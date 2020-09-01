@@ -4,7 +4,6 @@
 #[macro_use]
 extern crate beserial_derive;
 extern crate nimiq_account as account;
-extern crate nimiq_block as block;
 extern crate nimiq_block_albatross as block_albatross;
 extern crate nimiq_block_base as block_base;
 extern crate nimiq_bls as bls;
@@ -33,8 +32,6 @@ use beserial::{
     SerializingError, WriteBytesExt,
 };
 use bitflags::bitflags;
-use block::proof::ChainProof;
-use block::{Block, BlockHeader};
 use block_albatross::{
     Block as BlockAlbatross, BlockHeader as BlockHeaderAlbatross, ForkProof, PbftCommitMessage,
     PbftPrepareMessage, SignedPbftProposal, ViewChange, ViewChangeProof,
@@ -66,8 +63,6 @@ pub enum MessageType {
     GetHeader = 3,
     NotFound = 4,
     GetBlocks = 5,
-    Block = 6,
-    Header = 7,
     Tx = 8,
     Mempool = 9,
     Reject = 10,
@@ -80,8 +75,6 @@ pub enum MessageType {
 
     Signal = 30,
 
-    GetChainProof = 40,
-    ChainProof = 41,
     GetAccountsProof = 42,
     AccountsProof = 43,
     GetAccountsTreeChunk = 44,
@@ -90,11 +83,8 @@ pub enum MessageType {
     TransactionsProof = 48,
     GetTransactionReceipts = 49,
     TransactionReceipts = 50,
-    GetBlockProof = 51,
-    BlockProof = 52,
 
     GetHead = 60,
-    Head = 61,
 
     VerAck = 90,
 
@@ -104,7 +94,6 @@ pub enum MessageType {
     ViewChange = 105,
     ViewChangeProof = 106,
     ForkProof = 107,
-    //ValidatorInfo = 111,
     PbftProposal = 120,
     PbftPrepare = 121,
     PbftCommit = 122,
@@ -122,8 +111,6 @@ impl Display for MessageType {
             Self::GetHeader => write!(f, "get-header"),
             Self::NotFound => write!(f, "not-found"),
             Self::GetBlocks => write!(f, "get-blocks"),
-            Self::Block => write!(f, "block"),
-            Self::Header => write!(f, "header"),
             Self::Tx => write!(f, "tx"),
             Self::Mempool => write!(f, "mempool"),
             Self::Reject => write!(f, "reject"),
@@ -136,8 +123,6 @@ impl Display for MessageType {
 
             Self::Signal => write!(f, "signal"),
 
-            Self::GetChainProof => write!(f, "get-chain-proof"),
-            Self::ChainProof => write!(f, "chain-proof"),
             Self::GetAccountsProof => write!(f, "get-accounts-proof"),
             Self::AccountsProof => write!(f, "accounts-proof"),
             Self::GetAccountsTreeChunk => write!(f, "get-accounts-tree-chunk"),
@@ -146,11 +131,8 @@ impl Display for MessageType {
             Self::TransactionsProof => write!(f, "transactions-proof"),
             Self::GetTransactionReceipts => write!(f, "get-transaction-receipts"),
             Self::TransactionReceipts => write!(f, "transaction-receipts"),
-            Self::GetBlockProof => write!(f, "get-block-proof"),
-            Self::BlockProof => write!(f, "block-proof"),
 
             Self::GetHead => write!(f, "get-head"),
-            Self::Head => write!(f, "head"),
             Self::VerAck => write!(f, "verack"),
 
             // Albatross
@@ -176,8 +158,6 @@ pub enum Message {
     GetData(Vec<InvVector>),
     GetHeader(Vec<InvVector>),
     NotFound(Vec<InvVector>),
-    Block(Box<Block>),
-    Header(Box<BlockHeader>),
     Tx(Box<TxMessage>),
     GetBlocks(Box<GetBlocksMessage>),
     Mempool,
@@ -191,8 +171,6 @@ pub enum Message {
 
     Signal(Box<SignalMessage>),
 
-    GetChainProof,
-    ChainProof(Box<ChainProof>),
     GetAccountsProof(Box<GetAccountsProofMessage>),
     AccountsProof(Box<AccountsProofMessage>),
     GetAccountsTreeChunk(Box<GetAccountsTreeChunkMessage>),
@@ -201,11 +179,8 @@ pub enum Message {
     TransactionsProof(Box<TransactionsProofMessage>),
     GetTransactionReceipts(Box<GetTransactionReceiptsMessage>),
     TransactionReceipts(Box<TransactionReceiptsMessage>),
-    GetBlockProof(Box<GetBlockProofMessage>),
-    BlockProof(Box<BlockProofMessage>),
 
     GetHead,
-    Head(Box<BlockHeader>),
 
     VerAck(Box<VerAckMessage>),
 
@@ -231,8 +206,6 @@ impl Message {
             Message::GetData(_) => MessageType::GetData,
             Message::GetHeader(_) => MessageType::GetHeader,
             Message::NotFound(_) => MessageType::NotFound,
-            Message::Block(_) => MessageType::Block,
-            Message::Header(_) => MessageType::Header,
             Message::Tx(_) => MessageType::Tx,
             Message::GetBlocks(_) => MessageType::GetBlocks,
             Message::Mempool => MessageType::Mempool,
@@ -243,8 +216,6 @@ impl Message {
             Message::Ping(_) => MessageType::Ping,
             Message::Pong(_) => MessageType::Pong,
             Message::Signal(_) => MessageType::Signal,
-            Message::GetChainProof => MessageType::GetChainProof,
-            Message::ChainProof(_) => MessageType::ChainProof,
             Message::GetAccountsProof(_) => MessageType::GetAccountsProof,
             Message::AccountsProof(_) => MessageType::AccountsProof,
             Message::GetAccountsTreeChunk(_) => MessageType::GetAccountsTreeChunk,
@@ -253,10 +224,7 @@ impl Message {
             Message::TransactionsProof(_) => MessageType::TransactionsProof,
             Message::GetTransactionReceipts(_) => MessageType::GetTransactionReceipts,
             Message::TransactionReceipts(_) => MessageType::TransactionReceipts,
-            Message::GetBlockProof(_) => MessageType::GetBlockProof,
-            Message::BlockProof(_) => MessageType::BlockProof,
             Message::GetHead => MessageType::GetHead,
-            Message::Head(_) => MessageType::Head,
             Message::VerAck(_) => MessageType::VerAck,
             // Albatross
             Message::BlockAlbatross(_) => MessageType::BlockAlbatross,
@@ -369,8 +337,6 @@ impl Deserialize for Message {
                     &mut crc32_reader, Some(InvVector::VECTORS_MAX_COUNT)
                 )?)
             }
-            MessageType::Block => Message::Block(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::Header => Message::Header(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::Tx => Message::Tx(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::GetBlocks => {
                 Message::GetBlocks(Deserialize::deserialize(&mut crc32_reader)?)
@@ -385,10 +351,6 @@ impl Deserialize for Message {
             MessageType::Ping => Message::Ping(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::Pong => Message::Pong(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::Signal => Message::Signal(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::GetChainProof => Message::GetChainProof,
-            MessageType::ChainProof => {
-                Message::ChainProof(Deserialize::deserialize(&mut crc32_reader)?)
-            }
             MessageType::GetAccountsProof => {
                 Message::GetAccountsProof(Deserialize::deserialize(&mut crc32_reader)?)
             }
@@ -413,14 +375,7 @@ impl Deserialize for Message {
             MessageType::TransactionReceipts => {
                 Message::TransactionReceipts(Deserialize::deserialize(&mut crc32_reader)?)
             }
-            MessageType::GetBlockProof => {
-                Message::GetBlockProof(Deserialize::deserialize(&mut crc32_reader)?)
-            }
-            MessageType::BlockProof => {
-                Message::BlockProof(Deserialize::deserialize(&mut crc32_reader)?)
-            }
             MessageType::GetHead => Message::GetHead,
-            MessageType::Head => Message::Head(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::VerAck => Message::VerAck(Deserialize::deserialize(&mut crc32_reader)?),
             // Albatross
             MessageType::BlockAlbatross => {
@@ -492,8 +447,6 @@ impl Serialize for Message {
             Message::GetData(inv_vector) => inv_vector.serialize::<u16, Vec<u8>>(&mut v)?,
             Message::GetHeader(inv_vector) => inv_vector.serialize::<u16, Vec<u8>>(&mut v)?,
             Message::NotFound(inv_vector) => inv_vector.serialize::<u16, Vec<u8>>(&mut v)?,
-            Message::Block(block) => block.serialize(&mut v)?,
-            Message::Header(header) => header.serialize(&mut v)?,
             Message::Tx(tx) => tx.serialize(&mut v)?,
             Message::GetBlocks(get_blocks_message) => get_blocks_message.serialize(&mut v)?,
             Message::Mempool => 0,
@@ -504,8 +457,6 @@ impl Serialize for Message {
             Message::Ping(nonce) => nonce.serialize(&mut v)?,
             Message::Pong(nonce) => nonce.serialize(&mut v)?,
             Message::Signal(signal_message) => signal_message.serialize(&mut v)?,
-            Message::GetChainProof => 0,
-            Message::ChainProof(msg) => msg.serialize(&mut v)?,
             Message::GetAccountsProof(get_accounts_proof_message) => {
                 get_accounts_proof_message.serialize(&mut v)?
             }
@@ -522,10 +473,7 @@ impl Serialize for Message {
             Message::TransactionsProof(msg) => msg.serialize(&mut v)?,
             Message::GetTransactionReceipts(msg) => msg.serialize(&mut v)?,
             Message::TransactionReceipts(msg) => msg.serialize(&mut v)?,
-            Message::GetBlockProof(msg) => msg.serialize(&mut v)?,
-            Message::BlockProof(msg) => msg.serialize(&mut v)?,
             Message::GetHead => 0,
-            Message::Head(header) => header.serialize(&mut v)?,
             Message::VerAck(verack_message) => verack_message.serialize(&mut v)?,
             // Albatross
             Message::BlockAlbatross(block) => block.serialize(&mut v)?,
@@ -567,8 +515,6 @@ impl Serialize for Message {
             Message::GetData(inv_vector) => inv_vector.serialized_size::<u16>(),
             Message::GetHeader(inv_vector) => inv_vector.serialized_size::<u16>(),
             Message::NotFound(inv_vector) => inv_vector.serialized_size::<u16>(),
-            Message::Block(block) => block.serialized_size(),
-            Message::Header(header) => header.serialized_size(),
             Message::Tx(tx) => tx.serialized_size(),
             Message::GetBlocks(get_blocks_message) => get_blocks_message.serialized_size(),
             Message::Mempool => 0,
@@ -579,8 +525,6 @@ impl Serialize for Message {
             Message::Ping(nonce) => nonce.serialized_size(),
             Message::Pong(nonce) => nonce.serialized_size(),
             Message::Signal(signal_message) => signal_message.serialized_size(),
-            Message::GetChainProof => 0,
-            Message::ChainProof(chain_proof_message) => chain_proof_message.serialized_size(),
             Message::GetAccountsProof(get_accounts_proof_message) => {
                 get_accounts_proof_message.serialized_size()
             }
@@ -597,10 +541,7 @@ impl Serialize for Message {
             Message::TransactionsProof(msg) => msg.serialized_size(),
             Message::GetTransactionReceipts(msg) => msg.serialized_size(),
             Message::TransactionReceipts(msg) => msg.serialized_size(),
-            Message::GetBlockProof(msg) => msg.serialized_size(),
-            Message::BlockProof(msg) => msg.serialized_size(),
             Message::GetHead => 0,
-            Message::Head(header) => header.serialized_size(),
             Message::VerAck(verack_message) => verack_message.serialized_size(),
             // Albatross
             Message::BlockAlbatross(block) => block.serialized_size(),
@@ -651,8 +592,6 @@ pub struct MessageNotifier {
     pub get_data: RwLock<PassThroughNotifier<'static, Vec<InvVector>>>,
     pub get_header: RwLock<PassThroughNotifier<'static, Vec<InvVector>>>,
     pub not_found: RwLock<PassThroughNotifier<'static, Vec<InvVector>>>,
-    pub block: RwLock<PassThroughNotifier<'static, Block>>,
-    pub header: RwLock<PassThroughNotifier<'static, BlockHeader>>,
     pub tx: RwLock<PassThroughNotifier<'static, TxMessage>>,
     pub get_blocks: RwLock<PassThroughNotifier<'static, GetBlocksMessage>>,
     pub mempool: RwLock<PassThroughNotifier<'static, ()>>,
@@ -663,8 +602,6 @@ pub struct MessageNotifier {
     pub ping: RwLock<PassThroughNotifier<'static, /*nonce*/ u32>>,
     pub pong: RwLock<PassThroughNotifier<'static, /*nonce*/ u32>>,
     pub signal: RwLock<PassThroughNotifier<'static, SignalMessage>>,
-    pub get_chain_proof: RwLock<PassThroughNotifier<'static, ()>>,
-    pub chain_proof: RwLock<PassThroughNotifier<'static, ChainProof>>,
     pub get_accounts_proof: RwLock<PassThroughNotifier<'static, GetAccountsProofMessage>>,
     pub get_accounts_tree_chunk: RwLock<PassThroughNotifier<'static, GetAccountsTreeChunkMessage>>,
     pub accounts_tree_chunk: RwLock<PassThroughNotifier<'static, AccountsTreeChunkMessage>>,
@@ -674,10 +611,7 @@ pub struct MessageNotifier {
     pub get_transaction_receipts:
         RwLock<PassThroughNotifier<'static, GetTransactionReceiptsMessage>>,
     pub transaction_receipts: RwLock<PassThroughNotifier<'static, TransactionReceiptsMessage>>,
-    pub get_block_proof: RwLock<PassThroughNotifier<'static, GetBlockProofMessage>>,
-    pub block_proof: RwLock<PassThroughNotifier<'static, BlockProofMessage>>,
     pub get_head: RwLock<PassThroughNotifier<'static, ()>>,
-    pub head: RwLock<PassThroughNotifier<'static, BlockHeader>>,
     // Albatross
     pub block_albatross: RwLock<PassThroughNotifier<'static, BlockAlbatross>>,
     pub header_albatross: RwLock<PassThroughNotifier<'static, BlockHeaderAlbatross>>,
@@ -705,8 +639,6 @@ impl MessageNotifier {
             Message::GetData(vector) => self.get_data.read().notify(vector),
             Message::GetHeader(vector) => self.get_header.read().notify(vector),
             Message::NotFound(vector) => self.not_found.read().notify(vector),
-            Message::Block(block) => self.block.read().notify(*block),
-            Message::Header(header) => self.header.read().notify(*header),
             Message::Tx(msg) => self.tx.read().notify(*msg),
             Message::GetBlocks(msg) => self.get_blocks.read().notify(*msg),
             Message::Mempool => self.mempool.read().notify(()),
@@ -717,8 +649,6 @@ impl MessageNotifier {
             Message::Ping(nonce) => self.ping.read().notify(nonce),
             Message::Pong(nonce) => self.pong.read().notify(nonce),
             Message::Signal(msg) => self.signal.read().notify(*msg),
-            Message::GetChainProof => self.get_chain_proof.read().notify(()),
-            Message::ChainProof(proof) => self.chain_proof.read().notify(*proof),
             Message::GetAccountsProof(msg) => self.get_accounts_proof.read().notify(*msg),
             Message::AccountsProof(msg) => self.accounts_proof.read().notify(*msg),
             Message::GetAccountsTreeChunk(msg) => self.get_accounts_tree_chunk.read().notify(*msg),
@@ -729,10 +659,7 @@ impl MessageNotifier {
                 self.get_transaction_receipts.read().notify(*msg)
             }
             Message::TransactionReceipts(msg) => self.transaction_receipts.read().notify(*msg),
-            Message::GetBlockProof(msg) => self.get_block_proof.read().notify(*msg),
-            Message::BlockProof(msg) => self.block_proof.read().notify(*msg),
             Message::GetHead => self.get_head.read().notify(()),
-            Message::Head(header) => self.head.read().notify(*header),
             // Albatross
             Message::BlockAlbatross(block) => self.block_albatross.read().notify(*block),
             Message::HeaderAlbatross(header) => self.header_albatross.read().notify(*header),
@@ -762,31 +689,6 @@ pub trait MessageAdapter<B: block_base::Block> {
     );
     fn new_block_message(block: B) -> Message;
     fn new_header_message(header: B::Header) -> Message;
-}
-
-pub struct NimiqMessageAdapter {}
-impl MessageAdapter<Block> for NimiqMessageAdapter {
-    fn register_block_listener<T: PassThroughListener<Block> + 'static>(
-        notifier: &MessageNotifier,
-        listener: T,
-    ) {
-        notifier.block.write().register(listener)
-    }
-
-    fn register_header_listener<T: PassThroughListener<BlockHeader> + 'static>(
-        notifier: &MessageNotifier,
-        listener: T,
-    ) {
-        notifier.header.write().register(listener)
-    }
-
-    fn new_block_message(block: Block) -> Message {
-        Message::Block(Box::new(block))
-    }
-
-    fn new_header_message(header: BlockHeader) -> Message {
-        Message::Header(Box::new(header))
-    }
 }
 
 pub struct AlbatrossMessageAdapter {}
@@ -1299,28 +1201,6 @@ impl TransactionReceiptsMessage {
 
     pub fn empty() -> Message {
         Message::TransactionReceipts(Box::new(TransactionReceiptsMessage { receipts: None }))
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct GetBlockProofMessage {
-    pub block_hash_to_prove: Blake2bHash,
-    pub known_block_hash: Blake2bHash,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct BlockProofMessage {
-    #[beserial(len_type(u16))]
-    pub proof: Option<Vec<Block>>,
-}
-
-impl BlockProofMessage {
-    pub fn new(proof: Option<Vec<Block>>) -> Message {
-        Message::BlockProof(Box::new(BlockProofMessage { proof }))
-    }
-
-    pub fn empty() -> Message {
-        Message::BlockProof(Box::new(BlockProofMessage { proof: None }))
     }
 }
 
