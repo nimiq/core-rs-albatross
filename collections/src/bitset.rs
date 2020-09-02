@@ -78,6 +78,7 @@ impl BitSet {
             }
             self.store[i] &= !m;
         }
+        self.compact();
     }
 
     fn apply_op<O: Fn(u64, u64) -> u64>(&self, other: &Self, op: O) -> Self {
@@ -94,7 +95,9 @@ impl BitSet {
             count += x.count_ones() as usize;
         }
 
-        BitSet { store, count }
+        let mut bitset = BitSet { store, count };
+        bitset.compact();
+        bitset
     }
 
     fn apply_op_assign<O: Fn(&mut u64, u64)>(&mut self, other: Self, op: O) {
@@ -114,6 +117,14 @@ impl BitSet {
             }
         }
         self.count = count;
+        self.compact();
+    }
+
+    /// Removes unnecessary parts from store.
+    #[inline]
+    fn compact(&mut self) {
+        let num_empty = self.store.iter().rev().take_while(|&v| *v == 0).count();
+        self.store.truncate(self.store.len() - num_empty);
     }
 
     /// Infinite iterator of excluded items
