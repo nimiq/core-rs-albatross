@@ -31,7 +31,6 @@ members = [
   "metrics-server",
   "mnemonic",
   "nano-sync",
-  "network",
   "network-albatross",
   "network-interface",
   "network-mock",
