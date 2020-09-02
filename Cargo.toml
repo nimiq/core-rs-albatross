@@ -15,7 +15,6 @@ members = [
   "build-tools",
   "client",
   "collections",
-  "consensus",
   "consensus-albatross",
   "database",
   "fixed-unsigned",

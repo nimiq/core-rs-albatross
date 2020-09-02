@@ -30,6 +30,5 @@ beserial = { path = "../beserial", version = "0.1" }
 nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }
 nimiq-blockchain-albatross = { path = "../blockchain-albatross", version = "0.1", features = ["metrics"] }
 nimiq-blockchain-base = { path = "../blockchain-base", version = "0.1", features = ["metrics"] }
-nimiq-consensus = { path = "../consensus", version = "0.1" }
 nimiq-mempool = { path = "../mempool", version = "0.1" }
 nimiq-network-albatross = { path = "../network-albatross", version = "0.1", features = ["metrics"] }

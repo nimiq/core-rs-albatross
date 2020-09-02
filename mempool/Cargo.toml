@@ -34,5 +34,7 @@ nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "tim
 [dev-dependencies]
 hex = "0.4"
 
+nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }
+nimiq-blockchain-albatross = { path = "../blockchain-albatross", version = "0.1" }
 nimiq-database = { path = "../database", version = "0.1" }
 nimiq-genesis = { path = "../genesis", version = "0.1" }

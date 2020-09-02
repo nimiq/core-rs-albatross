@@ -29,7 +29,6 @@ nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1
 nimiq-blockchain-albatross = { path = "../blockchain-albatross", version = "0.1" }
 nimiq-blockchain-base = { path = "../blockchain-base", version = "0.1" }
 nimiq-bls = { path = "../bls", version = "0.1", optional = true }
-nimiq-consensus = { path = "../consensus", version = "0.1" }
 nimiq-hash = { path = "../hash", version = "0.1" }
 nimiq-mempool = { path = "../mempool", version = "0.1" }
 nimiq-utils = { path = "../utils", version = "0.1", features = ["unique-id"] }

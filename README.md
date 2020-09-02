@@ -1,6 +1,6 @@
 # Nimiq Core implementation in Rust _(core-rs)_
 
-![nimiq](docs/nimiq_logo_rgb_horizontal.png)
+![nimiq](https://raw.githubusercontent.com/nimiq/designs/master/logo/RGB/colored/png/nimiq_logo_rgb_horizontal.png)
 
 > Rust implementation of the Nimiq Blockchain Core
 

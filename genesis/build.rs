@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use log::Level;
 
-use nimiq_build_tools::genesis::albatross::GenesisBuilder;
+use nimiq_build_tools::genesis::GenesisBuilder;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 
