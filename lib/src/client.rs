@@ -2,11 +2,13 @@ use std::convert::TryFrom;
 use std::sync::{Arc, Weak};
 
 use blockchain::Blockchain;
-use consensus::{AlbatrossConsensusProtocol, Consensus as AbstractConsensus};
+use consensus::sync::QuickSync;
+use consensus::Consensus as AbstractConsensus;
 use database::Environment;
 use mempool::Mempool as GenericMempool;
 use network::{Network as GenericNetwork, NetworkConfig};
 use peer_address::services::ServiceFlags;
+use utils::time::OffsetTime;
 #[cfg(feature = "validator")]
 use validator::validator::Validator;
 
@@ -14,9 +16,9 @@ use crate::config::config::{ClientConfig, ProtocolConfig};
 use crate::error::Error;
 
 /// Alias for the Consensus specialized over Albatross
-pub type Consensus = AbstractConsensus<AlbatrossConsensusProtocol>;
 pub type Mempool = GenericMempool<Blockchain>;
 pub type Network = GenericNetwork<Blockchain>;
+pub type Consensus = AbstractConsensus<Network>;
 
 /// Holds references to the relevant structs. This is then Arc'd in `Client` and a nice API is
 /// exposed.
@@ -47,7 +49,7 @@ impl TryFrom<ClientConfig> for ClientInner {
     fn try_from(config: ClientConfig) -> Result<Self, Self::Error> {
         // Create network config
         // TODO: `NetworkConfig` could use some refactoring. So we might as well adapt it to the
-        // client API.
+        //        client API.
 
         let mut network_config = match config.protocol {
             ProtocolConfig::Dumb => NetworkConfig::new_dumb_network_config(),
@@ -130,12 +132,23 @@ impl TryFrom<ClientConfig> for ClientInner {
                 config.network
             )));
         }
-        let consensus = Consensus::new(
-            environment.clone(),
+
+        let time = Arc::new(OffsetTime::new());
+
+        let blockchain = Arc::new(Blockchain::new(environment.clone(), config.network).unwrap());
+
+        let mempool = Mempool::new(Arc::clone(&blockchain), config.mempool);
+
+        let network = Network::new(
+            Arc::clone(&blockchain),
+            network_config.clone(),
+            time,
             config.network,
-            network_config,
-            config.mempool,
         )?;
+
+        let sync = QuickSync::default();
+
+        let consensus = Consensus::new(environment.clone(), blockchain, mempool, network, sync)?;
 
         #[cfg(feature = "validator")]
         let validator = config

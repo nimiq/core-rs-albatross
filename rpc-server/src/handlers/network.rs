@@ -4,8 +4,9 @@ use std::sync::Arc;
 
 use json::{object, Array, JsonValue, Null};
 
+use blockchain_albatross::Blockchain;
 use blockchain_base::AbstractBlockchain;
-use consensus::{Consensus, ConsensusProtocol};
+use consensus::Consensus;
 use network::address::peer_address_state::{PeerAddressInfo, PeerAddressState};
 use network::connection::close_type::CloseType;
 use network::connection::connection_info::ConnectionInfo;
@@ -17,15 +18,15 @@ use peer_address::address::{PeerId, PeerUri};
 use crate::handler::Method;
 use crate::handlers::Module;
 
-pub struct NetworkHandler<P: ConsensusProtocol + 'static> {
-    pub consensus: Arc<Consensus<P>>,
-    pub network: Arc<Network<P::Blockchain>>,
-    pub blockchain: Arc<P::Blockchain>,
+pub struct NetworkHandler {
+    pub consensus: Arc<Consensus<Network<Blockchain>>>,
+    pub network: Arc<Network<Blockchain>>,
+    pub blockchain: Arc<Blockchain>,
     pub starting_block: u32,
 }
 
-impl<P: ConsensusProtocol + 'static> NetworkHandler<P> {
-    pub fn new(consensus: &Arc<Consensus<P>>) -> Self {
+impl NetworkHandler {
+    pub fn new(consensus: &Arc<Consensus<Network<Blockchain>>>) -> Self {
         NetworkHandler {
             consensus: consensus.clone(),
             network: consensus.network.clone(),
@@ -187,7 +188,7 @@ impl<P: ConsensusProtocol + 'static> NetworkHandler<P> {
     pub(crate) fn peer_address_info_to_obj(
         &self,
         peer_address_info: &PeerAddressInfo,
-        connection_info: Option<&ConnectionInfo<P::Blockchain>>,
+        connection_info: Option<&ConnectionInfo<Blockchain>>,
         score: Option<Score>,
     ) -> JsonValue {
         let state = self.network.connections.state();
@@ -227,7 +228,7 @@ impl<P: ConsensusProtocol + 'static> NetworkHandler<P> {
     }
 }
 
-impl<P: ConsensusProtocol + 'static> Module for NetworkHandler<P> {
+impl Module for NetworkHandler {
     rpc_module_methods! {
         "peerCount" => peer_count,
         "syncing" => syncing,

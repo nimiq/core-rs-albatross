@@ -1,17 +1,16 @@
 use std::sync::Arc;
 
-use consensus::{Consensus, ConsensusEvent, ConsensusProtocol};
+use blockchain_albatross::Blockchain;
+use consensus::{Consensus, ConsensusEvent};
 use json::JsonValue;
+use network::Network;
 use parking_lot::RwLock;
 
 use crate::handler::Method;
 use crate::handlers::Module;
 
-pub struct ConsensusHandler<P>
-where
-    P: ConsensusProtocol + 'static,
-{
-    pub consensus: Arc<Consensus<P>>,
+pub struct ConsensusHandler {
+    pub consensus: Arc<Consensus<Network<Blockchain>>>,
     state: Arc<RwLock<ConsensusHandlerState>>,
 }
 
@@ -19,11 +18,8 @@ pub struct ConsensusHandlerState {
     consensus: &'static str,
 }
 
-impl<P> ConsensusHandler<P>
-where
-    P: ConsensusProtocol + 'static,
-{
-    pub fn new(consensus: Arc<Consensus<P>>) -> Self {
+impl ConsensusHandler {
+    pub fn new(consensus: Arc<Consensus<Network<Blockchain>>>) -> Self {
         let state = ConsensusHandlerState {
             consensus: "syncing",
         };
@@ -40,8 +36,7 @@ where
             consensus
                 .notifier
                 .write()
-                .register(move |e: &ConsensusEvent| {
-                    trace!("Consensus Event: {:?}", e);
+                .register(move |e: &ConsensusEvent<Network<Blockchain>>| {
                     if let Some(state) = state.upgrade() {
                         match e {
                             ConsensusEvent::Established => state.write().consensus = "established",
@@ -63,7 +58,7 @@ where
     }
 }
 
-impl<P: ConsensusProtocol + 'static> Module for ConsensusHandler<P> {
+impl Module for ConsensusHandler {
     rpc_module_methods! {
         "consensus" => consensus,
     }

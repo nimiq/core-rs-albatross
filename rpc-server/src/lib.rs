@@ -1,14 +1,12 @@
 #[macro_use]
 extern crate log;
 extern crate nimiq_account as account;
-extern crate nimiq_block as block;
 extern crate nimiq_block_albatross as block_albatross;
 extern crate nimiq_block_base as block_base;
-extern crate nimiq_block_production as block_production;
 extern crate nimiq_blockchain_albatross as blockchain_albatross;
 extern crate nimiq_blockchain_base as blockchain_base;
 extern crate nimiq_bls as bls;
-extern crate nimiq_consensus as consensus;
+extern crate nimiq_consensus_albatross as consensus;
 extern crate nimiq_genesis as genesis;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;

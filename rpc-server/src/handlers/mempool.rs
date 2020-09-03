@@ -7,7 +7,7 @@ use json::{object, Array, JsonValue, Null};
 use parking_lot::RwLock;
 
 use beserial::{Deserialize, Serialize};
-use consensus::ConsensusProtocol;
+use blockchain_albatross::Blockchain;
 use hash::{Blake2bHash, Hash};
 use keys::Address;
 use nimiq_mempool::Mempool;
@@ -21,14 +21,14 @@ use crate::handler::Method;
 use crate::handlers::wallet::UnlockedWalletManager;
 use crate::handlers::Module;
 
-pub struct MempoolHandler<P: ConsensusProtocol + 'static> {
-    pub mempool: Arc<Mempool<P::Blockchain>>,
+pub struct MempoolHandler {
+    pub mempool: Arc<Mempool<Blockchain>>,
     pub unlocked_wallets: Option<Arc<RwLock<UnlockedWalletManager>>>,
 }
 
-impl<P: ConsensusProtocol + 'static> MempoolHandler<P> {
+impl MempoolHandler {
     pub fn new(
-        mempool: Arc<Mempool<P::Blockchain>>,
+        mempool: Arc<Mempool<Blockchain>>,
         unlocked_wallets: Option<Arc<RwLock<UnlockedWalletManager>>>,
     ) -> Self {
         MempoolHandler {
@@ -404,7 +404,7 @@ pub(crate) struct TransactionContext<'a> {
     pub timestamp: u64, // Milliseconds
 }
 
-impl<P: ConsensusProtocol + 'static> Module for MempoolHandler<P> {
+impl Module for MempoolHandler {
     rpc_module_methods! {
         // Transactions
         "sendRawTransaction" => send_raw_transaction,

@@ -4,7 +4,7 @@ extern crate failure;
 extern crate log;
 
 extern crate nimiq_blockchain_albatross as blockchain;
-extern crate nimiq_consensus as consensus;
+extern crate nimiq_consensus_albatross as consensus;
 extern crate nimiq_database as database;
 extern crate nimiq_keys as keys;
 extern crate nimiq_mempool as mempool;

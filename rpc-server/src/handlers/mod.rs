@@ -25,10 +25,8 @@ macro_rules! rpc_module_methods {
 
 #[cfg(feature = "validator")]
 pub mod block_production_albatross;
-pub mod block_production_nimiq;
 pub mod blockchain;
 pub mod blockchain_albatross;
-pub mod blockchain_nimiq;
 pub mod consensus;
 pub mod mempool;
 #[cfg(feature = "validator")]
@@ -38,10 +36,8 @@ pub mod wallet;
 
 #[cfg(feature = "validator")]
 pub use self::block_production_albatross::BlockProductionAlbatrossHandler;
-pub use self::block_production_nimiq::BlockProductionNimiqHandler;
 pub use self::blockchain::BlockchainHandler;
 pub use self::blockchain_albatross::BlockchainAlbatrossHandler;
-pub use self::blockchain_nimiq::BlockchainNimiqHandler;
 pub use self::consensus::ConsensusHandler;
 pub use self::mempool::MempoolHandler;
 #[cfg(feature = "validator")]

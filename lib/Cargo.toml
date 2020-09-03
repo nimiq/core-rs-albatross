@@ -42,6 +42,7 @@ url = "1.7"
 
 nimiq-blockchain-albatross = { path = "../blockchain-albatross", version = "0.1" }
 nimiq-bls = { path = "../bls", version = "0.1", optional = true }
+nimiq-consensus-albatross = { path = "../consensus-albatross", version = "0.1" }
 nimiq-database = { path = "../database", version = "0.1" }
 nimiq-keys = { path = "../keys", version = "0.1" }
 nimiq-mempool = { path = "../mempool", version = "0.1" }
