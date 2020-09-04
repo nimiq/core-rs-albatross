@@ -216,7 +216,7 @@ impl Blockchain {
             }
 
             let history_root = self
-                .get_history_root(policy::batch_at(header.block_number()), txn_opt)
+                .get_history_root(policy::epoch_at(header.block_number()), txn_opt)
                 .ok_or(PushError::BlockchainError(
                     BlockchainError::FailedLoadingMainChain,
                 ))?;

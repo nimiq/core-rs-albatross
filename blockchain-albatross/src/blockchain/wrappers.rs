@@ -206,29 +206,6 @@ impl Blockchain {
             txn_option,
         );
 
-        // We need to make sure that we have all micro blocks.
-        if blocks.len() as u32
-            != if for_batch {
-                policy::BATCH_LENGTH
-            } else {
-                policy::EPOCH_LENGTH
-            } - 2
-        {
-            debug!(
-                "Expected {} blocks, but get_blocks returned {}",
-                if for_batch {
-                    policy::BATCH_LENGTH
-                } else {
-                    policy::EPOCH_LENGTH
-                } - 2,
-                blocks.len()
-            );
-            for block in &blocks {
-                debug!("Returned block {} - {}", block.block_number(), block.hash());
-            }
-            return None;
-        }
-
         txs.extend(
             blocks
                 .into_iter()
@@ -263,11 +240,11 @@ impl Blockchain {
     /// Returns the history root for a given epoch.
     pub fn get_history_root(
         &self,
-        batch: u32,
+        epoch: u32,
         txn_option: Option<&Transaction>,
     ) -> Option<Blake2bHash> {
         let hashes: Vec<Blake2bHash> = self
-            .get_batch_transactions(batch, txn_option)?
+            .get_epoch_transactions(epoch, txn_option)?
             .iter()
             .map(|tx| tx.hash())
             .collect(); // BlockchainTransaction::hash does *not* work here.
