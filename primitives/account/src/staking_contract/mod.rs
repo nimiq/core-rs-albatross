@@ -202,7 +202,7 @@ impl StakingContract {
         self.current_lost_rewards.clone()
     }
 
-    /// Returns a BitSet of slots that were disabled at the end of the previous batch.
+    /// Returns a BitSet of slots that were marked as disabled in the previous batch.
     pub fn previous_disabled_slots(&self) -> BitSet {
         let mut bitset = BitSet::new();
         for slots in self.previous_disabled_slots.values() {
@@ -213,7 +213,7 @@ impl StakingContract {
         bitset
     }
 
-    /// Returns a BitSet of slots that are disabled in the current batch.
+    /// Returns a BitSet of slots that were marked as disabled in the current batch.
     pub fn current_disabled_slots(&self) -> BitSet {
         let mut bitset = BitSet::new();
         for slots in self.current_disabled_slots.values() {

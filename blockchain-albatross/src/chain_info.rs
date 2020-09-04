@@ -52,7 +52,7 @@ impl ChainInfo {
         })
     }
 
-    /// Creates a new dummy ChainInfo for a block transaction fees.
+    /// Creates a new dummy ChainInfo for a block ignoring slashes and transaction fees.
     pub fn dummy(block: Block) -> Self {
         ChainInfo {
             head: block,

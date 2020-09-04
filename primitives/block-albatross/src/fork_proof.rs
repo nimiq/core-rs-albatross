@@ -32,7 +32,7 @@ impl ForkProof {
     /// Verify the validity of a fork proof.
     pub fn verify(&self, public_key: &PublicKey) -> Result<(), ForkProofError> {
         // Check that the headers are not equal.
-        if self.header1.hash() == self.header2.hash() {
+        if self.header1.hash::<Blake2bHash>() == self.header2.hash::<Blake2bHash>() {
             return Err(ForkProofError::SameHeader);
         }
 

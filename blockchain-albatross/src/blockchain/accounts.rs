@@ -39,6 +39,8 @@ impl Blockchain {
 
                 // If this block is an election block, we also need to finalize the epoch.
                 if macro_block.is_election_block() {
+                    // On election the previous epoch needs to be finalized.
+                    // We can rely on `state` here, since we cannot revert macro blocks.
                     inherents.push(self.finalize_previous_epoch());
                 }
 
@@ -46,14 +48,13 @@ impl Blockchain {
                 let receipts =
                     accounts.commit(txn, &[], &inherents, macro_block.header.block_number);
 
-                // Check if the receipts contain an error.
-                if let Err(e) = receipts {
-                    return Err(PushError::AccountsError(e));
-                }
-
                 // Macro blocks are final and receipts for the previous batch are no longer necessary
                 // as rebranching across this block is not possible.
                 self.chain_store.clear_receipts(txn);
+
+                if let Err(e) = receipts {
+                    return Err(PushError::AccountsError(e));
+                }
             }
             Block::Micro(ref micro_block) => {
                 // Get the body of the block.
