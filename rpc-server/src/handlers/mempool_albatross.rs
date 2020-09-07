@@ -7,7 +7,6 @@ use parking_lot::RwLock;
 use beserial::{Deserialize, Serialize};
 use blockchain_albatross::Blockchain;
 use bls::{CompressedPublicKey, CompressedSignature};
-use consensus::AlbatrossConsensusProtocol;
 use genesis::NetworkInfo;
 use keys::Address;
 use nimiq_mempool::Mempool;
@@ -31,7 +30,7 @@ pub struct MempoolAlbatrossHandler {
     pub mempool: Arc<Mempool<Blockchain>>,
     pub validator: Option<Arc<Validator>>,
     pub unlocked_wallets: Option<Arc<RwLock<UnlockedWalletManager>>>,
-    generic: MempoolHandler<AlbatrossConsensusProtocol>,
+    generic: MempoolHandler,
 }
 
 impl MempoolAlbatrossHandler {

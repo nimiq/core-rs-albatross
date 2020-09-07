@@ -212,7 +212,8 @@ impl Validator {
 
         // remember listeners for when we drop this validator
         let listeners = ValidatorListeners {
-            consensus,
+            // TODO: This needs to be changed to the consensus listener. This is just a placeholder.
+            consensus: ListenerHandle::default(),
             blockchain,
             validator_network,
             fork,

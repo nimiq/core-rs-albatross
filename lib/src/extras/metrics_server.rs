@@ -22,7 +22,7 @@ pub fn initialize_metrics_server(
         (None, None)
     };
 
-    Ok(MetricsServer::new::<_, AlbatrossChainMetrics>(
+    Ok(MetricsServer::new::<AlbatrossChainMetrics>(
         ip,
         config.port,
         username,
