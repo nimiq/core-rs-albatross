@@ -146,6 +146,8 @@ impl TryFrom<ClientConfig> for ClientInner {
             config.network,
         )?;
 
+        // TODO: This will need to be changed from the QuickSync protocol to a more adequate sync
+        //       protocol.
         let sync = QuickSync::default();
 
         let consensus = Consensus::new(environment.clone(), blockchain, mempool, network, sync)?;

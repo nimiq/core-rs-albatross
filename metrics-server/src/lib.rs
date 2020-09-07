@@ -1,11 +1,9 @@
 #[macro_use]
 extern crate log;
-extern crate nimiq_block as block;
 extern crate nimiq_block_albatross as block_albatross;
-extern crate nimiq_blockchain as blockchain;
 extern crate nimiq_blockchain_albatross as blockchain_albatross;
 extern crate nimiq_blockchain_base as blockchain_base;
-extern crate nimiq_consensus as consensus;
+extern crate nimiq_consensus_albatross as consensus_albatross;
 extern crate nimiq_mempool as mempool;
 extern crate nimiq_network_albatross as network;
 
@@ -22,12 +20,14 @@ use native_tls::{Identity, TlsAcceptor as NativeTlsAcceptor};
 use tokio::net::TcpListener;
 use tokio_tls::TlsAcceptor as TokioTlsAcceptor;
 
-use consensus::{Consensus, ConsensusProtocol};
+use consensus_albatross::Consensus;
 
 use crate::error::Error;
-pub use crate::metrics::chain::{AbstractChainMetrics, AlbatrossChainMetrics, NimiqChainMetrics};
+pub use crate::metrics::chain::{AbstractChainMetrics, AlbatrossChainMetrics};
 use crate::metrics::mempool::MempoolMetrics;
 use crate::metrics::network::NetworkMetrics;
+use blockchain_albatross::Blockchain;
+use network::Network;
 
 macro_rules! attributes {
     // Empty attributes.
@@ -73,18 +73,17 @@ pub struct MetricsServer {
 }
 
 impl MetricsServer {
-    pub fn new<P, CM>(
+    pub fn new<CM>(
         ip: IpAddr,
         port: u16,
         username: Option<String>,
         password: Option<String>,
         pkcs12_key_file: &str,
         pkcs12_passphrase: &str,
-        consensus: Arc<Consensus<P>>,
+        consensus: Arc<Consensus<Network<Blockchain>>>,
     ) -> Result<MetricsServer, Error>
     where
-        P: ConsensusProtocol + 'static,
-        CM: AbstractChainMetrics<P> + server::Metrics + 'static,
+        CM: AbstractChainMetrics + server::Metrics + 'static,
     {
         let mut file = File::open(pkcs12_key_file)?;
         let mut pkcs12 = vec![];

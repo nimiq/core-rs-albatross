@@ -14,7 +14,7 @@ extern crate nimiq_blockchain_albatross as blockchain_albatross;
 extern crate nimiq_blockchain_base as blockchain_base;
 extern crate nimiq_bls as bls;
 extern crate nimiq_collections as collections;
-extern crate nimiq_consensus as consensus;
+extern crate nimiq_consensus_albatross as consensus_albatross;
 extern crate nimiq_database as database;
 extern crate nimiq_genesis as genesis;
 extern crate nimiq_hash as hash;

@@ -1,7 +1,7 @@
 use failure::Fail;
 
 use blockchain_base::BlockchainError;
-use consensus::Error as ConsensusError;
+use consensus_albatross::Error as ConsensusError;
 use utils::key_store::Error as KeyStoreError;
 
 #[derive(Fail, Debug)]

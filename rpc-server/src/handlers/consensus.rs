@@ -30,25 +30,28 @@ impl ConsensusHandler {
         };
 
         // Register for consensus events.
-        {
-            trace!("Register listener for consensus");
-            let state = Arc::downgrade(&state);
-            consensus
-                .notifier
-                .write()
-                .register(move |e: &ConsensusEvent<Network<Blockchain>>| {
-                    if let Some(state) = state.upgrade() {
-                        match e {
-                            ConsensusEvent::Established => state.write().consensus = "established",
-                            ConsensusEvent::Lost => state.write().consensus = "lost",
-                            ConsensusEvent::Syncing => state.write().consensus = "syncing",
-                            _ => (),
-                        }
-                    } else {
-                        // TODO Remove listener
-                    }
-                });
-        }
+        // TODO: Right now this uses the Consensus struct from the consensus crate. That crate was
+        //       deleted. Change this part to use the Consensus struct from the consensus-albatross
+        //       crate.
+        // {
+        //     trace!("Register listener for consensus");
+        //     let state = Arc::downgrade(&state);
+        //     consensus
+        //         .notifier
+        //         .write()
+        //         .register(move |e: &ConsensusEvent<Network<Blockchain>>| {
+        //             if let Some(state) = state.upgrade() {
+        //                 match e {
+        //                     ConsensusEvent::Established => state.write().consensus = "established",
+        //                     ConsensusEvent::Lost => state.write().consensus = "lost",
+        //                     ConsensusEvent::Syncing => state.write().consensus = "syncing",
+        //                     _ => (),
+        //                 }
+        //             } else {
+        //                 // TODO Remove listener
+        //             }
+        //         });
+        // }
 
         this
     }

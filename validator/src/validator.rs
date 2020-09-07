@@ -16,11 +16,12 @@ use block_production_albatross::BlockProducer;
 use blockchain_albatross::{Blockchain, ForkEvent};
 use blockchain_base::{AbstractBlockchain, BlockchainEvent};
 use bls::KeyPair;
-use consensus::{AlbatrossConsensusProtocol, Consensus, ConsensusEvent};
+use consensus_albatross::{Consensus, ConsensusEvent};
 use genesis::NetworkInfo;
 use hash::{Blake2bHash, Hash};
 use keys::Address;
 use macros::upgrade_weak;
+use network::Network;
 use primitives::coin::Coin;
 use primitives::policy;
 use transaction_builder::{Recipient, TransactionBuilder};
@@ -57,7 +58,7 @@ struct ValidatorListeners {
 pub struct Validator {
     blockchain: Arc<Blockchain>,
     block_producer: BlockProducer,
-    consensus: Arc<Consensus<AlbatrossConsensusProtocol>>,
+    consensus: Arc<Consensus<Network<Blockchain>>>,
     pub validator_network: Arc<ValidatorNetwork>,
     pub validator_key: KeyPair,
     pub validator_wallet_key: Option<keys::KeyPair>,
@@ -90,7 +91,7 @@ impl Validator {
     //const PBFT_TIMEOUT: Duration = Duration::from_secs(60);
 
     pub fn new(
-        consensus: Arc<Consensus<AlbatrossConsensusProtocol>>,
+        consensus: Arc<Consensus<Network<Blockchain>>>,
         validator_key: KeyPair,
         validator_wallet_key: Option<keys::KeyPair>,
     ) -> Result<Arc<Self>, Error> {
@@ -149,19 +150,20 @@ impl Validator {
         };
 
         // Setup event handlers for blockchain events
-        let weak = Arc::downgrade(this);
-        let consensus = this
-            .consensus
-            .notifier
-            .write()
-            .register(move |e: &ConsensusEvent| {
-                let this = upgrade_weak!(weak);
-                match e {
-                    ConsensusEvent::Established => this.on_consensus_established(),
-                    ConsensusEvent::Lost => this.on_consensus_lost(),
-                    _ => {}
-                }
-            });
+        // TODO: Right now this uses the Consensus struct from the consensus crate. That crate was
+        //       deleted. Change this part to use the Consensus struct from the consensus-albatross
+        //       crate.
+        // let weak = Arc::downgrade(this);
+        // let consensus = this.consensus.notifier.write().register(
+        //     move |e: &ConsensusEvent<Network<Blockchain>>| {
+        //         let this = upgrade_weak!(weak);
+        //         match e {
+        //             ConsensusEvent::Established => this.on_consensus_established(),
+        //             ConsensusEvent::Lost => this.on_consensus_lost(),
+        //             _ => {}
+        //         }
+        //     },
+        // );
 
         // Set up event handlers for blockchain events
         let weak = Arc::downgrade(this);
@@ -843,10 +845,13 @@ impl Validator {
 impl Drop for Validator {
     fn drop(&mut self) {
         if let Some(listeners) = self.listeners.as_ref() {
-            self.consensus
-                .notifier
-                .write()
-                .deregister(listeners.consensus);
+            // TODO: Right now this uses the Consensus struct from the consensus crate. That crate was
+            //       deleted. Change this part to use the Consensus struct from the consensus-albatross
+            //       crate.
+            // self.consensus
+            //     .notifier
+            //     .write()
+            //     .deregister(listeners.consensus);
             self.blockchain
                 .notifier
                 .write()
