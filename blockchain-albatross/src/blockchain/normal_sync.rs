@@ -236,7 +236,9 @@ impl Blockchain {
         let mut state = self.state.write();
         state.transaction_cache.push_block(&chain_info.head);
 
+        let mut is_macro = false;
         if let Block::Macro(ref macro_block) = chain_info.head {
+            is_macro = true;
             state.macro_info = chain_info.clone();
             state.macro_head_hash = block_hash.clone();
 
@@ -259,14 +261,20 @@ impl Blockchain {
         // Give up lock before notifying.
         drop(state);
 
-        if is_election_block {
-            self.notifier
-                .read()
-                .notify(BlockchainEvent::EpochFinalized(block_hash));
+        if is_macro {
+            if is_election_block {
+                self.notifier
+                    .read()
+                    .notify(BlockchainEvent::EpochFinalized(block_hash));
+            } else {
+                self.notifier
+                    .read()
+                    .notify(BlockchainEvent::Finalized(block_hash));
+            }
         } else {
             self.notifier
                 .read()
-                .notify(BlockchainEvent::Finalized(block_hash));
+                .notify(BlockchainEvent::Extended(block_hash));
         }
 
         Ok(PushResult::Extended)
