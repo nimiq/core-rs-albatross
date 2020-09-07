@@ -23,7 +23,6 @@ rand = "0.7"
 
 beserial = { path = "../beserial", version = "0.1" }
 beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
-fixed-unsigned = { path = "../fixed-unsigned", version = "0.1" }
 nimiq-account = { path = "../primitives/account", version = "0.1" }
 nimiq-accounts = { path = "../accounts", version = "0.1" }
 nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }

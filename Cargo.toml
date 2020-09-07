@@ -17,7 +17,6 @@ members = [
   "collections",
   "consensus-albatross",
   "database",
-  "fixed-unsigned",
   "genesis",
   "handel",
   "hash",

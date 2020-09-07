@@ -406,8 +406,7 @@ impl Blockchain {
 
         assert_eq!(
             cache_txn.missing_blocks(),
-            policy::TRANSACTION_VALIDITY_WINDOW_ALBATROSS
-                .saturating_sub(ancestor.1.head.block_number() + 1)
+            policy::TRANSACTION_VALIDITY_WINDOW.saturating_sub(ancestor.1.head.block_number() + 1)
         );
 
         // Check each fork block against TransactionCache & commit to AccountsTree and SlashRegistry.

@@ -32,12 +32,12 @@ matrix:
 
 # Splitting the jobs is necessary due to timeouts, however we have to make sure that we include all crates
 env:
-  - TEST_CRATES="-p nimiq-macros -p fixed-unsigned -p nimiq-build-tools -p nimiq-tools -p nimiq-utils -p nimiq-collections -p nimiq-primitives -p nimiq-account -p nimiq-block-albatross -p nimiq-block-base -p nimiq-transaction -p nimiq-transaction-builder"
+  - TEST_CRATES="-p nimiq-macros -p nimiq-build-tools -p nimiq-tools -p nimiq-utils -p nimiq-collections -p nimiq-primitives -p nimiq-account -p nimiq-block-albatross -p nimiq-block-base -p nimiq-transaction -p nimiq-transaction-builder"
   - TEST_CRATES="-p beserial -p beserial_derive"
   - TEST_CRATES="-p nimiq-database"
   - TEST_CRATES="-p nimiq-hash -p nimiq-hash_derive -p nimiq-keys -p nimiq-key-derivation -p nimiq-mnemonic -p nimiq-vrf -p nimiq-bls -p nimiq-nano-sync"
   - TEST_CRATES="-p nimiq-accounts -p nimiq-tree-primitives -p nimiq-blockchain-albatross -p nimiq-blockchain-base -p nimiq-block-production-albatross -p nimiq-mempool"
-  - TEST_CRATES="-p nimiq-handel -p nimiq-messages -p nimiq-metrics-server -p nimiq-network -p nimiq-genesis -p nimiq-rpc-server -p nimiq-validator -p nimiq-ws-rpc-server"
+  - TEST_CRATES="-p nimiq-handel -p nimiq-messages -p nimiq-metrics-server -p nimiq-genesis -p nimiq-rpc-server -p nimiq-validator -p nimiq-ws-rpc-server"
   - TEST_CRATES="-p nimiq-wallet -p nimiq-peer-address -p nimiq-subscription -p nimiq-lib -p nimiq-client"
   - RUN_CLIPPY=1
 

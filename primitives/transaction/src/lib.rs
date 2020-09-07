@@ -336,7 +336,7 @@ impl Transaction {
 
     pub fn is_valid_at(&self, block_height: u32) -> bool {
         let window = if self.network_id.is_albatross() {
-            policy::TRANSACTION_VALIDITY_WINDOW_ALBATROSS
+            policy::TRANSACTION_VALIDITY_WINDOW
         } else {
             policy::TRANSACTION_VALIDITY_WINDOW
         };

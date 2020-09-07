@@ -30,7 +30,6 @@ parking_lot = { version = "0.9", optional = true }
 
 beserial = { path = "../beserial", version = "0.1" }
 beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
-fixed-unsigned = { path = "../fixed-unsigned", version = "0.1", optional = true }
 nimiq-bls = { path = "../bls", version = "0.1", features = ["beserial"], optional = true }
 nimiq-keys = { path = "../keys", version = "0.1", optional = true }
 nimiq-macros = { path = "../macros", version = "0.1", optional = true }
@@ -43,6 +42,6 @@ lazy_static = "1.2"
 all = ["coin", "account", "policy", "networks", "validators"]
 coin = ["hex", "failure", "num-traits"]
 account = ["hex", "nimiq-macros", "failure", "enum-display-derive"]
-policy = ["num-bigint", "num-traits", "parking_lot", "lazy_static", "fixed-unsigned"]
+policy = ["num-bigint", "num-traits", "parking_lot", "lazy_static"]
 networks = ["failure"]
 validators = ["nimiq-bls", "nimiq-keys", "nimiq-utils", "beserial/bitvec", "itertools", "policy"]

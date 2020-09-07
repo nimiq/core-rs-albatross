@@ -37,9 +37,7 @@ impl Default for TransactionCache {
     fn default() -> Self {
         TransactionCache {
             transaction_hashes: HashSet::new(),
-            block_order: VecDeque::with_capacity(
-                policy::TRANSACTION_VALIDITY_WINDOW_ALBATROSS as usize,
-            ),
+            block_order: VecDeque::with_capacity(policy::TRANSACTION_VALIDITY_WINDOW as usize),
         }
     }
 }
@@ -82,7 +80,7 @@ impl TransactionCache {
         }
         self.block_order.push_back(descriptor);
 
-        if self.block_order.len() as u32 > policy::TRANSACTION_VALIDITY_WINDOW_ALBATROSS {
+        if self.block_order.len() as u32 > policy::TRANSACTION_VALIDITY_WINDOW {
             self.shift_block();
         }
     }
@@ -128,7 +126,7 @@ impl TransactionCache {
     }
 
     pub fn missing_blocks(&self) -> u32 {
-        policy::TRANSACTION_VALIDITY_WINDOW_ALBATROSS - self.block_order.len() as u32
+        policy::TRANSACTION_VALIDITY_WINDOW - self.block_order.len() as u32
     }
 
     pub fn is_empty(&self) -> bool {

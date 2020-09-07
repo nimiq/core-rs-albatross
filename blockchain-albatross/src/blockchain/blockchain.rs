@@ -161,8 +161,7 @@ impl Blockchain {
 
         assert_eq!(
             transaction_cache.missing_blocks(),
-            policy::TRANSACTION_VALIDITY_WINDOW_ALBATROSS
-                .saturating_sub(main_chain.head.block_number() + 1)
+            policy::TRANSACTION_VALIDITY_WINDOW.saturating_sub(main_chain.head.block_number() + 1)
         );
 
         // Current slots and validators
