@@ -3,8 +3,9 @@ extern crate log;
 
 extern crate nimiq_blockchain_albatross as blockchain_albatross;
 extern crate nimiq_blockchain_base as blockchain_base;
-extern crate nimiq_consensus as consensus;
+extern crate nimiq_consensus_albatross as consensus_albatross;
 extern crate nimiq_hash as hash;
+extern crate nimiq_network_albatross as network;
 extern crate nimiq_utils as utils;
 #[cfg(feature = "validator")]
 extern crate nimiq_validator as validator;
@@ -23,10 +24,11 @@ use tokio::net::TcpListener;
 use tokio_tungstenite::accept_async;
 use tokio_tungstenite::tungstenite::{Error as WsError, Message};
 
-use blockchain_albatross::BlockchainEvent;
+use blockchain_albatross::{Blockchain, BlockchainEvent};
 use blockchain_base::AbstractBlockchain;
-use consensus::{AlbatrossConsensusProtocol, Consensus};
+use consensus_albatross::Consensus;
 use hash::{Blake2bHash, Hash};
+use network::Network;
 use utils::unique_id::UniqueId;
 #[cfg(feature = "validator")]
 use validator::validator::Validator;
@@ -146,7 +148,7 @@ impl WsRpcServer {
         })
     }
 
-    pub fn register_blockchain(&self, consensus: Arc<Consensus<AlbatrossConsensusProtocol>>) {
+    pub fn register_blockchain(&self, consensus: Arc<Consensus<Network<Blockchain>>>) {
         let connections_listener = Arc::clone(&self.connections);
 
         consensus
