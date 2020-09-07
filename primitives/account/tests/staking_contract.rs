@@ -5,11 +5,11 @@ use rand::thread_rng;
 use beserial::{Deserialize, Serialize};
 use nimiq_account::inherent::{AccountInherentInteraction, Inherent, InherentType};
 use nimiq_account::{AccountError, AccountTransactionInteraction, AccountType, StakingContract};
+use nimiq_bls::lazy::LazyPublicKey;
 use nimiq_bls::CompressedPublicKey as BlsPublicKey;
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_bls::SecretKey as BlsSecretKey;
 use nimiq_bls::Signature as BlsSignature;
-use nimiq_bls::lazy::LazyPublicKey as LazyPublicKey;
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
@@ -1308,7 +1308,10 @@ fn it_can_revert_unpark_transactions() {
     assert_eq!(parked_in_both.check_inherent(&finalize, 0), Ok(()));
     assert_eq!(parked_in_both.commit_inherent(&finalize, 0), Ok(None));
     assert_eq!(parked_in_both.check_inherent(&slash, 0), Ok(()));
-    assert_eq!(parked_in_both.commit_inherent(&slash, 0), Ok(Some(vec![1, 1, 1])));
+    assert_eq!(
+        parked_in_both.commit_inherent(&slash, 0),
+        Ok(Some(vec![1, 1, 1]))
+    );
     assert_eq!(parked_in_both.current_epoch_parking.len(), 1);
     assert!(parked_in_both
         .current_epoch_parking
@@ -1438,7 +1441,10 @@ fn it_can_revert_slash_inherent() {
     assert_eq!(contract.balance, Coin::from_u64_unchecked(300_000_000));
 
     // Revert second slash
-    assert_eq!(contract.revert_inherent(&slash, 0, Some(&vec![0, 0, 0])), Ok(()));
+    assert_eq!(
+        contract.revert_inherent(&slash, 0, Some(&vec![0, 0, 0])),
+        Ok(())
+    );
     assert_eq!(contract.current_epoch_parking.len(), 1);
     assert_eq!(contract.previous_epoch_parking.len(), 1);
     assert!(contract.current_epoch_parking.contains(&validator_key));
@@ -1446,7 +1452,10 @@ fn it_can_revert_slash_inherent() {
     assert_eq!(contract.balance, Coin::from_u64_unchecked(300_000_000));
 
     // Revert first slash
-    assert_eq!(contract.revert_inherent(&slash, 0, Some(&vec![1, 1, 1])), Ok(()));
+    assert_eq!(
+        contract.revert_inherent(&slash, 0, Some(&vec![1, 1, 1])),
+        Ok(())
+    );
     assert_eq!(contract.current_epoch_parking.len(), 0);
     assert_eq!(contract.previous_epoch_parking.len(), 1);
     assert!(contract.previous_epoch_parking.contains(&validator_key));

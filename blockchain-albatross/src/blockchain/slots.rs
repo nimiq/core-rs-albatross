@@ -120,7 +120,8 @@ impl Blockchain {
             .unwrap()
             .disabled_set;
 
-        let slot_number = self.get_slot_owner_number_at(block_number, view_number, disabled_slots, Some(&txn));
+        let slot_number =
+            self.get_slot_owner_number_at(block_number, view_number, disabled_slots, Some(&txn));
 
         let slot = validator_slots
             .get(SlotIndex::Slot(slot_number))
