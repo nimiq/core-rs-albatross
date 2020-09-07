@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use std::fmt;
+use std::hash::Hash;
 use std::sync::{Arc, Weak};
 
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
@@ -45,7 +46,7 @@ struct AggregationState<C: AggregatableContribution> {
 pub struct Aggregation<
     P: Protocol,
     N: Network,
-    T: Clone + fmt::Debug + Eq + Serialize + Deserialize + Send + Sync + 'static,
+    T: Clone + fmt::Debug + Eq + Serialize + Deserialize + Hash + Send + Sync + 'static,
 > {
     /// Handel configuration, including the hash being signed, this node's contributed signature, etc.
     config: Config,
@@ -72,7 +73,7 @@ pub struct Aggregation<
 impl<
         P: Protocol + fmt::Debug,
         N: Network,
-        T: Clone + fmt::Debug + Eq + Serialize + Deserialize + Send + Sync + 'static, // TODO think about how to get rid of this generic
+        T: Clone + fmt::Debug + Eq + Serialize + Deserialize + Hash + Send + Sync + 'static, // TODO think about how to get rid of this generic
     > Aggregation<P, N, T>
 {
     fn new(tag: T, protocol: P, config: Config, network: Arc<N>) -> Arc<Self> {
@@ -137,16 +138,17 @@ impl<
             }) = todos.next().await
             {
                 trace!("Processing: level={}: {:?}", level, contribution);
-
+                // verify that the contribution is valid
                 let result = this.protocol.verify(&contribution).await;
                 if result.is_ok() {
-                    {
-                        let store = this.protocol.store();
-                        let mut store = store.write();
-                        store.put(contribution.clone(), level);
-                    }
-
+                    // store the contribution of the todo in the store (which will in turn update levels and aggregate)
+                    this.protocol
+                        .store()
+                        .write()
+                        .put(contribution.clone(), level);
+                    // check if this contribution completed a level.
                     this.check_completed_level(&contribution, level).await;
+                    // finally check if the aggregation is complete in which case the loop is broken.
                     if this.check_final_contribution() {
                         break;
                     }
@@ -157,6 +159,8 @@ impl<
                 panic!("TodoItem stream returned Ready(None), which should never happen");
             }
         }
+
+        // TODO continue work on todos for grace period amount of time.
 
         // return the best available result
         let aggregate = this
@@ -177,9 +181,14 @@ impl<
                 // for every level send the best available signature again if there is one.
                 trace!("resending Updates");
                 for level in this.levels.iter().skip(1) {
-                    let store = this.protocol.store();
-                    let aggregate = store.read().combined(level.id - 1);
-                    drop(store);
+                    // get the current best aggregate from store (no clone() needed as that already happens within the store)
+                    // freeing the lock as soon as possible for the todo aggregating to continue.
+                    let aggregate = {
+                        let store = this.protocol.store();
+                        let store = store.read();
+                        store.combined(level.id - 1)
+                    };
+                    // For an existing aggregate for this level send it around to the respective peers.
                     if let Some(aggregate) = aggregate {
                         this.send_update(aggregate, &level, this.config.update_count)
                             .await;
@@ -194,7 +203,7 @@ impl<
     }
 
     /// The timeout strategy 'activates' levels depending on the time that has passed since the aggregation started.
-    /// Terminates n its own once either all levels are completed, or the handel instance is dropped.
+    /// Terminates on its own once either all levels are completed, or the handel instance is dropped.
     async fn init_timeout(this: Weak<Self>, mut interval: time::Interval) {
         let mut next_level_timeout: usize = 0;
         while interval.next().await.is_some() {
@@ -215,7 +224,10 @@ impl<
         }
     }
 
+    // TODO move, get rid of the whole state stuff...
     /// adds this nodes own signature to the aggregation
+    ///
+    /// panics for contributions other than the single contribution of this node.
     async fn push_contribution(&self, contribution: P::Contribution) {
         // only allow contributions with a single contributor, which also must be this node itself.
         assert!(
@@ -232,7 +244,6 @@ impl<
             }
             let mut state = RwLockUpgradableReadGuard::upgrade(state);
             state.contribution = Some(contribution.clone());
-            // drop(state);
         }
 
         // put our own contribution into store at level 0
@@ -240,9 +251,9 @@ impl<
 
         // check for completed levels
         self.check_completed_level(&contribution, 0).await;
-        self.check_final_contribution(); // CHECKME
+        self.check_final_contribution();
 
-        // sending of level 0 is done by check_completed level
+        // sending of level 0 is done by check_completed_level
     }
 
     pub fn num_levels(&self) -> usize {
@@ -260,9 +271,12 @@ impl<
         level.start();
 
         if level.id > 0 {
-            let store = self.protocol.store();
-            let best = store.read().combined(level.id - 1);
-            drop(store);
+            // get the current best for the level. Freeing the lock as soon as possible to continue working on todos
+            let best = {
+                let store = self.protocol.store();
+                let store = store.read();
+                store.combined(level.id - 1)
+            };
 
             if let Some(best) = best {
                 self.send_update(best, level, self.config.peer_count).await;
@@ -276,15 +290,16 @@ impl<
     async fn send_update(&self, contribution: P::Contribution, level: &Level, count: usize) {
         let peer_ids = level.select_next_peers(count);
 
+        // if there are peers to send the update to send them
         if !peer_ids.is_empty() {
-            // TODO: optimize, if the multi-sig, only contains our individual, we don't have to send it
+            // incomplete levels will always also continue to send their own contribution, alongside the aggreagte.
             let individual = if level.receive_complete() {
                 None
             } else {
                 self.contribution.read().contribution.clone()
             };
-            // level needs to be in terms of the reciients tree not ours
 
+            // create the LevelUpdate with the aggregate contribution, the level, our node id and, if the level is incomplete, our own contribution
             let update = LevelUpdate::<P::Contribution>::new(
                 contribution,
                 individual,
@@ -292,14 +307,15 @@ impl<
                 self.protocol.node_id(),
             );
 
+            // Tag the LevelUpdate with the tag this aggregation runs over creating a LevelUpdateMessage.
             let update_msg = update.with_tag(self.tag.clone());
-
+            // TODO send the update to the corresponding peers.
             self.network.broadcast(&update_msg).await;
             //self.network.send_to(peer_ids, &update_msg).await;
         }
     }
 
-    /// Check if a level was completed
+    /// Check if a level was completed TODO: remove contribution parameter as it is not used at all.
     async fn check_completed_level(&self, contribution: &P::Contribution, level: usize) {
         let level = self
             .levels
@@ -322,6 +338,8 @@ impl<
             }
         }
 
+        // first get the current contributor count for this level. Release the lock as soon as possible
+        // to continue working on todos.
         let num_contributors = {
             let store = self.protocol.store();
             let store = store.read();
@@ -331,25 +349,31 @@ impl<
                 .num_contributors()
         };
 
+        // If the number of contributors on this level is equal to the number of peers on this level it is completed.
         if num_contributors == level.num_peers() {
             trace!("Level {} complete", level.id);
             {
+                // aquire write lock and set the level state for this level to completed.
                 let mut level_state = level.state.write();
                 level_state.receive_completed = true;
             }
+            // if there is a level with a higher id than the completed one it needs to be activated.
             if level.id + 1 < self.levels.len() {
                 // activate next level
                 self.start_level(level.id + 1).await
             }
         }
 
+        // In order to send updated messages iterate all levels higher than the given level.
         for i in level.id + 1..self.levels.len() {
             let combined = {
+                // aquire read lock to retrieve the current commbined contribution for the next lower level
                 let store = self.protocol.store();
                 let store = store.read();
                 store.combined(i - 1)
             };
 
+            // if there is an aggregate contribution for given level i send it out to the peers of that level.
             if let Some(multisig) = combined {
                 let level = self
                     .levels
@@ -365,12 +389,11 @@ impl<
     }
 
     /// Check if the best signature is final
-    ///
-    /// TODO: In some cases we still want to make the final signature "more final", i.e. the
-    /// pbft prepare signature still can become better and thus influence the finality of the
-    /// commit signature.
     fn check_final_contribution(&self) -> bool {
+        // highest level is always the root of the tree (potentially containing all contributions)
         let last_level = self.levels.last().expect("No levels");
+
+        // aquire read lock
         let store = self.protocol.store();
         let store = store.read();
 
@@ -379,19 +402,22 @@ impl<
             last_level.id
         );
 
+        // get the combined siganture for the highest level.
         if let Some(combined) = store.combined(last_level.id) {
             trace!("Best combined signature: {:?}", combined);
+            // if the combined contribution of the highest level (which includes all lower levels) is above the treshold
+            // the contribution is final
             if self.protocol.evaluator().is_final(&combined) {
-                // XXX Do this without cloning
                 trace!("Best aggregate is above threshold");
-
                 return true;
             }
         }
+        // if there is no combined signature for the highest level, or it is not above the treeshold the contribution is not final
         false
     }
 
     /// finds the best aggregation and returns it if it is final.
+    /// TODO identical to check_final_contribution -> get rid of one of these functions
     pub fn result(&self) -> Option<P::Contribution> {
         let last_level = self.levels.last().expect("No levels");
 
@@ -411,7 +437,7 @@ impl<
 impl<
         P: Protocol + fmt::Debug,
         N: Network,
-        T: Clone + fmt::Debug + Eq + Serialize + Deserialize + Send + Sync + 'static,
+        T: Clone + fmt::Debug + Eq + Serialize + Deserialize + Hash + Send + Sync + 'static,
     > HandelAggreation<P, N, T> for Aggregation<P, N, T>
 {
     async fn start(

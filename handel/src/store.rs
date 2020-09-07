@@ -84,8 +84,10 @@ impl<P: Partitioner, C: AggregatableContribution> ReplaceStore<P, C> {
     fn check_merge(&self, contribution: &C, level: usize) -> Option<C> {
         if let Some(best_contribution) = self.best_contribution.get(&level) {
             trace!(
-                "trying to combine contribution {:?} for level {}, current bests: {:?}",
-                contribution, level, self.best_contribution,
+                "trying to combine contribution {:?} for level {}, current best: {:?}",
+                contribution,
+                level,
+                self.best_contribution,
             );
             // try to combine
             let mut contribution = contribution.clone();
