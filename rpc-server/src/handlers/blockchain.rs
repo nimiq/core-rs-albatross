@@ -4,7 +4,7 @@ use std::sync::Arc;
 use json::{object, Array, JsonValue, Null};
 
 use block_albatross::Block;
-use blockchain_base::AbstractBlockchain;
+use blockchain_albatross::Blockchain;
 use keys::Address;
 
 use nimiq_hash::Blake2bHash;
@@ -12,12 +12,12 @@ use nimiq_transaction::TransactionReceipt;
 
 use crate::handlers::mempool::{transaction_to_obj, TransactionContext};
 
-pub struct BlockchainHandler<B: AbstractBlockchain + 'static> {
-    pub blockchain: Arc<B>,
+pub struct BlockchainHandler {
+    pub blockchain: Arc<Blockchain>,
 }
 
-impl<B: AbstractBlockchain + 'static> BlockchainHandler<B> {
-    pub(crate) fn new(blockchain: Arc<B>) -> Self {
+impl BlockchainHandler {
+    pub(crate) fn new(blockchain: Arc<Blockchain>) -> Self {
         Self { blockchain }
     }
 
@@ -25,7 +25,7 @@ impl<B: AbstractBlockchain + 'static> BlockchainHandler<B> {
 
     /// Returns the current block number.
     pub(crate) fn block_number(&self, _params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        Ok(self.blockchain.head_height().into())
+        Ok(self.blockchain.block_number().into())
     }
 
     /// Returns the number of transactions for a block hash.
@@ -239,7 +239,7 @@ impl<B: AbstractBlockchain + 'static> BlockchainHandler<B> {
                 index,
                 timestamp: block.header().timestamp(),
             }),
-            Some(self.blockchain.head_height()),
+            Some(self.blockchain.block_number()),
         ))
     }
 
@@ -253,7 +253,7 @@ impl<B: AbstractBlockchain + 'static> BlockchainHandler<B> {
             "transactionHash" => receipt.transaction_hash.to_hex(),
             "blockNumber" => receipt.block_height,
             "blockHash" => receipt.block_hash.to_hex(),
-            "confirmations" => self.blockchain.head_height() - receipt.block_height,
+            "confirmations" => self.blockchain.block_number() - receipt.block_height,
             "timestamp" => block.map(|block| block.header().timestamp().into()).unwrap_or(Null),
             "timestampMillis" => block.map(|block| (block.header().timestamp() / 1000).into()).unwrap_or(Null),
             "transactionIndex" => index.map(|i| i.into()).unwrap_or(Null)
@@ -265,9 +265,9 @@ impl<B: AbstractBlockchain + 'static> BlockchainHandler<B> {
             if number.as_str().unwrap().starts_with("latest-") {
                 let offset = u32::from_str(&number.as_str().unwrap()[7..])
                     .map_err(|_| object! {"message" => "Invalid block number"})?;
-                self.blockchain.head_height() - offset
+                self.blockchain.block_number() - offset
             } else if number.as_str().unwrap() == "latest" {
-                self.blockchain.head_height()
+                self.blockchain.block_number()
             } else {
                 u32::from_str(number.as_str().unwrap())
                     .map_err(|_| object! {"message" => "Invalid block number"})?

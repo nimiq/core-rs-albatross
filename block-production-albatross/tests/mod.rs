@@ -7,8 +7,7 @@ use nimiq_block_albatross::{
     SignedViewChange, ViewChange, ViewChangeProof, ViewChangeProofBuilder,
 };
 use nimiq_block_production_albatross::BlockProducer;
-use nimiq_blockchain_albatross::{Blockchain, PushResult};
-use nimiq_blockchain_base::{AbstractBlockchain, PushError};
+use nimiq_blockchain_albatross::{Blockchain, PushError, PushResult};
 use nimiq_bls::lazy::LazyPublicKey;
 use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_database::volatile::VolatileEnvironment;
@@ -106,7 +105,7 @@ fn it_can_produce_micro_blocks() {
 
 // Fill epoch with micro blocks
 fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<Blockchain>) {
-    let init_height = blockchain.head_height();
+    let init_height = blockchain.block_number();
     let macro_block_number = policy::macro_block_after(init_height + 1);
     for i in (init_height + 1)..macro_block_number {
         let last_micro_block = producer.next_micro_block(
@@ -121,7 +120,7 @@ fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<Blockchain>) {
             Ok(PushResult::Extended)
         );
     }
-    assert_eq!(blockchain.head_height(), macro_block_number - 1);
+    assert_eq!(blockchain.block_number(), macro_block_number - 1);
 }
 
 fn sign_macro_block(proposal: PbftProposal, extrinsics: Option<MacroBody>) -> MacroBlock {

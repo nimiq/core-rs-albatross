@@ -1,10 +1,10 @@
+#[cfg(feature = "metrics")]
+use crate::chain_metrics::BlockchainMetrics;
 use account::inherent::AccountInherentInteraction;
 use account::{Inherent, InherentType};
 use beserial::Serialize;
 use block::MacroHeader;
 use block::{ForkProof, ViewChanges};
-#[cfg(feature = "metrics")]
-use blockchain_base::chain_metrics::BlockchainMetrics;
 use database::Transaction;
 use genesis::NetworkInfo;
 use keys::Address;

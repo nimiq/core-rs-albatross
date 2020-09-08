@@ -2,7 +2,6 @@
 extern crate log;
 
 extern crate nimiq_blockchain_albatross as blockchain_albatross;
-extern crate nimiq_blockchain_base as blockchain_base;
 extern crate nimiq_consensus_albatross as consensus_albatross;
 extern crate nimiq_hash as hash;
 extern crate nimiq_network_albatross as network;
@@ -25,7 +24,6 @@ use tokio_tungstenite::accept_async;
 use tokio_tungstenite::tungstenite::{Error as WsError, Message};
 
 use blockchain_albatross::{Blockchain, BlockchainEvent};
-use blockchain_base::AbstractBlockchain;
 use consensus_albatross::Consensus;
 use hash::{Blake2bHash, Hash};
 use network::Network;
@@ -148,7 +146,7 @@ impl WsRpcServer {
         })
     }
 
-    pub fn register_blockchain(&self, consensus: Arc<Consensus<Network<Blockchain>>>) {
+    pub fn register_blockchain(&self, consensus: Arc<Consensus<Network>>) {
         let connections_listener = Arc::clone(&self.connections);
 
         consensus

@@ -9,7 +9,6 @@ members = [
   "beserial",
   "beserial/beserial_derive",
   "blockchain-albatross",
-  "blockchain-base",
   "block-production-albatross",
   "bls",
   "build-tools",

@@ -1,9 +1,9 @@
 use std::cmp;
 use std::cmp::Ordering;
 
-use block::{Block, BlockType};
 #[cfg(feature = "metrics")]
-use blockchain_base::chain_metrics::BlockchainMetrics;
+use crate::chain_metrics::BlockchainMetrics;
+use block::{Block, BlockType};
 use database::Transaction;
 use hash::Blake2bHash;
 

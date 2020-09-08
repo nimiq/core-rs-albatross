@@ -4,7 +4,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::{fmt, fmt::Display};
 
-use blockchain_base::AbstractBlockchain;
 use network_messages::MessageType;
 use peer_address::protocol::Protocol;
 
@@ -218,7 +217,7 @@ impl PeerMetrics {
     }
 }
 
-impl<B: AbstractBlockchain + 'static> ConnectionPool<B> {
+impl ConnectionPool {
     pub fn metrics(&self) -> (MessageMetrics, NetworkMetrics, PeerMetrics) {
         let mut bytes_sent: usize;
         let mut bytes_received: usize;

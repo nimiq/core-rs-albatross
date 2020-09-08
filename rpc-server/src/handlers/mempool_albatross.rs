@@ -27,7 +27,7 @@ use crate::handlers::wallet::UnlockedWalletManager;
 use crate::handlers::Module;
 
 pub struct MempoolAlbatrossHandler {
-    pub mempool: Arc<Mempool<Blockchain>>,
+    pub mempool: Arc<Mempool>,
     pub validator: Option<Arc<Validator>>,
     pub unlocked_wallets: Option<Arc<RwLock<UnlockedWalletManager>>>,
     generic: MempoolHandler,
@@ -35,7 +35,7 @@ pub struct MempoolAlbatrossHandler {
 
 impl MempoolAlbatrossHandler {
     pub fn new(
-        mempool: Arc<Mempool<Blockchain>>,
+        mempool: Arc<Mempool>,
         validator: Option<Arc<Validator>>,
         unlocked_wallets: Option<Arc<RwLock<UnlockedWalletManager>>>,
     ) -> Self {

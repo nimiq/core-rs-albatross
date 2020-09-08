@@ -6,7 +6,7 @@ use std::{
 
 use parking_lot::RwLock;
 
-use blockchain_base::AbstractBlockchain;
+use blockchain_albatross::Blockchain;
 use peer_address::address::PeerAddress;
 
 use crate::connection::network_agent::NetworkAgent;
@@ -25,19 +25,19 @@ pub enum ConnectionState {
     Closed = 6,
 }
 
-pub struct ConnectionInfo<B: AbstractBlockchain + 'static> {
+pub struct ConnectionInfo {
     peer_address: Option<Arc<PeerAddress>>,
     network_connection: Option<NetworkConnection>,
     peer: Option<Peer>,
     peer_channel: Option<Arc<PeerChannel>>,
     state: ConnectionState,
-    network_agent: Option<Arc<RwLock<NetworkAgent<B>>>>,
+    network_agent: Option<Arc<RwLock<NetworkAgent>>>,
     connection_handle: Option<Arc<ConnectionHandle>>,
     established_since: Option<Instant>,
     statistics: ConnectionStatistics,
 }
 
-impl<B: AbstractBlockchain + 'static> ConnectionInfo<B> {
+impl ConnectionInfo {
     pub fn new() -> Self {
         ConnectionInfo {
             peer_address: None,
@@ -84,7 +84,7 @@ impl<B: AbstractBlockchain + 'static> ConnectionInfo<B> {
     pub fn peer_channel(&self) -> Option<Arc<PeerChannel>> {
         self.peer_channel.clone()
     }
-    pub fn network_agent(&self) -> Option<&Arc<RwLock<NetworkAgent<B>>>> {
+    pub fn network_agent(&self) -> Option<&Arc<RwLock<NetworkAgent>>> {
         self.network_agent.as_ref()
     }
     pub fn connection_handle(&self) -> Option<&Arc<ConnectionHandle>> {
@@ -114,7 +114,7 @@ impl<B: AbstractBlockchain + 'static> ConnectionInfo<B> {
     pub fn set_peer_channel(&mut self, peer_channel: Arc<PeerChannel>) {
         self.peer_channel = Some(peer_channel);
     }
-    pub fn set_network_agent(&mut self, network_agent: Arc<RwLock<NetworkAgent<B>>>) {
+    pub fn set_network_agent(&mut self, network_agent: Arc<RwLock<NetworkAgent>>) {
         self.network_agent = Some(network_agent);
     }
     pub fn set_connection_handle(&mut self, handle: Arc<ConnectionHandle>) {
@@ -136,21 +136,21 @@ impl<B: AbstractBlockchain + 'static> ConnectionInfo<B> {
     }
 }
 
-impl<B: AbstractBlockchain + 'static> Default for ConnectionInfo<B> {
+impl Default for ConnectionInfo {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<B: AbstractBlockchain + 'static> PartialEq for ConnectionInfo<B> {
-    fn eq(&self, other: &ConnectionInfo<B>) -> bool {
+impl PartialEq for ConnectionInfo {
+    fn eq(&self, other: &ConnectionInfo) -> bool {
         self.peer_address == other.peer_address
     }
 }
 
-impl<B: AbstractBlockchain + 'static> Eq for ConnectionInfo<B> {}
+impl Eq for ConnectionInfo {}
 
-impl<B: AbstractBlockchain + 'static> fmt::Display for ConnectionInfo<B> {
+impl fmt::Display for ConnectionInfo {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(
             f,

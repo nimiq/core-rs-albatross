@@ -236,7 +236,7 @@ impl ValidatorNetwork {
     const LIMIT_POTENTIAL_VALIDATOR_INFOS: usize = 64;
 
     pub fn new(
-        network: Arc<Network<Blockchain>>,
+        network: Arc<Network>,
         blockchain: Arc<Blockchain>,
         info: SignedValidatorInfo,
     ) -> Arc<Self> {
@@ -259,7 +259,7 @@ impl ValidatorNetwork {
         this
     }
 
-    fn init_listeners(this: &Arc<Self>, network: Arc<Network<Blockchain>>) {
+    fn init_listeners(this: &Arc<Self>, network: Arc<Network>) {
         unsafe { this.self_weak.replace(Arc::downgrade(this)) };
 
         // Register for peers joining and leaving

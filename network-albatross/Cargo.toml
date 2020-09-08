@@ -37,7 +37,7 @@ url = "1.7"
 
 beserial = { path = "../beserial", version = "0.1" }
 beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
-nimiq-blockchain-base = { path = "../blockchain-base", version = "0.1" }
+nimiq-blockchain-albatross = { path = "../blockchain-albatross", version = "0.1" }
 nimiq-collections = { path = "../collections", version = "0.1" }
 nimiq-genesis = { path = "../genesis", version = "0.1" }
 nimiq-hash = { path = "../hash", version = "0.1" }

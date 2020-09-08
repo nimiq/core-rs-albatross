@@ -1,6 +1,6 @@
 use failure::Fail;
 
-use blockchain_base::BlockchainError;
+use blockchain_albatross::BlockchainError;
 
 #[derive(Fail, Debug)]
 pub enum Error {

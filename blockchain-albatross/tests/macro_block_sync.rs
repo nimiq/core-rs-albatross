@@ -6,9 +6,7 @@ use nimiq_block_albatross::{
     PbftProposal, SignedPbftCommitMessage, SignedPbftPrepareMessage,
 };
 use nimiq_block_production_albatross::BlockProducer;
-use nimiq_blockchain_albatross::{Blockchain, PushResult};
-use nimiq_blockchain_base::AbstractBlockchain;
-use nimiq_blockchain_base::Direction;
+use nimiq_blockchain_albatross::{Blockchain, Direction, PushResult};
 use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
@@ -22,7 +20,7 @@ const SECRET_KEY: &'static str = "196ffdb1a8acc7cbd76a251aeac0600a1d68b3aba1eba8
 
 // Fill epoch with micro blocks
 fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<Blockchain>) {
-    let init_height = blockchain.head_height();
+    let init_height = blockchain.block_number();
     let macro_block_number = policy::macro_block_after(init_height + 1);
     for i in (init_height + 1)..macro_block_number {
         let last_micro_block = producer.next_micro_block(
@@ -37,14 +35,14 @@ fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<Blockchain>) {
             Ok(PushResult::Extended)
         );
     }
-    assert_eq!(blockchain.head_height(), macro_block_number - 1);
+    assert_eq!(blockchain.block_number(), macro_block_number - 1);
 }
 
 fn produce_macro_blocks(num_macro: usize, producer: &BlockProducer, blockchain: &Arc<Blockchain>) {
     for _ in 0..num_macro {
         fill_micro_blocks(producer, blockchain);
 
-        let next_block_height = blockchain.head_height() + 1;
+        let next_block_height = blockchain.block_number() + 1;
         let (proposal, extrinsics) = producer.next_macro_block_proposal(
             blockchain.time.now() + next_block_height as u64 * 1000,
             0u32,

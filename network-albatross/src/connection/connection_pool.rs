@@ -6,7 +6,7 @@ use std::time::{Duration, SystemTime};
 
 use parking_lot::{ReentrantMutex, RwLock, RwLockReadGuard};
 
-use blockchain_base::AbstractBlockchain;
+use blockchain_albatross::Blockchain;
 use collections::SparseVec;
 use macros::upgrade_weak;
 use network_messages::SignalMessage;
@@ -51,8 +51,8 @@ macro_rules! update_checked {
 
 pub type ConnectionId = usize;
 
-pub struct ConnectionPoolState<B: AbstractBlockchain + 'static> {
-    connections: SparseVec<ConnectionInfo<B>>,
+pub struct ConnectionPoolState {
+    connections: SparseVec<ConnectionInfo>,
     connections_by_peer_address: HashMap<Arc<PeerAddress>, ConnectionId>,
     connections_by_net_address: HashMap<NetAddress, HashSet<ConnectionId>>,
     connections_by_subnet: HashMap<NetAddress, HashSet<ConnectionId>>,
@@ -83,8 +83,8 @@ pub struct ConnectionPoolState<B: AbstractBlockchain + 'static> {
     banned_ips: HashMap<NetAddress, SystemTime>,
 }
 
-impl<B: AbstractBlockchain + 'static> ConnectionPoolState<B> {
-    pub fn connection_iter(&self) -> Vec<&ConnectionInfo<B>> {
+impl ConnectionPoolState {
+    pub fn connection_iter(&self) -> Vec<&ConnectionInfo> {
         self.connections_by_peer_address
             .values()
             .map(|connection_id| {
@@ -95,7 +95,7 @@ impl<B: AbstractBlockchain + 'static> ConnectionPoolState<B> {
             .collect()
     }
 
-    pub fn id_and_connection_iter(&self) -> Vec<(ConnectionId, &ConnectionInfo<B>)> {
+    pub fn id_and_connection_iter(&self) -> Vec<(ConnectionId, &ConnectionInfo)> {
         self.connections_by_peer_address
             .values()
             .map(|connection_id| {
@@ -114,7 +114,7 @@ impl<B: AbstractBlockchain + 'static> ConnectionPoolState<B> {
     pub fn get_connection_by_peer_address(
         &self,
         peer_address: &PeerAddress,
-    ) -> Option<&ConnectionInfo<B>> {
+    ) -> Option<&ConnectionInfo> {
         Some(
             self.connections
                 .get(*self.connections_by_peer_address.get(peer_address)?)
@@ -135,7 +135,7 @@ impl<B: AbstractBlockchain + 'static> ConnectionPoolState<B> {
     pub fn get_connection_by_peer_address_mut(
         &mut self,
         peer_address: &PeerAddress,
-    ) -> Option<&mut ConnectionInfo<B>> {
+    ) -> Option<&mut ConnectionInfo> {
         Some(
             self.connections
                 .get_mut(*self.connections_by_peer_address.get(peer_address)?)
@@ -145,7 +145,7 @@ impl<B: AbstractBlockchain + 'static> ConnectionPoolState<B> {
 
     /// Get the connection info for a ConnectionId.
     #[inline]
-    pub fn get_connection(&self, connection_id: ConnectionId) -> Option<&ConnectionInfo<B>> {
+    pub fn get_connection(&self, connection_id: ConnectionId) -> Option<&ConnectionInfo> {
         self.connections.get(connection_id)
     }
 
@@ -153,7 +153,7 @@ impl<B: AbstractBlockchain + 'static> ConnectionPoolState<B> {
     pub fn get_connections_by_net_address(
         &self,
         net_address: &NetAddress,
-    ) -> Option<Vec<&ConnectionInfo<B>>> {
+    ) -> Option<Vec<&ConnectionInfo>> {
         self.connections_by_net_address.get(net_address).map(|s| {
             s.iter()
                 .map(|i| self.connections.get(*i).expect("Missing connection"))
@@ -173,9 +173,9 @@ impl<B: AbstractBlockchain + 'static> ConnectionPoolState<B> {
     pub fn get_connections_by_subnet(
         &self,
         net_address: &NetAddress,
-    ) -> Option<Vec<&ConnectionInfo<B>>> {
+    ) -> Option<Vec<&ConnectionInfo>> {
         self.connections_by_subnet
-            .get(&ConnectionPool::<B>::get_subnet_address(net_address))
+            .get(&ConnectionPool::get_subnet_address(net_address))
             .map(|s| {
                 s.iter()
                     .map(|i| self.connections.get(*i).expect("Missing connection"))
@@ -187,7 +187,7 @@ impl<B: AbstractBlockchain + 'static> ConnectionPoolState<B> {
     #[inline]
     pub fn get_num_connections_by_subnet(&self, net_address: &NetAddress) -> usize {
         self.connections_by_subnet
-            .get(&ConnectionPool::<B>::get_subnet_address(net_address))
+            .get(&ConnectionPool::get_subnet_address(net_address))
             .map_or(0, HashSet::len)
     }
 
@@ -195,7 +195,7 @@ impl<B: AbstractBlockchain + 'static> ConnectionPoolState<B> {
     pub fn get_outbound_connections_by_subnet(
         &self,
         net_address: &NetAddress,
-    ) -> Option<Vec<&ConnectionInfo<B>>> {
+    ) -> Option<Vec<&ConnectionInfo>> {
         self.get_connections_by_subnet(net_address).map(|mut v| {
             v.retain(|info| {
                 if let Some(network_connection) = info.network_connection() {
@@ -222,7 +222,7 @@ impl<B: AbstractBlockchain + 'static> ConnectionPoolState<B> {
     }
 
     /// Add a new connection to the connection pool.
-    fn add(&mut self, info: ConnectionInfo<B>) -> ConnectionId {
+    fn add(&mut self, info: ConnectionInfo) -> ConnectionId {
         let peer_address = info.peer_address();
         let connection_id = self.connections.insert(info).unwrap();
 
@@ -263,7 +263,7 @@ impl<B: AbstractBlockchain + 'static> ConnectionPoolState<B> {
     }
 
     /// Remove a connection from the connection pool if it is present.
-    fn remove(&mut self, connection_id: ConnectionId) -> Option<ConnectionInfo<B>> {
+    fn remove(&mut self, connection_id: ConnectionId) -> Option<ConnectionInfo> {
         let info = self.connections.remove(connection_id)?;
 
         if let Some(peer_address) = info.peer_address() {
@@ -289,7 +289,7 @@ impl<B: AbstractBlockchain + 'static> ConnectionPoolState<B> {
             .or_insert_with(HashSet::new)
             .insert(connection_id);
 
-        let subnet_address = ConnectionPool::<B>::get_subnet_address(net_address);
+        let subnet_address = ConnectionPool::get_subnet_address(net_address);
         self.connections_by_subnet
             .entry(subnet_address)
             .or_insert_with(HashSet::new)
@@ -318,7 +318,7 @@ impl<B: AbstractBlockchain + 'static> ConnectionPoolState<B> {
             }
         }
 
-        let subnet_address = ConnectionPool::<B>::get_subnet_address(net_address);
+        let subnet_address = ConnectionPool::get_subnet_address(net_address);
         if let Entry::Occupied(mut occupied) = self.connections_by_subnet.entry(subnet_address) {
             let is_empty = {
                 let s = occupied.get_mut();
@@ -353,7 +353,7 @@ impl<B: AbstractBlockchain + 'static> ConnectionPoolState<B> {
             } else {
                 net_address.subnet(64)
             };
-            let unban_time = SystemTime::now() + ConnectionPool::<B>::DEFAULT_BAN_TIME;
+            let unban_time = SystemTime::now() + ConnectionPool::DEFAULT_BAN_TIME;
             self.banned_ips.insert(banned_address, unban_time);
         }
     }
@@ -371,7 +371,7 @@ impl<B: AbstractBlockchain + 'static> ConnectionPoolState<B> {
     }
 
     /// Updates the number of connected peers.
-    fn update_connected_peer_count(&mut self, connection: Connection<B>, update: PeerCountUpdate) {
+    fn update_connected_peer_count(&mut self, connection: Connection, update: PeerCountUpdate) {
         // We assume the connection to be present and having a valid peer address/network connection.
         let info = match connection {
             Connection::Id(connection_id) => self.connections.get(connection_id).unwrap(),
@@ -421,9 +421,9 @@ impl<B: AbstractBlockchain + 'static> ConnectionPoolState<B> {
     }
 }
 
-enum Connection<'a, B: AbstractBlockchain + 'static> {
+enum Connection<'a> {
     Id(ConnectionId),
-    Info(&'a ConnectionInfo<B>),
+    Info(&'a ConnectionInfo),
 }
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy)]
@@ -431,8 +431,8 @@ enum ConnectionPoolTimer {
     UnbanIps,
 }
 
-pub struct ConnectionPool<B: AbstractBlockchain + 'static> {
-    blockchain: Arc<B>,
+pub struct ConnectionPool {
+    blockchain: Arc<Blockchain>,
     network_config: Arc<NetworkConfig>,
     addresses: Arc<PeerAddressBook>,
 
@@ -440,15 +440,15 @@ pub struct ConnectionPool<B: AbstractBlockchain + 'static> {
 
     signal_processor: SignalProcessor,
 
-    state: RwLock<ConnectionPoolState<B>>,
+    state: RwLock<ConnectionPoolState>,
     change_lock: ReentrantMutex<()>,
 
     pub notifier: RwLock<PassThroughNotifier<'static, ConnectionPoolEvent>>,
     timers: Timers<ConnectionPoolTimer>,
-    self_weak: MutableOnce<Weak<ConnectionPool<B>>>,
+    self_weak: MutableOnce<Weak<ConnectionPool>>,
 }
 
-impl<B: AbstractBlockchain + 'static> ConnectionPool<B> {
+impl ConnectionPool {
     pub const PEER_COUNT_MAX: usize = 4000;
     const PEER_COUNT_PER_IP_MAX: usize = 20;
     const PEER_COUNT_DUMB_MAX: usize = 1000;
@@ -464,7 +464,7 @@ impl<B: AbstractBlockchain + 'static> ConnectionPool<B> {
     pub fn new(
         peer_address_book: Arc<PeerAddressBook>,
         network_config: Arc<NetworkConfig>,
-        blockchain: Arc<B>,
+        blockchain: Arc<Blockchain>,
     ) -> Result<Arc<Self>, Error> {
         if !network_config.is_initialized() {
             return Err(Error::UninitializedPeerKey);
@@ -601,7 +601,7 @@ impl<B: AbstractBlockchain + 'static> ConnectionPool<B> {
     }
 
     /// Returns a mapped RwLockReadGuard for the internal state.
-    pub fn state(&self) -> RwLockReadGuard<ConnectionPoolState<B>> {
+    pub fn state(&self) -> RwLockReadGuard<ConnectionPoolState> {
         self.state.read()
     }
 
@@ -613,7 +613,7 @@ impl<B: AbstractBlockchain + 'static> ConnectionPool<B> {
     }
 
     /// Checks the validity of a connection from `on_connection`.
-    fn check_connection(state: &ConnectionPoolState<B>, connection_id: ConnectionId) -> bool {
+    fn check_connection(state: &ConnectionPoolState, connection_id: ConnectionId) -> bool {
         let info = state.connections.get(connection_id).unwrap();
         let conn = info.network_connection();
         assert!(conn.is_some(), "Connection must be established");
@@ -1024,7 +1024,7 @@ impl<B: AbstractBlockchain + 'static> ConnectionPool<B> {
             .unwrap_or_else(|| panic!("Missing connection #{}", connection_id));
 
         // Setup signal forwarding.
-        if Network::<B>::SIGNALING_ENABLED {
+        if Network::SIGNALING_ENABLED {
             let self_weak = self.self_weak.clone();
             let weak_peer_channel =
                 Arc::downgrade(&info.peer_channel().expect("Missing peer channel"));

@@ -1,24 +1,23 @@
 use std::io;
 use std::sync::Arc;
 
-use blockchain_base::AbstractBlockchain;
 use network::connection::connection_info::ConnectionState;
 use network::network::Network;
 
 use crate::server;
 use crate::server::SerializationType;
 
-pub struct NetworkMetrics<B: AbstractBlockchain + 'static> {
-    network: Arc<Network<B>>,
+pub struct NetworkMetrics {
+    network: Arc<Network>,
 }
 
-impl<B: AbstractBlockchain + 'static> NetworkMetrics<B> {
-    pub fn new(network: Arc<Network<B>>) -> Self {
+impl NetworkMetrics {
+    pub fn new(network: Arc<Network>) -> Self {
         NetworkMetrics { network }
     }
 }
 
-impl<B: AbstractBlockchain + 'static> server::Metrics for NetworkMetrics<B> {
+impl server::Metrics for NetworkMetrics {
     fn metrics(
         &self,
         serializer: &mut server::MetricsSerializer<SerializationType>,

@@ -22,13 +22,13 @@ use crate::handlers::wallet::UnlockedWalletManager;
 use crate::handlers::Module;
 
 pub struct MempoolHandler {
-    pub mempool: Arc<Mempool<Blockchain>>,
+    pub mempool: Arc<Mempool>,
     pub unlocked_wallets: Option<Arc<RwLock<UnlockedWalletManager>>>,
 }
 
 impl MempoolHandler {
     pub fn new(
-        mempool: Arc<Mempool<Blockchain>>,
+        mempool: Arc<Mempool>,
         unlocked_wallets: Option<Arc<RwLock<UnlockedWalletManager>>>,
     ) -> Self {
         MempoolHandler {

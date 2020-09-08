@@ -1,9 +1,8 @@
 use parking_lot::MutexGuard;
 
-use block::{Block, BlockError, MacroBody};
 #[cfg(feature = "metrics")]
-use blockchain_base::chain_metrics::BlockchainMetrics;
-use blockchain_base::BlockchainError;
+use crate::chain_metrics::BlockchainMetrics;
+use block::{Block, BlockError, MacroBody};
 use database::{ReadTransaction, WriteTransaction};
 use hash::{Blake2bHash, Hash};
 use primitives::policy;
@@ -11,7 +10,7 @@ use transaction::Transaction as BlockchainTransaction;
 use utils::merkle;
 
 use crate::chain_info::ChainInfo;
-use crate::{Blockchain, BlockchainEvent, PushError, PushResult};
+use crate::{Blockchain, BlockchainError, BlockchainEvent, PushError, PushResult};
 
 // TODO: This needs to be redone after Pascal finishes the history root code.
 impl Blockchain {

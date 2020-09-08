@@ -23,7 +23,7 @@ pub enum PushResult {
 // TODO: Arc CompressedPublicKey?
 pub struct ValidatorPool {
     /// Reference to the `ConnectionPool` in order to establish connections
-    network: Arc<Network<Blockchain>>,
+    network: Arc<Network>,
 
     /// Blacklist of validators we don't want to connect to
     blacklist: RwLock<BTreeSet<CompressedPublicKey>>,
@@ -47,7 +47,7 @@ pub struct ValidatorPool {
 }
 
 impl ValidatorPool {
-    pub fn new(network: Arc<Network<Blockchain>>) -> Self {
+    pub fn new(network: Arc<Network>) -> Self {
         ValidatorPool {
             network,
             blacklist: RwLock::new(BTreeSet::new()),

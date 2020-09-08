@@ -8,9 +8,7 @@ use nimiq_block_albatross::{
     ViewChangeProof, ViewChangeProofBuilder,
 };
 use nimiq_block_production_albatross::BlockProducer;
-use nimiq_blockchain_albatross::{Blockchain, ForkEvent, PushError, PushResult};
-use nimiq_blockchain_base::AbstractBlockchain;
-use nimiq_blockchain_base::Direction;
+use nimiq_blockchain_albatross::{Blockchain, Direction, ForkEvent, PushError, PushResult};
 use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_database::Environment;
@@ -51,7 +49,7 @@ impl TemporaryBlockProducer {
     }
 
     fn next_block(&self, view_number: u32, extra_data: Vec<u8>) -> Block {
-        let height = self.blockchain.head_height() + 1;
+        let height = self.blockchain.block_number() + 1;
 
         let view_change_proof = if self.blockchain.next_view_number() == view_number {
             None
@@ -123,7 +121,7 @@ impl TemporaryBlockProducer {
         );
 
         let view_change = ViewChange {
-            block_number: self.blockchain.head_height() + 1,
+            block_number: self.blockchain.block_number() + 1,
             new_view_number: view_number,
             prev_seed: self.blockchain.head().seed().clone(),
         };

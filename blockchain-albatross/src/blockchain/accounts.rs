@@ -1,8 +1,8 @@
+#[cfg(feature = "metrics")]
+use crate::chain_metrics::BlockchainMetrics;
 use account::Inherent;
 use accounts::Accounts;
 use block::{Block, MicroBlock, ViewChanges};
-#[cfg(feature = "metrics")]
-use blockchain_base::chain_metrics::BlockchainMetrics;
 use database::WriteTransaction;
 
 use crate::blockchain_state::BlockchainState;

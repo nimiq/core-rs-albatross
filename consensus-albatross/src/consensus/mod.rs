@@ -10,8 +10,7 @@ use futures::StreamExt;
 use parking_lot::{MappedRwLockReadGuard, RwLock, RwLockReadGuard};
 
 use block_albatross::Block;
-use blockchain_albatross::Blockchain;
-use blockchain_base::{AbstractBlockchain, BlockchainEvent};
+use blockchain_albatross::{Blockchain, BlockchainEvent};
 use database::Environment;
 use macros::upgrade_weak;
 use mempool::{Mempool, MempoolConfig, MempoolEvent};
@@ -60,7 +59,7 @@ impl<N: Network> Clone for ConsensusEvent<N> {
 
 pub struct Consensus<N: Network> {
     pub blockchain: Arc<Blockchain>,
-    pub mempool: Arc<Mempool<Blockchain>>,
+    pub mempool: Arc<Mempool>,
     pub network: Arc<N>,
     pub env: Environment,
 
@@ -92,7 +91,7 @@ impl<N: Network> Consensus<N> {
     pub fn new<S: SyncProtocol<N>>(
         env: Environment,
         blockchain: Arc<Blockchain>,
-        mempool: Arc<Mempool<Blockchain>>,
+        mempool: Arc<Mempool>,
         network: Arc<N>,
         sync_protocol: S,
     ) -> Result<Arc<Self>, Error> {
@@ -166,7 +165,7 @@ impl<N: Network> Consensus<N> {
         // Notify peers when our blockchain head changes.
         let weak = Arc::downgrade(this);
         this.blockchain
-            .register_listener(move |e: &BlockchainEvent<Block>| {
+            .register_listener(move |e: &BlockchainEvent| {
                 let this = upgrade_weak!(weak);
                 this.on_blockchain_event(e);
             });
@@ -192,7 +191,7 @@ impl<N: Network> Consensus<N> {
         tokio::spawn(Self::sync_blockchain(weak)); // TODO: Error handling
     }
 
-    fn on_blockchain_event(&self, event: &BlockchainEvent<Block>) {
+    fn on_blockchain_event(&self, event: &BlockchainEvent) {
         let state = self.state.read();
 
         let blocks: Vec<&Block>;
@@ -200,7 +199,7 @@ impl<N: Network> Consensus<N> {
         match event {
             BlockchainEvent::Extended(_) | BlockchainEvent::Finalized(_) => {
                 // This implicitly takes the lock on the blockchain state.
-                block = self.blockchain.head_block();
+                block = self.blockchain.head();
                 blocks = vec![&block];
             }
             BlockchainEvent::Rebranched(_, ref adopted_blocks) => {
@@ -210,7 +209,7 @@ impl<N: Network> Consensus<N> {
         }
 
         // print block height
-        let height = self.blockchain.head_height();
+        let height = self.blockchain.block_number();
         if height % 100 == 0 {
             info!("Now at block #{}", height);
         } else {

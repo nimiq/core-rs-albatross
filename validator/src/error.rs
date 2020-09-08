@@ -1,6 +1,6 @@
 use failure::Fail;
 
-use blockchain_base::BlockchainError;
+use blockchain_albatross::BlockchainError;
 use consensus_albatross::Error as ConsensusError;
 use utils::key_store::Error as KeyStoreError;
 

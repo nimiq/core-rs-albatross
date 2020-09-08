@@ -13,8 +13,7 @@ use block_albatross::{
     SignedPbftPrepareMessage, SignedPbftProposal, SignedViewChange, ViewChange, ViewChangeProof,
 };
 use block_production_albatross::BlockProducer;
-use blockchain_albatross::{Blockchain, ForkEvent};
-use blockchain_base::{AbstractBlockchain, BlockchainEvent};
+use blockchain_albatross::{Blockchain, BlockchainEvent, ForkEvent};
 use bls::KeyPair;
 use consensus_albatross::{Consensus, ConsensusEvent};
 use genesis::NetworkInfo;
@@ -58,7 +57,7 @@ struct ValidatorListeners {
 pub struct Validator {
     blockchain: Arc<Blockchain>,
     block_producer: BlockProducer,
-    consensus: Arc<Consensus<Network<Blockchain>>>,
+    consensus: Arc<Consensus<Network>>,
     pub validator_network: Arc<ValidatorNetwork>,
     pub validator_key: KeyPair,
     pub validator_wallet_key: Option<keys::KeyPair>,
@@ -91,7 +90,7 @@ impl Validator {
     //const PBFT_TIMEOUT: Duration = Duration::from_secs(60);
 
     pub fn new(
-        consensus: Arc<Consensus<Network<Blockchain>>>,
+        consensus: Arc<Consensus<Network>>,
         validator_key: KeyPair,
         validator_wallet_key: Option<keys::KeyPair>,
     ) -> Result<Arc<Self>, Error> {
@@ -167,14 +166,14 @@ impl Validator {
 
         // Set up event handlers for blockchain events
         let weak = Arc::downgrade(this);
-        let blockchain =
-            this.blockchain
-                .notifier
-                .write()
-                .register(move |e: &BlockchainEvent<Block>| {
-                    let this = upgrade_weak!(weak);
-                    this.on_blockchain_event(&e);
-                });
+        let blockchain = this
+            .blockchain
+            .notifier
+            .write()
+            .register(move |e: &BlockchainEvent| {
+                let this = upgrade_weak!(weak);
+                this.on_blockchain_event(&e);
+            });
 
         // Set up event handlers for validator network events
         let weak = Arc::downgrade(this);
@@ -257,7 +256,7 @@ impl Validator {
         );
     }
 
-    fn on_blockchain_event(&self, event: &BlockchainEvent<Block>) {
+    fn on_blockchain_event(&self, event: &BlockchainEvent) {
         // Handle each block type (which is directly related to each event type).
         match event {
             BlockchainEvent::EpochFinalized(hash) => {

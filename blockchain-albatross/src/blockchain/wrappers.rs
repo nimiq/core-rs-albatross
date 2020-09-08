@@ -1,20 +1,21 @@
-use parking_lot::{MappedRwLockReadGuard, RwLockReadGuard};
+use parking_lot::{MappedRwLockReadGuard, MutexGuard, RwLockReadGuard};
 
+#[cfg(feature = "metrics")]
+use crate::chain_metrics::BlockchainMetrics;
 use account::{Account, StakingContract};
 use block::{Block, BlockType, MacroBlock};
-#[cfg(feature = "metrics")]
-use blockchain_base::chain_metrics::BlockchainMetrics;
-use blockchain_base::Direction;
 use database::{Transaction, WriteTransaction};
 use genesis::NetworkInfo;
 use hash::{Blake2bHash, Hash};
+use keys::Address;
 use primitives::policy;
 use primitives::slot::ValidatorSlots;
-use transaction::Transaction as BlockchainTransaction;
+use transaction::{Transaction as BlockchainTransaction, TransactionReceipt};
 use utils::merkle;
+use utils::observer::{Listener, ListenerHandle};
 
 use crate::blockchain_state::BlockchainState;
-use crate::Blockchain;
+use crate::{Blockchain, BlockchainEvent, Direction};
 
 /// Implements several wrapper functions.
 impl Blockchain {
@@ -109,13 +110,18 @@ impl Blockchain {
         }
     }
 
+    /// Fetches a given block, by its block number.
+    pub fn get_block_at(&self, height: u32, include_body: bool) -> Option<Block> {
+        self.chain_store.get_block_at(height, include_body, None)
+    }
+
     /// Fetches a given block, by its hash.
-    fn get_block(&self, hash: &Blake2bHash, include_body: bool) -> Option<Block> {
+    pub fn get_block(&self, hash: &Blake2bHash, include_body: bool) -> Option<Block> {
         self.chain_store.get_block(hash, include_body, None)
     }
 
     /// Fetches a given number of blocks, starting at a specific block (by its hash).
-    fn get_blocks(
+    pub fn get_blocks(
         &self,
         start_block_hash: &Blake2bHash,
         count: u32,
@@ -269,5 +275,44 @@ impl Blockchain {
 
     pub fn write_transaction(&self) -> WriteTransaction {
         WriteTransaction::new(&self.env)
+    }
+
+    pub fn register_listener<T: Listener<BlockchainEvent> + 'static>(
+        &self,
+        listener: T,
+    ) -> ListenerHandle {
+        self.notifier.write().register(listener)
+    }
+
+    pub fn get_account(&self, address: &Address) -> Account {
+        self.state.read().accounts.get(address, None)
+    }
+
+    pub fn contains_tx_in_validity_window(&self, tx_hash: &Blake2bHash) -> bool {
+        self.state.read().transaction_cache.contains(tx_hash)
+    }
+
+    pub fn validator_registry_address(&self) -> Option<&Address> {
+        NetworkInfo::from_network_id(self.network_id).validator_registry_address()
+    }
+
+    pub fn lock(&self) -> MutexGuard<()> {
+        self.push_lock.lock()
+    }
+
+    #[cfg(feature = "metrics")]
+    pub fn metrics(&self) -> &BlockchainMetrics {
+        &self.metrics
+    }
+
+    // TODO: Implement this method. It is used in the rpc-server.
+    #[allow(unused_variables)]
+    pub fn get_transaction_receipts_by_address(
+        &self,
+        address: &Address,
+        sender_limit: usize,
+        recipient_limit: usize,
+    ) -> Vec<TransactionReceipt> {
+        unimplemented!()
     }
 }

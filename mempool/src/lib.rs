@@ -2,7 +2,7 @@
 extern crate log;
 extern crate nimiq_account as account;
 extern crate nimiq_block_albatross as block_albatross;
-extern crate nimiq_blockchain_base as blockchain_base;
+extern crate nimiq_blockchain_albatross as blockchain_albatross;
 extern crate nimiq_collections as collections;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
@@ -18,7 +18,6 @@ use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 
 use account::{Account, AccountTransactionInteraction};
 use beserial::Serialize;
-use blockchain_base::{AbstractBlockchain, BlockchainEvent};
 use hash::{Blake2bHash, Hash};
 use keys::Address;
 use primitives::networks::NetworkId;
@@ -27,11 +26,12 @@ use utils::observer::{weak_listener, Notifier};
 
 use crate::filter::{MempoolFilter, Rules};
 use block_albatross::Block;
+use blockchain_albatross::{Blockchain, BlockchainEvent};
 
 pub mod filter;
 
-pub struct Mempool<B: AbstractBlockchain> {
-    blockchain: Arc<B>,
+pub struct Mempool {
+    blockchain: Arc<Blockchain>,
     pub notifier: RwLock<Notifier<'static, MempoolEvent>>,
     state: RwLock<MempoolState>,
     mut_lock: Mutex<()>,
@@ -68,8 +68,8 @@ impl Default for MempoolConfig {
     }
 }
 
-impl<B: AbstractBlockchain + 'static> Mempool<B> {
-    pub fn new(blockchain: Arc<B>, config: MempoolConfig) -> Arc<Self> {
+impl Mempool {
+    pub fn new(blockchain: Arc<Blockchain>, config: MempoolConfig) -> Arc<Self> {
         let arc = Arc::new(Self {
             blockchain: blockchain.clone(),
             notifier: RwLock::new(Notifier::new()),
@@ -87,7 +87,7 @@ impl<B: AbstractBlockchain + 'static> Mempool<B> {
         let weak = Arc::downgrade(&arc);
         blockchain.register_listener(weak_listener(
             weak,
-            |this: Arc<Self>, event: &BlockchainEvent<Block>| this.on_blockchain_event(event),
+            |this: Arc<Self>, event: &BlockchainEvent| this.on_blockchain_event(event),
         ));
 
         arc
@@ -129,10 +129,7 @@ impl<B: AbstractBlockchain + 'static> Mempool<B> {
             };
 
             // Intrinsic transaction verification.
-            if transaction
-                .verify_mut(self.blockchain.network_id())
-                .is_err()
-            {
+            if transaction.verify_mut(self.blockchain.network_id).is_err() {
                 return ReturnCode::Invalid;
             }
 
@@ -156,7 +153,7 @@ impl<B: AbstractBlockchain + 'static> Mempool<B> {
             }
 
             // Check if transaction is valid at the next block height.
-            let block_height = self.blockchain.head_height() + 1;
+            let block_height = self.blockchain.block_number() + 1;
             if !transaction.is_valid_at(block_height) {
                 return ReturnCode::Invalid;
             }
@@ -361,7 +358,7 @@ impl<B: AbstractBlockchain + 'static> Mempool<B> {
         let mut size = 0;
 
         let mut validator_registry = None;
-        let block_height = self.blockchain.head_height() + 1;
+        let block_height = self.blockchain.block_number() + 1;
 
         let state = self.state.read();
         for tx in state.transactions_sorted_fee.iter() {
@@ -455,14 +452,14 @@ impl<B: AbstractBlockchain + 'static> Mempool<B> {
     }
 
     pub fn current_height(&self) -> u32 {
-        self.blockchain.head_height()
+        self.blockchain.block_number()
     }
 
     pub fn network_id(&self) -> NetworkId {
-        self.blockchain.network_id()
+        self.blockchain.network_id
     }
 
-    fn on_blockchain_event(&self, event: &BlockchainEvent<Block>) {
+    fn on_blockchain_event(&self, event: &BlockchainEvent) {
         match event {
             BlockchainEvent::Extended(_)
             | BlockchainEvent::Finalized(_)
@@ -484,7 +481,7 @@ impl<B: AbstractBlockchain + 'static> Mempool<B> {
         let mut txs_evicted = Vec::new();
         {
             let state = self.state.read();
-            let block_height = self.blockchain.head_height() + 1;
+            let block_height = self.blockchain.block_number() + 1;
 
             for (address, transactions) in state.transactions_by_sender.iter() {
                 // TODO Eliminate copy
@@ -571,7 +568,7 @@ impl<B: AbstractBlockchain + 'static> Mempool<B> {
 
         let mut removed_transactions = Vec::new();
         let mut restored_transactions = Vec::new();
-        let block_height = self.blockchain.head_height() + 1;
+        let block_height = self.blockchain.block_number() + 1;
 
         // Collect all transactions from reverted blocks that are still valid.
         // Track them by sender and sort them by fee/byte.

@@ -8,7 +8,6 @@ use account::staking_contract::{InactiveStake, InactiveValidator, Validator};
 use account::Account;
 use block_albatross::{signed, Block, ForkProof};
 use blockchain_albatross::Blockchain;
-use blockchain_base::AbstractBlockchain;
 use bls::CompressedPublicKey as BlsPublicKey;
 use genesis::NetworkInfo;
 use hash::{Blake2bHash, Hash};
@@ -25,7 +24,7 @@ use json::object::Object;
 
 pub struct BlockchainAlbatrossHandler {
     pub blockchain: Arc<Blockchain>,
-    generic: BlockchainHandler<Blockchain>,
+    generic: BlockchainHandler,
 }
 
 impl BlockchainAlbatrossHandler {

@@ -1,6 +1,5 @@
 extern crate nimiq_block_albatross as block;
 extern crate nimiq_blockchain_albatross as blockchain;
-extern crate nimiq_blockchain_base as blockchain_base;
 extern crate nimiq_bls as bls;
 extern crate nimiq_collections as collections;
 extern crate nimiq_database as database;
@@ -31,17 +30,13 @@ use primitives::policy;
 /// this validator.
 pub struct BlockProducer {
     pub blockchain: Arc<Blockchain>,
-    pub mempool: Option<Arc<Mempool<Blockchain>>>,
+    pub mempool: Option<Arc<Mempool>>,
     pub validator_key: KeyPair,
 }
 
 impl BlockProducer {
     /// Creates a new BlockProducer struct given a blockchain, a mempool and a validator key.
-    pub fn new(
-        blockchain: Arc<Blockchain>,
-        mempool: Arc<Mempool<Blockchain>>,
-        validator_key: KeyPair,
-    ) -> Self {
+    pub fn new(blockchain: Arc<Blockchain>, mempool: Arc<Mempool>, validator_key: KeyPair) -> Self {
         BlockProducer {
             blockchain,
             mempool: Some(mempool),
@@ -365,7 +360,7 @@ pub mod test_utils {
         SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedViewChange, ViewChange,
         ViewChangeProofBuilder,
     };
-    use blockchain_base::PushResult;
+    use blockchain::PushResult;
     use bls::lazy::LazyPublicKey;
     use keys::Address;
     use nimiq_vrf::VrfSeed;

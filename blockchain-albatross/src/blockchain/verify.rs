@@ -1,12 +1,11 @@
 use parking_lot::MappedRwLockReadGuard;
 
+#[cfg(feature = "metrics")]
+use crate::chain_metrics::BlockchainMetrics;
 use crate::hash::{Blake2bHash, Hash};
 use block::{
     Block, BlockBody, BlockError, BlockHeader, BlockJustification, BlockType, ForkProof, ViewChange,
 };
-#[cfg(feature = "metrics")]
-use blockchain_base::chain_metrics::BlockchainMetrics;
-use blockchain_base::BlockchainError;
 use bls::PublicKey;
 use database::Transaction as DBtx;
 use primitives::policy;
@@ -14,7 +13,7 @@ use transaction::Transaction;
 
 use crate::blockchain_state::BlockchainState;
 use crate::chain_info::ChainInfo;
-use crate::{Blockchain, PushError};
+use crate::{Blockchain, BlockchainError, PushError};
 use std::cmp::Ordering;
 
 /// Implements methods to verify the validity of blocks.

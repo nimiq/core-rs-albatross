@@ -3,7 +3,7 @@ extern crate log;
 
 #[macro_use]
 extern crate beserial_derive;
-extern crate nimiq_blockchain_base as blockchain_base;
+extern crate nimiq_blockchain_albatross as blockchain_albatross;
 extern crate nimiq_collections as collections;
 extern crate nimiq_genesis as genesis;
 extern crate nimiq_hash as hash;

@@ -4,8 +4,7 @@ use crate::messages::{
 };
 use crate::Consensus;
 use block_albatross::Block;
-use blockchain_albatross::Blockchain;
-use blockchain_base::{AbstractBlockchain, Direction};
+use blockchain_albatross::{Blockchain, Direction};
 use futures::StreamExt;
 use hash::Hash;
 use network_interface::prelude::{Network, Peer, ResponseMessage};
@@ -32,7 +31,7 @@ impl<N: Network> Consensus<N> {
                 // chain, ignore the rest. If none of the requested hashes is found,
                 // pick the genesis block hash. Send the main chain starting from the
                 // picked hash back to the peer.
-                let network_info = NetworkInfo::from_network_id(blockchain.network_id());
+                let network_info = NetworkInfo::from_network_id(blockchain.network_id);
                 let mut start_block_hash = network_info.genesis_hash().clone();
                 for locator in msg.locators.iter() {
                     if blockchain

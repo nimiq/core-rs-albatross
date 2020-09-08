@@ -1,7 +1,7 @@
 use std::convert::TryInto;
 
 #[cfg(feature = "metrics")]
-use blockchain_base::chain_metrics::BlockchainMetrics;
+use crate::chain_metrics::BlockchainMetrics;
 use collections::BitSet;
 use database::{ReadTransaction, Transaction};
 use primitives::policy;

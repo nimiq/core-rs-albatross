@@ -3,7 +3,6 @@ use std::{sync::Arc, time::Duration};
 use rand::rngs::OsRng;
 use rand::Rng;
 
-use blockchain_base::AbstractBlockchain;
 use peer_address::{address::PeerAddress, protocol::Protocol, services::ServiceFlags};
 
 use crate::address::peer_address_book::PeerAddressBookState;
@@ -21,14 +20,14 @@ use parking_lot::RwLockReadGuard;
 
 pub type Score = f64;
 
-pub struct PeerScorer<B: AbstractBlockchain + 'static> {
+pub struct PeerScorer {
     network_config: Arc<NetworkConfig>,
     addresses: Arc<PeerAddressBook>,
-    connections: Arc<ConnectionPool<B>>,
+    connections: Arc<ConnectionPool>,
     connection_scores: Vec<(ConnectionId, Score)>,
 }
 
-impl<B: AbstractBlockchain + 'static> PeerScorer<B> {
+impl PeerScorer {
     const PEER_COUNT_MIN_FULL_WS_OUTBOUND: usize = 1; // FIXME: this is fixed to the "node.js" value since we don't support browsers in the Rust impl yet
     const PEER_COUNT_MIN_OUTBOUND: usize = 6; // FIXME: this is fixed to the "node.js" value since we don't support browsers in the Rust impl yet
 
@@ -50,7 +49,7 @@ impl<B: AbstractBlockchain + 'static> PeerScorer<B> {
     pub fn new(
         network_config: Arc<NetworkConfig>,
         addresses: Arc<PeerAddressBook>,
-        connections: Arc<ConnectionPool<B>>,
+        connections: Arc<ConnectionPool>,
     ) -> Self {
         PeerScorer {
             network_config,
@@ -203,7 +202,7 @@ impl<B: AbstractBlockchain + 'static> PeerScorer<B> {
         let distribution: f64 =
             (state.peer_count_ws as f64 + state.peer_count_wss as f64) / state.peer_count() as f64;
         let peer_count_full_ws_outbound = state.get_peer_count_full_ws_outbound();
-        let connections: Vec<(ConnectionId, &ConnectionInfo<B>)> = state.id_and_connection_iter();
+        let connections: Vec<(ConnectionId, &ConnectionInfo)> = state.id_and_connection_iter();
 
         for connection in connections {
             if connection.1.state() == ConnectionState::Established
@@ -244,7 +243,7 @@ impl<B: AbstractBlockchain + 'static> PeerScorer<B> {
     }
 
     fn score_connection(
-        connection_info: &ConnectionInfo<B>,
+        connection_info: &ConnectionInfo,
         distribution: f64,
         peer_count_full_ws_outbound: usize,
     ) -> Score {
@@ -295,9 +294,9 @@ impl<B: AbstractBlockchain + 'static> PeerScorer<B> {
         // Connection speed, based on ping-pong latency median
         let median_latency = connection_info.statistics().latency_median();
         let score_speed: f64 = if median_latency > 0.0
-            && median_latency < NetworkAgent::<B>::PING_TIMEOUT.as_secs() as f64
+            && median_latency < NetworkAgent::PING_TIMEOUT.as_secs() as f64
         {
-            1.0 - median_latency / NetworkAgent::<B>::PING_TIMEOUT.as_secs() as f64
+            1.0 - median_latency / NetworkAgent::PING_TIMEOUT.as_secs() as f64
         } else {
             0.0
         };
@@ -316,7 +315,7 @@ impl<B: AbstractBlockchain + 'static> PeerScorer<B> {
         )
     }
 
-    fn score_connection_age(connection_info: &ConnectionInfo<B>) -> Score {
+    fn score_connection_age(connection_info: &ConnectionInfo) -> Score {
         let age = connection_info.age_established().as_millis();
         let services = connection_info
             .peer_address()

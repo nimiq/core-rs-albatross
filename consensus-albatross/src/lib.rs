@@ -7,7 +7,6 @@ extern crate pin_project;
 
 extern crate nimiq_block_albatross as block_albatross;
 extern crate nimiq_blockchain_albatross as blockchain_albatross;
-extern crate nimiq_blockchain_base as blockchain_base;
 extern crate nimiq_collections as collections;
 extern crate nimiq_database as database;
 extern crate nimiq_hash as hash;

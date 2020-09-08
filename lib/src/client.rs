@@ -16,8 +16,8 @@ use crate::config::config::{ClientConfig, ProtocolConfig};
 use crate::error::Error;
 
 /// Alias for the Consensus specialized over Albatross
-pub type Mempool = GenericMempool<Blockchain>;
-pub type Network = GenericNetwork<Blockchain>;
+pub type Mempool = GenericMempool;
+pub type Network = GenericNetwork;
 pub type Consensus = AbstractConsensus<Network>;
 
 /// Holds references to the relevant structs. This is then Arc'd in `Client` and a nice API is

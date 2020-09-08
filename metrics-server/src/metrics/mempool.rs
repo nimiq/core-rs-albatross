@@ -2,23 +2,22 @@ use std::io;
 use std::sync::Arc;
 
 use beserial::Serialize;
-use blockchain_base::AbstractBlockchain;
 use mempool::{Mempool, SIZE_MAX};
 
 use crate::server;
 use crate::server::SerializationType;
 
-pub struct MempoolMetrics<B: AbstractBlockchain + 'static> {
-    mempool: Arc<Mempool<B>>,
+pub struct MempoolMetrics {
+    mempool: Arc<Mempool>,
 }
 
-impl<B: AbstractBlockchain + 'static> MempoolMetrics<B> {
-    pub fn new(mempool: Arc<Mempool<B>>) -> Self {
+impl MempoolMetrics {
+    pub fn new(mempool: Arc<Mempool>) -> Self {
         MempoolMetrics { mempool }
     }
 }
 
-impl<B: AbstractBlockchain + 'static> server::Metrics for MempoolMetrics<B> {
+impl server::Metrics for MempoolMetrics {
     fn metrics(
         &self,
         serializer: &mut server::MetricsSerializer<SerializationType>,

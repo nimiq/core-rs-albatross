@@ -1,6 +1,5 @@
 use account::Receipts;
 use block::Block;
-use blockchain_base::Direction;
 use database::cursor::ReadCursor;
 use database::cursor::WriteCursor;
 use database::{
@@ -11,6 +10,7 @@ use primitives::policy;
 use transaction::Transaction as BlockchainTransaction;
 
 use crate::chain_info::{ChainInfo, EpochTransactions};
+use crate::Direction;
 
 #[derive(Debug)]
 pub struct ChainStore {

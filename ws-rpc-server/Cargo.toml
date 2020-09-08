@@ -27,7 +27,6 @@ tokio-tungstenite = "0.8"
 
 nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }
 nimiq-blockchain-albatross = { path = "../blockchain-albatross", version = "0.1" }
-nimiq-blockchain-base = { path = "../blockchain-base", version = "0.1" }
 nimiq-bls = { path = "../bls", version = "0.1", optional = true }
 nimiq-consensus-albatross = { path = "../consensus-albatross", version = "0.1" }
 nimiq-hash = { path = "../hash", version = "0.1" }

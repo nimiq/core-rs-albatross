@@ -10,7 +10,7 @@ use parking_lot::RwLockReadGuard;
 use rand::rngs::OsRng;
 use rand::Rng;
 
-use blockchain_base::AbstractBlockchain;
+use blockchain_albatross::Blockchain;
 use genesis::NetworkId;
 use network_interface::prelude::{
     Network as NetworkInterface, NetworkEvent as NetworkEventI, Peer as PeerInterface,
@@ -48,21 +48,21 @@ pub enum NetworkEvent {
     PeersChanged,
 }
 
-pub struct Network<B: AbstractBlockchain + 'static> {
+pub struct Network {
     pub network_config: Arc<NetworkConfig>,
     pub time: Arc<OffsetTime>,
     auto_connect: Atomic<bool>,
     backed_off: Atomic<bool>,
     backoff: Atomic<Duration>,
     pub addresses: Arc<PeerAddressBook>,
-    pub connections: Arc<ConnectionPool<B>>,
-    scorer: Arc<RwLock<PeerScorer<B>>>,
+    pub connections: Arc<ConnectionPool>,
+    scorer: Arc<RwLock<PeerScorer>>,
     timers: Timers<NetworkTimer>,
     pub notifier: RwLock<Notifier<'static, NetworkEvent>>,
-    self_weak: MutableOnce<Weak<Network<B>>>,
+    self_weak: MutableOnce<Weak<Network>>,
 }
 
-impl<B: AbstractBlockchain> Network<B> {
+impl Network {
     const PEER_COUNT_RECYCLING_ACTIVE: usize = 1000;
     const RECYCLING_PERCENTAGE_MIN: f64 = 0.01;
     const RECYCLING_PERCENTAGE_MAX: f64 = 0.20;
@@ -78,7 +78,7 @@ impl<B: AbstractBlockchain> Network<B> {
     pub const SIGNALING_ENABLED: bool = true;
 
     pub fn new(
-        blockchain: Arc<B>,
+        blockchain: Arc<Blockchain>,
         network_config: NetworkConfig,
         time: Arc<OffsetTime>,
         network_id: NetworkId,
@@ -180,7 +180,7 @@ impl<B: AbstractBlockchain> Network<B> {
             .notify(NetworkEvent::PeerLeft(Arc::new(peer)));
     }
 
-    fn on_peers_changed(&self, this: Arc<Network<B>>) {
+    fn on_peers_changed(&self, this: Arc<Network>) {
         self.notifier.read().notify(NetworkEvent::PeersChanged);
         self.timers.reset_delay(
             NetworkTimer::PeersChanged,
@@ -209,7 +209,7 @@ impl<B: AbstractBlockchain> Network<B> {
         );
     }
 
-    fn on_connect_error(&self, this: Arc<Network<B>>) {
+    fn on_connect_error(&self, this: Arc<Network>) {
         // Only set new delay if it doesn't already exist.
         if !self.timers.delay_exists(&NetworkTimer::ConnectError) {
             self.timers.set_delay(
@@ -313,7 +313,7 @@ impl<B: AbstractBlockchain> Network<B> {
         self.time.set_offset(time_offset);
     }
 
-    fn housekeeping(connections: Arc<ConnectionPool<B>>, scorer: Arc<RwLock<PeerScorer<B>>>) {
+    fn housekeeping(connections: Arc<ConnectionPool>, scorer: Arc<RwLock<PeerScorer>>) {
         scorer.write().score_connections();
 
         // Recycle.
@@ -323,7 +323,7 @@ impl<B: AbstractBlockchain> Network<B> {
             let percentage_to_recycle = (peer_count as f64
                 - Self::PEER_COUNT_RECYCLING_ACTIVE as f64)
                 * (Self::RECYCLING_PERCENTAGE_MAX - Self::RECYCLING_PERCENTAGE_MIN)
-                / (ConnectionPool::<B>::PEER_COUNT_MAX - Self::PEER_COUNT_RECYCLING_ACTIVE) as f64
+                / (ConnectionPool::PEER_COUNT_MAX - Self::PEER_COUNT_RECYCLING_ACTIVE) as f64
                 + Self::RECYCLING_PERCENTAGE_MIN as f64;
             let connections_to_recycle =
                 f64::ceil(peer_count as f64 * percentage_to_recycle) as u32;
@@ -344,7 +344,7 @@ impl<B: AbstractBlockchain> Network<B> {
         Self::refresh_addresses(connections, scorer);
     }
 
-    fn refresh_addresses(connections: Arc<ConnectionPool<B>>, scorer: Arc<RwLock<PeerScorer<B>>>) {
+    fn refresh_addresses(connections: Arc<ConnectionPool>, scorer: Arc<RwLock<PeerScorer>>) {
         let connection_scores =
             RwLockReadGuard::map(scorer.read(), |scorer| scorer.connection_scores());
         let mut randrng = OsRng;
@@ -422,12 +422,12 @@ impl<B: AbstractBlockchain> Network<B> {
             .set_allow_inbound_connections(allow_inbound_connections);
     }
 
-    pub fn scorer(&self) -> RwLockReadGuard<PeerScorer<B>> {
+    pub fn scorer(&self) -> RwLockReadGuard<PeerScorer> {
         self.scorer.read()
     }
 }
 
-impl<B: AbstractBlockchain> NetworkInterface for Network<B> {
+impl NetworkInterface for Network {
     type PeerType = PeerChannel;
 
     fn get_peers(&self) -> Vec<Arc<Self::PeerType>> {

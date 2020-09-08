@@ -1,7 +1,7 @@
+#[cfg(feature = "metrics")]
+use crate::chain_metrics::BlockchainMetrics;
 use accounts::Accounts;
 use block::MacroBlock;
-#[cfg(feature = "metrics")]
-use blockchain_base::chain_metrics::BlockchainMetrics;
 use hash::Blake2bHash;
 use primitives::slot::{Slots, ValidatorSlots};
 

@@ -10,7 +10,7 @@ use crate::handler::Method;
 use crate::handlers::Module;
 
 pub struct ConsensusHandler {
-    pub consensus: Arc<Consensus<Network<Blockchain>>>,
+    pub consensus: Arc<Consensus<Network>>,
     state: Arc<RwLock<ConsensusHandlerState>>,
 }
 
@@ -19,7 +19,7 @@ pub struct ConsensusHandlerState {
 }
 
 impl ConsensusHandler {
-    pub fn new(consensus: Arc<Consensus<Network<Blockchain>>>) -> Self {
+    pub fn new(consensus: Arc<Consensus<Network>>) -> Self {
         let state = ConsensusHandlerState {
             consensus: "syncing",
         };

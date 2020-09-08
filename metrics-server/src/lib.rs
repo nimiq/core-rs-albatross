@@ -2,7 +2,6 @@
 extern crate log;
 extern crate nimiq_block_albatross as block_albatross;
 extern crate nimiq_blockchain_albatross as blockchain_albatross;
-extern crate nimiq_blockchain_base as blockchain_base;
 extern crate nimiq_consensus_albatross as consensus_albatross;
 extern crate nimiq_mempool as mempool;
 extern crate nimiq_network_albatross as network;
@@ -80,7 +79,7 @@ impl MetricsServer {
         password: Option<String>,
         pkcs12_key_file: &str,
         pkcs12_passphrase: &str,
-        consensus: Arc<Consensus<Network<Blockchain>>>,
+        consensus: Arc<Consensus<Network>>,
     ) -> Result<MetricsServer, Error>
     where
         CM: AbstractChainMetrics + server::Metrics + 'static,

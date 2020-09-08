@@ -1,8 +1,8 @@
 use parking_lot::RwLockUpgradableReadGuard;
 
-use block::{Block, BlockType, ForkProof};
 #[cfg(feature = "metrics")]
-use blockchain_base::chain_metrics::BlockchainMetrics;
+use crate::chain_metrics::BlockchainMetrics;
+use block::{Block, BlockType, ForkProof};
 use database::{ReadTransaction, WriteTransaction};
 use hash::Blake2bHash;
 use primitives::policy;

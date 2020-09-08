@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use block_albatross::{Block, BlockComponents};
-use blockchain_base::AbstractBlockchain;
 use futures::stream::FuturesUnordered;
 use futures::{FutureExt, StreamExt};
 use hash::Blake2bHash;

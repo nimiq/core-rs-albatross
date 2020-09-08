@@ -26,7 +26,6 @@ beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
 nimiq-account = { path = "../primitives/account", version = "0.1" }
 nimiq-accounts = { path = "../accounts", version = "0.1" }
 nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }
-nimiq-blockchain-base = { path = "../blockchain-base", version = "0.1" }
 nimiq-bls = { path = "../bls", version = "0.1", features = ["beserial"] }
 nimiq-collections = { path = "../collections", version = "0.1" }
 nimiq-database = { path = "../database", version = "0.1", features = ["full-nimiq"] }
@@ -46,5 +45,5 @@ nimiq-block-production-albatross = { path = "../block-production-albatross", ver
 
 [features]
 default = ["transaction-store"]
-metrics = ["nimiq-blockchain-base/metrics"]
+metrics = []
 transaction-store = []

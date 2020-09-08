@@ -9,7 +9,7 @@ use parking_lot::RwLock;
 use rand::{rngs::OsRng, Rng};
 
 use beserial::Serialize;
-use blockchain_base::AbstractBlockchain;
+use blockchain_albatross::Blockchain;
 use genesis::NetworkInfo;
 use macros::upgrade_weak;
 use network_messages::*;
@@ -28,8 +28,8 @@ use crate::network_config::NetworkConfig;
 use crate::peer_channel::PeerChannel;
 use crate::Peer;
 
-pub struct NetworkAgent<B: AbstractBlockchain + 'static> {
-    blockchain: Arc<B>,
+pub struct NetworkAgent {
+    blockchain: Arc<Blockchain>,
     addresses: Arc<PeerAddressBook>,
     network_config: Arc<NetworkConfig>,
     channel: Arc<PeerChannel>,
@@ -51,7 +51,7 @@ pub struct NetworkAgent<B: AbstractBlockchain + 'static> {
 
     challenge_nonce: ChallengeNonce,
 
-    self_weak: Weak<RwLock<NetworkAgent<B>>>,
+    self_weak: Weak<RwLock<NetworkAgent>>,
     pub notifier: Notifier<'static, NetworkAgentEvent>,
 
     timers: Timers<NetworkAgentTimer>,
@@ -74,7 +74,7 @@ pub enum NetworkAgentEvent {
     PingPong(Duration),
 }
 
-impl<B: AbstractBlockchain + 'static> NetworkAgent<B> {
+impl NetworkAgent {
     const VERSION_ATTEMPTS_MAX: usize = 10;
     const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(4); // 4 seconds
     pub const PING_TIMEOUT: Duration = Duration::from_secs(10); // 10 seconds
@@ -87,7 +87,7 @@ impl<B: AbstractBlockchain + 'static> NetworkAgent<B> {
     const NUM_ADDR_PER_REQUEST: u16 = 200;
 
     pub fn new(
-        blockchain: Arc<B>,
+        blockchain: Arc<Blockchain>,
         addresses: Arc<PeerAddressBook>,
         network_config: Arc<NetworkConfig>,
         channel: Arc<PeerChannel>,
@@ -183,7 +183,7 @@ impl<B: AbstractBlockchain + 'static> NetworkAgent<B> {
         // Kick off the handshake by telling the peer our version, network address & blockchain head hash.
         // Firefox sends the data-channel-open event too early, so sending the version message might fail.
         // Try again in this case.
-        let network_info = NetworkInfo::from_network_id(self.blockchain.network_id());
+        let network_info = NetworkInfo::from_network_id(self.blockchain.network_id);
         let msg = VersionMessage::new(
             self.network_config.peer_address(),
             self.blockchain.head_hash(),
@@ -302,7 +302,7 @@ impl<B: AbstractBlockchain + 'static> NetworkAgent<B> {
         }
 
         // Check if the peer is working on the same genesis block.
-        let network_info = NetworkInfo::from_network_id(self.blockchain.network_id());
+        let network_info = NetworkInfo::from_network_id(self.blockchain.network_id);
         if *network_info.genesis_hash() != msg.genesis_hash {
             self.channel.close(CloseType::DifferentGenesisBlock);
             return;
