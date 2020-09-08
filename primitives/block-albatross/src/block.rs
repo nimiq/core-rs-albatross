@@ -1,9 +1,9 @@
-use bitflags::bitflags;
 use std::convert::TryFrom;
 use std::fmt;
 
+use bitflags::bitflags;
+
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
-use block_base;
 use hash::{Blake2bHash, Blake2sHash, Hash, SerializeContent};
 use hash_derive::SerializeContent;
 use primitives::coin::Coin;
@@ -12,7 +12,7 @@ use vrf::VrfSeed;
 
 use crate::macro_block::{MacroBlock, MacroHeader};
 use crate::micro_block::{MicroBlock, MicroHeader};
-use crate::{BlockError, MacroBody, MicroBody, MicroJustification, PbftProof};
+use crate::{MacroBody, MicroBody, MicroJustification, PbftProof};
 
 /// Defines the type of the block, either Micro or Macro (which includes both checkpoint and
 /// election blocks).
@@ -443,20 +443,6 @@ impl BlockHeader {
 #[allow(clippy::derive_hash_xor_eq)] // TODO: Shouldn't be necessary
 impl Hash for BlockHeader {}
 
-impl block_base::BlockHeader for BlockHeader {
-    fn hash(&self) -> Blake2bHash {
-        self.hash()
-    }
-
-    fn height(&self) -> u32 {
-        self.block_number()
-    }
-
-    fn timestamp(&self) -> u64 {
-        self.timestamp()
-    }
-}
-
 impl Serialize for BlockHeader {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size = 0;
@@ -605,42 +591,6 @@ impl Deserialize for BlockBody {
             BlockType::Micro => BlockBody::Micro(Deserialize::deserialize(reader)?),
         };
         Ok(extrinsics)
-    }
-}
-
-impl block_base::Block for Block {
-    type Header = BlockHeader;
-    type Error = BlockError;
-
-    fn hash(&self) -> Blake2bHash {
-        self.hash()
-    }
-
-    fn prev_hash(&self) -> &Blake2bHash {
-        self.parent_hash()
-    }
-
-    fn height(&self) -> u32 {
-        self.block_number()
-    }
-
-    fn header(&self) -> Self::Header {
-        self.header()
-    }
-
-    fn transactions(&self) -> Option<&Vec<Transaction>> {
-        self.transactions()
-    }
-
-    fn transactions_mut(&mut self) -> Option<&mut Vec<Transaction>> {
-        self.transactions_mut()
-    }
-
-    fn is_light(&self) -> bool {
-        match self {
-            Block::Macro(block) => block.body.is_none(),
-            Block::Micro(block) => block.body.is_none(),
-        }
     }
 }
 

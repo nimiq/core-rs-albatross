@@ -22,8 +22,8 @@ parking_lot = "0.9"
 
 beserial = { path = "../beserial", version = "0.1" }
 nimiq-account = { path = "../primitives/account", version = "0.1" }
-nimiq-block-base = { path = "../primitives/block-base", version = "0.1" }
 nimiq-database = { path = "../database", version = "0.1" }
+nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }
 nimiq-hash = { path = "../hash", version = "0.1" }
 nimiq-keys = { path = "../keys", version = "0.1" }
 nimiq-primitives = { path = "../primitives", version = "0.1" }

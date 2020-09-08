@@ -593,9 +593,9 @@ impl AccountInherentInteraction for StakingContract {
                 }
 
                 if receipt.newly_lost_rewards {
-                    if policy::epoch_at(slot.event_block) < policy::epoch_at(block_height) {
-                        self.previous_lost_rewards.remove(slot.slot as usize);
-                    } else if policy::batch_at(slot.event_block) < policy::batch_at(block_height) {
+                    if policy::epoch_at(slot.event_block) < policy::epoch_at(block_height)
+                        || policy::batch_at(slot.event_block) < policy::batch_at(block_height)
+                    {
                         self.previous_lost_rewards.remove(slot.slot as usize);
                     } else {
                         self.current_lost_rewards.remove(slot.slot as usize);

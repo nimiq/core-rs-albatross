@@ -289,8 +289,6 @@ impl Blockchain {
 // TODO: To remove this you need to handle Mempool crate (that requires this trait). That probably
 // requires separating the 1.0 stuff from the rest of the code.
 impl AbstractBlockchain for Blockchain {
-    type Block = Block;
-
     fn new(
         env: Environment,
         network_id: NetworkId,
@@ -308,7 +306,7 @@ impl AbstractBlockchain for Blockchain {
         self.network_id
     }
 
-    fn head_block(&self) -> MappedRwLockReadGuard<Self::Block> {
+    fn head_block(&self) -> MappedRwLockReadGuard<Block> {
         self.head()
     }
 
@@ -320,11 +318,11 @@ impl AbstractBlockchain for Blockchain {
         self.block_number()
     }
 
-    fn get_block(&self, hash: &Blake2bHash, include_body: bool) -> Option<Self::Block> {
+    fn get_block(&self, hash: &Blake2bHash, include_body: bool) -> Option<Block> {
         self.chain_store.get_block(hash, include_body, None)
     }
 
-    fn get_block_at(&self, height: u32, include_body: bool) -> Option<Self::Block> {
+    fn get_block_at(&self, height: u32, include_body: bool) -> Option<Block> {
         self.chain_store.get_block_at(height, include_body, None)
     }
 
@@ -385,12 +383,12 @@ impl AbstractBlockchain for Blockchain {
         count: u32,
         include_body: bool,
         direction: Direction,
-    ) -> Vec<Self::Block> {
+    ) -> Vec<Block> {
         self.chain_store
             .get_blocks(start_block_hash, count, include_body, direction, None)
     }
 
-    fn push(&self, block: Self::Block) -> Result<PushResult, PushError> {
+    fn push(&self, block: Block) -> Result<PushResult, PushError> {
         self.push(block)
     }
 

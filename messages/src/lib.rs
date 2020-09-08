@@ -5,7 +5,6 @@
 extern crate beserial_derive;
 extern crate nimiq_account as account;
 extern crate nimiq_block_albatross as block_albatross;
-extern crate nimiq_block_base as block_base;
 extern crate nimiq_bls as bls;
 extern crate nimiq_handel as handel;
 extern crate nimiq_hash as hash;
@@ -678,21 +677,21 @@ impl MessageNotifier {
     }
 }
 
-pub trait MessageAdapter<B: block_base::Block> {
+pub trait MessageAdapter<B, H> {
     fn register_block_listener<T: PassThroughListener<B> + 'static>(
         notifier: &MessageNotifier,
         listener: T,
     );
-    fn register_header_listener<T: PassThroughListener<B::Header> + 'static>(
+    fn register_header_listener<T: PassThroughListener<H> + 'static>(
         notifier: &MessageNotifier,
         listener: T,
     );
     fn new_block_message(block: B) -> Message;
-    fn new_header_message(header: B::Header) -> Message;
+    fn new_header_message(header: H) -> Message;
 }
 
 pub struct AlbatrossMessageAdapter {}
-impl MessageAdapter<BlockAlbatross> for AlbatrossMessageAdapter {
+impl MessageAdapter<BlockAlbatross, BlockHeaderAlbatross> for AlbatrossMessageAdapter {
     fn register_block_listener<T: PassThroughListener<BlockAlbatross> + 'static>(
         notifier: &MessageNotifier,
         listener: T,

@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use json::{object, Array, JsonValue, Null};
 
-use block_base::{Block, BlockHeader};
+use block_albatross::Block;
 use blockchain_base::AbstractBlockchain;
 use keys::Address;
 
@@ -206,14 +206,14 @@ impl<B: AbstractBlockchain + 'static> BlockchainHandler<B> {
 
     // Helper functions
 
-    pub(crate) fn block_by_number(&self, number: &JsonValue) -> Result<B::Block, JsonValue> {
+    pub(crate) fn block_by_number(&self, number: &JsonValue) -> Result<Block, JsonValue> {
         let block_number = self.parse_block_number(number)?;
         self.blockchain
             .get_block_at(block_number, true)
             .ok_or_else(|| object! {"message" => "Block not found"})
     }
 
-    pub(crate) fn block_by_hash(&self, hash: &JsonValue) -> Result<B::Block, JsonValue> {
+    pub(crate) fn block_by_hash(&self, hash: &JsonValue) -> Result<Block, JsonValue> {
         let hash = parse_hash(hash)?;
         self.blockchain
             .get_block(&hash, true)
@@ -222,7 +222,7 @@ impl<B: AbstractBlockchain + 'static> BlockchainHandler<B> {
 
     pub(crate) fn get_transaction_by_block_and_index(
         &self,
-        block: &B::Block,
+        block: &Block,
         index: u16,
     ) -> Result<JsonValue, JsonValue> {
         // Get the transaction. If the body doesn't store transaction, return an error
@@ -235,7 +235,7 @@ impl<B: AbstractBlockchain + 'static> BlockchainHandler<B> {
             &transaction,
             Some(&TransactionContext {
                 block_hash: &block.hash().to_hex(),
-                block_number: block.height(),
+                block_number: block.block_number(),
                 index,
                 timestamp: block.header().timestamp(),
             }),
@@ -247,7 +247,7 @@ impl<B: AbstractBlockchain + 'static> BlockchainHandler<B> {
         &self,
         receipt: &TransactionReceipt,
         index: Option<u16>,
-        block: Option<&B::Block>,
+        block: Option<&Block>,
     ) -> JsonValue {
         object! {
             "transactionHash" => receipt.transaction_hash.to_hex(),

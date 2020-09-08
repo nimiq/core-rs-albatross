@@ -6,7 +6,6 @@ extern crate log;
 extern crate pin_project;
 
 extern crate nimiq_block_albatross as block_albatross;
-extern crate nimiq_block_base as block_base;
 extern crate nimiq_blockchain_albatross as blockchain_albatross;
 extern crate nimiq_blockchain_base as blockchain_base;
 extern crate nimiq_collections as collections;

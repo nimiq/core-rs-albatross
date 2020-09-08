@@ -30,7 +30,6 @@ async-trait = "0.1"
 beserial = { path = "../beserial", version = "0.1" }
 beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
 nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }
-nimiq-block-base = { path = "../primitives/block-base", version = "0.1" }
 nimiq-blockchain-albatross = { path = "../blockchain-albatross", version = "0.1", features = ["transaction-store"] }
 nimiq-blockchain-base = { path = "../blockchain-base", version = "0.1" }
 nimiq-collections = { path = "../collections", version = "0.1" }

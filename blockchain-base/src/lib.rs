@@ -1,5 +1,5 @@
 extern crate nimiq_account as account;
-extern crate nimiq_block_base as block_base;
+extern crate nimiq_block_albatross as block_albatross;
 extern crate nimiq_database as database;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
@@ -17,7 +17,7 @@ use parking_lot::MappedRwLockReadGuard;
 use parking_lot::MutexGuard;
 
 use account::{Account, AccountError};
-use block_base::{Block, BlockError};
+use block_albatross::{Block, BlockError};
 use database::Environment;
 use database::{ReadTransaction, Transaction};
 use hash::Blake2bHash;
@@ -36,7 +36,6 @@ pub mod chain_metrics;
 pub trait AbstractBlockchain: Sized + Send + Sync {
     // TODO: Should this be `Block + 'static`? Our implementations would satisfy this anyway. And
     // I think all uses of AbstractBlockchain require it to be 'static too.
-    type Block: Block;
     //type VerifyResult;
 
     // XXX This signature is most likely too restrictive to accommodate all blockchain types.
@@ -53,7 +52,7 @@ pub trait AbstractBlockchain: Sized + Send + Sync {
     fn network_id(&self) -> NetworkId;
 
     /// Returns the current head block
-    fn head_block(&self) -> MappedRwLockReadGuard<Self::Block>;
+    fn head_block(&self) -> MappedRwLockReadGuard<Block>;
 
     /// Returns the current head hash of the active chain
     fn head_hash(&self) -> Blake2bHash;
@@ -62,10 +61,10 @@ pub trait AbstractBlockchain: Sized + Send + Sync {
     fn head_height(&self) -> u32;
 
     /// Get block by hash
-    fn get_block(&self, hash: &Blake2bHash, include_body: bool) -> Option<Self::Block>;
+    fn get_block(&self, hash: &Blake2bHash, include_body: bool) -> Option<Block>;
 
     /// Get block by block number
-    fn get_block_at(&self, height: u32, include_body: bool) -> Option<Self::Block>;
+    fn get_block_at(&self, height: u32, include_body: bool) -> Option<Block>;
 
     /// Get block locators
     fn get_block_locators(&self, max_count: usize) -> Vec<Blake2bHash>;
@@ -78,16 +77,13 @@ pub trait AbstractBlockchain: Sized + Send + Sync {
         count: u32,
         include_body: bool,
         direction: Direction,
-    ) -> Vec<Self::Block>;
+    ) -> Vec<Block>;
 
     /// Verify a block
     //fn verify(&self, block: &Self::Block) -> Self::VerifyResult;
 
     /// Push a block to the block chain
-    fn push(
-        &self,
-        block: Self::Block,
-    ) -> Result<PushResult, PushError<<Self::Block as Block>::Error>>;
+    fn push(&self, block: Block) -> Result<PushResult, PushError<BlockError>>;
 
     /// Check if a block with the given hash is included in the blockchain
     /// `include_forks` will also check for micro-block forks in the current epoch
@@ -114,7 +110,7 @@ pub trait AbstractBlockchain: Sized + Send + Sync {
 
     /* Required by Mempool */
 
-    fn register_listener<T: Listener<BlockchainEvent<Self::Block>> + 'static>(
+    fn register_listener<T: Listener<BlockchainEvent<Block>> + 'static>(
         &self,
         listener: T,
     ) -> ListenerHandle;
@@ -154,7 +150,7 @@ pub trait AbstractBlockchain: Sized + Send + Sync {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum BlockchainEvent<BL: Block> {
+pub enum BlockchainEvent<BL> {
     Extended(Blake2bHash),
     Rebranched(Vec<(Blake2bHash, BL)>, Vec<(Blake2bHash, BL)>),
     Finalized(Blake2bHash),
@@ -182,30 +178,22 @@ pub enum PushResult {
     Ignored,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Fail)]
-pub enum PushError<BE: BlockError> {
-    #[fail(display = "Block is an orphan")]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PushError<BE> {
     Orphan,
-    #[fail(display = "Block is invalid: {}", _0)]
-    InvalidBlock(#[cause] BE),
-    #[fail(display = "Block is not a valid successor")]
+    InvalidBlock(BE),
     InvalidSuccessor,
 
-    // TODO: This is part of powchain's and albatross' BlockError anyway
-    #[fail(display = "Block contains duplicate transactions")]
     DuplicateTransaction,
 
-    #[fail(display = "Block can't be applied to accounts tree: {}", _0)]
-    AccountsError(#[cause] AccountError),
+    AccountsError(AccountError),
 
-    #[fail(display = "Block is part of an invalid fork")]
     InvalidFork,
 
-    #[fail(display = "Failed to push block onto blockchain: {}", _0)]
-    BlockchainError(#[cause] BlockchainError),
+    BlockchainError(BlockchainError),
 }
 
-impl<BE: BlockError> PushError<BE> {
+impl<BE> PushError<BE> {
     /// Create a `PushError` from a `BlockError`.
     ///
     /// NOTE: We can't implement `From<BE: BlockError>`, since the compiler can't guarantee that
@@ -216,13 +204,13 @@ impl<BE: BlockError> PushError<BE> {
     }
 }
 
-impl<BE: BlockError> From<AccountError> for PushError<BE> {
+impl<BE> From<AccountError> for PushError<BE> {
     fn from(e: AccountError) -> Self {
         PushError::AccountsError(e)
     }
 }
 
-impl<BE: BlockError> From<BlockchainError> for PushError<BE> {
+impl<BE> From<BlockchainError> for PushError<BE> {
     fn from(e: BlockchainError) -> Self {
         PushError::BlockchainError(e)
     }

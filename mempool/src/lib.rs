@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate log;
 extern crate nimiq_account as account;
-extern crate nimiq_block_base as block_base;
+extern crate nimiq_block_albatross as block_albatross;
 extern crate nimiq_blockchain_base as blockchain_base;
 extern crate nimiq_collections as collections;
 extern crate nimiq_hash as hash;
@@ -18,7 +18,6 @@ use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 
 use account::{Account, AccountTransactionInteraction};
 use beserial::Serialize;
-use block_base::Block;
 use blockchain_base::{AbstractBlockchain, BlockchainEvent};
 use hash::{Blake2bHash, Hash};
 use keys::Address;
@@ -27,6 +26,7 @@ use transaction::{Transaction, TransactionFlags};
 use utils::observer::{weak_listener, Notifier};
 
 use crate::filter::{MempoolFilter, Rules};
+use block_albatross::Block;
 
 pub mod filter;
 
@@ -87,7 +87,7 @@ impl<B: AbstractBlockchain + 'static> Mempool<B> {
         let weak = Arc::downgrade(&arc);
         blockchain.register_listener(weak_listener(
             weak,
-            |this: Arc<Self>, event: &BlockchainEvent<B::Block>| this.on_blockchain_event(event),
+            |this: Arc<Self>, event: &BlockchainEvent<Block>| this.on_blockchain_event(event),
         ));
 
         arc
@@ -462,7 +462,7 @@ impl<B: AbstractBlockchain + 'static> Mempool<B> {
         self.blockchain.network_id()
     }
 
-    fn on_blockchain_event(&self, event: &BlockchainEvent<B::Block>) {
+    fn on_blockchain_event(&self, event: &BlockchainEvent<Block>) {
         match event {
             BlockchainEvent::Extended(_)
             | BlockchainEvent::Finalized(_)
@@ -565,7 +565,7 @@ impl<B: AbstractBlockchain + 'static> Mempool<B> {
         }
     }
 
-    fn restore_transactions(&self, reverted_blocks: &[(Blake2bHash, B::Block)]) {
+    fn restore_transactions(&self, reverted_blocks: &[(Blake2bHash, Block)]) {
         // Only one mutating operation at a time.
         let _lock = self.mut_lock.lock();
 

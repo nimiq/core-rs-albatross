@@ -37,7 +37,6 @@ members = [
   "primitives",
   "primitives/account",
   "primitives/block-albatross",
-  "primitives/block-base",
   "primitives/subscription",
   "primitives/transaction",
   "rpc-server",

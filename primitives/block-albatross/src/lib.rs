@@ -1,11 +1,10 @@
 #[macro_use]
-extern crate log;
+extern crate beserial_derive;
 #[macro_use]
 extern crate failure;
 #[macro_use]
-extern crate beserial_derive;
+extern crate log;
 extern crate nimiq_account as account;
-extern crate nimiq_block_base as block_base;
 extern crate nimiq_bls as bls;
 extern crate nimiq_collections as collections;
 extern crate nimiq_hash as hash;
@@ -15,14 +14,6 @@ extern crate nimiq_primitives as primitives;
 extern crate nimiq_transaction as transaction;
 extern crate nimiq_utils as utils;
 extern crate nimiq_vrf as vrf;
-
-mod block;
-mod fork_proof;
-mod macro_block;
-mod micro_block;
-mod pbft;
-pub mod signed;
-mod view_change;
 
 pub use block::{
     Block, BlockBody, BlockComponentFlags, BlockComponents, BlockHeader, BlockJustification,
@@ -40,6 +31,14 @@ pub use view_change::{
 };
 
 use crate::transaction::TransactionError;
+
+mod block;
+mod fork_proof;
+mod macro_block;
+mod micro_block;
+mod pbft;
+pub mod signed;
+mod view_change;
 
 /// Enum containing a variety of block error types.
 #[derive(Clone, PartialEq, Eq, Debug, Fail)]
@@ -97,8 +96,6 @@ pub enum BlockError {
     #[fail(display = "Incorrect validators")]
     InvalidValidators,
 }
-
-impl block_base::BlockError for BlockError {}
 
 impl From<signed::AggregateProofError> for BlockError {
     fn from(_e: signed::AggregateProofError) -> Self {
