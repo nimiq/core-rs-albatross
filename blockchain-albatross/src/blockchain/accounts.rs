@@ -1,5 +1,5 @@
 #[cfg(feature = "metrics")]
-use crate::chain_metrics::BlockchainMetrics;
+
 use account::Inherent;
 use accounts::Accounts;
 use block::{Block, MicroBlock, ViewChanges};

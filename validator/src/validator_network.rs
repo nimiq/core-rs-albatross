@@ -8,7 +8,7 @@ use tokio;
 
 use block_albatross::signed::AggregateProof;
 use block_albatross::{
-    BlockBody, BlockHeader, ForkProof, PbftCommitMessage, PbftPrepareMessage, PbftProof,
+    BlockHeader, ForkProof, PbftCommitMessage, PbftPrepareMessage, PbftProof,
     PbftProposal, SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedPbftProposal,
     SignedViewChange, ViewChange, ViewChangeProof,
 };

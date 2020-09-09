@@ -15,7 +15,7 @@ use block_albatross::{
 use block_production_albatross::BlockProducer;
 use blockchain_albatross::{Blockchain, BlockchainEvent, ForkEvent};
 use bls::KeyPair;
-use consensus_albatross::{Consensus, ConsensusEvent};
+use consensus_albatross::{Consensus};
 use genesis::NetworkInfo;
 use hash::{Blake2bHash, Hash};
 use keys::Address;

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use blockchain_albatross::Blockchain;
-use consensus::{Consensus, ConsensusEvent};
+
+use consensus::{Consensus};
 use json::JsonValue;
 use network::Network;
 use parking_lot::RwLock;

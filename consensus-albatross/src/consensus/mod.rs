@@ -13,19 +13,19 @@ use block_albatross::Block;
 use blockchain_albatross::{Blockchain, BlockchainEvent};
 use database::Environment;
 use macros::upgrade_weak;
-use mempool::{Mempool, MempoolConfig, MempoolEvent};
+use mempool::{Mempool, MempoolEvent};
 use network_interface::{
     network::{Network, NetworkEvent},
     peer::Peer,
 };
-use nimiq_genesis::NetworkId;
+
 use tokio::sync::broadcast::{
     channel as broadcast, Receiver as BroadcastReceiver, Sender as BroadcastSender,
 };
 use transaction::Transaction;
 use utils::mutable_once::MutableOnce;
-use utils::observer::Notifier;
-use utils::time::OffsetTime;
+
+
 use utils::timers::Timers;
 
 use crate::consensus_agent::ConsensusAgent;

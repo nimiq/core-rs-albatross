@@ -1,5 +1,5 @@
 #[cfg(feature = "metrics")]
-use crate::chain_metrics::BlockchainMetrics;
+
 use account::inherent::AccountInherentInteraction;
 use account::{Inherent, InherentType};
 use beserial::Serialize;

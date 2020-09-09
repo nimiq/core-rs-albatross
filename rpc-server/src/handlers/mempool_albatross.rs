@@ -5,7 +5,7 @@ use json::{object, JsonValue, Null};
 use parking_lot::RwLock;
 
 use beserial::{Deserialize, Serialize};
-use blockchain_albatross::Blockchain;
+
 use bls::{CompressedPublicKey, CompressedSignature};
 use genesis::NetworkInfo;
 use keys::Address;

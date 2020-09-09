@@ -25,7 +25,7 @@ use crate::error::Error;
 pub use crate::metrics::chain::{AbstractChainMetrics, AlbatrossChainMetrics};
 use crate::metrics::mempool::MempoolMetrics;
 use crate::metrics::network::NetworkMetrics;
-use blockchain_albatross::Blockchain;
+
 use network::Network;
 
 macro_rules! attributes {

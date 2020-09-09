@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use block_albatross::{Block, BlockComponents};
+use block_albatross::{Block};
 use futures::stream::FuturesUnordered;
 use futures::{FutureExt, StreamExt};
 use hash::Blake2bHash;
@@ -149,7 +149,7 @@ impl<N: Network> QuickSync<N> {
             });
 
         let mut successfully_synced = vec![];
-        let mut block_index = skip_prefix_len;
+        let block_index = skip_prefix_len;
         while let Some(block_result) = sync_queue.next().await {
             match block_result {
                 Ok(epoch) => {

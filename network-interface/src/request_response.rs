@@ -1,6 +1,6 @@
 use futures::{
     channel::oneshot::{channel, Sender},
-    future, Future, StreamExt,
+    future, StreamExt,
 };
 use parking_lot::Mutex;
 use std::collections::HashMap;

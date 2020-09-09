@@ -13,7 +13,7 @@ use nimiq_database::WriteTransaction;
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
-use nimiq_primitives::policy;
+
 use nimiq_transaction::{SignatureProof, Transaction};
 
 #[test]

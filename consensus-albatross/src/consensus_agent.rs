@@ -1,5 +1,5 @@
 use parking_lot::RwLock;
-use std::sync::{Arc, Weak};
+use std::sync::{Arc};
 use std::time::Duration;
 
 use crate::messages::{
@@ -12,10 +12,10 @@ use hash::Blake2bHash;
 use network_interface::peer::Peer;
 use network_interface::request_response::{RequestError, RequestResponse};
 use nimiq_subscription::Subscription;
-use tokio;
+
 use transaction::Transaction;
-use utils::mutable_once::MutableOnce;
-use utils::timers::Timers;
+
+
 
 pub struct ConsensusAgentState {
     local_subscription: Subscription,
@@ -75,7 +75,7 @@ impl<P: Peer> ConsensusAgent<P> {
 
     pub fn request_block(
         &self,
-        hash: Blake2bHash,
+        _hash: Blake2bHash,
     ) -> impl Future<Output = Result<Block, RequestError>> + 'static {
         async { Err(RequestError::Timeout) }
     }

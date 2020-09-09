@@ -1,7 +1,7 @@
 use parking_lot::MappedRwLockReadGuard;
 
 #[cfg(feature = "metrics")]
-use crate::chain_metrics::BlockchainMetrics;
+
 use crate::hash::{Blake2bHash, Hash};
 use block::{
     Block, BlockBody, BlockError, BlockHeader, BlockJustification, BlockType, ForkProof, ViewChange,

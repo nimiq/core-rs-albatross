@@ -1,11 +1,11 @@
 use crate::consensus_agent::ConsensusAgent;
-use block_albatross::Block;
+
 use futures::stream::FuturesUnordered;
 use futures::task::{Context, Poll};
 use futures::{ready, Future, FutureExt, Stream, StreamExt};
 use hash::Blake2bHash;
 use network_interface::peer::Peer;
-use network_interface::request_response::RequestError;
+
 use std::cmp;
 use std::cmp::Ordering;
 use std::collections::binary_heap::PeekMut;

@@ -838,7 +838,7 @@ impl ClientConfigBuilder {
                         .iter()
                         .map(|s| {
                             s.parse::<IpAddr>()
-                                .map_err({ |e| Error::config_error(format!("Invalid IP: {}", e)) })
+                                .map_err(|e| Error::config_error(format!("Invalid IP: {}", e)))
                         })
                         .collect::<Result<Vec<IpAddr>, Error>>();
                     Some(result?)

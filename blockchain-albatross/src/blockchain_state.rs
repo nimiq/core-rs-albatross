@@ -1,5 +1,5 @@
 #[cfg(feature = "metrics")]
-use crate::chain_metrics::BlockchainMetrics;
+
 use accounts::Accounts;
 use block::MacroBlock;
 use hash::Blake2bHash;

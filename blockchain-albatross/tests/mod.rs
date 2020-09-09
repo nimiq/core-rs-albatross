@@ -8,7 +8,7 @@ use nimiq_block_albatross::{
     ViewChangeProof, ViewChangeProofBuilder,
 };
 use nimiq_block_production_albatross::BlockProducer;
-use nimiq_blockchain_albatross::{Blockchain, Direction, ForkEvent, PushError, PushResult};
+use nimiq_blockchain_albatross::{Blockchain, ForkEvent, PushError, PushResult};
 use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_database::Environment;
@@ -275,7 +275,7 @@ fn it_can_rebranch_at_macro_block() {
     //                \- [1/1]
 
     let mut block;
-    let macro_block = loop {
+    let _macro_block = loop {
         block = temp_producer1.next_block(0, vec![]);
         temp_producer2.push(block.clone()).unwrap();
         if let Block::Macro(macro_block) = block {

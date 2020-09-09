@@ -4,21 +4,21 @@ use parking_lot::{MappedRwLockReadGuard, Mutex, MutexGuard, RwLock};
 
 #[cfg(feature = "metrics")]
 use crate::chain_metrics::BlockchainMetrics;
-use account::Account;
+
 use accounts::Accounts;
 use block::Block;
-use database::{Environment, ReadTransaction, Transaction, WriteTransaction};
+use database::{Environment, WriteTransaction};
 use genesis::NetworkInfo;
 use hash::Blake2bHash;
-use keys::Address;
+
 use primitives::coin::Coin;
 use primitives::networks::NetworkId;
 use primitives::policy;
 use primitives::slot::Slots;
-use transaction::{Transaction as BlockchainTransaction, TransactionReceipt, TransactionsProof};
-use tree_primitives::accounts_proof::AccountsProof;
-use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
-use utils::observer::{Listener, ListenerHandle, Notifier};
+
+
+
+use utils::observer::{Notifier};
 use utils::time::OffsetTime;
 
 use crate::blockchain_state::BlockchainState;
@@ -27,8 +27,8 @@ use crate::chain_store::ChainStore;
 use crate::reward::genesis_parameters;
 use crate::transaction_cache::TransactionCache;
 use crate::{BlockchainError, BlockchainEvent, Direction, ForkEvent, PushError, PushResult};
-use std::cmp;
-use std::collections::HashSet;
+
+
 
 /// The Blockchain struct. It stores all information of the blockchain. It is the main data
 /// structure in this crate.

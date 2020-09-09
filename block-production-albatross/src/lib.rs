@@ -354,7 +354,7 @@ impl BlockProducer {
 #[cfg(any(test, feature = "test-utils"))]
 pub mod test_utils {
     use super::*;
-    use beserial::Deserialize;
+    
     use block::{
         Block, MacroBlock, PbftCommitMessage, PbftPrepareMessage, PbftProofBuilder,
         SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedViewChange, ViewChange,
@@ -464,7 +464,7 @@ pub mod test_utils {
         for _ in 0..num_macro {
             fill_micro_blocks(producer, blockchain);
 
-            let next_block_height = blockchain.block_number() + 1;
+            let _next_block_height = blockchain.block_number() + 1;
             let (proposal, extrinsics) = producer.next_macro_block_proposal(
                 blockchain.time.now() + blockchain.block_number() as u64 * 1000,
                 0u32,

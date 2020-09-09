@@ -6,7 +6,7 @@ use std::{
 
 use parking_lot::RwLock;
 
-use blockchain_albatross::Blockchain;
+
 use peer_address::address::PeerAddress;
 
 use crate::connection::network_agent::NetworkAgent;

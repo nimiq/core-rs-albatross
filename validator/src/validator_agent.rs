@@ -13,7 +13,7 @@ use blockchain_albatross::Blockchain;
 use bls::CompressedPublicKey;
 use handel::update::LevelUpdateMessage;
 use hash::{Blake2bHash, Hash};
-use messages::{Message, ViewChangeProofMessage};
+use messages::{ViewChangeProofMessage};
 use network::connection::close_type::CloseType;
 use network::Peer;
 use network_interface::peer::Peer as PeerInterface;

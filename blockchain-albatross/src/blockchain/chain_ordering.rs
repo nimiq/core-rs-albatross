@@ -2,7 +2,7 @@ use std::cmp;
 use std::cmp::Ordering;
 
 #[cfg(feature = "metrics")]
-use crate::chain_metrics::BlockchainMetrics;
+
 use block::{Block, BlockType};
 use database::Transaction;
 use hash::Blake2bHash;

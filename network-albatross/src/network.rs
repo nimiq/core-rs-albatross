@@ -15,8 +15,8 @@ use genesis::NetworkId;
 use network_interface::prelude::{
     Network as NetworkInterface, NetworkEvent as NetworkEventI, Peer as PeerInterface,
 };
-use peer_address::address::PeerAddress;
-use tokio_02::sync::broadcast::{Receiver as BroadcastReceiver, RecvError as BroadcastRecvError};
+
+use tokio_02::sync::broadcast::{Receiver as BroadcastReceiver};
 use utils::mutable_once::MutableOnce;
 use utils::observer::Notifier;
 use utils::time::OffsetTime;

@@ -19,7 +19,7 @@ use nimiq_primitives::policy;
 use nimiq_primitives::slot::{ValidatorSlotBand, ValidatorSlots};
 use nimiq_vrf::VrfSeed;
 
-use nimiq_block_production_albatross::test_utils::*;
+
 
 /// Secret key of validator. Tests run with `genesis/src/genesis/unit-albatross.toml`
 const SECRET_KEY: &'static str =

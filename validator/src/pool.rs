@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 
-use blockchain_albatross::Blockchain;
+
 use bls::lazy::LazyPublicKey;
 use bls::CompressedPublicKey;
 use hash::{Blake2bHash, Hash};
