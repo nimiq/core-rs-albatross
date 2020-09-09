@@ -1,6 +1,6 @@
+use algebra_core::ProjectiveCurve;
 use rand::thread_rng;
 
-use algebra_core::ProjectiveCurve;
 use beserial::Deserialize;
 use nimiq_bls::*;
 use nimiq_utils::key_rng::SecureGenerate;

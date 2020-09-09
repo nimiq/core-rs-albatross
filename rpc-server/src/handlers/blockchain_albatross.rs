@@ -2,6 +2,7 @@ use std::borrow::Borrow;
 use std::convert::TryInto;
 use std::sync::Arc;
 
+use json::object::Object;
 use json::{object, JsonValue, Null};
 
 use account::staking_contract::{InactiveStake, InactiveValidator, Validator};
@@ -20,7 +21,6 @@ use crate::handlers::blockchain::BlockchainHandler;
 use crate::handlers::mempool::{transaction_to_obj, TransactionContext};
 use crate::handlers::Module;
 use crate::rpc_not_implemented;
-use json::object::Object;
 
 pub struct BlockchainAlbatrossHandler {
     pub blockchain: Arc<Blockchain>,

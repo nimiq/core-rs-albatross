@@ -1,13 +1,12 @@
 // TODO: Remove when stabilized.
 #![feature(div_duration)]
 
-#[cfg(feature = "log")]
-#[macro_use]
-extern crate log;
-
 #[cfg(feature = "beserial_derive")]
 #[macro_use]
 extern crate beserial_derive;
+#[cfg(feature = "log")]
+#[macro_use]
+extern crate log;
 
 #[cfg(feature = "crc")]
 pub mod crc;

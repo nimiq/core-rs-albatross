@@ -1,8 +1,8 @@
 use failure::Fail;
-use utils::key_store::Error as KeyStoreError;
 
 use genesis::NetworkId;
 use peer_address::address::peer_uri::PeerUriError;
+use utils::key_store::Error as KeyStoreError;
 
 use crate::websocket::error::ServerStartError;
 

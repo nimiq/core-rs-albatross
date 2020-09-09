@@ -1,7 +1,6 @@
 use failure::Fail;
 
 use beserial::{BigEndian, Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
-
 use collections::bitset::BitSet;
 
 #[derive(Clone, Debug, Fail)]

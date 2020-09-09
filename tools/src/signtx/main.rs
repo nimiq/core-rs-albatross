@@ -2,15 +2,18 @@ extern crate nimiq_keys as keys;
 extern crate nimiq_primitives as primitives;
 extern crate nimiq_transaction as transaction;
 
-use beserial::{Deserialize, Serialize};
-use clap::{crate_authors, crate_description, crate_version, App, Arg};
-use failure::Error;
-use failure::Fail;
-use keys::{Address, KeyPair, PrivateKey};
-use primitives::coin::Coin;
 use std::io::stdin;
 use std::process::exit;
 use std::str::FromStr;
+
+use clap::{crate_authors, crate_description, crate_version, App, Arg};
+use failure::Error;
+use failure::Fail;
+
+use beserial::{Deserialize, Serialize};
+use keys::{Address, KeyPair, PrivateKey};
+use primitives::coin::Coin;
+use primitives::networks::NetworkId;
 use transaction::Transaction;
 
 fn run_app() -> Result<(), Error> {
@@ -141,8 +144,6 @@ fn main() {
         }
     });
 }
-
-use primitives::networks::NetworkId;
 
 #[derive(Debug, Fail)]
 enum AppError {

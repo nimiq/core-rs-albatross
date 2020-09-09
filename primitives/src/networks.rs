@@ -1,6 +1,7 @@
-use beserial::{Deserialize, Serialize};
 use std::fmt::{Display, Error, Formatter};
 use std::str::FromStr;
+
+use beserial::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[repr(u8)]

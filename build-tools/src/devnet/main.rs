@@ -1,19 +1,20 @@
 #[macro_use]
-extern crate log;
-#[macro_use]
 extern crate failure;
-
-mod docker;
+#[macro_use]
+extern crate log;
 
 use std::fs::{canonicalize, remove_file};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use docker::Docker;
 use failure::Error;
 use log::Level;
 use structopt::StructOpt;
+
+use docker::Docker;
+
+mod docker;
 
 #[derive(Debug, StructOpt)]
 #[structopt(about = "Run an Albatross DevNet locally")]

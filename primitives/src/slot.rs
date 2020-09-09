@@ -1,3 +1,4 @@
+extern crate itertools;
 ///! # Slot allocation primitives
 ///!
 ///! This module contains data structures describing the allocation of slots.
@@ -23,8 +24,6 @@
 extern crate nimiq_bls as bls;
 extern crate nimiq_keys as keys;
 extern crate nimiq_utils as utils;
-
-extern crate itertools;
 
 use std::collections::BTreeMap;
 use std::fmt;

@@ -1,6 +1,7 @@
+use std::collections::HashSet;
+
 use beserial::Serialize;
 use block_albatross::{Block, ForkProof, MacroBlock, MacroHeader, MicroBlock};
-use std::collections::HashSet;
 
 #[derive(Default)]
 pub struct ForkProofPool {

@@ -13,8 +13,6 @@ use nimiq_genesis::NetworkId;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::policy;
 
-
-
 /// Secret key of validator. Tests run with `genesis/src/genesis/unit-albatross.toml`
 const SECRET_KEY: &str = "196ffdb1a8acc7cbd76a251aeac0600a1d68b3aba1eba823b5e4dc5dbdcdc730afa752c05ab4f6ef8518384ad514f403c5a088a22b17bf1bc14f8ff8decc2a512c0a200f68d7bdf5a319b30356fe8d1d75ef510aed7a8660968c216c328a0000";
 
@@ -73,9 +71,7 @@ fn sign_macro_block(proposal: PbftProposal, extrinsics: MacroBody) -> MacroBlock
         0,
     );
     let commit = SignedPbftCommitMessage::from_message(
-        PbftCommitMessage {
-            block_hash,
-        },
+        PbftCommitMessage { block_hash },
         &keypair.secret_key,
         0,
     );

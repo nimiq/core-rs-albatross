@@ -1,5 +1,6 @@
-use directories::UserDirs;
 use std::path::PathBuf;
+
+use directories::UserDirs;
 
 pub fn home() -> PathBuf {
     UserDirs::new()

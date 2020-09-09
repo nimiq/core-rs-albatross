@@ -1,22 +1,22 @@
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::pin::Pin;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use futures::channel::mpsc::{unbounded, UnboundedSender};
 use futures::channel::oneshot::{channel as oneshot, Sender as OneshotSender};
+use futures::task::{noop_waker_ref, Context, Poll};
 use futures::{executor, future, FutureExt, Sink, SinkExt, Stream, StreamExt};
 use parking_lot::{Mutex, RwLock};
 use tokio::sync::broadcast::{
     channel as broadcast, Receiver as BroadcastReceiver, Sender as BroadcastSender,
 };
 
-use futures::task::{noop_waker_ref, Context, Poll};
 use nimiq_network_interface::message::{peek_type, Message};
 use nimiq_network_interface::network::{Network, NetworkEvent};
 use nimiq_network_interface::peer::dispatch::{unbounded_dispatch, DispatchError};
 use nimiq_network_interface::peer::{CloseReason, Peer, SendError};
-use std::hash::{Hash, Hasher};
 
 pub type Channels =
     Arc<RwLock<HashMap<u64, Pin<Box<dyn Sink<Vec<u8>, Error = DispatchError> + Send + Sync>>>>>;
@@ -223,6 +223,7 @@ impl Network for MockNetwork {
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
+    use std::time::Duration;
 
     use futures::StreamExt;
 
@@ -230,10 +231,9 @@ mod tests {
     use nimiq_network_interface::message::{Message, RequestMessage, ResponseMessage};
     use nimiq_network_interface::network::{Network, NetworkEvent};
     use nimiq_network_interface::peer::{CloseReason, Peer};
+    use nimiq_network_interface::request_response::RequestResponse;
 
     use crate::network::MockNetwork;
-    use nimiq_network_interface::request_response::RequestResponse;
-    use std::time::Duration;
 
     #[derive(Debug, Deserialize, Serialize)]
     struct TestMessage {

@@ -18,6 +18,8 @@ use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 
 use account::{Account, AccountTransactionInteraction};
 use beserial::Serialize;
+use block_albatross::Block;
+use blockchain_albatross::{Blockchain, BlockchainEvent};
 use hash::{Blake2bHash, Hash};
 use keys::Address;
 use primitives::networks::NetworkId;
@@ -25,8 +27,6 @@ use transaction::{Transaction, TransactionFlags};
 use utils::observer::{weak_listener, Notifier};
 
 use crate::filter::{MempoolFilter, Rules};
-use block_albatross::Block;
-use blockchain_albatross::{Blockchain, BlockchainEvent};
 
 pub mod filter;
 
@@ -192,13 +192,15 @@ impl Mempool {
                 }
             }
             // Also check contract creation.
-            if is_contract_creation && Account::new_contract(
+            if is_contract_creation
+                && Account::new_contract(
                     transaction.recipient_type,
                     recipient_account.balance(),
                     &transaction,
                     block_height,
                 )
-                .is_err() {
+                .is_err()
+            {
                 return ReturnCode::Invalid;
             }
 
@@ -507,13 +509,15 @@ impl Mempool {
                         continue;
                     }
                     // Also check contract creation.
-                    if tx.flags.contains(TransactionFlags::CONTRACT_CREATION) && Account::new_contract(
+                    if tx.flags.contains(TransactionFlags::CONTRACT_CREATION)
+                        && Account::new_contract(
                             tx.recipient_type,
                             recipient_account.balance(),
                             &tx,
                             block_height,
                         )
-                        .is_err() {
+                        .is_err()
+                    {
                         txs_evicted.push(tx.clone());
                         continue;
                     }
@@ -596,13 +600,15 @@ impl Mempool {
                     continue;
                 }
                 // Also check contract creation.
-                if tx.flags.contains(TransactionFlags::CONTRACT_CREATION) && Account::new_contract(
+                if tx.flags.contains(TransactionFlags::CONTRACT_CREATION)
+                    && Account::new_contract(
                         tx.recipient_type,
                         recipient_account.balance(),
                         &tx,
                         block_height,
                     )
-                    .is_err() {
+                    .is_err()
+                {
                     // This transaction cannot be accepted by the recipient anymore.
                     // XXX The transaction is lost!
                     continue;

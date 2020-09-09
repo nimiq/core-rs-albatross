@@ -1,5 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
+use parking_lot::RwLockReadGuard;
 use rand::rngs::OsRng;
 use rand::Rng;
 
@@ -16,7 +17,6 @@ use crate::{
     },
     network_config::NetworkConfig,
 };
-use parking_lot::RwLockReadGuard;
 
 pub type Score = f64;
 

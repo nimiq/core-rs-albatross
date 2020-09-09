@@ -1,13 +1,16 @@
-use crate::key_pair::KeyPair;
-use crate::PublicKey;
-use hash::{hash_typed_array, Blake2bHash, Blake2bHasher, Hasher};
-use hex::FromHex;
-use macros::{add_hex_io_fns_typed_arr, create_typed_array};
 use std::char;
 use std::convert::From;
 use std::io;
 use std::iter::Iterator;
 use std::str::FromStr;
+
+use hex::FromHex;
+
+use hash::{hash_typed_array, Blake2bHash, Blake2bHasher, Hasher};
+use macros::{add_hex_io_fns_typed_arr, create_typed_array};
+
+use crate::key_pair::KeyPair;
+use crate::PublicKey;
 
 create_typed_array!(Address, u8, 20);
 hash_typed_array!(Address);

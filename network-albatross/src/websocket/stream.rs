@@ -13,9 +13,7 @@ use tungstenite::error::Error as WebSocketError;
 use tungstenite::protocol::CloseFrame;
 use tungstenite::protocol::Message as WebSocketMessage;
 
-
-use network_interface::message::{peek_length};
-
+use network_interface::message::peek_length;
 use peer_address::address::NetAddress;
 
 #[cfg(feature = "metrics")]

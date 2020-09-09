@@ -20,6 +20,7 @@ use messages::{Message, ViewChangeProofMessage};
 use network::{Network, NetworkEvent, Peer};
 use peer_address::address::PeerId;
 use primitives::policy::{is_macro_block_at, SLOTS, TWO_THIRD_SLOTS};
+use primitives::slot::SlotCollection;
 use utils::mutable_once::MutableOnce;
 use utils::observer::{weak_listener, weak_passthru_listener, Notifier};
 
@@ -28,7 +29,6 @@ use crate::signature_aggregation::pbft::PbftAggregation;
 use crate::signature_aggregation::view_change::ViewChangeAggregation;
 use crate::validator_agent::{ValidatorAgent, ValidatorAgentEvent};
 use crate::validator_info::SignedValidatorInfo;
-use primitives::slot::SlotCollection;
 
 #[derive(Clone, Debug, Fail)]
 pub enum ValidatorNetworkError {

@@ -79,10 +79,12 @@ impl<A: AccountsTreeLeave> AccountsProof<A> {
 
 #[cfg(test)]
 mod tests {
-    use crate::accounts_tree_node::AccountsTreeNodeChild;
+    use std::convert::TryFrom;
+
     use account::{Account, BasicAccount};
     use nimiq_primitives::coin::Coin;
-    use std::convert::TryFrom;
+
+    use crate::accounts_tree_node::AccountsTreeNodeChild;
 
     use super::*;
 
@@ -229,13 +231,7 @@ mod tests {
         assert_eq!(account4, proof1.get_account(&address4).unwrap());
 
         // The second proof proves the 2 leftmost terminal nodes (T1 and T3)
-        let mut proof2 = AccountsProof::new(vec![
-            t1,
-            t3,
-            b2.clone(),
-            b1.clone(),
-            r1.clone(),
-        ]);
+        let mut proof2 = AccountsProof::new(vec![t1, t3, b2.clone(), b1.clone(), r1.clone()]);
         assert!(proof2.verify());
         assert_eq!(account1, proof2.get_account(&address1).unwrap());
         assert_eq!(account3, proof2.get_account(&address3).unwrap());

@@ -1,5 +1,4 @@
 use beserial::{Deserialize, Serialize};
-
 use nimiq_collections::bitset::BitSet;
 
 fn sample_bitset() -> BitSet {

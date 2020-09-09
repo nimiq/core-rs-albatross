@@ -1,8 +1,10 @@
-use beserial::{Deserialize, Serialize, SerializingError};
-use lazy_static::lazy_static;
-use primitives::coin::{Coin, CoinParseError};
 use std::convert::{TryFrom, TryInto};
 use std::str::FromStr;
+
+use lazy_static::lazy_static;
+
+use beserial::{Deserialize, Serialize, SerializingError};
+use primitives::coin::{Coin, CoinParseError};
 
 struct NonFailingTest {
     data: &'static str,

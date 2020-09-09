@@ -8,9 +8,6 @@ use parking_lot::RwLock;
 use block_albatross::signed;
 use bls::PublicKey;
 use collections::bitset::BitSet;
-use messages::Message;
-use primitives::policy::TWO_THIRD_SLOTS;
-
 use handel::aggregation::Aggregation;
 use handel::config::Config;
 use handel::evaluator::WeightedVote;
@@ -23,6 +20,8 @@ use handel::store::ReplaceStore;
 use handel::store::SignatureStore;
 use handel::update::{LevelUpdate, LevelUpdateMessage};
 use handel::verifier::MultithreadedVerifier;
+use messages::Message;
+use primitives::policy::TWO_THIRD_SLOTS;
 
 use crate::pool::ValidatorPool;
 

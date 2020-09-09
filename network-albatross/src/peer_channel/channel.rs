@@ -1,17 +1,25 @@
+use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::hash::Hasher;
+use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-
-use atomic::Atomic;
-use futures::sync::mpsc::*;
-use parking_lot::RwLock;
-use std::collections::HashMap;
+use std::task::Poll;
 use std::time::Instant;
 
 use async_trait::async_trait;
+use atomic::Atomic;
+use futures::sync::mpsc::*;
+use futures_03::{
+    executor,
+    task::{noop_waker_ref, Context},
+    Sink, SinkExt, Stream,
+};
+use parking_lot::RwLock;
+
+use beserial::Deserialize;
 use network_interface::message::{peek_type, Message};
 use network_interface::peer::dispatch::{unbounded_dispatch, DispatchError};
 use network_interface::peer::{CloseReason, Peer as PeerInterface, SendError as SendErrorI};
@@ -29,14 +37,6 @@ use crate::websocket::Message as WebSocketMessage;
 
 use super::sink::PeerSink;
 use super::stream::PeerStreamEvent;
-use beserial::Deserialize;
-use futures_03::{
-    executor,
-    task::{noop_waker_ref, Context},
-    Sink, SinkExt, Stream,
-};
-use std::pin::Pin;
-use std::task::Poll;
 
 pub type Channels =
     Arc<RwLock<HashMap<u64, Pin<Box<dyn Sink<Vec<u8>, Error = DispatchError> + Send + Sync>>>>>;

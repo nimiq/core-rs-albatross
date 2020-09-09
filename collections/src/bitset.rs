@@ -1,11 +1,13 @@
+use std::fmt;
+use std::iter::{repeat, FromIterator};
+use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign};
+
+use itertools::{EitherOrBoth, Itertools};
+
 use beserial::{
     uvar, Deserialize, FromPrimitive, ReadBytesExt, Serialize, SerializingError, ToPrimitive,
     WriteBytesExt,
 };
-use itertools::{EitherOrBoth, Itertools};
-use std::fmt;
-use std::iter::{repeat, FromIterator};
-use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign};
 
 #[inline]
 fn index_and_mask(value: usize) -> (usize, u64) {

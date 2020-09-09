@@ -1,9 +1,8 @@
 use std::fmt;
 
 use block_albatross::ViewChange;
-use messages::Message;
-
 use handel::update::LevelUpdate;
+use messages::Message;
 
 use super::voting::{Tag, VoteAggregation};
 

@@ -1,5 +1,6 @@
-use keys::PublicKey;
 use url::Url;
+
+use keys::PublicKey;
 
 #[derive(Clone, Debug)]
 pub struct SeedList {

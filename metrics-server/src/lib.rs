@@ -20,13 +20,12 @@ use tokio::net::TcpListener;
 use tokio_tls::TlsAcceptor as TokioTlsAcceptor;
 
 use consensus_albatross::Consensus;
+use network::Network;
 
 use crate::error::Error;
 pub use crate::metrics::chain::{AbstractChainMetrics, AlbatrossChainMetrics};
 use crate::metrics::mempool::MempoolMetrics;
 use crate::metrics::network::NetworkMetrics;
-
-use network::Network;
 
 macro_rules! attributes {
     // Empty attributes.

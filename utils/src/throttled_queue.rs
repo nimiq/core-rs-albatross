@@ -1,10 +1,11 @@
-use nimiq_collections::{Queue, UniqueLinkedList};
 use std::borrow::Borrow;
 use std::cmp;
 use std::hash::Hash;
 use std::rc::Rc;
 use std::time::Duration;
 use std::time::Instant;
+
+use nimiq_collections::{Queue, UniqueLinkedList};
 
 /// A `ThrottledQueue` is a `Queue` that only allows unique elements and
 /// limits the number of elements that can be retrieved over a period of time.

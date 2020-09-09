@@ -6,7 +6,6 @@ use json::{object, Array, JsonValue, Null};
 use block_albatross::Block;
 use blockchain_albatross::Blockchain;
 use keys::Address;
-
 use nimiq_hash::Blake2bHash;
 use nimiq_transaction::TransactionReceipt;
 

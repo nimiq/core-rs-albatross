@@ -2,9 +2,6 @@
 extern crate beserial_derive;
 #[macro_use]
 extern crate log;
-#[macro_use]
-extern crate pin_project;
-
 extern crate nimiq_block_albatross as block_albatross;
 extern crate nimiq_blockchain_albatross as blockchain_albatross;
 extern crate nimiq_collections as collections;
@@ -17,13 +14,15 @@ extern crate nimiq_network_interface as network_interface;
 extern crate nimiq_primitives as primitives;
 extern crate nimiq_transaction as transaction;
 extern crate nimiq_utils as utils;
+#[macro_use]
+extern crate pin_project;
+
+pub use consensus::{Consensus, ConsensusEvent};
+pub use error::Error;
+pub use sync::SyncProtocol;
 
 pub mod consensus;
 pub mod consensus_agent;
 pub mod error;
 pub mod messages;
 pub mod sync;
-
-pub use consensus::{Consensus, ConsensusEvent};
-pub use error::Error;
-pub use sync::SyncProtocol;

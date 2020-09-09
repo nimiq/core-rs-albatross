@@ -4,19 +4,18 @@ use std::time::Duration;
 
 use atomic::Atomic;
 use atomic::Ordering;
-use macros::upgrade_weak;
 use parking_lot::RwLock;
 use parking_lot::RwLockReadGuard;
 use rand::rngs::OsRng;
 use rand::Rng;
+use tokio_02::sync::broadcast::Receiver as BroadcastReceiver;
 
 use blockchain_albatross::Blockchain;
 use genesis::NetworkId;
+use macros::upgrade_weak;
 use network_interface::prelude::{
     Network as NetworkInterface, NetworkEvent as NetworkEventI, Peer as PeerInterface,
 };
-
-use tokio_02::sync::broadcast::Receiver as BroadcastReceiver;
 use utils::mutable_once::MutableOnce;
 use utils::observer::Notifier;
 use utils::time::OffsetTime;

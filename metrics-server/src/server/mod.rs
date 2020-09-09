@@ -3,13 +3,13 @@ use std::io;
 use std::sync::Arc;
 
 use base64::encode;
+use futures::IntoFuture;
 use futures::{future, stream, stream::Stream, Future};
 use hyper::header::{AUTHORIZATION, LOCATION, WWW_AUTHENTICATE};
 use hyper::Chunk;
 use hyper::{Body, Request, Response, StatusCode};
 
 use crate::server::attributes::{CachedAttributes, VecAttributes};
-use futures::IntoFuture;
 
 pub mod attributes;
 

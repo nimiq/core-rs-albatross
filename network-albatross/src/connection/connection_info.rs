@@ -6,7 +6,6 @@ use std::{
 
 use parking_lot::RwLock;
 
-
 use peer_address::address::PeerAddress;
 
 use crate::connection::network_agent::NetworkAgent;

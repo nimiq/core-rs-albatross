@@ -1,7 +1,5 @@
 use parking_lot::{MappedRwLockReadGuard, MutexGuard, RwLockReadGuard};
 
-#[cfg(feature = "metrics")]
-use crate::chain_metrics::BlockchainMetrics;
 use account::{Account, StakingContract};
 use block::{Block, BlockType, MacroBlock};
 use database::{Transaction, WriteTransaction};
@@ -15,6 +13,8 @@ use utils::merkle;
 use utils::observer::{Listener, ListenerHandle};
 
 use crate::blockchain_state::BlockchainState;
+#[cfg(feature = "metrics")]
+use crate::chain_metrics::BlockchainMetrics;
 use crate::{Blockchain, BlockchainEvent, Direction};
 
 /// Implements several wrapper functions.

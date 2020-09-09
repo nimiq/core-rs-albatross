@@ -1,7 +1,9 @@
-use log::Level;
-use nimiq_build_tools::genesis::{GenesisBuilder, GenesisInfo};
 use std::env;
 use std::process::exit;
+
+use log::Level;
+
+use nimiq_build_tools::genesis::{GenesisBuilder, GenesisInfo};
 
 fn usage(args: Vec<String>) -> ! {
     eprintln!(

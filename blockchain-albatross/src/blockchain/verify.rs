@@ -1,6 +1,7 @@
+use std::cmp::Ordering;
+
 use parking_lot::MappedRwLockReadGuard;
 
-use crate::hash::{Blake2bHash, Hash};
 use block::{
     Block, BlockBody, BlockError, BlockHeader, BlockJustification, BlockType, ForkProof, ViewChange,
 };
@@ -11,8 +12,8 @@ use transaction::Transaction;
 
 use crate::blockchain_state::BlockchainState;
 use crate::chain_info::ChainInfo;
+use crate::hash::{Blake2bHash, Hash};
 use crate::{Blockchain, BlockchainError, PushError};
-use std::cmp::Ordering;
 
 /// Implements methods to verify the validity of blocks.
 impl Blockchain {

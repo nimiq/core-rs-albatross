@@ -26,6 +26,8 @@ use crate::connection::{
 };
 use crate::error::Error;
 use crate::network_config::NetworkConfig;
+#[cfg(feature = "metrics")]
+use crate::network_metrics::NetworkMetrics;
 use crate::peer_channel::PeerChannel;
 use crate::websocket::error::ConnectError;
 use crate::websocket::websocket_connector::{WebSocketConnector, WebSocketConnectorEvent};
@@ -34,9 +36,6 @@ use crate::Peer;
 
 use super::close_type::CloseType;
 use super::connection_info::{ConnectionInfo, ConnectionState};
-
-#[cfg(feature = "metrics")]
-use crate::network_metrics::NetworkMetrics;
 
 macro_rules! update_checked {
     ($peer_count: expr, $update: expr) => {
@@ -303,9 +302,7 @@ impl ConnectionPoolState {
             return;
         }
 
-        if let Entry::Occupied(mut occupied) =
-            self.connections_by_net_address.entry(*net_address)
-        {
+        if let Entry::Occupied(mut occupied) = self.connections_by_net_address.entry(*net_address) {
             let is_empty = {
                 let s = occupied.get_mut();
 
@@ -749,8 +746,7 @@ impl ConnectionPool {
 
             let net_address = info
                 .network_connection()
-                .map(NetworkConnection::net_address)
-                ;
+                .map(NetworkConnection::net_address);
 
             if let Some(ref net_address) = net_address {
                 state.add_net_address(connection_id, &net_address);

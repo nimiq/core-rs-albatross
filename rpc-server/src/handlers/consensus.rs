@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-
-use consensus::{Consensus};
 use json::JsonValue;
-use network::Network;
 use parking_lot::RwLock;
+
+use consensus::Consensus;
+use network::Network;
 
 use crate::handler::Method;
 use crate::handlers::Module;

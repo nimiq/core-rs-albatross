@@ -5,7 +5,6 @@ use std::time::Duration;
 
 use parking_lot::RwLock;
 
-
 use account::Account;
 use block_albatross::{
     Block, BlockType, ForkProof, MacroBlock, MacroBody, MicroBlock, MicroBody, MicroHeader,
@@ -15,7 +14,7 @@ use block_albatross::{
 use block_production_albatross::BlockProducer;
 use blockchain_albatross::{Blockchain, BlockchainEvent, ForkEvent};
 use bls::KeyPair;
-use consensus_albatross::{Consensus};
+use consensus_albatross::Consensus;
 use genesis::NetworkInfo;
 use hash::{Blake2bHash, Hash};
 use keys::Address;

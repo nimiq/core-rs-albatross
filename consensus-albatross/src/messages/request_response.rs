@@ -1,6 +1,8 @@
-use super::{Message, RequestMessage, ResponseMessage};
-use beserial::{Deserialize, Serialize};
 use std::ops::Deref;
+
+use beserial::{Deserialize, Serialize};
+
+use super::{Message, RequestMessage, ResponseMessage};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestResponseMessage<T: Serialize + Deserialize> {

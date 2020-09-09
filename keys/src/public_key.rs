@@ -7,10 +7,10 @@ use ed25519_dalek::Verifier;
 use hex::FromHex;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use hash::{Hash, SerializeContent};
 
 use crate::errors::{KeysError, ParseError};
 use crate::{PrivateKey, Signature};
-use hash::{Hash, SerializeContent};
 
 #[derive(Default, Eq, PartialEq, Clone, Copy)]
 pub struct PublicKey(pub(super) ed25519_dalek::PublicKey);

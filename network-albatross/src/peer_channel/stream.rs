@@ -2,6 +2,7 @@ use std::fmt;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use futures::future;
 use futures::prelude::*;
 use parking_lot::RwLock;
 use tokio::prelude::Stream;
@@ -14,7 +15,6 @@ use crate::connection::close_type::CloseType;
 use crate::connection::network_connection::ClosedFlag;
 use crate::websocket::Message as WebSocketMessage;
 use crate::websocket::{Error, SharedNimiqMessageStream};
-use futures::future;
 
 pub enum PeerStreamEvent {
     Message(Vec<u8>),

@@ -7,6 +7,9 @@ use std::time::Duration;
 
 use futures::StreamExt;
 use parking_lot::{MappedRwLockReadGuard, RwLock, RwLockReadGuard};
+use tokio::sync::broadcast::{
+    channel as broadcast, Receiver as BroadcastReceiver, Sender as BroadcastSender,
+};
 
 use block_albatross::Block;
 use blockchain_albatross::{Blockchain, BlockchainEvent};
@@ -17,13 +20,8 @@ use network_interface::{
     network::{Network, NetworkEvent},
     peer::Peer,
 };
-
-use tokio::sync::broadcast::{
-    channel as broadcast, Receiver as BroadcastReceiver, Sender as BroadcastSender,
-};
 use transaction::Transaction;
 use utils::mutable_once::MutableOnce;
-
 use utils::timers::Timers;
 
 use crate::consensus_agent::ConsensusAgent;

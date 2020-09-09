@@ -1,5 +1,3 @@
-mod serialization;
-
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fs::read_to_string;
@@ -25,6 +23,8 @@ use crate::config::command_line::CommandLine;
 use crate::config::config_file::serialization::*;
 use crate::config::{config, consts, paths};
 use crate::error::Error;
+
+mod serialization;
 
 // TODO: We have to make more settings `Option`s, so that they can use the `ConfigBuilder`'s
 // default and don't overwrite a setting even though it's not set in the config file.

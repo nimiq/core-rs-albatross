@@ -1562,11 +1562,7 @@ fn it_can_build_a_validator_set() {
         .unwrap();
 
     contract
-        .stake(
-            staker2,
-            Coin::from_u64_unchecked(100_000_000),
-            &validator2,
-        )
+        .stake(staker2, Coin::from_u64_unchecked(100_000_000), &validator2)
         .unwrap();
     contract
         .stake(
@@ -1576,18 +1572,10 @@ fn it_can_build_a_validator_set() {
         )
         .unwrap();
     contract
-        .stake(
-            staker1,
-            Coin::from_u64_unchecked(100_000_000),
-            &validator3,
-        )
+        .stake(staker1, Coin::from_u64_unchecked(100_000_000), &validator3)
         .unwrap();
     contract
-        .stake(
-            staker3,
-            Coin::from_u64_unchecked(100_000_000),
-            &validator3,
-        )
+        .stake(staker3, Coin::from_u64_unchecked(100_000_000), &validator3)
         .unwrap();
 
     // Check balances
@@ -3413,11 +3401,8 @@ fn make_signed_incoming_transaction(
     let private_key =
         PrivateKey::deserialize_from_vec(&hex::decode(STAKER_PRIVATE_KEY).unwrap()).unwrap();
     let key_pair = KeyPair::from(private_key);
-    tx.proof = SignatureProof::from(
-        key_pair.public,
-        key_pair.sign(&tx.serialize_content()),
-    )
-    .serialize_to_vec();
+    tx.proof = SignatureProof::from(key_pair.public, key_pair.sign(&tx.serialize_content()))
+        .serialize_to_vec();
     tx
 }
 
@@ -3476,11 +3461,8 @@ fn make_self_transaction(data: SelfStakingTransactionData, value: u64) -> Transa
     let private_key =
         PrivateKey::deserialize_from_vec(&hex::decode(STAKER_PRIVATE_KEY).unwrap()).unwrap();
     let key_pair = KeyPair::from(private_key);
-    tx.proof = SignatureProof::from(
-        key_pair.public,
-        key_pair.sign(&tx.serialize_content()),
-    )
-    .serialize_to_vec();
+    tx.proof = SignatureProof::from(key_pair.public, key_pair.sign(&tx.serialize_content()))
+        .serialize_to_vec();
     tx
 }
 

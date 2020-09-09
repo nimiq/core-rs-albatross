@@ -8,9 +8,6 @@ use block_albatross::{
     PbftCommitMessage, PbftPrepareMessage, SignedPbftCommitMessage, SignedPbftPrepareMessage,
 };
 use collections::bitset::BitSet;
-use hash::Blake2bHash;
-use messages::Message;
-
 use handel::aggregation::Aggregation;
 use handel::config::Config;
 use handel::evaluator::Evaluator;
@@ -21,9 +18,12 @@ use handel::protocol::Protocol;
 use handel::store::{ReplaceStore, SignatureStore};
 use handel::update::{LevelUpdate, LevelUpdateMessage};
 use handel::verifier::MultithreadedVerifier;
+use hash::Blake2bHash;
+use messages::Message;
+
+use crate::pool::ValidatorPool;
 
 use super::voting::{Tag, ValidatorRegistry, VotingEvaluator, VotingProtocol, VotingSender};
-use crate::pool::ValidatorPool;
 
 impl Tag for PbftPrepareMessage {
     fn create_level_update_message(&self, update: LevelUpdate) -> Message {
@@ -208,11 +208,8 @@ impl PbftAggregation {
         let config = config.unwrap_or_default();
 
         // create prepare aggregation
-        let prepare_protocol = PbftPrepareProtocol::new(
-            PbftPrepareMessage::from(proposal_hash),
-            node_id,
-            validators,
-        );
+        let prepare_protocol =
+            PbftPrepareProtocol::new(PbftPrepareMessage::from(proposal_hash), node_id, validators);
         let prepare_aggregation = Aggregation::new(prepare_protocol, config.clone());
 
         // create commit aggregation

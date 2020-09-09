@@ -1,7 +1,9 @@
+use std::io::{Error, Write};
+
+use byteorder::{BigEndian, WriteBytesExt};
+
 use super::hmac::compute_hmac_sha512;
 use super::{Sha512Hash, SHA512_LENGTH};
-use byteorder::{BigEndian, WriteBytesExt};
-use std::io::{Error, Write};
 
 #[derive(Debug)]
 pub enum Pbkdf2Error {

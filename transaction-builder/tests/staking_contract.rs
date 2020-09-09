@@ -329,11 +329,8 @@ fn make_signed_incoming_transaction(
     )
     .unwrap();
 
-    tx.proof = SignatureProof::from(
-        key_pair.public,
-        key_pair.sign(&tx.serialize_content()),
-    )
-    .serialize_to_vec();
+    tx.proof = SignatureProof::from(key_pair.public, key_pair.sign(&tx.serialize_content()))
+        .serialize_to_vec();
     tx
 }
 
@@ -392,10 +389,7 @@ fn make_self_transaction(data: SelfStakingTransactionData, value: u64) -> Transa
     let private_key =
         PrivateKey::deserialize_from_vec(&hex::decode(STAKER_PRIVATE_KEY).unwrap()).unwrap();
     let key_pair = KeyPair::from(private_key);
-    tx.proof = SignatureProof::from(
-        key_pair.public,
-        key_pair.sign(&tx.serialize_content()),
-    )
-    .serialize_to_vec();
+    tx.proof = SignatureProof::from(key_pair.public, key_pair.sign(&tx.serialize_content()))
+        .serialize_to_vec();
     tx
 }

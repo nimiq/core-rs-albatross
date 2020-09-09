@@ -1,8 +1,10 @@
-use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use std::convert::TryFrom;
+
 use hex::FromHex;
 
+use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+
 use crate::errors::{KeysError, ParseError};
-use std::convert::TryFrom;
 
 #[derive(Debug, Clone)]
 pub struct Signature(pub(super) ed25519_dalek::Signature);

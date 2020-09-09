@@ -6,7 +6,7 @@ extern crate nimiq_primitives as primitives;
 extern crate nimiq_transaction as transaction;
 extern crate nimiq_tree_primitives as tree_primitives;
 
+pub use self::accounts::Accounts;
+
 pub mod accounts;
 pub mod tree;
-
-pub use self::accounts::Accounts;

@@ -1,4 +1,3 @@
-
 use nimiq_mnemonic::*;
 
 struct TestVector {

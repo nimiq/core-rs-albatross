@@ -1,9 +1,9 @@
 use database::cursor::ReadCursor;
 use database::{Database, Environment, ReadTransaction, Transaction, WriteTransaction};
 use keys::Address;
+use nimiq_utils::otp::Locked;
 
 use crate::wallet_account::WalletAccount;
-use nimiq_utils::otp::Locked;
 
 #[derive(Debug)]
 pub struct WalletStore {

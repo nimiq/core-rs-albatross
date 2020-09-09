@@ -1,4 +1,3 @@
-
 use nimiq_key_derivation::*;
 use nimiq_keys::{PrivateKey, PublicKey};
 

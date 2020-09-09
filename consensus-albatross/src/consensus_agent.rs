@@ -1,19 +1,20 @@
-use parking_lot::RwLock;
 use std::sync::Arc;
 use std::time::Duration;
+
+use futures::Future;
+use parking_lot::RwLock;
+
+use block_albatross::Block;
+use hash::Blake2bHash;
+use network_interface::peer::Peer;
+use network_interface::request_response::{RequestError, RequestResponse};
+use nimiq_subscription::Subscription;
+use transaction::Transaction;
 
 use crate::messages::{
     BlockHashes, Epoch, RequestBlockHashes, RequestBlockHashesFilter, RequestEpoch,
     RequestResponseMessage,
 };
-use block_albatross::Block;
-use futures::Future;
-use hash::Blake2bHash;
-use network_interface::peer::Peer;
-use network_interface::request_response::{RequestError, RequestResponse};
-use nimiq_subscription::Subscription;
-
-use transaction::Transaction;
 
 pub struct ConsensusAgentState {
     local_subscription: Subscription,

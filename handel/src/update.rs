@@ -65,10 +65,11 @@ pub struct LevelUpdateMessage<T: Clone + Debug + Serialize + Deserialize> {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::multisig::{IndividualSignature, MultiSignature};
     use beserial::{Deserialize, Serialize};
-    
+
+    use crate::multisig::{IndividualSignature, MultiSignature};
+
+    use super::*;
 
     fn create_multisig() -> MultiSignature {
         let raw_key = hex::decode(

@@ -4,10 +4,11 @@ use std::hash::Hasher;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
-use crate::connection::close_type::CloseType;
-use crate::peer_channel::PeerChannel;
 use peer_address::address::{NetAddress, PeerAddress};
 use peer_address::protocol::Protocol;
+
+use crate::connection::close_type::CloseType;
+use crate::peer_channel::PeerChannel;
 
 pub struct PeerAddressInfo {
     pub peer_address: Arc<PeerAddress>,

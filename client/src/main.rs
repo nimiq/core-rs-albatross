@@ -1,13 +1,11 @@
 #[macro_use]
 extern crate log;
-
 extern crate nimiq_lib as nimiq;
 
 use std::convert::TryFrom;
 use std::time::Duration;
 
 use futures::{future, Future, IntoFuture, Stream};
-
 use tokio::timer::Interval;
 
 use nimiq::extras::deadlock::initialize_deadlock_detection;

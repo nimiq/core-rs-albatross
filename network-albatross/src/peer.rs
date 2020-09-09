@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use futures_03::Stream;
+
 use hash::Blake2bHash;
 use network_interface::prelude::{CloseReason, Message, Peer as PeerInterface, SendError};
 use peer_address::address::NetAddress;

@@ -1,6 +1,5 @@
 #[macro_use]
 extern crate log;
-
 extern crate nimiq_account as account;
 extern crate nimiq_accounts as accounts;
 extern crate nimiq_block_albatross as block_albatross;

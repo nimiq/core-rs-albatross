@@ -1,10 +1,10 @@
 use std::mem;
 
 use beserial::{Deserialize, Serialize};
+use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, HashOutput, Hasher, SerializeContent};
 
 use crate::math::CeilingDiv;
-use nimiq_collections::BitSet;
 
 /// An IncrementalMerkleProofBuilder can construct sequentially verifiable merkle proofs for a large list of data.
 /// The main difference to the PartialMerkleProofBuilder is that a different tree generation algorithm is used

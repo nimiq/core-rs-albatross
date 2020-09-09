@@ -1,9 +1,9 @@
-use lazy_static::lazy_static;
-
 extern crate beserial;
 extern crate nimiq_keys as keys;
 extern crate nimiq_primitives as primitives;
 extern crate nimiq_wallet as wallet;
+
+use lazy_static::lazy_static;
 
 use beserial::{Deserialize, Serialize};
 use keys::{Address, KeyPair, PrivateKey};

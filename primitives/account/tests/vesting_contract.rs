@@ -250,7 +250,10 @@ fn it_can_verify_outgoing_transactions() {
     );
     tx.sender_type = AccountType::Vesting;
 
-    assert!(matches!(AccountType::verify_outgoing_transaction(&tx), Err(TransactionError::InvalidSerialization(SerializingError::IoError(_, _)))));
+    assert!(matches!(
+        AccountType::verify_outgoing_transaction(&tx),
+        Err(TransactionError::InvalidSerialization(SerializingError::IoError(_, _)))
+    ));
 
     let signature = key_pair.sign(&tx.serialize_content()[..]);
     let signature_proof = SignatureProof::from(key_pair.public, signature);

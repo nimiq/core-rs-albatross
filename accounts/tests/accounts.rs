@@ -13,7 +13,6 @@ use nimiq_database::WriteTransaction;
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
-
 use nimiq_transaction::{SignatureProof, Transaction};
 
 #[test]
@@ -39,9 +38,7 @@ fn it_can_commit_and_revert_a_block_body() {
 
     let mut txn = WriteTransaction::new(&env);
 
-    assert!(accounts
-        .commit(&mut txn, &[], &[reward.clone()], 1)
-        .is_ok());
+    assert!(accounts.commit(&mut txn, &[], &[reward.clone()], 1).is_ok());
 
     txn.commit();
 
@@ -257,9 +254,7 @@ fn it_checks_for_sufficient_funds() {
 
     let mut txn = WriteTransaction::new(&env);
 
-    assert!(accounts
-        .commit(&mut txn, &[], &[reward.clone()], 1)
-        .is_ok());
+    assert!(accounts.commit(&mut txn, &[], &[reward.clone()], 1).is_ok());
 
     txn.commit();
 
@@ -339,9 +334,7 @@ fn it_correctly_prunes_account() {
     // Give a block reward
     let mut txn = WriteTransaction::new(&env);
 
-    assert!(accounts
-        .commit(&mut txn, &[], &[reward.clone()], 1)
-        .is_ok());
+    assert!(accounts.commit(&mut txn, &[], &[reward.clone()], 1).is_ok());
 
     txn.commit();
 
@@ -432,13 +425,7 @@ fn it_correctly_prunes_account() {
     let mut txn = WriteTransaction::new(&env);
 
     assert!(accounts
-        .revert(
-            &mut txn,
-            &[tx_prune],
-            &[reward.clone()],
-            3,
-            &receipts
-        )
+        .revert(&mut txn, &[tx_prune], &[reward.clone()], 3, &receipts)
         .is_ok());
 
     txn.commit();
@@ -453,13 +440,7 @@ fn it_correctly_prunes_account() {
     let mut txn = WriteTransaction::new(&env);
 
     assert!(accounts
-        .revert(
-            &mut txn,
-            &[tx_create],
-            &[reward],
-            2,
-            &Receipts::default()
-        )
+        .revert(&mut txn, &[tx_create], &[reward], 2, &Receipts::default())
         .is_ok());
 
     txn.commit();
@@ -497,9 +478,7 @@ fn can_generate_accounts_proof() {
 
     let mut txn = WriteTransaction::new(&env);
 
-    assert!(accounts
-        .commit(&mut txn, &[], &[reward], 1)
-        .is_ok());
+    assert!(accounts.commit(&mut txn, &[], &[reward], 1).is_ok());
 
     txn.commit();
 

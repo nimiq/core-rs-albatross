@@ -1,3 +1,5 @@
+use std::ops::Div;
+
 use failure::Fail;
 
 use keys::Address;
@@ -5,7 +7,6 @@ use primitives::coin::Coin;
 use transaction::account::vesting_contract::CreationTransactionData as VestingCreationData;
 
 use crate::recipient::Recipient;
-use std::ops::Div;
 
 /// Building a vesting recipient can fail if mandatory fields are not set.
 /// In these cases, a `VestingRecipientBuilderError` is returned.

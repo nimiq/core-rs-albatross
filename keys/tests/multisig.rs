@@ -2,11 +2,11 @@
 
 use curve25519_dalek::edwards::{CompressedEdwardsY, EdwardsPoint};
 use curve25519_dalek::scalar::Scalar;
+use sha2::Digest;
 
 use nimiq_keys::multisig::*;
 use nimiq_keys::multisig::{Commitment, PartialSignature, RandomSecret};
 use nimiq_keys::{KeyPair, PrivateKey, PublicKey, Signature};
-use sha2::Digest;
 
 struct StrTestVector {
     priv_keys: &'static [&'static str],

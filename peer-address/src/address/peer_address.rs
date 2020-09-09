@@ -1,8 +1,3 @@
-use beserial::{
-    Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
-    SerializingError, WriteBytesExt,
-};
-use keys::{PublicKey, Signature};
 use std::fmt;
 use std::hash::Hash;
 use std::hash::Hasher;
@@ -13,10 +8,17 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 use std::vec::Vec;
 
-use super::is_ip_globally_reachable_legacy;
+use beserial::{
+    Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
+    SerializingError, WriteBytesExt,
+};
+use keys::{PublicKey, Signature};
+
 use crate::address::{NetAddress, PeerId, PeerUri};
 use crate::protocol::Protocol;
 use crate::services::ServiceFlags;
+
+use super::is_ip_globally_reachable_legacy;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum PeerAddressType {

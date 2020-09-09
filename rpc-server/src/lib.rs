@@ -21,12 +21,12 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 
 use futures::future::Future;
+use futures::IntoFuture;
 use hyper::Server;
 use json::{object, JsonValue};
 
 use crate::error::Error;
 pub use crate::handler::Handler;
-use futures::IntoFuture;
 
 pub mod error;
 pub mod handler;

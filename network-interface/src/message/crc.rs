@@ -1,6 +1,7 @@
+use std::io;
+
 use beserial::ReadBytesExt;
 use nimiq_utils::crc::Crc32Computer;
-use std::io;
 
 pub struct ReaderComputeCrc32<'a, T: 'a + ReadBytesExt> {
     reader: &'a mut T,

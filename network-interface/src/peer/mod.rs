@@ -1,9 +1,11 @@
-use async_trait::async_trait;
-use beserial::SerializingError;
-use futures::Stream;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::pin::Pin;
+
+use async_trait::async_trait;
+use futures::Stream;
+
+use beserial::SerializingError;
 
 use crate::message::Message;
 

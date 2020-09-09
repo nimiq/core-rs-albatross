@@ -1,4 +1,3 @@
-
 use std::convert::TryFrom;
 
 use nimiq_account::{Account, BasicAccount};

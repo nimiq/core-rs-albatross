@@ -1,9 +1,10 @@
+use std::pin::Pin;
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use futures::stream::{FusedStream, SelectAll};
 use futures::task::{Context, Poll};
 use futures::{future, ready, stream, Stream, StreamExt, TryFutureExt};
-use std::pin::Pin;
-use std::sync::Arc;
 use tokio::sync::broadcast::{Receiver as BroadcastReceiver, RecvError as BroadcastRecvError};
 
 use crate::message::Message;

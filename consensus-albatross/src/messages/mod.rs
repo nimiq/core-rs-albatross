@@ -1,9 +1,10 @@
-pub use self::request_response::RequestResponseMessage;
 use beserial::{Deserialize, Serialize};
 use block_albatross::MacroBlock;
 use hash::Blake2bHash;
 use network_interface::message::*;
 use transaction::Transaction;
+
+pub use self::request_response::RequestResponseMessage;
 
 mod request_response;
 

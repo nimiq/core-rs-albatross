@@ -1,11 +1,7 @@
-
 use std::sync::Arc;
-
-
 
 use beserial::{Deserialize, Serialize};
 use nimiq_account::{Inherent, InherentType};
-
 use nimiq_blockchain_albatross::Blockchain;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_database::WriteTransaction;
@@ -16,7 +12,6 @@ use nimiq_mempool::{Mempool, MempoolConfig, ReturnCode};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_transaction::{SignatureProof, Transaction};
-
 
 const BASIC_TRANSACTION: &str = "000222666efadc937148a6d61589ce6d4aeecca97fda4c32348d294eab582f14a0754d1260f15bea0e8fb07ab18f45301483599e34000000000000c350000000000000008a00019640023fecb82d3aef4be76853d5c5b263754b7d495d9838f6ae5df60cf3addd3512a82988db0056059c7a52ae15285983ef0db8229ae446c004559147686d28f0a30a";
 
@@ -62,10 +57,8 @@ fn push_same_tx_twice() {
         NetworkId::UnitAlbatross,
     );
 
-    let signature_proof = SignatureProof::from(
-        keypair_a.public,
-        keypair_a.sign(&tx.serialize_content()),
-    );
+    let signature_proof =
+        SignatureProof::from(keypair_a.public, keypair_a.sign(&tx.serialize_content()));
 
     tx.proof = signature_proof.serialize_to_vec();
 
@@ -147,10 +140,8 @@ fn push_and_get_valid_tx() {
         NetworkId::UnitAlbatross,
     );
 
-    let signature_proof = SignatureProof::from(
-        keypair_a.public,
-        keypair_a.sign(&tx.serialize_content()),
-    );
+    let signature_proof =
+        SignatureProof::from(keypair_a.public, keypair_a.sign(&tx.serialize_content()));
 
     tx.proof = signature_proof.serialize_to_vec();
 
@@ -209,10 +200,8 @@ fn push_and_get_two_tx_same_user() {
         NetworkId::UnitAlbatross,
     );
 
-    let signature_proof1 = SignatureProof::from(
-        keypair_a.public,
-        keypair_a.sign(&tx1.serialize_content()),
-    );
+    let signature_proof1 =
+        SignatureProof::from(keypair_a.public, keypair_a.sign(&tx1.serialize_content()));
 
     tx1.proof = signature_proof1.serialize_to_vec();
 
@@ -232,10 +221,8 @@ fn push_and_get_two_tx_same_user() {
         NetworkId::UnitAlbatross,
     );
 
-    let signature_proof2 = SignatureProof::from(
-        keypair_a.public,
-        keypair_a.sign(&tx2.serialize_content()),
-    );
+    let signature_proof2 =
+        SignatureProof::from(keypair_a.public, keypair_a.sign(&tx2.serialize_content()));
 
     tx2.proof = signature_proof2.serialize_to_vec();
 
@@ -292,10 +279,8 @@ fn reject_free_tx_beyond_limit() {
             NetworkId::UnitAlbatross,
         );
 
-        let signature_proof1 = SignatureProof::from(
-            keypair_a.public,
-            keypair_a.sign(&tx1.serialize_content()),
-        );
+        let signature_proof1 =
+            SignatureProof::from(keypair_a.public, keypair_a.sign(&tx1.serialize_content()));
 
         tx1.proof = signature_proof1.serialize_to_vec();
 

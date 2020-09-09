@@ -1,6 +1,7 @@
-use nimiq_utils::observer::*;
 use std::sync::Arc;
 use std::sync::RwLock;
+
+use nimiq_utils::observer::*;
 
 #[test]
 fn it_can_register_notify_deregister() {

@@ -10,6 +10,7 @@ use beserial::{
 };
 use bls::CompressedPublicKey as BlsPublicKey;
 use keys::Address;
+use nimiq_collections::BitSet;
 use primitives::slot::{Slots, SlotsBuilder};
 use primitives::{coin::Coin, policy};
 use transaction::{SignatureProof, Transaction};
@@ -18,7 +19,6 @@ use vrf::{AliasMethod, VrfSeed, VrfUseCase};
 use crate::AccountError;
 
 pub use self::validator::*;
-use nimiq_collections::BitSet;
 
 pub mod actions;
 pub mod validator;

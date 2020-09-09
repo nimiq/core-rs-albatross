@@ -7,7 +7,6 @@ use json::{object, Array, JsonValue, Null};
 use parking_lot::RwLock;
 
 use beserial::{Deserialize, Serialize};
-
 use hash::{Blake2bHash, Hash};
 use keys::Address;
 use nimiq_mempool::Mempool;

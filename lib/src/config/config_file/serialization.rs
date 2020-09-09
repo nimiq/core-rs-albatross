@@ -3,9 +3,10 @@ use std::convert::TryFrom;
 use std::fmt::Display;
 use std::str::FromStr;
 
-use primitives::coin::Coin;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer};
+
+use primitives::coin::Coin;
 
 pub(crate) fn deserialize_coin<'de, D>(deserializer: D) -> Result<Coin, D::Error>
 where

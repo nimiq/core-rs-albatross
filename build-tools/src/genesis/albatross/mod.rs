@@ -1,23 +1,21 @@
-use std::convert::TryFrom;
-use std::fs::{read_to_string, OpenOptions};
-use std::io::Error as IoError;
-use std::path::Path;
-
-use chrono::{DateTime, Utc};
-use failure::Fail;
-use toml::de::Error as TomlError;
-
 use account::{Account, AccountError, AccountsList, BasicAccount, StakingContract};
 use accounts::Accounts;
 use beserial::{Serialize, SerializingError};
 use block_albatross::{Block, MacroBlock, MacroBody, MacroHeader};
 use bls::{PublicKey as BlsPublicKey, SecretKey as BlsSecretKey};
+use chrono::{DateTime, Utc};
 use database::volatile::{VolatileDatabaseError, VolatileEnvironment};
 use database::WriteTransaction;
+use failure::Fail;
 use hash::{Blake2bHash, Blake2sHasher, Hash, Hasher};
 use keys::Address;
 use primitives::coin::Coin;
 use primitives::slot::Slots;
+use std::convert::TryFrom;
+use std::fs::{read_to_string, OpenOptions};
+use std::io::Error as IoError;
+use std::path::Path;
+use toml::de::Error as TomlError;
 use vrf::VrfSeed;
 
 mod config;

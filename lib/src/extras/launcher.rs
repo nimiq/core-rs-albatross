@@ -1,3 +1,8 @@
+#[cfg(feature = "panic")]
+extern crate log_panics;
+
+use url::Url;
+
 /// # ToDo
 ///
 /// A rocket-like launcher. We can use this to easily:
@@ -14,9 +19,6 @@
 use crate::extras::deadlock::initialize_deadlock_detection;
 #[cfg(feature = "logging")]
 use crate::extras::logging::initialize_logging;
-use url::Url;
-#[cfg(feature = "panic")]
-extern crate log_panics;
 
 pub fn go() -> Launcher {
     Launcher::default()

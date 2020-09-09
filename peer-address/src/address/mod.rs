@@ -1,18 +1,19 @@
-pub mod net_address;
-pub mod peer_address;
-pub mod peer_uri;
-pub mod seed_list;
+use std::net::{IpAddr, Ipv4Addr};
+
+use hex::FromHex;
+
+use nimiq_hash::{Blake2bHash, Blake2bHasher, Hasher};
+use nimiq_keys::PublicKey;
 
 pub use self::net_address::*;
 pub use self::peer_address::*;
 pub use self::peer_uri::PeerUri;
 pub use self::seed_list::SeedList;
 
-use hex::FromHex;
-
-use nimiq_hash::{Blake2bHash, Blake2bHasher, Hasher};
-use nimiq_keys::PublicKey;
-use std::net::{IpAddr, Ipv4Addr};
+pub mod net_address;
+pub mod peer_address;
+pub mod peer_uri;
+pub mod seed_list;
 
 create_typed_array!(PeerId, u8, 16);
 add_hex_io_fns_typed_arr!(PeerId, PeerId::SIZE);

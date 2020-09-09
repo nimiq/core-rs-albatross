@@ -12,6 +12,6 @@ extern crate nimiq_primitives as primitives;
 extern crate nimiq_transaction as transaction;
 extern crate nimiq_utils as utils;
 
-pub mod networks;
-
 pub use networks::{NetworkId, NetworkInfo};
+
+pub mod networks;

@@ -42,8 +42,10 @@ pub enum IncomingStakingTransactionType {
 
 impl IncomingStakingTransactionType {
     pub fn is_signalling(&self) -> bool {
-        !matches!(self, IncomingStakingTransactionType::Stake
-            | IncomingStakingTransactionType::CreateValidator)
+        !matches!(
+            self,
+            IncomingStakingTransactionType::Stake | IncomingStakingTransactionType::CreateValidator
+        )
     }
 }
 

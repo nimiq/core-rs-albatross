@@ -1,17 +1,18 @@
-use crate::consensus_agent::ConsensusAgent;
-
-use futures::stream::FuturesUnordered;
-use futures::task::{Context, Poll};
-use futures::{ready, Future, Stream, StreamExt};
-use hash::Blake2bHash;
-use network_interface::peer::Peer;
-
 use std::cmp;
 use std::cmp::Ordering;
 use std::collections::binary_heap::PeekMut;
 use std::collections::BinaryHeap;
 use std::pin::Pin;
 use std::sync::Arc;
+
+use futures::stream::FuturesUnordered;
+use futures::task::{Context, Poll};
+use futures::{ready, Future, Stream, StreamExt};
+
+use hash::Blake2bHash;
+use network_interface::peer::Peer;
+
+use crate::consensus_agent::ConsensusAgent;
 
 #[pin_project]
 #[derive(Debug)]

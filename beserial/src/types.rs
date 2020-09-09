@@ -1,6 +1,5 @@
 use crate::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 
-
 #[allow(non_camel_case_types)]
 #[derive(Ord, PartialOrd, Eq, PartialEq, Debug, Copy, Clone)]
 pub struct uvar(u64);

@@ -1,15 +1,18 @@
+use std::sync::Arc;
+
+use futures::StreamExt;
+
+use block_albatross::Block;
+use blockchain_albatross::{Blockchain, Direction};
+use network_interface::prelude::{Network, Peer, ResponseMessage};
+use nimiq_genesis::NetworkInfo;
+use primitives::policy;
+
 use crate::messages::{
     BlockHashes, Epoch, RequestBlockHashes, RequestBlockHashesFilter, RequestEpoch,
     RequestResponseMessage,
 };
 use crate::Consensus;
-use block_albatross::Block;
-use blockchain_albatross::{Blockchain, Direction};
-use futures::StreamExt;
-use network_interface::prelude::{Network, Peer, ResponseMessage};
-use nimiq_genesis::NetworkInfo;
-use primitives::policy;
-use std::sync::Arc;
 
 impl<N: Network> Consensus<N> {
     pub(super) fn init_network_requests(network: &Arc<N>, blockchain: &Arc<Blockchain>) {

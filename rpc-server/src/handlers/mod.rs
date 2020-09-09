@@ -1,5 +1,16 @@
 use crate::handler::Method;
 
+#[cfg(feature = "validator")]
+pub use self::block_production_albatross::BlockProductionAlbatrossHandler;
+pub use self::blockchain::BlockchainHandler;
+pub use self::blockchain_albatross::BlockchainAlbatrossHandler;
+pub use self::consensus::ConsensusHandler;
+pub use self::mempool::MempoolHandler;
+#[cfg(feature = "validator")]
+pub use self::mempool_albatross::MempoolAlbatrossHandler;
+pub use self::network::NetworkHandler;
+pub use self::wallet::{UnlockedWalletManager, WalletHandler};
+
 // Generates an RPC method vec from map syntax
 #[macro_export]
 macro_rules! rpc_module_methods {
@@ -33,17 +44,6 @@ pub mod mempool;
 pub mod mempool_albatross;
 pub mod network;
 pub mod wallet;
-
-#[cfg(feature = "validator")]
-pub use self::block_production_albatross::BlockProductionAlbatrossHandler;
-pub use self::blockchain::BlockchainHandler;
-pub use self::blockchain_albatross::BlockchainAlbatrossHandler;
-pub use self::consensus::ConsensusHandler;
-pub use self::mempool::MempoolHandler;
-#[cfg(feature = "validator")]
-pub use self::mempool_albatross::MempoolAlbatrossHandler;
-pub use self::network::NetworkHandler;
-pub use self::wallet::{UnlockedWalletManager, WalletHandler};
 
 pub trait Module: Send + Sync {
     fn methods(self) -> Vec<(&'static str, Method)>;

@@ -9,13 +9,13 @@ use parking_lot::Mutex;
 use reqwest::r#async::{Chunk, Client, Response};
 use url::Url;
 
-use crate::network_config::{NetworkConfig, Seed};
 use genesis::{NetworkId, NetworkInfo};
 use keys::Signature;
 use peer_address::address::peer_uri::{PeerUri, PeerUriError};
 use peer_address::address::PeerAddress;
-
 use utils::observer::Notifier;
+
+use crate::network_config::{NetworkConfig, Seed};
 
 pub enum PeerAddressSeederEvent {
     Seeds(Vec<PeerAddress>),

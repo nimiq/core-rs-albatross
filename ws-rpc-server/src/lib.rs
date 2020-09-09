@@ -1,6 +1,5 @@
 #[macro_use]
 extern crate log;
-
 extern crate nimiq_blockchain_albatross as blockchain_albatross;
 extern crate nimiq_consensus_albatross as consensus_albatross;
 extern crate nimiq_hash as hash;
@@ -23,7 +22,7 @@ use tokio::net::TcpListener;
 use tokio_tungstenite::accept_async;
 use tokio_tungstenite::tungstenite::{Error as WsError, Message};
 
-use blockchain_albatross::{BlockchainEvent};
+use blockchain_albatross::BlockchainEvent;
 use consensus_albatross::Consensus;
 use hash::{Blake2bHash, Hash};
 use network::Network;

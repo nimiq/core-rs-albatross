@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use beserial::Deserialize;
 use nimiq_block_albatross::Block;
 use nimiq_block_production_albatross::{test_utils::*, BlockProducer};
@@ -11,7 +13,6 @@ use nimiq_genesis::NetworkId;
 use nimiq_mempool::{Mempool, MempoolConfig};
 use nimiq_network_mock::network::MockNetwork;
 use nimiq_primitives::policy;
-use std::sync::Arc;
 
 /// Secret key of validator. Tests run with `network-primitives/src/genesis/unit-albatross.toml`
 const SECRET_KEY: &str =

@@ -1,7 +1,8 @@
-use beserial::{uvar, Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
-use nimiq_utils::crc::Crc32Computer;
 use std::io;
 use std::io::{Cursor, Read, Seek, SeekFrom};
+
+use beserial::{uvar, Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use nimiq_utils::crc::Crc32Computer;
 
 use crate::message::crc::ReaderComputeCrc32;
 

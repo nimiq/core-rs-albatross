@@ -199,19 +199,11 @@ fn verify_works() {
         let other_node = pedersen_hash(bytes_to_bits(&bytes), generators.clone());
 
         if path[i] {
-            bits.extend_from_slice(
-                bytes_to_bits(serialize_g1_mnt6(other_node).as_ref()).as_ref(),
-            );
-            bits.extend_from_slice(
-                bytes_to_bits(serialize_g1_mnt6(node).as_ref()).as_ref(),
-            );
+            bits.extend_from_slice(bytes_to_bits(serialize_g1_mnt6(other_node).as_ref()).as_ref());
+            bits.extend_from_slice(bytes_to_bits(serialize_g1_mnt6(node).as_ref()).as_ref());
         } else {
-            bits.extend_from_slice(
-                bytes_to_bits(serialize_g1_mnt6(node).as_ref()).as_ref(),
-            );
-            bits.extend_from_slice(
-                bytes_to_bits(serialize_g1_mnt6(other_node).as_ref()).as_ref(),
-            );
+            bits.extend_from_slice(bytes_to_bits(serialize_g1_mnt6(node).as_ref()).as_ref());
+            bits.extend_from_slice(bytes_to_bits(serialize_g1_mnt6(other_node).as_ref()).as_ref());
         }
 
         nodes.push(other_node);
@@ -265,19 +257,11 @@ fn verify_wrong_root() {
         let other_node = pedersen_hash(bytes_to_bits(&bytes), generators.clone());
 
         if path[i] {
-            bits.extend_from_slice(
-                bytes_to_bits(serialize_g1_mnt6(other_node).as_ref()).as_ref(),
-            );
-            bits.extend_from_slice(
-                bytes_to_bits(serialize_g1_mnt6(node).as_ref()).as_ref(),
-            );
+            bits.extend_from_slice(bytes_to_bits(serialize_g1_mnt6(other_node).as_ref()).as_ref());
+            bits.extend_from_slice(bytes_to_bits(serialize_g1_mnt6(node).as_ref()).as_ref());
         } else {
-            bits.extend_from_slice(
-                bytes_to_bits(serialize_g1_mnt6(node).as_ref()).as_ref(),
-            );
-            bits.extend_from_slice(
-                bytes_to_bits(serialize_g1_mnt6(other_node).as_ref()).as_ref(),
-            );
+            bits.extend_from_slice(bytes_to_bits(serialize_g1_mnt6(node).as_ref()).as_ref());
+            bits.extend_from_slice(bytes_to_bits(serialize_g1_mnt6(other_node).as_ref()).as_ref());
         }
 
         nodes.push(other_node);

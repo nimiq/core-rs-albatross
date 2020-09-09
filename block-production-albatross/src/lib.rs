@@ -353,8 +353,6 @@ impl BlockProducer {
 
 #[cfg(any(test, feature = "test-utils"))]
 pub mod test_utils {
-    use super::*;
-    
     use block::{
         Block, MacroBlock, PbftCommitMessage, PbftPrepareMessage, PbftProofBuilder,
         SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedViewChange, ViewChange,
@@ -365,6 +363,8 @@ pub mod test_utils {
     use keys::Address;
     use nimiq_vrf::VrfSeed;
     use primitives::slot::{ValidatorSlotBand, ValidatorSlots};
+
+    use super::*;
 
     // Fill epoch with micro blocks
     pub fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<Blockchain>) {
@@ -402,9 +402,7 @@ pub mod test_utils {
             0,
         );
         let commit = SignedPbftCommitMessage::from_message(
-            PbftCommitMessage {
-                block_hash,
-            },
+            PbftCommitMessage { block_hash },
             &keypair.secret_key,
             0,
         );

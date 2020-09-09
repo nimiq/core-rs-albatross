@@ -3,19 +3,15 @@ use std::fmt;
 use std::fs;
 use std::sync::Arc;
 
-
-
+// re export the lmdb error
 pub use lmdb_zero::open;
 use lmdb_zero::traits::LmdbResultExt;
-
+pub use lmdb_zero::Error as LmdbError;
 use rand::{thread_rng, Rng};
 
 use crate::cursor::{RawReadCursor, ReadCursor, WriteCursor as WriteCursorTrait};
 
 use super::*;
-
-// re export the lmdb error
-pub use lmdb_zero::Error as LmdbError;
 
 #[derive(Debug)]
 pub struct LmdbEnvironment {
@@ -822,10 +818,7 @@ mod tests {
                 cursor.seek_key_nearest_value::<str, u32>("test1", &126),
                 Some(5783)
             );
-            assert_eq!(
-                cursor.get_current::<String, u32>(),
-                Some((test1, 5783))
-            );
+            assert_eq!(cursor.get_current::<String, u32>(), Some((test1, 5783)));
             assert!(cursor.prev_no_duplicate::<String, u32>().is_none());
             assert_eq!(cursor.next::<String, u32>(), Some((test2, 5783)));
             //            assert_eq!(cursor.seek_range_key::<String, u32>("test"), Some((test1.clone(), 12)));

@@ -2,13 +2,13 @@ use std::collections::btree_map::BTreeMap;
 use std::collections::{BTreeSet, HashSet};
 use std::hash::BuildHasher;
 use std::ops::Deref;
+use std::sync::Arc;
 
 pub use byteorder::{BigEndian, ByteOrder, ReadBytesExt, WriteBytesExt};
 use failure::Fail;
 pub use num::{FromPrimitive, ToPrimitive};
 
 pub use crate::types::uvar;
-use std::sync::Arc;
 
 #[cfg(feature = "bitvec")]
 mod bitvec;

@@ -2,9 +2,9 @@ use std::fmt;
 use std::sync::{Arc, Weak};
 
 use futures::{future, Future};
-use macros::upgrade_weak;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 
+use macros::upgrade_weak;
 use utils::mutable_once::MutableOnce;
 use utils::observer::PassThroughNotifier;
 use utils::timers::Timers;

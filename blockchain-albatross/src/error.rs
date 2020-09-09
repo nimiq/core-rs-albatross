@@ -1,6 +1,7 @@
+use failure::Fail;
+
 use account::AccountError;
 use block::{Block, BlockError, ForkProof};
-use failure::Fail;
 use hash::Blake2bHash;
 use primitives::networks::NetworkId;
 

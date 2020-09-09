@@ -1,8 +1,8 @@
 use std::fmt;
+use std::str::FromStr;
 
 use failure::Fail;
 use hex::{FromHex, FromHexError};
-use std::str::FromStr;
 use url::Url;
 
 use keys::PublicKey;
@@ -187,14 +187,12 @@ impl PeerUri {
                     _ => Some(Err(PeerUriError::TooManyPathSegments)),
                 }
             })
-            .transpose()?
-            ;
+            .transpose()?;
 
         // Take appropriate parts of URI to construct the PeerUri
         match protocol {
             Protocol::Dumb | Protocol::Rtc => {
-                let peer_id =
-                    String::from(url.host_str().ok_or(PeerUriError::MissingPeerId)?);
+                let peer_id = String::from(url.host_str().ok_or(PeerUriError::MissingPeerId)?);
                 if url.port().is_some() {
                     return Err(PeerUriError::UnexpectedPort);
                 }
@@ -210,9 +208,7 @@ impl PeerUri {
                 })
             }
             Protocol::Ws | Protocol::Wss => {
-                let host = String::from(
-                    url.host_str().ok_or(PeerUriError::MissingHostname)?,
-                );
+                let host = String::from(url.host_str().ok_or(PeerUriError::MissingHostname)?);
                 let (peer_id, public_key) = match path_segment {
                     Some(ref peer_id) if peer_id.len() == 2 * PeerId::SIZE => (path_segment, None),
                     Some(ref public_key) if public_key.len() == 2 * PublicKey::SIZE => {

@@ -1,7 +1,8 @@
-use futures::{Async, Future, Poll};
-use parking_lot::{Mutex, MutexGuard};
 use std::mem;
 use std::sync::Arc;
+
+use futures::{Async, Future, Poll};
+use parking_lot::{Mutex, MutexGuard};
 
 #[derive(Debug)]
 pub struct MultiLock<T> {

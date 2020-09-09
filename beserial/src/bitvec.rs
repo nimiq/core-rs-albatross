@@ -104,8 +104,9 @@ impl DeserializeWithLength for BitVec<Msb0, u8> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use bitvec::prelude::Msb0;
+
+    use super::*;
 
     fn reserialize(bits: &BitSlice<Msb0, u8>, raw: &[u8]) {
         let serialized = bits.serialize_to_vec::<u8>();

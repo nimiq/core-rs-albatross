@@ -1,8 +1,8 @@
 #[macro_use]
 extern crate beserial_derive;
+extern crate lazy_static;
 #[macro_use]
 extern crate log;
-extern crate lazy_static;
 extern crate nimiq_bls as bls;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;

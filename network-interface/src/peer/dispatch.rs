@@ -5,11 +5,13 @@
 //!   `DispatchError`.
 //! - Thus, upon receiving a Vec<u8> we deserialize the message accordingly,
 //!   before sending it over the channel.
-use beserial::SerializingError;
+use std::pin::Pin;
+
 use futures::channel::mpsc::{channel, unbounded, SendError};
 use futures::sink::{Sink, SinkExt};
 use futures::stream::{Stream, StreamExt};
-use std::pin::Pin;
+
+use beserial::SerializingError;
 
 use crate::message::Message;
 

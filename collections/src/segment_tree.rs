@@ -1,7 +1,8 @@
 extern crate num_traits;
 
-use num_traits::identities::Zero;
 use std::ops::*;
+
+use num_traits::identities::Zero;
 
 pub struct SegmentTree<T, U>
 where

@@ -1,12 +1,14 @@
+use std::marker::PhantomData;
+use std::sync::{Arc, Weak};
+
 use async_trait::async_trait;
-use block_albatross::Block;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
-use hash::Blake2bHash;
-use network_interface::prelude::{Network, Peer};
 use parking_lot::RwLock;
 
-use std::sync::{Arc, Weak};
+use block_albatross::Block;
+use hash::Blake2bHash;
+use network_interface::prelude::{Network, Peer};
 
 use crate::consensus::Consensus;
 use crate::consensus_agent::ConsensusAgent;
@@ -14,7 +16,6 @@ use crate::error::SyncError;
 use crate::messages::RequestBlockHashesFilter;
 use crate::sync::sync_queue::SyncQueue;
 use crate::sync::SyncProtocol;
-use std::marker::PhantomData;
 
 pub struct SyncingCluster<P: Peer> {
     hashes: Vec<Blake2bHash>,

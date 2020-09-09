@@ -1,12 +1,13 @@
+use std::collections::HashMap;
+use std::marker::PhantomData;
+use std::sync::{Arc, Weak};
+use std::time::Duration;
+
 use futures::{
     channel::oneshot::{channel, Sender},
     future, StreamExt,
 };
 use parking_lot::Mutex;
-use std::collections::HashMap;
-use std::marker::PhantomData;
-use std::sync::{Arc, Weak};
-use std::time::Duration;
 use tokio::{task::spawn, time::timeout};
 
 use crate::message::*;

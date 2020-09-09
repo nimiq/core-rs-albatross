@@ -5,11 +5,10 @@
 
 pub use macro_block::*;
 pub use merkle_tree::*;
-pub use state_commitment::*;
-pub use vk_commitment::*;
-
 // Re-export pedersen hashes from bls crate.
 pub use nimiq_bls::pedersen::*;
+pub use state_commitment::*;
+pub use vk_commitment::*;
 
 pub mod macro_block;
 pub mod merkle_tree;

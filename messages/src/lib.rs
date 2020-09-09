@@ -21,6 +21,7 @@ use std::fmt::Display;
 use std::io;
 use std::io::{Cursor, Read, Seek, SeekFrom};
 
+use bitflags::bitflags;
 use parking_lot::RwLock;
 use rand::rngs::OsRng;
 use rand::Rng;
@@ -30,7 +31,6 @@ use beserial::{
     uvar, Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
     SerializingError, WriteBytesExt,
 };
-use bitflags::bitflags;
 use block_albatross::{
     Block as BlockAlbatross, BlockHeader as BlockHeaderAlbatross, ForkProof, PbftCommitMessage,
     PbftPrepareMessage, SignedPbftProposal, ViewChange, ViewChangeProof,

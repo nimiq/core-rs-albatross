@@ -1,10 +1,13 @@
-use async_trait::async_trait;
-use network_interface::network::Network;
 use std::sync::Arc;
 
-pub use self::quick::*;
+use async_trait::async_trait;
+
+use network_interface::network::Network;
+
 use crate::consensus::Consensus;
 use crate::error::SyncError;
+
+pub use self::quick::*;
 
 mod quick;
 mod sync_queue;

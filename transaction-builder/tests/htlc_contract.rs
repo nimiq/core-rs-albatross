@@ -144,13 +144,7 @@ fn it_can_create_regular_transfer() {
         .expect("Builder should be able to create transaction");
     let mut proof_builder = proof_builder.unwrap_htlc();
     let proof = proof_builder.signature_with_key_pair(&recipient_key_pair);
-    proof_builder.regular_transfer(
-        HashAlgorithm::Blake2b,
-        pre_image,
-        1,
-        hash_root,
-        proof,
-    );
+    proof_builder.regular_transfer(HashAlgorithm::Blake2b, pre_image, 1, hash_root, proof);
     let tx2 = proof_builder
         .generate()
         .expect("Builder should be able to create proof");

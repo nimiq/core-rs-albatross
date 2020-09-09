@@ -1,5 +1,6 @@
-use beserial::{Deserialize, DeserializeWithLength, Serialize, SerializeWithLength};
 use std::collections::HashSet;
+
+use beserial::{Deserialize, DeserializeWithLength, Serialize, SerializeWithLength};
 
 #[test]
 fn it_correctly_serializes_and_deserializes_hashsets() {

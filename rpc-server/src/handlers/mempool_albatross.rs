@@ -5,7 +5,6 @@ use json::{object, JsonValue, Null};
 use parking_lot::RwLock;
 
 use beserial::{Deserialize, Serialize};
-
 use bls::{CompressedPublicKey, CompressedSignature};
 use genesis::NetworkInfo;
 use keys::Address;

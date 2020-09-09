@@ -1,3 +1,4 @@
+use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -19,7 +20,6 @@ use crate::peer_channel::PeerSink;
 use crate::peer_channel::PeerStream;
 use crate::peer_channel::PeerStreamEvent;
 use crate::websocket::{Message, SharedNimiqMessageStream};
-use std::fmt;
 
 #[derive(Debug, Clone, Default)]
 pub struct ClosedFlag {

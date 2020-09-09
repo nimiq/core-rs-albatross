@@ -80,9 +80,8 @@
 extern crate proc_macro;
 
 use proc_macro2::{Span, TokenStream};
-use syn::{parse_macro_input, Data, DeriveInput, Ident, Index, Meta, Path};
-
 use quote::quote;
+use syn::{parse_macro_input, Data, DeriveInput, Ident, Index, Meta, Path};
 
 enum FieldAttribute {
     Uvar,

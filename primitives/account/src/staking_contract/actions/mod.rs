@@ -4,6 +4,7 @@ use std::ops::Add;
 
 use beserial::{Deserialize, Serialize};
 use bls::CompressedPublicKey as BlsPublicKey;
+use nimiq_collections::BitSet;
 use primitives::coin::Coin;
 use primitives::policy;
 use primitives::slot::SlashedSlot;
@@ -22,7 +23,6 @@ use crate::{
     Account, AccountError, AccountTransactionInteraction, AccountType, Inherent, InherentType,
     StakingContract,
 };
-use nimiq_collections::BitSet;
 
 pub mod staker;
 pub mod validator;

@@ -2,25 +2,22 @@ use std::sync::Arc;
 
 use parking_lot::{Mutex, RwLock};
 
-#[cfg(feature = "metrics")]
-use crate::chain_metrics::BlockchainMetrics;
-
 use accounts::Accounts;
 use block::Block;
 use database::{Environment, WriteTransaction};
 use genesis::NetworkInfo;
 use hash::Blake2bHash;
-
 use primitives::coin::Coin;
 use primitives::networks::NetworkId;
 use primitives::policy;
 use primitives::slot::Slots;
-
 use utils::observer::Notifier;
 use utils::time::OffsetTime;
 
 use crate::blockchain_state::BlockchainState;
 use crate::chain_info::ChainInfo;
+#[cfg(feature = "metrics")]
+use crate::chain_metrics::BlockchainMetrics;
 use crate::chain_store::ChainStore;
 use crate::reward::genesis_parameters;
 use crate::transaction_cache::TransactionCache;
