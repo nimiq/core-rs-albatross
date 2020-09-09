@@ -102,7 +102,7 @@ fn prepare_outgoing_transaction() -> (
     let recipient_signature_proof =
         SignatureProof::from(recipient_key_pair.public, recipient_signature);
 
-    return (
+    (
         tx,
         pre_image,
         hash_root,
@@ -110,7 +110,7 @@ fn prepare_outgoing_transaction() -> (
         sender_signature_proof,
         recipient_key_pair,
         recipient_signature_proof,
-    );
+    )
 }
 
 #[test]
@@ -146,9 +146,9 @@ fn it_can_create_regular_transfer() {
     let proof = proof_builder.signature_with_key_pair(&recipient_key_pair);
     proof_builder.regular_transfer(
         HashAlgorithm::Blake2b,
-        pre_image.clone(),
+        pre_image,
         1,
-        hash_root.clone(),
+        hash_root,
         proof,
     );
     let tx2 = proof_builder

@@ -693,10 +693,10 @@ mod tests {
             );
             assert_eq!(
                 cursor.get_current::<String, u32>(),
-                Some((test1.clone(), 5783))
+                Some((test1, 5783))
             );
             assert!(cursor.prev_no_duplicate::<String, u32>().is_none());
-            assert_eq!(cursor.next::<String, u32>(), Some((test2.clone(), 5783)));
+            assert_eq!(cursor.next::<String, u32>(), Some((test2, 5783)));
             //            assert_eq!(cursor.seek_range_key::<String, u32>("test"), Some((test1.clone(), 12)));
         }
 

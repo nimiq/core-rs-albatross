@@ -19,10 +19,7 @@ impl InherentType {
     /// are applied before transactions.
     #[inline]
     pub fn is_pre_transactions(&self) -> bool {
-        match self {
-            InherentType::Slash => true,
-            _ => false,
-        }
+        matches!(self, InherentType::Slash)
     }
 }
 

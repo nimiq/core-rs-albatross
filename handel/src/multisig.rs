@@ -1,7 +1,7 @@
 use failure::Fail;
 
 use beserial::{BigEndian, Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
-use bls;
+
 use collections::bitset::BitSet;
 
 #[derive(Clone, Debug, Fail)]
@@ -153,17 +153,11 @@ impl Signature {
     }
 
     pub fn is_individual(&self) -> bool {
-        match self {
-            Signature::Individual(_) => true,
-            _ => false,
-        }
+        matches!(self, Signature::Individual(_))
     }
 
     pub fn is_multisig(&self) -> bool {
-        match self {
-            Signature::Multi(_) => true,
-            _ => false,
-        }
+        matches!(self, Signature::Multi(_))
     }
 }
 

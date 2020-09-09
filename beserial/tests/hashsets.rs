@@ -10,7 +10,7 @@ fn it_correctly_serializes_and_deserializes_hashsets() {
         let mut v = Vec::with_capacity(64);
         SerializeWithLength::serialize::<u16, Vec<u8>>(&s, &mut v).unwrap();
         let s2: HashSet<T> = DeserializeWithLength::deserialize::<u16, &[u8]>(&mut &v[..]).unwrap();
-        return s2;
+        s2
     }
 
     let mut hashset = HashSet::new();

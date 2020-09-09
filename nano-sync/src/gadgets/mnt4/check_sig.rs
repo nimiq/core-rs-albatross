@@ -57,7 +57,7 @@ impl CheckSigGadget {
         // Calculate the pairing for the left hand side of the verification equation.
         // e(sig, gen)
         let pairing1_var =
-            PairingGadget::pairing(cs.ns(|| "sig pairing"), sig_p_var, generator_p_var.clone())?;
+            PairingGadget::pairing(cs.ns(|| "sig pairing"), sig_p_var, generator_p_var)?;
 
         // Calculate the pairings for the right hand side of the verification equation.
         // e(hash_1, pk_1), e(hash_2, pk_2), ... , e(hash_n, pk_n)

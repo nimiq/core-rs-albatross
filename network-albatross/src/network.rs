@@ -101,7 +101,7 @@ impl Network {
             scorer: Arc::new(RwLock::new(PeerScorer::new(
                 net_config,
                 addresses,
-                connections.clone(),
+                connections,
             ))),
             timers: Timers::new(),
             notifier: RwLock::new(Notifier::new()),

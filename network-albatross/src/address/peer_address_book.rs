@@ -239,7 +239,7 @@ impl PeerAddressBookState {
     ) {
         if let Some(net_address) = net_address {
             self.addresses_by_net_address
-                .entry(net_address.as_ref().clone())
+                .entry(*net_address.as_ref())
                 .or_insert_with(HashSet::new)
                 .insert(peer_address.clone());
 

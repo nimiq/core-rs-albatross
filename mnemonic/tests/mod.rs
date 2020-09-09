@@ -1,4 +1,4 @@
-use hex;
+
 use nimiq_mnemonic::*;
 
 struct TestVector {

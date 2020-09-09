@@ -202,8 +202,8 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         next_cost_analysis!(cs, cost, || { "Verify final state commitment" });
 
         let final_block_number_var = UInt32::addmany(
-            cs.ns(|| format!("increment block number")),
-            &[initial_block_number_var.clone(), epoch_length_var.clone()],
+            cs.ns(|| "increment block number".to_string()),
+            &[initial_block_number_var.clone(), epoch_length_var],
         )?;
 
         let reference_commitment = StateCommitmentGadget::evaluate(

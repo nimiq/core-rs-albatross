@@ -774,7 +774,7 @@ impl<T> LinkedList<T> {
 
 impl<T> Drop for LinkedList<T> {
     fn drop(&mut self) {
-        while let Some(_) = self.pop_front_node() {}
+        while self.pop_front_node().is_some() {}
     }
 }
 
@@ -1328,7 +1328,7 @@ mod tests {
         assert_eq!(v1.len(), 3);
 
         assert_eq!(v1.iter().len(), 3);
-        assert_eq!(v1.iter().collect::<Vec<_>>().len(), 3);
+        assert_eq!(v1.iter().count(), 3);
     }
 
     #[test]

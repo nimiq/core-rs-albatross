@@ -94,7 +94,7 @@ impl PeerChannel {
                             let mut channels = msg_channels1.write();
                             if let Some(channel) = channels.get_mut(&msg_type) {
                                 // TODO: For now, we ignore asyncness here and block.
-                                if let Err(_) = executor::block_on(channel.send(msg)) {
+                                if executor::block_on(channel.send(msg)).is_err() {
                                     // TODO: What to do if there is an error?
                                 }
                             } else {

@@ -277,7 +277,7 @@ impl BlockProducer {
             timestamp,
             parent_hash,
             parent_election_hash,
-            seed: seed.clone(),
+            seed,
             extra_data,
             state_root: Blake2bHash::default(),
             body_root: Blake2bHash::default(),
@@ -403,7 +403,7 @@ pub mod test_utils {
         );
         let commit = SignedPbftCommitMessage::from_message(
             PbftCommitMessage {
-                block_hash: block_hash.clone(),
+                block_hash,
             },
             &keypair.secret_key,
             0,

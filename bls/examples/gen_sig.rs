@@ -8,7 +8,7 @@ fn main() {
 
     let keypair = KeyPair::generate(rng);
 
-    let message = format!("Who is on first.");
+    let message = "Who is on first.".to_string();
 
     let sig = keypair.sign(&message);
 

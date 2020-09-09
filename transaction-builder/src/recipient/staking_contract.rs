@@ -30,10 +30,7 @@ impl StakingTransaction {
     /// This method determines whether the transaction is a self transaction
     /// (i.e., both sender and recipient are the staking contract).
     pub fn is_self_transaction(&self) -> bool {
-        match self {
-            StakingTransaction::SelfTransaction(_) => true,
-            _ => false,
-        }
+        matches!(self, StakingTransaction::SelfTransaction(_))
     }
 }
 

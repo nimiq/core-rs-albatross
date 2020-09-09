@@ -11,7 +11,7 @@ use nimiq_primitives::slot::{Slots, ValidatorSlotBand, ValidatorSlots};
 
 #[test]
 fn it_can_convert_macro_block_into_slots() {
-    let hash = Blake2bHasher::default().digest(&vec![]);
+    let hash = Blake2bHasher::default().digest(&[]);
 
     let signature_bytes = hex::decode(
         "8001733b6e6edf3e1c6feb8841d32abe26d05163fddf6d2\
@@ -84,7 +84,7 @@ fn it_can_convert_macro_block_into_slots() {
             seed: signature.compress().into(),
             extra_data: vec![],
             state_root: hash.clone(),
-            body_root: hash.clone(),
+            body_root: hash,
         },
         justification: None,
         body: Some(MacroBody {

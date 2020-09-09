@@ -7,7 +7,7 @@ fn it_correctly_serializes_and_deserializes_uvar() {
         let mut v = Vec::with_capacity(9);
         Serialize::serialize(&uu, &mut v).unwrap();
         let uv: uvar = Deserialize::deserialize(&mut &v[..]).unwrap();
-        return uv.into();
+        uv.into()
     }
     assert_eq!(reserialize(0), 0);
     assert_eq!(reserialize(1), 1);
@@ -71,7 +71,7 @@ fn it_correctly_serializes_and_deserializes_string() {
         let mut v = Vec::with_capacity(50);
         SerializeWithLength::serialize::<u16, Vec<u8>>(&s, &mut v).unwrap();
         let s2: String = DeserializeWithLength::deserialize::<u16, &[u8]>(&mut &v[..]).unwrap();
-        return s2;
+        s2
     }
     assert!(reserialize("a".into()) == "a");
     assert!(reserialize("kjsSDFsdf345SD@$%^&".into()) == "kjsSDFsdf345SD@$%^&");

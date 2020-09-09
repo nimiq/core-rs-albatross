@@ -218,7 +218,7 @@ mod tests {
             t3.clone(),
             t4.clone(),
             b2.clone(),
-            t2.clone(),
+            t2,
             b1.clone(),
             r1.clone(),
         ]);
@@ -230,8 +230,8 @@ mod tests {
 
         // The second proof proves the 2 leftmost terminal nodes (T1 and T3)
         let mut proof2 = AccountsProof::new(vec![
-            t1.clone(),
-            t3.clone(),
+            t1,
+            t3,
             b2.clone(),
             b1.clone(),
             r1.clone(),
@@ -243,7 +243,7 @@ mod tests {
         assert_eq!(None, proof2.get_account(&address4));
 
         // The third proof just proves T4
-        let mut proof3 = AccountsProof::new(vec![t4.clone(), b2.clone(), b1.clone(), r1.clone()]);
+        let mut proof3 = AccountsProof::new(vec![t4, b2, b1, r1.clone()]);
         assert!(proof3.verify());
         assert_eq!(account4, proof3.get_account(&address4).unwrap());
         assert_eq!(None, proof3.get_account(&address1));

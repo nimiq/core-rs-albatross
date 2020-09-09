@@ -200,17 +200,17 @@ fn verify_works() {
 
         if path[i] {
             bits.extend_from_slice(
-                bytes_to_bits(serialize_g1_mnt6(other_node.clone()).as_ref()).as_ref(),
+                bytes_to_bits(serialize_g1_mnt6(other_node).as_ref()).as_ref(),
             );
             bits.extend_from_slice(
-                bytes_to_bits(serialize_g1_mnt6(node.clone()).as_ref()).as_ref(),
+                bytes_to_bits(serialize_g1_mnt6(node).as_ref()).as_ref(),
             );
         } else {
             bits.extend_from_slice(
-                bytes_to_bits(serialize_g1_mnt6(node.clone()).as_ref()).as_ref(),
+                bytes_to_bits(serialize_g1_mnt6(node).as_ref()).as_ref(),
             );
             bits.extend_from_slice(
-                bytes_to_bits(serialize_g1_mnt6(other_node.clone()).as_ref()).as_ref(),
+                bytes_to_bits(serialize_g1_mnt6(other_node).as_ref()).as_ref(),
             );
         }
 
@@ -266,17 +266,17 @@ fn verify_wrong_root() {
 
         if path[i] {
             bits.extend_from_slice(
-                bytes_to_bits(serialize_g1_mnt6(other_node.clone()).as_ref()).as_ref(),
+                bytes_to_bits(serialize_g1_mnt6(other_node).as_ref()).as_ref(),
             );
             bits.extend_from_slice(
-                bytes_to_bits(serialize_g1_mnt6(node.clone()).as_ref()).as_ref(),
+                bytes_to_bits(serialize_g1_mnt6(node).as_ref()).as_ref(),
             );
         } else {
             bits.extend_from_slice(
-                bytes_to_bits(serialize_g1_mnt6(node.clone()).as_ref()).as_ref(),
+                bytes_to_bits(serialize_g1_mnt6(node).as_ref()).as_ref(),
             );
             bits.extend_from_slice(
-                bytes_to_bits(serialize_g1_mnt6(other_node.clone()).as_ref()).as_ref(),
+                bytes_to_bits(serialize_g1_mnt6(other_node).as_ref()).as_ref(),
             );
         }
 

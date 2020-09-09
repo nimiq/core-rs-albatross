@@ -22,13 +22,13 @@ use nimiq_vrf::VrfSeed;
 
 
 /// Secret key of validator. Tests run with `genesis/src/genesis/unit-albatross.toml`
-const SECRET_KEY: &'static str =
+const SECRET_KEY: &str =
     "196ffdb1a8acc7cbd76a251aeac0600a1d68b3aba1eba823b5e4dc5dbdcdc730afa752c05ab4f6ef8518384ad514f403c5a088a22b17bf1bc14f8ff8decc2a512c0a200f68d7bdf5a319b30356fe8d1d75ef510aed7a8660968c216c328a0000";
 
 #[test]
 fn it_can_produce_micro_blocks() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::UnitAlbatross).unwrap());
+    let blockchain = Arc::new(Blockchain::new(env, NetworkId::UnitAlbatross).unwrap());
     let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
     let keypair =
         KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
@@ -46,7 +46,7 @@ fn it_can_produce_micro_blocks() {
     let fork_proof: ForkProof;
     {
         let header1 = block.header.clone();
-        let justification1 = block.justification.unwrap().signature.clone();
+        let justification1 = block.justification.unwrap().signature;
         let mut header2 = header1.clone();
         header2.timestamp += 1;
         let justification2 = keypair.sign(&header2).compress();
@@ -139,7 +139,7 @@ fn sign_macro_block(proposal: PbftProposal, extrinsics: Option<MacroBody>) -> Ma
     );
     let commit = SignedPbftCommitMessage::from_message(
         PbftCommitMessage {
-            block_hash: block_hash.clone(),
+            block_hash: block_hash,
         },
         &keypair.secret_key,
         0,
@@ -197,12 +197,12 @@ fn sign_view_change(
 #[test]
 fn it_can_produce_macro_blocks() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::UnitAlbatross).unwrap());
+    let blockchain = Arc::new(Blockchain::new(env, NetworkId::UnitAlbatross).unwrap());
     let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
 
     let keypair =
         KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
-    let producer = BlockProducer::new(Arc::clone(&blockchain), mempool, keypair.clone());
+    let producer = BlockProducer::new(Arc::clone(&blockchain), mempool, keypair);
 
     fill_micro_blocks(&producer, &blockchain);
 
@@ -223,12 +223,12 @@ fn it_can_produce_macro_blocks() {
 #[test]
 fn it_can_produce_election_blocks() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::UnitAlbatross).unwrap());
+    let blockchain = Arc::new(Blockchain::new(env, NetworkId::UnitAlbatross).unwrap());
     let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
 
     let keypair =
         KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
-    let producer = BlockProducer::new(Arc::clone(&blockchain), mempool, keypair.clone());
+    let producer = BlockProducer::new(Arc::clone(&blockchain), mempool, keypair);
     // push micro and macro blocks until the 3rd epoch is reached
     while policy::epoch_at(blockchain.block_number()) < 2 {
         fill_micro_blocks(&producer, &blockchain);

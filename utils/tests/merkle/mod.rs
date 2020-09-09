@@ -4,7 +4,7 @@ use nimiq_utils::merkle::{
     compute_root_from_content, compute_root_from_content_slice, MerklePath, MerkleProof,
 };
 
-const VALUE: &'static str = "merkletree";
+const VALUE: &str = "merkletree";
 
 pub mod incremental;
 pub mod partial;
@@ -21,7 +21,7 @@ fn it_correctly_computes_an_empty_root_hash() {
 #[test]
 fn it_correctly_computes_a_simple_root_hash() {
     let hash = Blake2bHasher::default().digest(VALUE.as_bytes());
-    let root = compute_root_from_content::<Blake2bHasher, &'static str>(&vec![VALUE]);
+    let root = compute_root_from_content::<Blake2bHasher, &'static str>(&[VALUE]);
     assert_eq!(root, hash);
     let root = compute_root_from_content_slice::<Blake2bHasher, &'static str>(&[VALUE]);
     assert_eq!(root, hash);
@@ -48,7 +48,7 @@ fn it_correctly_computes_a_complex_root_hash() {
         .chain(&level1)
         .finish();
     let root =
-        compute_root_from_content::<Blake2bHasher, &'static str>(&vec![VALUE, VALUE, VALUE, VALUE]);
+        compute_root_from_content::<Blake2bHasher, &'static str>(&[VALUE, VALUE, VALUE, VALUE]);
     assert_eq!(root, level2);
 
     /*
@@ -64,7 +64,7 @@ fn it_correctly_computes_a_complex_root_hash() {
         .chain(&level1)
         .chain(&level0)
         .finish();
-    let root = compute_root_from_content::<Blake2bHasher, &'static str>(&vec![VALUE, VALUE, VALUE]);
+    let root = compute_root_from_content::<Blake2bHasher, &'static str>(&[VALUE, VALUE, VALUE]);
     assert_eq!(root, level2a);
 }
 

@@ -59,7 +59,7 @@ fn everything_works() {
 
     let pks_commitment = merkle_tree_construct(pks_bits.clone());
 
-    let pks_nodes = merkle_tree_prove(pks_bits, path.clone());
+    let pks_nodes = merkle_tree_prove(pks_bits, path);
 
     // Create agg pk commitment for the given position in the tree.
     let mut agg_pk = sum_generator_g2_mnt6();
@@ -70,7 +70,7 @@ fn everything_works() {
         }
     }
 
-    let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk.clone()));
+    let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk));
 
     let pedersen_commitment = pedersen_hash(agg_pk_bits, pedersen_generators(5));
 
@@ -81,14 +81,14 @@ fn everything_works() {
 
     let c = PKTreeLeafCircuit::new(
         pks[0..VALIDATOR_SLOTS / PK_TREE_BREADTH].to_vec(),
-        pks_nodes.clone(),
-        agg_pk.clone(),
+        pks_nodes,
         agg_pk,
-        pks_commitment.clone(),
+        agg_pk,
+        pks_commitment,
         bitmap.to_vec(),
         agg_pk_commitment.clone(),
         bitmap.to_vec(),
-        agg_pk_commitment.clone(),
+        agg_pk_commitment,
         position,
     );
 
@@ -137,7 +137,7 @@ fn wrong_pks() {
 
     let pks_commitment = merkle_tree_construct(pks_bits.clone());
 
-    let pks_nodes = merkle_tree_prove(pks_bits, path.clone());
+    let pks_nodes = merkle_tree_prove(pks_bits, path);
 
     // Create agg pk commitment for the given position in the tree.
     let mut agg_pk = sum_generator_g2_mnt6();
@@ -148,7 +148,7 @@ fn wrong_pks() {
         }
     }
 
-    let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk.clone()));
+    let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk));
 
     let pedersen_commitment = pedersen_hash(agg_pk_bits, pedersen_generators(5));
 
@@ -166,14 +166,14 @@ fn wrong_pks() {
 
     let c = PKTreeLeafCircuit::new(
         fake_pks.to_vec(),
-        pks_nodes.clone(),
-        agg_pk.clone(),
+        pks_nodes,
         agg_pk,
-        pks_commitment.clone(),
+        agg_pk,
+        pks_commitment,
         bitmap.to_vec(),
         agg_pk_commitment.clone(),
         bitmap.to_vec(),
-        agg_pk_commitment.clone(),
+        agg_pk_commitment,
         position,
     );
 
@@ -219,7 +219,7 @@ fn wrong_merkle_proof() {
 
     let pks_commitment = merkle_tree_construct(pks_bits.clone());
 
-    let _pks_nodes = merkle_tree_prove(pks_bits, path.clone());
+    let _pks_nodes = merkle_tree_prove(pks_bits, path);
 
     // Create agg pk commitment for the given position in the tree.
     let mut agg_pk = sum_generator_g2_mnt6();
@@ -230,7 +230,7 @@ fn wrong_merkle_proof() {
         }
     }
 
-    let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk.clone()));
+    let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk));
 
     let pedersen_commitment = pedersen_hash(agg_pk_bits, pedersen_generators(5));
 
@@ -242,13 +242,13 @@ fn wrong_merkle_proof() {
     let c = PKTreeLeafCircuit::new(
         pks[0..VALIDATOR_SLOTS / PK_TREE_BREADTH].to_vec(),
         vec![sum_generator_g1_mnt6(); PK_TREE_DEPTH],
-        agg_pk.clone(),
         agg_pk,
-        pks_commitment.clone(),
+        agg_pk,
+        pks_commitment,
         bitmap.to_vec(),
         agg_pk_commitment.clone(),
         bitmap.to_vec(),
-        agg_pk_commitment.clone(),
+        agg_pk_commitment,
         position,
     );
 
@@ -294,7 +294,7 @@ fn wrong_agg_pk() {
 
     let pks_commitment = merkle_tree_construct(pks_bits.clone());
 
-    let pks_nodes = merkle_tree_prove(pks_bits, path.clone());
+    let pks_nodes = merkle_tree_prove(pks_bits, path);
 
     // Create agg pk commitment for the given position in the tree.
     let mut agg_pk = sum_generator_g2_mnt6();
@@ -305,7 +305,7 @@ fn wrong_agg_pk() {
         }
     }
 
-    let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk.clone()));
+    let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk));
 
     let pedersen_commitment = pedersen_hash(agg_pk_bits, pedersen_generators(5));
 
@@ -316,14 +316,14 @@ fn wrong_agg_pk() {
 
     let c = PKTreeLeafCircuit::new(
         pks[0..VALIDATOR_SLOTS / PK_TREE_BREADTH].to_vec(),
-        pks_nodes.clone(),
+        pks_nodes,
         sum_generator_g2_mnt6(),
         agg_pk,
-        pks_commitment.clone(),
+        pks_commitment,
         bitmap.to_vec(),
         agg_pk_commitment.clone(),
         bitmap.to_vec(),
-        agg_pk_commitment.clone(),
+        agg_pk_commitment,
         position,
     );
 
@@ -369,7 +369,7 @@ fn wrong_commitment() {
 
     let _pks_commitment = merkle_tree_construct(pks_bits.clone());
 
-    let pks_nodes = merkle_tree_prove(pks_bits, path.clone());
+    let pks_nodes = merkle_tree_prove(pks_bits, path);
 
     // Create agg pk commitment for the given position in the tree.
     let mut agg_pk = sum_generator_g2_mnt6();
@@ -380,7 +380,7 @@ fn wrong_commitment() {
         }
     }
 
-    let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk.clone()));
+    let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk));
 
     let pedersen_commitment = pedersen_hash(agg_pk_bits, pedersen_generators(5));
 
@@ -391,14 +391,14 @@ fn wrong_commitment() {
 
     let c = PKTreeLeafCircuit::new(
         pks[0..VALIDATOR_SLOTS / PK_TREE_BREADTH].to_vec(),
-        pks_nodes.clone(),
-        agg_pk.clone(),
+        pks_nodes,
+        agg_pk,
         agg_pk,
         agg_pk_commitment.clone(),
         bitmap.to_vec(),
         agg_pk_commitment.clone(),
         bitmap.to_vec(),
-        agg_pk_commitment.clone(),
+        agg_pk_commitment,
         position,
     );
 
@@ -444,7 +444,7 @@ fn wrong_bitmap() {
 
     let pks_commitment = merkle_tree_construct(pks_bits.clone());
 
-    let pks_nodes = merkle_tree_prove(pks_bits, path.clone());
+    let pks_nodes = merkle_tree_prove(pks_bits, path);
 
     // Create agg pk commitment for the given position in the tree.
     let mut agg_pk = sum_generator_g2_mnt6();
@@ -455,7 +455,7 @@ fn wrong_bitmap() {
         }
     }
 
-    let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk.clone()));
+    let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk));
 
     let pedersen_commitment = pedersen_hash(agg_pk_bits, pedersen_generators(5));
 
@@ -466,14 +466,14 @@ fn wrong_bitmap() {
 
     let c = PKTreeLeafCircuit::new(
         pks[0..VALIDATOR_SLOTS / PK_TREE_BREADTH].to_vec(),
-        pks_nodes.clone(),
-        agg_pk.clone(),
+        pks_nodes,
         agg_pk,
-        pks_commitment.clone(),
+        agg_pk,
+        pks_commitment,
         [1u8; VALIDATOR_SLOTS].to_vec(),
         agg_pk_commitment.clone(),
         bitmap.to_vec(),
-        agg_pk_commitment.clone(),
+        agg_pk_commitment,
         position,
     );
 
@@ -522,7 +522,7 @@ fn wrong_position() {
 
     let pks_commitment = merkle_tree_construct(pks_bits.clone());
 
-    let pks_nodes = merkle_tree_prove(pks_bits, path.clone());
+    let pks_nodes = merkle_tree_prove(pks_bits, path);
 
     // Create agg pk commitment for the given position in the tree.
     let mut agg_pk = sum_generator_g2_mnt6();
@@ -533,7 +533,7 @@ fn wrong_position() {
         }
     }
 
-    let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk.clone()));
+    let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk));
 
     let pedersen_commitment = pedersen_hash(agg_pk_bits, pedersen_generators(5));
 
@@ -544,14 +544,14 @@ fn wrong_position() {
 
     let c = PKTreeLeafCircuit::new(
         pks[0..VALIDATOR_SLOTS / PK_TREE_BREADTH].to_vec(),
-        pks_nodes.clone(),
-        agg_pk.clone(),
+        pks_nodes,
         agg_pk,
-        pks_commitment.clone(),
+        agg_pk,
+        pks_commitment,
         bitmap.to_vec(),
         agg_pk_commitment.clone(),
         bitmap.to_vec(),
-        agg_pk_commitment.clone(),
+        agg_pk_commitment,
         (PK_TREE_BREADTH - 1) as u8,
     );
 

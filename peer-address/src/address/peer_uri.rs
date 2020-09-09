@@ -188,13 +188,13 @@ impl PeerUri {
                 }
             })
             .transpose()?
-            .clone();
+            ;
 
         // Take appropriate parts of URI to construct the PeerUri
         match protocol {
             Protocol::Dumb | Protocol::Rtc => {
                 let peer_id =
-                    String::from(url.host_str().ok_or_else(|| PeerUriError::MissingPeerId)?);
+                    String::from(url.host_str().ok_or(PeerUriError::MissingPeerId)?);
                 if url.port().is_some() {
                     return Err(PeerUriError::UnexpectedPort);
                 }
@@ -211,8 +211,7 @@ impl PeerUri {
             }
             Protocol::Ws | Protocol::Wss => {
                 let host = String::from(
-                    url.host_str()
-                        .ok_or_else(|| PeerUriError::MissingHostname)?,
+                    url.host_str().ok_or(PeerUriError::MissingHostname)?,
                 );
                 let (peer_id, public_key) = match path_segment {
                     Some(ref peer_id) if peer_id.len() == 2 * PeerId::SIZE => (path_segment, None),

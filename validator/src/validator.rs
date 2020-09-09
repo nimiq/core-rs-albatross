@@ -4,7 +4,7 @@ use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use parking_lot::RwLock;
-use tokio;
+
 
 use account::Account;
 use block_albatross::{
@@ -97,7 +97,7 @@ impl Validator {
         let compressed_public_key = validator_key.public_key.compress();
         let info = ValidatorInfo {
             public_key: compressed_public_key,
-            peer_address: consensus.network.network_config.peer_address().clone(),
+            peer_address: consensus.network.network_config.peer_address(),
             udp_address: None,
             valid_from: consensus.blockchain.block_number(),
         };

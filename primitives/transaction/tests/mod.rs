@@ -1,4 +1,4 @@
-use hex;
+
 use std::convert::{TryFrom, TryInto};
 
 use beserial::{Deserialize, Serialize, SerializingError};

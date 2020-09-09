@@ -47,7 +47,7 @@ impl MockPeer {
             if let Ok(msg_type) = peek_type(&msg) {
                 let mut channels = channels1.write();
                 if let Some(channel) = channels.get_mut(&msg_type) {
-                    if let Err(_) = executor::block_on(channel.send(msg)) {
+                    if executor::block_on(channel.send(msg)).is_err() {
                         channels.remove(&msg_type);
                     }
                 }
@@ -103,7 +103,7 @@ impl Peer for MockPeer {
             Some(tx) => {
                 let mut serialized = Vec::with_capacity(msg.serialized_message_size());
                 msg.serialize_message(&mut serialized)
-                    .map_err(|e| SendError::Serialization(e))?;
+                    .map_err(SendError::Serialization)?;
                 executor::block_on(tx.send(serialized))
             }
             None => Err(SendError::AlreadyClosed),

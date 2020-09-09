@@ -139,7 +139,7 @@ impl<A: AccountsTreeLeave> AccountsTree<A> {
             if num_children == 1 && node_prefix != &root_address {
                 txn.remove(&self.db, node_prefix);
 
-                let first_child = node.iter_children().nth(0).unwrap();
+                let first_child = node.iter_children().next().unwrap();
                 return self.update_keys_batch(txn, node_prefix + &first_child.suffix, root_path);
             } else if num_children > 0 || node_prefix == &root_address {
                 // Otherwise, if the node has children left, update it and all keys on the
@@ -369,9 +369,9 @@ mod tests {
         let mut txn = WriteTransaction::new(&env);
 
         // Put accounts and check.
-        tree.put(&mut txn, &address1, account1.clone());
-        tree.put(&mut txn, &address2, account2.clone());
-        tree.put(&mut txn, &address3, account3.clone());
+        tree.put(&mut txn, &address1, account1);
+        tree.put(&mut txn, &address2, account2);
+        tree.put(&mut txn, &address3, account3);
 
         let mut chunk = tree.get_chunk(&txn, "", 100).unwrap();
         assert_eq!(chunk.len(), 3);

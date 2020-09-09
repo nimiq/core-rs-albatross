@@ -285,7 +285,7 @@ impl ConnectionPoolState {
         }
 
         self.connections_by_net_address
-            .entry(net_address.clone())
+            .entry(*net_address)
             .or_insert_with(HashSet::new)
             .insert(connection_id);
 
@@ -304,7 +304,7 @@ impl ConnectionPoolState {
         }
 
         if let Entry::Occupied(mut occupied) =
-            self.connections_by_net_address.entry(net_address.clone())
+            self.connections_by_net_address.entry(*net_address)
         {
             let is_empty = {
                 let s = occupied.get_mut();
@@ -579,7 +579,7 @@ impl ConnectionPool {
 
         // Create fresh ConnectionInfo instance.
         let mut state = self.state.write();
-        let connection_id = state.add(ConnectionInfo::outbound(peer_address.clone()));
+        let connection_id = state.add(ConnectionInfo::outbound(peer_address));
         state
             .connections
             .get_mut(connection_id)
@@ -738,7 +738,7 @@ impl ConnectionPool {
                 .write()
                 .register(move |ty: &CloseType| {
                     let arc = upgrade_weak!(weak);
-                    arc.on_close(connection_id, ty.clone());
+                    arc.on_close(connection_id, *ty);
                 });
 
             if !Self::check_connection(&state, connection_id) {
@@ -750,7 +750,7 @@ impl ConnectionPool {
             let net_address = info
                 .network_connection()
                 .map(NetworkConnection::net_address)
-                .clone();
+                ;
 
             if let Some(ref net_address) = net_address {
                 state.add_net_address(connection_id, &net_address);
@@ -1035,7 +1035,7 @@ impl ConnectionPool {
                 .register(move |msg: SignalMessage| {
                     let this = upgrade_weak!(self_weak);
                     let peer_channel = upgrade_weak!(weak_peer_channel);
-                    this.signal_processor.on_signal(peer_channel.clone(), msg);
+                    this.signal_processor.on_signal(peer_channel, msg);
                 });
         }
 
@@ -1152,7 +1152,7 @@ impl ConnectionPool {
                             self.notifier
                                 .read()
                                 .notify(ConnectionPoolEvent::ConnectError(
-                                    info.peer_address().expect("PeerAddress not set").clone(),
+                                    info.peer_address().expect("PeerAddress not set"),
                                     ty,
                                 ));
                         }

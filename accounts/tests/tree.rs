@@ -1,4 +1,4 @@
-use hex;
+
 use std::convert::TryFrom;
 
 use nimiq_account::{Account, BasicAccount};
@@ -41,7 +41,7 @@ fn it_can_put_and_get_a_balance() {
     if let Account::Basic(ref mut basic_account) = account {
         basic_account.balance = Coin::ZERO;
     }
-    tree.put(&mut txn, &address, account.clone());
+    tree.put(&mut txn, &address, account);
 
     let account2 = tree.get(&txn, &address);
     assert!(account2.is_none());
@@ -109,11 +109,11 @@ fn it_is_invariant_to_history() {
     tree.put(&mut txn, &address1, account1.clone());
     let root_hash1 = tree.root_hash(&txn);
 
-    tree.put(&mut txn, &address1, account2.clone());
+    tree.put(&mut txn, &address1, account2);
     let root_hash2 = tree.root_hash(&txn);
     assert_ne!(root_hash1, root_hash2);
 
-    tree.put(&mut txn, &address1, account1.clone());
+    tree.put(&mut txn, &address1, account1);
     let root_hash3 = tree.root_hash(&txn);
     assert_eq!(root_hash1, root_hash3);
 
@@ -199,12 +199,12 @@ fn it_is_invariant_to_insertion_order() {
     // Reset
     tree.put(&mut txn, &address1, empty_account.clone());
     tree.put(&mut txn, &address2, empty_account.clone());
-    tree.put(&mut txn, &address3, empty_account.clone());
+    tree.put(&mut txn, &address3, empty_account);
 
     // Order 6
-    tree.put(&mut txn, &address3, account3.clone());
-    tree.put(&mut txn, &address2, account2.clone());
-    tree.put(&mut txn, &address1, account1.clone());
+    tree.put(&mut txn, &address3, account3);
+    tree.put(&mut txn, &address2, account2);
+    tree.put(&mut txn, &address1, account1);
     let root_hash6 = tree.root_hash(&txn);
 
     assert_eq!(root_hash1, root_hash2);
@@ -242,13 +242,13 @@ fn it_can_merge_nodes_while_pruning() {
     let tree = AccountsTree::new(env.clone());
     let mut txn = WriteTransaction::new(&env);
 
-    tree.put(&mut txn, &address1, account1.clone());
+    tree.put(&mut txn, &address1, account1);
     let root_hash1 = tree.root_hash(&txn);
 
-    tree.put(&mut txn, &address2, account2.clone());
-    tree.put(&mut txn, &address3, account3.clone());
+    tree.put(&mut txn, &address2, account2);
+    tree.put(&mut txn, &address3, account3);
     tree.put(&mut txn, &address2, empty_account.clone());
-    tree.put(&mut txn, &address3, empty_account.clone());
+    tree.put(&mut txn, &address3, empty_account);
 
     let root_hash2 = tree.root_hash(&txn);
     assert_eq!(root_hash1, root_hash2);

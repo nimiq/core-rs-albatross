@@ -226,7 +226,7 @@ pub fn merkle_tree_prove(inputs: Vec<Vec<bool>>, path: Vec<bool>) -> Vec<G1Proje
             let bits = bytes_to_bits(&bytes);
             let parent_node = pedersen_hash(bits, generators.clone());
 
-            next_nodes.push(parent_node.clone());
+            next_nodes.push(parent_node);
         }
         nodes.clear();
 

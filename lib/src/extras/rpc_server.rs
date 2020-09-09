@@ -24,7 +24,7 @@ pub fn initialize_rpc_server(client: &Client, config: RpcServerConfig) -> Result
 
     let methods = config
         .allowed_methods
-        .map(|methods| HashSet::from_iter(methods))
+        .map(HashSet::from_iter)
         .unwrap_or_default();
 
     let corsdomain = config.corsdomain.unwrap_or_default();

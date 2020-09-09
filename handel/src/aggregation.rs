@@ -99,7 +99,7 @@ impl<P: Protocol + fmt::Debug> Aggregation<P> {
         let mut state = self.state.write();
         if state.contribution.is_none() {
             state.contribution = Some(contribution.clone());
-            let signature = Signature::Individual(contribution.clone());
+            let signature = Signature::Individual(contribution);
 
             // drop state before sending updates
             // Drop state before store is locked. Otherwise we have a circular dependency with

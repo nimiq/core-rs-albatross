@@ -78,7 +78,7 @@ impl IdentityRegistry for ValidatorRegistry {
         self.validators
             .read()
             .get_public_key(id)
-            .and_then(|pubkey| pubkey.uncompress().map(|c| c.clone()))
+            .and_then(|pubkey| pubkey.uncompress().map(|c| *c))
     }
 }
 

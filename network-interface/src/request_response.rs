@@ -100,7 +100,7 @@ impl<P: Peer, Req: RequestMessage, Res: ResponseMessage + 'static> RequestRespon
         let response = timeout(self.timeout, receiver).await;
 
         // Lock state and remove channel on timeout.
-        if let Err(_) = response {
+        if response.is_err() {
             let mut state = self.state.lock();
             state.responses.remove(&request_identifier);
             return Err(RequestError::Timeout);

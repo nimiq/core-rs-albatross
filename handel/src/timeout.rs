@@ -40,7 +40,7 @@ impl TimeoutStrategy for LinearTimeout {
         );
         Box::new(
             stream::iter_ok::<Range<usize>, ()>(0..num_levels)
-                .throttle(self.period.clone())
+                .throttle(self.period)
                 .map(|level| {
                     debug!("Timeout for level {}", level);
                     level

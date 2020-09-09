@@ -2,7 +2,7 @@
 
 use curve25519_dalek::edwards::{CompressedEdwardsY, EdwardsPoint};
 use curve25519_dalek::scalar::Scalar;
-use hex;
+
 use nimiq_keys::multisig::*;
 use nimiq_keys::multisig::{Commitment, PartialSignature, RandomSecret};
 use nimiq_keys::{KeyPair, PrivateKey, PublicKey, Signature};
@@ -98,7 +98,7 @@ impl TestVector {
         );
         let signature: Signature = from_hex!(v.signature, Signature::SIZE, Signature::from);
         let message: Vec<u8> = v.message.to_string().into_bytes();
-        return TestVector {
+        TestVector {
             priv_keys,
             pub_keys,
             pub_keys_hash,
@@ -112,7 +112,7 @@ impl TestVector {
             agg_signature,
             signature,
             message,
-        };
+        }
     }
 }
 

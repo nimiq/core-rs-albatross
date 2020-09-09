@@ -358,7 +358,7 @@ impl NetworkAgent {
             msg.user_agent,
         ));
 
-        self.peer_challenge_nonce = Some(msg.challenge_nonce.clone());
+        self.peer_challenge_nonce = Some(msg.challenge_nonce);
         self.version_received = true;
 
         // Tell listeners that we received this peer's version information.

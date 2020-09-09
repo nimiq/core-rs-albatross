@@ -240,7 +240,7 @@ impl<N: Network> QuickSync<N> {
             }
         }
 
-        if let Some(_) = synced_cluster {
+        if synced_cluster.is_some() {
             self.state.write().established = true;
             Ok(())
         } else {

@@ -162,10 +162,7 @@ impl Recipient {
     /// Vesting and HTLC recipients do create new contracts.
     /// Basic recipients and the staking contract do not create new contracts.
     pub fn is_creation(&self) -> bool {
-        match self {
-            Recipient::Basic { .. } | Recipient::Staking { .. } => false,
-            _ => true,
-        }
+        !matches!(self, Recipient::Basic { .. } | Recipient::Staking { .. })
     }
 
     /// This method checks whether the transaction is a signalling transaction

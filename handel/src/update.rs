@@ -68,7 +68,7 @@ mod test {
     use super::*;
     use crate::multisig::{IndividualSignature, MultiSignature};
     use beserial::{Deserialize, Serialize};
-    use bls;
+    
 
     fn create_multisig() -> MultiSignature {
         let raw_key = hex::decode(

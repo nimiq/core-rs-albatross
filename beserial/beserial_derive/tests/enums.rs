@@ -58,7 +58,7 @@ enum TestWithData {
 fn it_can_handle_value_enums_with_repr_u8() {
     fn reserialize(test: TestU8) -> TestU8 {
         let v = Serialize::serialize_to_vec(&test);
-        return Deserialize::deserialize(&mut &v[..]).unwrap();
+        Deserialize::deserialize(&mut &v[..]).unwrap()
     }
     assert_eq!(reserialize(TestU8::A), TestU8::A);
     assert_eq!(reserialize(TestU8::B), TestU8::B);
@@ -74,11 +74,11 @@ fn it_can_handle_value_enums_with_repr_u8() {
 fn it_can_handle_value_enums_with_repr_u64() {
     fn reserialize(test: TestU64) -> TestU64 {
         let v = Serialize::serialize_to_vec(&test);
-        return Deserialize::deserialize(&mut &v[..]).unwrap();
+        Deserialize::deserialize(&mut &v[..]).unwrap()
     }
     fn reserialize_to_num(test: TestU64) -> u64 {
         let v = Serialize::serialize_to_vec(&test);
-        return Deserialize::deserialize(&mut &v[..]).unwrap();
+        Deserialize::deserialize(&mut &v[..]).unwrap()
     }
     assert_eq!(reserialize(TestU64::A), TestU64::A);
     assert_eq!(reserialize(TestU64::B), TestU64::B);
@@ -94,11 +94,11 @@ fn it_can_handle_value_enums_with_repr_u64() {
 fn it_can_handle_value_enums_with_repr_uvar() {
     fn reserialize(test: TestUVar) -> TestUVar {
         let v = Serialize::serialize_to_vec(&test);
-        return Deserialize::deserialize(&mut &v[..]).unwrap();
+        Deserialize::deserialize(&mut &v[..]).unwrap()
     }
     fn reserialize_to_num(test: TestUVar) -> uvar {
         let v = Serialize::serialize_to_vec(&test);
-        return Deserialize::deserialize(&mut &v[..]).unwrap();
+        Deserialize::deserialize(&mut &v[..]).unwrap()
     }
     assert_eq!(reserialize(TestUVar::A), TestUVar::A);
     assert_eq!(reserialize(TestUVar::B), TestUVar::B);
@@ -114,7 +114,7 @@ fn it_can_handle_value_enums_with_repr_uvar() {
 fn it_can_handle_enums_without_discriminants() {
     fn reserialize(test: TestNoDiscriminants) -> TestNoDiscriminants {
         let v = Serialize::serialize_to_vec(&test);
-        return Deserialize::deserialize(&mut &v[..]).unwrap();
+        Deserialize::deserialize(&mut &v[..]).unwrap()
     }
     assert_eq!(reserialize(TestNoDiscriminants::A), TestNoDiscriminants::A);
     assert_eq!(reserialize(TestNoDiscriminants::B), TestNoDiscriminants::B);
@@ -128,7 +128,7 @@ fn it_can_handle_enums_without_discriminants() {
 fn it_can_handle_enums_with_data() {
     fn reserialize(test: TestWithData) -> TestWithData {
         let v = Serialize::serialize_to_vec(&test);
-        return Deserialize::deserialize(&mut &v[..]).unwrap();
+        Deserialize::deserialize(&mut &v[..]).unwrap()
     }
     assert_eq!(reserialize(TestWithData::A), TestWithData::A);
     assert_eq!(

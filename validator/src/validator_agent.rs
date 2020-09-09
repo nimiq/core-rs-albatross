@@ -391,8 +391,7 @@ impl ValidatorAgent {
 
         let unknown_infos = infos
             .iter()
-            .filter(|info| !state.known_validators.contains(&info.message.public_key))
-            .map(|info| info.clone())
+            .filter(|info| !state.known_validators.contains(&info.message.public_key)).cloned()
             .collect::<Vec<SignedValidatorInfo>>();
 
         // early return, if there are no unknown

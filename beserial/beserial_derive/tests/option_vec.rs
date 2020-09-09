@@ -15,7 +15,7 @@ fn it_correctly_serializes_and_deserializes_option_of_vec() {
         let mut v = Vec::with_capacity(s.serialized_size());
         Serialize::serialize(&s, &mut v).unwrap();
         let s2: TestStruct = Deserialize::deserialize(&mut &v[..]).unwrap();
-        return s2;
+        s2
     }
     let mut test = TestStruct { test: None };
     assert_eq!(test.serialized_size(), 1);

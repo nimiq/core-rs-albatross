@@ -40,10 +40,7 @@ pub enum WebSocketState {
 impl WebSocketState {
     #[inline]
     pub fn is_active(&self) -> bool {
-        match self {
-            WebSocketState::Active => true,
-            _ => false,
-        }
+        matches!(self, WebSocketState::Active)
     }
 
     #[inline]

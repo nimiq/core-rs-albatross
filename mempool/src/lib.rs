@@ -192,17 +192,14 @@ impl Mempool {
                 }
             }
             // Also check contract creation.
-            if is_contract_creation {
-                if Account::new_contract(
+            if is_contract_creation && Account::new_contract(
                     transaction.recipient_type,
                     recipient_account.balance(),
                     &transaction,
                     block_height,
                 )
-                .is_err()
-                {
-                    return ReturnCode::Invalid;
-                }
+                .is_err() {
+                return ReturnCode::Invalid;
             }
 
             // Retrieve sender account and check account type.
@@ -510,18 +507,15 @@ impl Mempool {
                         continue;
                     }
                     // Also check contract creation.
-                    if tx.flags.contains(TransactionFlags::CONTRACT_CREATION) {
-                        if Account::new_contract(
+                    if tx.flags.contains(TransactionFlags::CONTRACT_CREATION) && Account::new_contract(
                             tx.recipient_type,
                             recipient_account.balance(),
                             &tx,
                             block_height,
                         )
-                        .is_err()
-                        {
-                            txs_evicted.push(tx.clone());
-                            continue;
-                        }
+                        .is_err() {
+                        txs_evicted.push(tx.clone());
+                        continue;
                     }
 
                     // Check if transaction is still valid for sender.
@@ -602,19 +596,16 @@ impl Mempool {
                     continue;
                 }
                 // Also check contract creation.
-                if tx.flags.contains(TransactionFlags::CONTRACT_CREATION) {
-                    if Account::new_contract(
+                if tx.flags.contains(TransactionFlags::CONTRACT_CREATION) && Account::new_contract(
                         tx.recipient_type,
                         recipient_account.balance(),
                         &tx,
                         block_height,
                     )
-                    .is_err()
-                    {
-                        // This transaction cannot be accepted by the recipient anymore.
-                        // XXX The transaction is lost!
-                        continue;
-                    }
+                    .is_err() {
+                    // This transaction cannot be accepted by the recipient anymore.
+                    // XXX The transaction is lost!
+                    continue;
                 }
 
                 let txs = txs_by_sender
@@ -700,7 +691,7 @@ impl Mempool {
             .transactions_by_sender
             .entry(tx.sender.clone()) // XXX Get rid of the .clone() here
             .or_insert_with(BTreeSet::new);
-        txs_by_sender.insert(tx.clone());
+        txs_by_sender.insert(tx);
     }
 
     fn remove_transaction(state: &mut MempoolState, tx: &Transaction) {

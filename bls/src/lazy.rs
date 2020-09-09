@@ -29,7 +29,7 @@ impl Clone for LazyPublicKey {
     fn clone(&self) -> Self {
         LazyPublicKey {
             compressed: self.compressed.clone(),
-            cache: RwLock::new(self.cache.read().clone()),
+            cache: RwLock::new(*self.cache.read()),
         }
     }
 }

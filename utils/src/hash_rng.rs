@@ -45,7 +45,8 @@ impl<S: Sized + Default + AsMut<[u8]>, H: HashOutput> RngCore for HashRng<S, H> 
     }
 
     fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Error> {
-        Ok(self.fill_bytes(dest))
+        self.fill_bytes(dest);
+Ok(())
     }
 }
 

@@ -361,10 +361,7 @@ impl<T: Clear + Deserialize + Serialize> OtpLock<T> {
 
     #[inline]
     pub fn is_locked(&self) -> bool {
-        match self {
-            OtpLock::Locked(_) => true,
-            _ => false,
-        }
+        matches!(self, OtpLock::Locked(_))
     }
 
     #[inline]

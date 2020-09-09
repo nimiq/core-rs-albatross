@@ -187,7 +187,7 @@ pub struct SignalRouteInfo {
 
 impl SignalRouteInfo {
     pub fn new(signal_channel: Arc<PeerChannel>, distance: u8, timestamp: u64) -> Self {
-        let signal_channel = signal_channel.clone();
+        let signal_channel = signal_channel;
         SignalRouteInfo {
             failed_attempts: 0,
             timestamp,

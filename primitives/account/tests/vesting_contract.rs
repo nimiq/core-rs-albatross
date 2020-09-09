@@ -45,7 +45,7 @@ fn it_can_verify_creation_transaction() {
 
     let mut transaction = Transaction::new_contract_creation(
         vec![],
-        owner.clone(),
+        owner,
         AccountType::Basic,
         AccountType::Vesting,
         100.try_into().unwrap(),
@@ -250,10 +250,7 @@ fn it_can_verify_outgoing_transactions() {
     );
     tx.sender_type = AccountType::Vesting;
 
-    assert!(match AccountType::verify_outgoing_transaction(&tx) {
-        Err(TransactionError::InvalidSerialization(SerializingError::IoError(_, _))) => true,
-        _ => false,
-    });
+    assert!(matches!(AccountType::verify_outgoing_transaction(&tx), Err(TransactionError::InvalidSerialization(SerializingError::IoError(_, _)))));
 
     let signature = key_pair.sign(&tx.serialize_content()[..]);
     let signature_proof = SignatureProof::from(key_pair.public, signature);

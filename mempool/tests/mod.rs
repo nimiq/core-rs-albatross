@@ -1,7 +1,7 @@
 
 use std::sync::Arc;
 
-use hex;
+
 
 use beserial::{Deserialize, Serialize};
 use nimiq_account::{Inherent, InherentType};
@@ -47,15 +47,15 @@ fn push_same_tx_twice() {
     blockchain
         .state()
         .accounts()
-        .commit(&mut txn, &vec![], &vec![reward], 0)
+        .commit(&mut txn, &[], &[reward], 0)
         .unwrap();
 
     txn.commit();
 
     // Generate and sign transaction from address_a
     let mut tx = Transaction::new_basic(
-        address_a.clone(),
-        address_b.clone(),
+        address_a,
+        address_b,
         Coin::from_u64_unchecked(10),
         Coin::from_u64_unchecked(0),
         1,
@@ -63,7 +63,7 @@ fn push_same_tx_twice() {
     );
 
     let signature_proof = SignatureProof::from(
-        keypair_a.public.clone(),
+        keypair_a.public,
         keypair_a.sign(&tx.serialize_content()),
     );
 
@@ -76,7 +76,7 @@ fn push_same_tx_twice() {
 fn push_tx_with_wrong_signature() {
     let env = VolatileEnvironment::new(10).unwrap();
 
-    let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::UnitAlbatross).unwrap());
+    let blockchain = Arc::new(Blockchain::new(env, NetworkId::UnitAlbatross).unwrap());
 
     let mempool = Mempool::new(blockchain, MempoolConfig::default());
 
@@ -94,7 +94,7 @@ fn push_tx_with_wrong_signature() {
 fn push_tx_with_insufficient_balance() {
     let env = VolatileEnvironment::new(10).unwrap();
 
-    let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::UnitAlbatross).unwrap());
+    let blockchain = Arc::new(Blockchain::new(env, NetworkId::UnitAlbatross).unwrap());
 
     let mempool = Mempool::new(blockchain, MempoolConfig::default());
 
@@ -132,15 +132,15 @@ fn push_and_get_valid_tx() {
     blockchain
         .state()
         .accounts()
-        .commit(&mut txn, &vec![], &vec![reward], 1)
+        .commit(&mut txn, &[], &[reward], 1)
         .unwrap();
 
     txn.commit();
 
     // Generate and sign transaction from address_a
     let mut tx = Transaction::new_basic(
-        address_a.clone(),
-        address_b.clone(),
+        address_a,
+        address_b,
         Coin::from_u64_unchecked(10),
         Coin::from_u64_unchecked(0),
         1,
@@ -148,7 +148,7 @@ fn push_and_get_valid_tx() {
     );
 
     let signature_proof = SignatureProof::from(
-        keypair_a.public.clone(),
+        keypair_a.public,
         keypair_a.sign(&tx.serialize_content()),
     );
 
@@ -194,7 +194,7 @@ fn push_and_get_two_tx_same_user() {
     blockchain
         .state()
         .accounts()
-        .commit(&mut txn, &vec![], &vec![reward], 1)
+        .commit(&mut txn, &[], &[reward], 1)
         .unwrap();
 
     txn.commit();
@@ -210,7 +210,7 @@ fn push_and_get_two_tx_same_user() {
     );
 
     let signature_proof1 = SignatureProof::from(
-        keypair_a.public.clone(),
+        keypair_a.public,
         keypair_a.sign(&tx1.serialize_content()),
     );
 
@@ -224,8 +224,8 @@ fn push_and_get_two_tx_same_user() {
 
     // Generate, sign and push 2nd transaction from address_a
     let mut tx2 = Transaction::new_basic(
-        address_a.clone(),
-        address_b.clone(),
+        address_a,
+        address_b,
         Coin::from_u64_unchecked(9),
         Coin::from_u64_unchecked(0),
         1,
@@ -233,7 +233,7 @@ fn push_and_get_two_tx_same_user() {
     );
 
     let signature_proof2 = SignatureProof::from(
-        keypair_a.public.clone(),
+        keypair_a.public,
         keypair_a.sign(&tx2.serialize_content()),
     );
 
@@ -277,7 +277,7 @@ fn reject_free_tx_beyond_limit() {
     blockchain
         .state()
         .accounts()
-        .commit(&mut txn, &vec![], &vec![reward], 1)
+        .commit(&mut txn, &[], &[reward], 1)
         .unwrap();
 
     txn.commit();
@@ -293,7 +293,7 @@ fn reject_free_tx_beyond_limit() {
         );
 
         let signature_proof1 = SignatureProof::from(
-            keypair_a.public.clone(),
+            keypair_a.public,
             keypair_a.sign(&tx1.serialize_content()),
         );
 

@@ -32,10 +32,7 @@ impl Default for Subscription {
 
 impl Subscription {
     pub fn matches_block(&self) -> bool {
-        match self {
-            Subscription::None => false,
-            _ => true,
-        }
+        !matches!(self, Subscription::None)
     }
 
     pub fn matches_transaction(&self, transaction: &Transaction) -> bool {

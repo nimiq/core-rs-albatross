@@ -752,7 +752,7 @@ impl ClientConfigBuilder {
                     .host
                     .clone()
                     .ok_or_else(|| Error::config_error("Hostname not set."))?
-                    .clone(),
+                    ,
                 port: config_file
                     .network
                     .port
@@ -799,27 +799,19 @@ impl ClientConfigBuilder {
 
         // Configure storage config.
         let mut file_storage = FileStorageConfig::default();
-        config_file.database.path.as_ref().map(|path| {
-            file_storage.database_parent = PathBuf::from(path);
-        });
-        config_file.peer_key_file.as_ref().map(|path| {
-            file_storage.peer_key = PathBuf::from(path);
-        });
-        config_file.validator.as_ref().map(|validator_config| {
-            validator_config
+        if let Some(path) = config_file.database.path.as_ref() { file_storage.database_parent = PathBuf::from(path); }
+        if let Some(path) = config_file.peer_key_file.as_ref() { file_storage.peer_key = PathBuf::from(path); }
+        if let Some(validator_config) = config_file.validator.as_ref() { validator_config
                 .key_file
                 .as_ref()
-                .map(|key_path| file_storage.validator_key = Some(PathBuf::from(key_path)));
-        });
+                .map(|key_path| file_storage.validator_key = Some(PathBuf::from(key_path))); }
         self.storage = Some(file_storage.into());
 
         // Configure database
         self.database(config_file.database.clone());
 
         // Configure reverse proxy config
-        config_file.reverse_proxy.as_ref().map(|reverse_proxy| {
-            self.reverse_proxy = Some(Some(reverse_proxy.clone().into()));
-        });
+        if let Some(reverse_proxy) = config_file.reverse_proxy.as_ref() { self.reverse_proxy = Some(Some(reverse_proxy.clone().into())); }
 
         // Configure RPC server
         #[cfg(feature = "rpc-server")]

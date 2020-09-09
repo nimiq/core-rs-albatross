@@ -16,7 +16,7 @@ use nimiq_primitives::policy;
 
 
 /// Secret key of validator. Tests run with `genesis/src/genesis/unit-albatross.toml`
-const SECRET_KEY: &'static str = "196ffdb1a8acc7cbd76a251aeac0600a1d68b3aba1eba823b5e4dc5dbdcdc730afa752c05ab4f6ef8518384ad514f403c5a088a22b17bf1bc14f8ff8decc2a512c0a200f68d7bdf5a319b30356fe8d1d75ef510aed7a8660968c216c328a0000";
+const SECRET_KEY: &str = "196ffdb1a8acc7cbd76a251aeac0600a1d68b3aba1eba823b5e4dc5dbdcdc730afa752c05ab4f6ef8518384ad514f403c5a088a22b17bf1bc14f8ff8decc2a512c0a200f68d7bdf5a319b30356fe8d1d75ef510aed7a8660968c216c328a0000";
 
 // Fill epoch with micro blocks
 fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<Blockchain>) {
@@ -74,7 +74,7 @@ fn sign_macro_block(proposal: PbftProposal, extrinsics: MacroBody) -> MacroBlock
     );
     let commit = SignedPbftCommitMessage::from_message(
         PbftCommitMessage {
-            block_hash: block_hash.clone(),
+            block_hash,
         },
         &keypair.secret_key,
         0,
@@ -96,7 +96,7 @@ fn sign_macro_block(proposal: PbftProposal, extrinsics: MacroBody) -> MacroBlock
 // #[test]
 fn it_can_sync_macro_blocks() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::UnitAlbatross).unwrap());
+    let blockchain = Arc::new(Blockchain::new(env, NetworkId::UnitAlbatross).unwrap());
     let genesis_hash = blockchain.head_hash();
 
     let keypair =
@@ -113,7 +113,7 @@ fn it_can_sync_macro_blocks() {
 
     // Create a second blockchain to push these blocks.
     let env2 = VolatileEnvironment::new(10).unwrap();
-    let blockchain2 = Arc::new(Blockchain::new(env2.clone(), NetworkId::UnitAlbatross).unwrap());
+    let blockchain2 = Arc::new(Blockchain::new(env2, NetworkId::UnitAlbatross).unwrap());
 
     for block in macro_blocks {
         assert_eq!(

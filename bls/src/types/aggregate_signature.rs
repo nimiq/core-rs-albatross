@@ -23,7 +23,7 @@ impl AggregateSignature {
         for x in sigs {
             agg_sig += &x.signature;
         }
-        return AggregateSignature(Signature { signature: agg_sig });
+        AggregateSignature(Signature { signature: agg_sig })
     }
 
     /// Adds a single regular signature to an aggregated signature.

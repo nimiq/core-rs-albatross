@@ -4,7 +4,7 @@ use std::sync::{Arc, Weak};
 
 use failure::Fail;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
-use tokio;
+
 
 use block_albatross::signed::AggregateProof;
 use block_albatross::{
@@ -673,7 +673,7 @@ impl ValidatorNetwork {
 
         // The commit handler. This will store the finished commit proof and construct the
         // pBFT proof.
-        let key = block_hash.clone();
+        let key = block_hash;
         pbft.aggregation
             .read()
             .commit_aggregation

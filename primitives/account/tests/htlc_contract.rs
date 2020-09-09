@@ -62,7 +62,7 @@ fn it_can_verify_creation_transaction() {
 
     let mut transaction = Transaction::new_contract_creation(
         vec![],
-        sender.clone(),
+        sender,
         AccountType::Basic,
         AccountType::HTLC,
         100.try_into().unwrap(),
@@ -223,8 +223,8 @@ fn prepare_outgoing_transaction() -> (
 
     let start_contract = HashedTimeLockedContract {
         balance: 1000.try_into().unwrap(),
-        sender: sender.clone(),
-        recipient: recipient.clone(),
+        sender,
+        recipient,
         hash_algorithm: HashAlgorithm::Blake2b,
         hash_root,
         hash_count: 2,
@@ -249,13 +249,13 @@ fn prepare_outgoing_transaction() -> (
     let recipient_signature_proof =
         SignatureProof::from(recipient_key_pair.public, recipient_signature);
 
-    return (
+    (
         start_contract,
         tx,
         pre_image,
         sender_signature_proof,
         recipient_signature_proof,
-    );
+    )
 }
 
 #[test]

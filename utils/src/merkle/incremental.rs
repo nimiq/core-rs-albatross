@@ -343,8 +343,8 @@ where
             current_level = &current_level_owned;
             current_proof_nodes = mem::replace(&mut next_proof_nodes, BitSet::new());
 
-            level_leftmost = level_leftmost / 2;
-            level_rightmost = level_rightmost / 2;
+            level_leftmost /= 2;
+            level_rightmost /= 2;
             level_len = level_len.ceiling_div(2);
             current_position = (level_leftmost / 2) * 2;
             level_offset = current_position;

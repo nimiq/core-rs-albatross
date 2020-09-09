@@ -18,7 +18,7 @@ pub struct KeyPair {
 impl KeyPair {
     /// Derives a key pair from a secret key. This function will panic if it is given zero as an input.
     pub fn from_secret(x: &SecretKey) -> Self {
-        KeyPair::from(x.clone())
+        KeyPair::from(*x)
     }
 
     /// Signs a message using the key pair.
@@ -53,10 +53,10 @@ impl From<SecretKey> for KeyPair {
     /// Derives a key pair from a secret key. This function will produce an error if it is given zero as an input.
     fn from(secret: SecretKey) -> Self {
         let public = PublicKey::from_secret(&secret);
-        return KeyPair {
+        KeyPair {
             secret_key: secret,
             public_key: public,
-        };
+        }
     }
 }
 

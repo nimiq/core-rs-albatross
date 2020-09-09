@@ -37,7 +37,7 @@ impl MacroBlock {
     /// This function signs a macro block, for the prepare and commit rounds, given a validator's
     /// key pair and signer id (which is simply the position in the signer bitmap).
     pub fn sign(&mut self, sk: Fr, signer_id: usize, block_number: u32, pks_commitment: Vec<u8>) {
-        self.sign_prepare(sk.clone(), signer_id, block_number, pks_commitment.clone());
+        self.sign_prepare(sk, signer_id, block_number, pks_commitment.clone());
         self.sign_commit(sk, signer_id, block_number, pks_commitment);
     }
 

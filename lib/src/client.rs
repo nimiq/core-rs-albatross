@@ -141,7 +141,7 @@ impl TryFrom<ClientConfig> for ClientInner {
 
         let network = Network::new(
             Arc::clone(&blockchain),
-            network_config.clone(),
+            network_config,
             time,
             config.network,
         )?;

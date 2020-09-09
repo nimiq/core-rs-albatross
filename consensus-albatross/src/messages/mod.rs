@@ -37,11 +37,7 @@ impl<T: Serialize + Deserialize> Objects<T> {
     }
 
     pub fn contains_hashes(&self) -> bool {
-        if let Objects::Hashes(_) = self {
-            true
-        } else {
-            false
-        }
+        matches!(self, Objects::Hashes(_))
     }
 
     pub fn contains_objects(&self) -> bool {

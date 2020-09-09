@@ -94,7 +94,7 @@ fn it_can_create_creation_transaction() {
 
     let mut builder = TransactionBuilder::new();
     builder
-        .with_sender(owner.clone())
+        .with_sender(owner)
         .with_recipient(recipient.generate().unwrap())
         .with_value(100.try_into().unwrap())
         .with_validity_start_height(0)

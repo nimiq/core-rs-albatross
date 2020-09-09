@@ -3,11 +3,11 @@ use std::fmt;
 use std::fs;
 use std::sync::Arc;
 
-use fs2;
-use lmdb_zero;
+
+
 pub use lmdb_zero::open;
 use lmdb_zero::traits::LmdbResultExt;
-use parking_lot;
+
 use rand::{thread_rng, Rng};
 
 use crate::cursor::{RawReadCursor, ReadCursor, WriteCursor as WriteCursorTrait};
@@ -824,10 +824,10 @@ mod tests {
             );
             assert_eq!(
                 cursor.get_current::<String, u32>(),
-                Some((test1.clone(), 5783))
+                Some((test1, 5783))
             );
             assert!(cursor.prev_no_duplicate::<String, u32>().is_none());
-            assert_eq!(cursor.next::<String, u32>(), Some((test2.clone(), 5783)));
+            assert_eq!(cursor.next::<String, u32>(), Some((test2, 5783)));
             //            assert_eq!(cursor.seek_range_key::<String, u32>("test"), Some((test1.clone(), 12)));
         }
 

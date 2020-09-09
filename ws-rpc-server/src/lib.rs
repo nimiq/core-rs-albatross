@@ -118,7 +118,7 @@ impl WsRpcServer {
                         // Put sink into connections
                         connections_stream
                             .write()
-                            .insert(connection_id.clone(), WsRpcConnection { address, tx });
+                            .insert(connection_id, WsRpcConnection { address, tx });
 
                         let connection_future =
                             send_future.join(recv_future).map(|_| ()).map_err(move |e| {
@@ -187,14 +187,14 @@ impl WsRpcServer {
 
                 let reverted = JsonValue::Array(
                     reverted
-                        .into_iter()
+                        .iter()
                         .map(|(block_hash, _)| JsonValue::String(block_hash.to_string()))
                         .collect(),
                 );
 
                 let rebranched = JsonValue::Array(
                     rebranched
-                        .into_iter()
+                        .iter()
                         .map(|(block_hash, _)| JsonValue::String(block_hash.to_string()))
                         .collect(),
                 );

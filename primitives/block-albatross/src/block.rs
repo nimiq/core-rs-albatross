@@ -249,20 +249,12 @@ impl Block {
 
     /// Returns true if the block is a Micro block, false otherwise.
     pub fn is_micro(&self) -> bool {
-        if let Block::Micro(_) = self {
-            true
-        } else {
-            false
-        }
+        matches!(self, Block::Micro(_))
     }
 
     /// Returns true if the block is a Macro block, false otherwise.
     pub fn is_macro(&self) -> bool {
-        if let Block::Macro(_) = self {
-            true
-        } else {
-            false
-        }
+        matches!(self, Block::Macro(_))
     }
 }
 

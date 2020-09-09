@@ -303,10 +303,8 @@ impl Transaction {
             if self.value != Coin::ZERO {
                 return Err(TransactionError::InvalidForRecipient);
             }
-        } else {
-            if self.value == Coin::ZERO {
-                return Err(TransactionError::ZeroValue);
-            }
+        } else if self.value == Coin::ZERO {
+            return Err(TransactionError::ZeroValue);
         }
 
         // Check that value + fee doesn't overflow.

@@ -186,7 +186,7 @@ pub fn initialize_logging(
 
     // Set logging level for specific selected modules
     for (module, level) in &settings.tags {
-        dispatch = dispatch.level_for(module.clone(), level.clone());
+        dispatch = dispatch.level_for(module.clone(), *level);
     }
 
     // Log into file or to stderr

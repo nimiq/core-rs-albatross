@@ -282,7 +282,7 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeLeafCircuit {
         // Calculate the commit aggregate public key.
         next_cost_analysis!(cs, cost, || { "Calculate commit agg key" });
 
-        let mut reference_comm_agg_pk = sum_generator_g2_var.clone();
+        let mut reference_comm_agg_pk = sum_generator_g2_var;
 
         for (i, (key, included)) in pks_var
             .iter()

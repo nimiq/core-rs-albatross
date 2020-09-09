@@ -333,8 +333,8 @@ impl StakingContract {
 
         if !current_epoch
             && !previous_epoch
-            && !current_disabled_slots.is_some()
-            && !previous_disabled_slots.is_some()
+            && current_disabled_slots.is_none()
+            && previous_disabled_slots.is_none()
         {
             return Err(AccountError::InvalidForRecipient);
         }

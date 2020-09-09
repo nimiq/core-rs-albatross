@@ -116,7 +116,7 @@ fn it_does_not_support_contract_creation() {
     let sender = Address::from([3u8; 20]);
     let transaction = Transaction::new_contract_creation(
         data,
-        sender.clone(),
+        sender,
         AccountType::Basic,
         AccountType::Staking,
         100.try_into().unwrap(),
@@ -175,7 +175,7 @@ fn it_can_verify_validator_and_staking_transaction() {
     // Staking
     let mut tx = make_incoming_transaction(
         IncomingStakingTransactionData::Stake {
-            validator_key: validator_key.clone(),
+            validator_key,
             staker_address: None,
         },
         100_000_000,
@@ -205,7 +205,7 @@ fn it_can_apply_validator_and_staking_transaction() {
     let tx_1 = make_incoming_transaction(
         IncomingStakingTransactionData::CreateValidator {
             validator_key: bls_pair.public_key.compress(),
-            proof_of_knowledge: proof_of_knowledge.clone(),
+            proof_of_knowledge,
             reward_address: Default::default(),
         },
         150_000_000,
@@ -378,7 +378,7 @@ fn test_proof_verification(transaction: Transaction) {
                 );
 
                 let proof = OutgoingStakingTransactionProof::DropValidator {
-                    validator_key: validator_key.clone(),
+                    validator_key,
                     signature: bls_pair.sign(&tx_3.serialize_content()).compress(),
                 };
                 tx_3.proof = proof.serialize_to_vec();
@@ -477,7 +477,7 @@ fn it_can_apply_retiring_transaction() {
     );
     assert_eq!(
         contract.commit_outgoing_transaction(&tx_2, 3),
-        Err(funds_error.clone())
+        Err(funds_error)
     );
 
     // Retire second half of stake in two transactions
@@ -602,7 +602,7 @@ fn it_can_apply_unstaking_transaction() {
     );
     assert_eq!(
         contract.commit_outgoing_transaction(&tx_2, 40003),
-        Err(funds_error.clone())
+        Err(funds_error)
     );
 
     // Block 40003: Unstake quarter
@@ -1139,7 +1139,7 @@ fn it_can_apply_unpark_transactions() {
     // Unpark with address that is not parked
     let unpark = make_signed_incoming_transaction(
         IncomingStakingTransactionData::UnparkValidator {
-            validator_key: validator_key.clone(),
+            validator_key,
             signature: Default::default(),
         },
         0,
@@ -1563,7 +1563,7 @@ fn it_can_build_a_validator_set() {
 
     contract
         .stake(
-            staker2.clone(),
+            staker2,
             Coin::from_u64_unchecked(100_000_000),
             &validator2,
         )
@@ -1577,14 +1577,14 @@ fn it_can_build_a_validator_set() {
         .unwrap();
     contract
         .stake(
-            staker1.clone(),
+            staker1,
             Coin::from_u64_unchecked(100_000_000),
             &validator3,
         )
         .unwrap();
     contract
         .stake(
-            staker3.clone(),
+            staker3,
             Coin::from_u64_unchecked(100_000_000),
             &validator3,
         )
@@ -3414,7 +3414,7 @@ fn make_signed_incoming_transaction(
         PrivateKey::deserialize_from_vec(&hex::decode(STAKER_PRIVATE_KEY).unwrap()).unwrap();
     let key_pair = KeyPair::from(private_key);
     tx.proof = SignatureProof::from(
-        key_pair.public.clone(),
+        key_pair.public,
         key_pair.sign(&tx.serialize_content()),
     )
     .serialize_to_vec();
@@ -3434,7 +3434,7 @@ fn make_unstake_transaction(key_pair: &KeyPair, value: u64) -> Transaction {
         NetworkId::Dummy,
     );
     let proof = OutgoingStakingTransactionProof::Unstake(SignatureProof::from(
-        key_pair.public.clone(),
+        key_pair.public,
         key_pair.sign(&tx.serialize_content()),
     ));
     tx.proof = proof.serialize_to_vec();
@@ -3477,7 +3477,7 @@ fn make_self_transaction(data: SelfStakingTransactionData, value: u64) -> Transa
         PrivateKey::deserialize_from_vec(&hex::decode(STAKER_PRIVATE_KEY).unwrap()).unwrap();
     let key_pair = KeyPair::from(private_key);
     tx.proof = SignatureProof::from(
-        key_pair.public.clone(),
+        key_pair.public,
         key_pair.sign(&tx.serialize_content()),
     )
     .serialize_to_vec();

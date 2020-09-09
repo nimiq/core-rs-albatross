@@ -1,5 +1,5 @@
 use beserial::{Deserialize, Serialize};
-use hex;
+
 use nimiq_collections::bitset::BitSet;
 
 fn sample_bitset() -> BitSet {
@@ -11,7 +11,7 @@ fn sample_bitset() -> BitSet {
     }
     // Set bit 70
     set.insert(70);
-    return set;
+    set
 }
 
 #[test]

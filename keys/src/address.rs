@@ -86,7 +86,7 @@ impl Address {
                     .collect::<String>(),
             );
             if i != 8 {
-                friendly_spaces.push_str(" ");
+                friendly_spaces.push(' ');
             }
         }
         friendly_spaces

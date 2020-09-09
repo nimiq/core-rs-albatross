@@ -1,4 +1,4 @@
-use hex;
+
 use nimiq_key_derivation::*;
 use nimiq_keys::{PrivateKey, PublicKey};
 
@@ -32,7 +32,7 @@ impl TestVector {
 #[test]
 fn it_correctly_derives_keys() {
     // Test vectors from https://github.com/trezor/python-mnemonic/blob/master/vectors.json
-    const SEEDS: [&'static str; 2] = [
+    const SEEDS: [&str; 2] = [
         "000102030405060708090a0b0c0d0e0f",
         "fffcf9f6f3f0edeae7e4e1dedbd8d5d2cfccc9c6c3c0bdbab7b4b1aeaba8a5a29f9c999693908d8a8784817e7b7875726f6c696663605d5a5754514e4b484542"
     ];

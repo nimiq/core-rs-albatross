@@ -330,7 +330,7 @@ fn make_signed_incoming_transaction(
     .unwrap();
 
     tx.proof = SignatureProof::from(
-        key_pair.public.clone(),
+        key_pair.public,
         key_pair.sign(&tx.serialize_content()),
     )
     .serialize_to_vec();
@@ -350,7 +350,7 @@ fn make_unstake_transaction(key_pair: &KeyPair, value: u64) -> Transaction {
         NetworkId::Dummy,
     );
     let proof = OutgoingStakingTransactionProof::Unstake(SignatureProof::from(
-        key_pair.public.clone(),
+        key_pair.public,
         key_pair.sign(&tx.serialize_content()),
     ));
     tx.proof = proof.serialize_to_vec();
@@ -393,7 +393,7 @@ fn make_self_transaction(data: SelfStakingTransactionData, value: u64) -> Transa
         PrivateKey::deserialize_from_vec(&hex::decode(STAKER_PRIVATE_KEY).unwrap()).unwrap();
     let key_pair = KeyPair::from(private_key);
     tx.proof = SignatureProof::from(
-        key_pair.public.clone(),
+        key_pair.public,
         key_pair.sign(&tx.serialize_content()),
     )
     .serialize_to_vec();

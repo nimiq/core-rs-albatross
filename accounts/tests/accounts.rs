@@ -40,7 +40,7 @@ fn it_can_commit_and_revert_a_block_body() {
     let mut txn = WriteTransaction::new(&env);
 
     assert!(accounts
-        .commit(&mut txn, &vec![], &vec![reward.clone()], 1)
+        .commit(&mut txn, &[], &[reward.clone()], 1)
         .is_ok());
 
     txn.commit();
@@ -68,7 +68,7 @@ fn it_can_commit_and_revert_a_block_body() {
     let mut txn = WriteTransaction::new(&env);
 
     assert!(accounts
-        .commit(&mut txn, &transactions, &vec![reward.clone()], 2)
+        .commit(&mut txn, &transactions, &[reward.clone()], 2)
         .is_ok());
 
     txn.commit();
@@ -88,7 +88,7 @@ fn it_can_commit_and_revert_a_block_body() {
     let mut txn = WriteTransaction::new(&env);
 
     assert!(accounts
-        .revert(&mut txn, &transactions, &vec![reward], 2, &receipts)
+        .revert(&mut txn, &transactions, &[reward], 2, &receipts)
         .is_ok());
 
     txn.commit();
@@ -132,7 +132,7 @@ fn it_correctly_rewards_validators() {
 
     let mut txn = WriteTransaction::new(&env);
 
-    assert!(accounts.commit(&mut txn, &vec![], &vec![reward], 1).is_ok());
+    assert!(accounts.commit(&mut txn, &[], &[reward], 1).is_ok());
 
     txn.commit();
 
@@ -184,7 +184,7 @@ fn it_correctly_rewards_validators() {
     let mut txn = WriteTransaction::new(&env);
 
     assert!(accounts
-        .commit(&mut txn, &vec![tx1, tx2], &vec![reward], 2)
+        .commit(&mut txn, &vec![tx1, tx2], &[reward], 2)
         .is_ok());
 
     txn.commit();
@@ -243,7 +243,7 @@ fn it_checks_for_sufficient_funds() {
         let mut txn = WriteTransaction::new(&env);
 
         assert!(accounts
-            .commit(&mut txn, &vec![tx.clone()], &vec![reward.clone()], 1)
+            .commit(&mut txn, &[tx.clone()], &[reward.clone()], 1)
             .is_err());
     }
 
@@ -258,7 +258,7 @@ fn it_checks_for_sufficient_funds() {
     let mut txn = WriteTransaction::new(&env);
 
     assert!(accounts
-        .commit(&mut txn, &vec![], &vec![reward.clone()], 1)
+        .commit(&mut txn, &[], &[reward.clone()], 1)
         .is_ok());
 
     txn.commit();
@@ -281,7 +281,7 @@ fn it_checks_for_sufficient_funds() {
         let mut txn = WriteTransaction::new(&env);
 
         assert!(accounts
-            .commit(&mut txn, &vec![tx.clone()], &vec![reward.clone()], 2)
+            .commit(&mut txn, &[tx.clone()], &[reward.clone()], 2)
             .is_err());
     }
 
@@ -299,13 +299,13 @@ fn it_checks_for_sufficient_funds() {
 
     let mut tx2 = tx.clone();
 
-    tx2.value = tx2.value + Coin::from_u64_unchecked(10);
+    tx2.value += Coin::from_u64_unchecked(10);
 
     {
         let mut txn = WriteTransaction::new(&env);
 
         assert!(accounts
-            .commit(&mut txn, &vec![tx, tx2], &vec![reward.clone()], 2)
+            .commit(&mut txn, &vec![tx, tx2], &[reward], 2)
             .is_err());
     }
 
@@ -340,7 +340,7 @@ fn it_correctly_prunes_account() {
     let mut txn = WriteTransaction::new(&env);
 
     assert!(accounts
-        .commit(&mut txn, &vec![], &vec![reward.clone()], 1)
+        .commit(&mut txn, &[], &[reward.clone()], 1)
         .is_ok());
 
     txn.commit();
@@ -376,7 +376,7 @@ fn it_correctly_prunes_account() {
     let mut txn = WriteTransaction::new(&env);
 
     assert!(accounts
-        .commit(&mut txn, &vec![tx_create.clone()], &vec![reward.clone()], 2)
+        .commit(&mut txn, &[tx_create.clone()], &[reward.clone()], 2)
         .is_ok());
 
     txn.commit();
@@ -415,7 +415,7 @@ fn it_correctly_prunes_account() {
     let mut txn = WriteTransaction::new(&env);
 
     assert_eq!(
-        accounts.commit(&mut txn, &vec![tx_prune.clone()], &vec![reward.clone()], 3),
+        accounts.commit(&mut txn, &[tx_prune.clone()], &[reward.clone()], 3),
         Ok(receipts.clone())
     );
 
@@ -434,8 +434,8 @@ fn it_correctly_prunes_account() {
     assert!(accounts
         .revert(
             &mut txn,
-            &vec![tx_prune],
-            &vec![reward.clone()],
+            &[tx_prune],
+            &[reward.clone()],
             3,
             &receipts
         )
@@ -455,8 +455,8 @@ fn it_correctly_prunes_account() {
     assert!(accounts
         .revert(
             &mut txn,
-            &vec![tx_create.clone()],
-            &vec![reward.clone()],
+            &[tx_create],
+            &[reward],
             2,
             &Receipts::default()
         )
@@ -498,7 +498,7 @@ fn can_generate_accounts_proof() {
     let mut txn = WriteTransaction::new(&env);
 
     assert!(accounts
-        .commit(&mut txn, &vec![], &vec![reward.clone()], 1)
+        .commit(&mut txn, &[], &[reward], 1)
         .is_ok());
 
     txn.commit();
@@ -539,7 +539,7 @@ fn can_generate_accounts_proof() {
     let mut txn = WriteTransaction::new(&env);
 
     assert!(accounts
-        .commit(&mut txn, &vec![tx1, tx2], &vec![reward.clone()], 2)
+        .commit(&mut txn, &vec![tx1, tx2], &[reward], 2)
         .is_ok());
 
     txn.commit();
@@ -547,7 +547,7 @@ fn can_generate_accounts_proof() {
     let mut read_accs_txn = ReadTransaction::new(&env);
 
     let mut proof1 =
-        accounts.get_accounts_proof(&mut read_accs_txn, &vec![address_validator_1.clone()]);
+        accounts.get_accounts_proof(&mut read_accs_txn, &[address_validator_1.clone()]);
 
     assert!(proof1.verify());
 
@@ -566,7 +566,7 @@ fn can_generate_accounts_proof() {
 
     let mut proof2 = accounts.get_accounts_proof(
         &mut read_accs_txn,
-        &vec![address_recipient_2.clone(), address_validator_2.clone()],
+        &[address_recipient_2.clone(), address_validator_2.clone()],
     );
 
     assert!(proof2.verify());

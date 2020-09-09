@@ -11,7 +11,7 @@ use network_interface::prelude::{Network, Peer, ResponseMessage};
 use nimiq_genesis::NetworkInfo;
 use primitives::policy;
 use std::sync::Arc;
-use tokio;
+
 
 impl<N: Network> Consensus<N> {
     pub(super) fn init_network_requests(network: &Arc<N>, blockchain: &Arc<Blockchain>) {
