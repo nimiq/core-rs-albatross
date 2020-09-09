@@ -1,5 +1,3 @@
-#[cfg(feature = "metrics")]
-
 use account::Inherent;
 use accounts::Accounts;
 use block::{Block, MicroBlock, ViewChanges};

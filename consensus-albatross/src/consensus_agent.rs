@@ -1,5 +1,5 @@
 use parking_lot::RwLock;
-use std::sync::{Arc};
+use std::sync::Arc;
 use std::time::Duration;
 
 use crate::messages::{
@@ -7,15 +7,13 @@ use crate::messages::{
     RequestResponseMessage,
 };
 use block_albatross::Block;
-use futures::{Future, StreamExt};
+use futures::Future;
 use hash::Blake2bHash;
 use network_interface::peer::Peer;
 use network_interface::request_response::{RequestError, RequestResponse};
 use nimiq_subscription::Subscription;
 
 use transaction::Transaction;
-
-
 
 pub struct ConsensusAgentState {
     local_subscription: Subscription,

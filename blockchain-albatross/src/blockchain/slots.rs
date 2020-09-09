@@ -1,7 +1,5 @@
 use std::convert::TryInto;
 
-#[cfg(feature = "metrics")]
-
 use collections::BitSet;
 use database::{ReadTransaction, Transaction};
 use primitives::policy;

@@ -1,7 +1,7 @@
 use async_trait::async_trait;
-use block_albatross::{Block};
+use block_albatross::Block;
 use futures::stream::FuturesUnordered;
-use futures::{FutureExt, StreamExt};
+use futures::StreamExt;
 use hash::Blake2bHash;
 use network_interface::prelude::{Network, Peer};
 use parking_lot::RwLock;
@@ -167,8 +167,7 @@ impl<N: Network> QuickSync<N> {
 
                     match result {
                         Ok(_) => successfully_synced.push(actual_hash),
-                        Err(e) => {
-                            panic!("{:?}", e);
+                        Err(_) => {
                             warn!("Failed to push block {:?} into blockchain", actual_hash);
                             return Err(successfully_synced);
                         }
@@ -252,7 +251,7 @@ impl<N: Network> QuickSync<N> {
 #[async_trait]
 impl<N: Network + 'static> SyncProtocol<N> for QuickSync<N> {
     async fn perform_sync(&self, consensus: Arc<Consensus<N>>) -> Result<(), SyncError> {
-        self.macro_sync(consensus).await;
+        self.macro_sync(consensus).await?;
         Ok(())
     }
 

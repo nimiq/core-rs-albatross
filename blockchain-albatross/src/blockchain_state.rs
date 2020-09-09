@@ -1,5 +1,3 @@
-#[cfg(feature = "metrics")]
-
 use accounts::Accounts;
 use block::MacroBlock;
 use hash::Blake2bHash;

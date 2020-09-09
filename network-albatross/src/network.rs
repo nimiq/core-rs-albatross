@@ -16,7 +16,7 @@ use network_interface::prelude::{
     Network as NetworkInterface, NetworkEvent as NetworkEventI, Peer as PeerInterface,
 };
 
-use tokio_02::sync::broadcast::{Receiver as BroadcastReceiver};
+use tokio_02::sync::broadcast::Receiver as BroadcastReceiver;
 use utils::mutable_once::MutableOnce;
 use utils::observer::Notifier;
 use utils::time::OffsetTime;
@@ -248,7 +248,6 @@ impl Network {
                 if !self.backed_off.load(Ordering::Relaxed) {
                     self.backed_off.store(true, Ordering::Relaxed);
                     let old_backoff = self.backoff.load(Ordering::Relaxed);
-                    Duration::min(Self::CONNECT_BACKOFF_MAX, old_backoff * 2);
 
                     let weak = self.self_weak.clone();
                     self.timers.reset_delay(

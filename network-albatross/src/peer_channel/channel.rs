@@ -1,4 +1,3 @@
-
 use std::fmt;
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -16,7 +15,7 @@ use async_trait::async_trait;
 use network_interface::message::{peek_type, Message};
 use network_interface::peer::dispatch::{unbounded_dispatch, DispatchError};
 use network_interface::peer::{CloseReason, Peer as PeerInterface, SendError as SendErrorI};
-use network_messages::{Message as LegacyMessage, MessageNotifier, MessageType};
+use network_messages::MessageNotifier;
 use peer_address::address::PeerAddress;
 use utils::observer::Notifier;
 
@@ -30,11 +29,11 @@ use crate::websocket::Message as WebSocketMessage;
 
 use super::sink::PeerSink;
 use super::stream::PeerStreamEvent;
-use beserial::{uvar, Deserialize, Serialize};
+use beserial::Deserialize;
 use futures_03::{
     executor,
     task::{noop_waker_ref, Context},
-    AsyncWriteExt, Sink, SinkExt, Stream,
+    Sink, SinkExt, Stream,
 };
 use std::pin::Pin;
 use std::task::Poll;

@@ -275,13 +275,13 @@ fn it_can_rebranch_at_macro_block() {
     //                \- [1/1]
 
     let mut block;
-    let _macro_block = loop {
+    loop {
         block = temp_producer1.next_block(0, vec![]);
         temp_producer2.push(block.clone()).unwrap();
-        if let Block::Macro(macro_block) = block {
-            break macro_block;
+        if block.is_macro() {
+            break;
         }
-    };
+    }
 
     let fork1 = temp_producer1.next_block(0, vec![]);
     let fork2 = temp_producer2.next_block(1, vec![]);

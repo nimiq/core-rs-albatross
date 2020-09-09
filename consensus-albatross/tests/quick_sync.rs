@@ -1,5 +1,4 @@
 use beserial::Deserialize;
-use futures::StreamExt;
 use nimiq_block_albatross::Block;
 use nimiq_block_production_albatross::{test_utils::*, BlockProducer};
 use nimiq_blockchain_albatross::{Blockchain, PushResult};
@@ -10,7 +9,6 @@ use nimiq_consensus_albatross::sync::QuickSync;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
 use nimiq_mempool::{Mempool, MempoolConfig};
-use nimiq_network_interface::prelude::Network;
 use nimiq_network_mock::network::MockNetwork;
 use nimiq_primitives::policy;
 use std::sync::Arc;

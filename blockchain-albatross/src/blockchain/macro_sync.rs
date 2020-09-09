@@ -1,7 +1,5 @@
 use parking_lot::MutexGuard;
 
-#[cfg(feature = "metrics")]
-
 use block::{Block, BlockError, MacroBody};
 use database::{ReadTransaction, WriteTransaction};
 use hash::{Blake2bHash, Hash};

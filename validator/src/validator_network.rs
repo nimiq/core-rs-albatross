@@ -5,12 +5,11 @@ use std::sync::{Arc, Weak};
 use failure::Fail;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 
-
 use block_albatross::signed::AggregateProof;
 use block_albatross::{
-    BlockHeader, ForkProof, PbftCommitMessage, PbftPrepareMessage, PbftProof,
-    PbftProposal, SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedPbftProposal,
-    SignedViewChange, ViewChange, ViewChangeProof,
+    BlockHeader, ForkProof, PbftCommitMessage, PbftPrepareMessage, PbftProof, PbftProposal,
+    SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedPbftProposal, SignedViewChange,
+    ViewChange, ViewChangeProof,
 };
 use blockchain_albatross::Blockchain;
 use bls::CompressedPublicKey;
@@ -132,34 +131,36 @@ impl PbftState {
         let view_number = self.proposal.message.header.view_number;
 
         // Verify that the proposer is actually the slot owner
-        if let (slot, slot_number) = chain.get_slot_owner_at(block_number, view_number, None) {
-            let validator_id_opt = chain
-                .current_validators()
-                .get_band_number_by_slot_number(slot_number);
-            if validator_id_opt == Some(self.proposal.signer_idx) {
-                // get validator's public key from slot
-                let public_key = slot.public_key().uncompress_unchecked();
+        let (slot, slot_number) = chain.get_slot_owner_at(block_number, view_number, None);
 
-                // Check the validity of the block
-                // TODO: We check the view change proof the second time here if previously buffered
-                let result = chain.verify_block_header(
-                    &BlockHeader::Macro(self.proposal.message.header.clone()),
-                    &public_key,
-                    None, // TODO Would it make sense to pass a Read transaction?
-                );
-                if let Err(e) = result {
-                    debug!("[PBFT-PROPOSAL] Invalid macro block header: {:?}", e);
-                    return false;
-                }
+        let validator_id_opt = chain
+            .current_validators()
+            .get_band_number_by_slot_number(slot_number);
 
-                // Check the signature of the proposal
-                if !self.proposal.verify(&public_key) {
-                    debug!("[PBFT-PROPOSAL] Invalid signature");
-                    return false;
-                }
+        if validator_id_opt == Some(self.proposal.signer_idx) {
+            // get validator's public key from slot
+            let public_key = slot.public_key().uncompress_unchecked();
 
-                return true;
+            // Check the validity of the block
+            // TODO: We check the view change proof the second time here if previously buffered
+            let result = chain.verify_block_header(
+                &BlockHeader::Macro(self.proposal.message.header.clone()),
+                &public_key,
+                None, // TODO Would it make sense to pass a Read transaction?
+            );
+
+            if let Err(e) = result {
+                debug!("[PBFT-PROPOSAL] Invalid macro block header: {:?}", e);
+                return false;
             }
+
+            // Check the signature of the proposal
+            if !self.proposal.verify(&public_key) {
+                debug!("[PBFT-PROPOSAL] Invalid signature");
+                return false;
+            }
+
+            return true;
         }
 
         false

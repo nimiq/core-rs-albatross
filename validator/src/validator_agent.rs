@@ -13,7 +13,7 @@ use blockchain_albatross::Blockchain;
 use bls::CompressedPublicKey;
 use handel::update::LevelUpdateMessage;
 use hash::{Blake2bHash, Hash};
-use messages::{ViewChangeProofMessage};
+use messages::ViewChangeProofMessage;
 use network::connection::close_type::CloseType;
 use network::Peer;
 use network_interface::peer::Peer as PeerInterface;
@@ -243,19 +243,18 @@ impl ValidatorAgent {
         let block_number = fork_proof.block_number();
         let view_number = fork_proof.view_number();
 
-        if let (slot, _) = self
+        let (slot, _) = self
             .blockchain
-            .get_slot_owner_at(block_number, view_number, None)
-        {
-            if let Err(e) = fork_proof.verify(&slot.public_key().uncompress_unchecked()) {
-                debug!("[FORK-PROOF] Invalid signature in fork proof: {:?}", e);
-                return;
-            }
+            .get_slot_owner_at(block_number, view_number, None);
 
-            self.notifier
-                .read()
-                .notify(ValidatorAgentEvent::ForkProof(Box::new(fork_proof)));
+        if let Err(e) = fork_proof.verify(&slot.public_key().uncompress_unchecked()) {
+            debug!("[FORK-PROOF] Invalid signature in fork proof: {:?}", e);
+            return;
         }
+
+        self.notifier
+            .read()
+            .notify(ValidatorAgentEvent::ForkProof(Box::new(fork_proof)));
     }
 
     fn check_view_change_epoch(&self, view_change: &ViewChange) -> bool {
@@ -391,7 +390,8 @@ impl ValidatorAgent {
 
         let unknown_infos = infos
             .iter()
-            .filter(|info| !state.known_validators.contains(&info.message.public_key)).cloned()
+            .filter(|info| !state.known_validators.contains(&info.message.public_key))
+            .cloned()
             .collect::<Vec<SignedValidatorInfo>>();
 
         // early return, if there are no unknown

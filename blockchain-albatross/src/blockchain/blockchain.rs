@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use parking_lot::{MappedRwLockReadGuard, Mutex, MutexGuard, RwLock};
+use parking_lot::{Mutex, RwLock};
 
 #[cfg(feature = "metrics")]
 use crate::chain_metrics::BlockchainMetrics;
@@ -16,9 +16,7 @@ use primitives::networks::NetworkId;
 use primitives::policy;
 use primitives::slot::Slots;
 
-
-
-use utils::observer::{Notifier};
+use utils::observer::Notifier;
 use utils::time::OffsetTime;
 
 use crate::blockchain_state::BlockchainState;
@@ -26,9 +24,7 @@ use crate::chain_info::ChainInfo;
 use crate::chain_store::ChainStore;
 use crate::reward::genesis_parameters;
 use crate::transaction_cache::TransactionCache;
-use crate::{BlockchainError, BlockchainEvent, Direction, ForkEvent, PushError, PushResult};
-
-
+use crate::{BlockchainError, BlockchainEvent, ForkEvent};
 
 /// The Blockchain struct. It stores all information of the blockchain. It is the main data
 /// structure in this crate.

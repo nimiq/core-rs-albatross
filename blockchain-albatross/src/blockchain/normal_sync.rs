@@ -1,7 +1,5 @@
 use parking_lot::RwLockUpgradableReadGuard;
 
-#[cfg(feature = "metrics")]
-
 use block::{Block, BlockType, ForkProof};
 use database::{ReadTransaction, WriteTransaction};
 use hash::Blake2bHash;

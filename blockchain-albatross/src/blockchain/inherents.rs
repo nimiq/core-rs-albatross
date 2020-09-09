@@ -1,5 +1,3 @@
-#[cfg(feature = "metrics")]
-
 use account::inherent::AccountInherentInteraction;
 use account::{Inherent, InherentType};
 use beserial::Serialize;

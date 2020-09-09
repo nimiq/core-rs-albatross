@@ -2,7 +2,7 @@ use crate::consensus_agent::ConsensusAgent;
 
 use futures::stream::FuturesUnordered;
 use futures::task::{Context, Poll};
-use futures::{ready, Future, FutureExt, Stream, StreamExt};
+use futures::{ready, Future, Stream, StreamExt};
 use hash::Blake2bHash;
 use network_interface::peer::Peer;
 
