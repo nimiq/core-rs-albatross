@@ -28,7 +28,6 @@ nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1
 nimiq-block-production-albatross = { path = "../block-production-albatross", version = "0.1" }
 nimiq-blockchain-albatross = { path = "../blockchain-albatross", version = "0.1" }
 nimiq-bls = { path = "../bls", version = "0.1" }
-nimiq-consensus-albatross = { path = "../consensus-albatross", version = "0.1" }
 nimiq-collections = { path = "../collections", version = "0.1", features = ["bitset"] }
 nimiq-consensus-albatross = { path = "../consensus-albatross", version = "0.1" }
 nimiq-database = { path = "../database", version = "0.1", features = ["full-nimiq"] }

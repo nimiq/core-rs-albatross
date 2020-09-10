@@ -6,6 +6,7 @@ use hash::Blake2bHash;
 use primitives::networks::NetworkId;
 
 /// An enum used when a fork is detected.
+#[derive(Clone)]
 pub enum ForkEvent {
     Detected(ForkProof),
 }

@@ -10,7 +10,6 @@ use tokio::time;
 use block_albatross::{ForkProof, MicroBlock, SignedViewChange, ViewChange, ViewChangeProof};
 use block_production_albatross::BlockProducer;
 use blockchain_albatross::Blockchain;
-use blockchain_base::AbstractBlockchain;
 use mempool::Mempool;
 use utils::time::systemtime_to_timestamp;
 use vrf::VrfSeed;
@@ -25,7 +24,7 @@ pub(crate) enum ProduceMicroBlockEvent {
 #[derive(Clone)]
 struct NextProduceMicroBlockEvent {
     blockchain: Arc<Blockchain>,
-    mempool: Arc<Mempool<Blockchain>>,
+    mempool: Arc<Mempool>,
     signing_key: bls::KeyPair,
     validator_id: u16,
     fork_proofs: Vec<ForkProof>,
@@ -39,7 +38,7 @@ struct NextProduceMicroBlockEvent {
 impl NextProduceMicroBlockEvent {
     fn new(
         blockchain: Arc<Blockchain>,
-        mempool: Arc<Mempool<Blockchain>>,
+        mempool: Arc<Mempool>,
         signing_key: bls::KeyPair,
         validator_id: u16,
         fork_proofs: Vec<ForkProof>,
@@ -80,10 +79,9 @@ impl NextProduceMicroBlockEvent {
     }
 
     fn is_our_turn(&self) -> bool {
-        let (slot, _) = self
-            .blockchain
-            .get_slot_at(self.block_number, self.view_number, None)
-            .expect("Can't determine slot");
+        let (slot, _) =
+            self.blockchain
+                .get_slot_owner_at(self.block_number, self.view_number, None);
         &self.signing_key.public_key.compress() == slot.validator_slot.public_key().compressed()
     }
 
@@ -134,7 +132,7 @@ pub(crate) struct ProduceMicroBlock {
 impl ProduceMicroBlock {
     pub fn new(
         blockchain: Arc<Blockchain>,
-        mempool: Arc<Mempool<Blockchain>>,
+        mempool: Arc<Mempool>,
         signing_key: bls::KeyPair,
         validator_id: u16,
         fork_proofs: Vec<ForkProof>,

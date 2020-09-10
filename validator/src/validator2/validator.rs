@@ -8,8 +8,7 @@ use futures::{ready, Future, Stream, StreamExt};
 use tokio::sync::{broadcast, mpsc};
 
 use block_albatross::{Block, BlockType, ViewChangeProof};
-use blockchain_albatross::ForkEvent;
-use blockchain_base::{AbstractBlockchain, BlockchainEvent};
+use blockchain_albatross::{BlockchainEvent, ForkEvent};
 use consensus_albatross::{Consensus, ConsensusEvent};
 use hash::Blake2bHash;
 use network_interface::network::Network;
@@ -45,7 +44,7 @@ struct Validator<TNetwork: Network> {
     wallet_key: Option<keys::KeyPair>,
 
     consensus_event_rx: broadcast::Receiver<ConsensusEvent<TNetwork>>,
-    blockchain_event_rx: mpsc::UnboundedReceiver<BlockchainEvent<Block>>,
+    blockchain_event_rx: mpsc::UnboundedReceiver<BlockchainEvent>,
     fork_event_rx: mpsc::UnboundedReceiver<ForkEvent>,
 
     epoch_state: Option<ActiveEpochState>,
@@ -153,7 +152,7 @@ impl<TNetwork: Network> Validator<TNetwork> {
         }
     }
 
-    fn on_blockchain_event(&mut self, event: BlockchainEvent<Block>) {
+    fn on_blockchain_event(&mut self, event: BlockchainEvent) {
         match event {
             BlockchainEvent::Extended(ref hash) => self.on_blockchain_extended(hash),
             BlockchainEvent::Finalized(ref hash) => self.on_blockchain_extended(hash),
@@ -173,7 +172,7 @@ impl<TNetwork: Network> Validator<TNetwork> {
         let block = self
             .consensus
             .blockchain
-            .get_block(hash, false, true)
+            .get_block(hash, true)
             .expect("Head block not found");
         self.blockchain_state.fork_proofs.apply_block(&block);
     }
