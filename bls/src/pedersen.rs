@@ -6,7 +6,7 @@ use crypto_primitives::prf::Blake2sWithParameterBlock;
 use crate::rand_gen::generate_random_seed;
 use crate::utils::big_int_from_bytes_be;
 
-const POINT_CAPACITY: usize = FqParameters::MODULUS_BITS as usize - 1;
+const POINT_CAPACITY: usize = FqParameters::CAPACITY as usize;
 
 /// This is the function for creating generators in the G1 group for the MNT6-753 curve. These
 /// generators are meant to be used for the Pedersen hash function.

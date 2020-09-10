@@ -2,23 +2,24 @@
 //! easily here, without needing to change them in several places in the code.
 
 use algebra::mnt4_753::{
-    Fq as MNT4Fq, Fq2 as MNT4Fq2, G1Affine as MNT4G1Affine, G1Projective as MNT4G1Projective,
-    G2Affine as MNT4G2Affine, G2Projective as MNT4G2Projective,
+    Fq as MNT4Fq, Fq2 as MNT4Fq2, FqParameters, G1Affine as MNT4G1Affine,
+    G1Projective as MNT4G1Projective, G2Affine as MNT4G2Affine, G2Projective as MNT4G2Projective,
 };
 use algebra::mnt6_753::{
     Fq as MNT6Fq, Fq3 as MNT6Fq3, G1Affine as MNT6G1Affine, G1Projective as MNT6G1Projective,
     G2Affine as MNT6G2Affine, G2Projective as MNT6G2Projective,
 };
-use algebra::PrimeField;
+use algebra::{FpParameters, PrimeField};
 use algebra_core::One;
 use blake2_rfc::blake2s::Blake2s;
 use crypto_primitives::prf::Blake2sWithParameterBlock;
+use nimiq_primitives::policy;
 
 use crate::rand_gen::generate_random_seed;
 use crate::utils::big_int_from_bytes_be;
 
 /// This is the number of bits that each point in the elliptic curves MNT4-768 and MNT6-768 can store.
-pub const POINT_CAPACITY: usize = 752;
+pub const POINT_CAPACITY: usize = FqParameters::CAPACITY as usize;
 
 /// This is the depth of the PKTree circuit.
 pub const PK_TREE_DEPTH: usize = 5;
@@ -28,11 +29,11 @@ pub const PK_TREE_BREADTH: usize = 2_usize.pow(PK_TREE_DEPTH as u32);
 
 /// This is the length of one epoch in Albatross. Basically, the difference in the block numbers of
 /// two consecutive macro blocks.
-pub const EPOCH_LENGTH: u32 = 300;
+pub const EPOCH_LENGTH: u32 = policy::EPOCH_LENGTH;
 
 /// This is the number of validator slots in Albatross.
 /// VALIDATOR_SLOTS = MIN_SIGNERS + MAX_NON_SIGNERS
-pub const VALIDATOR_SLOTS: usize = 512;
+pub const VALIDATOR_SLOTS: usize = policy::SLOTS as usize;
 
 /// This is the minimum number of validator slots that must sign a macro block in order to be valid.
 /// MIN_SIGNERS = ceiling( VALIDATOR_SLOTS * 2/3 )
