@@ -15,6 +15,7 @@ use utils::time::systemtime_to_timestamp;
 use vrf::VrfSeed;
 
 use crate::validator2::mock::ViewChangeHandel;
+use crate::validator2::validator::ValidatorNetwork;
 
 pub(crate) enum ProduceMicroBlockEvent {
     MicroBlock(MicroBlock),
@@ -22,9 +23,10 @@ pub(crate) enum ProduceMicroBlockEvent {
 }
 
 #[derive(Clone)]
-struct NextProduceMicroBlockEvent {
+struct NextProduceMicroBlockEvent<TValidatorNetwork> {
     blockchain: Arc<Blockchain>,
     mempool: Arc<Mempool>,
+    network: Arc<TValidatorNetwork>,
     signing_key: bls::KeyPair,
     validator_id: u16,
     fork_proofs: Vec<ForkProof>,
@@ -35,10 +37,11 @@ struct NextProduceMicroBlockEvent {
     prev_seed: VrfSeed,
 }
 
-impl NextProduceMicroBlockEvent {
+impl<TValidatorNetwork: ValidatorNetwork> NextProduceMicroBlockEvent<TValidatorNetwork> {
     fn new(
         blockchain: Arc<Blockchain>,
         mempool: Arc<Mempool>,
+        network: Arc<TValidatorNetwork>,
         signing_key: bls::KeyPair,
         validator_id: u16,
         fork_proofs: Vec<ForkProof>,
@@ -54,6 +57,7 @@ impl NextProduceMicroBlockEvent {
         Self {
             blockchain,
             mempool,
+            network,
             signing_key,
             validator_id,
             fork_proofs,
@@ -65,7 +69,12 @@ impl NextProduceMicroBlockEvent {
         }
     }
 
-    async fn next(mut self) -> (ProduceMicroBlockEvent, NextProduceMicroBlockEvent) {
+    async fn next(
+        mut self,
+    ) -> (
+        ProduceMicroBlockEvent,
+        NextProduceMicroBlockEvent<TValidatorNetwork>,
+    ) {
         let event = if self.is_our_turn() {
             ProduceMicroBlockEvent::MicroBlock(self.produce_micro_block())
         } else {
@@ -125,14 +134,23 @@ impl NextProduceMicroBlockEvent {
     }
 }
 
-pub(crate) struct ProduceMicroBlock {
-    next_event: Option<BoxFuture<'static, (ProduceMicroBlockEvent, NextProduceMicroBlockEvent)>>,
+pub(crate) struct ProduceMicroBlock<TValidatorNetwork> {
+    next_event: Option<
+        BoxFuture<
+            'static,
+            (
+                ProduceMicroBlockEvent,
+                NextProduceMicroBlockEvent<TValidatorNetwork>,
+            ),
+        >,
+    >,
 }
 
-impl ProduceMicroBlock {
+impl<TValidatorNetwork: ValidatorNetwork> ProduceMicroBlock<TValidatorNetwork> {
     pub fn new(
         blockchain: Arc<Blockchain>,
         mempool: Arc<Mempool>,
+        network: Arc<TValidatorNetwork>,
         signing_key: bls::KeyPair,
         validator_id: u16,
         fork_proofs: Vec<ForkProof>,
@@ -143,6 +161,7 @@ impl ProduceMicroBlock {
         let next_event = NextProduceMicroBlockEvent::new(
             blockchain,
             mempool,
+            network,
             signing_key,
             validator_id,
             fork_proofs,
@@ -158,7 +177,7 @@ impl ProduceMicroBlock {
     }
 }
 
-impl Stream for ProduceMicroBlock {
+impl<TValidatorNetwork: ValidatorNetwork> Stream for ProduceMicroBlock<TValidatorNetwork> {
     type Item = ProduceMicroBlockEvent;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {

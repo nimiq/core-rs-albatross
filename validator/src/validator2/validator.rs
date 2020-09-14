@@ -18,6 +18,9 @@ use crate::validator2::micro::{ProduceMicroBlock, ProduceMicroBlockEvent};
 use crate::validator2::mock::notifier_to_stream;
 use crate::validator2::r#macro::ProduceMacroBlock;
 
+// Mock
+pub(crate) trait ValidatorNetwork: Network {}
+
 enum ValidatorStakingState {
     Active,
     Parked,
@@ -38,8 +41,9 @@ struct ProduceMicroBlockState {
     view_change_proof: Option<ViewChangeProof>,
 }
 
-struct Validator<TNetwork: Network> {
+struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> {
     consensus: Arc<Consensus<TNetwork>>,
+    network: Arc<TValidatorNetwork>,
     signing_key: bls::KeyPair,
     wallet_key: Option<keys::KeyPair>,
 
@@ -52,16 +56,19 @@ struct Validator<TNetwork: Network> {
 
     macro_producer: Option<ProduceMacroBlock>,
 
-    micro_producer: Option<ProduceMicroBlock>,
+    micro_producer: Option<ProduceMicroBlock<TValidatorNetwork>>,
     micro_state: ProduceMicroBlockState,
 }
 
-impl<TNetwork: Network> Validator<TNetwork> {
+impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
+    Validator<TNetwork, TValidatorNetwork>
+{
     const VIEW_CHANGE_DELAY: Duration = Duration::from_secs(10);
     const FORK_PROOFS_MAX_SIZE: usize = 1_000; // bytes
 
     pub fn new(
         consensus: Arc<Consensus<TNetwork>>,
+        network: TValidatorNetwork, // TODO Arc?
         signing_key: bls::KeyPair,
         wallet_key: Option<keys::KeyPair>,
     ) -> Self {
@@ -82,6 +89,7 @@ impl<TNetwork: Network> Validator<TNetwork> {
 
         let mut this = Self {
             consensus,
+            network: Arc::new(network),
             signing_key,
             wallet_key,
 
@@ -141,6 +149,7 @@ impl<TNetwork: Network> Validator<TNetwork> {
                 self.micro_producer = Some(ProduceMicroBlock::new(
                     Arc::clone(&self.consensus.blockchain),
                     Arc::clone(&self.consensus.mempool),
+                    Arc::clone(&self.network),
                     self.signing_key.clone(),
                     self.validator_id(),
                     fork_proofs,
@@ -227,7 +236,9 @@ impl<TNetwork: Network> Validator<TNetwork> {
     }
 }
 
-impl<TNetwork: Network> Future for Validator<TNetwork> {
+impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Future
+    for Validator<TNetwork, TValidatorNetwork>
+{
     type Output = ();
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
