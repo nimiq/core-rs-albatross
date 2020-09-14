@@ -1,5 +1,3 @@
-
-
 use beserial::{Deserialize, Serialize};
 use keys::Address;
 use primitives::coin::Coin;

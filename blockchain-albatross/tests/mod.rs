@@ -96,9 +96,7 @@ impl TemporaryBlockProducer {
             0,
         );
         let commit = SignedPbftCommitMessage::from_message(
-            PbftCommitMessage {
-                block_hash: block_hash,
-            },
+            PbftCommitMessage { block_hash },
             &keypair.secret_key,
             0,
         );

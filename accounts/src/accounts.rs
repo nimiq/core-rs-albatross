@@ -359,7 +359,7 @@ impl Accounts {
         account_type: Option<AccountType>,
         transaction: &Transaction,
         block_height: u32,
-        timestamp: u64,
+        _timestamp: u64,
         receipt: Option<&Vec<u8>>,
         account_op: &F,
     ) -> Result<Option<Vec<u8>>, AccountError>
@@ -458,7 +458,7 @@ impl Accounts {
         txn: &mut WriteTransaction,
         transaction: &Transaction,
         _block_height: u32,
-        timestamp: u64,
+        _timestamp: u64,
     ) -> Result<(), AccountError> {
         assert!(transaction
             .flags

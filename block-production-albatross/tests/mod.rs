@@ -136,9 +136,7 @@ fn sign_macro_block(proposal: PbftProposal, extrinsics: Option<MacroBody>) -> Ma
         0,
     );
     let commit = SignedPbftCommitMessage::from_message(
-        PbftCommitMessage {
-            block_hash: block_hash,
-        },
+        PbftCommitMessage { block_hash },
         &keypair.secret_key,
         0,
     );
