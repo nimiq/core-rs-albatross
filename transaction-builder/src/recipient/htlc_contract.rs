@@ -65,7 +65,7 @@ pub struct HtlcRecipientBuilder {
     hash_algorithm: Option<HashAlgorithm>,
     hash_root: Option<AnyHash>,
     hash_count: u8,
-    timeout: Option<u32>,
+    timeout: Option<u64>,
 }
 
 impl HtlcRecipientBuilder {
@@ -75,12 +75,12 @@ impl HtlcRecipientBuilder {
     }
 
     /// Creates a HTLC contract with all required parameters set.
-    /// This contract can be fully resolved by the `recipient` before the `timeout_block`
+    /// This contract can be fully resolved by the `recipient` before the `timeout`
     /// by presenting a sha256 hash that, when re-hashed, yields `hashed_secret`.
     pub fn new_single_sha256(
         sender: Address,
         recipient: Address,
-        timeout_block: u32,
+        timeout_block: u64,
         hashed_secret: Sha256Hash,
     ) -> Self {
         let mut builder = Self::new();
@@ -88,7 +88,7 @@ impl HtlcRecipientBuilder {
             .with_sender(sender)
             .with_recipient(recipient)
             .with_sha256_hash(hashed_secret, 1)
-            .with_timeout_block(timeout_block);
+            .with_timeout(timeout_block);
         builder
     }
 
@@ -181,8 +181,8 @@ impl HtlcRecipientBuilder {
     }
 
     /// Sets the blockchain height at which the `sender` automatically gains control over the funds.
-    pub fn with_timeout_block(&mut self, timeout_block: u32) -> &mut Self {
-        self.timeout = Some(timeout_block);
+    pub fn with_timeout(&mut self, timeout: u64) -> &mut Self {
+        self.timeout = Some(timeout);
         self
     }
 
@@ -215,7 +215,7 @@ impl HtlcRecipientBuilder {
     /// recipient_builder.with_recipient(
     ///     Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap()
     /// );
-    /// recipient_builder.with_timeout_block(100)
+    /// recipient_builder.with_timeout(100)
     ///     .with_blake2b_hash(hash_root, hash_count);
     /// let recipient = recipient_builder.generate();
     /// assert!(recipient.is_ok());

@@ -39,18 +39,25 @@ impl Inherent {
 }
 
 pub trait AccountInherentInteraction: Sized {
-    fn check_inherent(&self, inherent: &Inherent, block_height: u32) -> Result<(), AccountError>;
+    fn check_inherent(
+        &self,
+        inherent: &Inherent,
+        block_height: u32,
+        time: u64,
+    ) -> Result<(), AccountError>;
 
     fn commit_inherent(
         &mut self,
         inherent: &Inherent,
         block_height: u32,
+        time: u64,
     ) -> Result<Option<Vec<u8>>, AccountError>;
 
     fn revert_inherent(
         &mut self,
         inherent: &Inherent,
         block_height: u32,
+        time: u64,
         receipt: Option<&Vec<u8>>,
     ) -> Result<(), AccountError>;
 }

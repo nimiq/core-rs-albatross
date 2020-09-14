@@ -78,7 +78,7 @@ impl BlockProducer {
         );
 
         // Creates the body for the block.
-        let body = self.next_micro_body(fork_proofs, &view_changes);
+        let body = self.next_micro_body(timestamp, fork_proofs, &view_changes);
 
         // Creates the header for the block.
         let header =
@@ -101,6 +101,7 @@ impl BlockProducer {
     /// Creates the body for the next micro block.
     fn next_micro_body(
         &self,
+        timestamp: u64,
         fork_proofs: Vec<ForkProof>,
         view_changes: &Option<ViewChanges>,
     ) -> MicroBody {
@@ -129,6 +130,7 @@ impl BlockProducer {
                 &transactions,
                 &inherents,
                 self.blockchain.block_number() + 1,
+                timestamp,
             )
             .expect("Failed to collect receipts during block production");
 
@@ -182,7 +184,7 @@ impl BlockProducer {
             .blockchain
             .state()
             .accounts()
-            .hash_with(&body.transactions, &inherents, block_number)
+            .hash_with(&body.transactions, &inherents, block_number, timestamp)
             .expect("Failed to compute accounts hash during block production");
 
         // Create and return the micro block header.
@@ -301,7 +303,7 @@ impl BlockProducer {
         // Update the state.
         state
             .accounts()
-            .commit(txn, &[], &inherents, block_number)
+            .commit(txn, &[], &inherents, block_number, timestamp)
             .expect("Failed to compute accounts hash during block production");
 
         // Calculate the state root and add it to the header.

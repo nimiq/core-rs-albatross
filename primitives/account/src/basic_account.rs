@@ -16,6 +16,7 @@ impl AccountTransactionInteraction for BasicAccount {
         _balance: Coin,
         _transaction: &Transaction,
         _block_height: u32,
+        _time: u64,
     ) -> Result<Self, AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
@@ -24,6 +25,7 @@ impl AccountTransactionInteraction for BasicAccount {
         _balance: Coin,
         _transaction: &Transaction,
         _block_height: u32,
+        _time: u64,
     ) -> Result<Self, AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
@@ -31,6 +33,7 @@ impl AccountTransactionInteraction for BasicAccount {
     fn check_incoming_transaction(
         _transaction: &Transaction,
         _block_height: u32,
+        _time: u64,
     ) -> Result<(), AccountError> {
         Ok(())
     }
@@ -39,6 +42,7 @@ impl AccountTransactionInteraction for BasicAccount {
         &mut self,
         transaction: &Transaction,
         _block_height: u32,
+        _time: u64,
     ) -> Result<Option<Vec<u8>>, AccountError> {
         self.balance = Account::balance_add(self.balance, transaction.value)?;
         Ok(None)
@@ -48,6 +52,7 @@ impl AccountTransactionInteraction for BasicAccount {
         &mut self,
         transaction: &Transaction,
         _block_height: u32,
+        _time: u64,
         receipt: Option<&Vec<u8>>,
     ) -> Result<(), AccountError> {
         if receipt.is_some() {
@@ -62,6 +67,7 @@ impl AccountTransactionInteraction for BasicAccount {
         &self,
         transaction: &Transaction,
         _block_height: u32,
+        _time: u64,
     ) -> Result<(), AccountError> {
         Account::balance_sufficient(self.balance, transaction.total_value()?)
     }
@@ -70,6 +76,7 @@ impl AccountTransactionInteraction for BasicAccount {
         &mut self,
         transaction: &Transaction,
         _block_height: u32,
+        _time: u64,
     ) -> Result<Option<Vec<u8>>, AccountError> {
         self.balance = Account::balance_sub(self.balance, transaction.total_value()?)?;
         Ok(None)
@@ -79,6 +86,7 @@ impl AccountTransactionInteraction for BasicAccount {
         &mut self,
         transaction: &Transaction,
         _block_height: u32,
+        _time: u64,
         receipt: Option<&Vec<u8>>,
     ) -> Result<(), AccountError> {
         if receipt.is_some() {
@@ -91,7 +99,12 @@ impl AccountTransactionInteraction for BasicAccount {
 }
 
 impl AccountInherentInteraction for BasicAccount {
-    fn check_inherent(&self, inherent: &Inherent, _block_height: u32) -> Result<(), AccountError> {
+    fn check_inherent(
+        &self,
+        inherent: &Inherent,
+        _block_height: u32,
+        _time: u64,
+    ) -> Result<(), AccountError> {
         match inherent.ty {
             InherentType::Reward => Ok(()),
             _ => Err(AccountError::InvalidInherent),
@@ -102,8 +115,9 @@ impl AccountInherentInteraction for BasicAccount {
         &mut self,
         inherent: &Inherent,
         block_height: u32,
+        time: u64,
     ) -> Result<Option<Vec<u8>>, AccountError> {
-        self.check_inherent(inherent, block_height)?;
+        self.check_inherent(inherent, block_height, time)?;
         self.balance = Account::balance_add(self.balance, inherent.value)?;
         Ok(None)
     }
@@ -112,13 +126,14 @@ impl AccountInherentInteraction for BasicAccount {
         &mut self,
         inherent: &Inherent,
         block_height: u32,
+        time: u64,
         receipt: Option<&Vec<u8>>,
     ) -> Result<(), AccountError> {
         if receipt.is_some() {
             return Err(AccountError::InvalidReceipt);
         }
 
-        self.check_inherent(inherent, block_height)?;
+        self.check_inherent(inherent, block_height, time)?;
         self.balance = Account::balance_sub(self.balance, inherent.value)?;
         Ok(())
     }

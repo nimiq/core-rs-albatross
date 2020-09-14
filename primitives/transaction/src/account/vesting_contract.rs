@@ -35,7 +35,7 @@ impl AccountTransactionVerification for VestingContractVerifier {
             return Err(TransactionError::InvalidForRecipient);
         }
 
-        let allowed_sizes = [Address::SIZE + 4, Address::SIZE + 16, Address::SIZE + 24];
+        let allowed_sizes = [Address::SIZE + 8, Address::SIZE + 24, Address::SIZE + 32];
         if !allowed_sizes.contains(&transaction.data.len()) {
             warn!("Invalid creation data: invalid length");
             return Err(TransactionError::InvalidData);
@@ -62,8 +62,8 @@ impl AccountTransactionVerification for VestingContractVerifier {
 #[derive(Default, Clone, Debug)]
 pub struct CreationTransactionData {
     pub owner: Address,
-    pub start: u32,
-    pub step_blocks: u32,
+    pub start_time: u64,
+    pub time_step: u64,
     pub step_amount: Coin,
     pub total_amount: Coin,
 }
@@ -73,37 +73,37 @@ impl CreationTransactionData {
         let reader = &mut &transaction.data[..];
         let owner = Deserialize::deserialize(reader)?;
 
-        if transaction.data.len() == Address::SIZE + 4 {
-            // Only block number: vest full amount at that block
-            let step_blocks = Deserialize::deserialize(reader)?;
+        if transaction.data.len() == Address::SIZE + 8 {
+            // Only timestamp: vest full amount at that time
+            let time_step = Deserialize::deserialize(reader)?;
             Ok(CreationTransactionData {
                 owner,
-                start: 0,
-                step_blocks,
+                start_time: 0,
+                time_step,
                 step_amount: transaction.value,
                 total_amount: transaction.value,
             })
-        } else if transaction.data.len() == Address::SIZE + 16 {
-            let start = Deserialize::deserialize(reader)?;
-            let step_blocks = Deserialize::deserialize(reader)?;
+        } else if transaction.data.len() == Address::SIZE + 24 {
+            let start_time = Deserialize::deserialize(reader)?;
+            let time_step = Deserialize::deserialize(reader)?;
             let step_amount = Deserialize::deserialize(reader)?;
             Ok(CreationTransactionData {
                 owner,
-                start,
-                step_blocks,
+                start_time,
+                time_step,
                 step_amount,
                 total_amount: transaction.value,
             })
-        } else if transaction.data.len() == Address::SIZE + 24 {
+        } else if transaction.data.len() == Address::SIZE + 32 {
             // Create a vesting account with some instantly vested funds or additional funds considered.
-            let start = Deserialize::deserialize(reader)?;
-            let step_blocks = Deserialize::deserialize(reader)?;
+            let start_time = Deserialize::deserialize(reader)?;
+            let time_step = Deserialize::deserialize(reader)?;
             let step_amount = Deserialize::deserialize(reader)?;
             let total_amount = Deserialize::deserialize(reader)?;
             Ok(CreationTransactionData {
                 owner,
-                start,
-                step_blocks,
+                start_time,
+                time_step,
                 step_amount,
                 total_amount,
             })
@@ -119,16 +119,16 @@ impl Serialize for CreationTransactionData {
         size += self.owner.serialize(writer)?;
 
         if self.step_amount == self.total_amount {
-            if self.start == 0 {
-                size += self.step_blocks.serialize(writer)?;
+            if self.start_time == 0 {
+                size += self.time_step.serialize(writer)?;
             } else {
-                size += self.start.serialize(writer)?;
-                size += self.step_blocks.serialize(writer)?;
+                size += self.start_time.serialize(writer)?;
+                size += self.time_step.serialize(writer)?;
                 size += self.step_amount.serialize(writer)?;
             }
         } else {
-            size += self.start.serialize(writer)?;
-            size += self.step_blocks.serialize(writer)?;
+            size += self.start_time.serialize(writer)?;
+            size += self.time_step.serialize(writer)?;
             size += self.step_amount.serialize(writer)?;
             size += self.total_amount.serialize(writer)?;
         }
@@ -138,13 +138,13 @@ impl Serialize for CreationTransactionData {
 
     fn serialized_size(&self) -> usize {
         if self.step_amount == self.total_amount {
-            if self.start == 0 {
-                Address::SIZE + 4
+            if self.start_time == 0 {
+                Address::SIZE + 8
             } else {
-                Address::SIZE + 16
+                Address::SIZE + 24
             }
         } else {
-            Address::SIZE + 24
+            Address::SIZE + 32
         }
     }
 }

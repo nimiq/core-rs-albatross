@@ -12,7 +12,7 @@ use nimiq_transaction_builder::{Recipient, TransactionBuilder};
 #[test]
 #[allow(unused_must_use)]
 fn it_can_create_creation_transaction() {
-    let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE * 2 + AnyHash::SIZE + 6);
+    let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE * 2 + AnyHash::SIZE + 10);
     let sender = Address::from([0u8; 20]);
     let recipient = Address::from([0u8; 20]);
     sender.serialize(&mut data);
@@ -20,7 +20,7 @@ fn it_can_create_creation_transaction() {
     HashAlgorithm::Blake2b.serialize(&mut data);
     AnyHash::from([0u8; 32]).serialize(&mut data);
     Serialize::serialize(&2u8, &mut data);
-    Serialize::serialize(&1000u32, &mut data);
+    Serialize::serialize(&1000u64, &mut data);
 
     let transaction = Transaction::new_contract_creation(
         data,
@@ -38,7 +38,7 @@ fn it_can_create_creation_transaction() {
         .with_sender(sender.clone())
         .with_recipient(recipient)
         .with_blake2b_hash(Blake2bHash::from([0u8; 32]), 2)
-        .with_timeout_block(1000);
+        .with_timeout(1000);
 
     let mut builder = TransactionBuilder::new();
     builder

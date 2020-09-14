@@ -211,10 +211,10 @@ fn it_can_apply_validator_and_staking_transaction() {
         150_000_000,
     );
     assert_eq!(
-        StakingContract::check_incoming_transaction(&tx_1, 2),
+        StakingContract::check_incoming_transaction(&tx_1, 2, 0),
         Ok(())
     );
-    assert_eq!(contract.commit_incoming_transaction(&tx_1, 2), Ok(None));
+    assert_eq!(contract.commit_incoming_transaction(&tx_1, 2, 0), Ok(None));
     assert_eq!(contract.active_validators_by_key.len(), 1);
     assert_eq!(
         contract.get_validator(&validator_key).unwrap().balance,
@@ -224,7 +224,7 @@ fn it_can_apply_validator_and_staking_transaction() {
 
     // Cannot overwrite validator
     assert_eq!(
-        contract.commit_incoming_transaction(&tx_1, 2),
+        contract.commit_incoming_transaction(&tx_1, 2, 0),
         Err(AccountError::InvalidForRecipient)
     );
 
@@ -237,10 +237,10 @@ fn it_can_apply_validator_and_staking_transaction() {
         150_000_000,
     );
     assert_eq!(
-        StakingContract::check_incoming_transaction(&tx_2, 3),
+        StakingContract::check_incoming_transaction(&tx_2, 3, 0),
         Ok(())
     );
-    assert_eq!(contract.commit_incoming_transaction(&tx_2, 3), Ok(None));
+    assert_eq!(contract.commit_incoming_transaction(&tx_2, 3, 0), Ok(None));
     assert_eq!(contract.active_validators_by_key.len(), 1);
     assert_eq!(
         contract.get_validator(&validator_key).unwrap().balance,
@@ -263,10 +263,10 @@ fn it_can_apply_validator_and_staking_transaction() {
         150_000_000,
     );
     assert_eq!(
-        StakingContract::check_incoming_transaction(&tx_3, 4),
+        StakingContract::check_incoming_transaction(&tx_3, 4, 0),
         Ok(())
     );
-    assert_eq!(contract.commit_incoming_transaction(&tx_3, 4), Ok(None));
+    assert_eq!(contract.commit_incoming_transaction(&tx_3, 4, 0), Ok(None));
     assert_eq!(contract.active_validators_by_key.len(), 1);
     assert_eq!(
         contract.get_validator(&validator_key).unwrap().balance,
@@ -295,10 +295,10 @@ fn it_can_apply_validator_and_staking_transaction() {
         150_000_000,
     );
     assert_eq!(
-        StakingContract::check_incoming_transaction(&tx_4, 5),
+        StakingContract::check_incoming_transaction(&tx_4, 5, 0),
         Ok(())
     );
-    assert_eq!(contract.commit_incoming_transaction(&tx_4, 5), Ok(None));
+    assert_eq!(contract.commit_incoming_transaction(&tx_4, 5, 0), Ok(None));
     assert_eq!(contract.active_validators_by_key.len(), 1);
     assert_eq!(
         contract.get_validator(&validator_key).unwrap().balance,
@@ -319,14 +319,26 @@ fn it_can_apply_validator_and_staking_transaction() {
     assert_eq!(contract.balance, 600_000_000.try_into().unwrap());
 
     // Revert everything
-    assert_eq!(contract.revert_incoming_transaction(&tx_4, 5, None), Ok(()));
+    assert_eq!(
+        contract.revert_incoming_transaction(&tx_4, 5, 0, None),
+        Ok(())
+    );
     assert_eq!(contract.balance, 450_000_000.try_into().unwrap());
-    assert_eq!(contract.revert_incoming_transaction(&tx_3, 4, None), Ok(()));
+    assert_eq!(
+        contract.revert_incoming_transaction(&tx_3, 4, 0, None),
+        Ok(())
+    );
     assert_eq!(contract.balance, 300_000_000.try_into().unwrap());
-    assert_eq!(contract.revert_incoming_transaction(&tx_2, 3, None), Ok(()));
+    assert_eq!(
+        contract.revert_incoming_transaction(&tx_2, 3, 0, None),
+        Ok(())
+    );
     assert_eq!(contract.active_validators_by_key.len(), 1);
     assert_eq!(contract.balance, 150_000_000.try_into().unwrap());
-    assert_eq!(contract.revert_incoming_transaction(&tx_1, 2, None), Ok(()));
+    assert_eq!(
+        contract.revert_incoming_transaction(&tx_1, 2, 0, None),
+        Ok(())
+    );
     assert_eq!(contract.active_validators_by_key.len(), 0);
     assert_eq!(contract.balance, 0.try_into().unwrap());
 }
@@ -439,13 +451,13 @@ fn it_can_apply_retiring_transaction() {
         SelfStakingTransactionData::RetireStake(validator_key.clone()),
         99_999_900,
     );
-    assert_eq!(contract.check_outgoing_transaction(&tx_1, 2), Ok(()));
-    assert_eq!(contract.commit_outgoing_transaction(&tx_1, 2), Ok(None));
+    assert_eq!(contract.check_outgoing_transaction(&tx_1, 2, 0), Ok(()));
+    assert_eq!(contract.commit_outgoing_transaction(&tx_1, 2, 0), Ok(None));
     assert_eq!(
-        StakingContract::check_incoming_transaction(&tx_1, 2),
+        StakingContract::check_incoming_transaction(&tx_1, 2, 0),
         Ok(())
     );
-    assert_eq!(contract.commit_incoming_transaction(&tx_1, 2), Ok(None));
+    assert_eq!(contract.commit_incoming_transaction(&tx_1, 2, 0), Ok(None));
 
     assert_eq!(
         contract.get_active_stake(&validator_key, &staker_address),
@@ -472,11 +484,11 @@ fn it_can_apply_retiring_transaction() {
         balance: Coin::from_u64_unchecked(50_000_000),
     };
     assert_eq!(
-        contract.check_outgoing_transaction(&tx_2, 3),
+        contract.check_outgoing_transaction(&tx_2, 3, 0),
         Err(funds_error.clone())
     );
     assert_eq!(
-        contract.commit_outgoing_transaction(&tx_2, 3),
+        contract.commit_outgoing_transaction(&tx_2, 3, 0),
         Err(funds_error)
     );
 
@@ -485,24 +497,24 @@ fn it_can_apply_retiring_transaction() {
         SelfStakingTransactionData::RetireStake(validator_key.clone()),
         24_999_900,
     );
-    assert_eq!(contract.check_outgoing_transaction(&tx_3, 3), Ok(()));
-    assert_eq!(contract.commit_outgoing_transaction(&tx_3, 3), Ok(None));
-    assert_eq!(contract.check_outgoing_transaction(&tx_3, 3), Ok(()));
-    assert_eq!(contract.commit_outgoing_transaction(&tx_3, 3), Ok(None));
+    assert_eq!(contract.check_outgoing_transaction(&tx_3, 3, 0), Ok(()));
+    assert_eq!(contract.commit_outgoing_transaction(&tx_3, 3, 0), Ok(None));
+    assert_eq!(contract.check_outgoing_transaction(&tx_3, 3, 0), Ok(()));
+    assert_eq!(contract.commit_outgoing_transaction(&tx_3, 3, 0), Ok(None));
     assert_eq!(
-        StakingContract::check_incoming_transaction(&tx_3, 3),
+        StakingContract::check_incoming_transaction(&tx_3, 3, 0),
         Ok(())
     );
     let receipt_incoming_1 = contract
-        .commit_incoming_transaction(&tx_3, 3)
+        .commit_incoming_transaction(&tx_3, 3, 0)
         .unwrap()
         .unwrap();
     assert_eq!(
-        StakingContract::check_incoming_transaction(&tx_3, 3),
+        StakingContract::check_incoming_transaction(&tx_3, 3, 0),
         Ok(())
     );
     let receipt_incoming_2 = contract
-        .commit_incoming_transaction(&tx_3, 3)
+        .commit_incoming_transaction(&tx_3, 3, 0)
         .unwrap()
         .unwrap();
 
@@ -523,27 +535,39 @@ fn it_can_apply_retiring_transaction() {
 
     // Try to retire nonexistent funds
     assert_eq!(
-        contract.check_outgoing_transaction(&tx_3, 4),
+        contract.check_outgoing_transaction(&tx_3, 4, 0),
         Err(AccountError::InvalidForSender)
     );
     assert_eq!(
-        contract.commit_outgoing_transaction(&tx_3, 4),
+        contract.commit_outgoing_transaction(&tx_3, 4, 0),
         Err(AccountError::InvalidForSender)
     );
 
     // Revert to original state
     assert_eq!(
-        contract.revert_incoming_transaction(&tx_3, 3, Some(&receipt_incoming_2)),
+        contract.revert_incoming_transaction(&tx_3, 3, 0, Some(&receipt_incoming_2)),
         Ok(())
     );
     assert_eq!(
-        contract.revert_incoming_transaction(&tx_3, 3, Some(&receipt_incoming_1)),
+        contract.revert_incoming_transaction(&tx_3, 3, 0, Some(&receipt_incoming_1)),
         Ok(())
     );
-    assert_eq!(contract.revert_outgoing_transaction(&tx_3, 3, None), Ok(()));
-    assert_eq!(contract.revert_outgoing_transaction(&tx_3, 3, None), Ok(()));
-    assert_eq!(contract.revert_incoming_transaction(&tx_1, 2, None), Ok(()));
-    assert_eq!(contract.revert_outgoing_transaction(&tx_1, 2, None), Ok(()));
+    assert_eq!(
+        contract.revert_outgoing_transaction(&tx_3, 3, 0, None),
+        Ok(())
+    );
+    assert_eq!(
+        contract.revert_outgoing_transaction(&tx_3, 3, 0, None),
+        Ok(())
+    );
+    assert_eq!(
+        contract.revert_incoming_transaction(&tx_1, 2, 0, None),
+        Ok(())
+    );
+    assert_eq!(
+        contract.revert_outgoing_transaction(&tx_1, 2, 0, None),
+        Ok(())
+    );
 
     assert_eq!(
         contract.get_active_stake(&validator_key, &staker_address),
@@ -574,8 +598,8 @@ fn it_can_apply_unstaking_transaction() {
         SelfStakingTransactionData::RetireStake(bls_pair.public_key.compress()),
         50_000_000,
     );
-    assert_eq!(contract.commit_outgoing_transaction(&tx_1, 2), Ok(None));
-    assert_eq!(contract.commit_incoming_transaction(&tx_1, 2), Ok(None));
+    assert_eq!(contract.commit_outgoing_transaction(&tx_1, 2, 0), Ok(None));
+    assert_eq!(contract.commit_incoming_transaction(&tx_1, 2, 0), Ok(None));
     assert_eq!(contract.balance, Coin::from_u64_unchecked(299_999_900));
     assert_eq!(
         contract.get_active_stake(&bls_pair.public_key.compress(), &recipient),
@@ -597,18 +621,21 @@ fn it_can_apply_unstaking_transaction() {
         balance: Coin::from_u64_unchecked(50_000_000),
     };
     assert_eq!(
-        contract.check_outgoing_transaction(&tx_2, 40003),
+        contract.check_outgoing_transaction(&tx_2, 40003, 0),
         Err(funds_error.clone())
     );
     assert_eq!(
-        contract.commit_outgoing_transaction(&tx_2, 40003),
+        contract.commit_outgoing_transaction(&tx_2, 40003, 0),
         Err(funds_error)
     );
 
     // Block 40003: Unstake quarter
     let tx_3 = make_unstake_transaction(&key_pair, 12_500_000 - 100);
-    assert_eq!(contract.check_outgoing_transaction(&tx_3, 40003), Ok(()));
-    assert_eq!(contract.commit_outgoing_transaction(&tx_3, 40003), Ok(None));
+    assert_eq!(contract.check_outgoing_transaction(&tx_3, 40003, 0), Ok(()));
+    assert_eq!(
+        contract.commit_outgoing_transaction(&tx_3, 40003, 0),
+        Ok(None)
+    );
     assert_eq!(contract.balance, Coin::from_u64_unchecked(287_499_900));
     assert_eq!(
         contract.get_active_stake(&bls_pair.public_key.compress(), &recipient),
@@ -625,8 +652,11 @@ fn it_can_apply_unstaking_transaction() {
 
     // Block 40004: Unstake another quarter
     let tx_4 = tx_3.clone();
-    assert_eq!(contract.check_outgoing_transaction(&tx_4, 40004), Ok(()));
-    assert_eq!(contract.commit_outgoing_transaction(&tx_4, 40004), Ok(None));
+    assert_eq!(contract.check_outgoing_transaction(&tx_4, 40004, 0), Ok(()));
+    assert_eq!(
+        contract.commit_outgoing_transaction(&tx_4, 40004, 0),
+        Ok(None)
+    );
     assert_eq!(contract.balance, Coin::from_u64_unchecked(274_999_900));
     assert_eq!(
         contract.get_active_stake(&bls_pair.public_key.compress(), &recipient),
@@ -643,7 +673,7 @@ fn it_can_apply_unstaking_transaction() {
 
     // Revert block 40004
     assert_eq!(
-        contract.revert_outgoing_transaction(&tx_4, 40004, None),
+        contract.revert_outgoing_transaction(&tx_4, 40004, 0, None),
         Ok(())
     );
     assert_eq!(contract.balance, Coin::from_u64_unchecked(287_499_900));
@@ -665,9 +695,12 @@ fn it_can_apply_unstaking_transaction() {
         SelfStakingTransactionData::RetireStake(bls_pair.public_key.compress()),
         99_999_800,
     );
-    assert_eq!(contract.commit_outgoing_transaction(&tx_5, 40004), Ok(None));
+    assert_eq!(
+        contract.commit_outgoing_transaction(&tx_5, 40004, 0),
+        Ok(None)
+    );
     let receipt_5_incoming = contract
-        .commit_incoming_transaction(&tx_5, 40004)
+        .commit_incoming_transaction(&tx_5, 40004, 0)
         .unwrap()
         .unwrap();
     assert_eq!(contract.balance, Coin::from_u64_unchecked(287_499_800));
@@ -687,19 +720,22 @@ fn it_can_apply_unstaking_transaction() {
     // Try to replay reverted unstaking, should fail
     let tx_6 = tx_3.clone();
     assert_eq!(
-        contract.check_outgoing_transaction(&tx_6, 40005),
+        contract.check_outgoing_transaction(&tx_6, 40005, 0),
         Err(AccountError::InvalidForSender)
     );
     assert_eq!(
-        contract.commit_outgoing_transaction(&tx_6, 40005),
+        contract.commit_outgoing_transaction(&tx_6, 40005, 0),
         Err(AccountError::InvalidForSender)
     );
 
     // Unstake rest
     let tx_7 = make_unstake_transaction(&key_pair, 137_499_700);
-    assert_eq!(contract.check_outgoing_transaction(&tx_7, 100000), Ok(()));
+    assert_eq!(
+        contract.check_outgoing_transaction(&tx_7, 100000, 0),
+        Ok(())
+    );
     let receipt_7 = contract
-        .commit_outgoing_transaction(&tx_7, 100000)
+        .commit_outgoing_transaction(&tx_7, 100000, 0)
         .unwrap()
         .unwrap();
 
@@ -710,33 +746,39 @@ fn it_can_apply_unstaking_transaction() {
     // Try to unstake nonexistent funds
     let tx_8 = tx_3.clone();
     assert_eq!(
-        contract.check_outgoing_transaction(&tx_8, 40006),
+        contract.check_outgoing_transaction(&tx_8, 40006, 0),
         Err(AccountError::InvalidForSender)
     );
     assert_eq!(
-        contract.commit_outgoing_transaction(&tx_8, 40006),
+        contract.commit_outgoing_transaction(&tx_8, 40006, 0),
         Err(AccountError::InvalidForSender)
     );
 
     // Revert everything
     assert_eq!(
-        contract.revert_outgoing_transaction(&tx_7, 100000, Some(&receipt_7)),
+        contract.revert_outgoing_transaction(&tx_7, 100000, 0, Some(&receipt_7)),
         Ok(())
     );
     assert_eq!(
-        contract.revert_incoming_transaction(&tx_5, 40004, Some(&receipt_5_incoming)),
+        contract.revert_incoming_transaction(&tx_5, 40004, 0, Some(&receipt_5_incoming)),
         Ok(())
     );
     assert_eq!(
-        contract.revert_outgoing_transaction(&tx_5, 40004, None),
+        contract.revert_outgoing_transaction(&tx_5, 40004, 0, None),
         Ok(())
     );
     assert_eq!(
-        contract.revert_outgoing_transaction(&tx_3, 40003, None),
+        contract.revert_outgoing_transaction(&tx_3, 40003, 0, None),
         Ok(())
     );
-    assert_eq!(contract.revert_incoming_transaction(&tx_1, 2, None), Ok(()));
-    assert_eq!(contract.revert_outgoing_transaction(&tx_1, 2, None), Ok(()));
+    assert_eq!(
+        contract.revert_incoming_transaction(&tx_1, 2, 0, None),
+        Ok(())
+    );
+    assert_eq!(
+        contract.revert_outgoing_transaction(&tx_1, 2, 0, None),
+        Ok(())
+    );
 
     // Initial contract state
     assert_eq!(contract.active_validators_by_key.len(), 1);
@@ -762,11 +804,11 @@ fn it_can_verify_inherent() {
         data: Vec::new(),
     };
     assert_eq!(
-        contract.check_inherent(&inherent_1, 0),
+        contract.check_inherent(&inherent_1, 0, 0),
         Err(AccountError::InvalidForTarget)
     );
     assert_eq!(
-        contract.commit_inherent(&inherent_1, 0),
+        contract.commit_inherent(&inherent_1, 0, 0),
         Err(AccountError::InvalidForTarget)
     );
 }
@@ -792,11 +834,11 @@ fn it_rejects_invalid_slash_inherents() {
 
     // Invalid value.
     assert_eq!(
-        contract.check_inherent(&inherent, 0),
+        contract.check_inherent(&inherent, 0, 0),
         Err(AccountError::InvalidInherent)
     );
     assert_eq!(
-        contract.commit_inherent(&inherent, 0),
+        contract.commit_inherent(&inherent, 0, 0),
         Err(AccountError::InvalidInherent)
     );
 
@@ -804,11 +846,11 @@ fn it_rejects_invalid_slash_inherents() {
     inherent.value = Coin::ZERO;
     inherent.data = Vec::new();
     assert_eq!(
-        contract.check_inherent(&inherent, 0),
+        contract.check_inherent(&inherent, 0, 0),
         Err(AccountError::InvalidInherent)
     );
     assert_eq!(
-        contract.commit_inherent(&inherent, 0),
+        contract.commit_inherent(&inherent, 0, 0),
         Err(AccountError::InvalidInherent)
     );
 }
@@ -829,11 +871,11 @@ fn it_rejects_invalid_finalize_epoch_inherents() {
 
     // Invalid value.
     assert_eq!(
-        contract.check_inherent(&inherent, 0),
+        contract.check_inherent(&inherent, 0, 0),
         Err(AccountError::InvalidInherent)
     );
     assert_eq!(
-        contract.commit_inherent(&inherent, 0),
+        contract.commit_inherent(&inherent, 0, 0),
         Err(AccountError::InvalidInherent)
     );
 
@@ -841,11 +883,11 @@ fn it_rejects_invalid_finalize_epoch_inherents() {
     inherent.value = Coin::ZERO;
     inherent.data = vec![1];
     assert_eq!(
-        contract.check_inherent(&inherent, 0),
+        contract.check_inherent(&inherent, 0, 0),
         Err(AccountError::InvalidInherent)
     );
     assert_eq!(
-        contract.commit_inherent(&inherent, 0),
+        contract.commit_inherent(&inherent, 0, 0),
         Err(AccountError::InvalidInherent)
     );
 }
@@ -869,8 +911,11 @@ fn it_can_apply_slash_and_finalize_epoch_inherent() {
         value: Coin::ZERO,
         data: slot.serialize_to_vec(),
     };
-    assert_eq!(contract.check_inherent(&slash, 0), Ok(()));
-    assert_eq!(contract.commit_inherent(&slash, 0), Ok(Some(vec![1, 1, 1]))); // Receipt is boolean set to true.
+    assert_eq!(contract.check_inherent(&slash, 0, 0), Ok(()));
+    assert_eq!(
+        contract.commit_inherent(&slash, 0, 0),
+        Ok(Some(vec![1, 1, 1]))
+    ); // Receipt is boolean set to true.
     assert_eq!(contract.balance, Coin::from_u64_unchecked(300_000_000));
     assert_eq!(contract.active_validators_by_key.len(), 1);
     assert_eq!(contract.inactive_validators_by_key.len(), 0);
@@ -879,8 +924,11 @@ fn it_can_apply_slash_and_finalize_epoch_inherent() {
     assert!(contract.current_epoch_parking.contains(&validator_key));
 
     // Second slash
-    assert_eq!(contract.check_inherent(&slash, 0), Ok(()));
-    assert_eq!(contract.commit_inherent(&slash, 0), Ok(Some(vec![0, 0, 0]))); // Receipt is boolean set to false.
+    assert_eq!(contract.check_inherent(&slash, 0, 0), Ok(()));
+    assert_eq!(
+        contract.commit_inherent(&slash, 0, 0),
+        Ok(Some(vec![0, 0, 0]))
+    ); // Receipt is boolean set to false.
     assert_eq!(contract.balance, Coin::from_u64_unchecked(300_000_000));
     assert_eq!(contract.active_validators_by_key.len(), 1);
     assert_eq!(contract.inactive_validators_by_key.len(), 0);
@@ -896,8 +944,8 @@ fn it_can_apply_slash_and_finalize_epoch_inherent() {
         data: vec![],
     };
 
-    assert_eq!(contract.check_inherent(&finalize, 0), Ok(()));
-    assert_eq!(contract.commit_inherent(&finalize, 0), Ok(None));
+    assert_eq!(contract.check_inherent(&finalize, 0, 0), Ok(()));
+    assert_eq!(contract.commit_inherent(&finalize, 0, 0), Ok(None));
     assert_eq!(contract.balance, Coin::from_u64_unchecked(300_000_000));
     assert_eq!(contract.active_validators_by_key.len(), 1);
     assert_eq!(contract.inactive_validators_by_key.len(), 0);
@@ -906,8 +954,11 @@ fn it_can_apply_slash_and_finalize_epoch_inherent() {
     assert!(contract.previous_epoch_parking.contains(&validator_key));
 
     // Third slash
-    assert_eq!(contract.check_inherent(&slash, 0), Ok(()));
-    assert_eq!(contract.commit_inherent(&slash, 0), Ok(Some(vec![1, 1, 1])));
+    assert_eq!(contract.check_inherent(&slash, 0, 0), Ok(()));
+    assert_eq!(
+        contract.commit_inherent(&slash, 0, 0),
+        Ok(Some(vec![1, 1, 1]))
+    );
     assert_eq!(contract.balance, Coin::from_u64_unchecked(300_000_000));
     assert_eq!(contract.active_validators_by_key.len(), 1);
     assert_eq!(contract.inactive_validators_by_key.len(), 0);
@@ -917,8 +968,8 @@ fn it_can_apply_slash_and_finalize_epoch_inherent() {
     assert!(contract.previous_epoch_parking.contains(&validator_key));
 
     // Another finalize
-    assert_eq!(contract.check_inherent(&finalize, 0), Ok(()));
-    assert_eq!(contract.commit_inherent(&finalize, 0), Ok(None));
+    assert_eq!(contract.check_inherent(&finalize, 0, 0), Ok(()));
+    assert_eq!(contract.commit_inherent(&finalize, 0, 0), Ok(None));
     assert_eq!(contract.balance, Coin::from_u64_unchecked(300_000_000));
     assert_eq!(contract.active_validators_by_key.len(), 0);
     assert_eq!(contract.inactive_validators_by_key.len(), 1);
@@ -927,8 +978,8 @@ fn it_can_apply_slash_and_finalize_epoch_inherent() {
     assert!(contract.previous_epoch_parking.contains(&validator_key));
 
     // Another finalize
-    assert_eq!(contract.check_inherent(&finalize, 0), Ok(()));
-    assert_eq!(contract.commit_inherent(&finalize, 0), Ok(None));
+    assert_eq!(contract.check_inherent(&finalize, 0, 0), Ok(()));
+    assert_eq!(contract.commit_inherent(&finalize, 0, 0), Ok(None));
     assert_eq!(contract.balance, Coin::from_u64_unchecked(300_000_000));
     assert_eq!(contract.active_validators_by_key.len(), 0);
     assert_eq!(contract.inactive_validators_by_key.len(), 1);
@@ -989,10 +1040,10 @@ fn it_can_apply_slashes_after_retire() {
     );
     assert_eq!(AccountType::verify_incoming_transaction(&tx_1), Ok(()));
     assert_eq!(
-        StakingContract::check_incoming_transaction(&tx_1, 2),
+        StakingContract::check_incoming_transaction(&tx_1, 2, 0),
         Ok(())
     );
-    assert_eq!(contract.commit_incoming_transaction(&tx_1, 2), Ok(None));
+    assert_eq!(contract.commit_incoming_transaction(&tx_1, 2, 0), Ok(None));
 
     assert_eq!(contract.active_validators_by_key.len(), 0);
     assert_eq!(contract.active_validators_sorted.len(), 0);
@@ -1006,8 +1057,11 @@ fn it_can_apply_slashes_after_retire() {
         value: Coin::ZERO,
         data: slot.serialize_to_vec(),
     };
-    assert_eq!(contract.check_inherent(&slash, 3), Ok(()));
-    assert_eq!(contract.commit_inherent(&slash, 3), Ok(Some(vec![1, 0, 1]))); // Receipt is boolean set to true.
+    assert_eq!(contract.check_inherent(&slash, 3, 0), Ok(()));
+    assert_eq!(
+        contract.commit_inherent(&slash, 3, 0),
+        Ok(Some(vec![1, 0, 1]))
+    ); // Receipt is boolean set to true.
     assert_eq!(contract.current_epoch_parking.len(), 1);
     assert_eq!(contract.previous_epoch_parking.len(), 0);
     assert_eq!(contract.active_validators_sorted.len(), 0);
@@ -1017,7 +1071,7 @@ fn it_can_apply_slashes_after_retire() {
     // Scenario 1: Revert slash
     let mut contract_copy = contract.clone();
     assert_eq!(
-        contract_copy.revert_inherent(&slash, 3, Some(&vec![1, 1, 1])),
+        contract_copy.revert_inherent(&slash, 3, 0, Some(&vec![1, 1, 1])),
         Ok(())
     );
     assert_eq!(contract_copy.current_epoch_parking.len(), 0);
@@ -1032,8 +1086,8 @@ fn it_can_apply_slashes_after_retire() {
         value: Coin::ZERO,
         data: vec![],
     };
-    assert_eq!(contract.check_inherent(&finalize, 0), Ok(()));
-    assert_eq!(contract.commit_inherent(&finalize, 0), Ok(None));
+    assert_eq!(contract.check_inherent(&finalize, 0, 0), Ok(()));
+    assert_eq!(contract.commit_inherent(&finalize, 0, 0), Ok(None));
     assert_eq!(contract.current_epoch_parking.len(), 0);
     assert_eq!(contract.previous_epoch_parking.len(), 1);
     assert!(contract.previous_epoch_parking.contains(&validator_key));
@@ -1041,8 +1095,8 @@ fn it_can_apply_slashes_after_retire() {
     assert_eq!(contract.inactive_validators_by_key.len(), 1);
 
     // Second finalize
-    assert_eq!(contract.check_inherent(&finalize, 0), Ok(()));
-    assert_eq!(contract.commit_inherent(&finalize, 0), Ok(None));
+    assert_eq!(contract.check_inherent(&finalize, 0, 0), Ok(()));
+    assert_eq!(contract.commit_inherent(&finalize, 0, 0), Ok(None));
     assert_eq!(contract.current_epoch_parking.len(), 0);
     assert_eq!(contract.previous_epoch_parking.len(), 0);
     assert_eq!(contract.active_validators_sorted.len(), 0);
@@ -1128,11 +1182,11 @@ fn it_can_apply_unpark_transactions() {
     );
     assert_eq!(unpark.verify(NetworkId::Dummy), Ok(()));
     assert_eq!(
-        StakingContract::check_incoming_transaction(&unpark, 2),
+        StakingContract::check_incoming_transaction(&unpark, 2, 0),
         Ok(())
     );
     assert_eq!(
-        contract.commit_incoming_transaction(&unpark, 2),
+        contract.commit_incoming_transaction(&unpark, 2, 0),
         Err(AccountError::InvalidForRecipient)
     );
 
@@ -1147,11 +1201,11 @@ fn it_can_apply_unpark_transactions() {
     );
     assert_eq!(unpark.verify(NetworkId::Dummy), Ok(()));
     assert_eq!(
-        StakingContract::check_incoming_transaction(&unpark, 2),
+        StakingContract::check_incoming_transaction(&unpark, 2, 0),
         Ok(())
     );
     assert_eq!(
-        contract.commit_incoming_transaction(&unpark, 2),
+        contract.commit_incoming_transaction(&unpark, 2, 0),
         Err(AccountError::InvalidForRecipient)
     );
 
@@ -1162,17 +1216,20 @@ fn it_can_apply_unpark_transactions() {
         value: Coin::ZERO,
         data: slot.serialize_to_vec(),
     };
-    assert_eq!(contract.check_inherent(&slash, 0), Ok(()));
-    assert_eq!(contract.commit_inherent(&slash, 0), Ok(Some(vec![1, 1, 1]))); // Receipt is boolean set to true.
+    assert_eq!(contract.check_inherent(&slash, 0, 0), Ok(()));
+    assert_eq!(
+        contract.commit_inherent(&slash, 0, 0),
+        Ok(Some(vec![1, 1, 1]))
+    ); // Receipt is boolean set to true.
 
     // Unpark
     let mut contract_copy = contract.clone();
     assert_eq!(
-        StakingContract::check_incoming_transaction(&unpark, 2),
+        StakingContract::check_incoming_transaction(&unpark, 2, 0),
         Ok(())
     );
     assert!(contract_copy
-        .commit_incoming_transaction(&unpark, 2)
+        .commit_incoming_transaction(&unpark, 2, 0)
         .is_ok());
     assert_eq!(contract_copy.current_epoch_parking.len(), 0);
     assert_eq!(contract_copy.previous_epoch_parking.len(), 0);
@@ -1185,20 +1242,23 @@ fn it_can_apply_unpark_transactions() {
         value: Coin::ZERO,
         data: vec![],
     };
-    assert_eq!(contract.check_inherent(&finalize, 0), Ok(()));
-    assert_eq!(contract.commit_inherent(&finalize, 0), Ok(None));
-    assert_eq!(contract.check_inherent(&slash, 0), Ok(()));
-    assert_eq!(contract.commit_inherent(&slash, 0), Ok(Some(vec![1, 1, 1])));
+    assert_eq!(contract.check_inherent(&finalize, 0, 0), Ok(()));
+    assert_eq!(contract.commit_inherent(&finalize, 0, 0), Ok(None));
+    assert_eq!(contract.check_inherent(&slash, 0, 0), Ok(()));
+    assert_eq!(
+        contract.commit_inherent(&slash, 0, 0),
+        Ok(Some(vec![1, 1, 1]))
+    );
     assert_eq!(contract.current_epoch_parking.len(), 1);
     assert_eq!(contract.previous_epoch_parking.len(), 1);
     assert_eq!(contract.balance, Coin::from_u64_unchecked(300_000_000));
 
     // Unpark
     assert_eq!(
-        StakingContract::check_incoming_transaction(&unpark, 2),
+        StakingContract::check_incoming_transaction(&unpark, 2, 0),
         Ok(())
     );
-    assert!(contract.commit_incoming_transaction(&unpark, 2).is_ok());
+    assert!(contract.commit_incoming_transaction(&unpark, 2, 0).is_ok());
     assert_eq!(contract.current_epoch_parking.len(), 0);
     assert_eq!(contract.previous_epoch_parking.len(), 0);
     assert_eq!(contract.balance, Coin::from_u64_unchecked(300_000_000));
@@ -1233,14 +1293,14 @@ fn it_can_revert_unpark_transactions() {
         value: Coin::ZERO,
         data: slot.serialize_to_vec(),
     };
-    assert_eq!(parked_in_current.check_inherent(&slash, 0), Ok(()));
+    assert_eq!(parked_in_current.check_inherent(&slash, 0, 0), Ok(()));
     assert_eq!(
-        parked_in_current.commit_inherent(&slash, 0),
+        parked_in_current.commit_inherent(&slash, 0, 0),
         Ok(Some(vec![1, 1, 1]))
     ); // Receipt is boolean set to true.
 
     // Unpark
-    let incoming_receipt = parked_in_current.commit_incoming_transaction(&unpark, 2);
+    let incoming_receipt = parked_in_current.commit_incoming_transaction(&unpark, 2, 0);
     assert!(incoming_receipt.is_ok());
     assert_eq!(parked_in_current.current_epoch_parking.len(), 0);
     assert_eq!(parked_in_current.previous_epoch_parking.len(), 0);
@@ -1250,6 +1310,7 @@ fn it_can_revert_unpark_transactions() {
         parked_in_current.revert_incoming_transaction(
             &unpark,
             2,
+            0,
             incoming_receipt.unwrap().as_ref()
         ),
         Ok(())
@@ -1268,8 +1329,11 @@ fn it_can_revert_unpark_transactions() {
         value: Coin::ZERO,
         data: vec![],
     };
-    assert_eq!(parked_in_previous.check_inherent(&finalize, 0), Ok(()));
-    assert_eq!(parked_in_previous.commit_inherent(&finalize, 0), Ok(None));
+    assert_eq!(parked_in_previous.check_inherent(&finalize, 0, 0), Ok(()));
+    assert_eq!(
+        parked_in_previous.commit_inherent(&finalize, 0, 0),
+        Ok(None)
+    );
     assert_eq!(parked_in_previous.current_epoch_parking.len(), 0);
     assert_eq!(parked_in_previous.previous_epoch_parking.len(), 1);
     assert!(parked_in_previous
@@ -1277,7 +1341,7 @@ fn it_can_revert_unpark_transactions() {
         .contains(&validator_key));
 
     // Unpark
-    let incoming_receipt = parked_in_previous.commit_incoming_transaction(&unpark, 2);
+    let incoming_receipt = parked_in_previous.commit_incoming_transaction(&unpark, 2, 0);
     assert!(incoming_receipt.is_ok());
     assert_eq!(parked_in_previous.current_epoch_parking.len(), 0);
     assert_eq!(parked_in_previous.previous_epoch_parking.len(), 0);
@@ -1287,6 +1351,7 @@ fn it_can_revert_unpark_transactions() {
         parked_in_previous.revert_incoming_transaction(
             &unpark,
             2,
+            0,
             incoming_receipt.unwrap().as_ref()
         ),
         Ok(())
@@ -1305,11 +1370,11 @@ fn it_can_revert_unpark_transactions() {
         value: Coin::ZERO,
         data: vec![],
     };
-    assert_eq!(parked_in_both.check_inherent(&finalize, 0), Ok(()));
-    assert_eq!(parked_in_both.commit_inherent(&finalize, 0), Ok(None));
-    assert_eq!(parked_in_both.check_inherent(&slash, 0), Ok(()));
+    assert_eq!(parked_in_both.check_inherent(&finalize, 0, 0), Ok(()));
+    assert_eq!(parked_in_both.commit_inherent(&finalize, 0, 0), Ok(None));
+    assert_eq!(parked_in_both.check_inherent(&slash, 0, 0), Ok(()));
     assert_eq!(
-        parked_in_both.commit_inherent(&slash, 0),
+        parked_in_both.commit_inherent(&slash, 0, 0),
         Ok(Some(vec![1, 1, 1]))
     );
     assert_eq!(parked_in_both.current_epoch_parking.len(), 1);
@@ -1322,14 +1387,19 @@ fn it_can_revert_unpark_transactions() {
         .contains(&validator_key));
 
     // Unpark
-    let incoming_receipt = parked_in_both.commit_incoming_transaction(&unpark, 2);
+    let incoming_receipt = parked_in_both.commit_incoming_transaction(&unpark, 2, 0);
     assert!(incoming_receipt.is_ok());
     assert_eq!(parked_in_both.current_epoch_parking.len(), 0);
     assert_eq!(parked_in_both.previous_epoch_parking.len(), 0);
 
     // Revert unpark
     assert_eq!(
-        parked_in_both.revert_incoming_transaction(&unpark, 2, incoming_receipt.unwrap().as_ref()),
+        parked_in_both.revert_incoming_transaction(
+            &unpark,
+            2,
+            0,
+            incoming_receipt.unwrap().as_ref()
+        ),
         Ok(())
     );
     assert_eq!(parked_in_both.current_epoch_parking.len(), 1);
@@ -1355,10 +1425,10 @@ fn it_will_never_revert_finalized_epoch_inherents() {
         data: vec![],
     };
 
-    assert_eq!(contract.check_inherent(&finalize, 0), Ok(()));
-    assert_eq!(contract.commit_inherent(&finalize, 0), Ok(None));
+    assert_eq!(contract.check_inherent(&finalize, 0, 0), Ok(()));
+    assert_eq!(contract.commit_inherent(&finalize, 0, 0), Ok(None));
     assert_eq!(
-        contract.revert_inherent(&finalize, 0, None),
+        contract.revert_inherent(&finalize, 0, 0, None),
         Err(AccountError::InvalidForTarget)
     );
 }
@@ -1382,8 +1452,11 @@ fn it_can_revert_slash_inherent() {
         value: Coin::ZERO,
         data: slot.serialize_to_vec(),
     };
-    assert_eq!(contract.check_inherent(&slash, 0), Ok(()));
-    assert_eq!(contract.commit_inherent(&slash, 0), Ok(Some(vec![1, 1, 1]))); // Receipt is boolean set to true.
+    assert_eq!(contract.check_inherent(&slash, 0, 0), Ok(()));
+    assert_eq!(
+        contract.commit_inherent(&slash, 0, 0),
+        Ok(Some(vec![1, 1, 1]))
+    ); // Receipt is boolean set to true.
     assert_eq!(contract.current_epoch_parking.len(), 1);
     assert_eq!(contract.previous_epoch_parking.len(), 0);
     assert!(contract.current_epoch_parking.contains(&validator_key));
@@ -1392,7 +1465,7 @@ fn it_can_revert_slash_inherent() {
     // Revert slash
     let mut contract_copy = contract.clone();
     assert_eq!(
-        contract_copy.revert_inherent(&slash, 0, Some(&vec![1, 1, 1])),
+        contract_copy.revert_inherent(&slash, 0, 0, Some(&vec![1, 1, 1])),
         Ok(())
     );
     assert_eq!(contract_copy.current_epoch_parking.len(), 0);
@@ -1406,8 +1479,8 @@ fn it_can_revert_slash_inherent() {
         value: Coin::ZERO,
         data: vec![],
     };
-    assert_eq!(contract.check_inherent(&finalize, 0), Ok(()));
-    assert_eq!(contract.commit_inherent(&finalize, 0), Ok(None));
+    assert_eq!(contract.check_inherent(&finalize, 0, 0), Ok(()));
+    assert_eq!(contract.commit_inherent(&finalize, 0, 0), Ok(None));
     assert_eq!(contract.current_epoch_parking.len(), 0);
     assert_eq!(contract.previous_epoch_parking.len(), 1);
     assert!(contract.previous_epoch_parking.contains(&validator_key));
@@ -1416,15 +1489,18 @@ fn it_can_revert_slash_inherent() {
     // Revert slash after finalize is impossible
     let mut contract_copy = contract.clone();
     assert_eq!(
-        contract_copy.revert_inherent(&slash, 0, Some(&vec![1, 1, 1])),
+        contract_copy.revert_inherent(&slash, 0, 0, Some(&vec![1, 1, 1])),
         Err(AccountError::InvalidInherent)
     );
 
     // Slash multiple times and revert one of the slashes
     // This should *not* remove the slash
     // Slash 1
-    assert_eq!(contract.check_inherent(&slash, 0), Ok(()));
-    assert_eq!(contract.commit_inherent(&slash, 0), Ok(Some(vec![1, 1, 1]))); // Receipt is boolean set to true.
+    assert_eq!(contract.check_inherent(&slash, 0, 0), Ok(()));
+    assert_eq!(
+        contract.commit_inherent(&slash, 0, 0),
+        Ok(Some(vec![1, 1, 1]))
+    ); // Receipt is boolean set to true.
     assert_eq!(contract.current_epoch_parking.len(), 1);
     assert_eq!(contract.previous_epoch_parking.len(), 1);
     assert!(contract.current_epoch_parking.contains(&validator_key));
@@ -1432,8 +1508,11 @@ fn it_can_revert_slash_inherent() {
     assert_eq!(contract.balance, Coin::from_u64_unchecked(300_000_000));
 
     // Slash 2
-    assert_eq!(contract.check_inherent(&slash, 0), Ok(()));
-    assert_eq!(contract.commit_inherent(&slash, 0), Ok(Some(vec![0, 0, 0]))); // Receipt is boolean set to false.
+    assert_eq!(contract.check_inherent(&slash, 0, 0), Ok(()));
+    assert_eq!(
+        contract.commit_inherent(&slash, 0, 0),
+        Ok(Some(vec![0, 0, 0]))
+    ); // Receipt is boolean set to false.
     assert_eq!(contract.current_epoch_parking.len(), 1);
     assert_eq!(contract.previous_epoch_parking.len(), 1);
     assert!(contract.current_epoch_parking.contains(&validator_key));
@@ -1442,7 +1521,7 @@ fn it_can_revert_slash_inherent() {
 
     // Revert second slash
     assert_eq!(
-        contract.revert_inherent(&slash, 0, Some(&vec![0, 0, 0])),
+        contract.revert_inherent(&slash, 0, 0, Some(&vec![0, 0, 0])),
         Ok(())
     );
     assert_eq!(contract.current_epoch_parking.len(), 1);
@@ -1453,7 +1532,7 @@ fn it_can_revert_slash_inherent() {
 
     // Revert first slash
     assert_eq!(
-        contract.revert_inherent(&slash, 0, Some(&vec![1, 1, 1])),
+        contract.revert_inherent(&slash, 0, 0, Some(&vec![1, 1, 1])),
         Ok(())
     );
     assert_eq!(contract.current_epoch_parking.len(), 0);
@@ -1664,8 +1743,11 @@ fn it_can_apply_validator_signalling() {
     );
 
     assert_eq!(AccountType::verify_incoming_transaction(&tx), Ok(()));
-    assert_eq!(StakingContract::check_incoming_transaction(&tx, 2), Ok(()));
-    assert_eq!(contract.commit_incoming_transaction(&tx, 2), Ok(None));
+    assert_eq!(
+        StakingContract::check_incoming_transaction(&tx, 2, 0),
+        Ok(())
+    );
+    assert_eq!(contract.commit_incoming_transaction(&tx, 2, 0), Ok(None));
 
     // Verify contract.
     assert_eq!(contract.balance, Coin::from_u64_unchecked(100_000_000));
@@ -1682,7 +1764,7 @@ fn it_can_apply_validator_signalling() {
     // Check revert.
     let mut contract_copy = contract.clone();
     assert_eq!(
-        contract_copy.revert_incoming_transaction(&tx, 2, None),
+        contract_copy.revert_incoming_transaction(&tx, 2, 0, None),
         Ok(())
     );
 
@@ -1695,7 +1777,7 @@ fn it_can_apply_validator_signalling() {
 
     // Verify that no two validators with the same key can exist.
     assert_eq!(
-        contract.commit_incoming_transaction(&tx, 2),
+        contract.commit_incoming_transaction(&tx, 2, 0),
         Err(AccountError::InvalidForRecipient)
     );
 
@@ -1746,8 +1828,13 @@ fn it_can_apply_validator_signalling() {
         &bls_pair,
     );
     assert_eq!(AccountType::verify_incoming_transaction(&tx), Ok(()));
-    assert_eq!(StakingContract::check_incoming_transaction(&tx, 3), Ok(()));
-    let receipt = contract_copy.commit_incoming_transaction(&tx, 3).unwrap();
+    assert_eq!(
+        StakingContract::check_incoming_transaction(&tx, 3, 0),
+        Ok(())
+    );
+    let receipt = contract_copy
+        .commit_incoming_transaction(&tx, 3, 0)
+        .unwrap();
     assert!(receipt.is_some());
 
     // Verify contract.
@@ -1764,7 +1851,7 @@ fn it_can_apply_validator_signalling() {
 
     // Revert update.
     assert_eq!(
-        contract_copy.revert_incoming_transaction(&tx, 3, receipt.as_ref()),
+        contract_copy.revert_incoming_transaction(&tx, 3, 0, receipt.as_ref()),
         Ok(())
     );
 
@@ -1790,8 +1877,11 @@ fn it_can_apply_validator_signalling() {
         &bls_pair,
     );
     assert_eq!(AccountType::verify_incoming_transaction(&tx), Ok(()));
-    assert_eq!(StakingContract::check_incoming_transaction(&tx, 3), Ok(()));
-    assert_eq!(contract.commit_incoming_transaction(&tx, 3), Ok(None));
+    assert_eq!(
+        StakingContract::check_incoming_transaction(&tx, 3, 0),
+        Ok(())
+    );
+    assert_eq!(contract.commit_incoming_transaction(&tx, 3, 0), Ok(None));
 
     // Verify contract.
     assert_eq!(contract.balance, Coin::from_u64_unchecked(200_000_000));
@@ -1813,7 +1903,7 @@ fn it_can_apply_validator_signalling() {
     // Check revert.
     let mut contract_copy = contract.clone();
     assert_eq!(
-        contract_copy.revert_incoming_transaction(&tx, 2, None),
+        contract_copy.revert_incoming_transaction(&tx, 2, 0, None),
         Ok(())
     );
 
@@ -1843,8 +1933,13 @@ fn it_can_apply_validator_signalling() {
         &bls_pair,
     );
     assert_eq!(AccountType::verify_incoming_transaction(&tx), Ok(()));
-    assert_eq!(StakingContract::check_incoming_transaction(&tx, 3), Ok(()));
-    let receipt = contract_copy.commit_incoming_transaction(&tx, 3).unwrap();
+    assert_eq!(
+        StakingContract::check_incoming_transaction(&tx, 3, 0),
+        Ok(())
+    );
+    let receipt = contract_copy
+        .commit_incoming_transaction(&tx, 3, 0)
+        .unwrap();
     assert!(receipt.is_some());
 
     // Verify contract.
@@ -1861,7 +1956,7 @@ fn it_can_apply_validator_signalling() {
 
     // Revert update.
     assert_eq!(
-        contract_copy.revert_incoming_transaction(&tx, 3, receipt.as_ref()),
+        contract_copy.revert_incoming_transaction(&tx, 3, 0, receipt.as_ref()),
         Ok(())
     );
 
@@ -1888,8 +1983,13 @@ fn it_can_apply_validator_signalling() {
         &bls_pair,
     );
     assert_eq!(AccountType::verify_incoming_transaction(&tx), Ok(()));
-    assert_eq!(StakingContract::check_incoming_transaction(&tx, 4), Ok(()));
-    let receipt = contract_copy.commit_incoming_transaction(&tx, 4).unwrap();
+    assert_eq!(
+        StakingContract::check_incoming_transaction(&tx, 4, 0),
+        Ok(())
+    );
+    let receipt = contract_copy
+        .commit_incoming_transaction(&tx, 4, 0)
+        .unwrap();
     assert!(receipt.is_some());
 
     // Verify contract.
@@ -1907,7 +2007,7 @@ fn it_can_apply_validator_signalling() {
     // Check revert.
     let mut reactivated_contract = contract_copy.clone();
     assert_eq!(
-        contract_copy.revert_incoming_transaction(&tx, 2, receipt.as_ref()),
+        contract_copy.revert_incoming_transaction(&tx, 2, 0, receipt.as_ref()),
         Ok(())
     );
 
@@ -1933,11 +2033,11 @@ fn it_can_apply_validator_signalling() {
     let tx = make_drop_transaction(&bls_pair, 99_999_900);
     assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
     assert_eq!(
-        reactivated_contract.check_outgoing_transaction(&tx, 3000),
+        reactivated_contract.check_outgoing_transaction(&tx, 3000, 0),
         Err(AccountError::InvalidForSender)
     );
     assert_eq!(
-        reactivated_contract.commit_outgoing_transaction(&tx, 3000),
+        reactivated_contract.commit_outgoing_transaction(&tx, 3000, 0),
         Err(AccountError::InvalidForSender)
     );
 
@@ -1953,14 +2053,14 @@ fn it_can_apply_validator_signalling() {
     let tx = make_drop_transaction(&bls_pair, 200_000_000);
     assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
     assert_eq!(
-        contract.check_outgoing_transaction(&tx, 3000),
+        contract.check_outgoing_transaction(&tx, 3000, 0),
         Err(AccountError::InsufficientFunds {
             needed: Coin::from_u64_unchecked(300_000_100),
             balance: Coin::from_u64_unchecked(200_000_000),
         })
     );
     assert_eq!(
-        contract.commit_outgoing_transaction(&tx, 3000),
+        contract.commit_outgoing_transaction(&tx, 3000, 0),
         Err(AccountError::InsufficientFunds {
             needed: Coin::from_u64_unchecked(300_000_100),
             balance: Coin::from_u64_unchecked(200_000_000),
@@ -1971,14 +2071,14 @@ fn it_can_apply_validator_signalling() {
     let tx = make_drop_transaction(&bls_pair, 90_000_000);
     assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
     assert_eq!(
-        contract.check_outgoing_transaction(&tx, 3000),
+        contract.check_outgoing_transaction(&tx, 3000, 0),
         Err(AccountError::InsufficientFunds {
             needed: Coin::from_u64_unchecked(190_000_100),
             balance: Coin::from_u64_unchecked(200_000_000),
         })
     );
     assert_eq!(
-        contract.commit_outgoing_transaction(&tx, 3000),
+        contract.commit_outgoing_transaction(&tx, 3000, 0),
         Err(AccountError::InsufficientFunds {
             needed: Coin::from_u64_unchecked(190_000_100),
             balance: Coin::from_u64_unchecked(200_000_000),
@@ -1989,19 +2089,19 @@ fn it_can_apply_validator_signalling() {
     let tx = make_drop_transaction(&bls_pair, 99_999_900);
     assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
     assert_eq!(
-        contract.check_outgoing_transaction(&tx, 4),
+        contract.check_outgoing_transaction(&tx, 4, 0),
         Err(AccountError::InvalidForSender)
     );
     assert_eq!(
-        contract.commit_outgoing_transaction(&tx, 4),
+        contract.commit_outgoing_transaction(&tx, 4, 0),
         Err(AccountError::InvalidForSender)
     );
 
     // All valid.
     let tx = make_drop_transaction(&bls_pair, 99_999_900);
     assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
-    assert_eq!(contract.check_outgoing_transaction(&tx, 3000), Ok(()));
-    let receipt = contract.commit_outgoing_transaction(&tx, 3000).unwrap();
+    assert_eq!(contract.check_outgoing_transaction(&tx, 3000, 0), Ok(()));
+    let receipt = contract.commit_outgoing_transaction(&tx, 3000, 0).unwrap();
     assert!(receipt.is_some());
 
     // Verify contract.
@@ -2023,7 +2123,7 @@ fn it_can_apply_validator_signalling() {
     // Check revert.
     let mut contract_copy = contract.clone();
     assert_eq!(
-        contract_copy.revert_outgoing_transaction(&tx, 2, receipt.as_ref()),
+        contract_copy.revert_outgoing_transaction(&tx, 2, 0, receipt.as_ref()),
         Ok(())
     );
 
@@ -2076,8 +2176,11 @@ fn it_can_manage_stake() {
         100_000_000,
     );
     assert_eq!(AccountType::verify_incoming_transaction(&tx), Ok(()));
-    assert_eq!(StakingContract::check_incoming_transaction(&tx, 1), Ok(()));
-    assert_eq!(contract.commit_incoming_transaction(&tx, 1), Ok(None));
+    assert_eq!(
+        StakingContract::check_incoming_transaction(&tx, 1, 0),
+        Ok(())
+    );
+    assert_eq!(contract.commit_incoming_transaction(&tx, 1, 0), Ok(None));
 
     // Verify contract.
     assert_eq!(contract.balance, Coin::from_u64_unchecked(200_000_000));
@@ -2098,8 +2201,11 @@ fn it_can_manage_stake() {
 
     // Stake a second time.
     assert_eq!(AccountType::verify_incoming_transaction(&tx), Ok(()));
-    assert_eq!(StakingContract::check_incoming_transaction(&tx, 1), Ok(()));
-    assert_eq!(contract.commit_incoming_transaction(&tx, 1), Ok(None));
+    assert_eq!(
+        StakingContract::check_incoming_transaction(&tx, 1, 0),
+        Ok(())
+    );
+    assert_eq!(contract.commit_incoming_transaction(&tx, 1, 0), Ok(None));
 
     // Verify contract.
     assert_eq!(contract.balance, Coin::from_u64_unchecked(300_000_000));
@@ -2128,8 +2234,14 @@ fn it_can_manage_stake() {
         100_000_000,
     );
     assert_eq!(AccountType::verify_incoming_transaction(&tx2), Ok(()));
-    assert_eq!(StakingContract::check_incoming_transaction(&tx2, 1), Ok(()));
-    assert_eq!(contract_copy.commit_incoming_transaction(&tx2, 1), Ok(None));
+    assert_eq!(
+        StakingContract::check_incoming_transaction(&tx2, 1, 0),
+        Ok(())
+    );
+    assert_eq!(
+        contract_copy.commit_incoming_transaction(&tx2, 1, 0),
+        Ok(None)
+    );
 
     // Verify contract.
     assert_eq!(contract_copy.balance, Coin::from_u64_unchecked(400_000_000));
@@ -2156,7 +2268,10 @@ fn it_can_manage_stake() {
     );
 
     // Revert one stake.
-    assert_eq!(contract.revert_incoming_transaction(&tx, 1, None), Ok(()));
+    assert_eq!(
+        contract.revert_incoming_transaction(&tx, 1, 0, None),
+        Ok(())
+    );
 
     // Verify contract.
     assert_eq!(contract.balance, Coin::from_u64_unchecked(200_000_000));
@@ -2178,7 +2293,7 @@ fn it_can_manage_stake() {
     // Revert stakes.
     let mut contract_copy = contract.clone();
     assert_eq!(
-        contract_copy.revert_incoming_transaction(&tx, 1, None),
+        contract_copy.revert_incoming_transaction(&tx, 1, 0, None),
         Ok(())
     );
 
@@ -2198,12 +2313,15 @@ fn it_can_manage_stake() {
         49_999_900,
     );
     assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
-    assert_eq!(contract.check_outgoing_transaction(&tx, 2), Ok(()));
-    assert_eq!(contract.commit_outgoing_transaction(&tx, 2), Ok(None));
+    assert_eq!(contract.check_outgoing_transaction(&tx, 2, 0), Ok(()));
+    assert_eq!(contract.commit_outgoing_transaction(&tx, 2, 0), Ok(None));
 
     assert_eq!(AccountType::verify_incoming_transaction(&tx), Ok(()));
-    assert_eq!(StakingContract::check_incoming_transaction(&tx, 2), Ok(()));
-    assert_eq!(contract.commit_incoming_transaction(&tx, 2), Ok(None));
+    assert_eq!(
+        StakingContract::check_incoming_transaction(&tx, 2, 0),
+        Ok(())
+    );
+    assert_eq!(contract.commit_incoming_transaction(&tx, 2, 0), Ok(None));
 
     // Verify contract.
     assert_eq!(contract.balance, Coin::from_u64_unchecked(199_999_900));
@@ -2230,9 +2348,14 @@ fn it_can_manage_stake() {
 
     // Retire rest of stake.
     let mut contract_copy = contract.clone();
-    assert_eq!(contract_copy.check_outgoing_transaction(&tx, 3), Ok(()));
-    assert_eq!(contract_copy.commit_outgoing_transaction(&tx, 3), Ok(None));
-    let receipt = contract_copy.commit_incoming_transaction(&tx, 3).unwrap();
+    assert_eq!(contract_copy.check_outgoing_transaction(&tx, 3, 0), Ok(()));
+    assert_eq!(
+        contract_copy.commit_outgoing_transaction(&tx, 3, 0),
+        Ok(None)
+    );
+    let receipt = contract_copy
+        .commit_incoming_transaction(&tx, 3, 0)
+        .unwrap();
     assert!(receipt.is_some());
 
     // Verify contract.
@@ -2253,11 +2376,11 @@ fn it_can_manage_stake() {
 
     // Revert retire.
     assert_eq!(
-        contract_copy.revert_incoming_transaction(&tx, 3, receipt.as_ref()),
+        contract_copy.revert_incoming_transaction(&tx, 3, 0, receipt.as_ref()),
         Ok(())
     );
     assert_eq!(
-        contract_copy.revert_outgoing_transaction(&tx, 3, None),
+        contract_copy.revert_outgoing_transaction(&tx, 3, 0, None),
         Ok(())
     );
 
@@ -2286,11 +2409,11 @@ fn it_can_manage_stake() {
 
     // Revert second retire.
     assert_eq!(
-        contract_copy.revert_incoming_transaction(&tx, 2, None),
+        contract_copy.revert_incoming_transaction(&tx, 2, 0, None),
         Ok(())
     );
     assert_eq!(
-        contract_copy.revert_outgoing_transaction(&tx, 2, None),
+        contract_copy.revert_outgoing_transaction(&tx, 2, 0, None),
         Ok(())
     );
 
@@ -2339,12 +2462,15 @@ fn it_can_manage_stake() {
         29_999_800,
     );
     assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
-    assert_eq!(contract.check_outgoing_transaction(&tx, 3), Ok(()));
-    assert_eq!(contract.commit_outgoing_transaction(&tx, 3), Ok(None));
+    assert_eq!(contract.check_outgoing_transaction(&tx, 3, 0), Ok(()));
+    assert_eq!(contract.commit_outgoing_transaction(&tx, 3, 0), Ok(None));
 
     assert_eq!(AccountType::verify_incoming_transaction(&tx), Ok(()));
-    assert_eq!(StakingContract::check_incoming_transaction(&tx, 3), Ok(()));
-    assert_eq!(contract.commit_incoming_transaction(&tx, 3), Ok(None));
+    assert_eq!(
+        StakingContract::check_incoming_transaction(&tx, 3, 0),
+        Ok(())
+    );
+    assert_eq!(contract.commit_incoming_transaction(&tx, 3, 0), Ok(None));
 
     // Verify contract.
     assert_eq!(contract.balance, Coin::from_u64_unchecked(299_999_800));
@@ -2386,13 +2512,21 @@ fn it_can_manage_stake() {
         19_999_900,
     );
     assert_eq!(AccountType::verify_outgoing_transaction(&tx2), Ok(()));
-    assert_eq!(contract_copy.check_outgoing_transaction(&tx2, 4), Ok(()));
-    let receipt = contract_copy.commit_outgoing_transaction(&tx2, 4).unwrap();
+    assert_eq!(contract_copy.check_outgoing_transaction(&tx2, 4, 0), Ok(()));
+    let receipt = contract_copy
+        .commit_outgoing_transaction(&tx2, 4, 0)
+        .unwrap();
     assert!(receipt.is_some());
 
     assert_eq!(AccountType::verify_incoming_transaction(&tx2), Ok(()));
-    assert_eq!(StakingContract::check_incoming_transaction(&tx2, 4), Ok(()));
-    assert_eq!(contract_copy.commit_incoming_transaction(&tx2, 4), Ok(None));
+    assert_eq!(
+        StakingContract::check_incoming_transaction(&tx2, 4, 0),
+        Ok(())
+    );
+    assert_eq!(
+        contract_copy.commit_incoming_transaction(&tx2, 4, 0),
+        Ok(None)
+    );
 
     // Verify contract.
     assert_eq!(contract_copy.balance, Coin::from_u64_unchecked(299_999_700));
@@ -2423,11 +2557,11 @@ fn it_can_manage_stake() {
 
     // Revert re-activation one.
     assert_eq!(
-        contract_copy.revert_incoming_transaction(&tx2, 4, None),
+        contract_copy.revert_incoming_transaction(&tx2, 4, 0, None),
         Ok(())
     );
     assert_eq!(
-        contract_copy.revert_outgoing_transaction(&tx2, 4, receipt.as_ref()),
+        contract_copy.revert_outgoing_transaction(&tx2, 4, 0, receipt.as_ref()),
         Ok(())
     );
 
@@ -2466,11 +2600,11 @@ fn it_can_manage_stake() {
 
     // Revert second re-activation.
     assert_eq!(
-        contract_copy.revert_incoming_transaction(&tx, 3, None),
+        contract_copy.revert_incoming_transaction(&tx, 3, 0, None),
         Ok(())
     );
     assert_eq!(
-        contract_copy.revert_outgoing_transaction(&tx, 3, None),
+        contract_copy.revert_outgoing_transaction(&tx, 3, 0, None),
         Ok(())
     );
 
@@ -2513,14 +2647,14 @@ fn it_can_manage_stake() {
     let tx = make_unstake_transaction(&key_pair, 200_000_000);
     assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
     assert_eq!(
-        contract.check_outgoing_transaction(&tx, 3000),
+        contract.check_outgoing_transaction(&tx, 3000, 0),
         Err(AccountError::InsufficientFunds {
             needed: Coin::from_u64_unchecked(200_000_100),
             balance: Coin::from_u64_unchecked(20_000_000),
         })
     );
     assert_eq!(
-        contract.commit_outgoing_transaction(&tx, 3000),
+        contract.commit_outgoing_transaction(&tx, 3000, 0),
         Err(AccountError::InsufficientFunds {
             needed: Coin::from_u64_unchecked(200_000_100),
             balance: Coin::from_u64_unchecked(20_000_000),
@@ -2531,18 +2665,18 @@ fn it_can_manage_stake() {
     let tx = make_unstake_transaction(&key_pair, 9_999_700);
     assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
     assert_eq!(
-        contract.check_outgoing_transaction(&tx, 3),
+        contract.check_outgoing_transaction(&tx, 3, 0),
         Err(AccountError::InvalidForSender)
     );
     assert_eq!(
-        contract.commit_outgoing_transaction(&tx, 3),
+        contract.commit_outgoing_transaction(&tx, 3, 0),
         Err(AccountError::InvalidForSender)
     );
 
     // All valid.
     assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
-    assert_eq!(contract.check_outgoing_transaction(&tx, 3000), Ok(()));
-    assert_eq!(contract.commit_outgoing_transaction(&tx, 3000), Ok(None));
+    assert_eq!(contract.check_outgoing_transaction(&tx, 3000, 0), Ok(()));
+    assert_eq!(contract.commit_outgoing_transaction(&tx, 3000, 0), Ok(None));
 
     // Verify contract.
     assert_eq!(contract.balance, Coin::from_u64_unchecked(290_000_000));
@@ -2581,9 +2715,12 @@ fn it_can_manage_stake() {
     let mut contract_copy = contract.clone();
     let tx2 = make_unstake_transaction(&key_pair, 10_000_100);
     assert_eq!(AccountType::verify_outgoing_transaction(&tx2), Ok(()));
-    assert_eq!(contract_copy.check_outgoing_transaction(&tx2, 3000), Ok(()));
+    assert_eq!(
+        contract_copy.check_outgoing_transaction(&tx2, 3000, 0),
+        Ok(())
+    );
     let receipt = contract_copy
-        .commit_outgoing_transaction(&tx2, 3000)
+        .commit_outgoing_transaction(&tx2, 3000, 0)
         .unwrap();
     assert!(receipt.is_some());
 
@@ -2616,7 +2753,7 @@ fn it_can_manage_stake() {
 
     // Revert unstake.
     assert_eq!(
-        contract_copy.revert_outgoing_transaction(&tx2, 3000, receipt.as_ref()),
+        contract_copy.revert_outgoing_transaction(&tx2, 3000, 0, receipt.as_ref()),
         Ok(())
     );
 
@@ -2655,7 +2792,7 @@ fn it_can_manage_stake() {
 
     // Revert first unstake.
     assert_eq!(
-        contract_copy.revert_outgoing_transaction(&tx, 3000, None),
+        contract_copy.revert_outgoing_transaction(&tx, 3000, 0, None),
         Ok(())
     );
 
@@ -2705,8 +2842,11 @@ fn it_can_manage_stake() {
         &bls_pair,
     );
     assert_eq!(AccountType::verify_incoming_transaction(&tx), Ok(()));
-    assert_eq!(StakingContract::check_incoming_transaction(&tx, 2), Ok(()));
-    assert_eq!(contract.commit_incoming_transaction(&tx, 2), Ok(None));
+    assert_eq!(
+        StakingContract::check_incoming_transaction(&tx, 2, 0),
+        Ok(())
+    );
+    assert_eq!(contract.commit_incoming_transaction(&tx, 2, 0), Ok(None));
 
     // 1. Stake.
     let tx = make_incoming_transaction(
@@ -2717,8 +2857,11 @@ fn it_can_manage_stake() {
         100_000_000,
     );
     assert_eq!(AccountType::verify_incoming_transaction(&tx), Ok(()));
-    assert_eq!(StakingContract::check_incoming_transaction(&tx, 1), Ok(()));
-    assert_eq!(contract.commit_incoming_transaction(&tx, 1), Ok(None));
+    assert_eq!(
+        StakingContract::check_incoming_transaction(&tx, 1, 0),
+        Ok(())
+    );
+    assert_eq!(contract.commit_incoming_transaction(&tx, 1, 0), Ok(None));
 
     // Verify contract.
     assert_eq!(contract.balance, Coin::from_u64_unchecked(200_000_000));
@@ -2739,8 +2882,11 @@ fn it_can_manage_stake() {
 
     // Stake a second time.
     assert_eq!(AccountType::verify_incoming_transaction(&tx), Ok(()));
-    assert_eq!(StakingContract::check_incoming_transaction(&tx, 1), Ok(()));
-    assert_eq!(contract.commit_incoming_transaction(&tx, 1), Ok(None));
+    assert_eq!(
+        StakingContract::check_incoming_transaction(&tx, 1, 0),
+        Ok(())
+    );
+    assert_eq!(contract.commit_incoming_transaction(&tx, 1, 0), Ok(None));
 
     // Verify contract.
     assert_eq!(contract.balance, Coin::from_u64_unchecked(300_000_000));
@@ -2769,8 +2915,14 @@ fn it_can_manage_stake() {
         100_000_000,
     );
     assert_eq!(AccountType::verify_incoming_transaction(&tx2), Ok(()));
-    assert_eq!(StakingContract::check_incoming_transaction(&tx2, 1), Ok(()));
-    assert_eq!(contract_copy.commit_incoming_transaction(&tx2, 1), Ok(None));
+    assert_eq!(
+        StakingContract::check_incoming_transaction(&tx2, 1, 0),
+        Ok(())
+    );
+    assert_eq!(
+        contract_copy.commit_incoming_transaction(&tx2, 1, 0),
+        Ok(None)
+    );
 
     // Verify contract.
     assert_eq!(contract_copy.balance, Coin::from_u64_unchecked(400_000_000));
@@ -2797,7 +2949,10 @@ fn it_can_manage_stake() {
     );
 
     // Revert one stake.
-    assert_eq!(contract.revert_incoming_transaction(&tx, 1, None), Ok(()));
+    assert_eq!(
+        contract.revert_incoming_transaction(&tx, 1, 0, None),
+        Ok(())
+    );
 
     // Verify contract.
     assert_eq!(contract.balance, Coin::from_u64_unchecked(200_000_000));
@@ -2819,7 +2974,7 @@ fn it_can_manage_stake() {
     // Revert stakes.
     let mut contract_copy = contract.clone();
     assert_eq!(
-        contract_copy.revert_incoming_transaction(&tx, 1, None),
+        contract_copy.revert_incoming_transaction(&tx, 1, 0, None),
         Ok(())
     );
 
@@ -2839,12 +2994,15 @@ fn it_can_manage_stake() {
         49_999_900,
     );
     assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
-    assert_eq!(contract.check_outgoing_transaction(&tx, 2), Ok(()));
-    assert_eq!(contract.commit_outgoing_transaction(&tx, 2), Ok(None));
+    assert_eq!(contract.check_outgoing_transaction(&tx, 2, 0), Ok(()));
+    assert_eq!(contract.commit_outgoing_transaction(&tx, 2, 0), Ok(None));
 
     assert_eq!(AccountType::verify_incoming_transaction(&tx), Ok(()));
-    assert_eq!(StakingContract::check_incoming_transaction(&tx, 2), Ok(()));
-    assert_eq!(contract.commit_incoming_transaction(&tx, 2), Ok(None));
+    assert_eq!(
+        StakingContract::check_incoming_transaction(&tx, 2, 0),
+        Ok(())
+    );
+    assert_eq!(contract.commit_incoming_transaction(&tx, 2, 0), Ok(None));
 
     // Verify contract.
     assert_eq!(contract.balance, Coin::from_u64_unchecked(199_999_900));
@@ -2871,9 +3029,14 @@ fn it_can_manage_stake() {
 
     // Retire rest of stake.
     let mut contract_copy = contract.clone();
-    assert_eq!(contract_copy.check_outgoing_transaction(&tx, 3), Ok(()));
-    assert_eq!(contract_copy.commit_outgoing_transaction(&tx, 3), Ok(None));
-    let receipt = contract_copy.commit_incoming_transaction(&tx, 3).unwrap();
+    assert_eq!(contract_copy.check_outgoing_transaction(&tx, 3, 0), Ok(()));
+    assert_eq!(
+        contract_copy.commit_outgoing_transaction(&tx, 3, 0),
+        Ok(None)
+    );
+    let receipt = contract_copy
+        .commit_incoming_transaction(&tx, 3, 0)
+        .unwrap();
     assert!(receipt.is_some());
 
     // Verify contract.
@@ -2894,11 +3057,11 @@ fn it_can_manage_stake() {
 
     // Revert retire.
     assert_eq!(
-        contract_copy.revert_incoming_transaction(&tx, 3, receipt.as_ref()),
+        contract_copy.revert_incoming_transaction(&tx, 3, 0, receipt.as_ref()),
         Ok(())
     );
     assert_eq!(
-        contract_copy.revert_outgoing_transaction(&tx, 3, None),
+        contract_copy.revert_outgoing_transaction(&tx, 3, 0, None),
         Ok(())
     );
 
@@ -2927,11 +3090,11 @@ fn it_can_manage_stake() {
 
     // Revert second retire.
     assert_eq!(
-        contract_copy.revert_incoming_transaction(&tx, 2, None),
+        contract_copy.revert_incoming_transaction(&tx, 2, 0, None),
         Ok(())
     );
     assert_eq!(
-        contract_copy.revert_outgoing_transaction(&tx, 2, None),
+        contract_copy.revert_outgoing_transaction(&tx, 2, 0, None),
         Ok(())
     );
 
@@ -2980,12 +3143,15 @@ fn it_can_manage_stake() {
         29_999_800,
     );
     assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
-    assert_eq!(contract.check_outgoing_transaction(&tx, 3), Ok(()));
-    assert_eq!(contract.commit_outgoing_transaction(&tx, 3), Ok(None));
+    assert_eq!(contract.check_outgoing_transaction(&tx, 3, 0), Ok(()));
+    assert_eq!(contract.commit_outgoing_transaction(&tx, 3, 0), Ok(None));
 
     assert_eq!(AccountType::verify_incoming_transaction(&tx), Ok(()));
-    assert_eq!(StakingContract::check_incoming_transaction(&tx, 3), Ok(()));
-    assert_eq!(contract.commit_incoming_transaction(&tx, 3), Ok(None));
+    assert_eq!(
+        StakingContract::check_incoming_transaction(&tx, 3, 0),
+        Ok(())
+    );
+    assert_eq!(contract.commit_incoming_transaction(&tx, 3, 0), Ok(None));
 
     // Verify contract.
     assert_eq!(contract.balance, Coin::from_u64_unchecked(299_999_800));
@@ -3027,13 +3193,21 @@ fn it_can_manage_stake() {
         19_999_900,
     );
     assert_eq!(AccountType::verify_outgoing_transaction(&tx2), Ok(()));
-    assert_eq!(contract_copy.check_outgoing_transaction(&tx2, 4), Ok(()));
-    let receipt = contract_copy.commit_outgoing_transaction(&tx2, 4).unwrap();
+    assert_eq!(contract_copy.check_outgoing_transaction(&tx2, 4, 0), Ok(()));
+    let receipt = contract_copy
+        .commit_outgoing_transaction(&tx2, 4, 0)
+        .unwrap();
     assert!(receipt.is_some());
 
     assert_eq!(AccountType::verify_incoming_transaction(&tx2), Ok(()));
-    assert_eq!(StakingContract::check_incoming_transaction(&tx2, 4), Ok(()));
-    assert_eq!(contract_copy.commit_incoming_transaction(&tx2, 4), Ok(None));
+    assert_eq!(
+        StakingContract::check_incoming_transaction(&tx2, 4, 0),
+        Ok(())
+    );
+    assert_eq!(
+        contract_copy.commit_incoming_transaction(&tx2, 4, 0),
+        Ok(None)
+    );
 
     // Verify contract.
     assert_eq!(contract_copy.balance, Coin::from_u64_unchecked(299_999_700));
@@ -3064,11 +3238,11 @@ fn it_can_manage_stake() {
 
     // Revert re-activation one.
     assert_eq!(
-        contract_copy.revert_incoming_transaction(&tx2, 4, None),
+        contract_copy.revert_incoming_transaction(&tx2, 4, 0, None),
         Ok(())
     );
     assert_eq!(
-        contract_copy.revert_outgoing_transaction(&tx2, 4, receipt.as_ref()),
+        contract_copy.revert_outgoing_transaction(&tx2, 4, 0, receipt.as_ref()),
         Ok(())
     );
 
@@ -3107,11 +3281,11 @@ fn it_can_manage_stake() {
 
     // Revert second re-activation.
     assert_eq!(
-        contract_copy.revert_incoming_transaction(&tx, 3, None),
+        contract_copy.revert_incoming_transaction(&tx, 3, 0, None),
         Ok(())
     );
     assert_eq!(
-        contract_copy.revert_outgoing_transaction(&tx, 3, None),
+        contract_copy.revert_outgoing_transaction(&tx, 3, 0, None),
         Ok(())
     );
 
@@ -3154,14 +3328,14 @@ fn it_can_manage_stake() {
     let tx = make_unstake_transaction(&key_pair, 200_000_000);
     assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
     assert_eq!(
-        contract.check_outgoing_transaction(&tx, 3000),
+        contract.check_outgoing_transaction(&tx, 3000, 0),
         Err(AccountError::InsufficientFunds {
             needed: Coin::from_u64_unchecked(200_000_100),
             balance: Coin::from_u64_unchecked(20_000_000),
         })
     );
     assert_eq!(
-        contract.commit_outgoing_transaction(&tx, 3000),
+        contract.commit_outgoing_transaction(&tx, 3000, 0),
         Err(AccountError::InsufficientFunds {
             needed: Coin::from_u64_unchecked(200_000_100),
             balance: Coin::from_u64_unchecked(20_000_000),
@@ -3172,18 +3346,18 @@ fn it_can_manage_stake() {
     let tx = make_unstake_transaction(&key_pair, 9_999_700);
     assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
     assert_eq!(
-        contract.check_outgoing_transaction(&tx, 3),
+        contract.check_outgoing_transaction(&tx, 3, 0),
         Err(AccountError::InvalidForSender)
     );
     assert_eq!(
-        contract.commit_outgoing_transaction(&tx, 3),
+        contract.commit_outgoing_transaction(&tx, 3, 0),
         Err(AccountError::InvalidForSender)
     );
 
     // All valid.
     assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
-    assert_eq!(contract.check_outgoing_transaction(&tx, 3000), Ok(()));
-    assert_eq!(contract.commit_outgoing_transaction(&tx, 3000), Ok(None));
+    assert_eq!(contract.check_outgoing_transaction(&tx, 3000, 0), Ok(()));
+    assert_eq!(contract.commit_outgoing_transaction(&tx, 3000, 0), Ok(None));
 
     // Verify contract.
     assert_eq!(contract.balance, Coin::from_u64_unchecked(290_000_000));
@@ -3222,9 +3396,12 @@ fn it_can_manage_stake() {
     let mut contract_copy = contract.clone();
     let tx2 = make_unstake_transaction(&key_pair, 10_000_100);
     assert_eq!(AccountType::verify_outgoing_transaction(&tx2), Ok(()));
-    assert_eq!(contract_copy.check_outgoing_transaction(&tx2, 3000), Ok(()));
+    assert_eq!(
+        contract_copy.check_outgoing_transaction(&tx2, 3000, 0),
+        Ok(())
+    );
     let receipt = contract_copy
-        .commit_outgoing_transaction(&tx2, 3000)
+        .commit_outgoing_transaction(&tx2, 3000, 0)
         .unwrap();
     assert!(receipt.is_some());
 
@@ -3257,7 +3434,7 @@ fn it_can_manage_stake() {
 
     // Revert unstake.
     assert_eq!(
-        contract_copy.revert_outgoing_transaction(&tx2, 3000, receipt.as_ref()),
+        contract_copy.revert_outgoing_transaction(&tx2, 3000, 0, receipt.as_ref()),
         Ok(())
     );
 
@@ -3296,7 +3473,7 @@ fn it_can_manage_stake() {
 
     // Revert first unstake.
     assert_eq!(
-        contract_copy.revert_outgoing_transaction(&tx, 3000, None),
+        contract_copy.revert_outgoing_transaction(&tx, 3000, 0, None),
         Ok(())
     );
 

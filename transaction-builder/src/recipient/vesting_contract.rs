@@ -62,8 +62,8 @@ pub enum VestingRecipientBuilderError {
 #[derive(Default)]
 pub struct VestingRecipientBuilder {
     owner: Option<Address>,
-    start_block: Option<u32>,
-    step_distance: Option<u32>,
+    start_time: Option<u64>,
+    time_step: Option<u64>,
     step_amount: Option<Coin>,
     total_amount: Option<Coin>,
 }
@@ -77,12 +77,12 @@ impl VestingRecipientBuilder {
     }
 
     /// Creates a simple vesting contract that will release `amount` coins to `owner`
-    /// at blockchain height `start_block`.
-    pub fn new_single_step(owner: Address, start_block: u32, amount: Coin) -> Self {
+    /// at blockchain height `start_time`.
+    pub fn new_single_step(owner: Address, start_time: u64, amount: Coin) -> Self {
         let mut builder = Self::new(owner);
         builder
-            .with_start_block(0)
-            .with_step_distance(start_block)
+            .with_start_time(0)
+            .with_time_step(start_time)
             .with_total_amount(amount)
             .with_step_amount(amount);
         builder
@@ -94,10 +94,10 @@ impl VestingRecipientBuilder {
         self
     }
 
-    /// Sets the `start_block` for the release schedule.
-    /// The first `step_amount` funds will be released at time `start_block + step_distance`.
-    pub fn with_start_block(&mut self, start_block: u32) -> &mut Self {
-        self.start_block = Some(start_block);
+    /// Sets the `start_time` for the release schedule.
+    /// The first `time_step` funds will be released at time `start_time + time_step`.
+    pub fn with_start_time(&mut self, start_time: u64) -> &mut Self {
+        self.start_time = Some(start_time);
         self
     }
 
@@ -110,25 +110,25 @@ impl VestingRecipientBuilder {
     }
 
     /// This convenience function allows to quickly create a release schedule of `num_steps`
-    /// payouts starting at `start_block + step_distance`.
+    /// payouts starting at `start_time + time_step`.
     pub fn with_steps(
         &mut self,
         total_amount: Coin,
-        start_block: u32,
-        step_distance: u32,
+        start_time: u64,
+        time_step: u64,
         num_steps: u32,
     ) -> &mut Self {
         let step_amount = total_amount.div(u64::from(num_steps));
         self.with_total_amount(total_amount)
-            .with_start_block(start_block)
-            .with_step_distance(step_distance)
+            .with_start_time(start_time)
+            .with_time_step(time_step)
             .with_step_amount(step_amount);
         self
     }
 
     /// Sets the distance between releasing funds from the contract.
-    pub fn with_step_distance(&mut self, step_blocks: u32) -> &mut Self {
-        self.step_distance = Some(step_blocks);
+    pub fn with_time_step(&mut self, time_step: u64) -> &mut Self {
+        self.time_step = Some(time_step);
         self
     }
 
@@ -167,11 +167,11 @@ impl VestingRecipientBuilder {
         Ok(Recipient::VestingCreation {
             data: VestingCreationData {
                 owner: self.owner.ok_or(VestingRecipientBuilderError::NoOwner)?,
-                start: self
-                    .start_block
+                start_time: self
+                    .start_time
                     .ok_or(VestingRecipientBuilderError::NoStartBlock)?,
-                step_blocks: self
-                    .step_distance
+                time_step: self
+                    .time_step
                     .ok_or(VestingRecipientBuilderError::NoStepDistance)?,
                 step_amount: self
                     .step_amount

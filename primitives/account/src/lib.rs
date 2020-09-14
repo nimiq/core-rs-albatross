@@ -49,30 +49,35 @@ pub trait AccountTransactionInteraction: Sized {
         balance: Coin,
         transaction: &Transaction,
         block_height: u32,
+        time: u64,
     ) -> Result<Self, AccountError>;
 
     fn create(
         balance: Coin,
         transaction: &Transaction,
         block_height: u32,
+        time: u64,
     ) -> Result<Self, AccountError>;
 
     /// Incoming transaction checks must not depend on the account itself and may only be static on the transaction.
     fn check_incoming_transaction(
         transaction: &Transaction,
         block_height: u32,
+        time: u64,
     ) -> Result<(), AccountError>;
 
     fn commit_incoming_transaction(
         &mut self,
         transaction: &Transaction,
         block_height: u32,
+        time: u64,
     ) -> Result<Option<Vec<u8>>, AccountError>;
 
     fn revert_incoming_transaction(
         &mut self,
         transaction: &Transaction,
         block_height: u32,
+        time: u64,
         receipt: Option<&Vec<u8>>,
     ) -> Result<(), AccountError>;
 
@@ -81,18 +86,21 @@ pub trait AccountTransactionInteraction: Sized {
         &self,
         transaction: &Transaction,
         block_height: u32,
+        time: u64,
     ) -> Result<(), AccountError>;
 
     fn commit_outgoing_transaction(
         &mut self,
         transaction: &Transaction,
         block_height: u32,
+        time: u64,
     ) -> Result<Option<Vec<u8>>, AccountError>;
 
     fn revert_outgoing_transaction(
         &mut self,
         transaction: &Transaction,
         block_height: u32,
+        time: u64,
         receipt: Option<&Vec<u8>>,
     ) -> Result<(), AccountError>;
 }
@@ -185,19 +193,22 @@ impl Account {
         &self,
         transaction: &Transaction,
         block_height: u32,
+        time: u64,
     ) -> Result<(), AccountError> {
         match self {
             Account::Basic(_) => {
-                BasicAccount::check_incoming_transaction(transaction, block_height)
+                BasicAccount::check_incoming_transaction(transaction, block_height, time)
             }
             Account::Vesting(_) => {
-                VestingContract::check_incoming_transaction(transaction, block_height)
+                VestingContract::check_incoming_transaction(transaction, block_height, time)
             }
-            Account::HTLC(_) => {
-                HashedTimeLockedContract::check_incoming_transaction(transaction, block_height)
-            }
+            Account::HTLC(_) => HashedTimeLockedContract::check_incoming_transaction(
+                transaction,
+                block_height,
+                time,
+            ),
             Account::Staking(_) => {
-                StakingContract::check_incoming_transaction(transaction, block_height)
+                StakingContract::check_incoming_transaction(transaction, block_height, time)
             }
         }
     }
@@ -218,6 +229,7 @@ impl AccountTransactionInteraction for Account {
         balance: Coin,
         transaction: &Transaction,
         block_height: u32,
+        time: u64,
     ) -> Result<Self, AccountError> {
         match account_type {
             AccountType::Basic => Err(AccountError::InvalidForRecipient),
@@ -225,11 +237,13 @@ impl AccountTransactionInteraction for Account {
                 balance,
                 transaction,
                 block_height,
+                time,
             )?)),
             AccountType::HTLC => Ok(Account::HTLC(HashedTimeLockedContract::create(
                 balance,
                 transaction,
                 block_height,
+                time,
             )?)),
             AccountType::Staking => Err(AccountError::InvalidForRecipient),
         }
@@ -239,6 +253,7 @@ impl AccountTransactionInteraction for Account {
         _balance: Coin,
         _transaction: &Transaction,
         _block_height: u32,
+        _time: u64,
     ) -> Result<Self, AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
@@ -246,6 +261,7 @@ impl AccountTransactionInteraction for Account {
     fn check_incoming_transaction(
         _transaction: &Transaction,
         _block_height: u32,
+        _time: u64,
     ) -> Result<(), AccountError> {
         // This method must be called on specific types instead.
         Err(AccountError::InvalidForRecipient)
@@ -255,15 +271,23 @@ impl AccountTransactionInteraction for Account {
         &mut self,
         transaction: &Transaction,
         block_height: u32,
+        time: u64,
     ) -> Result<Option<Vec<u8>>, AccountError> {
-        self.check_incoming_transaction(transaction, block_height)?;
-        invoke_account_instance!(self, commit_incoming_transaction, transaction, block_height)
+        self.check_incoming_transaction(transaction, block_height, time)?;
+        invoke_account_instance!(
+            self,
+            commit_incoming_transaction,
+            transaction,
+            block_height,
+            time
+        )
     }
 
     fn revert_incoming_transaction(
         &mut self,
         transaction: &Transaction,
         block_height: u32,
+        time: u64,
         receipt: Option<&Vec<u8>>,
     ) -> Result<(), AccountError> {
         invoke_account_instance!(
@@ -271,6 +295,7 @@ impl AccountTransactionInteraction for Account {
             revert_incoming_transaction,
             transaction,
             block_height,
+            time,
             receipt
         )
     }
@@ -279,22 +304,37 @@ impl AccountTransactionInteraction for Account {
         &self,
         transaction: &Transaction,
         block_height: u32,
+        time: u64,
     ) -> Result<(), AccountError> {
-        invoke_account_instance!(self, check_outgoing_transaction, transaction, block_height)
+        invoke_account_instance!(
+            self,
+            check_outgoing_transaction,
+            transaction,
+            block_height,
+            time
+        )
     }
 
     fn commit_outgoing_transaction(
         &mut self,
         transaction: &Transaction,
         block_height: u32,
+        time: u64,
     ) -> Result<Option<Vec<u8>>, AccountError> {
-        invoke_account_instance!(self, commit_outgoing_transaction, transaction, block_height)
+        invoke_account_instance!(
+            self,
+            commit_outgoing_transaction,
+            transaction,
+            block_height,
+            time
+        )
     }
 
     fn revert_outgoing_transaction(
         &mut self,
         transaction: &Transaction,
         block_height: u32,
+        time: u64,
         receipt: Option<&Vec<u8>>,
     ) -> Result<(), AccountError> {
         invoke_account_instance!(
@@ -302,31 +342,39 @@ impl AccountTransactionInteraction for Account {
             revert_outgoing_transaction,
             transaction,
             block_height,
+            time,
             receipt
         )
     }
 }
 
 impl AccountInherentInteraction for Account {
-    fn check_inherent(&self, inherent: &Inherent, block_height: u32) -> Result<(), AccountError> {
-        invoke_account_instance!(self, check_inherent, inherent, block_height)
+    fn check_inherent(
+        &self,
+        inherent: &Inherent,
+        block_height: u32,
+        time: u64,
+    ) -> Result<(), AccountError> {
+        invoke_account_instance!(self, check_inherent, inherent, block_height, time)
     }
 
     fn commit_inherent(
         &mut self,
         inherent: &Inherent,
         block_height: u32,
+        time: u64,
     ) -> Result<Option<Vec<u8>>, AccountError> {
-        invoke_account_instance!(self, commit_inherent, inherent, block_height)
+        invoke_account_instance!(self, commit_inherent, inherent, block_height, time)
     }
 
     fn revert_inherent(
         &mut self,
         inherent: &Inherent,
         block_height: u32,
+        time: u64,
         receipt: Option<&Vec<u8>>,
     ) -> Result<(), AccountError> {
-        invoke_account_instance!(self, revert_inherent, inherent, block_height, receipt)
+        invoke_account_instance!(self, revert_inherent, inherent, block_height, time, receipt)
     }
 }
 

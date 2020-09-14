@@ -78,9 +78,10 @@ impl Accounts {
         transactions: &[Transaction],
         inherents: &[Inherent],
         block_height: u32,
+        timestamp: u64,
     ) -> Result<Blake2bHash, AccountError> {
         let mut txn = WriteTransaction::new(&self.env);
-        self.commit(&mut txn, transactions, inherents, block_height)?;
+        self.commit(&mut txn, transactions, inherents, block_height, timestamp)?;
         let hash = self.hash(Some(&txn));
         txn.abort();
         Ok(hash)
@@ -92,9 +93,11 @@ impl Accounts {
         transactions: &[Transaction],
         inherents: &[Inherent],
         block_height: u32,
+        timestamp: u64,
     ) -> Result<Receipts, AccountError> {
         let mut txn = WriteTransaction::new(&self.env);
-        let receipts = self.commit_nonfinal(&mut txn, transactions, inherents, block_height)?;
+        let receipts =
+            self.commit_nonfinal(&mut txn, transactions, inherents, block_height, timestamp)?;
         txn.abort();
         Ok(receipts)
     }
@@ -105,8 +108,10 @@ impl Accounts {
         transactions: &[Transaction],
         inherents: &[Inherent],
         block_height: u32,
+        timestamp: u64,
     ) -> Result<Receipts, AccountError> {
-        let receipts = self.commit_nonfinal(txn, transactions, inherents, block_height)?;
+        let receipts =
+            self.commit_nonfinal(txn, transactions, inherents, block_height, timestamp)?;
         self.tree.finalize_batch(txn);
         Ok(receipts)
     }
@@ -117,9 +122,17 @@ impl Accounts {
         transactions: &[Transaction],
         inherents: &[Inherent],
         block_height: u32,
+        timestamp: u64,
         receipts: &Receipts,
     ) -> Result<(), AccountError> {
-        self.revert_nonfinal(txn, transactions, inherents, block_height, receipts)?;
+        self.revert_nonfinal(
+            txn,
+            transactions,
+            inherents,
+            block_height,
+            timestamp,
+            receipts,
+        )?;
         self.tree.finalize_batch(txn);
         Ok(())
     }
@@ -130,6 +143,7 @@ impl Accounts {
         transactions: &[Transaction],
         inherents: &[Inherent],
         block_height: u32,
+        timestamp: u64,
     ) -> Result<Receipts, AccountError> {
         let mut receipts = Vec::new();
 
@@ -137,16 +151,17 @@ impl Accounts {
             txn,
             inherents.iter().filter(|i| i.is_pre_transactions()),
             HashMap::new(),
-            |account, inherent, _| account.commit_inherent(inherent, block_height),
+            |account, inherent, _| account.commit_inherent(inherent, block_height, timestamp),
         )?);
 
         receipts.append(&mut self.process_senders(
             txn,
             transactions,
             block_height,
+            timestamp,
             HashMap::new(),
             |account, transaction, block_height, _| {
-                account.commit_outgoing_transaction(transaction, block_height)
+                account.commit_outgoing_transaction(transaction, block_height, timestamp)
             },
         )?);
 
@@ -154,13 +169,14 @@ impl Accounts {
             txn,
             transactions,
             block_height,
+            timestamp,
             HashMap::new(),
             |account, transaction, block_height, _| {
-                account.commit_incoming_transaction(transaction, block_height)
+                account.commit_incoming_transaction(transaction, block_height, timestamp)
             },
         )?);
 
-        self.create_contracts(txn, transactions, block_height)?;
+        self.create_contracts(txn, transactions, block_height, timestamp)?;
 
         // TODO It makes more sense to prune accounts *after* inherents have been processed.
         // However, v1 awards the block reward after pruning, so we keep this behavior for now.
@@ -170,7 +186,7 @@ impl Accounts {
             txn,
             inherents.iter().filter(|i| !i.is_pre_transactions()),
             HashMap::new(),
-            |account, inherent, _| account.commit_inherent(inherent, block_height),
+            |account, inherent, _| account.commit_inherent(inherent, block_height, timestamp),
         )?);
 
         Ok(Receipts::from(receipts))
@@ -182,6 +198,7 @@ impl Accounts {
         transactions: &[Transaction],
         inherents: &[Inherent],
         block_height: u32,
+        timestamp: u64,
         receipts: &Receipts,
     ) -> Result<(), AccountError> {
         let (
@@ -198,23 +215,24 @@ impl Accounts {
             post_tx_inherent_receipts,
             |account, inherent, receipt| {
                 account
-                    .revert_inherent(inherent, block_height, receipt)
+                    .revert_inherent(inherent, block_height, timestamp, receipt)
                     .map(|_| None)
             },
         )?;
 
         self.restore_accounts(txn, pruned_accounts)?;
 
-        self.revert_contracts(txn, transactions, block_height)?;
+        self.revert_contracts(txn, transactions, block_height, timestamp)?;
 
         self.process_recipients(
             txn,
             transactions,
             block_height,
+            timestamp,
             recipient_receipts,
             |account, transaction, block_height, receipt| {
                 account
-                    .revert_incoming_transaction(transaction, block_height, receipt)
+                    .revert_incoming_transaction(transaction, block_height, timestamp, receipt)
                     .map(|_| None)
             },
         )?;
@@ -223,10 +241,11 @@ impl Accounts {
             txn,
             transactions,
             block_height,
+            timestamp,
             sender_receipts,
             |account, transaction, block_height, receipt| {
                 account
-                    .revert_outgoing_transaction(transaction, block_height, receipt)
+                    .revert_outgoing_transaction(transaction, block_height, timestamp, receipt)
                     .map(|_| None)
             },
         )?;
@@ -237,7 +256,7 @@ impl Accounts {
             pre_tx_inherent_receipts,
             |account, inherent, receipt| {
                 account
-                    .revert_inherent(inherent, block_height, receipt)
+                    .revert_inherent(inherent, block_height, timestamp, receipt)
                     .map(|_| None)
             },
         )?;
@@ -250,6 +269,7 @@ impl Accounts {
         txn: &mut WriteTransaction,
         transactions: &[Transaction],
         block_height: u32,
+        timestamp: u64,
         mut receipts: HashMap<u16, &Vec<u8>>,
         account_op: F,
     ) -> Result<Vec<Receipt>, AccountError>
@@ -269,6 +289,7 @@ impl Accounts {
                 Some(transaction.sender_type),
                 transaction,
                 block_height,
+                timestamp,
                 receipts.remove(&(index as u16)),
                 &account_op,
             )? {
@@ -287,6 +308,7 @@ impl Accounts {
         txn: &mut WriteTransaction,
         transactions: &[Transaction],
         block_height: u32,
+        timestamp: u64,
         mut receipts: HashMap<u16, &Vec<u8>>,
         account_op: F,
     ) -> Result<Vec<Receipt>, AccountError>
@@ -316,6 +338,7 @@ impl Accounts {
                 recipient_type,
                 transaction,
                 block_height,
+                timestamp,
                 receipts.remove(&(index as u16)),
                 &account_op,
             )? {
@@ -336,6 +359,7 @@ impl Accounts {
         account_type: Option<AccountType>,
         transaction: &Transaction,
         block_height: u32,
+        timestamp: u64,
         receipt: Option<&Vec<u8>>,
         account_op: &F,
     ) -> Result<Option<Vec<u8>>, AccountError>
@@ -374,13 +398,14 @@ impl Accounts {
         txn: &mut WriteTransaction,
         transactions: &[Transaction],
         block_height: u32,
+        timestamp: u64,
     ) -> Result<(), AccountError> {
         for transaction in transactions {
             if transaction
                 .flags
                 .contains(TransactionFlags::CONTRACT_CREATION)
             {
-                self.create_contract(txn, transaction, block_height)?;
+                self.create_contract(txn, transaction, block_height, timestamp)?;
             }
         }
         Ok(())
@@ -391,6 +416,7 @@ impl Accounts {
         txn: &mut WriteTransaction,
         transaction: &Transaction,
         block_height: u32,
+        timestamp: u64,
     ) -> Result<(), AccountError> {
         assert!(transaction
             .flags
@@ -402,6 +428,7 @@ impl Accounts {
             recipient_account.balance(),
             transaction,
             block_height,
+            timestamp,
         )?;
         self.tree
             .put_batch(txn, &transaction.recipient, new_recipient_account);
@@ -413,13 +440,14 @@ impl Accounts {
         txn: &mut WriteTransaction,
         transactions: &[Transaction],
         block_height: u32,
+        timestamp: u64,
     ) -> Result<(), AccountError> {
         for transaction in transactions {
             if transaction
                 .flags
                 .contains(TransactionFlags::CONTRACT_CREATION)
             {
-                self.revert_contract(txn, transaction, block_height)?;
+                self.revert_contract(txn, transaction, block_height, timestamp)?;
             }
         }
         Ok(())
@@ -430,6 +458,7 @@ impl Accounts {
         txn: &mut WriteTransaction,
         transaction: &Transaction,
         _block_height: u32,
+        timestamp: u64,
     ) -> Result<(), AccountError> {
         assert!(transaction
             .flags

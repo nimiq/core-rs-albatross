@@ -228,6 +228,7 @@ impl Blockchain {
             transactions,
             &inherents,
             macro_block.header.block_number,
+            macro_block.header.timestamp,
         );
         if let Err(e) = receipts {
             warn!("Rejecting block - commit failed: {:?}", e);

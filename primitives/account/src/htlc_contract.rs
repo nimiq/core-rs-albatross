@@ -20,7 +20,7 @@ pub struct HashedTimeLockedContract {
     pub hash_algorithm: HashAlgorithm,
     pub hash_root: AnyHash,
     pub hash_count: u8,
-    pub timeout: u32,
+    pub timeout: u64,
     pub total_amount: Coin,
 }
 
@@ -32,7 +32,7 @@ impl HashedTimeLockedContract {
         hash_algorithm: HashAlgorithm,
         hash_root: AnyHash,
         hash_count: u8,
-        timeout: u32,
+        timeout: u64,
         total_amount: Coin,
     ) -> Self {
         HashedTimeLockedContract {
@@ -67,9 +67,10 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         balance: Coin,
         transaction: &Transaction,
         block_height: u32,
+        time: u64,
     ) -> Result<Self, AccountError> {
         if account_type == AccountType::HTLC {
-            HashedTimeLockedContract::create(balance, transaction, block_height)
+            HashedTimeLockedContract::create(balance, transaction, block_height, time)
         } else {
             Err(AccountError::InvalidForRecipient)
         }
@@ -79,6 +80,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         balance: Coin,
         transaction: &Transaction,
         _block_height: u32,
+        _time: u64,
     ) -> Result<Self, AccountError> {
         let data = CreationTransactionData::parse(transaction)?;
         Ok(HashedTimeLockedContract::new(
@@ -96,6 +98,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     fn check_incoming_transaction(
         _transaction: &Transaction,
         _block_height: u32,
+        _time: u64,
     ) -> Result<(), AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
@@ -104,6 +107,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         &mut self,
         _transaction: &Transaction,
         _block_height: u32,
+        _time: u64,
     ) -> Result<Option<Vec<u8>>, AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
@@ -112,6 +116,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         &mut self,
         _transaction: &Transaction,
         _block_height: u32,
+        _time: u64,
         _receipt: Option<&Vec<u8>>,
     ) -> Result<(), AccountError> {
         Err(AccountError::InvalidForRecipient)
@@ -120,7 +125,8 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     fn check_outgoing_transaction(
         &self,
         transaction: &Transaction,
-        block_height: u32,
+        _block_height: u32,
+        time: u64,
     ) -> Result<(), AccountError> {
         let balance: Coin = Account::balance_sub(self.balance, transaction.total_value()?)?;
         let proof_buf = &mut &transaction.proof[..];
@@ -128,8 +134,8 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         match proof_type {
             ProofType::RegularTransfer => {
                 // Check that the contract has not expired yet.
-                if self.timeout < block_height {
-                    warn!("HTLC expired: {} < {}", self.timeout, block_height);
+                if self.timeout < time {
+                    warn!("HTLC has expired: {} < {}", self.timeout, time);
                     return Err(AccountError::InvalidForSender);
                 }
 
@@ -178,8 +184,8 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
             }
             ProofType::TimeoutResolve => {
                 // Check that the contract has expired.
-                if self.timeout >= block_height {
-                    warn!("HTLC not yet expired: {} >= {}", self.timeout, block_height);
+                if self.timeout >= time {
+                    warn!("HTLC has not yet expired: {} >= {}", self.timeout, time);
                     return Err(AccountError::InvalidForSender);
                 }
 
@@ -198,8 +204,9 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         &mut self,
         transaction: &Transaction,
         block_height: u32,
+        time: u64,
     ) -> Result<Option<Vec<u8>>, AccountError> {
-        self.check_outgoing_transaction(transaction, block_height)?;
+        self.check_outgoing_transaction(transaction, block_height, time)?;
         self.balance = Account::balance_sub(self.balance, transaction.total_value()?)?;
         Ok(None)
     }
@@ -208,6 +215,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         &mut self,
         transaction: &Transaction,
         _block_height: u32,
+        _time: u64,
         receipt: Option<&Vec<u8>>,
     ) -> Result<(), AccountError> {
         if receipt.is_some() {
@@ -220,7 +228,12 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
 }
 
 impl AccountInherentInteraction for HashedTimeLockedContract {
-    fn check_inherent(&self, _inherent: &Inherent, _block_height: u32) -> Result<(), AccountError> {
+    fn check_inherent(
+        &self,
+        _inherent: &Inherent,
+        _block_height: u32,
+        _time: u64,
+    ) -> Result<(), AccountError> {
         Err(AccountError::InvalidInherent)
     }
 
@@ -228,6 +241,7 @@ impl AccountInherentInteraction for HashedTimeLockedContract {
         &mut self,
         _inherent: &Inherent,
         _block_height: u32,
+        _time: u64,
     ) -> Result<Option<Vec<u8>>, AccountError> {
         Err(AccountError::InvalidInherent)
     }
@@ -236,6 +250,7 @@ impl AccountInherentInteraction for HashedTimeLockedContract {
         &mut self,
         _inherent: &Inherent,
         _block_height: u32,
+        _time: u64,
         _receipt: Option<&Vec<u8>>,
     ) -> Result<(), AccountError> {
         Err(AccountError::InvalidInherent)

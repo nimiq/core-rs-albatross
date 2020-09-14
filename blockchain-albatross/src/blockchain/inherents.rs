@@ -226,7 +226,7 @@ impl Blockchain {
             let account = state.accounts.get(&inherent.target, None);
 
             if account
-                .check_inherent(&inherent, macro_header.block_number)
+                .check_inherent(&inherent, macro_header.block_number, macro_header.timestamp)
                 .is_err()
             {
                 debug!(

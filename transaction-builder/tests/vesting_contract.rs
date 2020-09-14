@@ -11,10 +11,10 @@ use nimiq_transaction_builder::{Recipient, TransactionBuilder};
 #[test]
 #[allow(unused_must_use)]
 fn it_can_create_creation_transaction() {
-    let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE + 4);
+    let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE + 8);
     let owner = Address::from([0u8; 20]);
     Serialize::serialize(&owner, &mut data);
-    Serialize::serialize(&100u32, &mut data);
+    Serialize::serialize(&100u64, &mut data);
 
     let mut transaction = Transaction::new_contract_creation(
         data,
@@ -45,19 +45,19 @@ fn it_can_create_creation_transaction() {
     assert_eq!(proof_builder.transaction, transaction);
 
     // Valid
-    let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE + 16);
+    let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE + 24);
     let sender = Address::from([0u8; 20]);
     Serialize::serialize(&sender, &mut data);
-    Serialize::serialize(&100u32, &mut data);
-    Serialize::serialize(&100u32, &mut data);
+    Serialize::serialize(&100u64, &mut data);
+    Serialize::serialize(&100u64, &mut data);
     Serialize::serialize(&Coin::try_from(100).unwrap(), &mut data);
     transaction.data = data;
     transaction.recipient = transaction.contract_creation_address();
 
     let mut recipient = Recipient::new_vesting_builder(owner.clone());
     recipient
-        .with_start_block(100)
-        .with_step_distance(100)
+        .with_start_time(100)
+        .with_time_step(100)
         .with_step_amount(100.try_into().unwrap())
         .with_total_amount(100.try_into().unwrap());
 
@@ -75,11 +75,11 @@ fn it_can_create_creation_transaction() {
     assert_eq!(proof_builder.transaction, transaction);
 
     // Valid
-    let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE + 24);
+    let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE + 32);
     let sender = Address::from([0u8; 20]);
     Serialize::serialize(&sender, &mut data);
-    Serialize::serialize(&100u32, &mut data);
-    Serialize::serialize(&100u32, &mut data);
+    Serialize::serialize(&100u64, &mut data);
+    Serialize::serialize(&100u64, &mut data);
     Serialize::serialize(&Coin::try_from(100).unwrap(), &mut data);
     Serialize::serialize(&Coin::try_from(101).unwrap(), &mut data);
     transaction.data = data;
@@ -87,8 +87,8 @@ fn it_can_create_creation_transaction() {
 
     let mut recipient = Recipient::new_vesting_builder(owner.clone());
     recipient
-        .with_start_block(100)
-        .with_step_distance(100)
+        .with_start_time(100)
+        .with_time_step(100)
         .with_step_amount(100.try_into().unwrap())
         .with_total_amount(101.try_into().unwrap());
 

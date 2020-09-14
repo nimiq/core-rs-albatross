@@ -154,9 +154,12 @@ impl Mempool {
 
             // Check if transaction is valid at the next block height.
             let block_height = self.blockchain.block_number() + 1;
+
             if !transaction.is_valid_at(block_height) {
                 return ReturnCode::Invalid;
             }
+
+            let timestamp = self.blockchain.timestamp();
 
             // Check if transaction has already been mined.
             if self.blockchain.contains_tx_in_validity_window(&hash) {
@@ -176,7 +179,11 @@ impl Mempool {
 
             // Test incoming transaction.
             let old_balance = recipient_account.balance();
-            match recipient_account.commit_incoming_transaction(&transaction, block_height) {
+            match recipient_account.commit_incoming_transaction(
+                &transaction,
+                block_height,
+                timestamp,
+            ) {
                 Err(_) => return ReturnCode::Invalid,
                 Ok(_) => {
                     // Check recipient account against filter rules.
@@ -198,6 +205,7 @@ impl Mempool {
                     recipient_account.balance(),
                     &transaction,
                     block_height,
+                    timestamp,
                 )
                 .is_err()
             {
@@ -233,7 +241,7 @@ impl Mempool {
                 }
                 // Reject the transaction, if after the intrinsic check, the balance went too low
                 if sender_account
-                    .commit_outgoing_transaction(tx, block_height)
+                    .commit_outgoing_transaction(tx, block_height, timestamp)
                     .is_err()
                 {
                     return ReturnCode::Invalid;
@@ -250,7 +258,7 @@ impl Mempool {
             // Now, check the new transaction.
             let old_sender_balance = sender_account.balance();
             if sender_account
-                .commit_outgoing_transaction(&transaction, block_height)
+                .commit_outgoing_transaction(&transaction, block_height, timestamp)
                 .is_err()
             {
                 return ReturnCode::Invalid; // XXX More specific return code here?
@@ -273,7 +281,7 @@ impl Mempool {
             while let Some(tx) = tx_opt {
                 if tx_count < TRANSACTIONS_PER_SENDER_MAX {
                     if sender_account
-                        .commit_outgoing_transaction(tx, block_height)
+                        .commit_outgoing_transaction(tx, block_height, timestamp)
                         .is_ok()
                     {
                         tx_count += 1;
@@ -358,6 +366,7 @@ impl Mempool {
 
         let mut validator_registry = None;
         let block_height = self.blockchain.block_number() + 1;
+        let timestamp = self.blockchain.timestamp();
 
         let state = self.state.read();
         for tx in state.transactions_sorted_fee.iter() {
@@ -376,7 +385,7 @@ impl Mempool {
                     }
 
                     let sender_account = validator_registry.as_mut().unwrap();
-                    match sender_account.commit_outgoing_transaction(&tx, block_height) {
+                    match sender_account.commit_outgoing_transaction(&tx, block_height, timestamp) {
                         Err(_) => continue, // Ignore transaction.
                         Ok(receipt) => outgoing_receipt = receipt,
                     }
@@ -392,7 +401,7 @@ impl Mempool {
 
                     let recipient_account = validator_registry.as_mut().unwrap();
                     if recipient_account
-                        .commit_incoming_transaction(&tx, block_height)
+                        .commit_incoming_transaction(&tx, block_height, timestamp)
                         .is_err()
                     {
                         // Potentially revert sender side and ignore transaction.
@@ -401,6 +410,7 @@ impl Mempool {
                                 .revert_outgoing_transaction(
                                     &tx,
                                     block_height,
+                                    timestamp,
                                     outgoing_receipt.as_ref(),
                                 )
                                 .unwrap();
@@ -481,6 +491,7 @@ impl Mempool {
         {
             let state = self.state.read();
             let block_height = self.blockchain.block_number() + 1;
+            let timestamp = self.blockchain.timestamp();
 
             for (address, transactions) in state.transactions_by_sender.iter() {
                 // TODO Eliminate copy
@@ -502,7 +513,7 @@ impl Mempool {
                     // TODO Eliminate copy
                     let mut recipient_account = self.blockchain.get_account(&tx.recipient);
                     if recipient_account
-                        .commit_incoming_transaction(&tx, block_height)
+                        .commit_incoming_transaction(&tx, block_height, timestamp)
                         .is_err()
                     {
                         txs_evicted.push(tx.clone());
@@ -515,6 +526,7 @@ impl Mempool {
                             recipient_account.balance(),
                             &tx,
                             block_height,
+                            timestamp,
                         )
                         .is_err()
                     {
@@ -524,7 +536,7 @@ impl Mempool {
 
                     // Check if transaction is still valid for sender.
                     if sender_account
-                        .commit_outgoing_transaction(&tx, block_height)
+                        .commit_outgoing_transaction(&tx, block_height, timestamp)
                         .is_err()
                     {
                         txs_evicted.push(tx.clone());
@@ -567,6 +579,7 @@ impl Mempool {
         let mut removed_transactions = Vec::new();
         let mut restored_transactions = Vec::new();
         let block_height = self.blockchain.block_number() + 1;
+        let timestamp = self.blockchain.timestamp();
 
         // Collect all transactions from reverted blocks that are still valid.
         // Track them by sender and sort them by fee/byte.
@@ -592,7 +605,7 @@ impl Mempool {
                 // TODO Eliminate copy
                 let mut recipient_account = self.blockchain.get_account(&tx.recipient);
                 if recipient_account
-                    .commit_incoming_transaction(&tx, block_height)
+                    .commit_incoming_transaction(&tx, block_height, timestamp)
                     .is_err()
                 {
                     // This transaction cannot be accepted by the recipient anymore.
@@ -606,6 +619,7 @@ impl Mempool {
                         recipient_account.balance(),
                         &tx,
                         block_height,
+                        timestamp,
                     )
                     .is_err()
                 {
@@ -640,6 +654,7 @@ impl Mempool {
                 let (txs_to_add, txs_to_remove) = Self::merge_transactions(
                     sender_account,
                     block_height,
+                    timestamp,
                     existing_txs,
                     &restored_txs,
                 );
@@ -726,6 +741,7 @@ impl Mempool {
     fn merge_transactions<'a>(
         mut sender_account: Account,
         block_height: u32,
+        timestamp: u64,
         old_txs: &BTreeSet<Arc<Transaction>>,
         new_txs: &BTreeSet<&'a Transaction>,
     ) -> (Vec<&'a Transaction>, Vec<Arc<Transaction>>) {
@@ -752,7 +768,7 @@ impl Mempool {
                 if tx_count < TRANSACTIONS_PER_SENDER_MAX {
                     let tx = new_tx.unwrap();
                     if sender_account
-                        .commit_outgoing_transaction(*tx, block_height)
+                        .commit_outgoing_transaction(*tx, block_height, timestamp)
                         .is_ok()
                     {
                         tx_count += 1;
@@ -764,7 +780,7 @@ impl Mempool {
                 let tx = old_tx.unwrap();
                 if tx_count < TRANSACTIONS_PER_SENDER_MAX {
                     if sender_account
-                        .commit_outgoing_transaction(tx, block_height)
+                        .commit_outgoing_transaction(tx, block_height, timestamp)
                         .is_ok()
                     {
                         tx_count += 1;

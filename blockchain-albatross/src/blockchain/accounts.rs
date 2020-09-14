@@ -43,8 +43,13 @@ impl Blockchain {
                 }
 
                 // Commit block to AccountsTree and create the receipts.
-                let receipts =
-                    accounts.commit(txn, &[], &inherents, macro_block.header.block_number);
+                let receipts = accounts.commit(
+                    txn,
+                    &[],
+                    &inherents,
+                    macro_block.header.block_number,
+                    macro_block.header.timestamp,
+                );
 
                 // Macro blocks are final and receipts for the previous batch are no longer necessary
                 // as rebranching across this block is not possible.
@@ -75,6 +80,7 @@ impl Blockchain {
                     &body.transactions,
                     &inherents,
                     micro_block.header.block_number,
+                    micro_block.header.timestamp,
                 );
 
                 // Check if the receipts contain an error.
@@ -132,6 +138,7 @@ impl Blockchain {
             &body.transactions,
             &inherents,
             micro_block.header.block_number,
+            micro_block.header.timestamp,
             &receipts,
         ) {
             panic!("Failed to revert - {}", e);

@@ -41,7 +41,7 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
             return Err(TransactionError::InvalidForRecipient);
         }
 
-        if transaction.data.len() != (20 * 2 + 1 + 32 + 1 + 4) {
+        if transaction.data.len() != (20 * 2 + 1 + 32 + 1 + 8) {
             warn!("Invalid creation data: invalid length");
             return Err(TransactionError::InvalidData);
         }
@@ -158,7 +158,7 @@ pub struct CreationTransactionData {
     pub hash_algorithm: HashAlgorithm,
     pub hash_root: AnyHash,
     pub hash_count: u8,
-    pub timeout: u32,
+    pub timeout: u64,
 }
 
 impl CreationTransactionData {

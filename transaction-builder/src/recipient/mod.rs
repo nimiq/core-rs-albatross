@@ -89,7 +89,7 @@ impl Recipient {
     /// recipient_builder.with_recipient(
     ///     Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap()
     /// );
-    /// recipient_builder.with_timeout_block(100)
+    /// recipient_builder.with_timeout(100)
     ///     .with_blake2b_hash(hash_root, hash_count);
     /// let recipient = recipient_builder.generate();
     /// assert!(recipient.is_ok());

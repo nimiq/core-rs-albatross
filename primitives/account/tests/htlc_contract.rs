@@ -12,7 +12,30 @@ use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm, ProofTyp
 use nimiq_transaction::account::AccountTransactionVerification;
 use nimiq_transaction::{SignatureProof, Transaction, TransactionError, TransactionFlags};
 
-const HTLC: &str = "00000000000000001b215589344cf570d36bec770825eae30b73213924786862babbdb05e7c4430612135eb2a836812303daebe368963c60d22098a5e9f1ebcb8e54d0b7beca942a2a0a9d95391804fe8f01000296350000000000000001";
+const HTLC: &str = "00000000000000001b215589344cf570d36bec770825eae30b73213924786862babbdb05e7c4430612135eb2a836812303daebe368963c60d22098a5e9f1ebcb8e54d0b7beca942a2a0a9d95391804fe8f0100000000000296350000000000000001";
+
+// This function is used to create the HTLC constant above. If you need to generate a new one just
+// uncomment out the test flag.
+//#[test]
+#[allow(dead_code)]
+fn create_serialized_contract() {
+    let contract = HashedTimeLockedContract {
+        balance: Coin::ZERO,
+        sender: Address::from("1b215589344cf570d36bec770825eae30b732139"),
+        recipient: Address::from("24786862babbdb05e7c4430612135eb2a8368123"),
+        hash_algorithm: HashAlgorithm::Sha256,
+        hash_root: AnyHash::from(
+            "daebe368963c60d22098a5e9f1ebcb8e54d0b7beca942a2a0a9d95391804fe8f",
+        ),
+        hash_count: 1,
+        timeout: 169525,
+        total_amount: Coin::from_u64_unchecked(1),
+    };
+    let mut bytes: Vec<u8> = Vec::with_capacity(contract.serialized_size());
+    contract.serialize(&mut bytes).unwrap();
+    println!("{}", hex::encode(bytes));
+    assert!(false);
+}
 
 #[test]
 fn it_can_deserialize_a_htlc() {
@@ -50,7 +73,7 @@ fn it_can_serialize_a_htlc() {
 #[test]
 #[allow(unused_must_use)]
 fn it_can_verify_creation_transaction() {
-    let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE * 2 + AnyHash::SIZE + 6);
+    let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE * 2 + AnyHash::SIZE + 10);
     let sender = Address::from([0u8; 20]);
     let recipient = Address::from([0u8; 20]);
     sender.serialize(&mut data);
@@ -58,7 +81,7 @@ fn it_can_verify_creation_transaction() {
     HashAlgorithm::Blake2b.serialize(&mut data);
     AnyHash::from([0u8; 32]).serialize(&mut data);
     Serialize::serialize(&2u8, &mut data);
-    Serialize::serialize(&1000u32, &mut data);
+    Serialize::serialize(&1000u64, &mut data);
 
     let mut transaction = Transaction::new_contract_creation(
         vec![],
@@ -123,7 +146,7 @@ fn it_can_verify_creation_transaction() {
 #[test]
 #[allow(unused_must_use)]
 fn it_can_create_contract_from_transaction() {
-    let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE * 2 + AnyHash::SIZE + 6);
+    let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE * 2 + AnyHash::SIZE + 10);
     let sender = Address::from([0u8; 20]);
     let recipient = Address::from([0u8; 20]);
     sender.serialize(&mut data);
@@ -131,7 +154,7 @@ fn it_can_create_contract_from_transaction() {
     HashAlgorithm::Blake2b.serialize(&mut data);
     AnyHash::from([0u8; 32]).serialize(&mut data);
     Serialize::serialize(&2u8, &mut data);
-    Serialize::serialize(&1000u32, &mut data);
+    Serialize::serialize(&1000u64, &mut data);
     let transaction = Transaction::new_contract_creation(
         data,
         sender.clone(),
@@ -142,7 +165,7 @@ fn it_can_create_contract_from_transaction() {
         0,
         NetworkId::Dummy,
     );
-    match HashedTimeLockedContract::create(100.try_into().unwrap(), &transaction, 0) {
+    match HashedTimeLockedContract::create(100.try_into().unwrap(), &transaction, 0, 0) {
         Ok(htlc) => {
             assert_eq!(htlc.balance, 100.try_into().unwrap());
             assert_eq!(htlc.sender, sender);
@@ -179,15 +202,15 @@ fn it_does_not_support_incoming_transactions() {
     tx.recipient_type = AccountType::HTLC;
 
     assert_eq!(
-        HashedTimeLockedContract::check_incoming_transaction(&tx, 2),
+        HashedTimeLockedContract::check_incoming_transaction(&tx, 2, 2),
         Err(AccountError::InvalidForRecipient)
     );
     assert_eq!(
-        contract.commit_incoming_transaction(&tx, 2),
+        contract.commit_incoming_transaction(&tx, 2, 2),
         Err(AccountError::InvalidForRecipient)
     );
     assert_eq!(
-        contract.revert_incoming_transaction(&tx, 2, None),
+        contract.revert_incoming_transaction(&tx, 2, 2, None),
         Err(AccountError::InvalidForRecipient)
     );
 }
@@ -451,9 +474,11 @@ fn it_can_apply_and_revert_valid_transaction() {
     tx.proof = proof;
 
     let mut contract = start_contract.clone();
-    contract.commit_outgoing_transaction(&tx, 1).unwrap();
+    contract.commit_outgoing_transaction(&tx, 1, 1).unwrap();
     assert_eq!(contract.balance, 0.try_into().unwrap());
-    contract.revert_outgoing_transaction(&tx, 1, None).unwrap();
+    contract
+        .revert_outgoing_transaction(&tx, 1, 1, None)
+        .unwrap();
     assert_eq!(contract, start_contract);
 
     // early resolve
@@ -466,9 +491,11 @@ fn it_can_apply_and_revert_valid_transaction() {
     tx.proof = proof;
 
     let mut contract = start_contract.clone();
-    contract.commit_outgoing_transaction(&tx, 1).unwrap();
+    contract.commit_outgoing_transaction(&tx, 1, 1).unwrap();
     assert_eq!(contract.balance, 0.try_into().unwrap());
-    contract.revert_outgoing_transaction(&tx, 1, None).unwrap();
+    contract
+        .revert_outgoing_transaction(&tx, 1, 1, None)
+        .unwrap();
     assert_eq!(contract, start_contract);
 
     // timeout resolve
@@ -478,9 +505,11 @@ fn it_can_apply_and_revert_valid_transaction() {
     tx.proof = proof;
 
     let mut contract = start_contract.clone();
-    contract.commit_outgoing_transaction(&tx, 101).unwrap();
+    contract.commit_outgoing_transaction(&tx, 1, 101).unwrap();
     assert_eq!(contract.balance, 0.try_into().unwrap());
-    contract.revert_outgoing_transaction(&tx, 1, None).unwrap();
+    contract
+        .revert_outgoing_transaction(&tx, 1, 1, None)
+        .unwrap();
     assert_eq!(contract, start_contract);
 }
 
@@ -501,11 +530,11 @@ fn it_refuses_invalid_transaction() {
     Serialize::serialize(&recipient_signature_proof, &mut proof);
     tx.proof = proof;
     assert_eq!(
-        start_contract.check_outgoing_transaction(&tx, 101),
+        start_contract.check_outgoing_transaction(&tx, 1, 101),
         Err(AccountError::InvalidForSender)
     );
     assert_eq!(
-        start_contract.commit_outgoing_transaction(&tx, 101),
+        start_contract.commit_outgoing_transaction(&tx, 1, 101),
         Err(AccountError::InvalidForSender)
     );
 
@@ -520,11 +549,11 @@ fn it_refuses_invalid_transaction() {
     Serialize::serialize(&recipient_signature_proof, &mut proof);
     tx.proof = proof;
     assert_eq!(
-        start_contract.check_outgoing_transaction(&tx, 1),
+        start_contract.check_outgoing_transaction(&tx, 1, 1),
         Err(AccountError::InvalidForSender)
     );
     assert_eq!(
-        start_contract.commit_outgoing_transaction(&tx, 1),
+        start_contract.commit_outgoing_transaction(&tx, 1, 1),
         Err(AccountError::InvalidForSender)
     );
 
@@ -539,11 +568,11 @@ fn it_refuses_invalid_transaction() {
     Serialize::serialize(&sender_signature_proof, &mut proof);
     tx.proof = proof;
     assert_eq!(
-        start_contract.check_outgoing_transaction(&tx, 1),
+        start_contract.check_outgoing_transaction(&tx, 1, 1),
         Err(AccountError::InvalidSignature)
     );
     assert_eq!(
-        start_contract.commit_outgoing_transaction(&tx, 1),
+        start_contract.commit_outgoing_transaction(&tx, 1, 1),
         Err(AccountError::InvalidSignature)
     );
 
@@ -563,14 +592,14 @@ fn it_refuses_invalid_transaction() {
     Serialize::serialize(&recipient_signature_proof, &mut proof);
     tx.proof = proof;
     assert_eq!(
-        start_contract.check_outgoing_transaction(&tx, 1),
+        start_contract.check_outgoing_transaction(&tx, 1, 1),
         Err(AccountError::InsufficientFunds {
             needed: 500.try_into().unwrap(),
             balance: 0.try_into().unwrap()
         })
     );
     assert_eq!(
-        start_contract.commit_outgoing_transaction(&tx, 1),
+        start_contract.commit_outgoing_transaction(&tx, 1, 1),
         Err(AccountError::InsufficientFunds {
             needed: 500.try_into().unwrap(),
             balance: 0.try_into().unwrap()
@@ -586,11 +615,11 @@ fn it_refuses_invalid_transaction() {
     Serialize::serialize(&recipient_signature_proof, &mut proof);
     tx.proof = proof;
     assert_eq!(
-        start_contract.check_outgoing_transaction(&tx, 1),
+        start_contract.check_outgoing_transaction(&tx, 1, 1),
         Err(AccountError::InvalidSignature)
     );
     assert_eq!(
-        start_contract.commit_outgoing_transaction(&tx, 1),
+        start_contract.commit_outgoing_transaction(&tx, 1, 1),
         Err(AccountError::InvalidSignature)
     );
 
@@ -600,11 +629,11 @@ fn it_refuses_invalid_transaction() {
     Serialize::serialize(&sender_signature_proof, &mut proof);
     tx.proof = proof;
     assert_eq!(
-        start_contract.check_outgoing_transaction(&tx, 1),
+        start_contract.check_outgoing_transaction(&tx, 1, 1),
         Err(AccountError::InvalidForSender)
     );
     assert_eq!(
-        start_contract.commit_outgoing_transaction(&tx, 1),
+        start_contract.commit_outgoing_transaction(&tx, 1, 1),
         Err(AccountError::InvalidForSender)
     );
 
@@ -614,11 +643,11 @@ fn it_refuses_invalid_transaction() {
     Serialize::serialize(&recipient_signature_proof, &mut proof);
     tx.proof = proof;
     assert_eq!(
-        start_contract.check_outgoing_transaction(&tx, 101),
+        start_contract.check_outgoing_transaction(&tx, 1, 101),
         Err(AccountError::InvalidSignature)
     );
     assert_eq!(
-        start_contract.commit_outgoing_transaction(&tx, 101),
+        start_contract.commit_outgoing_transaction(&tx, 1, 101),
         Err(AccountError::InvalidSignature)
     );
 }

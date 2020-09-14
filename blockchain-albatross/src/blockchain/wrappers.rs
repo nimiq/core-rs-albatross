@@ -57,6 +57,11 @@ impl Blockchain {
         self.state.read_recursive().main_chain.head.block_number()
     }
 
+    /// Returns the timestamp at the head of the main chain.
+    pub fn timestamp(&self) -> u64 {
+        self.state.read_recursive().main_chain.head.timestamp()
+    }
+
     /// Returns the view number at the head of the main chain.
     pub fn view_number(&self) -> u32 {
         self.state.read_recursive().main_chain.head.view_number()
