@@ -10,7 +10,7 @@ use network::{Network as GenericNetwork, NetworkConfig};
 use peer_address::services::ServiceFlags;
 use utils::time::OffsetTime;
 #[cfg(feature = "validator")]
-use validator::validator::Validator;
+use validator::validator::Validator as AbstractValidator;
 
 use crate::config::config::{ClientConfig, ProtocolConfig};
 use crate::error::Error;
@@ -19,6 +19,7 @@ use crate::error::Error;
 pub type Mempool = GenericMempool;
 pub type Network = GenericNetwork;
 pub type Consensus = AbstractConsensus<Network>;
+pub type Validator = AbstractValidator<Network, /* TODO */ Network>;
 
 /// Holds references to the relevant structs. This is then Arc'd in `Client` and a nice API is
 /// exposed.
@@ -146,6 +147,10 @@ impl TryFrom<ClientConfig> for ClientInner {
             config.network,
         )?;
 
+        // Mock
+        #[cfg(feature = "validator")]
+        let validator_network = Arc::clone(&network);
+
         // TODO: This will need to be changed from the QuickSync protocol to a more adequate sync
         //       protocol.
         let sync = QuickSync::default();
@@ -153,12 +158,14 @@ impl TryFrom<ClientConfig> for ClientInner {
         let consensus = Consensus::new(environment.clone(), blockchain, mempool, network, sync)?;
 
         #[cfg(feature = "validator")]
-        let validator = config
-            .validator
-            .map(|_config| {
-                Validator::new(Arc::clone(&consensus), validator_key, validator_wallet_key)
-            })
-            .transpose()?;
+        let validator = config.validator.map(|_config| {
+            Arc::new(Validator::new(
+                Arc::clone(&consensus),
+                validator_network,
+                validator_key,
+                validator_wallet_key,
+            ))
+        });
 
         Ok(ClientInner {
             environment,

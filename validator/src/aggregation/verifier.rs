@@ -1,5 +1,6 @@
-use async_trait::async_trait;
 use std::sync::Arc;
+
+use async_trait::async_trait;
 
 use block_albatross::MultiSignature;
 use bls::AggregatePublicKey;
@@ -13,10 +14,7 @@ pub struct MultithreadedVerifier<I: IdentityRegistry> {
 }
 
 impl<I: IdentityRegistry> MultithreadedVerifier<I> {
-    pub fn new(
-        message_hash: Blake2sHash,
-        identity_registry: Arc<I>,
-    ) -> Self {
+    pub fn new(message_hash: Blake2sHash, identity_registry: Arc<I>) -> Self {
         Self {
             message_hash,
             identity_registry,

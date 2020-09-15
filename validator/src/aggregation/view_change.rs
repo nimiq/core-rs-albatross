@@ -1,23 +1,22 @@
 use std::fmt;
 use std::sync::Arc;
 
-use beserial::WriteBytesExt;
-
-// these should be moved here once they are no longer sed by the messages crate.
-use block_albatross::{MultiSignature, SignedViewChange, ViewChange, ViewChangeProof};
-use collections::BitSet;
 use parking_lot::RwLock;
 
-use nimiq_handel::aggregation::Aggregation;
-use nimiq_handel::config::Config;
-use nimiq_handel::evaluator::WeightedVote;
-use nimiq_handel::partitioner::BinomialPartitioner;
-use nimiq_handel::protocol::Protocol;
-use nimiq_handel::store::ReplaceStore;
-use nimiq_hash::{Blake2sHash, Blake2sHasher, Hasher, SerializeContent};
-use nimiq_network_interface::network::Network;
-use nimiq_primitives::policy;
-use nimiq_primitives::slot::{SlotCollection, ValidatorSlots};
+use beserial::WriteBytesExt;
+// these should be moved here once they are no longer used by the messages crate.
+use block_albatross::{MultiSignature, SignedViewChange, ViewChange, ViewChangeProof};
+use collections::BitSet;
+use handel::aggregation::Aggregation;
+use handel::config::Config;
+use handel::evaluator::WeightedVote;
+use handel::partitioner::BinomialPartitioner;
+use handel::protocol::Protocol;
+use handel::store::ReplaceStore;
+use hash::{Blake2sHash, Blake2sHasher, Hasher, SerializeContent};
+use network_interface::network::Network;
+use primitives::policy;
+use primitives::slot::{SlotCollection, ValidatorSlots};
 
 use super::registry::ValidatorRegistry;
 use super::verifier::MultithreadedVerifier;
@@ -42,21 +41,19 @@ impl ViewChangeAggregationProtocol {
         threshold: usize,
         message_hash: Blake2sHash,
     ) -> Self {
-        // aquire lock on validartorPool and read the active validator count
-        let num_validators = validators.len();
-
-        let registry = Arc::new(ValidatorRegistry::new(validators));
-        let partitioner = Arc::new(BinomialPartitioner::new(node_id, num_validators));
+        let partitioner = Arc::new(BinomialPartitioner::new(node_id, validators.len()));
 
         let store = Arc::new(RwLock::new(ReplaceStore::<
             BinomialPartitioner,
             MultiSignature,
-        >::new(partitioner.clone())));
+        >::new(Arc::clone(&partitioner))));
+
+        let registry = Arc::new(ValidatorRegistry::new(validators));
 
         let evaluator = Arc::new(WeightedVote::new(
-            store.clone(),
-            registry.clone(),
-            partitioner.clone(),
+            Arc::clone(&store),
+            Arc::clone(&registry),
+            Arc::clone(&partitioner),
             threshold,
         ));
 
@@ -78,16 +75,16 @@ impl Protocol for ViewChangeAggregationProtocol {
     type Contribution = MultiSignature;
     type Registry = ValidatorRegistry;
     type Verifier = MultithreadedVerifier<Self::Registry>;
-    type Partitioner = BinomialPartitioner;
     type Store = ReplaceStore<Self::Partitioner, Self::Contribution>;
     type Evaluator = WeightedVote<Self::Store, Self::Registry, Self::Partitioner>;
-
-    fn verifier(&self) -> Arc<Self::Verifier> {
-        self.verifier.clone()
-    }
+    type Partitioner = BinomialPartitioner;
 
     fn registry(&self) -> Arc<Self::Registry> {
         self.registry.clone()
+    }
+
+    fn verifier(&self) -> Arc<Self::Verifier> {
+        self.verifier.clone()
     }
 
     fn store(&self) -> Arc<RwLock<Self::Store>> {

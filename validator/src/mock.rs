@@ -8,8 +8,13 @@ use tokio::sync::mpsc;
 
 use block_albatross::{MacroBlock, SignedViewChange, ViewChangeProof};
 use blockchain_albatross::Blockchain;
+use network::Network;
+use network_interface::network::Network as NetworkInterface;
 use primitives::slot::ValidatorSlots;
 use utils::observer::Notifier;
+
+pub trait ValidatorNetwork: NetworkInterface {}
+impl ValidatorNetwork for Network {}
 
 pub struct Tendermint;
 impl Tendermint {

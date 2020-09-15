@@ -11,8 +11,8 @@ use network::error::Error as NetworkError;
 #[cfg(feature = "rpc-server")]
 use rpc_server::error::Error as RpcServerError;
 use utils::key_store::Error as KeyStoreError;
-#[cfg(feature = "validator")]
-use validator::error::Error as ValidatorError;
+// #[cfg(feature = "validator")]
+// use validator::error::Error as ValidatorError;
 
 #[derive(Debug, Fail)]
 pub enum Error {
@@ -37,10 +37,9 @@ pub enum Error {
     #[fail(display = "Config file parsing error: {}", _0)]
     Toml(#[cause] TomlError),
 
-    #[cfg(feature = "validator")]
-    #[fail(display = "Validator error: {}", _0)]
-    Validator(#[cause] ValidatorError),
-
+    // #[cfg(feature = "validator")]
+    // #[fail(display = "Validator error: {}", _0)]
+    // Validator(#[cause] ValidatorError),
     #[cfg(feature = "rpc-server")]
     #[fail(display = "RPC server error: {}", _0)]
     RpcServer(#[cause] RpcServerError),
@@ -106,12 +105,12 @@ impl From<TomlError> for Error {
     }
 }
 
-#[cfg(feature = "validator")]
-impl From<ValidatorError> for Error {
-    fn from(e: ValidatorError) -> Self {
-        Self::Validator(e)
-    }
-}
+// #[cfg(feature = "validator")]
+// impl From<ValidatorError> for Error {
+//     fn from(e: ValidatorError) -> Self {
+//         Self::Validator(e)
+//     }
+// }
 
 #[cfg(feature = "rpc-server")]
 impl From<RpcServerError> for Error {

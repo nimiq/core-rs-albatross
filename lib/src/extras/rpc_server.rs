@@ -45,7 +45,8 @@ pub fn initialize_rpc_server(client: &Client, config: RpcServerConfig) -> Result
     #[cfg(feature = "validator")]
     {
         if let Some(validator) = client.validator() {
-            let block_production_handler = BlockProductionAlbatrossHandler::new(validator);
+            let block_production_handler =
+                BlockProductionAlbatrossHandler::new(validator.signing_key());
             handler.add_module(block_production_handler);
         }
     }
@@ -63,8 +64,11 @@ pub fn initialize_rpc_server(client: &Client, config: RpcServerConfig) -> Result
     let wallet_manager = Arc::clone(&wallet_handler.unlocked_wallets);
     handler.add_module(wallet_handler);
 
-    let mempool_handler =
-        MempoolAlbatrossHandler::new(client.mempool(), client.validator(), Some(wallet_manager));
+    let mempool_handler = MempoolAlbatrossHandler::new(
+        client.mempool(),
+        client.validator().map(|v| v.signing_key()),
+        Some(wallet_manager),
+    );
     handler.add_module(mempool_handler);
 
     Ok(rpc_server)

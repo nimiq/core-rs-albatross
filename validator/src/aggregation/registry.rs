@@ -1,6 +1,6 @@
-use nimiq_bls::PublicKey;
-use nimiq_handel::identity::{IdentityRegistry, WeightRegistry};
-use nimiq_primitives::slot::{SlotBand, SlotCollection, ValidatorSlots};
+use bls::PublicKey;
+use handel::identity::{IdentityRegistry, WeightRegistry};
+use primitives::slot::{SlotBand, SlotCollection, ValidatorSlots};
 
 /// Implementation for handel registry using a `Validators` list.
 pub struct ValidatorRegistry {

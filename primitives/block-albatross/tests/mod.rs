@@ -3,7 +3,7 @@ use std::str::FromStr;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_block_albatross::{
-    IndividualSignature, MacroBlock, MacroExtrinsics, MacroHeader, MultiSignature,
+    IndividualSignature, MacroBlock, MacroBody, MacroHeader, MultiSignature,
 };
 use nimiq_bls::{CompressedPublicKey, KeyPair, Signature};
 use nimiq_collections::bitset::BitSet;

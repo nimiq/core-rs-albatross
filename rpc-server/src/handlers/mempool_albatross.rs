@@ -18,7 +18,6 @@ use transaction::account::staking_contract::{
     IncomingStakingTransactionData, OutgoingStakingTransactionProof, SelfStakingTransactionData,
 };
 use transaction::Transaction;
-use validator::validator::Validator;
 
 use crate::handler::Method;
 use crate::handlers::mempool::MempoolHandler;
@@ -27,7 +26,7 @@ use crate::handlers::Module;
 
 pub struct MempoolAlbatrossHandler {
     pub mempool: Arc<Mempool>,
-    pub validator: Option<Arc<Validator>>,
+    pub validator_key: Option<bls::KeyPair>,
     pub unlocked_wallets: Option<Arc<RwLock<UnlockedWalletManager>>>,
     generic: MempoolHandler,
 }
@@ -35,12 +34,12 @@ pub struct MempoolAlbatrossHandler {
 impl MempoolAlbatrossHandler {
     pub fn new(
         mempool: Arc<Mempool>,
-        validator: Option<Arc<Validator>>,
+        validator_key: Option<bls::KeyPair>,
         unlocked_wallets: Option<Arc<RwLock<UnlockedWalletManager>>>,
     ) -> Self {
         Self {
             mempool: Arc::clone(&mempool),
-            validator,
+            validator_key,
             unlocked_wallets: unlocked_wallets.as_ref().map(Arc::clone),
             generic: MempoolHandler::new(mempool, unlocked_wallets),
         }
@@ -155,9 +154,9 @@ impl MempoolAlbatrossHandler {
     /// - sender: NIM address used to create this transaction
     /// - fee: Fee for transaction in Luna
     pub(crate) fn retire_validator(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        // Make sure a validator object is available
-        let validator = self
-            .validator
+        // Make sure a validator key is available
+        let validator_key = self
+            .validator_key
             .as_ref()
             .ok_or_else(|| object! {"message" => "No validator configured"})?;
 
@@ -170,7 +169,7 @@ impl MempoolAlbatrossHandler {
             .map_err(|e| object! {"message" => format!("Invalid fee: {}", e)})?;
 
         let mut recipient = self.get_staking_contract_recipient();
-        recipient.retire_validator(&validator.validator_key.public_key);
+        recipient.retire_validator(&validator_key.public_key);
 
         let tx = self.build_validator_signalling_transaction(sender, recipient, fee)?;
         self.generic.push_transaction(tx)
@@ -184,9 +183,9 @@ impl MempoolAlbatrossHandler {
         &self,
         params: &[JsonValue],
     ) -> Result<JsonValue, JsonValue> {
-        // Make sure a validator object is available
-        let validator = self
-            .validator
+        // Make sure a validator key is available
+        let validator_key = self
+            .validator_key
             .as_ref()
             .ok_or_else(|| object! {"message" => "No validator configured"})?;
 
@@ -199,7 +198,7 @@ impl MempoolAlbatrossHandler {
             .map_err(|e| object! {"message" => format!("Invalid fee: {}", e)})?;
 
         let mut recipient = self.get_staking_contract_recipient();
-        recipient.reactivate_validator(&validator.validator_key.public_key);
+        recipient.reactivate_validator(&validator_key.public_key);
 
         let tx = self.build_validator_signalling_transaction(sender, recipient, fee)?;
         self.generic.push_transaction(tx)
@@ -210,9 +209,9 @@ impl MempoolAlbatrossHandler {
     /// - sender: NIM address used to create this transaction
     /// - fee: Fee for transaction in Luna
     pub(crate) fn unpark_validator(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        // Make sure a validator object is available
-        let validator = self
-            .validator
+        // Make sure a validator key is available
+        let validator_key = self
+            .validator_key
             .as_ref()
             .ok_or_else(|| object! {"message" => "No validator configured"})?;
 
@@ -225,7 +224,7 @@ impl MempoolAlbatrossHandler {
             .map_err(|e| object! {"message" => format!("Invalid fee: {}", e)})?;
 
         let mut recipient = self.get_staking_contract_recipient();
-        recipient.unpark_validator(&validator.validator_key.public_key);
+        recipient.unpark_validator(&validator_key.public_key);
 
         let tx = self.build_validator_signalling_transaction(sender, recipient, fee)?;
         self.generic.push_transaction(tx)
@@ -256,7 +255,7 @@ impl MempoolAlbatrossHandler {
             .with_recipient(recipient.generate().unwrap());
 
         let mut proof_builder = tx_builder.generate().unwrap().unwrap_signalling();
-        proof_builder.sign_with_validator_key_pair(&self.validator.as_ref().unwrap().validator_key);
+        proof_builder.sign_with_validator_key_pair(&self.validator_key.as_ref().unwrap());
         let mut proof_builder = proof_builder.generate().unwrap().unwrap_basic();
         proof_builder.sign_with_key_pair(&wallet_account.key_pair);
         proof_builder

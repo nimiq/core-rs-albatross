@@ -14,8 +14,7 @@ use mempool::Mempool;
 use utils::time::systemtime_to_timestamp;
 use vrf::VrfSeed;
 
-use crate::validator2::mock::ViewChangeHandel;
-use crate::validator2::validator::ValidatorNetwork;
+use crate::mock::{ValidatorNetwork, ViewChangeHandel};
 
 pub(crate) enum ProduceMicroBlockEvent {
     MicroBlock(MicroBlock),

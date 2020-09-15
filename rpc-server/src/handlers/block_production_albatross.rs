@@ -6,41 +6,41 @@ use std::sync::Arc;
 
 use json::{object, JsonValue};
 
-use validator::validator::Validator;
-
 use crate::handler::Method;
 use crate::handlers::Module;
 
 pub struct BlockProductionAlbatrossHandler {
-    validator: Arc<Validator>,
+    validator_key: bls::KeyPair,
 }
 
 impl BlockProductionAlbatrossHandler {
-    pub fn new(validator: Arc<Validator>) -> Self {
-        Self { validator }
+    pub fn new(validator_key: bls::KeyPair) -> Self {
+        Self { validator_key }
     }
 
     fn validator_key(&self, _params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        let key_pair = &self.validator.validator_key;
-
         // Compute proof of knowledge.
         // TODO: Do we need this at all? This is only needed to sign staking transactions, and
         // that can be done with the mempool module.
-        let proof_of_knowledge = key_pair.sign(&key_pair.public_key).compress();
+        let proof_of_knowledge = self
+            .validator_key
+            .sign(&self.validator_key.public_key)
+            .compress();
 
         Ok(object! {
-            "validatorKey" => self.validator.validator_key.public_key.to_string(),
+            "validatorKey" => self.validator_key.public_key.to_string(),
             "proofOfKnowledge" => proof_of_knowledge.to_string(),
         })
     }
 
     fn proof_of_knowledge(&self, _params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        let key_pair = &self.validator.validator_key;
-
         // Compute proof of knowledge.
         // TODO: Do we need this at all? This is only needed to sign staking transactions, and
         // that can be done with the mempool module.
-        let proof_of_knowledge = key_pair.sign(&key_pair.public_key).compress();
+        let proof_of_knowledge = self
+            .validator_key
+            .sign(&self.validator_key.public_key)
+            .compress();
 
         Ok(object! {
             "proofOfKnowledge" => proof_of_knowledge.to_string(),

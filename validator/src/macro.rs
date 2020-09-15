@@ -7,7 +7,7 @@ use futures::Future;
 use block_albatross::MacroBlock;
 
 pub(crate) struct ProduceMacroBlock {
-    tendermint: BoxFuture<'static, Result<MacroBlock, ()>>,
+    //tendermint: BoxFuture<'static, Result<MacroBlock, ()>>,
 }
 
 impl ProduceMacroBlock {

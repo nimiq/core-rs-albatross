@@ -27,10 +27,10 @@ use consensus_albatross::Consensus;
 use hash::{Blake2bHash, Hash};
 use network::Network;
 use utils::unique_id::UniqueId;
-#[cfg(feature = "validator")]
-use validator::validator::Validator;
-#[cfg(feature = "validator")]
-use validator::validator_network::ValidatorNetworkEvent;
+// #[cfg(feature = "validator")]
+// use validator::validator::Validator;
+// #[cfg(feature = "validator")]
+// use validator::validator_network::ValidatorNetworkEvent;
 
 pub type WsRpcServerFuture = Box<dyn Future<Item = (), Error = ()> + Send + Sync + 'static>;
 
@@ -159,20 +159,20 @@ impl WsRpcServer {
             });
     }
 
-    #[cfg(feature = "validator")]
-    pub fn register_validator(&self, validator: Arc<Validator>) {
-        let connections_listener = Arc::clone(&self.connections);
-
-        validator.validator_network.notifier.write().register(
-            move |event: &ValidatorNetworkEvent| {
-                if !connections_listener.read().is_empty() {
-                    if let Some(message) = Self::map_validator_event(event) {
-                        Self::broadcast_message(&connections_listener, message)
-                    }
-                }
-            },
-        );
-    }
+    // #[cfg(feature = "validator")]
+    // pub fn register_validator(&self, validator: Arc<Validator>) {
+    //     let connections_listener = Arc::clone(&self.connections);
+    //
+    //     validator.validator_network.notifier.write().register(
+    //         move |event: &ValidatorNetworkEvent| {
+    //             if !connections_listener.read().is_empty() {
+    //                 if let Some(message) = Self::map_validator_event(event) {
+    //                     Self::broadcast_message(&connections_listener, message)
+    //                 }
+    //             }
+    //         },
+    //     );
+    // }
 
     fn map_blockchain_event(event: &BlockchainEvent) -> Option<JsonValue> {
         Some(match event {
@@ -217,29 +217,29 @@ impl WsRpcServer {
         })
     }
 
-    #[cfg(feature = "validator")]
-    fn map_validator_event(event: &ValidatorNetworkEvent) -> Option<JsonValue> {
-        Some(match event {
-            ValidatorNetworkEvent::PbftProposal(proposal) => object! {
-                "eventType" => "pbftProposal",
-                "hash" => proposal.header.hash::<Blake2bHash>().to_string(),
-                "blockNumber" => proposal.header.block_number,
-            },
-            ValidatorNetworkEvent::PbftUpdate(event) => object! {
-                "eventType" => "pbftUpdate",
-                "hash" => event.hash.to_string(),
-                "prepareVotes" => event.prepare_votes,
-                "commitVotes" => event.commit_votes,
-            },
-            ValidatorNetworkEvent::ViewChangeUpdate(event) => object! {
-                "eventType" => "viewChangeUpdate",
-                "blockNumber" => event.view_change.block_number,
-                "newViewNumber" => event.view_change.new_view_number,
-                "votes" => event.votes,
-            },
-            _ => return None,
-        })
-    }
+    // #[cfg(feature = "validator")]
+    // fn map_validator_event(event: &ValidatorNetworkEvent) -> Option<JsonValue> {
+    //     Some(match event {
+    //         ValidatorNetworkEvent::PbftProposal(proposal) => object! {
+    //             "eventType" => "pbftProposal",
+    //             "hash" => proposal.header.hash::<Blake2bHash>().to_string(),
+    //             "blockNumber" => proposal.header.block_number,
+    //         },
+    //         ValidatorNetworkEvent::PbftUpdate(event) => object! {
+    //             "eventType" => "pbftUpdate",
+    //             "hash" => event.hash.to_string(),
+    //             "prepareVotes" => event.prepare_votes,
+    //             "commitVotes" => event.commit_votes,
+    //         },
+    //         ValidatorNetworkEvent::ViewChangeUpdate(event) => object! {
+    //             "eventType" => "viewChangeUpdate",
+    //             "blockNumber" => event.view_change.block_number,
+    //             "newViewNumber" => event.view_change.new_view_number,
+    //             "votes" => event.votes,
+    //         },
+    //         _ => return None,
+    //     })
+    // }
 
     fn broadcast_message(connections: &WsRpcConnections, message: JsonValue) {
         // Convert JSON message to Websocket TEXT frame

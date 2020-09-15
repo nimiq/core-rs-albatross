@@ -18,7 +18,8 @@ pub fn initialize_ws_rcp_server(
     #[cfg(feature = "validator")]
     {
         if let Some(validator) = client.validator() {
-            server.register_validator(validator)
+            // FIXME
+            // server.register_validator(validator)
         }
     }
 

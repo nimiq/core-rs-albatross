@@ -25,8 +25,6 @@ rand = "0.7"
 tokio = { version = "0.2", features = ["rt-core"] }
 
 beserial = { path = "../beserial", version = "0.1" }
-beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
-nimiq-account = { path = "../primitives/account", version = "0.1" }
 nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }
 nimiq-block-production-albatross = { path = "../block-production-albatross", version = "0.1" }
 nimiq-blockchain-albatross = { path = "../blockchain-albatross", version = "0.1" }
@@ -37,16 +35,13 @@ nimiq-database = { path = "../database", version = "0.1", features = ["full-nimi
 nimiq-genesis = { path = "../genesis", version = "0.1" }
 nimiq-handel = { path = "../handel", version = "0.1" }
 nimiq-hash = { path = "../hash", version = "0.1" }
-nimiq-hash_derive = { path = "../hash/hash_derive", version = "0.1" }
 nimiq-keys = { path = "../keys", version = "0.1" }
 nimiq-macros = { path = "../macros", version = "0.1" }
 nimiq-mempool = { path = "../mempool", version = "0.1" }
 nimiq-messages = { path = "../messages", version = "0.1" }
 nimiq-network-albatross = { path = "../network-albatross", version = "0.1" }
 nimiq-network-interface = { path = "../network-interface", version = "0.1" }
-nimiq-peer-address = { path = "../peer-address", version = "0.1" }
 nimiq-primitives = { path = "../primitives", version = "0.1" }
-nimiq-transaction-builder = { path = "../transaction-builder", version = "0.1" }
 nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "timers", "time", "mutable-once", "throttled-queue", "rate-limit"] }
 nimiq-vrf = { path = "../vrf", version = "0.1" }
 
