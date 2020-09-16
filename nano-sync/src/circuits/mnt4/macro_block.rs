@@ -365,7 +365,7 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         // Verifying the SNARK proof. This is a proof that the aggregate public keys chunks are indeed
         // correct. It simply takes the public keys and the signer bitmaps and recalculates the aggregate
         // public keys chunks, then compares them to the aggregate public keys chunks given as public input.
-        // Internally, this SNARK circuit is very complex. See the PKTree0Circuit for more details.
+        // Internally, this SNARK circuit is very complex. See the PKTreeLeafCircuit for more details.
         next_cost_analysis!(cs, cost, || { "Verify SNARK proof" });
 
         let mut proof_inputs =

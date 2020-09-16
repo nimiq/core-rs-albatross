@@ -1,8 +1,8 @@
 use algebra::mnt6_753::G2Projective;
 
 use crate::constants::POINT_CAPACITY;
-use crate::primitives::{merkle_tree_construct, pedersen_generators, pedersen_hash};
-use crate::utils::{bytes_to_bits, serialize_g1_mnt6, serialize_g2_mnt6};
+use crate::primitives::{pedersen_generators, pedersen_hash, pk_tree_construct};
+use crate::utils::{bytes_to_bits, serialize_g1_mnt6};
 
 /// This gadget is meant to calculate the "state commitment" off-circuit, which is simply a commitment,
 /// for a given block, of the block number concatenated with the root of a Merkle tree over the public
@@ -10,33 +10,9 @@ use crate::utils::{bytes_to_bits, serialize_g1_mnt6, serialize_g2_mnt6};
 /// block number and the Merkle tree root and feed it to the Pedersen hash function. Lastly we
 /// serialize the output and convert it to bytes. This provides an efficient way of compressing the
 /// state and representing it across different curves.
-pub fn state_commitment(
-    block_number: u32,
-    public_keys: Vec<G2Projective>,
-    tree_size: usize,
-) -> Vec<u8> {
-    // Checking that the number of leaves is a power of two.
-    assert!(((tree_size & (tree_size - 1)) == 0));
-
-    // Checking that the number of public keys is a multiple of the number of leaves.
-    assert_eq!(public_keys.len() % tree_size, 0);
-
+pub fn state_commitment(block_number: u32, public_keys: Vec<G2Projective>) -> Vec<u8> {
     // Construct the Merkle tree over the public keys.
-    let mut bytes: Vec<u8> = Vec::new();
-
-    for i in 0..public_keys.len() {
-        bytes.extend_from_slice(serialize_g2_mnt6(public_keys[i]).as_ref());
-    }
-
-    let bits = bytes_to_bits(&bytes);
-
-    let mut inputs = Vec::new();
-
-    for i in 0..tree_size {
-        inputs.push(bits[i * tree_size..(i + 1) * tree_size].to_vec());
-    }
-
-    let root = merkle_tree_construct(inputs);
+    let root = pk_tree_construct(public_keys);
 
     // Serialize the block number and the Merkle tree root into bits.
     let mut bytes: Vec<u8> = vec![];
