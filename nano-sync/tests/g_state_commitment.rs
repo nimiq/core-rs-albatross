@@ -8,6 +8,7 @@ use r1cs_std::prelude::{AllocGadget, UInt32, UInt8};
 use r1cs_std::test_constraint_system::TestConstraintSystem;
 use rand::RngCore;
 
+use nimiq_nano_sync::constants::{PK_TREE_BREADTH, VALIDATOR_SLOTS};
 use nimiq_nano_sync::gadgets::mnt4::StateCommitmentGadget;
 use nimiq_nano_sync::primitives::{merkle_tree_construct, pedersen_generators, state_commitment};
 use nimiq_nano_sync::utils::{bytes_to_bits, serialize_g2_mnt6};
@@ -28,13 +29,13 @@ fn state_commitment_works() {
     let x = Fr::from_random_bytes(&bytes).unwrap();
 
     let g2_point = G2Projective::prime_subgroup_generator().mul(x);
-    let public_keys = vec![g2_point; 16];
+    let public_keys = vec![g2_point; VALIDATOR_SLOTS];
     let block_number = 42;
 
-    let tree_size = 8;
+    let tree_size = PK_TREE_BREADTH;
 
     // Evaluate state commitment using the primitive version.
-    let primitive_out = state_commitment(block_number, public_keys.clone(), tree_size);
+    let primitive_out = state_commitment(block_number, public_keys.clone());
 
     // Convert the result to a UInt8 for easier comparison.
     let mut primitive_out_var: Vec<UInt8> = Vec::new();
