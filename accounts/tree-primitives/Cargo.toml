@@ -27,3 +27,5 @@ nimiq-keys = { path = "../../keys", version = "0.1" }
 
 [dev-dependencies]
 nimiq-primitives = { path = "../../primitives", version = "0.1", features = ["coin"] }
+nimiq-account = { path = "../../primitives/account", version = "0.1" }
+nimiq-transaction = { path = "../../primitives/transaction", version = "0.1" }

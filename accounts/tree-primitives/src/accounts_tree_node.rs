@@ -337,15 +337,20 @@ mod tests {
     use account::Account;
 
     use super::*;
+    use nimiq_account::{BasicAccount, HashedTimeLockedContract, VestingContract};
+    use nimiq_keys::Address;
+    use nimiq_primitives::coin::Coin;
+    use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm};
+    use nimiq_transaction::account::vesting_contract::VestingContractVerifier;
 
     const EMPTY_ROOT: &str = "000000";
     const ROOT: &str = "0000100130038679a597d998138965b1793503993691e50d3910347f2e6274327e0806c72d01311f5fec71d6df5709e7adb711835a80da5cca8ce27896a3e4a241977f62c142eb0132ef92a236c7622e6790bf8cfd13084488aa13d46109ecbbcca4579a4de8da2bdf01330ca9352121ed6a6ab793e124fb6453d96886cfdb9b8a399176ebc791313fd93001342161b614ecf10695066f82254149101292df15a8c7592ae3b44a2839247eeb1a01353604eb34e8720018f389a124eb7c05997b02c345a3f35ae06138584bb849d1b90136cfdf697dced7f0c07a09fdf2a7ba11641575205080cd9179f182a96ea01a69ca0137aea67da2ffc348458e4d8444477be2d6720da53c18414e0f6aed72ba4b5fd8b801383a6fc24a01fb88dc151dcc4d861e61e6951312c07be024d4df52ef5821dd77110139113ecaa04dfeeccef55576e7edc42a882cf9abb166509aca9598eb1b07b32f9a0161043cf8dd6f459a1edfdd1c7c25bd94263e0d00e650912967bb54ff899aa101bf01621cf41c547dba18db0b92b09a59d73c64e1be0f026ffcc7f56aad1f91938f07bd0163f4f3a285954a201a850e4331c7eeace387a83556dbac3c8ada406630b231110e0164297b13179a75cb0dd2288297d167c59cfd9fd29e20a0a20ad9a3c7e8f97ce308016596ee021457f86b14100eebe16efbe1c207f5914f59582cf7f64c986a3dca53040166ba6e9a80a103cac67f82938f6d6a63f1c87b9f4d1e06161ee63943461199b46e";
     const BRANCH_1: &str = "0003303032042530373864613866623936613539623364336535626632346131376334636135363130386334702543c7372bc57ca277115b4af975710ff9c0eb3d5f79f7cca53fb1d4e92e092539626637663639373131653835663135663166366230303362363438616234623061393837b18779913cb391d619ca4752d7119a075a5a00d1d14a05ffe65a0dd5c82e6f1a2563643437663164623461623133616532366262616637343939363037653563343237623039c510c8b8ca790c0a1769a0846db3da72a5c5e93d52c9ff81e6bbd1ed243bc4bd2564383935666333356461643266626332383834356163343862353962303231316264646634bb0a0e5467a7ae4ae4f67a7e531c5928e4edd095dad5b0a49dc0b8b645b1f116";
-    const TERMINAL_BASIC: &str = "ff2830303130333137646334316666333130333830373566313432626261373237336133366539653630000000000023314350";
-    const TERMINAL_VESTING: &str = "ff28383837613861303933643062346264383632623734316563323662613862663535373236313831360100000022ecb25c00ddf7adb0d0a547af45fd75f5baaa015d20a1bf59000000010001fa400000001176592e0000000022ecb25c00";
-    const TERMINAL_HTLC: &str = "ff2830326436663565356138643834623462353232616133343737653437353464336635353836616265020000000000000001882b67dded32f197ef32ac605e19b163d02f796a882b67dded32f197ef32ac605e19b163d02f796a03ee8cda12a177778c0dbbb81af62edcd7fb3cf1f50f06653c8d92dcc22130b88801000231460000000000000001";
+    const TERMINAL_BASIC: &str = "ff28666433346162373236356130653438633435346363626634633963363164666466363866396132320000000000000005dc";
+    const TERMINAL_VESTING: &str = "ff28666433346162373236356130653438633435346363626634633963363164666466363866396132320100002fbf9bd9c800fd34ab7265a0e48c454ccbf4c9c61dfdf68f9a220000000000000001000000000003f480000002632e314a0000002fbf9bd9c800";
+    const TERMINAL_HTLC: &str = "ff28666433346162373236356130653438633435346363626634633963363164666466363866396132320200000000000000001b215589344cf570d36bec770825eae30b73213924786862babbdb05e7c4430612135eb2a836812303daebe368963c60d22098a5e9f1ebcb8e54d0b7beca942a2a0a9d95391804fe8f0100000000000296350000000000000001";
 
-    //#[test]
+    #[test]
     fn it_can_calculate_hash() {
         let mut node =
             AccountsTreeNode::<Account>::deserialize_from_vec(&hex::decode(EMPTY_ROOT).unwrap())
@@ -371,21 +376,84 @@ mod tests {
             AccountsTreeNode::deserialize_from_vec(&hex::decode(TERMINAL_BASIC).unwrap()).unwrap();
         assert_eq!(
             node.hash::<Blake2bHash>(),
-            "3b1fcdc81825649f84a8dbf529b2677b4e5e866da96ee874c0b82f68b1afa7a3".into()
+            "7c4b904074d07912698661ffcdfa8c0bf17ee1c3c0d6aae230e3b53ce7f23cf2".into()
         );
 
         node = AccountsTreeNode::deserialize_from_vec(&hex::decode(TERMINAL_VESTING).unwrap())
             .unwrap();
         assert_eq!(
             node.hash::<Blake2bHash>(),
-            "aa73e73d559902bdd523b7a79962f3681d7431365999c49718fe5ac591c9daa7".into()
+            "45a043a02ff6e805734bee866bce8013c3272dcda4dbe063af142a6407896288".into()
         );
 
         node =
             AccountsTreeNode::deserialize_from_vec(&hex::decode(TERMINAL_HTLC).unwrap()).unwrap();
         assert_eq!(
             node.hash::<Blake2bHash>(),
-            "7b27f721750a0413df093e278000018f1293dd46eb246a21c053fa91e27ccaa5".into()
+            "b297ef941fb43fbd5d2afde680fb54a3e048b99343c471d404f81736eb1ea9d7".into()
         );
+    }
+
+    // This function is used to create the terminal node constants above. If you need to
+    // generate new ones just uncomment out the test flag.
+    //#[test]
+    #[allow(dead_code)]
+    fn create_terminal_constants() {
+        let basic = BasicAccount {
+            balance: Coin::from_u64_unchecked(1500),
+        };
+
+        let account = Account::Basic(basic);
+
+        terminal_node_printer(account, "Basic");
+
+        let vesting = VestingContract {
+            balance: Coin::from_u64_unchecked(52500000000000),
+            owner: Address::from("fd34ab7265a0e48c454ccbf4c9c61dfdf68f9a22"),
+            start_time: 1,
+            time_step: 259200,
+            step_amount: Coin::from_u64_unchecked(2625000000000),
+            total_amount: Coin::from_u64_unchecked(52500000000000),
+        };
+
+        let account = Account::Vesting(vesting);
+
+        terminal_node_printer(account, "Vesting");
+
+        let htlc = HashedTimeLockedContract {
+            balance: Coin::ZERO,
+            sender: Address::from("1b215589344cf570d36bec770825eae30b732139"),
+            recipient: Address::from("24786862babbdb05e7c4430612135eb2a8368123"),
+            hash_algorithm: HashAlgorithm::Sha256,
+            hash_root: AnyHash::from(
+                "daebe368963c60d22098a5e9f1ebcb8e54d0b7beca942a2a0a9d95391804fe8f",
+            ),
+            hash_count: 1,
+            timeout: 169525,
+            total_amount: Coin::from_u64_unchecked(1),
+        };
+
+        let account = Account::HTLC(htlc);
+
+        terminal_node_printer(account, "HTLC");
+
+        assert!(false);
+    }
+
+    fn terminal_node_printer(account: Account, name: &str) {
+        let nibbles =
+            AddressNibbles::from(&Address::from("fd34ab7265a0e48c454ccbf4c9c61dfdf68f9a22"));
+
+        let node = AccountsTreeNode::new_terminal(nibbles, account);
+
+        let mut bytes: Vec<u8> = Vec::with_capacity(node.serialized_size());
+
+        node.serialize(&mut bytes).unwrap();
+
+        println!("Serialized {} node:\n{}", name, hex::encode(bytes));
+
+        let hash = node.hash::<Blake2bHash>();
+
+        println!("{} node hash:\n{}", name, hex::encode(hash.as_bytes()));
     }
 }
