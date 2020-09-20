@@ -18,9 +18,9 @@ is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-futures = "0.1"
+futures = "0.3"
 log = "0.4"
-tokio = "0.1"
+tokio = { version = "0.2", features = ["rt-threaded", "time"] }
 
 [dependencies.nimiq-lib]
 path = "../lib"
