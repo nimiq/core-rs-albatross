@@ -41,6 +41,7 @@ members = [
   "primitives/transaction",
   #"rpc-server",
   "tools",
+  "tendermint",
   "transaction-builder",
   "utils",
   "validator",
