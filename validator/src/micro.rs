@@ -14,7 +14,8 @@ use mempool::Mempool;
 use utils::time::systemtime_to_timestamp;
 use vrf::VrfSeed;
 
-use crate::mock::{ValidatorNetwork, ViewChangeHandel};
+use crate::aggregation::view_change::ViewChangeAggregation;
+use crate::mock::ValidatorNetwork;
 
 pub(crate) enum ProduceMicroBlockEvent {
     MicroBlock(MicroBlock),
@@ -114,7 +115,7 @@ impl<TValidatorNetwork: ValidatorNetwork> NextProduceMicroBlockEvent<TValidatorN
         )
     }
 
-    fn change_view(&self) -> impl Future<Output = (u32, ViewChangeProof)> {
+    async fn change_view(&self) -> (u32, ViewChangeProof) {
         let new_view_number = self.view_number + 1;
         let view_change = ViewChange {
             block_number: self.block_number,
@@ -126,10 +127,18 @@ impl<TValidatorNetwork: ValidatorNetwork> NextProduceMicroBlockEvent<TValidatorN
             &self.signing_key.secret_key,
             self.validator_id,
         );
-        // TODO get at init time??
+
+        // TODO get at init time?
         let active_validators = self.blockchain.current_validators().clone();
-        ViewChangeHandel::new(signed_view_change, self.validator_id, active_validators)
-            .map(move |proof| (new_view_number, proof))
+        let view_change_proof = ViewChangeAggregation::start(
+            signed_view_change,
+            self.validator_id,
+            active_validators,
+            Arc::clone(&self.network),
+        )
+        .await;
+
+        (new_view_number, view_change_proof)
     }
 }
 

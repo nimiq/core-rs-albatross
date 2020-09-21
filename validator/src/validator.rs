@@ -203,7 +203,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
     }
 
     fn poll_macro(&mut self, cx: &mut Context<'_>) {
-        // TODO
+        unimplemented!()
     }
 
     fn poll_micro(&mut self, cx: &mut Context<'_>) {
@@ -211,7 +211,11 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         while let Poll::Ready(Some(event)) = micro_producer.poll_next_unpin(cx) {
             match event {
                 ProduceMicroBlockEvent::MicroBlock(block) => {
-                    self.consensus.blockchain.push(Block::Micro(block));
+                    self.consensus
+                        .blockchain
+                        .push(Block::Micro(block))
+                        .map_err(|e| error!("Failed to push our block onto the chain: {:?}", e))
+                        .ok();
                 }
                 ProduceMicroBlockEvent::ViewChange(new_view_number, view_change_proof) => {
                     self.micro_state.view_number = new_view_number;

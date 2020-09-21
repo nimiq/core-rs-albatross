@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use failure::_core::pin::Pin;
 use futures::task::{Context, Poll};
-use futures::{executor, Future, SinkExt, Stream};
+use futures::{executor, Future, Stream};
 use parking_lot::Mutex;
 use tokio::sync::mpsc;
 
@@ -35,7 +35,7 @@ impl ViewChangeHandel {
     pub fn new(
         signed_view_change: SignedViewChange,
         validator_id: u16,
-        active_validator: ValidatorSlots,
+        active_validators: ValidatorSlots,
     ) -> Self {
         unimplemented!()
     }

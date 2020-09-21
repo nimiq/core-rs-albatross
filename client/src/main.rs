@@ -59,7 +59,7 @@ fn main_inner() -> Result<(), Error> {
 
     // Create the "monitor" future which never completes to keep the client alive.
     // This closure is executed after the client has been initialized.
-    // TODO Get rid of this. Make the Client a future instead.
+    // TODO Get rid of this. Make the Client a future/stream instead.
     let create_monitor_future = move |client: Client| {
         let mut statistics_interval = config_file.log.statistics;
         let mut show_statistics = true;
