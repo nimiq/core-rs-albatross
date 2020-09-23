@@ -1,7 +1,10 @@
 use std::fmt::{Display, Error, Formatter};
 use std::str::FromStr;
 
+use thiserror::Error;
+
 use beserial::{Deserialize, Serialize};
+
 
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[repr(u8)]
@@ -23,8 +26,8 @@ impl NetworkId {
     }
 }
 
-#[derive(Fail, Debug)]
-#[fail(display = "Input is not a valid network name: {}", _0)]
+#[derive(Error, Debug)]
+#[error("Input is not a valid network name: {0}")]
 pub struct NetworkIdParseError(String);
 
 impl FromStr for NetworkId {

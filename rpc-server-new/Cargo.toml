@@ -1,0 +1,50 @@
+[package]
+name = "nimiq-rpc-server"
+version = "0.1.0"
+authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
+license = "Apache-2.0"
+edition = "2018"
+description = "JSON RPC server for the Nimiq Rust implementation"
+homepage = "https://nimiq.com"
+repository = "https://github.com/nimiq/core-rs-albatross"
+categories = ["cryptography::cryptocurrencies"]
+keywords = ["nimiq", "cryptocurrency", "blockchain"]
+
+[badges]
+travis-ci = { repository = "nimiq/core-rs", branch = "master" }
+is-it-maintained-issue-resolution = { repository = "nimiq/core-rs" }
+is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
+maintenance = { status = "experimental" }
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_with = "1.4"
+thiserror = "1.0"
+async-trait = "0.1"
+tokio = "0.2"
+hex = "0.4.2"
+log = "0.4"
+parking_lot = "0.11"
+
+beserial = { path = "../beserial" }
+nimiq-jsonrpc-core = { git = "https://github.com/nimiq/jsonrpc.git" }
+nimiq-jsonrpc-derive = { git = "https://github.com/nimiq/jsonrpc.git" }
+nimiq-jsonrpc-server = { git = "https://github.com/nimiq/jsonrpc.git" }
+nimiq-primitives = { path = "../primitives", features = ["coin", "account", "serde-derive"] }
+nimiq-account = { path = "../primitives/account" }
+nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1", features = ["serde-derive"] }
+nimiq-blockchain-albatross = { path = "../blockchain-albatross" }
+nimiq-mempool = { path = "../mempool" }
+nimiq-hash = { path = "../hash", features = ["serde-derive"] }
+nimiq-vrf = { path = "../vrf", features = ["serde-derive"] }
+nimiq-bls = { path = "../bls", features = ["serde-derive"] }
+nimiq-keys = { path = "../keys", features = ["serde-derive"] }
+nimiq-utils = { path = "../utils", features = ["otp"] }
+nimiq-transaction = { path = "../primitives/transaction", features = ["serde-derive"] }
+nimiq-validator = { path = "../validator", version = "0.1", optional = true }
+nimiq-collections = { path = "../collections", features = ["serde-derive"] }
+nimiq-database = { path = "../database" }
+nimiq-wallet = { path = "../wallet" }
+
+[features]
+validator = ["nimiq-validator"]

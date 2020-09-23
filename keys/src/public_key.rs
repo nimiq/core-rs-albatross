@@ -37,6 +37,7 @@ impl PublicKey {
         Ok(PublicKey(ed25519_dalek::PublicKey::from_bytes(bytes)?))
     }
 
+    #[inline]
     pub fn to_hex(&self) -> String {
         hex::encode(self.as_bytes())
     }
@@ -129,3 +130,34 @@ impl SerializeContent for PublicKey {
 // This is a different Hash than the std Hash.
 #[allow(clippy::derive_hash_xor_eq)] // TODO: Shouldn't be necessary
 impl Hash for PublicKey {}
+
+
+#[cfg(feature = "serde-derive")]
+mod serde_derive {
+    use serde::{
+        ser::{Serialize, Serializer},
+        de::{Deserialize, Deserializer, Error},
+    };
+
+    use super::PublicKey;
+
+    impl Serialize for PublicKey {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: Serializer
+        {
+            serializer.serialize_bytes(self.as_bytes())
+        }
+    }
+
+    impl<'de> Deserialize<'de> for PublicKey {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: Deserializer<'de>
+        {
+            let data: &'de str = Deserialize::deserialize(deserializer)?;
+            data.parse()
+                .map_err(Error::custom)
+        }
+    }
+}

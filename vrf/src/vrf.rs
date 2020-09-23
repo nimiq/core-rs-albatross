@@ -9,6 +9,7 @@ use bls::{CompressedSignature, PublicKey, SecretKey};
 use hash::{Blake2sHash, Blake2sHasher, Hasher};
 
 use crate::rng::Rng;
+use std::str::FromStr;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum VrfError {
@@ -26,6 +27,7 @@ pub enum VrfUseCase {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize), serde(transparent))]
 pub struct VrfSeed {
     signature: CompressedSignature,
 }
@@ -83,6 +85,14 @@ impl Hash for VrfSeed {
 impl fmt::Display for VrfSeed {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         fmt::Display::fmt(&self.signature, f)
+    }
+}
+
+impl FromStr for VrfSeed {
+    type Err = <CompressedSignature as FromStr>::Err;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(CompressedSignature::from_str(s)?.into())
     }
 }
 

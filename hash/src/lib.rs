@@ -17,6 +17,9 @@ pub mod argon2kdf;
 pub mod hmac;
 pub mod pbkdf2;
 pub mod sha512;
+#[cfg(feature = "serde")]
+mod serde;
+
 
 #[macro_export]
 macro_rules! add_hash_trait_arr {

@@ -1,4 +1,5 @@
 use std::convert::TryFrom;
+use std::str::FromStr;
 
 use hex::FromHex;
 
@@ -11,6 +12,11 @@ pub struct Signature(pub(super) ed25519_dalek::Signature);
 
 impl Signature {
     pub const SIZE: usize = 64;
+
+    #[inline]
+    pub fn as_bytes(&self) -> &[u8] {
+        self.0.as_ref()
+    }
 
     #[inline]
     pub fn to_bytes(&self) -> [u8; Self::SIZE] {
@@ -72,5 +78,44 @@ impl Serialize for Signature {
 
     fn serialized_size(&self) -> usize {
         Self::SIZE
+    }
+}
+
+impl FromStr for Signature {
+    type Err = ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Signature::from_hex(s)
+    }
+}
+
+
+#[cfg(feature = "serde-derive")]
+mod serde_derive {
+    use serde::{
+        ser::{Serialize, Serializer},
+        de::{Deserialize, Deserializer, Error},
+    };
+
+    use super::Signature;
+
+    impl Serialize for Signature {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: Serializer
+        {
+            serializer.serialize_bytes(self.as_bytes())
+        }
+    }
+
+    impl<'de> Deserialize<'de> for Signature {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: Deserializer<'de>
+        {
+            let data: &'de str = Deserialize::deserialize(deserializer)?;
+            data.parse()
+                .map_err(Error::custom)
+        }
     }
 }

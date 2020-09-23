@@ -1,14 +1,16 @@
-use std::fmt::Debug;
-use std::fmt::Error;
-use std::fmt::Formatter;
+use std::fmt::{Debug, Error, Formatter};
 use std::io;
 use std::str::FromStr;
+use std::iter::FromIterator;
 
 use hex::FromHex;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use hash::{Hash, SerializeContent};
 use utils::key_rng::{CryptoRng, Rng, SecureGenerate};
+
+use crate::errors::{KeysError, ParseError};
+
 
 pub struct PrivateKey(pub(super) ed25519_dalek::SecretKey);
 
@@ -23,6 +25,11 @@ impl PrivateKey {
     #[inline]
     pub(crate) fn as_dalek(&self) -> &ed25519_dalek::SecretKey {
         &self.0
+    }
+
+    #[inline]
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, KeysError> {
+        Ok(PrivateKey(ed25519_dalek::SecretKey::from_bytes(bytes)?))
     }
 
     #[inline]
@@ -97,13 +104,19 @@ impl PartialEq for PrivateKey {
 
 impl Eq for PrivateKey {}
 
+impl FromHex for PrivateKey {
+    type Error = ParseError;
+
+    fn from_hex<T: AsRef<[u8]>>(hex: T) -> Result<PrivateKey, ParseError> {
+        Ok(PrivateKey::from_bytes(hex::decode(hex)?.as_slice())?)
+    }
+}
+
 impl FromStr for PrivateKey {
-    type Err = hex::FromHexError;
+    type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let vec = Vec::from_hex(s)?;
-        Ok(Deserialize::deserialize_from_vec(&vec)
-            .map_err(|_| hex::FromHexError::InvalidStringLength)?)
+        PrivateKey::from_hex(s)
     }
 }
 
@@ -111,5 +124,35 @@ impl Default for PrivateKey {
     fn default() -> Self {
         let default_array: [u8; Self::SIZE] = Default::default();
         Self::from(default_array)
+    }
+}
+
+#[cfg(feature = "serde-derive")]
+mod serde_derive {
+    use serde::{
+        ser::{Serialize, Serializer},
+        de::{Deserialize, Deserializer, Error},
+    };
+
+    use super::PrivateKey;
+
+    impl Serialize for PrivateKey {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: Serializer
+        {
+            serializer.serialize_bytes(self.as_bytes())
+        }
+    }
+
+    impl<'de> Deserialize<'de> for PrivateKey {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: Deserializer<'de>
+        {
+            let data: &'de str = Deserialize::deserialize(deserializer)?;
+            data.parse()
+                .map_err(Error::custom)
+        }
     }
 }

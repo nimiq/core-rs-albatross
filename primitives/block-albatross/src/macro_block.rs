@@ -2,7 +2,7 @@ use std::convert::TryInto;
 use std::fmt;
 use std::io;
 
-use failure::Fail;
+use thiserror::Error;
 
 use beserial::{Deserialize, Serialize};
 use collections::bitset::BitSet;
@@ -134,11 +134,11 @@ impl fmt::Display for MacroBlock {
     }
 }
 
-#[derive(Clone, Debug, Fail)]
+#[derive(Error, Debug)]
 pub enum IntoSlotsError {
-    #[fail(display = "Body missing in macro block")]
+    #[error("Body missing in macro block")]
     MissingBody,
-    #[fail(display = "Not an election macro block")]
+    #[error("Not an election macro block")]
     NoElection,
 }
 

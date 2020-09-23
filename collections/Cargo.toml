@@ -19,6 +19,7 @@ maintenance = { status = "experimental" }
 [dependencies]
 itertools = { version = "0.8", optional = true }
 num-traits = "0.2"
+serde = { version = "1.0", features = ["derive"], optional = true }
 
 beserial = { path = "../beserial", optional = true }
 
@@ -28,3 +29,4 @@ rand = "0.7"
 
 [features]
 bitset = ["itertools", "beserial"]
+serde-derive = ["serde"]

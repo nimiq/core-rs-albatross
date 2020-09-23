@@ -150,3 +150,33 @@ impl<'a> From<&'a KeyPair> for Address {
         Address::from(&key_pair.public)
     }
 }
+
+#[cfg(feature = "serde-derive")]
+mod serde_derive {
+    use serde::{
+        ser::{Serialize, Serializer},
+        de::{Deserialize, Deserializer, Error},
+    };
+
+    use super::Address;
+
+    impl Serialize for Address {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: Serializer
+        {
+            serializer.serialize_str(&self.to_user_friendly_address())
+        }
+    }
+
+    impl<'de> Deserialize<'de> for Address {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: Deserializer<'de>
+        {
+            let s: &'de str = Deserialize::deserialize(deserializer)?;
+            Address::from_any_str(s)
+                .map_err(Error::custom)
+        }
+    }
+}

@@ -14,9 +14,10 @@ travis-ci = { repository = "nimiq/core-rs", branch = "master" }
 [dependencies]
 bitflags = "1.0"
 enum-display-derive = "0.1"
-failure = "0.1"
+thiserror = "1.0"
 hex = "0.4"
 log = "0.4"
+serde = { version = "1.0", optional = true }
 
 beserial = { path = "../../beserial", version = "0.1" }
 beserial_derive = { path = "../../beserial/beserial_derive", version = "0.1" }
@@ -29,3 +30,6 @@ nimiq-utils = { path = "../../utils", version = "0.1", features = ["merkle"] }
 
 [dev-dependencies]
 hex = "0.4"
+
+[features]
+serde-derive = ["serde"]

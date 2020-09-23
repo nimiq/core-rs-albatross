@@ -1,8 +1,5 @@
 #[macro_use]
 extern crate beserial_derive;
-#[cfg(feature = "failure")]
-#[macro_use]
-extern crate failure;
 #[cfg(feature = "nimiq-macros")]
 extern crate nimiq_macros;
 

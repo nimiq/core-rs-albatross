@@ -1,6 +1,8 @@
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
+use thiserror::Error;
+
 use beserial::{Deserialize, Serialize, WriteBytesExt};
 use bls::SigHash;
 use bls::{AggregatePublicKey, AggregateSignature, PublicKey, SecretKey, Signature};
@@ -195,6 +197,7 @@ impl<M: Message> Default for AggregateProofBuilder<M> {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 /// TODO: Maybe refactor this, since we only construct those from Handel MultiSignatures now.
 pub struct AggregateProof<M: Message> {
     /// Indices of validators that signed this proof
@@ -204,6 +207,7 @@ pub struct AggregateProof<M: Message> {
     pub signature: AggregateSignature,
 
     #[beserial(skip)]
+    #[cfg_attr(feature = "serde-derive", serde(skip))]
     _message: PhantomData<M>,
 }
 
@@ -265,12 +269,12 @@ pub fn votes_for_signers(
     Ok(votes)
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Fail)]
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum AggregateProofError {
-    #[fail(display = "Invalid signer index: {}", _0)]
+    #[error("Invalid signer index: {0}")]
     InvalidSignerIndex(u16),
-    #[fail(display = "Invalid signature")]
+    #[error("Invalid signature")]
     InvalidSignature,
-    #[fail(display = "Insufficient signers (got {}, want {})", _0, _1)]
+    #[error("Insufficient signers (got {0}, want {1})")]
     InsufficientSigners(u16, u16),
 }

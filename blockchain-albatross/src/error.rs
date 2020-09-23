@@ -1,4 +1,4 @@
-use failure::Fail;
+use thiserror::Error;
 
 use account::AccountError;
 use block::{Block, BlockError, ForkProof};
@@ -12,17 +12,17 @@ pub enum ForkEvent {
 }
 
 /// An enum representing different types of errors associated with slashing.
-#[derive(Debug, Fail)]
+#[derive(Error, Debug)]
 pub enum SlashPushError {
-    #[fail(display = "Redundant fork proofs in block")]
+    #[error("Redundant fork proofs in block")]
     DuplicateForkProof,
-    #[fail(display = "Block contains fork proof targeting a slot that was already slashed")]
+    #[error("Block contains fork proof targeting a slot that was already slashed")]
     SlotAlreadySlashed,
-    #[fail(display = "Fork proof is from a wrong epoch")]
+    #[error("Fork proof is from a wrong epoch")]
     InvalidEpochTarget,
-    #[fail(display = "Fork proof infos don't match fork proofs")]
+    #[error("Fork proof infos don't match fork proofs")]
     InvalidForkProofInfos,
-    #[fail(display = "Fork proof infos cannot be fetched (predecessor does not exist)")]
+    #[error("Fork proof infos cannot be fetched (predecessor does not exist)")]
     InvalidForkProofPredecessor,
 }
 
@@ -34,15 +34,15 @@ pub enum BlockchainEvent {
     EpochFinalized(Blake2bHash),
 }
 
-#[derive(Debug, Fail, Clone, PartialEq, Eq)]
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum BlockchainError {
-    #[fail(display = "Invalid genesis block stored. Are you on the right network?")]
+    #[error("Invalid genesis block stored. Are you on the right network?")]
     InvalidGenesisBlock,
-    #[fail(display = "Failed to load the main chain. Reset your consensus database.")]
+    #[error("Failed to load the main chain. Reset your consensus database.")]
     FailedLoadingMainChain,
-    #[fail(display = "Inconsistent chain/accounts state. Reset your consensus database.")]
+    #[error("Inconsistent chain/accounts state. Reset your consensus database.")]
     InconsistentState,
-    #[fail(display = "No network for: {:?}", _0)]
+    #[error("No network for: {:?}", _0)]
     NoNetwork(NetworkId),
 }
 
@@ -55,38 +55,22 @@ pub enum PushResult {
     Ignored,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum PushError {
+    #[error("Orphan block")]
     Orphan,
-    InvalidBlock(BlockError),
+    #[error("Invalid block: {0}")]
+    InvalidBlock(#[from] BlockError),
+    #[error("Invalid successor")]
     InvalidSuccessor,
+    #[error("Duplicate transaction")]
     DuplicateTransaction,
-    AccountsError(AccountError),
+    #[error("Account error: {0}")]
+    AccountsError(#[from] AccountError),
+    #[error("Invalid fork")]
     InvalidFork,
-    BlockchainError(BlockchainError),
-}
-
-impl PushError {
-    /// Create a `PushError` from a `BlockError`.
-    ///
-    /// NOTE: We can't implement `From<BE: BlockError>`, since the compiler can't guarantee that
-    /// nobody will implement `BlockError` for `AccountError`, which would result in a duplicate
-    /// implementation.
-    pub fn from_block_error(e: BlockError) -> Self {
-        PushError::InvalidBlock(e)
-    }
-}
-
-impl From<AccountError> for PushError {
-    fn from(e: AccountError) -> Self {
-        PushError::AccountsError(e)
-    }
-}
-
-impl From<BlockchainError> for PushError {
-    fn from(e: BlockchainError) -> Self {
-        PushError::BlockchainError(e)
-    }
+    #[error("Blockchain error: {0}")]
+    BlockchainError(#[from] BlockchainError),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]

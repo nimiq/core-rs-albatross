@@ -50,18 +50,18 @@ nimiq-metrics-server = { path = "../metrics-server", version = "0.1", optional =
 nimiq-network-albatross = { path = "../network-albatross", version = "0.1" }
 nimiq-peer-address = { path = "../peer-address", version = "0.1" }
 nimiq-primitives = { path = "../primitives", version = "0.1", features = ["networks"] }
-nimiq-rpc-server = { path = "../rpc-server", version = "0.1", optional = true }
+nimiq-rpc-server = { path = "../rpc-server-new", version = "0.1", optional = true }
 nimiq-utils = { path = "../utils", version = "0.1" }
 nimiq-validator = { path = "../validator", version = "0.1", optional = true }
-nimiq-ws-rpc-server = { path = "../ws-rpc-server", version = "0.1", optional = true }
+nimiq-jsonrpc-core = { git = "https://github.com/nimiq/jsonrpc.git" }
+nimiq-jsonrpc-server = { git = "https://github.com/nimiq/jsonrpc.git" }
 
 [features]
 default = []
-validator = ["nimiq-validator", "nimiq-bls", "nimiq-rpc-server/validator", "nimiq-ws-rpc-server/validator"]
+validator = ["nimiq-validator", "nimiq-bls", "nimiq-rpc-server/validator"]
 deadlock = ["parking_lot"]
 panic = ["log-panics"]
 logging = ["fern", "colored"]
 launcher = []
 rpc-server = ["validator", "nimiq-rpc-server", "parking_lot"]
 metrics-server = ["nimiq-metrics-server"]
-ws-rpc-server = ["nimiq-ws-rpc-server"]

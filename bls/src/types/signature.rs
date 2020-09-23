@@ -63,3 +63,35 @@ impl fmt::Debug for Signature {
         write!(f, "Signature({})", &::hex::encode(self.compress().as_ref()))
     }
 }
+
+#[cfg(feature = "serde-derive")]
+mod serde_derive {
+    // TODO: Replace this with a generic serialization using `ToHex` and `FromHex`.
+
+    use serde::{
+        ser::{Serialize, Serializer},
+        de::{Deserialize, Deserializer, Error},
+    };
+
+    use super::{Signature, CompressedSignature};
+
+    impl Serialize for Signature {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: Serializer
+        {
+            Serialize::serialize(&self.compress(), serializer)
+        }
+    }
+
+    impl<'de> Deserialize<'de> for Signature {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: Deserializer<'de>
+        {
+            let compressed: CompressedSignature = Deserialize::deserialize(deserializer)?;
+            compressed.uncompress()
+                .map_err(Error::custom)
+        }
+    }
+}

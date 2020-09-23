@@ -19,7 +19,7 @@ extern crate nimiq_utils as utils;
 
 use std::fmt::Display;
 use std::io;
-use std::io::{Cursor, Read, Seek, SeekFrom};
+use std::io::{Cursor, Read, Seek, SeekFrom, ErrorKind};
 
 use bitflags::bitflags;
 use parking_lot::RwLock;
@@ -749,7 +749,7 @@ impl Deserialize for VersionMessage {
             challenge_nonce: Deserialize::deserialize(reader)?,
             user_agent: match DeserializeWithLength::deserialize::<u8, R>(reader) {
                 Ok(user_agent) => Some(user_agent),
-                Err(SerializingError::IoError(std::io::ErrorKind::UnexpectedEof, _)) => None,
+                Err(SerializingError::IoError(e)) if e.kind() == ErrorKind::UnexpectedEof => None,
                 Err(e) => return Err(e),
             },
         })

@@ -14,10 +14,11 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 bitflags = "1.0"
-failure = "0.1"
+thiserror = "1.0"
 hex = "0.4"
 log = "0.4"
 num-bigint = "0.2"
+serde = { version = "1.0", features = ["derive"], optional = true }
 
 beserial = { path = "../../beserial", version = "0.1" }
 beserial_derive = { path = "../../beserial/beserial_derive", version = "0.1" }
@@ -36,3 +37,6 @@ nimiq-vrf = { path = "../../vrf", version = "0.1" }
 
 [dev-dependencies]
 num-traits = "0.2"
+
+[features]
+serde-derive = ["serde", "nimiq-collections/serde-derive", "nimiq-bls/serde-derive"]

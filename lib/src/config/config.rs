@@ -548,12 +548,6 @@ pub struct ClientConfig {
     #[builder(default)]
     pub rpc_server: Option<RpcServerConfig>,
 
-    /// The optional Websocket RPC configuration
-    ///
-    #[cfg(feature = "ws-rpc-server")]
-    #[builder(default)]
-    pub ws_rpc_server: Option<WsRpcServerConfig>,
-
     /// The optional metrics server configuration
     ///
     #[cfg(feature = "metrics-server")]

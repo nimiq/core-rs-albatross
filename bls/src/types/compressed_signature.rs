@@ -1,11 +1,16 @@
 use std::{cmp::Ordering, fmt};
+use std::str::FromStr;
 
 use algebra::mnt6_753::G1Affine;
 use algebra::SerializationError;
 use algebra_core::curves::AffineCurve;
 
+use beserial::Deserialize;
+
 use crate::compression::BeDeserialize;
 use crate::Signature;
+use crate::ParseError;
+
 
 /// The serialized compressed form of a signature.
 /// This form consists of the x-coordinate of the point (in the affine form),
@@ -73,6 +78,18 @@ impl fmt::Display for CompressedSignature {
     }
 }
 
+impl FromStr for CompressedSignature {
+    type Err = ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let raw = hex::decode(s)?;
+        if raw.len() != CompressedSignature::SIZE {
+            return Err(ParseError::IncorrectLength(raw.len()));
+        }
+        Ok(CompressedSignature::deserialize_from_vec(&raw).unwrap())
+    }
+}
+
 impl AsRef<[u8]> for CompressedSignature {
     fn as_ref(&self) -> &[u8] {
         self.signature.as_ref()
@@ -82,5 +99,40 @@ impl AsRef<[u8]> for CompressedSignature {
 impl AsMut<[u8]> for CompressedSignature {
     fn as_mut(&mut self) -> &mut [u8] {
         self.signature.as_mut()
+    }
+}
+
+#[cfg(feature = "serde-derive")]
+mod serde_derive {
+    // TODO: Replace this with a generic serialization using `ToHex` and `FromHex`.
+
+    use std::str::FromStr;
+
+    use serde::{
+        ser::{Serialize, Serializer},
+        de::{Deserialize, Deserializer, Error},
+    };
+
+    use super::CompressedSignature;
+
+    impl Serialize for CompressedSignature {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: Serializer
+        {
+            serializer.serialize_str(&self.to_hex())
+        }
+    }
+
+
+    impl<'de> Deserialize<'de> for CompressedSignature {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: Deserializer<'de>
+        {
+            let s: &'de str = Deserialize::deserialize(deserializer)?;
+            CompressedSignature::from_str(s)
+                .map_err(Error::custom)
+        }
     }
 }

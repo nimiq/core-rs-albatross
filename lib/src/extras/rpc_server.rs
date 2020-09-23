@@ -1,75 +1,63 @@
 use std::collections::HashSet;
 use std::iter::FromIterator;
-use std::sync::Arc;
 
-use rpc_server::handlers::*;
-use rpc_server::{JsonRpcConfig, RpcServer};
+use nimiq_rpc_server::dispatchers::*;
+
+use nimiq_jsonrpc_core::Credentials;
+use nimiq_jsonrpc_server::{Config, Server as _Server, ModularDispatcher, AllowListDispatcher};
 
 use crate::client::Client;
 use crate::config::config::RpcServerConfig;
 use crate::config::consts::default_bind;
 use crate::error::Error;
 
-pub fn initialize_rpc_server(client: &Client, config: RpcServerConfig) -> Result<RpcServer, Error> {
+
+pub type Server = _Server<AllowListDispatcher<ModularDispatcher>>;
+
+
+pub fn initialize_rpc_server(client: &Client, config: RpcServerConfig) -> Result<Server, Error> {
     let ip = config.bind_to.unwrap_or_else(default_bind);
     info!("Initializing RPC server: {}:{}", ip, config.port);
 
     // Configure RPC server
-    let (username, password) = if let Some(credentials) = config.credentials {
-        (Some(credentials.username), Some(credentials.password))
-    } else {
-        warn!("No password set for RPC server!");
-        (None, None)
-    };
+    let basic_auth = config.credentials
+        .map(|credentials| Credentials {
+            username: credentials.username,
+            password: credentials.password,
+        });
 
-    let methods = config
+    let allowed_methods = config
         .allowed_methods
-        .map(HashSet::from_iter)
-        .unwrap_or_default();
+        .map(HashSet::from_iter);
 
     let corsdomain = config.corsdomain.unwrap_or_default();
 
-    let json_rpc_config = JsonRpcConfig {
-        username,
-        password,
-        methods,
-        allowip: (), // TODO: config.allow_ips,
-        corsdomain,
-    };
+    let mut dispatcher = ModularDispatcher::default();
 
-    // Initialize RPC server
-    let rpc_server = RpcServer::new(ip, config.port, json_rpc_config)?;
-    let handler = Arc::clone(&rpc_server.handler);
-
-    // Install RPC modules
     #[cfg(feature = "validator")]
     {
         if let Some(validator) = client.validator() {
-            let block_production_handler =
-                BlockProductionAlbatrossHandler::new(validator.signing_key());
-            handler.add_module(block_production_handler);
+            //dispatcher.add(BlockProductionDispatcher::new(validator));
         }
     }
 
-    let blockchain_handler = BlockchainAlbatrossHandler::new(client.blockchain());
-    handler.add_module(blockchain_handler);
+    dispatcher.add(BlockchainDispatcher::new(client.blockchain()));
+    //dispatcher.add(ConsensusDispatcher::new(client.consensus()));
+    //dispatcher.add(NetworkDispatcher::new(client.consensus()));
+    //let wallet_manager = Arc::clone(&wallet_handler.unlocked_wallets);
+    //dispatcher.add(WalletDispatcher::new(wallet_manager));
+    //dispatcher.add(MempoolHandler::new(client.mempool(), client.validator(), Some(wallet_manager)));
 
-    let consensus_handler = ConsensusHandler::new(client.consensus());
-    handler.add_module(consensus_handler);
-
-    let network_handler = NetworkHandler::new(&client.consensus());
-    handler.add_module(network_handler);
-
-    let wallet_handler = WalletHandler::new(client.environment());
-    let wallet_manager = Arc::clone(&wallet_handler.unlocked_wallets);
-    handler.add_module(wallet_handler);
-
-    let mempool_handler = MempoolAlbatrossHandler::new(
-        client.mempool(),
-        client.validator().map(|v| v.signing_key()),
-        Some(wallet_manager),
-    );
-    handler.add_module(mempool_handler);
-
-    Ok(rpc_server)
+    Ok(Server::new(
+        Config {
+            bind_to: (
+                config.bind_to.unwrap_or_else(default_bind),
+                config.port,
+            ).into(),
+            enable_websocket: false,
+            ip_whitelist: None,
+            basic_auth,
+        },
+        AllowListDispatcher::new(dispatcher, allowed_methods),
+    ))
 }

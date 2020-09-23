@@ -1,8 +1,6 @@
 #[macro_use]
 extern crate beserial_derive;
 #[macro_use]
-extern crate failure;
-#[macro_use]
 extern crate log;
 extern crate nimiq_account as account;
 extern crate nimiq_bls as bls;
@@ -17,6 +15,9 @@ extern crate nimiq_utils as utils;
 extern crate nimiq_vrf as vrf;
 
 mod multisig;
+
+use thiserror::Error;
+
 pub use block::{
     Block, BlockBody, BlockComponentFlags, BlockComponents, BlockHeader, BlockJustification,
     BlockType,
@@ -44,64 +45,58 @@ pub mod signed;
 mod view_change;
 
 /// Enum containing a variety of block error types.
-#[derive(Clone, PartialEq, Eq, Debug, Fail)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum BlockError {
-    #[fail(display = "Unsupported version")]
+    #[error("Unsupported version")]
     UnsupportedVersion,
-    #[fail(display = "Block is from the future")]
+    #[error("Block is from the future")]
     FromTheFuture,
-    #[fail(display = "Block size exceeded")]
+    #[error("Block size exceeded")]
     SizeExceeded,
-    #[fail(display = "Body hash mismatch")]
+    #[error("Body hash mismatch")]
     BodyHashMismatch,
-    #[fail(display = "Accounts hash mismatch")]
+    #[error("Accounts hash mismatch")]
     AccountsHashMismatch,
-    #[fail(display = "Missing justification")]
+    #[error("Missing justification")]
     NoJustification,
-    #[fail(display = "Missing view change proof")]
+    #[error("Missing view change proof")]
     NoViewChangeProof,
-    #[fail(display = "Missing body")]
+    #[error("Missing body")]
     MissingBody,
 
-    #[fail(display = "Invalid fork proof")]
+    #[error("Invalid fork proof")]
     InvalidForkProof,
-    #[fail(display = "Duplicate fork proof")]
+    #[error("Duplicate fork proof")]
     DuplicateForkProof,
-    #[fail(display = "Fork proofs incorrectly ordered")]
+    #[error("Fork proofs incorrectly ordered")]
     ForkProofsNotOrdered,
 
-    #[fail(display = "Duplicate transaction in block")]
+    #[error("Duplicate transaction in block")]
     DuplicateTransaction,
-    #[fail(display = "Invalid transaction in block: {}", _0)]
-    InvalidTransaction(TransactionError),
-    #[fail(display = "Expired transaction in block")]
+    #[error("Invalid transaction in block: {}", _0)]
+    InvalidTransaction(#[from] TransactionError),
+    #[error("Expired transaction in block")]
     ExpiredTransaction,
-    #[fail(display = "Transactions incorrectly ordered")]
+    #[error("Transactions incorrectly ordered")]
     TransactionsNotOrdered,
 
-    #[fail(display = "Duplicate receipt in block")]
+    #[error("Duplicate receipt in block")]
     DuplicateReceipt,
-    #[fail(display = "Invalid receipt in block")]
+    #[error("Invalid receipt in block")]
     InvalidReceipt,
-    #[fail(display = "Receipts incorrectly ordered")]
+    #[error("Receipts incorrectly ordered")]
     ReceiptsNotOrdered,
 
-    #[fail(display = "Justification is invalid")]
+    #[error("Justification is invalid")]
     InvalidJustification,
-    #[fail(display = "Contains an invalid slash inherent")]
+    #[error("Contains an invalid slash inherent")]
     InvalidSlash,
-    #[fail(display = "Contains an invalid seed")]
+    #[error("Contains an invalid seed")]
     InvalidSeed,
-    #[fail(display = "Invalid view number")]
+    #[error("Invalid view number")]
     InvalidViewNumber,
-    #[fail(display = "Invalid history root")]
+    #[error("Invalid history root")]
     InvalidHistoryRoot,
-    #[fail(display = "Incorrect validators")]
+    #[error("Incorrect validators")]
     InvalidValidators,
-}
-
-impl From<signed::AggregateProofError> for BlockError {
-    fn from(_e: signed::AggregateProofError) -> Self {
-        BlockError::InvalidJustification
-    }
 }

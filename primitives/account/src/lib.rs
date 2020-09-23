@@ -15,7 +15,7 @@ use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::io;
 
-use failure::Fail;
+use thiserror::Error;
 
 use beserial::{
     Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
@@ -24,7 +24,7 @@ use beserial::{
 use hash::{Hash, HashOutput, Hasher, SerializeContent};
 use keys::Address;
 pub use primitives::account::AccountType;
-use primitives::coin::{Coin, CoinParseError};
+use primitives::coin::{Coin, CoinParseError, CoinConvertError};
 use transaction::{Transaction, TransactionError};
 
 use crate::inherent::AccountInherentInteraction;
@@ -685,56 +685,44 @@ impl PartialEq for PrunedAccount {
     }
 }
 
-#[derive(Clone, Debug, Eq, Fail, PartialEq)]
+#[derive(Debug, Error, PartialEq, Eq)]
 pub enum AccountError {
-    #[fail(
-        display = "Insufficient funds: needed {}, but has balance {}",
-        needed, balance
-    )]
-    InsufficientFunds { needed: Coin, balance: Coin },
-    // TODO: This still needs to be displayed as debug
-    #[fail(display = "Type mismatch: expected {}, but got {}", expected, got)]
+    #[error("Insufficient funds: needed {needed}, but has balance {balance}")]
+    InsufficientFunds {
+        needed: Coin,
+        balance: Coin
+    },
+
+    #[error("Type mismatch: expected {expected}, but got {got}")]
     TypeMismatch {
         expected: AccountType,
         got: AccountType,
     },
-    #[fail(display = "Invalid signature")]
+
+    #[error("Invalid signature")]
     InvalidSignature,
-    #[fail(display = "Invalid for sender")]
+    #[error("Invalid for sender")]
     InvalidForSender,
-    #[fail(display = "Invalid for recipient")]
+    #[error("Invalid for recipient")]
     InvalidForRecipient,
-    #[fail(display = "Invalid for target")]
+    #[error("Invalid for target")]
     InvalidForTarget,
-    #[fail(display = "Invalid receipt")]
+    #[error("Invalid receipt")]
     InvalidReceipt,
-    #[fail(display = "Invalid serialization")]
-    InvalidSerialization(#[cause] SerializingError),
-    #[fail(display = "Invalid transaction")]
-    InvalidTransaction(#[cause] TransactionError),
-    #[fail(display = "Invalid coin value")]
+    #[error("Invalid serialization")]
+    InvalidSerialization(#[from] SerializingError),
+    #[error("Invalid transaction")]
+    InvalidTransaction(#[from] TransactionError),
+    #[error("Invalid coin value")]
     InvalidCoinValue,
-    #[fail(display = "Invalid inherent")]
+    #[error("Invalid coin value: {0}")]
+    CoinParse(#[from] CoinParseError),
+    #[error("Invalid coin value: {0}")]
+    CoinConvert(#[from] CoinConvertError),
+    #[error("Invalid inherent")]
     InvalidInherent,
 }
 
-impl From<SerializingError> for AccountError {
-    fn from(e: SerializingError) -> Self {
-        AccountError::InvalidSerialization(e)
-    }
-}
-
-impl From<TransactionError> for AccountError {
-    fn from(e: TransactionError) -> Self {
-        AccountError::InvalidTransaction(e)
-    }
-}
-
-impl From<CoinParseError> for AccountError {
-    fn from(_: CoinParseError) -> Self {
-        AccountError::InvalidCoinValue
-    }
-}
 
 /// A small wrapper over a list of accounts with addresses. This is only used to have method
 /// of serializing and deserializing the genesis accounts.

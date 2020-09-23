@@ -5,12 +5,15 @@ use std::iter::Sum;
 use std::ops::{Add, AddAssign, Div, Rem, Sub, SubAssign};
 use std::str::FromStr;
 
-use failure::Fail;
+use thiserror::Error;
 use num_traits::identities::Zero;
+use regex::Regex;
+use lazy_static::lazy_static;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Default)]
+#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize), serde(transparent))]
 pub struct Coin(u64);
 
 impl Coin {
@@ -66,15 +69,19 @@ impl From<Coin> for u64 {
     }
 }
 
+#[derive(Debug, Error, PartialEq, Eq)]
+#[error("Can't convert u64 to Coin value: {0}")]
+pub struct CoinConvertError(u64);
+
 impl TryFrom<u64> for Coin {
-    type Error = CoinParseError;
+    type Error = CoinConvertError;
 
     #[inline]
     fn try_from(val: u64) -> Result<Self, Self::Error> {
         if val <= Coin::MAX_SAFE_VALUE {
             Ok(Coin(val))
         } else {
-            Err(CoinParseError::Overflow)
+            Err(CoinConvertError(val))
         }
     }
 }
@@ -189,66 +196,53 @@ impl Serialize for Coin {
     }
 }
 
-#[derive(Debug, Fail)]
-pub enum CoinParseError {
-    #[fail(display = "Invalid string")]
-    InvalidString,
-    #[fail(display = "Too many fractional digits")]
-    TooManyFractionalDigits,
-    #[fail(display = "Overflow or unsafe value")]
-    Overflow,
+#[derive(Debug, Error)]
+#[error("Can't parse Coin value: '{0}'")]
+pub struct CoinParseError(String);
+
+impl Eq for CoinParseError {}
+
+impl PartialEq for CoinParseError {
+    fn eq(&self, _other: &CoinParseError) -> bool {
+        true
+    }
+}
+
+lazy_static! {
+    /// This is an example for using doc comment attributes
+    static ref COIN_PARSE_REGEX: Regex = {
+        let r = r"^(?P<int_part>\d+) (.(?P<frac_part>\d{1,5})0*)?$";
+        Regex::new(r)
+            .unwrap_or_else(|e| panic!("Failed to compile regex: {}: {}", r, e))
+    };
 }
 
 impl FromStr for Coin {
     type Err = CoinParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // NOTE: I would like to use a RegEx here, but this needs a crate - Janosch
-        let split: Vec<&str> = s.split('.').collect();
+        let e = || CoinParseError(s.to_owned());
 
-        // Check that string is either 1 part or 2 parts separated by a `.`
-        if split.len() != 1 && split.len() != 2 {
-            return Err(CoinParseError::InvalidString);
-        }
-        // Try to parse integer part
-        // TODO: Do we accept int_part == "" as being 0?
-        let int_part = split[0]
+        let captures = COIN_PARSE_REGEX.captures(s)
+            .ok_or_else(e)?;
+
+        let int_part = captures.name("int_part")
+            .ok_or_else(e)?
+            .as_str()
             .parse::<u64>()
-            .map_err(|_| CoinParseError::InvalidString)?;
+            .map_err(|_| e())?;
 
-        // Try to parse fractional part, if available
-        // TODO: Do we accept frac_part == "" as being 0?
-        let frac_part = if split.len() == 2 {
-            // Check that number of digits doesn't overflow MAX_VALUE of u8
-            if split[1].len() > (std::u8::MAX as usize) {
-                return Err(CoinParseError::TooManyFractionalDigits);
-            }
-            // Check how many digits we have in the fraction and multiply by 10^(DIGITS - n)
-            // This cast is safe, since we checked that it doesn't overflow an u8
-            let frac_len = split[1].len() as u32;
-            if frac_len > Coin::FRAC_DIGITS {
-                Err(CoinParseError::TooManyFractionalDigits)
-            } else {
-                Ok(10u64.pow(Coin::FRAC_DIGITS - frac_len))
-            }? * split[1]
-                .parse::<u64>()
-                .map_err(|_| CoinParseError::InvalidString)?
-        } else {
-            0u64
-        };
+        let frac_part_str = captures.name("frac_part")
+            .ok_or_else(e)?
+            .as_str();
+        let mut frac_part = frac_part_str.parse::<u64>()
+            .map_err(|_| e())?;
 
-        // Check that digits out of our precision (5 digits) are all 0
-        if frac_part / Coin::LUNAS_PER_COIN > 0 {
-            return Err(CoinParseError::TooManyFractionalDigits);
-        }
+        frac_part *= 10_u64.pow(Coin::FRAC_DIGITS - frac_part_str.len() as u32);
 
-        // Multiply int_part with LUNAS_PER_COIN and add frac_part
-        let value = int_part
-            .checked_mul(Coin::LUNAS_PER_COIN)
-            .ok_or(CoinParseError::Overflow)?
-            .checked_add(frac_part)
-            .ok_or(CoinParseError::Overflow)?;
+        let coin = Coin::try_from(int_part * Coin::LUNAS_PER_COIN + frac_part)
+            .map_err(|_| e())?;
 
-        Ok(Coin::try_from(value)?)
+        Ok(coin)
     }
 }

@@ -5,8 +5,8 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 pub use byteorder::{BigEndian, ByteOrder, ReadBytesExt, WriteBytesExt};
-use failure::Fail;
 pub use num::{FromPrimitive, ToPrimitive};
+use thiserror::Error;
 
 pub use crate::types::uvar;
 
@@ -39,33 +39,50 @@ pub trait Serialize {
 
 // Error and result
 
-#[derive(Fail, Debug, PartialEq, Eq, Clone)]
+#[derive(Error, Debug)]
 pub enum SerializingError {
-    #[fail(display = "IoError(kind={:?}, description={})", _0, _1)]
-    IoError(std::io::ErrorKind, String),
-    #[fail(display = "Invalid encoding")]
+    #[error("IoError: {0}")]
+    IoError(#[from] std::io::Error),
+
+    #[error("Invalid encoding")]
     InvalidEncoding,
-    #[fail(display = "Invalid value")]
+
+    #[error("Invalid value")]
     InvalidValue,
-    #[fail(display = "Overflow")]
+
+    #[error("Overflow")]
     Overflow,
-    #[fail(display = "Length limit exceeded")]
+
+    #[error("Length limit exceeded")]
     LimitExceeded,
 }
 
-impl From<std::io::Error> for SerializingError {
-    fn from(io_error: std::io::Error) -> Self {
-        SerializingError::IoError(io_error.kind(), format!("{}", io_error))
+impl Eq for SerializingError {}
+
+impl PartialEq for SerializingError {
+    fn eq(&self, other: &SerializingError) -> bool {
+        match (self, other) {
+            (Self::IoError(e1), Self::IoError(e2)) if e1.kind() == e2.kind() => true,
+            (Self::InvalidEncoding, Self::InvalidEncoding)
+                | (Self::InvalidValue, Self::InvalidValue)
+                | (Self::Overflow, Self::Overflow)
+                | (Self::LimitExceeded, Self::LimitExceeded) => true,
+            _ => false,
+        }
     }
 }
 
 // TODO: Remove
 #[deprecated]
 impl From<SerializingError> for std::io::Error {
-    fn from(_: SerializingError) -> Self {
-        std::io::Error::from(std::io::ErrorKind::Other)
+    fn from(e: SerializingError) -> Self {
+        match e {
+            SerializingError::IoError(io_error) => io_error,
+            _ => std::io::Error::from(std::io::ErrorKind::Other),
+        }
     }
 }
+
 
 // Implementation for u8 and u16/32/64 (big endian)
 

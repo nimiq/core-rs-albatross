@@ -535,7 +535,7 @@ impl BlockBody {
     }
 
     /// Unwraps a block body and returns the underlying Micro body.
-    pub fn unwrap_micro(&self) -> &MicroBody {
+    pub fn unwrap_micro(self) -> MicroBody {
         if let BlockBody::Micro(body) = self {
             body
         } else {
@@ -544,7 +544,7 @@ impl BlockBody {
     }
 
     /// Unwraps a block body and returns the underlying Macro body.
-    pub fn unwrap_macro(&self) -> &MacroBody {
+    pub fn unwrap_macro(self) -> MacroBody {
         if let BlockBody::Macro(body) = self {
             body
         } else {

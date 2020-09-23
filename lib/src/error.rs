@@ -9,10 +9,11 @@ use database::lmdb::LmdbError;
 use database::volatile::VolatileDatabaseError;
 use network::error::Error as NetworkError;
 #[cfg(feature = "rpc-server")]
-use rpc_server::error::Error as RpcServerError;
+use rpc_server::Error as RpcServerError;
 use utils::key_store::Error as KeyStoreError;
 // #[cfg(feature = "validator")]
 // use validator::error::Error as ValidatorError;
+
 
 #[derive(Debug, Fail)]
 pub enum Error {

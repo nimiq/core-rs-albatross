@@ -365,3 +365,62 @@ impl FromIterator<usize> for BitSet {
         bitset
     }
 }
+
+#[cfg(feature = "serde-derive")]
+mod serde_derive {
+    use std::fmt;
+
+    use serde::{
+        ser::{Serialize, Serializer, SerializeSeq},
+        de::{Deserialize, Deserializer, Visitor, SeqAccess},
+    };
+
+    use super::BitSet;
+
+    impl Serialize for BitSet {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: Serializer
+        {
+            let mut seq = serializer.serialize_seq(Some(self.len()))?;
+
+            for elem in self.iter() {
+                seq.serialize_element(&elem)?;
+            }
+
+            seq.end()
+        }
+    }
+
+    impl<'de> Deserialize<'de> for BitSet {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: Deserializer<'de>
+        {
+            deserializer.deserialize_seq(BitSetVisitor)
+        }
+    }
+
+    struct BitSetVisitor;
+
+    impl<'de> Visitor<'de> for BitSetVisitor {
+        type Value = BitSet;
+
+        fn expecting(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+            write!(f, "usize")
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<BitSet, A::Error>
+            where
+                A: SeqAccess<'de>,
+        {
+            let mut bitset = BitSet::new();
+
+            while let Some(elem) = seq.next_element()? {
+                bitset.insert(elem);
+            }
+
+            Ok(bitset)
+        }
+    }
+}

@@ -156,6 +156,7 @@ impl Default for PbftProofBuilder {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub struct PbftProof {
     pub prepare: AggregateProof<PbftPrepareMessage>,
     pub commit: AggregateProof<PbftCommitMessage>,

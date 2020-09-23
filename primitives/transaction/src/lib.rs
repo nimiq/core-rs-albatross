@@ -14,7 +14,7 @@ use std::io;
 use std::sync::Arc;
 
 use bitflags::bitflags;
-use failure::Fail;
+use thiserror::Error;
 
 use beserial::{
     Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
@@ -30,6 +30,7 @@ use primitives::networks::NetworkId;
 use primitives::policy;
 
 use crate::account::AccountTransactionVerification;
+use std::convert::TryFrom;
 
 pub mod account;
 
@@ -56,9 +57,29 @@ pub enum TransactionFormat {
 
 bitflags! {
     #[derive(Default, Serialize)]
+    #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize), serde(try_from = "u8", into = "u8"))]
     pub struct TransactionFlags: u8 {
         const CONTRACT_CREATION = 0b1;
         const SIGNALLING = 0b10;
+    }
+}
+
+#[derive(Debug, Error)]
+#[error("Invalid transaction flags: {0}")]
+pub struct TransactionFlagsConvertError(u8);
+
+impl TryFrom<u8> for TransactionFlags {
+    type Error = TransactionFlagsConvertError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        TransactionFlags::from_bits(value)
+            .ok_or_else(|| TransactionFlagsConvertError(value))
+    }
+}
+
+impl From<TransactionFlags> for u8 {
+    fn from(flags: TransactionFlags) -> Self {
+        flags.bits()
     }
 }
 
@@ -527,30 +548,24 @@ impl Ord for Transaction {
     }
 }
 
-#[derive(Clone, Debug, Fail, PartialEq, Eq)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum TransactionError {
-    #[fail(display = "Transaction is for a foreign network")]
+    #[error("Transaction is for a foreign network")]
     ForeignNetwork,
-    #[fail(display = "Transaction has 0 value")]
+    #[error("Transaction has 0 value")]
     ZeroValue,
-    #[fail(display = "Overflow")]
+    #[error("Overflow")]
     Overflow,
-    #[fail(display = "Sender same as recipient")]
+    #[error("Sender same as recipient")]
     SenderEqualsRecipient,
-    #[fail(display = "Transaction is invalid for sender")]
+    #[error("Transaction is invalid for sender")]
     InvalidForSender,
-    #[fail(display = "Invalid transaction proof")]
+    #[error("Invalid transaction proof")]
     InvalidProof,
-    #[fail(display = "Transaction is invalid for recipient")]
+    #[error("Transaction is invalid for recipient")]
     InvalidForRecipient,
-    #[fail(display = "Invalid transaction data")]
+    #[error("Invalid transaction data")]
     InvalidData,
-    #[fail(display = "Invalid serialization")]
-    InvalidSerialization(#[cause] SerializingError),
-}
-
-impl From<SerializingError> for TransactionError {
-    fn from(e: SerializingError) -> Self {
-        TransactionError::InvalidSerialization(e)
-    }
+    #[error("Invalid serialization: {0}")]
+    InvalidSerialization(#[from] SerializingError),
 }
