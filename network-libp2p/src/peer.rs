@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::pin::Pin;
 
 use async_trait::async_trait;
@@ -46,6 +48,20 @@ impl Peer {
                 }
             }
         }
+    }
+}
+
+impl PartialEq for Peer {
+    fn eq(&self, other: &Peer) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for Peer {}
+
+impl Hash for Peer {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // TODO: Implement.
     }
 }
 
