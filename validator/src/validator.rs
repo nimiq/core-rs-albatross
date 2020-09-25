@@ -14,7 +14,7 @@ use hash::Blake2bHash;
 use network_interface::network::Network;
 
 use crate::micro::{ProduceMicroBlock, ProduceMicroBlockEvent};
-use crate::mock::{notifier_to_stream, ValidatorNetwork};
+use crate::mock::ValidatorNetwork;
 use crate::r#macro::ProduceMacroBlock;
 use crate::slash::ForkProofPool;
 
@@ -70,10 +70,8 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         wallet_key: Option<keys::KeyPair>,
     ) -> Self {
         let consensus_event_rx = consensus.subscribe_events();
-        let blockchain_event_rx =
-            notifier_to_stream(consensus.blockchain.notifier.write().borrow_mut());
-        let fork_event_rx =
-            notifier_to_stream(consensus.blockchain.fork_notifier.write().borrow_mut());
+        let blockchain_event_rx = consensus.blockchain.notifier.write().as_stream();
+        let fork_event_rx = consensus.blockchain.fork_notifier.write().as_stream();
 
         let blockchain_state = BlockchainState {
             fork_proofs: ForkProofPool::new(),

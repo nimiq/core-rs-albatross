@@ -10,11 +10,13 @@ use block_albatross::{MacroBlock, SignedViewChange, ViewChangeProof};
 use blockchain_albatross::Blockchain;
 use network::Network;
 use network_interface::network::Network as NetworkInterface;
+use nimiq_network_mock::network::MockNetwork;
 use primitives::slot::ValidatorSlots;
 use utils::observer::Notifier;
 
 pub trait ValidatorNetwork: NetworkInterface {}
 impl ValidatorNetwork for Network {}
+impl ValidatorNetwork for MockNetwork {}
 
 pub struct Tendermint;
 impl Tendermint {
@@ -46,15 +48,4 @@ impl Future for ViewChangeHandel {
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         unimplemented!()
     }
-}
-
-pub fn notifier_to_stream<E: Clone + Send + Sync + 'static>(
-    notifier: &mut Notifier<E>,
-) -> mpsc::UnboundedReceiver<E> {
-    // TODO how to deregister?
-    let (tx, rx) = mpsc::unbounded_channel();
-    notifier.register(move |event: &E| {
-        tx.send(event.clone());
-    });
-    rx
 }

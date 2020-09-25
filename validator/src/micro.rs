@@ -76,10 +76,26 @@ impl<TValidatorNetwork: ValidatorNetwork> NextProduceMicroBlockEvent<TValidatorN
         NextProduceMicroBlockEvent<TValidatorNetwork>,
     ) {
         let event = if self.is_our_turn() {
+            info!(
+                "Our turn at #{}:{}, producing micro block",
+                self.block_number, self.view_number
+            );
             ProduceMicroBlockEvent::MicroBlock(self.produce_micro_block())
         } else {
+            debug!(
+                "Not out turn at #{}:{}, waiting for proposal",
+                self.block_number, self.view_number
+            );
             time::delay_for(self.view_change_delay).await;
+            info!(
+                "No proposal received within timeout at #{}:{}, starting view change",
+                self.block_number, self.view_number
+            );
             let (new_view_number, view_change_proof) = self.change_view().await;
+            info!(
+                "View change completed for #{}:{}, new view is {}",
+                self.block_number, self.view_number, new_view_number
+            );
             self.view_number = new_view_number;
             self.view_change_proof = Some(view_change_proof.clone());
             ProduceMicroBlockEvent::ViewChange(new_view_number, view_change_proof)
