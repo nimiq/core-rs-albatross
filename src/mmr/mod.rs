@@ -18,17 +18,30 @@ mod utils;
 
 pub struct MerkleMountainRange<H, S: Store<H>> {
     store: S,
-    num_leaves: Option<usize>,
+    num_leaves: usize,
     hash: PhantomData<H>,
 }
 
 impl<H: Merge + Clone, S: Store<H>> MerkleMountainRange<H, S> {
+    /// Creates a new Merkle Mountain Range from a given Store.
     pub fn new(store: S) -> Self {
-        MerkleMountainRange {
+        let mut mmr = MerkleMountainRange {
             store,
-            num_leaves: None,
+            num_leaves: 0,
             hash: PhantomData,
-        }
+        };
+
+        // The number of leaves is the sum over 2^height for all full binary trees.
+        if !mmr.is_empty() {
+            mmr.num_leaves = mmr.peaks().map(|peak_pos| peak_pos.num_leaves()).sum();
+        };
+
+        mmr
+    }
+
+    /// Returns a element of the tree by its index.
+    pub fn get(&self, index: usize) -> Option<H> {
+        self.store.get(index)
     }
 
     /// Returns the number of elements in the tree.
@@ -36,18 +49,19 @@ impl<H: Merge + Clone, S: Store<H>> MerkleMountainRange<H, S> {
         self.store.len()
     }
 
+    /// Returns a leaf of the tree by its leaf index.
+    pub fn get_leaf(&self, leaf_index: usize) -> Option<H> {
+        // Note that leaf index starts at 0.
+        if leaf_index >= self.num_leaves() {
+            return None;
+        }
+
+        self.store.get(leaf_number_to_index(leaf_index))
+    }
+
     /// Returns the number of leaf hashes in the tree.
     pub fn num_leaves(&self) -> usize {
-        if self.is_empty() {
-            return 0;
-        }
-
-        if let Some(num_leaves) = self.num_leaves {
-            return num_leaves;
-        }
-
-        // The number of leaves is the sum over 2^height for all full binary trees.
-        self.peaks().map(|peak_pos| peak_pos.num_leaves()).sum()
+        self.num_leaves
     }
 
     pub fn is_empty(&self) -> bool {
@@ -68,7 +82,7 @@ impl<H: Merge + Clone, S: Store<H>> MerkleMountainRange<H, S> {
         let mut pos = Position::from(index);
 
         let mut store = MemoryTransaction::new(&mut self.store);
-        store.push(elem.hash(pos.num_leaves()));
+        store.push(elem.hash(pos.num_leaves() as u64));
 
         // Hash up as long as possible (as long as we're the right child of the parent).
         while pos.right_node {
@@ -81,16 +95,15 @@ impl<H: Merge + Clone, S: Store<H>> MerkleMountainRange<H, S> {
 
             // Prefix the merged hash with the number of leaf elements below that hash, which are
             // 2^height as it is a perfect binary tree.
-            let parent_elem = left_elem.merge(&right_elem, pos.num_leaves());
+            let parent_elem = left_elem.merge(&right_elem, pos.num_leaves() as u64);
             store.push(parent_elem);
         }
 
         store.commit();
 
         // Update num_leaves.
+        self.num_leaves += 1;
         let leaf_index = num_leaves;
-        let num_leaves = self.num_leaves.get_or_insert(num_leaves);
-        *num_leaves += 1;
         Ok(leaf_index)
     }
 
@@ -341,21 +354,19 @@ impl<H: Merge + Clone, S: Store<H>> MerkleMountainRange<H, S> {
 }
 
 impl<H: Merge + Clone + PartialEq, S: Store<H>> MerkleMountainRange<H, S> {
-    /// Tries to find a hash in the tree in O(n) and returns its index.
+    /// Tries to find a hash in the tree in O(n) and returns its leaf index.
     pub fn find<T>(&self, elem: T) -> Option<usize>
     where
         T: Hash<H>,
     {
         let h = elem.hash(1);
-        let mut i = 0;
-        let mut tree_i = leaf_number_to_index(i);
-        while tree_i < self.len() {
-            if h.eq(&self.store.get(tree_i)?) {
+
+        for i in 0..self.num_leaves() {
+            if h.eq(&self.get_leaf(i)?) {
                 return Some(i);
             }
-            i += 1;
-            tree_i = leaf_number_to_index(i);
         }
+
         None
     }
 }

@@ -22,7 +22,7 @@ pub(crate) fn bagging<H: Merge, I: Iterator<Item = Result<(H, usize), Error>>>(
             None => Some((peak_hash, peak_leaves)),
             Some((root_hash, root_leaves)) => {
                 let sum_leaves = root_leaves + peak_leaves;
-                Some((peak_hash.merge(&root_hash, sum_leaves), sum_leaves))
+                Some((peak_hash.merge(&root_hash, sum_leaves as u64), sum_leaves))
             }
         };
     }
@@ -54,7 +54,7 @@ pub(crate) mod test_utils {
         Some(H::merge(
             &hash_perfect_tree(&values[..mid])?,
             &hash_perfect_tree(&values[mid..])?,
-            len,
+            len as u64,
         ))
     }
 
@@ -79,18 +79,18 @@ pub(crate) mod test_utils {
     #[derive(Debug, Clone, Eq, PartialEq)]
     pub(crate) struct TestHash(pub(crate) usize);
     impl Merge for TestHash {
-        fn empty(prefix: usize) -> Self {
-            TestHash(prefix)
+        fn empty(prefix: u64) -> Self {
+            TestHash(prefix as usize)
         }
 
-        fn merge(&self, other: &Self, prefix: usize) -> Self {
-            TestHash(self.0 * 2 + other.0 * 3 + prefix)
+        fn merge(&self, other: &Self, prefix: u64) -> Self {
+            TestHash(self.0 * 2 + other.0 * 3 + prefix as usize)
         }
     }
 
     impl Hash<TestHash> for usize {
-        fn hash(&self, prefix: usize) -> TestHash {
-            TestHash(self * 2 + prefix)
+        fn hash(&self, prefix: u64) -> TestHash {
+            TestHash(self * 2 + prefix as usize)
         }
     }
 

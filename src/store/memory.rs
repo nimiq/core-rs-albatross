@@ -1,7 +1,7 @@
 use super::*;
 
 pub struct MemoryStore<H> {
-    inner: Vec<H>,
+    pub inner: Vec<H>,
 }
 
 impl<H: Clone> MemoryStore<H> {
