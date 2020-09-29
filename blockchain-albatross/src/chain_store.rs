@@ -18,6 +18,7 @@ pub struct ChainStore {
     chain_db: Database,
     block_db: Database,
     epoch_tx_db: Database,
+    // A database of block hashes indexed by their block number.
     height_idx: Database,
     receipt_db: Database,
 }
@@ -26,7 +27,7 @@ impl ChainStore {
     const CHAIN_DB_NAME: &'static str = "ChainData";
     const BLOCK_DB_NAME: &'static str = "Block";
     const EPOCH_TRANSACTIONS_DB_NAME: &'static str = "EpochTransactions";
-    const HEIGHT_IDX_NAME: &'static str = "HeightIdx";
+    const HEIGHT_IDX_NAME: &'static str = "HeightIndex";
     const RECEIPT_DB_NAME: &'static str = "Receipts";
 
     const HEAD_KEY: &'static str = "head";
@@ -130,7 +131,8 @@ impl ChainStore {
         chain_info: &ChainInfo,
         include_body: bool,
     ) {
-        // Store chain data. Block body will not be persisted.
+        // Store chain data. Block body will not be persisted because the serialization of ChainInfo
+        // ignores the block body.
         txn.put_reserve(&self.chain_db, hash, chain_info);
 
         // Store body if requested.

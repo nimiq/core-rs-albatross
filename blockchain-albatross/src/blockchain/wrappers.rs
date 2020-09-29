@@ -166,7 +166,8 @@ impl Blockchain {
         txn_option: Option<&Transaction>,
     ) -> Option<Vec<BlockchainTransaction>> {
         if !for_batch {
-            // It might be that we synced this epoch via macro block sync.
+            // It might be that we synced this epoch via macro block sync and don't actually have
+            // the micro blocks.
             // Therefore, we check this first.
             let macro_block = policy::election_block_of(batch_or_epoch_index);
             if let Some(macro_block_info) =

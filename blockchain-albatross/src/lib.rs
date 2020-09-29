@@ -1,6 +1,8 @@
+#[macro_use]
 extern crate beserial_derive;
 #[macro_use]
 extern crate log;
+extern crate merkle_mountain_range as mmr;
 extern crate nimiq_account as account;
 extern crate nimiq_accounts as accounts;
 extern crate nimiq_block_albatross as block;
@@ -26,5 +28,6 @@ pub mod chain_info;
 pub mod chain_metrics;
 pub mod chain_store;
 pub mod error;
+pub mod history_store;
 pub mod reward;
 pub mod transaction_cache;

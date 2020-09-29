@@ -36,7 +36,7 @@ impl ForkProof {
             return Err(ForkProofError::SameHeader);
         }
 
-        // Check that the headers have different block numbers and view numbers.
+        // Check that the headers have equal block numbers and view numbers.
         if self.header1.block_number != self.header2.block_number
             || self.header1.view_number != self.header2.view_number
         {

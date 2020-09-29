@@ -30,13 +30,13 @@ pub struct Blockchain {
     pub(crate) env: Environment,
     // The network ID. It determines if this is the mainnet or one of the testnets.
     pub network_id: NetworkId,
-    // The OffsetTime struct. It allows us query the current time.
+    // The OffsetTime struct. It allows us to query the current time.
     pub time: Arc<OffsetTime>,
     // The notifier processes events relative to the blockchain.
     pub notifier: RwLock<Notifier<'static, BlockchainEvent>>,
     // The fork notifier processes fork events.
     pub fork_notifier: RwLock<Notifier<'static, ForkEvent>>,
-    // The chain store is a database containing all of the blocks.
+    // The chain store is a database containing all of the chain infos, blocks and receipts.
     pub chain_store: Arc<ChainStore>,
     // The current state of the blockchain.
     pub(crate) state: RwLock<BlockchainState>,

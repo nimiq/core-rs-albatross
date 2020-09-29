@@ -8,7 +8,8 @@ use primitives::policy;
 use crate::chain_info::ChainInfo;
 use crate::{Blockchain, BlockchainEvent, ChainOrdering, ForkEvent, PushError, PushResult};
 
-/// Implements methods to push blocks into the chain.
+/// Implements methods to push blocks into the chain. This is used when the node has already synced
+/// and is just receiving newly produced blocks.
 impl Blockchain {
     /// Pushes a block into the chain.
     pub fn push(&self, block: Block) -> Result<PushResult, PushError> {
