@@ -46,7 +46,10 @@ nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "tim
 nimiq-vrf = { path = "../vrf", version = "0.1" }
 
 [dev-dependencies]
-hex = { version = "0.4" }
+hex = "0.4"
+simple_logger = "1.9.0"
+
+nimiq-build-tools = { path = "../build-tools", version = "0.1" }
 
 [features]
 metrics = []

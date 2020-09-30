@@ -83,12 +83,12 @@ impl<TValidatorNetwork: ValidatorNetwork> NextProduceMicroBlockEvent<TValidatorN
             ProduceMicroBlockEvent::MicroBlock(self.produce_micro_block())
         } else {
             debug!(
-                "Not out turn at #{}:{}, waiting for proposal",
+                "Not out turn at #{}:{}, waiting for micro block",
                 self.block_number, self.view_number
             );
             time::delay_for(self.view_change_delay).await;
             info!(
-                "No proposal received within timeout at #{}:{}, starting view change",
+                "No micro block received within timeout at #{}:{}, starting view change",
                 self.block_number, self.view_number
             );
             let (new_view_number, view_change_proof) = self.change_view().await;
