@@ -2,11 +2,13 @@ use std::sync::Arc;
 
 use parking_lot::{Mutex, RwLock};
 
+use account::Account;
 use accounts::Accounts;
 use block::Block;
 use database::{Environment, WriteTransaction};
 use genesis::NetworkInfo;
 use hash::Blake2bHash;
+use keys::Address;
 use primitives::coin::Coin;
 use primitives::networks::NetworkId;
 use primitives::policy;
@@ -56,34 +58,58 @@ pub struct Blockchain {
 impl Blockchain {
     /// Creates a new blockchain from a given environment and network ID.
     pub fn new(env: Environment, network_id: NetworkId) -> Result<Self, BlockchainError> {
-        let chain_store = Arc::new(ChainStore::new(env.clone()));
-
-        let history_store = Arc::new(HistoryStore::new(env.clone()));
-
+        // TODO `time` should be passed by the caller.
         let time = Arc::new(OffsetTime::new());
+        let network_info = NetworkInfo::from_network_id(network_id);
+        let genesis_block = network_info.genesis_block::<Block>();
+        let genesis_accounts = network_info.genesis_accounts();
+        Self::with_genesis(env, time, network_id, genesis_block, genesis_accounts)
+    }
 
+    /// Creates a new blockchain with the given genesis block.
+    pub fn with_genesis(
+        env: Environment,
+        time: Arc<OffsetTime>,
+        network_id: NetworkId,
+        genesis_block: Block,
+        genesis_accounts: Vec<(Address, Account)>,
+    ) -> Result<Self, BlockchainError> {
+        let chain_store = Arc::new(ChainStore::new(env.clone()));
+        let history_store = Arc::new(HistoryStore::new(env.clone()));
         Ok(match chain_store.get_head(None) {
-            Some(head_hash) => {
-                Blockchain::load(env, network_id, chain_store, history_store, time, head_hash)?
-            }
-            None => Blockchain::init(env, network_id, chain_store, history_store, time)?,
+            Some(head_hash) => Blockchain::load(
+                env,
+                chain_store,
+                history_store,
+                time,
+                network_id,
+                genesis_block,
+                head_hash,
+            )?,
+            None => Blockchain::init(
+                env,
+                chain_store,
+                history_store,
+                time,
+                network_id,
+                genesis_block,
+                genesis_accounts,
+            )?,
         })
     }
 
     /// Loads a blockchain from given inputs.
     fn load(
         env: Environment,
-        network_id: NetworkId,
         chain_store: Arc<ChainStore>,
         history_store: Arc<HistoryStore>,
         time: Arc<OffsetTime>,
+        network_id: NetworkId,
+        genesis_block: Block,
         head_hash: Blake2bHash,
     ) -> Result<Self, BlockchainError> {
         // Check that the correct genesis block is stored.
-        let network_info = NetworkInfo::from_network_id(network_id);
-
-        let genesis_info = chain_store.get_chain_info(network_info.genesis_hash(), false, None);
-
+        let genesis_info = chain_store.get_chain_info(&genesis_block.hash(), false, None);
         if !genesis_info
             .as_ref()
             .map(|i| i.on_main_chain)
@@ -93,7 +119,7 @@ impl Blockchain {
         }
 
         let (genesis_supply, genesis_timestamp) =
-            genesis_parameters(&genesis_info.unwrap().head.unwrap_macro().header);
+            genesis_parameters(&genesis_block.unwrap_macro().header);
 
         // Load main chain from store.
         let main_chain = chain_store
@@ -215,49 +241,31 @@ impl Blockchain {
     /// Initializes a blockchain.
     fn init(
         env: Environment,
-        network_id: NetworkId,
         chain_store: Arc<ChainStore>,
         history_store: Arc<HistoryStore>,
         time: Arc<OffsetTime>,
+        network_id: NetworkId,
+        genesis_block: Block,
+        genesis_accounts: Vec<(Address, Account)>,
     ) -> Result<Self, BlockchainError> {
         // Initialize chain & accounts with genesis block.
-        let network_info = NetworkInfo::from_network_id(network_id);
+        let head_hash = genesis_block.hash();
 
-        let genesis_block = network_info.genesis_block::<Block>();
-
-        let genesis_macro_block = (match genesis_block {
-            Block::Macro(ref macro_block) => Some(macro_block),
-            _ => None,
-        })
-        .unwrap();
-
+        let genesis_macro_block = genesis_block.unwrap_macro_ref().clone();
+        let current_slots = genesis_macro_block.get_slots().expect("Slots missing");
         let (genesis_supply, genesis_timestamp) = genesis_parameters(&genesis_macro_block.header);
 
-        let main_chain = ChainInfo::initial(genesis_block.clone());
-
-        let head_hash = network_info.genesis_hash().clone();
+        let main_chain = ChainInfo::initial(genesis_block);
 
         // Initialize accounts.
         let accounts = Accounts::new(env.clone());
-
         let mut txn = WriteTransaction::new(&env);
-
-        accounts.init(&mut txn, network_info.genesis_accounts());
+        accounts.init(&mut txn, genesis_accounts);
 
         // Store genesis block.
         chain_store.put_chain_info(&mut txn, &head_hash, &main_chain, true);
-
         chain_store.set_head(&mut txn, &head_hash);
-
         txn.commit();
-
-        // Initialize empty TransactionCache.
-        let transaction_cache = TransactionCache::new();
-
-        // current slots and validators
-        let current_slots = &genesis_macro_block.get_slots().unwrap();
-
-        let last_slots = Slots::default();
 
         Ok(Blockchain {
             env,
@@ -269,15 +277,15 @@ impl Blockchain {
             history_store,
             state: RwLock::new(BlockchainState {
                 accounts,
-                transaction_cache,
+                transaction_cache: TransactionCache::new(),
                 macro_info: main_chain.clone(),
                 main_chain,
                 head_hash: head_hash.clone(),
                 macro_head_hash: head_hash.clone(),
-                election_head: genesis_macro_block.clone(),
+                election_head: genesis_macro_block,
                 election_head_hash: head_hash,
-                current_slots: Some(current_slots.clone()),
-                previous_slots: Some(last_slots),
+                current_slots: Some(current_slots),
+                previous_slots: Some(Slots::default()),
             }),
             push_lock: Mutex::new(()),
 

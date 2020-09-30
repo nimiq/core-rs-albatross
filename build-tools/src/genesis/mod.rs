@@ -9,7 +9,7 @@ use toml::de::Error as TomlError;
 
 use account::{Account, AccountError, AccountsList, BasicAccount, StakingContract};
 use accounts::Accounts;
-use beserial::{Serialize, SerializingError};
+use beserial::{Deserialize, Serialize, SerializingError};
 use block_albatross::{Block, MacroBlock, MacroBody, MacroHeader};
 use bls::{PublicKey as BlsPublicKey, SecretKey as BlsSecretKey};
 use database::volatile::{VolatileDatabaseError, VolatileEnvironment};
@@ -20,6 +20,9 @@ use primitives::coin::Coin;
 use vrf::VrfSeed;
 
 mod config;
+
+const DEFAULT_SIGNING_KEY: [u8; 96] = [0u8; 96];
+const DEFAULT_STAKING_CONTRACT_ADDRESS: &str = "NQ38 STAK 1NG0 0000 0000 C0NT RACT 0000 0000";
 
 #[derive(Debug, Fail)]
 pub enum GenesisBuilderError {
@@ -71,13 +74,13 @@ impl From<VolatileDatabaseError> for GenesisBuilderError {
     }
 }
 
+#[derive(Clone)]
 pub struct GenesisInfo {
     pub block: Block,
     pub hash: Blake2bHash,
     pub accounts: Vec<(Address, Account)>,
 }
 
-#[derive(Default)]
 pub struct GenesisBuilder {
     pub signing_key: Option<BlsSecretKey>,
     pub seed_message: Option<String>,
@@ -89,6 +92,31 @@ pub struct GenesisBuilder {
 }
 
 impl GenesisBuilder {
+    pub fn new() -> Self {
+        GenesisBuilder {
+            signing_key: None,
+            seed_message: None,
+            timestamp: None,
+            validators: vec![],
+            stakes: vec![],
+            accounts: vec![],
+            staking_contract_address: None,
+        }
+    }
+
+    pub fn default() -> Self {
+        let mut builder = Self::new();
+        builder.with_defaults();
+        builder
+    }
+
+    pub fn with_defaults(&mut self) -> &mut Self {
+        self.signing_key = Some(BlsSecretKey::deserialize_from_vec(&DEFAULT_SIGNING_KEY).unwrap());
+        self.staking_contract_address =
+            Some(Address::from_user_friendly_address(DEFAULT_STAKING_CONTRACT_ADDRESS).unwrap());
+        self
+    }
+
     pub fn with_signing_key(&mut self, secret_key: BlsSecretKey) -> &mut Self {
         self.signing_key = Some(secret_key);
         self

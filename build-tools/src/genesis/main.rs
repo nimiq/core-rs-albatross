@@ -23,7 +23,7 @@ fn main() {
             block,
             hash,
             accounts,
-        } = GenesisBuilder::default()
+        } = GenesisBuilder::new()
             .with_config_file(file)
             .unwrap()
             .generate()

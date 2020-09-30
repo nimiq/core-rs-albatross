@@ -54,7 +54,7 @@ fn generate_albatross(
     };
     info!("genesis source file: {}", genesis_config.display());
 
-    let mut builder = GenesisBuilder::default();
+    let mut builder = GenesisBuilder::new();
     builder.with_config_file(genesis_config).unwrap();
     let staking_contract_address = builder
         .staking_contract_address
