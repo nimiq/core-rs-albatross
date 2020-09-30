@@ -7,26 +7,26 @@ use database::{
 };
 use hash::Blake2bHash;
 use primitives::policy;
-use transaction::Transaction as BlockchainTransaction;
 
-use crate::chain_info::{ChainInfo, EpochTransactions};
+use crate::chain_info::ChainInfo;
 use crate::Direction;
 
 #[derive(Debug)]
 pub struct ChainStore {
     env: Environment,
+    // A database of chain infos (it excludes the block body) indexed by their block hashes.
     chain_db: Database,
+    // A database of block bodies indexed by their block hashes.
     block_db: Database,
-    epoch_tx_db: Database,
     // A database of block hashes indexed by their block number.
     height_idx: Database,
+    // A database of the transaction receipts for a block, by their corresponding block hashes.
     receipt_db: Database,
 }
 
 impl ChainStore {
     const CHAIN_DB_NAME: &'static str = "ChainData";
     const BLOCK_DB_NAME: &'static str = "Block";
-    const EPOCH_TRANSACTIONS_DB_NAME: &'static str = "EpochTransactions";
     const HEIGHT_IDX_NAME: &'static str = "HeightIndex";
     const RECEIPT_DB_NAME: &'static str = "Receipts";
 
@@ -35,7 +35,6 @@ impl ChainStore {
     pub fn new(env: Environment) -> Self {
         let chain_db = env.open_database(Self::CHAIN_DB_NAME.to_string());
         let block_db = env.open_database(Self::BLOCK_DB_NAME.to_string());
-        let epoch_tx_db = env.open_database(Self::EPOCH_TRANSACTIONS_DB_NAME.to_string());
         let height_idx = env.open_database_with_flags(
             Self::HEIGHT_IDX_NAME.to_string(),
             DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_FIXED_SIZE_VALUES,
@@ -46,7 +45,6 @@ impl ChainStore {
             env,
             chain_db,
             block_db,
-            epoch_tx_db,
             height_idx,
             receipt_db,
         }
@@ -92,36 +90,6 @@ impl ChainStore {
         }
 
         Some(chain_info)
-    }
-
-    pub fn put_epoch_transactions(
-        &self,
-        txn: &mut WriteTransaction,
-        hash: &Blake2bHash,
-        transactions: &[BlockchainTransaction],
-    ) {
-        let epoch = EpochTransactions::Borrowed(transactions);
-        txn.put_reserve(&self.epoch_tx_db, hash, &epoch);
-    }
-
-    pub fn get_epoch_transactions(
-        &self,
-        hash: &Blake2bHash,
-        txn_option: Option<&Transaction>,
-    ) -> Option<Vec<BlockchainTransaction>> {
-        let read_txn: ReadTransaction;
-        let txn = match txn_option {
-            Some(txn) => txn,
-            None => {
-                read_txn = ReadTransaction::new(&self.env);
-                &read_txn
-            }
-        };
-
-        txn.get(&self.epoch_tx_db, hash).map(|epoch| match epoch {
-            EpochTransactions::Owned(v) => v,
-            _ => unreachable!(),
-        })
     }
 
     pub fn put_chain_info(

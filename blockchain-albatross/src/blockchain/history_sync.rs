@@ -287,8 +287,8 @@ impl Blockchain {
             false,
         );
         self.chain_store.set_head(&mut txn, &block_hash);
-        self.chain_store
-            .put_epoch_transactions(&mut txn, &block_hash, transactions);
+        // self.chain_store
+        //     .put_epoch_transactions(&mut txn, &block_hash, transactions);
 
         // Acquire write lock & commit changes.
         let mut state = self.state.write();

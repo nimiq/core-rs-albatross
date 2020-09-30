@@ -19,6 +19,7 @@ use crate::chain_info::ChainInfo;
 #[cfg(feature = "metrics")]
 use crate::chain_metrics::BlockchainMetrics;
 use crate::chain_store::ChainStore;
+use crate::history_store::HistoryStore;
 use crate::reward::genesis_parameters;
 use crate::transaction_cache::TransactionCache;
 use crate::{BlockchainError, BlockchainEvent, ForkEvent};
@@ -38,6 +39,8 @@ pub struct Blockchain {
     pub fork_notifier: RwLock<Notifier<'static, ForkEvent>>,
     // The chain store is a database containing all of the chain infos, blocks and receipts.
     pub chain_store: Arc<ChainStore>,
+    // The history store is a database containing all of the history trees and transactions.
+    pub history_store: Arc<HistoryStore>,
     // The current state of the blockchain.
     pub(crate) state: RwLock<BlockchainState>,
     pub(crate) push_lock: Mutex<()>,
@@ -55,11 +58,15 @@ impl Blockchain {
     pub fn new(env: Environment, network_id: NetworkId) -> Result<Self, BlockchainError> {
         let chain_store = Arc::new(ChainStore::new(env.clone()));
 
+        let history_store = Arc::new(HistoryStore::new(env.clone()));
+
         let time = Arc::new(OffsetTime::new());
 
         Ok(match chain_store.get_head(None) {
-            Some(head_hash) => Blockchain::load(env, network_id, chain_store, time, head_hash)?,
-            None => Blockchain::init(env, network_id, chain_store, time)?,
+            Some(head_hash) => {
+                Blockchain::load(env, network_id, chain_store, history_store, time, head_hash)?
+            }
+            None => Blockchain::init(env, network_id, chain_store, history_store, time)?,
         })
     }
 
@@ -68,6 +75,7 @@ impl Blockchain {
         env: Environment,
         network_id: NetworkId,
         chain_store: Arc<ChainStore>,
+        history_store: Arc<HistoryStore>,
         time: Arc<OffsetTime>,
         head_hash: Blake2bHash,
     ) -> Result<Self, BlockchainError> {
@@ -182,6 +190,7 @@ impl Blockchain {
             notifier: RwLock::new(Notifier::new()),
             fork_notifier: RwLock::new(Notifier::new()),
             chain_store,
+            history_store,
             state: RwLock::new(BlockchainState {
                 accounts,
                 transaction_cache,
@@ -208,6 +217,7 @@ impl Blockchain {
         env: Environment,
         network_id: NetworkId,
         chain_store: Arc<ChainStore>,
+        history_store: Arc<HistoryStore>,
         time: Arc<OffsetTime>,
     ) -> Result<Self, BlockchainError> {
         // Initialize chain & accounts with genesis block.
@@ -256,6 +266,7 @@ impl Blockchain {
             notifier: RwLock::new(Notifier::new()),
             fork_notifier: RwLock::new(Notifier::new()),
             chain_store,
+            history_store,
             state: RwLock::new(BlockchainState {
                 accounts,
                 transaction_cache,

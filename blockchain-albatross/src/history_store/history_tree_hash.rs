@@ -2,6 +2,8 @@ use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteByte
 use hash::{Blake2bHash, Hash};
 use mmr::hash::Merge;
 
+/// A wrapper for the Blake2bHash. This is necessary because Rust doesn't let us implement traits
+/// for structs defined in external crates.
 #[derive(Clone)]
 pub struct HistoryTreeHash(pub Blake2bHash);
 
@@ -12,11 +14,13 @@ impl HistoryTreeHash {
 }
 
 impl Merge for HistoryTreeHash {
+    /// Hashes just a prefix.
     fn empty(prefix: u64) -> Self {
         let message = prefix.to_be_bytes().to_vec();
         HistoryTreeHash(message.hash())
     }
 
+    /// Hashes a prefix and two History Tree Hashes together.
     fn merge(&self, other: &Self, prefix: u64) -> Self {
         let mut message = prefix.to_be_bytes().to_vec();
         message.append(&mut self.0.serialize_to_vec());

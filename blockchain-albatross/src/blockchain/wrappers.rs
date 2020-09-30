@@ -4,17 +4,17 @@ use account::{Account, StakingContract};
 use block::{Block, BlockType, MacroBlock};
 use database::{Transaction, WriteTransaction};
 use genesis::NetworkInfo;
-use hash::{Blake2bHash, Hash};
+use hash::Blake2bHash;
 use keys::Address;
 use primitives::policy;
 use primitives::slot::ValidatorSlots;
 use transaction::{Transaction as BlockchainTransaction, TransactionReceipt};
-use utils::merkle;
 use utils::observer::{Listener, ListenerHandle};
 
 use crate::blockchain_state::BlockchainState;
 #[cfg(feature = "metrics")]
 use crate::chain_metrics::BlockchainMetrics;
+use crate::history_store::ExtendedTransactionData;
 use crate::{Blockchain, BlockchainEvent, Direction};
 
 /// Implements several wrapper functions.
@@ -169,18 +169,19 @@ impl Blockchain {
             // It might be that we synced this epoch via macro block sync and don't actually have
             // the micro blocks.
             // Therefore, we check this first.
-            let macro_block = policy::election_block_of(batch_or_epoch_index);
-            if let Some(macro_block_info) =
-                self.chain_store
-                    .get_chain_info_at(macro_block, false, txn_option)
-            {
-                if let Some(txs) = self
-                    .chain_store
-                    .get_epoch_transactions(&macro_block_info.head.hash(), txn_option)
-                {
-                    return Some(txs);
+            let ext_txs = self
+                .history_store
+                .get_epoch_transactions(batch_or_epoch_index, txn_option)?;
+
+            let mut txs = vec![];
+
+            for ext_tx in ext_txs {
+                if let ExtendedTransactionData::Basic(tx) = ext_tx.data {
+                    txs.push(tx);
                 }
             }
+
+            return Some(txs);
         }
 
         // Else retrieve transactions normally from micro blocks.
@@ -255,13 +256,7 @@ impl Blockchain {
         epoch: u32,
         txn_option: Option<&Transaction>,
     ) -> Option<Blake2bHash> {
-        let hashes: Vec<Blake2bHash> = self
-            .get_epoch_transactions(epoch, txn_option)?
-            .iter()
-            .map(|tx| tx.hash())
-            .collect(); // BlockchainTransaction::hash does *not* work here.
-
-        Some(merkle::compute_root_from_hashes::<Blake2bHash>(&hashes))
+        self.history_store.get_history_tree_root(epoch, txn_option)
     }
 
     /// Returns the current staking contract.

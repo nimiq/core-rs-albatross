@@ -1,4 +1,4 @@
-use crate::history_store::history_tree_hash::HistoryTreeHash;
+use crate::history_store::HistoryTreeHash;
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use database::{FromDatabaseValue, IntoDatabaseValue};
 use hash::Hash;
@@ -6,14 +6,21 @@ use mmr::hash::Hash as MMRHash;
 use std::io;
 use transaction::Transaction as BlockchainTransaction;
 
+/// A single struct that stores information that represents any possible transaction (account
+/// transaction, fork, view change) on the blockchain.
 #[derive(Clone, Debug)]
 pub struct ExtendedTransaction {
+    // The number of the block when the transaction happened.
     pub block_number: u32,
+    // The timestamp of the block when the transaction happened.
     pub block_time: u64,
+    // A struct containing the transaction data.
     pub data: ExtendedTransactionData,
 }
 
 impl MMRHash<HistoryTreeHash> for &ExtendedTransaction {
+    /// Hashes a prefix and an extended transaction into a HistoryTreeHash. The prefix is necessary
+    /// to include it into the History Tree.
     fn hash(&self, prefix: u64) -> HistoryTreeHash {
         let mut message = prefix.to_be_bytes().to_vec();
         message.append(&mut self.serialize_to_vec());
@@ -72,13 +79,20 @@ impl FromDatabaseValue for ExtendedTransaction {
     }
 }
 
+/// An enum specifying the type of transaction and containing the necessary data to represent that
+/// transaction.
 #[derive(Clone, Debug)]
 pub enum ExtendedTransactionData {
+    // A basic transaction. It simply contains the transaction as contained in the block.
+    // TODO: The transaction includes a lot of unnecessary information (ex: the signature). Don't
+    //       include all of it here.
     Basic(BlockchainTransaction),
-    // This the block number and the view number, in that order.
-    Fork(u32, u32),
-    // This is the view number.
-    ViewChange(u32),
+    // A fork transaction. It only specifies the validator slot that got slashed as result of the
+    // fork. The proof is omitted.
+    Fork(u16),
+    // A view change transaction. It only specifies the validator slot(s) that got slashed as result
+    // of the view change. The proof is omitted.
+    ViewChange(Vec<u16>),
 }
 
 impl Serialize for ExtendedTransactionData {
@@ -90,17 +104,19 @@ impl Serialize for ExtendedTransactionData {
                 size += Serialize::serialize(tx, writer)?;
                 Ok(size)
             }
-            ExtendedTransactionData::Fork(block_nr, view_nr) => {
+            ExtendedTransactionData::Fork(slot) => {
                 let mut size = 0;
                 size += Serialize::serialize(&ExtendedTransactionDataType::Fork, writer)?;
-                size += Serialize::serialize(block_nr, writer)?;
-                size += Serialize::serialize(view_nr, writer)?;
+                size += Serialize::serialize(slot, writer)?;
                 Ok(size)
             }
-            ExtendedTransactionData::ViewChange(view_nr) => {
+            ExtendedTransactionData::ViewChange(slots) => {
                 let mut size = 0;
                 size += Serialize::serialize(&ExtendedTransactionDataType::ViewChange, writer)?;
-                size += Serialize::serialize(view_nr, writer)?;
+                size += Serialize::serialize(&(slots.len() as u16), writer)?;
+                for slot in slots {
+                    size += Serialize::serialize(slot, writer)?;
+                }
                 Ok(size)
             }
         }
@@ -113,15 +129,10 @@ impl Serialize for ExtendedTransactionData {
                 size += Serialize::serialized_size(tx);
                 size
             }
-            ExtendedTransactionData::Fork(block_nr, view_nr) => {
-                let mut size = 1;
-                size += Serialize::serialized_size(block_nr);
-                size += Serialize::serialized_size(view_nr);
-                size
-            }
-            ExtendedTransactionData::ViewChange(view_nr) => {
-                let mut size = 1;
-                size += Serialize::serialized_size(view_nr);
+            ExtendedTransactionData::Fork(_) => 1 + 4,
+            ExtendedTransactionData::ViewChange(slots) => {
+                let mut size = 1 + 4;
+                size += slots.len() * 2;
                 size
             }
         }
@@ -137,18 +148,22 @@ impl Deserialize for ExtendedTransactionData {
                 Ok(ExtendedTransactionData::Basic(tx))
             }
             ExtendedTransactionDataType::Fork => {
-                let block_nr: u32 = Deserialize::deserialize(reader)?;
-                let view_nr: u32 = Deserialize::deserialize(reader)?;
-                Ok(ExtendedTransactionData::Fork(block_nr, view_nr))
+                let slot: u16 = Deserialize::deserialize(reader)?;
+                Ok(ExtendedTransactionData::Fork(slot))
             }
             ExtendedTransactionDataType::ViewChange => {
-                let view_nr: u32 = Deserialize::deserialize(reader)?;
-                Ok(ExtendedTransactionData::ViewChange(view_nr))
+                let mut slots = vec![];
+                let len = Deserialize::deserialize(reader)?;
+                for _i in 0..len {
+                    slots.push(Deserialize::deserialize(reader)?);
+                }
+                Ok(ExtendedTransactionData::ViewChange(slots))
             }
         }
     }
 }
 
+/// Just a convenience enum to help with the serialization/deserialization functions.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum ExtendedTransactionDataType {
