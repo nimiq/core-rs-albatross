@@ -46,16 +46,3 @@ simple_logger = "1.0"
 nimiq-build-tools = { path = "../build-tools", version = "0.1" }
 nimiq-hash = { path = "../hash", version = "0.1" }
 nimiq-keys = { path = "../keys" }
-
-[features]
-default = ["all"]
-all = ["networks", "time", "address", "services", "version", "protocol", "subscription", "validator", "subscription-albatross"]
-networks = ["address", "services", "protocol"]
-time = []
-address = ["services", "protocol"]
-services = []
-version = []
-protocol = []
-subscription = []
-subscription-albatross = []
-validator = []
