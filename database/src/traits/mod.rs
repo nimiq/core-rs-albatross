@@ -93,6 +93,21 @@ impl FromDatabaseValue for u64 {
     }
 }
 
+impl FromDatabaseValue for Vec<u8> {
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
+    where
+        Self: Sized,
+    {
+        Ok(bytes.to_vec())
+    }
+}
+
+impl AsDatabaseBytes for Vec<u8> {
+    fn as_database_bytes(&self) -> Cow<[u8]> {
+        Cow::Borrowed(&self[..])
+    }
+}
+
 // Conflicting implementation:
 //impl<T> FromDatabaseValue for T
 //    where T: lmdb_zero::traits::FromLmdbBytes + ?Sized {
@@ -118,6 +133,7 @@ macro_rules! as_lmdb_bytes {
     };
 }
 
+as_lmdb_bytes!(u8);
 as_lmdb_bytes!(u16);
 as_lmdb_bytes!(i16);
 as_lmdb_bytes!(u32);
@@ -130,6 +146,7 @@ as_lmdb_bytes!(str);
 as_lmdb_bytes!(CStr);
 as_lmdb_bytes!(char);
 
+as_lmdb_bytes!([u8]);
 as_lmdb_bytes!([u16]);
 as_lmdb_bytes!([i16]);
 as_lmdb_bytes!([u32]);

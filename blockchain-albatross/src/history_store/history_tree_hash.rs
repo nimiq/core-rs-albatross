@@ -1,6 +1,9 @@
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use database::{AsDatabaseBytes, FromDatabaseValue};
 use hash::{Blake2bHash, Hash};
 use mmr::hash::Merge;
+use std::borrow::Cow;
+use std::io;
 
 /// A wrapper for the Blake2bHash. This is necessary because Rust doesn't let us implement traits
 /// for structs defined in external crates.
@@ -43,5 +46,20 @@ impl Deserialize for HistoryTreeHash {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let hash: Blake2bHash = Deserialize::deserialize(reader)?;
         Ok(HistoryTreeHash(hash))
+    }
+}
+
+impl AsDatabaseBytes for HistoryTreeHash {
+    fn as_database_bytes(&self) -> Cow<[u8]> {
+        self.0.as_database_bytes()
+    }
+}
+
+impl FromDatabaseValue for HistoryTreeHash {
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
+    where
+        Self: Sized,
+    {
+        Ok(HistoryTreeHash(bytes.into()))
     }
 }
