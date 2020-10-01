@@ -29,7 +29,7 @@ pub struct MMRStore<'a, 'env> {
     hist_tree_db: &'a Database,
     tx: Tx<'a, 'env>,
     epoch_number: u32,
-    last_index: usize,
+    size: usize,
 }
 
 impl<'a, 'env> MMRStore<'a, 'env> {
@@ -39,12 +39,14 @@ impl<'a, 'env> MMRStore<'a, 'env> {
         tx: &'a Transaction<'env>,
         epoch_number: u32,
     ) -> Self {
-        let last_index = Self::get_last_index(hist_tree_db, tx, epoch_number).unwrap_or(0);
+        let size = Self::get_last_index(hist_tree_db, tx, epoch_number)
+            .map(|index| index + 1)
+            .unwrap_or(0);
         MMRStore {
             hist_tree_db,
             tx: Tx::Read(tx),
             epoch_number,
-            last_index,
+            size,
         }
     }
 
@@ -54,12 +56,14 @@ impl<'a, 'env> MMRStore<'a, 'env> {
         tx: &'a mut WriteTransaction<'env>,
         epoch_number: u32,
     ) -> Self {
-        let last_index = Self::get_last_index(hist_tree_db, &tx, epoch_number).unwrap_or(0);
+        let size = Self::get_last_index(hist_tree_db, tx, epoch_number)
+            .map(|index| index + 1)
+            .unwrap_or(0);
         MMRStore {
             hist_tree_db,
             tx: Tx::Write(tx),
             epoch_number,
-            last_index,
+            size,
         }
     }
 
@@ -101,18 +105,18 @@ fn key_to_index(key: Vec<u8>) -> Option<(u32, usize)> {
 impl<'a, 'env> Store<HistoryTreeHash> for MMRStore<'a, 'env> {
     fn push(&mut self, elem: HistoryTreeHash) {
         if let Tx::Write(ref mut tx) = self.tx {
-            self.last_index += 1;
-            let key = index_to_key(self.epoch_number, self.last_index);
+            let key = index_to_key(self.epoch_number, self.size);
             tx.put(&self.hist_tree_db, &key, &elem);
+            self.size += 1;
         }
     }
 
     fn remove_back(&mut self, num_elems: usize) {
         if let Tx::Write(ref mut tx) = self.tx {
-            for _ in 0..cmp::min(num_elems, self.last_index + 1) {
-                let key = index_to_key(self.epoch_number, self.last_index);
+            for _ in 0..cmp::min(num_elems, self.size) {
+                let key = index_to_key(self.epoch_number, self.size - 1);
                 tx.remove(&self.hist_tree_db, &key);
-                self.last_index -= 1;
+                self.size -= 1;
             }
         }
     }
@@ -126,6 +130,6 @@ impl<'a, 'env> Store<HistoryTreeHash> for MMRStore<'a, 'env> {
     }
 
     fn len(&self) -> usize {
-        self.last_index + 1
+        self.size
     }
 }
