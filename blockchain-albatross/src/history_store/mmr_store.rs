@@ -14,7 +14,7 @@ enum Tx<'a, 'env> {
 /// A store implementation for MMRs based on a single database of LMDB.
 /// The database contains multiple MMRs and one entry per node.
 /// The values stored are `HistoryTreeHash`es and the keys are constructed as follows:
-/// The big-endian byte representation of the epoch concatenated with the big-endian byte
+/// The big-endian byte representation of the epoch number concatenated with the big-endian byte
 /// representation of the node index.
 ///
 /// This way, we can efficiently retrieve individual nodes in an MMR and efficiently calculate

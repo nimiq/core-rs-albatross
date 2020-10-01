@@ -2,8 +2,10 @@ use keys::Address;
 use primitives::coin::Coin;
 
 use crate::AccountError;
+use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Copy, Serialize, Deserialize)]
+#[repr(u8)]
 pub enum InherentType {
     Reward,
     Slash,
@@ -60,4 +62,49 @@ pub trait AccountInherentInteraction: Sized {
         time: u64,
         receipt: Option<&Vec<u8>>,
     ) -> Result<(), AccountError>;
+}
+
+impl Serialize for Inherent {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+        let mut size = 0;
+        size += Serialize::serialize(&self.ty, writer)?;
+        size += Serialize::serialize(&self.target, writer)?;
+        size += Serialize::serialize(&self.value, writer)?;
+        // Serialize the length of the data.
+        let length = self.data.len() as u32;
+        size += Serialize::serialize(&length, writer)?;
+        // Serialize each element of the vec.
+        for i in 0..self.data.len() {
+            size += Serialize::serialize(&self.data[i], writer)?;
+        }
+        Ok(size)
+    }
+
+    fn serialized_size(&self) -> usize {
+        let mut size = 1;
+        size += Serialize::serialized_size(&self.target);
+        size += Serialize::serialized_size(&self.value);
+        size += 4;
+        size += self.data.len();
+        size
+    }
+}
+
+impl Deserialize for Inherent {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        let ty = Deserialize::deserialize(reader)?;
+        let target = Deserialize::deserialize(reader)?;
+        let value = Deserialize::deserialize(reader)?;
+        let mut data = vec![];
+        let length = Deserialize::deserialize(reader)?;
+        for _i in 0..length {
+            data.push(Deserialize::deserialize(reader)?);
+        }
+        Ok(Inherent {
+            ty,
+            target,
+            value,
+            data,
+        })
+    }
 }

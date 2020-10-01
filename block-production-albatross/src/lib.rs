@@ -330,7 +330,7 @@ impl BlockProducer {
         let history_root = self
             .blockchain
             .get_history_root(policy::epoch_at(self.blockchain.block_number() + 1), None)
-            .expect("Failed to compute transactions root, micro blocks missing");
+            .expect("Failed to compute history root.");
 
         let validators = if policy::is_election_block_at(self.blockchain.block_number() + 1) {
             Some(

@@ -74,7 +74,7 @@ impl HistoryStore {
 
     /// Removes a number of extended transactions from an existing history tree. It returns the root of the
     /// resulting tree.
-    pub fn remove_from_history(
+    pub fn remove_partial_history(
         &self,
         txn: &mut WriteTransaction,
         epoch_number: u32,
@@ -199,7 +199,7 @@ impl HistoryStore {
     }
 
     /// Gets an extended transaction by its hash. Note that this hash is the leaf hash (see MMRHash)
-    /// of the transaction, not a simple Blake2b hash of the transaction
+    /// of the transaction, not a simple Blake2b hash of the transaction.
     pub fn get_extended_tx(
         &self,
         hash: &Blake2bHash,

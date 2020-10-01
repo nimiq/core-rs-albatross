@@ -14,7 +14,7 @@ use utils::observer::{Listener, ListenerHandle};
 use crate::blockchain_state::BlockchainState;
 #[cfg(feature = "metrics")]
 use crate::chain_metrics::BlockchainMetrics;
-use crate::history_store::ExtendedTransactionData;
+use crate::history_store::ExtTxData;
 use crate::{Blockchain, BlockchainEvent, Direction};
 
 /// Implements several wrapper functions.
@@ -176,7 +176,7 @@ impl Blockchain {
             let mut txs = vec![];
 
             for ext_tx in ext_txs {
-                if let ExtendedTransactionData::Basic(tx) = ext_tx.data {
+                if let ExtTxData::Basic(tx) = ext_tx.data {
                     txs.push(tx);
                 }
             }
