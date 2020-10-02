@@ -337,7 +337,7 @@ mod tests {
 
                 // Check if partial length is correct.
                 for &v in &leaves[to_prove] {
-                    tmp_mmr.push(v).unwrap();
+                    tmp_mmr.push(&v).unwrap();
                 }
                 assert_eq!(
                     pmmr.proven_len(),
@@ -370,7 +370,7 @@ mod tests {
         let mut mmr = MerkleMountainRange::<TestHash, _>::new(store);
 
         for &v in nodes[..2].iter() {
-            mmr.push(v).unwrap();
+            mmr.push(&v).unwrap();
         }
 
         /*      2
@@ -389,7 +389,7 @@ mod tests {
          *   0     1     3
          *   0     1     2
          */
-        mmr.push(nodes[2]).unwrap();
+        mmr.push(&nodes[2]).unwrap();
 
         for chunk_size in 1..=3 {
             test_proof(&mmr, &nodes[..3], chunk_size, false);
@@ -407,7 +407,7 @@ mod tests {
          *  0     1     2     3     4     5     6     7      8     9     10
          */
         for &v in nodes[3..].iter() {
-            mmr.push(v).unwrap();
+            mmr.push(&v).unwrap();
         }
 
         for chunk_size in 1..=10 {
@@ -424,7 +424,7 @@ mod tests {
         let mut mmr = MerkleMountainRange::<TestHash, _>::new(store);
 
         for &v in nodes.iter() {
-            mmr.push(v).unwrap();
+            mmr.push(&v).unwrap();
         }
 
         /*      2

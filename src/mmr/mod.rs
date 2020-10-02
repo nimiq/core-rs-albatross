@@ -71,7 +71,7 @@ impl<H: Merge + Clone, S: Store<H>> MerkleMountainRange<H, S> {
     /// Inserts an element and returns the corresponding leaf index.
     /// The leaf index is not the internal index within the tree,
     /// but a leaf index of i means that it is the i-th leaf (starting to count at 0).
-    pub fn push<T>(&mut self, elem: T) -> Result<usize, Error>
+    pub fn push<T>(&mut self, elem: &T) -> Result<usize, Error>
     where
         T: Hash<H>,
     {
@@ -386,7 +386,7 @@ mod tests {
 
         for (i, v) in nodes.clone().into_iter().enumerate() {
             // Add value.
-            let index = mmr.push(v);
+            let index = mmr.push(&v);
             assert_eq!(index, Ok(i));
             // Check properties.
             assert_eq!(mmr.num_leaves(), i + 1);
