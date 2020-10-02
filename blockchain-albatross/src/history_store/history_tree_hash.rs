@@ -7,7 +7,7 @@ use std::io;
 
 /// A wrapper for the Blake2bHash. This is necessary because Rust doesn't let us implement traits
 /// for structs defined in external crates.
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct HistoryTreeHash(pub Blake2bHash);
 
 impl HistoryTreeHash {

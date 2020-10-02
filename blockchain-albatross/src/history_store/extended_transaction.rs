@@ -66,7 +66,7 @@ impl ExtendedTransaction {
     }
 }
 
-impl MMRHash<HistoryTreeHash> for &ExtendedTransaction {
+impl MMRHash<HistoryTreeHash> for ExtendedTransaction {
     /// Hashes a prefix and an extended transaction into a HistoryTreeHash. The prefix is necessary
     /// to include it into the History Tree.
     fn hash(&self, prefix: u64) -> HistoryTreeHash {

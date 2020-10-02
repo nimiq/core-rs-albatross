@@ -1,10 +1,14 @@
 use crate::history_store::mmr_store::MMRStore;
-use crate::history_store::ExtendedTransaction;
+use crate::history_store::{ExtendedTransaction, HistoryTreeHash};
 use database::{Database, Environment, ReadTransaction, Transaction, WriteTransaction};
 use hash::Blake2bHash;
+use mmr::error::Error as MMRError;
 use mmr::hash::Hash as MMRHash;
+use mmr::mmr::partial::PartialMerkleMountainRange;
+use mmr::mmr::proof::RangeProof;
 use mmr::mmr::MerkleMountainRange;
 use std::cmp;
+use utils::math::CeilingDiv;
 
 /// A struct that contains databases to store history trees (which are Merkle Mountain Ranges
 /// constructed from the list of extended transactions in an epoch) and extended transactions (which
@@ -160,6 +164,131 @@ impl HistoryStore {
         ));
 
         Some(tree.get_root().ok()?.to_blake2b())
+    }
+
+    /// Returns the number of data chunks for a given epoch.
+    pub fn get_num_chunks(
+        &self,
+        epoch_number: u32,
+        chunk_size: usize,
+        txn_option: Option<&Transaction>,
+    ) -> usize {
+        let read_txn: ReadTransaction;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = ReadTransaction::new(&self.env);
+                &read_txn
+            }
+        };
+
+        // Get history tree for given epoch.
+        let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
+            &self.hist_tree_db,
+            txn,
+            epoch_number,
+        ));
+
+        tree.num_leaves().ceiling_div(chunk_size)
+    }
+
+    /// Returns the `chunk_index`th chunk of size `chunk_size` for a given epoch.
+    /// The return value consists of a vector of all the extended transactions in that chunk
+    /// and a proof for these in the MMR.
+    pub fn get_chunk(
+        &self,
+        epoch_number: u32,
+        chunk_size: usize,
+        chunk_index: usize,
+        txn_option: Option<&Transaction>,
+    ) -> Option<(Vec<ExtendedTransaction>, RangeProof<HistoryTreeHash>)> {
+        let read_txn: ReadTransaction;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = ReadTransaction::new(&self.env);
+                &read_txn
+            }
+        };
+
+        // Get history tree for given epoch.
+        let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
+            &self.hist_tree_db,
+            txn,
+            epoch_number,
+        ));
+
+        let start = cmp::min(chunk_size * chunk_index, tree.num_leaves());
+        let end = cmp::min(start + chunk_size, tree.num_leaves());
+
+        // TODO: Setting `assume_previous` to false allows the proofs to be verified independently.
+        //  This, however, increases the size of the proof. We might change this in the future.
+        let proof = tree.prove_range(start..end, false).ok()?;
+
+        // Get each extended transaction from the tree.
+        let mut ext_txs = vec![];
+
+        for i in start..end {
+            let leaf_hash = tree.get_leaf(i).unwrap();
+            ext_txs.push(
+                self.get_extended_tx(&leaf_hash.to_blake2b(), Some(txn))
+                    .unwrap(),
+            );
+        }
+
+        Some((ext_txs, proof))
+    }
+
+    /// Returns a partial MMR to put proofs in.
+    pub fn create_partial_tree<'a>(
+        &'a self,
+        epoch_number: u32,
+        txn: &'a mut WriteTransaction<'a>,
+    ) -> PartialMerkleMountainRange<HistoryTreeHash, MMRStore> {
+        // Get history tree for given epoch.
+        PartialMerkleMountainRange::new(MMRStore::with_write_transaction(
+            &self.hist_tree_db,
+            txn,
+            epoch_number,
+        ))
+    }
+
+    /// Creates a new history tree from chunks and returns the root hash.
+    pub fn put_history(
+        &self,
+        epoch_number: u32,
+        chunks: Vec<(Vec<ExtendedTransaction>, RangeProof<HistoryTreeHash>)>,
+        txn: &mut WriteTransaction,
+    ) -> Result<Blake2bHash, MMRError> {
+        // Get partial history tree for given epoch.
+        let mut tree = PartialMerkleMountainRange::new(MMRStore::with_write_transaction(
+            &self.hist_tree_db,
+            txn,
+            epoch_number,
+        ));
+
+        // Push all proofs into the history tree and remember all leaves.
+        let mut all_leaves = Vec::with_capacity(
+            chunks.len() * chunks.first().map(|(leaves, _)| leaves.len()).unwrap_or(0),
+        );
+        for (mut leaves, proof) in chunks {
+            tree.push_proof(proof, &leaves)?;
+            all_leaves.append(&mut leaves);
+        }
+
+        // Calculate the root once the tree is complete.
+        if !tree.is_finished() {
+            return Err(MMRError::IncompleteProof);
+        }
+        let root = tree.get_root()?.to_blake2b();
+
+        // Then add all transactions to the database as the tree is finished.
+        for leaf in all_leaves {
+            // The prefix is one because it is a leaf.
+            self.put_extended_tx(txn, &leaf.hash(1).to_blake2b(), &leaf);
+        }
+
+        Ok(root)
     }
 
     /// Gets all extended transactions for a given epoch.
