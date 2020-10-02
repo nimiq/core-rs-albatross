@@ -312,7 +312,7 @@ mod tests {
         let mut mmr = MerkleMountainRange::<TestHash, _>::new(store);
 
         for &v in nodes[..2].iter() {
-            mmr.push(v).unwrap();
+            mmr.push(&v).unwrap();
         }
 
         /*      2
@@ -334,7 +334,7 @@ mod tests {
          *   0     1     3
          *   0     1     2
          */
-        mmr.push(nodes[2]).unwrap();
+        mmr.push(&nodes[2]).unwrap();
 
         test_proof(&mmr, &nodes, &[0], &[Node::Store(1), Node::Store(3)]);
         test_proof(&mmr, &nodes, &[2], &[Node::Store(2)]);
@@ -350,7 +350,7 @@ mod tests {
          *  0     1     2     3     4     5     6     7      8     9     10
          */
         for &v in nodes[3..].iter() {
-            mmr.push(v).unwrap();
+            mmr.push(&v).unwrap();
         }
 
         let bagged_rhs = bagging(
@@ -430,7 +430,7 @@ mod tests {
         let mut mmr = MerkleMountainRange::<TestHash, _>::new(store);
 
         for &v in nodes.iter() {
-            mmr.push(v).unwrap();
+            mmr.push(&v).unwrap();
         }
 
         /*      2
@@ -520,7 +520,7 @@ mod tests {
         let mut mmr = MerkleMountainRange::<TestHash, _>::new(store);
 
         for &v in nodes[..2].iter() {
-            mmr.push(v).unwrap();
+            mmr.push(&v).unwrap();
         }
 
         /*      2
@@ -566,7 +566,7 @@ mod tests {
          *   0     1     3
          *   0     1     2
          */
-        mmr.push(nodes[2]).unwrap();
+        mmr.push(&nodes[2]).unwrap();
 
         test_proof(
             &mmr,
@@ -590,7 +590,7 @@ mod tests {
          *  0     1     2     3     4     5     6     7      8     9     10
          */
         for &v in nodes[3..].iter() {
-            mmr.push(v).unwrap();
+            mmr.push(&v).unwrap();
         }
 
         let bagged_rhs = bagging(
@@ -686,7 +686,7 @@ mod tests {
         let mut mmr = MerkleMountainRange::<TestHash, _>::new(store);
 
         for &v in nodes.iter() {
-            mmr.push(v).unwrap();
+            mmr.push(&v).unwrap();
         }
 
         /*      2
