@@ -20,7 +20,7 @@ use block::{
 use blockchain::blockchain::Blockchain;
 use blockchain::history_store::ExtendedTransaction;
 use bls::KeyPair;
-use database::WriteTransaction;
+
 use hash::{Blake2bHash, Hash};
 use mempool::Mempool;
 use nimiq_account::Inherent;
