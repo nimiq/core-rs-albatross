@@ -91,7 +91,7 @@ pub enum BlockError {
     InvalidSeed,
     #[fail(display = "Invalid view number")]
     InvalidViewNumber,
-    #[fail(display = "Invalid transactions root")]
+    #[fail(display = "Invalid history root")]
     InvalidHistoryRoot,
     #[fail(display = "Incorrect validators")]
     InvalidValidators,

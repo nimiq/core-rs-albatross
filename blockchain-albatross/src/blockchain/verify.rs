@@ -212,17 +212,6 @@ impl Blockchain {
             if policy::is_election_block_at(header.block_number()) && body.validators.is_none() {
                 return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
             }
-
-            let history_root = self
-                .get_history_root(policy::epoch_at(header.block_number()), txn_opt)
-                .ok_or(PushError::BlockchainError(
-                    BlockchainError::FailedLoadingMainChain,
-                ))?;
-
-            if body.history_root != history_root {
-                warn!("Rejecting block - wrong history root");
-                return Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot));
-            }
         }
 
         if let Some(BlockBody::Micro(body)) = body_opt {
@@ -333,6 +322,23 @@ impl Blockchain {
 
         // For macro blocks we have additional checks.
         if let Block::Macro(macro_block) = block {
+            // Check the history root.
+            let real_root = match self
+                .history_store
+                .get_history_tree_root(policy::epoch_at(macro_block.header.block_number), txn_opt)
+            {
+                Some(hash) => hash,
+                None => {
+                    return Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot));
+                }
+            };
+
+            if real_root != macro_block.body.as_ref().unwrap().history_root {
+                warn!("Rejecting block - History root doesn't match real history root");
+                return Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot));
+            }
+
+            // Check the correctness of the lost rewards and disabled sets.
             let staking_contract = self.get_staking_contract();
 
             if staking_contract.previous_lost_rewards()
@@ -349,6 +355,7 @@ impl Blockchain {
                 return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
             }
 
+            // If the macro block is an election block, you also need to check the validator set.
             if macro_block.is_election_block() {
                 let real_validators = &self.next_slots(&macro_block.header.seed).validator_slots;
 

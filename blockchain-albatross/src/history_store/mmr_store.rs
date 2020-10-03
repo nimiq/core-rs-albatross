@@ -33,15 +33,13 @@ pub struct MMRStore<'a, 'env> {
 }
 
 impl<'a, 'env> MMRStore<'a, 'env> {
-    // Create a read-only store.
+    /// Create a read-only store.
     pub fn with_read_transaction(
         hist_tree_db: &'a Database,
         tx: &'a Transaction<'env>,
         epoch_number: u32,
     ) -> Self {
-        let size = Self::get_last_index(hist_tree_db, tx, epoch_number)
-            .map(|index| index + 1)
-            .unwrap_or(0);
+        let size = Self::get_size(hist_tree_db, tx, epoch_number);
         MMRStore {
             hist_tree_db,
             tx: Tx::Read(tx),
@@ -50,15 +48,13 @@ impl<'a, 'env> MMRStore<'a, 'env> {
         }
     }
 
-    // Create a writable store.
+    /// Create a writable store.
     pub fn with_write_transaction(
         hist_tree_db: &'a Database,
         tx: &'a mut WriteTransaction<'env>,
         epoch_number: u32,
     ) -> Self {
-        let size = Self::get_last_index(hist_tree_db, tx, epoch_number)
-            .map(|index| index + 1)
-            .unwrap_or(0);
+        let size = Self::get_size(hist_tree_db, tx, epoch_number);
         MMRStore {
             hist_tree_db,
             tx: Tx::Write(tx),
@@ -67,34 +63,54 @@ impl<'a, 'env> MMRStore<'a, 'env> {
         }
     }
 
-    fn get_last_index(
-        hist_tree_db: &Database,
-        tx: &Transaction,
-        epoch_number: u32,
-    ) -> Option<usize> {
+    /// Calculates the size of MMR at a given epoch.
+    fn get_size(hist_tree_db: &Database, tx: &Transaction, epoch_number: u32) -> usize {
+        // Calculate the key for the beginning of the next epoch, `epoch_number + 1 || 0`.
         let mut next_epoch = (epoch_number + 1).to_be_bytes().to_vec();
         next_epoch.extend_from_slice(&0usize.to_be_bytes());
 
+        // Initialize the cursor for the database.
         let mut cursor = tx.cursor(hist_tree_db);
+
+        // Try to get the cursor on the key `epoch_number + 1 || 0`. If that key doesn't exist, then
+        // the cursor will continue until it finds the next key, which we know will be of the form
+        // `n || 0`. If it reaches the end of the database without finding a key, then it will be on
+        // a special key that indicates the end of the database.
         cursor.seek_range_key::<_, HistoryTreeHash>(&next_epoch);
 
-        // Try inferring last index.
-        let (last_key, _) = cursor.prev::<Vec<u8>, HistoryTreeHash>()?;
-        let (epoch, index) = key_to_index(last_key)?;
+        // Move the cursor back until it finds a key. By definition that key will either be the
+        // last index of some epoch or the beginning of the database.
+        // If we reach the beginning of the file, then we know that the epoch is empty and we return
+        // 0 as the size.
+        let (last_key, _) = match cursor.prev::<Vec<u8>, HistoryTreeHash>() {
+            Some(v) => v,
+            None => return 0,
+        };
+
+        // Deconstruct the key into an epoch number and a node index.
+        let (epoch, index) = key_to_index(last_key).unwrap();
+
+        // If the epoch number we got is equal to the desired epoch number, then we know that we are
+        // at the last node index of the epoch. The size then is simply the index + 1.
+        // Otherwise, then we did not find any key for the epoch that we wanted, consequently the
+        // epoch must be empty and we return a size of 0.
         if epoch == epoch_number {
-            Some(index)
+            index + 1
         } else {
-            None
+            0
         }
     }
 }
 
+/// Transforms an epoch number and a node index into the corresponding database key.
 fn index_to_key(epoch_number: u32, index: usize) -> Vec<u8> {
     let mut bytes = epoch_number.to_be_bytes().to_vec();
     bytes.extend_from_slice(&index.to_be_bytes());
     bytes
 }
 
+/// Transforms a database key into the corresponding epoch number and node index. Returns None if it
+/// fails.
 fn key_to_index(key: Vec<u8>) -> Option<(u32, usize)> {
     let (epoch_number, index) = key.split_at(4);
     let epoch_number = u32::from_be_bytes(epoch_number.try_into().ok()?);

@@ -25,24 +25,24 @@ impl ExtendedTransaction {
     pub fn from(
         block_number: u32,
         block_time: u64,
-        inherents: Vec<Inherent>,
         transactions: Vec<BlockchainTransaction>,
+        inherents: Vec<Inherent>,
     ) -> Vec<ExtendedTransaction> {
         let mut ext_txs = vec![];
-
-        for inherent in inherents {
-            ext_txs.push(ExtendedTransaction {
-                block_number,
-                block_time,
-                data: ExtTxData::Inherent(inherent),
-            })
-        }
 
         for transaction in transactions {
             ext_txs.push(ExtendedTransaction {
                 block_number,
                 block_time,
                 data: ExtTxData::Basic(transaction),
+            })
+        }
+
+        for inherent in inherents {
+            ext_txs.push(ExtendedTransaction {
+                block_number,
+                block_time,
+                data: ExtTxData::Inherent(inherent),
             })
         }
 

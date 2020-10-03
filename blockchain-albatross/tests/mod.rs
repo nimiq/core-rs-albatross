@@ -76,6 +76,7 @@ impl TemporaryBlockProducer {
                 extra_data,
             ))
         };
+
         assert_eq!(self.push(block.clone()), Ok(PushResult::Extended));
         block
     }

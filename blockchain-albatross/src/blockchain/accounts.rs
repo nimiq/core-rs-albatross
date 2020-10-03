@@ -5,7 +5,9 @@ use database::WriteTransaction;
 
 use crate::blockchain_state::BlockchainState;
 use crate::chain_info::ChainInfo;
+use crate::history_store::ExtendedTransaction;
 use crate::{Blockchain, PushError};
+use primitives::policy;
 
 /// Implements methods to handle the accounts.
 impl Blockchain {
@@ -51,13 +53,28 @@ impl Blockchain {
                     macro_block.header.timestamp,
                 );
 
+                // Check if the receipts contain an error.
+                if let Err(e) = receipts {
+                    return Err(PushError::AccountsError(e));
+                }
+
                 // Macro blocks are final and receipts for the previous batch are no longer necessary
                 // as rebranching across this block is not possible.
                 self.chain_store.clear_receipts(txn);
 
-                if let Err(e) = receipts {
-                    return Err(PushError::AccountsError(e));
-                }
+                // Store the transactions and the inherents into the History tree.
+                let ext_txs = ExtendedTransaction::from(
+                    macro_block.header.block_number,
+                    macro_block.header.timestamp,
+                    vec![],
+                    inherents,
+                );
+
+                self.history_store.add_to_history(
+                    txn,
+                    policy::epoch_at(macro_block.header.block_number),
+                    ext_txs,
+                );
             }
             Block::Micro(ref micro_block) => {
                 // Get the body of the block.
@@ -92,6 +109,20 @@ impl Blockchain {
                 let receipts = receipts.unwrap();
                 self.chain_store
                     .put_receipts(txn, micro_block.header.block_number, &receipts);
+
+                // Store the transactions and the inherents into the History tree.
+                let ext_txs = ExtendedTransaction::from(
+                    micro_block.header.block_number,
+                    micro_block.header.timestamp,
+                    body.transactions.clone(),
+                    inherents,
+                );
+
+                self.history_store.add_to_history(
+                    txn,
+                    policy::epoch_at(micro_block.header.block_number),
+                    ext_txs,
+                );
             }
         }
 
@@ -143,6 +174,16 @@ impl Blockchain {
         ) {
             panic!("Failed to revert - {}", e);
         }
+
+        // Remove the transactions from the History tree. For this you only need to calculate the
+        // number of transactions that you want to remove.
+        let num_txs = body.transactions.len() + inherents.len();
+
+        self.history_store.remove_partial_history(
+            txn,
+            policy::epoch_at(micro_block.header.block_number),
+            num_txs,
+        );
 
         Ok(())
     }
