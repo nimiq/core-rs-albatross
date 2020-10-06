@@ -64,7 +64,7 @@ impl HistoryStore {
 
         // Append the extended transactions to the history tree.
         for tx in ext_txs {
-            tree.push(tx).ok()?;
+            tree.push(&tx).ok()?;
         }
 
         // Return the history root.

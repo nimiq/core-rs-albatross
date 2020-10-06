@@ -13,7 +13,7 @@ use transaction::Transaction;
 use crate::blockchain_state::BlockchainState;
 use crate::chain_info::ChainInfo;
 use crate::hash::{Blake2bHash, Hash};
-use crate::{Blockchain, BlockchainError, PushError};
+use crate::{Blockchain, PushError};
 
 /// Implements methods to verify the validity of blocks.
 impl Blockchain {
