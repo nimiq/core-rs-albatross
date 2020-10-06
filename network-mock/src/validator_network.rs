@@ -18,7 +18,7 @@ impl MockValidatorNetwork {
     /// creates a new MockValidatorNetwork node who identifies itself with `validator_id`
     pub fn new(validator_id: usize) -> Self {
         MockValidatorNetwork {
-            mock_network: MockNetwork::new(validator_id as u32),
+            mock_network: MockNetwork::new(validator_id),
         }
     }
 
@@ -43,7 +43,7 @@ impl ValidatorNetwork for MockValidatorNetwork {
 
         for validator in validator_ids {
             // for every validator get the respective peer from the underliying MockNetwork instance
-            if let Some(peer) = self.mock_network.get_peer(&(*validator as u32)) {
+            if let Some(peer) = self.mock_network.get_peer(validator) {
                 // Try to send `msg` to the peer and push the result into the reuslt accumulation.
                 res.push(peer.send(msg).await.map_err(|err| match err {
                     // Transform everyhthing into Unreachable error except for Serialization errors.
@@ -79,13 +79,10 @@ impl ValidatorNetwork for MockValidatorNetwork {
     ) -> Pin<Box<dyn Stream<Item = (M, usize)> + Send>> {
         // select over all streams for every validator_id in validator_ids
         stream::select_all(validator_ids.iter().map(|id| {
-            let validator_id = id.clone();
-            // get the corresponding peer from the unnderlying MockNetwork
-            let peer = self
-                .mock_network
-                .get_peer(&(validator_id as u32))
-                .expect("Peer does not exist");
+            // get the corresponding peer from the underlying MockNetwork
+            let peer = self.mock_network.get_peer(id).expect("Peer does not exist");
 
+            let validator_id = id.clone();
             peer.receive::<M>().map(move |item| (item, validator_id))
         }))
         .boxed()
@@ -111,11 +108,11 @@ impl ValidatorNetwork for MockValidatorNetwork {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
     use beserial::{Deserialize, Serialize};
     use nimiq_network_interface::message::Message;
     use nimiq_network_interface::network::Network;
     use nimiq_network_interface::peer::Peer;
+    use std::time::Duration;
     use tokio::time::timeout;
 
     use nimiq_validator_network_interface::ValidatorNetwork;
@@ -206,7 +203,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn validators_will_not_receive_from_unrequested() {let original_msg1 = TestMessage { msg: 9 };
+    async fn validators_will_not_receive_from_unrequested() {
+        let original_msg1 = TestMessage { msg: 9 };
         let om1 = original_msg1.clone();
         let original_msg2 = TestMessage { msg: 12 };
         let om2 = original_msg2.clone();
@@ -243,8 +241,10 @@ mod tests {
             let msg1 = input.next().await.unwrap();
             let msg2 = input.next().await.unwrap();
             // make sure both messages were received as requested
-            assert!((msg1.0 == om1  && msg2.0 == om2 && msg1.1 == 2 && msg2.1 == 3)
-                || (msg1.0 == om2 && msg2.0 == om1 && msg1.1 == 3 && msg2.1 == 2));
+            assert!(
+                (msg1.0 == om1 && msg2.0 == om2 && msg1.1 == 2 && msg2.1 == 3)
+                    || (msg1.0 == om2 && msg2.0 == om1 && msg1.1 == 3 && msg2.1 == 2)
+            );
         });
 
         // net1 must not receive the message from net2, but it also must receive the message from net 3

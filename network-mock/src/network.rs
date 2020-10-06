@@ -22,7 +22,7 @@ pub type Channels =
     Arc<RwLock<HashMap<u64, Pin<Box<dyn Sink<Vec<u8>, Error = DispatchError> + Send + Sync>>>>>;
 
 pub struct MockPeer {
-    id: u32,
+    id: usize,
     tx: Arc<Mutex<Option<Pin<Box<dyn Sink<Vec<u8>, Error = SendError> + Send + Sync>>>>>,
     channels: Channels,
     close_tx: Mutex<Option<OneshotSender<CloseReason>>>,
@@ -30,10 +30,10 @@ pub struct MockPeer {
 
 impl MockPeer {
     pub fn new(
-        id: u32,
+        id: usize,
         tx: Pin<Box<dyn Sink<Vec<u8>, Error = SendError> + Send + Sync>>,
         rx: Pin<Box<dyn Stream<Item = Vec<u8>> + Send>>,
-        mut network_close_tx: UnboundedSender<u32>,
+        mut network_close_tx: UnboundedSender<usize>,
     ) -> Self {
         let tx = Arc::new(Mutex::new(Some(tx)));
         let tx1 = Arc::clone(&tx);
@@ -92,7 +92,7 @@ impl Eq for MockPeer {}
 
 #[async_trait]
 impl Peer for MockPeer {
-    type Id = u32;
+    type Id = usize;
 
     fn id(&self) -> Self::Id {
         self.id
@@ -132,23 +132,23 @@ impl Peer for MockPeer {
         if let Some(close_tx) = self.close_tx.lock().take() {
             close_tx.send(ty).expect("Close failed");
 
-            // Eagerly drop sender to stop sending message immediately.
+            // Eagerly drop sender to stop sending messages immediately.
             self.tx.lock().take();
         }
     }
 }
 
 pub struct MockNetwork {
-    peer_id: u32,
-    peers: Arc<RwLock<HashMap<u32, Arc<MockPeer>>>>,
+    peer_id: usize,
+    peers: Arc<RwLock<HashMap<usize, Arc<MockPeer>>>>,
     event_tx: BroadcastSender<NetworkEvent<MockPeer>>,
-    close_tx: UnboundedSender<u32>,
+    close_tx: UnboundedSender<usize>,
 }
 
 impl MockNetwork {
-    pub fn new(peer_id: u32) -> Self {
+    pub fn new(peer_id: usize) -> Self {
         let peers = Arc::new(RwLock::new(HashMap::new()));
-        let (event_tx, _rx) = broadcast(16);
+        let (event_tx, _rx) = broadcast(256);
         let (close_tx, close_rx) = unbounded();
 
         let peers1 = Arc::clone(&peers);
@@ -197,6 +197,12 @@ impl MockNetwork {
         self.event_tx
             .send(NetworkEvent::PeerJoined(Arc::clone(&peer)))
             .ok();
+    }
+
+    pub fn disconnect(&self) {
+        for (_, peer) in self.peers.write().drain() {
+            self.event_tx.send(NetworkEvent::PeerLeft(peer)).ok();
+        }
     }
 }
 

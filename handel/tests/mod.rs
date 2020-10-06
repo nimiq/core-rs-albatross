@@ -163,7 +163,7 @@ async fn it_can_aggregate() {
     // Initialize `contributor_num networks and Handel Aggregations. Connect all the networks with each other.
     for id in 0..contributor_num {
         // Create a network with id = `id`
-        let net = Arc::new(network::MockNetwork::new(id as u32));
+        let net = Arc::new(network::MockNetwork::new(id));
         // Create a protocol with `contributor_num + 1` peers set its id to `id`. Require `contributor_num` contributions
         // meaning all contributions need to be aggregated with the additional node initialized after this for loop.
         let protocol = Protocol::new(id, contributor_num + 1, contributor_num);
@@ -192,7 +192,7 @@ async fn it_can_aggregate() {
         ));
     }
     // same as in the for loop, execpt we want to keep the handel sinatnce and not spawn it.
-    let net = Arc::new(network::MockNetwork::new(contributor_num as u32));
+    let net = Arc::new(network::MockNetwork::new(contributor_num));
     let protocol = Protocol::new(contributor_num, contributor_num + 1, contributor_num + 1);
     let mut contributors = BitSet::new();
     contributors.insert(contributor_num);
@@ -237,7 +237,7 @@ async fn it_can_aggregate_to_treshold() {
     // Initialize `contributor_num networks and Handel Aggregations. Connect all the networks with each other.
     for id in 0..contributor_num {
         // Create a network with id = `id`
-        let net = Arc::new(network::MockNetwork::new(id as u32));
+        let net = Arc::new(network::MockNetwork::new(id));
         // Create a protocol with `contributor_num + 1` peers set its id to `id`. Require `contributor_num` contributions
         // meaning all contributions need to be aggregated with the additional node initialized after this for loop.
         let protocol = Protocol::new(id, contributor_num + 1, contributor_num / 2);
@@ -266,7 +266,7 @@ async fn it_can_aggregate_to_treshold() {
         ));
     }
     // same as in the for loop, execpt we want to keep the handel sinatnce and not spawn it.
-    let net = Arc::new(network::MockNetwork::new(contributor_num as u32));
+    let net = Arc::new(network::MockNetwork::new(contributor_num));
     let protocol = Protocol::new(contributor_num, contributor_num + 1, contributor_num / 2);
     let mut contributors = BitSet::new();
     contributors.insert(contributor_num);
