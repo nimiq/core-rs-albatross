@@ -39,7 +39,7 @@ struct ProduceMicroBlockState {
 }
 
 pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> {
-    consensus: Arc<Consensus<TNetwork>>,
+    pub consensus: Arc<Consensus<TNetwork>>,
     network: Arc<TValidatorNetwork>,
     signing_key: bls::KeyPair,
     wallet_key: Option<keys::KeyPair>,
@@ -227,7 +227,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         self.epoch_state.is_some()
     }
 
-    fn validator_id(&self) -> u16 {
+    pub fn validator_id(&self) -> u16 {
         self.epoch_state
             .as_ref()
             .expect("Validator not active")

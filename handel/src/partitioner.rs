@@ -111,7 +111,6 @@ impl Partitioner for BinomialPartitioner {
                 .unwrap_or_else(|e| panic!("Failed to combine contributions: {}", e));
         }
 
-        debug!("Combined signature: {:?}", combined);
         Some(combined)
     }
 }

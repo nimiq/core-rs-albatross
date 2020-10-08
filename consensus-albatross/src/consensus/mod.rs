@@ -91,7 +91,7 @@ impl<N: Network> Consensus<N> {
         network: Arc<N>,
         sync_protocol: S,
     ) -> Result<Arc<Self>, Error> {
-        let (tx, _rx) = broadcast(16);
+        let (tx, _rx) = broadcast(256);
         let this = Arc::new(Consensus {
             blockchain,
             mempool,

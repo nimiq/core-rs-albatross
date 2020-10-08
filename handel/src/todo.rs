@@ -176,7 +176,7 @@ impl<C: AggregatableContribution, E: Evaluator<C>> Stream for TodoList<C, E> {
                             }
                         }
                     } else {
-                        warn!(
+                        debug!(
                             "Sender of update :{} is not on level {}",
                             msg.origin, msg.level
                         );
