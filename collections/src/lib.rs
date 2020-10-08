@@ -1,6 +1,3 @@
-// Required for LinkedList.
-#![feature(specialization)]
-
 #[cfg(feature = "bitset")]
 extern crate beserial;
 
