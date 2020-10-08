@@ -164,7 +164,7 @@ impl<N: Network> QuickSync<N> {
                     // Add to blockchain.
                     let result = consensus
                         .blockchain
-                        .push_isolated_macro_block(Block::Macro(epoch.block), &epoch.transactions);
+                        .push_history_sync(Block::Macro(epoch.block), &epoch.transactions);
 
                     match result {
                         Ok(_) => successfully_synced.push(actual_hash),

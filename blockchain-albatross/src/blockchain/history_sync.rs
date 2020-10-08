@@ -1,59 +1,48 @@
 use parking_lot::MutexGuard;
 
-use block::{Block, BlockError, MacroBody};
+use block::{Block, BlockError};
 use database::{ReadTransaction, WriteTransaction};
 use hash::{Blake2bHash, Hash};
+use primitives::coin::Coin;
 use primitives::policy;
-use transaction::Transaction as BlockchainTransaction;
-use utils::merkle;
 
 use crate::chain_info::ChainInfo;
-use crate::{Blockchain, BlockchainError, BlockchainEvent, PushError, PushResult};
+use crate::history_store::{ExtTxData, ExtendedTransaction, HistoryStore};
+use crate::{Blockchain, BlockchainEvent, PushError, PushResult};
 
-// TODO: This needs to be redone after Pascal finishes the history root code.
 impl Blockchain {
     /// Pushes a macro block without requiring the micro blocks of the previous batch.
-    pub fn push_isolated_macro_block(
+    // Not many checks, we only care about the signatures.
+    pub fn push_history_sync(
         &self,
         block: Block,
-        transactions: &[BlockchainTransaction],
+        ext_txs: &[ExtendedTransaction],
     ) -> Result<PushResult, PushError> {
-        // TODO: Deduplicate code as much as possible...
         // Only one push operation at a time.
         let push_lock = self.push_lock.lock();
 
-        // XXX We might want to pass this as argument to this method
+        // TODO: We might want to pass this as argument to this method
         let read_txn = ReadTransaction::new(&self.env);
 
-        let macro_block = if let Block::Macro(ref block) = block {
-            if policy::is_election_block_at(block.header.block_number) != block.is_election_block()
-            {
+        // Check that it is a macro block.
+        let macro_block = match block {
+            Block::Macro(ref b) => b,
+            Block::Micro(_) => {
                 return Err(PushError::InvalidSuccessor);
-            } else {
-                block
             }
-        } else {
-            return Err(PushError::InvalidSuccessor);
         };
 
         // Check if we already know this block.
-        let hash: Blake2bHash = block.hash();
         if self
             .chain_store
-            .get_chain_info(&hash, false, Some(&read_txn))
+            .get_chain_info(&macro_block.hash(), false, Some(&read_txn))
             .is_some()
         {
             return Ok(PushResult::Known);
         }
 
-        if macro_block.is_election_block()
-            && self.election_head_hash() != macro_block.header.parent_election_hash
-        {
-            warn!("Rejecting block - does not follow on our current election head");
-            return Err(PushError::Orphan);
-        }
-
-        // Check if the block's immediate predecessor is part of the chain.
+        // Check if we have this block's parent. In this case we are not looking for the most direct
+        // parent, but rather for the parent election block.
         let prev_info = self
             .chain_store
             .get_chain_info(
@@ -61,264 +50,170 @@ impl Blockchain {
                 false,
                 Some(&read_txn),
             )
-            .ok_or_else(|| {
-                warn!("Rejecting block - unknown predecessor");
-                PushError::Orphan
-            })?;
+            .ok_or(PushError::Orphan)?;
 
-        // Check the block is the correct election block if it is an election block
-        if macro_block.is_election_block()
-            && policy::election_block_after(prev_info.head.block_number())
-                != macro_block.header.block_number
-        {
-            warn!(
-                "Rejecting block - wrong block number ({:?})",
-                macro_block.header.block_number
-            );
-            return Err(PushError::InvalidSuccessor);
-        }
-
-        // Check transactions root
-        let hashes: Vec<Blake2bHash> = transactions.iter().map(|tx| tx.hash()).collect();
-        let transactions_root = merkle::compute_root_from_hashes::<Blake2bHash>(&hashes);
-        if macro_block
+        // Checks if the body exists.
+        let body = macro_block
             .body
             .as_ref()
-            .expect("Missing body!")
-            .history_root
-            != transactions_root
-        {
+            .ok_or(PushError::InvalidBlock(BlockError::MissingBody))?;
+
+        // Check the body root.
+        if body.hash::<Blake2bHash>() != macro_block.header.body_root {
+            warn!("Rejecting block - Header body hash doesn't match real body hash");
+            return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
+        }
+
+        // Check the history root.
+        let history_root = HistoryStore::root_from_ext_txs(ext_txs)
+            .ok_or(PushError::InvalidBlock(BlockError::InvalidHistoryRoot))?;
+
+        if body.history_root != history_root {
             warn!("Rejecting block - wrong history root");
             return Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot));
         }
 
-        // Check Macro Justification
-        match macro_block.justification {
-            None => {
-                warn!("Rejecting block - macro block without justification");
-                return Err(PushError::InvalidBlock(BlockError::NoJustification));
-            }
-            Some(ref justification) => {
-                if let Err(_) = justification.verify(
-                    macro_block.hash(),
-                    &self.current_validators(),
-                    policy::TWO_THIRD_SLOTS,
-                ) {
-                    warn!("Rejecting block - macro block with bad justification");
-                    return Err(PushError::InvalidBlock(BlockError::NoJustification));
-                }
-            }
+        // Checks if the justification exists.
+        let justification = macro_block
+            .justification
+            .as_ref()
+            .ok_or(PushError::InvalidBlock(BlockError::NoJustification))?;
+
+        // Check the justification.
+        if justification
+            .verify(
+                macro_block.hash(),
+                body.validators.as_ref().unwrap(),
+                policy::TWO_THIRD_SLOTS,
+            )
+            .is_err()
+        {
+            warn!("Rejecting block - macro block with bad justification");
+            return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
         }
 
-        // The correct construction of the extrinsics is only checked after the block's inherents are applied.
-
-        // The macro extrinsics must not be None for this function.
-        if let Some(ref extrinsics) = macro_block.body {
-            let extrinsics_hash: Blake2bHash = extrinsics.hash();
-            if extrinsics_hash != macro_block.header.body_root {
-                warn!(
-                    "Rejecting block - Header extrinsics hash doesn't match real extrinsics hash"
-                );
-                return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
-            }
-        } else {
-            return Err(PushError::InvalidBlock(BlockError::MissingBody));
-        }
-
-        // Drop read transaction before creating the write transaction.
-        drop(read_txn);
-
-        // We don't know the exact distribution between fork proofs and view changes here.
-        // But as this block concludes the epoch, it is not of relevance anymore.
-        let chain_info = ChainInfo {
-            on_main_chain: false,
-            main_chain_successor: None,
-            head: block,
-            cum_tx_fees: transactions.iter().map(|tx| tx.fee).sum(),
-        };
-
-        self.extend_isolated_macro(
-            chain_info.head.hash(),
-            transactions,
-            chain_info,
-            prev_info,
-            push_lock,
-        )
+        self.extend_history_sync(block, ext_txs, prev_info, push_lock)
     }
 
-    fn extend_isolated_macro(
+    fn extend_history_sync(
         &self,
-        block_hash: Blake2bHash,
-        transactions: &[BlockchainTransaction],
-        mut chain_info: ChainInfo,
+        block: Block,
+        ext_txs: &[ExtendedTransaction],
         mut prev_info: ChainInfo,
         push_lock: MutexGuard<()>,
     ) -> Result<PushResult, PushError> {
+        // Create a new database write transaction.
         let mut txn = WriteTransaction::new(&self.env);
 
-        let state = self.state.read();
+        // Get the block hash.
+        let block_hash = block.hash();
 
-        let macro_block = chain_info.head.unwrap_macro_ref();
-        let is_election_block = macro_block.is_election_block();
-
-        // So far, the block is all good.
-        // Remove any micro blocks in the current epoch if necessary.
-        let blocks_to_revert = self.chain_store.get_blocks_forward(
-            &state.macro_head_hash,
-            policy::EPOCH_LENGTH - 1,
-            true,
-            Some(&txn),
-        );
-        let mut cache_txn = state.transaction_cache.clone();
-        for i in (0..blocks_to_revert.len()).rev() {
-            let block = &blocks_to_revert[i];
-            let micro_block = match block {
-                Block::Micro(block) => block,
-                _ => {
-                    return Err(PushError::BlockchainError(
-                        BlockchainError::InconsistentState,
-                    ))
-                }
-            };
-
-            let prev_view_number = if i == 0 {
-                state.macro_info.head.view_number()
-            } else {
-                blocks_to_revert[i - 1].view_number()
-            };
-            let prev_state_root = if i == 0 {
-                &state.macro_info.head.state_root()
-            } else {
-                blocks_to_revert[i - 1].state_root()
-            };
-
-            self.revert_accounts(&state.accounts, &mut txn, micro_block, prev_view_number)?;
-
-            cache_txn.revert_block(block);
-
-            assert_eq!(
-                prev_state_root,
-                &state.accounts.hash(Some(&txn)),
-                "Failed to revert main chain while rebranching - inconsistent state"
-            );
-        }
-
-        // We cannot verify the slashed set, so we need to trust it here.
-        // Also, we verified that macro extrinsics have been set in the corresponding push,
-        // thus we can unwrap here.
-        let slashed_set = macro_block.body.as_ref().unwrap().disabled_set.clone();
-        let current_slashed_set = macro_block.body.as_ref().unwrap().disabled_set.clone();
-
-        // We cannot check the accounts hash yet.
-        // Apply transactions and inherents to AccountsTree.
-        let _slots = state
-            .previous_slots
-            .as_ref()
-            .expect("Slots for last epoch are missing");
-        let mut inherents = vec![];
-
-        // election blocks finalize the previous epoch.
-        if is_election_block {
-            inherents.append(&mut self.finalize_previous_batch(&state, &macro_block.header));
-        }
-
-        // Commit epoch to AccountsTree.
-        let receipts = state.accounts.commit(
-            &mut txn,
-            transactions,
-            &inherents,
-            macro_block.header.block_number,
-            macro_block.header.timestamp,
-        );
-        if let Err(e) = receipts {
-            warn!("Rejecting block - commit failed: {:?}", e);
-            txn.abort();
-            #[cfg(feature = "metrics")]
-            self.metrics.note_invalid_block();
-            return Err(PushError::AccountsError(e));
-        }
-
-        drop(state);
-
-        // as with all macro blocks they cannot be rebranched over, so receipts are no longer needed.
-        self.chain_store.clear_receipts(&mut txn);
-
-        // Only now can we check macro extrinsics.
-        if let Block::Macro(ref mut macro_block) = &mut chain_info.head {
-            if is_election_block {
-                if let Some(ref validators) =
-                    macro_block.body.as_ref().expect("Missing body!").validators
-                {
-                    let slots = self.next_slots(&macro_block.header.seed);
-                    if &slots.validator_slots != validators {
-                        warn!("Rejecting block - Validators don't match real validators");
-                        return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
-                    }
-                } else {
-                    warn!("Rejecting block - Validators missing");
-                    return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
-                }
+        // Calculate the cumulative transaction fees for the current batch. This is necessary to
+        // create the chain info for the block.
+        let mut cum_tx_fees = Coin::ZERO;
+        for i in (0..ext_txs.len()).rev() {
+            if ext_txs[i].block_number != block.block_number() {
+                break;
             }
 
-            let computed_extrinsics = MacroBody {
-                validators: None,
-                lost_reward_set: slashed_set,
-                disabled_set: current_slashed_set,
-                history_root: Default::default(),
-            };
-
-            // The extrinsics must exist for isolated macro blocks, so we can unwrap() here.
-            let computed_extrinsics_hash: Blake2bHash = computed_extrinsics.hash();
-            if computed_extrinsics_hash != macro_block.header.body_root {
-                warn!("Rejecting block - Extrinsics hash doesn't match real extrinsics hash");
-                return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
+            if let ExtTxData::Basic(tx) = &ext_txs[i].data {
+                cum_tx_fees += tx.fee;
             }
         }
 
-        chain_info.on_main_chain = true;
+        // Create the chain info for the current block and store it.
+        let chain_info = ChainInfo {
+            on_main_chain: true,
+            main_chain_successor: None,
+            head: block.clone(),
+            cum_tx_fees,
+        };
+
+        self.chain_store
+            .put_chain_info(&mut txn, &chain_info.head.hash(), &chain_info, true);
+
+        // Update the chain info for the previous block and store it.
         prev_info.main_chain_successor = Some(chain_info.head.hash());
 
         self.chain_store
-            .put_chain_info(&mut txn, &block_hash, &chain_info, true);
-        self.chain_store.put_chain_info(
-            &mut txn,
-            &chain_info.head.parent_hash(),
-            &prev_info,
-            false,
-        );
+            .put_chain_info(&mut txn, &prev_info.head.hash(), &prev_info, false);
+
+        // Set the head of the chain store to the current block.
         self.chain_store.set_head(&mut txn, &block_hash);
-        // self.chain_store
-        //     .put_epoch_transactions(&mut txn, &block_hash, transactions);
 
-        // Acquire write lock & commit changes.
-        let mut state = self.state.write();
-        // FIXME: Macro block sync does not preserve transaction replay protection right now.
-        // But this is not an issue in the UTXO model.
-        //state.transaction_cache.push_block(&chain_info.head);
+        // Get a read transaction to the current state.
+        let state = self.state.read();
 
-        if let Block::Macro(ref macro_block) = chain_info.head {
-            state.macro_info = chain_info.clone();
-            state.macro_head_hash = block_hash.clone();
-            if is_election_block {
-                state.election_head = macro_block.clone();
-                state.election_head_hash = block_hash.clone();
+        // Separate the extended transactions by type and block number.
+        // We know it comes sorted because we already checked it against the history root.
+        let mut block_numbers = vec![];
+        let mut block_timestamps = vec![];
+        let mut block_transactions = vec![];
+        let mut block_inherents = vec![];
+        let mut transactions = vec![];
+        let mut inherents = vec![];
+        let mut prev = 0;
 
-                let slots = state.current_slots.take().unwrap();
-                state.previous_slots.replace(slots);
-
-                let slots = macro_block.get_slots().unwrap();
-                state.current_slots.replace(slots);
+        for ext_tx in ext_txs {
+            if ext_tx.block_number > prev {
+                prev = ext_tx.block_number;
+                block_numbers.push(ext_tx.block_number);
+                block_timestamps.push(ext_tx.block_time);
+                block_transactions.push(transactions.clone());
+                transactions.clear();
+                block_inherents.push(inherents.clone());
+                inherents.clear();
             }
-        } else {
-            unreachable!("Block is not a macro block");
+
+            match &ext_tx.data {
+                ExtTxData::Basic(tx) => transactions.push(tx.clone()),
+                ExtTxData::Inherent(tx) => inherents.push(tx.clone()),
+            }
         }
 
-        state.main_chain = chain_info;
-        state.head_hash = block_hash.clone();
-        state.transaction_cache = cache_txn;
-        txn.commit();
+        // Update the accounts tree, one block at a time.
+        for i in 0..block_numbers.len() {
+            let receipts = state.accounts.commit(
+                &mut txn,
+                &block_transactions[i],
+                &block_inherents[i],
+                block_numbers[i],
+                block_timestamps[i],
+            );
 
-        // Give up lock before notifying.
+            if let Err(e) = receipts {
+                warn!("Rejecting block - commit failed: {:?}", e);
+                txn.abort();
+                #[cfg(feature = "metrics")]
+                self.metrics.note_invalid_block();
+                return Err(PushError::AccountsError(e));
+            }
+        }
+
+        // Unwrap the block.
+        let macro_block = block.unwrap_macro_ref();
+
+        // Check if this block is an election block.
+        let is_election_block = macro_block.is_election_block();
+
+        // Get a write transaction to the current state.
+        drop(state);
+        let mut state = self.state.write();
+
+        // Update the blockchain state.
+        state.main_chain = chain_info.clone();
+        state.head_hash = block_hash.clone();
+        state.macro_info = chain_info;
+        state.macro_head_hash = block_hash.clone();
+        if is_election_block {
+            state.election_head = macro_block.clone();
+            state.election_head_hash = block_hash.clone();
+            state.previous_slots = state.current_slots.take();
+            state.current_slots = macro_block.get_slots();
+        }
+
+        // Give up database transactions and push lock before creating notifiers.
+        txn.commit();
         drop(state);
         drop(push_lock);
 
@@ -331,6 +226,7 @@ impl Blockchain {
                 .read()
                 .notify(BlockchainEvent::Finalized(block_hash));
         }
+
         Ok(PushResult::Extended)
     }
 }

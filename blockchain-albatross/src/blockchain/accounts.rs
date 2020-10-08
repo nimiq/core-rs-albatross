@@ -73,7 +73,7 @@ impl Blockchain {
                 self.history_store.add_to_history(
                     txn,
                     policy::epoch_at(macro_block.header.block_number),
-                    ext_txs,
+                    &ext_txs,
                 );
             }
             Block::Micro(ref micro_block) => {
@@ -121,7 +121,7 @@ impl Blockchain {
                 self.history_store.add_to_history(
                     txn,
                     policy::epoch_at(micro_block.header.block_number),
-                    ext_txs,
+                    &ext_txs,
                 );
             }
         }

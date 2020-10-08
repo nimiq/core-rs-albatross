@@ -20,30 +20,21 @@ impl Blockchain {
         let read_txn = ReadTransaction::new(&self.env);
 
         // Check if we already know this block.
-        let hash: Blake2bHash = block.hash();
-
         if self
             .chain_store
-            .get_chain_info(&hash, false, Some(&read_txn))
+            .get_chain_info(&block.hash(), false, Some(&read_txn))
             .is_some()
         {
             return Ok(PushResult::Known);
         }
 
-        if self
-            .chain_store
-            .get_chain_info(&block.parent_hash(), false, Some(&read_txn))
-            .is_none()
-        {
-            return Err(PushError::Orphan);
-        }
-
-        // Chain ordering
+        // Check if we have this block's parent.
         let prev_info = self
             .chain_store
             .get_chain_info(&block.parent_hash(), false, Some(&read_txn))
-            .unwrap();
+            .ok_or_else(|| PushError::Orphan)?;
 
+        // Calculate chain ordering.
         let chain_order = self.order_chains(&block, &prev_info, Some(&read_txn));
 
         // If it is an inferior chain, we ignore it as it cannot become better at any point in time.
@@ -51,7 +42,7 @@ impl Blockchain {
             info!(
                 "Ignoring block - inferior chain (#{}, {})",
                 block.block_number(),
-                hash
+                block.hash()
             );
             return Ok(PushResult::Ignored);
         }

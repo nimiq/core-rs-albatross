@@ -113,7 +113,7 @@ fn it_can_sync_macro_blocks() {
 
     for block in macro_blocks {
         assert_eq!(
-            blockchain2.push_isolated_macro_block(block, &[]),
+            blockchain2.push_history_sync(block, &[]),
             Ok(PushResult::Extended)
         );
     }

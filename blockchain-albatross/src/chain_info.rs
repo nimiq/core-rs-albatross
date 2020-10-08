@@ -38,6 +38,8 @@ impl ChainInfo {
     pub fn new(block: Block, prev_info: &ChainInfo) -> Result<Self, SlashPushError> {
         assert_eq!(prev_info.head.block_number(), block.block_number() - 1);
 
+        // Reset the transaction fee accumulator if this is the first block of a batch. Otherwise,
+        // just add the transactions fees of this block to the accumulator.
         let cum_tx_fees = if policy::is_macro_block_at(prev_info.head.block_number()) {
             block.sum_transaction_fees()
         } else {

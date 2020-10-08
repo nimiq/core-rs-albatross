@@ -45,7 +45,9 @@ pub struct Blockchain {
     pub history_store: Arc<HistoryStore>,
     // The current state of the blockchain.
     pub(crate) state: RwLock<BlockchainState>,
+    // A write lock for the blockchain. Guarantees that only one thread writes to it at a time.
     pub(crate) push_lock: Mutex<()>,
+    // The metrics for the blockchain. Needed for analysis.
     #[cfg(feature = "metrics")]
     pub(crate) metrics: BlockchainMetrics,
     // The coin supply at the genesis block. This is needed to calculate the rewards.

@@ -17,7 +17,9 @@ use crate::{Blockchain, PushError};
 
 /// Implements methods to verify the validity of blocks.
 impl Blockchain {
-    /// Verifies the header of a block.
+    /// Verifies the header of a block. This function is used when we are pushing a normal block
+    /// into the chain. It cannot be used when syncing, since this performs more strict checks than
+    /// the ones we make when syncing.
     pub fn verify_block_header(
         &self,
         header: &BlockHeader,
@@ -31,18 +33,12 @@ impl Blockchain {
         }
 
         // Check if the block's immediate predecessor is part of the chain.
-        let prev_info_opt = self
+        let prev_info = self
             .chain_store
-            .get_chain_info(&header.parent_hash(), false, txn_opt);
-
-        if prev_info_opt.is_none() {
-            warn!("Rejecting block - unknown predecessor");
-            return Err(PushError::Orphan);
-        }
+            .get_chain_info(&header.parent_hash(), false, txn_opt)
+            .unwrap();
 
         // Check that the block is a valid successor of its predecessor.
-        let prev_info = prev_info_opt.unwrap();
-
         if self.get_next_block_type(Some(prev_info.head.block_number())) != header.ty() {
             warn!("Rejecting block - wrong block type ({:?})", header.ty());
             return Err(PushError::InvalidSuccessor);

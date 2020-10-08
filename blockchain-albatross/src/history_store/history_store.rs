@@ -7,6 +7,7 @@ use mmr::hash::Hash as MMRHash;
 use mmr::mmr::partial::PartialMerkleMountainRange;
 use mmr::mmr::proof::RangeProof;
 use mmr::mmr::MerkleMountainRange;
+use mmr::store::memory::MemoryStore;
 use std::cmp;
 use utils::math::CeilingDiv;
 
@@ -46,16 +47,16 @@ impl HistoryStore {
         &self,
         txn: &mut WriteTransaction,
         epoch_number: u32,
-        ext_txs: Vec<ExtendedTransaction>,
+        ext_txs: &[ExtendedTransaction],
     ) -> Option<Blake2bHash> {
         // Add the extended transactions into the respective database.
         // We need to do this separately due to the borrowing rules of Rust.
-        for tx in &ext_txs {
+        for tx in ext_txs {
             // The prefix is one because it is a leaf.
             self.put_extended_tx(txn, &tx.hash(1).to_blake2b(), tx);
         }
 
-        // Get the history tree and put all leaves into the tree.
+        // Get the history tree.
         let mut tree = MerkleMountainRange::new(MMRStore::with_write_transaction(
             &self.hist_tree_db,
             txn,
@@ -64,16 +65,11 @@ impl HistoryStore {
 
         // Append the extended transactions to the history tree.
         for tx in ext_txs {
-            tree.push(&tx).ok()?;
+            tree.push(tx).ok()?;
         }
 
         // Return the history root.
-        let root = tree.get_root();
-
-        match root {
-            Ok(hash) => Some(hash.to_blake2b()),
-            Err(_) => None,
-        }
+        Some(tree.get_root().ok()?.to_blake2b())
     }
 
     /// Removes a number of extended transactions from an existing history tree. It returns the root
@@ -91,6 +87,9 @@ impl HistoryStore {
             epoch_number,
         ));
 
+        // Get the history root. We need to get it here because of Rust's borrowing rules.
+        let root = tree.get_root().ok()?.to_blake2b();
+
         // Remove all leaves from the history tree and remember the respective hashes.
         let mut hashes = Vec::with_capacity(num_ext_txs);
         let num_leaves = tree.num_leaves();
@@ -100,19 +99,14 @@ impl HistoryStore {
             hashes.push(leaf_hash);
         }
 
-        // Return the history root.
-        let root = tree.get_root();
-
         // Remove each of the extended transactions in the history tree from the extended
         // transaction database.
         for hash in hashes {
             self.remove_extended_tx(txn, &hash.to_blake2b());
         }
 
-        match root {
-            Ok(hash) => Some(hash.to_blake2b()),
-            Err(_) => None,
-        }
+        // Return the history root.
+        Some(root)
     }
 
     /// Removes an existing history tree and all the extended transactions that were part of it.
@@ -157,12 +151,29 @@ impl HistoryStore {
             }
         };
 
+        // Get the history root.
         let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
             &self.hist_tree_db,
             txn,
             epoch_number,
         ));
 
+        // Return the history root.
+        Some(tree.get_root().ok()?.to_blake2b())
+    }
+
+    /// Calculates the history tree root from a vector of extended transactions. It doesn't use the
+    /// database, it is just used to check the correctness of the history root when syncing.
+    pub fn root_from_ext_txs(ext_txs: &[ExtendedTransaction]) -> Option<Blake2bHash> {
+        // Create a new history tree.
+        let mut tree = MerkleMountainRange::new(MemoryStore::new());
+
+        // Append the extended transactions to the history tree.
+        for tx in ext_txs {
+            tree.push(tx).ok()?;
+        }
+
+        // Return the history root.
         Some(tree.get_root().ok()?.to_blake2b())
     }
 
