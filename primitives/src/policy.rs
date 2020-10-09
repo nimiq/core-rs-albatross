@@ -40,6 +40,16 @@ pub const MIN_STAKE: u64 = 1;
 /// in proof-of-work.
 pub const MIN_VALIDATOR_STAKE: u64 = 100_000_000;
 
+/// This is the number of Lunas (1 NIM = 100,000 Lunas) created by second at the genesis of the
+/// Nimiq 2.0 chain. The velocity then decreases following the formula:
+/// Supply_velocity (t) = Initial_supply_velocity * e^(- Supply_decay * t)
+/// Where e is the exponential function and t is the time in seconds since the genesis block.
+pub const INITIAL_SUPPLY_VELOCITY: f64 = 875_000.0;
+
+/// The supply decay is a constant that is calculated so that the supply velocity decreases at a
+/// steady 1.47% per year.
+pub const SUPPLY_DECAY: f64 = 4.692821935e-10;
+
 /// Returns the epoch number at a given block number (height).
 #[inline]
 pub fn epoch_at(block_number: u32) -> u32 {
@@ -173,16 +183,6 @@ pub fn first_block_of_registry(epoch: u32) -> u32 {
 pub fn first_batch_of_epoch(block_number: u32) -> bool {
     epoch_index_at(block_number) < BATCH_LENGTH
 }
-
-/// This is the number of Lunas (1 NIM = 100,000 Lunas) created by second at the genesis of the
-/// Nimiq 2.0 chain. The velocity then decreases following the formula:
-/// Supply_velocity (t) = Initial_supply_velocity * e^(- Supply_decay * t)
-/// Where e is the exponential function and t is the time in seconds since the genesis block.
-pub const INITIAL_SUPPLY_VELOCITY: f64 = 875_000.0;
-
-/// The supply decay is a constant that is calculated so that the supply velocity decreases at a
-/// steady 1.47% per year.
-pub const SUPPLY_DECAY: f64 = 4.692821935e-10;
 
 /// Returns the supply at a given time (as Unix time) in Lunas (1 NIM = 100,000 Lunas). It is
 /// calculated using the following formula:

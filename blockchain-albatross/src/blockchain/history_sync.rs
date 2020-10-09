@@ -10,9 +10,21 @@ use crate::chain_info::ChainInfo;
 use crate::history_store::{ExtTxData, ExtendedTransaction, HistoryStore};
 use crate::{Blockchain, BlockchainEvent, PushError, PushResult};
 
+/// Implements methods to push macro blocks into the chain when an history node is syncing. This
+/// type of syncing is called history syncing. It works by having the node get all the election
+/// macro blocks since genesis plus the last macro block (most likely it will be a checkpoint block,
+/// but it might be an election block). For these macro blocks the node must also get the
+/// corresponding history tree. When the macro blocks are synced, then the node gets all the micro
+/// blocks in the current batch and pushes them normally.
+/// Note that, when pushing the macro blocks, we rely on the assumption that they were produced by
+/// honest validator sets (defined as having less than 1/3 malicious validators). Because of that
+/// we don't actually check the validity of the blocks, we just perform the minimal amount of checks
+/// necessary to verify that the given block is a successor of our current chain so far and that the
+/// corresponding history tree is actually part of the block.
 impl Blockchain {
-    /// Pushes a macro block without requiring the micro blocks of the previous batch.
-    // Not many checks, we only care about the signatures.
+    /// Pushes a macro block (election or checkpoint) into the chain during history sync. You should
+    /// NOT provide micro blocks as input. You cannot push any more blocks using this function after
+    /// you push a checkpoint block.
     pub fn push_history_sync(
         &self,
         block: Block,
@@ -24,13 +36,20 @@ impl Blockchain {
         // TODO: We might want to pass this as argument to this method
         let read_txn = ReadTransaction::new(&self.env);
 
-        // Check that it is a macro block.
+        // Check that it is a macro block. We can't push micro blocks with this function.
         let macro_block = match block {
             Block::Macro(ref b) => b,
             Block::Micro(_) => {
                 return Err(PushError::InvalidSuccessor);
             }
         };
+
+        // Check that we didn't push any other macro block since the last election block. This is
+        // necessary to guarantee that we don't push any more macro blocks after we push a
+        // checkpoint block.
+        if self.state.read().macro_head_hash != self.state.read().election_head_hash {
+            return Err(PushError::InvalidSuccessor);
+        }
 
         // Check if we already know this block.
         if self
@@ -83,7 +102,7 @@ impl Blockchain {
         if justification
             .verify(
                 macro_block.hash(),
-                body.validators.as_ref().unwrap(),
+                &self.current_validators(),
                 policy::TWO_THIRD_SLOTS,
             )
             .is_err()
@@ -92,9 +111,11 @@ impl Blockchain {
             return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
         }
 
+        // Extend the chain with this block.
         self.extend_history_sync(block, ext_txs, prev_info, push_lock)
     }
 
+    /// Extends the current chain with a macro block (election or checkpoint) during history sync.
     fn extend_history_sync(
         &self,
         block: Block,
@@ -144,8 +165,9 @@ impl Blockchain {
         // Get a read transaction to the current state.
         let state = self.state.read();
 
-        // Separate the extended transactions by type and block number.
-        // We know it comes sorted because we already checked it against the history root.
+        // Separate the extended transactions by block number and type.
+        // We know it comes sorted because we already checked it against the history root and
+        // extended transactions in the history tree come sorted by block number and type.
         let mut block_numbers = vec![];
         let mut block_timestamps = vec![];
         let mut block_transactions = vec![];
@@ -212,7 +234,7 @@ impl Blockchain {
             state.current_slots = macro_block.get_slots();
         }
 
-        // Give up database transactions and push lock before creating notifiers.
+        // Give up database transactions and push lock before creating notifications.
         txn.commit();
         drop(state);
         drop(push_lock);
@@ -227,6 +249,7 @@ impl Blockchain {
                 .notify(BlockchainEvent::Finalized(block_hash));
         }
 
+        // Return result.
         Ok(PushResult::Extended)
     }
 }

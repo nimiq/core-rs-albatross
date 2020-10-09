@@ -16,7 +16,7 @@ use nimiq_genesis::NetworkId;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::policy;
 
-mod macro_block_sync;
+mod history_sync;
 mod signed;
 
 /// Secret key of validator. Tests run with `genesis/src/genesis/unit-albatross.toml`

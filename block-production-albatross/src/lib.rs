@@ -240,7 +240,7 @@ impl BlockProducer {
         let history_root = self
             .blockchain
             .history_store
-            .add_to_history(&mut txn, policy::epoch_at(block_number), ext_txs)
+            .add_to_history(&mut txn, policy::epoch_at(block_number), &ext_txs)
             .expect("Failed to compute history root during block production.");
 
         // Calculate the disabled set for the current validator set.

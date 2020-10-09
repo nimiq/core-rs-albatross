@@ -88,7 +88,7 @@ impl Blockchain {
         RwLockReadGuard::map(guard, |s| s.last_validators().unwrap())
     }
 
-    /// Returns the current state.
+    /// Returns the current state (with a read transaction).
     pub fn state(&self) -> RwLockReadGuard<BlockchainState> {
         self.state.read()
     }

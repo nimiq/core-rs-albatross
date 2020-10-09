@@ -12,6 +12,7 @@ use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::policy;
+use nimiq_primitives::policy::BATCHES_PER_EPOCH;
 
 /// Secret key of validator. Tests run with `genesis/src/genesis/unit-albatross.toml`
 const SECRET_KEY: &str = "196ffdb1a8acc7cbd76a251aeac0600a1d68b3aba1eba823b5e4dc5dbdcdc730afa752c05ab4f6ef8518384ad514f403c5a088a22b17bf1bc14f8ff8decc2a512c0a200f68d7bdf5a319b30356fe8d1d75ef510aed7a8660968c216c328a0000";
@@ -88,35 +89,52 @@ fn sign_macro_block(proposal: PbftProposal, extrinsics: MacroBody) -> MacroBlock
     }
 }
 
-// FIXME: Enable this test when history root refactor is ready.
-// #[test]
-fn it_can_sync_macro_blocks() {
+#[test]
+fn it_can_history_sync() {
+    // The minimum number of macro blocks necessary so that we have one election block and one
+    // checkpoint block to push.
+    let num_macro_blocks = (BATCHES_PER_EPOCH + 1) as usize;
+
+    // Create a blockchain to produce the macro blocks.
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(Blockchain::new(env, NetworkId::UnitAlbatross).unwrap());
-    let genesis_hash = blockchain.head_hash();
 
+    // Produce the blocks.
     let keypair =
         KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
     let producer = BlockProducer::new_without_mempool(Arc::clone(&blockchain), keypair);
+    produce_macro_blocks(num_macro_blocks, &producer, &blockchain);
 
-    produce_macro_blocks(2, &producer, &blockchain);
+    // Get the latest election block and corresponding history tree transactions.
+    let election_block = Block::Macro(blockchain.state().election_head.clone());
 
-    let macro_blocks = blockchain
-        .chain_store
-        .get_macro_blocks(&genesis_hash, 10, true, Direction::Forward, false, None)
+    let election_txs = blockchain
+        .history_store
+        .get_epoch_transactions(policy::epoch_at(election_block.block_number()), None)
         .unwrap();
-    assert_eq!(macro_blocks.len(), 2);
+
+    // Get the latest checkpoint block and corresponding history tree transactions.
+    let checkpoint_block = blockchain.state().macro_info.head.clone();
+
+    let checkpoint_txs = blockchain
+        .history_store
+        .get_epoch_transactions(policy::epoch_at(checkpoint_block.block_number()), None)
+        .unwrap();
 
     // Create a second blockchain to push these blocks.
     let env2 = VolatileEnvironment::new(10).unwrap();
     let blockchain2 = Arc::new(Blockchain::new(env2, NetworkId::UnitAlbatross).unwrap());
 
-    for block in macro_blocks {
-        assert_eq!(
-            blockchain2.push_history_sync(block, &[]),
-            Ok(PushResult::Extended)
-        );
-    }
+    // Push blocks using history sync.
+    assert_eq!(
+        blockchain2.push_history_sync(election_block, &election_txs),
+        Ok(PushResult::Extended)
+    );
+
+    assert_eq!(
+        blockchain2.push_history_sync(checkpoint_block, &checkpoint_txs),
+        Ok(PushResult::Extended)
+    );
 }
 
-// TODO Test transactions
+// TODO: Test using blocks with transactions.
