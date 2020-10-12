@@ -1,5 +1,5 @@
 use crate::history_store::mmr_store::MMRStore;
-use crate::history_store::{ExtendedTransaction, HistoryTreeHash};
+use crate::history_store::{ExtendedTransaction, HistoryTreeChunk, HistoryTreeHash};
 use database::{Database, Environment, ReadTransaction, Transaction, WriteTransaction};
 use hash::Blake2bHash;
 use mmr::error::Error as MMRError;
@@ -9,7 +9,6 @@ use mmr::mmr::proof::RangeProof;
 use mmr::mmr::MerkleMountainRange;
 use mmr::store::memory::MemoryStore;
 use std::cmp;
-use utils::math::CeilingDiv;
 
 /// A struct that contains databases to store history trees (which are Merkle Mountain Ranges
 /// constructed from the list of extended transactions in an epoch) and extended transactions (which
@@ -177,11 +176,10 @@ impl HistoryStore {
         Some(tree.get_root().ok()?.to_blake2b())
     }
 
-    /// Returns the number of data chunks for a given epoch.
-    pub fn get_num_chunks(
+    /// Returns the number of extended transactions for a given epoch.
+    pub fn get_num_extended_transactions(
         &self,
         epoch_number: u32,
-        chunk_size: usize,
         txn_option: Option<&Transaction>,
     ) -> usize {
         let read_txn: ReadTransaction;
@@ -200,7 +198,7 @@ impl HistoryStore {
             epoch_number,
         ));
 
-        tree.num_leaves().ceiling_div(chunk_size)
+        tree.num_leaves()
     }
 
     /// Returns the `chunk_index`th chunk of size `chunk_size` for a given epoch.
@@ -212,7 +210,7 @@ impl HistoryStore {
         chunk_size: usize,
         chunk_index: usize,
         txn_option: Option<&Transaction>,
-    ) -> Option<(Vec<ExtendedTransaction>, RangeProof<HistoryTreeHash>)> {
+    ) -> Option<HistoryTreeChunk> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -247,7 +245,10 @@ impl HistoryStore {
             );
         }
 
-        Some((ext_txs, proof))
+        Some(HistoryTreeChunk {
+            proof,
+            history: ext_txs,
+        })
     }
 
     /// Returns a partial MMR to put proofs in.

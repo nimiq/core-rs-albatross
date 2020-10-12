@@ -14,7 +14,7 @@ use utils::observer::{Listener, ListenerHandle};
 use crate::blockchain_state::BlockchainState;
 #[cfg(feature = "metrics")]
 use crate::chain_metrics::BlockchainMetrics;
-use crate::history_store::ExtTxData;
+use crate::history_store::{ExtTxData, HistoryTreeChunk};
 use crate::{Blockchain, BlockchainEvent, Direction};
 
 /// Implements several wrapper functions.
@@ -257,6 +257,30 @@ impl Blockchain {
         txn_option: Option<&Transaction>,
     ) -> Option<Blake2bHash> {
         self.history_store.get_history_tree_root(epoch, txn_option)
+    }
+
+    /// Returns the number of extended transactions for a given epoch.
+    pub fn get_num_extended_transactions(
+        &self,
+        epoch_number: u32,
+        txn_option: Option<&Transaction>,
+    ) -> usize {
+        self.history_store
+            .get_num_extended_transactions(epoch_number, txn_option)
+    }
+
+    /// Returns the `chunk_index`th chunk of size `chunk_size` for a given epoch.
+    /// The return value consists of a vector of all the extended transactions in that chunk
+    /// and a proof for these in the MMR.
+    pub fn get_chunk(
+        &self,
+        epoch_number: u32,
+        chunk_size: usize,
+        chunk_index: usize,
+        txn_option: Option<&Transaction>,
+    ) -> Option<HistoryTreeChunk> {
+        self.history_store
+            .get_chunk(epoch_number, chunk_size, chunk_index, txn_option)
     }
 
     /// Returns the current staking contract.

@@ -76,7 +76,7 @@ async fn peers_can_sync() {
     // Request hashes
     let agent = Arc::clone(consensus2.agents().values().next().unwrap());
     let hashes = agent
-        .request_blocks(
+        .request_block_hashes(
             vec![consensus2.blockchain.head_hash()],
             2,
             RequestBlockHashesFilter::ElectionOnly,
@@ -140,7 +140,7 @@ async fn peers_can_sync() {
     // Request hashes
     let agent = Arc::clone(consensus3.agents().values().next().unwrap());
     let hashes = agent
-        .request_blocks(
+        .request_block_hashes(
             vec![consensus3.blockchain.head_hash()],
             2,
             RequestBlockHashesFilter::ElectionOnly,

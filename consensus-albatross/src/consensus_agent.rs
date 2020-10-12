@@ -12,8 +12,8 @@ use nimiq_subscription::Subscription;
 use transaction::Transaction;
 
 use crate::messages::{
-    BlockHashes, Epoch, RequestBlockHashes, RequestBlockHashesFilter, RequestEpoch,
-    RequestResponseMessage,
+    BlockHashes, Epoch, HistoryChunk, RequestBlockHashes, RequestBlockHashesFilter, RequestEpoch,
+    RequestHistoryChunk, RequestResponseMessage,
 };
 
 pub struct ConsensusAgentState {
@@ -33,8 +33,7 @@ pub struct ConsensusAgent<P: Peer> {
 
     pub(crate) state: RwLock<ConsensusAgentState>,
 
-    /// Responses to `Blocks` requests.
-    block_requests: RequestResponse<
+    block_hashes_requests: RequestResponse<
         P,
         RequestResponseMessage<RequestBlockHashes>,
         RequestResponseMessage<BlockHashes>,
@@ -42,13 +41,19 @@ pub struct ConsensusAgent<P: Peer> {
 
     epoch_requests:
         RequestResponse<P, RequestResponseMessage<RequestEpoch>, RequestResponseMessage<Epoch>>,
+    history_chunk_requests: RequestResponse<
+        P,
+        RequestResponseMessage<RequestHistoryChunk>,
+        RequestResponseMessage<HistoryChunk>,
+    >,
 }
 
 impl<P: Peer> ConsensusAgent<P> {
     pub fn new(peer: Arc<P>) -> Arc<Self> {
         // TODO: Timeout
-        let block_requests = RequestResponse::new(Arc::clone(&peer), Duration::new(10, 0));
+        let block_hashes_requests = RequestResponse::new(Arc::clone(&peer), Duration::new(10, 0));
         let epoch_requests = RequestResponse::new(Arc::clone(&peer), Duration::new(10, 0));
+        let history_chunk_requests = RequestResponse::new(Arc::clone(&peer), Duration::new(10, 0));
 
         let agent = Arc::new(ConsensusAgent {
             peer,
@@ -56,8 +61,9 @@ impl<P: Peer> ConsensusAgent<P> {
                 local_subscription: Default::default(),
                 remote_subscription: Default::default(),
             }),
-            block_requests,
+            block_hashes_requests,
             epoch_requests,
+            history_chunk_requests,
         });
         agent
     }
@@ -88,18 +94,34 @@ impl<P: Peer> ConsensusAgent<P> {
         result.map(|r| r.msg)
     }
 
-    pub async fn request_blocks(
+    pub async fn request_block_hashes(
         &self,
         locators: Vec<Blake2bHash>,
         max_blocks: u16,
         filter: RequestBlockHashesFilter,
     ) -> Result<BlockHashes, RequestError> {
         let result = self
-            .block_requests
+            .block_hashes_requests
             .request(RequestResponseMessage::new(RequestBlockHashes {
                 locators,
                 max_blocks,
                 filter,
+            }))
+            .await;
+
+        result.map(|r| r.msg)
+    }
+
+    pub async fn request_history_chunk(
+        &self,
+        epoch_number: u32,
+        chunk_index: usize,
+    ) -> Result<HistoryChunk, RequestError> {
+        let result = self
+            .history_chunk_requests
+            .request(RequestResponseMessage::new(RequestHistoryChunk {
+                epoch_number,
+                chunk_index: chunk_index as u64,
             }))
             .await;
 

@@ -1,11 +1,15 @@
 use beserial::{Deserialize, Serialize};
 use block_albatross::MacroBlock;
+use blockchain_albatross::history_store::HistoryTreeChunk;
 use hash::Blake2bHash;
 use network_interface::message::*;
+use std::fmt::Debug;
 use transaction::Transaction;
 
 pub use self::request_response::RequestResponseMessage;
+use failure::_core::fmt::{Error, Formatter};
 
+pub(crate) mod handlers;
 mod request_response;
 
 /*
@@ -84,15 +88,41 @@ impl Message for RequestResponseMessage<RequestEpoch> {
     const TYPE_ID: u64 = 202;
 }
 
-// TODO: Syncing all of this from one peer is quite a lot
-//  and it is probably also inefficient to sync all transactions.
+/// This message contains a macro block and the number of extended transactions (transitions)
+/// within this epoch.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Epoch {
     pub block: MacroBlock,
-    #[beserial(len_type(u32))]
-    pub transactions: Vec<Transaction>,
+    pub history_len: u64,
 }
 
 impl Message for RequestResponseMessage<Epoch> {
     const TYPE_ID: u64 = 203;
+}
+
+/// This message contains a chunk of the history.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RequestHistoryChunk {
+    pub epoch_number: u32,
+    pub chunk_index: u64,
+}
+
+impl Message for RequestResponseMessage<RequestHistoryChunk> {
+    const TYPE_ID: u64 = 204;
+}
+
+/// This message contains a chunk of the history.
+#[derive(Serialize, Deserialize)]
+pub struct HistoryChunk {
+    chunk: Option<HistoryTreeChunk>,
+}
+
+impl Message for RequestResponseMessage<HistoryChunk> {
+    const TYPE_ID: u64 = 205;
+}
+
+impl Debug for HistoryChunk {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        unimplemented!()
+    }
 }

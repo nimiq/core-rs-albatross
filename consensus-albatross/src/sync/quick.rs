@@ -64,7 +64,7 @@ impl<N: Network> QuickSync<N> {
     ) -> (Weak<ConsensusAgent<N::PeerType>>, Option<Vec<Blake2bHash>>) {
         if let Some(agent) = Weak::upgrade(&weak_agent) {
             let objects = agent
-                .request_blocks(
+                .request_block_hashes(
                     vec![locator],
                     1000, // TODO: Use other value
                     RequestBlockHashesFilter::ElectionOnly,
@@ -162,17 +162,19 @@ impl<N: Network> QuickSync<N> {
                     }
 
                     // Add to blockchain.
-                    let result = consensus
-                        .blockchain
-                        .push_history_sync(Block::Macro(epoch.block), &epoch.transactions);
+                    // TODO!
+                    unimplemented!();
+                    //                    let result = consensus
+                    //                        .blockchain
+                    //                        .push_history_sync(Block::Macro(epoch.block), &epoch.transactions);
 
-                    match result {
-                        Ok(_) => successfully_synced.push(actual_hash),
-                        Err(_) => {
-                            warn!("Failed to push block {:?} into blockchain", actual_hash);
-                            return Err(successfully_synced);
-                        }
-                    }
+                    //                    match result {
+                    //                        Ok(_) => successfully_synced.push(actual_hash),
+                    //                        Err(_) => {
+                    //                            warn!("Failed to push block {:?} into blockchain", actual_hash);
+                    //                            return Err(successfully_synced);
+                    //                        }
+                    //                    }
                 }
                 Err(hash) => {
                     warn!("Failed to retrieve block with hash {:?}", hash);
