@@ -5,7 +5,7 @@ use futures::StreamExt;
 use crate::messages::handlers::Handle;
 use crate::messages::{
     BlockHashes, Epoch, RequestBlockHashes, RequestBlockHashesFilter, RequestEpoch,
-    RequestHistoryChunk, RequestResponseMessage,
+    RequestHistoryChunk,
 };
 use crate::Consensus;
 
@@ -19,7 +19,7 @@ impl<N: Network> Consensus<N> {
     pub(super) fn init_network_requests(network: &Arc<N>, blockchain: &Arc<Blockchain>) {
         let blockchain_outer = blockchain;
         let blockchain = Arc::clone(blockchain_outer);
-        let mut stream = network.receive_from_all::<RequestResponseMessage<RequestBlockHashes>>();
+        let mut stream = network.receive_from_all::<RequestBlockHashes>();
         tokio::spawn(async move {
             while let Some((msg, peer)) = stream.next().await {
                 trace!(
@@ -36,7 +36,7 @@ impl<N: Network> Consensus<N> {
         });
 
         let blockchain = Arc::clone(blockchain_outer);
-        let mut stream = network.receive_from_all::<RequestResponseMessage<RequestEpoch>>();
+        let mut stream = network.receive_from_all::<RequestEpoch>();
         tokio::spawn(async move {
             while let Some((msg, peer)) = stream.next().await {
                 trace!(
@@ -53,7 +53,7 @@ impl<N: Network> Consensus<N> {
         });
 
         let blockchain = Arc::clone(blockchain_outer);
-        let mut stream = network.receive_from_all::<RequestResponseMessage<RequestHistoryChunk>>();
+        let mut stream = network.receive_from_all::<RequestHistoryChunk>();
         tokio::spawn(async move {
             while let Some((msg, peer)) = stream.next().await {
                 trace!(

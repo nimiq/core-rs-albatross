@@ -1,13 +1,13 @@
 use beserial::{Deserialize, Serialize};
 use block_albatross::MacroBlock;
 use blockchain_albatross::history_store::HistoryTreeChunk;
+use failure::_core::fmt::{Error, Formatter};
 use hash::Blake2bHash;
 use network_interface::message::*;
 use std::fmt::Debug;
 use transaction::Transaction;
 
-pub use self::request_response::RequestResponseMessage;
-use failure::_core::fmt::{Error, Formatter};
+use crate::request_response;
 
 pub(crate) mod handlers;
 mod request_response;
@@ -54,9 +54,11 @@ impl<T: Serialize + Deserialize> Objects<T> {
 pub struct BlockHashes {
     #[beserial(len_type(u16))]
     pub hashes: Vec<Blake2bHash>,
+    pub request_identifier: u32,
 }
+request_response!(BlockHashes);
 
-impl Message for RequestResponseMessage<BlockHashes> {
+impl Message for BlockHashes {
     const TYPE_ID: u64 = 201;
 }
 
@@ -73,18 +75,22 @@ pub struct RequestBlockHashes {
     pub locators: Vec<Blake2bHash>,
     pub max_blocks: u16,
     pub filter: RequestBlockHashesFilter,
+    pub request_identifier: u32,
 }
+request_response!(RequestBlockHashes);
 
-impl Message for RequestResponseMessage<RequestBlockHashes> {
+impl Message for RequestBlockHashes {
     const TYPE_ID: u64 = 200;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestEpoch {
     pub hash: Blake2bHash,
+    pub request_identifier: u32,
 }
+request_response!(RequestEpoch);
 
-impl Message for RequestResponseMessage<RequestEpoch> {
+impl Message for RequestEpoch {
     const TYPE_ID: u64 = 202;
 }
 
@@ -94,9 +100,11 @@ impl Message for RequestResponseMessage<RequestEpoch> {
 pub struct Epoch {
     pub block: MacroBlock,
     pub history_len: u64,
+    pub request_identifier: u32,
 }
+request_response!(Epoch);
 
-impl Message for RequestResponseMessage<Epoch> {
+impl Message for Epoch {
     const TYPE_ID: u64 = 203;
 }
 
@@ -105,9 +113,11 @@ impl Message for RequestResponseMessage<Epoch> {
 pub struct RequestHistoryChunk {
     pub epoch_number: u32,
     pub chunk_index: u64,
+    pub request_identifier: u32,
 }
+request_response!(RequestHistoryChunk);
 
-impl Message for RequestResponseMessage<RequestHistoryChunk> {
+impl Message for RequestHistoryChunk {
     const TYPE_ID: u64 = 204;
 }
 
@@ -115,9 +125,11 @@ impl Message for RequestResponseMessage<RequestHistoryChunk> {
 #[derive(Serialize, Deserialize)]
 pub struct HistoryChunk {
     chunk: Option<HistoryTreeChunk>,
+    pub request_identifier: u32,
 }
+request_response!(HistoryChunk);
 
-impl Message for RequestResponseMessage<HistoryChunk> {
+impl Message for HistoryChunk {
     const TYPE_ID: u64 = 205;
 }
 

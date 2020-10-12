@@ -13,7 +13,7 @@ use transaction::Transaction;
 
 use crate::messages::{
     BlockHashes, Epoch, HistoryChunk, RequestBlockHashes, RequestBlockHashesFilter, RequestEpoch,
-    RequestHistoryChunk, RequestResponseMessage,
+    RequestHistoryChunk,
 };
 
 pub struct ConsensusAgentState {
@@ -33,19 +33,10 @@ pub struct ConsensusAgent<P: Peer> {
 
     pub(crate) state: RwLock<ConsensusAgentState>,
 
-    block_hashes_requests: RequestResponse<
-        P,
-        RequestResponseMessage<RequestBlockHashes>,
-        RequestResponseMessage<BlockHashes>,
-    >,
+    block_hashes_requests: RequestResponse<P, RequestBlockHashes, BlockHashes>,
 
-    epoch_requests:
-        RequestResponse<P, RequestResponseMessage<RequestEpoch>, RequestResponseMessage<Epoch>>,
-    history_chunk_requests: RequestResponse<
-        P,
-        RequestResponseMessage<RequestHistoryChunk>,
-        RequestResponseMessage<HistoryChunk>,
-    >,
+    epoch_requests: RequestResponse<P, RequestEpoch, Epoch>,
+    history_chunk_requests: RequestResponse<P, RequestHistoryChunk, HistoryChunk>,
 }
 
 impl<P: Peer> ConsensusAgent<P> {
@@ -88,10 +79,13 @@ impl<P: Peer> ConsensusAgent<P> {
     pub async fn request_epoch(&self, hash: Blake2bHash) -> Result<Epoch, RequestError> {
         let result = self
             .epoch_requests
-            .request(RequestResponseMessage::new(RequestEpoch { hash }))
+            .request(RequestEpoch {
+                hash,
+                request_identifier: 0, // will automatically be set at a later point
+            })
             .await;
 
-        result.map(|r| r.msg)
+        result
     }
 
     pub async fn request_block_hashes(
@@ -102,14 +96,15 @@ impl<P: Peer> ConsensusAgent<P> {
     ) -> Result<BlockHashes, RequestError> {
         let result = self
             .block_hashes_requests
-            .request(RequestResponseMessage::new(RequestBlockHashes {
+            .request(RequestBlockHashes {
                 locators,
                 max_blocks,
                 filter,
-            }))
+                request_identifier: 0, // will automatically be set at a later point
+            })
             .await;
 
-        result.map(|r| r.msg)
+        result
     }
 
     pub async fn request_history_chunk(
@@ -119,12 +114,13 @@ impl<P: Peer> ConsensusAgent<P> {
     ) -> Result<HistoryChunk, RequestError> {
         let result = self
             .history_chunk_requests
-            .request(RequestResponseMessage::new(RequestHistoryChunk {
+            .request(RequestHistoryChunk {
                 epoch_number,
                 chunk_index: chunk_index as u64,
-            }))
+                request_identifier: 0, // will automatically be set at a later point
+            })
             .await;
 
-        result.map(|r| r.msg)
+        result
     }
 }

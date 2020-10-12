@@ -1,6 +1,6 @@
 use crate::messages::{
     BlockHashes, Epoch, HistoryChunk, RequestBlockHashes, RequestBlockHashesFilter, RequestEpoch,
-    RequestHistoryChunk, RequestResponseMessage,
+    RequestHistoryChunk,
 };
 use block_albatross::Block;
 use blockchain_albatross::{history_store::CHUNK_SIZE, Blockchain, Direction};
@@ -14,8 +14,8 @@ pub trait Handle<Response> {
     fn handle(&self, blockchain: &Arc<Blockchain>) -> Option<Response>;
 }
 
-impl Handle<RequestResponseMessage<BlockHashes>> for RequestResponseMessage<RequestBlockHashes> {
-    fn handle(&self, blockchain: &Arc<Blockchain>) -> Option<RequestResponseMessage<BlockHashes>> {
+impl Handle<BlockHashes> for RequestBlockHashes {
+    fn handle(&self, blockchain: &Arc<Blockchain>) -> Option<BlockHashes> {
         // A peer has requested blocks. Check all requested block locator hashes
         // in the given order and pick the first hash that is found on our main
         // chain, ignore the rest. If none of the requested hashes is found,
@@ -57,45 +57,43 @@ impl Handle<RequestResponseMessage<BlockHashes>> for RequestResponseMessage<Requ
 
         let hashes = blocks.iter().map(|block| block.hash()).collect();
 
-        Some(RequestResponseMessage::with_identifier(
-            BlockHashes { hashes },
-            self.get_request_identifier(),
-        ))
+        Some(BlockHashes {
+            hashes,
+            request_identifier: self.get_request_identifier(),
+        })
     }
 }
 
-impl Handle<RequestResponseMessage<Epoch>> for RequestResponseMessage<RequestEpoch> {
-    fn handle(&self, blockchain: &Arc<Blockchain>) -> Option<RequestResponseMessage<Epoch>> {
+impl Handle<Epoch> for RequestEpoch {
+    fn handle(&self, blockchain: &Arc<Blockchain>) -> Option<Epoch> {
         if let Some(Block::Macro(block)) = blockchain.get_block(&self.hash, true) {
             let epoch = policy::epoch_at(block.header.block_number);
             let history_len = blockchain.get_num_extended_transactions(epoch, None);
             let response = Epoch {
                 block,
                 history_len: history_len as u64,
+                request_identifier: self.get_request_identifier(),
             };
 
-            Some(RequestResponseMessage::with_identifier(
-                response,
-                self.get_request_identifier(),
-            ))
+            Some(response)
         } else {
             None
         }
     }
 }
 
-impl Handle<RequestResponseMessage<HistoryChunk>> for RequestResponseMessage<RequestHistoryChunk> {
-    fn handle(&self, blockchain: &Arc<Blockchain>) -> Option<RequestResponseMessage<HistoryChunk>> {
+impl Handle<HistoryChunk> for RequestHistoryChunk {
+    fn handle(&self, blockchain: &Arc<Blockchain>) -> Option<HistoryChunk> {
         let chunk = blockchain.get_chunk(
             self.epoch_number,
             CHUNK_SIZE,
             self.chunk_index as usize,
             None,
         );
-        let response = HistoryChunk { chunk };
-        Some(RequestResponseMessage::with_identifier(
-            response,
-            self.get_request_identifier(),
-        ))
+        let response = HistoryChunk {
+            chunk,
+            request_identifier: self.get_request_identifier(),
+        };
+        Some(response)
     }
 }
