@@ -23,6 +23,8 @@ use crate::peer::Peer;
 enum SwarmAction {
     Dial(PeerId),
     DialAddr(Multiaddr),
+    BanIp(Multiaddr),
+    UnbanIp(Multiaddr),
 }
 
 struct SwarmTask {
@@ -52,6 +54,8 @@ impl SwarmTask {
                 .map_err(|err| warn!("Failed to dial peer {}: {:?}", peer_id, err)),
             SwarmAction::DialAddr(addr) => Swarm::dial_addr(&mut self.swarm, addr)
                 .map_err(|err| warn!("Failed to dial addr: {:?}", err)),
+            SwarmAction::BanIp(addr) => Ok(()), // TODO: Implement
+            SwarmAction::UnbanIp(addr) => Ok(()), // TODO: Implement
         }
         // TODO Error handling?
         .unwrap_or(())
@@ -79,6 +83,17 @@ impl Future for SwarmTask {
         // Poll the swarm.
         match ready!(self.swarm.poll_next_unpin(cx)) {
             Some(event) => {
+                match event.clone() {
+                    NetworkEvent::PeerJoined(peer) => {}
+                    NetworkEvent::PeerLeft(peer) => {}
+                    NetworkEvent::PeerDisconnect(peer) => {
+                        // Since the swarm network is private, the only way to access the peer disconnect
+                        // function is to ban (and subsequently unban) the peer.
+                        Swarm::ban_peer_id(&mut self.swarm, peer.id.clone());
+                        Swarm::unban_peer_id(&mut self.swarm, peer.id.clone());
+                    }
+                }
+
                 // Dispatch swarm event on network event broadcast channel.
                 if self.event_tx.send(event).is_ok() {
                     // Keep the task alive.
@@ -200,6 +215,7 @@ impl Network {
                             .remove(&peer.id)
                             .map(|_| ())
                             .expect("Unknown peer disconnected"),
+                        NetworkEvent::PeerDisconnect(peer) => (),
                     }
                 }
                 future::ready(())
@@ -218,6 +234,16 @@ impl Network {
     pub fn dial_addr(&self, addr: Multiaddr) {
         // TODO make async? handling
         executor::block_on(self.action_tx.lock().send(SwarmAction::DialAddr(addr))).unwrap_or(())
+    }
+
+    pub fn ban_ip(&self, addr: Multiaddr) {
+        // TODO make async? handling
+        executor::block_on(self.action_tx.lock().send(SwarmAction::BanIp(addr))).unwrap_or(())
+    }
+
+    pub fn unban_ip(&self, addr: Multiaddr) {
+        // TODO make async? handling
+        executor::block_on(self.action_tx.lock().send(SwarmAction::UnbanIp(addr))).unwrap_or(())
     }
 }
 
