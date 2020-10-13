@@ -19,6 +19,7 @@ maintenance = { status = "experimental" }
 [dependencies]
 async-trait = "0.1"
 futures = "0.3"
+ip_network = "0.3.4"
 libp2p = "0.22"
 log = "0.4"
 parking_lot = "0.9"
