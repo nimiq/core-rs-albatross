@@ -23,8 +23,8 @@ use crate::{Blockchain, BlockchainEvent, PushError, PushResult};
 /// corresponding history tree is actually part of the block.
 impl Blockchain {
     /// Pushes a macro block (election or checkpoint) into the chain during history sync. You should
-    /// NOT provide micro blocks as input. You cannot push any more blocks using this function after
-    /// you push a checkpoint block.
+    /// NOT provide micro blocks as input. You can push election blocks after checkpoint blocks and
+    /// vice-versa.
     pub fn push_history_sync(
         &self,
         block: Block,
@@ -44,13 +44,6 @@ impl Blockchain {
             }
         };
 
-        // Check that we didn't push any other macro block since the last election block. This is
-        // necessary to guarantee that we don't push any more macro blocks after we push a
-        // checkpoint block.
-        if self.state.read().macro_head_hash != self.state.read().election_head_hash {
-            return Err(PushError::InvalidSuccessor);
-        }
-
         // Check if we already know this block.
         if self
             .chain_store
@@ -60,16 +53,39 @@ impl Blockchain {
             return Ok(PushResult::Known);
         }
 
-        // Check if we have this block's parent. In this case we are not looking for the most direct
-        // parent, but rather for the parent election block.
+        // Get the chain info at the head of the current chain.
+        let head = self
+            .chain_store
+            .get_head(Some(&read_txn))
+            .ok_or(PushError::Orphan)?;
+
         let prev_info = self
             .chain_store
-            .get_chain_info(
-                &macro_block.header.parent_election_hash,
-                false,
-                Some(&read_txn),
-            )
+            .get_chain_info(&head, false, Some(&read_txn))
             .ok_or(PushError::Orphan)?;
+
+        // Check that the head is a macro block. This has to be the case since we never push micro
+        // blocks while we are syncing.
+        assert!(prev_info.head.is_micro());
+
+        // Check if we have this block's parent. The checks change depending if the last macro block
+        // that we pushed was an election block or not.
+        if policy::is_election_block_at(prev_info.head.block_number()) {
+            // We only need to check that the parent election block of this block is the same as our
+            // head block.
+            if macro_block.header.parent_election_hash != prev_info.head.hash() {
+                return Err(PushError::Orphan);
+            }
+        } else {
+            // We need to check that this block and our head block have the same parent election
+            // block and are in the correct order.
+            if &macro_block.header.parent_election_hash
+                != prev_info.head.parent_election_hash().unwrap()
+                || macro_block.header.block_number <= prev_info.head.block_number()
+            {
+                return Err(PushError::Orphan);
+            }
+        }
 
         // Checks if the body exists.
         let body = macro_block
@@ -132,8 +148,11 @@ impl Blockchain {
         // Calculate the cumulative transaction fees for the current batch. This is necessary to
         // create the chain info for the block.
         let mut cum_tx_fees = Coin::ZERO;
+
+        let current_batch = policy::batch_at(block.block_number());
+
         for i in (0..ext_txs.len()).rev() {
-            if ext_txs[i].block_number != block.block_number() {
+            if policy::batch_at(ext_txs[i].block_number) != current_batch {
                 break;
             }
 
@@ -151,7 +170,7 @@ impl Blockchain {
         };
 
         self.chain_store
-            .put_chain_info(&mut txn, &chain_info.head.hash(), &chain_info, true);
+            .put_chain_info(&mut txn, &block_hash, &chain_info, true);
 
         // Update the chain info for the previous block and store it.
         prev_info.main_chain_successor = Some(chain_info.head.hash());
@@ -165,36 +184,46 @@ impl Blockchain {
         // Get a read transaction to the current state.
         let state = self.state.read();
 
+        // Get the index for the first extended transaction that was not already added in past macro
+        // blocks.
+        let mut first_new_ext_tx = 0;
+
+        for ext_tx in ext_txs {
+            if ext_tx.block_number <= prev_info.head.block_number() {
+                first_new_ext_tx += 1;
+            } else {
+                break;
+            }
+        }
+
         // Separate the extended transactions by block number and type.
         // We know it comes sorted because we already checked it against the history root and
         // extended transactions in the history tree come sorted by block number and type.
+        // Ignore the extended transactions that were already added in past macro blocks.
         let mut block_numbers = vec![];
         let mut block_timestamps = vec![];
         let mut block_transactions = vec![];
         let mut block_inherents = vec![];
-        let mut transactions = vec![];
-        let mut inherents = vec![];
         let mut prev = 0;
 
-        for ext_tx in ext_txs {
-            if ext_tx.block_number > prev {
-                prev = ext_tx.block_number;
-                block_numbers.push(ext_tx.block_number);
-                block_timestamps.push(ext_tx.block_time);
-                block_transactions.push(transactions.clone());
-                transactions.clear();
-                block_inherents.push(inherents.clone());
-                inherents.clear();
+        for i in first_new_ext_tx..ext_txs.len() {
+            if ext_txs[i].block_number > prev {
+                block_numbers.push(ext_txs[i].block_number);
+                block_timestamps.push(ext_txs[i].block_time);
+                block_transactions.push(vec![]);
+                block_inherents.push(vec![]);
+                prev = ext_txs[i].block_number;
             }
 
-            match &ext_tx.data {
-                ExtTxData::Basic(tx) => transactions.push(tx.clone()),
-                ExtTxData::Inherent(tx) => inherents.push(tx.clone()),
+            match &ext_txs[i].data {
+                ExtTxData::Basic(tx) => block_transactions.last_mut().unwrap().push(tx.clone()),
+                ExtTxData::Inherent(tx) => block_inherents.last_mut().unwrap().push(tx.clone()),
             }
         }
 
         // Update the accounts tree, one block at a time.
         for i in 0..block_numbers.len() {
+            // Commit block to AccountsTree and create the receipts.
             let receipts = state.accounts.commit(
                 &mut txn,
                 &block_transactions[i],
@@ -203,6 +232,7 @@ impl Blockchain {
                 block_timestamps[i],
             );
 
+            // Check if the receipts contain an error.
             if let Err(e) = receipts {
                 warn!("Rejecting block - commit failed: {:?}", e);
                 txn.abort();
@@ -211,6 +241,17 @@ impl Blockchain {
                 return Err(PushError::AccountsError(e));
             }
         }
+
+        // Macro blocks are final and receipts for the previous batch are no longer necessary
+        // as rebranching across this block is not possible.
+        self.chain_store.clear_receipts(&mut txn);
+
+        // Store the new extended transactions into the History tree.
+        self.history_store.add_to_history(
+            &mut txn,
+            policy::epoch_at(block.block_number()),
+            &ext_txs[first_new_ext_tx..],
+        );
 
         // Unwrap the block.
         let macro_block = block.unwrap_macro_ref();
