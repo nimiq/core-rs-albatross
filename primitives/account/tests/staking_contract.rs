@@ -484,12 +484,16 @@ fn it_can_apply_retiring_transaction() {
         balance: Coin::from_u64_unchecked(50_000_000),
     };
     assert_eq!(
-        contract.check_outgoing_transaction(&tx_2, 3, 0),
-        Err(funds_error.clone())
+        contract
+            .check_outgoing_transaction(&tx_2, 3, 0)
+            .expect_err("Should error"),
+        funds_error
     );
     assert_eq!(
-        contract.commit_outgoing_transaction(&tx_2, 3, 0),
-        Err(funds_error)
+        contract
+            .commit_outgoing_transaction(&tx_2, 3, 0)
+            .expect_err("Should error"),
+        funds_error
     );
 
     // Retire second half of stake in two transactions
@@ -621,12 +625,16 @@ fn it_can_apply_unstaking_transaction() {
         balance: Coin::from_u64_unchecked(50_000_000),
     };
     assert_eq!(
-        contract.check_outgoing_transaction(&tx_2, 40003, 0),
-        Err(funds_error.clone())
+        contract
+            .check_outgoing_transaction(&tx_2, 40003, 0)
+            .expect_err("Should error"),
+        funds_error
     );
     assert_eq!(
-        contract.commit_outgoing_transaction(&tx_2, 40003, 0),
-        Err(funds_error)
+        contract
+            .commit_outgoing_transaction(&tx_2, 40003, 0)
+            .expect_err("Should error"),
+        funds_error
     );
 
     // Block 40003: Unstake quarter

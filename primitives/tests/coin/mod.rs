@@ -48,7 +48,7 @@ fn test_serialize_out_of_bounds() {
     match res {
         Ok(coin) => assert!(false, "Instead of failing, got {}", coin),
         Err(err) => match err {
-            SerializingError::IoError(_, _) => (),
+            SerializingError::IoError(_) => (),
             _ => assert!(false, "Expected to fail with IoError, but got {}", err),
         },
     }
@@ -123,93 +123,41 @@ fn test_parse_zero3() {
 
 #[test]
 fn test_parse_empty_string() {
-    let coin = Coin::from_str("");
-    match coin {
-        Ok(_) => assert!(false, "Expected error"),
-        Err(e) => match e {
-            CoinParseError::InvalidString => (),
-            _ => assert!(false, "Expected CoinParseError::InvalidString"),
-        },
-    }
+    Coin::from_str("").expect_err("Should error");
 }
 
 #[test]
 fn test_parse_too_many_dots() {
-    let coin = Coin::from_str("1234.456.789");
-    match coin {
-        Ok(_) => assert!(false, "Expected error"),
-        Err(e) => match e {
-            CoinParseError::InvalidString => (),
-            _ => assert!(false, "Expected CoinParseError::InvalidString"),
-        },
-    }
+    Coin::from_str("1234.456.789").expect_err("Should error");
 }
 
 #[test]
 fn test_parse_too_many_frac_digits() {
-    let coin = Coin::from_str("123.456789");
-    match coin {
-        Ok(_) => assert!(false, "Expected error"),
-        Err(e) => match e {
-            CoinParseError::TooManyFractionalDigits => (),
-            _ => assert!(false, "Expected CoinParseError::TooManyFractionalDigits"),
-        },
-    }
+    Coin::from_str("123.456789").expect_err("Should error");
 }
 
 #[test]
 // NOTE: This is open for discussion, if `1234.56789000` is a value amount of NIM
 // I don't think so - Janosch
 fn test_parse_frac_more_zeros() {
-    let coin = Coin::from_str("1234.56789000");
-    match &coin {
-        Err(e) => {
-            println!("{:#}", e);
-        }
-        _ => (),
-    };
-
-    assert!(coin.is_err());
+    Coin::from_str("1234.56789000").expect_err("Should error");
 }
 
 #[test]
 fn test_u64_overflow() {
-    let coin = Coin::try_from(Coin::MAX_SAFE_VALUE);
-    match coin {
-        Ok(_) => (),
-        Err(_) => assert!(false, "Did not expect an error here"),
-    }
-
-    let coin = Coin::try_from(Coin::MAX_SAFE_VALUE + 1);
-    match coin {
-        Err(CoinParseError::Overflow) => (),
-        _ => assert!(false, "Did not expect an error here"),
-    }
+    Coin::try_from(Coin::MAX_SAFE_VALUE).expect("Should work");
+    Coin::try_from(Coin::MAX_SAFE_VALUE + 1).expect_err("Should error");
 }
 
 #[test]
 fn test_int_part_overflow() {
-    let coin = Coin::from_str("900719925474");
-    match coin {
-        Ok(_) => assert!(false, "Expected error"),
-        Err(e) => match e {
-            CoinParseError::Overflow => (),
-            _ => assert!(false, "Expected CoinParseError::Overflow"),
-        },
-    }
+    Coin::from_str("900719925474").expect_err("Should error");
 }
 
 // Max safe value in fractional format: 90071992547.40991
 #[test]
 fn test_frac_part_overflow() {
-    let coin = Coin::from_str("90071992547.40992");
-    match coin {
-        Ok(_) => assert!(false, "Expected error"),
-        Err(e) => match e {
-            CoinParseError::Overflow => (),
-            _ => assert!(false, "Expected CoinParseError::Overflow"),
-        },
-    }
+    Coin::from_str("90071992547.40992").expect_err("Should error");
 }
 
 #[test]
@@ -220,26 +168,12 @@ fn test_max_value() {
 
 #[test]
 fn test_empty_int_part() {
-    let coin = Coin::from_str(".56789");
-    match coin {
-        Ok(_) => assert!(false, "Expected error"),
-        Err(e) => match e {
-            CoinParseError::InvalidString => (),
-            _ => assert!(false, "Expected CoinParseError::InvalidString"),
-        },
-    }
+    Coin::from_str(".56789").expect_err("Should error");
 }
 
 #[test]
 fn test_empty_frac_part() {
-    let coin = Coin::from_str("1234.");
-    match coin {
-        Ok(_) => assert!(false, "Expected error"),
-        Err(e) => match e {
-            CoinParseError::InvalidString => (),
-            _ => assert!(false, "Expected CoinParseError::InvalidString"),
-        },
-    }
+    Coin::from_str("1234.").expect_err("Should error");
 }
 
 #[test]

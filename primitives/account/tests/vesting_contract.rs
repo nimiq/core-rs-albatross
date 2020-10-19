@@ -271,7 +271,7 @@ fn it_can_verify_outgoing_transactions() {
 
     assert!(matches!(
         AccountType::verify_outgoing_transaction(&tx),
-        Err(TransactionError::InvalidSerialization(SerializingError::IoError(_, _)))
+        Err(TransactionError::InvalidSerialization(SerializingError::IoError(_)))
     ));
 
     let signature = key_pair.sign(&tx.serialize_content()[..]);
