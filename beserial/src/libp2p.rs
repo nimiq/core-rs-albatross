@@ -2,10 +2,13 @@
 
 use std::convert::TryFrom;
 
-use libp2p::Multiaddr;
+use libp2p::{
+    identity::PublicKey,
+    Multiaddr, PeerId,
+};
 use byteorder::{WriteBytesExt, ReadBytesExt};
 
-use crate::{Serialize, Deserialize, SerializingError, uvar};
+use crate::{Serialize, Deserialize, SerializeWithLength, DeserializeWithLength, SerializingError, uvar};
 
 
 impl Serialize for Multiaddr {
@@ -40,5 +43,30 @@ impl Deserialize for Multiaddr {
         reader.read_exact(&mut buf)?;
         Multiaddr::try_from(buf)
             .map_err(|e| SerializingError::InvalidValue)
+    }
+}
+
+// TODO: Very inefficient
+impl SerializeWithLength for PublicKey {
+    fn serialize<S: Serialize + num::FromPrimitive, W: WriteBytesExt>(
+        &self,
+        writer: &mut W,
+    ) -> Result<usize, SerializingError> {
+        self.clone().into_protobuf_encoding().serialize::<S, W>(writer)
+    }
+
+    fn serialized_size<S: Serialize + num::FromPrimitive>(&self) -> usize {
+        self.clone().into_protobuf_encoding().serialized_size::<S>()
+    }
+}
+
+impl DeserializeWithLength for PublicKey {
+    fn deserialize_with_limit<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(
+        reader: &mut R,
+        limit: Option<usize>,
+    ) -> Result<Self, SerializingError> {
+        let vec: Vec<u8> = DeserializeWithLength::deserialize_with_limit::<D, R>(reader, limit)?;
+        PublicKey::from_protobuf_encoding(&vec)
+            .map_err(|_| SerializingError::InvalidValue)
     }
 }

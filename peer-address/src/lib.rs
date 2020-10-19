@@ -1,4 +1,4 @@
-#![feature(ip)] // For Ip::is_global
+#![feature(ip)] // For IpAddr::is_global
 
 #[macro_use]
 extern crate beserial_derive;
@@ -17,3 +17,4 @@ pub mod address;
 pub mod protocol;
 pub mod services;
 pub mod version;
+//pub mod peer_info;

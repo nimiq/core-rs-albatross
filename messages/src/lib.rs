@@ -35,7 +35,7 @@ use block_albatross::{
 use handel::update::LevelUpdateMessage;
 use hash::Blake2bHash;
 use keys::{Address, KeyPair, PublicKey, Signature};
-use macros::create_typed_array;
+use macros::{create_typed_array, add_hex_io_fns_typed_arr};
 use network_interface::message::Message as MessageInterface;
 use peer_address::address::{PeerAddress, PeerId};
 use peer_address::protocol::ProtocolFlags;
@@ -607,6 +607,7 @@ impl MessageAdapter<BlockAlbatross, BlockHeaderAlbatross> for AlbatrossMessageAd
 }
 
 create_typed_array!(ChallengeNonce, u8, 32);
+add_hex_io_fns_typed_arr!(ChallengeNonce, ChallengeNonce::SIZE);
 
 impl ChallengeNonce {
     pub fn generate() -> Self {

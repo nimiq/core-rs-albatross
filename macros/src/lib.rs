@@ -45,9 +45,15 @@ macro_rules! create_typed_array {
             }
         }
 
-        impl ::std::fmt::Debug for $name {
-            fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-                f.write_str(&::hex::encode(&self.0))
+        impl AsRef<[$t]> for $name {
+            fn as_ref(&self) -> &[$t] {
+                &self.0
+            }
+        }
+
+        impl AsMut<[$t]> for $name {
+            fn as_mut(&mut self) -> &mut [$t] {
+                &mut self.0
             }
         }
 
@@ -57,6 +63,9 @@ macro_rules! create_typed_array {
             pub fn len() -> usize {
                 $len
             }
+
+            // NOTE: These arrays don't always consist of bytes
+            #[deprecated]
             pub fn as_bytes(&self) -> &[$t] {
                 &self.0
             }
@@ -83,6 +92,8 @@ macro_rules! add_hex_io_fns_typed_arr {
             type Err = ::hex::FromHexError;
 
             fn from_str(s: &str) -> Result<Self, Self::Err> {
+                use ::hex::FromHex;
+
                 let vec = Vec::from_hex(s)?;
                 if vec.len() == $len {
                     Ok($name::from(&vec[..]))
@@ -95,6 +106,12 @@ macro_rules! add_hex_io_fns_typed_arr {
         impl From<&'static str> for $name {
             fn from(s: &'static str) -> Self {
                 s.parse().unwrap()
+            }
+        }
+
+        impl ::std::fmt::Debug for $name {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+                f.write_str(&::hex::encode(&self.0))
             }
         }
     };
