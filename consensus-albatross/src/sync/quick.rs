@@ -139,15 +139,12 @@ impl<N: Network> QuickSync<N> {
             .skip(skip_prefix_len)
             .cloned()
             .collect();
-        let agents = cluster
-            .agents
-            .iter()
-            .filter_map(|agent| agent.upgrade())
-            .collect();
-        let mut sync_queue =
-            SyncQueue::new(hashes, agents, Self::DESIRED_PENDING_SIZE, |agent, hash| {
-                Box::pin(async move { agent.request_epoch(hash).await })
-            });
+        let mut sync_queue = SyncQueue::new(
+            hashes,
+            cluster.agents.clone(),
+            Self::DESIRED_PENDING_SIZE,
+            |hash, peer| Box::pin(async move { peer.request_epoch(hash).await.ok() }),
+        );
 
         let mut successfully_synced = vec![];
         let block_index = skip_prefix_len;
