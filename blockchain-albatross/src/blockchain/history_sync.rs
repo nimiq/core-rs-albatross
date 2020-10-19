@@ -66,7 +66,7 @@ impl Blockchain {
 
         // Check that the head is a macro block. This has to be the case since we never push micro
         // blocks while we are syncing.
-        assert!(prev_info.head.is_micro());
+        assert!(prev_info.head.is_macro());
 
         // Check if we have this block's parent. The checks change depending if the last macro block
         // that we pushed was an election block or not.

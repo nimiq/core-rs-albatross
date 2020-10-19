@@ -91,7 +91,7 @@ async fn peers_can_sync() {
         .request_epoch(consensus1.blockchain.election_head_hash())
         .await
         .expect("Should yield epoch");
-    assert_eq!(epoch.transactions.len(), 0);
+    assert_eq!(epoch.history_len, 0);
     assert_eq!(
         epoch.block.hash(),
         consensus1.blockchain.election_head_hash()
@@ -155,7 +155,7 @@ async fn peers_can_sync() {
         .request_epoch(consensus2.blockchain.election_head_hash())
         .await
         .expect("Should yield epoch");
-    assert_eq!(epoch.transactions.len(), 0);
+    assert_eq!(epoch.history_len, 0);
     assert_eq!(
         epoch.block.hash(),
         consensus2.blockchain.election_head_hash()
