@@ -71,7 +71,7 @@ impl Handle<Epoch> for RequestEpoch {
             let history_len = blockchain.get_num_extended_transactions(epoch, None);
             let response = Epoch {
                 block,
-                history_len: history_len as u64,
+                history_len: history_len as u32,
                 request_identifier: self.get_request_identifier(),
             };
 

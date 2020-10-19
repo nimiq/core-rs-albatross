@@ -9,6 +9,7 @@ use crate::error::SyncError;
 
 pub use self::quick::*;
 
+mod history;
 mod quick;
 mod sync_queue;
 

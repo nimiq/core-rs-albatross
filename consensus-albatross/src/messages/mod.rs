@@ -99,7 +99,7 @@ impl Message for RequestEpoch {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Epoch {
     pub block: MacroBlock,
-    pub history_len: u64,
+    pub history_len: u32,
     pub request_identifier: u32,
 }
 request_response!(Epoch);
@@ -124,7 +124,7 @@ impl Message for RequestHistoryChunk {
 /// This message contains a chunk of the history.
 #[derive(Serialize, Deserialize)]
 pub struct HistoryChunk {
-    chunk: Option<HistoryTreeChunk>,
+    pub chunk: Option<HistoryTreeChunk>,
     pub request_identifier: u32,
 }
 request_response!(HistoryChunk);

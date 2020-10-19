@@ -85,6 +85,8 @@ impl<P: Peer> ConsensusAgent<P> {
             })
             .await;
 
+        // TODO verify that hash of returned epoch matches the one we requested
+
         result
     }
 
@@ -120,6 +122,8 @@ impl<P: Peer> ConsensusAgent<P> {
                 request_identifier: 0, // will automatically be set at a later point
             })
             .await;
+
+        // TODO filter empty chunks here?
 
         result
     }

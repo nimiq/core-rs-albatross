@@ -1,7 +1,7 @@
 use std::cmp;
 use std::cmp::Ordering;
 use std::collections::binary_heap::PeekMut;
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, VecDeque};
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
 
@@ -71,9 +71,9 @@ impl<TOutput> Ord for QueuedOutput<TOutput> {
 /// and implements an ordered stream over the resulting objects.
 /// The stream returns an error if an id could not be resolved.
 pub struct SyncQueue<TPeer: Peer, TId, TOutput> {
-    peers: Vec<Weak<ConsensusAgent<TPeer>>>,
+    pub(crate) peers: Vec<Weak<ConsensusAgent<TPeer>>>,
     desired_pending_size: usize,
-    ids_to_request: Vec<TId>,
+    ids_to_request: VecDeque<TId>,
     pending_futures: FuturesUnordered<OrderWrapper<TId, BoxFuture<'static, Option<TOutput>>>>,
     queued_outputs: BinaryHeap<QueuedOutput<TOutput>>,
     next_incoming_index: usize,
@@ -97,11 +97,11 @@ where
         SyncQueue {
             peers,
             desired_pending_size,
-            ids_to_request: ids,
+            ids_to_request: VecDeque::from(ids),
             pending_futures: FuturesUnordered::new(),
             queued_outputs: BinaryHeap::new(),
-            next_outgoing_index: 0,
             next_incoming_index: 0,
+            next_outgoing_index: 0,
             current_peer_index: 0,
             request_fn,
         }
@@ -129,19 +129,18 @@ where
             // The number of pending futures can be higher than the desired pending size
             // (e.g., if there is an error and we re-request)
             self.desired_pending_size
-                .saturating_sub(self.pending_futures.len()),
+                .saturating_sub(self.pending_futures.len() + self.queued_outputs.len()),
         );
 
         // Drain ids and produce futures.
-        let new_ids_to_request: Vec<TId> =
-            self.ids_to_request.drain(0..num_ids_to_request).collect();
-        for id in new_ids_to_request {
+        for _ in 0..num_ids_to_request {
             // Get next peer in line. Abort if there are no more peers.
             let peer = match self.get_next_peer(self.current_peer_index) {
                 Some(peer) => peer,
                 None => return,
             };
 
+            let id = self.ids_to_request.pop_front().unwrap();
             let wrapper = OrderWrapper {
                 data: (self.request_fn)(id.clone(), peer),
                 id,
@@ -161,8 +160,16 @@ where
         self.peers.push(peer);
     }
 
-    pub fn add_ids(&mut self, mut ids: Vec<TId>) {
-        self.ids_to_request.append(&mut ids);
+    pub fn add_ids(&mut self, ids: Vec<TId>) {
+        for id in ids {
+            self.ids_to_request.push_back(id);
+        }
+    }
+
+    /// Truncates the stored ids, retaining only the first `len` elements.
+    /// The elements are counted from the *original* start of the ids vector.
+    pub fn truncate_ids(&mut self, len: usize) {
+        self.ids_to_request.truncate(len - self.next_incoming_index);
     }
 
     pub fn num_peers(&self) -> usize {
