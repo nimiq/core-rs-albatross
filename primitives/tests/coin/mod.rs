@@ -137,10 +137,9 @@ fn test_parse_too_many_frac_digits() {
 }
 
 #[test]
-// NOTE: This is open for discussion, if `1234.56789000` is a value amount of NIM
-// I don't think so - Janosch
 fn test_parse_frac_more_zeros() {
-    Coin::from_str("1234.56789000").expect_err("Should error");
+    let coin = Coin::from_str("1234.56789000").unwrap();
+    assert_eq!(Coin::try_from(123456789).unwrap(), coin)
 }
 
 #[test]

@@ -5,10 +5,10 @@ use std::iter::Sum;
 use std::ops::{Add, AddAssign, Div, Rem, Sub, SubAssign};
 use std::str::FromStr;
 
-use thiserror::Error;
+use lazy_static::lazy_static;
 use num_traits::identities::Zero;
 use regex::Regex;
-use lazy_static::lazy_static;
+use thiserror::Error;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 
@@ -159,12 +159,7 @@ impl fmt::Display for Coin {
         if frac_part == 0 {
             write!(f, "{}", self.0 / Coin::LUNAS_PER_COIN)
         } else {
-            write!(
-                f,
-                "{}.{:05}",
-                self.0 / Coin::LUNAS_PER_COIN,
-                self.0 % Coin::LUNAS_PER_COIN
-            )
+            write!(f, "{}.{:05}", self.0 / Coin::LUNAS_PER_COIN, self.0 % Coin::LUNAS_PER_COIN)
         }
     }
 }
@@ -211,7 +206,7 @@ impl PartialEq for CoinParseError {
 lazy_static! {
     /// This is an example for using doc comment attributes
     static ref COIN_PARSE_REGEX: Regex = {
-        let r = r"^(?P<int_part>\d+) (.(?P<frac_part>\d{1,5})0*)?$";
+        let r = r"^(?P<int_part>\d+)(.(?P<frac_part>\d{1,5})0*)?$";
         Regex::new(r)
             .unwrap_or_else(|e| panic!("Failed to compile regex: {}: {}", r, e))
     };
@@ -223,25 +218,21 @@ impl FromStr for Coin {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let e = || CoinParseError(s.to_owned());
 
-        let captures = COIN_PARSE_REGEX.captures(s)
-            .ok_or_else(e)?;
+        let captures = COIN_PARSE_REGEX.captures(s).ok_or_else(e)?;
 
-        let int_part = captures.name("int_part")
-            .ok_or_else(e)?
-            .as_str()
-            .parse::<u64>()
-            .map_err(|_| e())?;
+        let int_part = captures.name("int_part").ok_or_else(e)?.as_str().parse::<u64>().map_err(|_| e())?;
 
-        let frac_part_str = captures.name("frac_part")
-            .ok_or_else(e)?
-            .as_str();
-        let mut frac_part = frac_part_str.parse::<u64>()
-            .map_err(|_| e())?;
+        let frac_part = if let Some(frac_part_capture) = captures.name("frac_part") {
+            let frac_part_str = frac_part_capture.as_str();
+            println!("frac_part_str = {}", frac_part_str);
+            let mut frac_part = frac_part_str.parse::<u64>().map_err(|_| e())?;
+            frac_part *= 10_u64.pow(Coin::FRAC_DIGITS - frac_part_str.len() as u32);
+            frac_part
+        } else {
+            0
+        };
 
-        frac_part *= 10_u64.pow(Coin::FRAC_DIGITS - frac_part_str.len() as u32);
-
-        let coin = Coin::try_from(int_part * Coin::LUNAS_PER_COIN + frac_part)
-            .map_err(|_| e())?;
+        let coin = Coin::try_from(int_part * Coin::LUNAS_PER_COIN + frac_part).map_err(|_| e())?;
 
         Ok(coin)
     }
