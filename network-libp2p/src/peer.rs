@@ -27,6 +27,7 @@ pub struct Peer {
     pub id: PeerId,
     tx: AsyncMutex<mpsc::Sender<PeerAction>>,
     channels: Mutex<HashMap<u64, Pin<Box<dyn Sink<Vec<u8>, Error = DispatchError> + Send + Sync>>>>,
+    pub banned: bool,
 }
 
 impl Peer {
@@ -35,6 +36,7 @@ impl Peer {
             id,
             tx: AsyncMutex::new(tx),
             channels: Mutex::new(HashMap::new()),
+            banned: false,
         }
     }
 
