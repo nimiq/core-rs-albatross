@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
+use std::time::{Duration, SystemTime};
 
 use futures::channel::mpsc;
 use futures::task::{Context, Poll};
@@ -19,16 +20,19 @@ use network_interface::network::NetworkEvent;
 use crate::handler::{NimiqHandler, NimiqHandlerAction};
 use crate::peer::{Peer, PeerAction};
 
-const IPV4_SUBNET: u8 = 24;
-const IPV6_SUBNET: u8 = 96;
-const MAX_INBOUND_CONNECTION_LIMIT: usize = 100;
-const MAX_OUTBOUND_CONNECTION_LIMIT: usize = 2;
-const MAX_CONNECTIONS_LIMIT: usize = 4000;
-const MAX_CONNECTIONS_PER_IP_LIMIT: usize = 10;
+const PEER_COUNT_MAX: usize = 4000;
+const PEER_COUNT_PER_IP_MAX: usize = 20;
+const OUTBOUND_PEER_COUNT_PER_SUBNET_MAX: usize = 2;
+const INBOUND_PEER_COUNT_PER_SUBNET_MAX: usize = 100;
+
+const IPV4_SUBNET_MASK: u8 = 24;
+const IPV6_SUBNET_MASK: u8 = 96;
+
+const DEFAULT_BAN_TIME: Duration = Duration::from_secs(60 * 10);
 
 pub struct NimiqBehaviour {
     peers: HashMap<PeerId, Arc<Peer>>,
-    ip_ban: HashSet<IpNetwork>,
+    ip_ban: HashMap<IpNetwork, SystemTime>,
     ip_count: HashMap<IpNetwork, usize>,
     ipv4_count: usize,
     ipv6_count: usize,
@@ -42,7 +46,7 @@ impl NimiqBehaviour {
         let (peer_tx, peer_rx) = mpsc::channel(4096);
         Self {
             peers: HashMap::new(),
-            ip_ban: HashSet::new(),
+            ip_ban: HashMap::new(),
             ip_count: HashMap::new(),
             ipv4_count: 0,
             ipv6_count: 0,
@@ -75,19 +79,19 @@ impl NetworkBehaviour for NimiqBehaviour {
 
         let (address, subnet_limit) = match endpoint {
             ConnectedPoint::Listener { send_back_addr, .. } => {
-                (send_back_addr.clone(), MAX_INBOUND_CONNECTION_LIMIT)
+                (send_back_addr.clone(), INBOUND_PEER_COUNT_PER_SUBNET_MAX)
             }
-            ConnectedPoint::Dialer { address } => (address.clone(), MAX_OUTBOUND_CONNECTION_LIMIT),
+            ConnectedPoint::Dialer { address } => (address.clone(), OUTBOUND_PEER_COUNT_PER_SUBNET_MAX),
         };
 
         // Get the IP for this new peer connection
         let ip = match address.iter().next() {
-            Some(Protocol::Ip4(ip)) => IpNetwork::new(ip, IPV4_SUBNET).unwrap(),
-            Some(Protocol::Ip6(ip)) => IpNetwork::new(ip, IPV6_SUBNET).unwrap(),
+            Some(Protocol::Ip4(ip)) => IpNetwork::new(ip, IPV4_SUBNET_MASK).unwrap(),
+            Some(Protocol::Ip6(ip)) => IpNetwork::new(ip, IPV6_SUBNET_MASK).unwrap(),
             _ => return,
         };
 
-        if self.ip_count.get(&ip).is_some() && MAX_CONNECTIONS_PER_IP_LIMIT < *self.ip_count.get(&ip).unwrap() + 1 {
+        if self.ip_count.get(&ip).is_some() && PEER_COUNT_PER_IP_MAX < *self.ip_count.get(&ip).unwrap() + 1 {
             debug!("Max peer connections per IP limit reached, {}", ip);
             close_connection = true;
         }
@@ -99,11 +103,11 @@ impl NetworkBehaviour for NimiqBehaviour {
             debug!("IPv6 subnet limit reached");
             close_connection = true;
         }
-        if MAX_CONNECTIONS_LIMIT < self.peers.keys().len() + 1 {
+        if PEER_COUNT_MAX < self.peers.keys().len() + 1 {
             debug!("Max peer connections limit reached");
             close_connection = true;
         }
-        if self.ip_ban.contains(&ip) {
+        if self.ip_ban.get(&ip).is_some() {
             debug!("Connection IP is banned, {}", ip);
             close_connection = true;
         }
@@ -118,7 +122,7 @@ impl NetworkBehaviour for NimiqBehaviour {
             }
         }
 
-        // Send the network event to the Swa
+        // Send the network event to the Swarm
         let peer = Arc::new(Peer::new(peer_id.clone(), self.peer_tx.clone()));
         if close_connection {
             self.events.push_back(NetworkEvent::PeerDisconnect(peer));
@@ -132,20 +136,20 @@ impl NetworkBehaviour for NimiqBehaviour {
 
     fn inject_connected(&mut self, peer_id: &PeerId) {}
 
-    fn inject_disconnected(&mut self, peer_id: &PeerId) {
+    fn inject_disconnected(&mut self, peer_id: &PeerId) {}
+
+    fn inject_connection_closed(
+        &mut self,
+        peer_id: &PeerId,
+        conn: &ConnectionId,
+        info: &ConnectedPoint,
+    ) {
         let peer = self
             .peers
             .remove(peer_id)
             .expect("Unknown peer disconnected");
-        self.events.push_back(NetworkEvent::PeerLeft(peer));
-    }
+        self.events.push_back(NetworkEvent::PeerLeft(peer.clone()));
 
-    fn inject_connection_closed(
-        &mut self,
-        peer: &PeerId,
-        conn: &ConnectionId,
-        info: &ConnectedPoint,
-    ) {
         let address = match info {
             ConnectedPoint::Listener { send_back_addr, .. } => send_back_addr.clone(),
             ConnectedPoint::Dialer { address } => address.clone(),
@@ -153,10 +157,14 @@ impl NetworkBehaviour for NimiqBehaviour {
 
         // Get the IP for the closing peer connection
         let ip = match address.iter().next() {
-            Some(Protocol::Ip4(ip)) => IpNetwork::new(ip, IPV4_SUBNET).unwrap(),
-            Some(Protocol::Ip6(ip)) => IpNetwork::new(ip, IPV6_SUBNET).unwrap(),
+            Some(Protocol::Ip4(ip)) => IpNetwork::new(ip, IPV4_SUBNET_MASK).unwrap(),
+            Some(Protocol::Ip6(ip)) => IpNetwork::new(ip, IPV6_SUBNET_MASK).unwrap(),
             _ => return,
         };
+
+        if peer.banned {
+            self.ip_ban.insert(ip, SystemTime::now() + DEFAULT_BAN_TIME);
+        }
 
         // Decrement peer counts per IP
         *self.ip_count.entry(ip).or_insert(1) -= 1;
@@ -189,6 +197,13 @@ impl NetworkBehaviour for NimiqBehaviour {
         cx: &mut Context<'_>,
         _params: &mut impl PollParameters,
     ) -> Poll<NetworkBehaviourAction<NimiqHandlerAction, NetworkEvent<Peer>>> {
+        let ip_ban = self.ip_ban.clone();
+        for (ip, time) in ip_ban {
+            if time < SystemTime::now() {
+                self.ip_ban.remove(&ip);
+            }
+        }
+
         // Emit custom events.
         if let Some(event) = self.events.pop_front() {
             return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));
