@@ -23,8 +23,6 @@ use crate::peer::Peer;
 enum SwarmAction {
     Dial(PeerId),
     DialAddr(Multiaddr),
-    BanIp(Multiaddr),
-    UnbanIp(Multiaddr),
 }
 
 struct SwarmTask {
@@ -54,8 +52,6 @@ impl SwarmTask {
                 .map_err(|err| warn!("Failed to dial peer {}: {:?}", peer_id, err)),
             SwarmAction::DialAddr(addr) => Swarm::dial_addr(&mut self.swarm, addr)
                 .map_err(|err| warn!("Failed to dial addr: {:?}", err)),
-            SwarmAction::BanIp(addr) => Ok(()), // TODO: Implement
-            SwarmAction::UnbanIp(addr) => Ok(()), // TODO: Implement
         }
         // TODO Error handling?
         .unwrap_or(())
@@ -234,16 +230,6 @@ impl Network {
     pub fn dial_addr(&self, addr: Multiaddr) {
         // TODO make async? handling
         executor::block_on(self.action_tx.lock().send(SwarmAction::DialAddr(addr))).unwrap_or(())
-    }
-
-    pub fn ban_ip(&self, addr: Multiaddr) {
-        // TODO make async? handling
-        executor::block_on(self.action_tx.lock().send(SwarmAction::BanIp(addr))).unwrap_or(())
-    }
-
-    pub fn unban_ip(&self, addr: Multiaddr) {
-        // TODO make async? handling
-        executor::block_on(self.action_tx.lock().send(SwarmAction::UnbanIp(addr))).unwrap_or(())
     }
 }
 
