@@ -1,232 +1,135 @@
-use async_trait::async_trait;
-use std::fmt;
+use std::fmt::Debug;
 use std::hash::Hash;
-use std::sync::{Arc, Weak};
-
-use parking_lot::{RwLock, RwLockUpgradableReadGuard};
-
-use tokio::stream::StreamExt;
-
-use tokio::time;
+use std::pin::Pin;
 
 use beserial::{Deserialize, Serialize};
-use nimiq_network_interface::network::Network;
+
+use futures::channel::mpsc::{unbounded, UnboundedSender};
+use futures::future::BoxFuture;
+use futures::stream::BoxStream;
+use futures::task::{Context, Poll};
+use futures::{ready, select, FutureExt, Sink, Stream, StreamExt};
+
+use tokio::task::JoinHandle;
+use tokio::time::{interval_at, Instant, Interval};
 
 use crate::config::Config;
 use crate::contribution::AggregatableContribution;
-use crate::evaluator::Evaluator;
 use crate::level::Level;
+use crate::partitioner::Partitioner;
 use crate::protocol::Protocol;
 use crate::store::ContributionStore;
-use crate::todo::{TodoItem, TodoList};
+use crate::todo::TodoList;
 use crate::update::{LevelUpdate, LevelUpdateMessage};
 
-#[async_trait]
-pub trait HandelAggreation<P: Protocol, N: Network, T: Clone + fmt::Debug + Eq + Serialize + Deserialize + Send + Sync + 'static> {
-    async fn start(tag: T, own_contribution: P::Contribution, protocol: P, config: Config, network: Arc<N>) -> P::Contribution;
-}
+// TODOS:
+// * protocol.store RwLock.
+// * level.state RwLock
+// * SinkError.
+// * Evaluator::new -> threshold (now covered outside of this crate)
 
-// TODO remove
-struct AggregationState<C: AggregatableContribution> {
-    /// Our contribution
-    contribution: Option<C>, // todo move into Aggregattion
-}
+#[derive(std::fmt::Debug)]
+pub struct SinkError {} // TODO
 
-pub struct Aggregation<P: Protocol, N: Network, T: Clone + fmt::Debug + Eq + Serialize + Deserialize + Hash + Send + Sync + 'static> {
-    /// Handel configuration, including the hash being signed, this node's contributed signature, etc.
+/// Future implementation for the next aggregation event
+struct NextAggregation<
+    P: Protocol,
+    T: Clone + Debug + Eq + Serialize + Deserialize + Hash + Sized + Send + Sync,
+> {
+    /// Handel configuration
     config: Config,
 
     /// Levels
     levels: Vec<Level>,
 
-    /// Signatures that still need to be processed
-    // todos: Arc<TodoList<P::Contribution, P::Evaluator>>,
+    /// Remaining Todos
+    todos: Pin<Box<TodoList<P::Contribution, P::Evaluator>>>,
 
-    /// The underlying protocol
-    pub protocol: P,
+    /// The protocol specifying how this aggregation works.
+    protocol: P,
 
-    /// Our contribution behind a RwLock
-    contribution: RwLock<AggregationState<P::Contribution>>,
+    /// Our contribution
+    contribution: P::Contribution,
 
-    /// Network for all communication purposes
-    network: Arc<N>,
-
-    /// The message this aggregation is about (i.e. block hash)
+    /// The tag for this aggregation
     tag: T,
+
+    /// Sink used to relay messages
+    sender: UnboundedSender<(LevelUpdateMessage<P::Contribution, T>, usize)>,
+
+    /// Interval for starting the next level regarless of previous levels completion
+    start_level_interval: Interval,
+
+    /// Interval for sending level updates to the corresponding peers regardless of progression
+    periodic_update_interval: Interval,
+
+    /// the level which needs activation next
+    next_level_timeout: usize,
 }
 
-impl<
-        P: Protocol + fmt::Debug,
-        N: Network,
-        T: Clone + fmt::Debug + Eq + Serialize + Deserialize + Hash + Send + Sync + 'static, // TODO think about how to get rid of this generic
-    > Aggregation<P, N, T>
+impl<P: Protocol, T: Clone + Debug + Eq + Serialize + Deserialize + Hash + Sized + Send + Sync>
+    NextAggregation<P, T>
 {
-    fn new(tag: T, protocol: P, config: Config, network: Arc<N>) -> Arc<Self> {
+    pub fn new(
+        protocol: P,
+        tag: T,
+        config: Config,
+        own_contribution: P::Contribution,
+        input_stream: BoxStream<'static, LevelUpdate<P::Contribution>>,
+        sender: UnboundedSender<(LevelUpdateMessage<P::Contribution, T>, usize)>,
+    ) -> Self {
+        // invoke the partitioner to create the level structure of peers.
         let levels: Vec<Level> = Level::create_levels(protocol.partitioner());
 
-        // create aggregation
-        Arc::new(Self {
-            config,
-            levels,
-            protocol,
-            contribution: RwLock::new(AggregationState { contribution: None }),
-            tag,
-            network,
-        })
-    }
+        // Create an empty todo list  which can later be polled for the best available todo.
+        let todos = Box::pin(TodoList::new(protocol.evaluator(), input_stream));
 
-    /// only exposed function aside from `new`. Starts the aggregation of contributions and returns the bestt contribution after the threshold
-    /// is reached and a grace period has passed.
-    ///
-    /// A ReceiveFromAll for LevelUpdateMessages will be started, overriding existing Consumers for this message type. In case the previoous consumer
-    /// for that message type is necessary (i.e. View changes) it needs to be re-established after this aggregation resolves.
-    pub async fn start(tag: T, own_contribution: P::Contribution, protocol: P, config: Config, network: Arc<N>) -> P::Contribution {
-        trace!("Handel started for {:?}", &tag);
+        // Regarless of level completion consecutive levels need to be activated at some point. Activate Levels every time this interval ticks,
+        // if the level has not already been activated due to level completion
+        let start_level_interval = interval_at(Instant::now() + config.timeout, config.timeout);
 
-        let t = tag.clone();
-        // receive all msg then filter them to make sure they have the correct tag. Strip the Wrappers.
-        let input_stream = Box::pin(
-            network
-                .receive_from_all::<LevelUpdateMessage<P::Contribution, T>>()
-                .filter(move |msg| msg.0.tag == t)
-                .map(move |msg| msg.0.update),
+        // Every `config.update_interval` send Level updates to corresponding peers no matter the aggregations progression
+        // (makes sure other peers can catch up).
+        let periodic_update_interval = interval_at(
+            Instant::now() + config.update_interval,
+            config.update_interval,
         );
-        let mut todos = TodoList::new(protocol.evaluator(), input_stream);
 
-        let this = Self::new(tag.clone(), protocol, config, network);
+        // create the NextAggregation struct
+        let this = Self {
+            protocol,
+            tag,
+            config,
+            todos,
+            levels,
+            contribution: own_contribution.clone(),
+            sender,
+            start_level_interval,
+            periodic_update_interval,
+            next_level_timeout: 0,
+        };
 
-        // add this nodes own contribution as it will not be received over the network.
-        this.push_contribution(own_contribution).await;
+        // make sure the contribution of this instance is added to the store
+        this.protocol
+            .store()
+            .write()
+            .put(own_contribution.clone(), 0);
 
-        // start sending periodic updates
-        let weak = Arc::downgrade(&this);
-        let interval = time::interval(this.config.update_interval);
-        tokio::spawn(Self::periodic_loop(weak, interval));
+        // and check if that already completes a level
+        // Level 0 always only contains a single signature, the one of this instance. Thus it will always complete that level,
+        // startinng the next one and sending updates.
+        this.check_completed_level(own_contribution, 0);
 
-        // start starting levels on a schedule
-        let weak = Arc::downgrade(&this);
-        // This creates a linear schedule. In case anther schedule is beneficial a different Interval must be provided
-        let interval = time::interval(this.config.timeout);
-        tokio::spawn(Self::init_timeout(weak, interval));
-
-        // continuously work on Todos
-        loop {
-            if let Some(TodoItem { level, contribution }) = todos.next().await {
-                trace!("Processing: level={}: {:?}", level, contribution);
-                // verify that the contribution is valid
-                let result = this.protocol.verify(&contribution).await;
-                if result.is_ok() {
-                    // store the contribution of the todo in the store (which will in turn update levels and aggregate)
-                    this.protocol.store().write().put(contribution.clone(), level);
-                    // check if this contribution completed a level.
-                    this.check_completed_level(&contribution, level).await;
-                    // finally check if the aggregation is complete in which case the loop is broken.
-                    if this.check_final_contribution() {
-                        break;
-                    }
-                } else {
-                    warn!("Invalid signature: {:?}", result);
-                }
-            } else {
-                panic!("TodoItem stream returned Ready(None), which should never happen");
-            }
-        }
-
-        // TODO continue work on todos for grace period amount of time.
-
-        // return the best available result
-        let aggregate = this.result().expect("Final Aggregation is not existent even though it should be!");
-
-        trace!("Handel for {:?} cpmpleted: {:?}", &this.tag, &aggregate);
-
-        aggregate
-    }
-
-    /// Sends Updates periodically in order for peers who have fallen out of the network and rejoined
-    /// to be able to get up to speed again.
-    /// Terminates on its own once the handel instance is dropped.
-    async fn periodic_loop(this: Weak<Self>, mut interval: time::Interval) {
-        while interval.next().await.is_some() {
-            if let Some(this) = Weak::upgrade(&this) {
-                // for every level send the best available signature again if there is one.
-                trace!("resending Updates");
-                for level in this.levels.iter().skip(1) {
-                    // get the current best aggregate from store (no clone() needed as that already happens within the store)
-                    // freeing the lock as soon as possible for the todo aggregating to continue.
-                    let aggregate = {
-                        let store = this.protocol.store();
-                        let store = store.read();
-                        store.combined(level.id - 1)
-                    };
-                    // For an existing aggregate for this level send it around to the respective peers.
-                    if let Some(aggregate) = aggregate {
-                        this.send_update(aggregate, &level, this.config.update_count).await;
-                    }
-                }
-            } else {
-                // If the Weak Pointer cannot be upgraded the Handel instance no longer exists and this Task should
-                // terminate as it can no longer do anything.
-                break;
-            }
-        }
-    }
-
-    /// The timeout strategy 'activates' levels depending on the time that has passed since the aggregation started.
-    /// Terminates on its own once either all levels are completed, or the handel instance is dropped.
-    async fn init_timeout(this: Weak<Self>, mut interval: time::Interval) {
-        let mut next_level_timeout: usize = 0;
-        while interval.next().await.is_some() {
-            if let Some(this) = Weak::upgrade(&this) {
-                let level = next_level_timeout;
-                if level < this.num_levels() {
-                    trace!("Timeout for {:?} at level {}", this.protocol, level);
-                    next_level_timeout += 1;
-                    this.start_level(level).await;
-                } else {
-                    break; // terminate this function dropping the interval if all levels have been activated
-                }
-            } else {
-                // If the Weak Pointer cannot be upgraded the Handel instance no longer exists and this Task should
-                // terminate as it can no longer do anything.
-                break;
-            }
-        }
-    }
-
-    // TODO move, get rid of the whole state stuff...
-    /// adds this nodes own signature to the aggregation
-    ///
-    /// panics for contributions other than the single contribution of this node.
-    async fn push_contribution(&self, contribution: P::Contribution) {
-        // only allow contributions with a single contributor, which also must be this node itself.
-        assert!(contribution.num_contributors() == 1 && contribution.contributors().contains(self.protocol.node_id()));
-        {
-            let state = self.contribution.upgradable_read();
-            if state.contribution.is_some() {
-                error!("Contribution already exists");
-                return;
-            }
-            let mut state = RwLockUpgradableReadGuard::upgrade(state);
-            state.contribution = Some(contribution.clone());
-        }
-
-        // put our own contribution into store at level 0
-        self.protocol.store().write().put(contribution.clone(), 0);
-
-        // check for completed levels
-        self.check_completed_level(&contribution, 0).await;
-        self.check_final_contribution();
-
-        // sending of level 0 is done by check_completed_level
-    }
-
-    pub fn num_levels(&self) -> usize {
-        self.levels.len()
+        // return the NextAggregation struct
+        this
     }
 
     /// Starts level `level`
-    async fn start_level(&self, level: usize) {
-        let level = self.levels.get(level).unwrap_or_else(|| panic!("Timeout for invalid level {}", level));
+    fn start_level(&self, level: usize) {
+        let level = self
+            .levels
+            .get(level)
+            .unwrap_or_else(|| panic!("Attempted to start invalid level {}", level));
         trace!("Starting level {}: Peers: {:?}", level.id, level.peer_ids);
 
         level.start();
@@ -240,40 +143,19 @@ impl<
             };
 
             if let Some(best) = best {
-                self.send_update(best, level, self.config.peer_count).await;
+                self.send_update(best, level, self.config.peer_count);
             }
         }
     }
 
-    /// Send updated `contribution` for `level` to `count` peers
-    ///
-    /// for incomplete levels the contribution containing soley this nodes contribution is send alongside the aggregate
-    async fn send_update(&self, contribution: P::Contribution, level: &Level, count: usize) {
-        let peer_ids = level.select_next_peers(count);
-
-        // if there are peers to send the update to send them
-        if !peer_ids.is_empty() {
-            // incomplete levels will always also continue to send their own contribution, alongside the aggreagte.
-            let individual = if level.receive_complete() {
-                None
-            } else {
-                self.contribution.read().contribution.clone()
-            };
-
-            // create the LevelUpdate with the aggregate contribution, the level, our node id and, if the level is incomplete, our own contribution
-            let update = LevelUpdate::<P::Contribution>::new(contribution, individual, level.id, self.protocol.node_id());
-
-            // Tag the LevelUpdate with the tag this aggregation runs over creating a LevelUpdateMessage.
-            let update_msg = update.with_tag(self.tag.clone());
-            // TODO send the update to the corresponding peers.
-            self.network.broadcast(&update_msg).await;
-            //self.network.send_to(peer_ids, &update_msg).await;
-        }
-    }
-
     /// Check if a level was completed TODO: remove contribution parameter as it is not used at all.
-    async fn check_completed_level(&self, contribution: &P::Contribution, level: usize) {
-        let level = self.levels.get(level).unwrap_or_else(|| panic!("Invalid level: {}", level));
+    fn check_completed_level(&self, contribution: P::Contribution, level: usize) {
+        let level = self.levels.get(level).unwrap_or_else(|| {
+            panic!(
+                "Attempted to check completeness of invalid level: {}",
+                level
+            )
+        });
 
         trace!(
             "Checking for completed level {}: signers={:?}",
@@ -281,7 +163,7 @@ impl<
             contribution.contributors().iter().collect::<Vec<usize>>()
         );
 
-        // check if level is completed
+        // check if level already is completed
         {
             let level_state = level.state.read();
             if level_state.receive_completed {
@@ -313,12 +195,13 @@ impl<
             // if there is a level with a higher id than the completed one it needs to be activated.
             if level.id + 1 < self.levels.len() {
                 // activate next level
-                self.start_level(level.id + 1).await
+                self.start_level(level.id + 1);
             }
         }
 
         // In order to send updated messages iterate all levels higher than the given level.
-        for i in level.id + 1..self.levels.len() {
+        let level_count = self.levels.len();
+        for i in level.id + 1..level_count {
             let combined = {
                 // aquire read lock to retrieve the current commbined contribution for the next lower level
                 let store = self.protocol.store();
@@ -331,59 +214,237 @@ impl<
                 let level = self.levels.get(i).unwrap_or_else(|| panic!("No level {}", i));
                 if level.update_signature_to_send(&multisig.clone()) {
                     // XXX Do this without cloning
-                    self.send_update(multisig, &level, self.config.peer_count).await;
+                    self.send_update(multisig, level, self.config.peer_count);
                 }
             }
         }
     }
 
-    /// Check if the best signature is final
-    fn check_final_contribution(&self) -> bool {
-        // highest level is always the root of the tree (potentially containing all contributions)
-        let last_level = self.levels.last().expect("No levels");
+    /// Send updated `contribution` for `level` to `count` peers
+    ///
+    /// for incomplete levels the contribution containing soley this nodes contribution is send alongside the aggregate
+    fn send_update(&self, contribution: P::Contribution, level: &Level, count: usize) {
+        let peer_ids = level.select_next_peers(count);
 
-        // aquire read lock
-        let store = self.protocol.store();
-        let store = store.read();
+        // if there are peers to send the update to send them
+        if !peer_ids.is_empty() {
+            // incomplete levels will always also continue to send their own contribution, alongside the aggreagte.
+            let individual = if level.receive_complete() {
+                None
+            } else {
+                Some(self.contribution.clone())
+            };
 
-        trace!("Checking we have an aggregation above threshold: last_level={}", last_level.id);
+            // create the LevelUpdate with the aggregate contribution, the level, our node id and, if the level is incomplete, our own contribution
+            let update = LevelUpdate::<P::Contribution>::new(
+                contribution,
+                individual,
+                level.id,
+                self.protocol.node_id(),
+            );
 
-        // get the combined siganture for the highest level.
-        if let Some(combined) = store.combined(last_level.id) {
-            trace!("Best combined signature: {:?}", combined);
-            // if the combined contribution of the highest level (which includes all lower levels) is above the treshold
-            // the contribution is final
-            if self.protocol.evaluator().is_final(&combined) {
-                trace!("Best aggregate is above threshold");
-                return true;
+            // Tag the LevelUpdate with the tag this aggregation runs over creating a LevelUpdateMessage.
+            let update_msg = update.with_tag(self.tag.clone());
+            for peer_id in peer_ids {
+                self.sender
+                    // `unbounded_send` is not a future and thus will not block execution.
+                    .unbounded_send((update_msg.clone(), peer_id))
+                    // If an error occured that means the receiver no longer exists or was closed which should never happen.
+                    .expect("Message could not be send to unbounded_channel sender");
             }
         }
-        // if there is no combined signature for the highest level, or it is not above the treeshold the contribution is not final
-        false
     }
 
-    /// finds the best aggregation and returns it if it is final.
-    /// TODO identical to check_final_contribution -> get rid of one of these functions
-    pub fn result(&self) -> Option<P::Contribution> {
-        let last_level = self.levels.last().expect("No levels");
-
-        let store = self.protocol.store();
-        let store = store.read();
-
-        if let Some(combined) = store.combined(last_level.id) {
-            if self.protocol.evaluator().is_final(&combined) {
-                return Some(combined);
+    /// Send updates for every level to every peer accordingly.
+    fn automatic_update(&mut self) {
+        trace!("resending Updates");
+        for level in self.levels.iter().skip(1) {
+            // Get the current best aggregate from store (no clone() needed as that already happens within the store)
+            // freeing the lock as soon as possible for the todo aggregating to continue.
+            let aggregate = {
+                let store = self.protocol.store();
+                let store = store.read();
+                store.combined(level.id - 1)
+            };
+            // For an existing aggregate for this level send it around to the respective peers.
+            if let Some(aggregate) = aggregate {
+                self.send_update(aggregate, &level, self.config.update_count);
             }
         }
-        None
+    }
+
+    /// activate the next level which needs to be activated.
+    fn activate_next_level(&mut self) {
+        // the next level which needs activating on timeout.
+        let level = self.next_level_timeout;
+        // make sure such level exists
+        if level < self.levels.len() {
+            trace!("Timeout at level {}", level);
+
+            // next time the timeout triggers the next level needs activating
+            self.next_level_timeout += 1;
+
+            // finally start the level.
+            self.start_level(level);
+        }
+    }
+
+    async fn next(mut self) -> (P::Contribution, Option<Self>) {
+        // As long as there is no new aggregate to return loop over the select of both intervals and the actual aggregation
+        loop {
+            // Note that this function only gets called once per new aggregation.
+            // That means levels can only be activated either by completing the previous one, or before starting a new todo, which is not ideal.
+            // Likewise the periodic update will only trigger between todos.
+            select! {
+                _ = self.periodic_update_interval.next().fuse() => self.automatic_update(),
+                _ = self.start_level_interval.next().fuse() => self.activate_next_level(),
+                item = self.todos.next().fuse() => {
+                    match item {
+                        Some(todo) => {
+                            // verify the contribution
+                            let result = self.protocol.verify(&todo.contribution).await;
+
+                            if result.is_ok() {
+                                // if the contribution is valid push it to the store, creating a new aggregate
+                                {
+                                    let store = self.protocol.store();
+                                    let mut store = store.write();
+
+                                    store.put(todo.contribution.clone(), todo.level);
+                                }
+                                // in case the level of this todo has not started, start it now as we have already contributions on it.
+                                self.start_level(todo.level);
+                                // check if a level was completed by the addition of the contribution
+                                self.check_completed_level(todo.contribution.clone(), todo.level);
+
+                                // get the best aggregate
+                                let last_level = self.levels.last().expect("No levels");
+                                let best =  {
+                                    let store = self.protocol.store();
+                                    let store = store.read();
+
+                                    store.combined(last_level.id)
+                                };
+
+                                if let Some(best) = best {
+                                    if best.num_contributors() == self.protocol.partitioner().size() {
+                                        // if there is a best aggregate and this aggregate can no longer be improved upon (all contributors are already present)
+                                        // return the aggregate and None to signal no improvments can be made
+                                        return (best, None);
+                                    } else {
+                                        // if the best aggregate can still be improved return the aggregate and self to continue the aggregation
+                                        return (best, Some(self));
+                                    }
+                                }
+                            } else {
+                                // Invalid contributions create a warning, but do not terminate. -> Continue with the next best todo item.
+                                warn!("Invalid signature: {:?}", result);
+                            }
+                        },
+                        None => {
+                            // This should really never happen as TodoList<Item> does not return None.
+                            panic!("Todo Stream returned None");
+                        }
+                    }
+                },
+            }
+        }
     }
 }
 
-#[async_trait]
-impl<P: Protocol + fmt::Debug, N: Network, T: Clone + fmt::Debug + Eq + Serialize + Deserialize + Hash + Send + Sync + 'static> HandelAggreation<P, N, T>
-    for Aggregation<P, N, T>
+/// Stream implementation for consecutive aggregation events
+pub struct Aggregation<
+    P: Protocol,
+    T: Clone + Debug + Eq + Serialize + Deserialize + Hash + Sized + Send + Sync,
+> {
+    next_aggregation: Option<BoxFuture<'static, (P::Contribution, Option<NextAggregation<P, T>>)>>,
+    network_handle: Option<JoinHandle<()>>,
+}
+
+impl<
+        P: Protocol,
+        T: Clone + Debug + Eq + Serialize + Deserialize + Hash + Sized + Send + Sync + 'static,
+    > Aggregation<P, T>
 {
-    async fn start(tag: T, own_contribution: P::Contribution, protocol: P, config: Config, network: Arc<N>) -> P::Contribution {
-        Self::start(tag, own_contribution, protocol, config, network).await
+    pub fn new<E: Debug + 'static>(
+        protocol: P,
+        tag: T,
+        config: Config,
+        own_contribution: P::Contribution,
+        input_stream: BoxStream<'static, LevelUpdate<P::Contribution>>,
+        output_sink: Box<
+            (dyn Sink<(LevelUpdateMessage<P::Contribution, T>, usize), Error = E> + Unpin + Send),
+        >,
+    ) -> Self {
+        // Create an unbounded mpsc channel to buffer network messages for the actual aggregation not having to wait for them to get send.
+        // A future optimization could be to have this task not simply forward all messages but filter out those which have become obsolete
+        // by subsequent messages.
+        let (sender, receiver) = unbounded::<(LevelUpdateMessage<P::Contribution, T>, usize)>();
+
+        // Spawn a task emptying put the receiver of the created mpsc. Note that this task will terminate once all senders are dropped leading
+        // to the stream no longer producing any new items. In turn the forward future will resolve terminating the task.
+        let network_handle = tokio::spawn(async move {
+            if let Err(err) = receiver.map(Ok).forward(output_sink).await {
+                warn!("Error sending messages: {:?}", err);
+            }
+        });
+
+        let next_aggregation = NextAggregation::new(
+            protocol,
+            tag,
+            config,
+            own_contribution,
+            input_stream,
+            sender,
+        )
+        .next()
+        .boxed();
+
+        Self {
+            next_aggregation: Some(next_aggregation),
+            network_handle: Some(network_handle),
+        }
+    }
+
+    pub async fn shutdown(&mut self) {
+        // Drop the next aggregation on shutdown.
+        // That also drops the sender of the unbounded channel leaving the receiver to consume remaining items and then
+        // receiving None as there is no sender left, thus terminating the stream.
+        self.next_aggregation = None;
+        if let Some(handle) = self.network_handle.take() {
+            // Wait for the forward spawn to conclude operation.
+            handle.await.expect("network_task returned JoinError")
+        }
+    }
+}
+
+impl<
+        P: Protocol + Debug,
+        T: Clone + Debug + Eq + Serialize + Deserialize + Hash + Send + Sync + 'static,
+    > Stream for Aggregation<P, T>
+{
+    type Item = P::Contribution;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        // check if there is a next_aggregation
+        let next_aggregation = match self.next_aggregation.as_mut() {
+            // If there is Some(next_aggregation) proceed with it
+            Some(next_aggreagtion) => next_aggreagtion,
+            // If there is None that means all signatories have signed the payload so there is nothing more to aggregate after the last returned value.
+            // Thus return Poll::Ready(None) as the previous value can no longer be improved.
+            None => return Poll::Ready(None),
+        };
+
+        // Poll the next_aggregate future. If it is still Poll::Pending return Poll::Pending as well. (hidden within ready!)
+        let (aggregate, next_aggregation) = ready!(next_aggregation.poll_unpin(cx));
+
+        self.next_aggregation = match next_aggregation {
+            // If there is Some(next_agregation) set its next() future as the next output of this stream
+            Some(next_aggregation) => Some(next_aggregation.next().boxed()),
+            // If there is None set it as well so next time the sream is polled it will correctly signal that there are no more items coming.
+            None => None,
+        };
+        // At this point a new aggregate was returned so the Stream returns it as well.
+        Poll::Ready(Some(aggregate))
     }
 }

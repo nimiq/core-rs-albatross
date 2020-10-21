@@ -28,7 +28,6 @@ pub trait Protocol: Send + Sync + 'static {
     fn evaluator(&self) -> Arc<Self::Evaluator>;
     fn partitioner(&self) -> Arc<Self::Partitioner>;
 
-    //fn send_to(&self, to: usize, update: LevelUpdate) -> Result<(), IoError>;
     fn node_id(&self) -> usize;
 
     // TODO: not strictly necessary as it does the same as protocol.verifier().verify(contribution).

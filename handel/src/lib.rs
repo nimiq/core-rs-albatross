@@ -1,3 +1,4 @@
+#![recursion_limit = "256"] // unfortunately necessary for the rather big select! macro in aggregation.rs > Aggregation::next
 extern crate beserial;
 #[macro_use]
 extern crate beserial_derive;

@@ -6,7 +6,7 @@ use std::sync::Arc;
 use crate::contribution::AggregatableContribution;
 use crate::evaluator::Evaluator;
 use crate::update::LevelUpdate;
-use futures::stream::{Stream, StreamExt};
+use futures::stream::{BoxStream, Stream, StreamExt};
 
 /// A TodoItem represents a contribution which has not yet been aggregated into the store.
 #[derive(Clone, Debug)]
@@ -50,14 +50,14 @@ pub(crate) struct TodoList<C: AggregatableContribution, E: Evaluator<C>> {
     /// The evaluator used for scoring the individual todos
     evaluator: Arc<E>,
     /// The Stream where LevelUpdates can be polled from, which are subsequently converted into TodoItems
-    input_stream: Pin<Box<dyn Stream<Item = LevelUpdate<C>> + Send + 'static>>,
+    input_stream: BoxStream<'static, LevelUpdate<C>>,
 }
 
 impl<C: AggregatableContribution, E: Evaluator<C>> TodoList<C, E> {
     /// Create a new TodoList
     /// * `evaluator` - The evaluator which will be used for TodoItem scoring
     /// * `input_stream` - Thestream on which new LevelUpdates can be polled, which will then be converted into TodoItems
-    pub fn new(evaluator: Arc<E>, input_stream: Pin<Box<dyn Stream<Item = LevelUpdate<C>> + Send + 'static>>) -> Self {
+    pub fn new(evaluator: Arc<E>, input_stream: BoxStream<'static, LevelUpdate<C>>) -> Self {
         Self {
             list: HashSet::new(),
             evaluator,

@@ -13,9 +13,17 @@ use nimiq_handel::identity;
 use nimiq_handel::partitioner::BinomialPartitioner;
 use nimiq_handel::protocol;
 use nimiq_handel::store::ReplaceStore;
+use nimiq_handel::update::LevelUpdateMessage;
 use nimiq_handel::verifier;
+use nimiq_network_interface::message::Message;
+use nimiq_network_interface::network::Network;
 use nimiq_network_mock::{MockHub, MockNetwork};
 
+use futures::future::Future;
+use futures::sink::Sink;
+use futures::stream::StreamExt;
+use futures::task::{Context, Poll};
+use std::pin::Pin;
 use std::sync::Arc;
 use std::{fmt::Formatter, time::Duration};
 
@@ -50,7 +58,7 @@ impl AggregatableContribution for Contribution {
     }
 }
 
-// dumb Registry
+// A dumb Registry
 pub struct Registry {}
 impl identity::WeightRegistry for Registry {
     fn weight(&self, _id: usize) -> Option<usize> {
@@ -63,7 +71,7 @@ impl identity::IdentityRegistry for Registry {
     }
 }
 
-// dump Verifier who is happy with everything.
+/// A dump Verifier who is happy with everything.
 pub struct DumbVerifier {}
 
 #[async_trait]
@@ -145,19 +153,66 @@ impl protocol::Protocol for Protocol {
     }
 }
 
+/// Dump Sink wrapper for Network trait. (Only to be used with MockNetwork or the like, which have instant sending).
+struct NetworkSink<M: Message, N: Network> {
+    /// The network implementation this Sink is sending messages over
+    network: Arc<N>,
+    /// The buffered message if there is one
+    buffered_message: Option<M>,
+}
+
+impl<N: Network> Sink<(LevelUpdateMessage<Contribution, u8>, usize)>
+    for NetworkSink<LevelUpdateMessage<Contribution, u8>, N>
+{
+    type Error = ();
+
+    fn poll_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        if self.buffered_message.is_some() {
+            Poll::Pending
+        } else {
+            Poll::Ready(Ok(()))
+        }
+    }
+
+    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.poll_flush(cx)
+    }
+
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        let msg = self.buffered_message.take().unwrap();
+        let mut future = Box::pin(self.network.broadcast(&msg));
+        match future.as_mut().poll(cx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(_) => Poll::Ready(Ok(())),
+        }
+    }
+
+    fn start_send(
+        mut self: Pin<&mut Self>,
+        item: (LevelUpdateMessage<Contribution, u8>, usize),
+    ) -> Result<(), Self::Error> {
+        // TODO send_to. `item.1` is recipient.
+        if self.buffered_message.is_some() {
+            Err(())
+        } else {
+            self.buffered_message = Some(item.0);
+            Ok(())
+        }
+    }
+}
+
 #[tokio::test]
 async fn it_can_aggregate() {
     let config = Config {
         update_count: 4,
-        update_interval: Duration::from_millis(100),
+        update_interval: Duration::from_millis(500),
         timeout: Duration::from_millis(500),
-        grace_period: Duration::from_millis(50),
         peer_count: 1,
     };
 
     let mut hub = MockHub::default();
 
-    let contributor_num: usize = 8;
+    let contributor_num: usize = 7;
 
     let mut networks: Vec<Arc<MockNetwork>> = vec![];
     // Initialize `contributor_num networks and Handel Aggregations. Connect all the networks with each other.
@@ -182,15 +237,29 @@ async fn it_can_aggregate() {
         }
         // remember the network so that subsequently created networks can connect to it.
         networks.push(net.clone());
+
         // spawn a task for this Handel Aggregation and Network instance.
-        tokio::spawn(Aggregation::start(
-            1 as u8, // serves as the tag or identifier for this aggregation
-            contribution,
+        let mut aggregation = Aggregation::new(
             protocol,
+            1 as u8, // serves as the tag or identifier for this aggregation
             config.clone(),
-            net,
-        ));
+            contribution,
+            Box::pin(
+                net.receive_from_all::<LevelUpdateMessage<Contribution, u8>>()
+                    .map(move |msg| msg.0.update),
+            ),
+            Box::new(NetworkSink {
+                network: net.clone(),
+                buffered_message: None,
+            }),
+        );
+
+        tokio::spawn(async move {
+            // have them just run until the aggregation is finished
+            while let Some(_) = aggregation.next().await {}
+        });
     }
+
     // same as in the for loop, execpt we want to keep the handel sinatnce and not spawn it.
     let net = Arc::new(hub.new_network_with_address(contributor_num));
     let protocol = Protocol::new(contributor_num, contributor_num + 1, contributor_num + 1);
@@ -206,77 +275,43 @@ async fn it_can_aggregate() {
     networks.push(net.clone());
 
     // instead of spawning the aggregation atsk await its result here.
-    let aggregate: Contribution = Aggregation::start(1 as u8, contribution, protocol, config.clone(), net).await;
+    let mut aggregation = Aggregation::new(
+        protocol,
+        1 as u8, // serves as the tag or identifier for this aggregation
+        config.clone(),
+        contribution,
+        Box::pin(
+            net.receive_from_all::<LevelUpdateMessage<Contribution, u8>>()
+                .map(move |msg| msg.0.update),
+        ),
+        Box::new(NetworkSink {
+            network: net.clone(),
+            buffered_message: None,
+        }),
+    );
 
-    println!("{:?}", &aggregate);
+    let mut last_aggregate: Option<Contribution> = None;
+
+    while let Some(aggregate) = aggregation.next().await {
+        last_aggregate = Some(aggregate);
+    }
+
+    // An aggregation needs to be present
+    assert!(last_aggregate.is_some(), "Nothing was aggregated!");
+
+    let last_aggregate = last_aggregate.unwrap();
 
     // All nodes need to contribute
-    assert_eq!(aggregate.num_contributors(), contributor_num + 1, "Not all contributions are present");
-    // the final value needs to be the sum of all contributions: 9 + 8 + 7 + 6 + 5 + 4 + 3 + 2 + 1 = 45
-    assert_eq!(aggregate.value, 45, "Wrong aggregation result");
+    assert_eq!(
+        last_aggregate.num_contributors(),
+        contributor_num + 1,
+        "Not all contributions are present",
+    );
+
+    // the final value needs to be the sum of all contributions: 8 + 7 + 6 + 5 + 4 + 3 + 2 + 1 = 36
+    assert_eq!(last_aggregate.value, 36, "Wrong aggregation result",);
 }
 
-#[tokio::test]
-async fn it_can_aggregate_to_treshold() {
-    let mut hub = MockHub::default();
-
-    let config = Config {
-        update_count: 4,
-        update_interval: Duration::from_millis(100),
-        timeout: Duration::from_millis(500),
-        grace_period: Duration::from_millis(50),
-        peer_count: 1,
-    };
-
-    let contributor_num: usize = 8;
-
-    let mut networks: Vec<Arc<MockNetwork>> = vec![];
-    // Initialize `contributor_num networks and Handel Aggregations. Connect all the networks with each other.
-    for id in 0..contributor_num {
-        // Create a network with id = `id`
-        let net = Arc::new(hub.new_network_with_address(id));
-        // Create a protocol with `contributor_num + 1` peers set its id to `id`. Require `contributor_num` contributions
-        // meaning all contributions need to be aggregated with the additional node initialized after this for loop.
-        let protocol = Protocol::new(id, contributor_num + 1, contributor_num / 2);
-        // the sole contributor for soon to be created contribution is this node.
-        let mut contributors = BitSet::new();
-        contributors.insert(id);
-
-        // create a contribution for this node with a value of `id +1` (So no node has value 0 as that does't show up in addition).
-        let contribution = Contribution { value: 1u64, contributors };
-        // connect the network to all already existing networks.
-        for network in &networks {
-            net.dial_mock(network);
-        }
-        // remember the network so that subsequently created networks can connect to it.
-        networks.push(net.clone());
-        // spawn a task for this Handel Aggregation and Network instance.
-        tokio::spawn(Aggregation::start(
-            1 as u8, // serves as the tag or identifier for this aggregation
-            contribution,
-            protocol,
-            config.clone(),
-            net,
-        ));
-    }
-    // same as in the for loop, execpt we want to keep the handel sinatnce and not spawn it.
-    let net = Arc::new(hub.new_network_with_address(contributor_num));
-    let protocol = Protocol::new(contributor_num, contributor_num + 1, contributor_num / 2);
-    let mut contributors = BitSet::new();
-    contributors.insert(contributor_num);
-    let contribution = Contribution { value: 1u64, contributors };
-    for network in &networks {
-        net.dial_mock(network);
-    }
-    networks.push(net.clone());
-
-    // instead of spawning the aggregation atsk await its result here.
-    let aggregate: Contribution = Aggregation::start(1 as u8, contribution, protocol, config.clone(), net).await;
-
-    println!("{:?}", &aggregate);
-
-    // At least more than half of the nodes need to contribute
-    assert!(aggregate.num_contributors() >= contributor_num / 2, "Not enough contributions are present");
-    // the final value needs to be at least the sum of all contributions
-    assert!(aggregate.value >= (contributor_num / 2) as u64, "Wrong aggregation result");
-}
+// additional tests:
+// it_sends_periodic_updates
+// it_activates_levels
