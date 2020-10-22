@@ -1,6 +1,7 @@
 use std::fmt;
 use std::sync::Arc;
 
+use futures::stream::StreamExt;
 use parking_lot::RwLock;
 
 use beserial::WriteBytesExt;
@@ -9,15 +10,19 @@ use block_albatross::{MultiSignature, SignedViewChange, ViewChange, ViewChangePr
 use collections::BitSet;
 use handel::aggregation::Aggregation;
 use handel::config::Config;
+use handel::contribution::AggregatableContribution;
 use handel::evaluator::WeightedVote;
+use handel::identity::WeightRegistry;
 use handel::partitioner::BinomialPartitioner;
 use handel::protocol::Protocol;
 use handel::store::ReplaceStore;
+use handel::update::LevelUpdateMessage;
 use hash::{Blake2sHash, Blake2sHasher, Hasher, SerializeContent};
 use network_interface::network::Network;
 use primitives::policy;
 use primitives::slot::{SlotCollection, ValidatorSlots};
 
+use super::network_sink::NetworkSink;
 use super::registry::ValidatorRegistry;
 use super::verifier::MultithreadedVerifier;
 
@@ -107,7 +112,15 @@ impl<N: Network> ViewChangeAggregation<N> {
             .expect("Failed to write message to hasher for signature.");
         let message_hash = hasher.finish();
 
-        let protocol = ViewChangeAggregationProtocol::new(active_validators, validator_id as usize, policy::TWO_THIRD_SLOTS as usize, message_hash);
+        // TODO expose this somewehere else so we don't need to clone here.
+        let weights = ValidatorRegistry::new(active_validators.clone());
+
+        let protocol = ViewChangeAggregationProtocol::new(
+            active_validators,
+            validator_id as usize,
+            policy::TWO_THIRD_SLOTS as usize,
+            message_hash,
+        );
 
         let mut signature = bls::AggregateSignature::new();
         signature.aggregate(&view_change.signature);
@@ -117,12 +130,55 @@ impl<N: Network> ViewChangeAggregation<N> {
 
         let own_contribution = MultiSignature::new(signature, signers);
 
-        let multi_signature =
-            Aggregation::<ViewChangeAggregationProtocol, N, ViewChange>::start(view_change.message, own_contribution, protocol, Config::default(), network)
-                .await;
+        trace!(
+            "Starting view change {}.{}",
+            &view_change.message.block_number,
+            &view_change.message.new_view_number,
+        );
 
-        // Transform into finished ViewChange
-        ViewChangeProof::new(multi_signature.signature, multi_signature.signers)
+        let mut aggregation = Aggregation::new(
+            protocol,
+            view_change.message,
+            Config::default(),
+            own_contribution,
+            Box::pin(
+                network
+                    .receive_from_all::<LevelUpdateMessage<MultiSignature, ViewChange>>()
+                    .map(move |msg| msg.0.update),
+            ),
+            Box::new(NetworkSink::<
+                LevelUpdateMessage<MultiSignature, ViewChange>,
+                N,
+            >::new(network.clone())),
+        );
+
+        while let Some(aggregate) = aggregation.next().await {
+            if let Some(aggregate_weight) = weights.signature_weight(&aggregate) {
+                trace!(
+                    "New View Change Aggregate weight: {} / {} Signers: {:?}",
+                    aggregate_weight,
+                    policy::TWO_THIRD_SLOTS,
+                    &aggregate.contributors(),
+                );
+
+                // Check if the combined weight of the aggregation is above the Two_THIRD_SLOTS threshold.
+                if aggregate_weight > policy::TWO_THIRD_SLOTS as usize {
+                    // Make sure remaining messages get send.
+                    tokio::spawn(async move {
+                        aggregation.shutdown().await
+                    });
+
+                    // Create ViewChnageProof out of the aggregate
+                    let view_change_proof =
+                        ViewChangeProof::new(aggregate.signature, aggregate.signers);
+                    trace!("View Change complete: {:?}", &view_change_proof);
+
+                    // return the ViewChangeProof
+                    return view_change_proof;
+                }
+            }
+        }
+        panic!("ViewChangeAggregation Stream returned Ready(None) without a completed ViewChange");
     }
 }
 
