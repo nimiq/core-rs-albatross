@@ -40,13 +40,13 @@ pub struct ConsensusAgent<P: Peer> {
 }
 
 impl<P: Peer> ConsensusAgent<P> {
-    pub fn new(peer: Arc<P>) -> Arc<Self> {
+    pub fn new(peer: Arc<P>) -> Self {
         // TODO: Timeout
         let block_hashes_requests = RequestResponse::new(Arc::clone(&peer), Duration::new(10, 0));
         let epoch_requests = RequestResponse::new(Arc::clone(&peer), Duration::new(10, 0));
         let history_chunk_requests = RequestResponse::new(Arc::clone(&peer), Duration::new(10, 0));
 
-        let agent = Arc::new(ConsensusAgent {
+        ConsensusAgent {
             peer,
             state: RwLock::new(ConsensusAgentState {
                 local_subscription: Default::default(),
@@ -55,8 +55,7 @@ impl<P: Peer> ConsensusAgent<P> {
             block_hashes_requests,
             epoch_requests,
             history_chunk_requests,
-        });
-        agent
+        }
     }
 
     pub fn relay_block(&self, _block: &Block) -> bool {

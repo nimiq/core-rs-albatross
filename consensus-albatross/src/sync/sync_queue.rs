@@ -10,7 +10,6 @@ use futures::stream::FuturesUnordered;
 use futures::task::{Context, Poll};
 use futures::{ready, Future, Stream, StreamExt};
 
-use hash::Blake2bHash;
 use network_interface::peer::Peer;
 
 use crate::consensus_agent::ConsensusAgent;
@@ -169,7 +168,8 @@ where
     /// Truncates the stored ids, retaining only the first `len` elements.
     /// The elements are counted from the *original* start of the ids vector.
     pub fn truncate_ids(&mut self, len: usize) {
-        self.ids_to_request.truncate(len - self.next_incoming_index);
+        self.ids_to_request
+            .truncate(len.saturating_sub(self.next_incoming_index));
     }
 
     pub fn num_peers(&self) -> usize {

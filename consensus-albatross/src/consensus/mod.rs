@@ -169,7 +169,7 @@ impl<N: Network> Consensus<N> {
 
     fn on_peer_joined(&self, peer: Arc<N::PeerType>) {
         info!("Connected to {:?}", peer.id());
-        let agent = ConsensusAgent::new(Arc::clone(&peer));
+        let agent = Arc::new(ConsensusAgent::new(Arc::clone(&peer)));
         self.state.write().agents.insert(peer, Arc::clone(&agent));
 
         self.events.send(ConsensusEvent::PeerJoined(agent));
