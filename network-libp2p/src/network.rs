@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -18,6 +18,8 @@ use tokio::sync::broadcast;
 use network_interface::network::{Network as NetworkInterface, NetworkEvent};
 
 use crate::behaviour::NimiqBehaviour;
+use crate::limit::LimitBehaviour;
+use crate::message::MessageBehaviour;
 use crate::peer::Peer;
 
 #[derive(Debug)]
@@ -81,14 +83,13 @@ impl Future for SwarmTask {
         match ready!(self.swarm.poll_next_unpin(cx)) {
             Some(event) => {
                 match event.clone() {
-                    NetworkEvent::PeerJoined(peer) => {}
-                    NetworkEvent::PeerLeft(peer) => {}
                     NetworkEvent::PeerDisconnect(peer) => {
                         // Since the swarm network is private, the only way to access the peer disconnect
                         // function is to ban (and subsequently unban) the peer.
                         Swarm::ban_peer_id(&mut self.swarm, peer.id.clone());
                         Swarm::unban_peer_id(&mut self.swarm, peer.id.clone());
-                    }
+                    },
+                    _ => (),
                 }
 
                 // Dispatch swarm event on network event broadcast channel.
@@ -167,7 +168,11 @@ impl Network {
         let keypair = libp2p::identity::Keypair::generate_ed25519();
         let local_peer_id = PeerId::from(keypair.public());
         let transport = Self::new_transport(keypair).unwrap();
-        let behaviour = NimiqBehaviour::new();
+        let behaviour = NimiqBehaviour {
+            message_behaviour: MessageBehaviour::new(),
+            limit_behaviour: LimitBehaviour::new(),
+            events: VecDeque::new(),
+        };
 
         // TODO add proper config
         let mut swarm = SwarmBuilder::new(transport, behaviour, local_peer_id)
@@ -200,7 +205,7 @@ impl Network {
                             .remove(&peer.id)
                             .map(|_| ())
                             .expect("Unknown peer disconnected"),
-                        NetworkEvent::PeerDisconnect(peer) => (),
+                        _ => (),
                     }
                 }
                 future::ready(())

@@ -6,6 +6,8 @@ extern crate nimiq_network_interface as network_interface;
 
 mod behaviour;
 mod handler;
+mod limit;
+mod message;
 mod network;
 mod peer;
 mod protocol;
