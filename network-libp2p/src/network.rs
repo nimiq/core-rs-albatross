@@ -16,7 +16,7 @@ use tokio::sync::broadcast;
 
 use network_interface::network::{Network as NetworkInterface, NetworkEvent};
 
-use crate::behaviour::NimiqBehaviour;
+use crate::behaviour::{NimiqBehaviour, MessageBehaviour, LimitBehaviour};
 use crate::peer::Peer;
 
 #[derive(Debug)]
@@ -79,25 +79,27 @@ impl Future for SwarmTask {
         // Poll the swarm.
         match ready!(self.swarm.poll_next_unpin(cx)) {
             Some(event) => {
-                match event.clone() {
-                    NetworkEvent::PeerJoined(peer) => {}
-                    NetworkEvent::PeerLeft(peer) => {}
-                    NetworkEvent::PeerDisconnect(peer) => {
-                        // Since the swarm network is private, the only way to access the peer disconnect
-                        // function is to ban (and subsequently unban) the peer.
-                        Swarm::ban_peer_id(&mut self.swarm, peer.id.clone());
-                        Swarm::unban_peer_id(&mut self.swarm, peer.id.clone());
-                    }
-                }
+                // FIXME: Enable event handling
+                // match event.clone() {
+                //     NetworkEvent::PeerJoined(peer) => {}
+                //     NetworkEvent::PeerLeft(peer) => {}
+                //     NetworkEvent::PeerDisconnect(peer) => {
+                //         // Since the swarm network is private, the only way to access the peer disconnect
+                //         // function is to ban (and subsequently unban) the peer.
+                //         Swarm::ban_peer_id(&mut self.swarm, peer.id.clone());
+                //         Swarm::unban_peer_id(&mut self.swarm, peer.id.clone());
+                //     }
+                // }
 
-                // Dispatch swarm event on network event broadcast channel.
-                if self.event_tx.send(event).is_ok() {
-                    // Keep the task alive.
-                    Poll::Pending
-                } else {
-                    // Event dispatch can still fail if the network was dropped after the check above.
-                    Poll::Ready(())
-                }
+                // // Dispatch swarm event on network event broadcast channel.
+                // if self.event_tx.send(event).is_ok() {
+                //     // Keep the task alive.
+                //     Poll::Pending
+                // } else {
+                //     // Event dispatch can still fail if the network was dropped after the check above.
+                //     Poll::Ready(())
+                // }
+                Poll::Pending
             }
             None => {
                 // Swarm has terminated.
@@ -178,7 +180,10 @@ impl Network {
         let keypair = libp2p::identity::Keypair::generate_ed25519();
         let local_peer_id = PeerId::from(keypair.public());
         let transport = Self::new_transport(keypair).unwrap();
-        let behaviour = NimiqBehaviour::new();
+        let behaviour = NimiqBehaviour {
+            message_behaviour: MessageBehaviour::new(),
+            limit_behaviour: LimitBehaviour::new(),
+        };
 
         // TODO add proper config
         let mut swarm = SwarmBuilder::new(transport, behaviour, local_peer_id)
