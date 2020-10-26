@@ -33,7 +33,7 @@ use super::{
     peer_contacts::{Services, Protocols, PeerContactBook, SignedPeerContact},
 };
 use crate::{
-    message::{MessageReader, MessageWriter},
+    message_codec::{MessageReader, MessageWriter},
     tagged_signing::{TaggedKeypair, TaggedPublicKey}
 };
 

@@ -8,10 +8,11 @@ extern crate nimiq_network_interface as network_interface;
 
 mod behaviour;
 mod handler;
+mod limit;
+mod message;
 mod network;
 mod peer;
 mod protocol;
-//mod peer_address_book;
 pub mod discovery;
-mod message;
 pub mod tagged_signing;
+pub mod message_codec;

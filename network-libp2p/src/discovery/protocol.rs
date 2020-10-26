@@ -13,7 +13,7 @@ use nimiq_macros::{create_typed_array, add_hex_io_fns_typed_arr};
 use nimiq_hash::Blake2bHash;
 
 use crate::{
-    message::{MessageReader, MessageWriter},
+    message_codec::{MessageReader, MessageWriter},
     tagged_signing::{TaggedSignature, TaggedSignable},
 };
 use super::peer_contacts::{SignedPeerContact, Services, Protocols};

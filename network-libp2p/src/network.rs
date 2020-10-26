@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -17,8 +17,11 @@ use tokio::sync::broadcast;
 
 use network_interface::network::{Network as NetworkInterface, NetworkEvent};
 
-use crate::behaviour::{NimiqBehaviour, MessageBehaviour, LimitBehaviour};
+use crate::limit::LimitBehaviour;
+use crate::message::MessageBehaviour;
 use crate::peer::Peer;
+use crate::behaviour::NimiqBehaviour;
+
 
 #[derive(Debug)]
 enum SwarmAction {
@@ -80,27 +83,25 @@ impl Future for SwarmTask {
         // Poll the swarm.
         match ready!(self.swarm.poll_next_unpin(cx)) {
             Some(event) => {
-                // FIXME: Enable event handling
-                // match event.clone() {
-                //     NetworkEvent::PeerJoined(peer) => {}
-                //     NetworkEvent::PeerLeft(peer) => {}
-                //     NetworkEvent::PeerDisconnect(peer) => {
-                //         // Since the swarm network is private, the only way to access the peer disconnect
-                //         // function is to ban (and subsequently unban) the peer.
-                //         Swarm::ban_peer_id(&mut self.swarm, peer.id.clone());
-                //         Swarm::unban_peer_id(&mut self.swarm, peer.id.clone());
-                //     }
-                // }
+                match event.clone() {
+                    /* FIXME
+                        NetworkEvent::PeerDisconnect(peer) => {
+                        // Since the swarm network is private, the only way to access the peer disconnect
+                        // function is to ban (and subsequently unban) the peer.
+                        Swarm::ban_peer_id(&mut self.swarm, peer.id.clone());
+                        Swarm::unban_peer_id(&mut self.swarm, peer.id.clone());
+                    },*/
+                    _ => (),
+                }
 
-                // // Dispatch swarm event on network event broadcast channel.
-                // if self.event_tx.send(event).is_ok() {
-                //     // Keep the task alive.
-                //     Poll::Pending
-                // } else {
-                //     // Event dispatch can still fail if the network was dropped after the check above.
-                //     Poll::Ready(())
-                // }
-                Poll::Pending
+                // Dispatch swarm event on network event broadcast channel.
+                if self.event_tx.send(event).is_ok() {
+                    // Keep the task alive.
+                    Poll::Pending
+                } else {
+                    // Event dispatch can still fail if the network was dropped after the check above.
+                    Poll::Ready(())
+                }
             }
             None => {
                 // Swarm has terminated.
@@ -172,6 +173,7 @@ impl Network {
         let behaviour = NimiqBehaviour {
             message_behaviour: MessageBehaviour::new(),
             limit_behaviour: LimitBehaviour::new(),
+            events: VecDeque::new(),
         };
 
         // TODO add proper config
