@@ -14,6 +14,8 @@ pub use crate::types::uvar;
 mod bitvec;
 #[cfg(feature = "net")]
 mod net;
+#[cfg(feature = "libp2p")]
+mod libp2p;
 mod types;
 
 // Base traits
