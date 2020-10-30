@@ -3,15 +3,8 @@ use std::cmp;
 /// Number of blocks a transaction is valid with Albatross consensus.
 pub const TRANSACTION_VALIDITY_WINDOW: u32 = 7200;
 
-/// Total supply in units.
-pub const TOTAL_SUPPLY: u64 = 2_100_000_000_000_000;
-
 /// The current version number of the protocol. Changing this always results in a hard fork.
 pub const VERSION: u16 = 1;
-
-/// The maximum drift, in milliseconds, that is allowed between any block's timestamp and the node's
-/// system time. We only care about drifting to the future.
-pub const TIMESTAMP_MAX_DRIFT: u64 = 600000;
 
 /// Number of available validator slots. Note that a single validator may own several validator slots.
 pub const SLOTS: u16 = 512;
@@ -31,6 +24,18 @@ pub const BATCHES_PER_EPOCH: u32 = 4; // TODO Set
 /// Length of epoch including election macro block
 pub const EPOCH_LENGTH: u32 = BATCH_LENGTH * BATCHES_PER_EPOCH;
 
+/// The maximum drift, in milliseconds, that is allowed between any block's timestamp and the node's
+/// system time. We only care about drifting to the future.
+pub const TIMESTAMP_MAX_DRIFT: u64 = 600000;
+
+/// Tendermint's initial timeout, in milliseconds.
+/// See https://arxiv.org/abs/1807.04938v3 for more information.
+pub const TENDERMINT_TIMEOUT_INIT: u64 = 1000; // TODO Set
+
+/// Tendermint's timeout delta, in milliseconds.
+/// See https://arxiv.org/abs/1807.04938v3 for more information.
+pub const TENDERMINT_TIMEOUT_DELTA: u64 = 1000; // TODO Set
+
 /// Minimum stake for stakers in Lunas (1 NIM = 100,000 Lunas).
 /// A staker is someone who delegates their stake to a validator.
 pub const MIN_STAKE: u64 = 1;
@@ -39,6 +44,9 @@ pub const MIN_STAKE: u64 = 1;
 /// A validator is someone who actually participates in block production. They are akin to miners
 /// in proof-of-work.
 pub const MIN_VALIDATOR_STAKE: u64 = 100_000_000;
+
+/// Total supply in units.
+pub const TOTAL_SUPPLY: u64 = 2_100_000_000_000_000;
 
 /// This is the number of Lunas (1 NIM = 100,000 Lunas) created by second at the genesis of the
 /// Nimiq 2.0 chain. The velocity then decreases following the formula:
