@@ -1,21 +1,8 @@
-extern crate nimiq_bls as bls;
-extern crate nimiq_collections as collections;
-extern crate nimiq_database as database;
-extern crate nimiq_genesis as genesis;
-extern crate nimiq_hash as hash;
-extern crate nimiq_hash_derive as hash_derive;
-extern crate nimiq_keys as keys;
-extern crate nimiq_messages as messages;
-extern crate nimiq_network_interface as network_interface;
-extern crate nimiq_primitives as primitives;
-extern crate nimiq_utils as utils;
-extern crate nimiq_vrf as vrf;
-
 use async_trait::async_trait;
 use beserial::{Deserialize, Serialize};
 use futures::{StreamExt, TryStreamExt};
-use network_interface::message::Message;
-use network_interface::network::{
+use nimiq_network_interface::message::Message;
+use nimiq_network_interface::network::{
     Network as NetworkInterface, Network, NetworkEvent, ReceiveFromAll,
 };
 use nimiq_network_mock::network::MockNetwork;
