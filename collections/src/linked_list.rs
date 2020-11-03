@@ -1410,6 +1410,6 @@ mod tests {
         check_links(&m);
 
         assert_eq!(deleted, &[1, 2, 3, 4, 5, 6]);
-        assert_eq!(m.into_iter().collect::<Vec<_>>(), &[]);
+        assert_eq!(m.into_iter().collect::<Vec<_>>(), Vec::<u32>::new());
     }
 }

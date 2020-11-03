@@ -60,7 +60,7 @@ fn it_can_dequeue_multi() {
 
     assert_eq!(q.dequeue_multi(2), vec![3, 1]);
     assert_eq!(q.dequeue_multi(2), vec![2]);
-    assert_eq!(q.dequeue_multi(2), vec![]);
+    assert_eq!(q.dequeue_multi(2), Vec::<i32>::new());
 }
 
 #[test]
