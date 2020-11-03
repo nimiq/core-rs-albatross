@@ -121,11 +121,11 @@ pub trait Queue<T> {
     /// use nimiq_collections::{UniqueLinkedList, Queue};
     ///
     /// let mut d = UniqueLinkedList::new();
-    /// assert_eq!(d.dequeue_multi(1), vec![]);
+    /// assert_eq!(d.dequeue_multi(1), Vec::<i32>::new());
     ///
     /// d.enqueue(1);
     /// d.enqueue(3);
-    /// assert_eq!(d.dequeue_multi(0), vec![]);
+    /// assert_eq!(d.dequeue_multi(0), Vec::<i32>::new());
     /// assert_eq!(d.dequeue_multi(1), vec![1]);
     /// assert_eq!(d.dequeue_multi(2), vec![3]);
     /// ```
