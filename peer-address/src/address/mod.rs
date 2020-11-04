@@ -74,52 +74,58 @@ fn is_ipv4_globally_reachable_legacy(ipv4: Ipv4Addr) -> bool {
     true
 }
 
-#[test]
-fn is_ip_globally_reachable_legacy_falsifys() {
-    use std::str::FromStr;
 
-    let bad_ips = vec![
-        // Local IPs
-        "127.0.0.1",
-        // Private IPs
-        "192.168.2.1",
-        "172.16.0.0",
-        "172.31.0.0",
-        "172.31.255.255",
-        "100.64.0.0",
-        "169.254.0.0",
-        "fd12:3456:789a:1::1",
-        "fe80:3456:789a:1::1",
-        "fd00:3456:789a:1::1",
-        // Private IPv4-mapped IPv6
-        "::ffff:127.0.0.1",
-    ];
-    for bad_ip in bad_ips {
-        assert!(!is_ip_globally_reachable_legacy(
-            &IpAddr::from_str(bad_ip).unwrap()
-        ));
+#[cfg(test)]
+mod tests {
+    use std::{
+        str::FromStr,
+        net::IpAddr,
+    };
+    use super::is_ip_globally_reachable_legacy;
+
+    #[test]
+    fn is_ip_globally_reachable_legacy_falsifys() {
+        let bad_ips = vec![
+            // Local IPs
+            "127.0.0.1",
+            // Private IPs
+            "192.168.2.1",
+            "172.16.0.0",
+            "172.31.0.0",
+            "172.31.255.255",
+            "100.64.0.0",
+            "169.254.0.0",
+            "fd12:3456:789a:1::1",
+            "fe80:3456:789a:1::1",
+            "fd00:3456:789a:1::1",
+            // Private IPv4-mapped IPv6
+            "::ffff:127.0.0.1",
+        ];
+        for bad_ip in bad_ips {
+            assert!(!is_ip_globally_reachable_legacy(
+                &IpAddr::from_str(bad_ip).unwrap()
+            ));
+        }
     }
-}
 
-#[test]
-fn is_ip_globally_reachable_legacy_verifies() {
-    use std::str::FromStr;
-
-    let good_ips = vec![
-        // Non-Private IPs
-        "100.168.2.1",
-        "172.32.0.0",
-        "172.15.255.255",
-        "fbff:3456:789a:1::1",
-        "fe00:3456:789a:1::1",
-        "ff02:3456:789a:1::1",
-        "::3456:789a:1:1",
-        // IPv4-mapped IPv6
-        "::ffff:100.168.2.1",
-    ];
-    for good_ip in good_ips {
-        assert!(is_ip_globally_reachable_legacy(
-            &IpAddr::from_str(good_ip).unwrap()
-        ));
+    #[test]
+    fn is_ip_globally_reachable_legacy_verifies() {
+        let good_ips = vec![
+            // Non-Private IPs
+            "100.168.2.1",
+            "172.32.0.0",
+            "172.15.255.255",
+            "fbff:3456:789a:1::1",
+            "fe00:3456:789a:1::1",
+            "ff02:3456:789a:1::1",
+            "::3456:789a:1:1",
+            // IPv4-mapped IPv6
+            "::ffff:100.168.2.1",
+        ];
+        for good_ip in good_ips {
+            assert!(is_ip_globally_reachable_legacy(
+                &IpAddr::from_str(good_ip).unwrap()
+            ));
+        }
     }
 }
