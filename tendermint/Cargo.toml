@@ -22,8 +22,9 @@ async-trait = "0.1"
 
 beserial = { path = "../beserial", version = "0.1" }
 beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
+nimiq-hash = { path = "../hash", version = "0.1" }
 nimiq-macros = { path = "../macros", version = "0.1" }
-nimiq-network-interface = { path = "../network-interface", version = "0.1" }
+nimiq-primitives = { path = "../primitives", version = "0.1", features = ["policy"] }
 nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "time", "timers", "mutable-once", "throttled-queue", "rate-limit"] }
 
 [dev-dependencies]
