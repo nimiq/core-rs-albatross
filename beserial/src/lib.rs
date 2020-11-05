@@ -72,8 +72,11 @@ impl PartialEq for SerializingError {
     }
 }
 
-// TODO: Remove
-#[deprecated]
+/// # Notes
+///
+///  - This was marked as deprecated, but deprecation attributes don't work on impls and are now an error.
+///  - Why was this marked as deprecated in the first place?
+///
 impl From<SerializingError> for std::io::Error {
     fn from(e: SerializingError) -> Self {
         match e {

@@ -127,7 +127,6 @@ impl Slots {
 }
 
 // Deprecated. Check where we really want this conversion
-#[deprecated]
 impl From<Slots> for ValidatorSlots {
     fn from(slots: Slots) -> Self {
         slots.validator_slots
