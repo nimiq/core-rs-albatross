@@ -242,14 +242,15 @@ impl ProtocolsHandler for DiscoveryHandler {
     type Error = HandlerError;
     type InboundProtocol = DiscoveryProtocol;
     type OutboundProtocol = DiscoveryProtocol;
+    type InboundOpenInfo = ();
     type OutboundOpenInfo = ();
 
-    fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol> {
+    fn listen_protocol(&self) -> SubstreamProtocol<DiscoveryProtocol, ()> {
         log::debug!("DiscoveryHandler::listen_protocol");
-        SubstreamProtocol::new(DiscoveryProtocol)
+        SubstreamProtocol::new(DiscoveryProtocol, ())
     }
 
-    fn inject_fully_negotiated_inbound(&mut self, protocol: MessageReader<NegotiatedSubstream, DiscoveryMessage>) {
+    fn inject_fully_negotiated_inbound(&mut self, protocol: MessageReader<NegotiatedSubstream, DiscoveryMessage>, _info: ()) {
         log::debug!("DiscoveryHandler::inject_fully_negotiated_inbound");
 
         if self.inbound.is_some() {
@@ -322,8 +323,7 @@ impl ProtocolsHandler for DiscoveryHandler {
                     self.state = HandlerState::OpenSubstream;
 
                     return Poll::Ready(ProtocolsHandlerEvent::OutboundSubstreamRequest {
-                        protocol: SubstreamProtocol::new(DiscoveryProtocol),
-                        info: ()
+                        protocol: SubstreamProtocol::new(DiscoveryProtocol, ()),
                     })
                 },
 

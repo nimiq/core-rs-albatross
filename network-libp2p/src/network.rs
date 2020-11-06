@@ -6,11 +6,12 @@ use futures::channel::mpsc;
 use futures::task::{Context, Poll};
 use futures::{executor, future, ready, Future, SinkExt, StreamExt};
 use libp2p::core;
-use libp2p::core::transport::MemoryTransport;
+use libp2p::core::transport::{Boxed, MemoryTransport};
 use libp2p::core::Multiaddr;
+use libp2p::core::muxing::StreamMuxerBox;
 use libp2p::identity::Keypair;
 use libp2p::swarm::SwarmBuilder;
-use libp2p::{dns, mplex, secio, tcp, websocket, yamux, PeerId, Swarm, Transport};
+use libp2p::{dns, mplex, noise, tcp, websocket, yamux, PeerId, Swarm, Transport};
 use parking_lot::{Mutex, RwLock};
 use tokio::sync::broadcast;
 
@@ -139,23 +140,7 @@ impl Network {
 
     fn new_transport(
         keypair: Keypair,
-    ) -> std::io::Result<
-        impl Transport<
-                Output = (
-                    PeerId,
-                    impl core::muxing::StreamMuxer<
-                            OutboundSubstream = impl Send,
-                            Substream = impl Send,
-                            Error = impl Into<std::io::Error>,
-                        > + Send
-                        + Sync,
-                ),
-                Error = impl std::error::Error + Send,
-                Listener = impl Send,
-                Dial = impl Send,
-                ListenerUpgrade = impl Send,
-            > + Clone,
-    > {
+    ) -> std::io::Result<Boxed<(PeerId, StreamMuxerBox)>> {
         let transport = {
             let tcp = tcp::TcpConfig::new().nodelay(true);
             let transport = dns::DnsConfig::new(tcp)?;
@@ -165,15 +150,19 @@ impl Network {
             transport.or_transport(MemoryTransport::default())
         };
 
+        let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
+            .into_authentic(&keypair)
+            .unwrap();
+
         Ok(transport
             .upgrade(core::upgrade::Version::V1)
-            .authenticate(secio::SecioConfig::new(keypair))
+            .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
             .multiplex(core::upgrade::SelectUpgrade::new(
                 yamux::Config::default(),
                 mplex::MplexConfig::new(),
             ))
-            .map(|(peer, muxer), _| (peer, core::muxing::StreamMuxerBox::new(muxer)))
-            .timeout(std::time::Duration::from_secs(20)))
+            .timeout(std::time::Duration::from_secs(20))
+            .boxed())
     }
 
     fn new_swarm(listen_addr: Multiaddr) -> Swarm<NimiqBehaviour> {
@@ -253,8 +242,6 @@ impl NetworkInterface for Network {
     }
 }
 
-/*
-  FIXME: Tests are disfunctional
 
 #[cfg(test)]
 mod tests {
@@ -335,4 +322,3 @@ mod tests {
         assert_eq!(net2.get_peers().len(), 0);
     }
 }
-*/

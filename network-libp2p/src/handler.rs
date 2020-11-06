@@ -35,13 +35,14 @@ impl ProtocolsHandler for NimiqHandler {
     type Error = io::Error;
     type InboundProtocol = NimiqProtocol;
     type OutboundProtocol = NimiqProtocol;
+    type InboundOpenInfo = ();
     type OutboundOpenInfo = ();
 
-    fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol> {
-        SubstreamProtocol::new(NimiqProtocol::inbound())
+    fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol, Self::InboundOpenInfo> {
+        SubstreamProtocol::new(NimiqProtocol::inbound(), ())
     }
 
-    fn inject_fully_negotiated_inbound(&mut self, msg: Vec<u8>) {
+    fn inject_fully_negotiated_inbound(&mut self, msg: Vec<u8>, _info: Self::InboundOpenInfo) {
         self.inbound_msgs.push_back(msg);
     }
 
@@ -92,8 +93,7 @@ impl ProtocolsHandler for NimiqHandler {
 
         if let Some(msg) = self.outbound_msgs.pop_front() {
             return Poll::Ready(ProtocolsHandlerEvent::OutboundSubstreamRequest {
-                protocol: SubstreamProtocol::new(NimiqProtocol::outbound(msg)),
-                info: (),
+                protocol: SubstreamProtocol::new(NimiqProtocol::outbound(msg), ()),
             });
         }
 

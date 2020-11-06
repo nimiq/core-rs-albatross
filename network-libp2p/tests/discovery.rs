@@ -12,9 +12,9 @@ use libp2p::{
         upgrade::Version,
         muxing::StreamMuxerBox,
     },
-    secio::SecioConfig,
     swarm::{Swarm, NetworkBehaviour},
-    yamux, PeerId, Transport
+    noise::{self, NoiseConfig},
+    yamux, PeerId, Transport,
 };
 use futures::{
     future::Either,
@@ -49,13 +49,16 @@ impl TestNode {
 
         log::info!("Peer: id={}, address={}", peer_id, address);
 
+        let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
+            .into_authentic(&keypair)
+            .unwrap();
+
         let transport = base_transport
-            .upgrade(Version::V1)
-            //.upgrade(Version::V1Lazy) // Allows for 0-RTT negotiation
-            .authenticate(SecioConfig::new(keypair.clone()))
+            .upgrade(Version::V1) // `Version::V1Lazy` Allows for 0-RTT negotiation
+            .authenticate(NoiseConfig::xx(noise_keys).into_authenticated())
             .multiplex(yamux::Config::default())
-            .map(|(peer, muxer), _| (peer, StreamMuxerBox::new(muxer)))
-            .timeout(Duration::from_secs(20));
+            .timeout(Duration::from_secs(20))
+            .boxed();
 
         let config = DiscoveryConfig {
             genesis_hash: Blake2bHash::default(),
