@@ -20,14 +20,9 @@ addons:
 
 # run builds for all the trains (and more)
 rust:
-  - stable
-  - beta
   - nightly
 
 matrix:
-  allow_failures:
-    - rust: stable
-    - rust: beta
   fast_finish: true
 
 # Splitting the jobs is necessary due to timeouts, however we have to make sure that we include all crates
