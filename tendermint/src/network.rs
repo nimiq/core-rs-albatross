@@ -61,22 +61,23 @@ impl<
             ProposalResult::Proposal(proposal, valid_round) => {
                 if valid_round.is_none() {
                     self.state.write().current_proposal = Some(Arc::new(proposal));
-                    self.on_proposal(round);
+                    self.on_proposal();
                 } else if valid_round.unwrap() < round
                     && self.has_2f1_prevotes(proposal.hash(), valid_round.unwrap())
                 {
                     self.state.write().current_proposal = Some(Arc::new(proposal));
-                    self.on_past_proposal(round, valid_round);
+                    self.state.write().current_proposal_vr = valid_round;
+                    self.on_past_proposal();
                 } else {
                     // If we received an invalid proposal, and are not waiting for another, we might
                     // as well assume that we will timeout.
                     self.state.write().current_proposal = None;
-                    self.on_timeout_propose(round);
+                    self.on_timeout_propose();
                 }
             }
             ProposalResult::Timeout => {
                 self.state.write().current_proposal = None;
-                self.on_timeout_propose(round);
+                self.on_timeout_propose();
             }
         }
     }
@@ -108,23 +109,21 @@ impl<
         let prevote = aggregation_to_vote(proposal_hash, prevote_agg);
 
         match prevote {
-            VoteResult::Block(proof) => {
+            VoteResult::Block(_) => {
                 // Assuming that Handel only returns Block if there are 2f+1 prevotes for OUR
                 // block, then here we are guaranteed that: 1) we have a proposal, 2) it is valid and
                 // 3) the prevotes are for this proposal.
-                self.state.write().current_proof = Some(proof);
-                self.on_polka(round);
+                self.on_polka();
             }
-            VoteResult::Nil(proof) => {
-                self.state.write().current_proof = Some(proof);
-                self.on_nil_polka(round);
+            VoteResult::Nil(_) => {
+                self.on_nil_polka();
             }
             VoteResult::Timeout => {
-                self.state.write().current_proof = None;
-                self.on_timeout_prevote(round);
+                self.on_timeout_prevote();
             }
             VoteResult::NewRound(round) => {
-                self.start_round(round);
+                self.state.write().round = round;
+                self.start_round();
             }
         }
     }
@@ -160,16 +159,18 @@ impl<
                 // Again depends on how Handel treats votes for blocks different than the one
                 // we voted for. But we only want to call on_2f1_block_precommits if the precommits
                 // are for our block (so we can assemble it).
-                self.on_2f1_block_precommits(round, proof);
+                self.state.write().current_proof = Some(proof);
+                self.on_decision();
             }
             VoteResult::Nil(_) => {
-                self.on_timeout_precommit(round);
+                self.on_timeout_precommit();
             }
             VoteResult::Timeout => {
-                self.on_timeout_precommit(round);
+                self.on_timeout_precommit();
             }
             VoteResult::NewRound(round) => {
-                self.start_round(round);
+                self.state.write().round = round;
+                self.start_round();
             }
         }
     }
@@ -184,7 +185,9 @@ impl<
             locked_round: state.locked_round,
             valid_value: state.valid_value.clone(),
             valid_round: state.valid_round,
+            current_checkpoint: state.current_checkpoint,
             current_proposal: state.current_proposal.clone(),
+            current_proposal_vr: state.current_proposal_vr,
             current_proof: state.current_proof.clone(),
         });
 

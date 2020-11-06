@@ -105,7 +105,7 @@ pub fn pedersen_generators(number: usize) -> Vec<G1Projective> {
 /// We then calculate the commitment like so:
 /// H = G_0 + s_1 * G_1 + ... + s_n * G_n
 /// where G_0 is a sum generator that is used to avoid that the sum starts at zero (which is
-/// problematic because the circuit can't handle addition with zero).
+/// problematic because the ZK circuits used in nano-sync can't handle addition with zero).
 pub fn pedersen_hash(input: Vec<bool>, generators: Vec<G1Projective>) -> G1Projective {
     // Check that the input can be stored using the available generators.
     assert!((generators.len() - 1) * POINT_CAPACITY >= input.len());
@@ -115,8 +115,7 @@ pub fn pedersen_hash(input: Vec<bool>, generators: Vec<G1Projective>) -> G1Proje
 
     let bits_last_round = input.len() % POINT_CAPACITY;
 
-    // Initialize the sum to the generator. Normally it would be zero, but this is necessary because
-    // of some complications in the PedersenHashGadget.
+    // Initialize the sum to the first generator.
     let mut result = generators[0];
 
     let mut power = generators[1];

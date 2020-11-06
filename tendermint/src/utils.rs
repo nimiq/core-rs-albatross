@@ -5,6 +5,19 @@ use nimiq_primitives::policy::TWO_THIRD_SLOTS;
 use std::collections::BTreeMap;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum Checkpoint {
+    StartRound,
+    OnProposal,
+    OnPastProposal,
+    OnPolka,
+    OnNilPolka,
+    OnDecision,
+    OnTimeoutPropose,
+    OnTimeoutPrevote,
+    OnTimeoutPrecommit,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Step {
     Propose,
     Prevote,

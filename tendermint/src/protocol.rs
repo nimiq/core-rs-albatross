@@ -1,6 +1,6 @@
 use crate::outside_deps::TendermintOutsideDeps;
 use crate::state::TendermintState;
-use crate::utils::{Step, TendermintError, TendermintReturn, VoteDecision};
+use crate::utils::{Checkpoint, Step, TendermintError, TendermintReturn, VoteDecision};
 use beserial::{Deserialize, Serialize};
 use futures::channel::mpsc::{unbounded as mpsc_channel, UnboundedReceiver, UnboundedSender};
 use nimiq_hash::Hash;
@@ -63,7 +63,7 @@ impl<
         let weak_self = self.weak_self.clone();
         tokio::spawn(async move {
             let this = upgrade_weak!(weak_self);
-            this.start_round(0);
+            this.start_round();
         });
 
         receiver
@@ -80,48 +80,7 @@ impl<
         tokio::spawn(async move {
             let this = upgrade_weak!(weak_self);
 
-            let mut invalid_state = false;
-
-            match state.step {
-                Step::Propose => {
-                    if state.current_proof.is_some()
-                        && this
-                            .deps
-                            .verify_proposal_state(state.round, &state.current_proof.unwrap())
-                    {
-                        this.start_round(state.round);
-                    } else {
-                        invalid_state = true;
-                    }
-                }
-                Step::Prevote => {
-                    if state.current_proposal.is_some()
-                        && this.deps.verify_prevote_state(
-                            state.round,
-                            state.current_proposal.unwrap(),
-                            &state.current_proof.unwrap(),
-                        )
-                    {
-                        // Shouldn't this be able to vote nil also? Like on the Precommit step?
-                        this.broadcast_and_aggregate_prevote(state.round, VoteDecision::Block);
-                    } else {
-                        invalid_state = true;
-                    }
-                }
-                Step::Precommit => {
-                    if let Some(decision) = this.deps.verify_precommit_state(
-                        state.round,
-                        state.current_proposal,
-                        &state.current_proof.unwrap(),
-                    ) {
-                        this.broadcast_and_aggregate_precommit(state.round, decision);
-                    } else {
-                        invalid_state = true;
-                    }
-                }
-            };
-
-            if invalid_state {
+            if !this.deps.verify_state(state.clone()) {
                 if let Some(return_stream) = &this.return_stream {
                     if let Err(_) = return_stream
                         .unbounded_send(TendermintReturn::Error(TendermintError::BadInitState))
@@ -131,42 +90,77 @@ impl<
                     return_stream.close_channel();
                 }
             }
+
+            this.state.write().round = state.round;
+            this.state.write().step = state.step;
+            this.state.write().locked_value = state.locked_value;
+            this.state.write().locked_round = state.locked_round;
+            this.state.write().valid_value = state.valid_value;
+            this.state.write().valid_round = state.valid_round;
+            this.state.write().current_checkpoint = state.current_checkpoint;
+            this.state.write().current_proposal = state.current_proposal;
+            this.state.write().current_proposal_vr = state.current_proposal_vr;
+            this.state.write().current_proof = state.current_proof;
+
+            match state.current_checkpoint {
+                Checkpoint::StartRound => this.start_round(),
+                Checkpoint::OnProposal => this.on_proposal(),
+                Checkpoint::OnPastProposal => this.on_past_proposal(),
+                Checkpoint::OnPolka => this.on_polka(),
+                Checkpoint::OnNilPolka => this.on_nil_polka(),
+                Checkpoint::OnDecision => this.on_decision(),
+                Checkpoint::OnTimeoutPropose => this.on_timeout_propose(),
+                Checkpoint::OnTimeoutPrevote => this.on_timeout_prevote(),
+                Checkpoint::OnTimeoutPrecommit => this.on_timeout_precommit(),
+            }
         });
 
         receiver
     }
 
     // Lines 11-21
-    pub(crate) fn start_round(&self, round: u32) {
-        self.state.write().round = round;
-        self.state.write().step = Step::Propose;
+    pub(crate) fn start_round(&self) {
+        self.state.write().current_checkpoint = Checkpoint::StartRound;
+        self.return_state_update();
+
         self.state.write().current_proposal = None;
+        self.state.write().current_proposal_vr = None;
         self.state.write().current_proof = None;
 
-        if self.deps.is_our_turn(round) {
+        self.state.write().step = Step::Propose;
+
+        if self.deps.is_our_turn(self.state.read().round) {
             let proposal = if self.state.read().valid_value.is_some() {
                 self.state.read().valid_value.clone().unwrap()
             } else {
-                Arc::new(self.deps.get_value(round))
+                Arc::new(self.deps.get_value(self.state.read().round))
             };
 
-            self.broadcast_proposal(round, proposal.clone(), self.state.read().valid_round);
-
-            // Update our proposal state
-            self.state.write().current_proposal = Some(proposal);
+            // Update and send our proposal state
+            self.state.write().current_proposal = Some(proposal.clone());
+            self.state.write().current_proposal_vr = self.state.read().valid_round;
+            self.broadcast_proposal(
+                self.state.read().round,
+                proposal,
+                self.state.read().valid_round,
+            );
 
             // Prevote for our own proposal
-            self.broadcast_and_aggregate_prevote(round, VoteDecision::Block);
             self.state.write().step = Step::Prevote;
-            self.return_state_update();
+            self.broadcast_and_aggregate_prevote(self.state.read().round, VoteDecision::Block);
         } else {
-            self.await_proposal(round);
+            self.await_proposal(self.state.read().round);
         }
     }
 
     // Lines  22-27
-    pub(crate) fn on_proposal(&self, round: u32) {
-        assert!(self.state.read().round == round && self.state.read().step == Step::Propose);
+    pub(crate) fn on_proposal(&self) {
+        assert_eq!(self.state.read().step, Step::Propose);
+
+        self.state.write().current_checkpoint = Checkpoint::OnProposal;
+        self.return_state_update();
+
+        self.state.write().step = Step::Prevote;
 
         if self
             .deps
@@ -174,62 +168,65 @@ impl<
             && (self.state.read().locked_round.is_none()
                 || self.state.read().locked_value == self.state.read().current_proposal)
         {
-            self.broadcast_and_aggregate_prevote(round, VoteDecision::Block);
+            self.broadcast_and_aggregate_prevote(self.state.read().round, VoteDecision::Block);
         } else {
-            self.broadcast_and_aggregate_prevote(round, VoteDecision::Nil);
+            self.broadcast_and_aggregate_prevote(self.state.read().round, VoteDecision::Nil);
         }
-
-        self.state.write().step = Step::Prevote;
-
-        self.return_state_update();
     }
 
     // Lines 28-33.
-    pub(crate) fn on_past_proposal(&self, round: u32, valid_round: Option<u32>) {
-        assert!(self.state.read().round == round && self.state.read().step == Step::Propose);
+    pub(crate) fn on_past_proposal(&self) {
+        assert_eq!(self.state.read().step, Step::Propose);
+
+        self.state.write().current_checkpoint = Checkpoint::OnPastProposal;
+        self.return_state_update();
+
+        self.state.write().step = Step::Prevote;
 
         if self
             .deps
             .is_valid(self.state.read().current_proposal.clone().unwrap())
-            && (self.state.read().locked_round.unwrap_or(0) <= valid_round.unwrap()
+            && (self.state.read().locked_round.unwrap_or(0)
+                <= self.state.read().current_proposal_vr.unwrap()
                 || self.state.read().locked_value == self.state.read().current_proposal)
         {
-            self.broadcast_and_aggregate_prevote(round, VoteDecision::Block);
+            self.broadcast_and_aggregate_prevote(self.state.read().round, VoteDecision::Block);
         } else {
-            self.broadcast_and_aggregate_prevote(round, VoteDecision::Nil);
+            self.broadcast_and_aggregate_prevote(self.state.read().round, VoteDecision::Nil);
         }
-
-        self.state.write().step = Step::Prevote;
-
-        self.return_state_update();
     }
 
     // Lines 34-35: Handel takes care of waiting `timeoutPrevote` before returning
 
     // Lines 36-43
-    pub(crate) fn on_polka(&self, round: u32) {
+    pub(crate) fn on_polka(&self) {
         // step is either prevote or precommit
-        assert!(self.state.read().round == round && self.state.read().step != Step::Propose);
+        assert_ne!(self.state.read().step, Step::Propose);
+
+        self.state.write().current_checkpoint = Checkpoint::OnPolka;
+        self.return_state_update();
+
+        self.state.write().valid_value = self.state.read().current_proposal.clone();
+        self.state.write().valid_round = Some(self.state.read().round);
 
         if self.state.read().step == Step::Prevote {
             self.state.write().locked_value = self.state.read().current_proposal.clone();
-            self.state.write().locked_round = Some(round);
-            self.broadcast_and_aggregate_precommit(round, VoteDecision::Block);
+            self.state.write().locked_round = Some(self.state.read().round);
             self.state.write().step = Step::Precommit;
+            self.broadcast_and_aggregate_precommit(self.state.read().round, VoteDecision::Block);
         }
-
-        self.state.write().valid_value = self.state.read().current_proposal.clone();
-        self.state.write().valid_round = Some(round);
-        self.return_state_update();
     }
 
     // Lines 44-46
-    pub(crate) fn on_nil_polka(&self, round: u32) {
-        assert!(self.state.read().round == round && self.state.read().step == Step::Prevote);
+    pub(crate) fn on_nil_polka(&self) {
+        assert_eq!(self.state.read().step, Step::Prevote);
 
-        self.broadcast_and_aggregate_precommit(round, VoteDecision::Nil);
-        self.state.write().step = Step::Precommit;
+        self.state.write().current_checkpoint = Checkpoint::OnNilPolka;
         self.return_state_update();
+
+        self.state.write().step = Step::Precommit;
+
+        self.broadcast_and_aggregate_precommit(self.state.read().round, VoteDecision::Nil);
     }
 
     // Lines 47-48 Handel takes care of waiting `timeoutPrecommit` before returning
@@ -238,12 +235,14 @@ impl<
     // We only handle precommits for our current round and current proposal in this function. The
     // validator crate is always listening for completed blocks. The purpose of this function is just
     // to assemble the block if we can.
-    pub(crate) fn on_2f1_block_precommits(&self, round: u32, proof: ProofTy) {
-        assert_eq!(self.state.read().round, round);
+    pub(crate) fn on_decision(&self) {
+        self.state.write().current_checkpoint = Checkpoint::OnDecision;
+        self.return_state_update();
 
-        let block = self
-            .deps
-            .assemble_block(self.state.read().current_proposal.clone().unwrap(), proof);
+        let block = self.deps.assemble_block(
+            self.state.read().current_proposal.clone().unwrap(),
+            self.state.read().current_proof.clone().unwrap(),
+        );
 
         if let Some(return_stream) = &self.return_stream {
             if return_stream
@@ -260,31 +259,36 @@ impl<
     // Not here but anytime you handle VoteResult.
 
     // Lines 57-60
-    pub(crate) fn on_timeout_propose(&self, round: u32) {
-        assert!(self.state.read().round == round && self.state.read().step == Step::Propose);
+    pub(crate) fn on_timeout_propose(&self) {
+        assert_eq!(self.state.read().step, Step::Propose);
 
-        self.broadcast_and_aggregate_prevote(round, VoteDecision::Nil);
+        self.state.write().current_checkpoint = Checkpoint::OnTimeoutPropose;
+        self.return_state_update();
 
         self.state.write().step = Step::Prevote;
 
-        self.return_state_update();
+        self.broadcast_and_aggregate_prevote(self.state.read().round, VoteDecision::Nil);
     }
 
     // Lines 61-64
-    pub(crate) fn on_timeout_prevote(&self, round: u32) {
-        assert!(self.state.read().round == round && self.state.read().step == Step::Prevote);
+    pub(crate) fn on_timeout_prevote(&self) {
+        assert_eq!(self.state.read().step, Step::Prevote);
 
-        self.broadcast_and_aggregate_precommit(round, VoteDecision::Nil);
+        self.state.write().current_checkpoint = Checkpoint::OnTimeoutPrevote;
+        self.return_state_update();
 
         self.state.write().step = Step::Precommit;
 
-        self.return_state_update();
+        self.broadcast_and_aggregate_precommit(self.state.read().round, VoteDecision::Nil);
     }
 
     // Lines 65-67
-    pub(crate) fn on_timeout_precommit(&self, round: u32) {
-        assert_eq!(self.state.read().round, round);
+    pub(crate) fn on_timeout_precommit(&self) {
+        self.state.write().current_checkpoint = Checkpoint::OnTimeoutPrevote;
+        self.return_state_update();
 
-        self.start_round(round + 1);
+        self.state.write().round += 1;
+
+        self.start_round();
     }
 }
