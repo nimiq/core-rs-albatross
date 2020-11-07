@@ -130,7 +130,8 @@ impl NetworkBehaviour for LimitBehaviour {
         let (peer_tx, peer_rx) = mpsc::channel(4096);
         let peer = Arc::new(Peer::new(peer_id.clone(), peer_tx));
         if close_connection {
-            self.events.push_back(NetworkEvent::PeerDisconnect(peer));
+            // FIXME
+            //self.events.push_back(NetworkEvent::PeerDisconnect(peer));
         }
     }
 

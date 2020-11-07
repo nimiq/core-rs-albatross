@@ -88,7 +88,9 @@ impl From<SerializingError> for std::io::Error {
     }
 }
 
-// Implementation for u8 and u16/32/64 (big endian)
+
+// Implementation for u8 and u16/32/64/128 (big endian)
+
 
 impl Deserialize for u8 {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
@@ -131,8 +133,9 @@ macro_rules! primitive_serialize {
 primitive_serialize!(u16, 2, read_u16, write_u16);
 primitive_serialize!(u32, 4, read_u32, write_u32);
 primitive_serialize!(u64, 8, read_u64, write_u64);
+primitive_serialize!(u128, 16, read_u128, write_u128);
 
-// Implementation for i8 and i16/32/64 (big endian)
+// Implementation for i8 and i16/32/64/128 (big endian)
 
 impl Deserialize for i8 {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
@@ -154,6 +157,13 @@ impl Serialize for i8 {
 primitive_serialize!(i16, 2, read_i16, write_i16);
 primitive_serialize!(i32, 4, read_i32, write_i32);
 primitive_serialize!(i64, 8, read_i64, write_i64);
+primitive_serialize!(i128, 16, read_i128, write_i128);
+
+// Implementation for f32/f64
+
+primitive_serialize!(f32, 4, read_f32, write_f32);
+primitive_serialize!(f64, 8, read_f64, write_f64);
+
 
 // Unit
 
@@ -463,6 +473,8 @@ impl<'a, T: Serialize> Serialize for &'a T {
     }
 }
 
+// Option
+
 impl<T: Deserialize> Deserialize for Option<T> {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let is_present: u8 = Deserialize::deserialize(reader)?;
@@ -520,5 +532,36 @@ impl<T: SerializeWithLength> SerializeWithLength for Option<T> {
             Option::Some(one) => 1 + SerializeWithLength::serialized_size::<S>(one),
             Option::None => 1,
         }
+    }
+}
+
+// Slices (only serialization)
+
+impl<T: Serialize> SerializeWithLength for [T] {
+    fn serialize<S: Serialize + num::FromPrimitive, W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+        let mut size = 0;
+
+        let n = S::from_usize(self.len())
+            .ok_or(SerializingError::Overflow)?;
+        size += Serialize::serialize(&n, writer)?;
+
+        for elem in self {
+            size += Serialize::serialize(elem, writer)?;
+        }
+
+        Ok(size)
+    }
+
+    fn serialized_size<S: Serialize + num::FromPrimitive>(&self) -> usize {
+        let mut size = 0;
+
+        let n = S::from_usize(self.len()).unwrap();
+        size += Serialize::serialized_size(&n);
+
+        for elem in self {
+            size += Serialize::serialized_size(elem);
+        }
+
+        size
     }
 }

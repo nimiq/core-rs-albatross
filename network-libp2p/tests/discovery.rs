@@ -77,7 +77,7 @@ impl TestNode {
             public_key: keypair.public().clone(),
             services: Services::FULL_BLOCKS,
             timestamp: None,
-        }.sign(&keypair).unwrap();
+        }.sign(&keypair);
 
         let peer_contact_book = Arc::new(RwLock::new(PeerContactBook::new(peer_contact)));
 
@@ -114,7 +114,7 @@ fn random_peer_contact(n: usize, services: Services) -> SignedPeerContact {
 
     peer_contact.set_current_time();
 
-    peer_contact.sign(&keypair).unwrap()
+    peer_contact.sign(&keypair)
 }
 
 

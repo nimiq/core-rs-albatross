@@ -216,7 +216,6 @@ impl Network {
                             .remove(&peer.id)
                             .map(|_| ())
                             .expect("Unknown peer disconnected"),
-                        NetworkEvent::PeerDisconnect(peer) => (),
                     }
                 }
                 future::ready(())

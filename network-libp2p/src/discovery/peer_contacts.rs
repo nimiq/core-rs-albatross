@@ -6,10 +6,7 @@ use std::{
 
 use libp2p::{
     core::multiaddr::Protocol,
-    identity::{
-        error::SigningError,
-        Keypair, PublicKey
-    },
+    identity::{Keypair, PublicKey},
     Multiaddr, PeerId,
 };
 use bitflags::bitflags;
@@ -17,14 +14,18 @@ use parking_lot::RwLock;
 
 use beserial::{Serialize, Deserialize};
 
+use crate::tagged_signing::{TaggedSignature, TaggedSignable, TaggedPublicKey, TaggedKeypair};
 
-// TODO: Should the `PeerAddressBook` live under the `DiscoveryProtocol`? I think so, because otherwise, the behaviour
-// has to signal upwards everytime it receives a new peer address, without knowing if it already knows this one.
-//
-// TODO: Move Services, Protocols, PeerContact* into seperate module.
 
 bitflags! {
+    /// Bitmask of services
+    ///
+    /// # TODO
+    ///
+    ///  - This just serializes to its numeric value for serde, but a list of strings would be nicer.
+    ///
     #[derive(Serialize, Deserialize)]
+    #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize), serde(transparent))]
     pub struct Services: u32 {
         /// The node provides at least the latest [`nimiq_primitives::policy::NUM_BLOCKS_VERIFICATION`] as full blocks.
         ///
@@ -90,7 +91,14 @@ bitflags! {
 }
 
 bitflags! {
+    /// Bitmask of protocols
+    ///
+    /// # TODO
+    ///
+    ///  - This just serializes to its numeric value for serde, but a list of strings would be nicer.
+    ///
     #[derive(Serialize, Deserialize)]
+    #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize), serde(transparent))]
     pub struct Protocols: u32 {
         /// WebSocket (insecure)
         const WS = 1 << 0;
@@ -134,6 +142,12 @@ impl Protocols {
         }
     }
 
+    /// Returns the max age for this protocol
+    ///
+    /// # TODO
+    ///
+    ///  - Should this be a configurable parameter?
+    ///
     pub fn max_age(&self) -> Duration {
         if self.contains(Protocols::WS) || self.contains(Protocols::WSS) {
             Self::MAX_AGE_WEBSOCKET
@@ -148,14 +162,19 @@ impl Protocols {
 }
 
 
-// TODO: Move to appropriate place
+/// A plain peer contact. This contains:
+///
+///  - A set of multi-addresses for the peer.
+///  - The peer's public key.
+///  - A bitmask of the services supported by this peer.
+///  - A timestamp when this contact information was generated.
+///
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PeerContact {
     #[beserial(len_type(u8))]
     pub addresses: HashSet<Multiaddr>,
 
     /// Public key of this peer.
-    #[beserial(len_type(u8))]
     pub public_key: PublicKey,
 
     /// Services supported by this peer.
@@ -166,34 +185,54 @@ pub struct PeerContact {
 }
 
 impl PeerContact {
-    pub fn sign(self, keypair: &Keypair) -> Result<SignedPeerContact, SigningError> {
-        let signature = keypair.sign(&self.serialize_to_vec())?;
-        Ok(SignedPeerContact {
+    /// Signs this peer contact.
+    ///
+    /// # Panics
+    ///
+    /// This panics if the peer contacts public key doesn't match the supplied key pair.
+    ///
+    pub fn sign(self, keypair: &Keypair) -> SignedPeerContact {
+        if keypair.public() != self.public_key {
+            panic!("Supplied keypair doesn't match the public key in the peer contact.");
+        }
+
+        let signature = keypair.tagged_sign(&self);
+
+        SignedPeerContact {
             inner: self,
             signature
-        })
+        }
     }
 
+    /// Returns whether this is a seed peer contact. See [`PeerContact::timestamp`].
     pub fn is_seed(&self) -> bool {
         self.timestamp.is_none()
     }
 
+    /// This sets the timestamp in the peer contact to the current system time.
     pub fn set_current_time(&mut self) {
         self.timestamp = Some(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs());
     }
 }
 
+impl TaggedSignable for PeerContact {
+    const TAG: u8 = 0x02;
+}
+
+/// A signed peer contact.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SignedPeerContact {
+    /// The wrapped peer contact.
     pub inner: PeerContact,
 
-    #[beserial(len_type(u8))]
-    pub signature: Vec<u8>,
+    /// The signature over the serialized peer contact.
+    pub signature: TaggedSignature<PeerContact>,
 }
 
 impl SignedPeerContact {
+    /// Verifies that the signature is valid for this peer contact.
     pub fn verify(&self) -> bool {
-        self.inner.public_key.verify(&self.inner.serialize_to_vec(), &self.signature)
+        self.inner.public_key.tagged_verify(&self.inner, &self.signature)
     }
 
     pub fn public_key(&self) -> &PublicKey {
@@ -202,13 +241,18 @@ impl SignedPeerContact {
 }
 
 
+/// Meta information attached to peer contact info objects. This are meant to be mutable and change over time.
 #[derive(Clone, Debug)]
 struct PeerContactMeta {
     score: f32,
+
+    reported_by: HashSet<PeerId>,
 }
 
 
-#[derive(Clone, Debug)]
+/// This encapsulates a peer contact (signed), but also pre-computes frequently used values such as `peer_id` and
+/// `protocols`. It also contains meta-data that can be mutated.
+#[derive(Debug)]
 pub struct PeerContactInfo {
     /// The peer ID derived from the public key in the peer contact.
     peer_id: PeerId,
@@ -219,7 +263,7 @@ pub struct PeerContactInfo {
     /// Supported protocols extracted from multi addresses in the peer contact.
     protocols: Protocols,
 
-    // TODO
+    /// Mutable meta-data.
     meta: RwLock<PeerContactMeta>,
 }
 
@@ -234,40 +278,50 @@ impl From<SignedPeerContact> for PeerContactInfo {
             protocols,
             meta: RwLock::new(PeerContactMeta {
                 score: 0.,
+
+                reported_by: HashSet::new(),
             }),
         }
     }
 }
 
 impl PeerContactInfo {
+    /// Short-hand for the plain [`PeerContact`]
     pub fn contact(&self) -> &PeerContact {
         &self.contact.inner
     }
 
+    /// Short-hand for the signed [`SignedPeerContact`]
     pub fn signed(&self) -> &SignedPeerContact {
         &self.contact
     }
 
+    /// Returns the peer ID of this contact.
     pub fn peer_id(&self) -> &PeerId {
         &self.peer_id
     }
 
+    /// Returns the supported protocols of this contact.
     pub fn protocols(&self) -> Protocols {
         self.protocols
     }
 
+    /// Returns the supported services of this contact.
     pub fn services(&self) -> Services {
         self.contact.inner.services
     }
 
+    /// Returns the public key of this contact.
     pub fn public_key(&self) -> &PublicKey {
         &self.contact.inner.public_key
     }
 
+    /// Returns an iterator over the multi-addresses of this contact.
     pub fn addresses<'a>(&'a self) -> impl Iterator<Item=&Multiaddr> + 'a {
         self.contact.inner.addresses.iter()
     }
 
+    /// Returns whether this is a seed contact.
     pub fn is_seed(&self) -> bool {
         self.contact.inner.timestamp.is_none()
     }
@@ -301,7 +355,7 @@ impl PeerContactInfo {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct PeerContactBook {
     peer_contacts: HashMap<PeerId, Arc<PeerContactInfo>>,
 
@@ -316,6 +370,12 @@ impl PeerContactBook {
         }
     }
 
+    /// Insert a peer contact or update an existing one
+    ///
+    /// # TODO
+    ///
+    ///  - Check if the peer is already known and update its information.
+    ///
     pub fn insert(&mut self, contact: SignedPeerContact) {
         log::debug!("Adding peer contact: {:?}", contact);
 
@@ -361,16 +421,14 @@ impl PeerContactBook {
         // TODO: We need to update our own `SignedPeerContact`, if we want to do so.
     }
 
-    pub fn self_update(&mut self, keypair: &Keypair) -> Result<(), SigningError> {
+    pub fn self_update(&mut self, keypair: &Keypair) {
         // Not really optimal to clone here, but *shrugs*
         let mut contact = self.self_peer_contact.contact.inner.clone();
 
         // Update timestamp
         contact.set_current_time();
 
-        self.insert(contact.sign(keypair)?);
-
-        Ok(())
+        self.insert(contact.sign(keypair));
     }
 
     pub fn get_self(&self) -> &PeerContactInfo {

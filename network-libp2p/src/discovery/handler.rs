@@ -32,7 +32,10 @@ use super::{
     protocol::{DiscoveryProtocol, DiscoveryMessage, ChallengeNonce},
     peer_contacts::{Services, Protocols, PeerContactBook, SignedPeerContact},
 };
-use crate::message::{MessageReader, MessageWriter};
+use crate::{
+    message::{MessageReader, MessageWriter},
+    tagged_signing::{TaggedKeypair, TaggedPublicKey}
+};
 
 
 #[derive(Clone, Debug)]
@@ -352,10 +355,7 @@ impl ProtocolsHandler for DiscoveryHandler {
                                     peer_contact_book.self_add_addresses(observed_addresses.clone());
 
                                     // Send the HandshakeAck
-                                    let response_signature = match self.keypair.sign(challenge_nonce.as_ref()) {
-                                        Ok(s) => s,
-                                        Err(e) => return Poll::Ready(ProtocolsHandlerEvent::Close(e.into())),
-                                    };
+                                    let response_signature = self.keypair.tagged_sign(&challenge_nonce);
 
                                     // Remember peer's filter
                                     self.peer_list_limit = limit;
@@ -411,7 +411,7 @@ impl ProtocolsHandler for DiscoveryHandler {
                                     // TODO: Do we need to check other stuff in the peer contact?
 
                                     // Check the challenge response.
-                                    if !peer_contact.public_key().verify(self.challenge_nonce.as_ref(), &response_signature) {
+                                    if !peer_contact.public_key().tagged_verify(&self.challenge_nonce, &response_signature) {
                                         return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::ChallengeResponseFailed))
                                     }
 

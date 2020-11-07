@@ -13,7 +13,6 @@ use crate::peer::*;
 pub enum NetworkEvent<P> {
     PeerJoined(Arc<P>),
     PeerLeft(Arc<P>),
-    PeerDisconnect(Arc<P>),
 }
 
 impl<P> Clone for NetworkEvent<P> {
@@ -21,7 +20,6 @@ impl<P> Clone for NetworkEvent<P> {
         match self {
             NetworkEvent::PeerJoined(peer) => NetworkEvent::PeerJoined(Arc::clone(peer)),
             NetworkEvent::PeerLeft(peer) => NetworkEvent::PeerLeft(Arc::clone(peer)),
-            NetworkEvent::PeerDisconnect(peer) => NetworkEvent::PeerDisconnect(Arc::clone(peer)),
         }
     }
 }

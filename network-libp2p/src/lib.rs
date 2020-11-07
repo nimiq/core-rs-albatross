@@ -14,3 +14,4 @@ mod protocol;
 //mod peer_address_book;
 pub mod discovery;
 mod message;
+pub mod tagged_signing;

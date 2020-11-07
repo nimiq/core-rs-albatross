@@ -19,7 +19,10 @@ use beserial::{SerializingError, Serialize, Deserialize};
 use nimiq_macros::{create_typed_array, add_hex_io_fns_typed_arr};
 use nimiq_hash::Blake2bHash;
 
-use crate::message::{MessageReader, MessageWriter};
+use crate::{
+    message::{MessageReader, MessageWriter},
+    tagged_signing::{TaggedSignature, TaggedSignable},
+};
 use super::peer_contacts::{SignedPeerContact, Services, Protocols};
 
 
@@ -34,6 +37,10 @@ impl ChallengeNonce {
 
         nonce
     }
+}
+
+impl TaggedSignable for ChallengeNonce {
+    const TAG: u8 = 0x01;
 }
 
 
@@ -73,8 +80,7 @@ pub enum DiscoveryMessage {
 
         /// Signature for the challenge sent in `HandshakeAck`, signed with the identity keypair (same one as used for
         /// the peer contact).
-        #[beserial(len_type(u8))]
-        response_signature: Vec<u8>,
+        response_signature: TaggedSignature<ChallengeNonce>,
 
         /// Interval in ms in which the peer wants to receive new updates.
         update_interval: Option<u64>,
