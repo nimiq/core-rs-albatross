@@ -103,7 +103,7 @@ impl NetworkBehaviour for Discovery {
 
     fn new_handler(&mut self) -> Self::ProtocolsHandler {
         // TODO: I think we could borrow config and keypair, if we give the handler some lifetime parameter(s).
-        DiscoveryHandler::new(self.config.clone(), self.keypair.clone(), self.peer_contact_book.clone())
+        DiscoveryHandler::new(self.config.clone(), self.keypair.clone(), Arc::clone(&self.peer_contact_book))
     }
 
     fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {

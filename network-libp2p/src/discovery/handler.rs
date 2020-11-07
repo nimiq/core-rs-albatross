@@ -19,6 +19,10 @@ use futures::{
 use parking_lot::RwLock;
 use thiserror::Error;
 use wasm_timer::Interval;
+use rand::{
+    seq::IteratorRandom,
+    thread_rng,
+};
 
 use beserial::SerializingError;
 use nimiq_hash::Blake2bHash;
@@ -180,9 +184,14 @@ impl DiscoveryHandler {
     }
 
     fn get_peer_contacts(&self, peer_contact_book: &PeerContactBook) -> Vec<SignedPeerContact> {
+        let n = self.peer_list_limit.map(|l| l as usize).unwrap_or(128);
+
+        let mut rng = thread_rng();
+
         peer_contact_book
             .query(self.protocols_filter, self.services_filter)
-            .take(self.peer_list_limit.map(|l| l as usize).unwrap_or(128)) // TODO: Where to put this max value?
+            .choose_multiple(&mut rng, n)
+            .into_iter()
             .map(|c| c.signed().clone())
             .collect()
     }

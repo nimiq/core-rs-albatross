@@ -13,6 +13,7 @@ use libp2p::{
     Multiaddr, PeerId,
 };
 use bitflags::bitflags;
+use parking_lot::RwLock;
 
 use beserial::{Serialize, Deserialize};
 
@@ -93,10 +94,16 @@ bitflags! {
     pub struct Protocols: u32 {
         /// WebSocket (insecure)
         const WS = 1 << 0;
+
         /// WebSocket (secure)
         const WSS = 1 << 1;
+
         /// WebRTC
         const RTC = 1 << 2;
+
+        /// Memory transport (for testing)
+        #[cfg(test)]
+        const MEM = 1 << 31;
     }
 }
 
@@ -121,6 +128,8 @@ impl Protocols {
         match protocol {
             Protocol::Ws(_) => Self::WS,
             Protocol::Wss(_) => Self::WSS,
+            #[cfg(test)]
+            Protocol::Memory(_) => Self::MEM,
             _ => Self::empty(),
         }
     }
@@ -194,6 +203,12 @@ impl SignedPeerContact {
 
 
 #[derive(Clone, Debug)]
+struct PeerContactMeta {
+    score: f32,
+}
+
+
+#[derive(Clone, Debug)]
 pub struct PeerContactInfo {
     /// The peer ID derived from the public key in the peer contact.
     peer_id: PeerId,
@@ -205,7 +220,7 @@ pub struct PeerContactInfo {
     protocols: Protocols,
 
     // TODO
-    score: f32,
+    meta: RwLock<PeerContactMeta>,
 }
 
 impl From<SignedPeerContact> for PeerContactInfo {
@@ -217,7 +232,9 @@ impl From<SignedPeerContact> for PeerContactInfo {
             peer_id,
             contact,
             protocols,
-            score: 0.,
+            meta: RwLock::new(PeerContactMeta {
+                score: 0.,
+            }),
         }
     }
 }
@@ -329,6 +346,7 @@ impl PeerContactBook {
 
     pub fn query<'a>(&'a self, protocols: Protocols, services: Services) -> impl Iterator<Item = Arc<PeerContactInfo>> + 'a {
         // TODO: This is a naive implementation
+        // TODO: Sort by score?
         self.peer_contacts
             .iter()
             .filter_map(move |(_, contact)| {

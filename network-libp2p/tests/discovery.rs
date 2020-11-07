@@ -42,6 +42,7 @@ struct TestNode {
     peer_id: PeerId,
     swarm: Swarm<Discovery>,
     peer_contact_book: Arc<RwLock<PeerContactBook>>,
+    address: Multiaddr,
 }
 
 impl TestNode {
@@ -84,13 +85,14 @@ impl TestNode {
 
         let mut swarm = Swarm::new(transport, behaviour, peer_id.clone());
 
-        Swarm::listen_on(&mut swarm, address).unwrap();
+        Swarm::listen_on(&mut swarm, address.clone()).unwrap();
 
         TestNode {
             keypair,
             peer_id,
             swarm,
             peer_contact_book,
+            address,
         }
     }
 
@@ -149,18 +151,16 @@ pub async fn test_discovery() {
     node1.dial(2);
 
     // Run swarm for some time
+    let mut t = 0;
     futures::stream::select(node1.swarm, node2.swarm)
         .take_while(move |e| {
             println!("Swarm event: {:?}", e);
 
-            let c = if let DiscoveryEvent::Update = e {
-                false
+            if let DiscoveryEvent::Update = e {
+                t += 1;
             }
-            else {
-                true
-            };
 
-            async move { c }
+            async move { t < 10 }
         })
         .for_each(|_| async {})
         .await;
