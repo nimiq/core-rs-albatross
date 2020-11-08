@@ -10,4 +10,5 @@ pub(crate) mod network;
 pub(crate) mod outside_deps;
 pub(crate) mod protocol;
 pub(crate) mod state;
+pub(crate) mod tendermint;
 pub(crate) mod utils;

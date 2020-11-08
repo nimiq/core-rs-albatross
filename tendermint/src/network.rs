@@ -1,13 +1,12 @@
 use crate::outside_deps::TendermintOutsideDeps;
-use crate::protocol::Tendermint;
 use crate::state::TendermintState;
+use crate::tendermint::Tendermint;
 use crate::utils::{
-    aggregation_to_vote, AggregationResult, ProposalResult, Step, TendermintError,
-    TendermintReturn, VoteDecision, VoteResult,
+    aggregation_to_vote, AggregationResult, Checkpoint, ProposalResult, Step, TendermintReturn,
+    VoteDecision, VoteResult,
 };
 use beserial::{Deserialize, Serialize};
 use nimiq_hash::{Blake2sHash, Hash};
-use nimiq_macros::upgrade_weak;
 use nimiq_primitives::policy::TWO_THIRD_SLOTS;
 use std::clone::Clone;
 use std::sync::Arc;
@@ -31,68 +30,35 @@ impl<
             + 'static,
     > Tendermint<ProposalTy, ProofTy, ResultTy, DepsTy>
 {
-    pub(crate) fn broadcast_proposal(
-        &self,
-        round: u32,
-        proposal: Arc<ProposalTy>,
-        valid_round: Option<u32>,
-    ) {
-        let weak_self = self.weak_self.clone();
-        tokio::spawn(async move {
-            let this = upgrade_weak!(weak_self);
-            this.deps
-                .broadcast_proposal(round, proposal, valid_round)
-                .await;
-        });
-    }
-
-    pub(crate) fn await_proposal(&self, round: u32) {
-        let weak_self = self.weak_self.clone();
-        tokio::spawn(async move {
-            let this = upgrade_weak!(weak_self);
-            this.await_proposal_async(round).await;
-        });
-    }
-
-    async fn await_proposal_async(&self, round: u32) {
+    pub(crate) async fn await_proposal(&self, round: u32) {
         let proposal_res = self.deps.await_proposal(round).await;
 
         match proposal_res {
             ProposalResult::Proposal(proposal, valid_round) => {
                 if valid_round.is_none() {
                     self.state.write().current_proposal = Some(Arc::new(proposal));
-                    self.on_proposal();
+                    self.state.write().current_checkpoint = Checkpoint::OnProposal;
                 } else if valid_round.unwrap() < round
                     && self.has_2f1_prevotes(proposal.hash(), valid_round.unwrap())
                 {
                     self.state.write().current_proposal = Some(Arc::new(proposal));
                     self.state.write().current_proposal_vr = valid_round;
-                    self.on_past_proposal();
+                    self.state.write().current_checkpoint = Checkpoint::OnPastProposal;
                 } else {
                     // If we received an invalid proposal, and are not waiting for another, we might
                     // as well assume that we will timeout.
                     self.state.write().current_proposal = None;
-                    self.on_timeout_propose();
+                    self.state.write().current_checkpoint = Checkpoint::OnTimeoutPropose;
                 }
             }
             ProposalResult::Timeout => {
                 self.state.write().current_proposal = None;
-                self.on_timeout_propose();
+                self.state.write().current_checkpoint = Checkpoint::OnTimeoutPropose;
             }
         }
     }
 
-    pub(crate) fn broadcast_and_aggregate_prevote(&self, round: u32, decision: VoteDecision) {
-        let weak_self = self.weak_self.clone();
-
-        tokio::spawn(async move {
-            let this = upgrade_weak!(weak_self);
-            this.broadcast_and_aggregate_prevote_async(round, decision)
-                .await;
-        });
-    }
-
-    async fn broadcast_and_aggregate_prevote_async(&self, round: u32, decision: VoteDecision) {
+    pub(crate) async fn broadcast_and_aggregate_prevote(&self, round: u32, decision: VoteDecision) {
         let proposal = match decision {
             VoteDecision::Block => self.state.read().current_proposal.clone(),
             VoteDecision::Nil => None,
@@ -113,32 +79,26 @@ impl<
                 // Assuming that Handel only returns Block if there are 2f+1 prevotes for OUR
                 // block, then here we are guaranteed that: 1) we have a proposal, 2) it is valid and
                 // 3) the prevotes are for this proposal.
-                self.on_polka();
+                self.state.write().current_checkpoint = Checkpoint::OnPolka;
             }
             VoteResult::Nil(_) => {
-                self.on_nil_polka();
+                self.state.write().current_checkpoint = Checkpoint::OnNilPolka;
             }
             VoteResult::Timeout => {
-                self.on_timeout_prevote();
+                self.state.write().current_checkpoint = Checkpoint::OnTimeoutPrevote;
             }
             VoteResult::NewRound(round) => {
                 self.state.write().round = round;
-                self.start_round();
+                self.state.write().current_checkpoint = Checkpoint::StartRound;
             }
         }
     }
 
-    pub(crate) fn broadcast_and_aggregate_precommit(&self, round: u32, decision: VoteDecision) {
-        let weak_self = self.weak_self.clone();
-
-        tokio::spawn(async move {
-            let this = upgrade_weak!(weak_self);
-            this.broadcast_and_aggregate_precommit_async(round, decision)
-                .await;
-        });
-    }
-
-    async fn broadcast_and_aggregate_precommit_async(&self, round: u32, decision: VoteDecision) {
+    pub(crate) async fn broadcast_and_aggregate_precommit(
+        &self,
+        round: u32,
+        decision: VoteDecision,
+    ) {
         let proposal = match decision {
             VoteDecision::Block => self.state.read().current_proposal.clone(),
             VoteDecision::Nil => None,
@@ -160,17 +120,17 @@ impl<
                 // we voted for. But we only want to call on_2f1_block_precommits if the precommits
                 // are for our block (so we can assemble it).
                 self.state.write().current_proof = Some(proof);
-                self.on_decision();
+                self.state.write().current_checkpoint = Checkpoint::OnDecision;
             }
             VoteResult::Nil(_) => {
-                self.on_timeout_precommit();
+                self.state.write().current_checkpoint = Checkpoint::OnTimeoutPrecommit;
             }
             VoteResult::Timeout => {
-                self.on_timeout_precommit();
+                self.state.write().current_checkpoint = Checkpoint::OnTimeoutPrecommit;
             }
             VoteResult::NewRound(round) => {
                 self.state.write().round = round;
-                self.start_round();
+                self.state.write().current_checkpoint = Checkpoint::StartRound;
             }
         }
     }

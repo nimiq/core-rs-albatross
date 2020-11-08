@@ -1,5 +1,5 @@
 use crate::state::TendermintState;
-use crate::utils::{AggregationResult, ProposalResult, Step, TendermintError, VoteDecision};
+use crate::utils::{AggregationResult, ProposalResult, Step, TendermintError};
 use async_trait::async_trait;
 use beserial::{Deserialize, Serialize};
 use nimiq_hash::Blake2sHash;

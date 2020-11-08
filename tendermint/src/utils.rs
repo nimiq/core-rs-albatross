@@ -15,6 +15,7 @@ pub enum Checkpoint {
     OnTimeoutPropose,
     OnTimeoutPrevote,
     OnTimeoutPrecommit,
+    Finished,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
