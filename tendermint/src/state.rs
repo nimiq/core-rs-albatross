@@ -1,30 +1,20 @@
 use crate::utils::{Checkpoint, Step};
-use beserial::{Deserialize, Serialize};
-use std::sync::Arc;
 
 #[derive(Clone)]
-pub struct TendermintState<ProposalTy, ProofTy>
-where
-    ProposalTy: Clone + Serialize + Deserialize + Send + Sync + 'static,
-    ProofTy: Clone + Send + Sync + 'static,
-{
+pub struct TendermintState<ProposalTy, ProofTy> {
     pub round: u32,
     pub step: Step,
-    pub locked_value: Option<Arc<ProposalTy>>,
+    pub locked_value: Option<ProposalTy>,
     pub locked_round: Option<u32>,
-    pub valid_value: Option<Arc<ProposalTy>>,
+    pub valid_value: Option<ProposalTy>,
     pub valid_round: Option<u32>,
     pub current_checkpoint: Checkpoint,
-    pub current_proposal: Option<Arc<ProposalTy>>,
+    pub current_proposal: Option<ProposalTy>,
     pub current_proposal_vr: Option<u32>,
     pub current_proof: Option<ProofTy>,
 }
 
-impl<ProposalTy, ProofTy> TendermintState<ProposalTy, ProofTy>
-where
-    ProposalTy: Clone + Serialize + Deserialize + Send + Sync + 'static,
-    ProofTy: Clone + Send + Sync + 'static,
-{
+impl<ProposalTy, ProofTy> TendermintState<ProposalTy, ProofTy> {
     pub fn new() -> Self {
         Self {
             round: 0,

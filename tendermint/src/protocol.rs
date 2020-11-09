@@ -1,58 +1,46 @@
 use crate::outside_deps::TendermintOutsideDeps;
 use crate::tendermint::Tendermint;
-use crate::utils::{Checkpoint, Step, TendermintReturn, VoteDecision};
-use beserial::{Deserialize, Serialize};
+use crate::utils::{Checkpoint, Step, VoteDecision};
 use nimiq_hash::Hash;
 use std::clone::Clone;
-use std::sync::Arc;
 
 // This Tendermint implementation tries to stick to the pseudocode of https://arxiv.org/abs/1807.04938v3
 impl<
-        ProposalTy: Clone
-            + Eq
-            + PartialEq
-            + Serialize
-            + Deserialize
-            + Send
-            + Sync
-            + Hash
-            + 'static
-            + std::fmt::Display,
-        ProofTy: Clone + Send + Sync + 'static,
-        ResultTy: Send + Sync + 'static,
-        DepsTy: Send
-            + Sync
-            + TendermintOutsideDeps<ProposalTy = ProposalTy, ResultTy = ResultTy, ProofTy = ProofTy>
+        ProposalTy: Clone + PartialEq + Hash + Unpin + 'static,
+        ProofTy: Clone + Unpin + 'static,
+        ResultTy: Unpin + 'static,
+        DepsTy: TendermintOutsideDeps<ProposalTy = ProposalTy, ResultTy = ResultTy, ProofTy = ProofTy>
             + 'static,
     > Tendermint<ProposalTy, ProofTy, ResultTy, DepsTy>
 {
     // Lines 11-21
-    pub(crate) async fn start_round(&self) {
-        self.state.write().current_proposal = None;
-        self.state.write().current_proposal_vr = None;
-        self.state.write().current_proof = None;
+    pub(crate) async fn start_round(&mut self) {
+        self.state.current_proposal = None;
+        self.state.current_proposal_vr = None;
+        self.state.current_proof = None;
 
-        self.state.write().step = Step::Propose;
+        self.state.step = Step::Propose;
 
-        let round = self.state.read().round;
-        let valid_round = self.state.read().valid_round;
+        let round = self.state.round;
+        let valid_round = self.state.valid_round;
 
         if self.deps.is_our_turn(round) {
-            let proposal = if self.state.read().valid_value.is_some() {
-                self.state.read().valid_value.clone().unwrap()
+            let proposal = if self.state.valid_value.is_some() {
+                self.state.valid_value.clone().unwrap()
             } else {
-                Arc::new(self.deps.get_value(round))
+                self.deps.get_value(round)
             };
 
             // Update and send our proposal state
-            self.state.write().current_proposal = Some(proposal.clone());
-            self.state.write().current_proposal_vr = valid_round;
+            self.state.current_proposal = Some(proposal.clone());
+            self.state.current_proposal_vr = valid_round;
             self.deps
                 .broadcast_proposal(round, proposal, valid_round)
-                .await;
+                .await
+                .unwrap();
 
             // Prevote for our own proposal
-            self.state.write().step = Step::Prevote;
+            self.state.step = Step::Prevote;
             self.broadcast_and_aggregate_prevote(round, VoteDecision::Block)
                 .await;
         } else {
@@ -61,18 +49,18 @@ impl<
     }
 
     // Lines  22-27
-    pub(crate) async fn on_proposal(&self) {
-        assert_eq!(self.state.read().step, Step::Propose);
+    pub(crate) async fn on_proposal(&mut self) {
+        assert_eq!(self.state.step, Step::Propose);
 
-        self.state.write().step = Step::Prevote;
+        self.state.step = Step::Prevote;
 
-        let round = self.state.read().round;
+        let round = self.state.round;
 
         if self
             .deps
-            .is_valid(self.state.read().current_proposal.clone().unwrap())
-            && (self.state.read().locked_round.is_none()
-                || self.state.read().locked_value == self.state.read().current_proposal)
+            .is_valid(self.state.current_proposal.clone().unwrap())
+            && (self.state.locked_round.is_none()
+                || self.state.locked_value == self.state.current_proposal)
         {
             self.broadcast_and_aggregate_prevote(round, VoteDecision::Block)
                 .await;
@@ -83,19 +71,18 @@ impl<
     }
 
     // Lines 28-33.
-    pub(crate) async fn on_past_proposal(&self) {
-        assert_eq!(self.state.read().step, Step::Propose);
+    pub(crate) async fn on_past_proposal(&mut self) {
+        assert_eq!(self.state.step, Step::Propose);
 
-        self.state.write().step = Step::Prevote;
+        self.state.step = Step::Prevote;
 
-        let round = self.state.read().round;
+        let round = self.state.round;
 
         if self
             .deps
-            .is_valid(self.state.read().current_proposal.clone().unwrap())
-            && (self.state.read().locked_round.unwrap_or(0)
-                <= self.state.read().current_proposal_vr.unwrap()
-                || self.state.read().locked_value == self.state.read().current_proposal)
+            .is_valid(self.state.current_proposal.clone().unwrap())
+            && (self.state.locked_round.unwrap_or(0) <= self.state.current_proposal_vr.unwrap()
+                || self.state.locked_value == self.state.current_proposal)
         {
             self.broadcast_and_aggregate_prevote(round, VoteDecision::Block)
                 .await;
@@ -108,32 +95,32 @@ impl<
     // Lines 34-35: Handel takes care of waiting `timeoutPrevote` before returning
 
     // Lines 36-43
-    pub(crate) async fn on_polka(&self) {
+    pub(crate) async fn on_polka(&mut self) {
         // step is either prevote or precommit
-        assert_ne!(self.state.read().step, Step::Propose);
+        assert_ne!(self.state.step, Step::Propose);
 
-        let round = self.state.read().round;
+        let round = self.state.round;
 
-        self.state.write().valid_value = self.state.read().current_proposal.clone();
-        self.state.write().valid_round = Some(round);
+        self.state.valid_value = self.state.current_proposal.clone();
+        self.state.valid_round = Some(round);
 
         // TODO: What happens if the step is not prevote? Can this even happen?
-        if self.state.read().step == Step::Prevote {
-            self.state.write().locked_value = self.state.read().current_proposal.clone();
-            self.state.write().locked_round = Some(round);
-            self.state.write().step = Step::Precommit;
+        if self.state.step == Step::Prevote {
+            self.state.locked_value = self.state.current_proposal.clone();
+            self.state.locked_round = Some(round);
+            self.state.step = Step::Precommit;
             self.broadcast_and_aggregate_precommit(round, VoteDecision::Block)
                 .await;
         }
     }
 
     // Lines 44-46
-    pub(crate) async fn on_nil_polka(&self) {
-        assert_eq!(self.state.read().step, Step::Prevote);
+    pub(crate) async fn on_nil_polka(&mut self) {
+        assert_eq!(self.state.step, Step::Prevote);
 
-        self.state.write().step = Step::Precommit;
+        self.state.step = Step::Precommit;
 
-        let round = self.state.read().round;
+        let round = self.state.round;
 
         self.broadcast_and_aggregate_precommit(round, VoteDecision::Nil)
             .await;
@@ -145,56 +132,44 @@ impl<
     // We only handle precommits for our current round and current proposal in this function. The
     // validator crate is always listening for completed blocks. The purpose of this function is just
     // to assemble the block if we can.
-    pub(crate) fn on_decision(&self) {
-        let block = self.deps.assemble_block(
-            self.state.read().current_proposal.clone().unwrap(),
-            self.state.read().current_proof.clone().unwrap(),
-        );
-
-        if let Some(return_stream) = &self.return_stream {
-            if return_stream
-                .unbounded_send(TendermintReturn::Result(block))
-                .is_err()
-            {
-                warn!("Failed sending/returning completed macro block")
-            }
-            return_stream.close_channel();
-        }
-
-        self.state.write().current_checkpoint = Checkpoint::Finished;
+    pub(crate) fn on_decision(&mut self) -> ResultTy {
+        self.deps.assemble_block(
+            self.state.current_proposal.clone().unwrap(),
+            self.state.current_proof.clone().unwrap(),
+        )
     }
 
     // Lines 55-56 Go to next round if f+1
     // Not here but anytime you handle VoteResult.
 
     // Lines 57-60
-    pub(crate) async fn on_timeout_propose(&self) {
-        assert_eq!(self.state.read().step, Step::Propose);
+    pub(crate) async fn on_timeout_propose(&mut self) {
+        assert_eq!(self.state.step, Step::Propose);
 
-        self.state.write().step = Step::Prevote;
+        self.state.step = Step::Prevote;
 
-        let round = self.state.read().round;
+        let round = self.state.round;
 
         self.broadcast_and_aggregate_prevote(round, VoteDecision::Nil)
             .await;
     }
 
     // Lines 61-64
-    pub(crate) async fn on_timeout_prevote(&self) {
-        assert_eq!(self.state.read().step, Step::Prevote);
+    pub(crate) async fn on_timeout_prevote(&mut self) {
+        assert_eq!(self.state.step, Step::Prevote);
 
-        self.state.write().step = Step::Precommit;
+        self.state.step = Step::Precommit;
 
-        let round = self.state.read().round;
+        let round = self.state.round;
 
         self.broadcast_and_aggregate_precommit(round, VoteDecision::Nil)
             .await;
     }
 
     // Lines 65-67
-    pub(crate) fn on_timeout_precommit(&self) {
-        self.state.write().round += 1;
+    pub(crate) fn on_timeout_precommit(&mut self) {
+        self.state.round += 1;
 
-        self.state.write().current_checkpoint = Checkpoint::StartRound;
+        self.state.current_checkpoint = Checkpoint::StartRound;
     }
 }

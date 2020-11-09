@@ -1,5 +1,4 @@
 use crate::state::TendermintState;
-use beserial::{Deserialize, Serialize};
 use nimiq_hash::Blake2sHash;
 use nimiq_primitives::policy::TWO_THIRD_SLOTS;
 use std::collections::BTreeMap;
@@ -15,7 +14,6 @@ pub enum Checkpoint {
     OnTimeoutPropose,
     OnTimeoutPrevote,
     OnTimeoutPrecommit,
-    Finished,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -49,11 +47,7 @@ pub enum AggregationResult<ProofTy> {
     NewRound(u32),
 }
 
-pub enum TendermintReturn<ProposalTy, ProofTy, ResultTy>
-where
-    ProposalTy: Clone + Serialize + Deserialize + Send + Sync + 'static,
-    ProofTy: Clone + Send + Sync + 'static,
-{
+pub enum TendermintReturn<ProposalTy, ProofTy, ResultTy> {
     Result(ResultTy),
     StateUpdate(TendermintState<ProposalTy, ProofTy>),
     Error(TendermintError),

@@ -14,18 +14,11 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 futures = "0.3"
-log = "0.4"
-parking_lot = "0.9"
-tokio = { version = "0.2", features = ["rt-core", "sync"] }
-
+async-stream = "0.3.0"
 async-trait = "0.1"
 
-beserial = { path = "../beserial", version = "0.1" }
-beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
 nimiq-hash = { path = "../hash", version = "0.1" }
-nimiq-macros = { path = "../macros", version = "0.1" }
 nimiq-primitives = { path = "../primitives", version = "0.1", features = ["policy"] }
-nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "time", "timers", "mutable-once", "throttled-queue", "rate-limit"] }
 
 [dev-dependencies]
 nimiq-network-mock = { path = "../network-mock", version = "0.1" }

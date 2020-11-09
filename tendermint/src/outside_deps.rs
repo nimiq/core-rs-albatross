@@ -1,49 +1,40 @@
 use crate::state::TendermintState;
 use crate::utils::{AggregationResult, ProposalResult, Step, TendermintError};
 use async_trait::async_trait;
-use beserial::{Deserialize, Serialize};
-use nimiq_hash::Blake2sHash;
-use std::sync::Arc;
+use nimiq_hash::{Blake2sHash, Hash};
 
 #[async_trait]
 pub trait TendermintOutsideDeps {
-    type ProposalTy: Clone + Serialize + Deserialize + Send + Sync + 'static;
-    type ProofTy: Clone + Send + Sync + 'static;
-    type ResultTy: Send + Sync + 'static;
+    type ProposalTy: Clone + PartialEq + Hash + Unpin + 'static;
+    type ProofTy: Clone + Unpin + 'static;
+    type ResultTy: Unpin + 'static;
 
     // The functions from the validator
 
     // TODO: What exactly is this supposed to verify???
-    fn verify_state<ProposalTy, ProofTy>(
-        &self,
-        state: TendermintState<ProposalTy, ProofTy>,
-    ) -> bool
-    where
-        ProposalTy: Clone + Serialize + Deserialize + Send + Sync + 'static,
-        ProofTy: Clone + Send + Sync + 'static;
+    fn verify_state(&self, state: &TendermintState<Self::ProposalTy, Self::ProofTy>) -> bool;
 
     fn is_our_turn(&self, round: u32) -> bool;
 
     fn get_value(&self, round: u32) -> Self::ProposalTy;
 
-    fn is_valid(&self, proposal: Arc<Self::ProposalTy>) -> bool;
+    fn is_valid(&self, proposal: Self::ProposalTy) -> bool;
 
-    fn assemble_block(
-        &self,
-        proposal: Arc<Self::ProposalTy>,
-        proof: Self::ProofTy,
-    ) -> Self::ResultTy;
+    fn assemble_block(&self, proposal: Self::ProposalTy, proof: Self::ProofTy) -> Self::ResultTy;
 
     // Future
     async fn broadcast_proposal(
         &self,
         round: u32,
-        proposal: Arc<Self::ProposalTy>,
+        proposal: Self::ProposalTy,
         valid_round: Option<u32>,
-    );
+    ) -> Result<(), TendermintError>;
 
     // Future
-    async fn await_proposal(&self, round: u32) -> ProposalResult<Self::ProposalTy>;
+    async fn await_proposal(
+        &self,
+        round: u32,
+    ) -> Result<ProposalResult<Self::ProposalTy>, TendermintError>;
 
     // The functions from Handel
 
@@ -55,7 +46,11 @@ pub trait TendermintOutsideDeps {
         proposal: Option<Blake2sHash>,
     ) -> Result<AggregationResult<Self::ProofTy>, TendermintError>;
 
-    fn get_aggregation(&self, round: u32, step: Step) -> Option<AggregationResult<Self::ProofTy>>;
+    fn get_aggregation(
+        &self,
+        round: u32,
+        step: Step,
+    ) -> Result<AggregationResult<Self::ProofTy>, TendermintError>;
 
     fn cancel_aggregation(&self, round: u32, step: Step) -> Result<(), TendermintError>;
 }

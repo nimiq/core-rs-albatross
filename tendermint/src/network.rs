@@ -5,62 +5,53 @@ use crate::utils::{
     aggregation_to_vote, AggregationResult, Checkpoint, ProposalResult, Step, TendermintReturn,
     VoteDecision, VoteResult,
 };
-use beserial::{Deserialize, Serialize};
 use nimiq_hash::{Blake2sHash, Hash};
 use nimiq_primitives::policy::TWO_THIRD_SLOTS;
 use std::clone::Clone;
-use std::sync::Arc;
 
 impl<
-        ProposalTy: Clone
-            + Eq
-            + PartialEq
-            + Serialize
-            + Deserialize
-            + Send
-            + Sync
-            + Hash
-            + 'static
-            + std::fmt::Display,
-        ProofTy: Clone + Send + Sync + 'static,
-        ResultTy: Send + Sync + 'static,
-        DepsTy: Send
-            + Sync
-            + TendermintOutsideDeps<ProposalTy = ProposalTy, ResultTy = ResultTy, ProofTy = ProofTy>
+        ProposalTy: Clone + PartialEq + Hash + Unpin + 'static,
+        ProofTy: Clone + Unpin + 'static,
+        ResultTy: Unpin + 'static,
+        DepsTy: TendermintOutsideDeps<ProposalTy = ProposalTy, ResultTy = ResultTy, ProofTy = ProofTy>
             + 'static,
     > Tendermint<ProposalTy, ProofTy, ResultTy, DepsTy>
 {
-    pub(crate) async fn await_proposal(&self, round: u32) {
-        let proposal_res = self.deps.await_proposal(round).await;
+    pub(crate) async fn await_proposal(&mut self, round: u32) {
+        let proposal_res = self.deps.await_proposal(round).await.unwrap();
 
         match proposal_res {
             ProposalResult::Proposal(proposal, valid_round) => {
                 if valid_round.is_none() {
-                    self.state.write().current_proposal = Some(Arc::new(proposal));
-                    self.state.write().current_checkpoint = Checkpoint::OnProposal;
+                    self.state.current_proposal = Some(proposal);
+                    self.state.current_checkpoint = Checkpoint::OnProposal;
                 } else if valid_round.unwrap() < round
                     && self.has_2f1_prevotes(proposal.hash(), valid_round.unwrap())
                 {
-                    self.state.write().current_proposal = Some(Arc::new(proposal));
-                    self.state.write().current_proposal_vr = valid_round;
-                    self.state.write().current_checkpoint = Checkpoint::OnPastProposal;
+                    self.state.current_proposal = Some(proposal);
+                    self.state.current_proposal_vr = valid_round;
+                    self.state.current_checkpoint = Checkpoint::OnPastProposal;
                 } else {
                     // If we received an invalid proposal, and are not waiting for another, we might
                     // as well assume that we will timeout.
-                    self.state.write().current_proposal = None;
-                    self.state.write().current_checkpoint = Checkpoint::OnTimeoutPropose;
+                    self.state.current_proposal = None;
+                    self.state.current_checkpoint = Checkpoint::OnTimeoutPropose;
                 }
             }
             ProposalResult::Timeout => {
-                self.state.write().current_proposal = None;
-                self.state.write().current_checkpoint = Checkpoint::OnTimeoutPropose;
+                self.state.current_proposal = None;
+                self.state.current_checkpoint = Checkpoint::OnTimeoutPropose;
             }
         }
     }
 
-    pub(crate) async fn broadcast_and_aggregate_prevote(&self, round: u32, decision: VoteDecision) {
+    pub(crate) async fn broadcast_and_aggregate_prevote(
+        &mut self,
+        round: u32,
+        decision: VoteDecision,
+    ) {
         let proposal = match decision {
-            VoteDecision::Block => self.state.read().current_proposal.clone(),
+            VoteDecision::Block => self.state.current_proposal.clone(),
             VoteDecision::Nil => None,
         };
 
@@ -79,28 +70,28 @@ impl<
                 // Assuming that Handel only returns Block if there are 2f+1 prevotes for OUR
                 // block, then here we are guaranteed that: 1) we have a proposal, 2) it is valid and
                 // 3) the prevotes are for this proposal.
-                self.state.write().current_checkpoint = Checkpoint::OnPolka;
+                self.state.current_checkpoint = Checkpoint::OnPolka;
             }
             VoteResult::Nil(_) => {
-                self.state.write().current_checkpoint = Checkpoint::OnNilPolka;
+                self.state.current_checkpoint = Checkpoint::OnNilPolka;
             }
             VoteResult::Timeout => {
-                self.state.write().current_checkpoint = Checkpoint::OnTimeoutPrevote;
+                self.state.current_checkpoint = Checkpoint::OnTimeoutPrevote;
             }
             VoteResult::NewRound(round) => {
-                self.state.write().round = round;
-                self.state.write().current_checkpoint = Checkpoint::StartRound;
+                self.state.round = round;
+                self.state.current_checkpoint = Checkpoint::StartRound;
             }
         }
     }
 
     pub(crate) async fn broadcast_and_aggregate_precommit(
-        &self,
+        &mut self,
         round: u32,
         decision: VoteDecision,
     ) {
         let proposal = match decision {
-            VoteDecision::Block => self.state.read().current_proposal.clone(),
+            VoteDecision::Block => self.state.current_proposal.clone(),
             VoteDecision::Nil => None,
         };
 
@@ -119,43 +110,18 @@ impl<
                 // Again depends on how Handel treats votes for blocks different than the one
                 // we voted for. But we only want to call on_2f1_block_precommits if the precommits
                 // are for our block (so we can assemble it).
-                self.state.write().current_proof = Some(proof);
-                self.state.write().current_checkpoint = Checkpoint::OnDecision;
+                self.state.current_proof = Some(proof);
+                self.state.current_checkpoint = Checkpoint::OnDecision;
             }
             VoteResult::Nil(_) => {
-                self.state.write().current_checkpoint = Checkpoint::OnTimeoutPrecommit;
+                self.state.current_checkpoint = Checkpoint::OnTimeoutPrecommit;
             }
             VoteResult::Timeout => {
-                self.state.write().current_checkpoint = Checkpoint::OnTimeoutPrecommit;
+                self.state.current_checkpoint = Checkpoint::OnTimeoutPrecommit;
             }
             VoteResult::NewRound(round) => {
-                self.state.write().round = round;
-                self.state.write().current_checkpoint = Checkpoint::StartRound;
-            }
-        }
-    }
-
-    pub(crate) fn return_state_update(&self) {
-        let state = self.state.read();
-
-        let state_update = TendermintReturn::StateUpdate(TendermintState {
-            round: state.round,
-            step: state.step,
-            locked_value: state.locked_value.clone(),
-            locked_round: state.locked_round,
-            valid_value: state.valid_value.clone(),
-            valid_round: state.valid_round,
-            current_checkpoint: state.current_checkpoint,
-            current_proposal: state.current_proposal.clone(),
-            current_proposal_vr: state.current_proposal_vr,
-            current_proof: state.current_proof.clone(),
-        });
-
-        drop(state);
-
-        if let Some(return_stream) = &self.return_stream {
-            if return_stream.unbounded_send(state_update).is_err() {
-                warn!("Failed sending/returning tendermint state update")
+                self.state.round = round;
+                self.state.current_checkpoint = Checkpoint::StartRound;
             }
         }
     }
@@ -163,8 +129,8 @@ impl<
     // Check if you have the 2f+1 prevotes
     pub(crate) fn has_2f1_prevotes(&self, proposal_hash: Blake2sHash, round: u32) -> bool {
         let agg_result = match self.deps.get_aggregation(round, Step::Prevote) {
-            Some(v) => v,
-            None => return false,
+            Ok(v) => v,
+            Err(_) => return false,
         };
 
         let agg = match agg_result {
