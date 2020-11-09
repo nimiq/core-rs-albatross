@@ -1,6 +1,7 @@
 use crate::outside_deps::TendermintOutsideDeps;
 use crate::tendermint::Tendermint;
 use crate::utils::{Checkpoint, Step, VoteDecision};
+use crate::TendermintError;
 use nimiq_hash::Hash;
 use std::clone::Clone;
 
@@ -14,7 +15,7 @@ impl<
     > Tendermint<ProposalTy, ProofTy, ResultTy, DepsTy>
 {
     // Lines 11-21
-    pub(crate) async fn start_round(&mut self) {
+    pub(crate) async fn start_round(&mut self) -> Result<(), TendermintError> {
         self.state.current_proposal = None;
         self.state.current_proposal_vr = None;
         self.state.current_proof = None;
@@ -28,7 +29,7 @@ impl<
             let proposal = if self.state.valid_value.is_some() {
                 self.state.valid_value.clone().unwrap()
             } else {
-                self.deps.get_value(round)
+                self.deps.get_value(round)?
             };
 
             // Update and send our proposal state
@@ -36,20 +37,21 @@ impl<
             self.state.current_proposal_vr = valid_round;
             self.deps
                 .broadcast_proposal(round, proposal, valid_round)
-                .await
-                .unwrap();
+                .await?;
 
             // Prevote for our own proposal
             self.state.step = Step::Prevote;
             self.broadcast_and_aggregate_prevote(round, VoteDecision::Block)
-                .await;
+                .await?;
         } else {
-            self.await_proposal(round).await;
+            self.await_proposal(round).await?;
         }
+
+        Ok(())
     }
 
     // Lines  22-27
-    pub(crate) async fn on_proposal(&mut self) {
+    pub(crate) async fn on_proposal(&mut self) -> Result<(), TendermintError> {
         assert_eq!(self.state.step, Step::Propose);
 
         self.state.step = Step::Prevote;
@@ -63,15 +65,17 @@ impl<
                 || self.state.locked_value == self.state.current_proposal)
         {
             self.broadcast_and_aggregate_prevote(round, VoteDecision::Block)
-                .await;
+                .await?;
         } else {
             self.broadcast_and_aggregate_prevote(round, VoteDecision::Nil)
-                .await;
+                .await?;
         }
+
+        Ok(())
     }
 
     // Lines 28-33.
-    pub(crate) async fn on_past_proposal(&mut self) {
+    pub(crate) async fn on_past_proposal(&mut self) -> Result<(), TendermintError> {
         assert_eq!(self.state.step, Step::Propose);
 
         self.state.step = Step::Prevote;
@@ -85,17 +89,19 @@ impl<
                 || self.state.locked_value == self.state.current_proposal)
         {
             self.broadcast_and_aggregate_prevote(round, VoteDecision::Block)
-                .await;
+                .await?;
         } else {
             self.broadcast_and_aggregate_prevote(round, VoteDecision::Nil)
-                .await;
+                .await?;
         }
+
+        Ok(())
     }
 
     // Lines 34-35: Handel takes care of waiting `timeoutPrevote` before returning
 
     // Lines 36-43
-    pub(crate) async fn on_polka(&mut self) {
+    pub(crate) async fn on_polka(&mut self) -> Result<(), TendermintError> {
         // step is either prevote or precommit
         assert_ne!(self.state.step, Step::Propose);
 
@@ -110,12 +116,14 @@ impl<
             self.state.locked_round = Some(round);
             self.state.step = Step::Precommit;
             self.broadcast_and_aggregate_precommit(round, VoteDecision::Block)
-                .await;
+                .await?;
         }
+
+        Ok(())
     }
 
     // Lines 44-46
-    pub(crate) async fn on_nil_polka(&mut self) {
+    pub(crate) async fn on_nil_polka(&mut self) -> Result<(), TendermintError> {
         assert_eq!(self.state.step, Step::Prevote);
 
         self.state.step = Step::Precommit;
@@ -123,7 +131,9 @@ impl<
         let round = self.state.round;
 
         self.broadcast_and_aggregate_precommit(round, VoteDecision::Nil)
-            .await;
+            .await?;
+
+        Ok(())
     }
 
     // Lines 47-48 Handel takes care of waiting `timeoutPrecommit` before returning
@@ -132,18 +142,20 @@ impl<
     // We only handle precommits for our current round and current proposal in this function. The
     // validator crate is always listening for completed blocks. The purpose of this function is just
     // to assemble the block if we can.
-    pub(crate) fn on_decision(&mut self) -> ResultTy {
-        self.deps.assemble_block(
+    pub(crate) fn on_decision(&mut self) -> Result<ResultTy, TendermintError> {
+        let block = self.deps.assemble_block(
             self.state.current_proposal.clone().unwrap(),
             self.state.current_proof.clone().unwrap(),
-        )
+        )?;
+
+        Ok(block)
     }
 
     // Lines 55-56 Go to next round if f+1
     // Not here but anytime you handle VoteResult.
 
     // Lines 57-60
-    pub(crate) async fn on_timeout_propose(&mut self) {
+    pub(crate) async fn on_timeout_propose(&mut self) -> Result<(), TendermintError> {
         assert_eq!(self.state.step, Step::Propose);
 
         self.state.step = Step::Prevote;
@@ -151,11 +163,13 @@ impl<
         let round = self.state.round;
 
         self.broadcast_and_aggregate_prevote(round, VoteDecision::Nil)
-            .await;
+            .await?;
+
+        Ok(())
     }
 
     // Lines 61-64
-    pub(crate) async fn on_timeout_prevote(&mut self) {
+    pub(crate) async fn on_timeout_prevote(&mut self) -> Result<(), TendermintError> {
         assert_eq!(self.state.step, Step::Prevote);
 
         self.state.step = Step::Precommit;
@@ -163,13 +177,17 @@ impl<
         let round = self.state.round;
 
         self.broadcast_and_aggregate_precommit(round, VoteDecision::Nil)
-            .await;
+            .await?;
+
+        Ok(())
     }
 
     // Lines 65-67
-    pub(crate) fn on_timeout_precommit(&mut self) {
+    pub(crate) fn on_timeout_precommit(&mut self) -> Result<(), TendermintError> {
         self.state.round += 1;
 
         self.state.current_checkpoint = Checkpoint::StartRound;
+
+        Ok(())
     }
 }

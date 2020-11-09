@@ -9,4 +9,5 @@ pub(crate) mod utils;
 pub use outside_deps::TendermintOutsideDeps;
 pub use state::TendermintState;
 pub use stream::expect_block;
+pub use tendermint::Tendermint;
 pub use utils::*;

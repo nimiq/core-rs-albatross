@@ -57,6 +57,11 @@ pub enum TendermintReturn<ProposalTy, ProofTy, ResultTy> {
 pub enum TendermintError {
     BadInitState,
     AggregationError,
+    AggregationDoesNotExist,
+    ProposalBroadcastError,
+    CannotReceiveProposal,
+    CannotProduceProposal,
+    CannotAssembleBlock,
 }
 
 pub(crate) fn aggregation_to_vote<ProofTy: Clone>(

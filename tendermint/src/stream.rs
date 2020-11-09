@@ -18,35 +18,42 @@ where
         + 'static,
 {
     stream! {
-     let mut tendermint = if let Some(state) = state_opt {
-         if deps.verify_state(&state) {
-             Tendermint { deps, state }
-         } else {
-             yield TendermintReturn::Error(TendermintError::BadInitState);
-             return;
-         }
-     } else {
-         Tendermint::new(deps)
-     };
+    let mut tendermint = if let Some(state) = state_opt {
+        if deps.verify_state(&state) {
+            Tendermint { deps, state }
+        } else {
+            yield TendermintReturn::Error(TendermintError::BadInitState);
+            return;
+        }
+    } else {
+        Tendermint::new(deps)
+    };
 
-     loop {
-         match tendermint.state.current_checkpoint {
-             Checkpoint::StartRound => tendermint.start_round().await,
-             Checkpoint::OnProposal => tendermint.on_proposal().await,
-             Checkpoint::OnPastProposal => tendermint.on_past_proposal().await,
-             Checkpoint::OnPolka => tendermint.on_polka().await,
-             Checkpoint::OnNilPolka => tendermint.on_nil_polka().await,
-             Checkpoint::OnDecision => {
-                 let block = tendermint.on_decision();
-                 yield TendermintReturn::Result(block);
-                 return;
-             }
-             Checkpoint::OnTimeoutPropose => tendermint.on_timeout_propose().await,
-             Checkpoint::OnTimeoutPrevote => tendermint.on_timeout_prevote().await,
-             Checkpoint::OnTimeoutPrecommit => tendermint.on_timeout_precommit(),
-         }
+    loop {
+        let checkpoint_res = match tendermint.state.current_checkpoint {
+            Checkpoint::StartRound => tendermint.start_round().await,
+            Checkpoint::OnProposal => tendermint.on_proposal().await,
+            Checkpoint::OnPastProposal => tendermint.on_past_proposal().await,
+            Checkpoint::OnPolka => tendermint.on_polka().await,
+            Checkpoint::OnNilPolka => tendermint.on_nil_polka().await,
+            Checkpoint::OnDecision => match tendermint.on_decision() {
+                Ok(block) => {
+                    yield TendermintReturn::Result(block);
+                    return;
+                }
+                Err(error) => Err(error),
+            },
+            Checkpoint::OnTimeoutPropose => tendermint.on_timeout_propose().await,
+            Checkpoint::OnTimeoutPrevote => tendermint.on_timeout_prevote().await,
+            Checkpoint::OnTimeoutPrecommit => tendermint.on_timeout_precommit(),
+        };
 
-         yield TendermintReturn::StateUpdate(tendermint.state.clone());
-     }
+        if let Err(error) = checkpoint_res {
+            yield TendermintReturn::Error(error);
+            return;
+        }
+
+        yield TendermintReturn::StateUpdate(tendermint.state.clone());
+    }
     }
 }

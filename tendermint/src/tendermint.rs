@@ -1,6 +1,5 @@
 use crate::outside_deps::TendermintOutsideDeps;
 use crate::state::TendermintState;
-use crate::utils::Checkpoint;
 use nimiq_hash::Hash;
 use std::clone::Clone;
 
@@ -11,8 +10,8 @@ pub struct Tendermint<
     DepsTy: TendermintOutsideDeps<ProposalTy = ProposalTy, ResultTy = ResultTy, ProofTy = ProofTy>
         + 'static,
 > {
-    pub(crate) deps: DepsTy,
-    pub(crate) state: TendermintState<ProposalTy, ProofTy>,
+    pub deps: DepsTy,
+    pub state: TendermintState<ProposalTy, ProofTy>,
 }
 
 impl<

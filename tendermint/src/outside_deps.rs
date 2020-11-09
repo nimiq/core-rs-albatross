@@ -16,11 +16,15 @@ pub trait TendermintOutsideDeps {
 
     fn is_our_turn(&self, round: u32) -> bool;
 
-    fn get_value(&self, round: u32) -> Self::ProposalTy;
-
     fn is_valid(&self, proposal: Self::ProposalTy) -> bool;
 
-    fn assemble_block(&self, proposal: Self::ProposalTy, proof: Self::ProofTy) -> Self::ResultTy;
+    fn get_value(&self, round: u32) -> Result<Self::ProposalTy, TendermintError>;
+
+    fn assemble_block(
+        &self,
+        proposal: Self::ProposalTy,
+        proof: Self::ProofTy,
+    ) -> Result<Self::ResultTy, TendermintError>;
 
     // Future
     async fn broadcast_proposal(
