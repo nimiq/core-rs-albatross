@@ -185,3 +185,35 @@ mod tests {
         assert!(!keypair.public().tagged_verify(&msg2, &sig1_replayed));
     }
 }
+
+#[cfg(feature = "peer-contact-book-persistence")]
+mod serde_tagged_signature {
+    use serde::{
+        de::Error,
+        Serialize, Serializer, Deserialize, Deserializer,
+    };
+
+    use super::{TaggedSignature, TaggedSignable};
+
+    impl<T: TaggedSignable> Serialize for TaggedSignature<T> {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where
+            S: Serializer {
+            let hex_encoded = hex::encode(&self.data);
+            Serialize::serialize(&hex_encoded, serializer)
+        }
+    }
+
+    impl<'de, T: TaggedSignable> Deserialize<'de> for TaggedSignature<T> {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: Deserializer<'de>
+        {
+            let hex_encoded: String = Deserialize::deserialize(deserializer)?;
+
+            let data = hex::decode(&hex_encoded)
+                .map_err(D::Error::custom)?;
+
+            Ok(TaggedSignature::from_bytes(data))
+        }
+    }
+}

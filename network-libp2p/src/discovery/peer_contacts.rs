@@ -25,7 +25,7 @@ bitflags! {
     ///  - This just serializes to its numeric value for serde, but a list of strings would be nicer.
     ///
     #[derive(Serialize, Deserialize)]
-    #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize), serde(transparent))]
+    #[cfg_attr(feature = "peer-contact-book-persistence", derive(serde::Serialize, serde::Deserialize), serde(transparent))]
     pub struct Services: u32 {
         /// The node provides at least the latest [`nimiq_primitives::policy::NUM_BLOCKS_VERIFICATION`] as full blocks.
         ///
@@ -98,7 +98,7 @@ bitflags! {
     ///  - This just serializes to its numeric value for serde, but a list of strings would be nicer.
     ///
     #[derive(Serialize, Deserialize)]
-    #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize), serde(transparent))]
+    #[cfg_attr(feature = "peer-contact-book-persistence", derive(serde::Serialize, serde::Deserialize), serde(transparent))]
     pub struct Protocols: u32 {
         /// WebSocket (insecure)
         const WS = 1 << 0;
@@ -170,11 +170,13 @@ impl Protocols {
 ///  - A timestamp when this contact information was generated.
 ///
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "peer-contact-book-persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PeerContact {
     #[beserial(len_type(u8))]
     pub addresses: HashSet<Multiaddr>,
 
     /// Public key of this peer.
+    #[cfg_attr(feature = "peer-contact-book-persistence", serde(with = "self::serde_public_key"))]
     pub public_key: PublicKey,
 
     /// Services supported by this peer.
@@ -221,8 +223,10 @@ impl TaggedSignable for PeerContact {
 
 /// A signed peer contact.
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "peer-contact-book-persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct SignedPeerContact {
     /// The wrapped peer contact.
+    #[cfg_attr(feature = "peer-contact-book-persistence", serde(flatten))]
     pub inner: PeerContact,
 
     /// The signature over the serialized peer contact.
@@ -243,9 +247,17 @@ impl SignedPeerContact {
 
 /// Meta information attached to peer contact info objects. This are meant to be mutable and change over time.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "peer-contact-book-persistence", derive(serde::Serialize, serde::Deserialize))]
 struct PeerContactMeta {
     score: f32,
 
+    /// The peers that sent us this contact. Used for scoring.
+    ///
+    /// # TODO
+    ///
+    ///  - Somehow serialize this
+    ///
+    #[cfg_attr(feature = "peer-contact-book-persistence", serde(skip))]
     reported_by: HashSet<PeerId>,
 }
 
@@ -464,5 +476,35 @@ mod tests {
             ].iter()),
             Protocols::WS | Protocols::WSS
         );
+    }
+}
+
+#[cfg(feature = "peer-contact-book-persistence")]
+mod serde_public_key {
+    use libp2p::identity::PublicKey;
+
+    use serde::{
+        de::Error,
+        Serialize, Serializer, Deserialize, Deserializer,
+    };
+
+    pub fn serialize<S>(public_key: &PublicKey, serializer: S) -> Result<S::Ok, S::Error>
+        where S: Serializer
+    {
+        let hex_encoded = hex::encode(beserial::Serialize::serialize_to_vec(public_key));
+
+        Serialize::serialize(&hex_encoded, serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<PublicKey, D::Error>
+        where D: Deserializer<'de>
+    {
+        let hex_encoded: String = Deserialize::deserialize(deserializer)?;
+
+        let raw = hex::decode(&hex_encoded)
+            .map_err(D::Error::custom)?;
+
+        beserial::Deserialize::deserialize_from_vec(&raw)
+            .map_err(D::Error::custom)
     }
 }
