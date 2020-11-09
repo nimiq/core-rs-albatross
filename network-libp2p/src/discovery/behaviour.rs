@@ -37,6 +37,10 @@ pub struct DiscoveryConfig {
     /// Interval in which we want to be updated.
     pub update_interval: Duration,
 
+    /// Minimum update interval, that we will accept. If peer contact updates are received faster than this, they will
+    /// be rejected.
+    pub min_recv_update_interval: Duration,
+
     /// How many updated peer contacts we want to receive per update.
     pub update_limit: Option<u16>,
 
@@ -47,7 +51,7 @@ pub struct DiscoveryConfig {
     pub services_filter: Services,
 
     /// Minimium interval that we will update other peers with.
-    pub min_update_interval: Duration,
+    pub min_send_update_interval: Duration,
 }
 
 
@@ -102,13 +106,20 @@ impl NetworkBehaviour for Discovery {
     type OutEvent = DiscoveryEvent;
 
     fn new_handler(&mut self) -> Self::ProtocolsHandler {
-        // TODO: I think we could borrow config and keypair, if we give the handler some lifetime parameter(s).
-        DiscoveryHandler::new(self.config.clone(), self.keypair.clone(), Arc::clone(&self.peer_contact_book))
+        DiscoveryHandler::new(
+            self.config.clone(),
+            self.keypair.clone(),
+            Arc::clone(&self.peer_contact_book)
+        )
     }
 
     fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
-        // TODO: Look into peer address book. For that we need conversion between our and libp2p's `PeerId`.
-        unimplemented!();
+        self.peer_contact_book.read()
+            .get(peer_id)
+            .map(|addresses_opt| addresses_opt.addresses()
+                .cloned()
+                .collect())
+            .unwrap_or_default()
     }
 
     fn inject_connected(&mut self, peer_id: &PeerId) {
@@ -147,7 +158,11 @@ impl NetworkBehaviour for Discovery {
         log::debug!("DiscoveryBehaviour::inject_event: {}", peer_id);
 
         match event {
-            HandlerOutEvent::PeerExchangeEstablished { .. } => {},
+            HandlerOutEvent::PeerExchangeEstablished { peer_contact } => {
+                self.events.push_back(NetworkBehaviourAction::GenerateEvent(DiscoveryEvent::Established {
+                    peer_id: peer_contact.public_key().clone().into_peer_id(),
+                }));
+            },
             HandlerOutEvent::ObservedAddresses { observed_addresses } => {
                 for address in observed_addresses {
                     self.events.push_back(NetworkBehaviourAction::ReportObservedAddr { address });

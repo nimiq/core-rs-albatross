@@ -43,7 +43,7 @@ pub trait TaggedSignable: Serialize {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TaggedSignature<S: TaggedSignable> {
     #[beserial(len_type(u8))]
     data: Vec<u8>,

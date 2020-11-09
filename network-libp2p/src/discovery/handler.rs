@@ -1,7 +1,7 @@
 use std::{
     pin::Pin,
     sync::Arc,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use libp2p::{
@@ -86,6 +86,16 @@ pub enum HandlerError {
 
     #[error("Signing error: {0}")]
     Signing(#[from] libp2p::identity::error::SigningError),
+
+    #[error("Received too frequent updates: {}", .interval.as_secs())]
+    TooFrequentUpdates {
+        interval: Duration
+    },
+
+    #[error("Received update with too many peer contacts: {num_peer_contacts}")]
+    UpdateLimitExceeded {
+        num_peer_contacts: usize,
+    },
 }
 
 impl HandlerError {
@@ -120,33 +130,49 @@ pub enum HandlerState {
 
 
 pub struct DiscoveryHandler {
+    /// Configuration for peer discovery.
     config: DiscoveryConfig,
 
+    /// Identity keypair for this node.
     keypair: Keypair,
 
+    /// The peer contact book
     peer_contact_book: Arc<RwLock<PeerContactBook>>,
 
+    /// The peer contact of the peer we're connected to.
     peer_contact: Option<SignedPeerContact>,
 
-    // The addresses which we observed for the other peer.
+    /// The addresses which we observed for the other peer.
     observed_addresses: Vec<Multiaddr>,
 
+    /// The challenge nonce we send to this peer.
     challenge_nonce: ChallengeNonce,
 
+    /// Connection state
     state: HandlerState,
 
+    /// Services filter sent to us by this peer.
     services_filter: Services,
 
+    /// Protocols filter sent to us by this peer.
     protocols_filter: Protocols,
 
+    /// The limit for peer updates sent to us by this peer.
     peer_list_limit: Option<u16>,
 
-    inbound: Option<MessageReader<NegotiatedSubstream, DiscoveryMessage>>,
-
-    outbound: Option<MessageWriter<NegotiatedSubstream, DiscoveryMessage>>,
-
+    /// The interval at which the other peer wants to be updates.
     periodic_update_interval: Option<Interval>,
 
+    /// Time when we last received an update from the other peer.
+    last_update_time: Option<Instant>,
+
+    /// The inbound message stream.
+    inbound: Option<MessageReader<NegotiatedSubstream, DiscoveryMessage>>,
+
+    /// The outbound message stream.
+    outbound: Option<MessageWriter<NegotiatedSubstream, DiscoveryMessage>>,
+
+    /// Waker used when opening a substream.
     waker: Option<Waker>,
 }
 
@@ -163,27 +189,20 @@ impl DiscoveryHandler {
             services_filter: Services::empty(),
             protocols_filter: Protocols::empty(),
             peer_list_limit: None,
+            periodic_update_interval: None,
+            last_update_time: None,
             inbound: None,
             outbound: None,
-            periodic_update_interval: None,
             waker: None,
         }
     }
 
     fn send(&mut self, message: &DiscoveryMessage) -> Result<(), SerializingError> {
-        log::debug!("Sending message: {:#?}", message);
-
         Pin::new(self.outbound.as_mut().expect("Expected outbound substream")).start_send(message)
     }
 
     fn receive(&mut self, cx: &mut Context) -> Poll<Option<Result<DiscoveryMessage, SerializingError>>> {
-        let r = self.inbound.as_mut().expect("Expected inbound substream").poll_next_unpin(cx);
-
-        if let Poll::Ready(Some(Ok(message))) = &r {
-            log::debug!("Received message: {:#?}", message);
-        }
-
-        r
+        self.inbound.as_mut().expect("Expected inbound substream").poll_next_unpin(cx)
     }
 
     fn get_peer_contacts(&self, peer_contact_book: &PeerContactBook) -> Vec<SignedPeerContact> {
@@ -431,7 +450,7 @@ impl ProtocolsHandler for DiscoveryHandler {
                                     if let Some(mut update_interval) = update_interval {
                                         log::debug!("Update interval: {:?}", update_interval);
 
-                                        let min_secs = self.config.min_update_interval.as_secs();
+                                        let min_secs = self.config.min_send_update_interval.as_secs();
                                         if update_interval < min_secs {
                                             update_interval = min_secs;
                                         }
@@ -465,11 +484,32 @@ impl ProtocolsHandler for DiscoveryHandler {
                         Poll::Ready(Some(Ok(message))) => {
                             match message {
                                 DiscoveryMessage::PeerAddresses { peer_contacts } => {
-                                    // Insert the new peer contacts into the peer contact book.
-                                    // TODO: This doesn't actually filter and just assumes the peer already filtered.
-                                    self.peer_contact_book.write().insert_all(peer_contacts);
+                                    // Check if the update is actually not too frequent
+                                    let now = Instant::now();
+                                    if let Some(last_update_time) = self.last_update_time {
+                                        let interval = now - last_update_time;
+                                        if interval < self.config.min_recv_update_interval {
+                                            // TODO: Should we just close, or ban?
+                                            return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::TooFrequentUpdates { interval }));
+                                        }
+                                    }
+                                    self.last_update_time = Some(now);
 
-                                    // TODO: Return an event that we received new addresses.
+                                    // Check if the update is not too large.
+                                    if let Some(update_limit) = self.config.update_limit {
+                                        if peer_contacts.len() > update_limit as usize {
+                                            return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::UpdateLimitExceeded { num_peer_contacts: peer_contacts.len() }));
+                                        }
+                                    }
+
+                                    // Insert the new peer contacts into the peer contact book.
+                                    self.peer_contact_book.write()
+                                        .insert_all_filtered(
+                                            peer_contacts,
+                                            self.config.protocols_filter,
+                                            self.config.services_filter
+                                        );
+
                                     return Poll::Ready(ProtocolsHandlerEvent::Custom(HandlerOutEvent::Update))
                                 },
 

@@ -17,6 +17,40 @@ use beserial::{Serialize, Deserialize};
 use crate::tagged_signing::{TaggedSignature, TaggedSignable, TaggedPublicKey, TaggedKeypair};
 
 
+/// Configuration for the peer contact book.
+#[derive(Clone, Debug)]
+pub struct PeerContactBookConfig {
+    pub max_age_websocket: Duration,
+    pub max_age_webrtc: Duration,
+    pub max_age_dumb: Duration,
+}
+
+impl Default for PeerContactBookConfig {
+    fn default() -> Self {
+        Self {
+            max_age_websocket: Duration::from_secs(60 * 30),
+            max_age_webrtc: Duration::from_secs(60 * 15),
+            max_age_dumb: Duration::from_secs(60),
+        }
+    }
+}
+
+impl PeerContactBookConfig {
+    /// Returns the max age for this protocol
+    pub fn protocols_max_age(&self, protocols: Protocols) -> Duration {
+        if protocols.contains(Protocols::WS) || protocols.contains(Protocols::WSS) {
+            self.max_age_websocket
+        }
+        else if protocols.contains(Protocols::RTC) {
+            self.max_age_webrtc
+        }
+        else {
+            self.max_age_dumb
+        }
+    }
+}
+
+
 bitflags! {
     /// Bitmask of services
     ///
@@ -141,24 +175,6 @@ impl Protocols {
             _ => Self::empty(),
         }
     }
-
-    /// Returns the max age for this protocol
-    ///
-    /// # TODO
-    ///
-    ///  - Should this be a configurable parameter?
-    ///
-    pub fn max_age(&self) -> Duration {
-        if self.contains(Protocols::WS) || self.contains(Protocols::WSS) {
-            Self::MAX_AGE_WEBSOCKET
-        }
-        else if self.contains(Protocols::RTC) {
-            Self::MAX_AGE_WEBRTC
-        }
-        else {
-            Self::MAX_AGE_DUMB
-        }
-    }
 }
 
 
@@ -169,7 +185,7 @@ impl Protocols {
 ///  - A bitmask of the services supported by this peer.
 ///  - A timestamp when this contact information was generated.
 ///
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "peer-contact-book-persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PeerContact {
     #[beserial(len_type(u8))]
@@ -222,7 +238,7 @@ impl TaggedSignable for PeerContact {
 }
 
 /// A signed peer contact.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "peer-contact-book-persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct SignedPeerContact {
     /// The wrapped peer contact.
@@ -338,11 +354,12 @@ impl PeerContactInfo {
         self.contact.inner.timestamp.is_none()
     }
 
-    pub fn exceeds_age(&self) -> bool {
+    /// Returns whether the peer contact exceeds its age limit (specified in `config`).
+    pub fn exceeds_age(&self, config: &PeerContactBookConfig) -> bool {
         if let Some(timestamp) = self.contact.inner.timestamp {
             if let Ok(unix_time) = SystemTime::now().duration_since(UNIX_EPOCH) {
                 if let Some(age) = unix_time.checked_sub(Duration::from_millis(timestamp)) {
-                    return age < self.protocols.max_age();
+                    return age < config.protocols_max_age(self.protocols);
                 }
             }
         }
@@ -369,16 +386,19 @@ impl PeerContactInfo {
 
 #[derive(Debug)]
 pub struct PeerContactBook {
-    peer_contacts: HashMap<PeerId, Arc<PeerContactInfo>>,
+    config: PeerContactBookConfig,
 
     self_peer_contact: PeerContactInfo,
+
+    peer_contacts: HashMap<PeerId, Arc<PeerContactInfo>>,
 }
 
 impl PeerContactBook {
-    pub fn new(self_peer_contact: SignedPeerContact) -> Self {
+    pub fn new(config: PeerContactBookConfig, self_peer_contact: SignedPeerContact) -> Self {
         Self {
-            peer_contacts: HashMap::new(),
+            config,
             self_peer_contact: self_peer_contact.into(),
+            peer_contacts: HashMap::new(),
         }
     }
 
@@ -407,6 +427,12 @@ impl PeerContactBook {
     pub fn insert_all<I: IntoIterator<Item=SignedPeerContact>>(&mut self, contacts: I) {
         for contact in contacts {
             self.insert(contact);
+        }
+    }
+
+    pub fn insert_all_filtered<I: IntoIterator<Item=SignedPeerContact>>(&mut self, contacts: I, protocols_filter: Protocols, services_filter: Services) {
+        for contact in contacts {
+            self.insert_filtered(contact, protocols_filter, services_filter)
         }
     }
 
