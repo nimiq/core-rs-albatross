@@ -170,11 +170,7 @@ impl Network {
         let keypair = libp2p::identity::Keypair::generate_ed25519();
         let local_peer_id = PeerId::from(keypair.public());
         let transport = Self::new_transport(keypair).unwrap();
-        let behaviour = NimiqBehaviour {
-            message_behaviour: MessageBehaviour::new(),
-            limit_behaviour: LimitBehaviour::new(),
-            events: VecDeque::new(),
-        };
+        let behaviour = NimiqBehaviour::default();
 
         // TODO add proper config
         let mut swarm = SwarmBuilder::new(transport, behaviour, local_peer_id)
@@ -311,6 +307,8 @@ mod tests {
 
     #[tokio::test]
     async fn connections_are_properly_closed() {
+        pretty_env_logger::init();
+
         let (net1, net2) = create_connected_networks().await;
 
         let peer2 = net1.get_peer(net2.local_peer_id()).unwrap();

@@ -23,6 +23,12 @@ pub struct MessageBehaviour {
     peer_rx: mpsc::Receiver<PeerAction>,
 }
 
+impl Default for MessageBehaviour {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MessageBehaviour {
     pub fn new() -> Self {
         let (peer_tx, peer_rx) = mpsc::channel(4096);

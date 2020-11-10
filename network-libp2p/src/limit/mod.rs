@@ -38,6 +38,12 @@ pub struct LimitBehaviour {
     events: VecDeque<NetworkEvent<Peer>>,
 }
 
+impl Default for LimitBehaviour {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LimitBehaviour {
     pub fn new() -> Self {
         Self {
@@ -135,10 +141,12 @@ impl NetworkBehaviour for LimitBehaviour {
         _conn: &ConnectionId,
         info: &ConnectedPoint,
     ) {
-        let peer = self
+        /*let peer = self
             .peers
             .get(peer_id)
-            .expect("Message received from unknown peer");
+            .expect("Connection to unknown peer closed");*/
+        // FIXME: A peer should actually exist here, but it's never inserted into `self.peers`.
+        let peer = if let Some(peer) = self.peers.get(peer_id) { peer } else { return };
 
         let address = match info {
             ConnectedPoint::Listener { send_back_addr, .. } => send_back_addr.clone(),

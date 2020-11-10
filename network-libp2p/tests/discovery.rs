@@ -166,7 +166,7 @@ pub async fn test_exchanging_peers() {
     let mut t = 0;
     futures::stream::select(node1.swarm, node2.swarm)
         .take_while(move |e| {
-            println!("Swarm event: {:?}", e);
+            log::info!("Swarm event: {:?}", e);
 
             if let DiscoveryEvent::Update = e {
                 t += 1;

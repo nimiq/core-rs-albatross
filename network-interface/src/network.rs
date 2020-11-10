@@ -15,6 +15,20 @@ pub enum NetworkEvent<P> {
     PeerLeft(Arc<P>),
 }
 
+impl<P: Peer> std::fmt::Debug for NetworkEvent<P> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let (event_name, peer) = match self {
+            NetworkEvent::PeerJoined(peer) => ("PeerJoined", peer),
+            NetworkEvent::PeerLeft(peer) => ("PeerLeft", peer),
+            NetworkEvent::PeerDisconnect(peer) => ("PeerDisconnect", peer),
+        };
+
+        f.debug_struct(event_name)
+            .field("peer_id", &peer.id())
+            .finish()
+    }
+}
+
 impl<P> Clone for NetworkEvent<P> {
     fn clone(&self) -> Self {
         match self {

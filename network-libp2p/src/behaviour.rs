@@ -1,27 +1,50 @@
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
+use std::task::{Poll, Waker, Context};
 
 use libp2p::NetworkBehaviour;
-use libp2p::swarm::NetworkBehaviourEventProcess;
+use libp2p::swarm::{NetworkBehaviourEventProcess, NetworkBehaviourAction, PollParameters};
+use libp2p::core::either::EitherOutput;
 
 use network_interface::network::NetworkEvent;
 
 use crate::limit::LimitBehaviour;
 use crate::message::MessageBehaviour;
 use crate::peer::Peer;
+use crate::handler::NimiqHandlerAction;
 
-#[derive(NetworkBehaviour)]
-#[behaviour(out_event = "NetworkEvent<Peer>")]
+#[derive(Default, NetworkBehaviour)]
+#[behaviour(event_process = false, out_event = "NetworkEvent<Peer>", poll_method = "poll_event")]
 pub struct NimiqBehaviour {
     pub message_behaviour: MessageBehaviour,
     pub limit_behaviour: LimitBehaviour,
 
     #[behaviour(ignore)]
-    pub events: VecDeque<NetworkEvent<Peer>>,
+    events: VecDeque<NetworkEvent<Peer>>,
+
+    #[behaviour(ignore)]
+    waker: Option<Waker>,
+}
+
+impl NimiqBehaviour {
+    fn poll_event(&mut self, cx: &mut Context<'_>, params: &mut impl PollParameters) -> Poll<NetworkBehaviourAction<EitherOutput<NimiqHandlerAction, NimiqHandlerAction>, NetworkEvent<Peer>>> {
+        if let Some(event) = self.events.pop_front() {
+            Poll::Ready(NetworkBehaviourAction::GenerateEvent(event))
+        }
+        else{
+            // Register waker, if we're waiting for an event.
+            if self.waker.is_none() {
+                self.waker = Some(cx.waker().clone());
+            }
+
+            Poll::Pending
+        }
+    }
 }
 
 impl NetworkBehaviourEventProcess<NetworkEvent<Peer>> for NimiqBehaviour {
     fn inject_event(&mut self, event: NetworkEvent<Peer>) {
+        log::debug!("event: {:?}", event);
         match event {
             NetworkEvent::PeerJoined(peer) => {
                 self.limit_behaviour.peers
@@ -32,6 +55,11 @@ impl NetworkBehaviourEventProcess<NetworkEvent<Peer>> for NimiqBehaviour {
             NetworkEvent::PeerLeft(peer) => {
                 self.events.push_back(NetworkEvent::PeerLeft(peer));
             },
+        }
+
+        // Wake up any task that is waiting for events
+        if let Some(waker) = self.waker.take() {
+            waker.wake();
         }
     }
 }
