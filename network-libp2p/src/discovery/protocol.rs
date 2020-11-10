@@ -1,19 +1,12 @@
-use std::{
-    collections::HashSet,
-    sync::Arc,
-};
-
 use libp2p::{
-    swarm::ProtocolsHandler,
     core::UpgradeInfo,
-    identity::PublicKey,
     InboundUpgrade, OutboundUpgrade, Multiaddr,
 };
 use futures::{
     io::{AsyncRead, AsyncWrite},
     future,
 };
-use rand::{thread_rng, Rng, RngCore};
+use rand::{thread_rng, RngCore};
 
 use beserial::{SerializingError, Serialize, Deserialize};
 use nimiq_macros::{create_typed_array, add_hex_io_fns_typed_arr};
@@ -60,7 +53,7 @@ pub enum DiscoveryMessage {
         genesis_hash: Blake2bHash,
 
         /// Number of peer contacts the sender is willing to accept per update.
-        limit: Option<u16>,
+        limit: u16,
 
         /// Service flags for which the sender needs peer contacts.
         services: Services,

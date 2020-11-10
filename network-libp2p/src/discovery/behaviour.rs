@@ -14,18 +14,14 @@ use futures::{
     task::{Context, Poll},
     StreamExt,
 };
-use rand::{
-    seq::IteratorRandom,
-    thread_rng,
-};
 use parking_lot::RwLock;
+use wasm_timer::Interval;
 
 use nimiq_hash::Blake2bHash;
 
 use super::{
     handler::{DiscoveryHandler, HandlerInEvent, HandlerOutEvent},
-    protocol::DiscoveryMessage,
-    peer_contacts::{PeerContactBook, Services, Protocols, SignedPeerContact},
+    peer_contacts::{PeerContactBook, Services, Protocols},
 };
 
 
@@ -42,7 +38,7 @@ pub struct DiscoveryConfig {
     pub min_recv_update_interval: Duration,
 
     /// How many updated peer contacts we want to receive per update.
-    pub update_limit: Option<u16>,
+    pub update_limit: u16,
 
     /// Protocols for which we filter.
     pub protocols_filter: Protocols,
@@ -52,6 +48,9 @@ pub struct DiscoveryConfig {
 
     /// Minimium interval that we will update other peers with.
     pub min_send_update_interval: Duration,
+
+    /// Interval in which the peer address book is cleaned up.
+    pub house_keeping_interval: Duration,
 }
 
 
@@ -64,6 +63,11 @@ pub enum DiscoveryEvent {
 }
 
 
+/// Network behaviour for peer exchange.
+///
+/// When a connection to a peer is established, a handshake is done to exchange protocols and services filters, and
+/// subscription settings. The peers then send updates to each other in a configurable interval.
+///
 pub struct Discovery {
     /// Configuration for the discovery behaviour
     config: DiscoveryConfig,
@@ -79,19 +83,23 @@ pub struct Discovery {
 
     /// Queue with events to emit.
     events: VecDeque<NetworkBehaviourAction<HandlerInEvent, DiscoveryEvent>>,
+
+    /// Timer to do house-keeping in the peer address book.
+    house_keeping_timer: Interval,
 }
 
 
 impl Discovery {
-    // TODO: What interface is needed from the meta behaviour?
-
     pub fn new(config: DiscoveryConfig, keypair: Keypair, peer_contact_book: Arc<RwLock<PeerContactBook>>) -> Self {
+        let house_keeping_timer = Interval::new(config.house_keeping_interval);
+
         Self {
             config,
             keypair,
             connected_peers: HashSet::new(),
             peer_contact_book,
             events: VecDeque::new(),
+            house_keeping_timer,
         }
     }
 
@@ -128,6 +136,12 @@ impl NetworkBehaviour for Discovery {
         self.connected_peers.insert(peer_id.clone());
     }
 
+    fn inject_disconnected(&mut self, peer_id: &PeerId) {
+        log::debug!("DiscoveryBehaviour::inject_disconnected: {}", peer_id);
+
+        self.connected_peers.remove(peer_id);
+    }
+
     fn inject_connection_established(&mut self, peer_id: &PeerId, connection_id: &ConnectionId, connected_point: &ConnectedPoint) {
         log::debug!("DiscoveryBehaviour::inject_connection_established:");
         log::debug!("  - peer_id: {:?}", peer_id);
@@ -148,13 +162,7 @@ impl NetworkBehaviour for Discovery {
         });
     }
 
-    fn inject_disconnected(&mut self, peer_id: &PeerId) {
-        log::debug!("DiscoveryBehaviour::inject_disconnected: {}", peer_id);
-
-        self.connected_peers.remove(peer_id);
-    }
-
-    fn inject_event(&mut self, peer_id: PeerId, connection: ConnectionId, event: HandlerOutEvent) {
+    fn inject_event(&mut self, peer_id: PeerId, _connection: ConnectionId, event: HandlerOutEvent) {
         log::debug!("DiscoveryBehaviour::inject_event: {}", peer_id);
 
         match event {
@@ -174,10 +182,22 @@ impl NetworkBehaviour for Discovery {
         }
     }
 
-    fn poll(&mut self, cx: &mut Context, params: &mut impl PollParameters) -> Poll<NetworkBehaviourAction<HandlerInEvent, DiscoveryEvent>> {
+    fn poll(&mut self, cx: &mut Context, _params: &mut impl PollParameters) -> Poll<NetworkBehaviourAction<HandlerInEvent, DiscoveryEvent>> {
         // Emit events
         if let Some(event) = self.events.pop_front() {
             return Poll::Ready(event);
+        }
+
+        // Poll house-keeping timer
+        match self.house_keeping_timer.poll_next_unpin(cx) {
+            Poll::Ready(Some(_)) => {
+                log::debug!("Doing house-keeping in peer address book.");
+                let mut peer_address_book = self.peer_contact_book.write();
+                peer_address_book.self_update(&self.keypair);
+                peer_address_book.house_keeping();
+            },
+            Poll::Ready(None) => unreachable!(),
+            Poll::Pending => {},
         }
 
         Poll::Pending

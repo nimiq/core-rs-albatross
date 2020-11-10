@@ -189,7 +189,7 @@ impl Protocols {
 #[cfg_attr(feature = "peer-contact-book-persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PeerContact {
     #[beserial(len_type(u8))]
-    pub addresses: HashSet<Multiaddr>,
+    pub addresses: Vec<Multiaddr>,
 
     /// Public key of this peer.
     #[cfg_attr(feature = "peer-contact-book-persistence", serde(with = "self::serde_public_key"))]
@@ -203,6 +203,29 @@ pub struct PeerContact {
 }
 
 impl PeerContact {
+    pub fn new<I: IntoIterator<Item=Multiaddr>>(addresses: I, public_key: PublicKey, services: Services, timestamp: Option<u64>) -> Self {
+        let mut addresses = addresses.into_iter().collect::<Vec<Multiaddr>>();
+
+        addresses.sort();
+
+        Self {
+            addresses,
+            public_key,
+            services,
+            timestamp
+        }
+    }
+
+    /// Returns whether this is a seed peer contact. See [`PeerContact::timestamp`].
+    pub fn is_seed(&self) -> bool {
+        self.timestamp.is_none()
+    }
+
+    /// Derives the peer ID from the public key
+    pub fn peer_id(&self) -> PeerId {
+        self.public_key.clone().into_peer_id()
+    }
+
     /// Signs this peer contact.
     ///
     /// # Panics
@@ -220,11 +243,6 @@ impl PeerContact {
             inner: self,
             signature
         }
-    }
-
-    /// Returns whether this is a seed peer contact. See [`PeerContact::timestamp`].
-    pub fn is_seed(&self) -> bool {
-        self.timestamp.is_none()
     }
 
     /// This sets the timestamp in the peer contact to the current system time.
@@ -297,7 +315,7 @@ pub struct PeerContactInfo {
 
 impl From<SignedPeerContact> for PeerContactInfo {
     fn from(contact: SignedPeerContact) -> Self {
-        let peer_id = contact.inner.public_key.clone().into_peer_id();
+        let peer_id = contact.inner.peer_id();
         let protocols = Protocols::from_multiaddrs(contact.inner.addresses.iter());
 
         Self {
@@ -355,12 +373,10 @@ impl PeerContactInfo {
     }
 
     /// Returns whether the peer contact exceeds its age limit (specified in `config`).
-    pub fn exceeds_age(&self, config: &PeerContactBookConfig) -> bool {
+    pub fn exceeds_age(&self, config: &PeerContactBookConfig, unix_time: Duration) -> bool {
         if let Some(timestamp) = self.contact.inner.timestamp {
-            if let Ok(unix_time) = SystemTime::now().duration_since(UNIX_EPOCH) {
-                if let Some(age) = unix_time.checked_sub(Duration::from_millis(timestamp)) {
-                    return age < config.protocols_max_age(self.protocols);
-                }
+            if let Some(age) = unix_time.checked_sub(Duration::from_millis(timestamp)) {
+                return age < config.protocols_max_age(self.protocols);
             }
         }
         false
@@ -456,7 +472,11 @@ impl PeerContactBook {
     }
 
     pub fn self_add_addresses<I: IntoIterator<Item = Multiaddr>>(&mut self, addresses: I) {
-        // TODO: We need to update our own `SignedPeerContact`, if we want to do so.
+        log::info!("Addresses observed for us:");
+        for address in addresses {
+            log::info!("  - {}", address);
+        }
+        // TODO: We could add these observed addresses to our advertised addresses (with restrictions).
     }
 
     pub fn self_update(&mut self, keypair: &Keypair) {
@@ -471,6 +491,22 @@ impl PeerContactBook {
 
     pub fn get_self(&self) -> &PeerContactInfo {
         &self.self_peer_contact
+    }
+
+    pub fn house_keeping(&mut self) {
+        if let Ok(unix_time) = SystemTime::now().duration_since(UNIX_EPOCH) {
+            let delete_peers = self.peer_contacts
+                .iter()
+                .filter_map(|(peer_id, peer_contact)| {
+                    if peer_contact.exceeds_age(&self.config, unix_time) { Some(peer_id) } else { None }
+                })
+                .cloned()
+                .collect::<Vec<PeerId>>();
+
+            for peer_id in delete_peers {
+                self.peer_contacts.remove(&peer_id);
+            }
+        }
     }
 }
 

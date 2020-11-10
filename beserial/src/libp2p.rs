@@ -27,7 +27,7 @@ impl Deserialize for Multiaddr {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let buf: Vec<u8> = DeserializeWithLength::deserialize::<u8, R>(reader)?;
         Multiaddr::try_from(buf)
-            .map_err(|e| SerializingError::InvalidValue)
+            .map_err(|_| SerializingError::InvalidValue)
     }
 }
 
@@ -53,7 +53,7 @@ impl Deserialize for PublicKey {
         let mut buf = [0u8; 32];
         reader.read_exact(&mut buf)?;
         let pk = libp2p::identity::ed25519::PublicKey::decode(&buf)
-            .map_err(|e| SerializingError::InvalidValue)?;
+            .map_err(|_| SerializingError::InvalidValue)?;
         Ok(PublicKey::Ed25519(pk))
     }
 }

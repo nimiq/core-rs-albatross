@@ -28,7 +28,7 @@ use nimiq_network_libp2p::discovery::{
     peer_contacts::{PeerContact, Services, Protocols},
 };
 use nimiq_hash::Blake2bHash;
-use nimiq_network_libp2p::discovery::peer_contacts::{PeerContactBook, SignedPeerContact};
+use nimiq_network_libp2p::discovery::peer_contacts::{PeerContactBook, SignedPeerContact, PeerContactBookConfig};
 
 
 struct TestNode {
@@ -61,10 +61,11 @@ impl TestNode {
             genesis_hash: Blake2bHash::default(),
             update_interval: Duration::from_secs(10),
             min_send_update_interval: Duration::from_secs(5),
-            update_limit: Some(64),
+            update_limit: 64,
             protocols_filter: Protocols::all(),
             services_filter: Services::all(),
             min_recv_update_interval: Duration::from_secs(1),
+            house_keeping_interval: Duration::from_secs(1),
         };
 
         let peer_contact = PeerContact {
@@ -105,7 +106,7 @@ fn random_peer_contact(n: usize, services: Services) -> SignedPeerContact {
     let keypair = Keypair::generate_ed25519();
 
     let mut peer_contact = PeerContact {
-        addresses: vec![format!("/dns/test{}.local/tcp/443/wss", n).parse().unwrap()].into_iter().collect(),
+        addresses: vec![format!("/dns/test{}.local/tcp/443/wss", n).parse().unwrap()],
         public_key: keypair.public().clone(),
         services,
         timestamp: None,
@@ -212,4 +213,49 @@ pub async fn test_dialing_peer_from_contacts() {
         log::info!("Established PEX with {}", peer_id);
         assert_eq!(peer2_id, peer_id);
     }
+}
+
+fn test_housekeeping() {
+    let mut peer_contact_book = PeerContactBook::new(
+        PeerContactBookConfig::default(),
+        random_peer_contact(1, Services::FULL_BLOCKS)
+    );
+
+    let fresh_contact = random_peer_contact(1, Services::FULL_BLOCKS);
+
+    let mut old_contact = {
+        let keypair = Keypair::generate_ed25519();
+
+        let mut peer_contact = PeerContact {
+            addresses: vec!["/dns/test_old.local/tcp/443/wss".parse().unwrap()],
+            public_key: keypair.public().clone(),
+            services: Services::FULL_BLOCKS,
+            timestamp: None,
+        };
+
+        peer_contact.set_current_time();
+        peer_contact.timestamp.as_mut().map(|t| *t -= 60000);
+
+        peer_contact.sign(&keypair)
+    };
+
+    // Insert fresh contact and check that it was inserted
+    peer_contact_book.insert(fresh_contact.clone());
+    let peer_contact = peer_contact_book.get(&fresh_contact.public_key().clone().into_peer_id()).unwrap();
+    assert_eq!(peer_contact.contact(), &fresh_contact.inner);
+
+    // Insert old contact and check that it was inserted
+    peer_contact_book.insert(old_contact.clone());
+    let peer_contact = peer_contact_book.get(&old_contact.public_key().clone().into_peer_id()).unwrap();
+    assert_eq!(peer_contact.contact(), &old_contact.inner);
+
+    // Call house-keeping on peer contact book
+    peer_contact_book.house_keeping();
+
+    // Check that fresh contact is still in there
+    let peer_contact = peer_contact_book.get(&fresh_contact.public_key().clone().into_peer_id()).unwrap();
+    assert_eq!(peer_contact.contact(), &fresh_contact.inner);
+
+    // Check that old contact is not in there
+    assert!(peer_contact_book.get(&old_contact.public_key().clone().into_peer_id()).is_none());
 }

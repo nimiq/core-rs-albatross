@@ -14,7 +14,7 @@ use libp2p::{
 };
 use futures::{
     task::{Context, Poll, Waker},
-    Stream, StreamExt, Sink, SinkExt, ready,
+    StreamExt, Sink, SinkExt,
 };
 use parking_lot::RwLock;
 use thiserror::Error;
@@ -205,8 +205,10 @@ impl DiscoveryHandler {
         self.inbound.as_mut().expect("Expected inbound substream").poll_next_unpin(cx)
     }
 
+    /// Get peer contacts from our contact book to send to this peer. The contacts are filtered according to the peer's
+    /// protocols and service filters, they are limited to the number of peers specified by the peer.
     fn get_peer_contacts(&self, peer_contact_book: &PeerContactBook) -> Vec<SignedPeerContact> {
-        let n = self.peer_list_limit.map(|l| l as usize).unwrap_or(128);
+        let n = self.peer_list_limit.unwrap() as usize;
 
         let mut rng = thread_rng();
 
@@ -216,6 +218,21 @@ impl DiscoveryHandler {
             .into_iter()
             .map(|c| c.signed().clone())
             .collect()
+    }
+
+    /// Checks if both inbound and outbound are available and transitions to sending a handshake. This includes waking
+    /// waker to continue polling.
+    fn check_connected(&mut self) {
+        if self.inbound.is_some() && self.outbound.is_some() {
+            log::debug!("Inbound and outbound connected. Performing handshake");
+
+            self.state = HandlerState::SendHandshake;
+
+            self.waker
+                .take()
+                .expect("Expected waker to be present")
+                .wake();
+        }
     }
 }
 
@@ -240,9 +257,11 @@ impl ProtocolsHandler for DiscoveryHandler {
         }
 
         self.inbound = Some(protocol);
+
+        self.check_connected();
     }
 
-    fn inject_fully_negotiated_outbound(&mut self, protocol: MessageWriter<NegotiatedSubstream, DiscoveryMessage>, info: ()) {
+    fn inject_fully_negotiated_outbound(&mut self, protocol: MessageWriter<NegotiatedSubstream, DiscoveryMessage>, _info: ()) {
         log::debug!("DiscoveryHandler::inject_fully_negotiated_outbound");
 
         if self.outbound.is_some() {
@@ -254,12 +273,8 @@ impl ProtocolsHandler for DiscoveryHandler {
         }
 
         self.outbound = Some(protocol);
-        self.state = HandlerState::SendHandshake;
 
-        self.waker
-            .take()
-            .expect("Expected waker to be present")
-            .wake();
+        self.check_connected();
     }
 
     fn inject_event(&mut self, event: HandlerInEvent) {
@@ -273,7 +288,7 @@ impl ProtocolsHandler for DiscoveryHandler {
         }
     }
 
-    fn inject_dial_upgrade_error(&mut self, info: Self::OutboundOpenInfo, error: ProtocolsHandlerUpgrErr<SerializingError>) {
+    fn inject_dial_upgrade_error(&mut self, _info: Self::OutboundOpenInfo, error: ProtocolsHandlerUpgrErr<SerializingError>) {
         log::warn!("DiscoveryHandler::inject_dial_upgrade_error: {:?}", error);
         unimplemented!()
     }
@@ -289,10 +304,7 @@ impl ProtocolsHandler for DiscoveryHandler {
             if let Some(outbound) = self.outbound.as_mut() {
                 log::trace!("DiscoveryHandler: Polling sink");
                 match outbound.poll_ready_unpin(cx) {
-                    Poll::Ready(Err(e)) => {
-                        panic!("poll_ready failed: {}", e);
-                        return Poll::Ready(ProtocolsHandlerEvent::Close(e.into()))
-                    },
+                    Poll::Ready(Err(e)) => return Poll::Ready(ProtocolsHandlerEvent::Close(e.into())),
 
                     // Make sure the outbound sink is ready before we continue.
                     Poll::Pending => break,
@@ -377,7 +389,7 @@ impl ProtocolsHandler for DiscoveryHandler {
                                     let response_signature = self.keypair.tagged_sign(&challenge_nonce);
 
                                     // Remember peer's filter
-                                    self.peer_list_limit = limit;
+                                    self.peer_list_limit = Some(limit);
                                     self.services_filter = services;
                                     self.protocols_filter = protocols;
 
@@ -496,10 +508,8 @@ impl ProtocolsHandler for DiscoveryHandler {
                                     self.last_update_time = Some(now);
 
                                     // Check if the update is not too large.
-                                    if let Some(update_limit) = self.config.update_limit {
-                                        if peer_contacts.len() > update_limit as usize {
-                                            return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::UpdateLimitExceeded { num_peer_contacts: peer_contacts.len() }));
-                                        }
+                                    if peer_contacts.len() > self.config.update_limit as usize {
+                                        return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::UpdateLimitExceeded { num_peer_contacts: peer_contacts.len() }));
                                     }
 
                                     // Insert the new peer contacts into the peer contact book.
@@ -528,12 +538,16 @@ impl ProtocolsHandler for DiscoveryHandler {
                     if let Some(timer) = self.periodic_update_interval.as_mut() {
                         match timer.poll_next_unpin(cx) {
                             Poll::Ready(Some(_instant)) => {
-                                let msg = DiscoveryMessage::PeerAddresses {
-                                    peer_contacts: self.get_peer_contacts(&self.peer_contact_book.read()),
-                                };
+                                let peer_contacts = self.get_peer_contacts(&self.peer_contact_book.read());
 
-                                if let Err(e) = self.send(&msg) {
-                                    return Poll::Ready(ProtocolsHandlerEvent::Close(e.into()));
+                                if !peer_contacts.is_empty() {
+                                    let msg = DiscoveryMessage::PeerAddresses {
+                                        peer_contacts,
+                                    };
+
+                                    if let Err(e) = self.send(&msg) {
+                                        return Poll::Ready(ProtocolsHandlerEvent::Close(e.into()));
+                                    }
                                 }
                             },
                             Poll::Ready(None) => todo!("Interval terminated"),

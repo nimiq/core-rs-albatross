@@ -1,13 +1,13 @@
 use std::{
-    marker::{PhantomData, Unpin, PhantomPinned},
+    marker::PhantomData,
     pin::Pin,
 };
 
 use futures::{
     task::{Context, Poll},
-    AsyncRead, Stream, ready,
+    AsyncRead, Stream,
 };
-use bytes::{BytesMut, BufMut, Buf};
+use bytes::{BytesMut, Buf};
 use pin_project::pin_project;
 
 use beserial::{SerializingError, Deserialize};
@@ -57,10 +57,7 @@ fn read_to_buf<R>(reader: Pin<&mut R>, buffer: &mut BytesMut, n: usize, cx: &mut
             },
 
             // An error occured
-            Poll::Ready(Err(e)) => {
-                panic!("MessageReader: read_to_buf: poll_read failed: {}", e);
-                Poll::Ready(Err(e))
-            },
+            Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
 
             // Reader is not ready
             Poll::Pending => {
@@ -149,7 +146,6 @@ impl<R, M> Stream for MessageReader<R, M>
                             return Poll::Ready(None)
                         }
                         else {
-                            panic!("Unexpected EOF");
                             return Poll::Ready(Some(Err(SerializingError::from(std::io::Error::from(std::io::ErrorKind::UnexpectedEof)))))
                         }
                     },
@@ -190,10 +186,7 @@ impl<R, M> Stream for MessageReader<R, M>
                 // Decode the message, the read position of the buffer is already at the start of the message.
                 let message = match Deserialize::deserialize(&mut self_projected.buffer.reader()) {
                     Ok(message) => message,
-                    Err(e) => {
-                        panic!("MessageReader: Deserialization failed: {}", e);
-                        return Poll::Ready(Some(Err(e)))
-                    },
+                    Err(e) => return Poll::Ready(Some(Err(e))),
                 };
 
                 // Reset the reader state to read a header next.
