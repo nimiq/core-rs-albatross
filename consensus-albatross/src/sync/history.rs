@@ -216,6 +216,16 @@ struct EpochIds<TPeer: Peer> {
     sender: Arc<ConsensusAgent<TPeer>>,
 }
 
+impl<TPeer: Peer> Clone for EpochIds<TPeer> {
+    fn clone(&self) -> Self {
+        EpochIds {
+            ids: self.ids.clone(),
+            offset: self.offset,
+            sender: Arc::clone(&self.sender),
+        }
+    }
+}
+
 struct HistorySync<TNetwork: Network> {
     blockchain: Arc<Blockchain>,
     network_event_rx: broadcast::Receiver<NetworkEvent<TNetwork::PeerType>>,
@@ -273,8 +283,33 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         }
     }
 
-    fn cluster_epoch_ids(&mut self, epoch_ids: EpochIds<TNetwork::PeerType>) {
+    fn cluster_epoch_ids(&mut self, mut epoch_ids: EpochIds<TNetwork::PeerType>) {
         let agent = epoch_ids.sender;
+
+        // Truncate beginning of cluster to our current blockchain state.
+        let current_id = self.blockchain.election_head_hash();
+        let current_offset =
+            policy::epoch_at(self.blockchain.election_head().header.block_number) as usize;
+        // If `epoch_ids` includes known blocks, truncate (or discard on fork prior to our accepted state).
+        if epoch_ids.offset <= current_offset {
+            // Check most recent id against our state.
+            if current_id == epoch_ids.ids[current_offset - epoch_ids.offset] {
+                // Remove known blocks.
+                epoch_ids.ids = epoch_ids
+                    .ids
+                    .split_off(current_offset - epoch_ids.offset + 1);
+                epoch_ids.offset = current_offset;
+
+                // If there are no new election blocks left, return.
+                if epoch_ids.ids.is_empty() {
+                    return;
+                }
+            } else {
+                // TODO: Improve debug output.
+                debug!("Got fork prior to our accepted state.");
+                return;
+            }
+        }
 
         let mut id_index = 0;
         let mut new_clusters = Vec::new();
@@ -303,7 +338,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                     // is truncated to the matching overlapping part and the removed ids are put in a new
                     // cluster. Buffer up the new clusters and insert them after we finish iterating over
                     // sync_clusters.
-                    if match_until < len {
+                    if match_until < cluster.epoch_ids.len() - start_offset {
                         new_clusters.push(cluster.split_off(start_offset + match_until));
                     }
 
@@ -379,6 +414,7 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
 
         // Stop pulling in new EpochIds if we hit a maximum a number of clusters to prevent DoS.
         if self.sync_clusters.len() < Self::MAX_CLUSTERS {
+            // FIXME: move check into loop!
             while let Poll::Ready(Some(epoch_ids)) = self.epoch_ids_stream.poll_next_unpin(cx) {
                 if let Some(epoch_ids) = epoch_ids {
                     // The peer might have disconnected during the request.
@@ -452,5 +488,203 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
         }
 
         return Poll::Pending;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use nimiq_database::volatile::VolatileEnvironment;
+    use nimiq_genesis::NetworkId;
+    use nimiq_network_mock::network::{MockNetwork, MockPeer};
+
+    #[tokio::test]
+    async fn it_can_cluster_epoch_ids() {
+        fn generate_epoch_ids(
+            agent: &Arc<ConsensusAgent<MockPeer>>,
+            len: usize,
+            offset: usize,
+            diverge_at: Option<usize>,
+        ) -> EpochIds<MockPeer> {
+            let mut ids = vec![];
+            for i in offset..offset + len {
+                let mut epoch_id = [0u8; 32];
+                epoch_id[0..8].copy_from_slice(&i.to_le_bytes());
+
+                if diverge_at.map(|d| i >= d + offset).unwrap_or(false) {
+                    epoch_id[9] = 1;
+                }
+
+                ids.push(Blake2bHash::from(epoch_id));
+            }
+
+            EpochIds {
+                ids,
+                offset,
+                sender: Arc::clone(&agent),
+            }
+        }
+
+        let env1 = VolatileEnvironment::new(10).unwrap();
+        let blockchain = Arc::new(Blockchain::new(env1.clone(), NetworkId::UnitAlbatross).unwrap());
+
+        let net1 = Arc::new(MockNetwork::new(1));
+        let net2 = Arc::new(MockNetwork::new(2));
+        let net3 = Arc::new(MockNetwork::new(3));
+        net1.connect(&net2);
+        net1.connect(&net3);
+        let peers = net1.get_peers();
+        let consensus_agents: Vec<_> = peers
+            .into_iter()
+            .map(ConsensusAgent::new)
+            .map(Arc::new)
+            .collect();
+
+        fn run_test<F>(
+            blockchain: &Arc<Blockchain>,
+            net: &Arc<MockNetwork>,
+            epoch_ids1: EpochIds<MockPeer>,
+            epoch_ids2: EpochIds<MockPeer>,
+            test: F,
+            symmetric: bool,
+        ) where
+            F: Fn(HistorySync<MockNetwork>) -> (),
+        {
+            let mut sync =
+                HistorySync::<MockNetwork>::new(Arc::clone(&blockchain), net.subscribe_events());
+            sync.cluster_epoch_ids(epoch_ids1.clone());
+            sync.cluster_epoch_ids(epoch_ids2.clone());
+            test(sync);
+
+            // Symmetric check
+            if symmetric {
+                let mut sync = HistorySync::<MockNetwork>::new(
+                    Arc::clone(&blockchain),
+                    net.subscribe_events(),
+                );
+                sync.cluster_epoch_ids(epoch_ids2);
+                sync.cluster_epoch_ids(epoch_ids1);
+                test(sync);
+            }
+        }
+
+        // This test tests several aspects of the epoch id clustering.
+        // 1) disjunct epoch ids
+        let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 10, 1, None);
+        let epoch_ids2 = generate_epoch_ids(&consensus_agents[1], 10, 1, Some(0));
+        run_test(
+            &blockchain,
+            &net1,
+            epoch_ids1,
+            epoch_ids2,
+            |sync| {
+                assert_eq!(sync.sync_clusters.len(), 2);
+                assert_eq!(sync.sync_clusters[0].epoch_ids.len(), 10);
+                assert_eq!(sync.sync_clusters[1].epoch_ids.len(), 10);
+                assert_eq!(sync.sync_clusters[0].epoch_offset, 1);
+                assert_eq!(sync.sync_clusters[1].epoch_offset, 1);
+                assert_eq!(sync.sync_clusters[0].epoch_queue.peers.len(), 1);
+                assert_eq!(sync.sync_clusters[1].epoch_queue.peers.len(), 1);
+            },
+            true,
+        );
+
+        // 2) same offset and history, second shorter than first
+        let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 10, 1, None);
+        let epoch_ids2 = generate_epoch_ids(&consensus_agents[1], 8, 1, None);
+        run_test(
+            &blockchain,
+            &net1,
+            epoch_ids1,
+            epoch_ids2,
+            |sync| {
+                assert_eq!(sync.sync_clusters.len(), 2);
+                assert_eq!(sync.sync_clusters[0].epoch_ids.len(), 2);
+                assert_eq!(sync.sync_clusters[0].epoch_offset, 9);
+                assert_eq!(sync.sync_clusters[0].epoch_queue.peers.len(), 1);
+                assert_eq!(sync.sync_clusters[1].epoch_ids.len(), 8);
+                assert_eq!(sync.sync_clusters[1].epoch_offset, 1);
+                assert_eq!(sync.sync_clusters[1].epoch_queue.peers.len(), 2);
+            },
+            true,
+        );
+
+        // 3) different offset, same history, but second is longer
+        let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 10, 1, None);
+        let epoch_ids2 = generate_epoch_ids(&consensus_agents[0], 10, 3, None);
+        run_test(
+            &blockchain,
+            &net1,
+            epoch_ids1,
+            epoch_ids2,
+            |sync| {
+                assert_eq!(sync.sync_clusters.len(), 2);
+                assert_eq!(sync.sync_clusters[0].epoch_ids.len(), 2);
+                assert_eq!(sync.sync_clusters[0].epoch_offset, 11);
+                assert_eq!(sync.sync_clusters[0].epoch_queue.peers.len(), 1);
+                assert_eq!(sync.sync_clusters[1].epoch_ids.len(), 10);
+                assert_eq!(sync.sync_clusters[1].epoch_offset, 1);
+                assert_eq!(sync.sync_clusters[1].epoch_queue.peers.len(), 2);
+            },
+            false,
+        ); // TODO: for a symmetric check, blockchain state would need to change
+
+        // 4) Irrelevant epoch ids (that would constitute forks from what we have already seen.
+        let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 10, 0, None);
+        let epoch_ids2 = generate_epoch_ids(&consensus_agents[1], 10, 0, Some(0));
+        run_test(
+            &blockchain,
+            &net1,
+            epoch_ids1,
+            epoch_ids2,
+            |sync| {
+                assert_eq!(sync.sync_clusters.len(), 0);
+            },
+            true,
+        );
+
+        // 5) different offset, same history, but second is shorter
+        let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 10, 1, None);
+        let epoch_ids2 = generate_epoch_ids(&consensus_agents[0], 5, 3, None);
+        run_test(
+            &blockchain,
+            &net1,
+            epoch_ids1,
+            epoch_ids2,
+            |sync| {
+                assert_eq!(sync.sync_clusters.len(), 2);
+                assert_eq!(sync.sync_clusters[0].epoch_ids.len(), 3);
+                assert_eq!(sync.sync_clusters[0].epoch_offset, 8);
+                assert_eq!(sync.sync_clusters[0].epoch_queue.peers.len(), 1);
+                assert_eq!(sync.sync_clusters[1].epoch_ids.len(), 7);
+                assert_eq!(sync.sync_clusters[1].epoch_offset, 1);
+                assert_eq!(sync.sync_clusters[1].epoch_queue.peers.len(), 2);
+            },
+            false,
+        ); // TODO: for a symmetric check, blockchain state would need to change
+
+        // 6) different offset, diverging history, second longer
+        let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 10, 1, None);
+        let epoch_ids2 = generate_epoch_ids(&consensus_agents[0], 8, 4, Some(6));
+        run_test(
+            &blockchain,
+            &net1,
+            epoch_ids1,
+            epoch_ids2,
+            |sync| {
+                assert_eq!(sync.sync_clusters.len(), 3);
+                assert_eq!(sync.sync_clusters[0].epoch_ids.len(), 1);
+                assert_eq!(sync.sync_clusters[0].epoch_offset, 10);
+                assert_eq!(sync.sync_clusters[0].epoch_queue.peers.len(), 1);
+                assert_eq!(sync.sync_clusters[1].epoch_ids.len(), 2);
+                assert_eq!(sync.sync_clusters[1].epoch_offset, 10);
+                assert_eq!(sync.sync_clusters[1].epoch_queue.peers.len(), 1);
+                assert_eq!(sync.sync_clusters[2].epoch_ids.len(), 9);
+                assert_eq!(sync.sync_clusters[2].epoch_offset, 1);
+                assert_eq!(sync.sync_clusters[2].epoch_queue.peers.len(), 2);
+            },
+            false,
+        ); // TODO: for a symmetric check, blockchain state would need to change
     }
 }
