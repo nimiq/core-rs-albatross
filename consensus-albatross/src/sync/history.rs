@@ -413,9 +413,12 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
         }
 
         // Stop pulling in new EpochIds if we hit a maximum a number of clusters to prevent DoS.
-        if self.sync_clusters.len() < Self::MAX_CLUSTERS {
-            // FIXME: move check into loop!
-            while let Poll::Ready(Some(epoch_ids)) = self.epoch_ids_stream.poll_next_unpin(cx) {
+        loop {
+            if self.sync_clusters.len() >= Self::MAX_CLUSTERS {
+                break;
+            }
+
+            if let Poll::Ready(Some(epoch_ids)) = self.epoch_ids_stream.poll_next_unpin(cx) {
                 if let Some(epoch_ids) = epoch_ids {
                     // The peer might have disconnected during the request.
                     // FIXME Check if the peer is still connected
@@ -429,6 +432,8 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
                     }
                     self.cluster_epoch_ids(epoch_ids);
                 }
+            } else {
+                break;
             }
         }
 
