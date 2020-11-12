@@ -12,6 +12,7 @@ use pin_project::pin_project;
 
 use beserial::{SerializingError, Deserialize};
 
+use super::header::Header;
 
 
 /// Try to read, such that at most `n` bytes are in the buffer. This will return `Poll::Pending` until the buffer
@@ -75,18 +76,17 @@ fn read_to_buf<R>(reader: Pin<&mut R>, buffer: &mut BytesMut, n: usize, cx: &mut
 
 
 /// TODO: Generalize over a type `H: Header`, which is `Deserialize` and has a getter for the length of the message.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 enum ReaderState {
     Head,
-    Data(usize),
+    Data {
+        header: Header,
+    },
 }
 
 
 #[pin_project]
 pub struct MessageReader<R, M>
-    where
-        R: AsyncRead,
-        M: Deserialize,
 {
     #[pin]
     inner: R,
@@ -98,11 +98,7 @@ pub struct MessageReader<R, M>
     _message_type: PhantomData<M>,
 }
 
-impl<R, M> MessageReader<R, M>
-    where
-        R: AsyncRead,
-        M: Deserialize,
-{
+impl<R, M> MessageReader<R, M> {
     pub fn new(inner: R) -> Self {
         Self {
             inner,
@@ -114,6 +110,22 @@ impl<R, M> MessageReader<R, M>
 
     pub fn into_inner(self) -> R {
         self.inner
+    }
+
+    pub fn into_other<N>(self) -> MessageReader<R, N>
+        where
+            N: Deserialize,
+    {
+        if let ReaderState::Data { .. } = &ReaderState::Head {
+            panic!("MessageReader can't be converted while data is being read.");
+        }
+
+        MessageReader {
+            inner: self.inner,
+            state: ReaderState::Head,
+            buffer: self.buffer,
+            _message_type: PhantomData,
+        }
     }
 }
 
@@ -129,10 +141,10 @@ impl<R, M> Stream for MessageReader<R, M>
 
         log::trace!("MessageReader::poll_next: buffer={:?}", self_projected.buffer);
 
-        match *self_projected.state {
+        let (new_state, message) = match &self_projected.state {
             ReaderState::Head => {
                 // Read header. This returns `Poll::Pending` until all header bytes have been read.
-                match read_to_buf(self_projected.inner, self_projected.buffer, 2, cx) {
+                match read_to_buf(self_projected.inner, self_projected.buffer, Header::SIZE, cx) {
                     // Wait for more data.
                     Poll::Pending => return Poll::Pending,
 
@@ -156,16 +168,20 @@ impl<R, M> Stream for MessageReader<R, M>
 
                 // Decode the header: 16 bit length big-endian
                 // This will also advance the read position after the header.
-                let n = self_projected.buffer.get_u16();
+                let header = match Deserialize::deserialize_from_vec(&self_projected.buffer) {
+                    Ok(header) => header,
+                    Err(e) => return Poll::Ready(Some(Err(e))),
+                };
+
+                // Reset the buffer
+                self_projected.buffer.clear();
 
                 // Change reader state to read the data next.
-                *self_projected.state = ReaderState::Data(n as usize);
-
-                // Future is still not ready
-                cx.waker().wake_by_ref();
-                Poll::Pending
+                (ReaderState::Data { header }, None)
             },
-            ReaderState::Data(n) => {
+            ReaderState::Data { header } => {
+                let n = header.size as usize;
+
                 // Read data. This returns `Poll::Pending` until all data bytes have been read.
                 // The argument to `read_to_buf` is `n + 2`, because it takes the expected number of bytes read in
                 // total, which includes the header.
@@ -184,7 +200,7 @@ impl<R, M> Stream for MessageReader<R, M>
                 }
 
                 // Decode the message, the read position of the buffer is already at the start of the message.
-                let message = match Deserialize::deserialize(&mut self_projected.buffer.reader()) {
+                let message: M = match Deserialize::deserialize(&mut self_projected.buffer.reader()) {
                     Ok(message) => message,
                     Err(e) => return Poll::Ready(Some(Err(e))),
                 };
@@ -197,8 +213,18 @@ impl<R, M> Stream for MessageReader<R, M>
 
                 log::trace!("MessageReader: Received message: {:?}", message);
 
-                return Poll::Ready(Some(Ok(message)));
+                (ReaderState::Head, Some(message))
             },
+        };
+
+        *self_projected.state = new_state;
+
+        if let Some(message) = message {
+            return Poll::Ready(Some(Ok(message)));
+        }
+        else {
+            cx.waker().wake_by_ref();
+            return Poll::Pending;
         }
     }
 }
@@ -215,7 +241,7 @@ mod tests {
     use bytes::{BytesMut, BufMut};
 
     use super::MessageReader;
-
+    use crate::message_codec::header::Header;
 
     #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
     struct TestMessage {
@@ -226,9 +252,13 @@ mod tests {
 
     fn put_message<M: Serialize>(buf: &mut BytesMut, message: &M) {
         let n = message.serialized_size();
-        buf.reserve(n);
-        buf.put_u16(n as u16);
-        message.serialize( &mut buf.writer()).unwrap();
+        buf.reserve(n + Header::SIZE);
+        let header = Header::new(n as u32);
+
+        let mut w = buf.writer();
+
+        header.serialize(&mut w).unwrap();
+        message.serialize( &mut w).unwrap();
     }
 
     #[tokio::test]

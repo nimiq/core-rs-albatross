@@ -4,6 +4,7 @@ use std::pin::Pin;
 
 use async_trait::async_trait;
 use futures::Stream;
+use thiserror::Error;
 
 use beserial::SerializingError;
 
@@ -16,9 +17,11 @@ pub enum CloseReason {
     Other,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum SendError {
-    Serialization(SerializingError),
+    #[error("{0}")]
+    Serialization(#[from] SerializingError),
+    #[error("Peer connection already closed")]
     AlreadyClosed,
 }
 

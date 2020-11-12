@@ -4,15 +4,16 @@
 extern crate beserial_derive;
 #[macro_use]
 extern crate log;
-extern crate nimiq_network_interface as network_interface;
 
 mod behaviour;
-mod handler;
 mod limit;
-mod message;
+pub mod message;
 mod network;
-mod peer;
-mod protocol;
 pub mod discovery;
 pub mod tagged_signing;
 pub mod message_codec;
+
+
+pub const MESSAGE_PROTOCOL: &[u8] = b"/nimiq/message/0.0.1";
+pub const DISCOVERY_PROTOCOL: &[u8] = b"/nimiq/discovery/0.0.1";
+pub const LIMIT_PROTOCOL: &[u8] = b"/nimiq/limit/0.0.1";

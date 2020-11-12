@@ -34,6 +34,7 @@ tokio-02 = { package = "tokio", version = "0.2", features = ["sync"] }
 tokio-tls = "0.2"
 tokio-tungstenite = "0.8"
 url = "1.7"
+thiserror = "1.0"
 
 beserial = { path = "../beserial", version = "0.1" }
 beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }

@@ -15,6 +15,7 @@ use nimiq_hash::Blake2bHash;
 use crate::{
     message_codec::{MessageReader, MessageWriter},
     tagged_signing::{TaggedSignature, TaggedSignable},
+    DISCOVERY_PROTOCOL,
 };
 use super::peer_contacts::{SignedPeerContact, Services, Protocols};
 
@@ -104,7 +105,7 @@ impl UpgradeInfo for DiscoveryProtocol {
     type InfoIter = std::iter::Once<Self::Info>;
 
     fn protocol_info(&self) -> Self::InfoIter {
-        std::iter::once(b"/nimiq/discovery/0.0.1")
+        std::iter::once(DISCOVERY_PROTOCOL)
     }
 }
 

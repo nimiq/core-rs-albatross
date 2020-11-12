@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use futures::channel::mpsc;
 use futures::task::{Context, Poll};
-use futures::{executor, future, ready, Future, SinkExt, StreamExt};
+use futures::{executor, future, ready, Future, SinkExt, StreamExt, Stream};
 use libp2p::core;
 use libp2p::core::transport::{Boxed, MemoryTransport};
 use libp2p::core::Multiaddr;
@@ -14,13 +14,26 @@ use libp2p::swarm::SwarmBuilder;
 use libp2p::{dns, mplex, noise, tcp, websocket, yamux, PeerId, Swarm, Transport};
 use parking_lot::{Mutex, RwLock};
 use tokio::sync::broadcast;
+use async_trait::async_trait;
+use thiserror::Error;
 
-use network_interface::network::{Network as NetworkInterface, NetworkEvent};
+use beserial::{Serialize, Deserialize};
+use nimiq_network_interface::network::{Network as NetworkInterface, NetworkEvent, Topic};
 
-use crate::limit::LimitBehaviour;
-use crate::message::MessageBehaviour;
-use crate::peer::Peer;
-use crate::behaviour::NimiqBehaviour;
+use crate::{
+    behaviour::NimiqBehaviour,
+    limit::behaviour::LimitBehaviour,
+    message::{
+        behaviour::MessageBehaviour,
+        peer::Peer
+    }
+};
+
+
+#[derive(Debug, Error)]
+pub enum NetworkError {
+
+}
 
 
 #[derive(Debug)]
@@ -224,8 +237,10 @@ impl Network {
     }
 }
 
+#[async_trait]
 impl NetworkInterface for Network {
     type PeerType = Peer;
+    type Error = NetworkError;
 
     fn get_peers(&self) -> Vec<Arc<Self::PeerType>> {
         self.peers.read().values().cloned().collect()
@@ -238,6 +253,36 @@ impl NetworkInterface for Network {
     fn subscribe_events(&self) -> broadcast::Receiver<NetworkEvent<Self::PeerType>> {
         self.event_tx.subscribe()
     }
+
+    async fn subscribe<T>(topic: &T) -> Box<dyn Stream<Item = (T::Item, Self::PeerType)> + Send>
+        where
+            T: Topic + Sync,
+    {
+        unimplemented!()
+    }
+
+    async fn publish<T>(topic: &T, item: <T as Topic>::Item)
+        where
+            T: Topic + Sync,
+    {
+        unimplemented!()
+    }
+
+    async fn dht_get<K, V>(&self, k: &K) -> Result<V, Self::Error>
+        where
+            K: AsRef<[u8]> + Send + Sync,
+            V: Deserialize + Send + Sync,
+    {
+        unimplemented!()
+    }
+
+    async fn dht_put<K, V>(&self, k: &K, v: &V) -> Result<(), Self::Error>
+        where
+            K: AsRef<[u8]> + Send + Sync,
+            V: Serialize + Send + Sync,
+    {
+        unimplemented!()
+    }
 }
 
 
@@ -248,9 +293,11 @@ mod tests {
     use rand::{thread_rng, Rng};
 
     use beserial::{Deserialize, Serialize};
-    use network_interface::message::Message;
-    use network_interface::network::Network as NetworkInterface;
-    use network_interface::peer::{CloseReason, Peer};
+    use nimiq_network_interface::{
+        message::Message,
+        network::Network as NetworkInterface,
+        peer::{CloseReason, Peer}
+    };
 
     use crate::network::Network;
 

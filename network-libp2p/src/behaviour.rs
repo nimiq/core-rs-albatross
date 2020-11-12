@@ -6,12 +6,19 @@ use libp2p::NetworkBehaviour;
 use libp2p::swarm::{NetworkBehaviourEventProcess, NetworkBehaviourAction, PollParameters};
 use libp2p::core::either::EitherOutput;
 
-use network_interface::network::NetworkEvent;
+use nimiq_network_interface::network::NetworkEvent;
 
-use crate::limit::LimitBehaviour;
-use crate::message::MessageBehaviour;
-use crate::peer::Peer;
-use crate::handler::NimiqHandlerAction;
+use crate::limit::behaviour::{LimitBehaviour, LimitEvent};
+use crate::message::{
+    behaviour::MessageBehaviour,
+    peer::Peer,
+};
+use crate::{
+    message::handler::{
+        HandlerOutEvent as MessageEvent, HandlerInEvent as MessageAction,
+    },
+    limit::handler::HandlerInEvent as LimitAction,
+};
 
 #[derive(Default, NetworkBehaviour)]
 #[behaviour(event_process = false, out_event = "NetworkEvent<Peer>", poll_method = "poll_event")]
@@ -27,7 +34,7 @@ pub struct NimiqBehaviour {
 }
 
 impl NimiqBehaviour {
-    fn poll_event(&mut self, cx: &mut Context<'_>, params: &mut impl PollParameters) -> Poll<NetworkBehaviourAction<EitherOutput<NimiqHandlerAction, NimiqHandlerAction>, NetworkEvent<Peer>>> {
+    fn poll_event(&mut self, cx: &mut Context<'_>, params: &mut impl PollParameters) -> Poll<NetworkBehaviourAction<EitherOutput<MessageAction, LimitAction>, NetworkEvent<Peer>>> {
         if let Some(event) = self.events.pop_front() {
             Poll::Ready(NetworkBehaviourAction::GenerateEvent(event))
         }
@@ -61,5 +68,17 @@ impl NetworkBehaviourEventProcess<NetworkEvent<Peer>> for NimiqBehaviour {
         if let Some(waker) = self.waker.take() {
             waker.wake();
         }
+    }
+}
+
+impl From<MessageEvent> for NetworkEvent<Peer> {
+    fn from(event: MessageEvent) -> Self {
+        unimplemented!();
+    }
+}
+
+impl From<LimitEvent> for NetworkEvent<Peer> {
+    fn from(event: LimitEvent) -> Self {
+        unimplemented!();
     }
 }

@@ -9,11 +9,20 @@ use parking_lot::RwLockReadGuard;
 use rand::rngs::OsRng;
 use rand::Rng;
 use tokio_02::sync::broadcast::Receiver as BroadcastReceiver;
+use async_trait::async_trait;
+use futures_03::Stream;
+use thiserror::Error;
 
+use beserial::{Serialize, Deserialize};
 use blockchain_albatross::Blockchain;
 use genesis::NetworkId;
 use macros::upgrade_weak;
-use network_interface::prelude::{Network as NetworkInterface, NetworkEvent as NetworkEventI, Peer as PeerInterface};
+use network_interface::{
+    network::Topic,
+    prelude::{
+        Network as NetworkInterface, NetworkEvent as NetworkEventI, Peer as PeerInterface,
+    }
+};
 use utils::mutable_once::MutableOnce;
 use utils::observer::Notifier;
 use utils::time::OffsetTime;
@@ -30,6 +39,12 @@ use crate::network_config::NetworkConfig;
 use crate::peer_channel::PeerChannel;
 use crate::peer_scorer::PeerScorer;
 use crate::Peer;
+
+
+#[derive(Debug, Error)]
+pub enum NetworkError {
+
+}
 
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Hash)]
 enum NetworkTimer {
@@ -388,8 +403,10 @@ impl Network {
     }
 }
 
+#[async_trait]
 impl NetworkInterface for Network {
     type PeerType = PeerChannel;
+    type Error = NetworkError;
 
     fn get_peers(&self) -> Vec<Arc<Self::PeerType>> {
         self.connections
@@ -409,6 +426,36 @@ impl NetworkInterface for Network {
     }
 
     fn subscribe_events(&self) -> BroadcastReceiver<NetworkEventI<Self::PeerType>> {
+        unimplemented!()
+    }
+
+    async fn subscribe<T>(topic: &T) -> Box<dyn Stream<Item = (T::Item, Self::PeerType)> + Send>
+        where
+            T: Topic + Sync,
+    {
+        unimplemented!()
+    }
+
+    async fn publish<T>(topic: &T, item: <T as Topic>::Item)
+        where
+            T: Topic + Sync,
+    {
+        unimplemented!()
+    }
+
+    async fn dht_get<K, V>(&self, k: &K) -> Result<V, Self::Error>
+        where
+            K: AsRef<[u8]> + Send + Sync,
+            V: Deserialize + Send + Sync,
+    {
+        unimplemented!()
+    }
+
+    async fn dht_put<K, V>(&self, k: &K, v: &V) -> Result<(), Self::Error>
+        where
+            K: AsRef<[u8]> + Send + Sync,
+            V: Serialize + Send + Sync,
+    {
         unimplemented!()
     }
 }
