@@ -18,7 +18,7 @@ use beserial::{Serialize, Deserialize};
 use nimiq_network_interface::message::{peek_type, Message};
 use nimiq_network_interface::network::{Network, NetworkEvent, Topic};
 use nimiq_network_interface::peer::dispatch::{unbounded_dispatch, DispatchError};
-use nimiq_network_interface::peer::{CloseReason, Peer, SendError};
+use nimiq_network_interface::peer::{CloseReason, Peer, SendError, RequestResponse};
 
 pub type Channels = Arc<RwLock<HashMap<u64, Pin<Box<dyn Sink<Vec<u8>, Error = DispatchError> + Send + Sync>>>>>;
 
@@ -100,6 +100,7 @@ impl Eq for MockPeer {}
 #[async_trait]
 impl Peer for MockPeer {
     type Id = usize;
+    type Error = MockNetworkError;
 
     fn id(&self) -> Self::Id {
         self.id
@@ -141,6 +142,14 @@ impl Peer for MockPeer {
             // Eagerly drop sender to stop sending messages immediately.
             self.tx.lock().take();
         }
+    }
+
+    async fn request<R: RequestResponse>(&self, request: &<R as RequestResponse>::Request) -> Result<R::Response, Self::Error> {
+        unimplemented!()
+    }
+
+    fn requests<R: RequestResponse>(&self) -> Box<dyn Stream<Item = R::Request>> {
+        unimplemented!()
     }
 }
 

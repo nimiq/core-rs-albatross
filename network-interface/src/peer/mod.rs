@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use futures::Stream;
 use thiserror::Error;
 
-use beserial::SerializingError;
+use beserial::{SerializingError, Serialize, Deserialize};
 
 use crate::message::Message;
 
@@ -25,9 +25,17 @@ pub enum SendError {
     AlreadyClosed,
 }
 
+
+pub trait RequestResponse {
+    type Request: Serialize + Deserialize + Sync;
+    type Response: Serialize + Deserialize + Sync;
+}
+
+
 #[async_trait]
 pub trait Peer: Send + Sync + Hash + Eq {
     type Id: Debug;
+    type Error: std::error::Error;
 
     fn id(&self) -> Self::Id;
     async fn send<T: Message>(&self, msg: &T) -> Result<(), SendError>;
@@ -42,4 +50,8 @@ pub trait Peer: Send + Sync + Hash + Eq {
     /// Should panic if there is already a non-closed sink registered for a message type.
     fn receive<T: Message>(&self) -> Pin<Box<dyn Stream<Item = T> + Send>>;
     async fn close(&self, ty: CloseReason);
+
+    async fn request<R: RequestResponse>(&self, request: &R::Request) -> Result<R::Response, Self::Error>;
+
+    fn requests<R: RequestResponse>(&self) -> Box<dyn Stream<Item = R::Request>>;
 }

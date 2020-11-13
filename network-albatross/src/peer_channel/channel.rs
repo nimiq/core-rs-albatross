@@ -22,7 +22,7 @@ use parking_lot::RwLock;
 use beserial::Deserialize;
 use network_interface::message::{peek_type, Message};
 use network_interface::peer::dispatch::{unbounded_dispatch, DispatchError};
-use network_interface::peer::{CloseReason, Peer as PeerInterface, SendError as SendErrorI};
+use network_interface::peer::{CloseReason, Peer as PeerInterface, SendError as SendErrorI, RequestResponse};
 use network_messages::MessageNotifier;
 use peer_address::address::PeerAddress;
 use utils::observer::Notifier;
@@ -34,6 +34,7 @@ use crate::connection::network_connection::NetworkConnection;
 #[cfg(feature = "metrics")]
 use crate::network_metrics::MessageMetrics;
 use crate::websocket::Message as WebSocketMessage;
+use crate::network::NetworkError;
 
 use super::sink::PeerSink;
 use super::stream::PeerStreamEvent;
@@ -204,6 +205,7 @@ impl Hash for PeerChannel {
 #[async_trait]
 impl PeerInterface for PeerChannel {
     type Id = Arc<PeerAddress>;
+    type Error = NetworkError;
 
     fn id(&self) -> Self::Id {
         self.address_info.peer_address().expect("PeerAddress not set")
@@ -219,5 +221,13 @@ impl PeerInterface for PeerChannel {
 
     async fn close(&self, _ty: CloseReason) {
         self.close(CloseType::Unknown);
+    }
+
+    async fn request<R: RequestResponse>(&self, request: &<R as RequestResponse>::Request) -> Result<R::Response, Self::Error> {
+        unimplemented!()
+    }
+
+    fn requests<R: RequestResponse>(&self) -> Box<dyn Stream<Item = R::Request>> {
+        unimplemented!()
     }
 }

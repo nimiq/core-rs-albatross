@@ -17,11 +17,12 @@ use parking_lot::Mutex;
 use beserial::SerializingError;
 use nimiq_network_interface::peer::{
     dispatch::{unbounded_dispatch, DispatchError},
-    CloseReason, Peer as PeerInterface, SendError,
+    CloseReason, Peer as PeerInterface, SendError, RequestResponse,
 };
 use nimiq_network_interface::{message, message::Message};
 
 use super::dispatch::{MessageReceiver, MessageSender};
+use crate::network::NetworkError;
 
 #[derive(Debug)]
 pub(crate) enum PeerAction {
@@ -75,6 +76,7 @@ impl Hash for Peer {
 #[async_trait]
 impl PeerInterface for Peer {
     type Id = PeerId;
+    type Error = NetworkError;
 
     fn id(&self) -> Self::Id {
         self.id.clone()
@@ -90,5 +92,13 @@ impl PeerInterface for Peer {
 
     async fn close(&self, _ty: CloseReason) {
 
+    }
+
+    async fn request<R: RequestResponse>(&self, request: &<R as RequestResponse>::Request) -> Result<R::Response, Self::Error> {
+        unimplemented!()
+    }
+
+    fn requests<R: RequestResponse>(&self) -> Box<dyn Stream<Item = R::Request>> {
+        unimplemented!()
     }
 }

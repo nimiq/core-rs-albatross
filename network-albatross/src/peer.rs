@@ -9,11 +9,13 @@ use futures_03::Stream;
 
 use hash::Blake2bHash;
 use network_interface::prelude::{CloseReason, Message, Peer as PeerInterface, SendError};
+use network_interface::peer::RequestResponse;
 use peer_address::address::NetAddress;
 use peer_address::address::PeerAddress;
 
 use crate::connection::close_type::CloseType;
 use crate::peer_channel::PeerChannel;
+use crate::network::NetworkError;
 
 #[derive(Clone, Debug)]
 pub struct Peer {
@@ -68,6 +70,7 @@ impl Hash for Peer {
 #[async_trait]
 impl PeerInterface for Peer {
     type Id = Arc<PeerAddress>;
+    type Error = NetworkError;
 
     fn id(&self) -> Self::Id {
         self.channel.address_info.peer_address().expect("PeerAddress not set")
@@ -83,5 +86,13 @@ impl PeerInterface for Peer {
 
     async fn close(&self, _ty: CloseReason) {
         self.channel.close(CloseType::Unknown);
+    }
+
+    async fn request<R: RequestResponse>(&self, request: &<R as RequestResponse>::Request) -> Result<R::Response, Self::Error> {
+        unimplemented!()
+    }
+
+    fn requests<R: RequestResponse>(&self) -> Box<dyn Stream<Item = R::Request>> {
+        unimplemented!()
     }
 }
