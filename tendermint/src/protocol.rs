@@ -5,7 +5,19 @@ use crate::TendermintError;
 use nimiq_hash::Hash;
 use std::clone::Clone;
 
-// This Tendermint implementation tries to stick to the pseudocode of https://arxiv.org/abs/1807.04938v3
+/// This section has methods that implement the Tendermint protocol as described in the original
+/// paper (https://arxiv.org/abs/1807.04938v3).
+/// We made two modifications:
+/// 1) For each round, we only accept the first proposal that we receive. Since Tendermint is
+///    designed to work even if the proposer sends different proposals to each node, and the nodes
+///    don't rebroadcast the proposals they receive, we can safely ignore any subsequent proposals
+///    that we receive after the first one.
+/// 2) The protocol assumes that we are always listening for proposals and precommit messages, and
+///    if we receive any proposal with 2f+1 precommits accompanying it, we are supposed to accept it
+///    and terminate. We don't do this. Instead we assume that the validator crate will be listening
+///    for completed blocks and will terminate Tendermint when it receives one.
+/// These two modifications allows us to refactor the Tendermint protocol from its original message
+/// passing form into the state machine form that we use.
 impl<
         ProposalTy: Clone + PartialEq + Hash + Unpin + 'static,
         ProofTy: Clone + Unpin + 'static,
@@ -14,7 +26,7 @@ impl<
             + 'static,
     > Tendermint<ProposalTy, ProofTy, ResultTy, DepsTy>
 {
-    // Lines 11-21
+    /// Lines 11-21 of Tendermint consensus algorithm (Algorithm 1)
     pub(crate) async fn start_round(&mut self) -> Result<(), TendermintError> {
         self.state.current_proposal = None;
         self.state.current_proposal_vr = None;
@@ -32,14 +44,14 @@ impl<
                 self.deps.get_value(round)?
             };
 
-            // Update and send our proposal state
+            // Update our state and broadcast our proposal.
             self.state.current_proposal = Some(proposal.clone());
             self.state.current_proposal_vr = valid_round;
             self.deps
                 .broadcast_proposal(round, proposal, valid_round)
                 .await?;
 
-            // Prevote for our own proposal
+            // Prevote for our own proposal.
             self.state.step = Step::Prevote;
             self.broadcast_and_aggregate_prevote(round, VoteDecision::Block)
                 .await?;
@@ -50,7 +62,7 @@ impl<
         Ok(())
     }
 
-    // Lines  22-27
+    /// Lines 22-27 of Tendermint consensus algorithm (Algorithm 1)
     pub(crate) async fn on_proposal(&mut self) -> Result<(), TendermintError> {
         assert_eq!(self.state.step, Step::Propose);
 
@@ -74,7 +86,7 @@ impl<
         Ok(())
     }
 
-    // Lines 28-33.
+    /// Lines 28-33 of Tendermint consensus algorithm (Algorithm 1)
     pub(crate) async fn on_past_proposal(&mut self) -> Result<(), TendermintError> {
         assert_eq!(self.state.step, Step::Propose);
 
@@ -98,31 +110,34 @@ impl<
         Ok(())
     }
 
-    // Lines 34-35: Handel takes care of waiting `timeoutPrevote` before returning
+    /// Lines 34-35 of Tendermint consensus algorithm (Algorithm 1)
+    /// The `broadcast_and_aggregate_prevote` function takes care of waiting `timeoutPrevote`
+    /// before returning.
 
-    // Lines 36-43
+    /// Lines 36-43 of Tendermint consensus algorithm (Algorithm 1)
     pub(crate) async fn on_polka(&mut self) -> Result<(), TendermintError> {
-        // step is either prevote or precommit
-        assert_ne!(self.state.step, Step::Propose);
+        // The protocol dictates that the step must be either prevote or precommit. But since in our
+        // code it is impossible for this function to be called in the precommit step, we force the
+        // step to be prevote.
+        assert_eq!(self.state.step, Step::Prevote);
 
         let round = self.state.round;
 
         self.state.valid_value = self.state.current_proposal.clone();
         self.state.valid_round = Some(round);
 
-        // TODO: What happens if the step is not prevote? Can this even happen?
-        if self.state.step == Step::Prevote {
-            self.state.locked_value = self.state.current_proposal.clone();
-            self.state.locked_round = Some(round);
-            self.state.step = Step::Precommit;
-            self.broadcast_and_aggregate_precommit(round, VoteDecision::Block)
-                .await?;
-        }
+        self.state.locked_value = self.state.current_proposal.clone();
+        self.state.locked_round = Some(round);
+
+        self.state.step = Step::Precommit;
+
+        self.broadcast_and_aggregate_precommit(round, VoteDecision::Block)
+            .await?;
 
         Ok(())
     }
 
-    // Lines 44-46
+    /// Lines 44-46 of Tendermint consensus algorithm (Algorithm 1)
     pub(crate) async fn on_nil_polka(&mut self) -> Result<(), TendermintError> {
         assert_eq!(self.state.step, Step::Prevote);
 
@@ -136,25 +151,26 @@ impl<
         Ok(())
     }
 
-    // Lines 47-48 Handel takes care of waiting `timeoutPrecommit` before returning
+    /// Lines 47-48 of Tendermint consensus algorithm (Algorithm 1)
+    /// The `broadcast_and_aggregate_precommit` function takes care of waiting `timeoutPrecommit`
+    /// before returning.
 
-    // Lines 49-54
-    // We only handle precommits for our current round and current proposal in this function. The
-    // validator crate is always listening for completed blocks. The purpose of this function is just
-    // to assemble the block if we can.
+    /// Lines 49-54 of Tendermint consensus algorithm (Algorithm 1)
+    /// As stated before, we have the validator crate always listening for completed blocks. So this
+    /// function only handle precommits for our current round and current proposal. The purpose of
+    /// this function is then just to assemble the block if we can.
     pub(crate) fn on_decision(&mut self) -> Result<ResultTy, TendermintError> {
-        let block = self.deps.assemble_block(
+        self.deps.assemble_block(
             self.state.current_proposal.clone().unwrap(),
             self.state.current_proof.clone().unwrap(),
-        )?;
-
-        Ok(block)
+        )
     }
 
-    // Lines 55-56 Go to next round if f+1
-    // Not here but anytime you handle VoteResult.
+    /// Lines 55-56 of Tendermint consensus algorithm (Algorithm 1)
+    /// We handle this situation on the functions `broadcast_and_aggregate_prevote` and
+    /// `broadcast_and_aggregate_precommit`.
 
-    // Lines 57-60
+    /// Lines 57-60 of Tendermint consensus algorithm (Algorithm 1)
     pub(crate) async fn on_timeout_propose(&mut self) -> Result<(), TendermintError> {
         assert_eq!(self.state.step, Step::Propose);
 
@@ -168,7 +184,7 @@ impl<
         Ok(())
     }
 
-    // Lines 61-64
+    /// Lines 61-64 of Tendermint consensus algorithm (Algorithm 1)
     pub(crate) async fn on_timeout_prevote(&mut self) -> Result<(), TendermintError> {
         assert_eq!(self.state.step, Step::Prevote);
 
@@ -182,7 +198,7 @@ impl<
         Ok(())
     }
 
-    // Lines 65-67
+    /// Lines 65-67 of Tendermint consensus algorithm (Algorithm 1)
     pub(crate) fn on_timeout_precommit(&mut self) -> Result<(), TendermintError> {
         self.state.round += 1;
 

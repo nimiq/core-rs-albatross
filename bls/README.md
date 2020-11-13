@@ -9,7 +9,7 @@ This is a Rust crate for making Boneh-Lynn-Shacham signatures. It has functional
 
 It only supports the MNT6-753 elliptic curve. This curve was chosen to allow the creation of SNARKs proving statements
 about these BLS signatures. These SNARKs can be created using the library [ZEXE](https://github.com/scipr-lab/zexe) and
-are a fundamental part of Nimiq's Nano nodes (implemented on the nano-sync crate).
+are a fundamental part of Nimiq's Nano nodes (implemented in the nano-sync crate).
 
 It uses only the algebra and algebra-core crates in [ZEXE](https://github.com/scipr-lab/zexe) for its elliptic curve
 arithmetic.
