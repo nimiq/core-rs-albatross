@@ -1,15 +1,16 @@
 use crate::state::TendermintState;
 use crate::utils::{AggregationResult, ProposalResult, Step, TendermintError};
+use crate::{ProofTrait, ProposalTrait, ResultTrait};
 use async_trait::async_trait;
-use nimiq_hash::{Blake2sHash, Hash};
+use nimiq_hash::Blake2sHash;
 
 /// The (async) trait that we need for all of Tendermint's low-level functions. The functions are
 /// mostly about producing/verifying proposals and networking.
 #[async_trait]
 pub trait TendermintOutsideDeps {
-    type ProposalTy: Clone + PartialEq + Hash + Unpin + 'static;
-    type ProofTy: Clone + Unpin + 'static;
-    type ResultTy: Unpin + 'static;
+    type ProposalTy: ProposalTrait;
+    type ProofTy: ProofTrait;
+    type ResultTy: ResultTrait;
 
     /// Verify that a given Tendermint state is valid. This is necessary when we are initializing
     /// using a previous state.

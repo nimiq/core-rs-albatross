@@ -3,7 +3,7 @@ use crate::utils::{Checkpoint, Step};
 /// The struct that stores Tendermint's state. It contains both the state variables describes in the
 /// protocol (except for the height and the decision vector since we don't need them) and some extra
 /// variables that we need for our implementation (those are prefixed with "current").
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TendermintState<ProposalTy, ProofTy> {
     pub round: u32,
     pub step: Step,

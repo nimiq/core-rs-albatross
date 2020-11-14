@@ -4,15 +4,14 @@ use crate::utils::{
     aggregation_to_vote, has_2f1_votes, Checkpoint, ProposalResult, Step, VoteDecision, VoteResult,
 };
 use crate::TendermintError;
-use nimiq_hash::Hash;
-use std::clone::Clone;
+use crate::{ProofTrait, ProposalTrait, ResultTrait};
 
 /// This section implements methods to interface with TendermintOutsideDeps. All of them get or
 /// broadcast some information from/to the network, processes it and then updates Tendermint's state.
 impl<
-        ProposalTy: Clone + PartialEq + Hash + Unpin + 'static,
-        ProofTy: Clone + Unpin + 'static,
-        ResultTy: Unpin + 'static,
+        ProposalTy: ProposalTrait,
+        ProofTy: ProofTrait,
+        ResultTy: ResultTrait,
         DepsTy: TendermintOutsideDeps<ProposalTy = ProposalTy, ResultTy = ResultTy, ProofTy = ProofTy>
             + 'static,
     > Tendermint<ProposalTy, ProofTy, ResultTy, DepsTy>

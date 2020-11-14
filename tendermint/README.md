@@ -22,6 +22,7 @@ assume that some other crate will be listening for completed blocks and will ter
 Below you can find a flow diagram of Tendermint's state machine. The square boxes represent states and their
 corresponding functions in protocol.rs (except for the start and end boxes, which are just indicative), the elliptic
 boxes represent the network functions in network.rs.
+
 ![Tendermint flow diagram](tendermint.png)
 
 ## License

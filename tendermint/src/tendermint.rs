@@ -1,15 +1,14 @@
 use crate::outside_deps::TendermintOutsideDeps;
 use crate::state::TendermintState;
-use nimiq_hash::Hash;
-use std::clone::Clone;
+use crate::{ProofTrait, ProposalTrait, ResultTrait};
 
 /// This is the struct that implements the Tendermint state machine. Its only fields are deps
 /// (dependencies, any type that implements the trait TendermintOutsideDeps, needed for a variety of
 /// low-level tasks) and state (stores the current state of Tendermint).
 pub struct Tendermint<
-    ProposalTy: Clone + PartialEq + Hash + Unpin + 'static,
-    ProofTy: Clone + Unpin + 'static,
-    ResultTy: Unpin + 'static,
+    ProposalTy: ProposalTrait,
+    ProofTy: ProofTrait,
+    ResultTy: ResultTrait,
     DepsTy: TendermintOutsideDeps<ProposalTy = ProposalTy, ResultTy = ResultTy, ProofTy = ProofTy>
         + 'static,
 > {
@@ -18,9 +17,9 @@ pub struct Tendermint<
 }
 
 impl<
-        ProposalTy: Clone + PartialEq + Hash + Unpin + 'static,
-        ProofTy: Clone + Unpin + 'static,
-        ResultTy: Unpin + 'static,
+        ProposalTy: ProposalTrait,
+        ProofTy: ProofTrait,
+        ResultTy: ResultTrait,
         DepsTy: TendermintOutsideDeps<ProposalTy = ProposalTy, ResultTy = ResultTy, ProofTy = ProofTy>
             + 'static,
     > Tendermint<ProposalTy, ProofTy, ResultTy, DepsTy>

@@ -1,303 +1,234 @@
 use async_trait::async_trait;
-use beserial::{Deserialize, Serialize};
-use futures::{StreamExt, TryStreamExt};
-use nimiq_network_interface::message::Message;
-use nimiq_network_interface::network::{
-    Network as NetworkInterface, Network, NetworkEvent, ReceiveFromAll,
-};
-use nimiq_network_mock::network::MockNetwork;
-use nimiq_tendermint::protocol::TendermintReturn;
+use beserial::Serialize;
+use futures::{pin_mut, StreamExt};
+use nimiq_hash::{Blake2sHash, Hash, SerializeContent};
+use nimiq_primitives::policy::SLOTS;
 use nimiq_tendermint::{
-    PrecommitAggregationResult, PrevoteAggregationResult, SingleDecision, Tendermint,
-    TendermintOutsideDeps,
+    expect_block, AggregationResult, ProposalResult, Step, TendermintError, TendermintOutsideDeps,
+    TendermintReturn, TendermintState,
 };
-use parking_lot::RwLock;
-use std::sync::Arc;
-use tokio::sync::broadcast::Receiver;
-use tokio::time::{delay_for, Duration};
+use std::collections::BTreeMap;
+use std::io;
 
-pub struct Deps1 {}
+// We need to implement Hash for the proposal type so we need our own type.
+// TODO: Change to bool. True is a valid proposal, false is an invalid one.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct TestProposal(u32);
+
+impl SerializeContent for TestProposal {
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
+        let size = self.0.serialize(writer)?;
+        Ok(size)
+    }
+}
+
+impl Hash for TestProposal {}
+
+// We can use this to mimic a validator. The index is the validator index.
+pub struct TestValidators1 {
+    index: u16,
+}
 
 #[async_trait]
-impl TendermintOutsideDeps for Deps1 {
-    type ProposalTy = u32;
-    type ProofTy = u32;
-    type ResultTy = (u32, u32);
+impl TendermintOutsideDeps for TestValidators1 {
+    type ProposalTy = TestProposal;
+    // We never verify the proofs inside Tendermint.
+    type ProofTy = ();
+    type ResultTy = (TestProposal, ());
+
+    fn verify_state(&self, _state: &TendermintState<Self::ProposalTy, Self::ProofTy>) -> bool {
+        unimplemented!()
+    }
 
     fn is_our_turn(&self, round: u32) -> bool {
+        self.index as u32 == round
+    }
+
+    fn is_valid(&self, _proposal: Self::ProposalTy) -> bool {
         true
     }
 
-    fn verify_proposal(&self, proposal: Arc<Self::ProposalTy>, round: u32) -> bool {
-        true
-    }
-
-    fn produce_proposal(&self, round: u32) -> Option<Self::ProposalTy> {
-        Some(483)
+    fn get_value(&self, _round: u32) -> Result<Self::ProposalTy, TendermintError> {
+        Ok(TestProposal(42))
     }
 
     fn assemble_block(
         &self,
-        proposal: Arc<Self::ProposalTy>,
+        proposal: Self::ProposalTy,
         proof: Self::ProofTy,
-    ) -> Self::ResultTy {
-        (*proposal, proof)
+    ) -> Result<Self::ResultTy, TendermintError> {
+        Ok((proposal, proof))
     }
 
-    async fn broadcast_prevote(
+    async fn broadcast_proposal(
         &self,
-        proposal: Option<Arc<Self::ProposalTy>>,
-        round: u32,
-        decision: &SingleDecision,
-    ) -> PrevoteAggregationResult<Self::ProofTy> {
-        PrevoteAggregationResult::Polka(0)
+        _round: u32,
+        _proposal: Self::ProposalTy,
+        _valid_round: Option<u32>,
+    ) -> Result<(), TendermintError> {
+        Ok(())
     }
 
-    async fn broadcast_precommit(
+    async fn await_proposal(
         &self,
-        proposal: Option<Arc<Self::ProposalTy>>,
-        round: u32,
-        decision: &SingleDecision,
-    ) -> PrecommitAggregationResult<Self::ProofTy> {
-        PrecommitAggregationResult::Block2Fp1(6364)
+        _round: u32,
+    ) -> Result<ProposalResult<Self::ProposalTy>, TendermintError> {
+        Ok(ProposalResult::Proposal(TestProposal(42), None))
     }
 
-    fn verify_proposal_state(&self, round: u32, previous_precommit_result: &Self::ProofTy) -> bool {
+    async fn broadcast_and_aggregate(
+        &mut self,
+        _round: u32,
+        _step: Step,
+        _proposal: Option<Blake2sHash>,
+    ) -> Result<AggregationResult<Self::ProofTy>, TendermintError> {
+        let proposal_hash = TestProposal(42).hash();
+
+        let mut agg = BTreeMap::new();
+
+        agg.insert(Some(proposal_hash), ((), SLOTS as usize));
+
+        Ok(AggregationResult::Aggregation(agg))
+    }
+
+    fn get_aggregation(
+        &self,
+        _round: u32,
+        _step: Step,
+    ) -> Result<AggregationResult<Self::ProofTy>, TendermintError> {
         unimplemented!()
     }
 
-    fn verify_prevote_state(
-        &self,
-        round: u32,
-        proposal: Arc<Self::ProposalTy>,
-        previous_precommit_result: &Self::ProofTy,
-    ) -> bool {
-        unimplemented!()
-    }
-
-    fn verify_precommit_state(
-        &self,
-        round: u32,
-        proposal: Option<Arc<Self::ProposalTy>>,
-        prevote_result: &Self::ProofTy,
-    ) -> Option<SingleDecision> {
+    fn cancel_aggregation(&mut self, _round: u32, _step: Step) -> Result<(), TendermintError> {
         unimplemented!()
     }
 }
 
 #[tokio::test]
-async fn we_propose_and_everything_works() {
-    let t = Tendermint::new(Deps1 {}, MockNetwork::new(1));
+async fn everything_works() {
+    let proposer = TestValidators1 { index: 0 };
+    let tendermint = expect_block(proposer, None);
 
-    while let Some(r) = t.expect_block().next().await {
-        if let TendermintReturn::Result(block) = r {
-            assert_eq!(block, (483, 6364));
-            return;
+    pin_mut!(tendermint);
+
+    while let Some(value) = tendermint.next().await {
+        if let TendermintReturn::Error(_) = value {
+            panic!()
         }
     }
 
-    assert!(false);
+    let validator = TestValidators1 { index: 1 };
+    let tendermint = expect_block(validator, None);
+
+    pin_mut!(tendermint);
+
+    while let Some(value) = tendermint.next().await {
+        if let TendermintReturn::Error(_) = value {
+            panic!()
+        }
+    }
 }
 
-pub struct Deps2 {}
+pub struct TestValidators2 {
+    index: u16,
+}
 
 #[async_trait]
-impl TendermintOutsideDeps for Deps2 {
-    type ProposalTy = u32;
-    type ProofTy = u32;
-    type ResultTy = (u32, u32);
+impl TendermintOutsideDeps for TestValidators2 {
+    type ProposalTy = TestProposal;
+    // We never verify the proofs inside Tendermint.
+    type ProofTy = ();
+    type ResultTy = (TestProposal, ());
+
+    fn verify_state(&self, _state: &TendermintState<Self::ProposalTy, Self::ProofTy>) -> bool {
+        unimplemented!()
+    }
 
     fn is_our_turn(&self, round: u32) -> bool {
+        self.index as u32 == round
+    }
+
+    fn is_valid(&self, _proposal: Self::ProposalTy) -> bool {
         true
     }
 
-    fn verify_proposal(&self, proposal: Arc<Self::ProposalTy>, round: u32) -> bool {
-        true
-    }
-
-    fn produce_proposal(&self, round: u32) -> Option<Self::ProposalTy> {
-        Some(100 + round)
+    fn get_value(&self, _round: u32) -> Result<Self::ProposalTy, TendermintError> {
+        Ok(TestProposal(42))
     }
 
     fn assemble_block(
         &self,
-        proposal: Arc<Self::ProposalTy>,
+        proposal: Self::ProposalTy,
         proof: Self::ProofTy,
-    ) -> Self::ResultTy {
-        (*proposal, proof)
+    ) -> Result<Self::ResultTy, TendermintError> {
+        Ok((proposal, proof))
     }
 
-    async fn broadcast_prevote(
+    async fn broadcast_proposal(
         &self,
-        proposal: Option<Arc<Self::ProposalTy>>,
-        round: u32,
-        decision: &SingleDecision,
-    ) -> PrevoteAggregationResult<Self::ProofTy> {
-        assert_eq!(*decision, SingleDecision::Block);
-        if round < 10 {
-            PrevoteAggregationResult::Other(0)
-        } else {
-            PrevoteAggregationResult::Polka(0)
-        }
+        _round: u32,
+        _proposal: Self::ProposalTy,
+        _valid_round: Option<u32>,
+    ) -> Result<(), TendermintError> {
+        Ok(())
     }
 
-    async fn broadcast_precommit(
+    async fn await_proposal(
         &self,
-        proposal: Option<Arc<Self::ProposalTy>>,
-        round: u32,
-        decision: &SingleDecision,
-    ) -> PrecommitAggregationResult<Self::ProofTy> {
-        if round < 10 {
-            // There was a nil polka so there must be a nil precommit
-            assert_eq!(*decision, SingleDecision::Nil);
-            PrecommitAggregationResult::Other(12345678)
-        } else {
-            PrecommitAggregationResult::Block2Fp1(210)
-        }
+        _round: u32,
+    ) -> Result<ProposalResult<Self::ProposalTy>, TendermintError> {
+        Ok(ProposalResult::Proposal(TestProposal(42), None))
     }
 
-    fn verify_proposal_state(&self, round: u32, previous_precommit_result: &Self::ProofTy) -> bool {
+    async fn broadcast_and_aggregate(
+        &mut self,
+        _round: u32,
+        _step: Step,
+        _proposal: Option<Blake2sHash>,
+    ) -> Result<AggregationResult<Self::ProofTy>, TendermintError> {
+        let proposal_hash = TestProposal(42).hash();
+
+        let mut agg = BTreeMap::new();
+
+        agg.insert(Some(proposal_hash), ((), SLOTS as usize));
+
+        Ok(AggregationResult::Aggregation(agg))
+    }
+
+    fn get_aggregation(
+        &self,
+        _round: u32,
+        _step: Step,
+    ) -> Result<AggregationResult<Self::ProofTy>, TendermintError> {
         unimplemented!()
     }
 
-    fn verify_prevote_state(
-        &self,
-        round: u32,
-        proposal: Arc<Self::ProposalTy>,
-        previous_precommit_result: &Self::ProofTy,
-    ) -> bool {
-        unimplemented!()
-    }
-
-    fn verify_precommit_state(
-        &self,
-        round: u32,
-        proposal: Option<Arc<Self::ProposalTy>>,
-        prevote_result: &Self::ProofTy,
-    ) -> Option<SingleDecision> {
+    fn cancel_aggregation(&mut self, _round: u32, _step: Step) -> Result<(), TendermintError> {
         unimplemented!()
     }
 }
 
 #[tokio::test]
-async fn we_propose_and_first_rounds_nil() {
-    let t = Tendermint::new(Deps2 {}, MockNetwork::new(1));
+async fn no_proposal() {
+    let proposer = TestValidators1 { index: 0 };
+    let tendermint = expect_block(proposer, None);
 
-    let mut stream = t.expect_block();
-    while let Some(r) = stream.next().await {
-        if let TendermintReturn::Result(block) = r {
-            assert_eq!(block, (110, 210));
-            return;
+    pin_mut!(tendermint);
+
+    while let Some(value) = tendermint.next().await {
+        if let TendermintReturn::Error(_) = value {
+            panic!()
         }
     }
 
-    assert!(false);
-}
+    let validator = TestValidators1 { index: 1 };
+    let tendermint = expect_block(validator, None);
 
-pub struct Deps3 {
-    validator: u32,
-}
+    pin_mut!(tendermint);
 
-#[async_trait]
-impl TendermintOutsideDeps for Deps3 {
-    type ProposalTy = u32;
-    type ProofTy = u32;
-    type ResultTy = (u32, u32);
-
-    fn is_our_turn(&self, round: u32) -> bool {
-        return self.validator == 2;
-    }
-
-    fn verify_proposal(&self, proposal: Arc<Self::ProposalTy>, round: u32) -> bool {
-        true
-    }
-
-    fn produce_proposal(&self, round: u32) -> Option<Self::ProposalTy> {
-        Some(100 + 10 * round + self.validator)
-    }
-
-    fn assemble_block(
-        &self,
-        proposal: Arc<Self::ProposalTy>,
-        proof: Self::ProofTy,
-    ) -> Self::ResultTy {
-        (*proposal, proof)
-    }
-
-    async fn broadcast_prevote(
-        &self,
-        proposal: Option<Arc<Self::ProposalTy>>,
-        round: u32,
-        decision: &SingleDecision,
-    ) -> PrevoteAggregationResult<Self::ProofTy> {
-        PrevoteAggregationResult::Polka(0)
-    }
-
-    async fn broadcast_precommit(
-        &self,
-        proposal: Option<Arc<Self::ProposalTy>>,
-        round: u32,
-        decision: &SingleDecision,
-    ) -> PrecommitAggregationResult<Self::ProofTy> {
-        PrecommitAggregationResult::Block2Fp1(210)
-    }
-
-    fn verify_proposal_state(&self, round: u32, previous_precommit_result: &Self::ProofTy) -> bool {
-        unimplemented!()
-    }
-
-    fn verify_prevote_state(
-        &self,
-        round: u32,
-        proposal: Arc<Self::ProposalTy>,
-        previous_precommit_result: &Self::ProofTy,
-    ) -> bool {
-        unimplemented!()
-    }
-
-    fn verify_precommit_state(
-        &self,
-        round: u32,
-        proposal: Option<Arc<Self::ProposalTy>>,
-        prevote_result: &Self::ProofTy,
-    ) -> Option<SingleDecision> {
-        unimplemented!()
-    }
-}
-
-#[tokio::test]
-async fn two_validators() {
-    let net1 = MockNetwork::new(1);
-    let net2 = MockNetwork::new(2);
-    net1.connect(&net2);
-
-    let a = tokio::spawn(async move {
-        let t = Tendermint::new(Deps3 { validator: 1 }, net1);
-
-        while let Some(r) = t.expect_block().next().await {
-            if let TendermintReturn::Result(block) = r {
-                assert_eq!(block, (112, 210));
-                return;
-            }
+    while let Some(value) = tendermint.next().await {
+        if let TendermintReturn::Error(_) = value {
+            panic!()
         }
-
-        assert!(false);
-    });
-
-    let b = tokio::spawn(async move {
-        // delay_for(Duration::from_secs(2)).await;
-        let t = Tendermint::new(Deps3 { validator: 2 }, net2);
-
-        while let Some(r) = t.expect_block().next().await {
-            if let TendermintReturn::Result(block) = r {
-                assert_eq!(block, (112, 210));
-                return;
-            }
-        }
-
-        assert!(false);
-    });
-
-    a.await;
-    b.await;
+    }
 }

@@ -2,8 +2,7 @@ use crate::outside_deps::TendermintOutsideDeps;
 use crate::tendermint::Tendermint;
 use crate::utils::{Checkpoint, Step, VoteDecision};
 use crate::TendermintError;
-use nimiq_hash::Hash;
-use std::clone::Clone;
+use crate::{ProofTrait, ProposalTrait, ResultTrait};
 
 /// This section has methods that implement the Tendermint protocol as described in the original
 /// paper (https://arxiv.org/abs/1807.04938v3).
@@ -19,9 +18,9 @@ use std::clone::Clone;
 /// These two modifications allows us to refactor the Tendermint protocol from its original message
 /// passing form into the state machine form that we use.
 impl<
-        ProposalTy: Clone + PartialEq + Hash + Unpin + 'static,
-        ProofTy: Clone + Unpin + 'static,
-        ResultTy: Unpin + 'static,
+        ProposalTy: ProposalTrait,
+        ProofTy: ProofTrait,
+        ResultTy: ResultTrait,
         DepsTy: TendermintOutsideDeps<ProposalTy = ProposalTy, ResultTy = ResultTy, ProofTy = ProofTy>
             + 'static,
     > Tendermint<ProposalTy, ProofTy, ResultTy, DepsTy>

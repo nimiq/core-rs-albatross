@@ -17,4 +17,5 @@ nimiq-hash = { path = "../hash", version = "0.1" }
 nimiq-primitives = { path = "../primitives", version = "0.1", features = ["policy"] }
 
 [dev-dependencies]
-nimiq-network-mock = { path = "../network-mock", version = "0.1" }
+beserial = { path = "../beserial", version = "0.1" }
+tokio = { version = "0.2", features = ["rt-threaded","macros"] }

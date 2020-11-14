@@ -2,9 +2,9 @@ use crate::outside_deps::TendermintOutsideDeps;
 use crate::state::TendermintState;
 use crate::tendermint::Tendermint;
 use crate::utils::{Checkpoint, TendermintError, TendermintReturn};
+use crate::{ProofTrait, ProposalTrait, ResultTrait};
 use async_stream::stream;
 use futures::Stream;
-use nimiq_hash::Hash;
 
 /// This is the main function of the Tendermint crate. Calling this function returns a Stream that,
 /// when called repeatedly, yields state updates, errors and results produced by the Tendermint
@@ -26,9 +26,9 @@ pub fn expect_block<DepsTy, ProposalTy, ProofTy, ResultTy>(
     state_opt: Option<TendermintState<ProposalTy, ProofTy>>,
 ) -> impl Stream<Item = TendermintReturn<ProposalTy, ProofTy, ResultTy>>
 where
-    ProposalTy: Clone + PartialEq + Hash + Unpin + 'static,
-    ProofTy: Clone + Unpin + 'static,
-    ResultTy: Unpin + 'static,
+    ProposalTy: ProposalTrait,
+    ProofTy: ProofTrait,
+    ResultTy: ResultTrait,
     DepsTy: TendermintOutsideDeps<ProposalTy = ProposalTy, ResultTy = ResultTy, ProofTy = ProofTy>
         + 'static,
 {
