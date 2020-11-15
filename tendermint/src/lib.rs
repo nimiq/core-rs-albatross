@@ -1,6 +1,7 @@
 #![feature(trait_alias)]
 
 use nimiq_hash::Hash;
+use std::fmt::Debug;
 
 pub(crate) mod network;
 pub(crate) mod outside_deps;
@@ -16,8 +17,8 @@ pub use stream::expect_block;
 pub use tendermint::Tendermint;
 pub use utils::*;
 
-/// These are trait aliases. We use them instead of repeating these trait bounds all throughout the
-/// code. It results in code that is cleaner and easier to understand.
-pub trait ProposalTrait = Clone + PartialEq + Hash + Unpin + 'static;
-pub trait ProofTrait = Clone + Unpin + 'static;
-pub trait ResultTrait = Clone + Unpin + 'static;
+// These are trait aliases. We use them instead of repeating these trait bounds all throughout the
+// code. It results in code that is cleaner and easier to understand.
+pub trait ProposalTrait = Clone + Debug + PartialEq + Hash + Unpin + 'static;
+pub trait ProofTrait = Clone + Debug + Unpin + 'static;
+pub trait ResultTrait = Clone + Debug + Unpin + 'static;

@@ -1,4 +1,5 @@
 use crate::state::TendermintState;
+use crate::ProofTrait;
 use nimiq_hash::Blake2sHash;
 use nimiq_primitives::policy::TWO_THIRD_SLOTS;
 use std::collections::BTreeMap;
@@ -61,7 +62,7 @@ pub enum VoteResult<ProofTy> {
 
 /// Represents the results we can get from calling `broadcast_and_aggregate` from
 /// TendermintOutsideDeps.
-/// #[derive(Clone, Debug)]
+#[derive(Clone, Debug)]
 pub enum AggregationResult<ProofTy> {
     // If the aggregation was able to complete (get 2f+1 votes), we receive a BTreeMap of the
     // different vote messages (Some(hash) is a vote for a proposal with that hash, None is a vote
@@ -100,7 +101,7 @@ pub enum TendermintError {
 /// An utility function that converts an AggregationResult into a VoteResult. The AggregationResult
 /// just returns the raw vote messages it got (albeit in an aggregated form), so we need provide the
 /// semantics to translate that into the VoteResult that the Tendermint protocol expects.
-pub(crate) fn aggregation_to_vote<ProofTy: Clone>(
+pub(crate) fn aggregation_to_vote<ProofTy: ProofTrait>(
     // This is the hash of the proposal we voted for (None means we voted for Nil).
     proposal: Option<Blake2sHash>,
     aggregation: AggregationResult<ProofTy>,
@@ -133,7 +134,7 @@ pub(crate) fn aggregation_to_vote<ProofTy: Clone>(
 
 /// An utility function that checks if a given AggregationResult has 2f+1 votes for a given
 /// proposal.
-pub(crate) fn has_2f1_votes<ProofTy: Clone>(
+pub(crate) fn has_2f1_votes<ProofTy: ProofTrait>(
     proposal: Blake2sHash,
     aggregation: AggregationResult<ProofTy>,
 ) -> bool {
