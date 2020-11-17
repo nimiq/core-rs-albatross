@@ -23,16 +23,17 @@ use beserial::SerializingError;
 use super::{
     peer::{Peer, PeerAction},
     protocol::MessageProtocol,
-    dispatch::{MessageSender, MessageReceiver},
+    dispatch::MessageDispatch,
     behaviour::MessageConfig,
 };
 
 #[derive(Clone, Debug)]
 pub enum HandlerInEvent {
-    PeerJoined {
+    PeerConnected {
         peer_id: PeerId,
+        outbound: bool,
     },
-    PeerLeft {
+    PeerDisconnect {
         peer_id: PeerId,
     }
 }
@@ -62,9 +63,7 @@ pub struct MessageHandler {
 
     events: VecDeque<ProtocolsHandlerEvent<MessageProtocol, (), HandlerOutEvent, HandlerError>>,
 
-    inbound: Option<MessageReceiver>,
-
-    outbound: Option<MessageSender<NegotiatedSubstream>>,
+    socket: Option<MessageDispatch<NegotiatedSubstream>>,
 }
 
 impl MessageHandler {
@@ -75,8 +74,7 @@ impl MessageHandler {
             peer: None,
             waker: None,
             events: VecDeque::new(),
-            inbound: None,
-            outbound: None,
+            socket: None,
         }
     }
 
@@ -100,38 +98,55 @@ impl ProtocolsHandler for MessageHandler {
         SubstreamProtocol::new(MessageProtocol::default(), ())
     }
 
-    fn inject_fully_negotiated_inbound(&mut self, inbound: MessageReceiver, _info: ()) {
+    fn inject_fully_negotiated_inbound(&mut self, socket: MessageDispatch<NegotiatedSubstream>, _info: ()) {
         log::debug!("MessageHandler::inject_fully_negotiated_inbound");
-        assert!(self.inbound.is_none());
-        self.inbound = Some(inbound);
-        self.wake();
+
+        if self.peer.is_none() && self.socket.is_none() {
+            self.socket = Some(socket);
+            self.wake();
+        }
+        else {
+            log::debug!("Connection already established. Ignoring inbound.");
+        }
     }
 
-    fn inject_fully_negotiated_outbound(&mut self, outbound: MessageSender<NegotiatedSubstream>, _info: ()) {
+    fn inject_fully_negotiated_outbound(&mut self, socket: MessageDispatch<NegotiatedSubstream>, _info: ()) {
         log::debug!("MessageHandler::inject_fully_negotiated_outbound");
-        assert!(self.outbound.is_none());
-        self.outbound = Some(outbound);
-        self.wake();
+
+        if self.peer.is_none() && self.socket.is_none() {
+            self.socket = Some(socket);
+            self.wake();
+        }
+        else {
+            log::debug!("Connection already established. Ignoring outbound.");
+        }
     }
 
     fn inject_event(&mut self, event: HandlerInEvent) {
         log::debug!("MessageHandler::inject_event: {:?}", event);
 
         match event {
-            HandlerInEvent::PeerJoined { peer_id } => {
+            HandlerInEvent::PeerConnected { peer_id, outbound } => {
                 assert!(self.peer_id.is_none());
+
+                log::debug!("Requesting outbound substream.");
 
                 self.peer_id = Some(peer_id);
 
-                // Next open the outbound
-                self.events.push_back(ProtocolsHandlerEvent::OutboundSubstreamRequest {
-                    protocol: SubstreamProtocol::new(MessageProtocol::default(), ())
-                });
-                self.wake();
+                if outbound {
+                    // Next open the outbound
+                    self.events.push_back(ProtocolsHandlerEvent::OutboundSubstreamRequest {
+                        protocol: SubstreamProtocol::new(MessageProtocol::default(), ())
+                    });
+                    self.wake();
+                }
             },
 
-            HandlerInEvent::PeerLeft { peer_id } => {
+            HandlerInEvent::PeerDisconnect { peer_id } => {
                 assert!(self.peer.is_some());
+
+                todo!("FIXME: Peer disconnected");
+
                 self.peer = None;
                 self.wake(); // necessary?
             }
@@ -144,7 +159,7 @@ impl ProtocolsHandler for MessageHandler {
         error: ProtocolsHandlerUpgrErr<SerializingError>,
     ) {
         // TODO handle this
-        error!("Dial upgrade error: {:?}", error);
+        panic!("Dial upgrade error: {}", error);
     }
 
     fn connection_keep_alive(&self) -> KeepAlive {
@@ -155,6 +170,7 @@ impl ProtocolsHandler for MessageHandler {
         loop {
             // Emit event
             if let Some(event) = self.events.pop_front() {
+                log::debug!("MessageHandler: emitting event: {:?}", event);
                 return Poll::Ready(event);
             }
 
@@ -172,16 +188,16 @@ impl ProtocolsHandler for MessageHandler {
             }*/
 
             // Wait for outbound and inbound to be established and the peer ID to be injected.
-            if self.inbound.is_none() || self.outbound.is_none() || self.peer_id.is_none() {
+            if self.socket.is_none() || self.peer_id.is_none() {
                 break;
             }
 
             // Take inbound and outbound and create a peer from it.
             let peer_id = self.peer_id.clone().unwrap();
-            let inbound = self.inbound.take().unwrap();
-            let outbound = self.outbound.take().unwrap();
+            let socket = self.socket.take().unwrap();
 
-            let peer = Arc::new(Peer::new(peer_id, inbound, outbound));
+            let peer = Arc::new(Peer::new(peer_id, socket));
+            log::debug!("New peer: {:?}", peer);
 
             self.peer = Some(Arc::clone(&peer));
 

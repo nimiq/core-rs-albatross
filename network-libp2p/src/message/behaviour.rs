@@ -9,7 +9,10 @@ use libp2p::core::Multiaddr;
 use libp2p::swarm::{
     NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, PollParameters, ProtocolsHandler,
 };
-use libp2p::PeerId;
+use libp2p::{
+    core::ConnectedPoint,
+    PeerId
+};
 
 use nimiq_network_interface::network::NetworkEvent;
 
@@ -71,12 +74,17 @@ impl NetworkBehaviour for MessageBehaviour {
 
     fn inject_connected(&mut self, peer_id: &PeerId) {
         log::debug!("Peer connected: {:?}", peer_id);
+    }
+
+    fn inject_connection_established(&mut self, peer_id: &PeerId, connection_id: &ConnectionId, connected_point: &ConnectedPoint) {
+        log::debug!("Connection established: peer_id={:?}, connection_id={:?}, connected_point={:?}", peer_id, connection_id, connected_point);
 
         self.events.push_back(NetworkBehaviourAction::NotifyHandler {
             peer_id: peer_id.clone(),
             handler: NotifyHandler::All,
-            event: HandlerInEvent::PeerJoined {
+            event: HandlerInEvent::PeerConnected {
                 peer_id: peer_id.clone(),
+                outbound: connected_point.is_dialer(),
             },
         });
     }
@@ -89,7 +97,15 @@ impl NetworkBehaviour for MessageBehaviour {
 
         log::debug!("Peer disconnected: {:?}", peer);
 
-        self.events.push_back(NetworkBehaviourAction::GenerateEvent(NetworkEvent::PeerLeft(peer)));
+        self.events.push_back(NetworkBehaviourAction::NotifyHandler {
+            peer_id: peer_id.clone(),
+            handler: NotifyHandler::All,
+            event: HandlerInEvent::PeerDisconnect {
+                peer_id: peer_id.clone(),
+            },
+        });
+
+        self.events.push_back(NetworkBehaviourAction::GenerateEvent(NetworkEvent::PeerDisconnect(peer)))
     }
 
     fn inject_event(
@@ -99,7 +115,14 @@ impl NetworkBehaviour for MessageBehaviour {
         event: HandlerOutEvent,
     ) {
         log::debug!("MessageBehaviour::inject_event: peer_id={:?}: {:?}", peer_id, event);
-        todo!();
+        match event {
+            HandlerOutEvent::PeerJoined { peer } => {
+                self.events.push_back(NetworkBehaviourAction::GenerateEvent(NetworkEvent::PeerJoined(peer)))
+            },
+            /*HandlerOutEvent::PeerLeft { peer } => {
+                self.events.push_back(NetworkEvent::PeerDisconnect(peer))
+            }*/
+        }
     }
 
     fn poll(

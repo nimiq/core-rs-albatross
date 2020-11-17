@@ -103,7 +103,6 @@ impl<W, M> Sink<&M> for MessageWriter<W, M>
         log::trace!("MessageWriter: serialized_size = {}", item.serialized_size());
 
         // Reserve space for the header and message.
-        // TODO: Allow for a generic header struct.
         let n = Serialize::serialized_size(item);
         self_projected.buffer.reserve(n + Header::SIZE);
 
@@ -111,7 +110,7 @@ impl<W, M> Sink<&M> for MessageWriter<W, M>
 
         let mut w = self_projected.buffer.writer();
 
-        // Write header (i.e. length of message)
+        // Write header
         Serialize::serialize(&header, &mut w);
 
         // Serialize the message into the buffer.
@@ -124,6 +123,8 @@ impl<W, M> Sink<&M> for MessageWriter<W, M>
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
         let self_projected = self.project();
+
+        log::trace!("MessageWriter: poll_flush called.");
 
         // Try to finish writing from buffer to the inner `AsyncWrite`
         match write_from_buf(self_projected.inner, self_projected.buffer, cx) {
@@ -139,6 +140,9 @@ impl<W, M> Sink<&M> for MessageWriter<W, M>
 
     fn poll_close(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
         let self_projected = self.project();
+
+        log::trace!("MessageWriter: poll_close called.");
+        panic!("foob");
 
         // Try to finish writing from buffer to the inner `AsyncWrite`
         match write_from_buf(self_projected.inner, self_projected.buffer, cx) {
@@ -172,6 +176,7 @@ mod tests {
 
 
     #[tokio::test]
+    #[test_env_log::test]
     pub async fn it_can_write_a_message() {
         let test_message = TestMessage {
             foo: 42,
@@ -180,11 +185,10 @@ mod tests {
 
         let mut message_writer = MessageWriter::new(vec![]);
 
-        let n = test_message.serialized_size();
         message_writer.send(&test_message).await.unwrap();
 
         let data = message_writer.into_inner();
 
-        assert_eq!(&test_message.serialize_to_vec()[..], &data[Header::SIZE..])
+        assert_eq!(&test_message.serialize_to_vec(), &data[Header::SIZE..])
     }
 }

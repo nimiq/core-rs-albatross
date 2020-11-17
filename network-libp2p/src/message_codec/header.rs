@@ -11,7 +11,7 @@ pub struct Header {
 impl Header {
     pub const MAGIC: u32 = 0x4204_2042;
 
-    pub const SIZE: usize = 14;
+    pub const SIZE: usize = 12;
 
     pub fn new(size: u32) -> Self {
         Self {

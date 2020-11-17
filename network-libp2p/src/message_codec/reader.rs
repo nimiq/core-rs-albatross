@@ -27,12 +27,12 @@ fn read_to_buf<R>(reader: Pin<&mut R>, buffer: &mut BytesMut, n: usize, cx: &mut
     if n > n0 {
         buffer.resize(n, 0);
 
-        log::trace!("MessageReader: read_to_buf: n={}, n0={}", n, n0);
+        log::debug!("MessageReader: read_to_buf: n={}, n0={}", n, n0);
 
         match AsyncRead::poll_read(reader, cx, &mut buffer[n0 .. n]) {
             // EOF
             Poll::Ready(Ok(0)) => {
-                log::trace!("MessageReader: read_to_buf: poll_read returned 0");
+                log::debug!("MessageReader: read_to_buf: poll_read returned 0");
 
                 buffer.resize(n0, 0);
                 Poll::Ready(Ok(false))
@@ -40,7 +40,7 @@ fn read_to_buf<R>(reader: Pin<&mut R>, buffer: &mut BytesMut, n: usize, cx: &mut
 
             // Data was read
             Poll::Ready(Ok(n_read)) => {
-                log::trace!("MessageReader: read_to_buf: Received {} bytes, buffer={:?}", n_read, buffer);
+                log::debug!("MessageReader: read_to_buf: Received {} bytes, buffer={:?}", n_read, buffer);
 
                 // New length of buffer
                 let n_new = n0 + n_read;
@@ -62,7 +62,7 @@ fn read_to_buf<R>(reader: Pin<&mut R>, buffer: &mut BytesMut, n: usize, cx: &mut
 
             // Reader is not ready
             Poll::Pending => {
-                log::trace!("MessageReader: read_to_buf: poll_read pending");
+                log::debug!("MessageReader: read_to_buf: poll_read pending");
 
                 buffer.resize(n0, 0);
                 Poll::Pending
@@ -129,6 +129,10 @@ impl<R, M> MessageReader<R, M> {
     }
 }
 
+fn unexpected_eof<T>() -> Poll<Option<Result<T, SerializingError>>> {
+    Poll::Ready(Some(Err(SerializingError::from(std::io::Error::from(std::io::ErrorKind::UnexpectedEof, )))))
+}
+
 impl<R, M> Stream for MessageReader<R, M>
     where
         R: AsyncRead,
@@ -139,7 +143,7 @@ impl<R, M> Stream for MessageReader<R, M>
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let self_projected = self.project();
 
-        log::trace!("MessageReader::poll_next: buffer={:?}", self_projected.buffer);
+        log::debug!("MessageReader::poll_next: buffer={:?}", self_projected.buffer);
 
         let (new_state, message) = match &self_projected.state {
             ReaderState::Head => {
@@ -149,7 +153,10 @@ impl<R, M> Stream for MessageReader<R, M>
                     Poll::Pending => return Poll::Pending,
 
                     // An error occured.
-                    Poll::Ready(Err(e)) => return Poll::Ready(Some(Err(e.into()))),
+                    Poll::Ready(Err(e)) => return {
+                        log::error!("Inner AsyncRead returned an error: {}", e);
+                        Poll::Ready(Some(Err(e.into())))
+                    },
 
                     // EOF while reading the header.
                     Poll::Ready(Ok(false)) => {
@@ -158,7 +165,7 @@ impl<R, M> Stream for MessageReader<R, M>
                             return Poll::Ready(None)
                         }
                         else {
-                            return Poll::Ready(Some(Err(SerializingError::from(std::io::Error::from(std::io::ErrorKind::UnexpectedEof)))))
+                            return unexpected_eof()
                         }
                     },
 
@@ -193,7 +200,7 @@ impl<R, M> Stream for MessageReader<R, M>
                     Poll::Ready(Err(e)) => return Poll::Ready(Some(Err(e.into()))),
 
                     // EOF while reading the data.
-                    Poll::Ready(Ok(false)) => return Poll::Ready(Some(Err(SerializingError::from(std::io::Error::from(std::io::ErrorKind::UnexpectedEof, ))))),
+                    Poll::Ready(Ok(false)) => return unexpected_eof(),
 
                     // Finished reading the message
                     Poll::Ready(Ok(true)) => (),
@@ -211,7 +218,7 @@ impl<R, M> Stream for MessageReader<R, M>
                 // Reset the buffer
                 self_projected.buffer.clear();
 
-                log::trace!("MessageReader: Received message: {:?}", message);
+                log::debug!("MessageReader: Received message: {:?}", message);
 
                 (ReaderState::Head, Some(message))
             },

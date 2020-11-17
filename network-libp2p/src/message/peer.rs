@@ -21,7 +21,7 @@ use nimiq_network_interface::peer::{
 };
 use nimiq_network_interface::{message, message::Message};
 
-use super::dispatch::{MessageReceiver, MessageSender};
+use super::dispatch::MessageDispatch;
 use crate::network::NetworkError;
 
 #[derive(Debug)]
@@ -33,8 +33,7 @@ pub(crate) enum PeerAction {
 pub struct Peer {
     pub id: PeerId,
 
-    inbound: MessageReceiver,
-    outbound: MessageSender<NegotiatedSubstream>,
+    socket: MessageDispatch<NegotiatedSubstream>,
 
     //tx: AsyncMutex<mpsc::Sender<PeerAction>>,
     //channels: Mutex<HashMap<u64, Pin<Box<dyn Sink<Vec<u8>, Error = DispatchError> + Send + Sync>>>>,
@@ -42,11 +41,10 @@ pub struct Peer {
 }
 
 impl Peer {
-    pub(crate) fn new(id: PeerId, inbound: MessageReceiver, outbound: MessageSender<NegotiatedSubstream>) -> Self {
+    pub(crate) fn new(id: PeerId, socket: MessageDispatch<NegotiatedSubstream>) -> Self {
         Self {
             id,
-            inbound,
-            outbound,
+            socket,
         }
     }
 }
@@ -82,12 +80,12 @@ impl PeerInterface for Peer {
         self.id.clone()
     }
 
-    async fn send<M: Message>(&self, msg: &M) -> Result<(), SendError> {
-        Ok(self.outbound.send(msg).await?)
+    async fn send<M: Message>(&self, message: &M) -> Result<(), SendError> {
+        Ok(self.socket.outbound.send(message).await?)
     }
 
     fn receive<M: Message>(&self) -> Pin<Box<dyn Stream<Item = M> + Send>> {
-        Box::pin(self.inbound.receive())
+        Box::pin(self.socket.inbound.receive())
     }
 
     async fn close(&self, _ty: CloseReason) {

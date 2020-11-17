@@ -71,7 +71,7 @@ impl SwarmTask {
                 .map_err(|err| warn!("Failed to dial addr: {:?}", err)),
         }
         // TODO Error handling?
-        .unwrap_or(())
+        .unwrap_or(());
     }
 }
 
@@ -171,10 +171,7 @@ impl Network {
         Ok(transport
             .upgrade(core::upgrade::Version::V1)
             .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
-            .multiplex(core::upgrade::SelectUpgrade::new(
-                yamux::Config::default(),
-                mplex::MplexConfig::new(),
-            ))
+            .multiplex(yamux::Config::default())
             .timeout(std::time::Duration::from_secs(20))
             .boxed())
     }
@@ -301,7 +298,7 @@ mod tests {
 
     use crate::network::Network;
 
-    #[derive(Deserialize, Serialize)]
+    #[derive(Clone, Debug, Deserialize, Serialize)]
     struct TestMessage {
         id: u32,
     }
@@ -311,23 +308,31 @@ mod tests {
     }
 
     async fn create_connected_networks() -> (Network, Network) {
+        log::info!("Creating connected test networks:");
         let addr1 = multiaddr![Memory(thread_rng().gen::<u64>())];
         let addr2 = multiaddr![Memory(thread_rng().gen::<u64>())];
 
         let net1 = Network::new(addr1.clone());
         let net2 = Network::new(addr2.clone());
 
+        log::info!(" Network 1: {}", addr1);
+        log::info!(" Network 2: {}", addr1);
+
         net2.dial_addr(addr1);
 
         let mut events1 = net1.subscribe_events();
         let mut events2 = net2.subscribe_events();
 
-        future::join(events1.next(), events2.next()).await;
+        let (event1, event2) = future::join(events1.next(), events2.next()).await;
+
+        log::info!(" Event 1: {:?}", event1);
+        log::info!(" Event 2: {:?}", event2);
 
         (net1, net2)
     }
 
     #[tokio::test]
+    #[test_env_log::test]
     async fn two_networks_can_connect() {
         let (net1, net2) = create_connected_networks().await;
         assert_eq!(net1.get_peers().len(), 1);
@@ -340,22 +345,45 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn peers_can_talk_to_each_other() {
+    async fn one_peer_can_talk_to_another() {
         let (net1, net2) = create_connected_networks().await;
 
         let peer2 = net1.get_peer(net2.local_peer_id()).unwrap();
         let peer1 = net2.get_peer(net1.local_peer_id()).unwrap();
 
         let mut msgs = peer1.receive::<TestMessage>();
+
         peer2.send(&TestMessage { id: 4711 }).await.unwrap();
+
+        log::info!("Send complete");
+
         let msg = msgs.next().await.unwrap();
+
         assert_eq!(msg.id, 4711);
     }
 
     #[tokio::test]
-    async fn connections_are_properly_closed() {
-        pretty_env_logger::init();
+    async fn both_peers_can_talk_with_each_other() {
+        let (net1, net2) = create_connected_networks().await;
 
+        let peer2 = net1.get_peer(net2.local_peer_id()).unwrap();
+        let peer1 = net2.get_peer(net1.local_peer_id()).unwrap();
+
+        let mut in1 = peer1.receive::<TestMessage>();
+        let mut in2 = peer2.receive::<TestMessage>();
+
+        peer1.send(&TestMessage { id: 1337 }).await.unwrap();
+        peer2.send(&TestMessage { id: 420 }).await.unwrap();
+
+        let msg1 = in2.next().await.unwrap();
+        let msg2 = in1.next().await.unwrap();
+
+        assert_eq!(msg1.id, 1337);
+        assert_eq!(msg2.id, 420);
+    }
+
+    #[tokio::test]
+    async fn connections_are_properly_closed() {
         let (net1, net2) = create_connected_networks().await;
 
         let peer2 = net1.get_peer(net2.local_peer_id()).unwrap();

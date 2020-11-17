@@ -5,7 +5,7 @@ use std::{
 
 use futures::{
     channel::mpsc,
-    future, AsyncRead, AsyncWrite, AsyncWriteExt, FutureExt,
+    future, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, FutureExt,
 };
 use libp2p::{
     core::UpgradeInfo,
@@ -17,12 +17,12 @@ use nimiq_network_interface::message;
 
 use crate::MESSAGE_PROTOCOL;
 use super::{
-    dispatch::{MessageSender, MessageReceiver},
+    dispatch::MessageDispatch,
     peer::Peer,
 };
 
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct MessageProtocol {
     peer: Option<Arc<Peer>>,
 }
@@ -46,26 +46,24 @@ impl<C> InboundUpgrade<C> for MessageProtocol
     where
         C: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static,
 {
-    type Output = MessageReceiver;
+    type Output = MessageDispatch<C>;
     type Error = SerializingError;
-    type Future = future::Ready<Result<MessageReceiver, SerializingError>>;
+    type Future = future::Ready<Result<MessageDispatch<C>, SerializingError>>;
 
     fn upgrade_inbound(self, socket: C, _info: Self::Info) -> Self::Future {
-        log::debug!("MessageProtocol::upgrade_inbound");
-        future::ok(MessageReceiver::new(socket))
+        future::ok(MessageDispatch::new(socket))
     }
 }
 
 impl<C> OutboundUpgrade<C> for MessageProtocol
     where
-        C: AsyncRead + AsyncWrite + Send + Unpin + 'static,
+        C: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static,
 {
-    type Output = MessageSender<C>;
+    type Output = MessageDispatch<C>;
     type Error = SerializingError;
-    type Future = future::Ready<Result<MessageSender<C>, SerializingError>>;
+    type Future = future::Ready<Result<MessageDispatch<C>, SerializingError>>;
 
     fn upgrade_outbound(self, mut socket: C, _info: Self::Info) -> Self::Future {
-        log::debug!("MessageProtocol::upgrade_outbound");
-        future::ok(MessageSender::new(socket))
+        future::ok(MessageDispatch::new(socket))
     }
 }
