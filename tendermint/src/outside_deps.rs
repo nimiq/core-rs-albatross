@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use nimiq_hash::Blake2sHash;
 
 /// The (async) trait that we need for all of Tendermint's low-level functions. The functions are
-/// mostly about producing/verifying proposals and networking.
+/// mostly about producing proposals and networking.
 #[async_trait]
 pub trait TendermintOutsideDeps {
     type ProposalTy: ProposalTrait;
@@ -19,10 +19,8 @@ pub trait TendermintOutsideDeps {
     /// Checks if it our turn to propose for the given round.
     fn is_our_turn(&self, round: u32) -> bool;
 
-    /// Checks if a proposal is valid.
-    fn is_valid(&self, proposal: Self::ProposalTy) -> bool;
-
-    /// Produces a proposal for the given round. It is used when it is our turn to propose.
+    /// Produces a proposal for the given round. It is used when it is our turn to propose. The
+    /// proposal is guaranteed to be valid.
     fn get_value(&self, round: u32) -> Result<Self::ProposalTy, TendermintError>;
 
     /// Takes a proposal and a proof (2f+1 precommits) and returns a completed block.
@@ -42,7 +40,8 @@ pub trait TendermintOutsideDeps {
     ) -> Result<(), TendermintError>;
 
     /// Waits for a proposal message (which includes the proposal and the proposer's valid round).
-    /// It also has to take care of waiting before timing out.
+    /// The received proposal (if any) is guaranteed to be valid. This function also has to take
+    /// care of waiting before timing out.
     /// This is a Future and it is allowed to fail.
     async fn await_proposal(
         &self,
@@ -64,7 +63,8 @@ pub trait TendermintOutsideDeps {
     /// Returns the current aggregation for a given round and step. The returned aggregation might
     /// or not have 2f+1 votes, this function only returns all the votes that we have so far.
     /// It will fail if no aggregation was started for the given round and step.
-    fn get_aggregation(
+    /// This is a Future and it is allowed to fail.
+    async fn get_aggregation(
         &self,
         round: u32,
         step: Step,

@@ -8,12 +8,15 @@ provided that describes the required functions.
 ## Implementation
 
 This Tendermint implementation works like a state machine, moving from state to state until it either returns a
-completed block or an error. It was necessary to do two modifications to the original protocol in order to be able to
+completed block or an error. It was necessary to do three modifications to the original protocol in order to be able to
 refactor it from its original message passing form into the state machine form that we use:
 
 1. For each round, we only accept the first proposal that we receive. Since Tendermint is designed to work even if the
 proposer sends different proposals to each node, and the nodes don't rebroadcast the proposals they receive, we can
 safely ignore any subsequent proposals that we receive after the first one.
+
+2. We only accept valid proposals from the network, so that we don't need to check the validity of the proposal during
+the protocol. This guarantees that we never double-check the validity of a proposal, which would be wasted computation.
 
 2. The protocol assumes that we are always listening for proposals and precommit messages, and if we receive any
 proposal with 2f+1 precommits accompanying it, we are supposed to accept it and terminate. We don't do this. Instead, we

@@ -6,12 +6,14 @@ use crate::{ProofTrait, ProposalTrait, ResultTrait};
 
 /// This section has methods that implement the Tendermint protocol as described in the original
 /// paper (https://arxiv.org/abs/1807.04938v3).
-/// We made two modifications:
+/// We made three modifications:
 /// 1) For each round, we only accept the first proposal that we receive. Since Tendermint is
 ///    designed to work even if the proposer sends different proposals to each node, and the nodes
 ///    don't rebroadcast the proposals they receive, we can safely ignore any subsequent proposals
 ///    that we receive after the first one.
-/// 2) The protocol assumes that we are always listening for proposals and precommit messages, and
+/// 2) We only accept valid proposals to begin with, so we don't need to check the validity of the
+///    proposal during the protocol.
+/// 3) The protocol assumes that we are always listening for proposals and precommit messages, and
 ///    if we receive any proposal with 2f+1 precommits accompanying it, we are supposed to accept it
 ///    and terminate. We don't do this. Instead we assume that the validator crate will be listening
 ///    for completed blocks and will terminate Tendermint when it receives one.
@@ -69,11 +71,8 @@ impl<
 
         let round = self.state.round;
 
-        if self
-            .deps
-            .is_valid(self.state.current_proposal.clone().unwrap())
-            && (self.state.locked_round.is_none()
-                || self.state.locked_value == self.state.current_proposal)
+        if self.state.locked_round.is_none()
+            || self.state.locked_value == self.state.current_proposal
         {
             self.broadcast_and_aggregate_prevote(round, VoteDecision::Block)
                 .await?;
@@ -93,11 +92,8 @@ impl<
 
         let round = self.state.round;
 
-        if self
-            .deps
-            .is_valid(self.state.current_proposal.clone().unwrap())
-            && (self.state.locked_round.unwrap_or(0) <= self.state.current_proposal_vr.unwrap()
-                || self.state.locked_value == self.state.current_proposal)
+        if self.state.locked_round.unwrap_or(0) <= self.state.current_proposal_vr.unwrap()
+            || self.state.locked_value == self.state.current_proposal
         {
             self.broadcast_and_aggregate_prevote(round, VoteDecision::Block)
                 .await?;

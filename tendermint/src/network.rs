@@ -17,7 +17,7 @@ impl<
     > Tendermint<ProposalTy, ProofTy, ResultTy, DepsTy>
 {
     /// Wait for a proposal for a given round from that round's proposer. The proposal that we
-    /// receive might or not be valid, validity of the proposal is checked in the protocol methods.
+    /// is guaranteed to be valid.
     pub(crate) async fn await_proposal(&mut self, round: u32) -> Result<(), TendermintError> {
         // Wait for the proposal and receive ProposalResult.
         let proposal_res = self.deps.await_proposal(round).await?;
@@ -38,7 +38,8 @@ impl<
                     && has_2f1_votes(
                         proposal.hash(),
                         self.deps
-                            .get_aggregation(valid_round.unwrap(), Step::Prevote)?,
+                            .get_aggregation(valid_round.unwrap(), Step::Prevote)
+                            .await?,
                     )
                 {
                     self.state.current_proposal = Some(proposal);
@@ -82,18 +83,21 @@ impl<
         // return.
         let prevote_agg = self
             .deps
-            .broadcast_and_aggregate(round, Step::Prevote, proposal_hash.clone())
+            .broadcast_and_aggregate(round, Step::Prevote, proposal_hash)
             .await?;
+
+        // We also get the current proposal and hash it. We need it for the next step.
+        let current_proposal_hash = self.state.current_proposal.clone().map(|p| p.hash());
 
         // We transform the aggregation we got into an actual vote result. See the function for more
         // details.
-        let prevote = aggregation_to_vote(proposal_hash, prevote_agg);
+        let prevote = aggregation_to_vote(current_proposal_hash, prevote_agg);
 
         // Match the vote result and update Tendermint's state.
         match prevote {
             VoteResult::Block(_) => {
-                // We only get the Block result if there were 2f+1 prevotes for the proposal we
-                // voted on (not Nil or another proposal), so we are guaranteed that:
+                // We only get the Block result if there were 2f+1 prevotes for the current proposal
+                // (assuming it is not None), so we are guaranteed that:
                 //      1) we have a proposal,
                 //      2) it is valid, and
                 //      3) the 2f+1 prevotes are for this proposal.
@@ -142,18 +146,21 @@ impl<
         // return.
         let precom_agg = self
             .deps
-            .broadcast_and_aggregate(round, Step::Precommit, proposal_hash.clone())
+            .broadcast_and_aggregate(round, Step::Precommit, proposal_hash)
             .await?;
+
+        // We also get the current proposal and hash it. We need it for the next step.
+        let current_proposal_hash = self.state.current_proposal.clone().map(|p| p.hash());
 
         // We transform the aggregation we got into an actual vote result. See the function for more
         // details.
-        let precommit = aggregation_to_vote(proposal_hash, precom_agg);
+        let precommit = aggregation_to_vote(current_proposal_hash, precom_agg);
 
         // Match the vote result and update Tendermint's state.
         match precommit {
             VoteResult::Block(proof) => {
-                // We only get the Block result if there were 2f+1 precommits for the proposal we
-                // voted on (not Nil or another proposal). The proof is simply the aggregation of
+                // We only get the Block result if there were 2f+1 precommits for the current
+                // proposal (assuming it is not None). The proof is simply the aggregation of
                 // those 2f+1 precommits (The signatures more specifically. But they are not just
                 // signatures of the proposal hash, it's a bit more complicated. See the Handel
                 // crate for more details.), we need it to assemble the block.

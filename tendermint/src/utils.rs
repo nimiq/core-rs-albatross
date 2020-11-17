@@ -102,7 +102,7 @@ pub enum TendermintError {
 /// just returns the raw vote messages it got (albeit in an aggregated form), so we need provide the
 /// semantics to translate that into the VoteResult that the Tendermint protocol expects.
 pub(crate) fn aggregation_to_vote<ProofTy: ProofTrait>(
-    // This is the hash of the proposal we voted for (None means we voted for Nil).
+    // This is the hash of the current proposal (None means we don't have a current proposal).
     proposal: Option<Blake2sHash>,
     aggregation: AggregationResult<ProofTy>,
 ) -> VoteResult<ProofTy> {
@@ -112,17 +112,15 @@ pub(crate) fn aggregation_to_vote<ProofTy: ProofTrait>(
             if proposal.is_some()
                 && agg.get(&proposal).map_or(0, |x| x.1) >= TWO_THIRD_SLOTS as usize
             {
-                // If we received 2f+1 votes for the same proposal that we voted on (assuming that
-                // we didn't vote Nil), then we must return Block.
+                // If we received 2f+1 votes for the current (assuming that it isn't None), then we
+                // must return Block.
                 VoteResult::Block(agg.get(&proposal).cloned().unwrap().0)
             } else if agg.get(&None).map_or(0, |x| x.1) >= TWO_THIRD_SLOTS as usize {
-                // If we received 2f+1 votes for Nil (irrespective of us voting for a block or not),
-                // then we must return Nil.
+                // If we received 2f+1 votes for Nil, then we must return Nil.
                 VoteResult::Nil(agg.get(&None).cloned().unwrap().0)
             } else {
                 // There are two cases when we must return Timeout:
-                // 1) When we receive 2f+1 votes for a proposal for which we didn't vote (so we
-                //    voted Nil or for a different proposal).
+                // 1) When we receive 2f+1 votes for a proposal that we don't have.
                 // 2) When we don't have 2f+1 votes for a single proposal or for Nil.
                 VoteResult::Timeout
             }

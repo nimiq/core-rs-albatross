@@ -11,8 +11,8 @@ use futures::Stream;
 /// protocol.
 /// You need to input some type that implements the TendermintOutsideDeps trait, this trait has all
 /// the methods that Tendermint needs in order to interact with the network, produce proposals,
-/// verify proposals, etc. This code only implements the high-level Tendermint protocol, so
-/// TendermintOutsideDeps needs to provide all that low-level functionality.
+/// etc. This code only implements the high-level Tendermint protocol, so TendermintOutsideDeps
+/// needs to provide all that low-level functionality.
 /// Optionally, we can also input a TendermintState. This allows us to recover from a previous
 /// state. The Stream is always sending the current state. If, for some reason, Tendermint gets
 /// interrupted, we can resume from where we left off by calling `expect_block` with the last state
