@@ -59,7 +59,7 @@ impl ProtocolsHandler for LimitHandler {
     }
 
     fn connection_keep_alive(&self) -> KeepAlive {
-        KeepAlive::Yes
+        KeepAlive::No
     }
 
     fn poll(&mut self, cx: &mut Context) -> Poll<ProtocolsHandlerEvent<Self::OutboundProtocol, (), HandlerOutEvent, HandlerError>> {

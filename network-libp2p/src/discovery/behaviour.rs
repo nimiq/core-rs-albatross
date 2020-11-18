@@ -5,7 +5,7 @@ use std::{
 };
 
 use libp2p::{
-    swarm::{NetworkBehaviour, PollParameters, NetworkBehaviourAction, NotifyHandler},
+    swarm::{NetworkBehaviour, PollParameters, NetworkBehaviourAction, NotifyHandler, KeepAlive},
     core::connection::{ConnectionId, ConnectedPoint},
     identity::Keypair,
     PeerId, Multiaddr,
@@ -51,6 +51,9 @@ pub struct DiscoveryConfig {
 
     /// Interval in which the peer address book is cleaned up.
     pub house_keeping_interval: Duration,
+
+    /// Whether to keep the connection alive, even if no other behaviour uses it.
+    pub keep_alive: KeepAlive,
 }
 
 
@@ -68,7 +71,7 @@ pub enum DiscoveryEvent {
 /// When a connection to a peer is established, a handshake is done to exchange protocols and services filters, and
 /// subscription settings. The peers then send updates to each other in a configurable interval.
 ///
-pub struct Discovery {
+pub struct DiscoveryBehaviour {
     /// Configuration for the discovery behaviour
     config: DiscoveryConfig,
 
@@ -89,7 +92,7 @@ pub struct Discovery {
 }
 
 
-impl Discovery {
+impl DiscoveryBehaviour {
     pub fn new(config: DiscoveryConfig, keypair: Keypair, peer_contact_book: Arc<RwLock<PeerContactBook>>) -> Self {
         let house_keeping_timer = Interval::new(config.house_keeping_interval);
 
@@ -109,7 +112,7 @@ impl Discovery {
 }
 
 
-impl NetworkBehaviour for Discovery {
+impl NetworkBehaviour for DiscoveryBehaviour {
     type ProtocolsHandler = DiscoveryHandler;
     type OutEvent = DiscoveryEvent;
 
@@ -163,7 +166,7 @@ impl NetworkBehaviour for Discovery {
     }
 
     fn inject_event(&mut self, peer_id: PeerId, _connection: ConnectionId, event: HandlerOutEvent) {
-        log::debug!("DiscoveryBehaviour::inject_event: {}", peer_id);
+        log::debug!("DiscoveryBehaviour::inject_event: peer_id={}: {:?}", peer_id, event);
 
         match event {
             HandlerOutEvent::PeerExchangeEstablished { peer_contact } => {

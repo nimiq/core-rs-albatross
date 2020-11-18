@@ -22,36 +22,38 @@ use nimiq_network_interface::message::Message;
 use super::dispatch::MessageDispatch;
 use crate::network::NetworkError;
 
-#[derive(Debug)]
-pub(crate) enum PeerAction {
-    Message(PeerId, Vec<u8>),
-    Close(PeerId),
-}
 
 pub struct Peer {
     pub id: PeerId,
 
-    socket: MessageDispatch<NegotiatedSubstream>,
+    pub(crate) socket: MessageDispatch<NegotiatedSubstream>,
 
-    //tx: AsyncMutex<mpsc::Sender<PeerAction>>,
-    //channels: Mutex<HashMap<u64, Pin<Box<dyn Sink<Vec<u8>, Error = DispatchError> + Send + Sync>>>>,
-    //pub banned: bool,
+    close_tx: Mutex<Option<oneshot::Sender<CloseReason>>>,
 }
 
 impl Peer {
-    pub(crate) fn new(id: PeerId, socket: MessageDispatch<NegotiatedSubstream>) -> Self {
+    pub fn new(id: PeerId, socket: MessageDispatch<NegotiatedSubstream>, close_tx: oneshot::Sender<CloseReason>) -> Self {
         Self {
             id,
             socket,
+            close_tx: Mutex::new(Some(close_tx)),
         }
     }
+
+
 }
 
 impl std::fmt::Debug for Peer {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        f.debug_struct("Peer")
-            .field("peer_id", &self.id())
-            .finish()
+        let mut debug = f.debug_struct("Peer");
+
+        debug.field("peer_id", &self.id());
+
+        if self.close_tx.lock().is_none() {
+            debug.field("closed", &true);
+        }
+
+        debug.finish()
     }
 }
 
@@ -68,6 +70,7 @@ impl Hash for Peer {
         self.id.hash(state)
     }
 }
+
 
 #[async_trait]
 impl PeerInterface for Peer {
@@ -86,8 +89,21 @@ impl PeerInterface for Peer {
         Box::pin(self.socket.inbound.receive())
     }
 
-    async fn close(&self, _ty: CloseReason) {
+    async fn close(&self, reason: CloseReason) {
+        log::debug!("Peer::close: reason={:?}", reason);
 
+        let close_tx_opt = self.close_tx.lock().take();
+
+        if let Some(close_tx) = close_tx_opt {
+            self.socket.close().await;
+
+            if let Err(_) = close_tx.send(reason) {
+                log::error!("The receiver for Peer::close was already dropped.");
+            }
+        }
+        else {
+            log::debug!("Peer is already closed");
+        }
     }
 
     async fn request<R: RequestResponse>(&self, _request: &<R as RequestResponse>::Request) -> Result<R::Response, Self::Error> {

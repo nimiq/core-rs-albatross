@@ -10,16 +10,17 @@ use libp2p::{
         multiaddr::{multiaddr, Multiaddr},
         upgrade::Version,
     },
-    swarm::Swarm,
+    swarm::{Swarm, KeepAlive},
     noise::{self, NoiseConfig},
-    yamux, PeerId, Transport,
+    yamux::YamuxConfig,
+    PeerId, Transport,
 };
 use futures::StreamExt;
 use parking_lot::RwLock;
 use rand::{thread_rng, Rng};
 
 use nimiq_network_libp2p::discovery::{
-    behaviour::{Discovery, DiscoveryConfig, DiscoveryEvent},
+    behaviour::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryEvent},
     peer_contacts::{PeerContact, Services, Protocols},
 };
 use nimiq_hash::Blake2bHash;
@@ -28,7 +29,7 @@ use nimiq_network_libp2p::discovery::peer_contacts::{PeerContactBook, SignedPeer
 
 struct TestNode {
     peer_id: PeerId,
-    swarm: Swarm<Discovery>,
+    swarm: Swarm<DiscoveryBehaviour>,
     peer_contact_book: Arc<RwLock<PeerContactBook>>,
     address: Multiaddr,
 }
@@ -50,7 +51,7 @@ impl TestNode {
         let transport = base_transport
             .upgrade(Version::V1) // `Version::V1Lazy` Allows for 0-RTT negotiation
             .authenticate(NoiseConfig::xx(noise_keys).into_authenticated())
-            .multiplex(yamux::Config::default())
+            .multiplex(YamuxConfig::default())
             .timeout(Duration::from_secs(20))
             .boxed();
 
@@ -63,6 +64,7 @@ impl TestNode {
             services_filter: Services::all(),
             min_recv_update_interval: Duration::from_secs(1),
             house_keeping_interval: Duration::from_secs(1),
+            keep_alive: KeepAlive::Yes,
         };
 
         let peer_contact = PeerContact {
@@ -74,7 +76,7 @@ impl TestNode {
 
         let peer_contact_book = Arc::new(RwLock::new(PeerContactBook::new(Default::default(), peer_contact)));
 
-        let behaviour = Discovery::new(config, keypair, Arc::clone(&peer_contact_book));
+        let behaviour = DiscoveryBehaviour::new(config, keypair, Arc::clone(&peer_contact_book));
 
         let mut swarm = Swarm::new(transport, behaviour, peer_id.clone());
 
@@ -182,8 +184,6 @@ pub async fn test_exchanging_peers() {
 
 #[tokio::test]
 pub async fn test_dialing_peer_from_contacts() {
-    //pretty_env_logger::init();
-
     // create nodes
     let mut node1 = TestNode::new();
     let node2 = TestNode::new();

@@ -408,7 +408,7 @@ impl NetworkInterface for Network {
     type PeerType = PeerChannel;
     type Error = NetworkError;
 
-    fn get_peers(&self) -> Vec<Arc<Self::PeerType>> {
+    async fn get_peers(&self) -> Vec<Arc<Self::PeerType>> {
         self.connections
             .state()
             .connection_iter()
@@ -417,10 +417,10 @@ impl NetworkInterface for Network {
             .collect::<Vec<_>>()
     }
 
-    fn get_peer(&self, peer_id: &<Self::PeerType as PeerInterface>::Id) -> Option<Arc<Self::PeerType>> {
+    async fn get_peer(&self, peer_id: <Self::PeerType as PeerInterface>::Id) -> Option<Arc<Self::PeerType>> {
         self.connections
             .state()
-            .get_connection_by_peer_address(peer_id)
+            .get_connection_by_peer_address(&peer_id)
             .map(|info| info.peer_channel())
             .flatten()
     }

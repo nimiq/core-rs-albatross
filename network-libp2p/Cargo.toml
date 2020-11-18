@@ -18,9 +18,9 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 async-trait = "0.1"
-futures = "0.3"
+futures = { version = "0.3", features = ["bilock"] }
 ip_network = "0.3"
-libp2p = "0.29"
+libp2p = "0.30"
 log = "0.4"
 parking_lot = "0.9"
 rand = "0.7.3"
@@ -43,7 +43,6 @@ nimiq-macros = { path = "../macros", version = "0.1" }
 nimiq-hash = { path = "../hash", version = "0.1" }
 
 [dev-dependencies]
-test-env-log = "0.2"
 env_logger = "0.8"
 
 [features]

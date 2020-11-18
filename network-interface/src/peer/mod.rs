@@ -12,9 +12,10 @@ use crate::message::Message;
 
 pub mod dispatch;
 
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum CloseReason {
     Other,
+    RemoteClosed,
 }
 
 #[derive(Debug, Error)]

@@ -1,12 +1,11 @@
 use std::{
     collections::VecDeque,
     sync::Arc,
-    io,
+    pin::Pin,
 };
 
 use futures::{
     task::{Context, Poll, Waker},
-    channel::mpsc,
     channel::oneshot,
     Future,
 };
@@ -18,11 +17,13 @@ use libp2p::{
     PeerId,
 };
 use thiserror::Error;
+use nimiq_network_interface::peer::CloseReason;
 
 use beserial::SerializingError;
 
+
 use super::{
-    peer::{Peer, PeerAction},
+    peer::Peer,
     protocol::MessageProtocol,
     dispatch::MessageDispatch,
     behaviour::MessageConfig,
@@ -34,22 +35,29 @@ pub enum HandlerInEvent {
         peer_id: PeerId,
         outbound: bool,
     },
-    PeerDisconnect {
-        peer_id: PeerId,
-    }
+    //PeerDisconnected,
 }
 
 #[derive(Clone, Debug)]
 pub enum HandlerOutEvent {
     PeerJoined {
         peer: Arc<Peer>,
-    }
+    },
+    PeerClosed {
+        peer: Arc<Peer>,
+        reason: CloseReason,
+    },
 }
 
 #[derive(Debug, Error)]
 pub enum HandlerError {
     #[error("Serialization error: {0}")]
     Serializing(#[from] SerializingError),
+
+    #[error("Connection closed: reason={:?}", {0})]
+    ConnectionClosed {
+        reason: CloseReason,
+    },
 }
 
 
@@ -61,6 +69,8 @@ pub struct MessageHandler {
     peer_id: Option<PeerId>,
 
     peer: Option<Arc<Peer>>,
+
+    close_rx: Option<oneshot::Receiver<CloseReason>>,
 
     waker: Option<Waker>,
 
@@ -75,6 +85,7 @@ impl MessageHandler {
             config,
             peer_id: None,
             peer: None,
+            close_rx: None,
             waker: None,
             events: VecDeque::new(),
             socket: None,
@@ -145,14 +156,26 @@ impl ProtocolsHandler for MessageHandler {
                 }
             },
 
-            HandlerInEvent::PeerDisconnect { peer_id } => {
-                assert!(self.peer.is_some());
+            /*HandlerInEvent::PeerDisconnected => {
+                unreachable!();
+                // FIXME: Actually I think this is never called.
+                // If `self.peer` is `None`, it was closed by this handler already.
+                // TODO: We can expect `self.peer` to be Some here.
+                if let Some(peer) = self.peer.take() {
+                    self.socket = None;
+                    self.close_rx = None;
+                    self.keep_alive = KeepAlive::No;
 
-                self.peer = None;
-                self.wake(); // necessary?
+                    log::debug!("Peer disconnected: {:?}", peer);
 
-                todo!("FIXME: Peer disconnected");
-            }
+                    self.events.push_back(ProtocolsHandlerEvent::Custom(HandlerOutEvent::PeerClosed {
+                        reason: CloseReason::Other, // TODO: We might have a reason from the close_rx
+                        peer
+                    }));
+
+                    self.wake();
+                }
+            },*/
         }
     }
 
@@ -177,6 +200,55 @@ impl ProtocolsHandler for MessageHandler {
                 return Poll::Ready(event);
             }
 
+            // Poll the oneshot receiver that signals us when the peer is closed
+            if let Some(close_rx) = &mut self.close_rx {
+                match Pin::new(close_rx).poll(cx) { // TODO: use .poll_unpin()
+                    Poll::Ready(Ok(reason)) => {
+                        let peer = Arc::clone(self.peer.as_ref().expect("Expected peer"));
+
+                        log::debug!("MessageHandler: Closing peer: {:?}", peer);
+
+                        // Drop peer and socket
+                        // This is not needed as the returned event will cause the handler to be dropped.
+                        /*self.peer = None;
+                        self.socket = None;
+                        self.close_rx = None;
+
+                        // Close connection as soon as possible
+                        self.keep_alive = KeepAlive::No;*/
+
+                        // If the peer signals use that they were closed, we emit that event to the behaviour.
+                        /*return Poll::Ready(ProtocolsHandlerEvent::Custom(HandlerOutEvent::PeerClosed {
+                            reason,
+                            peer,
+                        }));*/
+
+                        return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::ConnectionClosed {
+                            reason,
+                        }));
+                    },
+                    Poll::Ready(Err(_)) => unimplemented!(), // Channel was closed without message.
+                    Poll::Pending => {},
+                }
+            }
+
+            if let Some(peer) = &self.peer {
+                // Poll the MessageReceiver if an error occured
+                match peer.socket.inbound.poll_error(cx) {
+                    Poll::Ready(Some(e)) => {
+                        // TODO: Check if `e` is actually an EOF and not just another error. And put that error into
+                        //       the `CloseReason`.
+                        log::debug!("Remote closed connection: {}", e);
+
+                        return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::ConnectionClosed {
+                            reason: CloseReason::RemoteClosed
+                        }))
+                    },
+                    _ => {},
+                }
+
+            }
+
             // If the peer is already available, poll it and return
             // TODO: Poll the future in the MessageReceiver
             /*if let Some(peer) = self.peer.as_mut() {
@@ -195,13 +267,19 @@ impl ProtocolsHandler for MessageHandler {
                 break;
             }
 
+            assert!(self.peer.is_none());
+            assert!(self.close_rx.is_none());
+
             // Take inbound and outbound and create a peer from it.
             let peer_id = self.peer_id.clone().unwrap();
             let socket = self.socket.take().unwrap();
 
-            let peer = Arc::new(Peer::new(peer_id, socket));
+            let (close_tx, close_rx) = oneshot::channel();
+
+            let peer = Arc::new(Peer::new(peer_id, socket, close_tx));
             log::debug!("New peer: {:?}", peer);
 
+            self.close_rx = Some(close_rx);
             self.peer = Some(Arc::clone(&peer));
 
             // Send peer to behaviour

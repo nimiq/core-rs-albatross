@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use super::network::MockNetwork;
 use async_trait::async_trait;
-use futures::{stream, Stream, StreamExt};
+use futures::{Stream, StreamExt};
 use std::pin::Pin;
 
 use nimiq_network_interface::message::Message;
@@ -39,7 +39,7 @@ impl ValidatorNetwork for MockValidatorNetwork {
 
         for validator in validator_ids {
             // for every validator get the respective peer from the underliying MockNetwork instance
-            if let Some(peer) = self.mock_network.get_peer(validator) {
+            if let Some(peer) = self.mock_network.get_peer(*validator).await {
                 // Try to send `msg` to the peer and push the result into the reuslt accumulation.
                 res.push(peer.send(msg).await.map_err(|err| match err {
                     // Transform everyhthing into Unreachable error except for Serialization errors.
@@ -61,7 +61,7 @@ impl ValidatorNetwork for MockValidatorNetwork {
     async fn broadcast<M: Message>(&self, msg: &M) -> Result<(), NetworkError> {
         // TODO this does currently not work and will always return ()
         self.mock_network.broadcast(msg).await;
-        if self.mock_network.get_peers().len() > 0 {
+        if self.mock_network.get_peers().await.len() > 0 {
             Ok(())
         } else {
             Err(NetworkError::Offline)
@@ -69,16 +69,17 @@ impl ValidatorNetwork for MockValidatorNetwork {
     }
 
     /// Receive messages of type `M` only from the specified set of validators `validator_ids`.
-    fn receive_from<M: Message>(&self, validator_ids: &[usize]) -> Pin<Box<dyn Stream<Item = (M, usize)> + Send>> {
+    fn receive_from<M: Message>(&self, _validator_ids: &[usize]) -> Pin<Box<dyn Stream<Item = (M, usize)> + Send>> {
         // select over all streams for every validator_id in validator_ids
-        stream::select_all(validator_ids.iter().map(|id| {
+        /*stream::select_all(validator_ids.iter().map(|id| {
             // get the corresponding peer from the underlying MockNetwork
             let peer = self.mock_network.get_peer(id).expect("Peer does not exist");
 
             let validator_id = id.clone();
             peer.receive::<M>().map(move |item| (item, validator_id))
         }))
-        .boxed()
+        .boxed()*/
+        todo!()
     }
 
     /// Receive messages of type `M` from all connected peers.
@@ -128,11 +129,11 @@ mod tests {
         let net2 = MockValidatorNetwork::new(2);
         net1.connect(&net2);
 
-        assert_eq!(net1.mock_network.get_peers().len(), 1);
-        assert_eq!(net2.mock_network.get_peers().len(), 1);
+        assert_eq!(net1.mock_network.get_peers().await.len(), 1);
+        assert_eq!(net2.mock_network.get_peers().await.len(), 1);
 
-        assert_eq!(net1.mock_network.get_peers().first().unwrap().id(), 2);
-        assert_eq!(net2.mock_network.get_peers().first().unwrap().id(), 1);
+        assert_eq!(net1.mock_network.get_peers().await.first().unwrap().id(), 2);
+        assert_eq!(net2.mock_network.get_peers().await.first().unwrap().id(), 1);
     }
 
     // #[tokio::test]

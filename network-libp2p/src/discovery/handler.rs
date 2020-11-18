@@ -295,7 +295,7 @@ impl ProtocolsHandler for DiscoveryHandler {
     }
 
     fn connection_keep_alive(&self) -> KeepAlive {
-        KeepAlive::Yes
+        self.config.keep_alive
     }
 
     fn poll(&mut self, cx: &mut Context) -> Poll<ProtocolsHandlerEvent<Self::OutboundProtocol, (), HandlerOutEvent, HandlerError>> {
@@ -440,6 +440,8 @@ impl ProtocolsHandler for DiscoveryHandler {
                                     }
 
                                     // TODO: Do we need to check other stuff in the peer contact?
+
+                                    // TODO: Check that the public key is actually used for this connection
 
                                     // Check the challenge response.
                                     if !peer_contact.public_key().tagged_verify(&self.challenge_nonce, &response_signature) {

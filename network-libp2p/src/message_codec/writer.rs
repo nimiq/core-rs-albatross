@@ -175,7 +175,6 @@ mod tests {
 
 
     #[tokio::test]
-    #[test_env_log::test]
     pub async fn it_can_write_a_message() {
         let test_message = TestMessage {
             foo: 42,

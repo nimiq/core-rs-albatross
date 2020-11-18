@@ -5,26 +5,49 @@ use std::task::{Poll, Waker, Context};
 use libp2p::NetworkBehaviour;
 use libp2p::swarm::{NetworkBehaviourEventProcess, NetworkBehaviourAction, PollParameters};
 use libp2p::core::either::EitherOutput;
+use parking_lot::RwLock;
 
 use nimiq_network_interface::network::NetworkEvent;
 
-use crate::limit::behaviour::{LimitBehaviour, LimitEvent};
-use crate::message::{
-    behaviour::MessageBehaviour,
-    peer::Peer,
-};
 use crate::{
-    message::handler::{
-        HandlerOutEvent as MessageEvent, HandlerInEvent as MessageAction,
+    discovery::{
+        behaviour::{DiscoveryBehaviour, DiscoveryEvent},
+        handler::{HandlerInEvent as DiscoveryAction},
+        peer_contacts::PeerContactBook,
     },
-    limit::handler::HandlerInEvent as LimitAction,
+    message::{
+        behaviour::MessageBehaviour,
+        handler::{HandlerInEvent as MessageAction},
+        peer::Peer,
+    },
+    limit::{
+        behaviour::{LimitBehaviour, LimitEvent},
+        handler::{HandlerInEvent as LimitAction},
+    },
+    network::Config,
 };
 
-#[derive(Default, NetworkBehaviour)]
-#[behaviour(event_process = false, out_event = "NetworkEvent<Peer>", poll_method = "poll_event")]
+
+type NimiqNetworkBehaviourAction = NetworkBehaviourAction<
+    EitherOutput<
+        EitherOutput<
+            DiscoveryAction,
+            MessageAction,
+        >,
+        LimitAction,
+    >,
+    NetworkEvent<Peer>,
+>;
+
+//type NimiqNetworkBehaviourAction = NetworkBehaviourAction<MessageAction, NetworkEvent<Peer>>;
+
+
+#[derive(NetworkBehaviour)]
+#[behaviour(out_event = "NetworkEvent<Peer>", poll_method = "poll_event")]
 pub struct NimiqBehaviour {
-    pub message_behaviour: MessageBehaviour,
-    pub limit_behaviour: LimitBehaviour,
+    pub discovery: DiscoveryBehaviour,
+    pub message: MessageBehaviour,
+    pub limit: LimitBehaviour,
 
     #[behaviour(ignore)]
     events: VecDeque<NetworkEvent<Peer>>,
@@ -34,29 +57,63 @@ pub struct NimiqBehaviour {
 }
 
 impl NimiqBehaviour {
-    fn poll_event(&mut self, cx: &mut Context<'_>, _params: &mut impl PollParameters) -> Poll<NetworkBehaviourAction<EitherOutput<MessageAction, LimitAction>, NetworkEvent<Peer>>> {
-        if let Some(event) = self.events.pop_front() {
-            Poll::Ready(NetworkBehaviourAction::GenerateEvent(event))
-        }
-        else{
-            // Register waker, if we're waiting for an event.
-            if self.waker.is_none() {
-                self.waker = Some(cx.waker().clone());
-            }
+    pub fn new(config: Config) -> Self {
+        // TODO: persist to disk
+        let peer_contact_book = Arc::new(RwLock::new(PeerContactBook::new(
+            Default::default(),
+            config.peer_contact.sign(&config.keypair)
+        )));
+        let discovery = DiscoveryBehaviour::new(config.discovery, config.keypair.clone(), peer_contact_book);
 
-            Poll::Pending
+        let message = MessageBehaviour::new(config.message);
+
+        let limit = LimitBehaviour::new(config.limit);
+
+        Self {
+            discovery,
+            message,
+            limit,
+            events: VecDeque::new(),
+            waker: None,
         }
+    }
+
+    fn poll_event(&mut self, cx: &mut Context, _params: &mut impl PollParameters) -> Poll<NimiqNetworkBehaviourAction> {
+        if let Some(event) = self.events.pop_front() {
+            log::debug!("NimiqBehaviour: emitting event: {:?}", event);
+            return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));
+        }
+
+        // Register waker, if we're waiting for an event.
+        if self.waker.is_none() {
+            self.waker = Some(cx.waker().clone());
+        }
+
+        Poll::Pending
+    }
+
+    fn wake(&self) {
+        if let Some(waker) = &self.waker {
+            waker.wake_by_ref();
+        }
+    }
+}
+
+impl NetworkBehaviourEventProcess<DiscoveryEvent> for NimiqBehaviour {
+    fn inject_event(&mut self, event: DiscoveryEvent) {
+        log::debug!("discovery event: {:?}", event);
     }
 }
 
 impl NetworkBehaviourEventProcess<NetworkEvent<Peer>> for NimiqBehaviour {
     fn inject_event(&mut self, event: NetworkEvent<Peer>) {
-        log::debug!("event: {:?}", event);
+        log::debug!("NimiqBehaviour::inject_event: {:?}", event);
         match event {
             NetworkEvent::PeerJoined(peer) => {
-                self.limit_behaviour.peers
+                /*self.limit.peers
                     .insert(peer.id.clone(), Arc::clone(&peer))
-                    .map(|p| panic!("Duplicate peer {}", p.id));
+                    .map(|p| panic!("Duplicate peer {}", p.id));*/
+
                 self.events.push_back(NetworkEvent::PeerJoined(peer));
             },
             NetworkEvent::PeerLeft(peer) => {
@@ -64,21 +121,12 @@ impl NetworkBehaviourEventProcess<NetworkEvent<Peer>> for NimiqBehaviour {
             },
         }
 
-        // Wake up any task that is waiting for events
-        if let Some(waker) = self.waker.take() {
-            waker.wake();
-        }
+        self.wake();
     }
 }
 
-impl From<MessageEvent> for NetworkEvent<Peer> {
-    fn from(_event: MessageEvent) -> Self {
-        unimplemented!();
-    }
-}
-
-impl From<LimitEvent> for NetworkEvent<Peer> {
-    fn from(_event: LimitEvent) -> Self {
-        unimplemented!();
+impl NetworkBehaviourEventProcess<LimitEvent> for NimiqBehaviour {
+    fn inject_event(&mut self, event: LimitEvent) {
+        log::debug!("NimiqBehaviour::inject_event: {:?}", event);
     }
 }

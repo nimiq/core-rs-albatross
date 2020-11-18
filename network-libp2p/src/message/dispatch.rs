@@ -5,9 +5,10 @@ use std::{
 };
 
 use futures::{
-    channel::mpsc,
+    channel::{mpsc, oneshot},
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, WriteHalf},
     lock::Mutex as AsyncMutex,
+    task::{Context, Poll},
     pin_mut, SinkExt, StreamExt, Stream, FutureExt,
 };
 use parking_lot::Mutex;
@@ -16,8 +17,17 @@ use beserial::SerializingError;
 use nimiq_network_interface::message::{Message, read_message, peek_type};
 
 
+/// # TODO
+///
+///  - Refactor to not use a spawn to handle the dispatching. Instead just add a poll method and poll it from the
+///    handler.
+///
 pub struct MessageReceiver {
     channels: Arc<Mutex<HashMap<u64, Option<mpsc::Sender<Vec<u8>>>>>>,
+
+    close_tx: Mutex<Option<oneshot::Sender<()>>>,
+
+    error_rx: Mutex<oneshot::Receiver<SerializingError>>,
 }
 
 
@@ -25,12 +35,42 @@ impl MessageReceiver
 {
     pub fn new<I: AsyncRead + Send + Sync + 'static>(inbound: I) -> Self {
         let channels = Arc::new(Mutex::new(HashMap::new()));
+        let (close_tx, close_rx) = oneshot::channel();
+        let (error_tx, error_rx) = oneshot::channel();
 
-        // FIXME: Poll this from the network behaviour
-        async_std::task::spawn(Self::reader(inbound, Arc::clone(&channels)));
+        async_std::task::spawn({
+            let channels = Arc::clone(&channels);
+
+            async move {
+                if let Err(e) = Self::reader(inbound, close_rx, channels).await {
+                    log::error!("Peer::reader: error: {}", e);
+                    error_tx.send(e).unwrap();
+                }
+            }
+        });
 
         Self {
             channels,
+            close_tx: Mutex::new(Some(close_tx)),
+            error_rx: Mutex::new(error_rx),
+        }
+    }
+
+    pub(crate) fn poll_error(&self, cx: &mut Context) -> Poll<Option<SerializingError>> {
+        match self.error_rx.lock().poll_unpin(cx) {
+            Poll::Ready(Ok(e)) => Poll::Ready(Some(e)),
+            Poll::Ready(Err(_)) => Poll::Ready(None),
+            Poll::Pending => Poll::Pending,
+        }
+    }
+
+    pub async fn close(&self) {
+        if let Some(close_tx) = self.close_tx.lock().take() {
+            // TODO: handle error
+            close_tx.send(()).unwrap();
+
+            // Remove all channels (i.e. senders, which closes readers too?
+            self.channels.lock().clear();
         }
     }
 
@@ -55,11 +95,17 @@ impl MessageReceiver
         })
     }
 
-    async fn reader<I: AsyncRead + Send + Sync + 'static>(mut inbound: I, channels: Arc<Mutex<HashMap<u64, Option<mpsc::Sender<Vec<u8>>>>>>) -> Result<(), SerializingError> {
+    async fn reader<I: AsyncRead + Send + Sync + 'static>(inbound: I, close_rx: oneshot::Receiver<()>, channels: Arc<Mutex<HashMap<u64, Option<mpsc::Sender<Vec<u8>>>>>>) -> Result<(), SerializingError> {
         pin_mut!(inbound);
 
+        let mut close_rx = close_rx.fuse();
+
         loop {
-            let data = read_message(&mut inbound).await?;
+            let data = futures::select! {
+                data = read_message(&mut inbound).fuse() => data?,
+                _ = close_rx => break,
+            };
+
             let message_type = peek_type(&data)?;
 
             log::debug!("Receiving message: type={}", message_type);
@@ -92,6 +138,8 @@ impl MessageReceiver
             }
         }
 
+        log::debug!("Message dispatcher task terminated");
+
         Ok(())
     }
 }
@@ -112,6 +160,10 @@ impl<O> MessageSender<O>
         Self {
             outbound: AsyncMutex::new(outbound),
         }
+    }
+
+    pub async fn close(&self) {
+        self.outbound.lock().await.close().await.unwrap();
     }
 
     pub async fn send<M: Message>(&self, message: &M) -> Result<(), SerializingError> {
@@ -151,5 +203,10 @@ impl<C> MessageDispatch<C>
             inbound: MessageReceiver::new(reader),
             outbound: MessageSender::new(writer),
         }
+    }
+
+    pub async fn close(&self) {
+        self.inbound.close().await;
+        self.outbound.close().await;
     }
 }

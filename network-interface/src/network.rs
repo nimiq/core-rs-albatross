@@ -4,7 +4,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use futures::stream::{FusedStream, SelectAll};
 use futures::task::{Context, Poll};
-use futures::{future, ready, stream, Stream, StreamExt, TryFutureExt};
+use futures::{future, ready, Stream, StreamExt, TryFutureExt};
 use tokio::sync::broadcast::{Receiver as BroadcastReceiver, RecvError as BroadcastRecvError};
 
 use beserial::{Serialize, Deserialize};
@@ -50,13 +50,13 @@ pub trait Network: Send + Sync + 'static {
     type PeerType: Peer + 'static;
     type Error: std::error::Error;
 
-    fn get_peers(&self) -> Vec<Arc<Self::PeerType>>;
-    fn get_peer(&self, peer_id: &<Self::PeerType as Peer>::Id) -> Option<Arc<Self::PeerType>>;
+    async fn get_peers(&self) -> Vec<Arc<Self::PeerType>>;
+    async fn get_peer(&self, peer_id: <Self::PeerType as Peer>::Id) -> Option<Arc<Self::PeerType>>;
 
     fn subscribe_events(&self) -> BroadcastReceiver<NetworkEvent<Self::PeerType>>;
 
     async fn broadcast<T: Message>(&self, msg: &T) {
-        future::join_all(self.get_peers().iter().map(|peer| {
+        future::join_all(self.get_peers().await.iter().map(|peer| {
             // TODO: Close reason
             peer.send_or_close(msg, |_| CloseReason::Other).unwrap_or_else(|_| ())
         }))
@@ -101,14 +101,15 @@ impl<T: Message, P: Peer + 'static> ReceiveFromAll<T, P> {
     /// TODO:
     ///
     ///  - This only listens from all peers that were present when the `ReceiveFromAll` was created.
-    pub fn new<N: Network<PeerType = P> + ?Sized>(network: &N) -> Self {
-        ReceiveFromAll {
+    pub fn new<N: Network<PeerType = P> + ?Sized>(_network: &N) -> Self {
+        /*ReceiveFromAll {
             inner: stream::select_all(network.get_peers().iter().map(|peer| {
                 let peer_inner = Arc::clone(&peer);
                 peer.receive::<T>().map(move |item| (item, Arc::clone(&peer_inner))).boxed()
             })),
             event_stream: Box::pin(network.subscribe_events().into_stream().fuse()),
-        }
+        }*/
+        todo!();
     }
 }
 

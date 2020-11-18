@@ -12,6 +12,8 @@ mod network;
 pub mod discovery;
 pub mod tagged_signing;
 pub mod message_codec;
+pub mod task;
+pub mod drop_notify;
 
 
 pub const MESSAGE_PROTOCOL: &[u8] = b"/nimiq/message/0.0.1";

@@ -67,6 +67,7 @@ impl Default for LimitBehaviour {
 }
 
 
+#[derive(Clone, Debug)]
 pub enum LimitEvent {
 
 }
