@@ -22,7 +22,6 @@ use network_interface::{
 };
 use transaction::Transaction;
 use utils::mutable_once::MutableOnce;
-use utils::timers::Timers;
 
 use crate::consensus_agent::ConsensusAgent;
 use crate::error::{Error, SyncError};
@@ -59,7 +58,7 @@ pub struct Consensus<N: Network> {
     pub network: Arc<N>,
     pub env: Environment,
 
-    timers: Timers<ConsensusTimer>,
+    //timers: Timers<ConsensusTimer>,
 
     pub(crate) state: RwLock<ConsensusState<N>>,
 
@@ -69,10 +68,10 @@ pub struct Consensus<N: Network> {
     sync_protocol: Box<dyn SyncProtocol<N>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/*#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum ConsensusTimer {
     Sync,
-}
+}*/
 
 type ConsensusAgentMap<P> = HashMap<Arc<P>, Arc<ConsensusAgent<P>>>;
 
@@ -98,7 +97,7 @@ impl<N: Network> Consensus<N> {
             network,
             env,
 
-            timers: Timers::new(),
+            //timers: Timers::new(),
 
             state: RwLock::new(ConsensusState {
                 agents: HashMap::new(),
@@ -172,7 +171,7 @@ impl<N: Network> Consensus<N> {
         let agent = Arc::new(ConsensusAgent::new(Arc::clone(&peer)));
         self.state.write().agents.insert(peer, Arc::clone(&agent));
 
-        self.events.send(ConsensusEvent::PeerJoined(agent));
+        self.events.send(ConsensusEvent::PeerJoined(agent)).unwrap_or_else(|_| panic!(""));
     }
 
     fn on_peer_left(&self, peer: Arc<N::PeerType>) {

@@ -129,7 +129,7 @@ lazy_static! {
     };
 }
 
-fn create_seed_peer_addr(url: &str, port: u16, pubkey_hex: &str) -> PeerAddress {
+pub fn create_seed_peer_addr(url: &str, port: u16, pubkey_hex: &str) -> PeerAddress {
     let public_key = PublicKey::from_hex(pubkey_hex).unwrap();
     PeerAddress {
         ty: PeerAddressType::Wss(url.to_string(), port),
@@ -143,7 +143,7 @@ fn create_seed_peer_addr(url: &str, port: u16, pubkey_hex: &str) -> PeerAddress 
     }
 }
 
-fn create_seed_peer_addr_ws(url: &str, port: u16, pubkey_hex: &str) -> PeerAddress {
+pub fn create_seed_peer_addr_ws(url: &str, port: u16, pubkey_hex: &str) -> PeerAddress {
     let public_key = PublicKey::from_hex(pubkey_hex).unwrap();
     PeerAddress {
         ty: PeerAddressType::Ws(url.to_string(), port),
@@ -157,7 +157,7 @@ fn create_seed_peer_addr_ws(url: &str, port: u16, pubkey_hex: &str) -> PeerAddre
     }
 }
 
-fn create_seed_list(url_str: &str, pubkey_hex: &str) -> SeedList {
+pub fn create_seed_list(url_str: &str, pubkey_hex: &str) -> SeedList {
     let url = url::Url::parse(url_str).unwrap();
     let public_key = PublicKey::from_hex(pubkey_hex).unwrap();
     SeedList::new(url, Some(public_key))

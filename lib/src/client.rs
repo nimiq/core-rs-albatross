@@ -1,5 +1,5 @@
 use std::convert::TryFrom;
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 
 use blockchain::Blockchain;
 use consensus::sync::QuickSync;
@@ -240,16 +240,6 @@ impl Client {
     /// Returns the database environment.
     pub fn environment(&self) -> Environment {
         self.inner.environment.clone()
-    }
-
-    /// Short-cut to get weak reference to the inner client object.
-    /// TODO: We'll use this to register listeners
-    pub(crate) fn inner_weak(&self) -> Weak<ClientInner> {
-        Arc::downgrade(&self.inner)
-    }
-
-    pub(crate) fn inner(&self) -> Arc<ClientInner> {
-        Arc::clone(&self.inner)
     }
 }
 

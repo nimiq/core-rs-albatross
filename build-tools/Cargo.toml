@@ -24,7 +24,7 @@ rand = "0.7"
 rand_chacha = "0.2"
 serde = { version = "1.0", features = ["derive"] }
 shellfn = "0.1"
-simple_logger = "1.0"
+pretty_env_logger ="0.4"
 structopt = { version = "0.3", features = ["paw"] }
 toml = "0.5"
 

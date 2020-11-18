@@ -1,12 +1,9 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use serde::{Serialize, Deserialize};
 
 use nimiq_blockchain_albatross::Blockchain;
-use nimiq_keys::Address;
 use nimiq_hash::Blake2bHash;
-use nimiq_transaction::TransactionReceipt;
 use nimiq_primitives::policy;
 
 use crate::{
@@ -132,15 +129,15 @@ impl BlockchainInterface for BlockchainDispatcher {
         })
     }
 
-    async fn get_raw_transaction_info(&self, raw_tx: String) -> Result<(), Error> {
+    async fn get_raw_transaction_info(&self, _raw_tx: String) -> Result<(), Error> {
         Err(Error::NotImplemented)
     }
 
-    async fn get_transaction_by_hash(&self, hash: Blake2bHash) -> Result<(), Error> {
+    async fn get_transaction_by_hash(&self, _hash: Blake2bHash) -> Result<(), Error> {
         Err(Error::NotImplemented)
     }
 
-    async fn get_transaction_receipt(&self, hash: Blake2bHash) -> Result<(), Error> {
+    async fn get_transaction_receipt(&self, _hash: Blake2bHash) -> Result<(), Error> {
         Err(Error::NotImplemented)
     }
 

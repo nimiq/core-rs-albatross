@@ -18,7 +18,7 @@ impl<T> MutableOnce<T> {
     /// and should only be called once, before any other reference can exist.
     /// This condition is not checked, thus this call is unsafe.
     pub unsafe fn replace(&self, value: T) {
-        mem::replace(&mut *self.inner.get(), value);
+        let _ = mem::replace(&mut *self.inner.get(), value);
     }
 
     fn get(&self) -> &T {

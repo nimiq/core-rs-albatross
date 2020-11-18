@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use nimiq_wallet::{WalletAccount, WalletStore};
-use nimiq_utils::otp::{Locked, Unlocked};
+use nimiq_wallet::WalletAccount;
+use nimiq_utils::otp::Unlocked;
 use nimiq_keys::Address;
 
 

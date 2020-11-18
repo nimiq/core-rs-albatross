@@ -5,7 +5,6 @@ use failure::_core::fmt::{Error, Formatter};
 use hash::Blake2bHash;
 use network_interface::message::*;
 use std::fmt::Debug;
-use transaction::Transaction;
 
 use crate::request_response;
 
@@ -134,7 +133,7 @@ impl Message for HistoryChunk {
 }
 
 impl Debug for HistoryChunk {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+    fn fmt(&self, _f: &mut Formatter<'_>) -> Result<(), Error> {
         unimplemented!()
     }
 }

@@ -1,7 +1,6 @@
 use std::fmt::{Debug, Error, Formatter};
 use std::io;
 use std::str::FromStr;
-use std::iter::FromIterator;
 
 use hex::FromHex;
 

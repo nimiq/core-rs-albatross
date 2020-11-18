@@ -1,18 +1,12 @@
-use std::sync::Arc;
-
 use failure::_core::pin::Pin;
 use futures::task::{Context, Poll};
-use futures::{executor, Future, Stream};
-use parking_lot::Mutex;
-use tokio::sync::mpsc;
+use futures::Future;
 
 use block_albatross::{MacroBlock, SignedViewChange, ViewChangeProof};
-use blockchain_albatross::Blockchain;
 use network::Network;
 use network_interface::network::Network as NetworkInterface;
 use nimiq_network_mock::network::MockNetwork;
 use primitives::slot::ValidatorSlots;
-use utils::observer::Notifier;
 
 pub trait ValidatorNetwork: NetworkInterface {}
 impl ValidatorNetwork for Network {}
@@ -27,7 +21,7 @@ impl Tendermint {
 impl Future for Tendermint {
     type Output = Result<MacroBlock, ()>;
 
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+    fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
         unimplemented!()
     }
 }
@@ -35,9 +29,9 @@ impl Future for Tendermint {
 pub struct ViewChangeHandel;
 impl ViewChangeHandel {
     pub fn new(
-        signed_view_change: SignedViewChange,
-        validator_id: u16,
-        active_validators: ValidatorSlots,
+        _signed_view_change: SignedViewChange,
+        _validator_id: u16,
+        _active_validators: ValidatorSlots,
     ) -> Self {
         unimplemented!()
     }
@@ -45,7 +39,7 @@ impl ViewChangeHandel {
 impl Future for ViewChangeHandel {
     type Output = ViewChangeProof;
 
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+    fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
         unimplemented!()
     }
 }

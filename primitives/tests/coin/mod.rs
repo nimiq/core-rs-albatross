@@ -4,7 +4,7 @@ use std::str::FromStr;
 use lazy_static::lazy_static;
 
 use beserial::{Deserialize, Serialize, SerializingError};
-use primitives::coin::{Coin, CoinParseError};
+use primitives::coin::Coin;
 
 struct NonFailingTest {
     data: &'static str,

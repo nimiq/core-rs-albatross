@@ -9,7 +9,6 @@ use nimiq_mempool::{Mempool, ReturnCode};
 use nimiq_transaction::{Transaction, TransactionFlags};
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
-use nimiq_wallet::WalletAccount;
 use nimiq_keys::Address;
 
 use crate::{
@@ -100,7 +99,7 @@ impl MempoolInterface for MempoolDispatcher {
         Ok(self.push_transaction(tx)?.to_hex())
     }
 
-    async fn get_transaction(&self, txid: Blake2bHash) -> Result<Option<()>, Error> {
+    async fn get_transaction(&self, _txid: Blake2bHash) -> Result<Option<()>, Error> {
         /*Ok(self.mempool
             .get_transaction(&txid)
             // TODO: We can return a `Arc<Transaction>`, if we implement `serde::Serialize` for it.
@@ -108,7 +107,7 @@ impl MempoolInterface for MempoolDispatcher {
         Err(Error::NotImplemented)
     }
 
-    async fn mempool_content(&self, include_transactions: bool) -> Result<Vec<()>, Error> {
+    async fn mempool_content(&self, _include_transactions: bool) -> Result<Vec<()>, Error> {
         Err(Error::NotImplemented)
     }
 

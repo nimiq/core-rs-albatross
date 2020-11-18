@@ -67,7 +67,7 @@ impl Network {
     const RECYCLING_PERCENTAGE_MAX: f64 = 0.20;
     const CONNECTING_COUNT_MAX: usize = 2;
     const CONNECT_BACKOFF_INITIAL: Duration = Duration::from_secs(2);
-    const CONNECT_BACKOFF_MAX: Duration = Duration::from_secs(10 * 60);
+    //const CONNECT_BACKOFF_MAX: Duration = Duration::from_secs(10 * 60);
     const HOUSEKEEPING_INTERVAL: Duration = Duration::from_secs(5 * 60);
     const SCORE_INBOUND_EXCHANGE: f64 = 0.5;
     const CONNECT_THROTTLE: Duration = Duration::from_secs(1);

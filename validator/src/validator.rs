@@ -1,10 +1,9 @@
-use std::borrow::BorrowMut;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
 use futures::task::{Context, Poll};
-use futures::{ready, Future, Stream, StreamExt};
+use futures::{Future, StreamExt};
 use tokio::sync::{broadcast, mpsc};
 
 use block_albatross::{Block, BlockType, ViewChangeProof};
@@ -200,7 +199,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         };
     }
 
-    fn poll_macro(&mut self, cx: &mut Context<'_>) {
+    fn poll_macro(&mut self, _cx: &mut Context<'_>) {
         unimplemented!()
     }
 

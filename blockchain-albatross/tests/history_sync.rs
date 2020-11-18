@@ -6,7 +6,7 @@ use nimiq_block_albatross::{
     PbftProposal, SignedPbftCommitMessage, SignedPbftPrepareMessage,
 };
 use nimiq_block_production_albatross::BlockProducer;
-use nimiq_blockchain_albatross::{Blockchain, Direction, PushResult};
+use nimiq_blockchain_albatross::{Blockchain, PushResult};
 use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;

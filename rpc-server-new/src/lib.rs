@@ -3,11 +3,7 @@ pub(crate) mod serde_helpers;
 pub mod dispatchers;
 pub mod wallets;
 
-use std::{
-    collections::HashSet,
-    net::SocketAddr,
-    fmt::{Display, Formatter},
-};
+use std::fmt::{Display, Formatter};
 
 use nimiq_jsonrpc_core::RpcError;
 use nimiq_hash::Blake2bHash;
@@ -15,9 +11,6 @@ use nimiq_keys::Address;
 pub use nimiq_jsonrpc_server::{Config, Server};
 
 use thiserror::Error;
-use async_trait::async_trait;
-use serde::{Serialize, Deserialize};
-use crate::types::OrLatest;
 
 
 #[derive(Clone, Debug)]

@@ -5,9 +5,6 @@ extern crate nimiq_lib as nimiq;
 use std::convert::TryFrom;
 use std::time::Duration;
 
-use futures::{future, FutureExt, StreamExt, TryFutureExt};
-use tokio::runtime::Runtime;
-
 use nimiq::extras::deadlock::initialize_deadlock_detection;
 use nimiq::extras::logging::{initialize_logging, log_error_cause_chain};
 use nimiq::extras::panic::initialize_panic_reporting;
@@ -77,7 +74,9 @@ async fn main_inner() -> Result<(), Error> {
                     pkcs12_key_file.display()
                 )
             });
-            let metrics_server = initialize_metrics_server(
+
+            // FIXME: Spawn `metrics_server` (which is a IntoFuture)
+            let _metrics_server = initialize_metrics_server(
                 &client,
                 metrics_config,
                 pkcs12_key_file,
@@ -120,8 +119,6 @@ async fn main_inner() -> Result<(), Error> {
             );
         }
     }
-
-    Ok(())
 }
 
 #[tokio::main]

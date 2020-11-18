@@ -4,10 +4,10 @@ use async_trait::async_trait;
 use parking_lot::RwLock;
 
 use beserial::Deserialize;
-use nimiq_database::{Environment, Transaction};
+use nimiq_database::Environment;
 use nimiq_keys::{Address, KeyPair, PublicKey, PrivateKey, Signature};
 use nimiq_wallet::{WalletAccount, WalletStore};
-use nimiq_utils::otp::{Locked, Unlocked};
+use nimiq_utils::otp::Locked;
 
 use crate::{
     Error,
@@ -118,7 +118,11 @@ impl WalletInterface for WalletDispatcher {
         })
     }
 
-    async fn unlock_account(&self, address: Address, passphrase: Option<String>, duration: Option<u64>) -> Result<(), Error> {
+    /// # TODO
+    ///
+    ///  - The duration parameter is ignored.
+    ///
+    async fn unlock_account(&self, address: Address, passphrase: Option<String>, _duration: Option<u64>) -> Result<(), Error> {
         let passphrase = passphrase.unwrap_or_default();
         let account = self
             .wallet_store

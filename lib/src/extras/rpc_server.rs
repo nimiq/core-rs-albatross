@@ -30,16 +30,19 @@ pub fn initialize_rpc_server(client: &Client, config: RpcServerConfig) -> Result
         .allowed_methods
         .map(HashSet::from_iter);
 
-    let corsdomain = config.corsdomain.unwrap_or_default();
+    // TODO: Pass this to the rpc server config
+    let _corsdomain = config.corsdomain.unwrap_or_default();
 
     let mut dispatcher = ModularDispatcher::default();
 
+    /*
     #[cfg(feature = "validator")]
     {
         if let Some(validator) = client.validator() {
-            //dispatcher.add(BlockProductionDispatcher::new(validator));
+            dispatcher.add(BlockProductionDispatcher::new(validator));
         }
     }
+    */
 
     dispatcher.add(BlockchainDispatcher::new(client.blockchain()));
     //dispatcher.add(ConsensusDispatcher::new(client.consensus()));

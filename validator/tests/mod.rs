@@ -2,13 +2,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures::{future, StreamExt};
-use log::Level;
 use rand::prelude::StdRng;
 use rand::SeedableRng;
 use tokio::sync::broadcast;
 use tokio::time;
 
-use beserial::Deserialize;
 use nimiq_blockchain_albatross::Blockchain;
 use nimiq_bls::KeyPair;
 use nimiq_build_tools::genesis::{GenesisBuilder, GenesisInfo};
@@ -22,10 +20,11 @@ use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_utils::time::OffsetTime;
 use nimiq_validator::validator::Validator as AbstractValidator;
-use tokio::time::Instant;
+
 
 type Consensus = AbstractConsensus<MockNetwork>;
 type Validator = AbstractValidator<MockNetwork, MockNetwork>;
+
 
 fn seeded_rng(seed: u64) -> StdRng {
     StdRng::seed_from_u64(seed)
@@ -63,7 +62,7 @@ fn mock_validator(peer_id: usize, signing_key: KeyPair, genesis_info: GenesisInf
 async fn mock_validators(num_validators: usize) -> Vec<Validator> {
     // Generate validator key pairs.
     let mut rng = seeded_rng(0);
-    let mut keys: Vec<KeyPair> = (0..num_validators)
+    let keys: Vec<KeyPair> = (0..num_validators)
         .map(|_| KeyPair::generate(&mut rng))
         .collect();
 
@@ -181,14 +180,14 @@ async fn three_validators_can_create_micro_blocks() {
         Duration::from_secs(3),
         events.take(30).for_each(|_| future::ready(())),
     )
-    .await;
+    .await.unwrap();
 
     assert!(consensus.blockchain.block_number() >= 30);
 }
 
 #[tokio::test]
 async fn four_validators_can_view_change() {
-    let mut validators = mock_validators(4).await;
+    let validators = mock_validators(4).await;
 
     // Disconnect the next block producer.
     let validator = validator_for_slot(&validators, 1, 0);

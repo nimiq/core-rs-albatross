@@ -9,7 +9,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use failure::Error;
-use log::Level;
 use structopt::StructOpt;
 
 use docker::Docker;
@@ -74,7 +73,7 @@ fn run_devnet(args: Args, keyboard_interrupt: Arc<AtomicBool>) -> Result<(), Err
 
 #[paw::main]
 fn main(args: Args) {
-    simple_logger::init_with_level(Level::Info).expect("Failed to initialize logging");
+    pretty_env_logger::init();
 
     debug!("{:#?}", args);
 

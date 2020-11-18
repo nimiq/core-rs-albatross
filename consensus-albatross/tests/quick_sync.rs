@@ -15,11 +15,13 @@ use nimiq_network_mock::network::MockNetwork;
 use nimiq_primitives::policy;
 
 /// Secret key of validator. Tests run with `network-primitives/src/genesis/unit-albatross.toml`
+#[allow(dead_code)]
 const SECRET_KEY: &str =
     "196ffdb1a8acc7cbd76a251aeac0600a1d68b3aba1eba823b5e4dc5dbdcdc730afa752c05ab4f6ef8518384ad514f403c5a088a22b17bf1bc14f8ff8decc2a512c0a200f68d7bdf5a319b30356fe8d1d75ef510aed7a8660968c216c328a0000";
 
 // FIXME: Enable this test when history root refactor is ready.
 // #[tokio::test]
+#[allow(dead_code)]
 async fn peers_can_sync() {
     // Setup first peer.
     let env1 = VolatileEnvironment::new(10).unwrap();
@@ -68,7 +70,7 @@ async fn peers_can_sync() {
     net1.connect(&net2);
     // Then wait for connection to be established.
     let mut stream = consensus2.subscribe_events();
-    stream.recv().await;
+    stream.recv().await.unwrap();
 
     assert_eq!(consensus2.num_agents(), 1);
 
@@ -132,7 +134,7 @@ async fn peers_can_sync() {
     net3.connect(&net2);
     // Then wait for connection to be established.
     let mut stream = consensus3.subscribe_events();
-    stream.recv().await;
+    stream.recv().await.unwrap();
 
     assert_eq!(consensus3.num_agents(), 1);
 

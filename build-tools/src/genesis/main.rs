@@ -1,8 +1,6 @@
 use std::env;
 use std::process::exit;
 
-use log::Level;
-
 use nimiq_build_tools::genesis::{GenesisBuilder, GenesisInfo};
 
 fn usage(args: Vec<String>) -> ! {
@@ -14,7 +12,7 @@ fn usage(args: Vec<String>) -> ! {
 }
 
 fn main() {
-    simple_logger::init_with_level(Level::Debug).expect("Failed to initialize logging");
+    pretty_env_logger::init();
 
     let args = env::args().collect::<Vec<String>>();
 

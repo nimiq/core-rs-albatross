@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 #[macro_use]
 extern crate log;
 extern crate nimiq_block_albatross as block_albatross;

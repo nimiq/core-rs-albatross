@@ -231,7 +231,7 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
-    use futures::StreamExt;
+    use futures::{StreamExt, join};
 
     use beserial::{Deserialize, Serialize};
     use nimiq_network_interface::message::{Message, RequestMessage, ResponseMessage};

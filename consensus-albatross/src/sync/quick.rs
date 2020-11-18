@@ -6,7 +6,6 @@ use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use parking_lot::RwLock;
 
-use block_albatross::Block;
 use hash::Blake2bHash;
 use network_interface::prelude::{Network, Peer};
 
@@ -127,7 +126,7 @@ impl<N: Network> QuickSync<N> {
         &self,
         cluster: &SyncingCluster<N::PeerType>,
         skip_prefix_len: usize,
-        consensus: &Arc<Consensus<N>>,
+        _consensus: &Arc<Consensus<N>>,
     ) -> Result<(), Vec<Blake2bHash>> {
         info!(
             "Syncing macro blocks with cluster of length {}",
@@ -146,6 +145,7 @@ impl<N: Network> QuickSync<N> {
             |hash, peer| Box::pin(async move { peer.request_epoch(hash).await.ok() }),
         );
 
+        #[allow(unused_mut)]
         let mut successfully_synced = vec![];
         let block_index = skip_prefix_len;
         while let Some(block_result) = sync_queue.next().await {

@@ -11,7 +11,6 @@ use nimiq_block_production_albatross::BlockProducer;
 use nimiq_blockchain_albatross::{Blockchain, ForkEvent, PushError, PushResult};
 use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_database::volatile::VolatileEnvironment;
-use nimiq_database::Environment;
 use nimiq_genesis::NetworkId;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::policy;
@@ -23,7 +22,6 @@ mod signed;
 const SECRET_KEY: &str = "196ffdb1a8acc7cbd76a251aeac0600a1d68b3aba1eba823b5e4dc5dbdcdc730afa752c05ab4f6ef8518384ad514f403c5a088a22b17bf1bc14f8ff8decc2a512c0a200f68d7bdf5a319b30356fe8d1d75ef510aed7a8660968c216c328a0000";
 
 struct TemporaryBlockProducer {
-    env: Environment,
     blockchain: Arc<Blockchain>,
     producer: BlockProducer,
 }
@@ -31,14 +29,13 @@ struct TemporaryBlockProducer {
 impl TemporaryBlockProducer {
     fn new() -> Self {
         let env = VolatileEnvironment::new(10).unwrap();
-        let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::UnitAlbatross).unwrap());
+        let blockchain = Arc::new(Blockchain::new(env, NetworkId::UnitAlbatross).unwrap());
 
         let keypair = KeyPair::from(
             SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap(),
         );
         let producer = BlockProducer::new_without_mempool(Arc::clone(&blockchain), keypair);
         TemporaryBlockProducer {
-            env,
             blockchain,
             producer,
         }
@@ -253,9 +250,8 @@ fn it_cant_rebranch_across_epochs() {
     let ancestor = temp_producer1.next_block(0, vec![]);
     temp_producer2.push(ancestor.clone()).unwrap();
 
-    let mut previous = ancestor;
     for _ in 0..policy::EPOCH_LENGTH {
-        previous = temp_producer1.next_block(0, vec![]);
+        temp_producer1.next_block(0, vec![]);
     }
 
     let fork = temp_producer2.next_block(1, vec![]);

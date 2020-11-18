@@ -4,7 +4,7 @@ use std::time::{Duration, SystemTime};
 
 use futures::future::BoxFuture;
 use futures::task::{Context, Poll};
-use futures::{ready, Future, FutureExt, Stream};
+use futures::{ready, FutureExt, Stream};
 use tokio::time;
 
 use block_albatross::{ForkProof, MicroBlock, SignedViewChange, ViewChange, ViewChangeProof};

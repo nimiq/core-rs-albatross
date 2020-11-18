@@ -2,30 +2,25 @@
 ///!
 ///! [1] https://github.com/nimiq/core-js/wiki/JSON-RPC-API#common-data-types
 
-use std::{
-    sync::Arc,
-    fmt::{Formatter, Display},
-};
+use std::fmt::{Formatter, Display};
+
+
+use serde::{Serialize, Deserialize, Serializer, Deserializer};
 
 use nimiq_primitives::{
     coin::Coin,
     account::AccountType,
 };
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_bls::lazy::LazyPublicKey;
 use nimiq_keys::Address;
 use nimiq_transaction::account::htlc_contract::AnyHash;
 use nimiq_primitives::policy;
 use nimiq_blockchain_albatross::Blockchain;
-
-use serde::{Serialize, Deserialize, Serializer, Deserializer};
 use nimiq_vrf::VrfSeed;
 use nimiq_bls::{CompressedPublicKey, CompressedSignature};
 use nimiq_block_albatross::{PbftProof, ViewChangeProof};
-use nimiq_block_albatross::signed::AggregateProof;
 use nimiq_primitives::slot::{ValidatorSlots, SlotBand};
 use nimiq_collections::BitSet;
-
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all="snake_case")]
@@ -499,7 +494,7 @@ impl<'de, T> Deserialize<'de> for OrLatest<T>
     where
         T: Deserialize<'de>
 {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
         where
             D: Deserializer<'de>
     {
@@ -584,7 +579,7 @@ impl Validator {
                     retire_time: None
                 })
                 .collect(),
-            retire_time: None
+            retire_time,
         }
     }
 

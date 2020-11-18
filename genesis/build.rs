@@ -1,11 +1,6 @@
-#[macro_use]
-extern crate log;
-
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
-
-use log::Level;
 
 use nimiq_build_tools::genesis::GenesisBuilder;
 use nimiq_hash::Blake2bHash;
@@ -32,7 +27,7 @@ fn write_genesis_rs(
     }}"#,
         name, genesis_hash, name, validator_registry_str
     );
-    debug!("Writing genesis source code: {}", &genesis_rs);
+    log::debug!("Writing genesis source code: {}", &genesis_rs);
     fs::write(directory.join("genesis.rs"), genesis_rs.as_bytes()).unwrap();
 }
 
@@ -42,7 +37,7 @@ fn generate_albatross(
     src_dir: &PathBuf,
     config_override: Option<PathBuf>,
 ) {
-    info!("Generating Albatross genesis config: {}", name);
+    log::info!("Generating Albatross genesis config: {}", name);
 
     let directory = out_dir.join(name);
     fs::create_dir_all(&directory).unwrap();
@@ -52,7 +47,7 @@ fn generate_albatross(
     } else {
         src_dir.join(format!("{}.toml", name))
     };
-    info!("genesis source file: {}", genesis_config.display());
+    log::info!("genesis source file: {}", genesis_config.display());
 
     let mut builder = GenesisBuilder::new();
     builder.with_config_file(genesis_config).unwrap();
@@ -70,9 +65,7 @@ fn generate_albatross(
 }
 
 fn main() {
-    //setup_panic!();
-    simple_logger::init_with_level(Level::Debug)
-        .unwrap_or_else(|e| eprintln!("Failed to initialize logging: {}", e));
+    pretty_env_logger::init();
 
     let out_dir = Path::new(&env::var("OUT_DIR").unwrap()).join("genesis");
     let src_dir = Path::new("src").join("genesis");
@@ -80,14 +73,14 @@ fn main() {
         .ok()
         .map(PathBuf::from);
 
-    info!("Taking genesis config files from: {}", src_dir.display());
-    info!("Writing genesis data to: {}", out_dir.display());
-    error!(
+    log::info!("Taking genesis config files from: {}", src_dir.display());
+    log::info!("Writing genesis data to: {}", out_dir.display());
+    log::error!(
         "DevNet override {:?}",
         env::var("NIMIQ_OVERRIDE_DEVNET_CONFIG")
     );
     if let Some(devnet_override) = &devnet_override {
-        info!(
+        log::info!(
             "Using override for Albatross DevNet config: {}",
             devnet_override.display()
         );
