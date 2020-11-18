@@ -3,8 +3,6 @@ use std::pin::Pin;
 use futures::task::{Context, Poll};
 use futures::Future;
 
-
-
 pub(crate) struct ProduceMacroBlock {
     //tendermint: BoxFuture<'static, Result<MacroBlock, ()>>,
 }

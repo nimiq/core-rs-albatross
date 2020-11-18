@@ -40,13 +40,7 @@ fn state_commitment_works() {
     // Convert the result to a UInt8 for easier comparison.
     let mut primitive_out_var: Vec<UInt8> = Vec::new();
     for i in 0..primitive_out.len() {
-        primitive_out_var.push(
-            UInt8::alloc(
-                cs.ns(|| format!("allocate primitive result: byte {}", i)),
-                || Ok(primitive_out[i]),
-            )
-            .unwrap(),
-        );
+        primitive_out_var.push(UInt8::alloc(cs.ns(|| format!("allocate primitive result: byte {}", i)), || Ok(primitive_out[i])).unwrap());
     }
 
     // Allocate the block number in the circuit.
@@ -68,13 +62,7 @@ fn state_commitment_works() {
     // Allocate the public keys Merkle tree commitment in the circuit.
     let mut pks_commitment_var: Vec<UInt8> = Vec::new();
     for i in 0..primitive_out.len() {
-        pks_commitment_var.push(
-            UInt8::alloc(
-                cs.ns(|| format!("allocate pks commitment: byte {}", i)),
-                || Ok(pks_commitment[i]),
-            )
-            .unwrap(),
-        );
+        pks_commitment_var.push(UInt8::alloc(cs.ns(|| format!("allocate pks commitment: byte {}", i)), || Ok(pks_commitment[i])).unwrap());
     }
 
     // Allocate the generators.
@@ -82,13 +70,7 @@ fn state_commitment_works() {
 
     let mut pedersen_generators_var: Vec<G1Gadget> = Vec::new();
     for i in 0..generators.len() {
-        pedersen_generators_var.push(
-            G1Gadget::alloc(
-                cs.ns(|| format!("pedersen_generators: generator {}", i)),
-                || Ok(generators[i]),
-            )
-            .unwrap(),
-        );
+        pedersen_generators_var.push(G1Gadget::alloc(cs.ns(|| format!("pedersen_generators: generator {}", i)), || Ok(generators[i])).unwrap());
     }
 
     // Evaluate state commitment using the gadget version.

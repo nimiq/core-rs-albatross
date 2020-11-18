@@ -30,8 +30,7 @@ impl<C: AggregatableContribution> TodoItem<C> {
 
 impl<C: AggregatableContribution> PartialEq for TodoItem<C> {
     fn eq(&self, other: &TodoItem<C>) -> bool {
-        self.level == other.level
-            && self.contribution.contributors() == other.contribution.contributors()
+        self.level == other.level && self.contribution.contributors() == other.contribution.contributors()
     }
 }
 
@@ -58,10 +57,7 @@ impl<C: AggregatableContribution, E: Evaluator<C>> TodoList<C, E> {
     /// Create a new TodoList
     /// * `evaluator` - The evaluator which will be used for TodoItem scoring
     /// * `input_stream` - Thestream on which new LevelUpdates can be polled, which will then be converted into TodoItems
-    pub fn new(
-        evaluator: Arc<E>,
-        input_stream: Pin<Box<dyn Stream<Item = LevelUpdate<C>> + Send + 'static>>,
-    ) -> Self {
+    pub fn new(evaluator: Arc<E>, input_stream: Pin<Box<dyn Stream<Item = LevelUpdate<C>> + Send + 'static>>) -> Self {
         Self {
             list: HashSet::new(),
             evaluator,
@@ -121,10 +117,7 @@ impl<C: AggregatableContribution, E: Evaluator<C>> Stream for TodoList<C, E> {
 
                 // A new LevelUpdate is available.
                 Some(msg) => {
-                    if self
-                        .evaluator
-                        .level_contains_id(msg.level as usize, msg.origin as usize)
-                    {
+                    if self.evaluator.level_contains_id(msg.level as usize, msg.origin as usize) {
                         // Every LevelUpdates contains an aggregate which can be turned into a TodoItem
                         let aggregate_todo = TodoItem {
                             contribution: msg.aggregate,
@@ -176,10 +169,7 @@ impl<C: AggregatableContribution, E: Evaluator<C>> Stream for TodoList<C, E> {
                             }
                         }
                     } else {
-                        debug!(
-                            "Sender of update :{} is not on level {}",
-                            msg.origin, msg.level
-                        );
+                        debug!("Sender of update :{} is not on level {}", msg.origin, msg.level);
                     }
                 }
             }

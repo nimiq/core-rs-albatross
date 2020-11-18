@@ -47,15 +47,10 @@ impl StateCommitmentGadget {
         bits.append(&mut pks_bits);
 
         // Calculate the Pedersen hash.
-        let hash = PedersenHashGadget::evaluate(
-            cs.ns(|| "calculate pedersen hash"),
-            &bits,
-            pedersen_generators,
-        )?;
+        let hash = PedersenHashGadget::evaluate(cs.ns(|| "calculate pedersen hash"), &bits, pedersen_generators)?;
 
         // Serialize the Pedersen hash.
-        let serialized_bits =
-            SerializeGadget::serialize_g1(cs.ns(|| "serialize pedersen hash"), &hash)?;
+        let serialized_bits = SerializeGadget::serialize_g1(cs.ns(|| "serialize pedersen hash"), &hash)?;
 
         let serialized_bits = reverse_inner_byte_order(&serialized_bits[..]);
 

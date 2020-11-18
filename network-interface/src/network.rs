@@ -36,8 +36,7 @@ pub trait Network: Send + Sync + 'static {
     async fn broadcast<T: Message>(&self, msg: &T) {
         future::join_all(self.get_peers().iter().map(|peer| {
             // TODO: Close reason
-            peer.send_or_close(msg, |_| CloseReason::Other)
-                .unwrap_or_else(|_| ())
+            peer.send_or_close(msg, |_| CloseReason::Other).unwrap_or_else(|_| ())
         }))
         .await;
     }
@@ -53,8 +52,7 @@ pub trait Network: Send + Sync + 'static {
 /// A wrapper around `SelectAll` that automatically subscribes to new peers.
 pub struct ReceiveFromAll<T: Message, P> {
     inner: SelectAll<Pin<Box<dyn Stream<Item = (T, Arc<P>)> + Send>>>,
-    event_stream:
-        Pin<Box<dyn FusedStream<Item = Result<NetworkEvent<P>, BroadcastRecvError>> + Send>>,
+    event_stream: Pin<Box<dyn FusedStream<Item = Result<NetworkEvent<P>, BroadcastRecvError>> + Send>>,
 }
 
 impl<T: Message, P: Peer + 'static> ReceiveFromAll<T, P> {
@@ -62,9 +60,7 @@ impl<T: Message, P: Peer + 'static> ReceiveFromAll<T, P> {
         ReceiveFromAll {
             inner: stream::select_all(network.get_peers().iter().map(|peer| {
                 let peer_inner = Arc::clone(&peer);
-                peer.receive::<T>()
-                    .map(move |item| (item, Arc::clone(&peer_inner)))
-                    .boxed()
+                peer.receive::<T>().map(move |item| (item, Arc::clone(&peer_inner))).boxed()
             })),
             event_stream: Box::pin(network.subscribe_events().into_stream().fuse()),
         }
@@ -81,11 +77,7 @@ impl<T: Message, P: Peer + 'static> Stream for ReceiveFromAll<T, P> {
                 Poll::Ready(Some(Ok(NetworkEvent::PeerJoined(peer)))) => {
                     // We have a new peer to receive from.
                     let peer_inner = Arc::clone(&peer);
-                    self.inner.push(
-                        peer.receive::<T>()
-                            .map(move |item| (item, Arc::clone(&peer_inner)))
-                            .boxed(),
-                    )
+                    self.inner.push(peer.receive::<T>().map(move |item| (item, Arc::clone(&peer_inner))).boxed())
                 }
                 #[allow(unreachable_patterns)]
                 Poll::Ready(Some(Ok(_))) => {} // Ignore others.

@@ -5,10 +5,7 @@ use std::ops;
 use std::str;
 use std::usize;
 
-use beserial::{
-    Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
-    SerializingError, WriteBytesExt,
-};
+use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, WriteBytesExt};
 use hash::{Hash, SerializeContent};
 use keys::Address;
 
@@ -22,10 +19,7 @@ pub struct AddressNibbles {
 
 impl AddressNibbles {
     pub fn empty() -> AddressNibbles {
-        AddressNibbles {
-            bytes: Vec::new(),
-            length: 0,
-        }
+        AddressNibbles { bytes: Vec::new(), length: 0 }
     }
 
     #[inline]
@@ -72,11 +66,7 @@ impl AddressNibbles {
         let mut first_difference_nibble = min_len;
         for j in 0..byte_len {
             if self.bytes[j] != other.bytes[j] {
-                first_difference_nibble = if self.get(j * 2) != other.get(j * 2) {
-                    j * 2
-                } else {
-                    j * 2 + 1
-                };
+                first_difference_nibble = if self.get(j * 2) != other.get(j * 2) { j * 2 } else { j * 2 + 1 };
                 break;
             }
         }
@@ -172,13 +162,10 @@ impl str::FromStr for AddressNibbles {
         } else {
             let mut v: Vec<u8> = hex::decode(&s[..s.len() - 1])?;
             let last_nibble = s.chars().last().unwrap();
-            let last_nibble =
-                last_nibble
-                    .to_digit(16)
-                    .ok_or_else(|| hex::FromHexError::InvalidHexCharacter {
-                        c: last_nibble,
-                        index: s.len() - 1,
-                    })?;
+            let last_nibble = last_nibble.to_digit(16).ok_or_else(|| hex::FromHexError::InvalidHexCharacter {
+                c: last_nibble,
+                index: s.len() - 1,
+            })?;
             v.push((last_nibble as u8) << 4);
             Ok(AddressNibbles {
                 bytes: v,
@@ -279,11 +266,7 @@ mod tests {
 
     #[test]
     fn it_can_convert_and_access_nibbles() {
-        let address = Address::from(
-            hex::decode("cfb98637bcae43c13323eaa1731ced2b716962fd")
-                .unwrap()
-                .as_slice(),
-        );
+        let address = Address::from(hex::decode("cfb98637bcae43c13323eaa1731ced2b716962fd").unwrap().as_slice());
         let an = AddressNibbles::from(&address);
         assert_eq!(an.bytes, address.as_bytes());
         assert_eq!(an.get(0), Some(12));
@@ -297,30 +280,15 @@ mod tests {
         assert_eq!(an.slice(0, 2).to_string(), "cf");
         assert_eq!(an.slice(0, 3).to_string(), "cfb");
         assert_eq!(an.slice(1, 3).to_string(), "fb");
-        assert_eq!(
-            an.slice(0, 41).to_string(),
-            "cfb98637bcae43c13323eaa1731ced2b716962fd"
-        );
-        assert_eq!(
-            an.slice(1, 40).to_string(),
-            "fb98637bcae43c13323eaa1731ced2b716962fd"
-        );
+        assert_eq!(an.slice(0, 41).to_string(), "cfb98637bcae43c13323eaa1731ced2b716962fd");
+        assert_eq!(an.slice(1, 40).to_string(), "fb98637bcae43c13323eaa1731ced2b716962fd");
         assert_eq!(an.slice(2, 1).to_string(), "");
         assert_eq!(an.slice(42, 43).to_string(), "");
 
         // Test suffixes
-        assert_eq!(
-            an.suffix(0).to_string(),
-            "cfb98637bcae43c13323eaa1731ced2b716962fd"
-        );
-        assert_eq!(
-            an.suffix(1).to_string(),
-            "fb98637bcae43c13323eaa1731ced2b716962fd"
-        );
-        assert_eq!(
-            an.suffix(2).to_string(),
-            "b98637bcae43c13323eaa1731ced2b716962fd"
-        );
+        assert_eq!(an.suffix(0).to_string(), "cfb98637bcae43c13323eaa1731ced2b716962fd");
+        assert_eq!(an.suffix(1).to_string(), "fb98637bcae43c13323eaa1731ced2b716962fd");
+        assert_eq!(an.suffix(2).to_string(), "b98637bcae43c13323eaa1731ced2b716962fd");
         assert_eq!(an.suffix(40).to_string(), "");
 
         let an2: AddressNibbles = "cfb".parse().unwrap();

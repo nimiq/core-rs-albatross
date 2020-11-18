@@ -14,10 +14,7 @@ pub trait Message: Serialize + Deserialize + Send + Sync + 'static {
     const TYPE_ID: u64;
 
     // Does CRC stuff and is called by network
-    fn serialize_message<W: WriteBytesExt>(
-        &self,
-        writer: &mut W,
-    ) -> Result<usize, SerializingError> {
+    fn serialize_message<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size = 0;
         let ty = uvar::from(Self::TYPE_ID);
         let serialized_size = self.serialized_message_size() as u32;
@@ -33,10 +30,7 @@ pub trait Message: Serialize + Deserialize + Send + Sync + 'static {
 
         // Write checksum to placeholder.
         let mut v_crc = Vec::with_capacity(4);
-        Crc32Computer::default()
-            .update(v.as_slice())
-            .result()
-            .serialize(&mut v_crc)?;
+        Crc32Computer::default().update(v.as_slice()).result().serialize(&mut v_crc)?;
 
         v[checksum_start..(4 + checksum_start)].clone_from_slice(&v_crc[..4]);
 
@@ -74,27 +68,19 @@ pub trait Message: Serialize + Deserialize + Send + Sync + 'static {
         let message: Self = Deserialize::deserialize(&mut crc32_reader)?;
 
         if length as usize != crc32_reader.length {
-            return Err(
-                io::Error::new(io::ErrorKind::InvalidData, "Incorrect message length").into(),
-            );
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "Incorrect message length").into());
         }
 
         // XXX Consume any leftover bytes in the message before computing the checksum.
         // This is consistent with the JS implementation.
         let remaining_length = crc32_reader.read_to_end(&mut Vec::new()).unwrap();
         if remaining_length > 0 {
-            return Err(
-                io::Error::new(io::ErrorKind::InvalidData, "Incorrect message length").into(),
-            );
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "Incorrect message length").into());
         }
 
         let crc_comp = crc32_reader.crc32.result();
         if crc_comp != checksum {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "Message deserialization: Bad checksum",
-            )
-            .into());
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "Message deserialization: Bad checksum").into());
         }
 
         Ok(message)

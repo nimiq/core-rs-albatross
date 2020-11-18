@@ -69,23 +69,12 @@ impl<TValidatorNetwork: ValidatorNetwork> NextProduceMicroBlockEvent<TValidatorN
         }
     }
 
-    async fn next(
-        mut self,
-    ) -> (
-        ProduceMicroBlockEvent,
-        NextProduceMicroBlockEvent<TValidatorNetwork>,
-    ) {
+    async fn next(mut self) -> (ProduceMicroBlockEvent, NextProduceMicroBlockEvent<TValidatorNetwork>) {
         let event = if self.is_our_turn() {
-            info!(
-                "Our turn at #{}:{}, producing micro block",
-                self.block_number, self.view_number
-            );
+            info!("Our turn at #{}:{}, producing micro block", self.block_number, self.view_number);
             ProduceMicroBlockEvent::MicroBlock(self.produce_micro_block())
         } else {
-            debug!(
-                "Not our turn at #{}:{}, waiting for micro block",
-                self.block_number, self.view_number
-            );
+            debug!("Not our turn at #{}:{}, waiting for micro block", self.block_number, self.view_number);
             time::delay_for(self.view_change_delay).await;
             info!(
                 "No micro block received within timeout at #{}:{}, starting view change",
@@ -104,24 +93,15 @@ impl<TValidatorNetwork: ValidatorNetwork> NextProduceMicroBlockEvent<TValidatorN
     }
 
     fn is_our_turn(&self) -> bool {
-        let (slot, _) =
-            self.blockchain
-                .get_slot_owner_at(self.block_number, self.view_number, None);
+        let (slot, _) = self.blockchain.get_slot_owner_at(self.block_number, self.view_number, None);
         &self.signing_key.public_key.compress() == slot.validator_slot.public_key().compressed()
     }
 
     fn produce_micro_block(&self) -> MicroBlock {
-        let producer = BlockProducer::new(
-            Arc::clone(&self.blockchain),
-            Arc::clone(&self.mempool),
-            self.signing_key.clone(),
-        );
+        let producer = BlockProducer::new(Arc::clone(&self.blockchain), Arc::clone(&self.mempool), self.signing_key.clone());
 
         let _lock = self.blockchain.lock();
-        let timestamp = u64::max(
-            self.blockchain.head().header().timestamp(),
-            systemtime_to_timestamp(SystemTime::now()),
-        );
+        let timestamp = u64::max(self.blockchain.head().header().timestamp(), systemtime_to_timestamp(SystemTime::now()));
         producer.next_micro_block(
             timestamp,
             self.view_number,
@@ -138,36 +118,18 @@ impl<TValidatorNetwork: ValidatorNetwork> NextProduceMicroBlockEvent<TValidatorN
             new_view_number,
             prev_seed: self.prev_seed.clone(),
         };
-        let signed_view_change = SignedViewChange::from_message(
-            view_change,
-            &self.signing_key.secret_key,
-            self.validator_id,
-        );
+        let signed_view_change = SignedViewChange::from_message(view_change, &self.signing_key.secret_key, self.validator_id);
 
         // TODO get at init time?
         let active_validators = self.blockchain.current_validators().clone();
-        let view_change_proof = ViewChangeAggregation::start(
-            signed_view_change,
-            self.validator_id,
-            active_validators,
-            Arc::clone(&self.network),
-        )
-        .await;
+        let view_change_proof = ViewChangeAggregation::start(signed_view_change, self.validator_id, active_validators, Arc::clone(&self.network)).await;
 
         (new_view_number, view_change_proof)
     }
 }
 
 pub(crate) struct ProduceMicroBlock<TValidatorNetwork> {
-    next_event: Option<
-        BoxFuture<
-            'static,
-            (
-                ProduceMicroBlockEvent,
-                NextProduceMicroBlockEvent<TValidatorNetwork>,
-            ),
-        >,
-    >,
+    next_event: Option<BoxFuture<'static, (ProduceMicroBlockEvent, NextProduceMicroBlockEvent<TValidatorNetwork>)>>,
 }
 
 impl<TValidatorNetwork: ValidatorNetwork> ProduceMicroBlock<TValidatorNetwork> {
@@ -195,9 +157,7 @@ impl<TValidatorNetwork: ValidatorNetwork> ProduceMicroBlock<TValidatorNetwork> {
         )
         .next()
         .boxed();
-        Self {
-            next_event: Some(next_event),
-        }
+        Self { next_event: Some(next_event) }
     }
 }
 

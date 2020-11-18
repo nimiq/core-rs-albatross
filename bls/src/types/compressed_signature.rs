@@ -1,5 +1,5 @@
-use std::{cmp::Ordering, fmt};
 use std::str::FromStr;
+use std::{cmp::Ordering, fmt};
 
 use algebra::mnt6_753::G1Affine;
 use algebra::SerializationError;
@@ -8,9 +8,8 @@ use algebra_core::curves::AffineCurve;
 use beserial::Deserialize;
 
 use crate::compression::BeDeserialize;
-use crate::Signature;
 use crate::ParseError;
-
+use crate::Signature;
 
 /// The serialized compressed form of a signature.
 /// This form consists of the x-coordinate of the point (in the affine form),
@@ -109,30 +108,28 @@ mod serde_derive {
     use std::str::FromStr;
 
     use serde::{
-        ser::{Serialize, Serializer},
         de::{Deserialize, Deserializer, Error},
+        ser::{Serialize, Serializer},
     };
 
     use super::CompressedSignature;
 
     impl Serialize for CompressedSignature {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-            where
-                S: Serializer
+        where
+            S: Serializer,
         {
             serializer.serialize_str(&self.to_hex())
         }
     }
 
-
     impl<'de> Deserialize<'de> for CompressedSignature {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-            where
-                D: Deserializer<'de>
+        where
+            D: Deserializer<'de>,
         {
             let s: &'de str = Deserialize::deserialize(deserializer)?;
-            CompressedSignature::from_str(s)
-                .map_err(Error::custom)
+            CompressedSignature::from_str(s).map_err(Error::custom)
         }
     }
 }

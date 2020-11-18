@@ -65,26 +65,13 @@ pub const PREFIX_POKOSK: u8 = 0x05;
 /// prefix to sign a validator info
 pub const PREFIX_VALIDATOR_INFO: u8 = 0x06;
 
-pub trait Message:
-    Clone
-    + Debug
-    + Serialize
-    + Deserialize
-    + SerializeContent
-    + Send
-    + Sync
-    + Sized
-    + PartialEq
-    + 'static
-{
+pub trait Message: Clone + Debug + Serialize + Deserialize + SerializeContent + Send + Sync + Sized + PartialEq + 'static {
     const PREFIX: u8;
 
     fn hash_with_prefix(&self) -> SigHash {
         let mut h = Blake2sHasher::new();
-        h.write_u8(Self::PREFIX)
-            .expect("Failed to write prefix to hasher for signature.");
-        self.serialize_content(&mut h)
-            .expect("Failed to write message to hasher for signature.");
+        h.write_u8(Self::PREFIX).expect("Failed to write prefix to hasher for signature.");
+        self.serialize_content(&mut h).expect("Failed to write message to hasher for signature.");
         h.finish()
     }
 
@@ -133,12 +120,7 @@ impl<M: Message> AggregateProofBuilder<M> {
 
     /// Adds a signed message to an aggregate proof
     /// NOTE: This method assumes the signature of the message was already checked
-    pub fn add_signature(
-        &mut self,
-        public_key: &PublicKey,
-        num_slots: u16,
-        signed: &SignedMessage<M>,
-    ) -> bool {
+    pub fn add_signature(&mut self, public_key: &PublicKey, num_slots: u16, signed: &SignedMessage<M>) -> bool {
         debug_assert!(signed.verify(public_key));
         let signer_idx = signed.signer_idx as usize;
         if self.signers.contains(signer_idx) {
@@ -158,16 +140,10 @@ impl<M: Message> AggregateProofBuilder<M> {
 
     pub fn verify(&self, message: &M, threshold: u16) -> Result<(), AggregateProofError> {
         if self.num_slots < threshold {
-            return Err(AggregateProofError::InsufficientSigners(
-                self.num_slots,
-                threshold,
-            ));
+            return Err(AggregateProofError::InsufficientSigners(self.num_slots, threshold));
         }
 
-        if !self
-            .public_key
-            .verify_hash(message.hash_with_prefix(), &self.signature)
-        {
+        if !self.public_key.verify_hash(message.hash_with_prefix(), &self.signature) {
             return Err(AggregateProofError::InvalidSignature);
         }
 
@@ -226,12 +202,7 @@ impl<M: Message> AggregateProof<M> {
 
     /// Verify message against aggregate signature and check the required number of signatures.
     /// Expects valid validator public keys.
-    pub fn verify(
-        &self,
-        message: &M,
-        validators: &ValidatorSlots,
-        threshold: u16,
-    ) -> Result<(), AggregateProofError> {
+    pub fn verify(&self, message: &M, validators: &ValidatorSlots, threshold: u16) -> Result<(), AggregateProofError> {
         // Aggregate signatures and count votes
         let mut public_key = AggregatePublicKey::new();
         let mut votes = 0;
@@ -256,10 +227,7 @@ impl<M: Message> AggregateProof<M> {
     }
 }
 
-pub fn votes_for_signers(
-    validators: &ValidatorSlots,
-    signers: &BitSet,
-) -> Result<u16, AggregateProofError> {
+pub fn votes_for_signers(validators: &ValidatorSlots, signers: &BitSet) -> Result<u16, AggregateProofError> {
     let mut votes = 0;
     for signer_idx in signers.iter() {
         votes += validators

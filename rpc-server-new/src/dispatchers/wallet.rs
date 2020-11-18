@@ -5,24 +5,19 @@ use parking_lot::RwLock;
 
 use beserial::Deserialize;
 use nimiq_database::Environment;
-use nimiq_keys::{Address, KeyPair, PublicKey, PrivateKey, Signature};
-use nimiq_wallet::{WalletAccount, WalletStore};
+use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey, Signature};
 use nimiq_utils::otp::Locked;
+use nimiq_wallet::{WalletAccount, WalletStore};
 
-use crate::{
-    Error,
-    wallets::UnlockedWallets,
-};
+use crate::{wallets::UnlockedWallets, Error};
 
 fn message_from_maybe_hex(s: String, is_hex: bool) -> Result<Vec<u8>, Error> {
     if is_hex {
         Ok(hex::decode(&s)?)
-    }
-    else {
+    } else {
         Ok(s.into_bytes())
     }
 }
-
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -38,7 +33,6 @@ pub struct ReturnAccount {
     public_key: PublicKey,
     private_key: PrivateKey,
 }
-
 
 #[async_trait]
 pub trait WalletInterface {
@@ -71,7 +65,7 @@ impl WalletDispatcher {
     }
 }
 
-#[nimiq_jsonrpc_derive::service(rename_all="mixedCase")]
+#[nimiq_jsonrpc_derive::service(rename_all = "mixedCase")]
 #[async_trait]
 impl WalletInterface for WalletDispatcher {
     async fn import_raw_key(&self, key_data: String, passphrase: Option<String>) -> Result<Address, Error> {
@@ -124,13 +118,9 @@ impl WalletInterface for WalletDispatcher {
     ///
     async fn unlock_account(&self, address: Address, passphrase: Option<String>, _duration: Option<u64>) -> Result<(), Error> {
         let passphrase = passphrase.unwrap_or_default();
-        let account = self
-            .wallet_store
-            .get(&address, None)
-            .ok_or_else(|| Error::AccountNotFound(address))?;
+        let account = self.wallet_store.get(&address, None).ok_or_else(|| Error::AccountNotFound(address))?;
 
-        let unlocked_account = account.unlock(passphrase.as_bytes())
-            .map_err(|_locked| Error::WrongPassphrase)?;
+        let unlocked_account = account.unlock(passphrase.as_bytes()).map_err(|_locked| Error::WrongPassphrase)?;
 
         self.unlocked_wallets.write().insert(unlocked_account);
 
@@ -147,9 +137,10 @@ impl WalletInterface for WalletDispatcher {
 
         let wallet = if let Some(wallet) = unlocked_wallets.get(&address) {
             wallet
-        }
-        else {
-            wallet_account = self.wallet_store.get(&address, None)
+        } else {
+            wallet_account = self
+                .wallet_store
+                .get(&address, None)
                 .ok_or_else(|| Error::AccountNotFound(address))?
                 .unlock(passphrase.as_bytes())
                 .map_err(|_locked| Error::WrongPassphrase)?
@@ -161,10 +152,7 @@ impl WalletInterface for WalletDispatcher {
 
         let (public_key, signature) = wallet.sign_message(&message);
 
-        Ok(ReturnSignature {
-            public_key,
-            signature
-        })
+        Ok(ReturnSignature { public_key, signature })
     }
 
     async fn verify_signature(&self, message: String, public_key: PublicKey, signature: Signature, is_hex: bool) -> Result<bool, Error> {

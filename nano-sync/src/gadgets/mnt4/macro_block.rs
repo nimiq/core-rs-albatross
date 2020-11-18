@@ -3,9 +3,7 @@ use std::borrow::Borrow;
 
 use algebra::mnt6_753::{Fq, FqParameters};
 use algebra::{mnt4_753::Fr as MNT4Fr, One};
-use crypto_primitives::prf::blake2s::constraints::{
-    blake2s_gadget_with_parameters, Blake2sOutputGadget,
-};
+use crypto_primitives::prf::blake2s::constraints::{blake2s_gadget_with_parameters, Blake2sOutputGadget};
 use crypto_primitives::prf::Blake2sWithParameterBlock;
 use r1cs_core::{ConstraintSystem, SynthesisError};
 use r1cs_std::mnt6_753::{FqGadget, G1Gadget, G2Gadget};
@@ -78,18 +76,11 @@ impl MacroBlockGadget {
         )?;
 
         // Get the hash point for the commit round of signing.
-        let commit_hash = self.get_hash(
-            cs.ns(|| "hash commit round"),
-            Round::Commit,
-            block_number,
-            pks_commitment,
-            pedersen_generators,
-        )?;
+        let commit_hash = self.get_hash(cs.ns(|| "hash commit round"), Round::Commit, block_number, pks_commitment, pedersen_generators)?;
 
         // Add together the two aggregated signatures for the prepare and commit rounds of signing.
         // Note the use of the generator to avoid an error in the sum.
-        let mut signature =
-            sum_generator_g1.add(cs.ns(|| "add prepare sig"), &self.prepare_signature)?;
+        let mut signature = sum_generator_g1.add(cs.ns(|| "add prepare sig"), &self.prepare_signature)?;
 
         signature = signature.add(cs.ns(|| "add commit sig"), &self.commit_signature)?;
 
@@ -159,14 +150,12 @@ impl MacroBlockGadget {
         bits.append(&mut pks_bits);
 
         // Calculate the first hash using Pedersen.
-        let first_hash =
-            PedersenHashGadget::evaluate(cs.ns(|| "first hash"), &bits, pedersen_generators)?;
+        let first_hash = PedersenHashGadget::evaluate(cs.ns(|| "first hash"), &bits, pedersen_generators)?;
 
         // Serialize the Pedersen hash.
         let x_bits = first_hash.x.to_bits(cs.ns(|| "x to bits: pedersen hash"))?;
 
-        let greatest_bit =
-            YToBitGadget::y_to_bit_g1(cs.ns(|| "y to bit: pedersen hash"), &first_hash)?;
+        let greatest_bit = YToBitGadget::y_to_bit_g1(cs.ns(|| "y to bit: pedersen hash"), &first_hash)?;
 
         let serialized_bits = pad_point_bits::<FqParameters>(x_bits, greatest_bit);
 
@@ -189,11 +178,7 @@ impl MacroBlockGadget {
         };
 
         // Calculate second hash using Blake2s.
-        let second_hash = blake2s_gadget_with_parameters(
-            cs.ns(|| "second hash"),
-            &serialized_bits,
-            &blake2s_parameters.parameters(),
-        )?;
+        let second_hash = blake2s_gadget_with_parameters(cs.ns(|| "second hash"), &serialized_bits, &blake2s_parameters.parameters())?;
 
         // Convert to bits.
         let mut hash_bits = Vec::new();
@@ -206,22 +191,14 @@ impl MacroBlockGadget {
         let hash_bits = reverse_inner_byte_order(&hash_bits);
 
         // Finally feed the bits into the Pedersen hash to calculate the third hash.
-        let third_hash = PedersenHashGadget::evaluate(
-            &mut cs.ns(|| "third hash"),
-            &hash_bits,
-            pedersen_generators,
-        )?;
+        let third_hash = PedersenHashGadget::evaluate(&mut cs.ns(|| "third hash"), &hash_bits, pedersen_generators)?;
 
         Ok(third_hash)
     }
 
     /// A function that checks if there are enough signers and if every signer in the commit round
     /// was also a signer in the prepare round.
-    pub fn check_signers<CS: r1cs_core::ConstraintSystem<MNT4Fr>>(
-        &self,
-        mut cs: CS,
-        max_non_signers: &FqGadget,
-    ) -> Result<(), SynthesisError> {
+    pub fn check_signers<CS: r1cs_core::ConstraintSystem<MNT4Fr>>(&self, mut cs: CS, max_non_signers: &FqGadget) -> Result<(), SynthesisError> {
         // Initialize the running sum.
         let mut num_non_signers = FqGadget::zero(cs.ns(|| "number non signers"))?;
 
@@ -236,31 +213,19 @@ impl MacroBlockGadget {
 
             // Update the number of non-signers. Note that the bitmap is negated to get the
             // non-signers: ~(included).
-            num_non_signers = num_non_signers.conditionally_add_constant(
-                cs.ns(|| format!("non-signers count {}", i)),
-                &valid.not(),
-                Fq::one(),
-            )?;
+            num_non_signers = num_non_signers.conditionally_add_constant(cs.ns(|| format!("non-signers count {}", i)), &valid.not(), Fq::one())?;
         }
 
         // Enforce that there are enough signers. Specifically that:
         // num_non_signers <= max_non_signers
-        num_non_signers.enforce_cmp(
-            cs.ns(|| "enforce non signers"),
-            max_non_signers,
-            Ordering::Less,
-            true,
-        )
+        num_non_signers.enforce_cmp(cs.ns(|| "enforce non signers"), max_non_signers, Ordering::Less, true)
     }
 }
 
 /// The allocation function for the macro block gadget.
 impl AllocGadget<MacroBlock, MNT4Fr> for MacroBlockGadget {
     /// This is the allocation function for a constant. It does not need to be implemented.
-    fn alloc_constant<T, CS: ConstraintSystem<MNT4Fr>>(
-        _cs: CS,
-        _val: T,
-    ) -> Result<Self, SynthesisError>
+    fn alloc_constant<T, CS: ConstraintSystem<MNT4Fr>>(_cs: CS, _val: T) -> Result<Self, SynthesisError>
     where
         T: Borrow<MacroBlock>,
     {
@@ -268,10 +233,7 @@ impl AllocGadget<MacroBlock, MNT4Fr> for MacroBlockGadget {
     }
 
     /// This is the allocation function for a private input.
-    fn alloc<F, T, CS: ConstraintSystem<MNT4Fr>>(
-        mut cs: CS,
-        value_gen: F,
-    ) -> Result<Self, SynthesisError>
+    fn alloc<F, T, CS: ConstraintSystem<MNT4Fr>>(mut cs: CS, value_gen: F) -> Result<Self, SynthesisError>
     where
         F: FnOnce() -> Result<T, SynthesisError>,
         T: Borrow<MacroBlock>,
@@ -287,8 +249,7 @@ impl AllocGadget<MacroBlock, MNT4Fr> for MacroBlockGadget {
 
         assert_eq!(value.commit_signer_bitmap.len(), VALIDATOR_SLOTS);
 
-        let header_hash =
-            Blake2sOutputGadget::alloc(cs.ns(|| "header hash"), || Ok(&value.header_hash))?;
+        let header_hash = Blake2sOutputGadget::alloc(cs.ns(|| "header hash"), || Ok(&value.header_hash))?;
 
         // While the bytes of the Blake2sOutputGadget start with the most significant first,
         // the bits internally start with the least significant.
@@ -299,23 +260,13 @@ impl AllocGadget<MacroBlock, MNT4Fr> for MacroBlockGadget {
             .flat_map(|n| reverse_inner_byte_order(&n.into_bits_le()))
             .collect::<Vec<Boolean>>();
 
-        let prepare_signer_bitmap =
-            Vec::<Boolean>::alloc(cs.ns(|| "prepare signer bitmap"), || {
-                Ok(&value.prepare_signer_bitmap[..])
-            })?;
+        let prepare_signer_bitmap = Vec::<Boolean>::alloc(cs.ns(|| "prepare signer bitmap"), || Ok(&value.prepare_signer_bitmap[..]))?;
 
-        let prepare_signature =
-            G1Gadget::alloc(
-                cs.ns(|| "prepare signature"),
-                || Ok(value.prepare_signature),
-            )?;
+        let prepare_signature = G1Gadget::alloc(cs.ns(|| "prepare signature"), || Ok(value.prepare_signature))?;
 
-        let commit_signer_bitmap = Vec::<Boolean>::alloc(cs.ns(|| "commit signer bitmap"), || {
-            Ok(&value.commit_signer_bitmap[..])
-        })?;
+        let commit_signer_bitmap = Vec::<Boolean>::alloc(cs.ns(|| "commit signer bitmap"), || Ok(&value.commit_signer_bitmap[..]))?;
 
-        let commit_signature =
-            G1Gadget::alloc(cs.ns(|| "commit signature"), || Ok(value.commit_signature))?;
+        let commit_signature = G1Gadget::alloc(cs.ns(|| "commit signature"), || Ok(value.commit_signature))?;
 
         Ok(MacroBlockGadget {
             header_hash,
@@ -327,10 +278,7 @@ impl AllocGadget<MacroBlock, MNT4Fr> for MacroBlockGadget {
     }
 
     /// This is the allocation function for a public input.
-    fn alloc_input<F, T, CS: ConstraintSystem<MNT4Fr>>(
-        mut cs: CS,
-        value_gen: F,
-    ) -> Result<Self, SynthesisError>
+    fn alloc_input<F, T, CS: ConstraintSystem<MNT4Fr>>(mut cs: CS, value_gen: F) -> Result<Self, SynthesisError>
     where
         F: FnOnce() -> Result<T, SynthesisError>,
         T: Borrow<MacroBlock>,
@@ -346,8 +294,7 @@ impl AllocGadget<MacroBlock, MNT4Fr> for MacroBlockGadget {
 
         assert_eq!(value.commit_signer_bitmap.len(), VALIDATOR_SLOTS);
 
-        let header_hash =
-            Blake2sOutputGadget::alloc_input(cs.ns(|| "header hash"), || Ok(&value.header_hash))?;
+        let header_hash = Blake2sOutputGadget::alloc_input(cs.ns(|| "header hash"), || Ok(&value.header_hash))?;
 
         // While the bytes of the Blake2sOutputGadget start with the most significant first,
         // the bits internally start with the least significant.
@@ -358,24 +305,13 @@ impl AllocGadget<MacroBlock, MNT4Fr> for MacroBlockGadget {
             .flat_map(|n| reverse_inner_byte_order(&n.into_bits_le()))
             .collect::<Vec<Boolean>>();
 
-        let prepare_signer_bitmap =
-            Vec::<Boolean>::alloc_input(cs.ns(|| "prepare signer bitmap"), || {
-                Ok(&value.prepare_signer_bitmap[..])
-            })?;
+        let prepare_signer_bitmap = Vec::<Boolean>::alloc_input(cs.ns(|| "prepare signer bitmap"), || Ok(&value.prepare_signer_bitmap[..]))?;
 
-        let prepare_signature =
-            G1Gadget::alloc_input(
-                cs.ns(|| "prepare signature"),
-                || Ok(value.prepare_signature),
-            )?;
+        let prepare_signature = G1Gadget::alloc_input(cs.ns(|| "prepare signature"), || Ok(value.prepare_signature))?;
 
-        let commit_signer_bitmap =
-            Vec::<Boolean>::alloc_input(cs.ns(|| "commit signer bitmap"), || {
-                Ok(&value.commit_signer_bitmap[..])
-            })?;
+        let commit_signer_bitmap = Vec::<Boolean>::alloc_input(cs.ns(|| "commit signer bitmap"), || Ok(&value.commit_signer_bitmap[..]))?;
 
-        let commit_signature =
-            G1Gadget::alloc_input(cs.ns(|| "commit signature"), || Ok(value.commit_signature))?;
+        let commit_signature = G1Gadget::alloc_input(cs.ns(|| "commit signature"), || Ok(value.commit_signature))?;
 
         Ok(MacroBlockGadget {
             header_hash,

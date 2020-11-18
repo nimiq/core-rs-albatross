@@ -28,11 +28,7 @@ pub trait Peer: Send + Sync + Hash + Eq {
 
     fn id(&self) -> Self::Id;
     async fn send<T: Message>(&self, msg: &T) -> Result<(), SendError>;
-    async fn send_or_close<T: Message, F: FnOnce(&SendError) -> CloseReason + Send>(
-        &self,
-        msg: &T,
-        f: F,
-    ) -> Result<(), SendError> {
+    async fn send_or_close<T: Message, F: FnOnce(&SendError) -> CloseReason + Send>(&self, msg: &T, f: F) -> Result<(), SendError> {
         if let Err(e) = self.send(msg).await {
             self.close(f(&e)).await;
             Err(e)

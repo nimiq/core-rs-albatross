@@ -39,12 +39,7 @@ where
     ///
     /// It will be enforced that `allowance` < `max_allowance`.
     #[inline]
-    pub fn new(
-        max_allowance: usize,
-        allowance_interval: Duration,
-        allowance_per_interval: usize,
-        max_size: Option<usize>,
-    ) -> Self {
+    pub fn new(max_allowance: usize, allowance_interval: Duration, allowance_per_interval: usize, max_size: Option<usize>) -> Self {
         ThrottledQueue {
             queue: UniqueLinkedList::new(),
             max_size,
@@ -61,15 +56,9 @@ where
         // Check for more allowance if interval is defined.
         if self.allowance_interval > Duration::default() {
             let now = Instant::now();
-            let num_intervals = now
-                .duration_since(self.last_allowance)
-                .div_duration_f64(self.allowance_interval)
-                .trunc() as usize;
+            let num_intervals = now.duration_since(self.last_allowance).div_duration_f64(self.allowance_interval).trunc() as usize;
             if num_intervals > 0 {
-                self.available_now = cmp::min(
-                    self.max_allowance,
-                    self.available_now + num_intervals * self.allowance_per_interval,
-                );
+                self.available_now = cmp::min(self.max_allowance, self.available_now + num_intervals * self.allowance_per_interval);
             }
             self.last_allowance = now;
         }

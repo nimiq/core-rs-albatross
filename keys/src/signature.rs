@@ -89,20 +89,19 @@ impl FromStr for Signature {
     }
 }
 
-
 #[cfg(feature = "serde-derive")]
 mod serde_derive {
     use serde::{
-        ser::{Serialize, Serializer},
         de::{Deserialize, Deserializer, Error},
+        ser::{Serialize, Serializer},
     };
 
     use super::Signature;
 
     impl Serialize for Signature {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-            where
-                S: Serializer
+        where
+            S: Serializer,
         {
             serializer.serialize_bytes(self.as_bytes())
         }
@@ -110,12 +109,11 @@ mod serde_derive {
 
     impl<'de> Deserialize<'de> for Signature {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-            where
-                D: Deserializer<'de>
+        where
+            D: Deserializer<'de>,
         {
             let data: &'de str = Deserialize::deserialize(deserializer)?;
-            data.parse()
-                .map_err(Error::custom)
+            data.parse().map_err(Error::custom)
         }
     }
 }

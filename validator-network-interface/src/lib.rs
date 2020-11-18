@@ -25,18 +25,11 @@ pub enum NetworkError {
 pub trait ValidatorNetwork: Send + Sync + 'static {
     /// must make a reasonable efford to establish a connection to the peer denoted with `validator_id`
     /// before returning a connection not established error.
-    async fn send_to<M: Message>(
-        &self,
-        validator_ids: &[usize],
-        msg: &M,
-    ) -> Vec<Result<(), NetworkError>>;
+    async fn send_to<M: Message>(&self, validator_ids: &[usize], msg: &M) -> Vec<Result<(), NetworkError>>;
 
     /// must make a reasonable efford to establish a connection to the peer denoted with `validator_id`
     /// before returning a connection not established error.
-    fn receive_from<M: Message>(
-        &self,
-        validator_ids: &[usize],
-    ) -> Pin<Box<dyn Stream<Item = (M, usize)> + Send>>;
+    fn receive_from<M: Message>(&self, validator_ids: &[usize]) -> Pin<Box<dyn Stream<Item = (M, usize)> + Send>>;
 
     /// Will receive from all connected peers
     fn receive<M: Message>(&self) -> Pin<Box<dyn Stream<Item = (M, usize)>>>;

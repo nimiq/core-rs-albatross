@@ -4,10 +4,7 @@ use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign};
 
 use itertools::{EitherOrBoth, Itertools};
 
-use beserial::{
-    uvar, Deserialize, FromPrimitive, ReadBytesExt, Serialize, SerializingError, ToPrimitive,
-    WriteBytesExt,
-};
+use beserial::{uvar, Deserialize, FromPrimitive, ReadBytesExt, Serialize, SerializingError, ToPrimitive, WriteBytesExt};
 
 #[inline]
 fn index_and_mask(value: usize) -> (usize, u64) {
@@ -22,10 +19,7 @@ pub struct BitSet {
 
 impl BitSet {
     pub fn new() -> Self {
-        BitSet {
-            store: Vec::new(),
-            count: 0,
-        }
+        BitSet { store: Vec::new(), count: 0 }
     }
 
     pub fn with_capacity(nbits: usize) -> Self {
@@ -131,9 +125,7 @@ impl BitSet {
 
     /// Infinite iterator of excluded items
     pub fn iter_excluded<'a>(&'a self) -> impl Iterator<Item = usize> + 'a {
-        self.iter_bits()
-            .enumerate()
-            .filter_map(|(i, one)| if one { None } else { Some(i) })
+        self.iter_bits().enumerate().filter_map(|(i, one)| if one { None } else { Some(i) })
     }
 
     /// Iterator of included items
@@ -146,10 +138,7 @@ impl BitSet {
 
     /// Infinite iterator of bits
     pub fn iter_bits<'a>(&'a self) -> impl Iterator<Item = bool> + 'a {
-        self.store
-            .iter()
-            .flat_map(|store| Bits64Iter::new(*store))
-            .chain(repeat(false))
+        self.store.iter().flat_map(|store| Bits64Iter::new(*store)).chain(repeat(false))
     }
 
     /// Test if this is a superset of `other`
@@ -176,11 +165,7 @@ impl BitSet {
     }
 
     pub fn intersection_size(&self, other: &Self) -> usize {
-        self.store
-            .iter()
-            .zip(other.store.iter())
-            .map(|(a, b)| (a & b).count_ones() as usize)
-            .sum()
+        self.store.iter().zip(other.store.iter()).map(|(a, b)| (a & b).count_ones() as usize).sum()
     }
 }
 
@@ -258,23 +243,18 @@ impl BitXorAssign for BitSet {
 
 impl PartialEq for BitSet {
     fn eq(&self, other: &Self) -> bool {
-        self.store
-            .iter()
-            .zip_longest(other.store.iter())
-            .all(|x| match x {
-                EitherOrBoth::Both(&a, &b) => a == b,
-                EitherOrBoth::Left(&a) => a == 0,
-                EitherOrBoth::Right(&b) => b == 0,
-            })
+        self.store.iter().zip_longest(other.store.iter()).all(|x| match x {
+            EitherOrBoth::Both(&a, &b) => a == b,
+            EitherOrBoth::Left(&a) => a == 0,
+            EitherOrBoth::Right(&b) => b == 0,
+        })
     }
 }
 
 impl Serialize for BitSet {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size = 0;
-        size += uvar::from_usize(self.store.len())
-            .ok_or(SerializingError::Overflow)?
-            .serialize(writer)?;
+        size += uvar::from_usize(self.store.len()).ok_or(SerializingError::Overflow)?.serialize(writer)?;
         for x in self.store.iter() {
             size += x.serialize(writer)?
         }
@@ -283,9 +263,7 @@ impl Serialize for BitSet {
 
     fn serialized_size(&self) -> usize {
         let mut size = 0;
-        size += uvar::from_usize(self.store.len())
-            .unwrap()
-            .serialized_size();
+        size += uvar::from_usize(self.store.len()).unwrap().serialized_size();
         size += self.store.len() * 0u64.serialized_size();
         size
     }
@@ -371,16 +349,16 @@ mod serde_derive {
     use std::fmt;
 
     use serde::{
-        ser::{Serialize, Serializer, SerializeSeq},
-        de::{Deserialize, Deserializer, Visitor, SeqAccess},
+        de::{Deserialize, Deserializer, SeqAccess, Visitor},
+        ser::{Serialize, SerializeSeq, Serializer},
     };
 
     use super::BitSet;
 
     impl Serialize for BitSet {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-            where
-                S: Serializer
+        where
+            S: Serializer,
         {
             let mut seq = serializer.serialize_seq(Some(self.len()))?;
 
@@ -394,8 +372,8 @@ mod serde_derive {
 
     impl<'de> Deserialize<'de> for BitSet {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-            where
-                D: Deserializer<'de>
+        where
+            D: Deserializer<'de>,
         {
             deserializer.deserialize_seq(BitSetVisitor)
         }
@@ -411,8 +389,8 @@ mod serde_derive {
         }
 
         fn visit_seq<A>(self, mut seq: A) -> Result<BitSet, A::Error>
-            where
-                A: SeqAccess<'de>,
+        where
+            A: SeqAccess<'de>,
         {
             let mut bitset = BitSet::new();
 
@@ -427,8 +405,8 @@ mod serde_derive {
 
 #[cfg(test)]
 mod tests {
-    use beserial::{Deserialize, Serialize};
     use super::BitSet;
+    use beserial::{Deserialize, Serialize};
 
     fn sample_bitset() -> BitSet {
         let mut set = BitSet::new();
@@ -446,10 +424,7 @@ mod tests {
     fn it_can_correctly_serialize() {
         let set = sample_bitset();
         let bin = set.serialize_to_vec();
-        assert_eq!(
-            hex::decode("02000000000007FFFE0000000000000040").unwrap(),
-            bin
-        );
+        assert_eq!(hex::decode("02000000000007FFFE0000000000000040").unwrap(), bin);
     }
 
     #[test]

@@ -17,14 +17,11 @@ use std::io;
 
 use thiserror::Error;
 
-use beserial::{
-    Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
-    SerializingError, WriteBytesExt,
-};
+use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, WriteBytesExt};
 use hash::{Hash, HashOutput, Hasher, SerializeContent};
 use keys::Address;
 pub use primitives::account::AccountType;
-use primitives::coin::{Coin, CoinParseError, CoinConvertError};
+use primitives::coin::{Coin, CoinConvertError, CoinParseError};
 use transaction::{Transaction, TransactionError};
 
 use crate::inherent::AccountInherentInteraction;
@@ -44,65 +41,23 @@ pub mod vesting_contract;
 /// Given the actual sender/receiver account (types), this checks and changes the accounts' states.
 /// TODO: `check_incoming_transaction` is not allowed to depend on the account's state.
 pub trait AccountTransactionInteraction: Sized {
-    fn new_contract(
-        account_type: AccountType,
-        balance: Coin,
-        transaction: &Transaction,
-        block_height: u32,
-        time: u64,
-    ) -> Result<Self, AccountError>;
+    fn new_contract(account_type: AccountType, balance: Coin, transaction: &Transaction, block_height: u32, time: u64) -> Result<Self, AccountError>;
 
-    fn create(
-        balance: Coin,
-        transaction: &Transaction,
-        block_height: u32,
-        time: u64,
-    ) -> Result<Self, AccountError>;
+    fn create(balance: Coin, transaction: &Transaction, block_height: u32, time: u64) -> Result<Self, AccountError>;
 
     /// Incoming transaction checks must not depend on the account itself and may only be static on the transaction.
-    fn check_incoming_transaction(
-        transaction: &Transaction,
-        block_height: u32,
-        time: u64,
-    ) -> Result<(), AccountError>;
+    fn check_incoming_transaction(transaction: &Transaction, block_height: u32, time: u64) -> Result<(), AccountError>;
 
-    fn commit_incoming_transaction(
-        &mut self,
-        transaction: &Transaction,
-        block_height: u32,
-        time: u64,
-    ) -> Result<Option<Vec<u8>>, AccountError>;
+    fn commit_incoming_transaction(&mut self, transaction: &Transaction, block_height: u32, time: u64) -> Result<Option<Vec<u8>>, AccountError>;
 
-    fn revert_incoming_transaction(
-        &mut self,
-        transaction: &Transaction,
-        block_height: u32,
-        time: u64,
-        receipt: Option<&Vec<u8>>,
-    ) -> Result<(), AccountError>;
+    fn revert_incoming_transaction(&mut self, transaction: &Transaction, block_height: u32, time: u64, receipt: Option<&Vec<u8>>) -> Result<(), AccountError>;
 
     /// Outgoing transaction checks are usually called from `commit_outgoing_transaction` and may depend on the account's state.
-    fn check_outgoing_transaction(
-        &self,
-        transaction: &Transaction,
-        block_height: u32,
-        time: u64,
-    ) -> Result<(), AccountError>;
+    fn check_outgoing_transaction(&self, transaction: &Transaction, block_height: u32, time: u64) -> Result<(), AccountError>;
 
-    fn commit_outgoing_transaction(
-        &mut self,
-        transaction: &Transaction,
-        block_height: u32,
-        time: u64,
-    ) -> Result<Option<Vec<u8>>, AccountError>;
+    fn commit_outgoing_transaction(&mut self, transaction: &Transaction, block_height: u32, time: u64) -> Result<Option<Vec<u8>>, AccountError>;
 
-    fn revert_outgoing_transaction(
-        &mut self,
-        transaction: &Transaction,
-        block_height: u32,
-        time: u64,
-        receipt: Option<&Vec<u8>>,
-    ) -> Result<(), AccountError>;
+    fn revert_outgoing_transaction(&mut self, transaction: &Transaction, block_height: u32, time: u64, receipt: Option<&Vec<u8>>) -> Result<(), AccountError>;
 }
 
 macro_rules! invoke_account_instance {
@@ -129,9 +84,7 @@ pub enum Account {
 }
 
 impl Account {
-    pub const INITIAL: Account = Account::Basic(BasicAccount {
-        balance: Coin::ZERO,
-    });
+    pub const INITIAL: Account = Account::Basic(BasicAccount { balance: Coin::ZERO });
 
     pub fn new_basic(balance: Coin) -> Account {
         Account::Basic(BasicAccount { balance })
@@ -163,53 +116,30 @@ impl Account {
     }
 
     pub fn balance_add(balance: Coin, value: Coin) -> Result<Coin, AccountError> {
-        balance
-            .checked_add(value)
-            .ok_or(AccountError::InvalidCoinValue)
+        balance.checked_add(value).ok_or(AccountError::InvalidCoinValue)
     }
 
     pub fn balance_sub(balance: Coin, value: Coin) -> Result<Coin, AccountError> {
         match balance.checked_sub(value) {
             Some(result) => Ok(result),
-            None => Err(AccountError::InsufficientFunds {
-                balance,
-                needed: value,
-            }),
+            None => Err(AccountError::InsufficientFunds { balance, needed: value }),
         }
     }
 
     pub fn balance_sufficient(balance: Coin, value: Coin) -> Result<(), AccountError> {
         if balance < value {
-            Err(AccountError::InsufficientFunds {
-                balance,
-                needed: value,
-            })
+            Err(AccountError::InsufficientFunds { balance, needed: value })
         } else {
             Ok(())
         }
     }
 
-    pub fn check_incoming_transaction(
-        &self,
-        transaction: &Transaction,
-        block_height: u32,
-        time: u64,
-    ) -> Result<(), AccountError> {
+    pub fn check_incoming_transaction(&self, transaction: &Transaction, block_height: u32, time: u64) -> Result<(), AccountError> {
         match self {
-            Account::Basic(_) => {
-                BasicAccount::check_incoming_transaction(transaction, block_height, time)
-            }
-            Account::Vesting(_) => {
-                VestingContract::check_incoming_transaction(transaction, block_height, time)
-            }
-            Account::HTLC(_) => HashedTimeLockedContract::check_incoming_transaction(
-                transaction,
-                block_height,
-                time,
-            ),
-            Account::Staking(_) => {
-                StakingContract::check_incoming_transaction(transaction, block_height, time)
-            }
+            Account::Basic(_) => BasicAccount::check_incoming_transaction(transaction, block_height, time),
+            Account::Vesting(_) => VestingContract::check_incoming_transaction(transaction, block_height, time),
+            Account::HTLC(_) => HashedTimeLockedContract::check_incoming_transaction(transaction, block_height, time),
+            Account::Staking(_) => StakingContract::check_incoming_transaction(transaction, block_height, time),
         }
     }
 }
@@ -224,156 +154,56 @@ impl AccountsTreeLeave for Account {
 }
 
 impl AccountTransactionInteraction for Account {
-    fn new_contract(
-        account_type: AccountType,
-        balance: Coin,
-        transaction: &Transaction,
-        block_height: u32,
-        time: u64,
-    ) -> Result<Self, AccountError> {
+    fn new_contract(account_type: AccountType, balance: Coin, transaction: &Transaction, block_height: u32, time: u64) -> Result<Self, AccountError> {
         match account_type {
             AccountType::Basic => Err(AccountError::InvalidForRecipient),
-            AccountType::Vesting => Ok(Account::Vesting(VestingContract::create(
-                balance,
-                transaction,
-                block_height,
-                time,
-            )?)),
-            AccountType::HTLC => Ok(Account::HTLC(HashedTimeLockedContract::create(
-                balance,
-                transaction,
-                block_height,
-                time,
-            )?)),
+            AccountType::Vesting => Ok(Account::Vesting(VestingContract::create(balance, transaction, block_height, time)?)),
+            AccountType::HTLC => Ok(Account::HTLC(HashedTimeLockedContract::create(balance, transaction, block_height, time)?)),
             AccountType::Staking => Err(AccountError::InvalidForRecipient),
         }
     }
 
-    fn create(
-        _balance: Coin,
-        _transaction: &Transaction,
-        _block_height: u32,
-        _time: u64,
-    ) -> Result<Self, AccountError> {
+    fn create(_balance: Coin, _transaction: &Transaction, _block_height: u32, _time: u64) -> Result<Self, AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
 
-    fn check_incoming_transaction(
-        _transaction: &Transaction,
-        _block_height: u32,
-        _time: u64,
-    ) -> Result<(), AccountError> {
+    fn check_incoming_transaction(_transaction: &Transaction, _block_height: u32, _time: u64) -> Result<(), AccountError> {
         // This method must be called on specific types instead.
         Err(AccountError::InvalidForRecipient)
     }
 
-    fn commit_incoming_transaction(
-        &mut self,
-        transaction: &Transaction,
-        block_height: u32,
-        time: u64,
-    ) -> Result<Option<Vec<u8>>, AccountError> {
+    fn commit_incoming_transaction(&mut self, transaction: &Transaction, block_height: u32, time: u64) -> Result<Option<Vec<u8>>, AccountError> {
         self.check_incoming_transaction(transaction, block_height, time)?;
-        invoke_account_instance!(
-            self,
-            commit_incoming_transaction,
-            transaction,
-            block_height,
-            time
-        )
+        invoke_account_instance!(self, commit_incoming_transaction, transaction, block_height, time)
     }
 
-    fn revert_incoming_transaction(
-        &mut self,
-        transaction: &Transaction,
-        block_height: u32,
-        time: u64,
-        receipt: Option<&Vec<u8>>,
-    ) -> Result<(), AccountError> {
-        invoke_account_instance!(
-            self,
-            revert_incoming_transaction,
-            transaction,
-            block_height,
-            time,
-            receipt
-        )
+    fn revert_incoming_transaction(&mut self, transaction: &Transaction, block_height: u32, time: u64, receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
+        invoke_account_instance!(self, revert_incoming_transaction, transaction, block_height, time, receipt)
     }
 
-    fn check_outgoing_transaction(
-        &self,
-        transaction: &Transaction,
-        block_height: u32,
-        time: u64,
-    ) -> Result<(), AccountError> {
-        invoke_account_instance!(
-            self,
-            check_outgoing_transaction,
-            transaction,
-            block_height,
-            time
-        )
+    fn check_outgoing_transaction(&self, transaction: &Transaction, block_height: u32, time: u64) -> Result<(), AccountError> {
+        invoke_account_instance!(self, check_outgoing_transaction, transaction, block_height, time)
     }
 
-    fn commit_outgoing_transaction(
-        &mut self,
-        transaction: &Transaction,
-        block_height: u32,
-        time: u64,
-    ) -> Result<Option<Vec<u8>>, AccountError> {
-        invoke_account_instance!(
-            self,
-            commit_outgoing_transaction,
-            transaction,
-            block_height,
-            time
-        )
+    fn commit_outgoing_transaction(&mut self, transaction: &Transaction, block_height: u32, time: u64) -> Result<Option<Vec<u8>>, AccountError> {
+        invoke_account_instance!(self, commit_outgoing_transaction, transaction, block_height, time)
     }
 
-    fn revert_outgoing_transaction(
-        &mut self,
-        transaction: &Transaction,
-        block_height: u32,
-        time: u64,
-        receipt: Option<&Vec<u8>>,
-    ) -> Result<(), AccountError> {
-        invoke_account_instance!(
-            self,
-            revert_outgoing_transaction,
-            transaction,
-            block_height,
-            time,
-            receipt
-        )
+    fn revert_outgoing_transaction(&mut self, transaction: &Transaction, block_height: u32, time: u64, receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
+        invoke_account_instance!(self, revert_outgoing_transaction, transaction, block_height, time, receipt)
     }
 }
 
 impl AccountInherentInteraction for Account {
-    fn check_inherent(
-        &self,
-        inherent: &Inherent,
-        block_height: u32,
-        time: u64,
-    ) -> Result<(), AccountError> {
+    fn check_inherent(&self, inherent: &Inherent, block_height: u32, time: u64) -> Result<(), AccountError> {
         invoke_account_instance!(self, check_inherent, inherent, block_height, time)
     }
 
-    fn commit_inherent(
-        &mut self,
-        inherent: &Inherent,
-        block_height: u32,
-        time: u64,
-    ) -> Result<Option<Vec<u8>>, AccountError> {
+    fn commit_inherent(&mut self, inherent: &Inherent, block_height: u32, time: u64) -> Result<Option<Vec<u8>>, AccountError> {
         invoke_account_instance!(self, commit_inherent, inherent, block_height, time)
     }
 
-    fn revert_inherent(
-        &mut self,
-        inherent: &Inherent,
-        block_height: u32,
-        time: u64,
-        receipt: Option<&Vec<u8>>,
-    ) -> Result<(), AccountError> {
+    fn revert_inherent(&mut self, inherent: &Inherent, block_height: u32, time: u64, receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
         invoke_account_instance!(self, revert_inherent, inherent, block_height, time, receipt)
     }
 }
@@ -486,20 +316,12 @@ impl Serialize for Receipt {
         let mut size = self.receipt_type().serialize(writer)?;
         match self {
             Receipt::PrunedAccount(pruned_account) => size += pruned_account.serialize(writer)?,
-            Receipt::Transaction {
-                index,
-                sender,
-                data,
-            } => {
+            Receipt::Transaction { index, sender, data } => {
                 size += index.serialize(writer)?;
                 size += sender.serialize(writer)?;
                 size += SerializeWithLength::serialize::<u16, W>(data, writer)?;
             }
-            Receipt::Inherent {
-                index,
-                data,
-                pre_transactions,
-            } => {
+            Receipt::Inherent { index, data, pre_transactions } => {
                 size += index.serialize(writer)?;
                 size += SerializeWithLength::serialize::<u16, W>(data, writer)?;
                 size += pre_transactions.serialize(writer)?;
@@ -512,20 +334,12 @@ impl Serialize for Receipt {
         let mut size = self.receipt_type().serialized_size();
         match self {
             Receipt::PrunedAccount(pruned_account) => size += pruned_account.serialized_size(),
-            Receipt::Transaction {
-                index,
-                sender,
-                data,
-            } => {
+            Receipt::Transaction { index, sender, data } => {
                 size += index.serialized_size();
                 size += sender.serialized_size();
                 size += SerializeWithLength::serialized_size::<u16>(data);
             }
-            Receipt::Inherent {
-                index,
-                data,
-                pre_transactions,
-            } => {
+            Receipt::Inherent { index, data, pre_transactions } => {
                 size += index.serialized_size();
                 size += SerializeWithLength::serialized_size::<u16>(data);
                 size += pre_transactions.serialized_size();
@@ -539,9 +353,7 @@ impl Deserialize for Receipt {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let ty: ReceiptType = Deserialize::deserialize(reader)?;
         match ty {
-            ReceiptType::PrunedAccount => {
-                Ok(Receipt::PrunedAccount(Deserialize::deserialize(reader)?))
-            }
+            ReceiptType::PrunedAccount => Ok(Receipt::PrunedAccount(Deserialize::deserialize(reader)?)),
             ReceiptType::Transaction => Ok(Receipt::Transaction {
                 index: Deserialize::deserialize(reader)?,
                 sender: Deserialize::deserialize(reader)?,
@@ -688,16 +500,10 @@ impl PartialEq for PrunedAccount {
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum AccountError {
     #[error("Insufficient funds: needed {needed}, but has balance {balance}")]
-    InsufficientFunds {
-        needed: Coin,
-        balance: Coin
-    },
+    InsufficientFunds { needed: Coin, balance: Coin },
 
     #[error("Type mismatch: expected {expected}, but got {got}")]
-    TypeMismatch {
-        expected: AccountType,
-        got: AccountType,
-    },
+    TypeMismatch { expected: AccountType, got: AccountType },
 
     #[error("Invalid signature")]
     InvalidSignature,
@@ -723,7 +529,6 @@ pub enum AccountError {
     InvalidInherent,
 }
 
-
 /// A small wrapper over a list of accounts with addresses. This is only used to have method
 /// of serializing and deserializing the genesis accounts.
 pub struct AccountsList(pub Vec<(Address, Account)>);
@@ -733,10 +538,7 @@ impl Deserialize for AccountsList {
         let count: u16 = Deserialize::deserialize(reader)?;
         let mut accounts: Vec<(Address, Account)> = Vec::new();
         for _ in 0..count {
-            accounts.push((
-                Deserialize::deserialize(reader)?,
-                Deserialize::deserialize(reader)?,
-            ));
+            accounts.push((Deserialize::deserialize(reader)?, Deserialize::deserialize(reader)?));
         }
         Ok(Self(accounts))
     }

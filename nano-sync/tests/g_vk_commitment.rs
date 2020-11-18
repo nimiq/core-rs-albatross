@@ -25,25 +25,13 @@ fn vk_commitment_test() {
 
     // Create random input.
     let mut vk: VerifyingKey<MNT6_753> = VerifyingKey::default();
-    vk.alpha_g1 = G1Projective::prime_subgroup_generator()
-        .mul(generate_random_int())
-        .into_affine();
-    vk.beta_g2 = G2Projective::prime_subgroup_generator()
-        .mul(generate_random_int())
-        .into_affine();
-    vk.gamma_g2 = G2Projective::prime_subgroup_generator()
-        .mul(generate_random_int())
-        .into_affine();
-    vk.delta_g2 = G2Projective::prime_subgroup_generator()
-        .mul(generate_random_int())
-        .into_affine();
+    vk.alpha_g1 = G1Projective::prime_subgroup_generator().mul(generate_random_int()).into_affine();
+    vk.beta_g2 = G2Projective::prime_subgroup_generator().mul(generate_random_int()).into_affine();
+    vk.gamma_g2 = G2Projective::prime_subgroup_generator().mul(generate_random_int()).into_affine();
+    vk.delta_g2 = G2Projective::prime_subgroup_generator().mul(generate_random_int()).into_affine();
     vk.gamma_abc_g1 = vec![
-        G1Projective::prime_subgroup_generator()
-            .mul(generate_random_int())
-            .into_affine(),
-        G1Projective::prime_subgroup_generator()
-            .mul(generate_random_int())
-            .into_affine(),
+        G1Projective::prime_subgroup_generator().mul(generate_random_int()).into_affine(),
+        G1Projective::prime_subgroup_generator().mul(generate_random_int()).into_affine(),
     ];
 
     // Evaluate state commitment using the primitive version.
@@ -52,40 +40,22 @@ fn vk_commitment_test() {
     // Convert the result to a UInt8 for easier comparison.
     let mut primitive_out_var: Vec<UInt8> = Vec::new();
     for i in 0..primitive_out.len() {
-        primitive_out_var.push(
-            UInt8::alloc(
-                cs.ns(|| format!("allocate primitive result: chunk {}", i)),
-                || Ok(primitive_out[i]),
-            )
-            .unwrap(),
-        );
+        primitive_out_var.push(UInt8::alloc(cs.ns(|| format!("allocate primitive result: chunk {}", i)), || Ok(primitive_out[i])).unwrap());
     }
 
     // Allocate the random input in the circuit.
-    let vk_var: VerifyingKeyGadget<MNT6_753, Fq, PairingGadget> =
-        VerifyingKeyGadget::alloc(cs.ns(|| "alloc vk"), || Ok(vk.clone())).unwrap();
+    let vk_var: VerifyingKeyGadget<MNT6_753, Fq, PairingGadget> = VerifyingKeyGadget::alloc(cs.ns(|| "alloc vk"), || Ok(vk.clone())).unwrap();
 
     // Allocate the generators.
     let generators = pedersen_generators(14);
 
     let mut pedersen_generators_var: Vec<G1Gadget> = Vec::new();
     for i in 0..generators.len() {
-        pedersen_generators_var.push(
-            G1Gadget::alloc(
-                cs.ns(|| format!("pedersen_generators: generator {}", i)),
-                || Ok(generators[i]),
-            )
-            .unwrap(),
-        );
+        pedersen_generators_var.push(G1Gadget::alloc(cs.ns(|| format!("pedersen_generators: generator {}", i)), || Ok(generators[i])).unwrap());
     }
 
     // Evaluate state commitment using the gadget version.
-    let gadget_out = VKCommitmentGadget::evaluate(
-        cs.ns(|| "evaluate vk commitment gadget"),
-        &vk_var,
-        &pedersen_generators_var,
-    )
-    .unwrap();
+    let gadget_out = VKCommitmentGadget::evaluate(cs.ns(|| "evaluate vk commitment gadget"), &vk_var, &pedersen_generators_var).unwrap();
 
     assert_eq!(primitive_out_var, gadget_out)
 }

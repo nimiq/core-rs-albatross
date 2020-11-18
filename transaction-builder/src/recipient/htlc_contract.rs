@@ -77,12 +77,7 @@ impl HtlcRecipientBuilder {
     /// Creates a HTLC contract with all required parameters set.
     /// This contract can be fully resolved by the `recipient` before the `timeout`
     /// by presenting a sha256 hash that, when re-hashed, yields `hashed_secret`.
-    pub fn new_single_sha256(
-        sender: Address,
-        recipient: Address,
-        timeout_block: u64,
-        hashed_secret: Sha256Hash,
-    ) -> Self {
+    pub fn new_single_sha256(sender: Address, recipient: Address, timeout_block: u64, hashed_secret: Sha256Hash) -> Self {
         let mut builder = Self::new();
         builder
             .with_sender(sender)
@@ -106,12 +101,7 @@ impl HtlcRecipientBuilder {
 
     /// Sets the hash data for the HTLC.
     /// The `hash_root` is the result of hashing the pre-image hash `hash_count` times.
-    pub fn with_hash(
-        &mut self,
-        hash_root: AnyHash,
-        hash_count: u8,
-        hash_algorithm: HashAlgorithm,
-    ) -> &mut Self {
+    pub fn with_hash(&mut self, hash_root: AnyHash, hash_count: u8, hash_algorithm: HashAlgorithm) -> &mut Self {
         self.hash_root = Some(hash_root);
         self.hash_count = hash_count;
         self.hash_algorithm = Some(hash_algorithm);
@@ -227,12 +217,8 @@ impl HtlcRecipientBuilder {
         Ok(Recipient::HtlcCreation {
             data: HtlcCreationData {
                 sender: self.sender.ok_or(HtlcRecipientBuilderError::NoSender)?,
-                recipient: self
-                    .recipient
-                    .ok_or(HtlcRecipientBuilderError::NoRecipient)?,
-                hash_algorithm: self
-                    .hash_algorithm
-                    .ok_or(HtlcRecipientBuilderError::NoHash)?,
+                recipient: self.recipient.ok_or(HtlcRecipientBuilderError::NoRecipient)?,
+                hash_algorithm: self.hash_algorithm.ok_or(HtlcRecipientBuilderError::NoHash)?,
                 hash_root: self.hash_root.ok_or(HtlcRecipientBuilderError::NoHash)?,
                 hash_count: self.hash_count,
                 timeout: self.timeout.ok_or(HtlcRecipientBuilderError::NoTimeout)?,

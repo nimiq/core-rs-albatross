@@ -21,9 +21,7 @@ pub enum Error {
     MessageSizeExceeded,
     #[fail(display = "Received the final chunk with a size exceeding the expected size")]
     FinalChunkSizeExceeded,
-    #[fail(
-        display = "Tried closing a connection and got invalid response from the WebSocket layer"
-    )]
+    #[fail(display = "Tried closing a connection and got invalid response from the WebSocket layer")]
     InvalidClosingState,
     #[fail(display = "Stream could not be wrapped: TLS acceptor is None")]
     TlsAcceptorMissing,

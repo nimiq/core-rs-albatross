@@ -28,10 +28,7 @@ pub fn merkle_tree_construct(inputs: Vec<Vec<bool>>) -> Vec<u8> {
     let mut generators_needed = 4; // At least this much is required for the non-leaf nodes.
 
     for i in 0..inputs.len() {
-        generators_needed = cmp::max(
-            generators_needed,
-            (inputs[i].len() + POINT_CAPACITY - 1) / POINT_CAPACITY + 1,
-        );
+        generators_needed = cmp::max(generators_needed, (inputs[i].len() + POINT_CAPACITY - 1) / POINT_CAPACITY + 1);
     }
 
     let generators = pedersen_generators(generators_needed);
@@ -86,12 +83,7 @@ pub fn merkle_tree_construct(inputs: Vec<Vec<bool>>) -> Vec<u8> {
 /// The path for the leaf 2 is simply 01. Another way of thinking about it is that if you go up
 /// the tree, each time you are the left node it's a zero and if you are the right node it's an
 /// one.
-pub fn merkle_tree_verify(
-    input: Vec<bool>,
-    nodes: Vec<G1Projective>,
-    path: Vec<bool>,
-    root: Vec<u8>,
-) -> bool {
+pub fn merkle_tree_verify(input: Vec<bool>, nodes: Vec<G1Projective>, path: Vec<bool>, root: Vec<u8>) -> bool {
     // Checking that the inputs vector is not empty.
     assert!(!input.is_empty());
 
@@ -176,10 +168,7 @@ pub fn merkle_tree_prove(inputs: Vec<Vec<bool>>, path: Vec<bool>) -> Vec<G1Proje
     let mut generators_needed = 4; // At least this much is required for the non-leaf nodes.
 
     for i in 0..inputs.len() {
-        generators_needed = cmp::max(
-            generators_needed,
-            (inputs[i].len() + POINT_CAPACITY - 1) / POINT_CAPACITY + 1,
-        );
+        generators_needed = cmp::max(generators_needed, (inputs[i].len() + POINT_CAPACITY - 1) / POINT_CAPACITY + 1);
     }
 
     let generators = pedersen_generators(generators_needed);

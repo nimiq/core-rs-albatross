@@ -25,10 +25,7 @@ impl<P: Peer> SyncingCluster<P> {
     /// Checks whether self is a subset of other.
     fn is_subset(&self, other: &SyncingCluster<P>) -> bool {
         if self.hashes.len() < other.hashes.len() {
-            self.hashes
-                .iter()
-                .zip(other.hashes.iter())
-                .all(|(a, b)| a == b)
+            self.hashes.iter().zip(other.hashes.iter()).all(|(a, b)| a == b)
         } else {
             false
         }
@@ -83,19 +80,14 @@ impl<N: Network> QuickSync<N> {
     /// and clusters them.
     /// The clusters are already sorted by size.
     /// TODO: What should we do with subsets?
-    fn cluster_hashes(
-        mut responses: Vec<(Weak<ConsensusAgent<N::PeerType>>, Option<Vec<Blake2bHash>>)>,
-    ) -> Vec<SyncingCluster<N::PeerType>> {
+    fn cluster_hashes(mut responses: Vec<(Weak<ConsensusAgent<N::PeerType>>, Option<Vec<Blake2bHash>>)>) -> Vec<SyncingCluster<N::PeerType>> {
         let mut clusters = vec![];
 
         while !responses.is_empty() {
             let (agent, response) = responses.pop().unwrap();
             if let Some(hashes) = response {
                 // Create a cluster.
-                let mut current_cluster = SyncingCluster {
-                    hashes,
-                    agents: vec![agent],
-                };
+                let mut current_cluster = SyncingCluster { hashes, agents: vec![agent] };
 
                 // Find all super/subsets of this cluster (remember our current agent is already removed).
                 responses.retain(|(agent, response)| {
@@ -128,22 +120,11 @@ impl<N: Network> QuickSync<N> {
         skip_prefix_len: usize,
         _consensus: &Arc<Consensus<N>>,
     ) -> Result<(), Vec<Blake2bHash>> {
-        info!(
-            "Syncing macro blocks with cluster of length {}",
-            cluster.hashes.len()
-        );
-        let hashes = cluster
-            .hashes
-            .iter()
-            .skip(skip_prefix_len)
-            .cloned()
-            .collect();
-        let mut sync_queue = SyncQueue::new(
-            hashes,
-            cluster.agents.clone(),
-            Self::DESIRED_PENDING_SIZE,
-            |hash, peer| Box::pin(async move { peer.request_epoch(hash).await.ok() }),
-        );
+        info!("Syncing macro blocks with cluster of length {}", cluster.hashes.len());
+        let hashes = cluster.hashes.iter().skip(skip_prefix_len).cloned().collect();
+        let mut sync_queue = SyncQueue::new(hashes, cluster.agents.clone(), Self::DESIRED_PENDING_SIZE, |hash, peer| {
+            Box::pin(async move { peer.request_epoch(hash).await.ok() })
+        });
 
         #[allow(unused_mut)]
         let mut successfully_synced = vec![];
@@ -194,11 +175,7 @@ impl<N: Network> QuickSync<N> {
         // Get weak pointers to all peers.
         let mut agents: Vec<Weak<ConsensusAgent<N::PeerType>>> = {
             let consensus_state = consensus.state.read();
-            consensus_state
-                .agents
-                .values()
-                .map(|agent| Arc::downgrade(agent))
-                .collect()
+            consensus_state.agents.values().map(|agent| Arc::downgrade(agent)).collect()
         };
 
         // Then, request hashes from all peers.
@@ -225,10 +202,7 @@ impl<N: Network> QuickSync<N> {
             };
 
             // Only sync from the point we already synced to.
-            match self
-                .sync_cluster(&cluster, skip_prefix_len, &consensus)
-                .await
-            {
+            match self.sync_cluster(&cluster, skip_prefix_len, &consensus).await {
                 Ok(()) => synced_cluster = Some(cluster),
                 Err(synced_hashes) => {
                     if !synced_hashes.is_empty() {

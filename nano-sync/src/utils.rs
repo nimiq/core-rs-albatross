@@ -1,9 +1,5 @@
-use algebra::mnt4_753::{
-    Fr as MNT4Fr, G1Projective as MNT4G1Projective, G2Projective as MNT4G2Projective,
-};
-use algebra::mnt6_753::{
-    Fr as MNT6Fr, G1Projective as MNT6G1Projective, G2Projective as MNT6G2Projective,
-};
+use algebra::mnt4_753::{Fr as MNT4Fr, G1Projective as MNT4G1Projective, G2Projective as MNT4G2Projective};
+use algebra::mnt6_753::{Fr as MNT6Fr, G1Projective as MNT6G1Projective, G2Projective as MNT6G2Projective};
 use algebra::FpParameters;
 use algebra_core::fields::Field;
 use algebra_core::ProjectiveCurve;
@@ -102,11 +98,7 @@ pub fn pad_point_bits<P: FpParameters>(mut bits: Vec<Boolean>, y_bit: Boolean) -
 
     let padding = 8 - (point_len % 8);
 
-    assert_eq!(
-        bits.len() % point_len as usize,
-        0,
-        "Can only pad multiples of point size"
-    );
+    assert_eq!(bits.len() % point_len as usize, 0, "Can only pad multiples of point size");
 
     let mut serialization = vec![];
 
@@ -140,11 +132,7 @@ pub fn pad_point_bits<P: FpParameters>(mut bits: Vec<Boolean>, y_bit: Boolean) -
         bits = new_bits;
     }
 
-    assert_eq!(
-        serialization.len() % 8,
-        0,
-        "Padded serialization should be of byte length"
-    );
+    assert_eq!(serialization.len() % 8, 0, "Padded serialization should be of byte length");
 
     serialization
 }

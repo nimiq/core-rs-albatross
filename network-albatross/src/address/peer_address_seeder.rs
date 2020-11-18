@@ -26,15 +26,9 @@ pub enum PeerAddressSeederEvent {
 pub enum PeerAddressSeederError {
     #[fail(display = "The seed list file didn't contain any parseable seed peer address")]
     EmptySeedAddresses,
-    #[fail(
-        display = "The fetching of the seed list file failed with error '{}'",
-        _0
-    )]
+    #[fail(display = "The fetching of the seed list file failed with error '{}'", _0)]
     FetchError(#[cause] reqwest::Error),
-    #[fail(
-        display = "Failed while reading a line from the seed list with io::error '{}'",
-        _0
-    )]
+    #[fail(display = "Failed while reading a line from the seed list with io::error '{}'", _0)]
     IoError(IoError),
     #[fail(display = "Seed node address parsing failed with error '{}'", _0)]
     PeerUriParsingError(#[cause] PeerUriError),
@@ -75,14 +69,10 @@ impl PeerAddressSeeder {
         let network_info = NetworkInfo::from_network_id(network_id);
 
         // Get additional seed lists from the config file (in Iterator form)
-        let additional_seedlists =
-            network_config
-                .additional_seeds()
-                .iter()
-                .filter_map(|seed| match seed {
-                    Seed::List(seed_list) => Some(&**seed_list),
-                    Seed::Peer(_) => None,
-                });
+        let additional_seedlists = network_config.additional_seeds().iter().filter_map(|seed| match seed {
+            Seed::List(seed_list) => Some(&**seed_list),
+            Seed::Peer(_) => None,
+        });
 
         // Create a new Iterator chaining the hardcoded seed lists with the seed lists from the config file
         // TODO: Optimize this to use references instead of cloning
@@ -124,9 +114,7 @@ impl PeerAddressSeeder {
                         match PeerUri::from_str(line) {
                             Ok(seed_address) => match seed_address.as_seed_peer_address() {
                                 Ok(peer_address) => seed_addresses.push(peer_address),
-                                Err(e) => {
-                                    return err(PeerAddressSeederError::PeerUriParsingError(e))
-                                }
+                                Err(e) => return err(PeerAddressSeederError::PeerUriParsingError(e)),
                             },
                             _ => signature = Signature::from_hex(line).ok(),
                         }
@@ -158,17 +146,10 @@ impl PeerAddressSeeder {
                     }
 
                     // Notify the Seeds event with the array of seed addresses
-                    notifier
-                        .lock()
-                        .notify(PeerAddressSeederEvent::Seeds(seed_addresses));
+                    notifier.lock().notify(PeerAddressSeederEvent::Seeds(seed_addresses));
                     ok(())
                 })
-                .map_err(move |err| {
-                    warn!(
-                        "Failed to retrieve seed list from {}: {}",
-                        seed_list_url, err
-                    )
-                });
+                .map_err(move |err| warn!("Failed to retrieve seed list from {}: {}", seed_list_url, err));
 
             tokio::spawn(task);
         }
@@ -187,17 +168,11 @@ impl PeerAddressSeeder {
 
     // Note: this is a standalone function to help the compiler because as a closure in the fetch() function
     // it would fail to infer the types correctly
-    fn fetch_callback(
-        res: Response,
-    ) -> Box<dyn Future<Item = Chunk, Error = PeerAddressSeederError> + Send> {
+    fn fetch_callback(res: Response) -> Box<dyn Future<Item = Chunk, Error = PeerAddressSeederError> + Send> {
         let status = res.status();
 
         if status == 200 {
-            Box::new(
-                res.into_body()
-                    .concat2()
-                    .map_err(PeerAddressSeederError::from),
-            )
+            Box::new(res.into_body().concat2().map_err(PeerAddressSeederError::from))
         } else {
             Box::new(err(PeerAddressSeederError::UnexpectedHttpStatus(status)))
         }

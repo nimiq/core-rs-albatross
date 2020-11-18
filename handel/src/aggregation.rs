@@ -22,19 +22,8 @@ use crate::todo::{TodoItem, TodoList};
 use crate::update::{LevelUpdate, LevelUpdateMessage};
 
 #[async_trait]
-pub trait HandelAggreation<
-    P: Protocol,
-    N: Network,
-    T: Clone + fmt::Debug + Eq + Serialize + Deserialize + Send + Sync + 'static,
->
-{
-    async fn start(
-        tag: T,
-        own_contribution: P::Contribution,
-        protocol: P,
-        config: Config,
-        network: Arc<N>,
-    ) -> P::Contribution;
+pub trait HandelAggreation<P: Protocol, N: Network, T: Clone + fmt::Debug + Eq + Serialize + Deserialize + Send + Sync + 'static> {
+    async fn start(tag: T, own_contribution: P::Contribution, protocol: P, config: Config, network: Arc<N>) -> P::Contribution;
 }
 
 // TODO remove
@@ -43,11 +32,7 @@ struct AggregationState<C: AggregatableContribution> {
     contribution: Option<C>, // todo move into Aggregattion
 }
 
-pub struct Aggregation<
-    P: Protocol,
-    N: Network,
-    T: Clone + fmt::Debug + Eq + Serialize + Deserialize + Hash + Send + Sync + 'static,
-> {
+pub struct Aggregation<P: Protocol, N: Network, T: Clone + fmt::Debug + Eq + Serialize + Deserialize + Hash + Send + Sync + 'static> {
     /// Handel configuration, including the hash being signed, this node's contributed signature, etc.
     config: Config,
 
@@ -95,13 +80,7 @@ impl<
     ///
     /// A ReceiveFromAll for LevelUpdateMessages will be started, overriding existing Consumers for this message type. In case the previoous consumer
     /// for that message type is necessary (i.e. View changes) it needs to be re-established after this aggregation resolves.
-    pub async fn start(
-        tag: T,
-        own_contribution: P::Contribution,
-        protocol: P,
-        config: Config,
-        network: Arc<N>,
-    ) -> P::Contribution {
+    pub async fn start(tag: T, own_contribution: P::Contribution, protocol: P, config: Config, network: Arc<N>) -> P::Contribution {
         trace!("Handel started for {:?}", &tag);
 
         let t = tag.clone();
@@ -132,20 +111,13 @@ impl<
 
         // continuously work on Todos
         loop {
-            if let Some(TodoItem {
-                level,
-                contribution,
-            }) = todos.next().await
-            {
+            if let Some(TodoItem { level, contribution }) = todos.next().await {
                 trace!("Processing: level={}: {:?}", level, contribution);
                 // verify that the contribution is valid
                 let result = this.protocol.verify(&contribution).await;
                 if result.is_ok() {
                     // store the contribution of the todo in the store (which will in turn update levels and aggregate)
-                    this.protocol
-                        .store()
-                        .write()
-                        .put(contribution.clone(), level);
+                    this.protocol.store().write().put(contribution.clone(), level);
                     // check if this contribution completed a level.
                     this.check_completed_level(&contribution, level).await;
                     // finally check if the aggregation is complete in which case the loop is broken.
@@ -163,9 +135,7 @@ impl<
         // TODO continue work on todos for grace period amount of time.
 
         // return the best available result
-        let aggregate = this
-            .result()
-            .expect("Final Aggregation is not existent even though it should be!");
+        let aggregate = this.result().expect("Final Aggregation is not existent even though it should be!");
 
         trace!("Handel for {:?} cpmpleted: {:?}", &this.tag, &aggregate);
 
@@ -190,8 +160,7 @@ impl<
                     };
                     // For an existing aggregate for this level send it around to the respective peers.
                     if let Some(aggregate) = aggregate {
-                        this.send_update(aggregate, &level, this.config.update_count)
-                            .await;
+                        this.send_update(aggregate, &level, this.config.update_count).await;
                     }
                 }
             } else {
@@ -230,12 +199,7 @@ impl<
     /// panics for contributions other than the single contribution of this node.
     async fn push_contribution(&self, contribution: P::Contribution) {
         // only allow contributions with a single contributor, which also must be this node itself.
-        assert!(
-            contribution.num_contributors() == 1
-                && contribution
-                    .contributors()
-                    .contains(self.protocol.node_id())
-        );
+        assert!(contribution.num_contributors() == 1 && contribution.contributors().contains(self.protocol.node_id()));
         {
             let state = self.contribution.upgradable_read();
             if state.contribution.is_some() {
@@ -262,10 +226,7 @@ impl<
 
     /// Starts level `level`
     async fn start_level(&self, level: usize) {
-        let level = self
-            .levels
-            .get(level)
-            .unwrap_or_else(|| panic!("Timeout for invalid level {}", level));
+        let level = self.levels.get(level).unwrap_or_else(|| panic!("Timeout for invalid level {}", level));
         trace!("Starting level {}: Peers: {:?}", level.id, level.peer_ids);
 
         level.start();
@@ -300,12 +261,7 @@ impl<
             };
 
             // create the LevelUpdate with the aggregate contribution, the level, our node id and, if the level is incomplete, our own contribution
-            let update = LevelUpdate::<P::Contribution>::new(
-                contribution,
-                individual,
-                level.id,
-                self.protocol.node_id(),
-            );
+            let update = LevelUpdate::<P::Contribution>::new(contribution, individual, level.id, self.protocol.node_id());
 
             // Tag the LevelUpdate with the tag this aggregation runs over creating a LevelUpdateMessage.
             let update_msg = update.with_tag(self.tag.clone());
@@ -317,10 +273,7 @@ impl<
 
     /// Check if a level was completed TODO: remove contribution parameter as it is not used at all.
     async fn check_completed_level(&self, contribution: &P::Contribution, level: usize) {
-        let level = self
-            .levels
-            .get(level)
-            .unwrap_or_else(|| panic!("Invalid level: {}", level));
+        let level = self.levels.get(level).unwrap_or_else(|| panic!("Invalid level: {}", level));
 
         trace!(
             "Checking for completed level {}: signers={:?}",
@@ -375,14 +328,10 @@ impl<
 
             // if there is an aggregate contribution for given level i send it out to the peers of that level.
             if let Some(multisig) = combined {
-                let level = self
-                    .levels
-                    .get(i)
-                    .unwrap_or_else(|| panic!("No level {}", i));
+                let level = self.levels.get(i).unwrap_or_else(|| panic!("No level {}", i));
                 if level.update_signature_to_send(&multisig.clone()) {
                     // XXX Do this without cloning
-                    self.send_update(multisig, &level, self.config.peer_count)
-                        .await;
+                    self.send_update(multisig, &level, self.config.peer_count).await;
                 }
             }
         }
@@ -397,10 +346,7 @@ impl<
         let store = self.protocol.store();
         let store = store.read();
 
-        trace!(
-            "Checking we have an aggregation above threshold: last_level={}",
-            last_level.id
-        );
+        trace!("Checking we have an aggregation above threshold: last_level={}", last_level.id);
 
         // get the combined siganture for the highest level.
         if let Some(combined) = store.combined(last_level.id) {
@@ -434,19 +380,10 @@ impl<
 }
 
 #[async_trait]
-impl<
-        P: Protocol + fmt::Debug,
-        N: Network,
-        T: Clone + fmt::Debug + Eq + Serialize + Deserialize + Hash + Send + Sync + 'static,
-    > HandelAggreation<P, N, T> for Aggregation<P, N, T>
+impl<P: Protocol + fmt::Debug, N: Network, T: Clone + fmt::Debug + Eq + Serialize + Deserialize + Hash + Send + Sync + 'static> HandelAggreation<P, N, T>
+    for Aggregation<P, N, T>
 {
-    async fn start(
-        tag: T,
-        own_contribution: P::Contribution,
-        protocol: P,
-        config: Config,
-        network: Arc<N>,
-    ) -> P::Contribution {
+    async fn start(tag: T, own_contribution: P::Contribution, protocol: P, config: Config, network: Arc<N>) -> P::Contribution {
         Self::start(tag, own_contribution, protocol, config, network).await
     }
 }

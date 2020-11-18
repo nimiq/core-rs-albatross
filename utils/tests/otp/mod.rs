@@ -9,10 +9,7 @@ struct DummyU32 {
 
 impl DummyU32 {
     fn new(value: u32) -> Self {
-        DummyU32 {
-            checksum: value,
-            value,
-        }
+        DummyU32 { checksum: value, value }
     }
 }
 

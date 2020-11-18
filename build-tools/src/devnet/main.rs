@@ -25,9 +25,7 @@ struct Args {
 
 #[shellfn::shell]
 // NOTE: env_dir needs to be absolute
-fn build_client<S: ToString>(
-    env_dir: S,
-) -> Result<impl Iterator<Item = Result<String, Error>>, Error> {
+fn build_client<S: ToString>(env_dir: S) -> Result<impl Iterator<Item = Result<String, Error>>, Error> {
     r#"
     mkdir -p $ENV_DIR/build/
     export NIMIQ_OVERRIDE_DEVNET_CONFIG=$ENV_DIR/dev-albatross.toml
@@ -65,8 +63,7 @@ fn run_devnet(args: Args, keyboard_interrupt: Arc<AtomicBool>) -> Result<(), Err
     // delete build directory
     //remove_dir_all(env_dir.join("build"))
     //    .expect("Failed to delete build directory");
-    remove_file(env_dir.join("build").join("nimiq-client"))
-        .expect("Failed to delete nimiq-client binary");
+    remove_file(env_dir.join("build").join("nimiq-client")).expect("Failed to delete nimiq-client binary");
 
     Ok(())
 }

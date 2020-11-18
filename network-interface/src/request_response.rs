@@ -87,11 +87,7 @@ impl<P: Peer, Req: RequestMessage, Res: ResponseMessage + 'static> RequestRespon
 
         // TODO: CloseType
         // If sending fails, remove channel and return error.
-        if let Err(e) = self
-            .peer
-            .send_or_close(&request, |_| CloseReason::Other)
-            .await
-        {
+        if let Err(e) = self.peer.send_or_close(&request, |_| CloseReason::Other).await {
             let mut state = self.state.lock();
             state.responses.remove(&request_identifier);
             return Err(RequestError::SendError(e));
@@ -108,10 +104,6 @@ impl<P: Peer, Req: RequestMessage, Res: ResponseMessage + 'static> RequestRespon
         }
 
         // Flatten response.
-        response
-            .ok()
-            .map(|inner| inner.ok())
-            .flatten()
-            .ok_or(RequestError::ReceiveError)
+        response.ok().map(|inner| inner.ok()).flatten().ok_or(RequestError::ReceiveError)
     }
 }

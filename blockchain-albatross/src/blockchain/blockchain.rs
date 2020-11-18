@@ -79,24 +79,8 @@ impl Blockchain {
         let chain_store = Arc::new(ChainStore::new(env.clone()));
         let history_store = Arc::new(HistoryStore::new(env.clone()));
         Ok(match chain_store.get_head(None) {
-            Some(head_hash) => Blockchain::load(
-                env,
-                chain_store,
-                history_store,
-                time,
-                network_id,
-                genesis_block,
-                head_hash,
-            )?,
-            None => Blockchain::init(
-                env,
-                chain_store,
-                history_store,
-                time,
-                network_id,
-                genesis_block,
-                genesis_accounts,
-            )?,
+            Some(head_hash) => Blockchain::load(env, chain_store, history_store, time, network_id, genesis_block, head_hash)?,
+            None => Blockchain::init(env, chain_store, history_store, time, network_id, genesis_block, genesis_accounts)?,
         })
     }
 
@@ -112,16 +96,11 @@ impl Blockchain {
     ) -> Result<Self, BlockchainError> {
         // Check that the correct genesis block is stored.
         let genesis_info = chain_store.get_chain_info(&genesis_block.hash(), false, None);
-        if !genesis_info
-            .as_ref()
-            .map(|i| i.on_main_chain)
-            .unwrap_or(false)
-        {
+        if !genesis_info.as_ref().map(|i| i.on_main_chain).unwrap_or(false) {
             return Err(BlockchainError::InvalidGenesisBlock);
         }
 
-        let (genesis_supply, genesis_timestamp) =
-            genesis_parameters(&genesis_block.unwrap_macro().header);
+        let (genesis_supply, genesis_timestamp) = genesis_parameters(&genesis_block.unwrap_macro().header);
 
         // Load main chain from store.
         let main_chain = chain_store
@@ -137,11 +116,7 @@ impl Blockchain {
 
         // Load macro chain from store.
         let macro_chain_info = chain_store
-            .get_chain_info_at(
-                policy::last_macro_block(main_chain.head.block_number()),
-                true,
-                None,
-            )
+            .get_chain_info_at(policy::last_macro_block(main_chain.head.block_number()), true, None)
             .ok_or(BlockchainError::FailedLoadingMainChain)?;
 
         let macro_head = match macro_chain_info.head {
@@ -153,11 +128,7 @@ impl Blockchain {
 
         // Load election macro chain from store.
         let election_chain_info = chain_store
-            .get_chain_info_at(
-                policy::last_election_block(main_chain.head.block_number()),
-                true,
-                None,
-            )
+            .get_chain_info_at(policy::last_election_block(main_chain.head.block_number()), true, None)
             .ok_or(BlockchainError::FailedLoadingMainChain)?;
 
         let election_head = match election_chain_info.head {
@@ -174,12 +145,7 @@ impl Blockchain {
         // Initialize TransactionCache.
         let mut transaction_cache = TransactionCache::new();
 
-        let blocks = chain_store.get_blocks_backward(
-            &head_hash,
-            transaction_cache.missing_blocks() - 1,
-            true,
-            None,
-        );
+        let blocks = chain_store.get_blocks_backward(&head_hash, transaction_cache.missing_blocks() - 1, true, None);
 
         for block in blocks.iter().rev() {
             transaction_cache.push_block(block);
@@ -196,8 +162,7 @@ impl Blockchain {
         let current_slots = election_head.get_slots().unwrap();
 
         // Get last slots and validators
-        let prev_block =
-            chain_store.get_block(&election_head.header.parent_election_hash, true, None);
+        let prev_block = chain_store.get_block(&election_head.header.parent_election_hash, true, None);
 
         let last_slots = match prev_block {
             Some(Block::Macro(prev_election_block)) => {

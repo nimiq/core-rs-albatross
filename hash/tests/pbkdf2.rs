@@ -62,21 +62,11 @@ fn it_correctly_computes_hmac_sha512() {
             iterations: 4096,
             derived_key_length: 64,
             derived_key: "8c0511f4c6e597c6ac6315d8f0362e225f3c501495ba23b868c005174dc4ee71115b59f9e60cd9532fa33e0f75aefe30225c583a186cd82bd4daea9724a3d3b8",
-        }
+        },
     ];
 
     for (i, vector) in TEST_CASES.iter().enumerate() {
-        let derived_key = compute_pbkdf2_sha512(
-            &vector.get_password()[..],
-            &vector.get_salt()[..],
-            vector.iterations,
-            vector.derived_key_length,
-        );
-        assert_eq!(
-            derived_key.unwrap(),
-            vector.get_derived_key(),
-            "Invalid pbkdf2 in test case {}",
-            i
-        );
+        let derived_key = compute_pbkdf2_sha512(&vector.get_password()[..], &vector.get_salt()[..], vector.iterations, vector.derived_key_length);
+        assert_eq!(derived_key.unwrap(), vector.get_derived_key(), "Invalid pbkdf2 in test case {}", i);
     }
 }

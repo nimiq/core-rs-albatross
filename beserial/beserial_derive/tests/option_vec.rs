@@ -20,14 +20,10 @@ fn it_correctly_serializes_and_deserializes_option_of_vec() {
     let mut test = TestStruct { test: None };
     assert_eq!(test.serialized_size(), 1);
     assert_eq!(reserialize(&test), test);
-    test = TestStruct {
-        test: Some(Vec::new()),
-    };
+    test = TestStruct { test: Some(Vec::new()) };
     assert_eq!(test.serialized_size(), 3);
     assert_eq!(reserialize(&test), test);
-    test = TestStruct {
-        test: Some(vec![1, 2, 3]),
-    };
+    test = TestStruct { test: Some(vec![1, 2, 3]) };
     assert_eq!(test.serialized_size(), 6);
     assert_eq!(reserialize(&test), test);
 }

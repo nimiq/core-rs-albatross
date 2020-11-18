@@ -38,8 +38,7 @@ use crate::websocket::Message as WebSocketMessage;
 use super::sink::PeerSink;
 use super::stream::PeerStreamEvent;
 
-pub type Channels =
-    Arc<RwLock<HashMap<u64, Pin<Box<dyn Sink<Vec<u8>, Error = DispatchError> + Send + Sync>>>>>;
+pub type Channels = Arc<RwLock<HashMap<u64, Pin<Box<dyn Sink<Vec<u8>, Error = DispatchError> + Send + Sync>>>>>;
 
 #[derive(Clone)]
 pub struct PeerChannel {
@@ -76,55 +75,48 @@ impl PeerChannel {
         let info = network_connection.address_info();
         let close_event_sent = Arc::new(AtomicBool::new(false));
         let close_event_sent_inner = close_event_sent.clone();
-        network_connection
-            .notifier
-            .write()
-            .register(move |e: PeerStreamEvent| {
-                match e {
-                    PeerStreamEvent::Message(msg) => {
-                        last_message_received1.store(Instant::now(), Ordering::Relaxed);
+        network_connection.notifier.write().register(move |e: PeerStreamEvent| {
+            match e {
+                PeerStreamEvent::Message(msg) => {
+                    last_message_received1.store(Instant::now(), Ordering::Relaxed);
 
-                        if let Ok(msg_type) = peek_type(&msg) {
-                            // There are 3 possibilities:
-                            // 1. We have a message channel, then we send it via this channel.
-                            // 2. We don't have a channel, but it is a legacy message.
-                            //    Then we send it via this channel.
-                            // 3. None of the above is true. Then, we discard the message.
-                            let mut channels = msg_channels1.write();
-                            if let Some(channel) = channels.get_mut(&msg_type) {
-                                // TODO: For now, we ignore asyncness here and block.
-                                if executor::block_on(channel.send(msg)).is_err() {
-                                    // TODO: What to do if there is an error?
-                                }
-                            } else {
-                                // Test whether it is a legacy message.
-                                if let Ok(msg) = Deserialize::deserialize_from_vec(&msg) {
-                                    msg_notifier1.notify(msg);
-                                }
+                    if let Ok(msg_type) = peek_type(&msg) {
+                        // There are 3 possibilities:
+                        // 1. We have a message channel, then we send it via this channel.
+                        // 2. We don't have a channel, but it is a legacy message.
+                        //    Then we send it via this channel.
+                        // 3. None of the above is true. Then, we discard the message.
+                        let mut channels = msg_channels1.write();
+                        if let Some(channel) = channels.get_mut(&msg_type) {
+                            // TODO: For now, we ignore asyncness here and block.
+                            if executor::block_on(channel.send(msg)).is_err() {
+                                // TODO: What to do if there is an error?
                             }
                         } else {
-                            // TODO: What to do if we cannot parse the message type?
+                            // Test whether it is a legacy message.
+                            if let Ok(msg) = Deserialize::deserialize_from_vec(&msg) {
+                                msg_notifier1.notify(msg);
+                            }
                         }
-                    }
-                    PeerStreamEvent::Close(ty) => {
-                        // Only send close event once, i.e., if close_event_sent was false.
-                        if !close_event_sent_inner.swap(true, Ordering::AcqRel) {
-                            close_notifier1.read().notify(ty)
-                        }
-                    }
-                    PeerStreamEvent::Error(error) => {
-                        // Only send close event once, i.e., if close_event_sent was false.
-                        if !close_event_sent_inner.swap(true, Ordering::AcqRel) {
-                            debug!(
-                                "Stream with peer closed with error: {} ({})",
-                                error.as_ref(),
-                                info
-                            );
-                            close_notifier1.read().notify(CloseType::NetworkError);
-                        }
+                    } else {
+                        // TODO: What to do if we cannot parse the message type?
                     }
                 }
-            });
+                PeerStreamEvent::Close(ty) => {
+                    // Only send close event once, i.e., if close_event_sent was false.
+                    if !close_event_sent_inner.swap(true, Ordering::AcqRel) {
+                        close_notifier1.read().notify(ty)
+                    }
+                }
+                PeerStreamEvent::Error(error) => {
+                    // Only send close event once, i.e., if close_event_sent was false.
+                    if !close_event_sent_inner.swap(true, Ordering::AcqRel) {
+                        debug!("Stream with peer closed with error: {} ({})", error.as_ref(), info);
+                        close_notifier1.read().notify(CloseType::NetworkError);
+                    }
+                }
+            }
+        });
 
         PeerChannel {
             msg_notifier,
@@ -148,8 +140,7 @@ impl PeerChannel {
 
     pub fn send_or_close<M: Message>(&self, msg: M) {
         if self.peer_sink.send(&msg).is_err() {
-            self.peer_sink
-                .close(CloseType::SendFailed, Some("SendFailed".to_string()));
+            self.peer_sink.close(CloseType::SendFailed, Some("SendFailed".to_string()));
         }
     }
 
@@ -215,15 +206,11 @@ impl PeerInterface for PeerChannel {
     type Id = Arc<PeerAddress>;
 
     fn id(&self) -> Self::Id {
-        self.address_info
-            .peer_address()
-            .expect("PeerAddress not set")
+        self.address_info.peer_address().expect("PeerAddress not set")
     }
 
     async fn send<T: Message>(&self, msg: &T) -> Result<(), SendErrorI> {
-        self.peer_sink
-            .send(msg)
-            .map_err(|_| SendErrorI::AlreadyClosed)
+        self.peer_sink.send(msg).map_err(|_| SendErrorI::AlreadyClosed)
     }
 
     fn receive<T: Message + 'static>(&self) -> Pin<Box<dyn Stream<Item = T> + Send>> {

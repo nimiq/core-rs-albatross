@@ -72,9 +72,7 @@ pub enum TransactionBuilderError {
     /// Zero value transactions are called [`signalling transaction`] (also see there for a list of signalling transactions).
     ///
     /// [`signalling transaction`]: struct.TransactionBuilder.html#method.with_value
-    #[fail(
-        display = "The value must be zero for signalling transactions and cannot be zero for others."
-    )]
+    #[fail(display = "The value must be zero for signalling transactions and cannot be zero for others.")]
     InvalidValue,
 }
 
@@ -153,13 +151,7 @@ impl TransactionBuilder {
     /// let transaction = proof_builder.preliminary_transaction();
     /// assert_eq!(transaction.sender, sender);
     /// ```
-    pub fn with_required(
-        sender: Address,
-        recipient: Recipient,
-        value: Coin,
-        validity_start_height: u32,
-        network_id: NetworkId,
-    ) -> Self {
+    pub fn with_required(sender: Address, recipient: Recipient, value: Coin, validity_start_height: u32, network_id: NetworkId) -> Self {
         let mut builder = Self::default();
         builder
             .with_sender(sender)
@@ -427,12 +419,8 @@ impl TransactionBuilder {
         }
 
         let value = self.value.ok_or(TransactionBuilderError::NoValue)?;
-        let validity_start_height = self
-            .validity_start_height
-            .ok_or(TransactionBuilderError::NoValidityStartHeight)?;
-        let network_id = self
-            .network_id
-            .ok_or(TransactionBuilderError::NoNetworkId)?;
+        let validity_start_height = self.validity_start_height.ok_or(TransactionBuilderError::NoValidityStartHeight)?;
+        let network_id = self.network_id.ok_or(TransactionBuilderError::NoNetworkId)?;
 
         if recipient.is_signalling() != value.is_zero() {
             return Err(TransactionBuilderError::InvalidValue);
@@ -483,14 +471,7 @@ impl TransactionBuilder {
 // Convenience functionality.
 impl TransactionBuilder {
     /// Creates a simple transaction from the address of a given `key_pair` to a basic `recipient`.
-    pub fn new_simple(
-        key_pair: &KeyPair,
-        recipient: Address,
-        value: Coin,
-        fee: Coin,
-        validity_start_height: u32,
-        network_id: NetworkId,
-    ) -> Transaction {
+    pub fn new_simple(key_pair: &KeyPair, recipient: Address, value: Coin, fee: Coin, validity_start_height: u32, network_id: NetworkId) -> Transaction {
         let sender = Address::from(key_pair);
         let mut builder = Self::new();
         builder

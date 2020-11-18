@@ -127,8 +127,7 @@ where
             self.ids_to_request.len(), // At most all of the ids
             // The number of pending futures can be higher than the desired pending size
             // (e.g., if there is an error and we re-request)
-            self.desired_pending_size
-                .saturating_sub(self.pending_futures.len() + self.queued_outputs.len()),
+            self.desired_pending_size.saturating_sub(self.pending_futures.len() + self.queued_outputs.len()),
         );
 
         // Drain ids and produce futures.
@@ -168,8 +167,7 @@ where
     /// Truncates the stored ids, retaining only the first `len` elements.
     /// The elements are counted from the *original* start of the ids vector.
     pub fn truncate_ids(&mut self, len: usize) {
-        self.ids_to_request
-            .truncate(len.saturating_sub(self.next_incoming_index));
+        self.ids_to_request.truncate(len.saturating_sub(self.next_incoming_index));
     }
 
     pub fn num_peers(&self) -> usize {

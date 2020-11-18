@@ -1,39 +1,33 @@
 ///! Defines the types used by the JSON RPC API[1]
 ///!
 ///! [1] https://github.com/nimiq/core-js/wiki/JSON-RPC-API#common-data-types
+use std::fmt::{Display, Formatter};
 
-use std::fmt::{Formatter, Display};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-
-use serde::{Serialize, Deserialize, Serializer, Deserializer};
-
-use nimiq_primitives::{
-    coin::Coin,
-    account::AccountType,
-};
+use nimiq_block_albatross::{PbftProof, ViewChangeProof};
+use nimiq_blockchain_albatross::Blockchain;
+use nimiq_bls::{CompressedPublicKey, CompressedSignature};
+use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
-use nimiq_transaction::account::htlc_contract::AnyHash;
 use nimiq_primitives::policy;
-use nimiq_blockchain_albatross::Blockchain;
+use nimiq_primitives::slot::{SlotBand, ValidatorSlots};
+use nimiq_primitives::{account::AccountType, coin::Coin};
+use nimiq_transaction::account::htlc_contract::AnyHash;
 use nimiq_vrf::VrfSeed;
-use nimiq_bls::{CompressedPublicKey, CompressedSignature};
-use nimiq_block_albatross::{PbftProof, ViewChangeProof};
-use nimiq_primitives::slot::{ValidatorSlots, SlotBand};
-use nimiq_collections::BitSet;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all="snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum BlockType {
     Macro,
     Micro,
 }
 
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct Block {
-    #[serde(rename="type")]
+    #[serde(rename = "type")]
     ty: BlockType,
 
     hash: Blake2bHash,
@@ -57,11 +51,11 @@ pub struct Block {
     timestamp: u64,
 
     #[serde(flatten)]
-    additional_fields: BlockAdditionalFields
+    additional_fields: BlockAdditionalFields,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all="camelCase", tag="type")]
+#[serde(rename_all = "camelCase", tag = "type")]
 pub enum BlockAdditionalFields {
     Macro {
         is_election_block: bool,
@@ -96,7 +90,7 @@ pub enum BlockAdditionalFields {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct MacroJustification {
     votes: u16,
 
@@ -107,23 +101,23 @@ pub struct MacroJustification {
 impl MacroJustification {
     fn from_pbft_proof(pbft_proof_opt: Option<PbftProof>, validator_slots_opt: Option<&ValidatorSlots>) -> Option<Self> {
         if let (Some(pbft_proof), Some(validator_slots)) = (pbft_proof_opt, validator_slots_opt) {
-            let votes = pbft_proof.votes(validator_slots)
-                .map_err(|e| { log::error!("{}", e); e })
+            let votes = pbft_proof
+                .votes(validator_slots)
+                .map_err(|e| {
+                    log::error!("{}", e);
+                    e
+                })
                 .ok()?;
 
-            Some(Self {
-                votes,
-                pbft_proof,
-            })
-        }
-        else {
+            Some(Self { votes, pbft_proof })
+        } else {
             None
         }
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct Slots {
     first_slot_number: u16,
 
@@ -137,7 +131,8 @@ pub struct Slots {
 
 impl Slots {
     pub fn from_slots(slots: nimiq_primitives::slot::Slots) -> Vec<Slots> {
-        slots.combined()
+        slots
+            .combined()
             .into_iter()
             .map(|(slot, first_slot_number)| Slots {
                 first_slot_number,
@@ -149,9 +144,8 @@ impl Slots {
     }
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct MicroJustification {
     #[serde(with = "serde_with::rust::display_fromstr")]
     signature: CompressedSignature,
@@ -168,9 +162,8 @@ impl From<nimiq_block_albatross::MicroJustification> for MicroJustification {
     }
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct Slot {
     slot_number: u16,
 
@@ -184,11 +177,7 @@ impl Slot {
     pub fn from_producer(blockchain: &Blockchain, block_number: u32, view_number: u32) -> Self {
         // TODO: `get_slot_owner_at` should really return an `Option` or `Result`. This will panic, when there is no
         // slot owner.
-        let (slot, slot_number) = blockchain.get_slot_owner_at(
-            block_number,
-            view_number,
-            None,
-        );
+        let (slot, slot_number) = blockchain.get_slot_owner_at(block_number, view_number, None);
 
         Slot {
             slot_number,
@@ -198,9 +187,8 @@ impl Slot {
     }
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct ForkProof {
     block_number: u32,
     view_number: u32,
@@ -210,10 +198,7 @@ pub struct ForkProof {
 
 impl From<nimiq_block_albatross::ForkProof> for ForkProof {
     fn from(fork_proof: nimiq_block_albatross::ForkProof) -> Self {
-        let hashes = [
-            fork_proof.header1.hash(),
-            fork_proof.header2.hash(),
-        ];
+        let hashes = [fork_proof.header1.hash(), fork_proof.header2.hash()];
 
         Self {
             block_number: fork_proof.header1.block_number,
@@ -225,7 +210,7 @@ impl From<nimiq_block_albatross::ForkProof> for ForkProof {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct Transaction {
     hash: Blake2bHash,
 
@@ -266,7 +251,14 @@ pub struct Transaction {
 }
 
 impl Transaction {
-    pub fn from_blockchain(transaction: nimiq_transaction::Transaction, transaction_index: usize, block_hash: &Blake2bHash, block_number: u32, timestamp: u64, head_height: u32) -> Self {
+    pub fn from_blockchain(
+        transaction: nimiq_transaction::Transaction,
+        transaction_index: usize,
+        block_hash: &Blake2bHash,
+        block_number: u32,
+        timestamp: u64,
+        head_height: u32,
+    ) -> Self {
         Transaction {
             hash: transaction.hash(),
             block_hash: block_hash.clone(),
@@ -282,7 +274,7 @@ impl Transaction {
             fee: transaction.fee,
             flags: transaction.flags.bits() as u8,
             data: transaction.data,
-            validity_start_height: transaction.validity_start_height
+            validity_start_height: transaction.validity_start_height,
         }
     }
 }
@@ -321,45 +313,30 @@ impl Block {
                         is_election_block: policy::is_election_block_at(block_number),
                         parent_election_hash: macro_block.header.parent_election_hash,
                         slots,
-                        lost_reward_set: macro_block.body
-                            .map(|body| body.lost_reward_set),
-                        justification: MacroJustification::from_pbft_proof(
-                            macro_block.justification,
-                            validator_slots_opt.as_ref()
-                        ),
-                    }
+                        lost_reward_set: macro_block.body.map(|body| body.lost_reward_set),
+                        justification: MacroJustification::from_pbft_proof(macro_block.justification, validator_slots_opt.as_ref()),
+                    },
                 }
-            },
+            }
 
             nimiq_block_albatross::Block::Micro(micro_block) => {
-                let (
-                    fork_proofs,
-                    transactions,
-                ) = if let Some(body) = micro_block.body {
+                let (fork_proofs, transactions) = if let Some(body) = micro_block.body {
                     (
                         Some(body.fork_proofs.into_iter().map(Into::into).collect()),
-
                         if include_transactions {
                             let head_height = blockchain.block_number();
-                            Some(body.transactions
-                                .into_iter()
-                                .enumerate()
-                                .map(|(index, tx)| Transaction::from_blockchain(
-                                    tx,
-                                    index,
-                                    &block_hash,
-                                    block_number,
-                                    timestamp,
-                                    head_height
-                                ))
-                                .collect())
-                        }
-                        else {
+                            Some(
+                                body.transactions
+                                    .into_iter()
+                                    .enumerate()
+                                    .map(|(index, tx)| Transaction::from_blockchain(tx, index, &block_hash, block_number, timestamp, head_height))
+                                    .collect(),
+                            )
+                        } else {
                             None
                         },
                     )
-                }
-                else {
+                } else {
                     (None, None)
                 };
 
@@ -381,13 +358,12 @@ impl Block {
                         transactions,
                         producer: Slot::from_producer(blockchain, block_number, view_number),
                         justification: micro_block.justification.map(Into::into),
-                    }
+                    },
                 }
-            },
+            }
         }
     }
 }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Account {
@@ -398,16 +374,15 @@ pub struct Account {
 
     balance: Coin,
 
-    #[serde(rename="type", with = "crate::serde_helpers::account_type")]
+    #[serde(rename = "type", with = "crate::serde_helpers::account_type")]
     ty: AccountType,
 
     #[serde(flatten)]
     account_additional_fields: AccountAdditionalFields,
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all="camelCase", tag="type")]
+#[serde(rename_all = "camelCase", tag = "type")]
 pub enum AccountAdditionalFields {
     /// Additional account information for vesting contracts.
     VestingContract {
@@ -465,9 +440,8 @@ pub enum AccountAdditionalFields {
     },
     Staking {
         // TODO
-    }
+    },
 }
-
 
 #[derive(Clone, Debug)]
 pub enum OrLatest<T> {
@@ -476,12 +450,12 @@ pub enum OrLatest<T> {
 }
 
 impl<T> Serialize for OrLatest<T>
-    where
-        T: Serialize,
+where
+    T: Serialize,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
+    where
+        S: Serializer,
     {
         match self {
             OrLatest::Value(x) => x.serialize(serializer),
@@ -491,20 +465,20 @@ impl<T> Serialize for OrLatest<T>
 }
 
 impl<'de, T> Deserialize<'de> for OrLatest<T>
-    where
-        T: Deserialize<'de>
+where
+    T: Deserialize<'de>,
 {
     fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
-        where
-            D: Deserializer<'de>
+    where
+        D: Deserializer<'de>,
     {
         unimplemented!()
     }
 }
 
 impl<T> Display for OrLatest<T>
-    where
-        T: Display
+where
+    T: Display,
 {
     fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
         match self {
@@ -514,9 +488,8 @@ impl<T> Display for OrLatest<T>
     }
 }
 
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct SlashedSlots {
     pub block_number: u32,
 
@@ -525,9 +498,8 @@ pub struct SlashedSlots {
     pub previous: BitSet,
 }
 
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct Stakes {
     pub active_validators: Vec<Validator>,
 
@@ -535,7 +507,6 @@ pub struct Stakes {
 
     pub inactive_stakes: Vec<Stake>,
 }
-
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Stake {
@@ -549,7 +520,7 @@ pub struct Stake {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct Validator {
     pub public_key: CompressedPublicKey,
 
@@ -570,13 +541,14 @@ impl Validator {
             public_key: public_key.clone(),
             balance: validator.balance,
             reward_address: validator.reward_address.clone(),
-            stakes: validator.active_stake_by_address
+            stakes: validator
+                .active_stake_by_address
                 .read()
                 .iter()
                 .map(|(address, balance)| Stake {
                     staker_address: address.clone(),
                     balance: *balance,
-                    retire_time: None
+                    retire_time: None,
                 })
                 .collect(),
             retire_time,

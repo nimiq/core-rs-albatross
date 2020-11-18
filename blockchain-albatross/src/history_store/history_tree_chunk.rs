@@ -1,8 +1,5 @@
 use crate::history_store::{ExtendedTransaction, HistoryTreeHash};
-use beserial::{
-    Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
-    SerializingError, WriteBytesExt,
-};
+use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, WriteBytesExt};
 use hash::Blake2bHash;
 use mmr::mmr::proof::{Proof, RangeProof};
 
@@ -23,9 +20,7 @@ impl HistoryTreeChunk {
         let expected_root = HistoryTreeHash(expected_root);
 
         // TODO: Modify MMR library so that we do not need to clone here.
-        self.proof
-            .verify_with_start(&expected_root, leaf_index, self.history.clone())
-            .ok()
+        self.proof.verify_with_start(&expected_root, leaf_index, self.history.clone()).ok()
     }
 }
 

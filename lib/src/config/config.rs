@@ -259,29 +259,17 @@ impl StorageConfig {
     ///
     /// Returns a `Result` which is either a `Environment` or a `Error`.
     ///
-    pub fn database(
-        &self,
-        network_id: NetworkId,
-        consensus: ConsensusConfig,
-        db_config: DatabaseConfig,
-    ) -> Result<Environment, Error> {
+    pub fn database(&self, network_id: NetworkId, consensus: ConsensusConfig, db_config: DatabaseConfig) -> Result<Environment, Error> {
         let db_name = format!("{}-{}-consensus", network_id, consensus).to_lowercase();
         info!("Opening database: {}", db_name);
 
         Ok(match self {
-            StorageConfig::Volatile => {
-                VolatileEnvironment::new_with_lmdb_flags(db_config.max_dbs, db_config.flags)?
-            }
+            StorageConfig::Volatile => VolatileEnvironment::new_with_lmdb_flags(db_config.max_dbs, db_config.flags)?,
             StorageConfig::Filesystem(file_storage) => {
                 let db_path = file_storage.database_parent.join(db_name);
                 let db_path = db_path
                     .to_str()
-                    .ok_or_else(|| {
-                        Error::config_error(format!(
-                            "Failed to convert database path to string: {}",
-                            db_path.display()
-                        ))
-                    })?
+                    .ok_or_else(|| Error::config_error(format!("Failed to convert database path to string: {}", db_path.display())))?
                     .to_string();
                 LmdbEnvironment::new(&db_path, db_config.size, db_config.max_dbs, db_config.flags)?
             }
@@ -297,12 +285,7 @@ impl StorageConfig {
                 let key_path = file_storage
                     .peer_key
                     .to_str()
-                    .ok_or_else(|| {
-                        Error::config_error(format!(
-                            "Failed to convert path of peer key to string: {}",
-                            file_storage.peer_key.display()
-                        ))
-                    })?
+                    .ok_or_else(|| Error::config_error(format!("Failed to convert path of peer key to string: {}", file_storage.peer_key.display())))?
                     .to_string();
                 let key_store = KeyStore::new(key_path.clone());
                 network_config.init_persistent(&key_store).map_err(|e| {
@@ -327,12 +310,7 @@ impl StorageConfig {
                     .ok_or_else(|| Error::config_error("No path for validator key specified"))?;
                 let key_path = key_path
                     .to_str()
-                    .ok_or_else(|| {
-                        Error::config_error(format!(
-                            "Failed to convert path of validator key to string: {}",
-                            key_path.display()
-                        ))
-                    })?
+                    .ok_or_else(|| Error::config_error(format!("Failed to convert path of validator key to string: {}", key_path.display())))?
                     .to_string();
                 let key_store = KeyStore::new(key_path);
                 match key_store.load_key() {
@@ -677,13 +655,7 @@ impl ClientConfigBuilder {
     /// * `address` - Address on which the reverse proxy is listening for incoming connections
     /// * `termination` - TODO
     ///
-    pub fn reverse_proxy(
-        &mut self,
-        port: u16,
-        header: String,
-        address: NetAddress,
-        with_tls_termination: bool,
-    ) -> &mut Self {
+    pub fn reverse_proxy(&mut self, port: u16, header: String, address: NetAddress, with_tls_termination: bool) -> &mut Self {
         self.reverse_proxy = Some(Some(ReverseProxyConfig {
             port,
             header,
@@ -701,10 +673,7 @@ impl ClientConfigBuilder {
 
     /// Sets the mempool filter rules
     pub fn mempool(&mut self, filter_rules: MempoolRules, filter_limit: usize) -> &mut Self {
-        self.mempool = Some(MempoolConfig {
-            filter_rules,
-            filter_limit,
-        });
+        self.mempool = Some(MempoolConfig { filter_rules, filter_limit });
         self
     }
 
@@ -729,9 +698,7 @@ impl ClientConfigBuilder {
     /// yet, this will just enable the validator.
     #[cfg(feature = "validator")]
     pub fn validator(&mut self) -> &mut Self {
-        self.validator = Some(Some(ValidatorConfig {
-            validator_wallet_key: None,
-        }));
+        self.validator = Some(Some(ValidatorConfig { validator_wallet_key: None }));
         self
     }
 
@@ -741,16 +708,8 @@ impl ClientConfigBuilder {
         self.protocol(match config_file.network.protocol {
             config_file::Protocol::Dumb => ProtocolConfig::Dumb,
             config_file::Protocol::Ws => ProtocolConfig::Ws {
-                host: config_file
-                    .network
-                    .host
-                    .clone()
-                    .ok_or_else(|| Error::config_error("Hostname not set."))?,
-                port: config_file
-                    .network
-                    .port
-                    .clone()
-                    .unwrap_or(consts::WS_DEFAULT_PORT),
+                host: config_file.network.host.clone().ok_or_else(|| Error::config_error("Hostname not set."))?,
+                port: config_file.network.port.clone().unwrap_or(consts::WS_DEFAULT_PORT),
             },
             config_file::Protocol::Wss => {
                 let tls = config_file
@@ -760,16 +719,8 @@ impl ClientConfigBuilder {
                     .ok_or_else(|| Error::config_error("[tls] section missing."))?
                     .clone();
                 ProtocolConfig::Wss {
-                    host: config_file
-                        .network
-                        .host
-                        .clone()
-                        .ok_or_else(|| Error::config_error("Hostname not set."))?,
-                    port: config_file
-                        .network
-                        .port
-                        .clone()
-                        .unwrap_or(consts::WS_DEFAULT_PORT),
+                    host: config_file.network.host.clone().ok_or_else(|| Error::config_error("Hostname not set."))?,
+                    port: config_file.network.port.clone().unwrap_or(consts::WS_DEFAULT_PORT),
                     pkcs12_key_file: PathBuf::from(tls.identity_file),
                     pkcs12_passphrase: tls.identity_password,
                 }
@@ -778,11 +729,7 @@ impl ClientConfigBuilder {
         });
 
         // Configure user agent
-        config_file
-            .network
-            .user_agent
-            .as_ref()
-            .map(|user_agent| self.user_agent(user_agent.clone()));
+        config_file.network.user_agent.as_ref().map(|user_agent| self.user_agent(user_agent.clone()));
 
         // Configure consensus
         self.consensus(config_file.consensus.consensus_type);
@@ -818,10 +765,7 @@ impl ClientConfigBuilder {
         #[cfg(feature = "rpc-server")]
         {
             if let Some(rpc_config) = &config_file.rpc_server {
-                let bind_to = rpc_config
-                    .bind
-                    .as_ref()
-                    .and_then(|addr| addr.into_ip_address());
+                let bind_to = rpc_config.bind.as_ref().and_then(|addr| addr.into_ip_address());
 
                 let allow_ips = if rpc_config.allowip.is_empty() {
                     None
@@ -829,10 +773,7 @@ impl ClientConfigBuilder {
                     let result = rpc_config
                         .allowip
                         .iter()
-                        .map(|s| {
-                            s.parse::<IpAddr>()
-                                .map_err(|e| Error::config_error(format!("Invalid IP: {}", e)))
-                        })
+                        .map(|s| s.parse::<IpAddr>().map_err(|e| Error::config_error(format!("Invalid IP: {}", e))))
                         .collect::<Result<Vec<IpAddr>, Error>>();
                     Some(result?)
                 };
@@ -840,11 +781,7 @@ impl ClientConfigBuilder {
                 let credentials = match (&rpc_config.username, &rpc_config.password) {
                     (Some(u), Some(p)) => Some(Credentials::new(u.clone(), p.clone())),
                     (None, None) => None,
-                    _ => {
-                        return Err(Error::config_error(
-                            "Either both username and password have to be set or none.",
-                        ))
-                    }
+                    _ => return Err(Error::config_error("Either both username and password have to be set or none.")),
                 };
 
                 self.rpc_server = Some(Some(RpcServerConfig {
@@ -862,19 +799,12 @@ impl ClientConfigBuilder {
         #[cfg(feature = "ws-rpc-server")]
         {
             if let Some(ws_rpc_config) = &config_file.ws_rpc_server {
-                let bind_to = ws_rpc_config
-                    .bind
-                    .as_ref()
-                    .and_then(|addr| addr.into_ip_address());
+                let bind_to = ws_rpc_config.bind.as_ref().and_then(|addr| addr.into_ip_address());
 
                 let credentials = match (&ws_rpc_config.username, &ws_rpc_config.password) {
                     (Some(u), Some(p)) => Some(Credentials::new(u.clone(), p.clone())),
                     (None, None) => None,
-                    _ => {
-                        return Err(Error::config_error(
-                            "Either both username and password have to be set or none.",
-                        ))
-                    }
+                    _ => return Err(Error::config_error("Either both username and password have to be set or none.")),
                 };
 
                 self.ws_rpc_server = Some(Some(WsRpcServerConfig {
@@ -889,15 +819,9 @@ impl ClientConfigBuilder {
         #[cfg(feature = "metrics-server")]
         {
             if let Some(metrics_config) = &config_file.metrics_server {
-                let bind_to = metrics_config
-                    .bind
-                    .as_ref()
-                    .and_then(|addr| addr.into_ip_address());
+                let bind_to = metrics_config.bind.as_ref().and_then(|addr| addr.into_ip_address());
 
-                let credentials = metrics_config
-                    .password
-                    .as_ref()
-                    .map(|password| Credentials::new("metrics", password));
+                let credentials = metrics_config.password.as_ref().map(|password| Credentials::new("metrics", password));
 
                 self.metrics_server = Some(Some(MetricsServerConfig {
                     bind_to,
@@ -909,10 +833,7 @@ impl ClientConfigBuilder {
 
         // Configure custom seeds
         for seed in &config_file.network.seed_nodes {
-            self.seed(
-                Seed::try_from(seed.clone())
-                    .map_err(|e| Error::config_error(format!("Invalid seed: {:?}: {}", seed, e)))?,
-            );
+            self.seed(Seed::try_from(seed.clone()).map_err(|e| Error::config_error(format!("Invalid seed: {:?}: {}", seed, e)))?);
         }
 
         // Configure validator
@@ -929,12 +850,7 @@ impl ClientConfigBuilder {
                     .map(|config_private_key| {
                         Some(keys::KeyPair::from(
                             keys::PrivateKey::from_str(&config_private_key)
-                                .map_err(|e| {
-                                    Error::config_error(format!(
-                                        "Invalid wallet private key: {:?}: {}",
-                                        &config_private_key, e
-                                    ))
-                                })
+                                .map_err(|e| Error::config_error(format!("Invalid wallet private key: {:?}: {}", &config_private_key, e)))
                                 .ok()?,
                         ))
                     })
@@ -970,9 +886,7 @@ impl ClientConfigBuilder {
         });
 
         // Set consensus type
-        command_line
-            .consensus_type
-            .map(|consensus| self.consensus(consensus));
+        command_line.consensus_type.map(|consensus| self.consensus(consensus));
 
         // Set network ID
         command_line.network.map(|network| self.network(network));

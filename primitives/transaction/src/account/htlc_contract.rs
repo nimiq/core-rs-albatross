@@ -23,10 +23,7 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
             return Err(TransactionError::SenderEqualsRecipient);
         }
 
-        if !transaction
-            .flags
-            .contains(TransactionFlags::CONTRACT_CREATION)
-        {
+        if !transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {
             warn!("Only contract creation is allowed");
             return Err(TransactionError::InvalidForRecipient);
         }
@@ -93,8 +90,7 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
                 }
             }
             ProofType::EarlyResolve => {
-                let signature_proof_recipient: SignatureProof =
-                    Deserialize::deserialize(proof_buf)?;
+                let signature_proof_recipient: SignatureProof = Deserialize::deserialize(proof_buf)?;
                 let signature_proof_sender: SignatureProof = Deserialize::deserialize(proof_buf)?;
 
                 if !proof_buf.is_empty() {
@@ -102,9 +98,7 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
                     return Err(TransactionError::InvalidProof);
                 }
 
-                if !signature_proof_recipient.verify(tx_buf)
-                    || !signature_proof_sender.verify(tx_buf)
-                {
+                if !signature_proof_recipient.verify(tx_buf) || !signature_proof_sender.verify(tx_buf) {
                     warn!("Invalid signature");
                     return Err(TransactionError::InvalidProof);
                 }

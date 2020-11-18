@@ -11,10 +11,7 @@ use network_interface::request_response::{RequestError, RequestResponse};
 use nimiq_subscription::Subscription;
 use transaction::Transaction;
 
-use crate::messages::{
-    BlockHashes, Epoch, HistoryChunk, RequestBlockHashes, RequestBlockHashesFilter, RequestEpoch,
-    RequestHistoryChunk,
-};
+use crate::messages::{BlockHashes, Epoch, HistoryChunk, RequestBlockHashes, RequestBlockHashesFilter, RequestEpoch, RequestHistoryChunk};
 
 pub struct ConsensusAgentState {
     local_subscription: Subscription,
@@ -68,10 +65,7 @@ impl<P: Peer> ConsensusAgent<P> {
 
     pub fn remove_transaction(&self, _transaction: &Transaction) {}
 
-    pub fn request_block(
-        &self,
-        _hash: Blake2bHash,
-    ) -> impl Future<Output = Result<Block, RequestError>> + 'static {
+    pub fn request_block(&self, _hash: Blake2bHash) -> impl Future<Output = Result<Block, RequestError>> + 'static {
         async { Err(RequestError::Timeout) }
     }
 
@@ -108,11 +102,7 @@ impl<P: Peer> ConsensusAgent<P> {
         result
     }
 
-    pub async fn request_history_chunk(
-        &self,
-        epoch_number: u32,
-        chunk_index: usize,
-    ) -> Result<HistoryChunk, RequestError> {
+    pub async fn request_history_chunk(&self, epoch_number: u32, chunk_index: usize) -> Result<HistoryChunk, RequestError> {
         let result = self
             .history_chunk_requests
             .request(RequestHistoryChunk {

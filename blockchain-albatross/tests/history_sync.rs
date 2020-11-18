@@ -2,8 +2,7 @@ use std::sync::Arc;
 
 use beserial::Deserialize;
 use nimiq_block_albatross::{
-    Block, MacroBlock, MacroBody, PbftCommitMessage, PbftPrepareMessage, PbftProofBuilder,
-    PbftProposal, SignedPbftCommitMessage, SignedPbftPrepareMessage,
+    Block, MacroBlock, MacroBody, PbftCommitMessage, PbftPrepareMessage, PbftProofBuilder, PbftProposal, SignedPbftCommitMessage, SignedPbftPrepareMessage,
 };
 use nimiq_block_production_albatross::BlockProducer;
 use nimiq_blockchain_albatross::{Blockchain, PushResult};
@@ -22,17 +21,8 @@ fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<Blockchain>) {
     let init_height = blockchain.block_number();
     let macro_block_number = policy::macro_block_after(init_height + 1);
     for i in (init_height + 1)..macro_block_number {
-        let last_micro_block = producer.next_micro_block(
-            blockchain.time.now() + i as u64 * 1000,
-            0,
-            None,
-            vec![],
-            vec![0x42],
-        );
-        assert_eq!(
-            blockchain.push(Block::Micro(last_micro_block)),
-            Ok(PushResult::Extended)
-        );
+        let last_micro_block = producer.next_micro_block(blockchain.time.now() + i as u64 * 1000, 0, None, vec![], vec![0x42]);
+        assert_eq!(blockchain.push(Block::Micro(last_micro_block)), Ok(PushResult::Extended));
     }
     assert_eq!(blockchain.block_number(), macro_block_number - 1);
 }
@@ -42,24 +32,15 @@ fn produce_macro_blocks(num_macro: usize, producer: &BlockProducer, blockchain: 
         fill_micro_blocks(producer, blockchain);
 
         let next_block_height = blockchain.block_number() + 1;
-        let (proposal, extrinsics) = producer.next_macro_block_proposal(
-            blockchain.time.now() + next_block_height as u64 * 1000,
-            0u32,
-            None,
-            vec![],
-        );
+        let (proposal, extrinsics) = producer.next_macro_block_proposal(blockchain.time.now() + next_block_height as u64 * 1000, 0u32, None, vec![]);
 
         let block = sign_macro_block(proposal, extrinsics);
-        assert_eq!(
-            blockchain.push(Block::Macro(block)),
-            Ok(PushResult::Extended)
-        );
+        assert_eq!(blockchain.push(Block::Macro(block)), Ok(PushResult::Extended));
     }
 }
 
 fn sign_macro_block(proposal: PbftProposal, extrinsics: MacroBody) -> MacroBlock {
-    let keypair =
-        KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
+    let keypair = KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
 
     let block_hash = proposal.header.hash::<Blake2bHash>();
 
@@ -71,11 +52,7 @@ fn sign_macro_block(proposal: PbftProposal, extrinsics: MacroBody) -> MacroBlock
         &keypair.secret_key,
         0,
     );
-    let commit = SignedPbftCommitMessage::from_message(
-        PbftCommitMessage { block_hash },
-        &keypair.secret_key,
-        0,
-    );
+    let commit = SignedPbftCommitMessage::from_message(PbftCommitMessage { block_hash }, &keypair.secret_key, 0);
 
     // create proof
     let mut pbft_proof = PbftProofBuilder::new();
@@ -100,8 +77,7 @@ fn it_can_history_sync() {
     let blockchain = Arc::new(Blockchain::new(env, NetworkId::UnitAlbatross).unwrap());
 
     // Produce the blocks.
-    let keypair =
-        KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
+    let keypair = KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
     let producer = BlockProducer::new_without_mempool(Arc::clone(&blockchain), keypair);
     produce_macro_blocks(num_macro_blocks, &producer, &blockchain);
 
@@ -126,15 +102,9 @@ fn it_can_history_sync() {
     let blockchain2 = Arc::new(Blockchain::new(env2, NetworkId::UnitAlbatross).unwrap());
 
     // Push blocks using history sync.
-    assert_eq!(
-        blockchain2.push_history_sync(election_block, &election_txs),
-        Ok(PushResult::Extended)
-    );
+    assert_eq!(blockchain2.push_history_sync(election_block, &election_txs), Ok(PushResult::Extended));
 
-    assert_eq!(
-        blockchain2.push_history_sync(checkpoint_block, &checkpoint_txs),
-        Ok(PushResult::Extended)
-    );
+    assert_eq!(blockchain2.push_history_sync(checkpoint_block, &checkpoint_txs), Ok(PushResult::Extended));
 }
 
 // TODO: Test using blocks with transactions.

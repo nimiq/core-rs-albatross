@@ -23,11 +23,7 @@ fn it_correctly_computes_a_simple_proof() {
     // Chunk size 1
     // ------------
     let chunks = PartialMerkleProofBuilder::from_values::<Blake2bHash, &str>(&values, 1);
-    assert!(
-        chunks.is_ok(),
-        "Proof builder errored: {:?}",
-        chunks.err().unwrap()
-    );
+    assert!(chunks.is_ok(), "Proof builder errored: {:?}", chunks.err().unwrap());
     let chunks = chunks.unwrap();
 
     assert_eq!(chunks.len(), 4);
@@ -38,11 +34,7 @@ fn it_correctly_computes_a_simple_proof() {
 
     // Chunk number 1
     let proof_result = chunks[0].compute_root_from_values(&values[..1], None);
-    assert!(
-        proof_result.is_ok(),
-        "Proof errored: {:?}",
-        proof_result.err().unwrap()
-    );
+    assert!(proof_result.is_ok(), "Proof errored: {:?}", proof_result.err().unwrap());
     let proof_result = proof_result.unwrap();
 
     assert_eq!(proof_result.root(), &root);
@@ -51,11 +43,7 @@ fn it_correctly_computes_a_simple_proof() {
 
     // Chunk number 2
     let proof_result = chunks[1].compute_root_from_values(&values[1..2], Some(&proof_result));
-    assert!(
-        proof_result.is_ok(),
-        "Proof errored: {:?}",
-        proof_result.err().unwrap()
-    );
+    assert!(proof_result.is_ok(), "Proof errored: {:?}", proof_result.err().unwrap());
     let proof_result = proof_result.unwrap();
 
     assert_eq!(proof_result.root(), &root);
@@ -64,11 +52,7 @@ fn it_correctly_computes_a_simple_proof() {
 
     // Chunk number 3
     let proof_result = chunks[2].compute_root_from_values(&values[2..3], Some(&proof_result));
-    assert!(
-        proof_result.is_ok(),
-        "Proof errored: {:?}",
-        proof_result.err().unwrap()
-    );
+    assert!(proof_result.is_ok(), "Proof errored: {:?}", proof_result.err().unwrap());
     let proof_result = proof_result.unwrap();
 
     assert_eq!(proof_result.root(), &root);
@@ -77,11 +61,7 @@ fn it_correctly_computes_a_simple_proof() {
 
     // Chunk number 4
     let proof_result = chunks[3].compute_root_from_values(&values[3..4], Some(&proof_result));
-    assert!(
-        proof_result.is_ok(),
-        "Proof errored: {:?}",
-        proof_result.err().unwrap()
-    );
+    assert!(proof_result.is_ok(), "Proof errored: {:?}", proof_result.err().unwrap());
     let proof_result = proof_result.unwrap();
 
     assert_eq!(proof_result.root(), &root);
@@ -92,11 +72,7 @@ fn it_correctly_computes_a_simple_proof() {
     // Chunk size 2
     // ------------
     let chunks = PartialMerkleProofBuilder::from_values::<Blake2bHash, &str>(&values, 2);
-    assert!(
-        chunks.is_ok(),
-        "Proof builder errored: {:?}",
-        chunks.err().unwrap()
-    );
+    assert!(chunks.is_ok(), "Proof builder errored: {:?}", chunks.err().unwrap());
     let chunks = chunks.unwrap();
 
     assert_eq!(chunks.len(), 2);
@@ -105,11 +81,7 @@ fn it_correctly_computes_a_simple_proof() {
 
     // Chunk number 1
     let proof_result = chunks[0].compute_root_from_values(&values[..2], None);
-    assert!(
-        proof_result.is_ok(),
-        "Proof errored: {:?}",
-        proof_result.err().unwrap()
-    );
+    assert!(proof_result.is_ok(), "Proof errored: {:?}", proof_result.err().unwrap());
     let proof_result = proof_result.unwrap();
 
     assert_eq!(proof_result.root(), &root);
@@ -118,11 +90,7 @@ fn it_correctly_computes_a_simple_proof() {
 
     // Chunk number 2
     let proof_result = chunks[1].compute_root_from_values(&values[2..], Some(&proof_result));
-    assert!(
-        proof_result.is_ok(),
-        "Proof errored: {:?}",
-        proof_result.err().unwrap()
-    );
+    assert!(proof_result.is_ok(), "Proof errored: {:?}", proof_result.err().unwrap());
     let proof_result = proof_result.unwrap();
 
     assert_eq!(proof_result.root(), &root);
@@ -133,11 +101,7 @@ fn it_correctly_computes_a_simple_proof() {
     // Chunk size 3
     // ------------
     let chunks = PartialMerkleProofBuilder::from_values::<Blake2bHash, &str>(&values, 3);
-    assert!(
-        chunks.is_ok(),
-        "Proof builder errored: {:?}",
-        chunks.err().unwrap()
-    );
+    assert!(chunks.is_ok(), "Proof builder errored: {:?}", chunks.err().unwrap());
     let chunks = chunks.unwrap();
 
     assert_eq!(chunks.len(), 2);
@@ -146,11 +110,7 @@ fn it_correctly_computes_a_simple_proof() {
 
     // Chunk number 1
     let proof_result = chunks[0].compute_root_from_values(&values[..3], None);
-    assert!(
-        proof_result.is_ok(),
-        "Proof errored: {:?}",
-        proof_result.err().unwrap()
-    );
+    assert!(proof_result.is_ok(), "Proof errored: {:?}", proof_result.err().unwrap());
     let proof_result = proof_result.unwrap();
 
     assert_eq!(proof_result.root(), &root);
@@ -159,11 +119,7 @@ fn it_correctly_computes_a_simple_proof() {
 
     // Chunk number 2
     let proof_result = chunks[1].compute_root_from_values(&values[3..], Some(&proof_result));
-    assert!(
-        proof_result.is_ok(),
-        "Proof errored: {:?}",
-        proof_result.err().unwrap()
-    );
+    assert!(proof_result.is_ok(), "Proof errored: {:?}", proof_result.err().unwrap());
     let proof_result = proof_result.unwrap();
 
     assert_eq!(proof_result.root(), &root);
@@ -174,11 +130,7 @@ fn it_correctly_computes_a_simple_proof() {
     // Chunk size 4
     // ------------
     let chunks = PartialMerkleProofBuilder::from_values::<Blake2bHash, &str>(&values, 4);
-    assert!(
-        chunks.is_ok(),
-        "Proof builder errored: {:?}",
-        chunks.err().unwrap()
-    );
+    assert!(chunks.is_ok(), "Proof builder errored: {:?}", chunks.err().unwrap());
     let chunks = chunks.unwrap();
 
     assert_eq!(chunks.len(), 1);
@@ -186,11 +138,7 @@ fn it_correctly_computes_a_simple_proof() {
 
     // Chunk number 1
     let proof_result = chunks[0].compute_root_from_values(&values, None);
-    assert!(
-        proof_result.is_ok(),
-        "Proof errored: {:?}",
-        proof_result.err().unwrap()
-    );
+    assert!(proof_result.is_ok(), "Proof errored: {:?}", proof_result.err().unwrap());
     let proof_result = proof_result.unwrap();
 
     assert_eq!(proof_result.root(), &root);
@@ -216,11 +164,7 @@ fn it_correctly_computes_more_complex_proofs() {
     // Chunk size 1
     // ------------
     let chunks = PartialMerkleProofBuilder::from_values::<Blake2bHash, &str>(&values, 1);
-    assert!(
-        chunks.is_ok(),
-        "Proof builder errored: {:?}",
-        chunks.err().unwrap()
-    );
+    assert!(chunks.is_ok(), "Proof builder errored: {:?}", chunks.err().unwrap());
     let chunks = chunks.unwrap();
 
     assert_eq!(chunks.len(), 3);
@@ -230,11 +174,7 @@ fn it_correctly_computes_more_complex_proofs() {
 
     // Chunk number 1
     let proof_result = chunks[0].compute_root_from_values(&values[..1], None);
-    assert!(
-        proof_result.is_ok(),
-        "Proof errored: {:?}",
-        proof_result.err().unwrap()
-    );
+    assert!(proof_result.is_ok(), "Proof errored: {:?}", proof_result.err().unwrap());
     let proof_result = proof_result.unwrap();
 
     assert_eq!(proof_result.root(), &root);
@@ -243,11 +183,7 @@ fn it_correctly_computes_more_complex_proofs() {
 
     // Chunk number 2
     let proof_result = chunks[1].compute_root_from_values(&values[1..2], Some(&proof_result));
-    assert!(
-        proof_result.is_ok(),
-        "Proof errored: {:?}",
-        proof_result.err().unwrap()
-    );
+    assert!(proof_result.is_ok(), "Proof errored: {:?}", proof_result.err().unwrap());
     let proof_result = proof_result.unwrap();
 
     assert_eq!(proof_result.root(), &root);
@@ -256,11 +192,7 @@ fn it_correctly_computes_more_complex_proofs() {
 
     // Chunk number 3
     let proof_result = chunks[2].compute_root_from_values(&values[2..3], Some(&proof_result));
-    assert!(
-        proof_result.is_ok(),
-        "Proof errored: {:?}",
-        proof_result.err().unwrap()
-    );
+    assert!(proof_result.is_ok(), "Proof errored: {:?}", proof_result.err().unwrap());
     let proof_result = proof_result.unwrap();
 
     assert_eq!(proof_result.root(), &root);
@@ -271,11 +203,7 @@ fn it_correctly_computes_more_complex_proofs() {
     // Chunk size 2
     // ------------
     let chunks = PartialMerkleProofBuilder::from_values::<Blake2bHash, &str>(&values, 2);
-    assert!(
-        chunks.is_ok(),
-        "Proof builder errored: {:?}",
-        chunks.err().unwrap()
-    );
+    assert!(chunks.is_ok(), "Proof builder errored: {:?}", chunks.err().unwrap());
     let chunks = chunks.unwrap();
 
     assert_eq!(chunks.len(), 2);
@@ -284,11 +212,7 @@ fn it_correctly_computes_more_complex_proofs() {
 
     // Chunk number 1
     let proof_result = chunks[0].compute_root_from_values(&values[..2], None);
-    assert!(
-        proof_result.is_ok(),
-        "Proof errored: {:?}",
-        proof_result.err().unwrap()
-    );
+    assert!(proof_result.is_ok(), "Proof errored: {:?}", proof_result.err().unwrap());
     let proof_result = proof_result.unwrap();
 
     assert_eq!(proof_result.root(), &root);
@@ -297,11 +221,7 @@ fn it_correctly_computes_more_complex_proofs() {
 
     // Chunk number 2
     let proof_result = chunks[1].compute_root_from_values(&values[2..], Some(&proof_result));
-    assert!(
-        proof_result.is_ok(),
-        "Proof errored: {:?}",
-        proof_result.err().unwrap()
-    );
+    assert!(proof_result.is_ok(), "Proof errored: {:?}", proof_result.err().unwrap());
     let proof_result = proof_result.unwrap();
 
     assert_eq!(proof_result.root(), &root);
@@ -343,10 +263,7 @@ fn it_correctly_computes_more_complex_proofs() {
 
         // Vary chunk sizes.
         for chunk_size in 1..end {
-            let chunks = PartialMerkleProofBuilder::from_values::<Blake2bHash, &str>(
-                &values[..end],
-                chunk_size,
-            );
+            let chunks = PartialMerkleProofBuilder::from_values::<Blake2bHash, &str>(&values[..end], chunk_size);
             assert!(
                 chunks.is_ok(),
                 "Proof builder errored for size {} and chunk_size {}: {:?}",
@@ -363,8 +280,7 @@ fn it_correctly_computes_more_complex_proofs() {
             for (chunk_i, chunk) in chunks.iter().enumerate() {
                 let start_i = chunk_i * chunk_size;
                 let end_i = cmp::min((chunk_i + 1) * chunk_size, end);
-                let proof_result =
-                    chunk.compute_root_from_values(&values[start_i..end_i], prev_proof.as_ref());
+                let proof_result = chunk.compute_root_from_values(&values[start_i..end_i], prev_proof.as_ref());
                 assert!(
                     proof_result.is_ok(),
                     "Proof #{} errored for size {} and chunk_size {}: {:?}",
@@ -413,20 +329,12 @@ fn it_discards_invalid_proofs() {
     let root = compute_root_from_content::<Blake2bHasher, &str>(&values);
 
     let chunks = PartialMerkleProofBuilder::from_values::<Blake2bHash, &str>(&values, 2);
-    assert!(
-        chunks.is_ok(),
-        "Proof builder errored: {:?}",
-        chunks.err().unwrap()
-    );
+    assert!(chunks.is_ok(), "Proof builder errored: {:?}", chunks.err().unwrap());
     let chunks = chunks.unwrap();
 
     // Case 1: Invalid input values lead to wrong hash.
     let proof_result = chunks[0].compute_root_from_values(&values[2..], None);
-    assert!(
-        proof_result.is_ok(),
-        "Proof errored: {:?}",
-        proof_result.err().unwrap()
-    );
+    assert!(proof_result.is_ok(), "Proof errored: {:?}", proof_result.err().unwrap());
     let proof_result = proof_result.unwrap();
 
     assert_ne!(proof_result.root(), &root);
@@ -441,18 +349,10 @@ fn it_discards_invalid_proofs() {
     // Case 3: Invalid previous proof.
     // First create a proof result for a different chunk size.
     let other_chunks = PartialMerkleProofBuilder::from_values::<Blake2bHash, &str>(&values, 1);
-    assert!(
-        other_chunks.is_ok(),
-        "Proof builder errored: {:?}",
-        other_chunks.err().unwrap()
-    );
+    assert!(other_chunks.is_ok(), "Proof builder errored: {:?}", other_chunks.err().unwrap());
     let other_chunks = other_chunks.unwrap();
     let proof_result = other_chunks[0].compute_root_from_values(&values[..1], None);
-    assert!(
-        proof_result.is_ok(),
-        "Proof errored: {:?}",
-        proof_result.err().unwrap()
-    );
+    assert!(proof_result.is_ok(), "Proof errored: {:?}", proof_result.err().unwrap());
     let proof_result = proof_result.unwrap();
 
     let proof_result = chunks[1].compute_root_from_values(&values[2..], Some(&proof_result));

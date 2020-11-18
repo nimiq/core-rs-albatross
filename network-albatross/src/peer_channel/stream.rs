@@ -29,16 +29,8 @@ pub struct PeerStream {
 }
 
 impl PeerStream {
-    pub fn new(
-        stream: SharedNimiqMessageStream,
-        notifier: Arc<RwLock<PassThroughNotifier<'static, PeerStreamEvent>>>,
-        closed_flag: ClosedFlag,
-    ) -> Self {
-        PeerStream {
-            stream,
-            notifier,
-            closed_flag,
-        }
+    pub fn new(stream: SharedNimiqMessageStream, notifier: Arc<RwLock<PassThroughNotifier<'static, PeerStreamEvent>>>, closed_flag: ClosedFlag) -> Self {
+        PeerStream { stream, notifier, closed_flag }
     }
 
     pub fn process_stream(self) -> impl Future<Item = (), Error = Error> + 'static {
@@ -59,9 +51,7 @@ impl PeerStream {
                     }
                     WebSocketMessage::Close(_frame) => {
                         msg_closed_flag.set_closed(true);
-                        let ty = msg_closed_flag
-                            .close_type()
-                            .unwrap_or(CloseType::ClosedByRemote);
+                        let ty = msg_closed_flag.close_type().unwrap_or(CloseType::ClosedByRemote);
                         msg_notifier.read().notify(PeerStreamEvent::Close(ty));
                     }
                     // We have a type WebSocketMessage::Resume that is only used in the Sink and will never be returned here.
@@ -76,15 +66,11 @@ impl PeerStream {
                         match &error {
                             Error::WebSocketError(WsError::ConnectionClosed) => {
                                 error_closed_flag.set_closed(true);
-                                let ty = error_closed_flag
-                                    .close_type()
-                                    .unwrap_or(CloseType::ClosedByRemote);
+                                let ty = error_closed_flag.close_type().unwrap_or(CloseType::ClosedByRemote);
                                 error_notifier.read().notify(PeerStreamEvent::Close(ty));
                             }
                             error => {
-                                error_notifier
-                                    .read()
-                                    .notify(PeerStreamEvent::Error(UniquePtr::new(error)));
+                                error_notifier.read().notify(PeerStreamEvent::Error(UniquePtr::new(error)));
                             }
                         }
                         future::err(error)
@@ -92,9 +78,7 @@ impl PeerStream {
                     Ok(_) => {
                         // If the stream was closed without any error or close frame (just in case), call close notifier as well.
                         error_closed_flag.set_closed(true);
-                        let ty = error_closed_flag
-                            .close_type()
-                            .unwrap_or(CloseType::ClosedByRemote);
+                        let ty = error_closed_flag.close_type().unwrap_or(CloseType::ClosedByRemote);
                         error_notifier.read().notify(PeerStreamEvent::Close(ty));
                         future::ok(())
                     }

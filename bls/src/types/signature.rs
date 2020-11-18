@@ -69,16 +69,16 @@ mod serde_derive {
     // TODO: Replace this with a generic serialization using `ToHex` and `FromHex`.
 
     use serde::{
-        ser::{Serialize, Serializer},
         de::{Deserialize, Deserializer, Error},
+        ser::{Serialize, Serializer},
     };
 
-    use super::{Signature, CompressedSignature};
+    use super::{CompressedSignature, Signature};
 
     impl Serialize for Signature {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-            where
-                S: Serializer
+        where
+            S: Serializer,
         {
             Serialize::serialize(&self.compress(), serializer)
         }
@@ -86,12 +86,11 @@ mod serde_derive {
 
     impl<'de> Deserialize<'de> for Signature {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-            where
-                D: Deserializer<'de>
+        where
+            D: Deserializer<'de>,
         {
             let compressed: CompressedSignature = Deserialize::deserialize(deserializer)?;
-            compressed.uncompress()
-                .map_err(Error::custom)
+            compressed.uncompress().map_err(Error::custom)
         }
     }
 }

@@ -2,9 +2,7 @@ use account::Receipts;
 use block::Block;
 use database::cursor::ReadCursor;
 use database::cursor::WriteCursor;
-use database::{
-    Database, DatabaseFlags, Environment, ReadTransaction, Transaction, WriteTransaction,
-};
+use database::{Database, DatabaseFlags, Environment, ReadTransaction, Transaction, WriteTransaction};
 use hash::Blake2bHash;
 use primitives::policy;
 
@@ -39,8 +37,7 @@ impl ChainStore {
             Self::HEIGHT_IDX_NAME.to_string(),
             DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_FIXED_SIZE_VALUES,
         );
-        let receipt_db = env
-            .open_database_with_flags(Self::RECEIPT_DB_NAME.to_string(), DatabaseFlags::UINT_KEYS);
+        let receipt_db = env.open_database_with_flags(Self::RECEIPT_DB_NAME.to_string(), DatabaseFlags::UINT_KEYS);
         ChainStore {
             env,
             chain_db,
@@ -61,12 +58,7 @@ impl ChainStore {
         txn.put(&self.chain_db, ChainStore::HEAD_KEY, hash);
     }
 
-    pub fn get_chain_info(
-        &self,
-        hash: &Blake2bHash,
-        include_body: bool,
-        txn_option: Option<&Transaction>,
-    ) -> Option<ChainInfo> {
+    pub fn get_chain_info(&self, hash: &Blake2bHash, include_body: bool, txn_option: Option<&Transaction>) -> Option<ChainInfo> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -92,13 +84,7 @@ impl ChainStore {
         Some(chain_info)
     }
 
-    pub fn put_chain_info(
-        &self,
-        txn: &mut WriteTransaction,
-        hash: &Blake2bHash,
-        chain_info: &ChainInfo,
-        include_body: bool,
-    ) {
+    pub fn put_chain_info(&self, txn: &mut WriteTransaction, hash: &Blake2bHash, chain_info: &ChainInfo, include_body: bool) {
         // Store chain data. Block body will not be persisted because the serialization of ChainInfo
         // ignores the block body.
         txn.put_reserve(&self.chain_db, hash, chain_info);
@@ -119,12 +105,7 @@ impl ChainStore {
         txn.remove_item(&self.height_idx, &height, hash);
     }
 
-    pub fn get_chain_info_at(
-        &self,
-        block_height: u32,
-        include_body: bool,
-        txn_option: Option<&Transaction>,
-    ) -> Option<ChainInfo> {
+    pub fn get_chain_info_at(&self, block_height: u32, include_body: bool, txn_option: Option<&Transaction>) -> Option<ChainInfo> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -167,12 +148,7 @@ impl ChainStore {
         Some(chain_info)
     }
 
-    pub fn get_block(
-        &self,
-        hash: &Blake2bHash,
-        include_body: bool,
-        txn_option: Option<&Transaction>,
-    ) -> Option<Block> {
+    pub fn get_block(&self, hash: &Blake2bHash, include_body: bool, txn_option: Option<&Transaction>) -> Option<Block> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -185,27 +161,15 @@ impl ChainStore {
         if include_body {
             txn.get(&self.block_db, hash)
         } else {
-            txn.get(&self.chain_db, hash)
-                .map(|chain_info: ChainInfo| chain_info.head)
+            txn.get(&self.chain_db, hash).map(|chain_info: ChainInfo| chain_info.head)
         }
     }
 
-    pub fn get_block_at(
-        &self,
-        block_height: u32,
-        include_body: bool,
-        txn_option: Option<&Transaction>,
-    ) -> Option<Block> {
-        self.get_chain_info_at(block_height, include_body, txn_option)
-            .map(|chain_info| chain_info.head)
+    pub fn get_block_at(&self, block_height: u32, include_body: bool, txn_option: Option<&Transaction>) -> Option<Block> {
+        self.get_chain_info_at(block_height, include_body, txn_option).map(|chain_info| chain_info.head)
     }
 
-    pub fn get_blocks_at(
-        &self,
-        block_height: u32,
-        include_body: bool,
-        txn_option: Option<&Transaction>,
-    ) -> Vec<Block> {
+    pub fn get_blocks_at(&self, block_height: u32, include_body: bool, txn_option: Option<&Transaction>) -> Vec<Block> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -237,13 +201,7 @@ impl ChainStore {
         blocks
     }
 
-    pub fn get_blocks_backward(
-        &self,
-        start_block_hash: &Blake2bHash,
-        count: u32,
-        include_body: bool,
-        txn_option: Option<&Transaction>,
-    ) -> Vec<Block> {
+    pub fn get_blocks_backward(&self, start_block_hash: &Blake2bHash, count: u32, include_body: bool, txn_option: Option<&Transaction>) -> Vec<Block> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -272,13 +230,7 @@ impl ChainStore {
         blocks
     }
 
-    pub fn get_blocks_forward(
-        &self,
-        start_block_hash: &Blake2bHash,
-        count: u32,
-        include_body: bool,
-        txn_option: Option<&Transaction>,
-    ) -> Vec<Block> {
+    pub fn get_blocks_forward(&self, start_block_hash: &Blake2bHash, count: u32, include_body: bool, txn_option: Option<&Transaction>) -> Vec<Block> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -320,12 +272,8 @@ impl ChainStore {
         txn_option: Option<&Transaction>,
     ) -> Vec<Block> {
         match direction {
-            Direction::Forward => {
-                self.get_blocks_forward(start_block_hash, count, include_body, txn_option)
-            }
-            Direction::Backward => {
-                self.get_blocks_backward(start_block_hash, count, include_body, txn_option)
-            }
+            Direction::Forward => self.get_blocks_forward(start_block_hash, count, include_body, txn_option),
+            Direction::Backward => self.get_blocks_backward(start_block_hash, count, include_body, txn_option),
         }
     }
 
@@ -446,20 +394,8 @@ impl ChainStore {
         txn_option: Option<&Transaction>,
     ) -> Option<Vec<Block>> {
         match direction {
-            Direction::Forward => self.get_macro_blocks_forward(
-                start_block_hash,
-                count,
-                election_blocks_only,
-                include_body,
-                txn_option,
-            ),
-            Direction::Backward => self.get_macro_blocks_backward(
-                start_block_hash,
-                count,
-                election_blocks_only,
-                include_body,
-                txn_option,
-            ),
+            Direction::Forward => self.get_macro_blocks_forward(start_block_hash, count, election_blocks_only, include_body, txn_option),
+            Direction::Backward => self.get_macro_blocks_backward(start_block_hash, count, election_blocks_only, include_body, txn_option),
         }
     }
 
@@ -467,11 +403,7 @@ impl ChainStore {
         txn.put_reserve(&self.receipt_db, &block_height, receipts);
     }
 
-    pub fn get_receipts(
-        &self,
-        block_height: u32,
-        txn_option: Option<&Transaction>,
-    ) -> Option<Receipts> {
+    pub fn get_receipts(&self, block_height: u32, txn_option: Option<&Transaction>) -> Option<Receipts> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,

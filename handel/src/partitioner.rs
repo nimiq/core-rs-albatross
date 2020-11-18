@@ -53,11 +53,7 @@ impl BinomialPartitioner {
             n => log2(n - 1) + 2,
         };
         assert!(node_id < num_ids);
-        Self {
-            node_id,
-            num_ids,
-            num_levels,
-        }
+        Self { node_id, num_ids, num_levels }
     }
 }
 
@@ -98,11 +94,7 @@ impl Partitioner for BinomialPartitioner {
     }
 
     /// TODO: Why do we have `_level` as argument?
-    fn combine<C: AggregatableContribution>(
-        &self,
-        contributions: Vec<&C>,
-        _level: usize,
-    ) -> Option<C> {
+    fn combine<C: AggregatableContribution>(&self, contributions: Vec<&C>, _level: usize) -> Option<C> {
         let mut combined = (*contributions.first()?).clone();
 
         for contribution in contributions.iter().skip(1) {
@@ -170,32 +162,15 @@ mod tests {
 
         // must be symetrical
         for level in 2..partitioner.levels() {
-            if partitioner
-                .range(level)
-                .unwrap()
-                .contains(&second_partitioner.node_id)
-            {
-                assert!(second_partitioner
-                    .range(level)
-                    .unwrap()
-                    .contains(&partitioner.node_id));
+            if partitioner.range(level).unwrap().contains(&second_partitioner.node_id) {
+                assert!(second_partitioner.range(level).unwrap().contains(&partitioner.node_id));
             }
-            if partitioner
-                .range(level)
-                .unwrap()
-                .contains(&third_partitioner.node_id)
-            {
-                assert!(third_partitioner
-                    .range(level)
-                    .unwrap()
-                    .contains(&partitioner.node_id));
+            if partitioner.range(level).unwrap().contains(&third_partitioner.node_id) {
+                assert!(third_partitioner.range(level).unwrap().contains(&partitioner.node_id));
             }
         }
 
-        assert_eq!(
-            partitioner.range(4),
-            Err(PartitioningError::InvalidLevel { level: 4 })
-        );
+        assert_eq!(partitioner.range(4), Err(PartitioningError::InvalidLevel { level: 4 }));
     }
 
     #[test]

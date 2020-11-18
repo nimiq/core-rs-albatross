@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 
-use nimiq_wallet::WalletAccount;
-use nimiq_utils::otp::Unlocked;
 use nimiq_keys::Address;
-
+use nimiq_utils::otp::Unlocked;
+use nimiq_wallet::WalletAccount;
 
 #[derive(Default)]
 pub struct UnlockedWallets {
@@ -18,9 +17,7 @@ impl UnlockedWallets {
 
     pub fn get(&self, address: &Address) -> Option<&WalletAccount> {
         log::info!("Accessing {:?}", address);
-        self.unlocked_wallets
-            .get(address)
-            .map(|unlocked| Unlocked::unlocked_data(unlocked))
+        self.unlocked_wallets.get(address).map(|unlocked| Unlocked::unlocked_data(unlocked))
     }
 
     pub fn remove(&mut self, address: &Address) -> Option<Unlocked<WalletAccount>> {

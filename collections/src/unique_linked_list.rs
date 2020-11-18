@@ -33,9 +33,7 @@ use std::iter::FusedIterator;
 use std::ptr::NonNull;
 use std::rc::Rc;
 
-use crate::linked_list::{
-    IntoIter as LinkedListIntoIter, Iter as LinkedListIter, LinkedList, Node,
-};
+use crate::linked_list::{IntoIter as LinkedListIntoIter, Iter as LinkedListIter, LinkedList, Node};
 
 /// A doubly-linked list with owned nodes and a unique constraint enforced by a HashMap.
 ///
@@ -176,9 +174,7 @@ where
     /// ```
     #[inline]
     pub fn iter(&self) -> Iter<T> {
-        Iter {
-            iter: self.list.iter(),
-        }
+        Iter { iter: self.list.iter() }
     }
 
     /// Returns `true` if the `UniqueLinkedList` is empty.
@@ -304,9 +300,7 @@ where
             Box::from_raw(node.as_ptr()); // This drops the node's Box.
             elt
         };
-        let elt = Rc::try_unwrap(elt)
-            .ok()
-            .expect("Internal contract requires a single strong reference");
+        let elt = Rc::try_unwrap(elt).ok().expect("Internal contract requires a single strong reference");
         Some(elt)
     }
 
@@ -397,12 +391,8 @@ where
     /// ```
     pub fn pop_front(&mut self) -> Option<T> {
         let elt = self.list.pop_front()?;
-        self.map
-            .remove(&elt)
-            .expect("Internal contract requires value to be present");
-        let elt = Rc::try_unwrap(elt)
-            .ok()
-            .expect("Internal contract requires a single strong reference");
+        self.map.remove(&elt).expect("Internal contract requires value to be present");
+        let elt = Rc::try_unwrap(elt).ok().expect("Internal contract requires a single strong reference");
         Some(elt)
     }
 
@@ -445,12 +435,8 @@ where
     /// ```
     pub fn pop_back(&mut self) -> Option<T> {
         let elt = self.list.pop_back()?;
-        self.map
-            .remove(&elt)
-            .expect("Internal contract requires value to be present");
-        let elt = Rc::try_unwrap(elt)
-            .ok()
-            .expect("Internal contract requires a single strong reference");
+        self.map.remove(&elt).expect("Internal contract requires value to be present");
+        let elt = Rc::try_unwrap(elt).ok().expect("Internal contract requires a single strong reference");
         Some(elt)
     }
 }
@@ -494,11 +480,9 @@ where
 
     #[inline]
     fn next(&mut self) -> Option<T> {
-        self.iter.next().map(|elt| {
-            Rc::try_unwrap(elt)
-                .ok()
-                .expect("Internal contract requires a single strong reference")
-        })
+        self.iter
+            .next()
+            .map(|elt| Rc::try_unwrap(elt).ok().expect("Internal contract requires a single strong reference"))
     }
 
     #[inline]
@@ -513,11 +497,9 @@ where
 {
     #[inline]
     fn next_back(&mut self) -> Option<T> {
-        self.iter.next_back().map(|elt| {
-            Rc::try_unwrap(elt)
-                .ok()
-                .expect("Internal contract requires a single strong reference")
-        })
+        self.iter
+            .next_back()
+            .map(|elt| Rc::try_unwrap(elt).ok().expect("Internal contract requires a single strong reference"))
     }
 }
 
@@ -547,9 +529,7 @@ where
     #[inline]
     fn into_iter(mut self) -> IntoIter<T> {
         self.map.clear();
-        IntoIter {
-            iter: self.list.into_iter(),
-        }
+        IntoIter { iter: self.list.into_iter() }
     }
 }
 

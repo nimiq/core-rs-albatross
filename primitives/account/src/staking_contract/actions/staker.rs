@@ -32,17 +32,10 @@ pub(super) struct InactiveStakeReceipt {
 impl StakingContract {
     /// Adds funds to stake of `address` for validator `validator_key`.
     /// XXX This is public to fill the genesis staking contract
-    pub fn stake(
-        &mut self,
-        staker_address: Address,
-        value: Coin,
-        validator_key: &BlsPublicKey,
-    ) -> Result<(), AccountError> {
+    pub fn stake(&mut self, staker_address: Address, value: Coin, validator_key: &BlsPublicKey) -> Result<(), AccountError> {
         let new_balance = Account::balance_add(self.balance, value)?;
 
-        let mut entry = self
-            .remove_validator(validator_key)
-            .ok_or(AccountError::InvalidForRecipient)?;
+        let mut entry = self.remove_validator(validator_key).ok_or(AccountError::InvalidForRecipient)?;
         entry.try_add_stake(staker_address, value);
         self.restore_validator(entry)?;
 
@@ -52,17 +45,10 @@ impl StakingContract {
     }
 
     /// Reverts a stake transaction.
-    pub(super) fn revert_stake(
-        &mut self,
-        staker_address: &Address,
-        value: Coin,
-        validator_key: &BlsPublicKey,
-    ) -> Result<(), AccountError> {
+    pub(super) fn revert_stake(&mut self, staker_address: &Address, value: Coin, validator_key: &BlsPublicKey) -> Result<(), AccountError> {
         let new_balance = Account::balance_sub(self.balance, value)?;
 
-        let mut entry = self
-            .remove_validator(validator_key)
-            .ok_or(AccountError::InvalidForRecipient)?;
+        let mut entry = self.remove_validator(validator_key).ok_or(AccountError::InvalidForRecipient)?;
         entry.try_sub_stake(staker_address, value, AccountError::InvalidForRecipient);
         self.restore_validator(entry)?;
 
@@ -72,17 +58,10 @@ impl StakingContract {
     }
 
     /// Removes stake from the active stake list.
-    pub(super) fn retire_sender(
-        &mut self,
-        staker_address: &Address,
-        value: Coin,
-        validator_key: &BlsPublicKey,
-    ) -> Result<(), AccountError> {
+    pub(super) fn retire_sender(&mut self, staker_address: &Address, value: Coin, validator_key: &BlsPublicKey) -> Result<(), AccountError> {
         let new_balance = Account::balance_sub(self.balance, value)?;
 
-        let mut entry = self
-            .remove_validator(validator_key)
-            .ok_or(AccountError::InvalidForSender)?;
+        let mut entry = self.remove_validator(validator_key).ok_or(AccountError::InvalidForSender)?;
         entry.try_sub_stake(staker_address, value, AccountError::InvalidForSender);
         self.restore_validator(entry)?;
 
@@ -92,17 +71,10 @@ impl StakingContract {
     }
 
     /// Reverts the sender side of a retire transaction.
-    pub(super) fn revert_retire_sender(
-        &mut self,
-        staker_address: Address,
-        value: Coin,
-        validator_key: &BlsPublicKey,
-    ) -> Result<(), AccountError> {
+    pub(super) fn revert_retire_sender(&mut self, staker_address: Address, value: Coin, validator_key: &BlsPublicKey) -> Result<(), AccountError> {
         let new_balance = Account::balance_add(self.balance, value)?;
 
-        let mut entry = self
-            .remove_validator(validator_key)
-            .ok_or(AccountError::InvalidForSender)?;
+        let mut entry = self.remove_validator(validator_key).ok_or(AccountError::InvalidForSender)?;
         entry.try_add_stake(staker_address, value);
         self.restore_validator(entry)?;
 
@@ -119,8 +91,7 @@ impl StakingContract {
         new_retire_time: Option<u32>,
     ) -> Result<Option<InactiveStakeReceipt>, AccountError> {
         // Make sure new_retire_time is set when entry is not present yet.
-        if !self.inactive_stake_by_address.contains_key(staker_address) && new_retire_time.is_none()
-        {
+        if !self.inactive_stake_by_address.contains_key(staker_address) && new_retire_time.is_none() {
             return Err(AccountError::InvalidReceipt);
         }
 
@@ -132,8 +103,7 @@ impl StakingContract {
                 balance: Account::balance_add(inactive_stake.balance, value)?,
                 retire_time: new_retire_time.unwrap_or(inactive_stake.retire_time),
             };
-            self.inactive_stake_by_address
-                .insert(staker_address.clone(), new_inactive_stake);
+            self.inactive_stake_by_address.insert(staker_address.clone(), new_inactive_stake);
 
             Ok(Some(InactiveStakeReceipt {
                 retire_time: inactive_stake.retire_time,
@@ -143,32 +113,22 @@ impl StakingContract {
                 balance: value,
                 retire_time: new_retire_time.unwrap(),
             };
-            self.inactive_stake_by_address
-                .insert(staker_address.clone(), new_inactive_stake);
+            self.inactive_stake_by_address.insert(staker_address.clone(), new_inactive_stake);
 
             Ok(None)
         }
     }
 
     /// Reverts a retire transaction.
-    pub(super) fn revert_retire_recipient(
-        &mut self,
-        staker_address: &Address,
-        value: Coin,
-        receipt: Option<InactiveStakeReceipt>,
-    ) -> Result<(), AccountError> {
-        let inactive_stake = self
-            .inactive_stake_by_address
-            .get(staker_address)
-            .ok_or(AccountError::InvalidForRecipient)?;
+    pub(super) fn revert_retire_recipient(&mut self, staker_address: &Address, value: Coin, receipt: Option<InactiveStakeReceipt>) -> Result<(), AccountError> {
+        let inactive_stake = self.inactive_stake_by_address.get(staker_address).ok_or(AccountError::InvalidForRecipient)?;
 
         if (inactive_stake.balance > value) != receipt.is_some() {
             return Err(AccountError::InvalidForRecipient);
         }
 
         let retire_time = receipt.map(|r| r.retire_time).unwrap_or_default();
-        self.reactivate_sender(staker_address, value, Some(retire_time))
-            .map(|_| ())
+        self.reactivate_sender(staker_address, value, Some(retire_time)).map(|_| ())
     }
 
     /// Reactivates stake (sender side).
@@ -178,10 +138,7 @@ impl StakingContract {
         value: Coin,
         new_retire_time: Option<u32>,
     ) -> Result<Option<InactiveStakeReceipt>, AccountError> {
-        let inactive_stake = self
-            .inactive_stake_by_address
-            .remove(staker_address)
-            .ok_or(AccountError::InvalidForRecipient)?;
+        let inactive_stake = self.inactive_stake_by_address.remove(staker_address).ok_or(AccountError::InvalidForRecipient)?;
 
         self.balance = Account::balance_sub(self.balance, value)?;
 
@@ -192,8 +149,7 @@ impl StakingContract {
                 balance: Account::balance_sub(inactive_stake.balance, value)?,
                 retire_time: new_retire_time.unwrap_or(inactive_stake.retire_time),
             };
-            self.inactive_stake_by_address
-                .insert(staker_address.clone(), new_inactive_stake);
+            self.inactive_stake_by_address.insert(staker_address.clone(), new_inactive_stake);
             Ok(None)
         } else {
             Ok(Some(InactiveStakeReceipt {
@@ -209,40 +165,22 @@ impl StakingContract {
         value: Coin,
         receipt: Option<InactiveStakeReceipt>,
     ) -> Result<(), AccountError> {
-        self.retire_recipient(staker_address, value, receipt.map(|r| r.retire_time))
-            .map(|_| ())
+        self.retire_recipient(staker_address, value, receipt.map(|r| r.retire_time)).map(|_| ())
     }
 
     /// Reactivates stake (recipient side).
-    pub(super) fn reactivate_recipient(
-        &mut self,
-        staker_address: Address,
-        value: Coin,
-        validator_key: &BlsPublicKey,
-    ) -> Result<(), AccountError> {
+    pub(super) fn reactivate_recipient(&mut self, staker_address: Address, value: Coin, validator_key: &BlsPublicKey) -> Result<(), AccountError> {
         self.stake(staker_address, value, validator_key)
     }
 
     /// Removes stake from the active stake list.
-    pub(super) fn revert_reactivate_recipient(
-        &mut self,
-        staker_address: &Address,
-        value: Coin,
-        validator_key: &BlsPublicKey,
-    ) -> Result<(), AccountError> {
+    pub(super) fn revert_reactivate_recipient(&mut self, staker_address: &Address, value: Coin, validator_key: &BlsPublicKey) -> Result<(), AccountError> {
         self.revert_stake(staker_address, value, validator_key)
     }
 
     /// Removes stake from the inactive stake list.
-    pub(super) fn unstake(
-        &mut self,
-        staker_address: &Address,
-        total_value: Coin,
-    ) -> Result<Option<InactiveStakeReceipt>, AccountError> {
-        let inactive_stake = self
-            .inactive_stake_by_address
-            .remove(staker_address)
-            .ok_or(AccountError::InvalidForSender)?;
+    pub(super) fn unstake(&mut self, staker_address: &Address, total_value: Coin) -> Result<Option<InactiveStakeReceipt>, AccountError> {
+        let inactive_stake = self.inactive_stake_by_address.remove(staker_address).ok_or(AccountError::InvalidForSender)?;
 
         self.balance = Account::balance_sub(self.balance, total_value)?;
 
@@ -252,8 +190,7 @@ impl StakingContract {
                 balance: Account::balance_sub(inactive_stake.balance, total_value)?,
                 retire_time: inactive_stake.retire_time,
             };
-            self.inactive_stake_by_address
-                .insert(staker_address.clone(), new_inactive_stake);
+            self.inactive_stake_by_address.insert(staker_address.clone(), new_inactive_stake);
 
             Ok(None)
         } else {
@@ -265,12 +202,7 @@ impl StakingContract {
     }
 
     /// Reverts a unstake transaction.
-    pub(super) fn revert_unstake(
-        &mut self,
-        staker_address: &Address,
-        total_value: Coin,
-        receipt: Option<InactiveStakeReceipt>,
-    ) -> Result<(), AccountError> {
+    pub(super) fn revert_unstake(&mut self, staker_address: &Address, total_value: Coin, receipt: Option<InactiveStakeReceipt>) -> Result<(), AccountError> {
         self.balance = Account::balance_add(self.balance, total_value)?;
 
         if let Some(inactive_stake) = self.inactive_stake_by_address.remove(staker_address) {
@@ -282,16 +214,14 @@ impl StakingContract {
                 balance: Account::balance_add(inactive_stake.balance, total_value)?,
                 retire_time: inactive_stake.retire_time,
             };
-            self.inactive_stake_by_address
-                .insert(staker_address.clone(), new_inactive_stake);
+            self.inactive_stake_by_address.insert(staker_address.clone(), new_inactive_stake);
         } else {
             let receipt = receipt.ok_or(AccountError::InvalidReceipt)?;
             let new_inactive_stake = InactiveStake {
                 balance: total_value,
                 retire_time: receipt.retire_time,
             };
-            self.inactive_stake_by_address
-                .insert(staker_address.clone(), new_inactive_stake);
+            self.inactive_stake_by_address.insert(staker_address.clone(), new_inactive_stake);
         }
         Ok(())
     }

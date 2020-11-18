@@ -3,9 +3,8 @@ use std::sync::RwLock;
 
 use beserial::Deserialize;
 use nimiq_block_albatross::{
-    Block, MacroBlock, MacroBody, PbftCommitMessage, PbftPrepareMessage, PbftProofBuilder,
-    PbftProposal, SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedViewChange, ViewChange,
-    ViewChangeProof, ViewChangeProofBuilder,
+    Block, MacroBlock, MacroBody, PbftCommitMessage, PbftPrepareMessage, PbftProofBuilder, PbftProposal, SignedPbftCommitMessage, SignedPbftPrepareMessage,
+    SignedViewChange, ViewChange, ViewChangeProof, ViewChangeProofBuilder,
 };
 use nimiq_block_production_albatross::BlockProducer;
 use nimiq_blockchain_albatross::{Blockchain, ForkEvent, PushError, PushResult};
@@ -31,14 +30,9 @@ impl TemporaryBlockProducer {
         let env = VolatileEnvironment::new(10).unwrap();
         let blockchain = Arc::new(Blockchain::new(env, NetworkId::UnitAlbatross).unwrap());
 
-        let keypair = KeyPair::from(
-            SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap(),
-        );
+        let keypair = KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
         let producer = BlockProducer::new_without_mempool(Arc::clone(&blockchain), keypair);
-        TemporaryBlockProducer {
-            blockchain,
-            producer,
-        }
+        TemporaryBlockProducer { blockchain, producer }
     }
 
     fn push(&self, block: Block) -> Result<PushResult, PushError> {
@@ -55,15 +49,10 @@ impl TemporaryBlockProducer {
         };
 
         let block = if policy::is_macro_block_at(height) {
-            let (proposal, extrinsics) = self.producer.next_macro_block_proposal(
-                self.blockchain.time.now() + height as u64 * 1000,
-                0u32,
-                view_change_proof,
-                extra_data,
-            );
-            Block::Macro(TemporaryBlockProducer::finalize_macro_block(
-                proposal, extrinsics,
-            ))
+            let (proposal, extrinsics) =
+                self.producer
+                    .next_macro_block_proposal(self.blockchain.time.now() + height as u64 * 1000, 0u32, view_change_proof, extra_data);
+            Block::Macro(TemporaryBlockProducer::finalize_macro_block(proposal, extrinsics))
         } else {
             Block::Micro(self.producer.next_micro_block(
                 self.blockchain.time.now() + height as u64 * 1000,
@@ -79,9 +68,7 @@ impl TemporaryBlockProducer {
     }
 
     fn finalize_macro_block(proposal: PbftProposal, extrinsics: MacroBody) -> MacroBlock {
-        let keypair = KeyPair::from(
-            SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap(),
-        );
+        let keypair = KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
 
         let block_hash = proposal.header.hash::<Blake2bHash>();
 
@@ -93,11 +80,7 @@ impl TemporaryBlockProducer {
             &keypair.secret_key,
             0,
         );
-        let commit = SignedPbftCommitMessage::from_message(
-            PbftCommitMessage { block_hash },
-            &keypair.secret_key,
-            0,
-        );
+        let commit = SignedPbftCommitMessage::from_message(PbftCommitMessage { block_hash }, &keypair.secret_key, 0);
 
         // create proof
         let mut pbft_proof = PbftProofBuilder::new();
@@ -112,9 +95,7 @@ impl TemporaryBlockProducer {
     }
 
     fn create_view_change_proof(&self, view_number: u32) -> ViewChangeProof {
-        let keypair = KeyPair::from(
-            SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap(),
-        );
+        let keypair = KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
 
         let view_change = ViewChange {
             block_number: self.blockchain.block_number() + 1,
@@ -294,13 +275,9 @@ fn create_fork_proof() {
     let event1_rc1 = Arc::new(RwLock::new(false));
     let event1_rc2 = event1_rc1.clone();
 
-    producer1
-        .blockchain
-        .fork_notifier
-        .write()
-        .register(move |e: &ForkEvent| match e {
-            ForkEvent::Detected(_) => *event1_rc2.write().unwrap() = true,
-        });
+    producer1.blockchain.fork_notifier.write().register(move |e: &ForkEvent| match e {
+        ForkEvent::Detected(_) => *event1_rc2.write().unwrap() = true,
+    });
 
     // Easy rebranch
     // [0] - [0] - [0] - [0]

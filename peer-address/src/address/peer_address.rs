@@ -8,10 +8,7 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 use std::vec::Vec;
 
-use beserial::{
-    Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
-    SerializingError, WriteBytesExt,
-};
+use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, WriteBytesExt};
 use keys::{PublicKey, Signature};
 
 use crate::address::{NetAddress, PeerId, PeerUri};
@@ -67,12 +64,8 @@ impl Serialize for PeerAddress {
         }
         size += match &self.ty {
             PeerAddressType::Dumb => 0,
-            PeerAddressType::Ws(host, port) => {
-                host.serialize::<u8, W>(writer)? + port.serialize(writer)?
-            }
-            PeerAddressType::Wss(host, port) => {
-                host.serialize::<u8, W>(writer)? + port.serialize(writer)?
-            }
+            PeerAddressType::Ws(host, port) => host.serialize::<u8, W>(writer)? + port.serialize(writer)?,
+            PeerAddressType::Wss(host, port) => host.serialize::<u8, W>(writer)? + port.serialize(writer)?,
             PeerAddressType::Rtc => 0,
         };
         Ok(size)
@@ -89,12 +82,8 @@ impl Serialize for PeerAddress {
         size += self.signature.serialized_size() - 1; // No 0/1 for the Option
         size += match &self.ty {
             PeerAddressType::Dumb => 0,
-            PeerAddressType::Ws(host, port) => {
-                host.serialized_size::<u8>() + port.serialized_size()
-            }
-            PeerAddressType::Wss(host, port) => {
-                host.serialized_size::<u8>() + port.serialized_size()
-            }
+            PeerAddressType::Ws(host, port) => host.serialized_size::<u8>() + port.serialized_size(),
+            PeerAddressType::Wss(host, port) => host.serialized_size::<u8>() + port.serialized_size(),
             PeerAddressType::Rtc => 0,
         };
         size
@@ -112,14 +101,8 @@ impl Deserialize for PeerAddress {
         let signature: Signature = Deserialize::deserialize(reader)?;
         let type_special: PeerAddressType = match protocol {
             Protocol::Dumb => PeerAddressType::Dumb,
-            Protocol::Ws => PeerAddressType::Ws(
-                DeserializeWithLength::deserialize::<u8, R>(reader)?,
-                Deserialize::deserialize(reader)?,
-            ),
-            Protocol::Wss => PeerAddressType::Wss(
-                DeserializeWithLength::deserialize::<u8, R>(reader)?,
-                Deserialize::deserialize(reader)?,
-            ),
+            Protocol::Ws => PeerAddressType::Ws(DeserializeWithLength::deserialize::<u8, R>(reader)?, Deserialize::deserialize(reader)?),
+            Protocol::Wss => PeerAddressType::Wss(DeserializeWithLength::deserialize::<u8, R>(reader)?, Deserialize::deserialize(reader)?),
             Protocol::Rtc => PeerAddressType::Rtc,
         };
         let peer_id = PeerId::from(&public_key);
@@ -139,9 +122,7 @@ impl Deserialize for PeerAddress {
 impl PeerAddress {
     pub fn verify_signature(&self) -> bool {
         if let Some(signature) = &self.signature {
-            return self
-                .public_key
-                .verify(signature, self.get_signature_data().as_slice());
+            return self.public_key.verify(signature, self.get_signature_data().as_slice());
         }
         false
     }
@@ -159,12 +140,8 @@ impl PeerAddress {
 
         let public_key: String = ::hex::encode(&self.public_key.as_bytes());
         match self.ty {
-            PeerAddressType::Ws(ref host, ref port) => {
-                Some(format!("ws://{}:{}/{}", host, port, public_key))
-            }
-            PeerAddressType::Wss(ref host, ref port) => {
-                Some(format!("wss://{}:{}/{}", host, port, public_key))
-            }
+            PeerAddressType::Ws(ref host, ref port) => Some(format!("ws://{}:{}/{}", host, port, public_key)),
+            PeerAddressType::Wss(ref host, ref port) => Some(format!("wss://{}:{}/{}", host, port, public_key)),
             _ => None, // Seed nodes should never be PeerAddressType::RTC or PeerAddressType::Dumb
         }
     }
@@ -265,9 +242,7 @@ impl PartialEq for PeerAddress {
         // We consider peer addresses to be equal if the public key or peer id is not known on one of them:
         // Peers from the network always contain a peer id and public key, peers without peer id or public key
         // are always set by the user.
-        self.protocol() == other.protocol()
-            && self.public_key == other.public_key
-            && self.peer_id == other.peer_id
+        self.protocol() == other.protocol() && self.public_key == other.public_key && self.peer_id == other.peer_id
         /* services is ignored */
         /* timestamp is ignored */
         /* netAddress is ignored */
@@ -318,16 +293,8 @@ impl Serialize for PeerAddressType {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         Ok(match self {
             PeerAddressType::Dumb => Protocol::Dumb.serialize(writer)?,
-            PeerAddressType::Ws(host, port) => {
-                Protocol::Ws.serialize(writer)?
-                    + host.serialize::<u8, W>(writer)?
-                    + port.serialize(writer)?
-            }
-            PeerAddressType::Wss(host, port) => {
-                Protocol::Wss.serialize(writer)?
-                    + host.serialize::<u8, W>(writer)?
-                    + port.serialize(writer)?
-            }
+            PeerAddressType::Ws(host, port) => Protocol::Ws.serialize(writer)? + host.serialize::<u8, W>(writer)? + port.serialize(writer)?,
+            PeerAddressType::Wss(host, port) => Protocol::Wss.serialize(writer)? + host.serialize::<u8, W>(writer)? + port.serialize(writer)?,
             PeerAddressType::Rtc => Protocol::Rtc.serialize(writer)?,
         })
     }
@@ -335,12 +302,8 @@ impl Serialize for PeerAddressType {
     fn serialized_size(&self) -> usize {
         Protocol::Dumb.serialized_size()
             + match self {
-                PeerAddressType::Ws(host, port) => {
-                    host.serialized_size::<u8>() + port.serialized_size()
-                }
-                PeerAddressType::Wss(host, port) => {
-                    host.serialized_size::<u8>() + port.serialized_size()
-                }
+                PeerAddressType::Ws(host, port) => host.serialized_size::<u8>() + port.serialized_size(),
+                PeerAddressType::Wss(host, port) => host.serialized_size::<u8>() + port.serialized_size(),
                 _ => 0,
             }
     }

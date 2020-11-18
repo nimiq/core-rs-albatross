@@ -126,11 +126,7 @@ impl Hash for MacroBody {}
 
 impl fmt::Display for MacroBlock {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(
-            f,
-            "[#{}, view {}, type Macro]",
-            self.header.block_number, self.header.view_number
-        )
+        write!(f, "[#{}, view {}, type Macro]", self.header.block_number, self.header.view_number)
     }
 }
 
@@ -147,11 +143,7 @@ impl TryInto<Slots> for MacroBlock {
 
     /// Transforms the validator_slots field of an election Macro block into a Slots struct.
     fn try_into(self) -> Result<Slots, Self::Error> {
-        let validator_slots = self
-            .body
-            .ok_or(IntoSlotsError::MissingBody)?
-            .validators
-            .ok_or(IntoSlotsError::NoElection)?;
+        let validator_slots = self.body.ok_or(IntoSlotsError::MissingBody)?.validators.ok_or(IntoSlotsError::NoElection)?;
 
         Ok(Slots::new(validator_slots))
     }

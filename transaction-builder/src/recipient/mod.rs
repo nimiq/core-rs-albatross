@@ -28,19 +28,10 @@ pub mod vesting_contract;
 /// [`new_vesting_builder`]: enum.Recipient.html#method.new_vesting_builder
 /// [`new_staking_builder`]: enum.Recipient.html#method.new_staking_builder
 pub enum Recipient {
-    Basic {
-        address: Address,
-    },
-    HtlcCreation {
-        data: HtlcCreationData,
-    },
-    VestingCreation {
-        data: VestingCreationData,
-    },
-    Staking {
-        address: Address,
-        data: StakingTransaction,
-    },
+    Basic { address: Address },
+    HtlcCreation { data: HtlcCreationData },
+    VestingCreation { data: VestingCreationData },
+    Staking { address: Address, data: StakingTransaction },
 }
 
 impl Recipient {

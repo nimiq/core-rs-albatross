@@ -20,10 +20,7 @@ impl<P: SWModelParameters, F: PrimeField> YToBitGadget<P, F> {
     /// Outputs a boolean representing the relation:
     /// y > half
     /// where half means the half point of the modulus of the underlying field. So, half = (p-1)/2.
-    pub fn is_greater_half<CS: r1cs_core::ConstraintSystem<F>>(
-        mut cs: CS,
-        y: &FpGadget<F>,
-    ) -> Result<Boolean, SynthesisError> {
+    pub fn is_greater_half<CS: r1cs_core::ConstraintSystem<F>>(mut cs: CS, y: &FpGadget<F>) -> Result<Boolean, SynthesisError> {
         // Calculates half.
         let half = F::from_repr(F::modulus_minus_one_div_two());
 
@@ -68,20 +65,13 @@ impl<P: SWModelParameters, F: PrimeField> YToBitGadget<P, F> {
     /// Outputs a boolean representing the relation:
     /// y = zero
     /// where zero means the identity element of the underlying field.
-    pub fn is_equal_zero<CS: r1cs_core::ConstraintSystem<F>>(
-        mut cs: CS,
-        y: &FpGadget<F>,
-    ) -> Result<Boolean, SynthesisError> {
+    pub fn is_equal_zero<CS: r1cs_core::ConstraintSystem<F>>(mut cs: CS, y: &FpGadget<F>) -> Result<Boolean, SynthesisError> {
         // Calculates and allocates the bit representing if y == 0.
-        let y_eq_bit = Boolean::alloc(cs.ns(|| "alloc y eq bit"), || {
-            Ok(y.get_value().get()? == F::zero())
-        })?;
+        let y_eq_bit = Boolean::alloc(cs.ns(|| "alloc y eq bit"), || Ok(y.get_value().get()? == F::zero()))?;
 
         // Calculates and allocates the inverse of y.
         // This value is necessary so that later we can enforce the correctness of y_eq_bit.
-        let inv = FpGadget::<F>::alloc(cs.ns(|| "alloc y inv"), || {
-            Ok(y.get_value().get()?.inverse().unwrap_or_else(F::zero))
-        })?;
+        let inv = FpGadget::<F>::alloc(cs.ns(|| "alloc y inv"), || Ok(y.get_value().get()?.inverse().unwrap_or_else(F::zero)))?;
 
         // Enforces the following relation:
         // y * y_inv == 1 - y_eq_bit

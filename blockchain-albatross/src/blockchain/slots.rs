@@ -21,10 +21,7 @@ impl Blockchain {
         } else if epoch == current_epoch - 1 {
             state.previous_slots.as_ref()?.clone()
         } else {
-            let macro_block = self
-                .chain_store
-                .get_block_at(policy::election_block_of(epoch), true, None)?
-                .unwrap_macro();
+            let macro_block = self.chain_store.get_block_at(policy::election_block_of(epoch), true, None)?.unwrap_macro();
             macro_block.try_into().unwrap()
         };
 
@@ -51,12 +48,7 @@ impl Blockchain {
     }
 
     /// Calculates the slot owner at a given block number and view number.
-    pub fn get_slot_owner_at(
-        &self,
-        block_number: u32,
-        view_number: u32,
-        txn_option: Option<&Transaction>,
-    ) -> (Slot, u16) {
+    pub fn get_slot_owner_at(&self, block_number: u32, view_number: u32, txn_option: Option<&Transaction>) -> (Slot, u16) {
         let state = self.state.read_recursive();
 
         let read_txn;
@@ -72,35 +64,23 @@ impl Blockchain {
         // (so `state.current_slots` was already updated by it, pushing this epoch's slots to
         // `state.previous_slots` and deleting previous epoch's slots).
         let validator_slots_owned;
-        let validator_slots = if policy::epoch_at(state.block_number())
-            == policy::epoch_at(block_number)
-            && !policy::is_election_block_at(state.block_number())
+        let validator_slots = if policy::epoch_at(state.block_number()) == policy::epoch_at(block_number) && !policy::is_election_block_at(state.block_number())
         {
-            state.current_slots.as_ref().unwrap_or_else(|| {
-                panic!(
-                    "Missing epoch's slots for block {}.{}",
-                    block_number, view_number
-                )
-            })
-        } else if (policy::epoch_at(state.block_number()) == policy::epoch_at(block_number)
-            && policy::is_election_block_at(state.block_number()))
-            || (policy::epoch_at(state.block_number()) == policy::epoch_at(block_number) + 1
-                && !policy::is_election_block_at(state.block_number()))
+            state
+                .current_slots
+                .as_ref()
+                .unwrap_or_else(|| panic!("Missing epoch's slots for block {}.{}", block_number, view_number))
+        } else if (policy::epoch_at(state.block_number()) == policy::epoch_at(block_number) && policy::is_election_block_at(state.block_number()))
+            || (policy::epoch_at(state.block_number()) == policy::epoch_at(block_number) + 1 && !policy::is_election_block_at(state.block_number()))
         {
-            state.previous_slots.as_ref().unwrap_or_else(|| {
-                panic!(
-                    "Missing previous epoch's slots for block {}.{}",
-                    block_number, view_number
-                )
-            })
+            state
+                .previous_slots
+                .as_ref()
+                .unwrap_or_else(|| panic!("Missing previous epoch's slots for block {}.{}", block_number, view_number))
         } else {
             let macro_block = self
                 .chain_store
-                .get_block_at(
-                    policy::election_block_before(block_number),
-                    true,
-                    Some(&txn),
-                )
+                .get_block_at(policy::election_block_before(block_number), true, Some(&txn))
                 .expect("Can't fetch block")
                 .unwrap_macro();
 
@@ -118,8 +98,7 @@ impl Blockchain {
             .unwrap()
             .disabled_set;
 
-        let slot_number =
-            self.get_slot_owner_number_at(block_number, view_number, disabled_slots, Some(&txn));
+        let slot_number = self.get_slot_owner_number_at(block_number, view_number, disabled_slots, Some(&txn));
 
         let slot = validator_slots
             .get(SlotIndex::Slot(slot_number))
@@ -130,13 +109,7 @@ impl Blockchain {
 
     /// Calculate the slot owner number at a given block and view number.
     /// In combination with the active `Slots`, this can be used to retrieve the validator info.
-    pub fn get_slot_owner_number_at(
-        &self,
-        block_number: u32,
-        view_number: u32,
-        disabled_slots: BitSet,
-        txn_option: Option<&Transaction>,
-    ) -> u16 {
+    pub fn get_slot_owner_number_at(&self, block_number: u32, view_number: u32, disabled_slots: BitSet, txn_option: Option<&Transaction>) -> u16 {
         let seed = self
             .chain_store
             .get_block_at(block_number - 1, false, txn_option)
@@ -162,11 +135,7 @@ impl Blockchain {
     }
 
     /// Calculates the slot owner for the next block.
-    pub fn get_slot_owner_for_next_block(
-        &self,
-        view_number: u32,
-        txn_option: Option<&Transaction>,
-    ) -> (Slot, u16) {
+    pub fn get_slot_owner_for_next_block(&self, view_number: u32, txn_option: Option<&Transaction>) -> (Slot, u16) {
         let block_number = self.block_number() + 1;
 
         self.get_slot_owner_at(block_number, view_number, txn_option)

@@ -193,10 +193,7 @@ impl SlotsBuilder {
     /// * `reward_address` - Address where reward will be sent to
     ///
     pub fn push<PK: Into<LazyPublicKey>>(&mut self, public_key: PK, reward_address: &Address) {
-        let (_, num_slots) = self
-            .validators
-            .entry(public_key.into())
-            .or_insert_with(|| (reward_address.clone(), 0));
+        let (_, num_slots) = self.validators.entry(public_key.into()).or_insert_with(|| (reward_address.clone(), 0));
         *num_slots += 1;
     }
 
@@ -205,11 +202,7 @@ impl SlotsBuilder {
 
         for (public_key, (reward_address, num_slots)) in self.validators {
             // Add validator slots.
-            validator_slots.push(ValidatorSlotBand::new(
-                public_key,
-                reward_address,
-                num_slots,
-            ));
+            validator_slots.push(ValidatorSlotBand::new(public_key, reward_address, num_slots));
         }
 
         let validator_slots = ValidatorSlots::new(validator_slots);
@@ -227,11 +220,7 @@ pub struct ValidatorSlotBand {
 }
 
 impl ValidatorSlotBand {
-    pub fn new<PK: Into<LazyPublicKey>>(
-        public_key: PK,
-        reward_address: Address,
-        num_slots: u16,
-    ) -> Self {
+    pub fn new<PK: Into<LazyPublicKey>>(public_key: PK, reward_address: Address, num_slots: u16) -> Self {
         Self {
             public_key: public_key.into(),
             reward_address,
@@ -269,10 +258,7 @@ impl ValidatorSlots {
         Some(&self.get(idx)?.public_key())
     }
 
-    pub fn find_idx_and_num_slots_by_public_key(
-        &self,
-        public_key: &CompressedPublicKey,
-    ) -> Option<(u16, u16)> {
+    pub fn find_idx_and_num_slots_by_public_key(&self, public_key: &CompressedPublicKey) -> Option<(u16, u16)> {
         self.bands
             .iter()
             .find_position(|validator| validator.public_key.compressed() == public_key)
@@ -357,11 +343,7 @@ impl Deserialize for ValidatorSlots {
         for num_slots in allocation {
             let public_key: CompressedPublicKey = Deserialize::deserialize(reader)?;
             let reward_address: Address = Deserialize::deserialize(reader)?;
-            validators.push(ValidatorSlotBand::new(
-                public_key,
-                reward_address,
-                num_slots,
-            ));
+            validators.push(ValidatorSlotBand::new(public_key, reward_address, num_slots));
         }
 
         // This invariant should always hold if SlotAllocation is implemented correctly

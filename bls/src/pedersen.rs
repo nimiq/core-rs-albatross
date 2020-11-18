@@ -77,8 +77,7 @@ pub fn pedersen_generators(number: usize) -> Vec<G1Projective> {
 
         bytes[96 * i + 1] = 0;
 
-        let mut x_coordinate =
-            Fq::from_repr(big_int_from_bytes_be(&mut &bytes[96 * i..96 * (i + 1)]));
+        let mut x_coordinate = Fq::from_repr(big_int_from_bytes_be(&mut &bytes[96 * i..96 * (i + 1)]));
 
         // This implements the try-and-increment method of converting an integer to an elliptic curve point.
         // See https://eprint.iacr.org/2009/226.pdf for more details.

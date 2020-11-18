@@ -150,27 +150,14 @@ fn it_correctly_computes_mnemonics() {
         }
     ];
 
-    for (i, vector) in TEST_CASES
-        .iter()
-        .filter(|case| case.entropy_len() == 32)
-        .enumerate()
-    {
+    for (i, vector) in TEST_CASES.iter().filter(|case| case.entropy_len() == 32).enumerate() {
         // We only support 32 byte entropy.
         let entropy = vector.get_entropy();
         let mnemonic = vector.get_mnemonic();
 
-        assert_eq!(
-            entropy.to_mnemonic(WORDLIST_EN),
-            mnemonic,
-            "Invalid entropy.to_mnemonic in test case {}",
-            i
-        );
+        assert_eq!(entropy.to_mnemonic(WORDLIST_EN), mnemonic, "Invalid entropy.to_mnemonic in test case {}", i);
         let computed_entropy = mnemonic.to_entropy(WORDLIST_EN);
-        assert!(
-            computed_entropy.is_some(),
-            "mnemonic.to_entropy yields None in test case {}",
-            i
-        );
+        assert!(computed_entropy.is_some(), "mnemonic.to_entropy yields None in test case {}", i);
         assert_eq!(
             mnemonic.to_entropy(WORDLIST_EN).unwrap(),
             entropy,
@@ -186,23 +173,28 @@ fn it_correctly_computes_mnemonics() {
 #[test]
 fn it_correctly_computes_mnemonic_type() {
     let bip39 = Mnemonic::from("void come effort suffer camp survey warrior heavy shoot primary clutch crush open amazing screen patrol group space point ten exist slush involve unfold");
-    let legacy = Mnemonic::from("refuse walk suggest raven cheese gate eye divert base slot fossil lock oven fuel thank need unit oak image spike vehicle grace citizen expose");
-    let both = Mnemonic::from("enforce valid stock pool lonely label awesome olive torch pledge enhance deny you rude inspire ill letter pulse pact light timber enable elbow guide");
+    let legacy = Mnemonic::from(
+        "refuse walk suggest raven cheese gate eye divert base slot fossil lock oven fuel thank need unit oak image spike vehicle grace citizen expose",
+    );
+    let both = Mnemonic::from(
+        "enforce valid stock pool lonely label awesome olive torch pledge enhance deny you rude inspire ill letter pulse pact light timber enable elbow guide",
+    );
     let invalid_checksum = Mnemonic::from("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art abandon abandon abandon abandon abandon abandon art");
     let invalid_words = Mnemonic::from("void come effort suffer camp survey nimiq heavy shoot primary clutch crush open amazing screen patrol group space point ten exist slush involve unfold");
     assert_eq!(bip39.get_type(WORDLIST_EN), MnemonicType::BIP39);
     assert_eq!(legacy.get_type(WORDLIST_EN), MnemonicType::LEGACY);
     assert_eq!(both.get_type(WORDLIST_EN), MnemonicType::UNKNOWN);
-    assert_eq!(
-        invalid_checksum.get_type(WORDLIST_EN),
-        MnemonicType::INVALID
-    );
+    assert_eq!(invalid_checksum.get_type(WORDLIST_EN), MnemonicType::INVALID);
     assert_eq!(invalid_words.get_type(WORDLIST_EN), MnemonicType::INVALID);
 }
 
 #[test]
 fn it_correctly_detects_collisions() {
-    let entropy = Mnemonic::from("enforce valid stock pool lonely label awesome olive torch pledge enhance deny you rude inspire ill letter pulse pact light timber enable elbow guide").to_entropy(WORDLIST_EN).unwrap();
+    let entropy = Mnemonic::from(
+        "enforce valid stock pool lonely label awesome olive torch pledge enhance deny you rude inspire ill letter pulse pact light timber enable elbow guide",
+    )
+    .to_entropy(WORDLIST_EN)
+    .unwrap();
     assert!(entropy.is_colliding_checksum());
 }
 

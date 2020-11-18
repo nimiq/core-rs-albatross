@@ -44,13 +44,7 @@ fn serialization_mnt4_works() {
     // Allocate the primitive result for easier comparison.
     let mut primitive_var: Vec<Boolean> = Vec::new();
     for i in 0..bits.len() {
-        primitive_var.push(
-            Boolean::alloc(
-                cs.ns(|| format!("allocate primitive result g2: bit {}", i)),
-                || Ok(bits[i]),
-            )
-            .unwrap(),
-        );
+        primitive_var.push(Boolean::alloc(cs.ns(|| format!("allocate primitive result g2: bit {}", i)), || Ok(bits[i])).unwrap());
     }
 
     // Serialize using the gadget version.
@@ -69,13 +63,7 @@ fn serialization_mnt4_works() {
     // Allocate the primitive result for easier comparison.
     let mut primitive_var: Vec<Boolean> = Vec::new();
     for i in 0..bits.len() {
-        primitive_var.push(
-            Boolean::alloc(
-                cs.ns(|| format!("allocate primitive result g1: bit {}", i)),
-                || Ok(bits[i]),
-            )
-            .unwrap(),
-        );
+        primitive_var.push(Boolean::alloc(cs.ns(|| format!("allocate primitive result g1: bit {}", i)), || Ok(bits[i])).unwrap());
     }
 
     // Serialize using the gadget version.

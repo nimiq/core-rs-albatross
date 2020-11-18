@@ -27,9 +27,7 @@ impl AggregatePublicKey {
         for x in public_keys {
             agg_key += &x.public_key;
         }
-        AggregatePublicKey(PublicKey {
-            public_key: agg_key,
-        })
+        AggregatePublicKey(PublicKey { public_key: agg_key })
     }
 
     /// Adds a single regular public key to an aggregated public keys.

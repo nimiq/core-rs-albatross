@@ -49,23 +49,14 @@ impl WalletStore {
         wallets
     }
 
-    pub fn get(
-        &self,
-        address: &Address,
-        txn_option: Option<&Transaction>,
-    ) -> Option<Locked<WalletAccount>> {
+    pub fn get(&self, address: &Address, txn_option: Option<&Transaction>) -> Option<Locked<WalletAccount>> {
         match txn_option {
             Some(txn) => txn.get(&self.wallet_db, address),
             None => ReadTransaction::new(&self.env).get(&self.wallet_db, address),
         }
     }
 
-    pub fn put(
-        &self,
-        address: &Address,
-        wallet: &Locked<WalletAccount>,
-        txn: &mut WriteTransaction,
-    ) {
+    pub fn put(&self, address: &Address, wallet: &Locked<WalletAccount>, txn: &mut WriteTransaction) {
         txn.put_reserve(&self.wallet_db, address, wallet);
     }
 }

@@ -6,7 +6,6 @@ use std::{
 use enum_display_derive::Display;
 use thiserror::Error;
 
-
 use beserial::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize, Display)]
@@ -26,7 +25,6 @@ impl AccountType {
         x.try_into().ok()
     }
 }
-
 
 #[derive(Debug, Error)]
 #[error("Can't convert {0} to AccountType.")]

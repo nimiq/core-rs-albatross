@@ -73,21 +73,7 @@ pub fn generate_random_seed() -> Vec<u8> {
 
     let concatenated = format!(
         "{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}",
-        block_00,
-        block_01,
-        block_02,
-        block_03,
-        block_04,
-        block_05,
-        block_06,
-        block_07,
-        block_08,
-        block_09,
-        block_10,
-        block_11,
-        block_12,
-        block_13,
-        block_14
+        block_00, block_01, block_02, block_03, block_04, block_05, block_06, block_07, block_08, block_09, block_10, block_11, block_12, block_13, block_14
     );
 
     let random_bytes = hex::decode(concatenated).unwrap();

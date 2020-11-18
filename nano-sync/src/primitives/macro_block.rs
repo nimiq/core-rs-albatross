@@ -43,13 +43,7 @@ impl MacroBlock {
 
     /// This function signs a macro block, for only the prepare round, given a validator's
     /// key pair and signer id (which is simply the position in the signer bitmap).
-    pub fn sign_prepare(
-        &mut self,
-        sk: Fr,
-        signer_id: usize,
-        block_number: u32,
-        pks_commitment: Vec<u8>,
-    ) {
+    pub fn sign_prepare(&mut self, sk: Fr, signer_id: usize, block_number: u32, pks_commitment: Vec<u8>) {
         // Generate the hash point for the signature.
         let hash_point = self.hash(0, block_number, pks_commitment);
 
@@ -65,13 +59,7 @@ impl MacroBlock {
 
     /// This function signs a macro block, for only the prepare round, given a validator's
     /// key pair and signer id (which is simply the position in the signer bitmap).
-    pub fn sign_commit(
-        &mut self,
-        sk: Fr,
-        signer_id: usize,
-        block_number: u32,
-        pks_commitment: Vec<u8>,
-    ) {
+    pub fn sign_commit(&mut self, sk: Fr, signer_id: usize, block_number: u32, pks_commitment: Vec<u8>) {
         // Generate the hash point for the signature.
         let hash_point = self.hash(1, block_number, pks_commitment);
 
@@ -93,12 +81,7 @@ impl MacroBlock {
     /// necessary because the Pedersen commitment is not pseudo-random and we need pseudo-randomness
     /// for the BLS signature scheme. Finally we use the Pedersen hash algorithm on those 256 bits
     /// to obtain a single EC point.
-    pub fn hash(
-        &self,
-        round_number: u8,
-        block_number: u32,
-        pks_commitment: Vec<u8>,
-    ) -> G1Projective {
+    pub fn hash(&self, round_number: u8, block_number: u32, pks_commitment: Vec<u8>) -> G1Projective {
         // Serialize the input into bits.
         let mut bytes = vec![round_number];
 

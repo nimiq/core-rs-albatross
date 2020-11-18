@@ -4,9 +4,7 @@ use beserial::{Deserialize, Serialize};
 use keys::Address;
 use primitives::account::*;
 use primitives::coin::Coin;
-use transaction::account::htlc_contract::{
-    AnyHash, CreationTransactionData, HashAlgorithm, ProofType,
-};
+use transaction::account::htlc_contract::{AnyHash, CreationTransactionData, HashAlgorithm, ProofType};
 use transaction::{SignatureProof, Transaction};
 
 use crate::inherent::{AccountInherentInteraction, Inherent};
@@ -62,13 +60,7 @@ impl HashedTimeLockedContract {
 }
 
 impl AccountTransactionInteraction for HashedTimeLockedContract {
-    fn new_contract(
-        account_type: AccountType,
-        balance: Coin,
-        transaction: &Transaction,
-        block_height: u32,
-        time: u64,
-    ) -> Result<Self, AccountError> {
+    fn new_contract(account_type: AccountType, balance: Coin, transaction: &Transaction, block_height: u32, time: u64) -> Result<Self, AccountError> {
         if account_type == AccountType::HTLC {
             HashedTimeLockedContract::create(balance, transaction, block_height, time)
         } else {
@@ -76,12 +68,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         }
     }
 
-    fn create(
-        balance: Coin,
-        transaction: &Transaction,
-        _block_height: u32,
-        _time: u64,
-    ) -> Result<Self, AccountError> {
+    fn create(balance: Coin, transaction: &Transaction, _block_height: u32, _time: u64) -> Result<Self, AccountError> {
         let data = CreationTransactionData::parse(transaction)?;
         Ok(HashedTimeLockedContract::new(
             balance,
@@ -95,20 +82,11 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         ))
     }
 
-    fn check_incoming_transaction(
-        _transaction: &Transaction,
-        _block_height: u32,
-        _time: u64,
-    ) -> Result<(), AccountError> {
+    fn check_incoming_transaction(_transaction: &Transaction, _block_height: u32, _time: u64) -> Result<(), AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
 
-    fn commit_incoming_transaction(
-        &mut self,
-        _transaction: &Transaction,
-        _block_height: u32,
-        _time: u64,
-    ) -> Result<Option<Vec<u8>>, AccountError> {
+    fn commit_incoming_transaction(&mut self, _transaction: &Transaction, _block_height: u32, _time: u64) -> Result<Option<Vec<u8>>, AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
 
@@ -122,12 +100,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         Err(AccountError::InvalidForRecipient)
     }
 
-    fn check_outgoing_transaction(
-        &self,
-        transaction: &Transaction,
-        _block_height: u32,
-        time: u64,
-    ) -> Result<(), AccountError> {
+    fn check_outgoing_transaction(&self, transaction: &Transaction, _block_height: u32, time: u64) -> Result<(), AccountError> {
         let balance: Coin = Account::balance_sub(self.balance, transaction.total_value()?)?;
         let proof_buf = &mut &transaction.proof[..];
         let proof_type: ProofType = Deserialize::deserialize(proof_buf)?;
@@ -159,26 +132,16 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
 
                 // Check min cap.
                 let cap_ratio = 1f64 - (f64::from(hash_depth) / f64::from(self.hash_count));
-                let min_cap = Coin::try_from(
-                    (cap_ratio * u64::from(self.total_amount) as f64)
-                        .floor()
-                        .max(0f64) as u64,
-                )?;
+                let min_cap = Coin::try_from((cap_ratio * u64::from(self.total_amount) as f64).floor().max(0f64) as u64)?;
                 if balance < min_cap {
-                    return Err(AccountError::InsufficientFunds {
-                        balance,
-                        needed: min_cap,
-                    });
+                    return Err(AccountError::InsufficientFunds { balance, needed: min_cap });
                 }
             }
             ProofType::EarlyResolve => {
                 // Check that the transaction is signed by both parties.
-                let signature_proof_recipient: SignatureProof =
-                    Deserialize::deserialize(proof_buf)?;
+                let signature_proof_recipient: SignatureProof = Deserialize::deserialize(proof_buf)?;
                 let signature_proof_sender: SignatureProof = Deserialize::deserialize(proof_buf)?;
-                if !signature_proof_recipient.is_signed_by(&self.recipient)
-                    || !signature_proof_sender.is_signed_by(&self.sender)
-                {
+                if !signature_proof_recipient.is_signed_by(&self.recipient) || !signature_proof_sender.is_signed_by(&self.sender) {
                     return Err(AccountError::InvalidSignature);
                 }
             }
@@ -200,12 +163,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         Ok(())
     }
 
-    fn commit_outgoing_transaction(
-        &mut self,
-        transaction: &Transaction,
-        block_height: u32,
-        time: u64,
-    ) -> Result<Option<Vec<u8>>, AccountError> {
+    fn commit_outgoing_transaction(&mut self, transaction: &Transaction, block_height: u32, time: u64) -> Result<Option<Vec<u8>>, AccountError> {
         self.check_outgoing_transaction(transaction, block_height, time)?;
         self.balance = Account::balance_sub(self.balance, transaction.total_value()?)?;
         Ok(None)
@@ -228,31 +186,15 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
 }
 
 impl AccountInherentInteraction for HashedTimeLockedContract {
-    fn check_inherent(
-        &self,
-        _inherent: &Inherent,
-        _block_height: u32,
-        _time: u64,
-    ) -> Result<(), AccountError> {
+    fn check_inherent(&self, _inherent: &Inherent, _block_height: u32, _time: u64) -> Result<(), AccountError> {
         Err(AccountError::InvalidInherent)
     }
 
-    fn commit_inherent(
-        &mut self,
-        _inherent: &Inherent,
-        _block_height: u32,
-        _time: u64,
-    ) -> Result<Option<Vec<u8>>, AccountError> {
+    fn commit_inherent(&mut self, _inherent: &Inherent, _block_height: u32, _time: u64) -> Result<Option<Vec<u8>>, AccountError> {
         Err(AccountError::InvalidInherent)
     }
 
-    fn revert_inherent(
-        &mut self,
-        _inherent: &Inherent,
-        _block_height: u32,
-        _time: u64,
-        _receipt: Option<&Vec<u8>>,
-    ) -> Result<(), AccountError> {
+    fn revert_inherent(&mut self, _inherent: &Inherent, _block_height: u32, _time: u64, _receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
         Err(AccountError::InvalidInherent)
     }
 }

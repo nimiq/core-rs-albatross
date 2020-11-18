@@ -2,9 +2,7 @@ use std::cmp::Ordering;
 
 use parking_lot::MappedRwLockReadGuard;
 
-use block::{
-    Block, BlockBody, BlockError, BlockHeader, BlockJustification, BlockType, ForkProof, ViewChange,
-};
+use block::{Block, BlockBody, BlockError, BlockHeader, BlockJustification, BlockType, ForkProof, ViewChange};
 use bls::PublicKey;
 use database::Transaction as DBtx;
 use primitives::policy;
@@ -33,10 +31,7 @@ impl Blockchain {
         }
 
         // Check if the block's immediate predecessor is part of the chain.
-        let prev_info = self
-            .chain_store
-            .get_chain_info(&header.parent_hash(), false, txn_opt)
-            .unwrap();
+        let prev_info = self.chain_store.get_chain_info(&header.parent_hash(), false, txn_opt).unwrap();
 
         // Check that the block is a valid successor of its predecessor.
         if self.get_next_block_type(Some(prev_info.head.block_number())) != header.ty() {
@@ -46,10 +41,7 @@ impl Blockchain {
 
         // Check the block number
         if prev_info.head.block_number() + 1 != header.block_number() {
-            warn!(
-                "Rejecting block - wrong block number ({:?})",
-                header.block_number()
-            );
+            warn!("Rejecting block - wrong block number ({:?})", header.block_number());
             return Err(PushError::InvalidSuccessor);
         }
 
@@ -69,10 +61,7 @@ impl Blockchain {
         }
 
         // Check if the seed was signed by the intended producer.
-        if let Err(e) = header
-            .seed()
-            .verify(prev_info.head.seed(), intended_slot_owner)
-        {
+        if let Err(e) = header.seed().verify(prev_info.head.seed(), intended_slot_owner) {
             warn!("Rejecting block - invalid seed ({:?})", e);
             return Err(PushError::InvalidBlock(BlockError::InvalidSeed));
         }
@@ -103,15 +92,8 @@ impl Blockchain {
 
         // If the block is a macro block, verify the PBFT proof.
         if let Some(BlockJustification::Macro(justification)) = justification_opt {
-            if let Err(e) = justification.verify(
-                header.hash(),
-                &self.current_validators(),
-                policy::TWO_THIRD_SLOTS,
-            ) {
-                warn!(
-                    "Rejecting block - macro block with bad justification: {}",
-                    e
-                );
+            if let Err(e) = justification.verify(header.hash(), &self.current_validators(), policy::TWO_THIRD_SLOTS) {
+                warn!("Rejecting block - macro block with bad justification: {}", e);
                 return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
             }
         }
@@ -136,10 +118,7 @@ impl Blockchain {
             }
 
             // Check if a view change occurred - if so, validate the proof
-            let prev_info = self
-                .chain_store
-                .get_chain_info(&header.parent_hash(), false, txn_opt)
-                .unwrap();
+            let prev_info = self.chain_store.get_chain_info(&header.parent_hash(), false, txn_opt).unwrap();
 
             let view_number = if policy::is_macro_block_at(header.block_number() - 1) {
                 // Reset view number in new batch
@@ -151,11 +130,7 @@ impl Blockchain {
             let new_view_number = header.view_number();
 
             if new_view_number < view_number {
-                warn!(
-                    "Rejecting block - lower view number {:?} < {:?}",
-                    header.view_number(),
-                    view_number
-                );
+                warn!("Rejecting block - lower view number {:?} < {:?}", header.view_number(), view_number);
                 return Err(PushError::InvalidBlock(BlockError::InvalidViewNumber));
             } else if new_view_number == view_number && justification.view_change_proof.is_some() {
                 warn!("Rejecting block - must not contain view change proof");
@@ -170,11 +145,12 @@ impl Blockchain {
                     prev_seed: prev_info.head.seed().clone(),
                 };
 
-                if let Err(e) = justification.view_change_proof.as_ref().unwrap().verify(
-                    &view_change,
-                    &self.current_validators(),
-                    policy::TWO_THIRD_SLOTS,
-                ) {
+                if let Err(e) = justification
+                    .view_change_proof
+                    .as_ref()
+                    .unwrap()
+                    .verify(&view_change, &self.current_validators(), policy::TWO_THIRD_SLOTS)
+                {
                     warn!("Rejecting block - bad view change proof: {:?}", e);
                     return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
                 }
@@ -186,12 +162,7 @@ impl Blockchain {
 
     /// Verifies the body of a block. This does not check anything that depends on the state. Ex: If
     /// an account has enough funds.
-    pub fn verify_block_body(
-        &self,
-        header: &BlockHeader,
-        body_opt: &Option<BlockBody>,
-        txn_opt: Option<&DBtx>,
-    ) -> Result<(), PushError> {
+    pub fn verify_block_body(&self, header: &BlockHeader, body_opt: &Option<BlockBody>, txn_opt: Option<&DBtx>) -> Result<(), PushError> {
         // Checks if the body exists.
         if let None = body_opt {
             return Err(PushError::InvalidBlock(BlockError::MissingBody));
@@ -240,17 +211,10 @@ impl Blockchain {
                 }
 
                 // Get intended slot owner for that block.
-                let (slot, _) = self.get_slot_owner_at(
-                    proof.header1.block_number,
-                    proof.header1.view_number,
-                    txn_opt,
-                );
+                let (slot, _) = self.get_slot_owner_at(proof.header1.block_number, proof.header1.view_number, txn_opt);
 
                 // Verify fork proof.
-                if proof
-                    .verify(&slot.public_key().uncompress_unchecked())
-                    .is_err()
-                {
+                if proof.verify(&slot.public_key().uncompress_unchecked()).is_err() {
                     warn!("Rejecting block - Bad fork proof: invalid owner signature");
                     return Err(PushError::InvalidBlock(BlockError::InvalidForkProof));
                 }
@@ -269,9 +233,7 @@ impl Blockchain {
                             return Err(PushError::InvalidBlock(BlockError::DuplicateTransaction));
                         }
                         Ordering::Greater => {
-                            return Err(PushError::InvalidBlock(
-                                BlockError::TransactionsNotOrdered,
-                            ));
+                            return Err(PushError::InvalidBlock(BlockError::TransactionsNotOrdered));
                         }
                         _ => (),
                     }
@@ -295,12 +257,7 @@ impl Blockchain {
     }
 
     /// Verifies the state of a block.
-    pub fn verify_block_state(
-        &self,
-        state: &BlockchainState,
-        chain_info: &ChainInfo,
-        txn_opt: Option<&DBtx>,
-    ) -> Result<(), PushError> {
+    pub fn verify_block_state(&self, state: &BlockchainState, chain_info: &ChainInfo, txn_opt: Option<&DBtx>) -> Result<(), PushError> {
         let accounts = &state.accounts;
 
         let block = &chain_info.head;
@@ -337,16 +294,12 @@ impl Blockchain {
             // Check the correctness of the lost rewards and disabled sets.
             let staking_contract = self.get_staking_contract();
 
-            if staking_contract.previous_lost_rewards()
-                != macro_block.body.as_ref().unwrap().lost_reward_set
-            {
+            if staking_contract.previous_lost_rewards() != macro_block.body.as_ref().unwrap().lost_reward_set {
                 warn!("Rejecting block - Lost rewards set doesn't match real lost rewards set");
                 return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
             }
 
-            if staking_contract.previous_disabled_slots()
-                != macro_block.body.as_ref().unwrap().disabled_set
-            {
+            if staking_contract.previous_disabled_slots() != macro_block.body.as_ref().unwrap().disabled_set {
                 warn!("Rejecting block - Disabled set doesn't match real disabled set");
                 return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
             }
@@ -355,13 +308,7 @@ impl Blockchain {
             if macro_block.is_election_block() {
                 let real_validators = &self.next_slots(&macro_block.header.seed).validator_slots;
 
-                let block_validators = macro_block
-                    .body
-                    .as_ref()
-                    .unwrap()
-                    .validators
-                    .as_ref()
-                    .unwrap();
+                let block_validators = macro_block.body.as_ref().unwrap().validators.as_ref().unwrap();
 
                 if real_validators != block_validators {
                     warn!("Rejecting block - Validators don't match real validators");

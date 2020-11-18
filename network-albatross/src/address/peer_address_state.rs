@@ -88,12 +88,7 @@ impl SignalRouter {
     }
 
     /// Adds a new route and returns whether we have a new best route
-    pub fn add_route(
-        &mut self,
-        signal_channel: Arc<PeerChannel>,
-        distance: u8,
-        timestamp: u64,
-    ) -> bool {
+    pub fn add_route(&mut self, signal_channel: Arc<PeerChannel>, distance: u8, timestamp: u64) -> bool {
         let mut new_route = SignalRouteInfo::new(signal_channel, distance, timestamp);
         // SignalRouteInfo matches only on signal_channel, so this will get us the old route with the same channel
         let old_route = self.routes.get(&new_route);
@@ -105,10 +100,7 @@ impl SignalRouter {
         self.routes.replace(new_route.clone());
 
         let is_new_best = match &self.best_route {
-            Some(route) => {
-                new_route.score() > route.score()
-                    || (new_route.score() == route.score() && timestamp > route.timestamp)
-            }
+            Some(route) => new_route.score() > route.score() || (new_route.score() == route.score() && timestamp > route.timestamp),
             None => true,
         };
         if is_new_best {
@@ -155,10 +147,7 @@ impl SignalRouter {
         for route in self.routes.iter() {
             match best_route {
                 Some(ref mut best_route) => {
-                    if route.score() > best_route.score()
-                        || (route.score() == best_route.score()
-                            && route.timestamp > best_route.timestamp)
-                    {
+                    if route.score() > best_route.score() || (route.score() == best_route.score() && route.timestamp > best_route.timestamp) {
                         *best_route = route.clone()
                     }
                 }
@@ -198,8 +187,7 @@ impl SignalRouteInfo {
     }
 
     pub fn score(&self) -> u32 {
-        u32::from((super::peer_address_book::MAX_DISTANCE - self.distance) / 2)
-            * (1 - self.failed_attempts / super::peer_address_book::MAX_FAILED_ATTEMPTS_RTC)
+        u32::from((super::peer_address_book::MAX_DISTANCE - self.distance) / 2) * (1 - self.failed_attempts / super::peer_address_book::MAX_FAILED_ATTEMPTS_RTC)
     }
 }
 

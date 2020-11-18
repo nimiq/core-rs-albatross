@@ -132,9 +132,7 @@ impl Sink for NimiqMessageStream {
                 return match self.inner.start_send(WebSocketMessage::Close(frame)) {
                     Ok(state) => match state {
                         AsyncSink::Ready => Ok(AsyncSink::Ready),
-                        AsyncSink::NotReady(WebSocketMessage::Close(frame)) => {
-                            Ok(AsyncSink::NotReady(Message::Close(frame)))
-                        }
+                        AsyncSink::NotReady(WebSocketMessage::Close(frame)) => Ok(AsyncSink::NotReady(Message::Close(frame))),
                         AsyncSink::NotReady(_) => {
                             error!("Expected to get NotReady of a Close message, but got something else.");
                             Err(Error::InvalidClosingState)
@@ -169,18 +167,11 @@ impl Sink for NimiqMessageStream {
                 Ok(state) => match state {
                     AsyncSink::Ready => {
                         #[cfg(feature = "metrics")]
-                        self.public_state
-                            .network_metrics
-                            .note_bytes_sent(buffer_len);
+                        self.public_state.network_metrics.note_bytes_sent(buffer_len);
                     }
                     // We started to send some chunks, but now the queue is full:
                     // If this happens, we will try sending the rest of the message at a later point with the same tag.
-                    AsyncSink::NotReady(_) => {
-                        return Ok(AsyncSink::NotReady(Message::Resume(
-                            serialized_msg[start..].to_vec(),
-                            Some(tag),
-                        )))
-                    }
+                    AsyncSink::NotReady(_) => return Ok(AsyncSink::NotReady(Message::Resume(serialized_msg[start..].to_vec(), Some(tag)))),
                 },
                 Err(error) => return Err(Error::WebSocketError(error)),
             };
@@ -228,10 +219,7 @@ impl NimiqMessageStream {
             if self.msg_buf.is_none() {
                 if let Ok(msg_size) = peek_length(chunk) {
                     if msg_size > MAX_MESSAGE_SIZE {
-                        error!(
-                            "Max message size exceeded ({} > {})",
-                            msg_size, MAX_MESSAGE_SIZE
-                        );
+                        error!("Max message size exceeded ({} > {})", msg_size, MAX_MESSAGE_SIZE);
                         return Err(Error::MessageSizeExceeded);
                     }
                     self.msg_buf = Some(Vec::with_capacity(msg_size));
@@ -292,9 +280,7 @@ impl Stream for NimiqMessageStream {
                 }
                 Ok(Async::Ready(Some(m))) => {
                     #[cfg(feature = "metrics")]
-                    self.public_state
-                        .network_metrics
-                        .note_bytes_received(m.len());
+                    self.public_state.network_metrics.note_bytes_received(m.len());
 
                     // Check max chunk size.
                     if m.len() > MAX_CHUNK_SIZE {

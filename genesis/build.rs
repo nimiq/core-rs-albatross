@@ -6,12 +6,7 @@ use nimiq_build_tools::genesis::GenesisBuilder;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 
-fn write_genesis_rs(
-    directory: &PathBuf,
-    name: &str,
-    genesis_hash: &Blake2bHash,
-    validator_registry: Option<Address>,
-) {
+fn write_genesis_rs(directory: &PathBuf, name: &str, genesis_hash: &Blake2bHash, validator_registry: Option<Address>) {
     let validator_registry_str;
     if let Some(address) = validator_registry {
         validator_registry_str = format!("Some(\"{}\".into())", address);
@@ -31,12 +26,7 @@ fn write_genesis_rs(
     fs::write(directory.join("genesis.rs"), genesis_rs.as_bytes()).unwrap();
 }
 
-fn generate_albatross(
-    name: &str,
-    out_dir: &PathBuf,
-    src_dir: &PathBuf,
-    config_override: Option<PathBuf>,
-) {
+fn generate_albatross(name: &str, out_dir: &PathBuf, src_dir: &PathBuf, config_override: Option<PathBuf>) {
     log::info!("Generating Albatross genesis config: {}", name);
 
     let directory = out_dir.join(name);
@@ -51,17 +41,9 @@ fn generate_albatross(
 
     let mut builder = GenesisBuilder::new();
     builder.with_config_file(genesis_config).unwrap();
-    let staking_contract_address = builder
-        .staking_contract_address
-        .clone()
-        .expect("Missing staking contract address");
+    let staking_contract_address = builder.staking_contract_address.clone().expect("Missing staking contract address");
     let genesis_hash = builder.write_to_files(&directory).unwrap();
-    write_genesis_rs(
-        &directory,
-        name,
-        &genesis_hash,
-        Some(staking_contract_address),
-    );
+    write_genesis_rs(&directory, name, &genesis_hash, Some(staking_contract_address));
 }
 
 fn main() {
@@ -69,21 +51,13 @@ fn main() {
 
     let out_dir = Path::new(&env::var("OUT_DIR").unwrap()).join("genesis");
     let src_dir = Path::new("src").join("genesis");
-    let devnet_override = env::var("NIMIQ_OVERRIDE_DEVNET_CONFIG")
-        .ok()
-        .map(PathBuf::from);
+    let devnet_override = env::var("NIMIQ_OVERRIDE_DEVNET_CONFIG").ok().map(PathBuf::from);
 
     log::info!("Taking genesis config files from: {}", src_dir.display());
     log::info!("Writing genesis data to: {}", out_dir.display());
-    log::error!(
-        "DevNet override {:?}",
-        env::var("NIMIQ_OVERRIDE_DEVNET_CONFIG")
-    );
+    log::error!("DevNet override {:?}", env::var("NIMIQ_OVERRIDE_DEVNET_CONFIG"));
     if let Some(devnet_override) = &devnet_override {
-        log::info!(
-            "Using override for Albatross DevNet config: {}",
-            devnet_override.display()
-        );
+        log::info!("Using override for Albatross DevNet config: {}", devnet_override.display());
     }
 
     generate_albatross("dev-albatross", &out_dir, &src_dir, devnet_override);

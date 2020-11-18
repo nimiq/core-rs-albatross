@@ -39,11 +39,7 @@ impl MerkleTreeGadget {
 
         for i in 0..inputs.len() {
             let input = &inputs[i];
-            let pedersen_hash = PedersenHashGadget::evaluate(
-                cs.ns(|| format!("pedersen hash for leaf {}", i)),
-                input,
-                pedersen_generators,
-            )?;
+            let pedersen_hash = PedersenHashGadget::evaluate(cs.ns(|| format!("pedersen hash for leaf {}", i)), input, pedersen_generators)?;
 
             nodes.push(pedersen_hash);
         }
@@ -71,11 +67,7 @@ impl MerkleTreeGadget {
                 )?);
 
                 // Calculate the parent node.
-                let parent_node = PedersenHashGadget::evaluate(
-                    cs.ns(|| format!("calculate parent node {} {}", i, j)),
-                    &bits,
-                    pedersen_generators,
-                )?;
+                let parent_node = PedersenHashGadget::evaluate(cs.ns(|| format!("calculate parent node {} {}", i, j)), &bits, pedersen_generators)?;
 
                 next_nodes.push(parent_node);
             }
@@ -87,8 +79,7 @@ impl MerkleTreeGadget {
         }
 
         // Serialize the root node.
-        let serialized_bits =
-            SerializeGadget::serialize_g1(cs.ns(|| "serialize root node"), &nodes[0])?;
+        let serialized_bits = SerializeGadget::serialize_g1(cs.ns(|| "serialize root node"), &nodes[0])?;
 
         let serialized_bits = reverse_inner_byte_order(&serialized_bits[..]);
 
@@ -131,53 +122,28 @@ impl MerkleTreeGadget {
         assert_eq!(nodes.len(), path.len());
 
         // Calculate the Pedersen hash for the input.
-        let mut result = PedersenHashGadget::evaluate(
-            cs.ns(|| "pedersen hash for input"),
-            input,
-            pedersen_generators,
-        )?;
+        let mut result = PedersenHashGadget::evaluate(cs.ns(|| "pedersen hash for input"), input, pedersen_generators)?;
 
         // Calculate the root of the tree using the branch values.
         for i in 0..nodes.len() {
             // Decide which node is the left or the right one based on the path.
-            let left_node = CondSelectGadget::conditionally_select(
-                cs.ns(|| format!("conditionally select left node {}", i)),
-                &path[i],
-                &nodes[i],
-                &result,
-            )?;
+            let left_node = CondSelectGadget::conditionally_select(cs.ns(|| format!("conditionally select left node {}", i)), &path[i], &nodes[i], &result)?;
 
-            let right_node = CondSelectGadget::conditionally_select(
-                cs.ns(|| format!("conditionally select right node {}", i)),
-                &path[i],
-                &result,
-                &nodes[i],
-            )?;
+            let right_node = CondSelectGadget::conditionally_select(cs.ns(|| format!("conditionally select right node {}", i)), &path[i], &result, &nodes[i])?;
 
             // Serialize the left and right nodes.
             let mut bits = Vec::new();
 
-            bits.extend(SerializeGadget::serialize_g1(
-                cs.ns(|| format!("serialize left node {}", i)),
-                &left_node,
-            )?);
+            bits.extend(SerializeGadget::serialize_g1(cs.ns(|| format!("serialize left node {}", i)), &left_node)?);
 
-            bits.extend(SerializeGadget::serialize_g1(
-                cs.ns(|| format!("serialize right node {}", i)),
-                &right_node,
-            )?);
+            bits.extend(SerializeGadget::serialize_g1(cs.ns(|| format!("serialize right node {}", i)), &right_node)?);
 
             // Calculate the parent node and update result.
-            result = PedersenHashGadget::evaluate(
-                cs.ns(|| format!("calculate parent node {}", i)),
-                &bits,
-                pedersen_generators,
-            )?;
+            result = PedersenHashGadget::evaluate(cs.ns(|| format!("calculate parent node {}", i)), &bits, pedersen_generators)?;
         }
 
         // Serialize the root node.
-        let serialized_bits =
-            SerializeGadget::serialize_g1(cs.ns(|| "serialize root node"), &result)?;
+        let serialized_bits = SerializeGadget::serialize_g1(cs.ns(|| "serialize root node"), &result)?;
 
         let serialized_bits = reverse_inner_byte_order(&serialized_bits[..]);
 

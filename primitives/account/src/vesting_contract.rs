@@ -18,14 +18,7 @@ pub struct VestingContract {
 }
 
 impl VestingContract {
-    pub fn new(
-        balance: Coin,
-        owner: Address,
-        start_time: u64,
-        time_step: u64,
-        step_amount: Coin,
-        total_amount: Coin,
-    ) -> Self {
+    pub fn new(balance: Coin, owner: Address, start_time: u64, time_step: u64, step_amount: Coin, total_amount: Coin) -> Self {
         VestingContract {
             balance,
             owner,
@@ -50,8 +43,7 @@ impl VestingContract {
     pub fn min_cap(&self, time: u64) -> Coin {
         if self.time_step > 0 && self.step_amount > Coin::ZERO {
             let steps = (time as i128 - self.start_time as i128) / self.time_step as i128;
-            let min_cap =
-                u64::from(self.total_amount) as i128 - steps * u64::from(self.step_amount) as i128;
+            let min_cap = u64::from(self.total_amount) as i128 - steps * u64::from(self.step_amount) as i128;
             // Since all parameters have been validated, this will be safe as well.
             Coin::from_u64_unchecked(min_cap.max(0) as u64)
         } else {
@@ -61,13 +53,7 @@ impl VestingContract {
 }
 
 impl AccountTransactionInteraction for VestingContract {
-    fn new_contract(
-        account_type: AccountType,
-        balance: Coin,
-        transaction: &Transaction,
-        block_height: u32,
-        time: u64,
-    ) -> Result<Self, AccountError> {
+    fn new_contract(account_type: AccountType, balance: Coin, transaction: &Transaction, block_height: u32, time: u64) -> Result<Self, AccountError> {
         if account_type == AccountType::Vesting {
             VestingContract::create(balance, transaction, block_height, time)
         } else {
@@ -75,12 +61,7 @@ impl AccountTransactionInteraction for VestingContract {
         }
     }
 
-    fn create(
-        balance: Coin,
-        transaction: &Transaction,
-        _block_height: u32,
-        _time: u64,
-    ) -> Result<Self, AccountError> {
+    fn create(balance: Coin, transaction: &Transaction, _block_height: u32, _time: u64) -> Result<Self, AccountError> {
         let data = CreationTransactionData::parse(transaction)?;
         Ok(VestingContract::new(
             balance,
@@ -92,20 +73,11 @@ impl AccountTransactionInteraction for VestingContract {
         ))
     }
 
-    fn check_incoming_transaction(
-        _transaction: &Transaction,
-        _block_height: u32,
-        _time: u64,
-    ) -> Result<(), AccountError> {
+    fn check_incoming_transaction(_transaction: &Transaction, _block_height: u32, _time: u64) -> Result<(), AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
 
-    fn commit_incoming_transaction(
-        &mut self,
-        _transaction: &Transaction,
-        _block_height: u32,
-        _time: u64,
-    ) -> Result<Option<Vec<u8>>, AccountError> {
+    fn commit_incoming_transaction(&mut self, _transaction: &Transaction, _block_height: u32, _time: u64) -> Result<Option<Vec<u8>>, AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
 
@@ -119,25 +91,16 @@ impl AccountTransactionInteraction for VestingContract {
         Err(AccountError::InvalidForRecipient)
     }
 
-    fn check_outgoing_transaction(
-        &self,
-        transaction: &Transaction,
-        _block_height: u32,
-        time: u64,
-    ) -> Result<(), AccountError> {
+    fn check_outgoing_transaction(&self, transaction: &Transaction, _block_height: u32, time: u64) -> Result<(), AccountError> {
         // Check vesting min cap.
         let balance: Coin = Account::balance_sub(self.balance, transaction.total_value()?)?;
         let min_cap = self.min_cap(time);
         if balance < min_cap {
-            return Err(AccountError::InsufficientFunds {
-                balance,
-                needed: min_cap,
-            });
+            return Err(AccountError::InsufficientFunds { balance, needed: min_cap });
         }
 
         // Check transaction signer is contract owner.
-        let signature_proof: SignatureProof =
-            Deserialize::deserialize(&mut &transaction.proof[..])?;
+        let signature_proof: SignatureProof = Deserialize::deserialize(&mut &transaction.proof[..])?;
         if !signature_proof.is_signed_by(&self.owner) {
             return Err(AccountError::InvalidSignature);
         }
@@ -145,12 +108,7 @@ impl AccountTransactionInteraction for VestingContract {
         Ok(())
     }
 
-    fn commit_outgoing_transaction(
-        &mut self,
-        transaction: &Transaction,
-        block_height: u32,
-        time: u64,
-    ) -> Result<Option<Vec<u8>>, AccountError> {
+    fn commit_outgoing_transaction(&mut self, transaction: &Transaction, block_height: u32, time: u64) -> Result<Option<Vec<u8>>, AccountError> {
         self.check_outgoing_transaction(transaction, block_height, time)?;
         self.balance = Account::balance_sub(self.balance, transaction.total_value()?)?;
         Ok(None)
@@ -173,31 +131,15 @@ impl AccountTransactionInteraction for VestingContract {
 }
 
 impl AccountInherentInteraction for VestingContract {
-    fn check_inherent(
-        &self,
-        _inherent: &Inherent,
-        _block_height: u32,
-        _time: u64,
-    ) -> Result<(), AccountError> {
+    fn check_inherent(&self, _inherent: &Inherent, _block_height: u32, _time: u64) -> Result<(), AccountError> {
         Err(AccountError::InvalidInherent)
     }
 
-    fn commit_inherent(
-        &mut self,
-        _inherent: &Inherent,
-        _block_height: u32,
-        _time: u64,
-    ) -> Result<Option<Vec<u8>>, AccountError> {
+    fn commit_inherent(&mut self, _inherent: &Inherent, _block_height: u32, _time: u64) -> Result<Option<Vec<u8>>, AccountError> {
         Err(AccountError::InvalidInherent)
     }
 
-    fn revert_inherent(
-        &mut self,
-        _inherent: &Inherent,
-        _block_height: u32,
-        _time: u64,
-        _receipt: Option<&Vec<u8>>,
-    ) -> Result<(), AccountError> {
+    fn revert_inherent(&mut self, _inherent: &Inherent, _block_height: u32, _time: u64, _receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
         Err(AccountError::InvalidInherent)
     }
 }

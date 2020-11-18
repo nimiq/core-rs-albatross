@@ -118,14 +118,10 @@ fn parse_field_attribs(attrs: &[syn::Attribute]) -> Option<FieldAttribute> {
                                         if let syn::NestedMeta::Meta(ref item) = nested {
                                             match item {
                                                 Meta::Path(value) => {
-                                                    if !cmp_ident(value, "u8")
-                                                        && !cmp_ident(value, "u16")
-                                                        && !cmp_ident(value, "u32")
-                                                    {
+                                                    if !cmp_ident(value, "u8") && !cmp_ident(value, "u16") && !cmp_ident(value, "u32") {
                                                         panic!("beserial(len_type) must be one of [u8, u16, u32], but was {:?}", value);
                                                     }
-                                                    len_type =
-                                                        Some(value.get_ident().cloned().unwrap());
+                                                    len_type = Some(value.get_ident().cloned().unwrap());
                                                 }
                                                 Meta::NameValue(name_value) => {
                                                     if !cmp_ident(&name_value.path, "limit") {
@@ -133,16 +129,11 @@ fn parse_field_attribs(attrs: &[syn::Attribute]) -> Option<FieldAttribute> {
                                                     }
                                                     // We do have something like beserial(discriminant = 123).
                                                     // Parse discriminant.
-                                                    if let syn::Lit::Int(lit_int) = &name_value.lit
-                                                    {
-                                                        if let Ok(l) =
-                                                            lit_int.base10_parse::<usize>()
-                                                        {
+                                                    if let syn::Lit::Int(lit_int) = &name_value.lit {
+                                                        if let Ok(l) = lit_int.base10_parse::<usize>() {
                                                             limit = Some(l);
                                                         } else {
-                                                            panic!(
-                                                                "limit cannot be parsed as usize"
-                                                            );
+                                                            panic!("limit cannot be parsed as usize");
                                                         }
                                                     } else {
                                                         panic!("non-integer limit");
@@ -161,9 +152,7 @@ fn parse_field_attribs(attrs: &[syn::Attribute]) -> Option<FieldAttribute> {
                                         if let syn::NestedMeta::Meta(ref item) = nested {
                                             if let Meta::NameValue(meta_name_value) = item {
                                                 if cmp_ident(&meta_name_value.path, "default") {
-                                                    return Some(FieldAttribute::Skip(Some(
-                                                        meta_name_value.lit.clone(),
-                                                    )));
+                                                    return Some(FieldAttribute::Skip(Some(meta_name_value.lit.clone())));
                                                 }
                                             }
                                         }
@@ -187,9 +176,7 @@ fn parse_field_attribs(attrs: &[syn::Attribute]) -> Option<FieldAttribute> {
                                     // Parse discriminant.
                                     if let syn::Lit::Int(lit_int) = &name_value.lit {
                                         if let Ok(discriminant) = lit_int.base10_parse::<u64>() {
-                                            return Some(FieldAttribute::Discriminant(
-                                                discriminant,
-                                            ));
+                                            return Some(FieldAttribute::Discriminant(discriminant));
                                         } else {
                                             panic!("discriminant cannot be parsed as u64");
                                         }
@@ -241,10 +228,7 @@ fn parse_enum_attribs(ast: &syn::DeriveInput) -> (Option<syn::Ident>, bool) {
 }
 
 fn enum_has_data_attached(enum_def: &syn::DataEnum) -> bool {
-    enum_def
-        .variants
-        .iter()
-        .any(|variant| variant.fields != syn::Fields::Unit)
+    enum_def.variants.iter().any(|variant| variant.fields != syn::Fields::Unit)
 }
 
 fn expr_from_u64(value: u64) -> syn::Expr {
@@ -280,11 +264,7 @@ pub fn derive_serialize(input: proc_macro::TokenStream) -> proc_macro::TokenStre
 }
 
 /// None means skip, otherwise return (serialize_body, serialized_size_body) token streams.
-fn impl_serialize_field(
-    field: &syn::Field,
-    i: usize,
-    override_ident: Option<&syn::Ident>,
-) -> Option<(TokenStream, TokenStream)> {
+fn impl_serialize_field(field: &syn::Field, i: usize, override_ident: Option<&syn::Ident>) -> Option<(TokenStream, TokenStream)> {
     let len_type = match parse_field_attribs(&field.attrs) {
         Some(FieldAttribute::Skip(_)) => return None,
         Some(FieldAttribute::LenType(ty, _)) => Some(ty),
@@ -346,12 +326,7 @@ fn impl_serialize(ast: &syn::DeriveInput) -> TokenStream {
             let ty = if uvar {
                 enum_type.unwrap_or_else(|| Ident::new("u64", Span::call_site()))
             } else {
-                enum_type.unwrap_or_else(|| {
-                    panic!(
-                        "Serialize can not be derived for enum {} without repr(u*) or repr(i*)",
-                        name
-                    )
-                })
+                enum_type.unwrap_or_else(|| panic!("Serialize can not be derived for enum {} without repr(u*) or repr(i*)", name))
             };
 
             if enum_has_data_attached(enum_def) {
@@ -378,8 +353,7 @@ fn impl_serialize(ast: &syn::DeriveInput) -> TokenStream {
                     first = false;
 
                     let discriminant_expr = expr_from_u64(discriminant);
-                    let discriminant_ts =
-                        int_to_correct_type(quote! { #discriminant_expr }, &ty, uvar);
+                    let discriminant_ts = int_to_correct_type(quote! { #discriminant_expr }, &ty, uvar);
                     let variant_ident = &variant.ident;
                     // The match looks different depending on the type of the Fields.
                     match variant.fields {
@@ -397,9 +371,7 @@ fn impl_serialize(ast: &syn::DeriveInput) -> TokenStream {
                             let mut serialized_size_body_fields = Vec::<TokenStream>::new();
                             for field in fields.named.iter() {
                                 let ident = field.ident.as_ref().unwrap();
-                                if let Some((serialize, serialized_size)) =
-                                    impl_serialize_field(field, 0, Some(ident))
-                                {
+                                if let Some((serialize, serialized_size)) = impl_serialize_field(field, 0, Some(ident)) {
                                     serialize_body_fields.push(serialize);
                                     serialized_size_body_fields.push(serialized_size);
                                 }
@@ -407,18 +379,14 @@ fn impl_serialize(ast: &syn::DeriveInput) -> TokenStream {
                                 idents.push(ident);
                             }
 
-                            serialize_body_variants.push(
-                                quote! { #name::#variant_ident { #(ref #idents),* } => {
-                                    size += Serialize::serialize(&#discriminant_ts, writer)?;
-                                    #(#serialize_body_fields)*
-                                }, },
-                            );
-                            serialized_size_body_variants.push(
-                                quote! { #name::#variant_ident { #(ref #idents),* } => {
-                                    size += Serialize::serialized_size(&#discriminant_ts);
-                                    #(#serialized_size_body_fields)*
-                                }, },
-                            );
+                            serialize_body_variants.push(quote! { #name::#variant_ident { #(ref #idents),* } => {
+                                size += Serialize::serialize(&#discriminant_ts, writer)?;
+                                #(#serialize_body_fields)*
+                            }, });
+                            serialized_size_body_variants.push(quote! { #name::#variant_ident { #(ref #idents),* } => {
+                                size += Serialize::serialized_size(&#discriminant_ts);
+                                #(#serialized_size_body_fields)*
+                            }, });
                         }
                         syn::Fields::Unnamed(ref fields) => {
                             let mut idents = Vec::new();
@@ -427,43 +395,34 @@ fn impl_serialize(ast: &syn::DeriveInput) -> TokenStream {
 
                             for (i, field) in fields.unnamed.iter().enumerate() {
                                 let ident = syn::Ident::new(&format!("f{}", i), Span::call_site());
-                                if let Some((serialize, serialized_size)) =
-                                    impl_serialize_field(field, 0, Some(&ident))
-                                {
+                                if let Some((serialize, serialized_size)) = impl_serialize_field(field, 0, Some(&ident)) {
                                     serialize_body_fields.push(serialize);
                                     serialized_size_body_fields.push(serialized_size);
                                 }
                                 idents.push(ident);
                             }
 
-                            serialize_body_variants.push(
-                                quote! { #name::#variant_ident ( #(ref #idents),* ) => {
-                                    size += Serialize::serialize(&#discriminant_ts, writer)?;
-                                    #(#serialize_body_fields)*
-                                }, },
-                            );
-                            serialized_size_body_variants.push(
-                                quote! { #name::#variant_ident ( #(ref #idents),* ) => {
-                                    size += Serialize::serialized_size(&#discriminant_ts);
-                                    #(#serialized_size_body_fields)*
-                                }, },
-                            );
+                            serialize_body_variants.push(quote! { #name::#variant_ident ( #(ref #idents),* ) => {
+                                size += Serialize::serialize(&#discriminant_ts, writer)?;
+                                #(#serialize_body_fields)*
+                            }, });
+                            serialized_size_body_variants.push(quote! { #name::#variant_ident ( #(ref #idents),* ) => {
+                                size += Serialize::serialized_size(&#discriminant_ts);
+                                #(#serialized_size_body_fields)*
+                            }, });
                         }
                     }
                 }
 
                 serialize_body.push(quote! { match self { #(#serialize_body_variants)* } });
-                serialized_size_body
-                    .push(quote! { match self { #(#serialized_size_body_variants)* } });
+                serialized_size_body.push(quote! { match self { #(#serialized_size_body_variants)* } });
             } else {
                 // Serialization for enums that do not carry any data is easy.
                 // As defined here: https://doc.rust-lang.org/reference/items/enumerations.html
                 // these can be cast to an integer directly.
                 let discriminant = int_to_correct_type(quote! { *self }, &ty, uvar);
-                serialize_body
-                    .push(quote! { size += Serialize::serialize(&#discriminant, writer)?; });
-                serialized_size_body
-                    .push(quote! { size += Serialize::serialized_size(&#discriminant); });
+                serialize_body.push(quote! { size += Serialize::serialize(&#discriminant, writer)?; });
+                serialized_size_body.push(quote! { size += Serialize::serialized_size(&#discriminant); });
             }
         }
         Data::Struct(ref data_struct) => {
@@ -572,12 +531,7 @@ fn impl_deserialize(ast: &syn::DeriveInput) -> TokenStream {
             let ty = if uvar {
                 enum_type.unwrap_or_else(|| Ident::new("u64", Span::call_site()))
             } else {
-                enum_type.unwrap_or_else(|| {
-                    panic!(
-                        "Deserialize can not be derived for enum {} without repr(u*) or repr(i*)",
-                        name
-                    )
-                })
+                enum_type.unwrap_or_else(|| panic!("Deserialize can not be derived for enum {} without repr(u*) or repr(i*)", name))
             };
 
             // Deserialization works more generically.
@@ -602,9 +556,7 @@ fn impl_deserialize(ast: &syn::DeriveInput) -> TokenStream {
                             if !first {
                                 if let syn::Expr::Lit(ref expr_lit) = discriminant {
                                     if let syn::Lit::Int(lit_int) = &expr_lit.lit {
-                                        discriminant = expr_from_u64(
-                                            lit_int.base10_parse::<u64>().map(|x| x + 1).unwrap(),
-                                        );
+                                        discriminant = expr_from_u64(lit_int.base10_parse::<u64>().map(|x| x + 1).unwrap());
                                     } else {
                                         panic!("non-integer discriminant");
                                     }
@@ -622,9 +574,7 @@ fn impl_deserialize(ast: &syn::DeriveInput) -> TokenStream {
                             if !first {
                                 if let syn::Expr::Lit(ref expr_lit) = discriminant {
                                     if let syn::Lit::Int(lit_int) = &expr_lit.lit {
-                                        discriminant = expr_from_u64(
-                                            lit_int.base10_parse::<u64>().map(|x| x + 1).unwrap(),
-                                        );
+                                        discriminant = expr_from_u64(lit_int.base10_parse::<u64>().map(|x| x + 1).unwrap());
                                     } else {
                                         panic!("non-integer discriminant");
                                     }
@@ -647,18 +597,14 @@ fn impl_deserialize(ast: &syn::DeriveInput) -> TokenStream {
                         for field in fields.named.iter() {
                             field_cases.push(impl_deserialize_field(field));
                         }
-                        match_cases.push(
-                            quote! { #discriminant => Ok(#name::#ident { #(#field_cases)* }), },
-                        );
+                        match_cases.push(quote! { #discriminant => Ok(#name::#ident { #(#field_cases)* }), });
                     }
                     syn::Fields::Unnamed(ref fields) => {
                         let mut field_cases = Vec::<TokenStream>::new();
                         for field in fields.unnamed.iter() {
                             field_cases.push(impl_deserialize_field(field));
                         }
-                        match_cases.push(
-                            quote! { #discriminant => Ok(#name::#ident ( #(#field_cases)* )), },
-                        );
+                        match_cases.push(quote! { #discriminant => Ok(#name::#ident ( #(#field_cases)* )), });
                     }
                 }
             }

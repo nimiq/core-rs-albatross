@@ -33,38 +33,23 @@ fn pedersen_hash_works() {
     let primitive_out = pedersen_hash(bits.clone(), generators.clone());
 
     // Convert the result to a G1Gadget for easier comparison.
-    let primitive_out_var =
-        G1Gadget::alloc(cs.ns(|| "allocate primitive result"), || Ok(primitive_out)).unwrap();
+    let primitive_out_var = G1Gadget::alloc(cs.ns(|| "allocate primitive result"), || Ok(primitive_out)).unwrap();
 
     // Allocate the random bits in the circuit.
     let mut bits_var = vec![];
     for i in 0..3600 {
-        bits_var.push(
-            Boolean::alloc(cs.ns(|| format!("allocating input bit {}", i)), || {
-                Ok(&bits[i])
-            })
-            .unwrap(),
-        );
+        bits_var.push(Boolean::alloc(cs.ns(|| format!("allocating input bit {}", i)), || Ok(&bits[i])).unwrap());
     }
 
     // Allocate the Pedersen generators in the circuit.
     let mut c_generators = Vec::new();
     for i in 0..generators.len() {
-        let base = G1Gadget::alloc(
-            &mut cs.ns(|| format!("allocating pedersen generator {}", i)),
-            || Ok(&generators[i]),
-        )
-        .unwrap();
+        let base = G1Gadget::alloc(&mut cs.ns(|| format!("allocating pedersen generator {}", i)), || Ok(&generators[i])).unwrap();
         c_generators.push(base);
     }
 
     // Evaluate Pedersen hash using the gadget version.
-    let gadget_out = PedersenHashGadget::evaluate(
-        cs.ns(|| "evaluate pedersen gadget"),
-        &bits_var,
-        &c_generators,
-    )
-    .unwrap();
+    let gadget_out = PedersenHashGadget::evaluate(cs.ns(|| "evaluate pedersen gadget"), &bits_var, &c_generators).unwrap();
 
     assert_eq!(primitive_out_var, gadget_out)
 }

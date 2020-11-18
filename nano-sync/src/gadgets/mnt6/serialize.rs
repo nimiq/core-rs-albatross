@@ -12,10 +12,7 @@ use crate::utils::pad_point_bits;
 pub struct SerializeGadget;
 
 impl SerializeGadget {
-    pub fn serialize_g1<CS: r1cs_core::ConstraintSystem<MNT6Fr>>(
-        mut cs: CS,
-        point: &G1Gadget,
-    ) -> Result<Vec<Boolean>, SynthesisError> {
+    pub fn serialize_g1<CS: r1cs_core::ConstraintSystem<MNT6Fr>>(mut cs: CS, point: &G1Gadget) -> Result<Vec<Boolean>, SynthesisError> {
         // Get bits from the x coordinate.
         let x_bits = point.x.to_bits(cs.ns(|| "x to bits"))?;
 
@@ -28,10 +25,7 @@ impl SerializeGadget {
         Ok(bits)
     }
 
-    pub fn serialize_g2<CS: r1cs_core::ConstraintSystem<MNT6Fr>>(
-        mut cs: CS,
-        point: &G2Gadget,
-    ) -> Result<Vec<Boolean>, SynthesisError> {
+    pub fn serialize_g2<CS: r1cs_core::ConstraintSystem<MNT6Fr>>(mut cs: CS, point: &G2Gadget) -> Result<Vec<Boolean>, SynthesisError> {
         // Get bits from the x coordinate.
         let x_bits = point.x.to_bits(cs.ns(|| "x to bits"))?;
 

@@ -17,10 +17,7 @@ impl AccountTransactionVerification for VestingContractVerifier {
             return Err(TransactionError::SenderEqualsRecipient);
         }
 
-        if !transaction
-            .flags
-            .contains(TransactionFlags::CONTRACT_CREATION)
-        {
+        if !transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {
             warn!("Only contract creation is allowed");
             return Err(TransactionError::InvalidForRecipient);
         }
@@ -48,8 +45,7 @@ impl AccountTransactionVerification for VestingContractVerifier {
         assert_eq!(transaction.sender_type, AccountType::Vesting);
 
         // Verify signature.
-        let signature_proof: SignatureProof =
-            Deserialize::deserialize(&mut &transaction.proof[..])?;
+        let signature_proof: SignatureProof = Deserialize::deserialize(&mut &transaction.proof[..])?;
         if !signature_proof.verify(transaction.serialize_content().as_slice()) {
             warn!("Invalid signature");
             return Err(TransactionError::InvalidProof);

@@ -10,7 +10,6 @@ use utils::key_rng::{CryptoRng, Rng, SecureGenerate};
 
 use crate::errors::{KeysError, ParseError};
 
-
 pub struct PrivateKey(pub(super) ed25519_dalek::SecretKey);
 
 impl PrivateKey {
@@ -129,16 +128,16 @@ impl Default for PrivateKey {
 #[cfg(feature = "serde-derive")]
 mod serde_derive {
     use serde::{
-        ser::{Serialize, Serializer},
         de::{Deserialize, Deserializer, Error},
+        ser::{Serialize, Serializer},
     };
 
     use super::PrivateKey;
 
     impl Serialize for PrivateKey {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-            where
-                S: Serializer
+        where
+            S: Serializer,
         {
             serializer.serialize_bytes(self.as_bytes())
         }
@@ -146,12 +145,11 @@ mod serde_derive {
 
     impl<'de> Deserialize<'de> for PrivateKey {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-            where
-                D: Deserializer<'de>
+        where
+            D: Deserializer<'de>,
         {
             let data: &'de str = Deserialize::deserialize(deserializer)?;
-            data.parse()
-                .map_err(Error::custom)
+            data.parse().map_err(Error::custom)
         }
     }
 }

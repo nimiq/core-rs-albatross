@@ -131,20 +131,19 @@ impl SerializeContent for PublicKey {
 #[allow(clippy::derive_hash_xor_eq)] // TODO: Shouldn't be necessary
 impl Hash for PublicKey {}
 
-
 #[cfg(feature = "serde-derive")]
 mod serde_derive {
     use serde::{
-        ser::{Serialize, Serializer},
         de::{Deserialize, Deserializer, Error},
+        ser::{Serialize, Serializer},
     };
 
     use super::PublicKey;
 
     impl Serialize for PublicKey {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-            where
-                S: Serializer
+        where
+            S: Serializer,
         {
             serializer.serialize_bytes(self.as_bytes())
         }
@@ -152,12 +151,11 @@ mod serde_derive {
 
     impl<'de> Deserialize<'de> for PublicKey {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-            where
-                D: Deserializer<'de>
+        where
+            D: Deserializer<'de>,
         {
             let data: &'de str = Deserialize::deserialize(deserializer)?;
-            data.parse()
-                .map_err(Error::custom)
+            data.parse().map_err(Error::custom)
         }
     }
 }

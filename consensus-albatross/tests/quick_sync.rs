@@ -28,29 +28,17 @@ async fn peers_can_sync() {
     let blockchain1 = Arc::new(Blockchain::new(env1.clone(), NetworkId::UnitAlbatross).unwrap());
     let mempool1 = Mempool::new(Arc::clone(&blockchain1), MempoolConfig::default());
 
-    let keypair =
-        KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
-    let producer = BlockProducer::new(
-        Arc::clone(&blockchain1),
-        Arc::clone(&mempool1),
-        keypair.clone(),
-    );
+    let keypair = KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
+    let producer = BlockProducer::new(Arc::clone(&blockchain1), Arc::clone(&mempool1), keypair.clone());
 
     while policy::epoch_at(blockchain1.block_number()) < 2 {
         fill_micro_blocks(&producer, &blockchain1);
 
-        let (proposal, extrinsics) = producer.next_macro_block_proposal(
-            blockchain1.time.now() + blockchain1.block_number() as u64 * 1000,
-            0u32,
-            None,
-            vec![0x42],
-        );
+        let (proposal, extrinsics) =
+            producer.next_macro_block_proposal(blockchain1.time.now() + blockchain1.block_number() as u64 * 1000, 0u32, None, vec![0x42]);
 
         let block = sign_macro_block(&keypair, proposal, Some(extrinsics));
-        assert_eq!(
-            blockchain1.push(Block::Macro(block)),
-            Ok(PushResult::Extended)
-        );
+        assert_eq!(blockchain1.push(Block::Macro(block)), Ok(PushResult::Extended));
     }
 
     let net1 = Arc::new(MockNetwork::new(1));
@@ -78,11 +66,7 @@ async fn peers_can_sync() {
     // Request hashes
     let agent = Arc::clone(consensus2.agents().values().next().unwrap());
     let hashes = agent
-        .request_block_hashes(
-            vec![consensus2.blockchain.head_hash()],
-            2,
-            RequestBlockHashesFilter::ElectionOnly,
-        )
+        .request_block_hashes(vec![consensus2.blockchain.head_hash()], 2, RequestBlockHashesFilter::ElectionOnly)
         .await
         .expect("Should yield hashes");
     assert_eq!(hashes.hashes.len(), 1);
@@ -94,18 +78,12 @@ async fn peers_can_sync() {
         .await
         .expect("Should yield epoch");
     assert_eq!(epoch.history_len, 0);
-    assert_eq!(
-        epoch.block.hash(),
-        consensus1.blockchain.election_head_hash()
-    );
+    assert_eq!(epoch.block.hash(), consensus1.blockchain.election_head_hash());
 
     let sync_result = Consensus::sync_blockchain(Arc::downgrade(&consensus2)).await;
 
     assert!(sync_result.is_ok());
-    assert_eq!(
-        consensus2.blockchain.election_head_hash(),
-        consensus1.blockchain.election_head_hash(),
-    );
+    assert_eq!(consensus2.blockchain.election_head_hash(), consensus1.blockchain.election_head_hash(),);
 
     // Setup third peer (not synced yet).
     let env3 = VolatileEnvironment::new(10).unwrap();
@@ -120,13 +98,7 @@ async fn peers_can_sync() {
     for i in 1..4 {
         consensus3
             .blockchain
-            .push(
-                consensus1
-                    .blockchain
-                    .chain_store
-                    .get_block_at(i, true, None)
-                    .unwrap(),
-            )
+            .push(consensus1.blockchain.chain_store.get_block_at(i, true, None).unwrap())
             .unwrap();
     }
 
@@ -142,11 +114,7 @@ async fn peers_can_sync() {
     // Request hashes
     let agent = Arc::clone(consensus3.agents().values().next().unwrap());
     let hashes = agent
-        .request_block_hashes(
-            vec![consensus3.blockchain.head_hash()],
-            2,
-            RequestBlockHashesFilter::ElectionOnly,
-        )
+        .request_block_hashes(vec![consensus3.blockchain.head_hash()], 2, RequestBlockHashesFilter::ElectionOnly)
         .await
         .expect("Should yield hashes");
     assert_eq!(hashes.hashes.len(), 1);
@@ -158,16 +126,10 @@ async fn peers_can_sync() {
         .await
         .expect("Should yield epoch");
     assert_eq!(epoch.history_len, 0);
-    assert_eq!(
-        epoch.block.hash(),
-        consensus2.blockchain.election_head_hash()
-    );
+    assert_eq!(epoch.block.hash(), consensus2.blockchain.election_head_hash());
 
     let sync_result = Consensus::sync_blockchain(Arc::downgrade(&consensus3)).await;
 
     assert!(sync_result.is_ok());
-    assert_eq!(
-        consensus3.blockchain.election_head_hash(),
-        consensus1.blockchain.election_head_hash()
-    );
+    assert_eq!(consensus3.blockchain.election_head_hash(), consensus1.blockchain.election_head_hash());
 }

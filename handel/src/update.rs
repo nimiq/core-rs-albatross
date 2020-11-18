@@ -40,10 +40,7 @@ impl<C: AggregatableContribution> LevelUpdate<C> {
 
     /// Add a tag to the Update, resulting in a LeveelUpdateMessage which can be send over wire.
     /// * `tag` The message this aggregation runs over
-    pub fn with_tag<T: Clone + Debug + Serialize + Deserialize + Send + Sync>(
-        self,
-        tag: T,
-    ) -> LevelUpdateMessage<C, T> {
+    pub fn with_tag<T: Clone + Debug + Serialize + Deserialize + Send + Sync>(self, tag: T) -> LevelUpdateMessage<C, T> {
         LevelUpdateMessage { update: self, tag }
     }
 
@@ -59,10 +56,7 @@ impl<C: AggregatableContribution> LevelUpdate<C> {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct LevelUpdateMessage<
-    C: AggregatableContribution,
-    T: Clone + Debug + Serialize + Deserialize + Send + Sync,
-> {
+pub struct LevelUpdateMessage<C: AggregatableContribution, T: Clone + Debug + Serialize + Deserialize + Send + Sync> {
     /// The update for that level
     pub update: LevelUpdate<C>,
 
@@ -71,10 +65,6 @@ pub struct LevelUpdateMessage<
     pub tag: T,
 }
 
-impl<
-        C: AggregatableContribution + 'static,
-        T: Clone + Debug + Serialize + Deserialize + Send + Sync + 'static,
-    > Message for LevelUpdateMessage<C, T>
-{
+impl<C: AggregatableContribution + 'static, T: Clone + Debug + Serialize + Deserialize + Send + Sync + 'static> Message for LevelUpdateMessage<C, T> {
     const TYPE_ID: u64 = 121;
 }

@@ -28,28 +28,16 @@ impl VKCommitmentGadget {
 
         // Serialize the verifying key into bits.
         // Alpha G1
-        bits.extend(SerializeGadget::serialize_g1(
-            cs.ns(|| "serialize alpha g1"),
-            &vk.alpha_g1,
-        )?);
+        bits.extend(SerializeGadget::serialize_g1(cs.ns(|| "serialize alpha g1"), &vk.alpha_g1)?);
 
         // Beta G2
-        bits.extend(SerializeGadget::serialize_g2(
-            cs.ns(|| "serialize beta g2"),
-            &vk.beta_g2,
-        )?);
+        bits.extend(SerializeGadget::serialize_g2(cs.ns(|| "serialize beta g2"), &vk.beta_g2)?);
 
         // Gamma G2
-        bits.extend(SerializeGadget::serialize_g2(
-            cs.ns(|| "serialize gamma g2"),
-            &vk.gamma_g2,
-        )?);
+        bits.extend(SerializeGadget::serialize_g2(cs.ns(|| "serialize gamma g2"), &vk.gamma_g2)?);
 
         // Delta G2
-        bits.extend(SerializeGadget::serialize_g2(
-            cs.ns(|| "serialize delta g2"),
-            &vk.delta_g2,
-        )?);
+        bits.extend(SerializeGadget::serialize_g2(cs.ns(|| "serialize delta g2"), &vk.delta_g2)?);
 
         // Gamma ABC G1
         for i in 0..vk.gamma_abc_g1.len() {
@@ -60,15 +48,10 @@ impl VKCommitmentGadget {
         }
 
         // Calculate the Pedersen hash.
-        let hash = PedersenHashGadget::evaluate(
-            cs.ns(|| "calculate pedersen hash"),
-            &bits,
-            pedersen_generators,
-        )?;
+        let hash = PedersenHashGadget::evaluate(cs.ns(|| "calculate pedersen hash"), &bits, pedersen_generators)?;
 
         // Serialize the Pedersen hash.
-        let serialized_bits =
-            SerializeGadget::serialize_g1(cs.ns(|| "serialize pedersen hash"), &hash)?;
+        let serialized_bits = SerializeGadget::serialize_g1(cs.ns(|| "serialize pedersen hash"), &hash)?;
 
         let serialized_bits = reverse_inner_byte_order(&serialized_bits[..]);
 

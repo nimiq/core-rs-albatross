@@ -56,18 +56,11 @@ pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> {
     micro_state: ProduceMicroBlockState,
 }
 
-impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
-    Validator<TNetwork, TValidatorNetwork>
-{
+impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Validator<TNetwork, TValidatorNetwork> {
     const VIEW_CHANGE_DELAY: Duration = Duration::from_secs(10);
     const FORK_PROOFS_MAX_SIZE: usize = 1_000; // bytes
 
-    pub fn new(
-        consensus: Arc<Consensus<TNetwork>>,
-        network: Arc<TValidatorNetwork>,
-        signing_key: bls::KeyPair,
-        wallet_key: Option<keys::KeyPair>,
-    ) -> Self {
+    pub fn new(consensus: Arc<Consensus<TNetwork>>, network: Arc<TValidatorNetwork>, signing_key: bls::KeyPair, wallet_key: Option<keys::KeyPair>) -> Self {
         let consensus_event_rx = consensus.subscribe_events();
         let blockchain_event_rx = consensus.blockchain.notifier.write().as_stream();
         let fork_event_rx = consensus.blockchain.fork_notifier.write().as_stream();
@@ -136,10 +129,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                     view_change_proof: None,
                 };
 
-                let fork_proofs = self
-                    .blockchain_state
-                    .fork_proofs
-                    .get_fork_proofs_for_block(Self::FORK_PROOFS_MAX_SIZE);
+                let fork_proofs = self.blockchain_state.fork_proofs.get_fork_proofs_for_block(Self::FORK_PROOFS_MAX_SIZE);
                 self.micro_producer = Some(ProduceMicroBlock::new(
                     Arc::clone(&self.consensus.blockchain),
                     Arc::clone(&self.consensus.mempool),
@@ -163,28 +153,18 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                 self.on_blockchain_extended(hash);
                 self.init_epoch()
             }
-            BlockchainEvent::Rebranched(ref old_chain, ref new_chain) => {
-                self.on_blockchain_rebranched(old_chain, new_chain)
-            }
+            BlockchainEvent::Rebranched(ref old_chain, ref new_chain) => self.on_blockchain_rebranched(old_chain, new_chain),
         }
 
         self.init_block_producer();
     }
 
     fn on_blockchain_extended(&mut self, hash: &Blake2bHash) {
-        let block = self
-            .consensus
-            .blockchain
-            .get_block(hash, true)
-            .expect("Head block not found");
+        let block = self.consensus.blockchain.get_block(hash, true).expect("Head block not found");
         self.blockchain_state.fork_proofs.apply_block(&block);
     }
 
-    fn on_blockchain_rebranched(
-        &mut self,
-        old_chain: &[(Blake2bHash, Block)],
-        new_chain: &[(Blake2bHash, Block)],
-    ) {
+    fn on_blockchain_rebranched(&mut self, old_chain: &[(Blake2bHash, Block)], new_chain: &[(Blake2bHash, Block)]) {
         for (_hash, block) in old_chain.iter() {
             self.blockchain_state.fork_proofs.revert_block(block);
         }
@@ -227,10 +207,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
     }
 
     pub fn validator_id(&self) -> u16 {
-        self.epoch_state
-            .as_ref()
-            .expect("Validator not active")
-            .validator_id
+        self.epoch_state.as_ref().expect("Validator not active").validator_id
     }
 
     pub fn signing_key(&self) -> bls::KeyPair {
@@ -238,9 +215,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
     }
 }
 
-impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Future
-    for Validator<TNetwork, TValidatorNetwork>
-{
+impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Future for Validator<TNetwork, TValidatorNetwork> {
     type Output = ();
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {

@@ -14,7 +14,6 @@ use utils::key_store::Error as KeyStoreError;
 // #[cfg(feature = "validator")]
 // use validator::error::Error as ValidatorError;
 
-
 #[derive(Debug, Fail)]
 pub enum Error {
     #[fail(display = "Configuration error: {}", _0)]

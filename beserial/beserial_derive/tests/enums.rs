@@ -131,10 +131,7 @@ fn it_can_handle_enums_with_data() {
         Deserialize::deserialize(&mut &v[..]).unwrap()
     }
     assert_eq!(reserialize(TestWithData::A), TestWithData::A);
-    assert_eq!(
-        reserialize(TestWithData::B(5, true)),
-        TestWithData::B(5, true)
-    );
+    assert_eq!(reserialize(TestWithData::B(5, true)), TestWithData::B(5, true));
     assert_eq!(
         reserialize(TestWithData::C {
             test: 514,
@@ -166,8 +163,5 @@ fn it_can_handle_enums_with_data() {
         test2: false,
         v: vec![1, 2, 3],
     });
-    assert_eq!(
-        TestWithData::deserialize_from_vec(&mut &v[..]),
-        Err(SerializingError::LimitExceeded)
-    );
+    assert_eq!(TestWithData::deserialize_from_vec(&mut &v[..]), Err(SerializingError::LimitExceeded));
 }

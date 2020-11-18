@@ -59,14 +59,7 @@ pub mod inner {
             let indent_amount = 2 * NUM_INDENT.fetch_add(0, Ordering::Relaxed);
             let indent = compute_indent(indent_amount);
 
-            println!(
-                "{}{:8} {:.<pad$}{}",
-                indent,
-                end_info,
-                message,
-                final_constraints,
-                pad = 75 - indent_amount
-            );
+            println!("{}{:8} {:.<pad$}{}", indent, end_info, message, final_constraints, pad = 75 - indent_amount);
         }};
     }
 

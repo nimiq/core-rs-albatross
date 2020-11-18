@@ -16,10 +16,9 @@ pub use self::sha512::*;
 pub mod argon2kdf;
 pub mod hmac;
 pub mod pbkdf2;
-pub mod sha512;
 #[cfg(feature = "serde")]
 mod serde;
-
+pub mod sha512;
 
 #[macro_export]
 macro_rules! add_hash_trait_arr {
@@ -81,17 +80,7 @@ pub trait Hash: SerializeContent {
     }
 }
 
-pub trait HashOutput:
-    PartialEq
-    + Eq
-    + Clone
-    + Serialize
-    + Deserialize
-    + Sized
-    + SerializeContent
-    + Debug
-    + std::hash::Hash
-{
+pub trait HashOutput: PartialEq + Eq + Clone + Serialize + Deserialize + Sized + SerializeContent + Debug + std::hash::Hash {
     type Builder: Hasher<Output = Self>;
 
     fn as_bytes(&self) -> &[u8];
@@ -236,10 +225,7 @@ impl Argon2dHasher {
         config.mem_cost = kib;
         config.hash_length = 32;
         config.variant = argon2::Variant::Argon2d;
-        Argon2dHasher {
-            buf: Vec::new(),
-            config,
-        }
+        Argon2dHasher { buf: Vec::new(), config }
     }
 
     fn hash_bytes(&self, bytes: &[u8], salt: &[u8]) -> Argon2dHash {

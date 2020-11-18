@@ -13,19 +13,13 @@ use crate::constants::POINT_CAPACITY;
 /// pseudo-random. Furthermore, its input must have a fixed-length. The main advantage is that it
 /// is purely algebraic and its output is an elliptic curve point.
 /// The Pedersen hash also guarantees that the exponent of the resulting point H is not known.
-pub struct PedersenHashGadget<
-    P: SWModelParameters,
-    ConstraintF: PrimeField,
-    F: FieldGadget<P::BaseField, ConstraintF>,
-> {
+pub struct PedersenHashGadget<P: SWModelParameters, ConstraintF: PrimeField, F: FieldGadget<P::BaseField, ConstraintF>> {
     _params: PhantomData<P>,
     _cfield: PhantomData<ConstraintF>,
     _field: PhantomData<F>,
 }
 
-impl<P: SWModelParameters, ConstraintF: PrimeField, F: FieldGadget<P::BaseField, ConstraintF>>
-    PedersenHashGadget<P, ConstraintF, F>
-{
+impl<P: SWModelParameters, ConstraintF: PrimeField, F: FieldGadget<P::BaseField, ConstraintF>> PedersenHashGadget<P, ConstraintF, F> {
     /// Calculates the Pedersen hash. Given a vector of bits b_i we divide the vector into chunks
     /// of 752 bits (because that's the capacity of the MNT curves) and convert them into scalars
     /// like so:

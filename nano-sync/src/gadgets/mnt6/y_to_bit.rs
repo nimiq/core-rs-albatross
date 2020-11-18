@@ -16,10 +16,7 @@ impl YToBitGadget {
     /// Outputs a boolean representing the relation:
     /// y > half
     /// where half means the half point of the modulus of the underlying field. So, half = (p-1)/2.
-    pub fn y_to_bit_g1<CS: r1cs_core::ConstraintSystem<MNT6Fr>>(
-        mut cs: CS,
-        point: &G1Gadget,
-    ) -> Result<Boolean, SynthesisError> {
+    pub fn y_to_bit_g1<CS: r1cs_core::ConstraintSystem<MNT6Fr>>(mut cs: CS, point: &G1Gadget) -> Result<Boolean, SynthesisError> {
         let y_bit = Self::is_greater_half(&mut cs.ns(|| "calculate y bit"), &point.y)?;
 
         Ok(y_bit)
@@ -28,10 +25,7 @@ impl YToBitGadget {
     /// Outputs a boolean representing the relation:
     /// (y_c1 > half) || (y_c1 == 0 && y_c0 > half)
     /// where half means the half point of the modulus of the underlying field. So, half = (p-1)/2.
-    pub fn y_to_bit_g2<CS: r1cs_core::ConstraintSystem<MNT6Fr>>(
-        mut cs: CS,
-        point: &G2Gadget,
-    ) -> Result<Boolean, SynthesisError> {
+    pub fn y_to_bit_g2<CS: r1cs_core::ConstraintSystem<MNT6Fr>>(mut cs: CS, point: &G2Gadget) -> Result<Boolean, SynthesisError> {
         // Calculate the required inputs to the formula.
         let y_c1_bit = Self::is_greater_half(&mut cs.ns(|| "calculate y_c1_bit"), &point.y.c1)?;
 

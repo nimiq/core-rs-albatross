@@ -7,10 +7,9 @@ use nimiq_hash::Blake2bHash;
 use nimiq_primitives::policy;
 
 use crate::{
+    types::{Block, OrLatest, SlashedSlots, Slot, Stake, Stakes, Validator},
     Error,
-    types::{Block, OrLatest, Slot, SlashedSlots, Stakes, Validator, Stake},
 };
-
 
 #[async_trait]
 pub trait BlockchainInterface {
@@ -38,20 +37,17 @@ pub trait BlockchainInterface {
     async fn list_stakes(&self) -> Result<Stakes, Error>;
 }
 
-
 pub struct BlockchainDispatcher {
     blockchain: Arc<Blockchain>,
 }
 
 impl BlockchainDispatcher {
     pub fn new(blockchain: Arc<Blockchain>) -> Self {
-        Self {
-            blockchain
-        }
+        Self { blockchain }
     }
 }
 
-#[nimiq_jsonrpc_derive::service(rename_all="mixedCase")]
+#[nimiq_jsonrpc_derive::service(rename_all = "mixedCase")]
 #[async_trait]
 impl BlockchainInterface for BlockchainDispatcher {
     async fn block_number(&self) -> Result<u32, Error> {
@@ -75,14 +71,11 @@ impl BlockchainInterface for BlockchainDispatcher {
 
     async fn block_by_number(&self, block_number: OrLatest<u32>, include_transactions: bool) -> Result<Block, Error> {
         let block = match block_number {
-            OrLatest::Value(block_number) => {
-                self.blockchain
-                    .get_block_at(block_number, true)
-                    .ok_or_else(|| Error::BlockNotFound(block_number.into()))?
-            },
-            OrLatest::Latest => {
-                self.blockchain.head().clone()
-            }
+            OrLatest::Value(block_number) => self
+                .blockchain
+                .get_block_at(block_number, true)
+                .ok_or_else(|| Error::BlockNotFound(block_number.into()))?,
+            OrLatest::Latest => self.blockchain.head().clone(),
         };
 
         Ok(Block::from_block(&self.blockchain, block, include_transactions))
@@ -98,10 +91,8 @@ impl BlockchainInterface for BlockchainDispatcher {
 
         let view_number = if let Some(view_number) = view_number_opt {
             view_number
-        }
-        else {
-            self
-                .blockchain
+        } else {
+            self.blockchain
                 .chain_store
                 .get_block_at(block_number, false, None)
                 .ok_or_else(|| Error::BlockNotFound(block_number.into()))?
@@ -116,11 +107,9 @@ impl BlockchainInterface for BlockchainDispatcher {
         let block_number = self.blockchain.block_number();
         let staking_contract = self.blockchain.get_staking_contract();
 
-        let current_slashed_set =
-            staking_contract.current_lost_rewards() & staking_contract.current_disabled_slots();
+        let current_slashed_set = staking_contract.current_lost_rewards() & staking_contract.current_disabled_slots();
 
-        let previous_slashed_set =
-            staking_contract.previous_lost_rewards() & staking_contract.previous_disabled_slots();
+        let previous_slashed_set = staking_contract.previous_lost_rewards() & staking_contract.previous_disabled_slots();
 
         Ok(SlashedSlots {
             block_number,
@@ -144,17 +133,20 @@ impl BlockchainInterface for BlockchainDispatcher {
     async fn list_stakes(&self) -> Result<Stakes, Error> {
         let staking_contract = self.blockchain.get_staking_contract();
 
-        let active_validators = staking_contract.active_validators_by_key
+        let active_validators = staking_contract
+            .active_validators_by_key
             .iter()
             .map(|(public_key, validator)| Validator::from_active(public_key.clone(), &validator))
             .collect();
 
-        let inactive_validators = staking_contract.inactive_validators_by_key
+        let inactive_validators = staking_contract
+            .inactive_validators_by_key
             .iter()
             .map(|(public_key, validator)| Validator::from_inactive(public_key.clone(), &validator))
             .collect();
 
-        let inactive_stakes = staking_contract.inactive_stake_by_address
+        let inactive_stakes = staking_contract
+            .inactive_stake_by_address
             .iter()
             .map(|(address, stake)| Stake {
                 staker_address: address.clone(),
@@ -166,7 +158,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         Ok(Stakes {
             active_validators,
             inactive_validators,
-            inactive_stakes
+            inactive_stakes,
         })
     }
 }

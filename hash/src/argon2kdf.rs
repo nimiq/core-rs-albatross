@@ -5,12 +5,7 @@ use argon2::{Config, ThreadMode};
 const MEMORY_COST: u32 = 512;
 const PARALELLISM: u32 = 1;
 
-pub fn compute_argon2_kdf(
-    password: &[u8],
-    salt: &[u8],
-    iterations: u32,
-    derived_key_length: usize,
-) -> Result<Vec<u8>, Argon2Error> {
+pub fn compute_argon2_kdf(password: &[u8], salt: &[u8], iterations: u32, derived_key_length: usize) -> Result<Vec<u8>, Argon2Error> {
     let mut config = Config::default();
     config.time_cost = iterations;
     config.hash_length = derived_key_length as u32;

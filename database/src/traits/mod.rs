@@ -72,11 +72,8 @@ impl FromDatabaseValue for u32 {
     where
         Self: Sized,
     {
-        let lmdb_result: Result<&lmdb_zero::Unaligned<u32>, String> =
-            lmdb_zero::traits::FromLmdbBytes::from_lmdb_bytes(bytes);
-        Ok(lmdb_result
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
-            .get())
+        let lmdb_result: Result<&lmdb_zero::Unaligned<u32>, String> = lmdb_zero::traits::FromLmdbBytes::from_lmdb_bytes(bytes);
+        Ok(lmdb_result.map_err(|e| io::Error::new(io::ErrorKind::Other, e))?.get())
     }
 }
 
@@ -85,11 +82,8 @@ impl FromDatabaseValue for u64 {
     where
         Self: Sized,
     {
-        let lmdb_result: Result<&lmdb_zero::Unaligned<u64>, String> =
-            lmdb_zero::traits::FromLmdbBytes::from_lmdb_bytes(bytes);
-        Ok(lmdb_result
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
-            .get())
+        let lmdb_result: Result<&lmdb_zero::Unaligned<u64>, String> = lmdb_zero::traits::FromLmdbBytes::from_lmdb_bytes(bytes);
+        Ok(lmdb_result.map_err(|e| io::Error::new(io::ErrorKind::Other, e))?.get())
     }
 }
 

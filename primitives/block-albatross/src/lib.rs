@@ -18,21 +18,15 @@ mod multisig;
 
 use thiserror::Error;
 
-pub use block::{
-    Block, BlockBody, BlockComponentFlags, BlockComponents, BlockHeader, BlockJustification,
-    BlockType,
-};
+pub use block::{Block, BlockBody, BlockComponentFlags, BlockComponents, BlockHeader, BlockJustification, BlockType};
 pub use fork_proof::ForkProof;
 pub use macro_block::{MacroBlock, MacroBody, MacroHeader};
 pub use micro_block::{MicroBlock, MicroBody, MicroHeader, MicroJustification};
 pub use multisig::{IndividualSignature, MultiSignature};
 pub use pbft::{
-    PbftCommitMessage, PbftPrepareMessage, PbftProof, PbftProofBuilder, PbftProposal,
-    SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedPbftProposal,
+    PbftCommitMessage, PbftPrepareMessage, PbftProof, PbftProofBuilder, PbftProposal, SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedPbftProposal,
 };
-pub use view_change::{
-    SignedViewChange, ViewChange, ViewChangeProof, ViewChangeProofBuilder, ViewChanges,
-};
+pub use view_change::{SignedViewChange, ViewChange, ViewChangeProof, ViewChangeProofBuilder, ViewChanges};
 
 use crate::transaction::TransactionError;
 

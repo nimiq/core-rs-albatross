@@ -9,17 +9,14 @@ use futures::channel::oneshot::{channel as oneshot, Sender as OneshotSender};
 use futures::task::{noop_waker_ref, Context, Poll};
 use futures::{executor, future, FutureExt, Sink, SinkExt, Stream, StreamExt};
 use parking_lot::{Mutex, RwLock};
-use tokio::sync::broadcast::{
-    channel as broadcast, Receiver as BroadcastReceiver, Sender as BroadcastSender,
-};
+use tokio::sync::broadcast::{channel as broadcast, Receiver as BroadcastReceiver, Sender as BroadcastSender};
 
 use nimiq_network_interface::message::{peek_type, Message};
 use nimiq_network_interface::network::{Network, NetworkEvent};
 use nimiq_network_interface::peer::dispatch::{unbounded_dispatch, DispatchError};
 use nimiq_network_interface::peer::{CloseReason, Peer, SendError};
 
-pub type Channels =
-    Arc<RwLock<HashMap<u64, Pin<Box<dyn Sink<Vec<u8>, Error = DispatchError> + Send + Sync>>>>>;
+pub type Channels = Arc<RwLock<HashMap<u64, Pin<Box<dyn Sink<Vec<u8>, Error = DispatchError> + Send + Sync>>>>>;
 
 pub struct MockPeer {
     id: usize,
@@ -102,8 +99,7 @@ impl Peer for MockPeer {
         match self.tx.lock().as_mut() {
             Some(tx) => {
                 let mut serialized = Vec::with_capacity(msg.serialized_message_size());
-                msg.serialize_message(&mut serialized)
-                    .map_err(SendError::Serialization)?;
+                msg.serialize_message(&mut serialized).map_err(SendError::Serialization)?;
                 executor::block_on(tx.send(serialized))
             }
             None => Err(SendError::AlreadyClosed),
@@ -194,9 +190,7 @@ impl MockNetwork {
             .write()
             .insert(peer.id(), Arc::clone(&peer))
             .map_or((), |_| panic!("Duplicate peer '{}'", peer.id()));
-        self.event_tx
-            .send(NetworkEvent::PeerJoined(Arc::clone(&peer)))
-            .ok();
+        self.event_tx.send(NetworkEvent::PeerJoined(Arc::clone(&peer))).ok();
     }
 
     pub fn disconnect(&self) {
@@ -210,11 +204,7 @@ impl Network for MockNetwork {
     type PeerType = MockPeer;
 
     fn get_peers(&self) -> Vec<Arc<Self::PeerType>> {
-        self.peers
-            .read()
-            .values()
-            .map(|peer| Arc::clone(peer))
-            .collect()
+        self.peers.read().values().map(|peer| Arc::clone(peer)).collect()
     }
 
     fn get_peer(&self, peer_id: &<Self::PeerType as Peer>::Id) -> Option<Arc<Self::PeerType>> {
@@ -231,7 +221,7 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
-    use futures::{StreamExt, join};
+    use futures::{join, StreamExt};
 
     use beserial::{Deserialize, Serialize};
     use nimiq_network_interface::message::{Message, RequestMessage, ResponseMessage};
@@ -301,18 +291,11 @@ mod tests {
 
         let peer1 = net2.get_peer(&1).unwrap();
         tokio::spawn(async move {
-            peer1
-                .send(&TestMessage { id: 4711 })
-                .await
-                .expect("Send failed");
+            peer1.send(&TestMessage { id: 4711 }).await.expect("Send failed");
         });
 
         let peer2 = net1.get_peer(&2).unwrap();
-        let msg = peer2
-            .receive::<TestMessage>()
-            .next()
-            .await
-            .expect("Message expected");
+        let msg = peer2.receive::<TestMessage>().next().await.expect("Message expected");
         assert_eq!(msg.id, 4711);
     }
 
@@ -329,10 +312,7 @@ mod tests {
         tokio::spawn(async move {
             peer2.close(CloseReason::Other).await;
             // This message should not arrive.
-            peer2
-                .send(&TestMessage { id: 6969 })
-                .await
-                .expect_err("Message didn't fail");
+            peer2.send(&TestMessage { id: 6969 }).await.expect_err("Message didn't fail");
         });
 
         let mut events1 = net1.subscribe_events();
@@ -369,8 +349,7 @@ mod tests {
         });
 
         let peer2 = net1.get_peer(&2).unwrap();
-        let requests =
-            RequestResponse::<_, TestMessage, TestMessage>::new(peer2, Duration::new(1, 0));
+        let requests = RequestResponse::<_, TestMessage, TestMessage>::new(peer2, Duration::new(1, 0));
 
         let msg = TestMessage { id: 0 };
         let response = requests.request(msg).await.expect("TestMessage expected");

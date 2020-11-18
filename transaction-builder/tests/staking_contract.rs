@@ -5,9 +5,7 @@ use nimiq_account::AccountType;
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::networks::NetworkId;
-use nimiq_transaction::account::staking_contract::{
-    IncomingStakingTransactionData, OutgoingStakingTransactionProof, SelfStakingTransactionData,
-};
+use nimiq_transaction::account::staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionProof, SelfStakingTransactionData};
 use nimiq_transaction::{SignatureProof, Transaction};
 use nimiq_transaction_builder::{Recipient, TransactionBuilder};
 
@@ -43,10 +41,7 @@ fn it_can_verify_staker_transactions() {
     assert_eq!(tx2, tx);
 
     // Retire
-    let tx = make_self_transaction(
-        SelfStakingTransactionData::RetireStake(bls_pair.public_key.compress()),
-        150_000_000,
-    );
+    let tx = make_self_transaction(SelfStakingTransactionData::RetireStake(bls_pair.public_key.compress()), 150_000_000);
 
     let tx2 = TransactionBuilder::new_retire(
         Address::from([1u8; 20]),
@@ -61,10 +56,7 @@ fn it_can_verify_staker_transactions() {
     assert_eq!(tx2, tx);
 
     // Reactivate
-    let tx = make_self_transaction(
-        SelfStakingTransactionData::ReactivateStake(bls_pair.public_key.compress()),
-        150_000_000,
-    );
+    let tx = make_self_transaction(SelfStakingTransactionData::ReactivateStake(bls_pair.public_key.compress()), 150_000_000);
 
     let tx2 = TransactionBuilder::new_reactivate(
         Address::from([1u8; 20]),
@@ -273,25 +265,20 @@ fn it_can_verify_validator_transactions() {
 }
 
 fn bls_key_pair() -> BlsKeyPair {
-    const BLS_PRIVKEY: &str =
-        "93ded88af373537a2fad738892ae29cf012bb27875cb66af9278991acbcb8e44f414\
+    const BLS_PRIVKEY: &str = "93ded88af373537a2fad738892ae29cf012bb27875cb66af9278991acbcb8e44f414\
     9c27fe9d62a31ae8537fc4891e935e1303c511091095c0ad083a1cfc0f5f223c394c2d5109288e639cde0692facc9fd\
     221a806c0003835db99b423360000";
-    BlsKeyPair::from_secret(
-        &Deserialize::deserialize(&mut &hex::decode(BLS_PRIVKEY).unwrap()[..]).unwrap(),
-    )
+    BlsKeyPair::from_secret(&Deserialize::deserialize(&mut &hex::decode(BLS_PRIVKEY).unwrap()[..]).unwrap())
 }
 
 fn ed25519_key_pair() -> KeyPair {
-    let priv_key: PrivateKey =
-        Deserialize::deserialize(&mut &hex::decode(STAKER_PRIVATE_KEY).unwrap()[..]).unwrap();
+    let priv_key: PrivateKey = Deserialize::deserialize(&mut &hex::decode(STAKER_PRIVATE_KEY).unwrap()[..]).unwrap();
     priv_key.into()
 }
 
 fn make_incoming_transaction(data: IncomingStakingTransactionData, value: u64) -> Transaction {
     match data {
-        IncomingStakingTransactionData::Stake { .. }
-        | IncomingStakingTransactionData::CreateValidator { .. } => Transaction::new_extended(
+        IncomingStakingTransactionData::Stake { .. } | IncomingStakingTransactionData::CreateValidator { .. } => Transaction::new_extended(
             Address::from_any_str(STAKER_ADDRESS).unwrap(),
             AccountType::Basic,
             Address::from([1u8; 20]),
@@ -316,21 +303,11 @@ fn make_incoming_transaction(data: IncomingStakingTransactionData, value: u64) -
     }
 }
 
-fn make_signed_incoming_transaction(
-    data: IncomingStakingTransactionData,
-    value: u64,
-    bls_pair: &BlsKeyPair,
-    key_pair: &KeyPair,
-) -> Transaction {
+fn make_signed_incoming_transaction(data: IncomingStakingTransactionData, value: u64, bls_pair: &BlsKeyPair, key_pair: &KeyPair) -> Transaction {
     let mut tx = make_incoming_transaction(data, value);
-    tx.data = IncomingStakingTransactionData::set_validator_signature_on_data(
-        &tx.data,
-        bls_pair.sign(&tx.serialize_content()).compress(),
-    )
-    .unwrap();
+    tx.data = IncomingStakingTransactionData::set_validator_signature_on_data(&tx.data, bls_pair.sign(&tx.serialize_content()).compress()).unwrap();
 
-    tx.proof = SignatureProof::from(key_pair.public, key_pair.sign(&tx.serialize_content()))
-        .serialize_to_vec();
+    tx.proof = SignatureProof::from(key_pair.public, key_pair.sign(&tx.serialize_content())).serialize_to_vec();
     tx
 }
 
@@ -346,10 +323,7 @@ fn make_unstake_transaction(key_pair: &KeyPair, value: u64) -> Transaction {
         1,
         NetworkId::Dummy,
     );
-    let proof = OutgoingStakingTransactionProof::Unstake(SignatureProof::from(
-        key_pair.public,
-        key_pair.sign(&tx.serialize_content()),
-    ));
+    let proof = OutgoingStakingTransactionProof::Unstake(SignatureProof::from(key_pair.public, key_pair.sign(&tx.serialize_content())));
     tx.proof = proof.serialize_to_vec();
     tx
 }
@@ -386,10 +360,8 @@ fn make_self_transaction(data: SelfStakingTransactionData, value: u64) -> Transa
         1,
         NetworkId::Dummy,
     );
-    let private_key =
-        PrivateKey::deserialize_from_vec(&hex::decode(STAKER_PRIVATE_KEY).unwrap()).unwrap();
+    let private_key = PrivateKey::deserialize_from_vec(&hex::decode(STAKER_PRIVATE_KEY).unwrap()).unwrap();
     let key_pair = KeyPair::from(private_key);
-    tx.proof = SignatureProof::from(key_pair.public, key_pair.sign(&tx.serialize_content()))
-        .serialize_to_vec();
+    tx.proof = SignatureProof::from(key_pair.public, key_pair.sign(&tx.serialize_content())).serialize_to_vec();
     tx
 }

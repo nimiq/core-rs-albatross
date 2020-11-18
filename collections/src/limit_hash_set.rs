@@ -210,10 +210,7 @@ where
     /// assert_eq!(diff, [4].iter().collect());
     /// ```
     pub fn difference<'a>(&'a self, other: &'a LimitHashSet<T>) -> Difference<'a, T> {
-        Difference {
-            iter: self.iter(),
-            other,
-        }
+        Difference { iter: self.iter(), other }
     }
 
     /// Visits the values representing the symmetric difference,
@@ -237,10 +234,7 @@ where
     /// assert_eq!(diff1, diff2);
     /// assert_eq!(diff1, [1, 4].iter().collect());
     /// ```
-    pub fn symmetric_difference<'a>(
-        &'a self,
-        other: &'a LimitHashSet<T>,
-    ) -> SymmetricDifference<'a, T> {
+    pub fn symmetric_difference<'a>(&'a self, other: &'a LimitHashSet<T>) -> SymmetricDifference<'a, T> {
         SymmetricDifference {
             iter: self.difference(other).chain(other.difference(self)),
         }
@@ -265,10 +259,7 @@ where
     /// assert_eq!(intersection, [2, 3].iter().collect());
     /// ```
     pub fn intersection<'a>(&'a self, other: &'a LimitHashSet<T>) -> Intersection<'a, T> {
-        Intersection {
-            iter: self.iter(),
-            other,
-        }
+        Intersection { iter: self.iter(), other }
     }
 
     /// Visits the values representing the union,
@@ -918,9 +909,7 @@ where
     T: Eq + Hash + Clone,
 {
     fn clone(&self) -> SymmetricDifference<'a, T> {
-        SymmetricDifference {
-            iter: self.iter.clone(),
-        }
+        SymmetricDifference { iter: self.iter.clone() }
     }
 }
 
@@ -954,9 +943,7 @@ where
     T: Eq + Hash + Clone,
 {
     fn clone(&self) -> Union<'a, T> {
-        Union {
-            iter: self.iter.clone(),
-        }
+        Union { iter: self.iter.clone() }
     }
 }
 
@@ -993,9 +980,7 @@ fn assert_covariance() {
     fn difference<'a, 'new>(v: Difference<'a, &'static str>) -> Difference<'a, &'new str> {
         v
     }
-    fn symmetric_difference<'a, 'new>(
-        v: SymmetricDifference<'a, &'static str>,
-    ) -> SymmetricDifference<'a, &'new str> {
+    fn symmetric_difference<'a, 'new>(v: SymmetricDifference<'a, &'static str>) -> SymmetricDifference<'a, &'new str> {
         v
     }
     fn intersection<'a, 'new>(v: Intersection<'a, &'static str>) -> Intersection<'a, &'new str> {

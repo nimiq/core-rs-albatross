@@ -108,13 +108,8 @@ impl<K: Eq + Hash + Debug> Timers<K> {
     }
 
     // Internal functions
-    fn set_delay_guarded<F: Send + 'static>(
-        &self,
-        key: K,
-        func: F,
-        delay: Duration,
-        delays: &mut MutexGuard<HashMap<K, oneshot::Sender<()>>>,
-    ) where
+    fn set_delay_guarded<F: Send + 'static>(&self, key: K, func: F, delay: Duration, delays: &mut MutexGuard<HashMap<K, oneshot::Sender<()>>>)
+    where
         F: FnOnce(),
     {
         if delays.contains_key(&key) {
@@ -162,11 +157,7 @@ impl<K: Eq + Hash + Debug> Timers<K> {
         tokio::spawn(task);
     }
 
-    fn clear_timer_guarded(
-        &self,
-        key: &K,
-        guard: &mut MutexGuard<HashMap<K, oneshot::Sender<()>>>,
-    ) {
+    fn clear_timer_guarded(&self, key: &K, guard: &mut MutexGuard<HashMap<K, oneshot::Sender<()>>>) {
         let handle = guard.remove(key);
         if let Some(handle) = handle {
             handle.send(()).unwrap_or(());

@@ -57,9 +57,7 @@ impl Address {
         spec.symbols.push_str(Address::NIMIQ_ALPHABET);
         let encoding = spec.encoding().unwrap();
 
-        let b_vec = encoding
-            .decode(friendly_addr_wospace[4..].as_bytes())
-            .unwrap();
+        let b_vec = encoding.decode(friendly_addr_wospace[4..].as_bytes()).unwrap();
         let mut b = [0; 20];
         b.copy_from_slice(&b_vec[..b_vec.len()]);
         Ok(Address(b))
@@ -71,23 +69,12 @@ impl Address {
         let encoding = spec.encoding().unwrap();
 
         let base32 = encoding.encode(&self.0);
-        let check_string = "00".to_string()
-            + &(98 - Address::iban_check(&(base32.clone() + Address::CCODE + "00"))).to_string();
-        let check = check_string
-            .chars()
-            .skip(check_string.len() - 2)
-            .take(2)
-            .collect::<String>();
+        let check_string = "00".to_string() + &(98 - Address::iban_check(&(base32.clone() + Address::CCODE + "00"))).to_string();
+        let check = check_string.chars().skip(check_string.len() - 2).take(2).collect::<String>();
         let friendly_addr = Address::CCODE.to_string() + &check + &base32;
         let mut friendly_spaces = String::with_capacity(36 + 8);
         for i in 0..9 {
-            friendly_spaces.push_str(
-                &friendly_addr
-                    .chars()
-                    .skip(4 * i)
-                    .take(4)
-                    .collect::<String>(),
-            );
+            friendly_spaces.push_str(&friendly_addr.chars().skip(4 * i).take(4).collect::<String>());
             if i != 8 {
                 friendly_spaces.push(' ');
             }
@@ -154,16 +141,16 @@ impl<'a> From<&'a KeyPair> for Address {
 #[cfg(feature = "serde-derive")]
 mod serde_derive {
     use serde::{
-        ser::{Serialize, Serializer},
         de::{Deserialize, Deserializer, Error},
+        ser::{Serialize, Serializer},
     };
 
     use super::Address;
 
     impl Serialize for Address {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-            where
-                S: Serializer
+        where
+            S: Serializer,
         {
             serializer.serialize_str(&self.to_user_friendly_address())
         }
@@ -171,12 +158,11 @@ mod serde_derive {
 
     impl<'de> Deserialize<'de> for Address {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-            where
-                D: Deserializer<'de>
+        where
+            D: Deserializer<'de>,
         {
             let s: &'de str = Deserialize::deserialize(deserializer)?;
-            Address::from_any_str(s)
-                .map_err(Error::custom)
+            Address::from_any_str(s).map_err(Error::custom)
         }
     }
 }

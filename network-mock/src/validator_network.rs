@@ -33,11 +33,7 @@ impl ValidatorNetwork for MockValidatorNetwork {
     /// Sends Message `msg` to Validatrs with ids `validator_ids`.
     /// Returns a Vector of `Result<(), NetworkError>`, with each index `i` indicating wether or not the sending to
     /// validator `validator_ids[i]` has happened or not.
-    async fn send_to<M: Message>(
-        &self,
-        validator_ids: &[usize],
-        msg: &M,
-    ) -> Vec<Result<(), NetworkError>> {
+    async fn send_to<M: Message>(&self, validator_ids: &[usize], msg: &M) -> Vec<Result<(), NetworkError>> {
         // accumulate results
         let mut res: Vec<Result<(), NetworkError>> = vec![];
 
@@ -73,10 +69,7 @@ impl ValidatorNetwork for MockValidatorNetwork {
     }
 
     /// Receive messages of type `M` only from the specified set of validators `validator_ids`.
-    fn receive_from<M: Message>(
-        &self,
-        validator_ids: &[usize],
-    ) -> Pin<Box<dyn Stream<Item = (M, usize)> + Send>> {
+    fn receive_from<M: Message>(&self, validator_ids: &[usize]) -> Pin<Box<dyn Stream<Item = (M, usize)> + Send>> {
         // select over all streams for every validator_id in validator_ids
         stream::select_all(validator_ids.iter().map(|id| {
             // get the corresponding peer from the underlying MockNetwork
@@ -241,10 +234,7 @@ mod tests {
             let msg1 = input.next().await.unwrap();
             let msg2 = input.next().await.unwrap();
             // make sure both messages were received as requested
-            assert!(
-                (msg1.0 == om1 && msg2.0 == om2 && msg1.1 == 2 && msg2.1 == 3)
-                    || (msg1.0 == om2 && msg2.0 == om1 && msg1.1 == 3 && msg2.1 == 2)
-            );
+            assert!((msg1.0 == om1 && msg2.0 == om2 && msg1.1 == 2 && msg2.1 == 3) || (msg1.0 == om2 && msg2.0 == om1 && msg1.1 == 3 && msg2.1 == 2));
         });
 
         // net1 must not receive the message from net2, but it also must receive the message from net 3

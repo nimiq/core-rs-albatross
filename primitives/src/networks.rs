@@ -5,7 +5,6 @@ use thiserror::Error;
 
 use beserial::{Deserialize, Serialize};
 
-
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[repr(u8)]
 pub enum NetworkId {

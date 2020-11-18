@@ -1,10 +1,7 @@
 use std::convert::TryFrom;
 
 use beserial::Serialize;
-use nimiq_account::{
-    Account, AccountTransactionInteraction, AccountType, BasicAccount, Inherent, InherentType,
-    PrunedAccount,
-};
+use nimiq_account::{Account, AccountTransactionInteraction, AccountType, BasicAccount, Inherent, InherentType, PrunedAccount};
 use nimiq_account::{Receipt, Receipts};
 use nimiq_accounts::Accounts;
 use nimiq_database::volatile::VolatileEnvironment;
@@ -38,16 +35,11 @@ fn it_can_commit_and_revert_a_block_body() {
 
     let mut txn = WriteTransaction::new(&env);
 
-    assert!(accounts
-        .commit(&mut txn, &[], &[reward.clone()], 1, 1)
-        .is_ok());
+    assert!(accounts.commit(&mut txn, &[], &[reward.clone()], 1, 1).is_ok());
 
     txn.commit();
 
-    assert_eq!(
-        accounts.get(&address_validator, None).balance(),
-        Coin::from_u64_unchecked(10000)
-    );
+    assert_eq!(accounts.get(&address_validator, None).balance(), Coin::from_u64_unchecked(10000));
 
     let hash1 = accounts.hash(None);
 
@@ -66,38 +58,25 @@ fn it_can_commit_and_revert_a_block_body() {
 
     let mut txn = WriteTransaction::new(&env);
 
-    assert!(accounts
-        .commit(&mut txn, &transactions, &[reward.clone()], 2, 2)
-        .is_ok());
+    assert!(accounts.commit(&mut txn, &transactions, &[reward.clone()], 2, 2).is_ok());
 
     txn.commit();
 
-    assert_eq!(
-        accounts.get(&address_recipient, None).balance(),
-        Coin::from_u64_unchecked(10)
-    );
+    assert_eq!(accounts.get(&address_recipient, None).balance(), Coin::from_u64_unchecked(10));
 
-    assert_eq!(
-        accounts.get(&address_validator, None).balance(),
-        Coin::from_u64_unchecked(10000 + 10000 - 10)
-    );
+    assert_eq!(accounts.get(&address_validator, None).balance(), Coin::from_u64_unchecked(10000 + 10000 - 10));
 
     assert_ne!(hash1, accounts.hash(None));
 
     let mut txn = WriteTransaction::new(&env);
 
-    assert!(accounts
-        .revert(&mut txn, &transactions, &[reward], 2, 2, &receipts)
-        .is_ok());
+    assert!(accounts.revert(&mut txn, &transactions, &[reward], 2, 2, &receipts).is_ok());
 
     txn.commit();
 
     assert_eq!(accounts.get(&address_recipient, None).balance(), Coin::ZERO);
 
-    assert_eq!(
-        accounts.get(&address_validator, None).balance(),
-        Coin::from_u64_unchecked(10000)
-    );
+    assert_eq!(accounts.get(&address_validator, None).balance(), Coin::from_u64_unchecked(10000));
 
     assert_eq!(hash1, accounts.hash(None));
 }
@@ -117,10 +96,7 @@ fn it_correctly_rewards_validators() {
     let address_recipient_2 = Address::from([4u8; Address::SIZE]);
 
     // Validator 1 mines first block.
-    assert_eq!(
-        accounts.get(&address_validator_1, None).balance(),
-        Coin::ZERO
-    );
+    assert_eq!(accounts.get(&address_validator_1, None).balance(), Coin::ZERO);
 
     let reward = Inherent {
         ty: InherentType::Reward,
@@ -136,10 +112,7 @@ fn it_correctly_rewards_validators() {
     txn.commit();
 
     // Create transactions to Recipient 1 and Recipient 2.
-    assert_eq!(
-        accounts.get(&address_validator_1, None).balance(),
-        Coin::from_u64_unchecked(10000)
-    );
+    assert_eq!(accounts.get(&address_validator_1, None).balance(), Coin::from_u64_unchecked(10000));
 
     let value1 = Coin::from_u64_unchecked(5);
 
@@ -149,29 +122,12 @@ fn it_correctly_rewards_validators() {
 
     let fee2 = Coin::from_u64_unchecked(11);
 
-    let tx1 = Transaction::new_basic(
-        address_validator_1.clone(),
-        address_recipient_1.clone(),
-        value1,
-        fee1,
-        2,
-        NetworkId::Main,
-    );
+    let tx1 = Transaction::new_basic(address_validator_1.clone(), address_recipient_1.clone(), value1, fee1, 2, NetworkId::Main);
 
-    let tx2 = Transaction::new_basic(
-        address_validator_1.clone(),
-        address_recipient_2.clone(),
-        value2,
-        fee2,
-        2,
-        NetworkId::Main,
-    );
+    let tx2 = Transaction::new_basic(address_validator_1.clone(), address_recipient_2.clone(), value2, fee2, 2, NetworkId::Main);
 
     // Validator 2 mines second block.
-    assert_eq!(
-        accounts.get(&address_validator_2, None).balance(),
-        Coin::ZERO
-    );
+    assert_eq!(accounts.get(&address_validator_2, None).balance(), Coin::ZERO);
 
     let reward = Inherent {
         ty: InherentType::Reward,
@@ -182,9 +138,7 @@ fn it_correctly_rewards_validators() {
 
     let mut txn = WriteTransaction::new(&env);
 
-    assert!(accounts
-        .commit(&mut txn, &vec![tx1, tx2], &[reward], 2, 2)
-        .is_ok());
+    assert!(accounts.commit(&mut txn, &vec![tx1, tx2], &[reward], 2, 2).is_ok());
 
     txn.commit();
 
@@ -241,9 +195,7 @@ fn it_checks_for_sufficient_funds() {
     {
         let mut txn = WriteTransaction::new(&env);
 
-        assert!(accounts
-            .commit(&mut txn, &[tx.clone()], &[reward.clone()], 1, 1)
-            .is_err());
+        assert!(accounts.commit(&mut txn, &[tx.clone()], &[reward.clone()], 1, 1).is_err());
     }
 
     assert_eq!(accounts.get(&address_sender, None).balance(), Coin::ZERO);
@@ -256,16 +208,11 @@ fn it_checks_for_sufficient_funds() {
 
     let mut txn = WriteTransaction::new(&env);
 
-    assert!(accounts
-        .commit(&mut txn, &[], &[reward.clone()], 1, 1)
-        .is_ok());
+    assert!(accounts.commit(&mut txn, &[], &[reward.clone()], 1, 1).is_ok());
 
     txn.commit();
 
-    assert_eq!(
-        accounts.get(&address_sender, None).balance(),
-        Coin::from_u64_unchecked(10000)
-    );
+    assert_eq!(accounts.get(&address_sender, None).balance(), Coin::from_u64_unchecked(10000));
 
     assert_eq!(accounts.get(&address_recipient, None).balance(), Coin::ZERO);
 
@@ -279,15 +226,10 @@ fn it_checks_for_sufficient_funds() {
     {
         let mut txn = WriteTransaction::new(&env);
 
-        assert!(accounts
-            .commit(&mut txn, &[tx.clone()], &[reward.clone()], 2, 2)
-            .is_err());
+        assert!(accounts.commit(&mut txn, &[tx.clone()], &[reward.clone()], 2, 2).is_err());
     }
 
-    assert_eq!(
-        accounts.get(&address_sender, None).balance(),
-        Coin::from_u64_unchecked(10000)
-    );
+    assert_eq!(accounts.get(&address_sender, None).balance(), Coin::from_u64_unchecked(10000));
 
     assert_eq!(accounts.get(&address_recipient, None).balance(), Coin::ZERO);
 
@@ -303,15 +245,10 @@ fn it_checks_for_sufficient_funds() {
     {
         let mut txn = WriteTransaction::new(&env);
 
-        assert!(accounts
-            .commit(&mut txn, &vec![tx, tx2], &[reward], 2, 2)
-            .is_err());
+        assert!(accounts.commit(&mut txn, &vec![tx, tx2], &[reward], 2, 2).is_err());
     }
 
-    assert_eq!(
-        accounts.get(&address_sender, None).balance(),
-        Coin::from_u64_unchecked(10000)
-    );
+    assert_eq!(accounts.get(&address_sender, None).balance(), Coin::from_u64_unchecked(10000));
 
     assert_eq!(accounts.get(&address_recipient, None).balance(), Coin::ZERO);
 
@@ -338,9 +275,7 @@ fn it_correctly_prunes_account() {
     // Give a block reward
     let mut txn = WriteTransaction::new(&env);
 
-    assert!(accounts
-        .commit(&mut txn, &[], &[reward.clone()], 1, 1)
-        .is_ok());
+    assert!(accounts.commit(&mut txn, &[], &[reward.clone()], 1, 1).is_ok());
 
     txn.commit();
 
@@ -364,19 +299,13 @@ fn it_correctly_prunes_account() {
         NetworkId::Dummy,
     );
 
-    tx_create.proof = SignatureProof::from(
-        key_pair.public,
-        key_pair.sign(&tx_create.serialize_content()),
-    )
-    .serialize_to_vec();
+    tx_create.proof = SignatureProof::from(key_pair.public, key_pair.sign(&tx_create.serialize_content())).serialize_to_vec();
 
     let contract_address = tx_create.contract_creation_address();
 
     let mut txn = WriteTransaction::new(&env);
 
-    assert!(accounts
-        .commit(&mut txn, &[tx_create.clone()], &[reward.clone()], 2, 2)
-        .is_ok());
+    assert!(accounts.commit(&mut txn, &[tx_create.clone()], &[reward.clone()], 2, 2).is_ok());
 
     txn.commit();
 
@@ -392,17 +321,11 @@ fn it_correctly_prunes_account() {
 
     tx_prune.sender_type = AccountType::Vesting;
 
-    tx_prune.proof = SignatureProof::from(
-        key_pair.public,
-        key_pair.sign(&tx_prune.serialize_content()),
-    )
-    .serialize_to_vec();
+    tx_prune.proof = SignatureProof::from(key_pair.public, key_pair.sign(&tx_prune.serialize_content())).serialize_to_vec();
 
     let mut pruned_account = accounts.get(&contract_address, None);
 
-    pruned_account
-        .commit_outgoing_transaction(&tx_prune, 2, 2)
-        .unwrap();
+    pruned_account.commit_outgoing_transaction(&tx_prune, 2, 2).unwrap();
 
     let receipts = Receipts {
         receipts: vec![Receipt::PrunedAccount(PrunedAccount {
@@ -413,10 +336,7 @@ fn it_correctly_prunes_account() {
 
     let mut txn = WriteTransaction::new(&env);
 
-    assert_eq!(
-        accounts.commit(&mut txn, &[tx_prune.clone()], &[reward.clone()], 3, 3),
-        Ok(receipts.clone())
-    );
+    assert_eq!(accounts.commit(&mut txn, &[tx_prune.clone()], &[reward.clone()], 3, 3), Ok(receipts.clone()));
 
     txn.commit();
 
@@ -430,9 +350,7 @@ fn it_correctly_prunes_account() {
     // Now revert pruning
     let mut txn = WriteTransaction::new(&env);
 
-    assert!(accounts
-        .revert(&mut txn, &[tx_prune], &[reward.clone()], 3, 3, &receipts)
-        .is_ok());
+    assert!(accounts.revert(&mut txn, &[tx_prune], &[reward.clone()], 3, 3, &receipts).is_ok());
 
     txn.commit();
 
@@ -445,16 +363,7 @@ fn it_correctly_prunes_account() {
     // Now revert account
     let mut txn = WriteTransaction::new(&env);
 
-    assert!(accounts
-        .revert(
-            &mut txn,
-            &[tx_create],
-            &[reward],
-            2,
-            2,
-            &Receipts::default()
-        )
-        .is_ok());
+    assert!(accounts.revert(&mut txn, &[tx_create], &[reward], 2, 2, &Receipts::default()).is_ok());
 
     txn.commit();
 
@@ -503,23 +412,9 @@ fn can_generate_accounts_proof() {
 
     let fee2 = Coin::from_u64_unchecked(11);
 
-    let tx1 = Transaction::new_basic(
-        address_validator_1.clone(),
-        address_recipient_1.clone(),
-        value1,
-        fee1,
-        2,
-        NetworkId::Main,
-    );
+    let tx1 = Transaction::new_basic(address_validator_1.clone(), address_recipient_1.clone(), value1, fee1, 2, NetworkId::Main);
 
-    let tx2 = Transaction::new_basic(
-        address_validator_1.clone(),
-        address_recipient_2.clone(),
-        value2,
-        fee2,
-        2,
-        NetworkId::Main,
-    );
+    let tx2 = Transaction::new_basic(address_validator_1.clone(), address_recipient_2.clone(), value2, fee2, 2, NetworkId::Main);
 
     let reward = Inherent {
         ty: InherentType::Reward,
@@ -530,16 +425,13 @@ fn can_generate_accounts_proof() {
 
     let mut txn = WriteTransaction::new(&env);
 
-    assert!(accounts
-        .commit(&mut txn, &vec![tx1, tx2], &[reward], 2, 2)
-        .is_ok());
+    assert!(accounts.commit(&mut txn, &vec![tx1, tx2], &[reward], 2, 2).is_ok());
 
     txn.commit();
 
     let mut read_accs_txn = ReadTransaction::new(&env);
 
-    let mut proof1 =
-        accounts.get_accounts_proof(&mut read_accs_txn, &[address_validator_1.clone()]);
+    let mut proof1 = accounts.get_accounts_proof(&mut read_accs_txn, &[address_validator_1.clone()]);
 
     assert!(proof1.verify());
 
@@ -556,10 +448,7 @@ fn can_generate_accounts_proof() {
 
     assert_eq!(None, proof1.get_account(&address_recipient_2));
 
-    let mut proof2 = accounts.get_accounts_proof(
-        &mut read_accs_txn,
-        &[address_recipient_2.clone(), address_validator_2.clone()],
-    );
+    let mut proof2 = accounts.get_accounts_proof(&mut read_accs_txn, &[address_recipient_2.clone(), address_validator_2.clone()]);
 
     assert!(proof2.verify());
 

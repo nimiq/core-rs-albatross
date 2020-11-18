@@ -4,31 +4,26 @@ use std::iter::FromIterator;
 use nimiq_rpc_server::dispatchers::*;
 
 use nimiq_jsonrpc_core::Credentials;
-use nimiq_jsonrpc_server::{Config, Server as _Server, ModularDispatcher, AllowListDispatcher};
+use nimiq_jsonrpc_server::{AllowListDispatcher, Config, ModularDispatcher, Server as _Server};
 
 use crate::client::Client;
 use crate::config::config::RpcServerConfig;
 use crate::config::consts::default_bind;
 use crate::error::Error;
 
-
 pub type Server = _Server<AllowListDispatcher<ModularDispatcher>>;
-
 
 pub fn initialize_rpc_server(client: &Client, config: RpcServerConfig) -> Result<Server, Error> {
     let ip = config.bind_to.unwrap_or_else(default_bind);
     info!("Initializing RPC server: {}:{}", ip, config.port);
 
     // Configure RPC server
-    let basic_auth = config.credentials
-        .map(|credentials| Credentials {
-            username: credentials.username,
-            password: credentials.password,
-        });
+    let basic_auth = config.credentials.map(|credentials| Credentials {
+        username: credentials.username,
+        password: credentials.password,
+    });
 
-    let allowed_methods = config
-        .allowed_methods
-        .map(HashSet::from_iter);
+    let allowed_methods = config.allowed_methods.map(HashSet::from_iter);
 
     // TODO: Pass this to the rpc server config
     let _corsdomain = config.corsdomain.unwrap_or_default();
@@ -53,10 +48,7 @@ pub fn initialize_rpc_server(client: &Client, config: RpcServerConfig) -> Result
 
     Ok(Server::new(
         Config {
-            bind_to: (
-                config.bind_to.unwrap_or_else(default_bind),
-                config.port,
-            ).into(),
+            bind_to: (config.bind_to.unwrap_or_else(default_bind), config.port).into(),
             enable_websocket: false,
             ip_whitelist: None,
             basic_auth,

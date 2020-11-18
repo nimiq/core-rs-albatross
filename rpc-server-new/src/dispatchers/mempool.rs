@@ -3,19 +3,15 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use parking_lot::RwLock;
 
-use beserial::{Serialize, Deserialize};
+use beserial::{Deserialize, Serialize};
 use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_keys::Address;
 use nimiq_mempool::{Mempool, ReturnCode};
-use nimiq_transaction::{Transaction, TransactionFlags};
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
-use nimiq_keys::Address;
+use nimiq_transaction::{Transaction, TransactionFlags};
 
-use crate::{
-    wallets::UnlockedWallets,
-    Error,
-};
-
+use crate::{wallets::UnlockedWallets, Error};
 
 #[async_trait]
 pub trait MempoolInterface {
@@ -34,13 +30,11 @@ pub trait MempoolInterface {
     async fn get_mempool_transaction(&self) -> Result<(), Error>;
 }
 
-
 pub struct MempoolDispatcher {
     mempool: Arc<Mempool>,
 
     //#[cfg(feature = "validator")]
     //validator: Option<Arc<Validator>>,
-
     unlocked_wallets: Option<Arc<RwLock<UnlockedWallets>>>,
 }
 
@@ -51,7 +45,6 @@ impl MempoolDispatcher {
 
             //#[cfg(feature = "validator")]
             //validator: None,
-
             unlocked_wallets: None,
         }
     }
@@ -76,7 +69,7 @@ impl MempoolDispatcher {
     }
 }
 
-#[nimiq_jsonrpc_derive::service(rename_all="mixedCase")]
+#[nimiq_jsonrpc_derive::service(rename_all = "mixedCase")]
 #[async_trait]
 impl MempoolInterface for MempoolDispatcher {
     async fn send_raw_transaction(&self, raw_tx: String) -> Result<String, Error> {
@@ -101,9 +94,9 @@ impl MempoolInterface for MempoolDispatcher {
 
     async fn get_transaction(&self, _txid: Blake2bHash) -> Result<Option<()>, Error> {
         /*Ok(self.mempool
-            .get_transaction(&txid)
-            // TODO: We can return a `Arc<Transaction>`, if we implement `serde::Serialize` for it.
-            .map(|tx| Transaction::clone(&tx)))*/
+        .get_transaction(&txid)
+        // TODO: We can return a `Arc<Transaction>`, if we implement `serde::Serialize` for it.
+        .map(|tx| Transaction::clone(&tx)))*/
         Err(Error::NotImplemented)
     }
 
@@ -119,7 +112,6 @@ impl MempoolInterface for MempoolDispatcher {
         Err(Error::NotImplemented)
     }
 }
-
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -146,36 +138,31 @@ pub struct TransactionParameters {
 
 impl TransactionParameters {
     pub fn into_transaction(self, mempool: &Mempool) -> Result<Transaction, Error> {
-        let validity_start_height = self.validity_start_height
-            .unwrap_or_else(|| mempool.current_height());
+        let validity_start_height = self.validity_start_height.unwrap_or_else(|| mempool.current_height());
         let network_id = mempool.network_id();
 
         match self.to {
-            None if self.to_type != AccountType::Basic &&  self.flags.contains(TransactionFlags::CONTRACT_CREATION) => {
-                Ok(Transaction::new_contract_creation(
-                    self.data,
-                    self.from,
-                    self.from_type,
-                    self.to_type,
-                    self.value,
-                    self.fee,
-                    validity_start_height,
-                    network_id,
-                ))
-            },
-            Some(to) if !self.flags.contains(TransactionFlags::CONTRACT_CREATION) => {
-                Ok(Transaction::new_extended(
-                    self.from,
-                    self.from_type,
-                    to,
-                    self.to_type,
-                    self.value,
-                    self.fee,
-                    self.data,
-                    validity_start_height,
-                    network_id,
-                ))
-            },
+            None if self.to_type != AccountType::Basic && self.flags.contains(TransactionFlags::CONTRACT_CREATION) => Ok(Transaction::new_contract_creation(
+                self.data,
+                self.from,
+                self.from_type,
+                self.to_type,
+                self.value,
+                self.fee,
+                validity_start_height,
+                network_id,
+            )),
+            Some(to) if !self.flags.contains(TransactionFlags::CONTRACT_CREATION) => Ok(Transaction::new_extended(
+                self.from,
+                self.from_type,
+                to,
+                self.to_type,
+                self.value,
+                self.fee,
+                self.data,
+                validity_start_height,
+                network_id,
+            )),
             _ => Err(Error::InvalidTransactionParameters),
         }
     }

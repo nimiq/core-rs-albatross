@@ -7,9 +7,7 @@ use std::time::Duration;
 
 use futures::StreamExt;
 use parking_lot::{MappedRwLockReadGuard, RwLock, RwLockReadGuard};
-use tokio::sync::broadcast::{
-    channel as broadcast, Receiver as BroadcastReceiver, Sender as BroadcastSender,
-};
+use tokio::sync::broadcast::{channel as broadcast, Receiver as BroadcastReceiver, Sender as BroadcastSender};
 
 use block_albatross::Block;
 use blockchain_albatross::{Blockchain, BlockchainEvent};
@@ -59,7 +57,6 @@ pub struct Consensus<N: Network> {
     pub env: Environment,
 
     //timers: Timers<ConsensusTimer>,
-
     pub(crate) state: RwLock<ConsensusState<N>>,
 
     self_weak: MutableOnce<Weak<Consensus<N>>>,
@@ -98,10 +95,7 @@ impl<N: Network> Consensus<N> {
             env,
 
             //timers: Timers::new(),
-
-            state: RwLock::new(ConsensusState {
-                agents: HashMap::new(),
-            }),
+            state: RwLock::new(ConsensusState { agents: HashMap::new() }),
 
             self_weak: MutableOnce::new(Weak::new()),
             events: tx,
@@ -135,35 +129,23 @@ impl<N: Network> Consensus<N> {
 
         // Relay new (verified) transactions to peers.
         let weak = Arc::downgrade(this);
-        this.mempool
-            .notifier
-            .write()
-            .register(move |e: &MempoolEvent| {
-                let this = upgrade_weak!(weak);
-                match e {
-                    MempoolEvent::TransactionAdded(_, transaction) => {
-                        this.on_transaction_added(transaction)
-                    }
-                    // TODO: Relay on restore?
-                    MempoolEvent::TransactionRestored(transaction) => {
-                        this.on_transaction_added(transaction)
-                    }
-                    MempoolEvent::TransactionEvicted(transaction) => {
-                        this.on_transaction_removed(transaction)
-                    }
-                    MempoolEvent::TransactionMined(transaction) => {
-                        this.on_transaction_removed(transaction)
-                    }
-                }
-            });
+        this.mempool.notifier.write().register(move |e: &MempoolEvent| {
+            let this = upgrade_weak!(weak);
+            match e {
+                MempoolEvent::TransactionAdded(_, transaction) => this.on_transaction_added(transaction),
+                // TODO: Relay on restore?
+                MempoolEvent::TransactionRestored(transaction) => this.on_transaction_added(transaction),
+                MempoolEvent::TransactionEvicted(transaction) => this.on_transaction_removed(transaction),
+                MempoolEvent::TransactionMined(transaction) => this.on_transaction_removed(transaction),
+            }
+        });
 
         // Notify peers when our blockchain head changes.
         let weak = Arc::downgrade(this);
-        this.blockchain
-            .register_listener(move |e: &BlockchainEvent| {
-                let this = upgrade_weak!(weak);
-                this.on_blockchain_event(e);
-            });
+        this.blockchain.register_listener(move |e: &BlockchainEvent| {
+            let this = upgrade_weak!(weak);
+            this.on_blockchain_event(e);
+        });
     }
 
     fn on_peer_joined(&self, peer: Arc<N::PeerType>) {

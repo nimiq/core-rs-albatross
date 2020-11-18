@@ -91,9 +91,7 @@ impl Protocol {
     pub fn new(node_id: usize, num_ids: usize, threshold: usize) -> Self {
         let partitioner = Arc::new(BinomialPartitioner::new(node_id, num_ids));
         let registry = Arc::new(Registry {});
-        let store = Arc::new(RwLock::new(
-            ReplaceStore::<BinomialPartitioner, Contribution>::new(partitioner.clone()),
-        ));
+        let store = Arc::new(RwLock::new(ReplaceStore::<BinomialPartitioner, Contribution>::new(partitioner.clone())));
 
         let evaluator = Arc::new(evaluator::WeightedVote::new(
             store.clone(),
@@ -206,17 +204,12 @@ async fn it_can_aggregate() {
     networks.push(net.clone());
 
     // instead of spawning the aggregation atsk await its result here.
-    let aggregate: Contribution =
-        Aggregation::start(1 as u8, contribution, protocol, config.clone(), net).await;
+    let aggregate: Contribution = Aggregation::start(1 as u8, contribution, protocol, config.clone(), net).await;
 
     println!("{:?}", &aggregate);
 
     // All nodes need to contribute
-    assert_eq!(
-        aggregate.num_contributors(),
-        contributor_num + 1,
-        "Not all contributions are present"
-    );
+    assert_eq!(aggregate.num_contributors(), contributor_num + 1, "Not all contributions are present");
     // the final value needs to be the sum of all contributions: 9 + 8 + 7 + 6 + 5 + 4 + 3 + 2 + 1 = 45
     assert_eq!(aggregate.value, 45, "Wrong aggregation result");
 }
@@ -246,10 +239,7 @@ async fn it_can_aggregate_to_treshold() {
         contributors.insert(id);
 
         // create a contribution for this node with a value of `id +1` (So no node has value 0 as that does't show up in addition).
-        let contribution = Contribution {
-            value: 1u64,
-            contributors,
-        };
+        let contribution = Contribution { value: 1u64, contributors };
         // connect the network to all already existing networks.
         for network in &networks {
             net.connect(network);
@@ -270,29 +260,19 @@ async fn it_can_aggregate_to_treshold() {
     let protocol = Protocol::new(contributor_num, contributor_num + 1, contributor_num / 2);
     let mut contributors = BitSet::new();
     contributors.insert(contributor_num);
-    let contribution = Contribution {
-        value: 1u64,
-        contributors,
-    };
+    let contribution = Contribution { value: 1u64, contributors };
     for network in &networks {
         net.connect(network);
     }
     networks.push(net.clone());
 
     // instead of spawning the aggregation atsk await its result here.
-    let aggregate: Contribution =
-        Aggregation::start(1 as u8, contribution, protocol, config.clone(), net).await;
+    let aggregate: Contribution = Aggregation::start(1 as u8, contribution, protocol, config.clone(), net).await;
 
     println!("{:?}", &aggregate);
 
     // At least more than half of the nodes need to contribute
-    assert!(
-        aggregate.num_contributors() >= contributor_num / 2,
-        "Not enough contributions are present"
-    );
+    assert!(aggregate.num_contributors() >= contributor_num / 2, "Not enough contributions are present");
     // the final value needs to be at least the sum of all contributions
-    assert!(
-        aggregate.value >= (contributor_num / 2) as u64,
-        "Wrong aggregation result"
-    );
+    assert!(aggregate.value >= (contributor_num / 2) as u64, "Wrong aggregation result");
 }

@@ -114,20 +114,12 @@ impl<'a> fmt::Display for PeerUri {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.protocol {
             Protocol::Dumb | Protocol::Rtc => {
-                write!(
-                    f,
-                    "{}://{}",
-                    self.protocol,
-                    self.peer_id().expect("No peer ID for dumb/rtc URI")
-                )?;
+                write!(f, "{}://{}", self.protocol, self.peer_id().expect("No peer ID for dumb/rtc URI"))?;
             }
             Protocol::Ws | Protocol::Wss => {
                 write!(f, "{}://{}", self.protocol, self.hostname.as_ref().unwrap())?;
                 self.port.map(|p| write!(f, ":{}", p)).transpose()?;
-                self.peer_id()
-                    .or_else(|| self.public_key())
-                    .map(|p| write!(f, "/{}", p))
-                    .transpose()?;
+                self.peer_id().or_else(|| self.public_key()).map(|p| write!(f, "/{}", p)).transpose()?;
             }
         }
         Ok(())
@@ -135,12 +127,7 @@ impl<'a> fmt::Display for PeerUri {
 }
 
 impl PeerUri {
-    pub fn new_wss(
-        hostname: String,
-        port: Option<u16>,
-        peer_id: Option<String>,
-        public_key: Option<String>,
-    ) -> PeerUri {
+    pub fn new_wss(hostname: String, port: Option<u16>, peer_id: Option<String>, public_key: Option<String>) -> PeerUri {
         PeerUri {
             protocol: Protocol::Wss,
             hostname: Some(hostname),
@@ -211,9 +198,7 @@ impl PeerUri {
                 let host = String::from(url.host_str().ok_or(PeerUriError::MissingHostname)?);
                 let (peer_id, public_key) = match path_segment {
                     Some(ref peer_id) if peer_id.len() == 2 * PeerId::SIZE => (path_segment, None),
-                    Some(ref public_key) if public_key.len() == 2 * PublicKey::SIZE => {
-                        (None, path_segment)
-                    }
+                    Some(ref public_key) if public_key.len() == 2 * PublicKey::SIZE => (None, path_segment),
                     None => (None, None),
                     _ => return Err(PeerUriError::InvalidPeerId),
                 };
@@ -250,18 +235,14 @@ impl PeerUri {
             return Err(PeerUriError::SeedNodeMissingPublicKey);
         }
 
-        let public_key =
-            match PublicKey::from_hex(self.public_key().expect("Checked in previous step")) {
-                Ok(public_key) => public_key,
-                Err(e) => return Err(PeerUriError::from(e)),
-            };
+        let public_key = match PublicKey::from_hex(self.public_key().expect("Checked in previous step")) {
+            Ok(public_key) => public_key,
+            Err(e) => return Err(PeerUriError::from(e)),
+        };
 
         match self.protocol() {
             Protocol::Wss => Ok(PeerAddress {
-                ty: PeerAddressType::Wss(
-                    self.hostname().expect("Mandatory for Wss").to_string(),
-                    self.port().unwrap_or(443),
-                ),
+                ty: PeerAddressType::Wss(self.hostname().expect("Mandatory for Wss").to_string(), self.port().unwrap_or(443)),
                 services: ServiceFlags::FULL,
                 timestamp: 0,
                 net_address: NetAddress::Unspecified,
@@ -271,10 +252,7 @@ impl PeerUri {
                 peer_id: PeerId::from(&public_key),
             }),
             Protocol::Ws => Ok(PeerAddress {
-                ty: PeerAddressType::Ws(
-                    self.hostname().expect("Mandatory for Ws").to_string(),
-                    self.port().unwrap_or(80),
-                ),
+                ty: PeerAddressType::Ws(self.hostname().expect("Mandatory for Ws").to_string(), self.port().unwrap_or(80)),
                 services: ServiceFlags::FULL,
                 timestamp: 0,
                 net_address: NetAddress::Unspecified,

@@ -1,14 +1,9 @@
 use algebra::{MNT4_753, MNT6_753};
 use algebra_core::{test_rng, PairingEngine, ToConstraintField};
-use crypto_primitives::nizk::groth16::constraints::{
-    Groth16VerifierGadget, ProofGadget, VerifyingKeyGadget,
-};
+use crypto_primitives::nizk::groth16::constraints::{Groth16VerifierGadget, ProofGadget, VerifyingKeyGadget};
 use crypto_primitives::nizk::Groth16;
 use crypto_primitives::NIZKVerifierGadget;
-use groth16::{
-    create_random_proof, generate_random_parameters, prepare_verifying_key, verify_proof, Proof,
-    VerifyingKey,
-};
+use groth16::{create_random_proof, generate_random_parameters, prepare_verifying_key, verify_proof, Proof, VerifyingKey};
 use r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisError};
 use r1cs_std::alloc::AllocGadget;
 use r1cs_std::bits::uint8::UInt8;
@@ -27,10 +22,7 @@ struct DummyCircuit {
 }
 
 impl ConstraintSynthesizer<<MNT4_753 as PairingEngine>::Fr> for DummyCircuit {
-    fn generate_constraints<CS: ConstraintSystem<<MNT4_753 as PairingEngine>::Fr>>(
-        self,
-        cs: &mut CS,
-    ) -> Result<(), SynthesisError> {
+    fn generate_constraints<CS: ConstraintSystem<<MNT4_753 as PairingEngine>::Fr>>(self, cs: &mut CS) -> Result<(), SynthesisError> {
         // Allocate bytes in private.
         let private_bytes = UInt8::alloc_vec(cs.ns(|| "Private input"), &self.input_bytes)?;
         // Allocate bytes from public input.
@@ -48,8 +40,7 @@ impl ConstraintSynthesizer<<MNT4_753 as PairingEngine>::Fr> for DummyCircuit {
 type TheProofSystem = Groth16<MNT4_753, DummyCircuit, <MNT4_753 as PairingEngine>::Fr>;
 type TheProofGadget = ProofGadget<MNT4_753, <MNT6_753 as PairingEngine>::Fr, PairingGadget>;
 type TheVkGadget = VerifyingKeyGadget<MNT4_753, <MNT6_753 as PairingEngine>::Fr, PairingGadget>;
-type TheVerifierGadget =
-    Groth16VerifierGadget<MNT4_753, <MNT6_753 as PairingEngine>::Fr, PairingGadget>;
+type TheVerifierGadget = Groth16VerifierGadget<MNT4_753, <MNT6_753 as PairingEngine>::Fr, PairingGadget>;
 
 #[derive(Clone)]
 struct VerifierCircuit {
@@ -59,10 +50,7 @@ struct VerifierCircuit {
 }
 
 impl ConstraintSynthesizer<<MNT6_753 as PairingEngine>::Fr> for VerifierCircuit {
-    fn generate_constraints<CS: ConstraintSystem<<MNT6_753 as PairingEngine>::Fr>>(
-        self,
-        cs: &mut CS,
-    ) -> Result<(), SynthesisError> {
+    fn generate_constraints<CS: ConstraintSystem<<MNT6_753 as PairingEngine>::Fr>>(self, cs: &mut CS) -> Result<(), SynthesisError> {
         // Allocate bytes from public input.
         let public_bytes = UInt8::alloc_input_vec(cs.ns(|| "Public input"), &self.input_bytes)?;
 
@@ -72,14 +60,9 @@ impl ConstraintSynthesizer<<MNT6_753 as PairingEngine>::Fr> for VerifierCircuit 
         let proof = TheProofGadget::alloc(cs.ns(|| "Proof"), || Ok(&self.proof))?;
 
         // Here comes the conversion.
-        let input_bytes = RecursiveInputGadget::to_field_elements::<<MNT4_753 as PairingEngine>::Fr>(
-            &public_bytes,
-        )?;
+        let input_bytes = RecursiveInputGadget::to_field_elements::<<MNT4_753 as PairingEngine>::Fr>(&public_bytes)?;
 
-        <TheVerifierGadget as NIZKVerifierGadget<
-            TheProofSystem,
-            <MNT6_753 as PairingEngine>::Fr,
-        >>::check_verify(
+        <TheVerifierGadget as NIZKVerifierGadget<TheProofSystem, <MNT6_753 as PairingEngine>::Fr>>::check_verify(
             cs.ns(|| "Verify groth16 proof"),
             &vk,
             input_bytes.iter(),
@@ -108,8 +91,7 @@ fn recursive_input_is_read_correctly() {
     };
 
     // Generate parameters for the dummy circuit.
-    let parameters =
-        generate_random_parameters::<MNT4_753, _, _>(dummy_circuit.clone(), rng).unwrap();
+    let parameters = generate_random_parameters::<MNT4_753, _, _>(dummy_circuit.clone(), rng).unwrap();
 
     // Generate a proof for the dummy circuit.
     let proof = create_random_proof(dummy_circuit, &parameters, rng).unwrap();

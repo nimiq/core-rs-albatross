@@ -15,10 +15,7 @@ pub struct CombinedAttributes<'a> {
 
 impl<'a> CombinedAttributes<'a> {
     #[inline]
-    pub fn with_attributes(
-        vec_attributes: VecAttributes,
-        cached_attributes: &'a CachedAttributes,
-    ) -> Self {
+    pub fn with_attributes(vec_attributes: VecAttributes, cached_attributes: &'a CachedAttributes) -> Self {
         CombinedAttributes {
             vec_attributes,
             cached_attributes,
@@ -60,9 +57,7 @@ pub struct VecAttributes {
 impl VecAttributes {
     #[inline]
     pub fn new() -> Self {
-        VecAttributes {
-            attributes: Vec::new(),
-        }
+        VecAttributes { attributes: Vec::new() }
     }
 
     #[inline]

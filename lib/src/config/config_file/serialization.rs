@@ -35,10 +35,7 @@ where
     T::Err: Display,
 {
     let values = Vec::<String>::deserialize(deserializer)?;
-    values
-        .iter()
-        .map(|value| T::from_str(value).map_err(Error::custom))
-        .collect()
+    values.iter().map(|value| T::from_str(value).map_err(Error::custom)).collect()
 }
 
 pub(crate) fn deserialize_string_option<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>

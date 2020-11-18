@@ -2,12 +2,11 @@
 //! easily here, without needing to change them in several places in the code.
 
 use algebra::mnt4_753::{
-    Fq as MNT4Fq, Fq2 as MNT4Fq2, FqParameters, G1Affine as MNT4G1Affine,
-    G1Projective as MNT4G1Projective, G2Affine as MNT4G2Affine, G2Projective as MNT4G2Projective,
+    Fq as MNT4Fq, Fq2 as MNT4Fq2, FqParameters, G1Affine as MNT4G1Affine, G1Projective as MNT4G1Projective, G2Affine as MNT4G2Affine,
+    G2Projective as MNT4G2Projective,
 };
 use algebra::mnt6_753::{
-    Fq as MNT6Fq, Fq3 as MNT6Fq3, G1Affine as MNT6G1Affine, G1Projective as MNT6G1Projective,
-    G2Affine as MNT6G2Affine, G2Projective as MNT6G2Projective,
+    Fq as MNT6Fq, Fq3 as MNT6Fq3, G1Affine as MNT6G1Affine, G1Projective as MNT6G1Projective, G2Affine as MNT6G2Affine, G2Projective as MNT6G2Projective,
 };
 use algebra::{FpParameters, PrimeField};
 use algebra_core::One;

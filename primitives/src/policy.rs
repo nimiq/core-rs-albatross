@@ -196,8 +196,7 @@ pub fn supply_at(genesis_supply: u64, genesis_time: u64, current_time: u64) -> u
 
     let exponent = -SUPPLY_DECAY * t;
 
-    let supply =
-        genesis_supply + (INITIAL_SUPPLY_VELOCITY / SUPPLY_DECAY * (1.0 - exponent.exp())) as u64;
+    let supply = genesis_supply + (INITIAL_SUPPLY_VELOCITY / SUPPLY_DECAY * (1.0 - exponent.exp())) as u64;
 
     cmp::min(supply, TOTAL_SUPPLY)
 }

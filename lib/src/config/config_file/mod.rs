@@ -95,18 +95,17 @@ impl ConfigFile {
         if !path_example.exists() {
             info!("Creating example config at: {}", path_example.display());
             if let Err(e) = std::fs::write(&path_example, Self::EXAMPLE_CONFIG) {
-                warn!(
-                    "Failed to create example config file: {}: {}",
-                    e,
-                    path_example.display()
-                );
+                warn!("Failed to create example config file: {}: {}", e, path_example.display());
             }
         }
 
         // check if config exists, otherwise tell user to create one
         let path = paths::home().join("client.toml");
         if !path.exists() {
-            let msg = format!("Config file not found. Please create one. An example config file can be found at: {}", path.display());
+            let msg = format!(
+                "Config file not found. Please create one. An example config file can be found at: {}",
+                path.display()
+            );
             warn!("{}", msg);
             return Err(Error::config_error(&msg));
         }
@@ -194,9 +193,7 @@ impl TryFrom<Seed> for NetworkSeed {
 
     fn try_from(seed: Seed) -> Result<Self, Self::Error> {
         Ok(match seed {
-            Seed::Uri(SeedUri { uri }) => {
-                NetworkSeed::Peer(Box::new(address::PeerUri::from_str(&uri)?))
-            }
+            Seed::Uri(SeedUri { uri }) => NetworkSeed::Peer(Box::new(address::PeerUri::from_str(&uri)?)),
             Seed::Info(SeedInfo {
                 host,
                 port,
@@ -204,16 +201,12 @@ impl TryFrom<Seed> for NetworkSeed {
                 peer_id,
             }) => {
                 // TODO: Implement this without having to instantiate a PeerUri
-                NetworkSeed::Peer(Box::new(address::PeerUri::new_wss(
-                    host, port, peer_id, public_key,
-                )))
+                NetworkSeed::Peer(Box::new(address::PeerUri::new_wss(host, port, peer_id, public_key)))
             }
-            Seed::List(SeedList { list, public_key }) => {
-                NetworkSeed::List(Box::new(address::SeedList::new(
-                    Url::from_str(&list)?,
-                    public_key.map(PublicKey::from_hex).transpose()?,
-                )))
-            }
+            Seed::List(SeedList { list, public_key }) => NetworkSeed::List(Box::new(address::SeedList::new(
+                Url::from_str(&list)?,
+                public_key.map(PublicKey::from_hex).transpose()?,
+            ))),
         })
     }
 }
@@ -507,9 +500,7 @@ pub struct MempoolFilterSettings {
 impl From<MempoolSettings> for MempoolConfig {
     fn from(mempool: MempoolSettings) -> Self {
         Self {
-            filter_limit: mempool
-                .blacklist_limit
-                .unwrap_or(MempoolFilter::DEFAULT_BLACKLIST_SIZE),
+            filter_limit: mempool.blacklist_limit.unwrap_or(MempoolFilter::DEFAULT_BLACKLIST_SIZE),
             filter_rules: mempool.filter.map(MempoolRules::from).unwrap_or_default(),
         }
     }

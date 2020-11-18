@@ -51,11 +51,8 @@ async fn main_inner() -> Result<(), Error> {
     // Initialize RPC server
     if let Some(rpc_config) = rpc_config {
         use nimiq::extras::rpc_server::initialize_rpc_server;
-        let rpc_server = initialize_rpc_server(&client, rpc_config)
-            .expect("Failed to initialize RPC server");
-        tokio::spawn(async move {
-            rpc_server.run().await
-        });
+        let rpc_server = initialize_rpc_server(&client, rpc_config).expect("Failed to initialize RPC server");
+        tokio::spawn(async move { rpc_server.run().await });
     }
 
     // Initialize metrics server
@@ -68,21 +65,13 @@ async fn main_inner() -> Result<(), Error> {
             ..
         } = protocol_config
         {
-            let pkcs12_key_file = pkcs12_key_file.to_str().unwrap_or_else(|| {
-                panic!(
-                    "Failed to convert path to PKCS#12 key file to string: {}",
-                    pkcs12_key_file.display()
-                )
-            });
+            let pkcs12_key_file = pkcs12_key_file
+                .to_str()
+                .unwrap_or_else(|| panic!("Failed to convert path to PKCS#12 key file to string: {}", pkcs12_key_file.display()));
 
             // FIXME: Spawn `metrics_server` (which is a IntoFuture)
-            let _metrics_server = initialize_metrics_server(
-                &client,
-                metrics_config,
-                pkcs12_key_file,
-                &pkcs12_passphrase,
-            )
-                .expect("Failed to initialize metrics server");
+            let _metrics_server =
+                initialize_metrics_server(&client, metrics_config, pkcs12_key_file, &pkcs12_passphrase).expect("Failed to initialize metrics server");
             //tokio::spawn(metrics_server.into_future());
         } else {
             error!("Cannot provide metrics when running without a certificate");
@@ -111,12 +100,7 @@ async fn main_inner() -> Result<(), Error> {
         if show_statistics {
             let peer_count = client.network().connections.peer_count();
             let head = client.blockchain().head().clone();
-            info!(
-                "Head: #{} - {}, Peers: {}",
-                head.block_number(),
-                head.hash(),
-                peer_count
-            );
+            info!("Head: #{} - {}, Peers: {}", head.block_number(), head.hash(), peer_count);
         }
     }
 }

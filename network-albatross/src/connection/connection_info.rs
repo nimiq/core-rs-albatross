@@ -90,9 +90,7 @@ impl ConnectionInfo {
         self.connection_handle.as_ref()
     }
     pub fn age_established(&self) -> Duration {
-        self.established_since
-            .expect("No peer has been set yet")
-            .elapsed()
+        self.established_since.expect("No peer has been set yet").elapsed()
     }
     pub fn statistics(&self) -> &ConnectionStatistics {
         &self.statistics
@@ -169,9 +167,7 @@ pub struct ConnectionStatistics {
 
 impl ConnectionStatistics {
     pub fn new() -> Self {
-        Self {
-            latencies: Vec::new(),
-        }
+        Self { latencies: Vec::new() }
     }
 
     pub fn reset(&mut self) {

@@ -48,7 +48,10 @@ impl ReverseProxyCallback {
         if let Some(ref config) = self.reverse_proxy_config {
             let proxy_net_address = &config.address;
             if proxy_net_address != &stream_net_address {
-                error!("Received connection from {} when all connections were expected from the reverse proxy at {}: closing the connection", stream_net_address, proxy_net_address);
+                error!(
+                    "Received connection from {} when all connections were expected from the reverse proxy at {}: closing the connection",
+                    stream_net_address, proxy_net_address
+                );
                 return None;
             }
 
@@ -75,26 +78,20 @@ impl<'a> Callback for &'a ReverseProxyCallback {
                     body: None,
                 })?; // Take first value from list.
                 let str_value = str_value.trim();
-                trace!(
-                    "Remote peer address (according to headers): {:?}",
-                    str_value
-                );
-                let net_address = NetAddress::from_str(str_value)
-                    .map_err(|_|
-                         ErrorResponse {
-                             error_code: StatusCode::INTERNAL_SERVER_ERROR,
-                             headers: None,
-                             body: Some("Expected header to contain the real IP from the connecting client: closing the connection".to_string()),
-                         }
-                    )?;
+                trace!("Remote peer address (according to headers): {:?}", str_value);
+                let net_address = NetAddress::from_str(str_value).map_err(|_| ErrorResponse {
+                    error_code: StatusCode::INTERNAL_SERVER_ERROR,
+                    headers: None,
+                    body: Some("Expected header to contain the real IP from the connecting client: closing the connection".to_string()),
+                })?;
                 self.remote_address.lock().replace(net_address);
             } else {
                 error!("The reverse proxy 'header' parameter is missing");
                 return Err(ErrorResponse {
-                        error_code: StatusCode::INTERNAL_SERVER_ERROR,
-                        headers: None,
-                        body: Some("Expected header to contain the real IP from the connecting client: closing the connection".to_string()),
-                    });
+                    error_code: StatusCode::INTERNAL_SERVER_ERROR,
+                    headers: None,
+                    body: Some("Expected header to contain the real IP from the connecting client: closing the connection".to_string()),
+                });
             }
         }
         Ok(None)

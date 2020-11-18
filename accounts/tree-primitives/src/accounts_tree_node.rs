@@ -14,9 +14,7 @@ pub struct AccountsTreeNodeChild {
     pub hash: Blake2bHash,
 }
 
-pub const NO_CHILDREN: [Option<AccountsTreeNodeChild>; 16] = [
-    None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
-];
+pub const NO_CHILDREN: [Option<AccountsTreeNodeChild>; 16] = [None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None];
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Debug, Serialize, Deserialize)]
 #[repr(u8)]
@@ -42,10 +40,7 @@ impl<A: AccountsTreeLeave> AccountsTreeNode<A> {
         AccountsTreeNode::TerminalNode { prefix, account }
     }
 
-    pub fn new_branch(
-        prefix: AddressNibbles,
-        children: [Option<AccountsTreeNodeChild>; 16],
-    ) -> Self {
+    pub fn new_branch(prefix: AddressNibbles, children: [Option<AccountsTreeNodeChild>; 16]) -> Self {
         AccountsTreeNode::BranchNode {
             prefix,
             children: Box::new(children),
@@ -126,9 +121,7 @@ impl<A: AccountsTreeLeave> AccountsTreeNode<A> {
             AccountsTreeNode::TerminalNode { .. } => {
                 return None;
             }
-            AccountsTreeNode::BranchNode {
-                ref mut children, ..
-            } => {
+            AccountsTreeNode::BranchNode { ref mut children, .. } => {
                 let child = AccountsTreeNodeChild { suffix, hash };
                 children[child_index] = Some(child);
             }
@@ -142,9 +135,7 @@ impl<A: AccountsTreeLeave> AccountsTreeNode<A> {
             AccountsTreeNode::TerminalNode { .. } => {
                 return None;
             }
-            AccountsTreeNode::BranchNode {
-                ref mut children, ..
-            } => {
+            AccountsTreeNode::BranchNode { ref mut children, .. } => {
                 children[child_index] = None;
             }
         };
@@ -153,9 +144,7 @@ impl<A: AccountsTreeLeave> AccountsTreeNode<A> {
 
     pub fn with_account(mut self, new_account: A) -> Option<Self> {
         match &mut self {
-            AccountsTreeNode::TerminalNode {
-                ref mut account, ..
-            } => {
+            AccountsTreeNode::TerminalNode { ref mut account, .. } => {
                 *account = new_account;
             }
             AccountsTreeNode::BranchNode { .. } => {
@@ -185,9 +174,7 @@ impl<A: AccountsTreeLeave> Serialize for AccountsTreeNode<A> {
                 size += Serialize::serialize(&account, writer)?;
             }
             AccountsTreeNode::BranchNode { ref children, .. } => {
-                let child_count: u8 = children
-                    .iter()
-                    .fold(0, |acc, child| acc + if child.is_none() { 0 } else { 1 });
+                let child_count: u8 = children.iter().fold(0, |acc, child| acc + if child.is_none() { 0 } else { 1 });
                 Serialize::serialize(&child_count, writer)?;
                 for child in children.iter() {
                     if let Some(ref child) = child {
@@ -260,12 +247,8 @@ impl<A: AccountsTreeLeave> SerializeContent for AccountsTreeNode<A> {
 impl<A: AccountsTreeLeave> Hash for AccountsTreeNode<A> {}
 
 #[allow(clippy::type_complexity)]
-type AccountsTreeNodeIter<'a> = Option<
-    iter::FilterMap<
-        slice::Iter<'a, Option<AccountsTreeNodeChild>>,
-        fn(&Option<AccountsTreeNodeChild>) -> Option<&AccountsTreeNodeChild>,
-    >,
->;
+type AccountsTreeNodeIter<'a> =
+    Option<iter::FilterMap<slice::Iter<'a, Option<AccountsTreeNodeChild>>, fn(&Option<AccountsTreeNodeChild>) -> Option<&AccountsTreeNodeChild>>>;
 
 pub struct Iter<'a> {
     it: AccountsTreeNodeIter<'a>,
@@ -296,10 +279,8 @@ impl<'a, A: AccountsTreeLeave> iter::IntoIterator for &'a AccountsTreeNode<A> {
     }
 }
 
-type AccountsTreeNodeChildFilterMap<'a> = iter::FilterMap<
-    slice::IterMut<'a, Option<AccountsTreeNodeChild>>,
-    fn(&mut Option<AccountsTreeNodeChild>) -> Option<&mut AccountsTreeNodeChild>,
->;
+type AccountsTreeNodeChildFilterMap<'a> =
+    iter::FilterMap<slice::IterMut<'a, Option<AccountsTreeNodeChild>>, fn(&mut Option<AccountsTreeNodeChild>) -> Option<&mut AccountsTreeNodeChild>>;
 
 pub struct IterMut<'a> {
     it: Option<AccountsTreeNodeChildFilterMap<'a>>,
@@ -323,9 +304,7 @@ impl<'a, A: AccountsTreeLeave> iter::IntoIterator for &'a mut AccountsTreeNode<A
     fn into_iter(self) -> IterMut<'a> {
         match self {
             AccountsTreeNode::TerminalNode { .. } => IterMut { it: None },
-            AccountsTreeNode::BranchNode {
-                ref mut children, ..
-            } => IterMut {
+            AccountsTreeNode::BranchNode { ref mut children, .. } => IterMut {
                 it: Some(children.iter_mut().filter_map(Option::as_mut)),
             },
         }
@@ -341,7 +320,6 @@ mod tests {
     use nimiq_keys::Address;
     use nimiq_primitives::coin::Coin;
     use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm};
-    
 
     const EMPTY_ROOT: &str = "000000";
     const ROOT: &str = "0000100130038679a597d998138965b1793503993691e50d3910347f2e6274327e0806c72d01311f5fec71d6df5709e7adb711835a80da5cca8ce27896a3e4a241977f62c142eb0132ef92a236c7622e6790bf8cfd13084488aa13d46109ecbbcca4579a4de8da2bdf01330ca9352121ed6a6ab793e124fb6453d96886cfdb9b8a399176ebc791313fd93001342161b614ecf10695066f82254149101292df15a8c7592ae3b44a2839247eeb1a01353604eb34e8720018f389a124eb7c05997b02c345a3f35ae06138584bb849d1b90136cfdf697dced7f0c07a09fdf2a7ba11641575205080cd9179f182a96ea01a69ca0137aea67da2ffc348458e4d8444477be2d6720da53c18414e0f6aed72ba4b5fd8b801383a6fc24a01fb88dc151dcc4d861e61e6951312c07be024d4df52ef5821dd77110139113ecaa04dfeeccef55576e7edc42a882cf9abb166509aca9598eb1b07b32f9a0161043cf8dd6f459a1edfdd1c7c25bd94263e0d00e650912967bb54ff899aa101bf01621cf41c547dba18db0b92b09a59d73c64e1be0f026ffcc7f56aad1f91938f07bd0163f4f3a285954a201a850e4331c7eeace387a83556dbac3c8ada406630b231110e0164297b13179a75cb0dd2288297d167c59cfd9fd29e20a0a20ad9a3c7e8f97ce308016596ee021457f86b14100eebe16efbe1c207f5914f59582cf7f64c986a3dca53040166ba6e9a80a103cac67f82938f6d6a63f1c87b9f4d1e06161ee63943461199b46e";
@@ -352,9 +330,7 @@ mod tests {
 
     #[test]
     fn it_can_calculate_hash() {
-        let mut node =
-            AccountsTreeNode::<Account>::deserialize_from_vec(&hex::decode(EMPTY_ROOT).unwrap())
-                .unwrap();
+        let mut node = AccountsTreeNode::<Account>::deserialize_from_vec(&hex::decode(EMPTY_ROOT).unwrap()).unwrap();
         assert_eq!(
             node.hash::<Blake2bHash>(),
             "ab29e6dc16755d0071eba349ebda225d15e4f910cb474549c47e95cb85ecc4d6".into()
@@ -372,22 +348,19 @@ mod tests {
             "e208dcfb22e9130280c633ae753f4a1eb0a6caf71f1a8fce837a7d430b846f1f".into()
         );
 
-        node =
-            AccountsTreeNode::deserialize_from_vec(&hex::decode(TERMINAL_BASIC).unwrap()).unwrap();
+        node = AccountsTreeNode::deserialize_from_vec(&hex::decode(TERMINAL_BASIC).unwrap()).unwrap();
         assert_eq!(
             node.hash::<Blake2bHash>(),
             "7c4b904074d07912698661ffcdfa8c0bf17ee1c3c0d6aae230e3b53ce7f23cf2".into()
         );
 
-        node = AccountsTreeNode::deserialize_from_vec(&hex::decode(TERMINAL_VESTING).unwrap())
-            .unwrap();
+        node = AccountsTreeNode::deserialize_from_vec(&hex::decode(TERMINAL_VESTING).unwrap()).unwrap();
         assert_eq!(
             node.hash::<Blake2bHash>(),
             "45a043a02ff6e805734bee866bce8013c3272dcda4dbe063af142a6407896288".into()
         );
 
-        node =
-            AccountsTreeNode::deserialize_from_vec(&hex::decode(TERMINAL_HTLC).unwrap()).unwrap();
+        node = AccountsTreeNode::deserialize_from_vec(&hex::decode(TERMINAL_HTLC).unwrap()).unwrap();
         assert_eq!(
             node.hash::<Blake2bHash>(),
             "b297ef941fb43fbd5d2afde680fb54a3e048b99343c471d404f81736eb1ea9d7".into()
@@ -425,9 +398,7 @@ mod tests {
             sender: Address::from("1b215589344cf570d36bec770825eae30b732139"),
             recipient: Address::from("24786862babbdb05e7c4430612135eb2a8368123"),
             hash_algorithm: HashAlgorithm::Sha256,
-            hash_root: AnyHash::from(
-                "daebe368963c60d22098a5e9f1ebcb8e54d0b7beca942a2a0a9d95391804fe8f",
-            ),
+            hash_root: AnyHash::from("daebe368963c60d22098a5e9f1ebcb8e54d0b7beca942a2a0a9d95391804fe8f"),
             hash_count: 1,
             timeout: 169525,
             total_amount: Coin::from_u64_unchecked(1),
@@ -441,8 +412,7 @@ mod tests {
     }
 
     fn terminal_node_printer(account: Account, name: &str) {
-        let nibbles =
-            AddressNibbles::from(&Address::from("fd34ab7265a0e48c454ccbf4c9c61dfdf68f9a22"));
+        let nibbles = AddressNibbles::from(&Address::from("fd34ab7265a0e48c454ccbf4c9c61dfdf68f9a22"));
 
         let node = AccountsTreeNode::new_terminal(nibbles, account);
 

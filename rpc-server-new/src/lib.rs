@@ -1,17 +1,16 @@
-pub mod types;
-pub(crate) mod serde_helpers;
 pub mod dispatchers;
+pub(crate) mod serde_helpers;
+pub mod types;
 pub mod wallets;
 
 use std::fmt::{Display, Formatter};
 
-use nimiq_jsonrpc_core::RpcError;
 use nimiq_hash::Blake2bHash;
-use nimiq_keys::Address;
+use nimiq_jsonrpc_core::RpcError;
 pub use nimiq_jsonrpc_server::{Config, Server};
+use nimiq_keys::Address;
 
 use thiserror::Error;
-
 
 #[derive(Clone, Debug)]
 pub enum BlockNumberOrHash {
@@ -39,7 +38,6 @@ impl Display for BlockNumberOrHash {
         }
     }
 }
-
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -76,7 +74,6 @@ pub enum Error {
     #[error("Transaction rejected: {0:?}")]
     TransactionRejected(nimiq_mempool::ReturnCode),
 }
-
 
 impl From<Error> for nimiq_jsonrpc_core::RpcError {
     fn from(e: Error) -> Self {

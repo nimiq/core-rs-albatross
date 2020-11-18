@@ -47,41 +47,23 @@ fn it_can_create_creation_transaction() {
         .with_value(100.try_into().unwrap())
         .with_validity_start_height(0)
         .with_network_id(NetworkId::Dummy);
-    let result = builder
-        .generate()
-        .expect("Builder should be able to create transaction");
+    let result = builder.generate().expect("Builder should be able to create transaction");
     let result = result.unwrap_basic();
 
     assert_eq!(result.transaction, transaction);
 }
 
-fn prepare_outgoing_transaction() -> (
-    Transaction,
-    AnyHash,
-    AnyHash,
-    KeyPair,
-    SignatureProof,
-    KeyPair,
-    SignatureProof,
-) {
-    let sender_priv_key: PrivateKey = Deserialize::deserialize_from_vec(
-        &hex::decode("9d5bd02379e7e45cf515c788048f5cf3c454ffabd3e83bd1d7667716c325c3c0").unwrap(),
-    )
-    .unwrap();
-    let recipient_priv_key: PrivateKey = Deserialize::deserialize_from_vec(
-        &hex::decode("bd1cfcd49a81048c8c8d22a25766bd01bfa0f6b2eb0030f65241189393af96a2").unwrap(),
-    )
-    .unwrap();
+fn prepare_outgoing_transaction() -> (Transaction, AnyHash, AnyHash, KeyPair, SignatureProof, KeyPair, SignatureProof) {
+    let sender_priv_key: PrivateKey =
+        Deserialize::deserialize_from_vec(&hex::decode("9d5bd02379e7e45cf515c788048f5cf3c454ffabd3e83bd1d7667716c325c3c0").unwrap()).unwrap();
+    let recipient_priv_key: PrivateKey =
+        Deserialize::deserialize_from_vec(&hex::decode("bd1cfcd49a81048c8c8d22a25766bd01bfa0f6b2eb0030f65241189393af96a2").unwrap()).unwrap();
 
     let sender_key_pair = KeyPair::from(sender_priv_key);
     let recipient_key_pair = KeyPair::from(recipient_priv_key);
     let pre_image = AnyHash::from([1u8; 32]);
     let hash_root = AnyHash::from(<[u8; 32]>::from(
-        Blake2bHasher::default().digest(
-            Blake2bHasher::default()
-                .digest(&pre_image.as_bytes())
-                .as_bytes(),
-        ),
+        Blake2bHasher::default().digest(Blake2bHasher::default().digest(&pre_image.as_bytes()).as_bytes()),
     ));
 
     let tx = Transaction::new_extended(
@@ -99,8 +81,7 @@ fn prepare_outgoing_transaction() -> (
     let sender_signature = sender_key_pair.sign(&tx.serialize_content()[..]);
     let recipient_signature = recipient_key_pair.sign(&tx.serialize_content()[..]);
     let sender_signature_proof = SignatureProof::from(sender_key_pair.public, sender_signature);
-    let recipient_signature_proof =
-        SignatureProof::from(recipient_key_pair.public, recipient_signature);
+    let recipient_signature_proof = SignatureProof::from(recipient_key_pair.public, recipient_signature);
 
     (
         tx,
@@ -116,12 +97,10 @@ fn prepare_outgoing_transaction() -> (
 #[test]
 #[allow(unused_must_use)]
 fn it_can_create_regular_transfer() {
-    let (mut tx, pre_image, hash_root, _, _, recipient_key_pair, recipient_signature_proof) =
-        prepare_outgoing_transaction();
+    let (mut tx, pre_image, hash_root, _, _, recipient_key_pair, recipient_signature_proof) = prepare_outgoing_transaction();
 
     // regular: valid Blake-2b
-    let mut proof =
-        Vec::with_capacity(3 + 2 * AnyHash::SIZE + recipient_signature_proof.serialized_size());
+    let mut proof = Vec::with_capacity(3 + 2 * AnyHash::SIZE + recipient_signature_proof.serialized_size());
     Serialize::serialize(&ProofType::RegularTransfer, &mut proof);
     Serialize::serialize(&HashAlgorithm::Blake2b, &mut proof);
     Serialize::serialize(&1u8, &mut proof);
@@ -139,15 +118,11 @@ fn it_can_create_regular_transfer() {
         .with_fee(0.try_into().unwrap())
         .with_validity_start_height(1)
         .with_network_id(NetworkId::Dummy);
-    let proof_builder = builder
-        .generate()
-        .expect("Builder should be able to create transaction");
+    let proof_builder = builder.generate().expect("Builder should be able to create transaction");
     let mut proof_builder = proof_builder.unwrap_htlc();
     let proof = proof_builder.signature_with_key_pair(&recipient_key_pair);
     proof_builder.regular_transfer(HashAlgorithm::Blake2b, pre_image, 1, hash_root, proof);
-    let tx2 = proof_builder
-        .generate()
-        .expect("Builder should be able to create proof");
+    let tx2 = proof_builder.generate().expect("Builder should be able to create proof");
 
     assert_eq!(tx2, tx);
 }
@@ -155,20 +130,10 @@ fn it_can_create_regular_transfer() {
 #[test]
 #[allow(unused_must_use)]
 fn it_can_create_early_resolve() {
-    let (
-        mut tx,
-        _,
-        _,
-        sender_key_pair,
-        sender_signature_proof,
-        recipient_key_pair,
-        recipient_signature_proof,
-    ) = prepare_outgoing_transaction();
+    let (mut tx, _, _, sender_key_pair, sender_signature_proof, recipient_key_pair, recipient_signature_proof) = prepare_outgoing_transaction();
 
     // early resolve: valid
-    let mut proof = Vec::with_capacity(
-        1 + recipient_signature_proof.serialized_size() + sender_signature_proof.serialized_size(),
-    );
+    let mut proof = Vec::with_capacity(1 + recipient_signature_proof.serialized_size() + sender_signature_proof.serialized_size());
     Serialize::serialize(&ProofType::EarlyResolve, &mut proof);
     Serialize::serialize(&recipient_signature_proof, &mut proof);
     Serialize::serialize(&sender_signature_proof, &mut proof);
@@ -183,16 +148,12 @@ fn it_can_create_early_resolve() {
         .with_fee(0.try_into().unwrap())
         .with_validity_start_height(1)
         .with_network_id(NetworkId::Dummy);
-    let proof_builder = builder
-        .generate()
-        .expect("Builder should be able to create transaction");
+    let proof_builder = builder.generate().expect("Builder should be able to create transaction");
     let mut proof_builder = proof_builder.unwrap_htlc();
     let sender_proof = proof_builder.signature_with_key_pair(&sender_key_pair);
     let recipient_proof = proof_builder.signature_with_key_pair(&recipient_key_pair);
     proof_builder.early_resolve(sender_proof, recipient_proof);
-    let tx2 = proof_builder
-        .generate()
-        .expect("Builder should be able to create proof");
+    let tx2 = proof_builder.generate().expect("Builder should be able to create proof");
 
     assert_eq!(tx2, tx);
 }
@@ -200,8 +161,7 @@ fn it_can_create_early_resolve() {
 #[test]
 #[allow(unused_must_use)]
 fn it_can_create_timeout_resolve() {
-    let (mut tx, _, _, sender_key_pair, sender_signature_proof, _, _) =
-        prepare_outgoing_transaction();
+    let (mut tx, _, _, sender_key_pair, sender_signature_proof, _, _) = prepare_outgoing_transaction();
 
     // timeout resolve: valid
     let mut proof = Vec::with_capacity(1 + sender_signature_proof.serialized_size());
@@ -218,15 +178,11 @@ fn it_can_create_timeout_resolve() {
         .with_fee(0.try_into().unwrap())
         .with_validity_start_height(1)
         .with_network_id(NetworkId::Dummy);
-    let proof_builder = builder
-        .generate()
-        .expect("Builder should be able to create transaction");
+    let proof_builder = builder.generate().expect("Builder should be able to create transaction");
     let mut proof_builder = proof_builder.unwrap_htlc();
     let proof = proof_builder.signature_with_key_pair(&sender_key_pair);
     proof_builder.timeout_resolve(proof);
-    let tx2 = proof_builder
-        .generate()
-        .expect("Builder should be able to create proof");
+    let tx2 = proof_builder.generate().expect("Builder should be able to create proof");
 
     assert_eq!(tx2, tx);
 }

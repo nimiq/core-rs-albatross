@@ -67,9 +67,7 @@ impl ChainInfo {
 
 impl PartialEq for ChainInfo {
     fn eq(&self, other: &Self) -> bool {
-        self.head.eq(&other.head)
-            && self.on_main_chain == other.on_main_chain
-            && self.main_chain_successor.eq(&other.main_chain_successor)
+        self.head.eq(&other.head) && self.on_main_chain == other.on_main_chain && self.main_chain_successor.eq(&other.main_chain_successor)
     }
 }
 

@@ -48,10 +48,7 @@ impl PublicKey {
         if self.public_key.is_zero() {
             return false;
         }
-        let lhs = MNT6_753::pairing(
-            signature.signature,
-            G2Projective::prime_subgroup_generator(),
-        );
+        let lhs = MNT6_753::pairing(signature.signature, G2Projective::prime_subgroup_generator());
         let rhs = MNT6_753::pairing(hash_curve, self.public_key);
         lhs == rhs
     }
@@ -83,9 +80,7 @@ impl PartialOrd<PublicKey> for PublicKey {
 
 impl Ord for PublicKey {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.public_key
-            .into_affine()
-            .lexicographic_cmp(&other.public_key.into_affine())
+        self.public_key.into_affine().lexicographic_cmp(&other.public_key.into_affine())
     }
 }
 

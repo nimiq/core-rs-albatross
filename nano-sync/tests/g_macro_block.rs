@@ -10,9 +10,7 @@ use r1cs_std::prelude::{AllocGadget, UInt32, UInt8};
 use r1cs_std::test_constraint_system::TestConstraintSystem;
 use rand::RngCore;
 
-use nimiq_nano_sync::constants::{
-    sum_generator_g1_mnt6, MAX_NON_SIGNERS, MIN_SIGNERS, VALIDATOR_SLOTS,
-};
+use nimiq_nano_sync::constants::{sum_generator_g1_mnt6, MAX_NON_SIGNERS, MIN_SIGNERS, VALIDATOR_SLOTS};
 use nimiq_nano_sync::gadgets::mnt4::{MacroBlockGadget, Round};
 use nimiq_nano_sync::primitives::{pedersen_generators, MacroBlock};
 
@@ -29,13 +27,7 @@ struct DummyCircuit {
 }
 
 impl DummyCircuit {
-    pub fn new(
-        prepare_agg_pk: G2Projective,
-        commit_agg_pk: G2Projective,
-        block_number: u32,
-        pks_commitment: Vec<u8>,
-        block: MacroBlock,
-    ) -> Self {
+    pub fn new(prepare_agg_pk: G2Projective, commit_agg_pk: G2Projective, block_number: u32, pks_commitment: Vec<u8>, block: MacroBlock) -> Self {
         Self {
             prepare_agg_pk,
             commit_agg_pk,
@@ -47,43 +39,24 @@ impl DummyCircuit {
 }
 
 impl ConstraintSynthesizer<MNT4Fr> for DummyCircuit {
-    fn generate_constraints<CS: ConstraintSystem<MNT4Fr>>(
-        self,
-        cs: &mut CS,
-    ) -> Result<(), SynthesisError> {
+    fn generate_constraints<CS: ConstraintSystem<MNT4Fr>>(self, cs: &mut CS) -> Result<(), SynthesisError> {
         // Allocate all the constants.
-        let max_non_signers_var = FqGadget::alloc_constant(
-            cs.ns(|| "alloc max non signers"),
-            &Fq::from(MAX_NON_SIGNERS as u64),
-        )?;
+        let max_non_signers_var = FqGadget::alloc_constant(cs.ns(|| "alloc max non signers"), &Fq::from(MAX_NON_SIGNERS as u64))?;
 
-        let sig_generator_var = G2Gadget::alloc_constant(
-            cs.ns(|| "alloc signature generator"),
-            &G2Projective::prime_subgroup_generator(),
-        )?;
+        let sig_generator_var = G2Gadget::alloc_constant(cs.ns(|| "alloc signature generator"), &G2Projective::prime_subgroup_generator())?;
 
-        let sum_generator_g1_var =
-            G1Gadget::alloc_constant(cs.ns(|| "alloc sum generator g1"), &sum_generator_g1_mnt6())?;
+        let sum_generator_g1_var = G1Gadget::alloc_constant(cs.ns(|| "alloc sum generator g1"), &sum_generator_g1_mnt6())?;
 
-        let pedersen_generators_var = Vec::<G1Gadget>::alloc_constant(
-            cs.ns(|| "alloc pedersen_generators"),
-            pedersen_generators(256),
-        )?;
+        let pedersen_generators_var = Vec::<G1Gadget>::alloc_constant(cs.ns(|| "alloc pedersen_generators"), pedersen_generators(256))?;
 
         // Allocate private inputs
-        let prepare_agg_pk_var = G2Gadget::alloc(cs.ns(|| "allocating prepare agg pk"), || {
-            Ok(self.prepare_agg_pk)
-        })?;
+        let prepare_agg_pk_var = G2Gadget::alloc(cs.ns(|| "allocating prepare agg pk"), || Ok(self.prepare_agg_pk))?;
 
-        let commit_agg_pk_var = G2Gadget::alloc(cs.ns(|| "allocating commit agg pk"), || {
-            Ok(self.commit_agg_pk)
-        })?;
+        let commit_agg_pk_var = G2Gadget::alloc(cs.ns(|| "allocating commit agg pk"), || Ok(self.commit_agg_pk))?;
 
-        let block_number_var =
-            UInt32::alloc(cs.ns(|| "alloc block number"), Some(self.block_number))?;
+        let block_number_var = UInt32::alloc(cs.ns(|| "alloc block number"), Some(self.block_number))?;
 
-        let pks_commitment_var =
-            UInt8::alloc_vec(cs.ns(|| "alloc pks commitment"), &self.pks_commitment)?;
+        let pks_commitment_var = UInt8::alloc_vec(cs.ns(|| "alloc pks commitment"), &self.pks_commitment)?;
 
         let block_var = MacroBlockGadget::alloc(cs.ns(|| "alloc macro block"), || Ok(&self.block))?;
 
@@ -122,23 +95,16 @@ fn hash_works() {
     let primitive_out = block.hash(1, block_number, pks_commitment.clone());
 
     // Allocate primitive result to facilitate comparison.
-    let primitive_out_var =
-        G1Gadget::alloc(cs.ns(|| "allocate primitive result"), || Ok(primitive_out)).unwrap();
+    let primitive_out_var = G1Gadget::alloc(cs.ns(|| "allocate primitive result"), || Ok(primitive_out)).unwrap();
 
     // Allocate parameters in the circuit.
     let block_var = MacroBlockGadget::alloc(cs.ns(|| "alloc macro block"), || Ok(&block)).unwrap();
 
-    let block_number_var =
-        UInt32::alloc(cs.ns(|| "alloc block number"), Some(block_number)).unwrap();
+    let block_number_var = UInt32::alloc(cs.ns(|| "alloc block number"), Some(block_number)).unwrap();
 
-    let pks_commitment_var =
-        UInt8::alloc_vec(cs.ns(|| "alloc pks commitment"), &pks_commitment).unwrap();
+    let pks_commitment_var = UInt8::alloc_vec(cs.ns(|| "alloc pks commitment"), &pks_commitment).unwrap();
 
-    let pedersen_generators_var = Vec::<G1Gadget>::alloc_constant(
-        cs.ns(|| "alloc pedersen_generators"),
-        pedersen_generators(3),
-    )
-    .unwrap();
+    let pedersen_generators_var = Vec::<G1Gadget>::alloc_constant(cs.ns(|| "alloc pedersen_generators"), pedersen_generators(3)).unwrap();
 
     // Calculate hash using the gadget version.
     let gadget_out = block_var
@@ -189,13 +155,7 @@ fn macro_block_works() {
 
     // Test constraint system.
     let mut test_cs = TestConstraintSystem::new();
-    let circuit = DummyCircuit::new(
-        prepare_agg_pk,
-        commit_agg_pk,
-        block_number,
-        pks_commitment,
-        block,
-    );
+    let circuit = DummyCircuit::new(prepare_agg_pk, commit_agg_pk, block_number, pks_commitment, block);
     circuit.generate_constraints(&mut test_cs).unwrap();
 
     if !test_cs.is_satisfied() {
@@ -239,13 +199,7 @@ fn wrong_prepare_agg_pk() {
 
     // Test constraint system.
     let mut test_cs = TestConstraintSystem::new();
-    let circuit = DummyCircuit::new(
-        G2Projective::prime_subgroup_generator(),
-        commit_agg_pk,
-        block_number,
-        pks_commitment,
-        block,
-    );
+    let circuit = DummyCircuit::new(G2Projective::prime_subgroup_generator(), commit_agg_pk, block_number, pks_commitment, block);
     circuit.generate_constraints(&mut test_cs).unwrap();
 
     assert!(!test_cs.is_satisfied())
@@ -286,13 +240,7 @@ fn wrong_commit_agg_pk() {
 
     // Test constraint system.
     let mut test_cs = TestConstraintSystem::new();
-    let circuit = DummyCircuit::new(
-        prepare_agg_pk,
-        G2Projective::prime_subgroup_generator(),
-        block_number,
-        pks_commitment,
-        block,
-    );
+    let circuit = DummyCircuit::new(prepare_agg_pk, G2Projective::prime_subgroup_generator(), block_number, pks_commitment, block);
     circuit.generate_constraints(&mut test_cs).unwrap();
 
     assert!(!test_cs.is_satisfied())
@@ -374,13 +322,7 @@ fn wrong_pks_commitment() {
 
     // Test constraint system.
     let mut test_cs = TestConstraintSystem::new();
-    let circuit = DummyCircuit::new(
-        prepare_agg_pk,
-        commit_agg_pk,
-        block_number,
-        vec![0u8; 95],
-        block,
-    );
+    let circuit = DummyCircuit::new(prepare_agg_pk, commit_agg_pk, block_number, vec![0u8; 95], block);
     circuit.generate_constraints(&mut test_cs).unwrap();
 
     assert!(!test_cs.is_satisfied())
@@ -424,13 +366,7 @@ fn wrong_header_hash() {
 
     // Test constraint system.
     let mut test_cs = TestConstraintSystem::new();
-    let circuit = DummyCircuit::new(
-        prepare_agg_pk,
-        commit_agg_pk,
-        block_number,
-        pks_commitment,
-        block,
-    );
+    let circuit = DummyCircuit::new(prepare_agg_pk, commit_agg_pk, block_number, pks_commitment, block);
     circuit.generate_constraints(&mut test_cs).unwrap();
 
     assert!(!test_cs.is_satisfied())
@@ -474,13 +410,7 @@ fn wrong_prepare_signature() {
 
     // Test constraint system.
     let mut test_cs = TestConstraintSystem::new();
-    let circuit = DummyCircuit::new(
-        prepare_agg_pk,
-        commit_agg_pk,
-        block_number,
-        pks_commitment,
-        block,
-    );
+    let circuit = DummyCircuit::new(prepare_agg_pk, commit_agg_pk, block_number, pks_commitment, block);
     circuit.generate_constraints(&mut test_cs).unwrap();
 
     assert!(!test_cs.is_satisfied())
@@ -524,13 +454,7 @@ fn wrong_commit_signature() {
 
     // Test constraint system.
     let mut test_cs = TestConstraintSystem::new();
-    let circuit = DummyCircuit::new(
-        prepare_agg_pk,
-        commit_agg_pk,
-        block_number,
-        pks_commitment,
-        block,
-    );
+    let circuit = DummyCircuit::new(prepare_agg_pk, commit_agg_pk, block_number, pks_commitment, block);
     circuit.generate_constraints(&mut test_cs).unwrap();
 
     assert!(!test_cs.is_satisfied())
@@ -572,13 +496,7 @@ fn too_few_signers_prepare() {
 
     // Test constraint system.
     let mut test_cs = TestConstraintSystem::new();
-    let circuit = DummyCircuit::new(
-        prepare_agg_pk,
-        commit_agg_pk,
-        block_number,
-        pks_commitment,
-        block,
-    );
+    let circuit = DummyCircuit::new(prepare_agg_pk, commit_agg_pk, block_number, pks_commitment, block);
     circuit.generate_constraints(&mut test_cs).unwrap();
 
     assert!(!test_cs.is_satisfied())
@@ -620,13 +538,7 @@ fn too_few_signers_commit() {
 
     // Test constraint system.
     let mut test_cs = TestConstraintSystem::new();
-    let circuit = DummyCircuit::new(
-        prepare_agg_pk,
-        commit_agg_pk,
-        block_number,
-        pks_commitment,
-        block,
-    );
+    let circuit = DummyCircuit::new(prepare_agg_pk, commit_agg_pk, block_number, pks_commitment, block);
     circuit.generate_constraints(&mut test_cs).unwrap();
 
     assert!(!test_cs.is_satisfied())
@@ -668,13 +580,7 @@ fn mismatched_signer_sets() {
 
     // Test constraint system.
     let mut test_cs = TestConstraintSystem::new();
-    let circuit = DummyCircuit::new(
-        prepare_agg_pk,
-        commit_agg_pk,
-        block_number,
-        pks_commitment,
-        block,
-    );
+    let circuit = DummyCircuit::new(prepare_agg_pk, commit_agg_pk, block_number, pks_commitment, block);
     circuit.generate_constraints(&mut test_cs).unwrap();
 
     assert!(!test_cs.is_satisfied())

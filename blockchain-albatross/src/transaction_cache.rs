@@ -15,9 +15,7 @@ impl<'a> From<&'a Block> for BlockDescriptor {
     fn from(block: &'a Block) -> Self {
         let transactions = block.transactions();
 
-        let hashes = transactions
-            .map(|txs| txs.iter().map(Hash::hash).collect())
-            .unwrap_or_else(|| vec![]);
+        let hashes = transactions.map(|txs| txs.iter().map(Hash::hash).collect()).unwrap_or_else(|| vec![]);
 
         BlockDescriptor {
             hash: block.hash(),
@@ -68,10 +66,7 @@ impl TransactionCache {
     }
 
     pub fn push_block(&mut self, block: &Block) {
-        assert!(
-            self.block_order.is_empty()
-                || *block.parent_hash() == self.block_order.back().as_ref().unwrap().hash
-        );
+        assert!(self.block_order.is_empty() || *block.parent_hash() == self.block_order.back().as_ref().unwrap().hash);
 
         let descriptor = BlockDescriptor::from(block);
         for hash in &descriptor.transaction_hashes {
@@ -98,10 +93,7 @@ impl TransactionCache {
     }
 
     pub fn prepend_block(&mut self, block: &Block) {
-        assert!(
-            self.block_order.is_empty()
-                || block.hash() == self.block_order.front().as_ref().unwrap().prev_hash
-        );
+        assert!(self.block_order.is_empty() || block.hash() == self.block_order.front().as_ref().unwrap().prev_hash);
 
         assert!(self.missing_blocks() > 0);
 

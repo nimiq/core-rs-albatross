@@ -35,18 +35,10 @@ struct ViewChangeAggregationProtocol {
 }
 
 impl ViewChangeAggregationProtocol {
-    pub fn new(
-        validators: ValidatorSlots,
-        node_id: usize,
-        threshold: usize,
-        message_hash: Blake2sHash,
-    ) -> Self {
+    pub fn new(validators: ValidatorSlots, node_id: usize, threshold: usize, message_hash: Blake2sHash) -> Self {
         let partitioner = Arc::new(BinomialPartitioner::new(node_id, validators.len()));
 
-        let store = Arc::new(RwLock::new(ReplaceStore::<
-            BinomialPartitioner,
-            MultiSignature,
-        >::new(Arc::clone(&partitioner))));
+        let store = Arc::new(RwLock::new(ReplaceStore::<BinomialPartitioner, MultiSignature>::new(Arc::clone(&partitioner))));
 
         let registry = Arc::new(ValidatorRegistry::new(validators));
 
@@ -58,10 +50,7 @@ impl ViewChangeAggregationProtocol {
         ));
 
         ViewChangeAggregationProtocol {
-            verifier: Arc::new(MultithreadedVerifier::new(
-                message_hash,
-                Arc::clone(&registry),
-            )),
+            verifier: Arc::new(MultithreadedVerifier::new(message_hash, Arc::clone(&registry))),
             partitioner,
             evaluator,
             store,
@@ -109,28 +98,16 @@ pub struct ViewChangeAggregation<N: Network> {
 }
 
 impl<N: Network> ViewChangeAggregation<N> {
-    pub async fn start(
-        view_change: SignedViewChange,
-        validator_id: u16,
-        active_validators: ValidatorSlots,
-        network: Arc<N>,
-    ) -> ViewChangeProof {
+    pub async fn start(view_change: SignedViewChange, validator_id: u16, active_validators: ValidatorSlots, network: Arc<N>) -> ViewChangeProof {
         let mut hasher = Blake2sHasher::new();
-        hasher
-            .write_u8(PREFIX_VIEW_CHANGE)
-            .expect("Failed to write prefix to hasher for signature.");
+        hasher.write_u8(PREFIX_VIEW_CHANGE).expect("Failed to write prefix to hasher for signature.");
         view_change
             .message
             .serialize_content(&mut hasher)
             .expect("Failed to write message to hasher for signature.");
         let message_hash = hasher.finish();
 
-        let protocol = ViewChangeAggregationProtocol::new(
-            active_validators,
-            validator_id as usize,
-            policy::TWO_THIRD_SLOTS as usize,
-            message_hash,
-        );
+        let protocol = ViewChangeAggregationProtocol::new(active_validators, validator_id as usize, policy::TWO_THIRD_SLOTS as usize, message_hash);
 
         let mut signature = bls::AggregateSignature::new();
         signature.aggregate(&view_change.signature);
@@ -140,14 +117,9 @@ impl<N: Network> ViewChangeAggregation<N> {
 
         let own_contribution = MultiSignature::new(signature, signers);
 
-        let multi_signature = Aggregation::<ViewChangeAggregationProtocol, N, ViewChange>::start(
-            view_change.message,
-            own_contribution,
-            protocol,
-            Config::default(),
-            network,
-        )
-        .await;
+        let multi_signature =
+            Aggregation::<ViewChangeAggregationProtocol, N, ViewChange>::start(view_change.message, own_contribution, protocol, Config::default(), network)
+                .await;
 
         // Transform into finished ViewChange
         ViewChangeProof::new(multi_signature.signature, multi_signature.signers)

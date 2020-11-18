@@ -17,36 +17,12 @@ pub trait AbstractChainMetrics {
         serializer: &mut server::MetricsSerializer<SerializationType>,
     ) -> Result<(), io::Error> {
         let metrics = blockchain.metrics();
-        serializer.metric_with_attributes(
-            "chain_block",
-            metrics.block_forked_count(),
-            attributes! {"action" => "forked"},
-        )?;
-        serializer.metric_with_attributes(
-            "chain_block",
-            metrics.block_rebranched_count(),
-            attributes! {"action" => "rebranched"},
-        )?;
-        serializer.metric_with_attributes(
-            "chain_block",
-            metrics.block_extended_count(),
-            attributes! {"action" => "extended"},
-        )?;
-        serializer.metric_with_attributes(
-            "chain_block",
-            metrics.block_orphan_count(),
-            attributes! {"action" => "orphan"},
-        )?;
-        serializer.metric_with_attributes(
-            "chain_block",
-            metrics.block_invalid_count(),
-            attributes! {"action" => "invalid"},
-        )?;
-        serializer.metric_with_attributes(
-            "chain_block",
-            metrics.block_known_count(),
-            attributes! {"action" => "known"},
-        )?;
+        serializer.metric_with_attributes("chain_block", metrics.block_forked_count(), attributes! {"action" => "forked"})?;
+        serializer.metric_with_attributes("chain_block", metrics.block_rebranched_count(), attributes! {"action" => "rebranched"})?;
+        serializer.metric_with_attributes("chain_block", metrics.block_extended_count(), attributes! {"action" => "extended"})?;
+        serializer.metric_with_attributes("chain_block", metrics.block_orphan_count(), attributes! {"action" => "orphan"})?;
+        serializer.metric_with_attributes("chain_block", metrics.block_invalid_count(), attributes! {"action" => "invalid"})?;
+        serializer.metric_with_attributes("chain_block", metrics.block_known_count(), attributes! {"action" => "known"})?;
         Ok(())
     }
 }
@@ -62,10 +38,7 @@ impl AbstractChainMetrics for AlbatrossChainMetrics {
 }
 
 impl Metrics for AlbatrossChainMetrics {
-    fn metrics(
-        &self,
-        serializer: &mut server::MetricsSerializer<SerializationType>,
-    ) -> Result<(), io::Error> {
+    fn metrics(&self, serializer: &mut server::MetricsSerializer<SerializationType>) -> Result<(), io::Error> {
         // Release lock as fast as possible.
         {
             let head = self.blockchain.head();

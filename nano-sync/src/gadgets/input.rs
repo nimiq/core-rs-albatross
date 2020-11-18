@@ -11,9 +11,7 @@ pub struct RecursiveInputGadget;
 impl RecursiveInputGadget {
     /// Converts a `Vec<Uint8>` into field elements, each represented by a `Vec<UInt8>`,
     /// that can be read by `Uint8::alloc_input_vec` when passing to a proof verification.
-    pub fn to_field_elements<TargetConstraintF: PrimeField>(
-        input_bytes: &[UInt8],
-    ) -> Result<Vec<Vec<UInt8>>, SynthesisError> {
+    pub fn to_field_elements<TargetConstraintF: PrimeField>(input_bytes: &[UInt8]) -> Result<Vec<Vec<UInt8>>, SynthesisError> {
         let max_size = TargetConstraintF::Params::CAPACITY / 8;
 
         let max_size = max_size as usize;

@@ -30,9 +30,7 @@ impl<S: ContributionStore, P: Partitioner> SingleVote<S, P> {
     }
 }
 
-impl<C: AggregatableContribution, S: ContributionStore<Contribution = C>, P: Partitioner>
-    Evaluator<C> for SingleVote<S, P>
-{
+impl<C: AggregatableContribution, S: ContributionStore<Contribution = C>, P: Partitioner> Evaluator<C> for SingleVote<S, P> {
     fn evaluate(&self, _contribution: &C, _level: usize) -> usize {
         // This is going to be used here, and we don't want any warnings
         let _ = (&self.signature_store, &self.partitioner);
@@ -62,12 +60,7 @@ pub struct WeightedVote<S: ContributionStore, I: WeightRegistry, P: Partitioner>
 }
 
 impl<S: ContributionStore, I: WeightRegistry, P: Partitioner> WeightedVote<S, I, P> {
-    pub fn new(
-        store: Arc<RwLock<S>>,
-        weights: Arc<I>,
-        partitioner: Arc<P>,
-        threshold: usize,
-    ) -> Self {
+    pub fn new(store: Arc<RwLock<S>>, weights: Arc<I>, partitioner: Arc<P>, threshold: usize) -> Self {
         Self {
             store,
             weights,
@@ -77,13 +70,7 @@ impl<S: ContributionStore, I: WeightRegistry, P: Partitioner> WeightedVote<S, I,
     }
 }
 
-impl<
-        C: AggregatableContribution,
-        S: ContributionStore<Contribution = C>,
-        I: WeightRegistry,
-        P: Partitioner,
-    > Evaluator<C> for WeightedVote<S, I, P>
-{
+impl<C: AggregatableContribution, S: ContributionStore<Contribution = C>, I: WeightRegistry, P: Partitioner> Evaluator<C> for WeightedVote<S, I, P> {
     /// takes an unverified contribution and scroes it in terms of usefulness with
     ///
     /// `0` being not useful at all, can be discarded.
@@ -97,11 +84,7 @@ impl<
         let store = self.store.read();
 
         // check if we already know this individual signature
-        if contribution.num_contributors() == 1
-            && store
-                .individual_signature(level, contribution.contributor())
-                .is_some()
-        {
+        if contribution.num_contributors() == 1 && store.individual_signature(level, contribution.contributor()).is_some() {
             // If we already know it for this level, score it as 0
             trace!(
                 "Individual contribution from peer {} for level {} already known",
@@ -127,10 +110,7 @@ impl<
             }
 
             // check if the best signature is better than the new one
-            if best_contribution
-                .contributors()
-                .is_superset(&contribution.contributors())
-            {
+            if best_contribution.contributors().is_superset(&contribution.contributors()) {
                 trace!("Best signature is better");
                 return 0;
             }
@@ -154,8 +134,7 @@ impl<
 
         // ---------------------------------------------
 
-        let (new_total, added_sigs, combined_sigs) = if let Some(best_signature) = best_contribution
-        {
+        let (new_total, added_sigs, combined_sigs) = if let Some(best_signature) = best_contribution {
             // TODO weights!
             if signers.intersection_size(&best_signature.contributors()) > 0 {
                 // can't merge
@@ -169,11 +148,7 @@ impl<
                 let final_sig = &with_individuals | &best_signature.contributors();
                 let new_total = final_sig.len();
                 let combined_sigs = (final_sig ^ (&best_signature.contributors() | &signers)).len();
-                (
-                    new_total,
-                    new_total - best_signature.num_contributors(),
-                    combined_sigs,
-                )
+                (new_total, new_total - best_signature.num_contributors(), combined_sigs)
             }
         } else {
             // best is the new signature with the individual signatures
@@ -181,12 +156,7 @@ impl<
             (new_total, new_total, new_total - signers.len())
         };
 
-        trace!(
-            "new_total={}, added_sigs={}, combined_sigs={}",
-            new_total,
-            added_sigs,
-            combined_sigs
-        );
+        trace!("new_total={}, added_sigs={}, combined_sigs={}", new_total, added_sigs, combined_sigs);
 
         // compute score
         // TODO: Remove magic numbers! What do they mean? I don't think this is discussed in the paper.
@@ -210,11 +180,7 @@ impl<
             .signature_weight(signature)
             .unwrap_or_else(|| panic!("Missing weights for signature: {:?}", signature));
 
-        trace!(
-            "is_final(): votes={}, final={}",
-            votes,
-            votes >= self.threshold
-        );
+        trace!("is_final(): votes={}, final={}", votes, votes >= self.threshold);
         votes >= self.threshold
     }
 

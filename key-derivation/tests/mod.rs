@@ -33,7 +33,7 @@ fn it_correctly_derives_keys() {
     // Test vectors from https://github.com/trezor/python-mnemonic/blob/master/vectors.json
     const SEEDS: [&str; 2] = [
         "000102030405060708090a0b0c0d0e0f",
-        "fffcf9f6f3f0edeae7e4e1dedbd8d5d2cfccc9c6c3c0bdbab7b4b1aeaba8a5a29f9c999693908d8a8784817e7b7875726f6c696663605d5a5754514e4b484542"
+        "fffcf9f6f3f0edeae7e4e1dedbd8d5d2cfccc9c6c3c0bdbab7b4b1aeaba8a5a29f9c999693908d8a8784817e7b7875726f6c696663605d5a5754514e4b484542",
     ];
 
     const TEST_CASES: [[TestVector; 6]; 2] = [
@@ -121,12 +121,7 @@ fn it_correctly_derives_keys() {
         for (j, vector) in vectors.iter().enumerate() {
             let key = ExtendedPrivateKey::from_seed(seed.clone());
             let key = key.derive_path(vector.path);
-            assert!(
-                key.is_some(),
-                "Could not derive path for seed {} in test case {}",
-                i,
-                j
-            );
+            assert!(key.is_some(), "Could not derive path for seed {} in test case {}", i, j);
             let key = key.unwrap();
 
             assert_eq!(

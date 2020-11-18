@@ -11,12 +11,8 @@ use r1cs_std::test_constraint_system::TestConstraintSystem;
 use rand::RngCore;
 
 use nimiq_nano_sync::circuits::mnt4::PKTreeLeafCircuit;
-use nimiq_nano_sync::constants::{
-    sum_generator_g1_mnt6, sum_generator_g2_mnt6, PK_TREE_BREADTH, PK_TREE_DEPTH, VALIDATOR_SLOTS,
-};
-use nimiq_nano_sync::primitives::{
-    merkle_tree_construct, merkle_tree_prove, pedersen_generators, pedersen_hash,
-};
+use nimiq_nano_sync::constants::{sum_generator_g1_mnt6, sum_generator_g2_mnt6, PK_TREE_BREADTH, PK_TREE_DEPTH, VALIDATOR_SLOTS};
+use nimiq_nano_sync::primitives::{merkle_tree_construct, merkle_tree_prove, pedersen_generators, pedersen_hash};
 use nimiq_nano_sync::utils::{bytes_to_bits, serialize_g1_mnt6, serialize_g2_mnt6};
 
 // When running tests you are advised to run only one test at a time or you might run out of RAM.
@@ -50,9 +46,7 @@ fn everything_works() {
     for i in 0..PK_TREE_BREADTH {
         let mut bits = Vec::new();
         for j in 0..VALIDATOR_SLOTS / PK_TREE_BREADTH {
-            bits.extend(bytes_to_bits(&serialize_g2_mnt6(
-                pks[i * VALIDATOR_SLOTS / PK_TREE_BREADTH + j],
-            )));
+            bits.extend(bytes_to_bits(&serialize_g2_mnt6(pks[i * VALIDATOR_SLOTS / PK_TREE_BREADTH + j])));
         }
         pks_bits.push(bits);
     }
@@ -128,9 +122,7 @@ fn wrong_pks() {
     for i in 0..PK_TREE_BREADTH {
         let mut bits = Vec::new();
         for j in 0..VALIDATOR_SLOTS / PK_TREE_BREADTH {
-            bits.extend(bytes_to_bits(&serialize_g2_mnt6(
-                pks[i * VALIDATOR_SLOTS / PK_TREE_BREADTH + j],
-            )));
+            bits.extend(bytes_to_bits(&serialize_g2_mnt6(pks[i * VALIDATOR_SLOTS / PK_TREE_BREADTH + j])));
         }
         pks_bits.push(bits);
     }
@@ -210,9 +202,7 @@ fn wrong_merkle_proof() {
     for i in 0..PK_TREE_BREADTH {
         let mut bits = Vec::new();
         for j in 0..VALIDATOR_SLOTS / PK_TREE_BREADTH {
-            bits.extend(bytes_to_bits(&serialize_g2_mnt6(
-                pks[i * VALIDATOR_SLOTS / PK_TREE_BREADTH + j],
-            )));
+            bits.extend(bytes_to_bits(&serialize_g2_mnt6(pks[i * VALIDATOR_SLOTS / PK_TREE_BREADTH + j])));
         }
         pks_bits.push(bits);
     }
@@ -285,9 +275,7 @@ fn wrong_agg_pk() {
     for i in 0..PK_TREE_BREADTH {
         let mut bits = Vec::new();
         for j in 0..VALIDATOR_SLOTS / PK_TREE_BREADTH {
-            bits.extend(bytes_to_bits(&serialize_g2_mnt6(
-                pks[i * VALIDATOR_SLOTS / PK_TREE_BREADTH + j],
-            )));
+            bits.extend(bytes_to_bits(&serialize_g2_mnt6(pks[i * VALIDATOR_SLOTS / PK_TREE_BREADTH + j])));
         }
         pks_bits.push(bits);
     }
@@ -360,9 +348,7 @@ fn wrong_commitment() {
     for i in 0..PK_TREE_BREADTH {
         let mut bits = Vec::new();
         for j in 0..VALIDATOR_SLOTS / PK_TREE_BREADTH {
-            bits.extend(bytes_to_bits(&serialize_g2_mnt6(
-                pks[i * VALIDATOR_SLOTS / PK_TREE_BREADTH + j],
-            )));
+            bits.extend(bytes_to_bits(&serialize_g2_mnt6(pks[i * VALIDATOR_SLOTS / PK_TREE_BREADTH + j])));
         }
         pks_bits.push(bits);
     }
@@ -435,9 +421,7 @@ fn wrong_bitmap() {
     for i in 0..PK_TREE_BREADTH {
         let mut bits = Vec::new();
         for j in 0..VALIDATOR_SLOTS / PK_TREE_BREADTH {
-            bits.extend(bytes_to_bits(&serialize_g2_mnt6(
-                pks[i * VALIDATOR_SLOTS / PK_TREE_BREADTH + j],
-            )));
+            bits.extend(bytes_to_bits(&serialize_g2_mnt6(pks[i * VALIDATOR_SLOTS / PK_TREE_BREADTH + j])));
         }
         pks_bits.push(bits);
     }
@@ -513,9 +497,7 @@ fn wrong_position() {
     for i in 0..PK_TREE_BREADTH {
         let mut bits = Vec::new();
         for j in 0..VALIDATOR_SLOTS / PK_TREE_BREADTH {
-            bits.extend(bytes_to_bits(&serialize_g2_mnt6(
-                pks[i * VALIDATOR_SLOTS / PK_TREE_BREADTH + j],
-            )));
+            bits.extend(bytes_to_bits(&serialize_g2_mnt6(pks[i * VALIDATOR_SLOTS / PK_TREE_BREADTH + j])));
         }
         pks_bits.push(bits);
     }

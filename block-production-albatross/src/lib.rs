@@ -13,10 +13,7 @@ use std::sync::Arc;
 
 use block::ForkProof;
 use block::MicroJustification;
-use block::{
-    MacroBody, MacroHeader, MicroBlock, MicroBody, MicroHeader, PbftProposal, ViewChangeProof,
-    ViewChanges,
-};
+use block::{MacroBody, MacroHeader, MicroBlock, MicroBody, MicroHeader, PbftProposal, ViewChangeProof, ViewChanges};
 use blockchain::blockchain::Blockchain;
 use blockchain::history_store::ExtendedTransaction;
 use bls::KeyPair;
@@ -83,16 +80,10 @@ impl BlockProducer {
 
         // Calculate the seed for this block by signing the previous block seed with the validator
         // key.
-        let seed = self
-            .blockchain
-            .head()
-            .seed()
-            .sign_next(&self.validator_key.secret_key);
+        let seed = self.blockchain.head().seed().sign_next(&self.validator_key.secret_key);
 
         // Calculate the maximum allowed size for the micro block body.
-        let max_size = MicroBlock::MAX_SIZE
-            - MicroHeader::SIZE
-            - MicroBody::get_metadata_size(fork_proofs.len());
+        let max_size = MicroBlock::MAX_SIZE - MicroHeader::SIZE - MicroBody::get_metadata_size(fork_proofs.len());
 
         // Get the transactions from the mempool.
         let mut transactions = self
@@ -105,16 +96,10 @@ impl BlockProducer {
         transactions.sort_unstable_by(|a, b| a.cmp_block_order(b));
 
         // Creates a new ViewChanges struct.
-        let view_changes = ViewChanges::new(
-            self.blockchain.block_number() + 1,
-            self.blockchain.next_view_number(),
-            view_number,
-        );
+        let view_changes = ViewChanges::new(self.blockchain.block_number() + 1, self.blockchain.next_view_number(), view_number);
 
         // Create the inherents from the fork proofs and the view changes.
-        let inherents = self
-            .blockchain
-            .create_slash_inherents(&fork_proofs, &view_changes, None);
+        let inherents = self.blockchain.create_slash_inherents(&fork_proofs, &view_changes, None);
 
         // Update the state and calculate the state root.
         let state_root = self
@@ -125,10 +110,7 @@ impl BlockProducer {
             .expect("Failed to compute accounts hash during block production");
 
         // Create the micro block body.
-        let body = MicroBody {
-            fork_proofs,
-            transactions,
-        };
+        let body = MicroBody { fork_proofs, transactions };
 
         // Create the micro block header.
         let header = MicroHeader {
@@ -150,10 +132,7 @@ impl BlockProducer {
         MicroBlock {
             header,
             body: Some(body),
-            justification: Some(MicroJustification {
-                signature,
-                view_change_proof,
-            }),
+            justification: Some(MicroJustification { signature, view_change_proof }),
         }
     }
 
@@ -188,11 +167,7 @@ impl BlockProducer {
 
         // Calculate the seed for this block by signing the previous block seed with the validator
         // key.
-        let seed = self
-            .blockchain
-            .head()
-            .seed()
-            .sign_next(&self.validator_key.secret_key);
+        let seed = self.blockchain.head().seed().sign_next(&self.validator_key.secret_key);
 
         // Create the header for the macro block without the state root and the transactions root.
         // We need several fields of this header in order to calculate the transactions and the
@@ -244,26 +219,14 @@ impl BlockProducer {
             .expect("Failed to compute history root during block production.");
 
         // Calculate the disabled set for the current validator set.
-        let disabled_set = self
-            .blockchain
-            .get_staking_contract()
-            .previous_disabled_slots();
+        let disabled_set = self.blockchain.get_staking_contract().previous_disabled_slots();
 
         // Calculate the lost reward set for the current validator set.
-        let lost_reward_set = self
-            .blockchain
-            .get_staking_contract()
-            .previous_lost_rewards();
+        let lost_reward_set = self.blockchain.get_staking_contract().previous_lost_rewards();
 
         // If this is an election block, calculate the validator set for the next epoch.
         let validators = if policy::is_election_block_at(self.blockchain.block_number() + 1) {
-            Some(
-                self.blockchain
-                    .state()
-                    .current_validators()
-                    .unwrap()
-                    .clone(),
-            )
+            Some(self.blockchain.state().current_validators().unwrap().clone())
         } else {
             None
         };
@@ -293,9 +256,8 @@ impl BlockProducer {
 #[cfg(any(test, feature = "test-utils"))]
 pub mod test_utils {
     use block::{
-        Block, MacroBlock, PbftCommitMessage, PbftPrepareMessage, PbftProofBuilder,
-        SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedViewChange, ViewChange,
-        ViewChangeProofBuilder,
+        Block, MacroBlock, PbftCommitMessage, PbftPrepareMessage, PbftProofBuilder, SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedViewChange,
+        ViewChange, ViewChangeProofBuilder,
     };
     use blockchain::PushResult;
     use bls::lazy::LazyPublicKey;
@@ -310,26 +272,13 @@ pub mod test_utils {
         let init_height = blockchain.block_number();
         let macro_block_number = policy::macro_block_after(init_height + 1);
         for i in (init_height + 1)..macro_block_number {
-            let last_micro_block = producer.next_micro_block(
-                blockchain.time.now() + i as u64 * 1000,
-                0,
-                None,
-                vec![],
-                vec![0x42],
-            );
-            assert_eq!(
-                blockchain.push(Block::Micro(last_micro_block)),
-                Ok(PushResult::Extended)
-            );
+            let last_micro_block = producer.next_micro_block(blockchain.time.now() + i as u64 * 1000, 0, None, vec![], vec![0x42]);
+            assert_eq!(blockchain.push(Block::Micro(last_micro_block)), Ok(PushResult::Extended));
         }
         assert_eq!(blockchain.block_number(), macro_block_number - 1);
     }
 
-    pub fn sign_macro_block(
-        keypair: &KeyPair,
-        proposal: PbftProposal,
-        extrinsics: Option<MacroBody>,
-    ) -> MacroBlock {
+    pub fn sign_macro_block(keypair: &KeyPair, proposal: PbftProposal, extrinsics: Option<MacroBody>) -> MacroBlock {
         let block_hash = proposal.header.hash::<Blake2bHash>();
 
         // create signed prepare and commit
@@ -340,11 +289,7 @@ pub mod test_utils {
             &keypair.secret_key,
             0,
         );
-        let commit = SignedPbftCommitMessage::from_message(
-            PbftCommitMessage { block_hash },
-            &keypair.secret_key,
-            0,
-        );
+        let commit = SignedPbftCommitMessage::from_message(PbftCommitMessage { block_hash }, &keypair.secret_key, 0);
 
         // create proof
         let mut pbft_proof = PbftProofBuilder::new();
@@ -358,26 +303,17 @@ pub mod test_utils {
         }
     }
 
-    pub fn sign_view_change(
-        keypair: &KeyPair,
-        prev_seed: VrfSeed,
-        block_number: u32,
-        new_view_number: u32,
-    ) -> ViewChangeProof {
+    pub fn sign_view_change(keypair: &KeyPair, prev_seed: VrfSeed, block_number: u32, new_view_number: u32) -> ViewChangeProof {
         let view_change = ViewChange {
             block_number,
             new_view_number,
             prev_seed,
         };
-        let signed_view_change =
-            SignedViewChange::from_message(view_change.clone(), &keypair.secret_key, 0);
+        let signed_view_change = SignedViewChange::from_message(view_change.clone(), &keypair.secret_key, 0);
 
         let mut proof_builder = ViewChangeProofBuilder::new();
         proof_builder.add_signature(&keypair.public_key, policy::SLOTS, &signed_view_change);
-        assert_eq!(
-            proof_builder.verify(&view_change, policy::TWO_THIRD_SLOTS),
-            Ok(())
-        );
+        assert_eq!(proof_builder.verify(&view_change, policy::TWO_THIRD_SLOTS), Ok(()));
 
         let proof = proof_builder.build();
         let validators = ValidatorSlots::new(vec![ValidatorSlotBand::new(
@@ -385,35 +321,21 @@ pub mod test_utils {
             Address::default(),
             policy::SLOTS,
         )]);
-        assert_eq!(
-            proof.verify(&view_change, &validators, policy::TWO_THIRD_SLOTS),
-            Ok(())
-        );
+        assert_eq!(proof.verify(&view_change, &validators, policy::TWO_THIRD_SLOTS), Ok(()));
 
         proof
     }
 
-    pub fn produce_macro_blocks(
-        num_macro: usize,
-        producer: &BlockProducer,
-        blockchain: &Arc<Blockchain>,
-    ) {
+    pub fn produce_macro_blocks(num_macro: usize, producer: &BlockProducer, blockchain: &Arc<Blockchain>) {
         for _ in 0..num_macro {
             fill_micro_blocks(producer, blockchain);
 
             let _next_block_height = blockchain.block_number() + 1;
-            let (proposal, extrinsics) = producer.next_macro_block_proposal(
-                blockchain.time.now() + blockchain.block_number() as u64 * 1000,
-                0u32,
-                None,
-                vec![],
-            );
+            let (proposal, extrinsics) =
+                producer.next_macro_block_proposal(blockchain.time.now() + blockchain.block_number() as u64 * 1000, 0u32, None, vec![]);
 
             let block = sign_macro_block(&producer.validator_key, proposal, Some(extrinsics));
-            assert_eq!(
-                blockchain.push(Block::Macro(block)),
-                Ok(PushResult::Extended)
-            );
+            assert_eq!(blockchain.push(Block::Macro(block)), Ok(PushResult::Extended));
         }
     }
 }

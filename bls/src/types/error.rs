@@ -1,7 +1,6 @@
 use hex::FromHexError;
 use thiserror::Error;
 
-
 // TODO: These both are identical
 #[derive(Debug, Error)]
 pub enum ParseError {

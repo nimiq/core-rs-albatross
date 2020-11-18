@@ -21,11 +21,7 @@ impl CheckSigGadget {
         generator: &G2Gadget,
     ) -> Result<(), SynthesisError> {
         // Make some initial sanity checks.
-        assert_eq!(
-            hash_points.len(),
-            public_keys.len(),
-            "One hash point per public key is required"
-        );
+        assert_eq!(hash_points.len(), public_keys.len(), "One hash point per public key is required");
 
         assert!(hash_points.len() > 1, "Min one message is required");
 
@@ -33,8 +29,7 @@ impl CheckSigGadget {
         let mut pub_key_p_vars = vec![];
 
         for (i, public_key) in public_keys.iter().enumerate() {
-            let pub_key_p_var: G2PreparedGadget =
-                PairingGadget::prepare_g2(cs.ns(|| format!("pub_key_p {}", i)), public_key)?;
+            let pub_key_p_var: G2PreparedGadget = PairingGadget::prepare_g2(cs.ns(|| format!("pub_key_p {}", i)), public_key)?;
             pub_key_p_vars.push(pub_key_p_var);
         }
 
@@ -42,8 +37,7 @@ impl CheckSigGadget {
         let mut hash_p_vars = vec![];
 
         for (i, hash_point) in hash_points.iter().enumerate() {
-            let hash_p_var: G1PreparedGadget =
-                PairingGadget::prepare_g1(cs.ns(|| format!("hash_p {}", i)), hash_point)?;
+            let hash_p_var: G1PreparedGadget = PairingGadget::prepare_g1(cs.ns(|| format!("hash_p {}", i)), hash_point)?;
             hash_p_vars.push(hash_p_var);
         }
 
@@ -51,28 +45,18 @@ impl CheckSigGadget {
         let sig_p_var: G1PreparedGadget = PairingGadget::prepare_g1(cs.ns(|| "sig_p"), &signature)?;
 
         // Prepare the generator elliptic curve point.
-        let generator_p_var: G2PreparedGadget =
-            PairingGadget::prepare_g2(cs.ns(|| "generator"), &generator)?;
+        let generator_p_var: G2PreparedGadget = PairingGadget::prepare_g2(cs.ns(|| "generator"), &generator)?;
 
         // Calculate the pairing for the left hand side of the verification equation.
         // e(sig, gen)
-        let pairing1_var =
-            PairingGadget::pairing(cs.ns(|| "sig pairing"), sig_p_var, generator_p_var)?;
+        let pairing1_var = PairingGadget::pairing(cs.ns(|| "sig pairing"), sig_p_var, generator_p_var)?;
 
         // Calculate the pairings for the right hand side of the verification equation.
         // e(hash_1, pk_1), e(hash_2, pk_2), ... , e(hash_n, pk_n)
         let mut pairings2_var = vec![];
 
-        for (i, (hash_p_var, pub_key_p_var)) in hash_p_vars
-            .drain(..)
-            .zip(pub_key_p_vars.drain(..))
-            .enumerate()
-        {
-            let pairing2_var = PairingGadget::pairing(
-                cs.ns(|| format!("pub pairing {}", i)),
-                hash_p_var,
-                pub_key_p_var,
-            )?;
+        for (i, (hash_p_var, pub_key_p_var)) in hash_p_vars.drain(..).zip(pub_key_p_vars.drain(..)).enumerate() {
+            let pairing2_var = PairingGadget::pairing(cs.ns(|| format!("pub pairing {}", i)), hash_p_var, pub_key_p_var)?;
             pairings2_var.push(pairing2_var);
         }
 

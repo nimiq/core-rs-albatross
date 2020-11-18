@@ -3,9 +3,7 @@ use std::fs::File;
 use algebra::mnt4_753::{Fq, Fr, MNT4_753};
 use algebra::mnt6_753::Fr as MNT6Fr;
 use algebra_core::CanonicalDeserialize;
-use crypto_primitives::nizk::groth16::constraints::{
-    Groth16VerifierGadget, ProofGadget, VerifyingKeyGadget,
-};
+use crypto_primitives::nizk::groth16::constraints::{Groth16VerifierGadget, ProofGadget, VerifyingKeyGadget};
 use crypto_primitives::nizk::groth16::Groth16;
 use crypto_primitives::NIZKVerifierGadget;
 use groth16::{Proof, VerifyingKey};
@@ -45,12 +43,7 @@ pub struct MacroBlockWrapperCircuit {
 }
 
 impl MacroBlockWrapperCircuit {
-    pub fn new(
-        vk_file: &'static str,
-        proof: Proof<MNT4_753>,
-        initial_state_commitment: Vec<u8>,
-        final_state_commitment: Vec<u8>,
-    ) -> Self {
+    pub fn new(vk_file: &'static str, proof: Proof<MNT4_753>, initial_state_commitment: Vec<u8>, final_state_commitment: Vec<u8>) -> Self {
         Self {
             vk_file,
             proof,
@@ -62,10 +55,7 @@ impl MacroBlockWrapperCircuit {
 
 impl ConstraintSynthesizer<MNT6Fr> for MacroBlockWrapperCircuit {
     /// This function generates the constraints for the circuit.
-    fn generate_constraints<CS: ConstraintSystem<MNT6Fr>>(
-        self,
-        cs: &mut CS,
-    ) -> Result<(), SynthesisError> {
+    fn generate_constraints<CS: ConstraintSystem<MNT6Fr>>(self, cs: &mut CS) -> Result<(), SynthesisError> {
         // Load the verifying key from file.
         let mut file = File::open(format!("verifying_keys/{}", &self.vk_file))?;
 
@@ -75,8 +65,7 @@ impl ConstraintSynthesizer<MNT6Fr> for MacroBlockWrapperCircuit {
         #[allow(unused_mut)]
         let mut cost = start_cost_analysis!(cs, || "Alloc constants");
 
-        let vk_macro_block_var =
-            TheVkGadget::alloc_constant(cs.ns(|| "alloc vk macro block"), &vk_macro_block)?;
+        let vk_macro_block_var = TheVkGadget::alloc_constant(cs.ns(|| "alloc vk macro block"), &vk_macro_block)?;
 
         // Allocate all the private inputs.
         next_cost_analysis!(cs, cost, || { "Alloc private inputs" });
@@ -86,25 +75,16 @@ impl ConstraintSynthesizer<MNT6Fr> for MacroBlockWrapperCircuit {
         // Allocate all the public inputs.
         next_cost_analysis!(cs, cost, || { "Alloc public inputs" });
 
-        let initial_state_commitment_var = UInt8::alloc_input_vec(
-            cs.ns(|| "alloc initial state commitment"),
-            self.initial_state_commitment.as_ref(),
-        )?;
+        let initial_state_commitment_var = UInt8::alloc_input_vec(cs.ns(|| "alloc initial state commitment"), self.initial_state_commitment.as_ref())?;
 
-        let final_state_commitment_var = UInt8::alloc_input_vec(
-            cs.ns(|| "alloc final state commitment"),
-            self.final_state_commitment.as_ref(),
-        )?;
+        let final_state_commitment_var = UInt8::alloc_input_vec(cs.ns(|| "alloc final state commitment"), self.final_state_commitment.as_ref())?;
 
         // Verify the ZK proof.
         next_cost_analysis!(cs, cost, || { "Verify ZK proof" });
 
-        let mut proof_inputs =
-            RecursiveInputGadget::to_field_elements::<Fr>(&initial_state_commitment_var)?;
+        let mut proof_inputs = RecursiveInputGadget::to_field_elements::<Fr>(&initial_state_commitment_var)?;
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
-            &final_state_commitment_var,
-        )?);
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(&final_state_commitment_var)?);
 
         <TheVerifierGadget as NIZKVerifierGadget<TheProofSystem, Fq>>::check_verify(
             cs.ns(|| "verify groth16 proof"),

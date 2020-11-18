@@ -74,14 +74,10 @@ fn is_ipv4_globally_reachable_legacy(ipv4: Ipv4Addr) -> bool {
     true
 }
 
-
 #[cfg(test)]
 mod tests {
-    use std::{
-        str::FromStr,
-        net::IpAddr,
-    };
     use super::is_ip_globally_reachable_legacy;
+    use std::{net::IpAddr, str::FromStr};
 
     #[test]
     fn is_ip_globally_reachable_legacy_falsifys() {
@@ -102,9 +98,7 @@ mod tests {
             "::ffff:127.0.0.1",
         ];
         for bad_ip in bad_ips {
-            assert!(!is_ip_globally_reachable_legacy(
-                &IpAddr::from_str(bad_ip).unwrap()
-            ));
+            assert!(!is_ip_globally_reachable_legacy(&IpAddr::from_str(bad_ip).unwrap()));
         }
     }
 
@@ -123,9 +117,7 @@ mod tests {
             "::ffff:100.168.2.1",
         ];
         for good_ip in good_ips {
-            assert!(is_ip_globally_reachable_legacy(
-                &IpAddr::from_str(good_ip).unwrap()
-            ));
+            assert!(is_ip_globally_reachable_legacy(&IpAddr::from_str(good_ip).unwrap()));
         }
     }
 }

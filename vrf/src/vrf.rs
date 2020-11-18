@@ -34,10 +34,7 @@ pub struct VrfSeed {
 
 impl VrfSeed {
     pub fn verify(&self, prev_seed: &VrfSeed, public_key: &PublicKey) -> Result<(), VrfError> {
-        let signature = self
-            .signature
-            .uncompress()
-            .map_err(|_| VrfError::InvalidSignature)?;
+        let signature = self.signature.uncompress().map_err(|_| VrfError::InvalidSignature)?;
 
         // Hash use-case prefix and signature
         let mut hasher = Blake2sHasher::new();

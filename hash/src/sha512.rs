@@ -8,11 +8,7 @@ pub struct Sha512Hash([u8; SHA512_LENGTH]);
 
 impl<'a> From<&'a [u8]> for Sha512Hash {
     fn from(slice: &'a [u8]) -> Self {
-        assert_eq!(
-            slice.len(),
-            SHA512_LENGTH,
-            "Tried to create instance with slice of wrong length"
-        );
+        assert_eq!(slice.len(), SHA512_LENGTH, "Tried to create instance with slice of wrong length");
         let mut a = [0 as u8; SHA512_LENGTH];
         a.clone_from_slice(&slice[0..SHA512_LENGTH]);
         Sha512Hash(a)
@@ -20,9 +16,7 @@ impl<'a> From<&'a [u8]> for Sha512Hash {
 }
 
 impl ::beserial::Deserialize for Sha512Hash {
-    fn deserialize<R: ::beserial::ReadBytesExt>(
-        reader: &mut R,
-    ) -> Result<Self, ::beserial::SerializingError> {
+    fn deserialize<R: ::beserial::ReadBytesExt>(reader: &mut R) -> Result<Self, ::beserial::SerializingError> {
         let mut a = [0 as u8; SHA512_LENGTH];
         reader.read_exact(&mut a[..])?;
         Ok(Sha512Hash(a))
@@ -30,10 +24,7 @@ impl ::beserial::Deserialize for Sha512Hash {
 }
 
 impl ::beserial::Serialize for Sha512Hash {
-    fn serialize<W: ::beserial::WriteBytesExt>(
-        &self,
-        writer: &mut W,
-    ) -> Result<usize, ::beserial::SerializingError> {
+    fn serialize<W: ::beserial::WriteBytesExt>(&self, writer: &mut W) -> Result<usize, ::beserial::SerializingError> {
         writer.write_all(&self.0)?;
         Ok(SHA512_LENGTH)
     }
