@@ -4,8 +4,6 @@ use std::io;
 use std::iter::Iterator;
 use std::str::FromStr;
 
-use hex::FromHex;
-
 use hash::{hash_typed_array, Blake2bHash, Blake2bHasher, Hasher};
 use macros::{add_hex_io_fns_typed_arr, create_typed_array};
 
@@ -36,6 +34,10 @@ pub enum AddressParseError {
 impl Address {
     const CCODE: &'static str = "NQ";
     const NIMIQ_ALPHABET: &'static str = "0123456789ABCDEFGHJKLMNPQRSTUVXY";
+
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.0
+    }
 
     pub fn from_user_friendly_address(friendly_addr: &str) -> Result<Address, AddressParseError> {
         let friendly_addr_wospace = str::replace(friendly_addr, " ", "");

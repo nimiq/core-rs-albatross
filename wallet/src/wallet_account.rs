@@ -3,7 +3,7 @@ use std::io;
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError};
 use database::{FromDatabaseValue, IntoDatabaseValue};
 use keys::{Address, KeyPair, PublicKey, SecureGenerate, Signature};
-use nimiq_hash::{Hash, Sha256Hash};
+use nimiq_hash::{Hash, Sha256Hash, HashOutput};
 use nimiq_utils::otp::Verify;
 use primitives::coin::Coin;
 use primitives::networks::NetworkId;

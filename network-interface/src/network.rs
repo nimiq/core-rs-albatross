@@ -5,10 +5,7 @@ use async_trait::async_trait;
 use futures::stream::{FusedStream, SelectAll};
 use futures::task::{Context, Poll};
 use futures::{future, ready, stream, Stream, StreamExt, TryFutureExt};
-use tokio::sync::{
-    broadcast::{Receiver as BroadcastReceiver, RecvError as BroadcastRecvError},
-    mpsc,
-};
+use tokio::sync::broadcast::{Receiver as BroadcastReceiver, RecvError as BroadcastRecvError};
 
 use beserial::{Serialize, Deserialize};
 

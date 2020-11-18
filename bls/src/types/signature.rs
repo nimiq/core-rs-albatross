@@ -3,6 +3,8 @@ use std::fmt;
 use algebra::mnt6_753::G1Projective;
 use algebra_core::curves::ProjectiveCurve;
 
+use nimiq_hash::HashOutput;
+
 use crate::compression::BeSerialize;
 use crate::pedersen::{pedersen_generators, pedersen_hash};
 use crate::utils::bytes_to_bits;

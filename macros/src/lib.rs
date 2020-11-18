@@ -64,9 +64,7 @@ macro_rules! create_typed_array {
                 $len
             }
 
-            // NOTE: These arrays don't always consist of bytes
-            #[deprecated]
-            pub fn as_bytes(&self) -> &[$t] {
+            pub fn as_slice(&self) -> &[$t] {
                 &self.0
             }
         }

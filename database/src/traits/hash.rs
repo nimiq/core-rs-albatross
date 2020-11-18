@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::io;
 
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::{Blake2bHash, HashOutput};
 
 use crate::{AsDatabaseBytes, FromDatabaseValue};
 

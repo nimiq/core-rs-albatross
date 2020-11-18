@@ -145,6 +145,12 @@ pub enum ProofType {
 create_typed_array!(AnyHash, u8, 32);
 add_hex_io_fns_typed_arr!(AnyHash, AnyHash::SIZE);
 
+impl AnyHash {
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.0
+    }
+}
+
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub struct CreationTransactionData {
     pub sender: Address,

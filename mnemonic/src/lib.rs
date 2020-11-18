@@ -11,7 +11,7 @@ use hex::FromHex;
 use unicode_normalization::UnicodeNormalization;
 
 use hash::pbkdf2::{compute_pbkdf2_sha512, Pbkdf2Error};
-use hash::{Hasher, Sha256Hasher};
+use hash::{Hasher, Sha256Hasher, HashOutput};
 use macros::{add_hex_io_fns_typed_arr, create_typed_array};
 use utils::crc::Crc8Computer;
 
@@ -24,6 +24,10 @@ add_hex_io_fns_typed_arr!(Entropy, 32);
 
 impl Entropy {
     const CHECKSUM_SIZE: usize = 8;
+
+    fn as_bytes(&self) -> &[u8] {
+        &self.0
+    }
 
     /// Computes the CRC8 checksum of this entropy.
     fn crc8_checksum(&self) -> u8 {

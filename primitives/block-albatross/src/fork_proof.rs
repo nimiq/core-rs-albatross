@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 use std::io;
 
 use beserial::{Deserialize, Serialize};
-use hash::{Blake2bHash, Hash, SerializeContent};
+use hash::{Blake2bHash, Hash, SerializeContent, HashOutput};
 use nimiq_bls::{CompressedSignature, PublicKey};
 use primitives::policy;
 
