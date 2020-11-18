@@ -112,7 +112,7 @@ impl TaggedPublicKey for PublicKey {
 
 #[cfg(test)]
 mod tests {
-    use libp2p::identity::{PublicKey, Keypair};
+    use libp2p::identity::Keypair;
 
     use beserial::{Serialize, Deserialize};
 

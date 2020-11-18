@@ -5,9 +5,10 @@ use std::{
 };
 
 use futures::{
-    io::ErrorKind,
     task::{Context, Poll, Waker},
     channel::mpsc,
+    channel::oneshot,
+    Future,
 };
 use libp2p::{
     swarm::{
@@ -53,6 +54,8 @@ pub enum HandlerError {
 
 
 pub struct MessageHandler {
+    // NOTE: Will probably be used later.
+    #[allow(dead_code)]
     config: MessageConfig,
 
     peer_id: Option<PeerId>,
@@ -145,10 +148,10 @@ impl ProtocolsHandler for MessageHandler {
             HandlerInEvent::PeerDisconnect { peer_id } => {
                 assert!(self.peer.is_some());
 
-                todo!("FIXME: Peer disconnected");
-
                 self.peer = None;
                 self.wake(); // necessary?
+
+                todo!("FIXME: Peer disconnected");
             }
         }
     }

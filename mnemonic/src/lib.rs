@@ -7,7 +7,6 @@ use std::str;
 use std::str::FromStr;
 
 use bitvec::prelude::{AsBits, BitSlice, BitVec, Msb0};
-use hex::FromHex;
 use unicode_normalization::UnicodeNormalization;
 
 use hash::pbkdf2::{compute_pbkdf2_sha512, Pbkdf2Error};

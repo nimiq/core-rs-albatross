@@ -1,7 +1,5 @@
 use std::net::{IpAddr, Ipv4Addr};
 
-use hex::FromHex;
-
 use nimiq_hash::{Blake2bHash, Blake2bHasher, Hasher};
 use nimiq_keys::PublicKey;
 

@@ -1,20 +1,6 @@
-use std::{
-    pin::Pin,
-    sync::Arc,
-    time::{Duration, Instant},
-};
-
-use libp2p::{
-    swarm::{
-        ProtocolsHandler, SubstreamProtocol, ProtocolsHandlerUpgrErr, KeepAlive, ProtocolsHandlerEvent,
-        NegotiatedSubstream,
-    },
-    identity::Keypair,
-    Multiaddr,
-};
+use libp2p::swarm::{ProtocolsHandler, SubstreamProtocol, ProtocolsHandlerUpgrErr, KeepAlive, ProtocolsHandlerEvent};
 use futures::{
-    task::{Context, Poll, Waker},
-    StreamExt, Sink, SinkExt,
+    task::{Context, Poll},
 };
 use thiserror::Error;
 

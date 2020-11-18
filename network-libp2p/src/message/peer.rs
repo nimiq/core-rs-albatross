@@ -1,25 +1,23 @@
-use std::collections::HashMap;
-use std::hash::Hash;
-use std::hash::Hasher;
-use std::pin::Pin;
+use std::{
+    hash::{Hash, Hasher},
+    pin::Pin,
+};
 
 use async_trait::async_trait;
-use futures::channel::mpsc;
-use futures::lock::Mutex as AsyncMutex;
-use futures::task::{noop_waker_ref, Context, Poll};
-use futures::{executor, Sink, SinkExt, Stream, TryFutureExt, Future};
+use futures::{
+    channel::oneshot,
+    Stream,
+};
 use libp2p::{
     swarm::NegotiatedSubstream,
     PeerId
 };
 use parking_lot::Mutex;
 
-use beserial::SerializingError;
 use nimiq_network_interface::peer::{
-    dispatch::{unbounded_dispatch, DispatchError},
     CloseReason, Peer as PeerInterface, SendError, RequestResponse,
 };
-use nimiq_network_interface::{message, message::Message};
+use nimiq_network_interface::message::Message;
 
 use super::dispatch::MessageDispatch;
 use crate::network::NetworkError;
@@ -92,7 +90,7 @@ impl PeerInterface for Peer {
 
     }
 
-    async fn request<R: RequestResponse>(&self, request: &<R as RequestResponse>::Request) -> Result<R::Response, Self::Error> {
+    async fn request<R: RequestResponse>(&self, _request: &<R as RequestResponse>::Request) -> Result<R::Response, Self::Error> {
         unimplemented!()
     }
 

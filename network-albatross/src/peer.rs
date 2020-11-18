@@ -88,7 +88,7 @@ impl PeerInterface for Peer {
         self.channel.close(CloseType::Unknown);
     }
 
-    async fn request<R: RequestResponse>(&self, request: &<R as RequestResponse>::Request) -> Result<R::Response, Self::Error> {
+    async fn request<R: RequestResponse>(&self, _request: &<R as RequestResponse>::Request) -> Result<R::Response, Self::Error> {
         unimplemented!()
     }
 

@@ -2,7 +2,6 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use futures::channel::mpsc;
 use futures::task::{Context, Poll};
 use ip_network::IpNetwork;
 use libp2p::core::connection::ConnectionId;
@@ -14,23 +13,11 @@ use libp2p::swarm::{
 };
 use libp2p::PeerId;
 
-use nimiq_network_interface::network::NetworkEvent;
 
 use crate::message::peer::Peer;
 use super::handler::{
-    LimitHandler, HandlerInEvent, HandlerOutEvent,
+    LimitHandler, HandlerInEvent,
 };
-
-
-const PEER_COUNT_MAX: usize = 4000;
-const PEER_COUNT_PER_IP_MAX: usize = 20;
-const OUTBOUND_PEER_COUNT_PER_SUBNET_MAX: usize = 2;
-const INBOUND_PEER_COUNT_PER_SUBNET_MAX: usize = 100;
-
-const IPV4_SUBNET_MASK: u8 = 24;
-const IPV6_SUBNET_MASK: u8 = 96;
-
-const DEFAULT_BAN_TIME: Duration = Duration::from_secs(60 * 10);
 
 
 
@@ -125,19 +112,19 @@ impl NetworkBehaviour for LimitBehaviour {
 
         let (address, subnet_limit) = match endpoint {
             ConnectedPoint::Listener { send_back_addr, .. } => {
-                (send_back_addr.clone(), INBOUND_PEER_COUNT_PER_SUBNET_MAX)
+                (send_back_addr.clone(), self.config.inbound_peer_count_per_subnet_max)
             }
-            ConnectedPoint::Dialer { address } => (address.clone(), OUTBOUND_PEER_COUNT_PER_SUBNET_MAX),
+            ConnectedPoint::Dialer { address } => (address.clone(), self.config.outbound_peer_count_per_subnet_max),
         };
 
         // Get the IP for this new peer connection
         let ip = match address.iter().next() {
-            Some(Protocol::Ip4(ip)) => IpNetwork::new(ip, IPV4_SUBNET_MASK).unwrap(),
-            Some(Protocol::Ip6(ip)) => IpNetwork::new(ip, IPV6_SUBNET_MASK).unwrap(),
+            Some(Protocol::Ip4(ip)) => IpNetwork::new(ip, self.config.ipv4_subnet_mask).unwrap(),
+            Some(Protocol::Ip6(ip)) => IpNetwork::new(ip, self.config.ipv6_subnet_mask).unwrap(),
             _ => return,
         };
 
-        if self.ip_count.get(&ip).is_some() && PEER_COUNT_PER_IP_MAX < *self.ip_count.get(&ip).unwrap() + 1 {
+        if self.ip_count.get(&ip).is_some() && self.config.peer_count_per_ip_max < *self.ip_count.get(&ip).unwrap() + 1 {
             debug!("Max peer connections per IP limit reached, {}", ip);
             close_connection = true;
         }
@@ -149,7 +136,7 @@ impl NetworkBehaviour for LimitBehaviour {
             debug!("IPv6 subnet limit reached");
             close_connection = true;
         }
-        if PEER_COUNT_MAX < self.ipv4_count + self.ipv6_count + 1 {
+        if self.config.peer_count_max < self.ipv4_count + self.ipv6_count + 1 {
             debug!("Max peer connections limit reached");
             close_connection = true;
         }
@@ -197,8 +184,8 @@ impl NetworkBehaviour for LimitBehaviour {
 
         // Get the IP for the closing peer connection
         let ip = match address.iter().next() {
-            Some(Protocol::Ip4(ip)) => IpNetwork::new(ip, IPV4_SUBNET_MASK).unwrap(),
-            Some(Protocol::Ip6(ip)) => IpNetwork::new(ip, IPV6_SUBNET_MASK).unwrap(),
+            Some(Protocol::Ip4(ip)) => IpNetwork::new(ip, self.config.ipv4_subnet_mask).unwrap(),
+            Some(Protocol::Ip6(ip)) => IpNetwork::new(ip, self.config.ipv6_subnet_mask).unwrap(),
             _ => return,
         };
 

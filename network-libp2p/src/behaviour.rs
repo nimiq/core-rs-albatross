@@ -1,4 +1,4 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::task::{Poll, Waker, Context};
 
@@ -34,7 +34,7 @@ pub struct NimiqBehaviour {
 }
 
 impl NimiqBehaviour {
-    fn poll_event(&mut self, cx: &mut Context<'_>, params: &mut impl PollParameters) -> Poll<NetworkBehaviourAction<EitherOutput<MessageAction, LimitAction>, NetworkEvent<Peer>>> {
+    fn poll_event(&mut self, cx: &mut Context<'_>, _params: &mut impl PollParameters) -> Poll<NetworkBehaviourAction<EitherOutput<MessageAction, LimitAction>, NetworkEvent<Peer>>> {
         if let Some(event) = self.events.pop_front() {
             Poll::Ready(NetworkBehaviourAction::GenerateEvent(event))
         }
@@ -72,13 +72,13 @@ impl NetworkBehaviourEventProcess<NetworkEvent<Peer>> for NimiqBehaviour {
 }
 
 impl From<MessageEvent> for NetworkEvent<Peer> {
-    fn from(event: MessageEvent) -> Self {
+    fn from(_event: MessageEvent) -> Self {
         unimplemented!();
     }
 }
 
 impl From<LimitEvent> for NetworkEvent<Peer> {
-    fn from(event: LimitEvent) -> Self {
+    fn from(_event: LimitEvent) -> Self {
         unimplemented!();
     }
 }

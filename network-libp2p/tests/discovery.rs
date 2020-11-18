@@ -1,27 +1,22 @@
 use std::{
     time::Duration,
     sync::Arc,
-    collections::HashSet,
 };
 
 use libp2p::{
     identity::Keypair,
     core::{
         transport::MemoryTransport,
-        multiaddr::{multiaddr, Multiaddr, Protocol},
+        multiaddr::{multiaddr, Multiaddr},
         upgrade::Version,
-        muxing::StreamMuxerBox,
     },
-    swarm::{Swarm, NetworkBehaviour},
+    swarm::Swarm,
     noise::{self, NoiseConfig},
     yamux, PeerId, Transport,
 };
-use futures::{
-    future::Either,
-    select, Stream, StreamExt
-};
+use futures::StreamExt;
 use parking_lot::RwLock;
-use rand::{thread_rng, Rng, RngCore};
+use rand::{thread_rng, Rng};
 
 use nimiq_network_libp2p::discovery::{
     behaviour::{Discovery, DiscoveryConfig, DiscoveryEvent},
@@ -32,7 +27,6 @@ use nimiq_network_libp2p::discovery::peer_contacts::{PeerContactBook, SignedPeer
 
 
 struct TestNode {
-    keypair: Keypair,
     peer_id: PeerId,
     swarm: Swarm<Discovery>,
     peer_contact_book: Arc<RwLock<PeerContactBook>>,
@@ -80,14 +74,13 @@ impl TestNode {
 
         let peer_contact_book = Arc::new(RwLock::new(PeerContactBook::new(Default::default(), peer_contact)));
 
-        let behaviour = Discovery::new(config, keypair.clone(), Arc::clone(&peer_contact_book));
+        let behaviour = Discovery::new(config, keypair, Arc::clone(&peer_contact_book));
 
         let mut swarm = Swarm::new(transport, behaviour, peer_id.clone());
 
         Swarm::listen_on(&mut swarm, address.clone()).unwrap();
 
         TestNode {
-            keypair,
             peer_id,
             swarm,
             peer_contact_book,
@@ -136,7 +129,7 @@ pub async fn test_exchanging_peers() {
 
     // create nodes
     let mut node1 = TestNode::new();
-    let mut node2 = TestNode::new();
+    let node2 = TestNode::new();
 
     let peer_contact_book1 = Arc::clone(&node1.peer_contact_book);
     let peer_contact_book2 = Arc::clone(&node2.peer_contact_book);
@@ -193,7 +186,7 @@ pub async fn test_dialing_peer_from_contacts() {
 
     // create nodes
     let mut node1 = TestNode::new();
-    let mut node2 = TestNode::new();
+    let node2 = TestNode::new();
 
     let peer_contact_book1 = Arc::clone(&node1.peer_contact_book);
     let peer_contact_book2 = Arc::clone(&node2.peer_contact_book);
@@ -218,6 +211,7 @@ pub async fn test_dialing_peer_from_contacts() {
     }
 }
 
+#[test]
 fn test_housekeeping() {
     let mut peer_contact_book = PeerContactBook::new(
         PeerContactBookConfig::default(),
@@ -226,7 +220,7 @@ fn test_housekeeping() {
 
     let fresh_contact = random_peer_contact(1, Services::FULL_BLOCKS);
 
-    let mut old_contact = {
+    let old_contact = {
         let keypair = Keypair::generate_ed25519();
 
         let mut peer_contact = PeerContact {

@@ -111,7 +111,7 @@ impl<W, M> Sink<&M> for MessageWriter<W, M>
         let mut w = self_projected.buffer.writer();
 
         // Write header
-        Serialize::serialize(&header, &mut w);
+        Serialize::serialize(&header, &mut w)?;
 
         // Serialize the message into the buffer.
         Serialize::serialize(item, &mut w)?;
@@ -142,7 +142,6 @@ impl<W, M> Sink<&M> for MessageWriter<W, M>
         let self_projected = self.project();
 
         log::trace!("MessageWriter: poll_close called.");
-        panic!("foob");
 
         // Try to finish writing from buffer to the inner `AsyncWrite`
         match write_from_buf(self_projected.inner, self_projected.buffer, cx) {

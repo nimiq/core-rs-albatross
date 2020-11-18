@@ -1,21 +1,13 @@
 use libp2p::{
     core::UpgradeInfo,
-    InboundUpgrade, OutboundUpgrade, Multiaddr,
+    InboundUpgrade, OutboundUpgrade,
 };
 use futures::{
     io::{AsyncRead, AsyncWrite},
     future,
 };
 
-use beserial::{SerializingError, Serialize, Deserialize};
-use nimiq_macros::{create_typed_array, add_hex_io_fns_typed_arr};
-use nimiq_hash::Blake2bHash;
-
-use crate::{
-    message_codec::{MessageReader, MessageWriter},
-    tagged_signing::{TaggedSignature, TaggedSignable},
-    LIMIT_PROTOCOL,
-};
+use crate::LIMIT_PROTOCOL;
 
 
 pub struct LimitProtocol;

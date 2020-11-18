@@ -144,7 +144,7 @@ impl Peer for MockPeer {
         }
     }
 
-    async fn request<R: RequestResponse>(&self, request: &<R as RequestResponse>::Request) -> Result<R::Response, Self::Error> {
+    async fn request<R: RequestResponse>(&self, _request: &<R as RequestResponse>::Request) -> Result<R::Response, Self::Error> {
         unimplemented!()
     }
 
@@ -236,21 +236,21 @@ impl Network for MockNetwork {
         self.event_tx.subscribe()
     }
 
-    async fn subscribe<T>(topic: &T) -> Box<dyn Stream<Item = (T::Item, Self::PeerType)> + Send>
+    async fn subscribe<T>(_topic: &T) -> Box<dyn Stream<Item = (T::Item, Self::PeerType)> + Send>
         where
             T: Topic + Sync,
     {
         unimplemented!()
     }
 
-    async fn publish<T>(topic: &T, item: <T as Topic>::Item)
+    async fn publish<T>(_topic: &T, _item: <T as Topic>::Item)
         where
             T: Topic + Sync,
     {
         unimplemented!()
     }
 
-    async fn dht_get<K, V>(&self, k: &K) -> Result<V, Self::Error>
+    async fn dht_get<K, V>(&self, _k: &K) -> Result<V, Self::Error>
         where
             K: AsRef<[u8]> + Send + Sync,
             V: Deserialize + Send + Sync,
@@ -258,7 +258,7 @@ impl Network for MockNetwork {
         unimplemented!()
     }
 
-    async fn dht_put<K, V>(&self, k: &K, v: &V) -> Result<(), Self::Error>
+    async fn dht_put<K, V>(&self, _k: &K, _v: &V) -> Result<(), Self::Error>
         where
             K: AsRef<[u8]> + Send + Sync,
             V: Serialize + Send + Sync,

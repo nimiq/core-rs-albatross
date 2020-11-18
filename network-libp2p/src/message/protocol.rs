@@ -1,19 +1,15 @@
 use std::{
     sync::Arc,
-    io, iter,
+    iter,
 };
 
-use futures::{
-    channel::mpsc,
-    future, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, FutureExt,
-};
+use futures::{future, AsyncRead, AsyncWrite};
 use libp2p::{
     core::UpgradeInfo,
     InboundUpgrade, OutboundUpgrade,
 };
 
 use beserial::SerializingError;
-use nimiq_network_interface::message;
 
 use crate::MESSAGE_PROTOCOL;
 use super::{
@@ -25,12 +21,6 @@ use super::{
 #[derive(Debug, Default)]
 pub struct MessageProtocol {
     peer: Option<Arc<Peer>>,
-}
-
-impl MessageProtocol {
-    fn peer(&self) -> Arc<Peer> {
-        Arc::clone(self.peer.as_ref().unwrap())
-    }
 }
 
 impl UpgradeInfo for MessageProtocol {
@@ -63,7 +53,7 @@ impl<C> OutboundUpgrade<C> for MessageProtocol
     type Error = SerializingError;
     type Future = future::Ready<Result<MessageDispatch<C>, SerializingError>>;
 
-    fn upgrade_outbound(self, mut socket: C, _info: Self::Info) -> Self::Future {
+    fn upgrade_outbound(self, socket: C, _info: Self::Info) -> Self::Future {
         future::ok(MessageDispatch::new(socket))
     }
 }

@@ -1,26 +1,19 @@
 use std::{
     collections::HashMap,
     sync::Arc,
-    future::Future,
-    pin::Pin,
     io::Cursor,
 };
 
 use futures::{
     channel::mpsc,
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, WriteHalf},
-    task::{Context, Poll},
     lock::Mutex as AsyncMutex,
     pin_mut, SinkExt, StreamExt, Stream, FutureExt,
 };
-use libp2p::swarm::NegotiatedSubstream;
 use parking_lot::Mutex;
-use pin_project::pin_project;
 
 use beserial::SerializingError;
 use nimiq_network_interface::message::{Message, read_message, peek_type};
-
-use super::peer::Peer;
 
 
 pub struct MessageReceiver {

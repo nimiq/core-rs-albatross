@@ -1,4 +1,4 @@
-use beserial::{uvar, Serialize, Deserialize};
+use beserial::{Serialize, Deserialize};
 
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

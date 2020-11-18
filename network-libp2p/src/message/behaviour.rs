@@ -1,13 +1,11 @@
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 
-use futures::channel::mpsc;
 use futures::task::{Context, Poll};
-use futures::{ready, StreamExt};
 use libp2p::core::connection::ConnectionId;
 use libp2p::core::Multiaddr;
 use libp2p::swarm::{
-    NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, PollParameters, ProtocolsHandler,
+    NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, PollParameters,
 };
 use libp2p::{
     core::ConnectedPoint,
@@ -104,8 +102,6 @@ impl NetworkBehaviour for MessageBehaviour {
                 peer_id: peer_id.clone(),
             },
         });
-
-        self.events.push_back(NetworkBehaviourAction::GenerateEvent(NetworkEvent::PeerDisconnect(peer)))
     }
 
     fn inject_event(
@@ -127,9 +123,10 @@ impl NetworkBehaviour for MessageBehaviour {
 
     fn poll(
         &mut self,
-        cx: &mut Context<'_>,
+        _cx: &mut Context<'_>,
         _params: &mut impl PollParameters,
     ) -> Poll<NetworkBehaviourAction<HandlerInEvent, NetworkEvent<Peer>>> {
+        // TODO: Store waker in behaviour and wake when an event is pushed onto the queue.
 
         // Emit custom events.
         if let Some(event) = self.events.pop_front() {

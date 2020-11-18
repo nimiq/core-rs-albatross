@@ -8,11 +8,12 @@ pub use self::writer::MessageWriter;
 
 #[cfg(test)]
 mod tests {
-    use futures::SinkExt;
-
     use beserial::{Serialize, Deserialize};
+    use futures::{
+        io::Cursor,
+        SinkExt, StreamExt
+    };
 
-    use crate::message_codec::header::Header;
     use super::{MessageReader, MessageWriter};
 
     #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
@@ -22,8 +23,16 @@ mod tests {
         pub bar: String,
     }
 
-    #[test]
-    fn it_writes_and_reads_messages() {
+    #[tokio::test]
+    async fn it_writes_and_reads_messages() {
+        let mut buf = vec![];
 
+        let message = TestMessage { foo: 42, bar: "Hello World".to_owned() };
+
+        MessageWriter::new(&mut buf).send(&message).await.unwrap();
+
+        let received = MessageReader::new(Cursor::new(buf)).next().await.unwrap().unwrap();
+
+        assert_eq!(message, received);
     }
 }

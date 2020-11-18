@@ -1,7 +1,6 @@
 use std::fmt::Display;
 
 use enum_display_derive::Display;
-use hex::FromHex;
 
 use beserial::{Deserialize, Serialize};
 use hash::{Blake2bHasher, Hasher, Sha256Hasher};
