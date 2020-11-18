@@ -213,8 +213,12 @@ pub async fn test_dialing_peer_from_contacts() {
 
 #[test]
 fn test_housekeeping() {
+    let mut config = PeerContactBookConfig::default();
+
+    config.max_age_websocket = Duration::from_secs(60); // 60 seconds
+
     let mut peer_contact_book = PeerContactBook::new(
-        PeerContactBookConfig::default(),
+        config,
         random_peer_contact(1, Services::FULL_BLOCKS)
     );
 
@@ -231,7 +235,7 @@ fn test_housekeeping() {
         };
 
         peer_contact.set_current_time();
-        peer_contact.timestamp.as_mut().map(|t| *t -= 60000);
+        peer_contact.timestamp.as_mut().map(|t| *t -= 120); // 120 seconds older
 
         peer_contact.sign(&keypair)
     };

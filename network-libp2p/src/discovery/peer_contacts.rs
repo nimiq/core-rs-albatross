@@ -198,7 +198,7 @@ pub struct PeerContact {
     /// Services supported by this peer.
     pub services: Services,
 
-    /// Timestamp when this peer contact was created in milliseconds since unix epoch. `None` if this is a seed.
+    /// Timestamp when this peer contact was created in *seconds* since unix epoch. `None` if this is a seed.
     pub timestamp: Option<u64>,
 }
 
@@ -374,9 +374,15 @@ impl PeerContactInfo {
 
     /// Returns whether the peer contact exceeds its age limit (specified in `config`).
     pub fn exceeds_age(&self, config: &PeerContactBookConfig, unix_time: Duration) -> bool {
+        log::trace!("exceeds_age():");
+        log::trace!("  config: {:#?}", config);
+        log::trace!("  unix_time: {:#?}", unix_time);
+
         if let Some(timestamp) = self.contact.inner.timestamp {
-            if let Some(age) = unix_time.checked_sub(Duration::from_millis(timestamp)) {
-                return age < config.protocols_max_age(self.protocols);
+            log::trace!("  timestamp: {:#?}", timestamp);
+            if let Some(age) = unix_time.checked_sub(Duration::from_secs(timestamp)) {
+                log::trace!("  age: {:#?}", age);
+                return age > config.protocols_max_age(self.protocols);
             }
         }
         false
@@ -425,10 +431,11 @@ impl PeerContactBook {
     ///  - Check if the peer is already known and update its information.
     ///
     pub fn insert(&mut self, contact: SignedPeerContact) {
-        log::debug!("Adding peer contact: {:?}", contact);
-
         let info = PeerContactInfo::from(contact);
         let peer_id = info.peer_id.clone();
+
+        log::debug!("Adding peer contact: {:?}", peer_id);
+
         self.peer_contacts.insert(peer_id, Arc::new(info));
     }
 
@@ -498,7 +505,13 @@ impl PeerContactBook {
             let delete_peers = self.peer_contacts
                 .iter()
                 .filter_map(|(peer_id, peer_contact)| {
-                    if peer_contact.exceeds_age(&self.config, unix_time) { Some(peer_id) } else { None }
+                    if peer_contact.exceeds_age(&self.config, unix_time) {
+                        log::debug!("Removing peer contact because of old age: {:?}", peer_id);
+                        Some(peer_id)
+                    }
+                    else {
+                        None
+                    }
                 })
                 .cloned()
                 .collect::<Vec<PeerId>>();
@@ -506,6 +519,8 @@ impl PeerContactBook {
             for peer_id in delete_peers {
                 self.peer_contacts.remove(&peer_id);
             }
+
+            //log::debug!("contacts: {:#?}", self.peer_contacts);
         }
     }
 }
