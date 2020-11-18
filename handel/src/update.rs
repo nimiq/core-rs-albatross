@@ -8,7 +8,7 @@ use crate::contribution::AggregatableContribution;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LevelUpdate<C: AggregatableContribution> {
     /// The updated multi-signature for this level
-    pub(crate) aggregate: C,
+    pub aggregate: C,
 
     /// The individual signature of the sender, or `None`
     pub(crate) individual: Option<C>,
@@ -40,7 +40,7 @@ impl<C: AggregatableContribution> LevelUpdate<C> {
 
     /// Add a tag to the Update, resulting in a LeveelUpdateMessage which can be send over wire.
     /// * `tag` The message this aggregation runs over
-    pub fn with_tag<T: Clone + Debug + Serialize + Deserialize + Send>(
+    pub fn with_tag<T: Clone + Debug + Serialize + Deserialize + Send + Unpin>(
         self,
         tag: T,
     ) -> LevelUpdateMessage<C, T> {
@@ -61,7 +61,7 @@ impl<C: AggregatableContribution> LevelUpdate<C> {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LevelUpdateMessage<
     C: AggregatableContribution,
-    T: Clone + Debug + Serialize + Deserialize + Send,
+    T: Clone + Debug + Serialize + Deserialize + Send + Unpin,
 > {
     /// The update for that level
     pub update: LevelUpdate<C>,
@@ -71,6 +71,10 @@ pub struct LevelUpdateMessage<
     pub tag: T,
 }
 
-impl<C: AggregatableContribution + 'static, T: Clone + Debug + Serialize + Deserialize + Send + Sync + 'static> Message for LevelUpdateMessage<C, T> {
+impl<
+        C: AggregatableContribution + 'static,
+        T: Clone + Debug + Serialize + Deserialize + Send + Sync + Unpin + 'static,
+    > Message for LevelUpdateMessage<C, T>
+{
     const TYPE_ID: u64 = 121;
 }

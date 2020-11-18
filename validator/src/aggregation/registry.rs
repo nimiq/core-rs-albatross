@@ -3,6 +3,7 @@ use handel::identity::{IdentityRegistry, WeightRegistry};
 use primitives::slot::{SlotBand, SlotCollection, ValidatorSlots};
 
 /// Implementation for handel registry using a `Validators` list.
+#[derive(Debug)]
 pub struct ValidatorRegistry {
     validators: ValidatorSlots,
 }
@@ -10,6 +11,10 @@ pub struct ValidatorRegistry {
 impl ValidatorRegistry {
     pub fn new(validators: ValidatorSlots) -> Self {
         Self { validators }
+    }
+
+    pub fn len(&self) -> usize {
+        self.validators.len()
     }
 }
 

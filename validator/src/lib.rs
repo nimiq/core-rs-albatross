@@ -1,7 +1,9 @@
-#![allow(dead_code)]
+#![feature(map_first_last, btree_drain_filter)]
 
 #[macro_use]
 extern crate log;
+#[macro_use]
+extern crate beserial_derive;
 extern crate nimiq_block_albatross as block_albatross;
 extern crate nimiq_block_production_albatross as block_production_albatross;
 extern crate nimiq_blockchain_albatross as blockchain_albatross;

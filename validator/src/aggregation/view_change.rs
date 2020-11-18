@@ -164,9 +164,7 @@ impl<N: Network> ViewChangeAggregation<N> {
                 // Check if the combined weight of the aggregation is above the Two_THIRD_SLOTS threshold.
                 if aggregate_weight > policy::TWO_THIRD_SLOTS as usize {
                     // Make sure remaining messages get send.
-                    tokio::spawn(async move {
-                        aggregation.shutdown().await
-                    });
+                    tokio::spawn(async move { aggregation.shutdown().await });
 
                     // Create ViewChnageProof out of the aggregate
                     let view_change_proof =

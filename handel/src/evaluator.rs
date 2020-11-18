@@ -52,6 +52,7 @@ impl<C: AggregatableContribution, S: ContributionStore<Contribution = C>, P: Par
 /// A signature counts as it was signed N times, where N is the signers weight
 ///
 /// NOTE: This can be used for ViewChanges
+#[derive(Debug)]
 pub struct WeightedVote<S: ContributionStore, I: WeightRegistry, P: Partitioner> {
     store: Arc<RwLock<S>>,
     pub weights: Arc<I>,

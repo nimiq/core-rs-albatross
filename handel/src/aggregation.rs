@@ -34,7 +34,7 @@ pub struct SinkError {} // TODO
 /// Future implementation for the next aggregation event
 struct NextAggregation<
     P: Protocol,
-    T: Clone + Debug + Eq + Serialize + Deserialize + Hash + Sized + Send + Sync,
+    T: Clone + Debug + Eq + Serialize + Deserialize + Sized + Send + Sync + Unpin,
 > {
     /// Handel configuration
     config: Config,
@@ -67,8 +67,10 @@ struct NextAggregation<
     next_level_timeout: usize,
 }
 
-impl<P: Protocol, T: Clone + Debug + Eq + Serialize + Deserialize + Hash + Sized + Send + Sync>
-    NextAggregation<P, T>
+impl<
+        P: Protocol,
+        T: Clone + Debug + Eq + Serialize + Deserialize + Sized + Send + Sync + Unpin,
+    > NextAggregation<P, T>
 {
     pub fn new(
         protocol: P,
@@ -355,7 +357,7 @@ impl<P: Protocol, T: Clone + Debug + Eq + Serialize + Deserialize + Hash + Sized
 /// Stream implementation for consecutive aggregation events
 pub struct Aggregation<
     P: Protocol,
-    T: Clone + Debug + Eq + Serialize + Deserialize + Hash + Sized + Send + Sync,
+    T: Clone + Debug + Eq + Serialize + Deserialize + Sized + Send + Sync + Unpin,
 > {
     next_aggregation: Option<BoxFuture<'static, (P::Contribution, Option<NextAggregation<P, T>>)>>,
     network_handle: Option<JoinHandle<()>>,
@@ -363,7 +365,7 @@ pub struct Aggregation<
 
 impl<
         P: Protocol,
-        T: Clone + Debug + Eq + Serialize + Deserialize + Hash + Sized + Send + Sync + 'static,
+        T: Clone + Debug + Eq + Serialize + Deserialize + Sized + Send + Sync + Unpin + 'static,
     > Aggregation<P, T>
 {
     pub fn new<E: Debug + 'static>(
@@ -420,7 +422,7 @@ impl<
 
 impl<
         P: Protocol + Debug,
-        T: Clone + Debug + Eq + Serialize + Deserialize + Hash + Send + Sync + 'static,
+        T: Clone + Debug + Eq + Serialize + Deserialize + Send + Sync + Unpin + 'static,
     > Stream for Aggregation<P, T>
 {
     type Item = P::Contribution;
