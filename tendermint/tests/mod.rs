@@ -205,11 +205,6 @@ impl TendermintOutsideDeps for TestValidator {
             Ok(AggregationResult::Aggregation(agg))
         }
     }
-
-    // We never call this on tests. Needs to be implemented if we want to use it.
-    fn cancel_aggregation(&mut self, _round: u32, _step: Step) -> Result<(), TendermintError> {
-        unimplemented!()
-    }
 }
 
 // This is the function that runs the Tendermint stream to completion. It takes as input a

@@ -69,8 +69,4 @@ pub trait TendermintOutsideDeps {
         round: u32,
         step: Step,
     ) -> Result<AggregationResult<Self::ProofTy>, TendermintError>;
-
-    /// Cancels the current aggregation for a given round and step.
-    /// It will fail if no aggregation was started for the given round and step.
-    fn cancel_aggregation(&mut self, round: u32, step: Step) -> Result<(), TendermintError>;
 }
