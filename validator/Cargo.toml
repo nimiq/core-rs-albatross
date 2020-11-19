@@ -45,6 +45,7 @@ nimiq-network-albatross = { path = "../network-albatross", version = "0.1" }
 nimiq-network-interface = { path = "../network-interface", version = "0.1" }
 nimiq-network-mock = { path = "../network-mock", version = "0.1" }
 nimiq-primitives = { path = "../primitives", version = "0.1" }
+nimiq-tendermint = { path = "../tendermint", version = "0.1" }
 nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "timers", "time", "mutable-once", "throttled-queue", "rate-limit"] }
 nimiq-vrf = { path = "../vrf", version = "0.1" }
 

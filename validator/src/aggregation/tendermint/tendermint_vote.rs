@@ -1,5 +1,6 @@
 use beserial::{Deserialize, Serialize};
 use nimiq_hash::{Blake2sHash, Hash, SerializeContent};
+use nimiq_tendermint::Step;
 use std::io;
 
 // Multiple things this needs to take care of when it comes to what needs signing here:
@@ -40,6 +41,16 @@ use std::io;
 pub enum TendermintStep {
     PreVote = 0x02, // works as a prefix to the hashing as well. Since View Change has prefix 0x01 we continue here with 0x02 and 0x03
     PreCommit = 0x03,
+}
+
+impl From<Step> for TendermintStep {
+    fn from(step: Step) -> Self {
+        match step {
+            Step::Prevote => TendermintStep::PreVote,
+            Step::Precommit => TendermintStep::PreCommit,
+            _ => panic!("Aggregations can not have a different Step than Prevote or Precommit"),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, std::fmt::Debug, Clone, Eq, PartialEq)]

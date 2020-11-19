@@ -13,9 +13,10 @@ use futures::task::{Context, Poll};
 
 use futures_locks::{Mutex, RwLock};
 
+use nimiq_block_albatross::MultiSignature;
 use nimiq_bls::SecretKey;
 use nimiq_collections::bitset::BitSet;
-use nimiq_hash::{Blake2sHash, Hash};
+use nimiq_hash::Blake2sHash;
 use nimiq_nano_sync::primitives::pk_tree_construct;
 use nimiq_network_interface::network::Network;
 use nimiq_primitives::policy;
@@ -26,6 +27,8 @@ use nimiq_handel::config::Config;
 use nimiq_handel::contribution::AggregatableContribution;
 use nimiq_handel::identity::WeightRegistry;
 use nimiq_handel::update::{LevelUpdate, LevelUpdateMessage};
+
+use nimiq_tendermint::{AggregationResult, TendermintError};
 
 use super::super::network_sink::NetworkSink;
 use super::super::registry::ValidatorRegistry;
@@ -70,12 +73,9 @@ impl TendermintAggregations {
     #![allow(unused)]
     pub(crate) fn new(
         validator_id: u16,
-        active_validators: ValidatorSlots,
+        validator_registry: Arc<ValidatorRegistry>,
         input: BoxStream<'static, LevelUpdateMessage<TendermintContribution, TendermintIdentifier>>,
     ) -> Self {
-        // use the validator slots to create a validator registry
-        let validator_registry = Arc::new(ValidatorRegistry::new(active_validators.clone()));
-
         // Create the instance and return it
         TendermintAggregations {
             combined_aggregation_streams: Box::pin(SelectAll::new()),
@@ -168,7 +168,7 @@ impl TendermintAggregations {
         Ok(())
     }
 
-    pub fn stop_aggregation(&self, round: u32, step: TendermintStep) {
+    pub fn cancel_aggregation(&self, round: u32, step: TendermintStep) {
         if let Some(descriptor) = self.aggregation_descriptors.get(&(round, step)) {
             descriptor.is_running.store(false, Ordering::Relaxed);
         }
@@ -258,7 +258,7 @@ impl Stream for TendermintAggregations {
 }
 
 struct CurrentAggregation {
-    pub sender: mpsc::UnboundedSender<TendermintAggregationEvent>,
+    pub sender: mpsc::UnboundedSender<AggregationResult<MultiSignature>>,
     pub round: u32,
     pub step: TendermintStep,
 }
@@ -321,14 +321,12 @@ impl<N: Network> HandelTendermintAdapter<N> {
 
         let handel_aggregations = Mutex::new(TendermintAggregations::new(
             validator_id,
-            active_validators,
+            validator_registry.clone(),
             input,
         ));
         let current_bests = RwLock::new(BTreeMap::new());
         let current_aggregate = RwLock::new(None);
         let pending_new_round = RwLock::new(None);
-
-        // let weak = Arc::downgrade(&handel_aggregations);
 
         let this = Self {
             current_bests: current_bests.clone(),
@@ -365,8 +363,10 @@ impl<N: Network> HandelTendermintAdapter<N> {
                                 }) => {
                                     // check that the next_round is actually higher than the round which is awaiting a result.
                                     if round < next_round {
-                                        // Send the me NewRound event to through the channel to the currently awaited aggregation for it to resolve.
-                                        if let Err(_err) = sender.send(event) {
+                                        // Send the me NewRound event through the channel to the currently awaited aggregation for it to resolve.
+                                        if let Err(_err) =
+                                            sender.send(AggregationResult::NewRound(next_round))
+                                        {
                                             error!(
                                                 "Sending of AggregationEvent::NewRound({}) failed",
                                                 round
@@ -434,20 +434,31 @@ impl<N: Network> HandelTendermintAdapter<N> {
                                     if round == r && step == s {
                                         // see if this is actionable
                                         // Actionable here means everything with voter_weight > 2f+1 is potentially actionable.
-                                        // On the receiving end of this channel is a timeoout, which will wait (if necessary) for better results
+                                        // On the receiving end of this channel is a timeout, which will wait (if necessary) for better results
                                         // but will, if nothing better is made available also return this aggregate.
                                         if validator_registry
                                             .signature_weight(&contribution)
                                             .expect("Failed to unwrap signature weight")
                                             > policy::TWO_THIRD_SLOTS as usize
                                         {
-                                            if let Err(err) = sender.send(
-                                                TendermintAggregationEvent::Aggregation(
-                                                    r,
-                                                    s,
-                                                    contribution,
-                                                ),
-                                            ) {
+                                            // Transform to the appropiate result type adding the weight to each proposals Contribution
+                                            let result = contribution
+                                                .contributions
+                                                .iter()
+                                                .map(|(hash, contribution)| (
+                                                        hash.clone(),
+                                                        (
+                                                            contribution.clone(),
+                                                            validator_registry
+                                                                .signature_weight(contribution)
+                                                                .expect("Cannot compute weight of signatories"),
+                                                        ),
+                                                )).collect();
+
+                                            // send the result
+                                            if let Err(err) =
+                                                sender.send(AggregationResult::Aggregation(result))
+                                            {
                                                 error!("failed sending message to broadcast_and_aggregate caller: {:?}", err);
                                             }
                                         }
@@ -460,8 +471,10 @@ impl<N: Network> HandelTendermintAdapter<N> {
                         }
                     };
                 } else {
-                    // once there is no items left on the combined handel stream this task is finished and will terminate.
-                    break;
+                    // Once there is no items left on the combined handel stream then there is nothing being aggregated
+                    // so this task is finished and will terminate.
+                    // break;
+                    // TODO how to terminate this
                 }
             }
         });
@@ -478,7 +491,7 @@ impl<N: Network> HandelTendermintAdapter<N> {
         round: u32,
         step: TendermintStep,
         proposal_hash: Option<Blake2sHash>,
-    ) -> Result<TendermintAggregationEvent, AggregationError> {
+    ) -> Result<AggregationResult<MultiSignature>, TendermintError> {
         // make sure that there is no currently ongoing aggregation from a previous call to `broadcast_and_aggregate` which has not yet been awaited.
         // if there is none make sure to set this one with the same lock to prevent a race condition
         let mut aggregate_receiver = {
@@ -487,12 +500,12 @@ impl<N: Network> HandelTendermintAdapter<N> {
                 Some(aggr) => {
                     // re-set the current_agggregate and return error
                     *current_aggregate = Some(aggr);
-                    return Err(AggregationError::CurrentAggregationNotFinished);
+                    return Err(TendermintError::AggregationError);
                 }
                 None => {
                     // create channel foor result propagation
                     let (sender, aggregate_receiver) =
-                        mpsc::unbounded_channel::<TendermintAggregationEvent>();
+                        mpsc::unbounded_channel::<AggregationResult<MultiSignature>>();
                     // set the current aggregate
                     *current_aggregate = Some(CurrentAggregation {
                         sender,
@@ -537,8 +550,9 @@ impl<N: Network> HandelTendermintAdapter<N> {
                 own_contribution,
                 self.validator_merkle_root.clone(),
                 output_sink,
-            )?;
-        }
+            )
+            .map_err(|_| TendermintError::AggregationError)
+        }?;
 
         // If a new round event was emitted before it needs to be checked if it is still relevant by
         // checking if it concerned a round higher than the one which is currently starting.
@@ -547,7 +561,7 @@ impl<N: Network> HandelTendermintAdapter<N> {
                 // If it is higher then the NewRound Event is emitted finishing this broadcast_and_aggregate call.
                 // The aggregation itself however willl remain valid, as it might get referenced in a future round.
                 self.current_aggregate.write().await.take();
-                return Ok(TendermintAggregationEvent::NewRound(pending_round));
+                return Ok(AggregationResult::NewRound(pending_round));
             }
         }
 
@@ -556,7 +570,7 @@ impl<N: Network> HandelTendermintAdapter<N> {
         // wait for the first result
         let mut result = match aggregate_receiver.recv().await {
             Some(event) => event,
-            None => return Err(AggregationError::Closed),
+            None => return Err(TendermintError::AggregationError),
         };
 
         // create timeout according to rules. For every consecutive round the timeout must increase by a constant factor.
@@ -564,14 +578,6 @@ impl<N: Network> HandelTendermintAdapter<N> {
         let deadline = time::Instant::now()
             .checked_add(time::Duration::from_millis(100u64 + round as u64 * 10u64))
             .expect("Cannot create timeout Instant");
-
-        // compute the nil_contribution_hash as we need to check it later on.
-        let nil_contribution_hash = (TendermintVote {
-            proposal_hash: None,
-            id,
-            validator_merkle_root: self.validator_merkle_root.clone(),
-        })
-        .hash::<Blake2sHash>();
 
         loop {
             // check if the current result is final (no improvment possible even though ot all signatories have siged) if so return it immediately
@@ -581,26 +587,36 @@ impl<N: Network> HandelTendermintAdapter<N> {
             // * all proposals combined (including nil) except the proposal this node signed have 2f+1 vote weight
             //      (as this can never result in a block vote, only in nil vote)
             // 1* f+1 for a future round (`TendermintAggregationEvent::NewRound(n)`)
-
             match &result {
-                TendermintAggregationEvent::NewRound(_) => return Ok(result),
-                TendermintAggregationEvent::Aggregation(r, s, contribution) => {
+                // If the event is a NewRound it is propagated as is.
+                AggregationResult::NewRound(_) => {
+                    if step == TendermintStep::PreCommit {
+                        self.handel_aggregations
+                            .lock()
+                            .await
+                            .cancel_aggregation(round, step);
+                    }
+                    return Ok(result);
+                }
+
+                // If the event is an Aggregation there are some comparisons to be made before it can be returned (or not)
+                AggregationResult::Aggregation(map) => {
                     // keep trck of the combined weight of all proposals which this node has not signed.
                     let mut combined_weight = 0usize;
 
                     // iterate all proposals present in this contribution
-                    for (proposal, contribution) in contribution.contributions.iter() {
-                        // get weight for current proposals contributions
-                        let weight = self
-                            .validator_registry
-                            .signature_weight(contribution)
-                            .expect("Failed to compute signature weight");
-
+                    for (proposal, (_, weight)) in map.iter() {
                         if let None = proposal {
                             // Nil vote has f+1
-                            if weight
+                            if *weight
                                 > policy::SLOTS as usize - policy::TWO_THIRD_SLOTS as usize + 1usize
                             {
+                                if step == TendermintStep::PreCommit {
+                                    self.handel_aggregations
+                                        .lock()
+                                        .await
+                                        .cancel_aggregation(round, step);
+                                }
                                 return Ok(result);
                             }
 
@@ -610,10 +626,15 @@ impl<N: Network> HandelTendermintAdapter<N> {
                             }
                         } else {
                             // any individual proposal got 2f+1 vote weight
-                            if weight > policy::TWO_THIRD_SLOTS as usize {
+                            if *weight > policy::TWO_THIRD_SLOTS as usize {
+                                if step == TendermintStep::PreCommit {
+                                    self.handel_aggregations
+                                        .lock()
+                                        .await
+                                        .cancel_aggregation(round, step);
+                                }
                                 return Ok(result);
                             }
-
                             // if proposal is not the same as the one this node signed, then it contributes to the combined weight
                             if proposal != &proposal_hash {
                                 combined_weight += weight;
@@ -623,6 +644,12 @@ impl<N: Network> HandelTendermintAdapter<N> {
 
                     // combined weight of all proposals exclluding the one this node signed reached 2f+1
                     if combined_weight > policy::SLOTS as usize {
+                        if step == TendermintStep::PreCommit {
+                            self.handel_aggregations
+                                .lock()
+                                .await
+                                .cancel_aggregation(round, step);
+                        }
                         return Ok(result);
                     }
                 }
@@ -632,8 +659,16 @@ impl<N: Network> HandelTendermintAdapter<N> {
             // Only wait for a set perodof time, if it elapses the current (best) result is returned (likely resulting in a subsequent Nil vote/commit).
             match time::timeout_at(deadline, aggregate_receiver.recv()).await {
                 Ok(Some(event)) => result = event,
-                Ok(None) => return Err(AggregationError::Closed),
-                Err(_) => return Ok(result),
+                Ok(None) => return Err(TendermintError::AggregationError),
+                Err(_) => {
+                    if step == TendermintStep::PreCommit {
+                        self.handel_aggregations
+                            .lock()
+                            .await
+                            .cancel_aggregation(round, step);
+                    }
+                    return Ok(result);
+                }
             }
         }
     }
@@ -642,18 +677,27 @@ impl<N: Network> HandelTendermintAdapter<N> {
         &self,
         round: u32,
         step: TendermintStep,
-    ) -> Result<TendermintContribution, AggregationError> {
+    ) -> Result<AggregationResult<MultiSignature>, TendermintError> {
         if let Some(current_best) = self.current_bests.read().await.get(&(round, step)) {
-            Ok(current_best.clone())
+            Ok(AggregationResult::Aggregation(
+                current_best
+                    .contributions
+                    .iter()
+                    .map(|(hash, contribution)| {
+                        (
+                            hash.clone(),
+                            (
+                                contribution.clone(),
+                                self.validator_registry
+                                    .signature_weight(contribution)
+                                    .expect("Cannot compute weight of signatories"),
+                            ),
+                        )
+                    })
+                    .collect(),
+            ))
         } else {
-            Err(AggregationError::AggregationDoesNotExist)
+            Err(TendermintError::AggregationDoesNotExist)
         }
-    }
-
-    pub async fn stop_aggregation(&self, round: u32, step: TendermintStep) {
-        self.handel_aggregations
-            .lock()
-            .await
-            .stop_aggregation(round, step)
     }
 }
