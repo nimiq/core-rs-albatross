@@ -21,6 +21,7 @@ extern crate nimiq_messages as messages;
 extern crate nimiq_network_albatross as network;
 extern crate nimiq_network_interface as network_interface;
 extern crate nimiq_primitives as primitives;
+extern crate nimiq_tendermint as tendermint;
 extern crate nimiq_utils as utils;
 extern crate nimiq_vrf as vrf;
 
@@ -29,4 +30,5 @@ mod r#macro;
 mod micro;
 mod mock;
 mod slash;
+mod tendermint_outside_deps;
 pub mod validator;
