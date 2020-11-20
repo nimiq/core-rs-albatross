@@ -35,26 +35,10 @@ use super::super::registry::ValidatorRegistry;
 
 use super::contribution::TendermintContribution;
 use super::protocol::TendermintAggregationProtocol;
-use super::tendermint_vote::{TendermintIdentifier, TendermintStep, TendermintVote};
-
-#[derive(std::fmt::Debug)]
-pub enum TendermintAggregationEvent {
-    NewRound(u32),
-    Aggregation(u32, TendermintStep, TendermintContribution),
-}
-
-pub enum AggregationError {
-    AggregationAlreadyExists,
-    AggregationDoesNotExist,
-    CommitRoundIsTooOld,
-    CurrentAggregationNotFinished,
-    Closed,
-}
-
-struct AggregationDescriptor {
-    is_running: Arc<AtomicBool>,
-    input: mpsc::UnboundedSender<LevelUpdate<TendermintContribution>>,
-}
+use super::utils::{
+    AggregationDescriptor, CurrentAggregation, TendermintAggregationEvent, TendermintIdentifier,
+    TendermintStep, TendermintVote,
+};
 
 /// Maintains various aggregations for different rounds and steps of Tendermint.
 ///
@@ -102,13 +86,13 @@ impl TendermintAggregations {
             > + Unpin
                  + Send),
         >,
-    ) -> Result<(), AggregationError> {
+    ) -> Result<(), TendermintError> {
         // TODO: TendermintAggregationEvent
         if self
             .aggregation_descriptors
             .contains_key(&(id.round_number, id.step))
         {
-            return Err(AggregationError::AggregationAlreadyExists);
+            return Err(TendermintError::AggregationError);
         }
 
         // crate the correct protocol instance
@@ -255,12 +239,6 @@ impl Stream for TendermintAggregations {
             )),
         }
     }
-}
-
-struct CurrentAggregation {
-    pub sender: mpsc::UnboundedSender<AggregationResult<MultiSignature>>,
-    pub round: u32,
-    pub step: TendermintStep,
 }
 
 /// Adaption for tendermint not using the handel stream directly. Ideally all of what this Adapter does would be done callerside just using the stream
@@ -489,9 +467,10 @@ impl<N: Network> HandelTendermintAdapter<N> {
     pub async fn broadcast_and_aggregate(
         &mut self,
         round: u32,
-        step: TendermintStep,
+        step: impl Into<TendermintStep>,
         proposal_hash: Option<Blake2sHash>,
     ) -> Result<AggregationResult<MultiSignature>, TendermintError> {
+        let step = step.into();
         // make sure that there is no currently ongoing aggregation from a previous call to `broadcast_and_aggregate` which has not yet been awaited.
         // if there is none make sure to set this one with the same lock to prevent a race condition
         let mut aggregate_receiver = {
@@ -676,9 +655,9 @@ impl<N: Network> HandelTendermintAdapter<N> {
     pub async fn get_aggregate(
         &self,
         round: u32,
-        step: TendermintStep,
+        step: impl Into<TendermintStep>,
     ) -> Result<AggregationResult<MultiSignature>, TendermintError> {
-        if let Some(current_best) = self.current_bests.read().await.get(&(round, step)) {
+        if let Some(current_best) = self.current_bests.read().await.get(&(round, step.into())) {
             Ok(AggregationResult::Aggregation(
                 current_best
                     .contributions

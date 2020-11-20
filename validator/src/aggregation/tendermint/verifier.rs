@@ -11,7 +11,7 @@ use nimiq_handel::verifier::{VerificationResult, Verifier};
 use nimiq_hash::Hash;
 
 use super::contribution::TendermintContribution;
-use super::tendermint_vote::{TendermintIdentifier, TendermintVote};
+use super::utils::{TendermintIdentifier, TendermintVote};
 
 #[derive(Debug)]
 pub(crate) struct TendermintVerifier<I: IdentityRegistry> {
@@ -21,7 +21,7 @@ pub(crate) struct TendermintVerifier<I: IdentityRegistry> {
 }
 
 impl<I: IdentityRegistry> TendermintVerifier<I> {
-    pub fn new(
+    pub(crate) fn new(
         identity_registry: Arc<I>,
         id: TendermintIdentifier,
         validator_merkle_root: Vec<u8>,

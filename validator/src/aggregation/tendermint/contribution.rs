@@ -8,7 +8,7 @@ use nimiq_hash::{Blake2sHash, Blake2sHasher, Hasher, SerializeContent};
 
 use nimiq_handel::contribution::{AggregatableContribution, ContributionError};
 
-use super::tendermint_vote::TendermintVote;
+use super::utils::TendermintVote;
 
 #[derive(Serialize, Deserialize, std::fmt::Debug, Clone)]
 pub struct TendermintContribution {
@@ -37,7 +37,7 @@ impl TendermintContribution {
         let multi_signature = MultiSignature::new(signature, signers);
 
         let mut contributions = BTreeMap::new();
-        contributions.insert(vote.proposal(), multi_signature);
+        contributions.insert(vote.proposal_hash, multi_signature);
         Self { contributions }
     }
 }
@@ -76,7 +76,7 @@ impl AggregatableContribution for TendermintContribution {
         self.contributions
             .iter()
             .fold(BitSet::new(), |aggregated_set, multi_sig| {
-                (aggregated_set & multi_sig.1.contributors())
+                aggregated_set & multi_sig.1.contributors()
             })
     }
 }

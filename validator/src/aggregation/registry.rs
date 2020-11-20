@@ -4,7 +4,7 @@ use primitives::slot::{SlotBand, SlotCollection, ValidatorSlots};
 
 /// Implementation for handel registry using a `Validators` list.
 #[derive(Debug)]
-pub struct ValidatorRegistry {
+pub(crate) struct ValidatorRegistry {
     validators: ValidatorSlots,
 }
 

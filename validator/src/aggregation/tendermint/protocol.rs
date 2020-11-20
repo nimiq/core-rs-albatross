@@ -9,7 +9,7 @@ use nimiq_handel::store::ReplaceStore;
 use super::super::registry::ValidatorRegistry;
 
 use super::contribution::TendermintContribution;
-use super::tendermint_vote::TendermintIdentifier;
+use super::utils::TendermintIdentifier;
 use super::verifier::TendermintVerifier;
 
 #[derive(std::fmt::Debug)]
@@ -24,7 +24,7 @@ pub(crate) struct TendermintAggregationProtocol {
 }
 
 impl TendermintAggregationProtocol {
-    pub fn new(
+    pub(super) fn new(
         validators: Arc<ValidatorRegistry>,
         node_id: usize,
         threshold: usize,
