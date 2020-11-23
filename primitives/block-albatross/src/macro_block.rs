@@ -11,8 +11,8 @@ use primitives::policy;
 use primitives::slot::{Slots, ValidatorSlots};
 use vrf::VrfSeed;
 
-use crate::pbft::PbftProof;
-use crate::signed;
+use crate::signed::{Message, PREFIX_TENDERMINT_PROPOSAL};
+use crate::tendermint::TendermintProof;
 
 /// The struct representing a Macro block (can be either checkpoint or election).
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -21,7 +21,7 @@ pub struct MacroBlock {
     pub header: MacroHeader,
     /// The justification, contains all the information needed to verify that the header was signed
     /// by the correct producers.
-    pub justification: Option<PbftProof>,
+    pub justification: Option<TendermintProof>,
     /// The body of the block.
     pub body: Option<MacroBody>,
 }
@@ -102,8 +102,8 @@ impl MacroBody {
     }
 }
 
-impl signed::Message for MacroHeader {
-    const PREFIX: u8 = signed::PREFIX_PBFT_PROPOSAL;
+impl Message for MacroHeader {
+    const PREFIX: u8 = PREFIX_TENDERMINT_PROPOSAL;
 }
 
 impl SerializeContent for MacroHeader {

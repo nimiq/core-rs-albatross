@@ -1,21 +1,26 @@
 ///! Defines the types used by the JSON RPC API[1]
 ///!
 ///! [1] https://github.com/nimiq/core-js/wiki/JSON-RPC-API#common-data-types
-use std::fmt::{Display, Formatter};
+use std::{
+    fmt::{Display, Formatter},
+    sync::Arc,
+};
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
-use nimiq_block_albatross::{PbftProof, ViewChangeProof};
 use nimiq_blockchain_albatross::Blockchain;
-use nimiq_bls::{CompressedPublicKey, CompressedSignature};
-use nimiq_collections::BitSet;
+use nimiq_bls::lazy::LazyPublicKey;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
 use nimiq_primitives::policy;
-use nimiq_primitives::slot::{SlotBand, ValidatorSlots};
 use nimiq_primitives::{account::AccountType, coin::Coin};
 use nimiq_transaction::account::htlc_contract::AnyHash;
+
+use nimiq_block_albatross::signed::AggregateProof;
+use nimiq_block_albatross::{TendermintProof, ViewChangeProof};
+use nimiq_bls::{CompressedPublicKey, CompressedSignature};
+use nimiq_collections::BitSet;
+use nimiq_primitives::slot::{SlotBand, ValidatorSlots};
 use nimiq_vrf::VrfSeed;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -95,11 +100,14 @@ pub struct MacroJustification {
     votes: u16,
 
     #[serde(flatten)]
-    pbft_proof: PbftProof,
+    pbft_proof: TendermintProof,
 }
 
 impl MacroJustification {
-    fn from_pbft_proof(pbft_proof_opt: Option<PbftProof>, validator_slots_opt: Option<&ValidatorSlots>) -> Option<Self> {
+    fn from_pbft_proof(
+        pbft_proof_opt: Option<TendermintProof>,
+        validator_slots_opt: Option<&ValidatorSlots>,
+    ) -> Option<Self> {
         if let (Some(pbft_proof), Some(validator_slots)) = (pbft_proof_opt, validator_slots_opt) {
             let votes = pbft_proof
                 .votes(validator_slots)
@@ -280,7 +288,11 @@ impl Transaction {
 }
 
 impl Block {
-    pub fn from_block(blockchain: &Blockchain, block: nimiq_block_albatross::Block, include_transactions: bool) -> Self {
+    pub fn from_block(
+        blockchain: &Blockchain,
+        block: nimiq_block_albatross::Block,
+        include_transactions: bool,
+    ) -> Self {
         let block_hash = block.hash();
         let block_number = block.block_number();
         let batch = policy::batch_at(block_number);
@@ -295,7 +307,9 @@ impl Block {
                     .and_then(|block| block.body())
                     .and_then(|body| body.unwrap_macro().validators);
 
-                let slots = macro_block.get_slots().map(|slots| Slots::from_slots(slots));
+                let slots = macro_block
+                    .get_slots()
+                    .map(|slots| Slots::from_slots(slots));
 
                 Block {
                     ty: BlockType::Macro,
@@ -314,7 +328,10 @@ impl Block {
                         parent_election_hash: macro_block.header.parent_election_hash,
                         slots,
                         lost_reward_set: macro_block.body.map(|body| body.lost_reward_set),
-                        justification: MacroJustification::from_pbft_proof(macro_block.justification, validator_slots_opt.as_ref()),
+                        justification: MacroJustification::from_pbft_proof(
+                            macro_block.justification,
+                            validator_slots_opt.as_ref(),
+                        ),
                     },
                 }
             }
@@ -329,7 +346,16 @@ impl Block {
                                 body.transactions
                                     .into_iter()
                                     .enumerate()
-                                    .map(|(index, tx)| Transaction::from_blockchain(tx, index, &block_hash, block_number, timestamp, head_height))
+                                    .map(|(index, tx)| {
+                                        Transaction::from_blockchain(
+                                            tx,
+                                            index,
+                                            &block_hash,
+                                            block_number,
+                                            timestamp,
+                                            head_height,
+                                        )
+                                    })
                                     .collect(),
                             )
                         } else {
@@ -468,7 +494,7 @@ impl<'de, T> Deserialize<'de> for OrLatest<T>
 where
     T: Deserialize<'de>,
 {
-    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -536,7 +562,11 @@ pub struct Validator {
 }
 
 impl Validator {
-    pub fn from_validator(public_key: CompressedPublicKey, validator: &nimiq_account::staking_contract::Validator, retire_time: Option<u32>) -> Self {
+    pub fn from_validator(
+        public_key: CompressedPublicKey,
+        validator: &nimiq_account::staking_contract::Validator,
+        retire_time: Option<u32>,
+    ) -> Self {
         Validator {
             public_key: public_key.clone(),
             balance: validator.balance,
@@ -551,15 +581,25 @@ impl Validator {
                     retire_time: None,
                 })
                 .collect(),
-            retire_time,
+            retire_time: None,
         }
     }
 
-    pub fn from_active(public_key: CompressedPublicKey, validator: &nimiq_account::staking_contract::Validator) -> Self {
+    pub fn from_active(
+        public_key: CompressedPublicKey,
+        validator: &nimiq_account::staking_contract::Validator,
+    ) -> Self {
         Self::from_validator(public_key, validator, None)
     }
 
-    pub fn from_inactive(public_key: CompressedPublicKey, validator: &nimiq_account::staking_contract::InactiveValidator) -> Self {
-        Self::from_validator(public_key, &validator.validator, Some(validator.retire_time))
+    pub fn from_inactive(
+        public_key: CompressedPublicKey,
+        validator: &nimiq_account::staking_contract::InactiveValidator,
+    ) -> Self {
+        Self::from_validator(
+            public_key,
+            &validator.validator,
+            Some(validator.retire_time),
+        )
     }
 }

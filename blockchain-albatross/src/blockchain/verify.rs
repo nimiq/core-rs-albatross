@@ -90,7 +90,7 @@ impl Blockchain {
             return Err(PushError::InvalidBlock(BlockError::NoJustification));
         }
 
-        // If the block is a macro block, verify the PBFT proof.
+        // If the block is a macro block, verify the Tendermint proof.
         if let Some(BlockJustification::Macro(justification)) = justification_opt {
             if let Err(e) = justification.verify(header.hash(), &self.current_validators(), policy::TWO_THIRD_SLOTS) {
                 warn!("Rejecting block - macro block with bad justification: {}", e);

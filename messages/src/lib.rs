@@ -29,8 +29,8 @@ use rand::Rng;
 use account::Account;
 use beserial::{uvar, Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, WriteBytesExt};
 use block_albatross::{
-    Block as BlockAlbatross, BlockHeader as BlockHeaderAlbatross, ForkProof, MultiSignature, PbftCommitMessage, PbftPrepareMessage, SignedPbftProposal,
-    ViewChange, ViewChangeProof,
+    Block as BlockAlbatross, BlockHeader as BlockHeaderAlbatross, ForkProof, MultiSignature,
+    PbftCommitMessage, PbftPrepareMessage, SignedTendermintProposal, ViewChange, ViewChangeProof,
 };
 use handel::update::LevelUpdateMessage;
 use hash::Blake2bHash;
@@ -186,7 +186,7 @@ pub enum Message {
     ForkProof(Box<ForkProof>),
     ViewChange(Box<LevelUpdateMessage<MultiSignature, ViewChange>>),
     ViewChangeProof(Box<ViewChangeProofMessage>),
-    PbftProposal(Box<SignedPbftProposal>),
+    PbftProposal(Box<SignedTendermintProposal>),
     PbftPrepare(Box<LevelUpdateMessage<MultiSignature, PbftPrepareMessage>>),
     PbftCommit(Box<LevelUpdateMessage<MultiSignature, PbftCommitMessage>>),
     GetMacroBlocks(Box<GetBlocksMessage>),
@@ -524,9 +524,12 @@ pub struct MessageNotifier {
     pub fork_proof: RwLock<PassThroughNotifier<'static, ForkProof>>,
     pub view_change: RwLock<PassThroughNotifier<'static, LevelUpdateMessage<MultiSignature, ViewChange>>>,
     pub view_change_proof: RwLock<PassThroughNotifier<'static, ViewChangeProofMessage>>,
-    pub pbft_proposal: RwLock<PassThroughNotifier<'static, SignedPbftProposal>>,
-    pub pbft_prepare: RwLock<PassThroughNotifier<'static, LevelUpdateMessage<MultiSignature, PbftPrepareMessage>>>,
-    pub pbft_commit: RwLock<PassThroughNotifier<'static, LevelUpdateMessage<MultiSignature, PbftCommitMessage>>>,
+    pub pbft_proposal: RwLock<PassThroughNotifier<'static, SignedTendermintProposal>>,
+    pub pbft_prepare: RwLock<
+        PassThroughNotifier<'static, LevelUpdateMessage<MultiSignature, PbftPrepareMessage>>,
+    >,
+    pub pbft_commit:
+        RwLock<PassThroughNotifier<'static, LevelUpdateMessage<MultiSignature, PbftCommitMessage>>>,
     pub get_macro_blocks: RwLock<PassThroughNotifier<'static, GetBlocksMessage>>,
     pub get_epoch_transactions: RwLock<PassThroughNotifier<'static, GetEpochTransactionsMessage>>,
     pub epoch_transactions: RwLock<PassThroughNotifier<'static, EpochTransactionsMessage>>,

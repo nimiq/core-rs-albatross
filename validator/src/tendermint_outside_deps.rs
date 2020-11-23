@@ -1,6 +1,8 @@
 use beserial::{Deserialize, Serialize};
-use block_albatross::signed::{Message, SignedMessage};
-use block_albatross::{BlockHeader, MacroBlock, MacroHeader};
+use block_albatross::signed::{Message, SignedMessage, PREFIX_TENDERMINT_PROPOSAL};
+use block_albatross::{
+    BlockHeader, MacroBlock, MacroHeader, SignedTendermintProposal, TendermintProposal,
+};
 use block_production_albatross::BlockProducer;
 use blockchain_albatross::Blockchain;
 use bls::KeyPair;
@@ -17,28 +19,6 @@ use async_trait::async_trait;
 use failure::Fail;
 use nimiq_collections::BitSet;
 use std::{fmt, io};
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct Proposal {
-    pub value: MacroHeader,
-    pub valid_round: u32,
-}
-
-impl SerializeContent for Proposal {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
-        let mut size = self.value.serialize(writer)?;
-        size += self.valid_round.serialize(writer)?;
-        Ok(size)
-    }
-}
-
-impl Message for Proposal {
-    const PREFIX: u8 = PREFIX_TENDERMINT_PROPOSAL;
-}
-
-pub const PREFIX_TENDERMINT_PROPOSAL: u8 = 0x07;
-
-pub type SignedProposal = SignedMessage<Proposal>;
 
 struct TendermintOutsideDepsImpl {
     offset_time: Arc<OffsetTime>,

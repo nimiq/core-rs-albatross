@@ -2,8 +2,9 @@ use std::sync::Arc;
 
 use beserial::Deserialize;
 use nimiq_block_albatross::{
-    Block, BlockError, ForkProof, MacroBlock, MacroBody, PbftCommitMessage, PbftPrepareMessage, PbftProofBuilder, PbftProposal, SignedPbftCommitMessage,
-    SignedPbftPrepareMessage, SignedViewChange, ViewChange, ViewChangeProof, ViewChangeProofBuilder,
+    Block, BlockError, ForkProof, MacroBlock, MacroBody, PbftCommitMessage, PbftPrepareMessage,
+    PbftProofBuilder, SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedViewChange,
+    TendermintProposal, ViewChange, ViewChangeProof, ViewChangeProofBuilder,
 };
 use nimiq_block_production_albatross::BlockProducer;
 use nimiq_blockchain_albatross::{Blockchain, PushError, PushResult};
@@ -83,10 +84,11 @@ fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<Blockchain>) {
     assert_eq!(blockchain.block_number(), macro_block_number - 1);
 }
 
-fn sign_macro_block(proposal: PbftProposal, extrinsics: Option<MacroBody>) -> MacroBlock {
-    let keypair = KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
+fn sign_macro_block(proposal: TendermintProposal, extrinsics: Option<MacroBody>) -> MacroBlock {
+    let keypair =
+        KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
 
-    let block_hash = proposal.header.hash::<Blake2bHash>();
+    let block_hash = proposal.value.hash::<Blake2bHash>();
 
     // create signed prepare and commit
     let prepare = SignedPbftPrepareMessage::from_message(
@@ -104,7 +106,7 @@ fn sign_macro_block(proposal: PbftProposal, extrinsics: Option<MacroBody>) -> Ma
     pbft_proof.add_commit_signature(&keypair.public_key, policy::SLOTS, &commit);
 
     MacroBlock {
-        header: proposal.header,
+        header: proposal.value,
         justification: Some(pbft_proof.build()),
         body: extrinsics,
     }

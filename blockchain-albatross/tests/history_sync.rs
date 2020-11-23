@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use beserial::Deserialize;
 use nimiq_block_albatross::{
-    Block, MacroBlock, MacroBody, PbftCommitMessage, PbftPrepareMessage, PbftProofBuilder, PbftProposal, SignedPbftCommitMessage, SignedPbftPrepareMessage,
+    Block, MacroBlock, MacroBody, PbftCommitMessage, PbftPrepareMessage, PbftProofBuilder,
+    SignedPbftCommitMessage, SignedPbftPrepareMessage, TendermintProposal,
 };
 use nimiq_block_production_albatross::BlockProducer;
 use nimiq_blockchain_albatross::{Blockchain, PushResult};
@@ -39,10 +40,11 @@ fn produce_macro_blocks(num_macro: usize, producer: &BlockProducer, blockchain: 
     }
 }
 
-fn sign_macro_block(proposal: PbftProposal, extrinsics: MacroBody) -> MacroBlock {
-    let keypair = KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
+fn sign_macro_block(proposal: TendermintProposal, extrinsics: MacroBody) -> MacroBlock {
+    let keypair =
+        KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
 
-    let block_hash = proposal.header.hash::<Blake2bHash>();
+    let block_hash = proposal.value.hash::<Blake2bHash>();
 
     // create signed prepare and commit
     let prepare = SignedPbftPrepareMessage::from_message(
@@ -60,7 +62,7 @@ fn sign_macro_block(proposal: PbftProposal, extrinsics: MacroBody) -> MacroBlock
     pbft_proof.add_commit_signature(&keypair.public_key, policy::SLOTS, &commit);
 
     MacroBlock {
-        header: proposal.header,
+        header: proposal.value,
         justification: Some(pbft_proof.build()),
         body: Some(extrinsics),
     }

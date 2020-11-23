@@ -13,7 +13,10 @@ use std::sync::Arc;
 
 use block::ForkProof;
 use block::MicroJustification;
-use block::{MacroBody, MacroHeader, MicroBlock, MicroBody, MicroHeader, PbftProposal, ViewChangeProof, ViewChanges};
+use block::{
+    MacroBody, MacroHeader, MicroBlock, MicroBody, MicroHeader, TendermintProposal,
+    ViewChangeProof, ViewChanges,
+};
 use blockchain::blockchain::Blockchain;
 use blockchain::history_store::ExtendedTransaction;
 use bls::KeyPair;
@@ -151,7 +154,7 @@ impl BlockProducer {
         view_change_proof: Option<ViewChangeProof>,
         // Extra data for this block. It has no a priori use.
         extra_data: Vec<u8>,
-    ) -> (PbftProposal, MacroBody) {
+    ) -> (TendermintProposal, MacroBody) {
         // Calculate the block number. It is simply the previous block number incremented by one.
         let block_number = self.blockchain.block_number() + 1;
 
@@ -244,8 +247,8 @@ impl BlockProducer {
 
         // Returns the block proposal.
         (
-            PbftProposal {
-                header,
+            TendermintProposal {
+                value: header,
                 view_change: view_change_proof,
             },
             body,
@@ -278,8 +281,12 @@ pub mod test_utils {
         assert_eq!(blockchain.block_number(), macro_block_number - 1);
     }
 
-    pub fn sign_macro_block(keypair: &KeyPair, proposal: PbftProposal, extrinsics: Option<MacroBody>) -> MacroBlock {
-        let block_hash = proposal.header.hash::<Blake2bHash>();
+    pub fn sign_macro_block(
+        keypair: &KeyPair,
+        proposal: TendermintProposal,
+        extrinsics: Option<MacroBody>,
+    ) -> MacroBlock {
+        let block_hash = proposal.value.hash::<Blake2bHash>();
 
         // create signed prepare and commit
         let prepare = SignedPbftPrepareMessage::from_message(
@@ -297,7 +304,7 @@ pub mod test_utils {
         pbft_proof.add_commit_signature(&keypair.public_key, policy::SLOTS, &commit);
 
         MacroBlock {
-            header: proposal.header,
+            header: proposal.value,
             justification: Some(pbft_proof.build()),
             body: extrinsics,
         }

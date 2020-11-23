@@ -23,10 +23,8 @@ pub use fork_proof::ForkProof;
 pub use macro_block::{MacroBlock, MacroBody, MacroHeader};
 pub use micro_block::{MicroBlock, MicroBody, MicroHeader, MicroJustification};
 pub use multisig::{IndividualSignature, MultiSignature};
-pub use pbft::{
-    PbftCommitMessage, PbftPrepareMessage, PbftProof, PbftProofBuilder, PbftProposal, SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedPbftProposal,
-};
-pub use view_change::{SignedViewChange, ViewChange, ViewChangeProof, ViewChangeProofBuilder, ViewChanges};
+pub use tendermint::{SignedTendermintProposal, TendermintProof, TendermintProposal};
+pub use view_change::{SignedViewChange, ViewChange, ViewChangeProof, ViewChanges};
 
 use crate::transaction::TransactionError;
 
@@ -34,8 +32,8 @@ mod block;
 mod fork_proof;
 mod macro_block;
 mod micro_block;
-mod pbft;
 pub mod signed;
+mod tendermint;
 mod view_change;
 
 /// Enum containing a variety of block error types.

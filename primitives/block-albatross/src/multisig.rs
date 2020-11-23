@@ -51,7 +51,7 @@ impl IndividualSignature {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MultiSignature {
     pub signature: bls::AggregateSignature,
     pub signers: BitSet,

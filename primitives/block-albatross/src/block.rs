@@ -12,7 +12,7 @@ use vrf::VrfSeed;
 
 use crate::macro_block::{MacroBlock, MacroHeader};
 use crate::micro_block::{MicroBlock, MicroHeader};
-use crate::{MacroBody, MicroBody, MicroJustification, PbftProof};
+use crate::{MacroBody, MicroBody, MicroJustification, TendermintProof};
 
 /// Defines the type of the block, either Micro or Macro (which includes both checkpoint and
 /// election blocks).
@@ -462,7 +462,7 @@ impl Deserialize for BlockHeader {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum BlockJustification {
     Micro(MicroJustification),
-    Macro(PbftProof),
+    Macro(TendermintProof),
 }
 
 impl BlockJustification {

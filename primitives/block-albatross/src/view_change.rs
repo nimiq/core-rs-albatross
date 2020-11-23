@@ -1,11 +1,11 @@
-use std::fmt;
-
 use beserial::{Deserialize, Serialize};
 use hash::SerializeContent;
 use hash_derive::SerializeContent;
+use std::fmt;
 use vrf::VrfSeed;
 
-use super::signed;
+use crate::signed::{Message, SignedMessage, PREFIX_VIEW_CHANGE};
+use crate::MultiSignature;
 
 /// The struct representing a view change. View changes happen when a given micro block is not
 /// produced in time by its intended producer. It allows the next slot owner to take over and
@@ -26,13 +26,12 @@ pub struct ViewChange {
     pub prev_seed: VrfSeed,
 }
 
-impl signed::Message for ViewChange {
-    const PREFIX: u8 = signed::PREFIX_VIEW_CHANGE;
+impl Message for ViewChange {
+    const PREFIX: u8 = PREFIX_VIEW_CHANGE;
 }
 
-pub type SignedViewChange = signed::SignedMessage<ViewChange>;
-pub type ViewChangeProof = signed::AggregateProof<ViewChange>;
-pub type ViewChangeProofBuilder = signed::AggregateProofBuilder<ViewChange>;
+pub type SignedViewChange = SignedMessage<ViewChange>;
+pub type ViewChangeProof = MultiSignature;
 
 /// A struct that represents a series of consecutive view changes at the same block height.
 #[derive(Clone, Debug, Serialize, Deserialize)]
