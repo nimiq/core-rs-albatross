@@ -1,4 +1,4 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use futures::task::{Context, Poll, Waker};
@@ -12,7 +12,7 @@ use libp2p::{
     PeerId
 };
 
-use nimiq_network_interface::network::NetworkEvent;
+use nimiq_network_interface::network::{ObservablePeerMap, NetworkEvent};
 
 use super::{
     peer::Peer,
@@ -39,7 +39,7 @@ pub struct MessageBehaviour {
 
     events: VecDeque<NetworkBehaviourAction<HandlerInEvent, NetworkEvent<Peer>>>,
 
-    peers: HashMap<PeerId, Arc<Peer>>,
+    pub(crate) peers: ObservablePeerMap<Peer>,
 
     waker: Option<Waker>,
 }
@@ -54,18 +54,10 @@ impl MessageBehaviour {
     pub fn new(config: MessageConfig) -> Self {
         Self {
             config,
-            peers: HashMap::new(),
+            peers: ObservablePeerMap::default(),
             events: VecDeque::new(),
             waker: None,
         }
-    }
-
-    pub fn get_peers(&self) -> impl Iterator<Item=&Arc<Peer>> {
-        self.peers.values()
-    }
-
-    pub fn get_peer(&self, peer_id: &PeerId) -> Option<&Arc<Peer>> {
-        self.peers.get(peer_id)
     }
 
     fn push_event(&mut self, event: NetworkBehaviourAction<HandlerInEvent, NetworkEvent<Peer>>) {
@@ -132,7 +124,7 @@ impl NetworkBehaviour for MessageBehaviour {
         log::debug!("MessageBehaviour::inject_event: peer_id={:?}: {:?}", peer_id, event);
         match event {
             HandlerOutEvent::PeerJoined { peer } => {
-                self.peers.insert(peer_id, Arc::clone(&peer));
+                self.peers.insert(Arc::clone(&peer));
                 self.push_event(NetworkBehaviourAction::GenerateEvent(NetworkEvent::PeerJoined(peer)));
             },
             HandlerOutEvent::PeerClosed { peer, reason } => {

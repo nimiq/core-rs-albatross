@@ -21,7 +21,7 @@ use thiserror::Error;
 use libp2p::core::transport::MemoryTransport;
 
 use beserial::{Serialize, Deserialize};
-use nimiq_network_interface::network::{Network as NetworkInterface, NetworkEvent, Topic};
+use nimiq_network_interface::network::{Network as NetworkInterface, NetworkEvent, Topic, ObservablePeerMap};
 
 use crate::{
     behaviour::NimiqBehaviour,
@@ -71,13 +71,6 @@ pub enum NetworkAction {
         address: Multiaddr,
         output: oneshot::Sender<Result<(), NetworkError>>,
     },
-    GetPeers {
-        output: oneshot::Sender<Vec<Arc<Peer>>>,
-    },
-    GetPeer {
-        peer_id: PeerId,
-        output: oneshot::Sender<Option<Arc<Peer>>>,
-    },
 }
 
 
@@ -85,6 +78,7 @@ pub struct Network {
     local_peer_id: PeerId,
     events_tx: broadcast::Sender<NetworkEvent<Peer>>,
     action_tx: AsyncMutex<mpsc::Sender<NetworkAction>>,
+    peers: ObservablePeerMap<Peer>,
 }
 
 impl Network {
@@ -97,6 +91,7 @@ impl Network {
     ///
     pub fn new(listen_addr: Multiaddr, config: Config) -> Self {
         let swarm = Self::new_swarm(listen_addr, config);
+        let peers = swarm.message.peers.clone();
 
         let local_peer_id = Swarm::local_peer_id(&swarm).clone();
 
@@ -109,6 +104,7 @@ impl Network {
             local_peer_id,
             events_tx,
             action_tx: AsyncMutex::new(action_tx),
+            peers,
         }
     }
 
@@ -192,6 +188,7 @@ impl Network {
                     match event {
                        SwarmEvent::Behaviour(event) => {
                             log::debug!("Swarm task received event: {:?}", event);
+
                             if let Err(event) = events_tx.send(event) {
                                 log::error!("Failed to notify subscribers about network event: {:?}", event);
                             }
@@ -223,21 +220,6 @@ impl Network {
                 output.send(Swarm::dial_addr(swarm, address)
                     .map_err(|l| NetworkError::Dial(libp2p::swarm::DialError::ConnectionLimit(l)))).ok();
             },
-            NetworkAction::GetPeers { output } => {
-                let peers = swarm.message
-                    .get_peers()
-                    .map(|p| Arc::clone(p))
-                    .collect();
-                log::debug!("get_peers() -> {:?}", peers);
-                output.send(peers).ok();
-            },
-            NetworkAction::GetPeer { peer_id, output } => {
-                let peer = swarm.message
-                    .get_peer(&peer_id)
-                    .map(|p| Arc::clone(p));
-                log::debug!("get_peers({:?}) -> {:?}", peer_id, peer);
-                output.send(peer).ok();
-            },
         }
 
         Ok(())
@@ -249,21 +231,16 @@ impl NetworkInterface for Network {
     type PeerType = Peer;
     type Error = NetworkError;
 
-    async fn get_peers(&self) -> Vec<Arc<Self::PeerType>> {
-        let (output_tx, output_rx) = oneshot::channel();
-        self.action_tx.lock().await.send(NetworkAction::GetPeers {
-            output: output_tx,
-        }).await.unwrap();
-        output_rx.await.unwrap()
+    fn get_peer_updates(&self) -> (Vec<Arc<Self::PeerType>>, broadcast::Receiver<NetworkEvent<Self::PeerType>>) {
+        self.peers.subscribe()
     }
 
-    async fn get_peer(&self, peer_id: PeerId) -> Option<Arc<Self::PeerType>> {
-        let (output_tx, output_rx) = oneshot::channel();
-        self.action_tx.lock().await.send(NetworkAction::GetPeer {
-            peer_id,
-            output: output_tx,
-        }).await.unwrap();
-        output_rx.await.unwrap()
+    fn get_peers(&self) -> Vec<Arc<Self::PeerType>> {
+        self.peers.get_peers()
+    }
+
+    fn get_peer(&self, peer_id: PeerId) -> Option<Arc<Self::PeerType>> {
+        self.peers.get_peer(&peer_id)
     }
 
     fn subscribe_events(&self) -> broadcast::Receiver<NetworkEvent<Self::PeerType>> {
@@ -416,11 +393,11 @@ mod tests {
     #[tokio::test]
     async fn two_networks_can_connect() {
         let (net1, net2) = create_connected_networks().await;
-        assert_eq!(net1.get_peers().await.len(), 1);
-        assert_eq!(net2.get_peers().await.len(), 1);
+        assert_eq!(net1.get_peers().len(), 1);
+        assert_eq!(net2.get_peers().len(), 1);
 
-        let peer2 = net1.get_peer(net2.local_peer_id().clone()).await.unwrap();
-        let peer1 = net2.get_peer(net1.local_peer_id().clone()).await.unwrap();
+        let peer2 = net1.get_peer(net2.local_peer_id().clone()).unwrap();
+        let peer1 = net2.get_peer(net1.local_peer_id().clone()).unwrap();
         assert_eq!(peer2.id(), net2.local_peer_id);
         assert_eq!(peer1.id(), net1.local_peer_id);
 
@@ -431,8 +408,8 @@ mod tests {
     async fn one_peer_can_talk_to_another() {
         let (net1, net2) = create_connected_networks().await;
 
-        let peer2 = net1.get_peer(net2.local_peer_id().clone()).await.unwrap();
-        let peer1 = net2.get_peer(net1.local_peer_id().clone()).await.unwrap();
+        let peer2 = net1.get_peer(net2.local_peer_id().clone()).unwrap();
+        let peer1 = net2.get_peer(net1.local_peer_id().clone()).unwrap();
 
         let mut msgs = peer1.receive::<TestMessage>();
 
@@ -449,8 +426,8 @@ mod tests {
     async fn both_peers_can_talk_with_each_other() {
         let (net1, net2) = create_connected_networks().await;
 
-        let peer2 = net1.get_peer(net2.local_peer_id().clone()).await.unwrap();
-        let peer1 = net2.get_peer(net1.local_peer_id().clone()).await.unwrap();
+        let peer2 = net1.get_peer(net2.local_peer_id().clone()).unwrap();
+        let peer1 = net2.get_peer(net1.local_peer_id().clone()).unwrap();
 
         let mut in1 = peer1.receive::<TestMessage>();
         let mut in2 = peer2.receive::<TestMessage>();
@@ -478,7 +455,7 @@ mod tests {
     async fn connections_are_properly_closed() {
         let (net1, net2) = create_connected_networks().await;
 
-        let peer2 = net1.get_peer(net2.local_peer_id().clone()).await.unwrap();
+        let peer2 = net1.get_peer(net2.local_peer_id().clone()).unwrap();
         peer2.close(CloseReason::Other).await;
 
         let mut events1 = net1.subscribe_events();
@@ -492,7 +469,7 @@ mod tests {
         assert_peer_left(&event1, net2.local_peer_id());
         log::debug!("event1 = {:?}", event1);
 
-        assert_eq!(net1.get_peers().await.len(), 0);
-        assert_eq!(net2.get_peers().await.len(), 0);
+        assert_eq!(net1.get_peers().len(), 0);
+        assert_eq!(net2.get_peers().len(), 0);
     }
 }

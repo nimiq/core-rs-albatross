@@ -25,6 +25,7 @@ use nimiq_network_interface::message::{Message, read_message, peek_type};
 pub struct MessageReceiver {
     channels: Arc<Mutex<HashMap<u64, Option<mpsc::Sender<Vec<u8>>>>>>,
 
+
     close_tx: Mutex<Option<oneshot::Sender<()>>>,
 
     error_rx: Mutex<oneshot::Receiver<SerializingError>>,

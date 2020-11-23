@@ -9,9 +9,7 @@ use futures::channel::oneshot::{channel as oneshot, Sender as OneshotSender};
 use futures::task::{noop_waker_ref, Context, Poll};
 use futures::{executor, future, FutureExt, Sink, SinkExt, Stream, StreamExt};
 use parking_lot::{Mutex, RwLock};
-use tokio::sync::broadcast::{
-    channel as broadcast, Receiver as BroadcastReceiver, Sender as BroadcastSender,
-};
+use tokio::sync::broadcast;
 use thiserror::Error;
 
 use beserial::{Serialize, Deserialize};
@@ -156,14 +154,14 @@ impl Peer for MockPeer {
 pub struct MockNetwork {
     peer_id: usize,
     peers: Arc<RwLock<HashMap<usize, Arc<MockPeer>>>>,
-    event_tx: BroadcastSender<NetworkEvent<MockPeer>>,
+    event_tx: broadcast::Sender<NetworkEvent<MockPeer>>,
     close_tx: UnboundedSender<usize>,
 }
 
 impl MockNetwork {
     pub fn new(peer_id: usize) -> Self {
         let peers = Arc::new(RwLock::new(HashMap::new()));
-        let (event_tx, _rx) = broadcast(256);
+        let (event_tx, _rx) = broadcast::channel(256);
         let (close_tx, close_rx) = unbounded();
 
         let peers1 = Arc::clone(&peers);
@@ -224,15 +222,19 @@ impl Network for MockNetwork {
     type PeerType = MockPeer;
     type Error = MockNetworkError;
 
-    async fn get_peers(&self) -> Vec<Arc<Self::PeerType>> {
+    fn get_peer_updates(&self) -> (Vec<Arc<MockPeer>>, broadcast::Receiver<NetworkEvent<MockPeer>>) {
+        unimplemented!()
+    }
+
+    fn get_peers(&self) -> Vec<Arc<Self::PeerType>> {
         self.peers.read().values().map(|peer| Arc::clone(peer)).collect()
     }
 
-    async fn get_peer(&self, peer_id: <Self::PeerType as Peer>::Id) -> Option<Arc<Self::PeerType>> {
+    fn get_peer(&self, peer_id: <Self::PeerType as Peer>::Id) -> Option<Arc<Self::PeerType>> {
         self.peers.read().get(&peer_id).cloned()
     }
 
-    fn subscribe_events(&self) -> BroadcastReceiver<NetworkEvent<Self::PeerType>> {
+    fn subscribe_events(&self) -> broadcast::Receiver<NetworkEvent<Self::PeerType>> {
         self.event_tx.subscribe()
     }
 
@@ -323,15 +325,15 @@ mod tests {
             _ => panic!("Unexpected event"),
         };
 
-        assert_eq!(net1.get_peers().await.len(), 1);
-        assert_eq!(net1.get_peers().await.first().unwrap().id, 2);
-        assert_eq!(net1.get_peer(2).await.unwrap().id, 2);
-        assert!(net1.get_peer(1).await.is_none());
+        assert_eq!(net1.get_peers().len(), 1);
+        assert_eq!(net1.get_peers().first().unwrap().id, 2);
+        assert_eq!(net1.get_peer(2).unwrap().id, 2);
+        assert!(net1.get_peer(1).is_none());
 
-        assert_eq!(net2.get_peers().await.len(), 1);
-        assert_eq!(net2.get_peers().await.first().unwrap().id, 1);
-        assert_eq!(net2.get_peer(1).await.unwrap().id, 1);
-        assert!(net2.get_peer(2).await.is_none());
+        assert_eq!(net2.get_peers().len(), 1);
+        assert_eq!(net2.get_peers().first().unwrap().id, 1);
+        assert_eq!(net2.get_peer(1).unwrap().id, 1);
+        assert!(net2.get_peer(2).is_none());
     }
 
     #[tokio::test]
@@ -340,12 +342,12 @@ mod tests {
         let net2 = MockNetwork::new(2);
         net1.connect(&net2);
 
-        let peer1 = net2.get_peer(1).await.unwrap();
+        let peer1 = net2.get_peer(1).unwrap();
         tokio::spawn(async move {
             peer1.send(&TestMessage { id: 4711 }).await.expect("Send failed");
         });
 
-        let peer2 = net1.get_peer(2).await.unwrap();
+        let peer2 = net1.get_peer(2).unwrap();
         let msg = peer2.receive::<TestMessage>().next().await.expect("Message expected");
         assert_eq!(msg.id, 4711);
     }
@@ -356,10 +358,10 @@ mod tests {
         let net2 = MockNetwork::new(2);
         net1.connect(&net2);
 
-        assert_eq!(net1.get_peers().await.len(), 1);
-        assert_eq!(net2.get_peers().await.len(), 1);
+        assert_eq!(net1.get_peers().len(), 1);
+        assert_eq!(net2.get_peers().len(), 1);
 
-        let peer2 = net1.get_peer(2).await.unwrap();
+        let peer2 = net1.get_peer(2).unwrap();
         tokio::spawn(async move {
             peer2.close(CloseReason::Other).await;
             // This message should not arrive.
@@ -368,7 +370,7 @@ mod tests {
 
         let mut events1 = net1.subscribe_events();
         let mut events2 = net2.subscribe_events();
-        let peer1 = net2.get_peer(1).await.unwrap();
+        let peer1 = net2.get_peer(1).unwrap();
         let mut no_msg = peer1.receive::<TestMessage>();
         match join!(events1.next(), events2.next(), no_msg.next()) {
             (Some(Ok(NetworkEvent::PeerLeft(p1))), Some(Ok(NetworkEvent::PeerLeft(p2))), None) => {
@@ -378,8 +380,8 @@ mod tests {
             _ => panic!("Unexpected event"),
         }
 
-        assert_eq!(net1.get_peers().await.len(), 0);
-        assert_eq!(net2.get_peers().await.len(), 0);
+        assert_eq!(net1.get_peers().len(), 0);
+        assert_eq!(net2.get_peers().len(), 0);
     }
 
     #[tokio::test]
@@ -388,8 +390,8 @@ mod tests {
         let net2 = MockNetwork::new(2);
         net1.connect(&net2);
 
-        assert_eq!(net1.get_peers().await.len(), 1);
-        assert_eq!(net2.get_peers().await.len(), 1);
+        assert_eq!(net1.get_peers().len(), 1);
+        assert_eq!(net2.get_peers().len(), 1);
 
         let mut stream = net2.receive_from_all::<TestMessage>();
         // Relay messages back.
@@ -399,7 +401,7 @@ mod tests {
             }
         });
 
-        let peer2 = net1.get_peer(2).await.unwrap();
+        let peer2 = net1.get_peer(2).unwrap();
         let requests = RequestResponse::<_, TestMessage, TestMessage>::new(peer2, Duration::new(1, 0));
 
         let msg = TestMessage { id: 0 };

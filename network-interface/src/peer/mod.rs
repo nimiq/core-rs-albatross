@@ -35,7 +35,7 @@ pub trait RequestResponse {
 
 #[async_trait]
 pub trait Peer: Send + Sync + Hash + Eq {
-    type Id: Debug;
+    type Id: Debug + Hash + Eq;
     type Error: std::error::Error;
 
     fn id(&self) -> Self::Id;

@@ -1,11 +1,17 @@
-use std::pin::Pin;
-use std::sync::Arc;
+use std::{
+    pin::Pin,
+    sync::Arc,
+    collections::HashMap,
+};
 
 use async_trait::async_trait;
-use futures::stream::{FusedStream, SelectAll};
-use futures::task::{Context, Poll};
-use futures::{future, ready, Stream, StreamExt, TryFutureExt};
-use tokio::sync::broadcast::{Receiver as BroadcastReceiver, RecvError as BroadcastRecvError};
+use futures::{
+    task::{Context, Poll},
+    stream::{FusedStream, SelectAll},
+    future, ready, Stream, StreamExt, TryFutureExt, stream
+};
+use tokio::sync::broadcast;
+use parking_lot::RwLock;
 
 use beserial::{Serialize, Deserialize};
 
@@ -45,18 +51,132 @@ impl<P> Clone for NetworkEvent<P> {
     }
 }
 
+
+struct Inner<P>
+    where P: Peer + 'static,
+{
+    peers: HashMap<P::Id, Arc<P>>,
+    tx: broadcast::Sender<NetworkEvent<P>>,
+}
+
+impl<P> Inner<P>
+    where P: Peer + 'static,
+{
+    fn notify(&self, event: NetworkEvent<P>) {
+        // According to documentation this only fails if all receivers dropped. But that's okay for us.
+        self.tx.send(event).ok();
+    }
+}
+
+pub struct ObservablePeerMap<P>
+    where P: Peer + 'static,
+{
+    inner: Arc<RwLock<Inner<P>>>,
+}
+
+impl<P> Clone for ObservablePeerMap<P>
+    where P: Peer + std::fmt::Debug,
+{
+    fn clone(&self) -> Self {
+        Self { inner: Arc::clone(&self.inner) }
+    }
+}
+
+impl<P> std::fmt::Debug for ObservablePeerMap<P>
+    where P: Peer + std::fmt::Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        self.inner.read().peers.fmt(f)
+    }
+}
+
+impl<P> Default for ObservablePeerMap<P>
+    where P: Peer,
+{
+    fn default() -> Self {
+        Self::new(Default::default())
+    }
+}
+
+impl<P> ObservablePeerMap<P>
+    where P: Peer + 'static,
+{
+    pub fn new(peers: HashMap<P::Id, Arc<P>>) -> Self {
+        let (tx, _rx) = broadcast::channel(64);
+
+        Self {
+            inner: Arc::new(RwLock::new(Inner {
+                peers,
+                tx,
+            }))
+        }
+    }
+
+    pub fn insert(&self, peer: Arc<P>) {
+        let mut inner = self.inner.write();
+
+        inner.peers.insert(peer.id(), Arc::clone(&peer));
+        inner.notify(NetworkEvent::PeerJoined(peer));
+    }
+
+    pub fn remove(&self, peer_id: &P::Id) -> Option<Arc<P>> {
+        let mut inner = self.inner.write();
+
+        if let Some(peer) = inner.peers.remove(peer_id) {
+            inner.notify(NetworkEvent::PeerLeft(Arc::clone(&peer)));
+            Some(peer)
+        }
+        else {
+            None
+        }
+    }
+
+    pub fn get_peer(&self, peer_id: &P::Id) -> Option<Arc<P>> {
+        self.inner
+            .read()
+            .peers
+            .get(peer_id)
+            .map(|peer| Arc::clone(peer))
+    }
+
+    pub fn get_peers(&self) -> Vec<Arc<P>> {
+        self.inner
+            .read()
+            .peers
+            .values()
+            .map(|peer| Arc::clone(peer))
+            .collect()
+    }
+
+    pub fn subscribe(&self) -> (Vec<Arc<P>>, broadcast::Receiver<NetworkEvent<P>>) {
+        let inner = self.inner.write();
+
+        let peers = inner.peers
+            .values()
+            .map(|peer| Arc::clone(peer))
+            .collect();
+
+        let rx = inner.tx.subscribe();
+
+        (peers, rx)
+    }
+}
+
+
 #[async_trait]
 pub trait Network: Send + Sync + 'static {
     type PeerType: Peer + 'static;
     type Error: std::error::Error;
 
-    async fn get_peers(&self) -> Vec<Arc<Self::PeerType>>;
-    async fn get_peer(&self, peer_id: <Self::PeerType as Peer>::Id) -> Option<Arc<Self::PeerType>>;
+    fn get_peer_updates(&self) -> (Vec<Arc<Self::PeerType>>, broadcast::Receiver<NetworkEvent<Self::PeerType>>);
 
-    fn subscribe_events(&self) -> BroadcastReceiver<NetworkEvent<Self::PeerType>>;
+    fn get_peers(&self) -> Vec<Arc<Self::PeerType>>;
+    fn get_peer(&self, peer_id: <Self::PeerType as Peer>::Id) -> Option<Arc<Self::PeerType>>;
+
+    fn subscribe_events(&self) -> broadcast::Receiver<NetworkEvent<Self::PeerType>>;
 
     async fn broadcast<T: Message>(&self, msg: &T) {
-        future::join_all(self.get_peers().await.iter().map(|peer| {
+        future::join_all(self.get_peers().iter().map(|peer| {
             // TODO: Close reason
             peer.send_or_close(msg, |_| CloseReason::Other).unwrap_or_else(|_| ())
         }))
@@ -94,22 +214,20 @@ pub trait Network: Send + Sync + 'static {
 /// A wrapper around `SelectAll` that automatically subscribes to new peers.
 pub struct ReceiveFromAll<T: Message, P> {
     inner: SelectAll<Pin<Box<dyn Stream<Item = (T, Arc<P>)> + Send>>>,
-    event_stream: Pin<Box<dyn FusedStream<Item = Result<NetworkEvent<P>, BroadcastRecvError>> + Send>>,
+    event_stream: Pin<Box<dyn FusedStream<Item = Result<NetworkEvent<P>, broadcast::RecvError>> + Send>>,
 }
 
 impl<T: Message, P: Peer + 'static> ReceiveFromAll<T, P> {
-    /// TODO:
-    ///
-    ///  - This only listens from all peers that were present when the `ReceiveFromAll` was created.
-    pub fn new<N: Network<PeerType = P> + ?Sized>(_network: &N) -> Self {
-        /*ReceiveFromAll {
-            inner: stream::select_all(network.get_peers().iter().map(|peer| {
+    pub fn new<N: Network<PeerType = P> + ?Sized>(network: &N) -> Self {
+        let (peers, updates) = network.get_peer_updates();
+
+        ReceiveFromAll {
+            inner: stream::select_all(peers.into_iter().map(|peer| {
                 let peer_inner = Arc::clone(&peer);
                 peer.receive::<T>().map(move |item| (item, Arc::clone(&peer_inner))).boxed()
             })),
-            event_stream: Box::pin(network.subscribe_events().into_stream().fuse()),
-        }*/
-        todo!();
+            event_stream: Box::pin(updates.into_stream().fuse()),
+        }
     }
 }
 
@@ -130,8 +248,8 @@ impl<T: Message, P: Peer + 'static> Stream for ReceiveFromAll<T, P> {
                 // The receiver lagged too far behind.
                 // Attempting to receive again will return the oldest message still retained by the channel.
                 // So, that's what we do.
-                Poll::Ready(Some(Err(BroadcastRecvError::Lagged(_)))) => {}
-                Poll::Ready(None) | Poll::Ready(Some(Err(BroadcastRecvError::Closed))) => {
+                Poll::Ready(Some(Err(broadcast::RecvError::Lagged(_)))) => {}
+                Poll::Ready(None) | Poll::Ready(Some(Err(broadcast::RecvError::Closed))) => {
                     // There are no more active senders implying no further messages will ever be sent.
                     return Poll::Ready(None); // Discard this stream entirely.
                 }

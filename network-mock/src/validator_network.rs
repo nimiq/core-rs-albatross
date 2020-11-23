@@ -39,7 +39,7 @@ impl ValidatorNetwork for MockValidatorNetwork {
 
         for validator in validator_ids {
             // for every validator get the respective peer from the underliying MockNetwork instance
-            if let Some(peer) = self.mock_network.get_peer(*validator).await {
+            if let Some(peer) = self.mock_network.get_peer(*validator) {
                 // Try to send `msg` to the peer and push the result into the reuslt accumulation.
                 res.push(peer.send(msg).await.map_err(|err| match err {
                     // Transform everyhthing into Unreachable error except for Serialization errors.
@@ -61,7 +61,8 @@ impl ValidatorNetwork for MockValidatorNetwork {
     async fn broadcast<M: Message>(&self, msg: &M) -> Result<(), NetworkError> {
         // TODO this does currently not work and will always return ()
         self.mock_network.broadcast(msg).await;
-        if self.mock_network.get_peers().await.len() > 0 {
+        // get_peers().len() is super in-efficient
+        if self.mock_network.get_peers().len() > 0 {
             Ok(())
         } else {
             Err(NetworkError::Offline)
@@ -129,11 +130,11 @@ mod tests {
         let net2 = MockValidatorNetwork::new(2);
         net1.connect(&net2);
 
-        assert_eq!(net1.mock_network.get_peers().await.len(), 1);
-        assert_eq!(net2.mock_network.get_peers().await.len(), 1);
+        assert_eq!(net1.mock_network.get_peers().len(), 1);
+        assert_eq!(net2.mock_network.get_peers().len(), 1);
 
-        assert_eq!(net1.mock_network.get_peers().await.first().unwrap().id(), 2);
-        assert_eq!(net2.mock_network.get_peers().await.first().unwrap().id(), 1);
+        assert_eq!(net1.mock_network.get_peers().first().unwrap().id(), 2);
+        assert_eq!(net2.mock_network.get_peers().first().unwrap().id(), 1);
     }
 
     // #[tokio::test]

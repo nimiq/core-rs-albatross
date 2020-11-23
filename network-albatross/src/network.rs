@@ -8,7 +8,7 @@ use parking_lot::RwLock;
 use parking_lot::RwLockReadGuard;
 use rand::rngs::OsRng;
 use rand::Rng;
-use tokio_02::sync::broadcast::Receiver as BroadcastReceiver;
+use tokio_02::sync::broadcast;
 use async_trait::async_trait;
 use futures_03::Stream;
 use thiserror::Error;
@@ -408,7 +408,11 @@ impl NetworkInterface for Network {
     type PeerType = PeerChannel;
     type Error = NetworkError;
 
-    async fn get_peers(&self) -> Vec<Arc<Self::PeerType>> {
+    fn get_peer_updates(&self) -> (Vec<Arc<Self::PeerType>>, broadcast::Receiver<NetworkEventI<Self::PeerType>>) {
+        unimplemented!();
+    }
+
+    fn get_peers(&self) -> Vec<Arc<Self::PeerType>> {
         self.connections
             .state()
             .connection_iter()
@@ -417,7 +421,7 @@ impl NetworkInterface for Network {
             .collect::<Vec<_>>()
     }
 
-    async fn get_peer(&self, peer_id: <Self::PeerType as PeerInterface>::Id) -> Option<Arc<Self::PeerType>> {
+    fn get_peer(&self, peer_id: <Self::PeerType as PeerInterface>::Id) -> Option<Arc<Self::PeerType>> {
         self.connections
             .state()
             .get_connection_by_peer_address(&peer_id)
@@ -425,7 +429,7 @@ impl NetworkInterface for Network {
             .flatten()
     }
 
-    fn subscribe_events(&self) -> BroadcastReceiver<NetworkEventI<Self::PeerType>> {
+    fn subscribe_events(&self) -> broadcast::Receiver<NetworkEventI<Self::PeerType>> {
         unimplemented!()
     }
 

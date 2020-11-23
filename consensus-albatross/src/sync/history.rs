@@ -486,7 +486,7 @@ mod tests {
         let net3 = Arc::new(MockNetwork::new(3));
         net1.connect(&net2);
         net1.connect(&net3);
-        let peers = net1.get_peers().await;
+        let peers = net1.get_peers();
         let consensus_agents: Vec<_> = peers.into_iter().map(ConsensusAgent::new).map(Arc::new).collect();
 
         fn run_test<F>(
