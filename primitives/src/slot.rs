@@ -5,7 +5,7 @@ extern crate itertools;
 ///!
 ///! The graphic below shows how slots relate to validators. In the example we have two
 ///! validators that produce blocks distributed over a total of 16 slots. Validator #0
-///! produces blocks for slots 0 - 9). Validator #2 works similarly.
+///! produces blocks for slots 0 - A). Validator #2 works similarly.
 ///!
 ///! ```plain
 ///!                      +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+

@@ -1,6 +1,6 @@
 use std::fmt;
 
-use algebra::mnt6_753::G1Projective;
+use algebra::mnt6_753::{Fr, G1Projective};
 use algebra_core::curves::ProjectiveCurve;
 
 use nimiq_hash::HashOutput;
@@ -43,6 +43,14 @@ impl Signature {
         let mut buffer = [0u8; CompressedSignature::SIZE];
         BeSerialize::serialize(&self.signature.into_affine(), &mut &mut buffer[..]).unwrap();
         CompressedSignature { signature: buffer }
+    }
+
+    /// Multiplies a Signature by a u16. It's useful when you need to validator's signature by its
+    /// number of slots.
+    pub fn multiply(&self, x: u16) -> Self {
+        Signature {
+            signature: self.signature.mul(Fr::from(x)),
+        }
     }
 }
 

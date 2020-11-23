@@ -1,6 +1,7 @@
 use beserial::{Deserialize, Serialize};
 use hash::{Blake2sHash, SerializeContent};
 use hash_derive::SerializeContent;
+use primitives::policy::TWO_THIRD_SLOTS;
 use primitives::slot::ValidatorSlots;
 
 use crate::signed::{Message, SignedMessage, PREFIX_TENDERMINT_PROPOSAL};
@@ -37,11 +38,11 @@ impl TendermintProof {
         block_hash: Blake2sHash,
         block_number: u32,
         validators: &ValidatorSlots,
-        threshold: u16,
     ) -> bool {
-        if self.votes() < threshold {
+        if self.votes() < TWO_THIRD_SLOTS {
             return false;
         }
+
         true
     }
 }
