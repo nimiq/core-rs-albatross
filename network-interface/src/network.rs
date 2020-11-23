@@ -1,7 +1,6 @@
 use std::{
     pin::Pin,
     sync::Arc,
-    collections::HashMap,
 };
 
 use async_trait::async_trait;
@@ -11,7 +10,6 @@ use futures::{
     future, ready, Stream, StreamExt, TryFutureExt, stream
 };
 use tokio::sync::broadcast;
-use parking_lot::RwLock;
 
 use beserial::{Serialize, Deserialize};
 
@@ -48,117 +46,6 @@ impl<P> Clone for NetworkEvent<P> {
             NetworkEvent::PeerJoined(peer) => NetworkEvent::PeerJoined(Arc::clone(peer)),
             NetworkEvent::PeerLeft(peer) => NetworkEvent::PeerLeft(Arc::clone(peer)),
         }
-    }
-}
-
-
-struct Inner<P>
-    where P: Peer + 'static,
-{
-    peers: HashMap<P::Id, Arc<P>>,
-    tx: broadcast::Sender<NetworkEvent<P>>,
-}
-
-impl<P> Inner<P>
-    where P: Peer + 'static,
-{
-    fn notify(&self, event: NetworkEvent<P>) {
-        // According to documentation this only fails if all receivers dropped. But that's okay for us.
-        self.tx.send(event).ok();
-    }
-}
-
-pub struct ObservablePeerMap<P>
-    where P: Peer + 'static,
-{
-    inner: Arc<RwLock<Inner<P>>>,
-}
-
-impl<P> Clone for ObservablePeerMap<P>
-    where P: Peer + std::fmt::Debug,
-{
-    fn clone(&self) -> Self {
-        Self { inner: Arc::clone(&self.inner) }
-    }
-}
-
-impl<P> std::fmt::Debug for ObservablePeerMap<P>
-    where P: Peer + std::fmt::Debug,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        self.inner.read().peers.fmt(f)
-    }
-}
-
-impl<P> Default for ObservablePeerMap<P>
-    where P: Peer,
-{
-    fn default() -> Self {
-        Self::new(Default::default())
-    }
-}
-
-impl<P> ObservablePeerMap<P>
-    where P: Peer + 'static,
-{
-    pub fn new(peers: HashMap<P::Id, Arc<P>>) -> Self {
-        let (tx, _rx) = broadcast::channel(64);
-
-        Self {
-            inner: Arc::new(RwLock::new(Inner {
-                peers,
-                tx,
-            }))
-        }
-    }
-
-    pub fn insert(&self, peer: Arc<P>) {
-        let mut inner = self.inner.write();
-
-        inner.peers.insert(peer.id(), Arc::clone(&peer));
-        inner.notify(NetworkEvent::PeerJoined(peer));
-    }
-
-    pub fn remove(&self, peer_id: &P::Id) -> Option<Arc<P>> {
-        let mut inner = self.inner.write();
-
-        if let Some(peer) = inner.peers.remove(peer_id) {
-            inner.notify(NetworkEvent::PeerLeft(Arc::clone(&peer)));
-            Some(peer)
-        }
-        else {
-            None
-        }
-    }
-
-    pub fn get_peer(&self, peer_id: &P::Id) -> Option<Arc<P>> {
-        self.inner
-            .read()
-            .peers
-            .get(peer_id)
-            .map(|peer| Arc::clone(peer))
-    }
-
-    pub fn get_peers(&self) -> Vec<Arc<P>> {
-        self.inner
-            .read()
-            .peers
-            .values()
-            .map(|peer| Arc::clone(peer))
-            .collect()
-    }
-
-    pub fn subscribe(&self) -> (Vec<Arc<P>>, broadcast::Receiver<NetworkEvent<P>>) {
-        let inner = self.inner.write();
-
-        let peers = inner.peers
-            .values()
-            .map(|peer| Arc::clone(peer))
-            .collect();
-
-        let rx = inner.tx.subscribe();
-
-        (peers, rx)
     }
 }
 
@@ -273,3 +160,4 @@ impl<T: Message, P: Peer + 'static> FusedStream for ReceiveFromAll<T, P> {
         self.event_stream.is_terminated()
     }
 }
+

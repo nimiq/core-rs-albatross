@@ -20,7 +20,7 @@ maintenance = { status = "experimental" }
 async-trait = "0.1"
 futures = "0.3"
 parking_lot = "0.11"
-tokio = { version = "0.2", features = ["time", "rt-core", "sync", "stream"] }
+tokio = { version = "0.2", features = ["time", "rt-core", "sync", "stream", "macros"] }
 thiserror = "1.0"
 
 beserial = { path = "../beserial", version = "0.1" }

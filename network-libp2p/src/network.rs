@@ -21,7 +21,10 @@ use thiserror::Error;
 use libp2p::core::transport::MemoryTransport;
 
 use beserial::{Serialize, Deserialize};
-use nimiq_network_interface::network::{Network as NetworkInterface, NetworkEvent, Topic, ObservablePeerMap};
+use nimiq_network_interface::{
+    network::{Network as NetworkInterface, NetworkEvent, Topic},
+    peer_map::ObservablePeerMap,
+};
 
 use crate::{
     behaviour::NimiqBehaviour,

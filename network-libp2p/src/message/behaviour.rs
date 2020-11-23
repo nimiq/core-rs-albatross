@@ -12,7 +12,10 @@ use libp2p::{
     PeerId
 };
 
-use nimiq_network_interface::network::{ObservablePeerMap, NetworkEvent};
+use nimiq_network_interface::{
+    network::NetworkEvent,
+    peer_map::ObservablePeerMap,
+};
 
 use super::{
     peer::Peer,
