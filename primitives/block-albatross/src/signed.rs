@@ -6,21 +6,15 @@ use std::fmt::Debug;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SignedMessage<M: Message> {
-    // the signed message
-    //  - view change: (VIEW-CHANGE, i + 1, b)
-    //    - i: current view change number
-    //    - b: current block number
-    //  - tendermint-prepare: (PREPARE, h)
-    //  - tendermint-commit: (COMMIT, h)
-    //    - h: block hash -> Blake2bHash
-    // X the actual message doesn't contain the prefix. This is added only during signing
+    // The signed message. Note that the actual message doesn't contain the prefix. This is added
+    // only during signing
     pub message: M,
 
-    // index of public key of signer
-    // XXX they need to be indexable, because we will include a bitmap of all signers in the block
+    // The index of public key of signer. Signers need to be indexable, because we will include a
+    // bitmap of all signers in the block.
     pub signer_idx: u16,
 
-    // signature over message
+    // The signature over the message.
     pub signature: Signature,
 }
 
@@ -41,18 +35,18 @@ impl<M: Message> SignedMessage<M> {
     }
 }
 
-// XXX The contents of ViewChangeMessage and TendermintMessage (and any other message that is signed by
+// The contents of ViewChangeMessage and TendermintMessage (and any other message that is signed by
 // a validator) must be distinguishable!
 // Therefore all signed messages should be prefixed with a standardized type. We should keep those
-// prefixed at one place to not accidentally create collisions.
+// prefixes at one place to not accidentally create collisions.
 
 /// prefix to sign view change messages
 pub const PREFIX_VIEW_CHANGE: u8 = 0x01;
-/// prefix to sign a pbft-proposal
+/// prefix to sign a tendermint proposal
 pub const PREFIX_TENDERMINT_PROPOSAL: u8 = 0x02;
-/// prefix to sign pbft-prepare messages
+/// prefix to sign tendermint prepare messages
 pub const PREFIX_TENDERMINT_PREPARE: u8 = 0x03;
-/// prefix to sign pbft-commit messages
+/// prefix to sign tendermint commit messages
 pub const PREFIX_TENDERMINT_COMMIT: u8 = 0x04;
 /// prefix to sign proof of knowledge of secret key
 pub const PREFIX_POKOSK: u8 = 0x05;

@@ -9,30 +9,30 @@ extern crate nimiq_handel as handel;
 extern crate nimiq_hash as hash;
 extern crate nimiq_hash_derive as hash_derive;
 extern crate nimiq_keys as keys;
+extern crate nimiq_nano_sync as nano_sync;
 extern crate nimiq_primitives as primitives;
 extern crate nimiq_transaction as transaction;
 extern crate nimiq_utils as utils;
 extern crate nimiq_vrf as vrf;
 
-mod multisig;
-
+use crate::transaction::TransactionError;
 use thiserror::Error;
 
-pub use block::{Block, BlockBody, BlockComponentFlags, BlockComponents, BlockHeader, BlockJustification, BlockType};
-pub use fork_proof::ForkProof;
-pub use macro_block::{MacroBlock, MacroBody, MacroHeader};
-pub use micro_block::{MicroBlock, MicroBody, MicroHeader, MicroJustification};
-pub use multisig::{IndividualSignature, MultiSignature};
-pub use tendermint::{SignedTendermintProposal, TendermintProof, TendermintProposal};
-pub use view_change::{SignedViewChange, ViewChange, ViewChangeProof, ViewChanges};
-
-use crate::transaction::TransactionError;
+pub use block::*;
+pub use fork_proof::*;
+pub use macro_block::*;
+pub use micro_block::*;
+pub use multisig::*;
+pub use signed::*;
+pub use tendermint::*;
+pub use view_change::*;
 
 mod block;
 mod fork_proof;
 mod macro_block;
 mod micro_block;
-pub mod signed;
+mod multisig;
+mod signed;
 mod tendermint;
 mod view_change;
 

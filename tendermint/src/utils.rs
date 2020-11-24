@@ -1,5 +1,6 @@
 use crate::state::TendermintState;
 use crate::ProofTrait;
+use nimiq_block_albatross::TendermintStep;
 use nimiq_hash::Blake2sHash;
 use nimiq_primitives::policy::TWO_THIRD_SLOTS;
 use std::collections::BTreeMap;
@@ -25,6 +26,17 @@ pub enum Step {
     Propose,
     Prevote,
     Precommit,
+}
+
+/// A method for easy conversion of Step into TendermintStep.
+impl Into<TendermintStep> for Step {
+    fn into(self) -> TendermintStep {
+        match self {
+            Step::Prevote => TendermintStep::PreVote,
+            Step::Precommit => TendermintStep::PreCommit,
+            _ => panic!("Aggregations can not have a different Step than Prevote or Precommit"),
+        }
+    }
 }
 
 /// Used to represent our vote decision (prevote or precommit) on a given proposal.

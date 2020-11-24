@@ -5,7 +5,7 @@ use handel::contribution::{AggregatableContribution, ContributionError};
 
 /*
 This does not really belong here, but as there would otherwise be a cyclic dependency it needs to be here for now.
-TODO Move this out of primitives and into validator/aggregation once the messages crate is no longer required
+TODO: Move this out of primitives and into validator/aggregation once the messages crate is no longer required.
 */
 
 #[derive(Clone, Debug)]

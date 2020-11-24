@@ -19,7 +19,7 @@ pub struct PublicKey {
 
 impl PublicKey {
     /// Generates a public key from a given point in G2. This function will produce an error if it is given the point at infinity.
-    fn new(public_key: G2Projective) -> Self {
+    pub fn new(public_key: G2Projective) -> Self {
         if public_key.is_zero() {
             error!("Public key cannot be the point at infinity!");
         }

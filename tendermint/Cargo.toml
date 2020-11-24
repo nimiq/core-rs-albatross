@@ -15,6 +15,7 @@ async-trait = "0.1"
 
 nimiq-hash = { path = "../hash", version = "0.1" }
 nimiq-primitives = { path = "../primitives", version = "0.1", features = ["policy"] }
+nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }
 
 [dev-dependencies]
 beserial = { path = "../beserial", version = "0.1" }

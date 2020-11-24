@@ -16,7 +16,7 @@ pub struct ViewChange {
     /// the validator is at + 1, since it's for the next block).
     pub block_number: u32,
 
-    /// The view number after the view_change (i.e. the current view number + 1, except if the view
+    /// The view number after the view change (i.e. the current view number + 1, except if the view
     /// change is for the first micro block of an batch, in that case it is simply 1).
     pub new_view_number: u32,
 

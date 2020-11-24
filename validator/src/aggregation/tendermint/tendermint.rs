@@ -263,19 +263,19 @@ impl<N: Network> HandelTendermintAdapter<N> {
         network: Arc<N>,
         secret_key: SecretKey,
     ) -> Self {
-        // to avooid importing an entire crate only for G2projective type this confusing construction:
-        // for every number in range 0..policy:;SLOTS
+        // to avoid importing an entire crate only for G2projective type this confusing construction:
+        // for every number in range 0..policy::SLOTS
         let public_keys = (0..policy::SLOTS)
             // map every index
             .map(|index| {
                 active_validators
                     // to the public key of validator with index index
                     .get_public_key(SlotIndex::Slot(index as u16))
-                    // unnwrap must succeed here or there is bigger problems
+                    // unwrap must succeed here or there is bigger problems
                     .unwrap()
-                    // get the compressed version of the publiic key
+                    // get the compressed version of the public key
                     .compressed()
-                    // and unncompress it
+                    // and uncompress it
                     .uncompress()
                     // this as well must succeed for the validator to work at all.
                     .expect("failed to retrieve public_key")
