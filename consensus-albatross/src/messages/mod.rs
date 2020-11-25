@@ -1,5 +1,5 @@
 use beserial::{Deserialize, Serialize};
-use block_albatross::MacroBlock;
+use block_albatross::{Block, MacroBlock};
 use blockchain_albatross::history_store::HistoryTreeChunk;
 use failure::_core::fmt::{Error, Formatter};
 use hash::Blake2bHash;
@@ -49,10 +49,33 @@ impl<T: Serialize + Deserialize> Objects<T> {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum BlockHashType {
+    Micro = 1,
+    Checkpoint = 2,
+    Election = 3,
+}
+
+impl<'a> From<&'a Block> for BlockHashType {
+    fn from(block: &'a Block) -> Self {
+        match block {
+            Block::Micro(_) => BlockHashType::Micro,
+            Block::Macro(macro_block) => {
+                if macro_block.is_election_block() {
+                    BlockHashType::Election
+                } else {
+                    BlockHashType::Checkpoint
+                }
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BlockHashes {
     #[beserial(len_type(u16))]
-    pub hashes: Vec<Blake2bHash>,
+    pub hashes: Vec<(BlockHashType, Blake2bHash)>,
     pub request_identifier: u32,
 }
 request_response!(BlockHashes);
@@ -66,6 +89,7 @@ impl Message for BlockHashes {
 pub enum RequestBlockHashesFilter {
     All = 1,
     ElectionOnly = 2,
+    ElectionAndLatestCheckpoint = 3,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -83,27 +107,27 @@ impl Message for RequestBlockHashes {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct RequestEpoch {
+pub struct RequestBatchSet {
     pub hash: Blake2bHash,
     pub request_identifier: u32,
 }
-request_response!(RequestEpoch);
+request_response!(RequestBatchSet);
 
-impl Message for RequestEpoch {
+impl Message for RequestBatchSet {
     const TYPE_ID: u64 = 202;
 }
 
 /// This message contains a macro block and the number of extended transactions (transitions)
 /// within this epoch.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Epoch {
+pub struct BatchSetInfo {
     pub block: MacroBlock,
     pub history_len: u32,
     pub request_identifier: u32,
 }
-request_response!(Epoch);
+request_response!(BatchSetInfo);
 
-impl Message for Epoch {
+impl Message for BatchSetInfo {
     const TYPE_ID: u64 = 203;
 }
 

@@ -72,7 +72,10 @@ async fn peers_can_sync() {
         .await
         .expect("Should yield hashes");
     assert_eq!(hashes.hashes.len(), 1);
-    assert_eq!(hashes.hashes[0], consensus1.blockchain.election_head_hash());
+    assert_eq!(
+        hashes.hashes[0].1,
+        consensus1.blockchain.election_head_hash()
+    );
 
     // Request epoch
     let epoch = agent
@@ -120,7 +123,10 @@ async fn peers_can_sync() {
         .await
         .expect("Should yield hashes");
     assert_eq!(hashes.hashes.len(), 1);
-    assert_eq!(hashes.hashes[0], consensus2.blockchain.election_head_hash());
+    assert_eq!(
+        hashes.hashes[0].1,
+        consensus2.blockchain.election_head_hash()
+    );
 
     // Request epoch
     let epoch = agent

@@ -11,7 +11,10 @@ use network_interface::request_response::{RequestError, RequestResponse};
 use nimiq_subscription::Subscription;
 use transaction::Transaction;
 
-use crate::messages::{BlockHashes, Epoch, HistoryChunk, RequestBlockHashes, RequestBlockHashesFilter, RequestEpoch, RequestHistoryChunk};
+use crate::messages::{
+    BatchSetInfo, BlockHashes, HistoryChunk, RequestBatchSet, RequestBlockHashes,
+    RequestBlockHashesFilter, RequestHistoryChunk,
+};
 
 pub struct ConsensusAgentState {
     local_subscription: Subscription,
@@ -32,7 +35,7 @@ pub struct ConsensusAgent<P: Peer> {
 
     block_hashes_requests: RequestResponse<P, RequestBlockHashes, BlockHashes>,
 
-    epoch_requests: RequestResponse<P, RequestEpoch, Epoch>,
+    epoch_requests: RequestResponse<P, RequestBatchSet, BatchSetInfo>,
     history_chunk_requests: RequestResponse<P, RequestHistoryChunk, HistoryChunk>,
 }
 
@@ -69,10 +72,10 @@ impl<P: Peer> ConsensusAgent<P> {
         async { Err(RequestError::Timeout) }
     }
 
-    pub async fn request_epoch(&self, hash: Blake2bHash) -> Result<Epoch, RequestError> {
+    pub async fn request_epoch(&self, hash: Blake2bHash) -> Result<BatchSetInfo, RequestError> {
         let result = self
             .epoch_requests
-            .request(RequestEpoch {
+            .request(RequestBatchSet {
                 hash,
                 request_identifier: 0, // will automatically be set at a later point
             })

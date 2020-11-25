@@ -68,7 +68,10 @@ impl<N: Network> QuickSync<N> {
                 .await;
 
             match objects {
-                Ok(objects) => (weak_agent, Some(objects.hashes)),
+                Ok(objects) => (
+                    weak_agent,
+                    Some(objects.hashes.into_iter().map(|(_, hash)| hash).collect()),
+                ),
                 _ => (weak_agent, None),
             }
         } else {

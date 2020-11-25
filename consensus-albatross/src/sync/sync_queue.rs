@@ -158,6 +158,10 @@ where
         self.peers.push(peer);
     }
 
+    pub fn has_peer(&self, peer: &Weak<ConsensusAgent<TPeer>>) -> bool {
+        self.peers.iter().any(|o_peer| o_peer.ptr_eq(peer))
+    }
+
     pub fn add_ids(&mut self, ids: Vec<TId>) {
         for id in ids {
             self.ids_to_request.push_back(id);

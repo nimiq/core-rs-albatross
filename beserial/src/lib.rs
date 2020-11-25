@@ -532,6 +532,26 @@ impl<T: SerializeWithLength> SerializeWithLength for Option<T> {
     }
 }
 
+// Tuples
+impl<T: Serialize, V: Serialize> Serialize for (T, V) {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+        Ok(self.0.serialize(writer)? + self.1.serialize(writer)?)
+    }
+
+    fn serialized_size(&self) -> usize {
+        self.0.serialized_size() + self.1.serialized_size()
+    }
+}
+
+impl<T: Deserialize, V: Deserialize> Deserialize for (T, V) {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        Ok((
+            Deserialize::deserialize(reader)?,
+            Deserialize::deserialize(reader)?,
+        ))
+    }
+}
+
 // Slices (only serialization)
 
 impl<T: Serialize> SerializeWithLength for [T] {

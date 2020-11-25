@@ -1,4 +1,7 @@
-use crate::messages::{BlockHashes, Epoch, HistoryChunk, RequestBlockHashes, RequestBlockHashesFilter, RequestEpoch, RequestHistoryChunk};
+use crate::messages::{
+    BatchSetInfo, BlockHashType, BlockHashes, HistoryChunk, RequestBatchSet, RequestBlockHashes,
+    RequestBlockHashesFilter, RequestHistoryChunk,
+};
 use block_albatross::Block;
 use blockchain_albatross::{history_store::CHUNK_SIZE, Blockchain, Direction};
 use network_interface::message::ResponseMessage;
@@ -31,13 +34,33 @@ impl Handle<BlockHashes> for RequestBlockHashes {
         // Collect up to GETBLOCKS_VECTORS_MAX inventory vectors for the blocks starting right
         // after the identified block on the main chain.
         let blocks = match self.filter {
-            RequestBlockHashesFilter::ElectionOnly => blockchain
-                .get_macro_blocks(&start_block_hash, self.max_blocks as u32, false, Direction::Forward, true)
+            RequestBlockHashesFilter::ElectionOnly
+            | RequestBlockHashesFilter::ElectionAndLatestCheckpoint => blockchain
+                .get_macro_blocks(
+                    &start_block_hash,
+                    self.max_blocks as u32,
+                    false,
+                    Direction::Forward,
+                    true,
+                )
                 .unwrap(), // We made sure that start_block_hash is on our chain.
             RequestBlockHashesFilter::All => blockchain.get_blocks(&start_block_hash, self.max_blocks as u32, false, Direction::Forward),
         };
 
-        let hashes = blocks.iter().map(|block| block.hash()).collect();
+        let mut hashes: Vec<_> = blocks
+            .iter()
+            .map(|block| (BlockHashType::from(block), block.hash()))
+            .collect();
+
+        // Add latest checkpoint block if requested.
+        if self.filter == RequestBlockHashesFilter::ElectionAndLatestCheckpoint
+            && hashes.len() < self.max_blocks as usize
+        {
+            let checkpoint_block = blockchain.macro_head();
+            if !checkpoint_block.is_election_block() {
+                hashes.push((BlockHashType::Checkpoint, checkpoint_block.hash()));
+            }
+        }
 
         Some(BlockHashes {
             hashes,
@@ -46,12 +69,12 @@ impl Handle<BlockHashes> for RequestBlockHashes {
     }
 }
 
-impl Handle<Epoch> for RequestEpoch {
-    fn handle(&self, blockchain: &Arc<Blockchain>) -> Option<Epoch> {
+impl Handle<BatchSetInfo> for RequestBatchSet {
+    fn handle(&self, blockchain: &Arc<Blockchain>) -> Option<BatchSetInfo> {
         if let Some(Block::Macro(block)) = blockchain.get_block(&self.hash, true) {
             let epoch = policy::epoch_at(block.header.block_number);
             let history_len = blockchain.get_num_extended_transactions(epoch, None);
-            let response = Epoch {
+            let response = BatchSetInfo {
                 block,
                 history_len: history_len as u32,
                 request_identifier: self.get_request_identifier(),
