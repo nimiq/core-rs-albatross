@@ -6,7 +6,7 @@ use thiserror::Error;
 
 use beserial::{Deserialize, Serialize};
 use collections::bitset::BitSet;
-use hash::{Blake2bHash, Hash, SerializeContent};
+use hash::{Blake2bHash, Blake2sHash, Hash, SerializeContent};
 use primitives::policy;
 use primitives::slot::{Slots, ValidatorSlots};
 use vrf::VrfSeed;
@@ -19,11 +19,11 @@ use crate::tendermint::TendermintProof;
 pub struct MacroBlock {
     /// The header, contains some basic information and commitments to the body and the state.
     pub header: MacroHeader,
+    /// The body of the block.
+    pub body: Option<MacroBody>,
     /// The justification, contains all the information needed to verify that the header was signed
     /// by the correct producers.
     pub justification: Option<TendermintProof>,
-    /// The body of the block.
-    pub body: Option<MacroBody>,
 }
 
 /// The struct representing the header of a Macro block (can be either checkpoint or election).
@@ -74,8 +74,13 @@ pub struct MacroBody {
 }
 
 impl MacroBlock {
-    /// Returns the hash of the block header.
+    /// Returns the Blake2b hash of the block header.
     pub fn hash(&self) -> Blake2bHash {
+        self.header.hash()
+    }
+
+    /// Returns the Blake2s hash of the block header.
+    pub fn hash_blake2s(&self) -> Blake2sHash {
         self.header.hash()
     }
 

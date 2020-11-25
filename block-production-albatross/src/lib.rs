@@ -11,11 +11,10 @@ extern crate nimiq_primitives as primitives;
 
 use std::sync::Arc;
 
-use block::ForkProof;
 use block::MicroJustification;
+use block::{ForkProof, MacroBlock};
 use block::{
-    MacroBody, MacroHeader, MicroBlock, MicroBody, MicroHeader, TendermintProposal,
-    ViewChangeProof, ViewChanges,
+    MacroBody, MacroHeader, MicroBlock, MicroBody, MicroHeader, ViewChangeProof, ViewChanges,
 };
 use blockchain::blockchain::Blockchain;
 use blockchain::history_store::ExtendedTransaction;
@@ -149,12 +148,9 @@ impl BlockProducer {
         timestamp: u64,
         // The view number for the block proposal.
         view_number: u32,
-        // The view change proof. Only exists if one or more view changes happened for this block
-        // height.
-        view_change_proof: Option<ViewChangeProof>,
         // Extra data for this block. It has no a priori use.
         extra_data: Vec<u8>,
-    ) -> (TendermintProposal, MacroBody) {
+    ) -> MacroBlock {
         // Calculate the block number. It is simply the previous block number incremented by one.
         let block_number = self.blockchain.block_number() + 1;
 
@@ -246,27 +242,26 @@ impl BlockProducer {
         header.body_root = body.hash();
 
         // Returns the block proposal.
-        (
-            TendermintProposal {
-                value: header,
-                view_change: view_change_proof,
-            },
-            body,
-        )
+        MacroBlock {
+            header,
+            body: Some(body),
+            justification: None,
+        }
     }
 }
 
 #[cfg(any(test, feature = "test-utils"))]
 pub mod test_utils {
     use block::{
-        Block, MacroBlock, PbftCommitMessage, PbftPrepareMessage, PbftProofBuilder, SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedViewChange,
-        ViewChange, ViewChangeProofBuilder,
+        Block, MacroBlock, MultiSignature, SignedViewChange, TendermintIdentifier, TendermintProof,
+        TendermintStep, TendermintVote, ViewChange,
     };
     use blockchain::PushResult;
-    use bls::lazy::LazyPublicKey;
-    use keys::Address;
+    use bls::AggregateSignature;
+    use collections::BitSet;
+    use nimiq_nano_sync::primitives::pk_tree_construct;
     use nimiq_vrf::VrfSeed;
-    use primitives::slot::{ValidatorSlotBand, ValidatorSlots};
+    use primitives::policy::{SLOTS, TWO_THIRD_SLOTS};
 
     use super::*;
 
@@ -283,54 +278,93 @@ pub mod test_utils {
 
     pub fn sign_macro_block(
         keypair: &KeyPair,
-        proposal: TendermintProposal,
-        extrinsics: Option<MacroBody>,
+        header: MacroHeader,
+        body: Option<MacroBody>,
     ) -> MacroBlock {
-        let block_hash = proposal.value.hash::<Blake2bHash>();
+        // Calculate block hash.
+        let block_hash = header.hash::<Blake2bHash>();
 
-        // create signed prepare and commit
-        let prepare = SignedPbftPrepareMessage::from_message(
-            PbftPrepareMessage {
-                block_hash: block_hash.clone(),
+        // Calculate the validator Merkle root (used in the nano sync).
+        let validator_merkle_root =
+            pk_tree_construct(vec![keypair.public_key.public_key; SLOTS as usize]);
+
+        // Create the precommit tendermint vote.
+        let precommit = TendermintVote {
+            proposal_hash: Some(block_hash),
+            id: TendermintIdentifier {
+                block_number: header.block_number,
+                round_number: 0,
+                step: TendermintStep::PreCommit,
             },
-            &keypair.secret_key,
-            0,
-        );
-        let commit = SignedPbftCommitMessage::from_message(PbftCommitMessage { block_hash }, &keypair.secret_key, 0);
+            validator_merkle_root,
+        };
 
-        // create proof
-        let mut pbft_proof = PbftProofBuilder::new();
-        pbft_proof.add_prepare_signature(&keypair.public_key, policy::SLOTS, &prepare);
-        pbft_proof.add_commit_signature(&keypair.public_key, policy::SLOTS, &commit);
+        // Create signed precommit.
+        let signed_precommit = keypair.secret_key.sign(&precommit);
 
+        // Create signers Bitset.
+        let mut signers = BitSet::new();
+        for i in 0..TWO_THIRD_SLOTS {
+            signers.insert(i as usize);
+        }
+
+        // Create multisignature.
+        let multisig = MultiSignature {
+            signature: AggregateSignature::from_signatures(&*vec![
+                signed_precommit;
+                TWO_THIRD_SLOTS as usize
+            ]),
+            signers,
+        };
+
+        // Create Tendermint proof.
+        let tendermint_proof = TendermintProof {
+            round: 0,
+            sig: multisig,
+        };
+
+        // Create and return the macro block.
         MacroBlock {
-            header: proposal.value,
-            justification: Some(pbft_proof.build()),
-            body: extrinsics,
+            header,
+            body,
+            justification: Some(tendermint_proof),
         }
     }
 
-    pub fn sign_view_change(keypair: &KeyPair, prev_seed: VrfSeed, block_number: u32, new_view_number: u32) -> ViewChangeProof {
+    pub fn sign_view_change(
+        keypair: &KeyPair,
+        prev_seed: VrfSeed,
+        block_number: u32,
+        new_view_number: u32,
+    ) -> ViewChangeProof {
+        // Create the view change.
         let view_change = ViewChange {
             block_number,
             new_view_number,
             prev_seed,
         };
-        let signed_view_change = SignedViewChange::from_message(view_change.clone(), &keypair.secret_key, 0);
 
-        let mut proof_builder = ViewChangeProofBuilder::new();
-        proof_builder.add_signature(&keypair.public_key, policy::SLOTS, &signed_view_change);
-        assert_eq!(proof_builder.verify(&view_change, policy::TWO_THIRD_SLOTS), Ok(()));
+        // Sign the view change.
+        let signed_view_change =
+            SignedViewChange::from_message(view_change.clone(), &keypair.secret_key, 0).signature;
 
-        let proof = proof_builder.build();
-        let validators = ValidatorSlots::new(vec![ValidatorSlotBand::new(
-            LazyPublicKey::from(keypair.public_key),
-            Address::default(),
-            policy::SLOTS,
-        )]);
-        assert_eq!(proof.verify(&view_change, &validators, policy::TWO_THIRD_SLOTS), Ok(()));
+        // Create signers Bitset.
+        let mut signers = BitSet::new();
+        for i in 0..TWO_THIRD_SLOTS {
+            signers.insert(i as usize);
+        }
 
-        proof
+        // Create multisignature.
+        let multisig = MultiSignature {
+            signature: AggregateSignature::from_signatures(&*vec![
+                signed_view_change;
+                TWO_THIRD_SLOTS as usize
+            ]),
+            signers,
+        };
+
+        // Create and return view change proof.
+        ViewChangeProof { sig: multisig }
     }
 
     pub fn produce_macro_blocks(num_macro: usize, producer: &BlockProducer, blockchain: &Arc<Blockchain>) {
@@ -338,11 +372,21 @@ pub mod test_utils {
             fill_micro_blocks(producer, blockchain);
 
             let _next_block_height = blockchain.block_number() + 1;
-            let (proposal, extrinsics) =
-                producer.next_macro_block_proposal(blockchain.time.now() + blockchain.block_number() as u64 * 1000, 0u32, None, vec![]);
+            let macro_block = producer.next_macro_block_proposal(
+                blockchain.time.now() + blockchain.block_number() as u64 * 1000,
+                0u32,
+                vec![],
+            );
 
-            let block = sign_macro_block(&producer.validator_key, proposal, Some(extrinsics));
-            assert_eq!(blockchain.push(Block::Macro(block)), Ok(PushResult::Extended));
+            let block = sign_macro_block(
+                &producer.validator_key,
+                macro_block.header,
+                macro_block.body,
+            );
+            assert_eq!(
+                blockchain.push(Block::Macro(block)),
+                Ok(PushResult::Extended)
+            );
         }
     }
 }

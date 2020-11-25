@@ -81,8 +81,8 @@ pub enum BlockError {
 
     #[error("Justification is invalid")]
     InvalidJustification,
-    #[error("Contains an invalid slash inherent")]
-    InvalidSlash,
+    #[error("View change proof is invalid")]
+    InvalidViewChangeProof,
     #[error("Contains an invalid seed")]
     InvalidSeed,
     #[error("Invalid view number")]

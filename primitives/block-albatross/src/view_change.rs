@@ -1,16 +1,17 @@
+use crate::{Message, MultiSignature, SignedMessage, PREFIX_VIEW_CHANGE};
 use beserial::{Deserialize, Serialize};
-use hash::SerializeContent;
+use bls::AggregatePublicKey;
+use hash::{Hash, SerializeContent};
 use hash_derive::SerializeContent;
+use primitives::policy::{SLOTS, TWO_THIRD_SLOTS};
+use primitives::slot::{SlotIndex, ValidatorSlots};
 use std::fmt;
 use vrf::VrfSeed;
-
-use crate::signed::{Message, SignedMessage, PREFIX_VIEW_CHANGE};
-use crate::MultiSignature;
 
 /// The struct representing a view change. View changes happen when a given micro block is not
 /// produced in time by its intended producer. It allows the next slot owner to take over and
 /// produce the block. A proof is necessary but it exists as the ViewChangeProof struct.
-#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize, SerializeContent, Hash)]
+#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize, SerializeContent)]
 pub struct ViewChange {
     /// The number of the block for which the view change is constructed (i.e. the block number
     /// the validator is at + 1, since it's for the next block).
@@ -30,8 +31,9 @@ impl Message for ViewChange {
     const PREFIX: u8 = PREFIX_VIEW_CHANGE;
 }
 
+impl Hash for ViewChange {}
+
 pub type SignedViewChange = SignedMessage<ViewChange>;
-pub type ViewChangeProof = MultiSignature;
 
 /// A struct that represents a series of consecutive view changes at the same block height.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -61,5 +63,47 @@ impl ViewChanges {
 impl fmt::Display for ViewChange {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "#{}.{} ({})", self.block_number, self.new_view_number, self.prev_seed)
+    }
+}
+
+/// The proof for a view change on a micro block.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ViewChangeProof {
+    // The aggregated signature of the validator's signatures for the view change.
+    pub sig: MultiSignature,
+}
+
+impl ViewChangeProof {
+    /// This simply returns the number of slots that voted for this view change.
+    pub fn votes(&self) -> u16 {
+        self.sig.signers.len() as u16
+    }
+
+    /// Verifies the proof. This only checks that the proof is valid for this view change, not that
+    /// the view change itself is valid.
+    pub fn verify(&self, view_change: &ViewChange, validators: &ValidatorSlots) -> bool {
+        // Check if there are enough votes.
+        if self.votes() < TWO_THIRD_SLOTS {
+            return false;
+        }
+
+        // Get the public key for each SLOT and add them together to get the aggregated public key
+        // (if they are part of the Multisignature Bitset).
+        let mut agg_pk = AggregatePublicKey::new();
+        for i in 0..SLOTS {
+            let pk = validators
+                .get_public_key(SlotIndex::Slot(i))
+                .unwrap()
+                .compressed()
+                .uncompress()
+                .unwrap();
+
+            if self.sig.signers.contains(i as usize) {
+                agg_pk.aggregate(&pk);
+            }
+        }
+
+        // Verify the aggregated signature against our aggregated public key.
+        agg_pk.verify_hash(view_change.hash_with_prefix(), &self.sig.signature)
     }
 }

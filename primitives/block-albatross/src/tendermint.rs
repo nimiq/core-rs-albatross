@@ -1,17 +1,16 @@
-use beserial::{Deserialize, Serialize};
-use bls::AggregatePublicKey;
-use hash::{Blake2sHash, Hash, SerializeContent};
-use hash_derive::SerializeContent;
-use nano_sync::primitives::pk_tree_construct;
-use primitives::policy::{SLOTS, TWO_THIRD_SLOTS};
-use primitives::slot::{SlotIndex, ValidatorSlots};
-use std::io;
-
 use crate::signed::{
     Message, SignedMessage, PREFIX_TENDERMINT_COMMIT, PREFIX_TENDERMINT_PREPARE,
     PREFIX_TENDERMINT_PROPOSAL,
 };
 use crate::{MacroHeader, MultiSignature};
+use beserial::{Deserialize, Serialize};
+use bls::AggregatePublicKey;
+use hash::{Blake2bHash, Hash, SerializeContent};
+use hash_derive::SerializeContent;
+use nano_sync::primitives::pk_tree_construct;
+use primitives::policy::{SLOTS, TWO_THIRD_SLOTS};
+use primitives::slot::{SlotIndex, ValidatorSlots};
+use std::io;
 
 /// A macro block proposed by the Tendermint leader.
 #[derive(Clone, Debug, Serialize, Deserialize, SerializeContent, PartialEq, Eq)]
@@ -30,7 +29,6 @@ impl Message for TendermintProposal {
 
 /// The proof for a block produced by Tendermint.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub struct TendermintProof {
     // The round when the block was completed. This is necessary to verify the signature.
     pub round: u32,
@@ -48,7 +46,7 @@ impl TendermintProof {
     /// block itself is valid.
     pub fn verify(
         &self,
-        block_hash: Blake2sHash,
+        block_hash: Blake2bHash,
         block_number: u32,
         validators: &ValidatorSlots,
     ) -> bool {
@@ -58,7 +56,8 @@ impl TendermintProof {
         }
 
         // Get the public key for each SLOT and:
-        // 1) add them together to get the aggregated public key,
+        // 1) add them together to get the aggregated public key (if they are part of the
+        //    Multisignature Bitset),
         // 2) get the raw elliptic curve point for each one and push them to a vector.
         let mut agg_pk = AggregatePublicKey::new();
         let mut raw_pks = Vec::new();
@@ -70,7 +69,9 @@ impl TendermintProof {
                 .uncompress()
                 .unwrap();
 
-            agg_pk.aggregate(&pk);
+            if self.sig.signers.contains(i as usize) {
+                agg_pk.aggregate(&pk);
+            }
 
             raw_pks.push(pk.public_key);
         }
@@ -96,9 +97,7 @@ impl TendermintProof {
 
 /// Internal representation of nimiq_tendermint::Step struct. It needs to be Serializable and must not contain Proposal
 /// thus the additional type.
-#[derive(
-    Serialize, Deserialize, std::fmt::Debug, Clone, Ord, PartialOrd, PartialEq, Eq, Hash, Copy,
-)]
+#[derive(Serialize, Deserialize, Debug, Clone, Ord, PartialOrd, PartialEq, Eq, Hash, Copy)]
 #[repr(u8)]
 pub enum TendermintStep {
     PreVote = PREFIX_TENDERMINT_PREPARE,
@@ -106,14 +105,14 @@ pub enum TendermintStep {
 }
 
 /// Unique identifier for a single instance of TendermintAggregation
-#[derive(Serialize, Deserialize, std::fmt::Debug, Clone, Eq, PartialEq)]
-pub(crate) struct TendermintIdentifier {
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+pub struct TendermintIdentifier {
     /// block_number of the to-be-decided-upon macro block.
-    pub(super) block_number: u32,
+    pub block_number: u32,
     /// The round number this aggregation accepts contributions for
-    pub(super) round_number: u32,
+    pub round_number: u32,
     /// the Step for which contributions are accepted
-    pub(super) step: TendermintStep,
+    pub step: TendermintStep,
 }
 
 // Multiple things this needs to take care of when it comes to what needs signing here:
@@ -139,14 +138,14 @@ pub(crate) struct TendermintIdentifier {
 // * round_number
 //
 // that can be included plain text as the proof alongside it also contains it.
-#[derive(std::fmt::Debug, Clone, Eq, PartialEq)]
-pub(crate) struct TendermintVote {
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct TendermintVote {
     /// MacroHeader hash of the proposed macro block
-    pub(super) proposal_hash: Option<Blake2sHash>,
+    pub proposal_hash: Option<Blake2bHash>,
     /// Identifier to this votes aggregation
-    pub(super) id: TendermintIdentifier,
+    pub id: TendermintIdentifier,
     /// The merkle root of validators is required for consensus.
-    pub(super) validator_merkle_root: Vec<u8>,
+    pub validator_merkle_root: Vec<u8>,
 }
 
 /// Custom Serialize Content, to make sure that
@@ -174,9 +173,9 @@ impl SerializeContent for TendermintVote {
             None => {
                 size += false.serialize(writer)?;
 
-                let zero_bytes: Vec<u8> = vec![0u8, Blake2sHash::SIZE as u8];
+                let zero_bytes: Vec<u8> = vec![0u8, Blake2bHash::SIZE as u8];
                 writer.write_all(zero_bytes.as_slice())?;
-                size += Blake2sHash::SIZE;
+                size += Blake2bHash::SIZE;
             }
         };
 

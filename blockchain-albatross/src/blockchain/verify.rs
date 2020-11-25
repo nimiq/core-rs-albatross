@@ -91,9 +91,16 @@ impl Blockchain {
         }
 
         // If the block is a macro block, verify the Tendermint proof.
+        // Note that the hash provided here is the Blake2s hash of the header. It needs to be the
+        // Blake2s function since that's what the validator's signatures on the block use (because
+        // the nano-sync crate only verifies Blake2s, not Blake2b).
         if let Some(BlockJustification::Macro(justification)) = justification_opt {
-            if let Err(e) = justification.verify(header.hash(), &self.current_validators(), policy::TWO_THIRD_SLOTS) {
-                warn!("Rejecting block - macro block with bad justification: {}", e);
+            if !justification.verify(
+                header.hash(),
+                header.block_number(),
+                &self.current_validators(),
+            ) {
+                warn!("Rejecting block - macro block with bad justification");
                 return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
             }
         }
@@ -145,14 +152,14 @@ impl Blockchain {
                     prev_seed: prev_info.head.seed().clone(),
                 };
 
-                if let Err(e) = justification
+                if !justification
                     .view_change_proof
                     .as_ref()
                     .unwrap()
-                    .verify(&view_change, &self.current_validators(), policy::TWO_THIRD_SLOTS)
+                    .verify(&view_change, &self.current_validators())
                 {
-                    warn!("Rejecting block - bad view change proof: {:?}", e);
-                    return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
+                    warn!("Rejecting block - bad view change proof");
+                    return Err(PushError::InvalidBlock(BlockError::InvalidViewChangeProof));
                 }
             }
         }
