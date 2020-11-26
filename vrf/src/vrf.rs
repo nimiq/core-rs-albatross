@@ -6,7 +6,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
 use beserial::{Deserialize, Serialize};
 use bls::{CompressedSignature, PublicKey, SecretKey};
-use hash::{Blake2sHash, Blake2sHasher, Hasher, HashOutput};
+use hash::{Blake2sHash, Blake2sHasher, HashOutput, Hasher};
 
 use crate::rng::Rng;
 use std::str::FromStr;

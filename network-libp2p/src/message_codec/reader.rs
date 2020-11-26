@@ -1,25 +1,21 @@
-use std::{
-    marker::PhantomData,
-    pin::Pin,
-};
+use std::{marker::PhantomData, pin::Pin};
 
+use bytes::{Buf, BytesMut};
 use futures::{
     task::{Context, Poll},
     AsyncRead, Stream,
 };
-use bytes::{BytesMut, Buf};
 use pin_project::pin_project;
 
-use beserial::{SerializingError, Deserialize};
+use beserial::{Deserialize, SerializingError};
 
 use super::header::Header;
-
 
 /// Try to read, such that at most `n` bytes are in the buffer. This will return `Poll::Pending` until the buffer
 /// has `n` bytes in it. This returns `Poll::Ready(Ok(false))` in case of EOF.
 fn read_to_buf<R>(reader: Pin<&mut R>, buffer: &mut BytesMut, n: usize, cx: &mut Context<'_>) -> Poll<Result<bool, std::io::Error>>
-    where
-        R: AsyncRead,
+where
+    R: AsyncRead,
 {
     // Current length of buffer
     let n0 = buffer.len();
@@ -29,14 +25,14 @@ fn read_to_buf<R>(reader: Pin<&mut R>, buffer: &mut BytesMut, n: usize, cx: &mut
 
         log::trace!("MessageReader: read_to_buf: n={}, n0={}", n, n0);
 
-        match AsyncRead::poll_read(reader, cx, &mut buffer[n0 .. n]) {
+        match AsyncRead::poll_read(reader, cx, &mut buffer[n0..n]) {
             // EOF
             Poll::Ready(Ok(0)) => {
                 log::trace!("MessageReader: read_to_buf: poll_read returned 0");
 
                 buffer.resize(n0, 0);
                 Poll::Ready(Ok(false))
-            },
+            }
 
             // Data was read
             Poll::Ready(Ok(n_read)) => {
@@ -51,11 +47,10 @@ fn read_to_buf<R>(reader: Pin<&mut R>, buffer: &mut BytesMut, n: usize, cx: &mut
 
                     cx.waker().wake_by_ref();
                     Poll::Pending
-                }
-                else {
+                } else {
                     Poll::Ready(Ok(true))
                 }
-            },
+            }
 
             // An error occured
             Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
@@ -66,28 +61,22 @@ fn read_to_buf<R>(reader: Pin<&mut R>, buffer: &mut BytesMut, n: usize, cx: &mut
 
                 buffer.resize(n0, 0);
                 Poll::Pending
-            },
+            }
         }
-    }
-    else {
+    } else {
         Poll::Ready(Ok(true))
     }
 }
-
 
 /// TODO: Generalize over a type `H: Header`, which is `Deserialize` and has a getter for the length of the message.
 #[derive(Clone, Debug)]
 enum ReaderState {
     Head,
-    Data {
-        header: Header,
-    },
+    Data { header: Header },
 }
 
-
 #[pin_project]
-pub struct MessageReader<R, M>
-{
+pub struct MessageReader<R, M> {
     #[pin]
     inner: R,
 
@@ -113,8 +102,8 @@ impl<R, M> MessageReader<R, M> {
     }
 
     pub fn into_other<N>(self) -> MessageReader<R, N>
-        where
-            N: Deserialize,
+    where
+        N: Deserialize,
     {
         if let ReaderState::Data { .. } = &ReaderState::Head {
             panic!("MessageReader can't be converted while data is being read.");
@@ -130,13 +119,13 @@ impl<R, M> MessageReader<R, M> {
 }
 
 fn unexpected_eof<T>() -> Poll<Option<Result<T, SerializingError>>> {
-    Poll::Ready(Some(Err(SerializingError::from(std::io::Error::from(std::io::ErrorKind::UnexpectedEof, )))))
+    Poll::Ready(Some(Err(SerializingError::from(std::io::Error::from(std::io::ErrorKind::UnexpectedEof)))))
 }
 
 impl<R, M> Stream for MessageReader<R, M>
-    where
-        R: AsyncRead,
-        M: Deserialize + std::fmt::Debug,
+where
+    R: AsyncRead,
+    M: Deserialize + std::fmt::Debug,
 {
     type Item = Result<M, SerializingError>;
 
@@ -153,24 +142,25 @@ impl<R, M> Stream for MessageReader<R, M>
                     Poll::Pending => return Poll::Pending,
 
                     // An error occured.
-                    Poll::Ready(Err(e)) => return {
-                        log::error!("Inner AsyncRead returned an error: {}", e);
-                        Poll::Ready(Some(Err(e.into())))
-                    },
+                    Poll::Ready(Err(e)) => {
+                        return {
+                            log::error!("Inner AsyncRead returned an error: {}", e);
+                            Poll::Ready(Some(Err(e.into())))
+                        }
+                    }
 
                     // EOF while reading the header.
                     Poll::Ready(Ok(false)) => {
                         if self_projected.buffer.is_empty() {
                             // No partial message, so this is the end of the stream
-                            return Poll::Ready(None)
+                            return Poll::Ready(None);
+                        } else {
+                            return unexpected_eof();
                         }
-                        else {
-                            return unexpected_eof()
-                        }
-                    },
+                    }
 
                     // Finished reading the header, and we didn't reach EOF.
-                    Poll::Ready(Ok(true)) => {},
+                    Poll::Ready(Ok(true)) => {}
                 }
 
                 // Decode the header: 16 bit length big-endian
@@ -185,7 +175,7 @@ impl<R, M> Stream for MessageReader<R, M>
 
                 // Change reader state to read the data next.
                 (ReaderState::Data { header }, None)
-            },
+            }
             ReaderState::Data { header } => {
                 let n = header.size as usize;
 
@@ -221,31 +211,26 @@ impl<R, M> Stream for MessageReader<R, M>
                 log::trace!("MessageReader: Received message: {:?}", message);
 
                 (ReaderState::Head, Some(message))
-            },
+            }
         };
 
         *self_projected.state = new_state;
 
         if let Some(message) = message {
             return Poll::Ready(Some(Ok(message)));
-        }
-        else {
+        } else {
             cx.waker().wake_by_ref();
             return Poll::Pending;
         }
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    use futures::{
-        io::Cursor,
-        StreamExt,
-    };
+    use futures::{io::Cursor, StreamExt};
 
-    use beserial::{Serialize, Deserialize};
-    use bytes::{BytesMut, BufMut};
+    use beserial::{Deserialize, Serialize};
+    use bytes::{BufMut, BytesMut};
 
     use super::MessageReader;
     use crate::message_codec::header::Header;
@@ -265,7 +250,7 @@ mod tests {
         let mut w = buf.writer();
 
         header.serialize(&mut w).unwrap();
-        message.serialize( &mut w).unwrap();
+        message.serialize(&mut w).unwrap();
     }
 
     #[tokio::test]

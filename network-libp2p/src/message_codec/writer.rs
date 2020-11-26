@@ -1,57 +1,50 @@
-use std::{
-    marker::PhantomData,
-    pin::Pin,
-};
+use std::{marker::PhantomData, pin::Pin};
 
+use bytes::{Buf, BufMut, BytesMut};
 use futures::{
+    ready,
     task::{Context, Poll},
-    AsyncWrite, Sink, ready,
+    AsyncWrite, Sink,
 };
 use pin_project::pin_project;
-use bytes::{BytesMut, Buf, BufMut};
 
 use beserial::{Serialize, SerializingError};
 
 use super::header::Header;
 
-
 fn write_from_buf<'w, W>(inner: &mut W, buffer: &mut BytesMut, cx: &mut Context) -> Poll<Result<(), SerializingError>>
-    where
-        W: AsyncWrite + Unpin
+where
+    W: AsyncWrite + Unpin,
 {
     if buffer.remaining() > 0 {
         match Pin::new(inner).poll_write(cx, buffer.bytes()) {
             Poll::Ready(Ok(0)) => {
                 log::warn!("MessageWriter: write_from_buf: Unexpected EOF.");
                 Poll::Ready(Err(SerializingError::from(std::io::Error::from(std::io::ErrorKind::UnexpectedEof))))
-            },
+            }
 
             Poll::Ready(Ok(n)) => {
                 log::trace!("MessageWriter: write_from_buf: {} bytes written", n);
                 buffer.advance(n);
                 if buffer.remaining() > 0 {
                     Poll::Pending
-                }
-                else {
+                } else {
                     buffer.clear();
                     Poll::Ready(Ok(()))
                 }
-            },
+            }
 
             Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
 
             Poll::Pending => Poll::Pending,
         }
-    }
-    else {
+    } else {
         Poll::Ready(Ok(()))
     }
 }
 
-
 #[pin_project]
-pub struct MessageWriter<W, M>
-{
+pub struct MessageWriter<W, M> {
     inner: W,
     buffer: BytesMut,
     _message_type: PhantomData<M>,
@@ -72,9 +65,9 @@ impl<W, M> MessageWriter<W, M> {
 }
 
 impl<W, M> Sink<&M> for MessageWriter<W, M>
-    where
-        W: AsyncWrite + Unpin,
-        M: Serialize + std::fmt::Debug,
+where
+    W: AsyncWrite + Unpin,
+    M: Serialize + std::fmt::Debug,
 {
     type Error = SerializingError;
 
@@ -96,7 +89,7 @@ impl<W, M> Sink<&M> for MessageWriter<W, M>
 
         if !self_projected.buffer.is_empty() {
             log::warn!("MessageWriter: Trying to send while buffer is not empty.");
-            return Err(SerializingError::from(std::io::Error::from(std::io::ErrorKind::WouldBlock)))
+            return Err(SerializingError::from(std::io::Error::from(std::io::ErrorKind::WouldBlock)));
         }
 
         log::trace!("MessageWriter: Sending {:?}", item);
@@ -132,9 +125,8 @@ impl<W, M> Sink<&M> for MessageWriter<W, M>
             Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
             Poll::Ready(Ok(())) => {
                 // Finished writing the message. Flush the underlying `AsyncWrite`.
-                Poll::Ready(ready!(Pin::new(self_projected.inner).poll_flush(cx))
-                    .map_err(|e| e.into()))
-            },
+                Poll::Ready(ready!(Pin::new(self_projected.inner).poll_flush(cx)).map_err(|e| e.into()))
+            }
         }
     }
 
@@ -149,22 +141,20 @@ impl<W, M> Sink<&M> for MessageWriter<W, M>
             Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
             Poll::Ready(Ok(())) => {
                 // Finished writing the message. Close the underlying `AsyncWrite`.
-                Poll::Ready(ready!(Pin::new(self_projected.inner).poll_close(cx))
-                    .map_err(|e| e.into()))
-            },
+                Poll::Ready(ready!(Pin::new(self_projected.inner).poll_close(cx)).map_err(|e| e.into()))
+            }
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
     use futures::SinkExt;
 
-    use beserial::{Serialize, Deserialize};
+    use beserial::{Deserialize, Serialize};
 
-    use crate::message_codec::header::Header;
     use super::MessageWriter;
+    use crate::message_codec::header::Header;
 
     #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
     struct TestMessage {
@@ -172,7 +162,6 @@ mod tests {
         #[beserial(len_type(u8))]
         pub bar: String,
     }
-
 
     #[tokio::test]
     pub async fn it_can_write_a_message() {

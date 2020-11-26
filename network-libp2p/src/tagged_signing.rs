@@ -12,8 +12,7 @@ use std::{
 
 use libp2p::identity::{Keypair, PublicKey};
 
-use beserial::{Serialize, Deserialize};
-
+use beserial::{Deserialize, Serialize};
 
 /// A trait for objects that can be signed. You have to choose an unique `TAG` that is used as prefix for
 /// the message that will be signed. This is used to avoid replay attacks.
@@ -54,10 +53,7 @@ pub struct TaggedSignature<S: TaggedSignable> {
 
 impl<S: TaggedSignable> TaggedSignature<S> {
     pub fn from_bytes(data: Vec<u8>) -> Self {
-        Self {
-            data,
-            _tagged: PhantomData,
-        }
+        Self { data, _tagged: PhantomData }
     }
 
     pub fn as_bytes(&self) -> &[u8] {
@@ -95,11 +91,9 @@ pub trait TaggedPublicKey {
     }
 }
 
-
 impl TaggedKeypair for Keypair {
     fn sign(&self, message: &[u8]) -> Vec<u8> {
-        Keypair::sign(&self, message)
-            .expect("Signing failed")
+        Keypair::sign(&self, message).expect("Signing failed")
     }
 }
 
@@ -109,14 +103,13 @@ impl TaggedPublicKey for PublicKey {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use libp2p::identity::Keypair;
 
-    use beserial::{Serialize, Deserialize};
+    use beserial::{Deserialize, Serialize};
 
-    use super::{TaggedKeypair, TaggedSignature, TaggedPublicKey, TaggedSignable};
+    use super::{TaggedKeypair, TaggedPublicKey, TaggedSignable, TaggedSignature};
 
     #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
     struct Message(u64);
@@ -178,7 +171,6 @@ mod tests {
         let sig1_replayed = TaggedSignature::<AnotherMessage>::from_bytes(sig1.data);
         let sig2_replayed = TaggedSignature::<Message>::from_bytes(sig2.data);
 
-
         // But even though we signed messages that serialize to the same data, the signature of one message must not
         // verify the other message.
         assert!(!keypair.public().tagged_verify(&msg1, &sig2_replayed));
@@ -188,16 +180,15 @@ mod tests {
 
 #[cfg(feature = "peer-contact-book-persistence")]
 mod serde_tagged_signature {
-    use serde::{
-        de::Error,
-        Serialize, Serializer, Deserialize, Deserializer,
-    };
+    use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 
-    use super::{TaggedSignature, TaggedSignable};
+    use super::{TaggedSignable, TaggedSignature};
 
     impl<T: TaggedSignable> Serialize for TaggedSignature<T> {
-        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where
-            S: Serializer {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
             let hex_encoded = hex::encode(&self.data);
             Serialize::serialize(&hex_encoded, serializer)
         }
@@ -205,13 +196,12 @@ mod serde_tagged_signature {
 
     impl<'de, T: TaggedSignable> Deserialize<'de> for TaggedSignature<T> {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-            where
-                D: Deserializer<'de>
+        where
+            D: Deserializer<'de>,
         {
             let hex_encoded: String = Deserialize::deserialize(deserializer)?;
 
-            let data = hex::decode(&hex_encoded)
-                .map_err(D::Error::custom)?;
+            let data = hex::decode(&hex_encoded).map_err(D::Error::custom)?;
 
             Ok(TaggedSignature::from_bytes(data))
         }

@@ -8,18 +8,11 @@ use libp2p::core::connection::ConnectionId;
 use libp2p::core::multiaddr::Protocol;
 use libp2p::core::ConnectedPoint;
 use libp2p::core::Multiaddr;
-use libp2p::swarm::{
-    NetworkBehaviour, NetworkBehaviourAction, PollParameters, ProtocolsHandler,
-};
+use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters, ProtocolsHandler};
 use libp2p::PeerId;
 
-
+use super::handler::{HandlerInEvent, LimitHandler};
 use crate::message::peer::Peer;
-use super::handler::{
-    LimitHandler, HandlerInEvent,
-};
-
-
 
 #[derive(Clone, Debug)]
 pub struct LimitConfig {
@@ -46,9 +39,6 @@ impl Default for LimitConfig {
     }
 }
 
-
-
-
 pub struct LimitBehaviour {
     config: LimitConfig,
 
@@ -66,12 +56,8 @@ impl Default for LimitBehaviour {
     }
 }
 
-
 #[derive(Clone, Debug)]
-pub enum LimitEvent {
-
-}
-
+pub enum LimitEvent {}
 
 impl LimitBehaviour {
     pub fn new(config: LimitConfig) -> Self {
@@ -103,18 +89,11 @@ impl NetworkBehaviour for LimitBehaviour {
 
     fn inject_disconnected(&mut self, _peer_id: &PeerId) {}
 
-    fn inject_connection_established(
-        &mut self,
-        peer_id: &PeerId,
-        _conn: &ConnectionId,
-        endpoint: &ConnectedPoint,
-    ) {
+    fn inject_connection_established(&mut self, peer_id: &PeerId, _conn: &ConnectionId, endpoint: &ConnectedPoint) {
         let mut close_connection = false;
 
         let (address, subnet_limit) = match endpoint {
-            ConnectedPoint::Listener { send_back_addr, .. } => {
-                (send_back_addr.clone(), self.config.inbound_peer_count_per_subnet_max)
-            }
+            ConnectedPoint::Listener { send_back_addr, .. } => (send_back_addr.clone(), self.config.inbound_peer_count_per_subnet_max),
             ConnectedPoint::Dialer { address } => (address.clone(), self.config.outbound_peer_count_per_subnet_max),
         };
 
@@ -165,16 +144,11 @@ impl NetworkBehaviour for LimitBehaviour {
         }
     }
 
-    fn inject_connection_closed(
-        &mut self,
-        peer_id: &PeerId,
-        _conn: &ConnectionId,
-        info: &ConnectedPoint,
-    ) {
+    fn inject_connection_closed(&mut self, peer_id: &PeerId, _conn: &ConnectionId, info: &ConnectedPoint) {
         /*let peer = self
-            .peers
-            .get(peer_id)
-            .expect("Connection to unknown peer closed");*/
+        .peers
+        .get(peer_id)
+        .expect("Connection to unknown peer closed");*/
         // FIXME: A peer should actually exist here, but it's never inserted into `self.peers`.
         let peer = if let Some(peer) = self.peers.get(peer_id) { peer } else { return };
 
@@ -208,18 +182,9 @@ impl NetworkBehaviour for LimitBehaviour {
         }
     }
 
-    fn inject_event(
-        &mut self,
-        _peer_id: PeerId,
-        _connection: ConnectionId,
-        _msg: <Self::ProtocolsHandler as ProtocolsHandler>::OutEvent,
-    ) {}
+    fn inject_event(&mut self, _peer_id: PeerId, _connection: ConnectionId, _msg: <Self::ProtocolsHandler as ProtocolsHandler>::OutEvent) {}
 
-    fn poll(
-        &mut self,
-        _cx: &mut Context<'_>,
-        _params: &mut impl PollParameters,
-    ) -> Poll<NetworkBehaviourAction<HandlerInEvent, LimitEvent>> {
+    fn poll(&mut self, _cx: &mut Context<'_>, _params: &mut impl PollParameters) -> Poll<NetworkBehaviourAction<HandlerInEvent, LimitEvent>> {
         let ip_ban = self.ip_ban.clone();
         for (ip, time) in ip_ban {
             if time < SystemTime::now() {

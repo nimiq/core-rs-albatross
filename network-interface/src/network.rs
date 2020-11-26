@@ -1,17 +1,15 @@
-use std::{
-    pin::Pin,
-    sync::Arc,
-};
+use std::{pin::Pin, sync::Arc};
 
 use async_trait::async_trait;
 use futures::{
-    task::{Context, Poll},
+    future, ready, stream,
     stream::{FusedStream, SelectAll},
-    future, ready, Stream, StreamExt, TryFutureExt, stream
+    task::{Context, Poll},
+    Stream, StreamExt, TryFutureExt,
 };
 use tokio::sync::broadcast;
 
-use beserial::{Serialize, Deserialize};
+use beserial::{Deserialize, Serialize};
 
 use crate::message::Message;
 use crate::peer::*;
@@ -34,9 +32,7 @@ impl<P: Peer> std::fmt::Debug for NetworkEvent<P> {
             NetworkEvent::PeerLeft(peer) => ("PeerLeft", peer),
         };
 
-        f.debug_struct(event_name)
-            .field("peer_id", &peer.id())
-            .finish()
+        f.debug_struct(event_name).field("peer_id", &peer.id()).finish()
     }
 }
 
@@ -48,7 +44,6 @@ impl<P> Clone for NetworkEvent<P> {
         }
     }
 }
-
 
 #[async_trait]
 pub trait Network: Send + Sync + 'static {
@@ -77,22 +72,22 @@ pub trait Network: Send + Sync + 'static {
     }
 
     async fn subscribe<T>(topic: &T) -> Box<dyn Stream<Item = (T::Item, Self::PeerType)> + Send>
-        where
-            T: Topic + Sync;
+    where
+        T: Topic + Sync;
 
     async fn publish<T: Topic>(topic: &T, item: T::Item)
-        where
-            T: Topic + Sync;
+    where
+        T: Topic + Sync;
 
     async fn dht_get<K, V>(&self, k: &K) -> Result<V, Self::Error>
-        where
-            K: AsRef<[u8]> + Send + Sync,
-            V: Deserialize + Send + Sync;
+    where
+        K: AsRef<[u8]> + Send + Sync,
+        V: Deserialize + Send + Sync;
 
     async fn dht_put<K, V>(&self, k: &K, v: &V) -> Result<(), Self::Error>
-        where
-            K: AsRef<[u8]> + Send + Sync,
-            V: Serialize + Send + Sync;
+    where
+        K: AsRef<[u8]> + Send + Sync,
+        V: Serialize + Send + Sync;
 
     async fn dial_peer(&self, peer_id: <Self::PeerType as Peer>::Id) -> Result<(), Self::Error>;
 
@@ -163,4 +158,3 @@ impl<T: Message, P: Peer + 'static> FusedStream for ReceiveFromAll<T, P> {
         self.event_stream.is_terminated()
     }
 }
-

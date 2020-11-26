@@ -1,15 +1,12 @@
 // TODO: Documentation and move to nimiq_utils
 
-use std::{
-    sync::Arc,
-    pin::Pin,
-};
+use std::{pin::Pin, sync::Arc};
 
-use parking_lot::Mutex;
 use futures::{
-    task::{Waker, Poll, Context},
+    task::{Context, Poll, Waker},
     Future,
 };
+use parking_lot::Mutex;
 
 struct Inner {
     dropped: bool,
@@ -24,7 +21,6 @@ impl Inner {
         }
     }
 }
-
 
 pub struct DropNotifier {
     inner: Arc<Mutex<Inner>>,
@@ -48,7 +44,7 @@ impl DropNotifier {
 
     pub fn listen(&self) -> DropListener {
         DropListener {
-            inner: Arc::clone(&self.inner)
+            inner: Arc::clone(&self.inner),
         }
     }
 }
@@ -72,14 +68,12 @@ impl Future for DropListener {
 
         if inner.dropped {
             Poll::Ready(())
-        }
-        else {
+        } else {
             inner.wakers.push(cx.waker().clone());
             Poll::Pending
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {

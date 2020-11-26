@@ -8,14 +8,14 @@ use async_trait::async_trait;
 use futures_03::Stream;
 
 use hash::Blake2bHash;
-use network_interface::prelude::{CloseReason, Message, Peer as PeerInterface, SendError};
 use network_interface::peer::RequestResponse;
+use network_interface::prelude::{CloseReason, Message, Peer as PeerInterface, SendError};
 use peer_address::address::NetAddress;
 use peer_address::address::PeerAddress;
 
 use crate::connection::close_type::CloseType;
-use crate::peer_channel::PeerChannel;
 use crate::network::NetworkError;
+use crate::peer_channel::PeerChannel;
 
 #[derive(Clone, Debug)]
 pub struct Peer {

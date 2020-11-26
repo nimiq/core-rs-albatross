@@ -1,24 +1,20 @@
-use libp2p::{
-    core::UpgradeInfo,
-    InboundUpgrade, OutboundUpgrade, Multiaddr,
-};
 use futures::{
-    io::{AsyncRead, AsyncWrite},
     future,
+    io::{AsyncRead, AsyncWrite},
 };
+use libp2p::{core::UpgradeInfo, InboundUpgrade, Multiaddr, OutboundUpgrade};
 use rand::{thread_rng, RngCore};
 
-use beserial::{SerializingError, Serialize, Deserialize};
-use nimiq_macros::{create_typed_array, add_hex_io_fns_typed_arr};
+use beserial::{Deserialize, Serialize, SerializingError};
 use nimiq_hash::Blake2bHash;
+use nimiq_macros::{add_hex_io_fns_typed_arr, create_typed_array};
 
+use super::peer_contacts::{Protocols, Services, SignedPeerContact};
 use crate::{
     message_codec::{MessageReader, MessageWriter},
-    tagged_signing::{TaggedSignature, TaggedSignable},
+    tagged_signing::{TaggedSignable, TaggedSignature},
     DISCOVERY_PROTOCOL,
 };
-use super::peer_contacts::{SignedPeerContact, Services, Protocols};
-
 
 create_typed_array!(ChallengeNonce, u8, 32);
 add_hex_io_fns_typed_arr!(ChallengeNonce, ChallengeNonce::SIZE);
@@ -36,7 +32,6 @@ impl ChallengeNonce {
 impl TaggedSignable for ChallengeNonce {
     const TAG: u8 = 0x01;
 }
-
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[repr(u8)]
@@ -110,8 +105,8 @@ impl UpgradeInfo for DiscoveryProtocol {
 }
 
 impl<C> InboundUpgrade<C> for DiscoveryProtocol
-    where
-        C: AsyncRead + AsyncWrite + Send + Unpin + 'static,
+where
+    C: AsyncRead + AsyncWrite + Send + Unpin + 'static,
 {
     type Output = MessageReader<C, DiscoveryMessage>;
     type Error = SerializingError;
@@ -124,8 +119,8 @@ impl<C> InboundUpgrade<C> for DiscoveryProtocol
 }
 
 impl<C> OutboundUpgrade<C> for DiscoveryProtocol
-    where
-        C: AsyncRead + AsyncWrite + Send + Unpin + 'static,
+where
+    C: AsyncRead + AsyncWrite + Send + Unpin + 'static,
 {
     type Output = MessageWriter<C, DiscoveryMessage>;
     type Error = SerializingError;

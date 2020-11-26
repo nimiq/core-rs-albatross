@@ -4,57 +4,44 @@ use std::{
     time::{Duration, Instant},
 };
 
-use libp2p::{
-    swarm::{
-        ProtocolsHandler, SubstreamProtocol, ProtocolsHandlerUpgrErr, KeepAlive, ProtocolsHandlerEvent,
-        NegotiatedSubstream,
-    },
-    identity::Keypair,
-    Multiaddr,
-};
 use futures::{
     task::{Context, Poll, Waker},
-    StreamExt, Sink, SinkExt,
+    Sink, SinkExt, StreamExt,
+};
+use libp2p::{
+    identity::Keypair,
+    swarm::{KeepAlive, NegotiatedSubstream, ProtocolsHandler, ProtocolsHandlerEvent, ProtocolsHandlerUpgrErr, SubstreamProtocol},
+    Multiaddr,
 };
 use parking_lot::RwLock;
+use rand::{seq::IteratorRandom, thread_rng};
 use thiserror::Error;
 use wasm_timer::Interval;
-use rand::{
-    seq::IteratorRandom,
-    thread_rng,
-};
 
 use beserial::SerializingError;
 use nimiq_hash::Blake2bHash;
 
 use super::{
     behaviour::DiscoveryConfig,
-    protocol::{DiscoveryProtocol, DiscoveryMessage, ChallengeNonce},
-    peer_contacts::{Services, Protocols, PeerContactBook, SignedPeerContact},
+    peer_contacts::{PeerContactBook, Protocols, Services, SignedPeerContact},
+    protocol::{ChallengeNonce, DiscoveryMessage, DiscoveryProtocol},
 };
 use crate::{
     message_codec::{MessageReader, MessageWriter},
-    tagged_signing::{TaggedKeypair, TaggedPublicKey}
+    tagged_signing::{TaggedKeypair, TaggedPublicKey},
 };
-
 
 #[derive(Clone, Debug)]
 pub enum HandlerInEvent {
     ObservedAddress(Multiaddr),
 }
 
-
 #[derive(Clone, Debug)]
 pub enum HandlerOutEvent {
-    ObservedAddresses {
-        observed_addresses: Vec<Multiaddr>,
-    },
-    PeerExchangeEstablished {
-        peer_contact: SignedPeerContact,
-    },
+    ObservedAddresses { observed_addresses: Vec<Multiaddr> },
+    PeerExchangeEstablished { peer_contact: SignedPeerContact },
     Update,
 }
-
 
 #[derive(Debug, Error)]
 pub enum HandlerError {
@@ -65,21 +52,13 @@ pub enum HandlerError {
     Serialization(#[from] SerializingError),
 
     #[error("Unexpected message for state {state:?}: {message:?}")]
-    UnexpectedMessage {
-        state: HandlerState,
-        message: DiscoveryMessage
-    },
+    UnexpectedMessage { state: HandlerState, message: DiscoveryMessage },
 
     #[error("Mismatch for genesis hash: Expected {expected}, but received {received}")]
-    GenesisHashMismatch {
-        expected: Blake2bHash,
-        received: Blake2bHash,
-    },
+    GenesisHashMismatch { expected: Blake2bHash, received: Blake2bHash },
 
     #[error("Peer contact has an invalid signature: {peer_contact:?}")]
-    InvalidPeerContactSignature {
-        peer_contact: SignedPeerContact,
-    },
+    InvalidPeerContactSignature { peer_contact: SignedPeerContact },
 
     #[error("Peer replied with incorrect response to challenge.")]
     ChallengeResponseFailed,
@@ -88,14 +67,10 @@ pub enum HandlerError {
     Signing(#[from] libp2p::identity::error::SigningError),
 
     #[error("Received too frequent updates: {}", .interval.as_secs())]
-    TooFrequentUpdates {
-        interval: Duration
-    },
+    TooFrequentUpdates { interval: Duration },
 
     #[error("Received update with too many peer contacts: {num_peer_contacts}")]
-    UpdateLimitExceeded {
-        num_peer_contacts: usize,
-    },
+    UpdateLimitExceeded { num_peer_contacts: usize },
 }
 
 impl HandlerError {
@@ -104,8 +79,6 @@ impl HandlerError {
         Self::Io(std::io::ErrorKind::ConnectionReset.into())
     }
 }
-
-
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum HandlerState {
@@ -127,7 +100,6 @@ pub enum HandlerState {
     /// Peer exchange is established. We now will send peer lists periodically.
     Established,
 }
-
 
 pub struct DiscoveryHandler {
     /// Configuration for peer discovery.
@@ -228,10 +200,7 @@ impl DiscoveryHandler {
 
             self.state = HandlerState::SendHandshake;
 
-            self.waker
-                .take()
-                .expect("Expected waker to be present")
-                .wake();
+            self.waker.take().expect("Expected waker to be present").wake();
         }
     }
 }
@@ -311,7 +280,7 @@ impl ProtocolsHandler for DiscoveryHandler {
                     Poll::Pending => break,
 
                     // Outbound sink is ready, so continue to state handling.
-                    Poll::Ready(Ok(())) => {},
+                    Poll::Ready(Ok(())) => {}
                 }
             }
 
@@ -324,8 +293,8 @@ impl ProtocolsHandler for DiscoveryHandler {
 
                     return Poll::Ready(ProtocolsHandlerEvent::OutboundSubstreamRequest {
                         protocol: SubstreamProtocol::new(DiscoveryProtocol, ()),
-                    })
-                },
+                    });
+                }
 
                 HandlerState::OpenSubstream => {
                     // Wait for the substream to be opened
@@ -335,7 +304,7 @@ impl ProtocolsHandler for DiscoveryHandler {
 
                     // We need to wait for the inbound substream to be injected.
                     break;
-                },
+                }
 
                 HandlerState::SendHandshake => {
                     // Send out a handshake message.
@@ -356,7 +325,7 @@ impl ProtocolsHandler for DiscoveryHandler {
                     }
 
                     self.state = HandlerState::ReceiveHandshake;
-                },
+                }
 
                 HandlerState::ReceiveHandshake => {
                     // Wait for the peer's handshake message
@@ -379,7 +348,7 @@ impl ProtocolsHandler for DiscoveryHandler {
                                         return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::GenesisHashMismatch {
                                             expected: self.config.genesis_hash.clone(),
                                             received: genesis_hash,
-                                        }))
+                                        }));
                                     }
 
                                     // Update our own peer contact given the observed addresses we received
@@ -408,20 +377,17 @@ impl ProtocolsHandler for DiscoveryHandler {
 
                                     self.state = HandlerState::ReceiveHandshakeAck;
 
-                                    return Poll::Ready(ProtocolsHandlerEvent::Custom(HandlerOutEvent::ObservedAddresses { observed_addresses }))
-                                },
+                                    return Poll::Ready(ProtocolsHandlerEvent::Custom(HandlerOutEvent::ObservedAddresses { observed_addresses }));
+                                }
 
-                                _ => return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::UnexpectedMessage {
-                                    message,
-                                    state: self.state,
-                                })),
+                                _ => return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::UnexpectedMessage { message, state: self.state })),
                             }
-                        },
+                        }
                         Poll::Ready(None) => return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::connection_reset())),
                         Poll::Ready(Some(Err(e))) => return Poll::Ready(ProtocolsHandlerEvent::Close(e.into())),
                         Poll::Pending => break,
                     }
-                },
+                }
 
                 HandlerState::ReceiveHandshakeAck => {
                     // Wait for the peer's HandshakeAck message
@@ -436,7 +402,7 @@ impl ProtocolsHandler for DiscoveryHandler {
                                 } => {
                                     // Check the peer contact for a valid signature.
                                     if !peer_contact.verify() {
-                                        return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::InvalidPeerContactSignature { peer_contact }))
+                                        return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::InvalidPeerContactSignature { peer_contact }));
                                     }
 
                                     // TODO: Do we need to check other stuff in the peer contact?
@@ -445,7 +411,7 @@ impl ProtocolsHandler for DiscoveryHandler {
 
                                     // Check the challenge response.
                                     if !peer_contact.public_key().tagged_verify(&self.challenge_nonce, &response_signature) {
-                                        return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::ChallengeResponseFailed))
+                                        return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::ChallengeResponseFailed));
                                     }
 
                                     let mut peer_contact_book = self.peer_contact_book.write();
@@ -475,22 +441,17 @@ impl ProtocolsHandler for DiscoveryHandler {
                                     self.state = HandlerState::Established;
 
                                     // TODO: Return an event that we established PEX with a new peer.
-                                    return Poll::Ready(ProtocolsHandlerEvent::Custom(HandlerOutEvent::PeerExchangeEstablished {
-                                        peer_contact,
-                                    }))
-                                },
+                                    return Poll::Ready(ProtocolsHandlerEvent::Custom(HandlerOutEvent::PeerExchangeEstablished { peer_contact }));
+                                }
 
-                                _ => return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::UnexpectedMessage {
-                                    message,
-                                    state: self.state,
-                                })),
+                                _ => return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::UnexpectedMessage { message, state: self.state })),
                             }
-                        },
+                        }
                         Poll::Ready(None) => return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::connection_reset())),
                         Poll::Ready(Some(Err(e))) => return Poll::Ready(ProtocolsHandlerEvent::Close(e.into())),
                         Poll::Pending => break,
                     }
-                },
+                }
 
                 HandlerState::Established => {
                     // Check for incoming updates.
@@ -511,29 +472,27 @@ impl ProtocolsHandler for DiscoveryHandler {
 
                                     // Check if the update is not too large.
                                     if peer_contacts.len() > self.config.update_limit as usize {
-                                        return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::UpdateLimitExceeded { num_peer_contacts: peer_contacts.len() }));
+                                        return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::UpdateLimitExceeded {
+                                            num_peer_contacts: peer_contacts.len(),
+                                        }));
                                     }
 
                                     // Insert the new peer contacts into the peer contact book.
-                                    self.peer_contact_book.write()
-                                        .insert_all_filtered(
-                                            peer_contacts,
-                                            self.config.protocols_filter,
-                                            self.config.services_filter
-                                        );
+                                    self.peer_contact_book.write().insert_all_filtered(
+                                        peer_contacts,
+                                        self.config.protocols_filter,
+                                        self.config.services_filter,
+                                    );
 
-                                    return Poll::Ready(ProtocolsHandlerEvent::Custom(HandlerOutEvent::Update))
-                                },
+                                    return Poll::Ready(ProtocolsHandlerEvent::Custom(HandlerOutEvent::Update));
+                                }
 
-                                _ => return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::UnexpectedMessage {
-                                    message,
-                                    state: self.state,
-                                })),
+                                _ => return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::UnexpectedMessage { message, state: self.state })),
                             }
-                        },
+                        }
                         Poll::Ready(None) => return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::connection_reset())),
                         Poll::Ready(Some(Err(e))) => return Poll::Ready(ProtocolsHandlerEvent::Close(e.into())),
-                        Poll::Pending => {},
+                        Poll::Pending => {}
                     }
 
                     // Periodically send out updates.
@@ -543,20 +502,18 @@ impl ProtocolsHandler for DiscoveryHandler {
                                 let peer_contacts = self.get_peer_contacts(&self.peer_contact_book.read());
 
                                 if !peer_contacts.is_empty() {
-                                    let msg = DiscoveryMessage::PeerAddresses {
-                                        peer_contacts,
-                                    };
+                                    let msg = DiscoveryMessage::PeerAddresses { peer_contacts };
 
                                     if let Err(e) = self.send(&msg) {
                                         return Poll::Ready(ProtocolsHandlerEvent::Close(e.into()));
                                     }
                                 }
-                            },
+                            }
                             Poll::Ready(None) => todo!("Interval terminated"),
                             Poll::Pending => break,
                         }
                     }
-                },
+                }
             }
         }
 

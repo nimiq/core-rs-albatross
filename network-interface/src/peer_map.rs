@@ -1,26 +1,20 @@
-use std::{
-    collections::HashMap,
-    sync::Arc,
-    iter::FromIterator,
-};
-use tokio::sync::broadcast;
 use parking_lot::RwLock;
+use std::{collections::HashMap, iter::FromIterator, sync::Arc};
+use tokio::sync::broadcast;
 
-use crate::{
-    network::NetworkEvent,
-    peer::Peer,
-};
-
+use crate::{network::NetworkEvent, peer::Peer};
 
 struct Inner<P>
-    where P: Peer + 'static,
+where
+    P: Peer + 'static,
 {
     peers: HashMap<P::Id, Arc<P>>,
     tx: broadcast::Sender<NetworkEvent<P>>,
 }
 
 impl<P> Inner<P>
-    where P: Peer + 'static,
+where
+    P: Peer + 'static,
 {
     fn notify(&self, event: NetworkEvent<P>) {
         // According to documentation this only fails if all receivers dropped. But that's okay for us.
@@ -29,21 +23,26 @@ impl<P> Inner<P>
 }
 
 pub struct ObservablePeerMap<P>
-    where P: Peer + 'static,
+where
+    P: Peer + 'static,
 {
     inner: Arc<RwLock<Inner<P>>>,
 }
 
 impl<P> Clone for ObservablePeerMap<P>
-    where P: Peer + std::fmt::Debug,
+where
+    P: Peer + std::fmt::Debug,
 {
     fn clone(&self) -> Self {
-        Self { inner: Arc::clone(&self.inner) }
+        Self {
+            inner: Arc::clone(&self.inner),
+        }
     }
 }
 
 impl<P> std::fmt::Debug for ObservablePeerMap<P>
-    where P: Peer + std::fmt::Debug,
+where
+    P: Peer + std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         self.inner.read().peers.fmt(f)
@@ -51,7 +50,8 @@ impl<P> std::fmt::Debug for ObservablePeerMap<P>
 }
 
 impl<P> Default for ObservablePeerMap<P>
-    where P: Peer,
+where
+    P: Peer,
 {
     fn default() -> Self {
         Self::new()
@@ -59,33 +59,32 @@ impl<P> Default for ObservablePeerMap<P>
 }
 
 impl<P> FromIterator<Arc<P>> for ObservablePeerMap<P>
-    where P: Peer,
+where
+    P: Peer,
 {
-    fn from_iter<I: IntoIterator<Item=Arc<P>>>(iter: I) -> Self {
+    fn from_iter<I: IntoIterator<Item = Arc<P>>>(iter: I) -> Self {
         Self::from_peers(iter.into_iter().map(|peer| (peer.id(), peer)).collect())
     }
 }
 
 impl<P> FromIterator<P> for ObservablePeerMap<P>
-    where P: Peer,
+where
+    P: Peer,
 {
-    fn from_iter<I: IntoIterator<Item=P>>(iter: I) -> Self {
+    fn from_iter<I: IntoIterator<Item = P>>(iter: I) -> Self {
         Self::from_iter(iter.into_iter().map(|peer| Arc::new(peer)))
     }
 }
 
-
 impl<P> ObservablePeerMap<P>
-    where P: Peer + 'static,
+where
+    P: Peer + 'static,
 {
     fn from_peers(peers: HashMap<P::Id, Arc<P>>) -> Self {
         let (tx, _rx) = broadcast::channel(64);
 
         Self {
-            inner: Arc::new(RwLock::new(Inner {
-                peers,
-                tx,
-            }))
+            inner: Arc::new(RwLock::new(Inner { peers, tx })),
         }
     }
 
@@ -109,36 +108,23 @@ impl<P> ObservablePeerMap<P>
         if let Some(peer) = inner.peers.remove(peer_id) {
             inner.notify(NetworkEvent::PeerLeft(Arc::clone(&peer)));
             Some(peer)
-        }
-        else {
+        } else {
             None
         }
     }
 
     pub fn get_peer(&self, peer_id: &P::Id) -> Option<Arc<P>> {
-        self.inner
-            .read()
-            .peers
-            .get(peer_id)
-            .map(|peer| Arc::clone(peer))
+        self.inner.read().peers.get(peer_id).map(|peer| Arc::clone(peer))
     }
 
     pub fn get_peers(&self) -> Vec<Arc<P>> {
-        self.inner
-            .read()
-            .peers
-            .values()
-            .map(|peer| Arc::clone(peer))
-            .collect()
+        self.inner.read().peers.values().map(|peer| Arc::clone(peer)).collect()
     }
 
     pub fn subscribe(&self) -> (Vec<Arc<P>>, broadcast::Receiver<NetworkEvent<P>>) {
         let inner = self.inner.write();
 
-        let peers = inner.peers
-            .values()
-            .map(|peer| Arc::clone(peer))
-            .collect();
+        let peers = inner.peers.values().map(|peer| Arc::clone(peer)).collect();
 
         let rx = inner.tx.subscribe();
 
@@ -146,25 +132,20 @@ impl<P> ObservablePeerMap<P>
     }
 }
 
-
-
 #[cfg(test)]
 mod tests {
-    use std::{
-        collections::HashSet,
-        pin::Pin,
-    };
+    use std::{collections::HashSet, pin::Pin};
 
     use futures::{Stream, StreamExt};
     use thiserror::Error;
     use tokio::sync::broadcast;
 
-    use crate::{
-        network::NetworkEvent,
-        peer::{Peer as PeerInterface, SendError, CloseReason, RequestResponse},
-        message::Message,
-    };
     use super::ObservablePeerMap;
+    use crate::{
+        message::Message,
+        network::NetworkEvent,
+        peer::{CloseReason, Peer as PeerInterface, RequestResponse, SendError},
+    };
 
     #[derive(Debug, Error)]
     pub enum PeerError {}
@@ -189,20 +170,27 @@ mod tests {
             self.id
         }
 
-        async fn send<T: Message>(&self, _msg: &T) -> Result<(), SendError> { unreachable!(); }
-        fn receive<T: Message>(&self) -> Pin<Box<dyn Stream<Item = T> + Send>> { unreachable!(); }
+        async fn send<T: Message>(&self, _msg: &T) -> Result<(), SendError> {
+            unreachable!();
+        }
+        fn receive<T: Message>(&self) -> Pin<Box<dyn Stream<Item = T> + Send>> {
+            unreachable!();
+        }
         fn close(&self, _ty: CloseReason) {}
 
-        async fn request<R: RequestResponse>(&self, _request: &R::Request) -> Result<R::Response, Self::Error> { unreachable!(); }
+        async fn request<R: RequestResponse>(&self, _request: &R::Request) -> Result<R::Response, Self::Error> {
+            unreachable!();
+        }
 
-        fn requests<R: RequestResponse>(&self) -> Box<dyn Stream<Item = R::Request>> { unreachable!(); }
+        fn requests<R: RequestResponse>(&self) -> Box<dyn Stream<Item = R::Request>> {
+            unreachable!();
+        }
     }
 
     async fn assert_peer_joined(listener: &mut broadcast::Receiver<NetworkEvent<Peer>>, id: u32) {
         if let Some(Ok(NetworkEvent::PeerJoined(peer))) = listener.next().await {
             assert_eq!(peer.id(), id);
-        }
-        else {
+        } else {
             panic!("Expected PeerJoined event with id={}", id);
         }
     }
@@ -210,8 +198,7 @@ mod tests {
     async fn assert_peer_left(listener: &mut broadcast::Receiver<NetworkEvent<Peer>>, id: u32) {
         if let Some(Ok(NetworkEvent::PeerLeft(peer))) = listener.next().await {
             assert_eq!(peer.id(), id);
-        }
-        else {
+        } else {
             panic!("Expected PeerLeft event with id={}", id);
         }
     }

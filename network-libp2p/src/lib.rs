@@ -6,15 +6,14 @@ extern crate beserial_derive;
 extern crate log;
 
 mod behaviour;
+pub mod discovery;
+pub mod drop_notify;
 mod limit;
 pub mod message;
-mod network;
-pub mod discovery;
-pub mod tagged_signing;
 pub mod message_codec;
+mod network;
+pub mod tagged_signing;
 pub mod task;
-pub mod drop_notify;
-
 
 pub const MESSAGE_PROTOCOL: &[u8] = b"/nimiq/message/0.0.1";
 pub const DISCOVERY_PROTOCOL: &[u8] = b"/nimiq/discovery/0.0.1";

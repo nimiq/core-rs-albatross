@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use futures::Stream;
 use thiserror::Error;
 
-use beserial::{SerializingError, Serialize, Deserialize};
+use beserial::{Deserialize, Serialize, SerializingError};
 
 use crate::message::Message;
 
@@ -26,12 +26,10 @@ pub enum SendError {
     AlreadyClosed,
 }
 
-
 pub trait RequestResponse {
     type Request: Serialize + Deserialize + Sync;
     type Response: Serialize + Deserialize + Sync;
 }
-
 
 #[async_trait]
 pub trait Peer: Send + Sync + Hash + Eq {

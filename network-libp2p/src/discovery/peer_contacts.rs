@@ -1,21 +1,20 @@
 use std::{
-    collections::{HashSet, HashMap},
+    collections::{HashMap, HashSet},
     sync::Arc,
-    time::{SystemTime, Duration, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+use bitflags::bitflags;
 use libp2p::{
     core::multiaddr::Protocol,
     identity::{Keypair, PublicKey},
     Multiaddr, PeerId,
 };
-use bitflags::bitflags;
 use parking_lot::RwLock;
 
-use beserial::{Serialize, Deserialize};
+use beserial::{Deserialize, Serialize};
 
-use crate::tagged_signing::{TaggedSignature, TaggedSignable, TaggedPublicKey, TaggedKeypair};
-
+use crate::tagged_signing::{TaggedKeypair, TaggedPublicKey, TaggedSignable, TaggedSignature};
 
 /// Configuration for the peer contact book.
 #[derive(Clone, Debug)]
@@ -40,16 +39,13 @@ impl PeerContactBookConfig {
     pub fn protocols_max_age(&self, protocols: Protocols) -> Duration {
         if protocols.contains(Protocols::WS) || protocols.contains(Protocols::WSS) {
             self.max_age_websocket
-        }
-        else if protocols.contains(Protocols::RTC) {
+        } else if protocols.contains(Protocols::RTC) {
             self.max_age_webrtc
-        }
-        else {
+        } else {
             self.max_age_dumb
         }
     }
 }
-
 
 bitflags! {
     /// Bitmask of services
@@ -164,8 +160,7 @@ impl Protocols {
     }
 
     pub fn from_multiaddr(multiaddr: &Multiaddr) -> Self {
-        let protocol = multiaddr.iter().last()
-            .unwrap_or_else(|| panic!("Empty multiaddr: {}", multiaddr));
+        let protocol = multiaddr.iter().last().unwrap_or_else(|| panic!("Empty multiaddr: {}", multiaddr));
 
         match protocol {
             Protocol::Ws(_) => Self::WS,
@@ -176,7 +171,6 @@ impl Protocols {
         }
     }
 }
-
 
 /// A plain peer contact. This contains:
 ///
@@ -203,7 +197,7 @@ pub struct PeerContact {
 }
 
 impl PeerContact {
-    pub fn new<I: IntoIterator<Item=Multiaddr>>(addresses: I, public_key: PublicKey, services: Services, timestamp: Option<u64>) -> Self {
+    pub fn new<I: IntoIterator<Item = Multiaddr>>(addresses: I, public_key: PublicKey, services: Services, timestamp: Option<u64>) -> Self {
         let mut addresses = addresses.into_iter().collect::<Vec<Multiaddr>>();
 
         addresses.sort();
@@ -212,7 +206,7 @@ impl PeerContact {
             addresses,
             public_key,
             services,
-            timestamp
+            timestamp,
         }
     }
 
@@ -239,10 +233,7 @@ impl PeerContact {
 
         let signature = keypair.tagged_sign(&self);
 
-        SignedPeerContact {
-            inner: self,
-            signature
-        }
+        SignedPeerContact { inner: self, signature }
     }
 
     /// This sets the timestamp in the peer contact to the current system time.
@@ -278,7 +269,6 @@ impl SignedPeerContact {
     }
 }
 
-
 /// Meta information attached to peer contact info objects. This are meant to be mutable and change over time.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "peer-contact-book-persistence", derive(serde::Serialize, serde::Deserialize))]
@@ -294,7 +284,6 @@ struct PeerContactMeta {
     #[cfg_attr(feature = "peer-contact-book-persistence", serde(skip))]
     reported_by: HashSet<PeerId>,
 }
-
 
 /// This encapsulates a peer contact (signed), but also pre-computes frequently used values such as `peer_id` and
 /// `protocols`. It also contains meta-data that can be mutated.
@@ -363,7 +352,7 @@ impl PeerContactInfo {
     }
 
     /// Returns an iterator over the multi-addresses of this contact.
-    pub fn addresses<'a>(&'a self) -> impl Iterator<Item=&Multiaddr> + 'a {
+    pub fn addresses<'a>(&'a self) -> impl Iterator<Item = &Multiaddr> + 'a {
         self.contact.inner.addresses.iter()
     }
 
@@ -394,7 +383,7 @@ impl PeerContactInfo {
                 match protocol {
                     Protocol::Ip4(ip_addr) => return ip_addr.is_global(),
                     Protocol::Ip6(ip_addr) => return ip_addr.is_global(),
-                    _ => {},
+                    _ => {}
                 }
             }
         }
@@ -447,35 +436,32 @@ impl PeerContactBook {
         }
     }
 
-    pub fn insert_all<I: IntoIterator<Item=SignedPeerContact>>(&mut self, contacts: I) {
+    pub fn insert_all<I: IntoIterator<Item = SignedPeerContact>>(&mut self, contacts: I) {
         for contact in contacts {
             self.insert(contact);
         }
     }
 
-    pub fn insert_all_filtered<I: IntoIterator<Item=SignedPeerContact>>(&mut self, contacts: I, protocols_filter: Protocols, services_filter: Services) {
+    pub fn insert_all_filtered<I: IntoIterator<Item = SignedPeerContact>>(&mut self, contacts: I, protocols_filter: Protocols, services_filter: Services) {
         for contact in contacts {
             self.insert_filtered(contact, protocols_filter, services_filter)
         }
     }
 
     pub fn get(&self, peer_id: &PeerId) -> Option<Arc<PeerContactInfo>> {
-        self.peer_contacts
-            .get(peer_id)
-            .map(|c| Arc::clone(c))
+        self.peer_contacts.get(peer_id).map(|c| Arc::clone(c))
     }
 
     pub fn query<'a>(&'a self, protocols: Protocols, services: Services) -> impl Iterator<Item = Arc<PeerContactInfo>> + 'a {
         // TODO: This is a naive implementation
         // TODO: Sort by score?
-        self.peer_contacts
-            .iter()
-            .filter_map(move |(_, contact)| {
-                if !contact.is_seed() && contact.matches(protocols, services) {
-                    Some(Arc::clone(contact))
-                }
-                else { None }
-            })
+        self.peer_contacts.iter().filter_map(move |(_, contact)| {
+            if !contact.is_seed() && contact.matches(protocols, services) {
+                Some(Arc::clone(contact))
+            } else {
+                None
+            }
+        })
     }
 
     pub fn self_add_addresses<I: IntoIterator<Item = Multiaddr>>(&mut self, addresses: I) {
@@ -502,14 +488,14 @@ impl PeerContactBook {
 
     pub fn house_keeping(&mut self) {
         if let Ok(unix_time) = SystemTime::now().duration_since(UNIX_EPOCH) {
-            let delete_peers = self.peer_contacts
+            let delete_peers = self
+                .peer_contacts
                 .iter()
                 .filter_map(|(peer_id, peer_contact)| {
                     if peer_contact.exceeds_age(&self.config, unix_time) {
                         log::debug!("Removing peer contact because of old age: {:?}", peer_id);
                         Some(peer_id)
-                    }
-                    else {
+                    } else {
                         None
                     }
                 })
@@ -525,7 +511,6 @@ impl PeerContactBook {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::Protocols;
@@ -539,18 +524,12 @@ mod tests {
     #[test]
     fn protocols_from_multiaddrs() {
         assert_eq!(
-            Protocols::from_multiaddrs(vec![
-                "/ip4/1.2.3.4/tcp/80/ws".parse().unwrap(),
-                "/dns/test.local/tcp/443/ws".parse().unwrap()
-            ].iter()),
+            Protocols::from_multiaddrs(vec!["/ip4/1.2.3.4/tcp/80/ws".parse().unwrap(), "/dns/test.local/tcp/443/ws".parse().unwrap()].iter()),
             Protocols::WS
         );
 
         assert_eq!(
-            Protocols::from_multiaddrs(vec![
-                "/ip4/1.2.3.4/tcp/443/ws".parse().unwrap(),
-                "/ip4/1.2.3.4/tcp/443/wss".parse().unwrap()
-            ].iter()),
+            Protocols::from_multiaddrs(vec!["/ip4/1.2.3.4/tcp/443/ws".parse().unwrap(), "/ip4/1.2.3.4/tcp/443/wss".parse().unwrap()].iter()),
             Protocols::WS | Protocols::WSS
         );
     }
@@ -560,13 +539,11 @@ mod tests {
 mod serde_public_key {
     use libp2p::identity::PublicKey;
 
-    use serde::{
-        de::Error,
-        Serialize, Serializer, Deserialize, Deserializer,
-    };
+    use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 
     pub fn serialize<S>(public_key: &PublicKey, serializer: S) -> Result<S::Ok, S::Error>
-        where S: Serializer
+    where
+        S: Serializer,
     {
         let hex_encoded = hex::encode(beserial::Serialize::serialize_to_vec(public_key));
 
@@ -574,14 +551,13 @@ mod serde_public_key {
     }
 
     pub fn deserialize<'de, D>(deserializer: D) -> Result<PublicKey, D::Error>
-        where D: Deserializer<'de>
+    where
+        D: Deserializer<'de>,
     {
         let hex_encoded: String = Deserialize::deserialize(deserializer)?;
 
-        let raw = hex::decode(&hex_encoded)
-            .map_err(D::Error::custom)?;
+        let raw = hex::decode(&hex_encoded).map_err(D::Error::custom)?;
 
-        beserial::Deserialize::deserialize_from_vec(&raw)
-            .map_err(D::Error::custom)
+        beserial::Deserialize::deserialize_from_vec(&raw).map_err(D::Error::custom)
     }
 }

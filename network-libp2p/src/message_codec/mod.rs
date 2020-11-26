@@ -1,18 +1,14 @@
+mod header;
 mod reader;
 mod writer;
-mod header;
 
 pub use self::reader::MessageReader;
 pub use self::writer::MessageWriter;
 
-
 #[cfg(test)]
 mod tests {
-    use beserial::{Serialize, Deserialize};
-    use futures::{
-        io::Cursor,
-        SinkExt, StreamExt
-    };
+    use beserial::{Deserialize, Serialize};
+    use futures::{io::Cursor, SinkExt, StreamExt};
 
     use super::{MessageReader, MessageWriter};
 
@@ -27,7 +23,10 @@ mod tests {
     async fn it_writes_and_reads_messages() {
         let mut buf = vec![];
 
-        let message = TestMessage { foo: 42, bar: "Hello World".to_owned() };
+        let message = TestMessage {
+            foo: 42,
+            bar: "Hello World".to_owned(),
+        };
 
         MessageWriter::new(&mut buf).send(&message).await.unwrap();
 

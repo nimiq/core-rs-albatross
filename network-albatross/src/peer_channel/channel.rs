@@ -22,7 +22,7 @@ use parking_lot::RwLock;
 use beserial::Deserialize;
 use network_interface::message::{peek_type, Message};
 use network_interface::peer::dispatch::{unbounded_dispatch, DispatchError};
-use network_interface::peer::{CloseReason, Peer as PeerInterface, SendError as SendErrorI, RequestResponse};
+use network_interface::peer::{CloseReason, Peer as PeerInterface, RequestResponse, SendError as SendErrorI};
 use network_messages::MessageNotifier;
 use peer_address::address::PeerAddress;
 use utils::observer::Notifier;
@@ -31,10 +31,10 @@ use crate::connection::close_type::CloseType;
 use crate::connection::network_connection::AddressInfo;
 use crate::connection::network_connection::ClosedFlag;
 use crate::connection::network_connection::NetworkConnection;
+use crate::network::NetworkError;
 #[cfg(feature = "metrics")]
 use crate::network_metrics::MessageMetrics;
 use crate::websocket::Message as WebSocketMessage;
-use crate::network::NetworkError;
 
 use super::sink::PeerSink;
 use super::stream::PeerStreamEvent;

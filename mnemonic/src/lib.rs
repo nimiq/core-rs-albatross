@@ -10,7 +10,7 @@ use bitvec::prelude::{AsBits, BitSlice, BitVec, Msb0};
 use unicode_normalization::UnicodeNormalization;
 
 use hash::pbkdf2::{compute_pbkdf2_sha512, Pbkdf2Error};
-use hash::{Hasher, Sha256Hasher, HashOutput};
+use hash::{HashOutput, Hasher, Sha256Hasher};
 use macros::{add_hex_io_fns_typed_arr, create_typed_array};
 use utils::crc::Crc8Computer;
 

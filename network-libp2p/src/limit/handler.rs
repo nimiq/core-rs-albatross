@@ -1,30 +1,20 @@
-use libp2p::swarm::{ProtocolsHandler, SubstreamProtocol, ProtocolsHandlerUpgrErr, KeepAlive, ProtocolsHandlerEvent};
-use futures::{
-    task::{Context, Poll},
-};
+use futures::task::{Context, Poll};
+use libp2p::swarm::{KeepAlive, ProtocolsHandler, ProtocolsHandlerEvent, ProtocolsHandlerUpgrErr, SubstreamProtocol};
 use thiserror::Error;
-
 
 use super::protocol::LimitProtocol;
 
+#[derive(Clone, Debug)]
+pub enum HandlerInEvent {}
 
 #[derive(Clone, Debug)]
-pub enum HandlerInEvent {
-}
-
-
-#[derive(Clone, Debug)]
-pub enum HandlerOutEvent {
-}
-
+pub enum HandlerOutEvent {}
 
 #[derive(Debug, Error)]
-pub enum HandlerError {
-}
+pub enum HandlerError {}
 
 #[derive(Default)]
-pub struct LimitHandler {
-}
+pub struct LimitHandler {}
 
 impl ProtocolsHandler for LimitHandler {
     type InEvent = HandlerInEvent;

@@ -4,24 +4,15 @@ use std::{
 };
 
 use async_trait::async_trait;
-use futures::{
-    channel::oneshot,
-    Stream,
-};
-use libp2p::{
-    swarm::NegotiatedSubstream,
-    PeerId
-};
+use futures::{channel::oneshot, Stream};
+use libp2p::{swarm::NegotiatedSubstream, PeerId};
 use parking_lot::Mutex;
 
-use nimiq_network_interface::peer::{
-    CloseReason, Peer as PeerInterface, SendError, RequestResponse,
-};
 use nimiq_network_interface::message::Message;
+use nimiq_network_interface::peer::{CloseReason, Peer as PeerInterface, RequestResponse, SendError};
 
 use super::dispatch::MessageDispatch;
 use crate::network::NetworkError;
-
 
 pub struct Peer {
     pub id: PeerId,
@@ -39,8 +30,6 @@ impl Peer {
             close_tx: Mutex::new(Some(close_tx)),
         }
     }
-
-
 }
 
 impl std::fmt::Debug for Peer {
@@ -71,7 +60,6 @@ impl Hash for Peer {
     }
 }
 
-
 #[async_trait]
 impl PeerInterface for Peer {
     type Id = PeerId;
@@ -98,8 +86,7 @@ impl PeerInterface for Peer {
             if let Err(_) = close_tx.send(reason) {
                 log::error!("The receiver for Peer::close was already dropped.");
             }
-        }
-        else {
+        } else {
             log::error!("Peer is already closed");
         }
     }

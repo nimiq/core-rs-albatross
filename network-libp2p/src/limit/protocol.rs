@@ -1,14 +1,10 @@
-use libp2p::{
-    core::UpgradeInfo,
-    InboundUpgrade, OutboundUpgrade,
-};
 use futures::{
-    io::{AsyncRead, AsyncWrite},
     future,
+    io::{AsyncRead, AsyncWrite},
 };
+use libp2p::{core::UpgradeInfo, InboundUpgrade, OutboundUpgrade};
 
 use crate::LIMIT_PROTOCOL;
-
 
 pub struct LimitProtocol;
 
@@ -22,8 +18,8 @@ impl UpgradeInfo for LimitProtocol {
 }
 
 impl<C> InboundUpgrade<C> for LimitProtocol
-    where
-        C: AsyncRead + AsyncWrite + Send + Unpin + 'static,
+where
+    C: AsyncRead + AsyncWrite + Send + Unpin + 'static,
 {
     type Output = ();
     type Error = std::io::Error;
@@ -36,8 +32,8 @@ impl<C> InboundUpgrade<C> for LimitProtocol
 }
 
 impl<C> OutboundUpgrade<C> for LimitProtocol
-    where
-        C: AsyncRead + AsyncWrite + Send + Unpin + 'static,
+where
+    C: AsyncRead + AsyncWrite + Send + Unpin + 'static,
 {
     type Output = ();
     type Error = std::io::Error;

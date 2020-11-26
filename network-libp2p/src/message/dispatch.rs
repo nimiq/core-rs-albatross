@@ -1,21 +1,16 @@
-use std::{
-    collections::HashMap,
-    sync::Arc,
-    io::Cursor,
-};
+use std::{collections::HashMap, io::Cursor, sync::Arc};
 
 use futures::{
     channel::{mpsc, oneshot},
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, WriteHalf},
     lock::Mutex as AsyncMutex,
     task::{Context, Poll},
-    SinkExt, StreamExt, Stream, FutureExt,
+    FutureExt, SinkExt, Stream, StreamExt,
 };
 use parking_lot::Mutex;
 
 use beserial::SerializingError;
-use nimiq_network_interface::message::{Message, read_message, peek_type};
-
+use nimiq_network_interface::message::{peek_type, read_message, Message};
 
 /// # TODO
 ///
@@ -25,15 +20,12 @@ use nimiq_network_interface::message::{Message, read_message, peek_type};
 pub struct MessageReceiver {
     channels: Arc<Mutex<HashMap<u64, Option<mpsc::Sender<Vec<u8>>>>>>,
 
-
     close_tx: Mutex<Option<oneshot::Sender<()>>>,
 
     error_rx: Mutex<oneshot::Receiver<SerializingError>>,
 }
 
-
-impl MessageReceiver
-{
+impl MessageReceiver {
     pub fn new<I: AsyncRead + Unpin + Send + Sync + 'static>(inbound: I) -> Self {
         let channels = Arc::new(Mutex::new(HashMap::new()));
         let (close_tx, close_rx) = oneshot::channel();
@@ -69,14 +61,13 @@ impl MessageReceiver
         if let Some(close_tx) = self.close_tx.lock().take() {
             // TODO: handle error
             close_tx.send(()).unwrap();
-        }
-        else {
+        } else {
             log::error!("MessageReceiver::close: Already closed.");
         }
     }
 
     /// Registers a receiver stream for a message type
-    pub fn receive<M: Message>(&self) -> impl Stream<Item=M> {
+    pub fn receive<M: Message>(&self) -> impl Stream<Item = M> {
         let (tx, rx) = mpsc::channel(16);
 
         let mut channels = self.channels.lock();
@@ -85,18 +76,20 @@ impl MessageReceiver
         }
         channels.insert(M::TYPE_ID, Some(tx));
 
-        rx.filter_map(|buf| {
-            async move {
-                let message = M::deserialize_message(&mut Cursor::new(buf))
-                    .map_err(|e| log::error!("MessageReceiver error: {}", e))
-                    .ok()?;
+        rx.filter_map(|buf| async move {
+            let message = M::deserialize_message(&mut Cursor::new(buf))
+                .map_err(|e| log::error!("MessageReceiver error: {}", e))
+                .ok()?;
 
-                Some(message)
-            }
+            Some(message)
         })
     }
 
-    async fn reader<I: AsyncRead + Unpin + Send + Sync + 'static>(mut inbound: I, close_rx: oneshot::Receiver<()>, channels: Arc<Mutex<HashMap<u64, Option<mpsc::Sender<Vec<u8>>>>>>) -> Result<(), SerializingError> {
+    async fn reader<I: AsyncRead + Unpin + Send + Sync + 'static>(
+        mut inbound: I,
+        close_rx: oneshot::Receiver<()>,
+        channels: Arc<Mutex<HashMap<u64, Option<mpsc::Sender<Vec<u8>>>>>>,
+    ) -> Result<(), SerializingError> {
         let mut close_rx = close_rx.fuse();
 
         loop {
@@ -123,11 +116,10 @@ impl MessageReceiver
                 if let Some(tx_opt) = channels.get_mut(&message_type) {
                     // This tx should be Some(_) because only this function takes out senders.
                     tx_opt.take().expect("Expected sender")
-                }
-                else {
+                } else {
                     log::warn!("No receiver for message type: {}", message_type);
                     // No receiver for this message type
-                    continue
+                    continue;
                 }
             };
 
@@ -137,8 +129,7 @@ impl MessageReceiver
                 log::error!("Error while receiving data: {}", e);
 
                 channels.lock().remove(&message_type);
-            }
-            else {
+            } else {
                 // Put tx back into Option
                 *channels.lock().get_mut(&message_type).unwrap() = Some(tx);
             }
@@ -153,17 +144,16 @@ impl MessageReceiver
     }
 }
 
-
 pub struct MessageSender<O>
-    where
-        O: AsyncWrite,
+where
+    O: AsyncWrite,
 {
     outbound: AsyncMutex<Option<O>>,
 }
 
 impl<O> MessageSender<O>
-    where
-        O: AsyncWrite + Unpin,
+where
+    O: AsyncWrite + Unpin,
 {
     pub fn new(outbound: O) -> Self {
         Self {
@@ -178,8 +168,7 @@ impl<O> MessageSender<O>
         if let Some(mut outbound) = outbound.take() {
             log::debug!("Closing outbound...");
             outbound.close().await.unwrap()
-        }
-        else {
+        } else {
             log::error!("Outbound already closed.");
         }
     }
@@ -196,27 +185,24 @@ impl<O> MessageSender<O>
         if let Some(outbound) = outbound.as_mut() {
             outbound.write_all(&serialized).await?;
             Ok(())
-        }
-        else {
+        } else {
             log::error!("Outbound already closed.");
             Err(SerializingError::IoError(std::io::Error::from(std::io::ErrorKind::NotConnected)))
         }
     }
 }
 
-
-
 pub struct MessageDispatch<C>
-    where
-        C: AsyncRead + AsyncWriteExt + Send + Sync,
+where
+    C: AsyncRead + AsyncWriteExt + Send + Sync,
 {
     pub inbound: MessageReceiver,
     pub outbound: MessageSender<WriteHalf<C>>,
 }
 
 impl<C> MessageDispatch<C>
-    where
-        C: AsyncRead + AsyncWriteExt + Send + Sync + 'static,
+where
+    C: AsyncRead + AsyncWriteExt + Send + Sync + 'static,
 {
     pub fn new(socket: C) -> Self {
         let (reader, writer) = socket.split();

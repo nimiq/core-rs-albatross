@@ -9,22 +9,19 @@ use futures::channel::oneshot::{channel as oneshot, Sender as OneshotSender};
 use futures::task::{noop_waker_ref, Context, Poll};
 use futures::{executor, future, FutureExt, Sink, SinkExt, Stream, StreamExt};
 use parking_lot::{Mutex, RwLock};
-use tokio::sync::broadcast;
 use thiserror::Error;
+use tokio::sync::broadcast;
 
-use beserial::{Serialize, Deserialize};
+use beserial::{Deserialize, Serialize};
 use nimiq_network_interface::message::{peek_type, Message};
 use nimiq_network_interface::network::{Network, NetworkEvent, Topic};
 use nimiq_network_interface::peer::dispatch::{unbounded_dispatch, DispatchError};
-use nimiq_network_interface::peer::{CloseReason, Peer, SendError, RequestResponse};
+use nimiq_network_interface::peer::{CloseReason, Peer, RequestResponse, SendError};
 
 pub type Channels = Arc<RwLock<HashMap<u64, Pin<Box<dyn Sink<Vec<u8>, Error = DispatchError> + Send + Sync>>>>>;
 
-
 #[derive(Debug, Error)]
-pub enum MockNetworkError {
-
-}
+pub enum MockNetworkError {}
 
 pub struct MockPeer {
     id: usize,
@@ -152,8 +149,6 @@ impl Peer for MockPeer {
 }
 
 pub struct MockNetwork {
-
-
     peer_id: usize,
     peers: Arc<RwLock<HashMap<usize, Arc<MockPeer>>>>,
     event_tx: broadcast::Sender<NetworkEvent<MockPeer>>,
@@ -242,31 +237,31 @@ impl Network for MockNetwork {
     }
 
     async fn subscribe<T>(_topic: &T) -> Box<dyn Stream<Item = (T::Item, Self::PeerType)> + Send>
-        where
-            T: Topic + Sync,
+    where
+        T: Topic + Sync,
     {
         unimplemented!()
     }
 
     async fn publish<T>(_topic: &T, _item: <T as Topic>::Item)
-        where
-            T: Topic + Sync,
+    where
+        T: Topic + Sync,
     {
         unimplemented!()
     }
 
     async fn dht_get<K, V>(&self, _k: &K) -> Result<V, Self::Error>
-        where
-            K: AsRef<[u8]> + Send + Sync,
-            V: Deserialize + Send + Sync,
+    where
+        K: AsRef<[u8]> + Send + Sync,
+        V: Deserialize + Send + Sync,
     {
         unimplemented!()
     }
 
     async fn dht_put<K, V>(&self, _k: &K, _v: &V) -> Result<(), Self::Error>
-        where
-            K: AsRef<[u8]> + Send + Sync,
-            V: Serialize + Send + Sync,
+    where
+        K: AsRef<[u8]> + Send + Sync,
+        V: Serialize + Send + Sync,
     {
         unimplemented!()
     }

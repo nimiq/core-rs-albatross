@@ -1,18 +1,18 @@
 use std::{
-    collections::{VecDeque, HashSet},
-    time::Duration,
+    collections::{HashSet, VecDeque},
     sync::Arc,
+    time::Duration,
 };
 
-use libp2p::{
-    swarm::{NetworkBehaviour, PollParameters, NetworkBehaviourAction, NotifyHandler, KeepAlive},
-    core::connection::{ConnectionId, ConnectedPoint},
-    identity::Keypair,
-    PeerId, Multiaddr,
-};
 use futures::{
     task::{Context, Poll},
     StreamExt,
+};
+use libp2p::{
+    core::connection::{ConnectedPoint, ConnectionId},
+    identity::Keypair,
+    swarm::{KeepAlive, NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, PollParameters},
+    Multiaddr, PeerId,
 };
 use parking_lot::RwLock;
 use wasm_timer::Interval;
@@ -21,9 +21,8 @@ use nimiq_hash::Blake2bHash;
 
 use super::{
     handler::{DiscoveryHandler, HandlerInEvent, HandlerOutEvent},
-    peer_contacts::{PeerContactBook, Services, Protocols},
+    peer_contacts::{PeerContactBook, Protocols, Services},
 };
-
 
 #[derive(Clone, Debug)]
 pub struct DiscoveryConfig {
@@ -56,15 +55,11 @@ pub struct DiscoveryConfig {
     pub keep_alive: KeepAlive,
 }
 
-
 #[derive(Clone, Debug)]
 pub enum DiscoveryEvent {
-    Established {
-        peer_id: PeerId,
-    },
+    Established { peer_id: PeerId },
     Update,
 }
-
 
 /// Network behaviour for peer exchange.
 ///
@@ -91,7 +86,6 @@ pub struct DiscoveryBehaviour {
     house_keeping_timer: Interval,
 }
 
-
 impl DiscoveryBehaviour {
     pub fn new(config: DiscoveryConfig, keypair: Keypair, peer_contact_book: Arc<RwLock<PeerContactBook>>) -> Self {
         let house_keeping_timer = Interval::new(config.house_keeping_interval);
@@ -111,25 +105,19 @@ impl DiscoveryBehaviour {
     }
 }
 
-
 impl NetworkBehaviour for DiscoveryBehaviour {
     type ProtocolsHandler = DiscoveryHandler;
     type OutEvent = DiscoveryEvent;
 
     fn new_handler(&mut self) -> Self::ProtocolsHandler {
-        DiscoveryHandler::new(
-            self.config.clone(),
-            self.keypair.clone(),
-            Arc::clone(&self.peer_contact_book)
-        )
+        DiscoveryHandler::new(self.config.clone(), self.keypair.clone(), Arc::clone(&self.peer_contact_book))
     }
 
     fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
-        self.peer_contact_book.read()
+        self.peer_contact_book
+            .read()
             .get(peer_id)
-            .map(|addresses_opt| addresses_opt.addresses()
-                .cloned()
-                .collect())
+            .map(|addresses_opt| addresses_opt.addresses().cloned().collect())
             .unwrap_or_default()
     }
 
@@ -161,7 +149,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         self.events.push_back(NetworkBehaviourAction::NotifyHandler {
             peer_id: peer_id.clone(),
             handler: NotifyHandler::One(connection_id.clone()),
-            event: HandlerInEvent::ObservedAddress(remote_address.clone())
+            event: HandlerInEvent::ObservedAddress(remote_address.clone()),
         });
     }
 
@@ -173,15 +161,13 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                 self.events.push_back(NetworkBehaviourAction::GenerateEvent(DiscoveryEvent::Established {
                     peer_id: peer_contact.public_key().clone().into_peer_id(),
                 }));
-            },
+            }
             HandlerOutEvent::ObservedAddresses { observed_addresses } => {
                 for address in observed_addresses {
                     self.events.push_back(NetworkBehaviourAction::ReportObservedAddr { address });
                 }
             }
-            HandlerOutEvent::Update => {
-                self.events.push_back(NetworkBehaviourAction::GenerateEvent(DiscoveryEvent::Update))
-            },
+            HandlerOutEvent::Update => self.events.push_back(NetworkBehaviourAction::GenerateEvent(DiscoveryEvent::Update)),
         }
     }
 
@@ -198,9 +184,9 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                 let mut peer_address_book = self.peer_contact_book.write();
                 peer_address_book.self_update(&self.keypair);
                 peer_address_book.house_keeping();
-            },
+            }
             Poll::Ready(None) => unreachable!(),
-            Poll::Pending => {},
+            Poll::Pending => {}
         }
 
         Poll::Pending

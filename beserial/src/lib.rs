@@ -12,10 +12,10 @@ pub use crate::types::uvar;
 
 #[cfg(feature = "bitvec")]
 mod bitvec;
-#[cfg(feature = "net")]
-mod net;
 #[cfg(feature = "libp2p")]
 mod libp2p;
+#[cfg(feature = "net")]
+mod net;
 mod types;
 
 // Base traits
@@ -88,9 +88,7 @@ impl From<SerializingError> for std::io::Error {
     }
 }
 
-
 // Implementation for u8 and u16/32/64/128 (big endian)
-
 
 impl Deserialize for u8 {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
@@ -163,7 +161,6 @@ primitive_serialize!(i128, 16, read_i128, write_i128);
 
 primitive_serialize!(f32, 4, read_f32, write_f32);
 primitive_serialize!(f64, 8, read_f64, write_f64);
-
 
 // Unit
 
@@ -541,8 +538,7 @@ impl<T: Serialize> SerializeWithLength for [T] {
     fn serialize<S: Serialize + num::FromPrimitive, W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size = 0;
 
-        let n = S::from_usize(self.len())
-            .ok_or(SerializingError::Overflow)?;
+        let n = S::from_usize(self.len()).ok_or(SerializingError::Overflow)?;
         size += Serialize::serialize(&n, writer)?;
 
         for elem in self {

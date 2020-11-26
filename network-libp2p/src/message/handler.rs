@@ -1,51 +1,31 @@
-use std::{
-    collections::VecDeque,
-    sync::Arc,
-};
+use std::{collections::VecDeque, sync::Arc};
 
 use futures::{
-    task::{Context, Poll, Waker},
     channel::oneshot,
     future::BoxFuture,
+    task::{Context, Poll, Waker},
     FutureExt,
 };
 use libp2p::{
-    swarm::{
-        KeepAlive, ProtocolsHandler, ProtocolsHandlerEvent, ProtocolsHandlerUpgrErr, SubstreamProtocol,
-        NegotiatedSubstream,
-    },
+    swarm::{KeepAlive, NegotiatedSubstream, ProtocolsHandler, ProtocolsHandlerEvent, ProtocolsHandlerUpgrErr, SubstreamProtocol},
     PeerId,
 };
-use thiserror::Error;
 use nimiq_network_interface::peer::CloseReason;
+use thiserror::Error;
 
 use beserial::SerializingError;
 
-
-use super::{
-    peer::Peer,
-    protocol::MessageProtocol,
-    dispatch::MessageDispatch,
-    behaviour::MessageConfig,
-};
+use super::{behaviour::MessageConfig, dispatch::MessageDispatch, peer::Peer, protocol::MessageProtocol};
 
 #[derive(Clone, Debug)]
 pub enum HandlerInEvent {
-    PeerConnected {
-        peer_id: PeerId,
-        outbound: bool,
-    },
+    PeerConnected { peer_id: PeerId, outbound: bool },
 }
 
 #[derive(Clone, Debug)]
 pub enum HandlerOutEvent {
-    PeerJoined {
-        peer: Arc<Peer>,
-    },
-    PeerClosed {
-        peer: Arc<Peer>,
-        reason: CloseReason,
-    },
+    PeerJoined { peer: Arc<Peer> },
+    PeerClosed { peer: Arc<Peer>, reason: CloseReason },
 }
 
 #[derive(Debug, Error)]
@@ -54,11 +34,8 @@ pub enum HandlerError {
     Serializing(#[from] SerializingError),
 
     #[error("Connection closed: reason={:?}", {0})]
-    ConnectionClosed {
-        reason: CloseReason,
-    },
+    ConnectionClosed { reason: CloseReason },
 }
-
 
 pub struct MessageHandler {
     // NOTE: Will probably be used later.
@@ -120,8 +97,7 @@ impl ProtocolsHandler for MessageHandler {
         if self.peer.is_none() && self.socket.is_none() {
             self.socket = Some(socket);
             self.wake();
-        }
-        else {
+        } else {
             log::debug!("Connection already established. Ignoring inbound.");
         }
     }
@@ -132,8 +108,7 @@ impl ProtocolsHandler for MessageHandler {
         if self.peer.is_none() && self.socket.is_none() {
             self.socket = Some(socket);
             self.wake();
-        }
-        else {
+        } else {
             log::debug!("Connection already established. Ignoring outbound.");
         }
     }
@@ -152,12 +127,11 @@ impl ProtocolsHandler for MessageHandler {
                 if outbound {
                     // Next open the outbound
                     self.events.push_back(ProtocolsHandlerEvent::OutboundSubstreamRequest {
-                        protocol: SubstreamProtocol::new(MessageProtocol::default(), ())
+                        protocol: SubstreamProtocol::new(MessageProtocol::default(), ()),
                     });
                     self.wake();
                 }
-            },
-
+            }
             /*HandlerInEvent::PeerDisconnected => {
                 unreachable!();
                 // FIXME: Actually I think this is never called.
@@ -181,11 +155,7 @@ impl ProtocolsHandler for MessageHandler {
         }
     }
 
-    fn inject_dial_upgrade_error(
-        &mut self,
-        _info: Self::OutboundOpenInfo,
-        error: ProtocolsHandlerUpgrErr<SerializingError>,
-    ) {
+    fn inject_dial_upgrade_error(&mut self, _info: Self::OutboundOpenInfo, error: ProtocolsHandlerUpgrErr<SerializingError>) {
         // TODO handle this
         panic!("Dial upgrade error: {}", error);
     }
@@ -213,9 +183,7 @@ impl ProtocolsHandler for MessageHandler {
                         // Close the handler
                         log::trace!("Closing MessageHandler.");
 
-                        return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::ConnectionClosed {
-                            reason: *reason,
-                        }));
+                        return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::ConnectionClosed { reason: *reason }));
                     }
                 }
             }
@@ -228,15 +196,12 @@ impl ProtocolsHandler for MessageHandler {
 
                         log::debug!("MessageHandler: Closing peer: {:?}", peer);
 
-                        self.closing = Some((
-                            async move { peer.socket.close().await }.boxed(),
-                            reason
-                        ));
+                        self.closing = Some((async move { peer.socket.close().await }.boxed(), reason));
 
                         continue;
-                    },
+                    }
                     Poll::Ready(Err(e)) => panic!("close_rx returned error: {}", e), // Channel was closed without message.
-                    Poll::Pending => {},
+                    Poll::Pending => {}
                 }
             }
 
@@ -249,12 +214,11 @@ impl ProtocolsHandler for MessageHandler {
                         log::warn!("Remote closed connection: {}", e);
 
                         return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::ConnectionClosed {
-                            reason: CloseReason::RemoteClosed
-                        }))
-                    },
-                    _ => {},
+                            reason: CloseReason::RemoteClosed,
+                        }));
+                    }
+                    _ => {}
                 }
-
             }
 
             // If the peer is already available, poll it and return

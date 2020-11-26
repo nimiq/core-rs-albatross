@@ -2,7 +2,7 @@ use std::convert::TryInto;
 
 use beserial::{Deserialize, Serialize, SerializingError};
 use nimiq_account::{AccountError, AccountTransactionInteraction, AccountType, HashedTimeLockedContract};
-use nimiq_hash::{Blake2bHasher, Hasher, Sha256Hasher, HashOutput};
+use nimiq_hash::{Blake2bHasher, HashOutput, Hasher, Sha256Hasher};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;

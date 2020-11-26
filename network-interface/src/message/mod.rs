@@ -112,10 +112,7 @@ pub fn peek_length(buffer: &[u8]) -> Result<usize, SerializingError> {
     Ok(n as usize)
 }
 
-pub async fn read_message<R: AsyncRead + Unpin>(
-    mut reader: R,
-) -> Result<Vec<u8>, SerializingError> {
-
+pub async fn read_message<R: AsyncRead + Unpin>(mut reader: R) -> Result<Vec<u8>, SerializingError> {
     log::trace!("read_message: reading magic and first byte of type...");
     // Read message magic and first type byte.
     let mut msg = vec![0; 5];

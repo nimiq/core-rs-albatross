@@ -1,15 +1,11 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
-use std::task::{Poll, Waker, Context};
+use std::task::{Context, Poll, Waker};
 
 use libp2p::{
-    core::either::{EitherOutput, EitherError},
-    swarm::{NetworkBehaviourEventProcess, NetworkBehaviourAction, PollParameters},
-    kad::{
-        store::MemoryStore,
-        handler::{KademliaHandlerIn as KademliaAction},
-        Kademlia, KademliaEvent, QueryId,
-    },
+    core::either::{EitherError, EitherOutput},
+    kad::{handler::KademliaHandlerIn as KademliaAction, store::MemoryStore, Kademlia, KademliaEvent, QueryId},
+    swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters},
     NetworkBehaviour,
 };
 use parking_lot::RwLock;
@@ -19,47 +15,25 @@ use nimiq_network_interface::network::NetworkEvent;
 use crate::{
     discovery::{
         behaviour::{DiscoveryBehaviour, DiscoveryEvent},
-        handler::{HandlerInEvent as DiscoveryAction, HandlerError as DiscoveryError},
+        handler::{HandlerError as DiscoveryError, HandlerInEvent as DiscoveryAction},
         peer_contacts::PeerContactBook,
-    },
-    message::{
-        behaviour::MessageBehaviour,
-        handler::{HandlerInEvent as MessageAction, HandlerError as MessageError},
-        peer::Peer,
     },
     limit::{
         behaviour::{LimitBehaviour, LimitEvent},
-        handler::{HandlerInEvent as LimitAction, HandlerError as LimitError},
+        handler::{HandlerError as LimitError, HandlerInEvent as LimitAction},
+    },
+    message::{
+        behaviour::MessageBehaviour,
+        handler::{HandlerError as MessageError, HandlerInEvent as MessageAction},
+        peer::Peer,
     },
     network::Config,
 };
 
+pub type NimiqNetworkBehaviourAction =
+    NetworkBehaviourAction<EitherOutput<EitherOutput<EitherOutput<DiscoveryAction, MessageAction>, LimitAction>, KademliaAction<QueryId>>, NimiqEvent>;
 
-pub type NimiqNetworkBehaviourAction = NetworkBehaviourAction<
-    EitherOutput<
-        EitherOutput<
-            EitherOutput<
-                DiscoveryAction,
-                MessageAction
-            >,
-            LimitAction
-        >,
-        KademliaAction<QueryId>,
-    >,
-    NimiqEvent,
->;
-
-pub type NimiqNetworkBehaviourError = EitherError<
-    EitherError<
-        EitherError<
-            DiscoveryError,
-            MessageError
-        >,
-        LimitError
-    >,
-    std::io::Error,
->;
-
+pub type NimiqNetworkBehaviourError = EitherError<EitherError<EitherError<DiscoveryError, MessageError>, LimitError>, std::io::Error>;
 
 #[derive(Debug)]
 pub enum NimiqEvent {
@@ -78,7 +52,6 @@ impl From<KademliaEvent> for NimiqEvent {
         Self::Dht(event)
     }
 }
-
 
 #[derive(NetworkBehaviour)]
 #[behaviour(out_event = "NimiqEvent", poll_method = "poll_event")]
@@ -101,10 +74,7 @@ impl NimiqBehaviour {
         let peer_id = public_key.clone().into_peer_id();
 
         // TODO: persist to disk
-        let peer_contact_book = Arc::new(RwLock::new(PeerContactBook::new(
-            Default::default(),
-            config.peer_contact.sign(&config.keypair)
-        )));
+        let peer_contact_book = Arc::new(RwLock::new(PeerContactBook::new(Default::default(), config.peer_contact.sign(&config.keypair))));
         let discovery = DiscoveryBehaviour::new(config.discovery, config.keypair.clone(), peer_contact_book);
 
         let message = MessageBehaviour::new(config.message);
@@ -139,8 +109,8 @@ impl NimiqBehaviour {
     }
 
     fn emit_event<E>(&mut self, event: E)
-        where
-            NimiqEvent: From<E>,
+    where
+        NimiqEvent: From<E>,
     {
         self.events.push_back(event.into());
         self.wake();
@@ -151,8 +121,6 @@ impl NimiqBehaviour {
             waker.wake_by_ref();
         }
     }
-
-
 }
 
 impl NetworkBehaviourEventProcess<DiscoveryEvent> for NimiqBehaviour {

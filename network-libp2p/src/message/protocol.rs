@@ -1,22 +1,12 @@
-use std::{
-    sync::Arc,
-    iter,
-};
+use std::{iter, sync::Arc};
 
 use futures::{future, AsyncRead, AsyncWrite};
-use libp2p::{
-    core::UpgradeInfo,
-    InboundUpgrade, OutboundUpgrade,
-};
+use libp2p::{core::UpgradeInfo, InboundUpgrade, OutboundUpgrade};
 
 use beserial::SerializingError;
 
+use super::{dispatch::MessageDispatch, peer::Peer};
 use crate::MESSAGE_PROTOCOL;
-use super::{
-    dispatch::MessageDispatch,
-    peer::Peer,
-};
-
 
 #[derive(Debug, Default)]
 pub struct MessageProtocol {
@@ -33,8 +23,8 @@ impl UpgradeInfo for MessageProtocol {
 }
 
 impl<C> InboundUpgrade<C> for MessageProtocol
-    where
-        C: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static,
+where
+    C: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static,
 {
     type Output = MessageDispatch<C>;
     type Error = SerializingError;
@@ -46,8 +36,8 @@ impl<C> InboundUpgrade<C> for MessageProtocol
 }
 
 impl<C> OutboundUpgrade<C> for MessageProtocol
-    where
-        C: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static,
+where
+    C: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static,
 {
     type Output = MessageDispatch<C>;
     type Error = SerializingError;

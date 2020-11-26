@@ -1,5 +1,4 @@
-use beserial::{Serialize, Deserialize};
-
+use beserial::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Header {

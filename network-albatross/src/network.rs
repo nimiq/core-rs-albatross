@@ -2,26 +2,24 @@ use std::cmp;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
+use async_trait::async_trait;
 use atomic::Atomic;
 use atomic::Ordering;
+use futures_03::Stream;
 use parking_lot::RwLock;
 use parking_lot::RwLockReadGuard;
 use rand::rngs::OsRng;
 use rand::Rng;
-use tokio_02::sync::broadcast;
-use async_trait::async_trait;
-use futures_03::Stream;
 use thiserror::Error;
+use tokio_02::sync::broadcast;
 
-use beserial::{Serialize, Deserialize};
+use beserial::{Deserialize, Serialize};
 use blockchain_albatross::Blockchain;
 use genesis::NetworkId;
 use macros::upgrade_weak;
 use network_interface::{
     network::Topic,
-    prelude::{
-        Network as NetworkInterface, NetworkEvent as NetworkEventI, Peer as PeerInterface,
-    }
+    prelude::{Network as NetworkInterface, NetworkEvent as NetworkEventI, Peer as PeerInterface},
 };
 use utils::mutable_once::MutableOnce;
 use utils::observer::Notifier;
@@ -40,11 +38,8 @@ use crate::peer_channel::PeerChannel;
 use crate::peer_scorer::PeerScorer;
 use crate::Peer;
 
-
 #[derive(Debug, Error)]
-pub enum NetworkError {
-
-}
+pub enum NetworkError {}
 
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Hash)]
 enum NetworkTimer {
@@ -435,31 +430,31 @@ impl NetworkInterface for Network {
     }
 
     async fn subscribe<T>(_topic: &T) -> Box<dyn Stream<Item = (T::Item, Self::PeerType)> + Send>
-        where
-            T: Topic + Sync,
+    where
+        T: Topic + Sync,
     {
         unimplemented!()
     }
 
     async fn publish<T>(_topic: &T, _item: <T as Topic>::Item)
-        where
-            T: Topic + Sync,
+    where
+        T: Topic + Sync,
     {
         unimplemented!()
     }
 
     async fn dht_get<K, V>(&self, _k: &K) -> Result<V, Self::Error>
-        where
-            K: AsRef<[u8]> + Send + Sync,
-            V: Deserialize + Send + Sync,
+    where
+        K: AsRef<[u8]> + Send + Sync,
+        V: Deserialize + Send + Sync,
     {
         unimplemented!()
     }
 
     async fn dht_put<K, V>(&self, _k: &K, _v: &V) -> Result<(), Self::Error>
-        where
-            K: AsRef<[u8]> + Send + Sync,
-            V: Serialize + Send + Sync,
+    where
+        K: AsRef<[u8]> + Send + Sync,
+        V: Serialize + Send + Sync,
     {
         unimplemented!()
     }

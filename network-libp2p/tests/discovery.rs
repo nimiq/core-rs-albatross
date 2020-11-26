@@ -1,31 +1,27 @@
-use std::{
-    time::Duration,
-    sync::Arc,
-};
+use std::{sync::Arc, time::Duration};
 
+use futures::StreamExt;
 use libp2p::{
-    identity::Keypair,
     core::{
-        transport::MemoryTransport,
         multiaddr::{multiaddr, Multiaddr},
+        transport::MemoryTransport,
         upgrade::Version,
     },
-    swarm::{Swarm, KeepAlive},
+    identity::Keypair,
     noise::{self, NoiseConfig},
+    swarm::{KeepAlive, Swarm},
     yamux::YamuxConfig,
     PeerId, Transport,
 };
-use futures::StreamExt;
 use parking_lot::RwLock;
 use rand::{thread_rng, Rng};
 
+use nimiq_hash::Blake2bHash;
+use nimiq_network_libp2p::discovery::peer_contacts::{PeerContactBook, PeerContactBookConfig, SignedPeerContact};
 use nimiq_network_libp2p::discovery::{
     behaviour::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryEvent},
-    peer_contacts::{PeerContact, Services, Protocols},
+    peer_contacts::{PeerContact, Protocols, Services},
 };
-use nimiq_hash::Blake2bHash;
-use nimiq_network_libp2p::discovery::peer_contacts::{PeerContactBook, SignedPeerContact, PeerContactBookConfig};
-
 
 struct TestNode {
     peer_id: PeerId,
@@ -44,9 +40,7 @@ impl TestNode {
 
         log::info!("Peer: id={}, address={}", peer_id, address);
 
-        let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
-            .into_authentic(&keypair)
-            .unwrap();
+        let noise_keys = noise::Keypair::<noise::X25519Spec>::new().into_authentic(&keypair).unwrap();
 
         let transport = base_transport
             .upgrade(Version::V1) // `Version::V1Lazy` Allows for 0-RTT negotiation
@@ -72,7 +66,8 @@ impl TestNode {
             public_key: keypair.public().clone(),
             services: Services::FULL_BLOCKS,
             timestamp: None,
-        }.sign(&keypair);
+        }
+        .sign(&keypair);
 
         let peer_contact_book = Arc::new(RwLock::new(PeerContactBook::new(Default::default(), peer_contact)));
 
@@ -99,7 +94,6 @@ impl TestNode {
     }
 }
 
-
 fn random_peer_contact(n: usize, services: Services) -> SignedPeerContact {
     let keypair = Keypair::generate_ed25519();
 
@@ -123,7 +117,6 @@ fn test_peers_in_contact_book(peer_contact_book: &PeerContactBook, peer_contacts
         assert_eq!(peer_contact, peer_contact_in_book.signed(), "peer contacts differ");
     }
 }
-
 
 #[tokio::test]
 pub async fn test_exchanging_peers() {
@@ -217,10 +210,7 @@ fn test_housekeeping() {
 
     config.max_age_websocket = Duration::from_secs(60); // 60 seconds
 
-    let mut peer_contact_book = PeerContactBook::new(
-        config,
-        random_peer_contact(1, Services::FULL_BLOCKS)
-    );
+    let mut peer_contact_book = PeerContactBook::new(config, random_peer_contact(1, Services::FULL_BLOCKS));
 
     let fresh_contact = random_peer_contact(1, Services::FULL_BLOCKS);
 
