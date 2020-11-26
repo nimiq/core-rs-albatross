@@ -1,22 +1,29 @@
 #![allow(dead_code)]
 
-use std::sync::Arc;
+use std::{
+    sync::Arc,
+    collections::HashMap,
+};
 
 use futures::{
     channel::{mpsc, oneshot},
     lock::Mutex as AsyncMutex,
     Stream, FutureExt, SinkExt, StreamExt,
 };
-use libp2p::core;
-use libp2p::core::transport::Boxed;
-use libp2p::core::Multiaddr;
-use libp2p::core::muxing::StreamMuxerBox;
-use libp2p::identity::Keypair;
-use libp2p::swarm::{SwarmBuilder, SwarmEvent};
-use libp2p::{dns, noise, tcp, websocket, yamux, PeerId, Swarm, Transport};
 use tokio::sync::broadcast;
 use async_trait::async_trait;
 use thiserror::Error;
+use libp2p::{
+    core::{
+        transport::Boxed,
+        muxing::StreamMuxerBox,
+    },
+    identity::Keypair,
+    swarm::{SwarmBuilder, SwarmEvent},
+    kad::{KademliaConfig, Record, Quorum, QueryId, KademliaEvent, QueryResult, GetRecordOk},
+    core, dns, noise, tcp, websocket, yamux, PeerId, Swarm, Transport, Multiaddr
+};
+
 #[cfg(test)]
 use libp2p::core::transport::MemoryTransport;
 
@@ -27,7 +34,7 @@ use nimiq_network_interface::{
 };
 
 use crate::{
-    behaviour::NimiqBehaviour,
+    behaviour::{NimiqBehaviour, NimiqEvent, NimiqNetworkBehaviourError},
     discovery::{
         behaviour::DiscoveryConfig,
         peer_contacts::PeerContact,
@@ -46,6 +53,7 @@ pub struct Config {
     pub discovery: DiscoveryConfig,
     pub message: MessageConfig,
     pub limit: LimitConfig,
+    pub kademlia: KademliaConfig,
 }
 
 
@@ -59,6 +67,39 @@ pub enum NetworkError {
 
     #[error("Network action was cancelled: {0}")]
     Canceled(#[from] futures::channel::oneshot::Canceled),
+
+    #[error("Serialization error: {0}")]
+    Serialization(#[from] beserial::SerializingError),
+
+    #[error("Network behaviour error: {0}")]
+    Behaviour(#[from] NimiqNetworkBehaviourError),
+
+    #[error("DHT store error: {0:?}")]
+    DhtStore(libp2p::kad::store::Error),
+
+    #[error("DHT GetRecord error: {0:?}")]
+    DhtGetRecord(libp2p::kad::GetRecordError),
+
+    #[error("DHT PutRecord error: {0:?}")]
+    DhtPutRecord(libp2p::kad::PutRecordError),
+}
+
+impl From<libp2p::kad::store::Error> for NetworkError {
+    fn from(e: libp2p::kad::store::Error) -> Self {
+        Self::DhtStore(e)
+    }
+}
+
+impl From<libp2p::kad::GetRecordError> for NetworkError {
+    fn from(e: libp2p::kad::GetRecordError) -> Self {
+        Self::DhtGetRecord(e)
+    }
+}
+
+impl From<libp2p::kad::PutRecordError> for NetworkError {
+    fn from(e: libp2p::kad::PutRecordError) -> Self {
+        Self::DhtPutRecord(e)
+    }
 }
 
 type NimiqSwarm = Swarm<NimiqBehaviour>;
@@ -74,6 +115,22 @@ pub enum NetworkAction {
         address: Multiaddr,
         output: oneshot::Sender<Result<(), NetworkError>>,
     },
+    DhtGet {
+        key: Vec<u8>,
+        output: oneshot::Sender<Result<Vec<u8>, NetworkError>>,
+    },
+    DhtPut {
+        key: Vec<u8>,
+        value: Vec<u8>,
+        output: oneshot::Sender<Result<(), NetworkError>>,
+    }
+}
+
+
+#[derive(Default)]
+struct TaskState {
+    dht_puts: HashMap<QueryId, oneshot::Sender<Result<(), NetworkError>>>,
+    dht_gets: HashMap<QueryId, oneshot::Sender<Result<Vec<u8>, NetworkError>>>,
 }
 
 
@@ -186,23 +243,17 @@ impl Network {
         events_tx: broadcast::Sender<NetworkEvent<Peer>>,
         mut action_rx: mpsc::Receiver<NetworkAction>,
     ) {
+        let mut task_state = TaskState::default();
+
         loop {
             futures::select! {
                 event = swarm.next_event().fuse() => {
                     log::debug!("Swarm task received event: {:?}", event);
-
-                    match event {
-                       SwarmEvent::Behaviour(event) => {
-                            if let Err(event) = events_tx.send(event) {
-                                log::error!("Failed to notify subscribers about network event: {:?}", event);
-                            }
-                        },
-                        _ => {},
-                    }
+                    Self::handle_event(event, &events_tx, &mut swarm, &mut task_state).await;
                 },
                 action_opt = action_rx.next().fuse() => {
                     if let Some(action) = action_opt {
-                        Self::perform_action(action, &mut swarm).await.unwrap();
+                        Self::perform_action(action, &mut swarm, &mut task_state).await.unwrap();
                     }
                     else {
                         // `action_rx.next()` will return `None` if all senders (i.e. the `Network` object) are dropped.
@@ -213,7 +264,62 @@ impl Network {
         }
     }
 
-    async fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm) -> Result<(), NetworkError> {
+    async fn handle_event(event: SwarmEvent<NimiqEvent, NimiqNetworkBehaviourError>, events_tx: &broadcast::Sender<NetworkEvent<Peer>>, swarm: &mut NimiqSwarm, state: &mut TaskState) {
+        match event {
+            SwarmEvent::ConnectionEstablished { peer_id, endpoint, .. } => {
+                swarm.kademlia.add_address(&peer_id, endpoint.get_remote_address().clone());
+            },
+
+            //SwarmEvent::ConnectionClosed { .. } => {},
+
+            SwarmEvent::Behaviour(event) => {
+                match event {
+                    NimiqEvent::Message(event) => {
+                        if let Err(event) = events_tx.send(event) {
+                            log::error!("Failed to notify subscribers about network event: {:?}", event);
+                        }
+                    }
+                    NimiqEvent::Dht(event) => {
+                        match event {
+                            KademliaEvent::QueryResult { id, result, .. } => {
+                                match result {
+                                    QueryResult::GetRecord(result) => {
+                                        if let Some(output) = state.dht_gets.remove(&id) {
+                                            let result = result
+                                                .map_err(Into::into)
+                                                .and_then(|GetRecordOk { mut records }| {
+                                                    // TODO: What do we do, if we get multiple records?
+                                                    let record = records.pop().unwrap();
+                                                    Ok(record.record.value)
+                                                });
+                                            output.send(result).ok();
+                                        }
+                                        else {
+                                            log::warn!("GetRecord query result for unknown query ID: {:?}", id);
+                                        }
+                                    },
+                                    QueryResult::PutRecord(result) => {
+                                        // dht_put resolved
+                                        if let Some(output) = state.dht_puts.remove(&id) {
+                                            output.send(result.map(|_| ()).map_err(Into::into)).ok();
+                                        }
+                                        else {
+                                            log::warn!("PutRecord query result for unknown query ID: {:?}", id);
+                                        }
+                                    },
+                                    _ => {},
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            },
+            _ => {},
+        }
+    }
+
+    async fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut TaskState) -> Result<(), NetworkError> {
         log::debug!("Swarm task: performing action: {:?}", action);
 
         match action {
@@ -224,6 +330,30 @@ impl Network {
                 output.send(Swarm::dial_addr(swarm, address)
                     .map_err(|l| NetworkError::Dial(libp2p::swarm::DialError::ConnectionLimit(l)))).ok();
             },
+            NetworkAction::DhtGet { key, output } => {
+                let query_id = swarm.kademlia.get_record(&key.into(), Quorum::One);
+                state.dht_gets.insert(query_id, output);
+            },
+            NetworkAction::DhtPut { key, value, output } => {
+                let local_peer_id = Swarm::local_peer_id(&swarm);
+
+                let record = Record {
+                    key: key.into(),
+                    value,
+                    publisher: Some(local_peer_id.clone()),
+                    expires: None, // TODO: Records should expire at some point in time
+                };
+
+                match swarm.kademlia.put_record(record, Quorum::One) {
+                    Ok(query_id) => {
+                        // Remember put operation to resolve when we receive a `QueryResult::PutRecord`
+                        state.dht_puts.insert(query_id, output);
+                    },
+                    Err(e) => {
+                        output.send(Err(e.into())).ok();
+                    },
+                }
+            }
         }
 
         Ok(())
@@ -265,20 +395,36 @@ impl NetworkInterface for Network {
         unimplemented!()
     }
 
-    async fn dht_get<K, V>(&self, _k: &K) -> Result<V, Self::Error>
+    async fn dht_get<K, V>(&self, k: &K) -> Result<V, Self::Error>
         where
             K: AsRef<[u8]> + Send + Sync,
             V: Deserialize + Send + Sync,
     {
-        unimplemented!()
+        let (output_tx, output_rx) = oneshot::channel();
+        self.action_tx.lock().await.send(NetworkAction::DhtGet {
+            key: k.as_ref().to_owned(),
+            output: output_tx,
+        }).await?;
+
+        Ok(Deserialize::deserialize_from_vec(&output_rx.await??)?)
     }
 
-    async fn dht_put<K, V>(&self, _k: &K, _v: &V) -> Result<(), Self::Error>
+    async fn dht_put<K, V>(&self, k: &K, v: &V) -> Result<(), Self::Error>
         where
             K: AsRef<[u8]> + Send + Sync,
             V: Serialize + Send + Sync,
     {
-        unimplemented!()
+        let (output_tx, output_rx) = oneshot::channel();
+
+        let mut buf = vec![];
+        v.serialize(&mut buf)?;
+
+        self.action_tx.lock().await.send(NetworkAction::DhtPut {
+            key: k.as_ref().to_owned(),
+            value: buf,
+            output: output_tx,
+        }).await?;
+        output_rx.await?
     }
 }
 
@@ -308,10 +454,7 @@ mod tests {
             behaviour::DiscoveryConfig,
             peer_contacts::{PeerContact, Protocols, Services},
         },
-        message::{
-            behaviour::MessageConfig,
-            peer::Peer,
-        },
+        message::peer::Peer,
     };
     use super::{Network, Config};
     use nimiq_network_interface::network::NetworkEvent;
@@ -350,8 +493,9 @@ mod tests {
                 house_keeping_interval: Duration::from_secs(60),
                 keep_alive: KeepAlive::No,
             },
-            message: MessageConfig::default(),
+            message: Default::default(),
             limit: Default::default(),
+            kademlia: Default::default(),
         }
     }
 
@@ -478,5 +622,23 @@ mod tests {
 
         assert_eq!(net1.get_peers().len(), 0);
         assert_eq!(net2.get_peers().len(), 0);
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+    struct TestRecord {
+        x: i32,
+    }
+
+    #[tokio::test]
+    async fn dht_put_and_get() {
+        let (net1, net2) = create_connected_networks().await;
+
+        let put_record = TestRecord { x: 420 };
+
+        net1.dht_put(b"foo", &put_record).await.unwrap();
+
+        let fetched_record = net2.dht_get::<_, TestRecord>(b"foo").await.unwrap();
+
+        assert_eq!(fetched_record, put_record);
     }
 }
