@@ -1,13 +1,13 @@
 use std::{
     collections::VecDeque,
     sync::Arc,
-    pin::Pin,
 };
 
 use futures::{
     task::{Context, Poll, Waker},
     channel::oneshot,
-    Future,
+    future::BoxFuture,
+    FutureExt,
 };
 use libp2p::{
     swarm::{
@@ -35,7 +35,6 @@ pub enum HandlerInEvent {
         peer_id: PeerId,
         outbound: bool,
     },
-    //PeerDisconnected,
 }
 
 #[derive(Clone, Debug)]
@@ -77,6 +76,8 @@ pub struct MessageHandler {
     events: VecDeque<ProtocolsHandlerEvent<MessageProtocol, (), HandlerOutEvent, HandlerError>>,
 
     socket: Option<MessageDispatch<NegotiatedSubstream>>,
+
+    closing: Option<(BoxFuture<'static, ()>, CloseReason)>,
 }
 
 impl MessageHandler {
@@ -89,6 +90,7 @@ impl MessageHandler {
             waker: None,
             events: VecDeque::new(),
             socket: None,
+            closing: None,
         }
     }
 
@@ -194,40 +196,46 @@ impl ProtocolsHandler for MessageHandler {
 
     fn poll(&mut self, cx: &mut Context) -> Poll<ProtocolsHandlerEvent<MessageProtocol, (), HandlerOutEvent, HandlerError>> {
         loop {
+            log::trace!("MessageHandler::poll - Iteration");
+
             // Emit event
             if let Some(event) = self.events.pop_front() {
-                log::debug!("MessageHandler: emitting event: {:?}", event);
+                log::trace!("MessageHandler: emitting event: {:?}", event);
                 return Poll::Ready(event);
+            }
+
+            // Check if we're closing this connection
+            if let Some((close_fut, reason)) = &mut self.closing {
+                log::trace!("Polling closing future");
+                match close_fut.poll_unpin(cx) {
+                    Poll::Pending => return Poll::Pending,
+                    Poll::Ready(_) => {
+                        // Close the handler
+                        log::trace!("Closing MessageHandler.");
+
+                        return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::ConnectionClosed {
+                            reason: *reason,
+                        }));
+                    }
+                }
             }
 
             // Poll the oneshot receiver that signals us when the peer is closed
             if let Some(close_rx) = &mut self.close_rx {
-                match Pin::new(close_rx).poll(cx) { // TODO: use .poll_unpin()
+                match close_rx.poll_unpin(cx) {
                     Poll::Ready(Ok(reason)) => {
-                        let peer = Arc::clone(self.peer.as_ref().expect("Expected peer"));
+                        let peer = self.peer.take().expect("Expected peer");
 
                         log::debug!("MessageHandler: Closing peer: {:?}", peer);
 
-                        // Drop peer and socket
-                        // This is not needed as the returned event will cause the handler to be dropped.
-                        /*self.peer = None;
-                        self.socket = None;
-                        self.close_rx = None;
+                        self.closing = Some((
+                            async move { peer.socket.close().await }.boxed(),
+                            reason
+                        ));
 
-                        // Close connection as soon as possible
-                        self.keep_alive = KeepAlive::No;*/
-
-                        // If the peer signals use that they were closed, we emit that event to the behaviour.
-                        /*return Poll::Ready(ProtocolsHandlerEvent::Custom(HandlerOutEvent::PeerClosed {
-                            reason,
-                            peer,
-                        }));*/
-
-                        return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::ConnectionClosed {
-                            reason,
-                        }));
+                        continue;
                     },
-                    Poll::Ready(Err(_)) => unimplemented!(), // Channel was closed without message.
+                    Poll::Ready(Err(e)) => panic!("close_rx returned error: {}", e), // Channel was closed without message.
                     Poll::Pending => {},
                 }
             }
@@ -238,7 +246,7 @@ impl ProtocolsHandler for MessageHandler {
                     Poll::Ready(Some(e)) => {
                         // TODO: Check if `e` is actually an EOF and not just another error. And put that error into
                         //       the `CloseReason`.
-                        log::debug!("Remote closed connection: {}", e);
+                        log::warn!("Remote closed connection: {}", e);
 
                         return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::ConnectionClosed {
                             reason: CloseReason::RemoteClosed

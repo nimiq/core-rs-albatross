@@ -191,7 +191,7 @@ mod tests {
 
         async fn send<T: Message>(&self, _msg: &T) -> Result<(), SendError> { unreachable!(); }
         fn receive<T: Message>(&self) -> Pin<Box<dyn Stream<Item = T> + Send>> { unreachable!(); }
-        async fn close(&self, _ty: CloseReason) {}
+        fn close(&self, _ty: CloseReason) {}
 
         async fn request<R: RequestResponse>(&self, _request: &R::Request) -> Result<R::Response, Self::Error> { unreachable!(); }
 

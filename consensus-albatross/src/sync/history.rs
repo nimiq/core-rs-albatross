@@ -254,7 +254,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                 sender: agent,
             }),
             Err(_) => {
-                agent.peer.close(CloseReason::Other).await;
+                agent.peer.close(CloseReason::Other);
                 None
             }
         }

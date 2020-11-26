@@ -115,6 +115,8 @@ pub fn peek_length(buffer: &[u8]) -> Result<usize, SerializingError> {
 pub async fn read_message<R: AsyncRead + Unpin>(
     mut reader: R,
 ) -> Result<Vec<u8>, SerializingError> {
+
+    log::trace!("read_message: reading magic and first byte of type...");
     // Read message magic and first type byte.
     let mut msg = vec![0; 5];
     reader.read_exact(&mut msg).await?;
@@ -124,6 +126,8 @@ pub async fn read_message<R: AsyncRead + Unpin>(
     msg.resize(header_len, 0);
     reader.read_exact(&mut msg[5..]).await?;
 
+    log::trace!("read_message: header: {}", pretty_hex::pretty_hex(&msg));
+
     // Check message size.
     let msg_len = peek_length(&msg[..])?;
     if msg_len < 13 {
@@ -132,11 +136,17 @@ pub async fn read_message<R: AsyncRead + Unpin>(
         return Err(SerializingError::LimitExceeded);
     }
 
+    log::trace!("read_message: msg_len = {}", msg_len);
+
     // Read remainder of message.
     // FIXME Don't allocate the whole message buffer immediately.
     // TODO Copy message in chunks and grow incrementally.
     msg.resize(msg_len, 0);
+
+    log::trace!("read_message: reading remainder of message");
     reader.read_exact(&mut msg[header_len..]).await?;
+
+    log::trace!("read_message: finished reading message: {:?}", msg);
 
     Ok(msg)
 }

@@ -1,6 +1,6 @@
 //! # TODO
 //!
-//! - Move th=is to somewhere appropriate (utils maybe).
+//! - Move this to somewhere appropriate (utils maybe).
 //! - We have something similar for BLS signatures. This trait might be used there too. In general this can be
 //!   used for all kinds of signature.
 //!

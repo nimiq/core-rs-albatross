@@ -113,12 +113,15 @@ impl Network {
 
     fn new_transport(keypair: &Keypair) -> std::io::Result<Boxed<(PeerId, StreamMuxerBox)>> {
         let transport = {
-            let tcp = tcp::TcpConfig::new().nodelay(true);
-            let transport = dns::DnsConfig::new(tcp)?;
-            let trans_clone = transport.clone();
-            let transport = transport.or_transport(websocket::WsConfig::new(trans_clone));
+            // Websocket over TCP/DNS
+            let transport = websocket::WsConfig::new(
+                dns::DnsConfig::new(
+                    tcp::TcpConfig::new().nodelay(true)
+                )?
+            );
 
             // Memory transport for testing
+            // TODO: Use websocket over the memory transport
             #[cfg(test)]
             let transport = transport.or_transport(MemoryTransport::default());
 
@@ -183,15 +186,13 @@ impl Network {
         events_tx: broadcast::Sender<NetworkEvent<Peer>>,
         mut action_rx: mpsc::Receiver<NetworkAction>,
     ) {
-        // TODO: Use swarm events for
-
         loop {
             futures::select! {
                 event = swarm.next_event().fuse() => {
+                    log::debug!("Swarm task received event: {:?}", event);
+
                     match event {
                        SwarmEvent::Behaviour(event) => {
-                            log::debug!("Swarm task received event: {:?}", event);
-
                             if let Err(event) = events_tx.send(event) {
                                 log::error!("Failed to notify subscribers about network event: {:?}", event);
                             }
@@ -347,7 +348,7 @@ mod tests {
                 services_filter: Services::all(),
                 min_send_update_interval: Duration::from_secs(30),
                 house_keeping_interval: Duration::from_secs(60),
-                keep_alive: KeepAlive::Yes,
+                keep_alive: KeepAlive::No,
             },
             message: MessageConfig::default(),
             limit: Default::default(),
@@ -456,21 +457,24 @@ mod tests {
 
     #[tokio::test]
     async fn connections_are_properly_closed() {
+        //env_logger::init();
+
         let (net1, net2) = create_connected_networks().await;
 
         let peer2 = net1.get_peer(net2.local_peer_id().clone()).unwrap();
-        peer2.close(CloseReason::Other).await;
 
         let mut events1 = net1.subscribe_events();
         let mut events2 = net2.subscribe_events();
 
-        let event2 = events2.next().await.unwrap().unwrap();
-        assert_peer_left(&event2, net1.local_peer_id());
-        log::debug!("event2 = {:?}", event2);
+        peer2.close(CloseReason::Other);
 
         let event1 = events1.next().await.unwrap().unwrap();
         assert_peer_left(&event1, net2.local_peer_id());
         log::debug!("event1 = {:?}", event1);
+
+        let event2 = events2.next().await.unwrap().unwrap();
+        assert_peer_left(&event2, net1.local_peer_id());
+        log::debug!("event2 = {:?}", event2);
 
         assert_eq!(net1.get_peers().len(), 0);
         assert_eq!(net2.get_peers().len(), 0);

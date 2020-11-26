@@ -84,7 +84,7 @@ impl PeerInterface for Peer {
         self.channel.receive()
     }
 
-    async fn close(&self, _ty: CloseReason) {
+    fn close(&self, _ty: CloseReason) {
         self.channel.close(CloseType::Unknown);
     }
 

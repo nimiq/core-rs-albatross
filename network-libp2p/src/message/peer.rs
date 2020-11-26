@@ -89,20 +89,18 @@ impl PeerInterface for Peer {
         Box::pin(self.socket.inbound.receive())
     }
 
-    async fn close(&self, reason: CloseReason) {
+    fn close(&self, reason: CloseReason) {
         log::debug!("Peer::close: reason={:?}", reason);
 
         let close_tx_opt = self.close_tx.lock().take();
 
         if let Some(close_tx) = close_tx_opt {
-            self.socket.close().await;
-
             if let Err(_) = close_tx.send(reason) {
                 log::error!("The receiver for Peer::close was already dropped.");
             }
         }
         else {
-            log::debug!("Peer is already closed");
+            log::error!("Peer is already closed");
         }
     }
 

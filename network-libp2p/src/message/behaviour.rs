@@ -92,7 +92,7 @@ impl NetworkBehaviour for MessageBehaviour {
 
     fn inject_disconnected(&mut self, peer_id: &PeerId) {
         // No handler exists anymore.
-        log::debug!("inject_disconnected: {:?}", peer_id);
+        log::trace!("inject_disconnected: {:?}", peer_id);
     }
 
     fn inject_connection_established(&mut self, peer_id: &PeerId, connection_id: &ConnectionId, connected_point: &ConnectedPoint) {
@@ -124,7 +124,7 @@ impl NetworkBehaviour for MessageBehaviour {
         _connection: ConnectionId,
         event: HandlerOutEvent,
     ) {
-        log::debug!("MessageBehaviour::inject_event: peer_id={:?}: {:?}", peer_id, event);
+        log::trace!("MessageBehaviour::inject_event: peer_id={:?}: {:?}", peer_id, event);
         match event {
             HandlerOutEvent::PeerJoined { peer } => {
                 self.peers.insert(Arc::clone(&peer));
@@ -145,7 +145,7 @@ impl NetworkBehaviour for MessageBehaviour {
     ) -> Poll<NetworkBehaviourAction<HandlerInEvent, NetworkEvent<Peer>>> {
         // Emit custom events.
         if let Some(event) = self.events.pop_front() {
-            log::debug!("MessageBehaviour::poll: Emitting event: {:?}", event);
+            log::trace!("MessageBehaviour::poll: Emitting event: {:?}", event);
             return Poll::Ready(event);
         }
 

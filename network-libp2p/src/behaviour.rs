@@ -39,8 +39,6 @@ type NimiqNetworkBehaviourAction = NetworkBehaviourAction<
     NetworkEvent<Peer>,
 >;
 
-//type NimiqNetworkBehaviourAction = NetworkBehaviourAction<MessageAction, NetworkEvent<Peer>>;
-
 
 #[derive(NetworkBehaviour)]
 #[behaviour(out_event = "NetworkEvent<Peer>", poll_method = "poll_event")]
@@ -80,7 +78,7 @@ impl NimiqBehaviour {
 
     fn poll_event(&mut self, cx: &mut Context, _params: &mut impl PollParameters) -> Poll<NimiqNetworkBehaviourAction> {
         if let Some(event) = self.events.pop_front() {
-            log::debug!("NimiqBehaviour: emitting event: {:?}", event);
+            log::trace!("NimiqBehaviour: emitting event: {:?}", event);
             return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));
         }
 
@@ -101,13 +99,13 @@ impl NimiqBehaviour {
 
 impl NetworkBehaviourEventProcess<DiscoveryEvent> for NimiqBehaviour {
     fn inject_event(&mut self, event: DiscoveryEvent) {
-        log::debug!("discovery event: {:?}", event);
+        log::trace!("discovery event: {:?}", event);
     }
 }
 
 impl NetworkBehaviourEventProcess<NetworkEvent<Peer>> for NimiqBehaviour {
     fn inject_event(&mut self, event: NetworkEvent<Peer>) {
-        log::debug!("NimiqBehaviour::inject_event: {:?}", event);
+        log::trace!("NimiqBehaviour::inject_event: {:?}", event);
         match event {
             NetworkEvent::PeerJoined(peer) => {
                 /*self.limit.peers
@@ -127,6 +125,6 @@ impl NetworkBehaviourEventProcess<NetworkEvent<Peer>> for NimiqBehaviour {
 
 impl NetworkBehaviourEventProcess<LimitEvent> for NimiqBehaviour {
     fn inject_event(&mut self, event: LimitEvent) {
-        log::debug!("NimiqBehaviour::inject_event: {:?}", event);
+        log::trace!("NimiqBehaviour::inject_event: {:?}", event);
     }
 }

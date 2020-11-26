@@ -133,7 +133,7 @@ impl Peer for MockPeer {
         rx
     }
 
-    async fn close(&self, ty: CloseReason) {
+    fn close(&self, ty: CloseReason) {
         if let Some(close_tx) = self.close_tx.lock().take() {
             close_tx.send(ty).expect("Close failed");
 
@@ -363,7 +363,7 @@ mod tests {
 
         let peer2 = net1.get_peer(2).unwrap();
         tokio::spawn(async move {
-            peer2.close(CloseReason::Other).await;
+            peer2.close(CloseReason::Other);
             // This message should not arrive.
             peer2.send(&TestMessage { id: 6969 }).await.expect_err("Message didn't fail");
         });

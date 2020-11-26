@@ -9,7 +9,7 @@ use futures::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, WriteHalf},
     lock::Mutex as AsyncMutex,
     task::{Context, Poll},
-    pin_mut, SinkExt, StreamExt, Stream, FutureExt,
+    SinkExt, StreamExt, Stream, FutureExt,
 };
 use parking_lot::Mutex;
 
@@ -34,7 +34,7 @@ pub struct MessageReceiver {
 
 impl MessageReceiver
 {
-    pub fn new<I: AsyncRead + Send + Sync + 'static>(inbound: I) -> Self {
+    pub fn new<I: AsyncRead + Unpin + Send + Sync + 'static>(inbound: I) -> Self {
         let channels = Arc::new(Mutex::new(HashMap::new()));
         let (close_tx, close_rx) = oneshot::channel();
         let (error_tx, error_rx) = oneshot::channel();
@@ -44,7 +44,7 @@ impl MessageReceiver
 
             async move {
                 if let Err(e) = Self::reader(inbound, close_rx, channels).await {
-                    log::error!("Peer::reader: error: {}", e);
+                    log::warn!("Peer::reader: error: {}", e);
                     error_tx.send(e).unwrap();
                 }
             }
@@ -65,13 +65,13 @@ impl MessageReceiver
         }
     }
 
-    pub async fn close(&self) {
+    pub fn close(&self) {
         if let Some(close_tx) = self.close_tx.lock().take() {
             // TODO: handle error
             close_tx.send(()).unwrap();
-
-            // Remove all channels (i.e. senders, which closes readers too?
-            self.channels.lock().clear();
+        }
+        else {
+            log::error!("MessageReceiver::close: Already closed.");
         }
     }
 
@@ -96,15 +96,20 @@ impl MessageReceiver
         })
     }
 
-    async fn reader<I: AsyncRead + Send + Sync + 'static>(inbound: I, close_rx: oneshot::Receiver<()>, channels: Arc<Mutex<HashMap<u64, Option<mpsc::Sender<Vec<u8>>>>>>) -> Result<(), SerializingError> {
-        pin_mut!(inbound);
-
+    async fn reader<I: AsyncRead + Unpin + Send + Sync + 'static>(mut inbound: I, close_rx: oneshot::Receiver<()>, channels: Arc<Mutex<HashMap<u64, Option<mpsc::Sender<Vec<u8>>>>>>) -> Result<(), SerializingError> {
         let mut close_rx = close_rx.fuse();
 
         loop {
+            log::info!("Waiting for incoming message...");
             let data = futures::select! {
-                data = read_message(&mut inbound).fuse() => data?,
-                _ = close_rx => break,
+                result = read_message(&mut inbound).fuse() => {
+                    log::warn!("read_message = {:?}", result);
+                    result?
+                },
+                _ = close_rx => {
+                    log::info!("Received close event");
+                    break;
+                },
             };
 
             let message_type = peek_type(&data)?;
@@ -141,6 +146,9 @@ impl MessageReceiver
 
         log::debug!("Message dispatcher task terminated");
 
+        // Remove all channels (i.e. senders, which closes readers too?
+        channels.lock().clear();
+
         Ok(())
     }
 }
@@ -150,7 +158,7 @@ pub struct MessageSender<O>
     where
         O: AsyncWrite,
 {
-    outbound: AsyncMutex<O>,
+    outbound: AsyncMutex<Option<O>>,
 }
 
 impl<O> MessageSender<O>
@@ -159,12 +167,21 @@ impl<O> MessageSender<O>
 {
     pub fn new(outbound: O) -> Self {
         Self {
-            outbound: AsyncMutex::new(outbound),
+            outbound: AsyncMutex::new(Some(outbound)),
         }
     }
 
     pub async fn close(&self) {
-        self.outbound.lock().await.close().await.unwrap();
+        log::debug!("Waiting for outbound lock...");
+        let mut outbound = self.outbound.lock().await;
+
+        if let Some(mut outbound) = outbound.take() {
+            log::debug!("Closing outbound...");
+            outbound.close().await.unwrap()
+        }
+        else {
+            log::error!("Outbound already closed.");
+        }
     }
 
     pub async fn send<M: Message>(&self, message: &M) -> Result<(), SerializingError> {
@@ -174,11 +191,15 @@ impl<O> MessageSender<O>
 
         log::debug!("Sending message: {:?}", serialized);
 
-        if let Err(e) = self.outbound.lock().await.write_all(&serialized).await {
-            panic!("Sending message failed: {}", e);
+        let mut outbound = self.outbound.lock().await;
+
+        if let Some(outbound) = outbound.as_mut() {
+            outbound.write_all(&serialized).await?;
+            Ok(())
         }
         else {
-            Ok(())
+            log::error!("Outbound already closed.");
+            Err(SerializingError::IoError(std::io::Error::from(std::io::ErrorKind::NotConnected)))
         }
     }
 }
@@ -207,7 +228,12 @@ impl<C> MessageDispatch<C>
     }
 
     pub async fn close(&self) {
-        self.inbound.close().await;
+        log::debug!("MessageDispatch::close: Closing outbound");
         self.outbound.close().await;
+
+        log::debug!("MessageDispatch::close: Closing inbound");
+        self.inbound.close();
+
+        log::debug!("MessageDispatch::close: Closed.");
     }
 }

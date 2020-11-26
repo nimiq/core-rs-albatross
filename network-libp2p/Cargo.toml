@@ -32,7 +32,7 @@ thiserror = "1.0"
 hex = "0.4"
 wasm-timer = "0.2"
 serde = { version = "1.0", features = ["derive"], optional = true }
-async-std = "1.7" # TODO: Remove
+async-std = "1.7" # Used in some places, but can we not depend on a runtime?
 
 beserial = { path = "../beserial", version = "0.1", features = ["libp2p"] }
 beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
