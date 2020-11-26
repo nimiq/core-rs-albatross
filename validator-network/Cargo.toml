@@ -1,5 +1,5 @@
 [package]
-name = "nimiq-validator-network-interface"
+name = "nimiq-validator-network"
 version = "0.1.0"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2018"
@@ -18,6 +18,12 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 async-trait = "0.1"
-beserial = { path = "../beserial", version = "0.1" }
+beserial = { path = "../beserial", version = "0.1", features = ["libp2p"] }
+beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
 futures = "0.3"
+thiserror = "1.0"
+log = "0.4"
+
 nimiq-network-interface = { path = "../network-interface", version = "0.1" }
+nimiq-bls = { path = "../bls", version = "0.1" }
+nimiq-utils = { path = "../utils", version = "0.1" }

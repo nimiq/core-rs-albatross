@@ -10,6 +10,8 @@ extern crate log;
 
 #[cfg(feature = "crc")]
 pub mod crc;
+#[cfg(feature = "drop-notify")]
+pub mod drop_notify;
 #[cfg(feature = "hash-rng")]
 pub mod hash_rng;
 #[cfg(feature = "iterators")]
@@ -32,6 +34,8 @@ pub mod observer;
 pub mod otp;
 #[cfg(feature = "rate-limit")]
 pub mod rate_limit;
+#[cfg(feature = "tagged-signing")]
+pub mod tagged_signing;
 #[cfg(feature = "throttled-queue")]
 pub mod throttled_queue;
 #[cfg(feature = "time")]

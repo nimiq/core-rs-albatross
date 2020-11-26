@@ -7,12 +7,10 @@ extern crate log;
 
 mod behaviour;
 pub mod discovery;
-pub mod drop_notify;
 mod limit;
 pub mod message;
 pub mod message_codec;
 mod network;
-pub mod tagged_signing;
 pub mod task;
 
 pub const MESSAGE_PROTOCOL: &[u8] = b"/nimiq/message/0.0.1";

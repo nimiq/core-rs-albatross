@@ -28,17 +28,24 @@ rand = { version = "0.7", optional = true }
 rand_core = { version = "0.5", optional = true }
 tokio = { version = "0.1", optional = true }
 tokio-02 = { package = "tokio", version = "0.2", features = ["sync"], optional = true }
+serde = { version = "1.0", features = ["derive"], optional = true }
+libp2p = { version = "0.30", optional = true }
+hex = { version = "0.4", optional = true }
 
 beserial = { path = "../beserial", version = "0.1", optional = true }
 beserial_derive = { path = "../beserial/beserial_derive", version = "0.1", optional = true }
 nimiq-collections = { path = "../collections", version = "0.1", optional = true }
 nimiq-hash = { path = "../hash", version = "0.1", optional = true }
+# This causes a circular dependency
+#nimiq-keys = { path = "../keys", version = "0.1", optional = true }
 
 [dev-dependencies]
 beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
+nimiq-keys = { path = "../keys", version = "0.1" }
 
 [features]
 crc = []
+drop-notify = []
 otp = ["beserial", "clear_on_drop", "nimiq-hash", "rand"]
 key-store = ["failure", "beserial"]
 iterators = []
@@ -49,6 +56,7 @@ observer = ["tokio-02"]
 time = ["atomic"]
 timers = ["futures", "parking_lot", "tokio", "log"]
 unique-ptr = []
+tagged-signing = ["hex", "beserial", "beserial_derive"]
 throttled-queue = ["nimiq-collections"]
 rate-limit = []
 unique-id = []
@@ -59,3 +67,4 @@ full-nimiq = ["crc", "iterators", "key-store", "locking", "merkle", "mutable-onc
 math = []
 key-rng = ["rand"]
 hash-rng = ["rand_core", "nimiq-hash"]
+serde-derive = ["serde"]

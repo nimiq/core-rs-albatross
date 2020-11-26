@@ -27,5 +27,4 @@ thiserror = "1.0"
 beserial = { path = "../beserial", version = "0.1" }
 beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
 nimiq-network-interface = { path = "../network-interface", version = "0.1" }
-nimiq-validator-network-interface = { path = "../validator-network-interface", version = "0.1" }
 nimiq-utils = { path = "../utils", version = "0.1", features = ["crc"] }

@@ -20,16 +20,14 @@ use wasm_timer::Interval;
 
 use beserial::SerializingError;
 use nimiq_hash::Blake2bHash;
+use nimiq_utils::tagged_signing::TaggedKeypair;
 
 use super::{
     behaviour::DiscoveryConfig,
     peer_contacts::{PeerContactBook, Protocols, Services, SignedPeerContact},
     protocol::{ChallengeNonce, DiscoveryMessage, DiscoveryProtocol},
 };
-use crate::{
-    message_codec::{MessageReader, MessageWriter},
-    tagged_signing::{TaggedKeypair, TaggedPublicKey},
-};
+use crate::message_codec::{MessageReader, MessageWriter};
 
 #[derive(Clone, Debug)]
 pub enum HandlerInEvent {
@@ -410,7 +408,7 @@ impl ProtocolsHandler for DiscoveryHandler {
                                     // TODO: Check that the public key is actually used for this connection
 
                                     // Check the challenge response.
-                                    if !peer_contact.public_key().tagged_verify(&self.challenge_nonce, &response_signature) {
+                                    if !response_signature.tagged_verify(&self.challenge_nonce, peer_contact.public_key()) {
                                         return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::ChallengeResponseFailed));
                                     }
 

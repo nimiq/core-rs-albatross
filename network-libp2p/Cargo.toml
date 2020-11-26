@@ -41,6 +41,7 @@ nimiq-keys = { path = "../keys", version = "0.1" }
 nimiq-peer-address = { path = "../peer-address", version = "0.1" }
 nimiq-macros = { path = "../macros", version = "0.1" }
 nimiq-hash = { path = "../hash", version = "0.1" }
+nimiq-utils = { path = "../utils", version = "0.1", features = ["tagged-signing", "serde-derive", "libp2p"] }
 
 [dev-dependencies]
 env_logger = "0.8"

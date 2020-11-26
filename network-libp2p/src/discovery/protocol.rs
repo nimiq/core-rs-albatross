@@ -2,17 +2,17 @@ use futures::{
     future,
     io::{AsyncRead, AsyncWrite},
 };
-use libp2p::{core::UpgradeInfo, InboundUpgrade, Multiaddr, OutboundUpgrade};
+use libp2p::{core::UpgradeInfo, identity::Keypair, InboundUpgrade, Multiaddr, OutboundUpgrade};
 use rand::{thread_rng, RngCore};
 
 use beserial::{Deserialize, Serialize, SerializingError};
 use nimiq_hash::Blake2bHash;
 use nimiq_macros::{add_hex_io_fns_typed_arr, create_typed_array};
+use nimiq_utils::tagged_signing::{TaggedSignable, TaggedSignature};
 
 use super::peer_contacts::{Protocols, Services, SignedPeerContact};
 use crate::{
     message_codec::{MessageReader, MessageWriter},
-    tagged_signing::{TaggedSignable, TaggedSignature},
     DISCOVERY_PROTOCOL,
 };
 
@@ -69,7 +69,7 @@ pub enum DiscoveryMessage {
 
         /// Signature for the challenge sent in `HandshakeAck`, signed with the identity keypair (same one as used for
         /// the peer contact).
-        response_signature: TaggedSignature<ChallengeNonce>,
+        response_signature: TaggedSignature<ChallengeNonce, Keypair>,
 
         /// Interval in ms in which the peer wants to receive new updates.
         update_interval: Option<u64>,

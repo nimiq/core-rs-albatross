@@ -14,7 +14,7 @@ use parking_lot::RwLock;
 
 use beserial::{Deserialize, Serialize};
 
-use crate::tagged_signing::{TaggedKeypair, TaggedPublicKey, TaggedSignable, TaggedSignature};
+use nimiq_utils::tagged_signing::{TaggedKeypair, TaggedSignable, TaggedSignature};
 
 /// Configuration for the peer contact book.
 #[derive(Clone, Debug)]
@@ -255,13 +255,13 @@ pub struct SignedPeerContact {
     pub inner: PeerContact,
 
     /// The signature over the serialized peer contact.
-    pub signature: TaggedSignature<PeerContact>,
+    pub signature: TaggedSignature<PeerContact, Keypair>,
 }
 
 impl SignedPeerContact {
     /// Verifies that the signature is valid for this peer contact.
     pub fn verify(&self) -> bool {
-        self.inner.public_key.tagged_verify(&self.inner, &self.signature)
+        self.signature.tagged_verify(&self.inner, &self.inner.public_key)
     }
 
     pub fn public_key(&self) -> &PublicKey {
