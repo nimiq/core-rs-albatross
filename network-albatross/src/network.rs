@@ -406,6 +406,7 @@ impl Network {
 #[async_trait]
 impl NetworkInterface for Network {
     type PeerType = PeerChannel;
+    type AddressType = String;
     type Error = NetworkError;
 
     fn get_peer_updates(&self) -> (Vec<Arc<Self::PeerType>>, broadcast::Receiver<NetworkEventI<Self::PeerType>>) {
@@ -460,6 +461,14 @@ impl NetworkInterface for Network {
             K: AsRef<[u8]> + Send + Sync,
             V: Serialize + Send + Sync,
     {
+        unimplemented!()
+    }
+
+    async fn dial_peer(&self, _peer_id: <Self::PeerType as PeerInterface>::Id) -> Result<(), Self::Error> {
+        unimplemented!()
+    }
+
+    async fn dial_address(&self, _address: String) -> Result<(), Self::Error> {
         unimplemented!()
     }
 }

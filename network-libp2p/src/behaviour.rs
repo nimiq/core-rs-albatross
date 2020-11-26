@@ -196,7 +196,3 @@ impl NetworkBehaviourEventProcess<KademliaEvent> for NimiqBehaviour {
         self.emit_event(event);
     }
 }
-
-
-
-

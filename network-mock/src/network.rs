@@ -152,6 +152,8 @@ impl Peer for MockPeer {
 }
 
 pub struct MockNetwork {
+
+
     peer_id: usize,
     peers: Arc<RwLock<HashMap<usize, Arc<MockPeer>>>>,
     event_tx: broadcast::Sender<NetworkEvent<MockPeer>>,
@@ -220,6 +222,7 @@ impl MockNetwork {
 #[async_trait]
 impl Network for MockNetwork {
     type PeerType = MockPeer;
+    type AddressType = usize;
     type Error = MockNetworkError;
 
     fn get_peer_updates(&self) -> (Vec<Arc<MockPeer>>, broadcast::Receiver<NetworkEvent<MockPeer>>) {
@@ -265,6 +268,14 @@ impl Network for MockNetwork {
             K: AsRef<[u8]> + Send + Sync,
             V: Serialize + Send + Sync,
     {
+        unimplemented!()
+    }
+
+    async fn dial_peer(&self, _peer_id: usize) -> Result<(), Self::Error> {
+        unimplemented!()
+    }
+
+    async fn dial_address(&self, _address: Self::AddressType) -> Result<(), Self::Error> {
         unimplemented!()
     }
 }

@@ -53,6 +53,7 @@ impl<P> Clone for NetworkEvent<P> {
 #[async_trait]
 pub trait Network: Send + Sync + 'static {
     type PeerType: Peer + 'static;
+    type AddressType: std::fmt::Display + std::fmt::Debug;
     type Error: std::error::Error;
 
     fn get_peer_updates(&self) -> (Vec<Arc<Self::PeerType>>, broadcast::Receiver<NetworkEvent<Self::PeerType>>);
@@ -93,7 +94,9 @@ pub trait Network: Send + Sync + 'static {
             K: AsRef<[u8]> + Send + Sync,
             V: Serialize + Send + Sync;
 
-    // TODO: dial
+    async fn dial_peer(&self, peer_id: <Self::PeerType as Peer>::Id) -> Result<(), Self::Error>;
+
+    async fn dial_address(&self, address: Self::AddressType) -> Result<(), Self::Error>;
 }
 
 // .next() To get next item of stream.

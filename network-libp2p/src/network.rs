@@ -220,24 +220,6 @@ impl Network {
         &self.local_peer_id
     }
 
-    pub async fn dial(&self, peer_id: PeerId) -> Result<(), NetworkError> {
-        let (output_tx, output_rx) = oneshot::channel();
-        self.action_tx.lock().await.send(NetworkAction::Dial {
-            peer_id,
-            output: output_tx,
-        }).await?;
-        output_rx.await?
-    }
-
-    pub async fn dial_address(&self, address: Multiaddr) -> Result<(), NetworkError> {
-        let (output_tx, output_rx) = oneshot::channel();
-        self.action_tx.lock().await.send(NetworkAction::DialAddress {
-            address,
-            output: output_tx,
-        }).await?;
-        output_rx.await?
-    }
-
     async fn swarm_task(
         mut swarm: NimiqSwarm,
         events_tx: broadcast::Sender<NetworkEvent<Peer>>,
@@ -363,6 +345,7 @@ impl Network {
 #[async_trait]
 impl NetworkInterface for Network {
     type PeerType = Peer;
+    type AddressType = Multiaddr;
     type Error = NetworkError;
 
     fn get_peer_updates(&self) -> (Vec<Arc<Self::PeerType>>, broadcast::Receiver<NetworkEvent<Self::PeerType>>) {
@@ -422,6 +405,24 @@ impl NetworkInterface for Network {
         self.action_tx.lock().await.send(NetworkAction::DhtPut {
             key: k.as_ref().to_owned(),
             value: buf,
+            output: output_tx,
+        }).await?;
+        output_rx.await?
+    }
+
+    async fn dial_peer(&self, peer_id: PeerId) -> Result<(), NetworkError> {
+        let (output_tx, output_rx) = oneshot::channel();
+        self.action_tx.lock().await.send(NetworkAction::Dial {
+            peer_id,
+            output: output_tx,
+        }).await?;
+        output_rx.await?
+    }
+
+    async fn dial_address(&self, address: Multiaddr) -> Result<(), NetworkError> {
+        let (output_tx, output_rx) = oneshot::channel();
+        self.action_tx.lock().await.send(NetworkAction::DialAddress {
+            address,
             output: output_tx,
         }).await?;
         output_rx.await?
