@@ -30,7 +30,7 @@ impl Serialize for HistoryTreeChunk {
         size += Serialize::serialize(&(self.proof.proof.mmr_size as u64), writer)?;
         size += SerializeWithLength::serialize::<u32, _>(&self.proof.proof.nodes, writer)?;
 
-        size += SerializeWithLength::serialize::<u16, _>(&self.proof.proof.nodes, writer)?;
+        size += SerializeWithLength::serialize::<u16, _>(&self.history, writer)?;
         Ok(size)
     }
 

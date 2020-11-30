@@ -46,6 +46,7 @@ nimiq-utils = { path = "../utils", version = "0.1", features = ["time", "observe
 
 [dev-dependencies]
 hex = "0.4"
+simple_logger = "1.0"
 
 nimiq-bls = { path = "../bls", version = "0.1" }
 nimiq-network-mock = { path = "../network-mock", version = "0.1" }

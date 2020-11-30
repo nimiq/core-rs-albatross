@@ -15,6 +15,7 @@ use beserial::SerializingError;
 
 use crate::message::Message;
 
+#[derive(Debug)]
 pub enum DispatchError {
     SendError(SendError),
     SerializingError(SerializingError),

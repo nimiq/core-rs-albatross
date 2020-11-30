@@ -18,6 +18,7 @@ use blockchain_albatross::Blockchain;
 use hash::Blake2bHash;
 use network_interface::prelude::{CloseReason, Network, NetworkEvent, Peer};
 use primitives::policy;
+use utils::math::CeilingDiv;
 
 use crate::consensus_agent::ConsensusAgent;
 use crate::messages::{BatchSetInfo, BlockHashType, HistoryChunk, RequestBlockHashesFilter};
@@ -102,6 +103,7 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
         // Currently we only do a very basic check here
         let current_block_number = self.blockchain.block_number();
         if epoch.block.header.block_number < current_block_number {
+            debug!("Received outdated epoch at block {}", current_block_number);
             return Err(SyncClusterResult::Outdated);
         }
 
@@ -136,9 +138,10 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
 
         // Queue history chunks for the given epoch for download.
         let history_chunk_ids = (start_index
-            ..(epoch.history_len as usize / history_store::CHUNK_SIZE))
+            ..((epoch.history_len as usize).ceiling_div(history_store::CHUNK_SIZE)))
             .map(|i| (epoch_number, i))
             .collect();
+        debug!("Requesting history for ids: {:?}", history_chunk_ids);
         self.history_queue.add_ids(history_chunk_ids);
 
         // We keep the epoch in pending_epochs while the history is downloading.
@@ -234,7 +237,9 @@ impl<TPeer: Peer + 'static> Stream for SyncCluster<TPeer> {
                             return Poll::Ready(Some(Err(e)));
                         }
                     }
-                    Err(_) => return Poll::Ready(Some(Err(SyncClusterResult::Error))), // TODO Error
+                    Err(e) => {
+                        return Poll::Ready(Some(Err(SyncClusterResult::Error)));
+                    } // TODO Error
                 }
             }
         }
@@ -256,7 +261,9 @@ impl<TPeer: Peer + 'static> Stream for SyncCluster<TPeer> {
                         return Poll::Ready(Some(Ok(epoch)));
                     }
                 }
-                Err(_) => return Poll::Ready(Some(Err(SyncClusterResult::Error))), // TODO Error
+                Err(e) => {
+                    return Poll::Ready(Some(Err(SyncClusterResult::Error)));
+                } // TODO Error
             }
         }
 
@@ -322,7 +329,7 @@ impl<TPeer: Peer> EpochIds<TPeer> {
     }
 }
 
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 enum SyncClusterResult {
     EpochSuccessful,
     NoMoreEpochs,
@@ -339,7 +346,7 @@ impl<T, E> From<Result<T, E>> for SyncClusterResult {
     }
 }
 
-struct HistorySync<TNetwork: Network> {
+pub struct HistorySync<TNetwork: Network> {
     blockchain: Arc<Blockchain>,
     network_event_rx: broadcast::Receiver<NetworkEvent<TNetwork::PeerType>>,
     epoch_ids_stream: FuturesUnordered<BoxFuture<'static, Option<EpochIds<TNetwork::PeerType>>>>,
@@ -363,6 +370,10 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
             checkpoint_sync_clusters: Vec::new(),
             agents: HashMap::new(),
         }
+    }
+
+    pub fn agents(&self) -> impl Iterator<Item = &Arc<ConsensusAgent<TNetwork::PeerType>>> {
+        self.agents.values().map(|(agent, _)| agent)
     }
 
     async fn request_epoch_ids(
@@ -590,6 +601,7 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
         }
 
         // Stop pulling in new EpochIds if we hit a maximum a number of clusters to prevent DoS.
+        trace!("Pulling epoch ids");
         loop {
             if self.epoch_sync_clusters.len() >= Self::MAX_CLUSTERS {
                 // TODO: We still want to get the wakes for the epoch_ids_stream
@@ -616,6 +628,10 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
             }
         }
 
+        trace!(
+            "Syncing epoch clusters ({} clusters)",
+            self.epoch_sync_clusters.len()
+        );
         // Poll the best epoch cluster.
         // The best cluster is the last element in sync_clusters, so removing it is cheap.
         while !self.epoch_sync_clusters.is_empty() {
@@ -632,6 +648,8 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
                 Some(Err(_)) => SyncClusterResult::Error,
                 None => SyncClusterResult::NoMoreEpochs,
             };
+
+            trace!("Pushed epoch, result: {:?}", result);
 
             // If the epoch was successful, the cluster is not done yet
             // and we update the remaining clusters.
@@ -702,6 +720,10 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
             }
         }
 
+        trace!(
+            "Syncing checkpoint clusters ({} clusters)",
+            self.checkpoint_sync_clusters.len()
+        );
         // When no more epochs are to be processed, we continue with checkpoint blocks.
         // Poll the best checkpoint cluster.
         let current_offset =
@@ -724,12 +746,14 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
                     Some(Err(e)) => e,
                     None => SyncClusterResult::NoMoreEpochs,
                 };
+
+                trace!("Pushed checkpoint, result: {:?}", result);
             }
 
             // Since clusters here are always of length 1, we can remove them immediately.
             // Evict current best cluster and move to next one.
             let cluster = self
-                .epoch_sync_clusters
+                .checkpoint_sync_clusters
                 .pop()
                 .expect("sync_clusters not empty");
 
