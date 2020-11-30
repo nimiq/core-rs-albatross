@@ -4,6 +4,7 @@ use std::task::{Context, Poll, Waker};
 
 use libp2p::{
     core::either::{EitherError, EitherOutput},
+    gossipsub::{Gossipsub, GossipsubEvent, GossipsubRpc, MessageAuthenticity},
     kad::{handler::KademliaHandlerIn as KademliaAction, store::MemoryStore, Kademlia, KademliaEvent, QueryId},
     swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters},
     NetworkBehaviour,
@@ -31,14 +32,15 @@ use crate::{
 };
 
 pub type NimiqNetworkBehaviourAction =
-    NetworkBehaviourAction<EitherOutput<EitherOutput<EitherOutput<DiscoveryAction, MessageAction>, LimitAction>, KademliaAction<QueryId>>, NimiqEvent>;
+    NetworkBehaviourAction<EitherOutput<EitherOutput<EitherOutput<EitherOutput<DiscoveryAction, MessageAction>, LimitAction>, KademliaAction<QueryId>>, GossipsubRpc>, NimiqEvent>;
 
-pub type NimiqNetworkBehaviourError = EitherError<EitherError<EitherError<DiscoveryError, MessageError>, LimitError>, std::io::Error>;
+pub type NimiqNetworkBehaviourError = EitherError<EitherError<EitherError<EitherError<DiscoveryError, MessageError>, LimitError>, std::io::Error>, std::io::Error>;
 
 #[derive(Debug)]
 pub enum NimiqEvent {
     Message(NetworkEvent<Peer>),
     Dht(KademliaEvent),
+    Gossip(GossipsubEvent),
 }
 
 impl From<NetworkEvent<Peer>> for NimiqEvent {
@@ -53,6 +55,12 @@ impl From<KademliaEvent> for NimiqEvent {
     }
 }
 
+impl From<GossipsubEvent> for NimiqEvent {
+    fn from(event: GossipsubEvent) -> Self {
+        Self::Gossip(event)
+    }
+}
+
 #[derive(NetworkBehaviour)]
 #[behaviour(out_event = "NimiqEvent", poll_method = "poll_event")]
 pub struct NimiqBehaviour {
@@ -60,6 +68,7 @@ pub struct NimiqBehaviour {
     pub message: MessageBehaviour,
     pub limit: LimitBehaviour,
     pub kademlia: Kademlia<MemoryStore>,
+    pub gossipsub: Gossipsub,
 
     #[behaviour(ignore)]
     events: VecDeque<NimiqEvent>,
@@ -83,12 +92,14 @@ impl NimiqBehaviour {
 
         let store = MemoryStore::new(peer_id.clone());
         let kademlia = Kademlia::with_config(peer_id, store, config.kademlia);
+        let gossipsub = Gossipsub::new(MessageAuthenticity::Signed(config.keypair), config.gossipsub);
 
         Self {
             discovery,
             message,
             limit,
             kademlia,
+            gossipsub,
             events: VecDeque::new(),
             waker: None,
         }
@@ -161,6 +172,13 @@ impl NetworkBehaviourEventProcess<LimitEvent> for NimiqBehaviour {
 impl NetworkBehaviourEventProcess<KademliaEvent> for NimiqBehaviour {
     fn inject_event(&mut self, event: KademliaEvent) {
         log::debug!("NimiqBehaviour::inject_event: {:?}", event);
+        self.emit_event(event);
+    }
+}
+
+impl NetworkBehaviourEventProcess<GossipsubEvent> for NimiqBehaviour {
+    fn inject_event(&mut self, event: GossipsubEvent) {
+        log::debug!("NimiqBehaviour::gossipsub_event: {:?}", event);
         self.emit_event(event);
     }
 }

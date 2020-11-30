@@ -12,6 +12,7 @@ use libp2p::{
     core,
     core::{muxing::StreamMuxerBox, transport::Boxed},
     dns,
+    gossipsub::{GossipsubConfig, GossipsubEvent, GossipsubMessage, Topic as GossipsubTopic, TopicHash},
     identity::Keypair,
     kad::{GetRecordOk, KademliaConfig, KademliaEvent, QueryId, QueryResult, Quorum, Record},
     noise,
@@ -47,6 +48,7 @@ pub struct Config {
     pub message: MessageConfig,
     pub limit: LimitConfig,
     pub kademlia: KademliaConfig,
+    pub gossipsub: GossipsubConfig,
 }
 
 #[derive(Debug, Error)]
@@ -74,6 +76,9 @@ pub enum NetworkError {
 
     #[error("DHT PutRecord error: {0:?}")]
     DhtPutRecord(libp2p::kad::PutRecordError),
+
+    #[error("Gossipsub Publish error: {0:?}")]
+    GossipsubPublish(libp2p::gossipsub::error::PublishError)
 }
 
 impl From<libp2p::kad::store::Error> for NetworkError {
@@ -94,8 +99,13 @@ impl From<libp2p::kad::PutRecordError> for NetworkError {
     }
 }
 
-type NimiqSwarm = Swarm<NimiqBehaviour>;
+impl From<libp2p::gossipsub::error::PublishError> for NetworkError {
+    fn from(e: libp2p::gossipsub::error::PublishError) -> Self {
+        Self::GossipsubPublish(e)
+    }
+}
 
+type NimiqSwarm = Swarm<NimiqBehaviour>;
 #[derive(Debug)]
 pub enum NetworkAction {
     Dial {
@@ -115,12 +125,27 @@ pub enum NetworkAction {
         value: Vec<u8>,
         output: oneshot::Sender<Result<(), NetworkError>>,
     },
+    RegisterTopic {
+        topic_hash: TopicHash,
+        output: mpsc::Sender<(GossipsubMessage, Arc<Peer>)>,
+    },
+    Subscribe {
+        topic_name: &'static str,
+        output: oneshot::Sender<TopicHash>,
+    },
+    Publish {
+        topic_name: &'static str,
+        data: Vec<u8>,
+        output: oneshot::Sender<Result<(), NetworkError>>,
+    },
 }
 
 #[derive(Default)]
 struct TaskState {
     dht_puts: HashMap<QueryId, oneshot::Sender<Result<(), NetworkError>>>,
     dht_gets: HashMap<QueryId, oneshot::Sender<Result<Vec<u8>, NetworkError>>>,
+    gossip_sub: HashMap<TopicHash, oneshot::Sender<TopicHash>>,
+    gossip_topics: HashMap<TopicHash, mpsc::Sender<(GossipsubMessage, Arc<Peer>)>>,
 }
 
 pub struct Network {
@@ -274,6 +299,30 @@ impl Network {
                             _ => {}
                         }
                     }
+                    NimiqEvent::Gossip(event) => {
+                        match event {
+                            GossipsubEvent::Message(peer_id, msg_id, msg) => {
+                                log::trace!("Received message {:?} from peer {:?}: {:?}", msg_id, peer_id, msg);
+                                for topic in msg.topics.iter() {
+                                    if let Some(output) = state.gossip_topics.get(&topic) {
+                                        // let peer = Self::get_peer(peer_id).unwrap();
+                                        // output.send((msg, peer));
+                                    } else {
+                                        log::warn!("Unknown topic hash: {:?}", topic);
+                                    }
+                                }
+                            }
+                            GossipsubEvent::Subscribed { peer_id, topic } => {
+                                log::trace!("Peer {:?} subscribed to topic: {:?}", peer_id, topic);
+                                if let Some(output) = state.gossip_sub.remove(&topic) {
+                                    output.send(topic).ok();
+                                }
+                            }
+                            GossipsubEvent::Unsubscribed { peer_id, topic } => {
+                                log::trace!("Peer {:?} unsubscribed to topic: {:?}", peer_id, topic);
+                            }
+                        }
+                    }
                 }
             }
             _ => {}
@@ -316,6 +365,22 @@ impl Network {
                     }
                 }
             }
+            NetworkAction::RegisterTopic { topic_hash, output } => {
+                state.gossip_topics.insert(topic_hash, output);
+            }
+            NetworkAction::Subscribe { topic_name, output } => {
+                let topic = GossipsubTopic::new(topic_name.into());
+                if swarm.gossipsub.subscribe(topic.clone()) {
+                    state.gossip_sub.insert(topic.sha256_hash(), output);
+                } else {
+                    log::warn!("Already subscribed to topic: {:?}", topic_name);
+                    drop(output);
+                }
+            }
+            NetworkAction::Publish { topic_name, data, output } => {
+                let topic = GossipsubTopic::new(topic_name.into());
+                output.send(swarm.gossipsub.publish(&topic, data).map_err(Into::into)).ok();
+            }
         }
 
         Ok(())
@@ -344,18 +409,61 @@ impl NetworkInterface for Network {
         self.events_tx.subscribe()
     }
 
-    async fn subscribe<T>(_topic: &T) -> Box<dyn Stream<Item = (T::Item, Self::PeerType)> + Send>
+    async fn subscribe<T>(&self, topic: &T) -> Box<dyn Stream<Item = (T::Item, Arc<Self::PeerType>)> + Send>
     where
         T: Topic + Sync,
     {
-        unimplemented!()
+        let (output_tx, output_rx) = oneshot::channel();
+
+        self.action_tx
+            .lock()
+            .await
+            .send(NetworkAction::Subscribe {
+                topic_name: topic.topic(),
+                output: output_tx,
+            })
+            .await;
+
+        let topic_hash = output_rx.await.expect("Already subscribed to topic");
+        let (tx, rx) = mpsc::channel(16);
+
+        self.action_tx
+            .lock()
+            .await
+            .send(NetworkAction::RegisterTopic {
+                topic_hash,
+                output: tx,
+            })
+            .await;
+
+        let test = rx.map(|(msg, peer)|
+            {
+                let item = msg.data;
+                ( item , peer) 
+            }).into_inner();
+        Box::new(test)
     }
 
-    async fn publish<T>(_topic: &T, _item: <T as Topic>::Item)
+    async fn publish<T>(&self, topic: &T, item: <T as Topic>::Item) -> Result<(), Self::Error>
     where
         T: Topic + Sync,
     {
-        unimplemented!()
+        let (output_tx, output_rx) = oneshot::channel();
+
+        let mut buf = vec![];
+        item.serialize(&mut buf)?;
+
+        self.action_tx
+            .lock()
+            .await
+            .send(NetworkAction::Publish {
+                topic_name: topic.topic(),
+                data: buf,
+                output: output_tx,
+            })
+            .await?;
+
+        output_rx.await?
     }
 
     async fn dht_get<K, V>(&self, k: &K) -> Result<V, Self::Error>
@@ -482,6 +590,7 @@ mod tests {
             message: Default::default(),
             limit: Default::default(),
             kademlia: Default::default(),
+            gossipsub: Default::default(),
         }
     }
 

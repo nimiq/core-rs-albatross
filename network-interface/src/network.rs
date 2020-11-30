@@ -20,9 +20,9 @@ pub enum NetworkEvent<P> {
 }
 
 pub trait Topic {
-    type Item: Serialize + Deserialize + Send;
+    type Item: Serialize + Deserialize + Send + Sync + 'static;
 
-    fn topic(&self) -> String;
+    fn topic(&self) -> &'static str;
 }
 
 impl<P: Peer> std::fmt::Debug for NetworkEvent<P> {
@@ -71,11 +71,11 @@ pub trait Network: Send + Sync + 'static {
         ReceiveFromAll::new(self)
     }
 
-    async fn subscribe<T>(topic: &T) -> Box<dyn Stream<Item = (T::Item, Self::PeerType)> + Send>
+    async fn subscribe<T>(&self, topic: &T) -> Box<dyn Stream<Item = (T::Item, Arc<Self::PeerType>)> + Send>
     where
         T: Topic + Sync;
 
-    async fn publish<T: Topic>(topic: &T, item: T::Item)
+    async fn publish<T: Topic>(&self, topic: &T, item: T::Item) -> Result<(), Self::Error>
     where
         T: Topic + Sync;
 
