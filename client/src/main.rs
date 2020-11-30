@@ -51,7 +51,8 @@ async fn main_inner() -> Result<(), Error> {
     // Initialize RPC server
     if let Some(rpc_config) = rpc_config {
         use nimiq::extras::rpc_server::initialize_rpc_server;
-        let rpc_server = initialize_rpc_server(&client, rpc_config).expect("Failed to initialize RPC server");
+        let rpc_server =
+            initialize_rpc_server(&client, rpc_config).expect("Failed to initialize RPC server");
         tokio::spawn(async move { rpc_server.run().await });
     }
 
@@ -65,13 +66,19 @@ async fn main_inner() -> Result<(), Error> {
             ..
         } = protocol_config
         {
-            let pkcs12_key_file = pkcs12_key_file
-                .to_str()
-                .unwrap_or_else(|| panic!("Failed to convert path to PKCS#12 key file to string: {}", pkcs12_key_file.display()));
-
-            // FIXME: Spawn `metrics_server` (which is a IntoFuture)
-            let _metrics_server =
-                initialize_metrics_server(&client, metrics_config, pkcs12_key_file, &pkcs12_passphrase).expect("Failed to initialize metrics server");
+            let pkcs12_key_file = pkcs12_key_file.to_str().unwrap_or_else(|| {
+                panic!(
+                    "Failed to convert path to PKCS#12 key file to string: {}",
+                    pkcs12_key_file.display()
+                )
+            });
+            let metrics_server = initialize_metrics_server(
+                &client,
+                metrics_config,
+                pkcs12_key_file,
+                &pkcs12_passphrase,
+            )
+            .expect("Failed to initialize metrics server");
             //tokio::spawn(metrics_server.into_future());
         } else {
             error!("Cannot provide metrics when running without a certificate");

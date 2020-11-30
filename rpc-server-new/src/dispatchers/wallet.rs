@@ -36,7 +36,11 @@ pub struct ReturnAccount {
 
 #[async_trait]
 pub trait WalletInterface {
-    async fn import_raw_key(&self, key_data: String, passphrase: Option<String>) -> Result<Address, Error>;
+    async fn import_raw_key(
+        &self,
+        key_data: String,
+        passphrase: Option<String>,
+    ) -> Result<Address, Error>;
 
     async fn list_accounts(&self) -> Result<Vec<Address>, Error>;
 
@@ -44,11 +48,28 @@ pub trait WalletInterface {
 
     async fn create_account(&self, passphrase: Option<String>) -> Result<ReturnAccount, Error>;
 
-    async fn unlock_account(&self, address: Address, passphrase: Option<String>, duration: Option<u64>) -> Result<(), Error>;
+    async fn unlock_account(
+        &self,
+        address: Address,
+        passphrase: Option<String>,
+        duration: Option<u64>,
+    ) -> Result<(), Error>;
 
-    async fn sign(&self, message: String, address: Address, passphrase: Option<String>, is_hex: bool) -> Result<ReturnSignature, Error>;
+    async fn sign(
+        &self,
+        message: String,
+        address: Address,
+        passphrase: Option<String>,
+        is_hex: bool,
+    ) -> Result<ReturnSignature, Error>;
 
-    async fn verify_signature(&self, message: String, public_key: PublicKey, signature: Signature, is_hex: bool) -> Result<bool, Error>;
+    async fn verify_signature(
+        &self,
+        message: String,
+        public_key: PublicKey,
+        signature: Signature,
+        is_hex: bool,
+    ) -> Result<bool, Error>;
 }
 
 pub struct WalletDispatcher {
@@ -68,7 +89,11 @@ impl WalletDispatcher {
 #[nimiq_jsonrpc_derive::service(rename_all = "mixedCase")]
 #[async_trait]
 impl WalletInterface for WalletDispatcher {
-    async fn import_raw_key(&self, key_data: String, passphrase: Option<String>) -> Result<Address, Error> {
+    async fn import_raw_key(
+        &self,
+        key_data: String,
+        passphrase: Option<String>,
+    ) -> Result<Address, Error> {
         let passphrase = passphrase.unwrap_or_default();
 
         let private_key: PrivateKey = Deserialize::deserialize_from_vec(&hex::decode(&key_data)?)?;
@@ -120,14 +145,22 @@ impl WalletInterface for WalletDispatcher {
         let passphrase = passphrase.unwrap_or_default();
         let account = self.wallet_store.get(&address, None).ok_or_else(|| Error::AccountNotFound(address))?;
 
-        let unlocked_account = account.unlock(passphrase.as_bytes()).map_err(|_locked| Error::WrongPassphrase)?;
+        let unlocked_account = account
+            .unlock(passphrase.as_bytes())
+            .map_err(|_locked| Error::WrongPassphrase)?;
 
         self.unlocked_wallets.write().insert(unlocked_account);
 
         Ok(())
     }
 
-    async fn sign(&self, message: String, address: Address, passphrase: Option<String>, is_hex: bool) -> Result<ReturnSignature, Error> {
+    async fn sign(
+        &self,
+        message: String,
+        address: Address,
+        passphrase: Option<String>,
+        is_hex: bool,
+    ) -> Result<ReturnSignature, Error> {
         let message = message_from_maybe_hex(message, is_hex)?;
 
         let passphrase = passphrase.unwrap_or_default();
@@ -152,11 +185,24 @@ impl WalletInterface for WalletDispatcher {
 
         let (public_key, signature) = wallet.sign_message(&message);
 
-        Ok(ReturnSignature { public_key, signature })
+        Ok(ReturnSignature {
+            public_key,
+            signature,
+        })
     }
 
-    async fn verify_signature(&self, message: String, public_key: PublicKey, signature: Signature, is_hex: bool) -> Result<bool, Error> {
+    async fn verify_signature(
+        &self,
+        message: String,
+        public_key: PublicKey,
+        signature: Signature,
+        is_hex: bool,
+    ) -> Result<bool, Error> {
         let message = message_from_maybe_hex(message, is_hex)?;
-        Ok(WalletAccount::verify_message(&public_key, &message, &signature))
+        Ok(WalletAccount::verify_message(
+            &public_key,
+            &message,
+            &signature,
+        ))
     }
 }

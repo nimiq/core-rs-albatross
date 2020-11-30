@@ -30,7 +30,7 @@ use account::Account;
 use beserial::{uvar, Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, WriteBytesExt};
 use block_albatross::{
     Block as BlockAlbatross, BlockHeader as BlockHeaderAlbatross, ForkProof, MultiSignature,
-    PbftCommitMessage, PbftPrepareMessage, SignedTendermintProposal, ViewChange, ViewChangeProof,
+    SignedTendermintProposal, ViewChange, ViewChangeProof,
 };
 use handel::update::LevelUpdateMessage;
 use hash::Blake2bHash;
@@ -90,9 +90,6 @@ pub enum MessageType {
     ViewChange = 105,
     ViewChangeProof = 106,
     ForkProof = 107,
-    PbftProposal = 120,
-    PbftPrepare = 121,
-    PbftCommit = 122,
     GetMacroBlocks = 123,
     GetEpochTransactions = 124,
     EpochTransactions = 125,
@@ -137,9 +134,6 @@ impl Display for MessageType {
             Self::ViewChange => write!(f, "view-change"),
             Self::ViewChangeProof => write!(f, "view-change-proof"),
             Self::ForkProof => write!(f, "fork-proof"),
-            Self::PbftProposal => write!(f, "pbft-proposal"),
-            Self::PbftPrepare => write!(f, "pbft-prepare"),
-            Self::PbftCommit => write!(f, "pbft-commit"),
             Self::GetMacroBlocks => write!(f, "get-macro-blocks"),
             Self::GetEpochTransactions => write!(f, "get-epoch-transactions"),
             Self::EpochTransactions => write!(f, "epoch-transactions"),
@@ -186,9 +180,6 @@ pub enum Message {
     ForkProof(Box<ForkProof>),
     ViewChange(Box<LevelUpdateMessage<MultiSignature, ViewChange>>),
     ViewChangeProof(Box<ViewChangeProofMessage>),
-    PbftProposal(Box<SignedTendermintProposal>),
-    PbftPrepare(Box<LevelUpdateMessage<MultiSignature, PbftPrepareMessage>>),
-    PbftCommit(Box<LevelUpdateMessage<MultiSignature, PbftCommitMessage>>),
     GetMacroBlocks(Box<GetBlocksMessage>),
     GetEpochTransactions(Box<GetEpochTransactionsMessage>),
     EpochTransactions(Box<EpochTransactionsMessage>),
@@ -228,9 +219,6 @@ impl Message {
             Message::ViewChange(_) => MessageType::ViewChange,
             Message::ViewChangeProof(_) => MessageType::ViewChangeProof,
             Message::ForkProof(_) => MessageType::ForkProof,
-            Message::PbftProposal(_) => MessageType::PbftProposal,
-            Message::PbftPrepare(_) => MessageType::PbftPrepare,
-            Message::PbftCommit(_) => MessageType::PbftCommit,
             Message::GetMacroBlocks(_) => MessageType::GetMacroBlocks,
             Message::GetEpochTransactions(_) => MessageType::GetEpochTransactions,
             Message::EpochTransactions(_) => MessageType::EpochTransactions,
@@ -339,17 +327,30 @@ impl Deserialize for Message {
             MessageType::GetHead => Message::GetHead,
             MessageType::VerAck => Message::VerAck(Deserialize::deserialize(&mut crc32_reader)?),
             // Albatross
-            MessageType::BlockAlbatross => Message::BlockAlbatross(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::HeaderAlbatross => Message::HeaderAlbatross(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::ForkProof => Message::ForkProof(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::ViewChange => Message::ViewChange(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::ViewChangeProof => Message::ViewChangeProof(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::PbftProposal => Message::PbftProposal(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::PbftPrepare => Message::PbftPrepare(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::PbftCommit => Message::PbftCommit(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::GetMacroBlocks => Message::GetMacroBlocks(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::GetEpochTransactions => Message::GetEpochTransactions(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::EpochTransactions => Message::EpochTransactions(Deserialize::deserialize(&mut crc32_reader)?),
+            MessageType::BlockAlbatross => {
+                Message::BlockAlbatross(Deserialize::deserialize(&mut crc32_reader)?)
+            }
+            MessageType::HeaderAlbatross => {
+                Message::HeaderAlbatross(Deserialize::deserialize(&mut crc32_reader)?)
+            }
+            MessageType::ForkProof => {
+                Message::ForkProof(Deserialize::deserialize(&mut crc32_reader)?)
+            }
+            MessageType::ViewChange => {
+                Message::ViewChange(Deserialize::deserialize(&mut crc32_reader)?)
+            }
+            MessageType::ViewChangeProof => {
+                Message::ViewChangeProof(Deserialize::deserialize(&mut crc32_reader)?)
+            }
+            MessageType::GetMacroBlocks => {
+                Message::GetMacroBlocks(Deserialize::deserialize(&mut crc32_reader)?)
+            }
+            MessageType::GetEpochTransactions => {
+                Message::GetEpochTransactions(Deserialize::deserialize(&mut crc32_reader)?)
+            }
+            MessageType::EpochTransactions => {
+                Message::EpochTransactions(Deserialize::deserialize(&mut crc32_reader)?)
+            }
         };
 
         // XXX Consume any leftover bytes in the message before computing the checksum.
@@ -408,9 +409,6 @@ impl Serialize for Message {
             Message::ViewChange(view_change_message) => view_change_message.serialize(&mut v)?,
             Message::ViewChangeProof(view_change_proof) => view_change_proof.serialize(&mut v)?,
             Message::ForkProof(fork_proof) => fork_proof.serialize(&mut v)?,
-            Message::PbftProposal(pbft_proposal) => pbft_proposal.serialize(&mut v)?,
-            Message::PbftPrepare(pbft_prepare) => pbft_prepare.serialize(&mut v)?,
-            Message::PbftCommit(pbft_commit) => pbft_commit.serialize(&mut v)?,
             Message::GetMacroBlocks(get_blocks_message) => get_blocks_message.serialize(&mut v)?,
             Message::GetEpochTransactions(get_epoch_transactions) => get_epoch_transactions.serialize(&mut v)?,
             Message::EpochTransactions(epoch_transactions) => epoch_transactions.serialize(&mut v)?,
@@ -461,9 +459,6 @@ impl Serialize for Message {
             Message::ForkProof(fork_proof) => fork_proof.serialized_size(),
             Message::ViewChange(view_change_message) => view_change_message.serialized_size(),
             Message::ViewChangeProof(view_change_proof) => view_change_proof.serialized_size(),
-            Message::PbftProposal(pbft_proposal) => pbft_proposal.serialized_size(),
-            Message::PbftPrepare(pbft_prepare) => pbft_prepare.serialized_size(),
-            Message::PbftCommit(pbft_commit) => pbft_commit.serialized_size(),
             Message::GetMacroBlocks(get_blocks_message) => get_blocks_message.serialized_size(),
             Message::GetEpochTransactions(get_epoch_transactions) => get_epoch_transactions.serialized_size(),
             Message::EpochTransactions(epoch_transactions) => epoch_transactions.serialized_size(),
@@ -524,12 +519,6 @@ pub struct MessageNotifier {
     pub fork_proof: RwLock<PassThroughNotifier<'static, ForkProof>>,
     pub view_change: RwLock<PassThroughNotifier<'static, LevelUpdateMessage<MultiSignature, ViewChange>>>,
     pub view_change_proof: RwLock<PassThroughNotifier<'static, ViewChangeProofMessage>>,
-    pub pbft_proposal: RwLock<PassThroughNotifier<'static, SignedTendermintProposal>>,
-    pub pbft_prepare: RwLock<
-        PassThroughNotifier<'static, LevelUpdateMessage<MultiSignature, PbftPrepareMessage>>,
-    >,
-    pub pbft_commit:
-        RwLock<PassThroughNotifier<'static, LevelUpdateMessage<MultiSignature, PbftCommitMessage>>>,
     pub get_macro_blocks: RwLock<PassThroughNotifier<'static, GetBlocksMessage>>,
     pub get_epoch_transactions: RwLock<PassThroughNotifier<'static, GetEpochTransactionsMessage>>,
     pub epoch_transactions: RwLock<PassThroughNotifier<'static, EpochTransactionsMessage>>,
@@ -573,9 +562,6 @@ impl MessageNotifier {
             Message::ViewChange(view_change) => self.view_change.read().notify(*view_change),
             Message::ViewChangeProof(view_change_proof) => self.view_change_proof.read().notify(*view_change_proof),
             Message::ForkProof(fork_proof) => self.fork_proof.read().notify(*fork_proof),
-            Message::PbftProposal(proposal) => self.pbft_proposal.read().notify(*proposal),
-            Message::PbftPrepare(prepare) => self.pbft_prepare.read().notify(*prepare),
-            Message::PbftCommit(commit) => self.pbft_commit.read().notify(*commit),
             Message::GetMacroBlocks(msg) => self.get_macro_blocks.read().notify(*msg),
             Message::GetEpochTransactions(msg) => self.get_epoch_transactions.read().notify(*msg),
             Message::EpochTransactions(msg) => self.epoch_transactions.read().notify(*msg),

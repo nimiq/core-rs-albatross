@@ -1,25 +1,22 @@
 use std::sync::Arc;
 
-use beserial::Deserialize;
+use beserial::{Deserialize, Serialize};
 use nimiq_block_albatross::{
-    Block, BlockError, ForkProof, MacroBlock, MacroBody, MacroHeader, MultiSignature,
-    SignedViewChange, TendermintIdentifier, TendermintProof, TendermintProposal, TendermintStep,
-    TendermintVote, ViewChange, ViewChangeProof,
+    Block, BlockError, ForkProof, MacroBlock, MacroBody, MacroHeader, Message, MultiSignature,
+    SignedViewChange, TendermintIdentifier, TendermintProof, TendermintStep, TendermintVote,
+    ViewChange, ViewChangeProof,
 };
 use nimiq_block_production_albatross::BlockProducer;
 use nimiq_blockchain_albatross::{Blockchain, PushError, PushResult};
-use nimiq_bls::lazy::LazyPublicKey;
 use nimiq_bls::{AggregateSignature, KeyPair, SecretKey};
 use nimiq_collections::BitSet;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
-use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_keys::Address;
+use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
 use nimiq_mempool::{Mempool, MempoolConfig};
 use nimiq_nano_sync::primitives::pk_tree_construct;
 use nimiq_primitives::policy;
 use nimiq_primitives::policy::{SLOTS, TWO_THIRD_SLOTS};
-use nimiq_primitives::slot::{ValidatorSlotBand, ValidatorSlots};
 use nimiq_vrf::VrfSeed;
 
 /// Secret key of validator. Tests run with `genesis/src/genesis/unit-albatross.toml`
@@ -171,13 +168,22 @@ fn it_can_produce_micro_blocks() {
     let block = producer.next_micro_block(blockchain.time.now() + 1000, 0, None, vec![fork_proof], vec![0x41]);
     assert_eq!(blockchain.push(Block::Micro(block)), Ok(PushResult::Extended));
     assert_eq!(blockchain.block_number(), 2);
+    assert_eq!(blockchain.view_number(), 0);
 
     // #2.1: Empty view-changed micro block (wrong prev_hash)
     let view_change = sign_view_change(VrfSeed::default(), 3, 1);
-    let block = producer.next_micro_block(blockchain.time.now() + 2000, 1, Some(view_change), vec![], vec![0x41]);
+    let block = producer.next_micro_block(
+        blockchain.time.now() + 2000,
+        1,
+        Some(view_change),
+        vec![],
+        vec![0x41],
+    );
+
+    // the block justification is ok, the view_change justification is not.
     assert_eq!(
         blockchain.push(Block::Micro(block)),
-        Err(PushError::InvalidBlock(BlockError::InvalidJustification))
+        Err(PushError::InvalidBlock(BlockError::InvalidViewChangeProof))
     );
 
     // #2.2: Empty view-changed micro block

@@ -13,11 +13,12 @@ use futures::task::{Context, Poll};
 
 use futures_locks::{Mutex, RwLock};
 
-use nimiq_block_albatross::MultiSignature;
+use nimiq_block_albatross::{
+    create_pk_tree_root, MultiSignature, TendermintIdentifier, TendermintStep, TendermintVote,
+};
 use nimiq_bls::SecretKey;
 use nimiq_collections::bitset::BitSet;
-use nimiq_hash::Blake2sHash;
-use nimiq_nano_sync::primitives::pk_tree_construct;
+use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::Network;
 use nimiq_primitives::policy;
 use nimiq_primitives::slot::{SlotIndex, ValidatorSlots};
@@ -35,10 +36,7 @@ use super::super::registry::ValidatorRegistry;
 
 use super::contribution::TendermintContribution;
 use super::protocol::TendermintAggregationProtocol;
-use super::utils::{
-    AggregationDescriptor, CurrentAggregation, TendermintAggregationEvent, TendermintIdentifier,
-    TendermintStep, TendermintVote,
-};
+use super::utils::{AggregationDescriptor, CurrentAggregation, TendermintAggregationEvent};
 
 /// Maintains various aggregations for different rounds and steps of Tendermint.
 ///
@@ -263,29 +261,7 @@ impl<N: Network> HandelTendermintAdapter<N> {
         network: Arc<N>,
         secret_key: SecretKey,
     ) -> Self {
-        // to avoid importing an entire crate only for G2projective type this confusing construction:
-        // for every number in range 0..policy::SLOTS
-        let public_keys = (0..policy::SLOTS)
-            // map every index
-            .map(|index| {
-                active_validators
-                    // to the public key of validator with index index
-                    .get_public_key(SlotIndex::Slot(index as u16))
-                    // unwrap must succeed here or there is bigger problems
-                    .unwrap()
-                    // get the compressed version of the public key
-                    .compressed()
-                    // and uncompress it
-                    .uncompress()
-                    // this as well must succeed for the validator to work at all.
-                    .expect("failed to retrieve public_key")
-                    // finally get the G2Projective as implicit type.
-                    .public_key
-            })
-            // finally collect to get a Vec<G2Projective>
-            .collect();
-
-        let validator_merkle_root = pk_tree_construct(public_keys);
+        let validator_merkle_root = create_pk_tree_root(&active_validators);
 
         // the input stream is all levelUpdateMessages concerning a TendemrintContribution and TendemrintIdentifier.
         // We get rid of the sender, but while processing these messages they need to be dispatched to the appropriate Aggregation.
@@ -468,7 +444,7 @@ impl<N: Network> HandelTendermintAdapter<N> {
         &mut self,
         round: u32,
         step: impl Into<TendermintStep>,
-        proposal_hash: Option<Blake2sHash>,
+        proposal_hash: Option<Blake2bHash>,
     ) -> Result<AggregationResult<MultiSignature>, TendermintError> {
         let step = step.into();
         // make sure that there is no currently ongoing aggregation from a previous call to `broadcast_and_aggregate` which has not yet been awaited.

@@ -1,8 +1,8 @@
 use beserial::{Deserialize, Serialize};
-use block_albatross::signed::{Message, SignedMessage, PREFIX_TENDERMINT_PROPOSAL};
 use block_albatross::{
     BlockHeader, MacroBlock, MacroHeader, SignedTendermintProposal, TendermintProposal,
 };
+use block_albatross::{Message, SignedMessage, PREFIX_TENDERMINT_PROPOSAL};
 use block_production_albatross::BlockProducer;
 use blockchain_albatross::Blockchain;
 use bls::KeyPair;

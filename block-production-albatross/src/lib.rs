@@ -253,14 +253,13 @@ impl BlockProducer {
 #[cfg(any(test, feature = "test-utils"))]
 pub mod test_utils {
     use block::{
-        Block, MacroBlock, MultiSignature, SignedViewChange, TendermintIdentifier, TendermintProof,
-        TendermintStep, TendermintVote, ViewChange,
+        Block, MacroBlock, MultiSignature, TendermintIdentifier, TendermintProof, TendermintStep,
+        TendermintVote,
     };
     use blockchain::PushResult;
     use bls::AggregateSignature;
     use collections::BitSet;
     use nimiq_nano_sync::primitives::pk_tree_construct;
-    use nimiq_vrf::VrfSeed;
     use primitives::policy::{SLOTS, TWO_THIRD_SLOTS};
 
     use super::*;
@@ -331,41 +330,39 @@ pub mod test_utils {
         }
     }
 
-    pub fn sign_view_change(
-        keypair: &KeyPair,
-        prev_seed: VrfSeed,
-        block_number: u32,
-        new_view_number: u32,
-    ) -> ViewChangeProof {
-        // Create the view change.
-        let view_change = ViewChange {
-            block_number,
-            new_view_number,
-            prev_seed,
-        };
+    // /// Currently unused
+    // pub fn sign_view_change(
+    //     keypair: &KeyPair,
+    //     prev_seed: VrfSeed,
+    //     block_number: u32,
+    //     new_view_number: u32,
+    // ) -> ViewChangeProof {
+    //     // Create the view change.
+    //     let view_change = ViewChange {
+    //         block_number,
+    //         new_view_number,
+    //         prev_seed,
+    //     };
 
-        // Sign the view change.
-        let signed_view_change =
-            SignedViewChange::from_message(view_change.clone(), &keypair.secret_key, 0).signature;
+    //     // Sign the view change.
+    //     let signed_view_change =
+    //         SignedViewChange::from_message(view_change.clone(), &keypair.secret_key, 0).signature;
 
-        // Create signers Bitset.
-        let mut signers = BitSet::new();
-        for i in 0..TWO_THIRD_SLOTS {
-            signers.insert(i as usize);
-        }
+    //     // Create signers Bitset.
+    //     let mut signers = BitSet::new();
+    //     for i in 0..TWO_THIRD_SLOTS {
+    //         signers.insert(i as usize);
+    //     }
 
-        // Create multisignature.
-        let multisig = MultiSignature {
-            signature: AggregateSignature::from_signatures(&*vec![
-                signed_view_change;
-                TWO_THIRD_SLOTS as usize
-            ]),
-            signers,
-        };
-
-        // Create and return view change proof.
-        ViewChangeProof { sig: multisig }
-    }
+    //     // Create ViewChangeProof and return  it.
+    //     ViewChangeProof::new(
+    //         AggregateSignature::from_signatures(&*vec![
+    //             signed_view_change;
+    //             TWO_THIRD_SLOTS as usize
+    //         ]),
+    //         signers,
+    //     )
+    // }
 
     pub fn produce_macro_blocks(num_macro: usize, producer: &BlockProducer, blockchain: &Arc<Blockchain>) {
         for _ in 0..num_macro {

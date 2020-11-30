@@ -7,8 +7,9 @@ use thiserror::Error;
 use beserial::{Deserialize, Serialize};
 use collections::bitset::BitSet;
 use hash::{Blake2bHash, Blake2sHash, Hash, SerializeContent};
+use nimiq_nano_sync::primitives::pk_tree_construct;
 use primitives::policy;
-use primitives::slot::{Slots, ValidatorSlots};
+use primitives::slot::{SlotIndex, Slots, ValidatorSlots};
 use vrf::VrfSeed;
 
 use crate::signed::{Message, PREFIX_TENDERMINT_PROPOSAL};
@@ -152,4 +153,30 @@ impl TryInto<Slots> for MacroBlock {
 
         Ok(Slots::new(validator_slots))
     }
+}
+
+pub fn create_pk_tree_root(slots: &ValidatorSlots) -> Vec<u8> {
+    // create a
+    let public_keys = (0..policy::SLOTS)
+        // map every index
+        .map(|index| {
+            slots
+                // to the public key of validator with index index
+                .get_public_key(SlotIndex::Slot(index as u16))
+                // unwrap must succeed here or there is bigger problems
+                .unwrap()
+                // get the compressed version of the public key
+                .compressed()
+                // and uncompress it
+                .uncompress()
+                // this as well must succeed for the validator to work at all.
+                .expect("failed to retrieve public_key")
+                // finally get the G2Projective as implicit type.
+                .public_key
+        })
+        // finally collect to get a Vec<G2Projective>
+        .collect();
+
+    // Create the tree
+    pk_tree_construct(public_keys)
 }

@@ -3,16 +3,17 @@ use std::sync::RwLock;
 
 use beserial::Deserialize;
 use nimiq_block_albatross::{
-    Block, MacroBlock, MacroBody, PbftCommitMessage, PbftPrepareMessage, PbftProofBuilder,
-    SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedViewChange, TendermintProposal,
-    ViewChange, ViewChangeProof, ViewChangeProofBuilder,
+    create_pk_tree_root, Block, MacroBlock, MacroBody, MultiSignature, SignedViewChange,
+    TendermintIdentifier, TendermintProof, TendermintProposal, TendermintStep, TendermintVote,
+    ViewChange, ViewChangeProof,
 };
 use nimiq_block_production_albatross::BlockProducer;
 use nimiq_blockchain_albatross::{Blockchain, ForkEvent, PushError, PushResult};
-use nimiq_bls::{KeyPair, SecretKey};
+use nimiq_bls::{AggregateSignature, KeyPair, SecretKey};
+use nimiq_collections::bitset::BitSet;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_primitives::policy;
 
 mod history_sync;
@@ -50,10 +51,30 @@ impl TemporaryBlockProducer {
         };
 
         let block = if policy::is_macro_block_at(height) {
-            let (proposal, extrinsics) =
-                self.producer
-                    .next_macro_block_proposal(self.blockchain.time.now() + height as u64 * 1000, 0u32, view_change_proof, extra_data);
-            Block::Macro(TemporaryBlockProducer::finalize_macro_block(proposal, extrinsics))
+            let macro_block_proposal = self.producer.next_macro_block_proposal(
+                self.blockchain.time.now() + height as u64 * 1000,
+                0u32,
+                extra_data,
+            );
+            // Get validator set and make sure it exists.
+            let validators = self
+                .blockchain
+                .get_validators_for_epoch(policy::epoch_at(self.blockchain.block_number() + 1));
+            assert!(validators.is_some());
+
+            let validator_merkle_root = create_pk_tree_root(&validators.unwrap());
+
+            Block::Macro(TemporaryBlockProducer::finalize_macro_block(
+                TendermintProposal {
+                    valid_round: None,
+                    value: macro_block_proposal.header,
+                },
+                macro_block_proposal
+                    .body
+                    .or(Some(MacroBody::new()))
+                    .unwrap(),
+                validator_merkle_root,
+            ))
         } else {
             Block::Micro(self.producer.next_micro_block(
                 self.blockchain.time.now() + height as u64 * 1000,
@@ -68,31 +89,51 @@ impl TemporaryBlockProducer {
         block
     }
 
-    fn finalize_macro_block(proposal: TendermintProposal, extrinsics: MacroBody) -> MacroBlock {
+    fn finalize_macro_block(
+        proposal: TendermintProposal,
+        extrinsics: MacroBody,
+        validator_merkle_root: Vec<u8>,
+    ) -> MacroBlock {
         let keypair = KeyPair::from(
             SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap(),
         );
 
-        let block_hash = proposal.value.hash::<Blake2bHash>();
-
-        // create signed prepare and commit
-        let prepare = SignedPbftPrepareMessage::from_message(
-            PbftPrepareMessage {
-                block_hash: block_hash.clone(),
+        // Create a TendemrintVote instance out of known properties.
+        // round_number is for now fixed at 0 for tests, but it could be anything,
+        // as long as the TendermintProof further down this function does use the same round_umber.
+        let vote = TendermintVote {
+            proposal_hash: Some(proposal.value.hash::<Blake2bHash>()),
+            id: TendermintIdentifier {
+                block_number: proposal.value.block_number,
+                step: TendermintStep::PreVote,
+                round_number: 0,
             },
-            &keypair.secret_key,
-            0,
-        );
-        let commit = SignedPbftCommitMessage::from_message(PbftCommitMessage { block_hash }, &keypair.secret_key, 0);
+            validator_merkle_root,
+        };
 
-        // create proof
-        let mut pbft_proof = PbftProofBuilder::new();
-        pbft_proof.add_prepare_signature(&keypair.public_key, policy::SLOTS, &prepare);
-        pbft_proof.add_commit_signature(&keypair.public_key, policy::SLOTS, &commit);
+        // create the to be signed hash
+        let message_hash = vote.hash::<Blake2sHash>();
+
+        // sign the hash
+        let signature = AggregateSignature::from_signatures(
+            &[keypair.secret_key.sign_hash(message_hash); policy::SLOTS as usize],
+        );
+
+        // create and populate signers BitSet.
+        let mut signers = BitSet::new();
+        for i in 0..policy::SLOTS {
+            signers.insert(i as usize);
+        }
+
+        // create the TendermintProof
+        let justification = Some(TendermintProof {
+            round: 0,
+            sig: MultiSignature::new(signature, signers),
+        });
 
         MacroBlock {
             header: proposal.value,
-            justification: Some(pbft_proof.build()),
+            justification,
             body: Some(extrinsics),
         }
     }
@@ -108,11 +149,21 @@ impl TemporaryBlockProducer {
 
         // create signed prepare and commit
         let view_change = SignedViewChange::from_message(view_change, &keypair.secret_key, 0);
+        // println!("{:?}", view_change.)
+
+        let signature = view_change.signature.multiply(policy::SLOTS);
+        let mut signers = BitSet::new();
+        for i in 0..policy::SLOTS {
+            signers.insert(i as usize);
+        }
 
         // create proof
-        let mut view_change_proof = ViewChangeProofBuilder::new();
-        view_change_proof.add_signature(&keypair.public_key, policy::SLOTS, &view_change);
-        view_change_proof.build()
+        ViewChangeProof {
+            sig: MultiSignature::new(
+                AggregateSignature::from_signatures(&[signature; policy::SLOTS as usize]),
+                signers,
+            ),
+        }
     }
 }
 

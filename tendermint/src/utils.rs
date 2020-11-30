@@ -1,7 +1,7 @@
 use crate::state::TendermintState;
 use crate::ProofTrait;
 use nimiq_block_albatross::TendermintStep;
-use nimiq_hash::Blake2sHash;
+use nimiq_hash::{Blake2bHash, Blake2sHash};
 use nimiq_primitives::policy::TWO_THIRD_SLOTS;
 use std::collections::BTreeMap;
 
@@ -80,7 +80,7 @@ pub enum AggregationResult<ProofTy> {
     // different vote messages (Some(hash) is a vote for a proposal with that hash, None is a vote
     // for Nil) along with the corresponding proofs (the aggregation of the votes signatures) and
     // a integer representing how many votes were received for that particular message.
-    Aggregation(BTreeMap<Option<Blake2sHash>, (ProofTy, usize)>),
+    Aggregation(BTreeMap<Option<Blake2bHash>, (ProofTy, usize)>),
     // Means that we have received f+1 messages for a round greater than our current one. The field
     // states for which round we received those messages.
     NewRound(u32),
@@ -115,7 +115,7 @@ pub enum TendermintError {
 /// semantics to translate that into the VoteResult that the Tendermint protocol expects.
 pub(crate) fn aggregation_to_vote<ProofTy: ProofTrait>(
     // This is the hash of the current proposal (None means we don't have a current proposal).
-    proposal: Option<Blake2sHash>,
+    proposal: Option<Blake2bHash>,
     aggregation: AggregationResult<ProofTy>,
 ) -> VoteResult<ProofTy> {
     match aggregation {
@@ -145,7 +145,7 @@ pub(crate) fn aggregation_to_vote<ProofTy: ProofTrait>(
 /// An utility function that checks if a given AggregationResult has 2f+1 votes for a given
 /// proposal.
 pub(crate) fn has_2f1_votes<ProofTy: ProofTrait>(
-    proposal: Blake2sHash,
+    proposal: Blake2bHash,
     aggregation: AggregationResult<ProofTy>,
 ) -> bool {
     let agg = match aggregation {

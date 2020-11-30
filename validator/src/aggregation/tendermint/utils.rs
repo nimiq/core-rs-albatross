@@ -1,14 +1,11 @@
-use std::io;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use tokio::sync::mpsc;
 
-use beserial::{Deserialize, Serialize};
-use nimiq_block_albatross::MultiSignature;
+use nimiq_block_albatross::{MultiSignature, TendermintStep};
 use nimiq_handel::update::LevelUpdate;
-use nimiq_hash::{Blake2sHash, Hash, SerializeContent};
-use nimiq_tendermint::{AggregationResult, Step};
+use nimiq_tendermint::AggregationResult;
 
 use super::contribution::TendermintContribution;
 

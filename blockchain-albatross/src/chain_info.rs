@@ -1,7 +1,11 @@
+use std::convert::TryInto;
 use std::io;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
-use block::{Block, BlockType, MacroBody, MicroBody};
+use block::{
+    Block, BlockBody, BlockComponents, BlockHeader, BlockJustification, BlockType, MacroBody,
+    MacroHeader, MicroBody, MicroHeader, MicroJustification, TendermintProof,
+};
 use database::{FromDatabaseValue, IntoDatabaseValue};
 use hash::Blake2bHash;
 use primitives::coin::Coin;
@@ -123,9 +127,41 @@ impl Deserialize for ChainInfo {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let ty: BlockType = Deserialize::deserialize(reader)?;
         let head = match ty {
-            BlockType::Macro => Block::Macro(Deserialize::deserialize(reader)?),
-            BlockType::Micro => Block::Micro(Deserialize::deserialize(reader)?),
-        };
+            BlockType::Macro => {
+                // Maintain correct order of serialized objects here such that the deserialization
+                // does not rely on the struct being in the correct order.
+                let header: MacroHeader = Deserialize::deserialize(reader)?;
+                let justification: Option<TendermintProof> = Deserialize::deserialize(reader)?;
+                let body: Option<MacroBody> = Deserialize::deserialize(reader)?;
+
+                // Group the deserialized parts in a BlockComponents instance.
+                BlockComponents {
+                    header: Some(BlockHeader::Macro(header)),
+                    justification: justification
+                        .and_then(|justification| Some(BlockJustification::Macro(justification))),
+                    body: body.and_then(|body| Some(BlockBody::Macro(body))),
+                }
+            }
+            BlockType::Micro => {
+                // Maintain correct order of serialized objects here such that the deserialization
+                // does not rely on the struct being in the correct order.
+                let header: MicroHeader = Deserialize::deserialize(reader)?;
+                let justification: Option<MicroJustification> = Deserialize::deserialize(reader)?;
+                let body: Option<MicroBody> = Deserialize::deserialize(reader)?;
+
+                // Group the deserialized parts in a BlockComponents instance.
+                BlockComponents {
+                    header: Some(BlockHeader::Micro(header)),
+                    justification: justification
+                        .and_then(|justification| Some(BlockJustification::Micro(justification))),
+                    body: body.and_then(|body| Some(BlockBody::Micro(body))),
+                }
+            }
+        }
+        // re-create the block out of the BlockComponenets returned by the match
+        .try_into()
+        .map_err(|_| SerializingError::InvalidValue)?;
+
         let on_main_chain = Deserialize::deserialize(reader)?;
         let main_chain_successor = Deserialize::deserialize(reader)?;
         let cum_tx_fees = Deserialize::deserialize(reader)?;

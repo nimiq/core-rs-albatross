@@ -167,8 +167,7 @@ impl<N: Network> ViewChangeAggregation<N> {
                     tokio::spawn(async move { aggregation.shutdown().await });
 
                     // Create ViewChnageProof out of the aggregate
-                    let view_change_proof =
-                        ViewChangeProof::new(aggregate.signature, aggregate.signers);
+                    let view_change_proof = ViewChangeProof { sig: aggregate };
                     trace!("View Change complete: {:?}", &view_change_proof);
 
                     // return the ViewChangeProof

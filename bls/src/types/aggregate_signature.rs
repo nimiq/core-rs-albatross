@@ -7,7 +7,11 @@ use crate::Signature;
 
 /// An aggregate signature. Mathematically, it is equivalent to a regular signature. However, we created a new type for it in order to help differentiate between the two use cases.
 #[derive(Clone, Copy)]
-#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize), serde(transparent))]
+#[cfg_attr(
+    feature = "serde-derive",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(transparent)
+)]
 pub struct AggregateSignature(pub Signature);
 
 impl AggregateSignature {

@@ -1,6 +1,7 @@
 use parking_lot::RwLock;
 use std::sync::Arc;
 
+use nimiq_block_albatross::TendermintIdentifier;
 use nimiq_handel::evaluator::WeightedVote;
 use nimiq_handel::partitioner::BinomialPartitioner;
 use nimiq_handel::protocol::Protocol;
@@ -9,7 +10,6 @@ use nimiq_handel::store::ReplaceStore;
 use super::super::registry::ValidatorRegistry;
 
 use super::contribution::TendermintContribution;
-use super::utils::TendermintIdentifier;
 use super::verifier::TendermintVerifier;
 
 #[derive(std::fmt::Debug)]

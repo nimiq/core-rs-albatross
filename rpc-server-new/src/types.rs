@@ -1,20 +1,15 @@
 ///! Defines the types used by the JSON RPC API[1]
 ///!
 ///! [1] https://github.com/nimiq/core-js/wiki/JSON-RPC-API#common-data-types
-use std::{
-    fmt::{Display, Formatter},
-    sync::Arc,
-};
+use std::fmt::{Display, Formatter};
 
 use nimiq_blockchain_albatross::Blockchain;
-use nimiq_bls::lazy::LazyPublicKey;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
 use nimiq_primitives::policy;
 use nimiq_primitives::{account::AccountType, coin::Coin};
 use nimiq_transaction::account::htlc_contract::AnyHash;
 
-use nimiq_block_albatross::signed::AggregateProof;
 use nimiq_block_albatross::{TendermintProof, ViewChangeProof};
 use nimiq_bls::{CompressedPublicKey, CompressedSignature};
 use nimiq_collections::BitSet;
@@ -94,30 +89,28 @@ pub enum BlockAdditionalFields {
     },
 }
 
+/// Likely no longer necessary and can be repalced by TendermintProof directly as
+/// the vote count in terms of slots is encoded in there.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MacroJustification {
     votes: u16,
 
     #[serde(flatten)]
-    pbft_proof: TendermintProof,
+    tendermint_proof: TendermintProof,
 }
 
 impl MacroJustification {
     fn from_pbft_proof(
-        pbft_proof_opt: Option<TendermintProof>,
-        validator_slots_opt: Option<&ValidatorSlots>,
+        tendermint_proof_opt: Option<TendermintProof>,
+        _validator_slots_opt: Option<&ValidatorSlots>,
     ) -> Option<Self> {
-        if let (Some(pbft_proof), Some(validator_slots)) = (pbft_proof_opt, validator_slots_opt) {
-            let votes = pbft_proof
-                .votes(validator_slots)
-                .map_err(|e| {
-                    log::error!("{}", e);
-                    e
-                })
-                .ok()?;
-
-            Some(Self { votes, pbft_proof })
+        if let Some(tendermint_proof) = tendermint_proof_opt {
+            let votes = tendermint_proof.votes();
+            Some(Self {
+                votes,
+                tendermint_proof,
+            })
         } else {
             None
         }

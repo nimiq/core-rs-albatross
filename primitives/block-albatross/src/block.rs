@@ -587,9 +587,9 @@ bitflags! {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BlockComponents {
-    header: Option<BlockHeader>,
-    justification: Option<BlockJustification>,
-    body: Option<BlockBody>,
+    pub header: Option<BlockHeader>,
+    pub justification: Option<BlockJustification>,
+    pub body: Option<BlockBody>,
 }
 
 impl BlockComponents {

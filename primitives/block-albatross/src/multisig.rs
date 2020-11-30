@@ -52,6 +52,7 @@ impl IndividualSignature {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub struct MultiSignature {
     pub signature: bls::AggregateSignature,
     pub signers: BitSet,

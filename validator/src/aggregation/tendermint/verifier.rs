@@ -5,13 +5,13 @@ use futures::stream;
 use futures::stream::StreamExt;
 use tokio::task;
 
+use nimiq_block_albatross::{TendermintIdentifier, TendermintVote};
 use nimiq_bls::AggregatePublicKey;
 use nimiq_handel::identity::IdentityRegistry;
 use nimiq_handel::verifier::{VerificationResult, Verifier};
 use nimiq_hash::Hash;
 
 use super::contribution::TendermintContribution;
-use super::utils::{TendermintIdentifier, TendermintVote};
 
 #[derive(Debug)]
 pub(crate) struct TendermintVerifier<I: IdentityRegistry> {

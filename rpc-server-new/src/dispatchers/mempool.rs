@@ -17,7 +17,10 @@ use crate::{wallets::UnlockedWallets, Error};
 pub trait MempoolInterface {
     async fn send_raw_transaction(&self, raw_tx: String) -> Result<String, Error>;
 
-    async fn create_raw_transaction(&self, tx_params: TransactionParameters) -> Result<String, Error>;
+    async fn create_raw_transaction(
+        &self,
+        tx_params: TransactionParameters,
+    ) -> Result<String, Error>;
 
     async fn send_transaction(&self, tx_params: TransactionParameters) -> Result<String, Error>;
 
@@ -77,7 +80,10 @@ impl MempoolInterface for MempoolDispatcher {
         Ok(self.push_transaction(tx)?.to_hex())
     }
 
-    async fn create_raw_transaction(&self, tx_params: TransactionParameters) -> Result<String, Error> {
+    async fn create_raw_transaction(
+        &self,
+        tx_params: TransactionParameters,
+    ) -> Result<String, Error> {
         let mut tx = tx_params.into_transaction(&self.mempool)?;
 
         if tx.sender_type == AccountType::Basic {
@@ -138,31 +144,39 @@ pub struct TransactionParameters {
 
 impl TransactionParameters {
     pub fn into_transaction(self, mempool: &Mempool) -> Result<Transaction, Error> {
-        let validity_start_height = self.validity_start_height.unwrap_or_else(|| mempool.current_height());
+        let validity_start_height = self
+            .validity_start_height
+            .unwrap_or_else(|| mempool.current_height());
         let network_id = mempool.network_id();
 
         match self.to {
-            None if self.to_type != AccountType::Basic && self.flags.contains(TransactionFlags::CONTRACT_CREATION) => Ok(Transaction::new_contract_creation(
-                self.data,
-                self.from,
-                self.from_type,
-                self.to_type,
-                self.value,
-                self.fee,
-                validity_start_height,
-                network_id,
-            )),
-            Some(to) if !self.flags.contains(TransactionFlags::CONTRACT_CREATION) => Ok(Transaction::new_extended(
-                self.from,
-                self.from_type,
-                to,
-                self.to_type,
-                self.value,
-                self.fee,
-                self.data,
-                validity_start_height,
-                network_id,
-            )),
+            None if self.to_type != AccountType::Basic
+                && self.flags.contains(TransactionFlags::CONTRACT_CREATION) =>
+            {
+                Ok(Transaction::new_contract_creation(
+                    self.data,
+                    self.from,
+                    self.from_type,
+                    self.to_type,
+                    self.value,
+                    self.fee,
+                    validity_start_height,
+                    network_id,
+                ))
+            }
+            Some(to) if !self.flags.contains(TransactionFlags::CONTRACT_CREATION) => {
+                Ok(Transaction::new_extended(
+                    self.from,
+                    self.from_type,
+                    to,
+                    self.to_type,
+                    self.value,
+                    self.fee,
+                    self.data,
+                    validity_start_height,
+                    network_id,
+                ))
+            }
             _ => Err(Error::InvalidTransactionParameters),
         }
     }
