@@ -2,7 +2,7 @@ use crate::state::TendermintState;
 use crate::utils::{AggregationResult, ProposalResult, Step, TendermintError};
 use crate::{ProofTrait, ProposalTrait, ResultTrait};
 use async_trait::async_trait;
-use nimiq_hash::Blake2sHash;
+use nimiq_hash::Blake2bHash;
 
 /// The (async) trait that we need for all of Tendermint's low-level functions. The functions are
 /// mostly about producing proposals and networking.
@@ -21,11 +21,12 @@ pub trait TendermintOutsideDeps {
 
     /// Produces a proposal for the given round. It is used when it is our turn to propose. The
     /// proposal is guaranteed to be valid.
-    fn get_value(&self, round: u32) -> Result<Self::ProposalTy, TendermintError>;
+    fn get_value(&mut self, round: u32) -> Result<Self::ProposalTy, TendermintError>;
 
     /// Takes a proposal and a proof (2f+1 precommits) and returns a completed block.
     fn assemble_block(
         &self,
+        round: u32,
         proposal: Self::ProposalTy,
         proof: Self::ProofTy,
     ) -> Result<Self::ResultTy, TendermintError>;
@@ -44,7 +45,7 @@ pub trait TendermintOutsideDeps {
     /// care of waiting before timing out.
     /// This is a Future and it is allowed to fail.
     async fn await_proposal(
-        &self,
+        &mut self,
         round: u32,
     ) -> Result<ProposalResult<Self::ProposalTy>, TendermintError>;
 
@@ -57,7 +58,7 @@ pub trait TendermintOutsideDeps {
         &mut self,
         round: u32,
         step: Step,
-        proposal: Option<Blake2sHash>,
+        proposal: Option<Blake2bHash>,
     ) -> Result<AggregationResult<Self::ProofTy>, TendermintError>;
 
     /// Returns the current aggregation for a given round and step. The returned aggregation might

@@ -156,6 +156,7 @@ impl<
     /// this function is then just to assemble the block if we can.
     pub(crate) fn on_decision(&mut self) -> Result<ResultTy, TendermintError> {
         self.deps.assemble_block(
+            self.state.round,
             self.state.current_proposal.clone().unwrap(),
             self.state.current_proof.clone().unwrap(),
         )

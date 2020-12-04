@@ -134,7 +134,9 @@ impl Blockchain {
 
         let mut txn = WriteTransaction::new(&self.env);
 
-        self.chain_store.put_chain_info(&mut txn, &chain_info.head.hash(), &chain_info, true);
+        self.chain_store
+            .put_chain_info(&mut txn, &chain_info.head.hash(), &chain_info, true);
+
         txn.commit();
 
         Ok(PushResult::Forked)
@@ -155,7 +157,12 @@ impl Blockchain {
         }
 
         // Commit block to AccountsTree.
-        if let Err(e) = self.commit_accounts(&state, &chain_info, prev_info.head.next_view_number(), &mut txn) {
+        if let Err(e) = self.commit_accounts(
+            &state,
+            &chain_info.head,
+            prev_info.head.next_view_number(),
+            &mut txn,
+        ) {
             warn!("Rejecting block - commit failed: {:?}", e);
             txn.abort();
             #[cfg(feature = "metrics")]
@@ -164,7 +171,7 @@ impl Blockchain {
         }
 
         // Verify the state against the block.
-        if let Err(e) = self.verify_block_state(&state, &chain_info, Some(&txn)) {
+        if let Err(e) = self.verify_block_state(&state, &chain_info.head, Some(&txn)) {
             warn!("Rejecting block - Bad state");
             return Err(e);
         }
@@ -346,7 +353,12 @@ impl Blockchain {
                 Block::Macro(_) => unreachable!(),
                 Block::Micro(ref micro_block) => {
                     let result = if !cache_txn.contains_any(&fork_block.1.head) {
-                        self.commit_accounts(&state, &fork_block.1, prev_view_number, &mut write_txn)
+                        self.commit_accounts(
+                            &state,
+                            &fork_block.1.head,
+                            prev_view_number,
+                            &mut write_txn,
+                        )
                     } else {
                         Err(PushError::DuplicateTransaction)
                     };

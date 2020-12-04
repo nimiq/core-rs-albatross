@@ -30,11 +30,11 @@ pub const TIMESTAMP_MAX_DRIFT: u64 = 600000;
 
 /// Tendermint's initial timeout, in milliseconds.
 /// See https://arxiv.org/abs/1807.04938v3 for more information.
-pub const TENDERMINT_TIMEOUT_INIT: u64 = 1000; // TODO Set
+pub const TENDERMINT_TIMEOUT_INIT: u64 = 1000; // TODO: Set
 
 /// Tendermint's timeout delta, in milliseconds.
 /// See https://arxiv.org/abs/1807.04938v3 for more information.
-pub const TENDERMINT_TIMEOUT_DELTA: u64 = 1000; // TODO Set
+pub const TENDERMINT_TIMEOUT_DELTA: u64 = 1000; // TODO: Set
 
 /// Minimum stake for stakers in Lunas (1 NIM = 100,000 Lunas).
 /// A staker is someone who delegates their stake to a validator.

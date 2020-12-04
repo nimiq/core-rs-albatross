@@ -8,11 +8,12 @@ use bls::AggregatePublicKey;
 use hash::{Blake2bHash, Hash, SerializeContent};
 use hash_derive::SerializeContent;
 use nano_sync::primitives::pk_tree_construct;
+use network_interface::message::Message as NetworkMessage;
 use primitives::policy::{SLOTS, TWO_THIRD_SLOTS};
 use primitives::slot::{SlotIndex, ValidatorSlots};
 use std::io;
 
-/// A macro block proposed by the Tendermint leader.
+/// The proposal message sent by the Tendermint leader.
 #[derive(Clone, Debug, Serialize, Deserialize, SerializeContent, PartialEq, Eq)]
 pub struct TendermintProposal {
     // The header of the macro block, which is effectively the proposal.
@@ -21,10 +22,14 @@ pub struct TendermintProposal {
     pub valid_round: Option<u32>,
 }
 
-pub type SignedTendermintProposal = SignedMessage<TendermintProposal>;
-
 impl Message for TendermintProposal {
     const PREFIX: u8 = PREFIX_TENDERMINT_PROPOSAL;
+}
+
+pub type SignedTendermintProposal = SignedMessage<TendermintProposal>;
+
+impl NetworkMessage for SignedTendermintProposal {
+    const TYPE_ID: u64 = 666;
 }
 
 /// The proof for a block produced by Tendermint.

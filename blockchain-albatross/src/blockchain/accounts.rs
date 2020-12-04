@@ -2,26 +2,22 @@ use account::Inherent;
 use accounts::Accounts;
 use block::{Block, MicroBlock, ViewChanges};
 use database::WriteTransaction;
+use primitives::policy;
 
 use crate::blockchain_state::BlockchainState;
-use crate::chain_info::ChainInfo;
 use crate::history_store::ExtendedTransaction;
 use crate::{Blockchain, PushError};
-use primitives::policy;
 
 /// Implements methods to handle the accounts.
 impl Blockchain {
     /// Updates the accounts given a block.
-    pub(crate) fn commit_accounts(
+    pub fn commit_accounts(
         &self,
         state: &BlockchainState,
-        chain_info: &ChainInfo,
+        block: &Block,
         first_view_number: u32,
         txn: &mut WriteTransaction,
     ) -> Result<(), PushError> {
-        // Get the block from the chain info.
-        let block = &chain_info.head;
-
         // Get the accounts from the state.
         let accounts = &state.accounts;
 
@@ -32,7 +28,7 @@ impl Blockchain {
                 let mut inherents: Vec<Inherent> = vec![];
 
                 // Every macro block is the end of a batch, so we need to finalize the batch.
-                inherents.append(&mut self.finalize_previous_batch(state, &chain_info.head.unwrap_macro_ref().header));
+                inherents.append(&mut self.finalize_previous_batch(state, &macro_block.header));
 
                 // If this block is an election block, we also need to finalize the epoch.
                 if macro_block.is_election_block() {

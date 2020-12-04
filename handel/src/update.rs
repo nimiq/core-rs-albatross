@@ -18,7 +18,7 @@ pub struct LevelUpdate<C: AggregatableContribution> {
 
     /// The validator ID of the sender (a.k.a. `pk_idx`)
     ///
-    /// NOTE: It's save to just send your own validator ID, since everything critical is authenticated
+    /// NOTE: It's safe to just send your own validator ID, since everything critical is authenticated
     /// by signatures anyway.
     pub(crate) origin: u16,
 }

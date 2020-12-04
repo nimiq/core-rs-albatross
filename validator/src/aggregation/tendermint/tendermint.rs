@@ -21,7 +21,7 @@ use nimiq_collections::bitset::BitSet;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::Network;
 use nimiq_primitives::policy;
-use nimiq_primitives::slot::{SlotIndex, ValidatorSlots};
+use nimiq_primitives::slot::ValidatorSlots;
 
 use nimiq_handel::aggregation::Aggregation;
 use nimiq_handel::config::Config;
@@ -611,7 +611,7 @@ impl<N: Network> HandelTendermintAdapter<N> {
             }
 
             // if the result is not immediately actionable wait for a new (and better) result to check again.
-            // Only wait for a set perodof time, if it elapses the current (best) result is returned (likely resulting in a subsequent Nil vote/commit).
+            // Only wait for a set period of time, if it elapses the current (best) result is returned (likely resulting in a subsequent Nil vote/commit).
             match time::timeout_at(deadline, aggregate_receiver.recv()).await {
                 Ok(Some(event)) => result = event,
                 Ok(None) => return Err(TendermintError::AggregationError),

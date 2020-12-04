@@ -30,7 +30,7 @@ use crate::{BlockchainError, BlockchainEvent, ForkEvent};
 /// structure in this crate.
 pub struct Blockchain {
     // The environment of the blockchain.
-    pub(crate) env: Environment,
+    pub env: Environment,
     // The network ID. It determines if this is the mainnet or one of the testnets.
     pub network_id: NetworkId,
     // The OffsetTime struct. It allows us to query the current time.
@@ -44,7 +44,7 @@ pub struct Blockchain {
     // The history store is a database containing all of the history trees and transactions.
     pub history_store: Arc<HistoryStore>,
     // The current state of the blockchain.
-    pub(crate) state: RwLock<BlockchainState>,
+    pub state: RwLock<BlockchainState>,
     // A write lock for the blockchain. Guarantees that only one thread writes to it at a time.
     pub(crate) push_lock: Mutex<()>,
     // The metrics for the blockchain. Needed for analysis.
