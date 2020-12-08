@@ -1,6 +1,6 @@
 use crate::messages::{
-    BatchSetInfo, BlockHashType, BlockHashes, HistoryChunk, RequestBatchSet, RequestBlockHashes,
-    RequestBlockHashesFilter, RequestHistoryChunk,
+    BatchSetInfo, BlockHashType, BlockHashes, HistoryChunk, RequestBatchSet, RequestBlock,
+    RequestBlockHashes, RequestBlockHashesFilter, RequestHistoryChunk, ResponseBlock,
 };
 use block_albatross::Block;
 use blockchain_albatross::{history_store::CHUNK_SIZE, Blockchain, Direction};
@@ -92,6 +92,17 @@ impl Handle<HistoryChunk> for RequestHistoryChunk {
         let chunk = blockchain.get_chunk(self.epoch_number, CHUNK_SIZE, self.chunk_index as usize, None);
         let response = HistoryChunk {
             chunk,
+            request_identifier: self.get_request_identifier(),
+        };
+        Some(response)
+    }
+}
+
+impl Handle<ResponseBlock> for RequestBlock {
+    fn handle(&self, blockchain: &Arc<Blockchain>) -> Option<ResponseBlock> {
+        let block = blockchain.get_block(&self.hash, true);
+        let response = ResponseBlock {
+            block,
             request_identifier: self.get_request_identifier(),
         };
         Some(response)

@@ -12,8 +12,8 @@ use nimiq_subscription::Subscription;
 use transaction::Transaction;
 
 use crate::messages::{
-    BatchSetInfo, BlockHashes, HistoryChunk, RequestBatchSet, RequestBlockHashes,
-    RequestBlockHashesFilter, RequestHistoryChunk,
+    BatchSetInfo, BlockHashes, HistoryChunk, RequestBatchSet, RequestBlock, RequestBlockHashes,
+    RequestBlockHashesFilter, RequestHistoryChunk, ResponseBlock,
 };
 
 pub struct ConsensusAgentState {
@@ -34,9 +34,9 @@ pub struct ConsensusAgent<P: Peer> {
     pub(crate) state: RwLock<ConsensusAgentState>,
 
     block_hashes_requests: RequestResponse<P, RequestBlockHashes, BlockHashes>,
-
     epoch_requests: RequestResponse<P, RequestBatchSet, BatchSetInfo>,
     history_chunk_requests: RequestResponse<P, RequestHistoryChunk, HistoryChunk>,
+    block_requests: RequestResponse<P, RequestBlock, ResponseBlock>,
 }
 
 impl<P: Peer> ConsensusAgent<P> {
@@ -45,6 +45,7 @@ impl<P: Peer> ConsensusAgent<P> {
         let block_hashes_requests = RequestResponse::new(Arc::clone(&peer), Duration::new(10, 0));
         let epoch_requests = RequestResponse::new(Arc::clone(&peer), Duration::new(10, 0));
         let history_chunk_requests = RequestResponse::new(Arc::clone(&peer), Duration::new(10, 0));
+        let block_requests = RequestResponse::new(Arc::clone(&peer), Duration::new(10, 0));
 
         ConsensusAgent {
             peer,
@@ -55,6 +56,7 @@ impl<P: Peer> ConsensusAgent<P> {
             block_hashes_requests,
             epoch_requests,
             history_chunk_requests,
+            block_requests,
         }
     }
 
@@ -68,8 +70,16 @@ impl<P: Peer> ConsensusAgent<P> {
 
     pub fn remove_transaction(&self, _transaction: &Transaction) {}
 
-    pub fn request_block(&self, _hash: Blake2bHash) -> impl Future<Output = Result<Block, RequestError>> + 'static {
-        async { Err(RequestError::Timeout) }
+    pub async fn request_block(&self, hash: Blake2bHash) -> Result<ResponseBlock, RequestError> {
+        let result = self
+            .block_requests
+            .request(RequestBlock {
+                hash,
+                request_identifier: 0, // will automatically be set at a later point
+            })
+            .await;
+
+        result
     }
 
     pub async fn request_epoch(&self, hash: Blake2bHash) -> Result<BatchSetInfo, RequestError> {

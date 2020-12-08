@@ -161,3 +161,25 @@ impl Debug for HistoryChunk {
         unimplemented!()
     }
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ResponseBlock {
+    pub block: Option<Block>,
+    pub request_identifier: u32,
+}
+request_response!(ResponseBlock);
+
+impl Message for ResponseBlock {
+    const TYPE_ID: u64 = 206;
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RequestBlock {
+    pub hash: Blake2bHash,
+    pub request_identifier: u32,
+}
+request_response!(RequestBlock);
+
+impl Message for RequestBlock {
+    const TYPE_ID: u64 = 207;
+}
