@@ -308,9 +308,9 @@ impl Network {
                             }
                             GossipsubEvent::Subscribed { peer_id, topic } => {
                                 log::trace!("Peer {:?} subscribed to topic: {:?}", peer_id, topic);
-                                if let Some(output) = state.gossip_sub.remove(&topic) {
+                                /*if let Some(output) = state.gossip_topics.remove(&topic) {
                                     output.send(topic).ok();
-                                }
+                                }*/
                             }
                             GossipsubEvent::Unsubscribed { peer_id, topic } => {
                                 log::trace!("Peer {:?} unsubscribed to topic: {:?}", peer_id, topic);
