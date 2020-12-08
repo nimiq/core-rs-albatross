@@ -125,13 +125,9 @@ pub enum NetworkAction {
         value: Vec<u8>,
         output: oneshot::Sender<Result<(), NetworkError>>,
     },
-    RegisterTopic {
-        topic_hash: TopicHash,
-        output: mpsc::Sender<(GossipsubMessage, Arc<Peer>)>,
-    },
     Subscribe {
         topic_name: &'static str,
-        output: oneshot::Sender<TopicHash>,
+        output: mpsc::Sender<(GossipsubMessage, PeerId)>,
     },
     Publish {
         topic_name: &'static str,
@@ -144,8 +140,7 @@ pub enum NetworkAction {
 struct TaskState {
     dht_puts: HashMap<QueryId, oneshot::Sender<Result<(), NetworkError>>>,
     dht_gets: HashMap<QueryId, oneshot::Sender<Result<Vec<u8>, NetworkError>>>,
-    gossip_sub: HashMap<TopicHash, oneshot::Sender<TopicHash>>,
-    gossip_topics: HashMap<TopicHash, mpsc::Sender<(GossipsubMessage, Arc<Peer>)>>,
+    gossip_topics: HashMap<TopicHash, mpsc::Sender<(GossipsubMessage, PeerId)>>,
 }
 
 pub struct Network {
@@ -306,7 +301,7 @@ impl Network {
                                 for topic in msg.topics.iter() {
                                     if let Some(output) = state.gossip_topics.get(&topic) {
                                         // let peer = Self::get_peer(peer_id).unwrap();
-                                        // output.send((msg, peer));
+                                        output.send((msg, peer));
                                     } else {
                                         log::warn!("Unknown topic hash: {:?}", topic);
                                     }
@@ -365,13 +360,10 @@ impl Network {
                     }
                 }
             }
-            NetworkAction::RegisterTopic { topic_hash, output } => {
-                state.gossip_topics.insert(topic_hash, output);
-            }
             NetworkAction::Subscribe { topic_name, output } => {
                 let topic = GossipsubTopic::new(topic_name.into());
                 if swarm.gossipsub.subscribe(topic.clone()) {
-                    state.gossip_sub.insert(topic.sha256_hash(), output);
+                    state.gossip_topics.insert(topic.sha256_hash(), output);
                 } else {
                     log::warn!("Already subscribed to topic: {:?}", topic_name);
                     drop(output);
@@ -413,35 +405,22 @@ impl NetworkInterface for Network {
     where
         T: Topic + Sync,
     {
-        let (output_tx, output_rx) = oneshot::channel();
+        let (tx, rx) = mpsc::channel(16);
 
         self.action_tx
             .lock()
             .await
             .send(NetworkAction::Subscribe {
                 topic_name: topic.topic(),
-                output: output_tx,
-            })
-            .await;
-
-        let topic_hash = output_rx.await.expect("Already subscribed to topic");
-        let (tx, rx) = mpsc::channel(16);
-
-        self.action_tx
-            .lock()
-            .await
-            .send(NetworkAction::RegisterTopic {
-                topic_hash,
                 output: tx,
             })
-            .await;
+            .await
+            .expect("Couldn't subscribe to pubsub topic");
 
-        let test = rx.map(|(msg, peer)|
-            {
-                let item = msg.data;
-                ( item , peer) 
-            }).into_inner();
-        Box::new(test)
+        Box::new(rx.map(|(msg, peer)| {
+            let item: <T as Topic>::Item = Deserialize::deserialize_from_vec(&msg.data);
+            (item, peer)
+        }))
     }
 
     async fn publish<T>(&self, topic: &T, item: <T as Topic>::Item) -> Result<(), Self::Error>
