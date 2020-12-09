@@ -236,7 +236,7 @@ impl Network for MockNetwork {
         self.event_tx.subscribe()
     }
 
-    async fn subscribe<T>(&self, _topic: &T) -> Box<dyn Stream<Item = (T::Item, Arc<Self::PeerType>)> + Send>
+    async fn subscribe<T>(&self, _topic: &T) -> Box<dyn Stream<Item = (T::Item, usize)> + Send>
     where
         T: Topic + Sync,
     {

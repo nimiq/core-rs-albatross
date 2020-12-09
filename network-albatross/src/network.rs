@@ -429,7 +429,7 @@ impl NetworkInterface for Network {
         unimplemented!()
     }
 
-    async fn subscribe<T>(&self, _topic: &T) -> Box<dyn Stream<Item = (T::Item, Arc<Self::PeerType>)> + Send>
+    async fn subscribe<T>(&self, _topic: &T) -> Box<dyn Stream<Item = (T::Item, <Self::PeerType as PeerInterface>::Id)> + Send>
     where
         T: Topic + Sync,
     {

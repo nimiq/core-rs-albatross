@@ -299,9 +299,8 @@ impl Network {
                             GossipsubEvent::Message(peer_id, msg_id, msg) => {
                                 log::trace!("Received message {:?} from peer {:?}: {:?}", msg_id, peer_id, msg);
                                 for topic in msg.topics.iter() {
-                                    if let Some(output) = state.gossip_topics.get(&topic) {
-                                        // let peer = Self::get_peer(peer_id).unwrap();
-                                        output.send((msg, peer));
+                                    if let Some(output) = state.gossip_topics.get_mut(&topic) {
+                                        output.send((msg.clone(), peer_id.clone())).await.ok();
                                     } else {
                                         log::warn!("Unknown topic hash: {:?}", topic);
                                     }
@@ -401,7 +400,7 @@ impl NetworkInterface for Network {
         self.events_tx.subscribe()
     }
 
-    async fn subscribe<T>(&self, topic: &T) -> Box<dyn Stream<Item = (T::Item, Arc<Self::PeerType>)> + Send>
+    async fn subscribe<T>(&self, topic: &T) -> Box<dyn Stream<Item = (T::Item, PeerId)> + Send>
     where
         T: Topic + Sync,
     {
@@ -417,9 +416,9 @@ impl NetworkInterface for Network {
             .await
             .expect("Couldn't subscribe to pubsub topic");
 
-        Box::new(rx.map(|(msg, peer)| {
-            let item: <T as Topic>::Item = Deserialize::deserialize_from_vec(&msg.data);
-            (item, peer)
+        Box::new(rx.map(|(msg, peer_id)| {
+            let item: <T as Topic>::Item = Deserialize::deserialize_from_vec(&msg.data).unwrap();
+            (item, peer_id)
         }))
     }
 
