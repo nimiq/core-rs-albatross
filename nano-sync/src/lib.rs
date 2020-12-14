@@ -1,5 +1,4 @@
 #![allow(dead_code)]
-#![feature(const_int_pow)]
 
 // Re-export big-endian serialization of algebra types.
 pub use nimiq_bls::compression;
