@@ -71,7 +71,7 @@ pub trait Network: Send + Sync + 'static {
         ReceiveFromAll::new(self)
     }
 
-    async fn subscribe<T>(&self, topic: &T) -> Box<dyn Stream<Item = (T::Item, <Self::PeerType as Peer>::Id)> + Send>
+    async fn subscribe<T>(&self, topic: &T) -> Result<Box<dyn Stream<Item = (T::Item, <Self::PeerType as Peer>::Id)> + Send + Unpin>, Self::Error>
     where
         T: Topic + Sync;
 

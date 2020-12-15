@@ -159,6 +159,8 @@ impl Network {
     ///  - `config`: The network configuration, containing key pair, and other behaviour-specific configuration.
     ///
     pub fn new(listen_addr: Multiaddr, config: Config) -> Self {
+        assert!(!config.gossipsub.hash_topics, "Hash topics not supported");
+
         let swarm = Self::new_swarm(listen_addr, config);
         let peers = swarm.message.peers.clone();
 
@@ -297,7 +299,7 @@ impl Network {
                     NimiqEvent::Gossip(event) => {
                         match event {
                             GossipsubEvent::Message(peer_id, msg_id, msg) => {
-                                log::trace!("Received message {:?} from peer {:?}: {:?}", msg_id, peer_id, msg);
+                                log::debug!("Received message {:?} from peer {:?}: {:?}", msg_id, peer_id, msg);
                                 for topic in msg.topics.iter() {
                                     if let Some(output) = state.gossip_topics.get_mut(&topic) {
                                         output.send((msg.clone(), peer_id.clone())).await.ok();
@@ -307,13 +309,13 @@ impl Network {
                                 }
                             }
                             GossipsubEvent::Subscribed { peer_id, topic } => {
-                                log::trace!("Peer {:?} subscribed to topic: {:?}", peer_id, topic);
+                                log::debug!("Peer {:?} subscribed to topic: {:?}", peer_id, topic);
                                 /*if let Some(output) = state.gossip_topics.remove(&topic) {
                                     output.send(topic).ok();
                                 }*/
                             }
                             GossipsubEvent::Unsubscribed { peer_id, topic } => {
-                                log::trace!("Peer {:?} unsubscribed to topic: {:?}", peer_id, topic);
+                                log::debug!("Peer {:?} unsubscribed to topic: {:?}", peer_id, topic);
                             }
                         }
                     }
@@ -329,16 +331,16 @@ impl Network {
         match action {
             NetworkAction::Dial { peer_id, output } => {
                 output.send(Swarm::dial(swarm, &peer_id).map_err(Into::into)).ok();
-            }
+            },
             NetworkAction::DialAddress { address, output } => {
                 output
                     .send(Swarm::dial_addr(swarm, address).map_err(|l| NetworkError::Dial(libp2p::swarm::DialError::ConnectionLimit(l))))
                     .ok();
-            }
+            },
             NetworkAction::DhtGet { key, output } => {
                 let query_id = swarm.kademlia.get_record(&key.into(), Quorum::One);
                 state.dht_gets.insert(query_id, output);
-            }
+            },
             NetworkAction::DhtPut { key, value, output } => {
                 let local_peer_id = Swarm::local_peer_id(&swarm);
 
@@ -358,16 +360,15 @@ impl Network {
                         output.send(Err(e.into())).ok();
                     }
                 }
-            }
+            },
             NetworkAction::Subscribe { topic_name, output } => {
                 let topic = GossipsubTopic::new(topic_name.into());
                 if swarm.gossipsub.subscribe(topic.clone()) {
-                    state.gossip_topics.insert(topic.sha256_hash(), output);
+                    state.gossip_topics.insert(topic.no_hash(), output);
                 } else {
                     log::warn!("Already subscribed to topic: {:?}", topic_name);
-                    drop(output);
                 }
-            }
+            },
             NetworkAction::Publish { topic_name, data, output } => {
                 let topic = GossipsubTopic::new(topic_name.into());
                 output.send(swarm.gossipsub.publish(&topic, data).map_err(Into::into)).ok();
@@ -400,7 +401,8 @@ impl NetworkInterface for Network {
         self.events_tx.subscribe()
     }
 
-    async fn subscribe<T>(&self, topic: &T) -> Box<dyn Stream<Item = (T::Item, PeerId)> + Send>
+
+    async fn subscribe<T>(&self, topic: &T) -> Result<Box<dyn Stream<Item = (T::Item, PeerId)> + Send + Unpin>, Self::Error>
     where
         T: Topic + Sync,
     {
@@ -413,13 +415,12 @@ impl NetworkInterface for Network {
                 topic_name: topic.topic(),
                 output: tx,
             })
-            .await
-            .expect("Couldn't subscribe to pubsub topic");
+            .await?;
 
-        Box::new(rx.map(|(msg, peer_id)| {
+        Ok(Box::new(rx.map(|(msg, peer_id)| {
             let item: <T as Topic>::Item = Deserialize::deserialize_from_vec(&msg.data).unwrap();
             (item, peer_id)
-        }))
+        })))
     }
 
     async fn publish<T>(&self, topic: &T, item: <T as Topic>::Item) -> Result<(), Self::Error>
@@ -505,11 +506,12 @@ impl NetworkInterface for Network {
 mod tests {
     use std::time::Duration;
 
-    use futures::StreamExt;
+    use futures::{StreamExt, Stream};
     use libp2p::{
         identity::Keypair,
         multiaddr::{multiaddr, Multiaddr},
         swarm::KeepAlive,
+        gossipsub::GossipsubConfig,
         PeerId,
     };
     use rand::{thread_rng, Rng};
@@ -529,7 +531,7 @@ mod tests {
         },
         message::peer::Peer,
     };
-    use nimiq_network_interface::network::NetworkEvent;
+    use nimiq_network_interface::network::{NetworkEvent, Topic};
 
     #[derive(Clone, Debug, Deserialize, Serialize)]
     struct TestMessage {
@@ -551,6 +553,10 @@ mod tests {
         };
         peer_contact.set_current_time();
 
+        let mut gossipsub = GossipsubConfig::default();
+        gossipsub.mesh_n = 2;
+        gossipsub.mesh_n_low = 2;
+
         Config {
             keypair,
             peer_contact,
@@ -568,7 +574,7 @@ mod tests {
             message: Default::default(),
             limit: Default::default(),
             kademlia: Default::default(),
-            gossipsub: Default::default(),
+            gossipsub,
         }
     }
 
@@ -577,6 +583,51 @@ mod tests {
             assert_eq!(&peer.id, peer_id);
         } else {
             panic!("Event is not a NetworkEvent::PeerJoined: {:?}", event);
+        }
+    }
+
+
+    #[derive(Clone, Debug)]
+    struct TestNetwork {
+        next_address: u64,
+        addresses: Vec<Multiaddr>,
+    }
+
+    impl TestNetwork {
+        pub fn new() -> Self {
+            Self {
+                next_address: thread_rng().gen::<u64>(),
+                addresses: vec![],
+            }
+        }
+
+        pub async fn spawn(&mut self) -> Network {
+            let address = multiaddr![Memory(self.next_address)];
+            self.next_address += 1;
+
+            let net = Network::new(address.clone(), network_config(address.clone()));
+            log::info!("Creating node: address={}, peer_id={}", address, net.local_peer_id);
+
+            if let Some(dial_address) = self.addresses.first() {
+                log::info!("Dialing peer: address={}", dial_address);
+                net.dial_address(dial_address.clone()).await.unwrap();
+            }
+
+            let mut events = net.subscribe_events();
+            log::debug!("event: {:?}", events.next().await);
+
+            self.addresses.push(address);
+
+            net
+        }
+
+        pub async fn spawn_2() -> (Network, Network) {
+            let mut net = Self::new();
+
+            let net1 = net.spawn().await;
+            let net2 = net.spawn().await;
+
+            (net1, net2)
         }
     }
 
@@ -696,7 +747,7 @@ mod tests {
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-    struct TestRecord {
+    pub struct TestRecord {
         x: i32,
     }
 
@@ -711,5 +762,50 @@ mod tests {
         let fetched_record = net2.dht_get::<_, TestRecord>(b"foo").await.unwrap();
 
         assert_eq!(fetched_record, put_record);
+    }
+
+    pub struct TestTopic;
+
+    impl Topic for TestTopic {
+        type Item = TestRecord;
+
+        fn topic(&self) -> &'static str {
+            "hello_world"
+        }
+    }
+
+    fn consume_stream<T: std::fmt::Debug>(mut stream: impl Stream<Item=T> + Unpin + Send + 'static) {
+        tokio::spawn(async move {
+            while let Some(_) = stream.next().await {}
+        });
+    }
+
+    #[tokio::test]
+    async fn test_gossipsub() {
+        let mut net = TestNetwork::new();
+
+        let net1 = net.spawn().await;
+        let net2 = net.spawn().await;
+
+        for _ in 0 .. 5i32 {
+            let net_n = net.spawn().await;
+            net_n.subscribe_events().next().await;
+            let stream_n = net_n.subscribe(&TestTopic).await.unwrap();
+            consume_stream(stream_n);
+        }
+
+        let test_message = TestRecord { x: 42 };
+
+        let mut messages = net1.subscribe(&TestTopic).await.unwrap();
+        consume_stream(net2.subscribe(&TestTopic).await.unwrap());
+
+        tokio::time::delay_for(Duration::from_secs(10)).await;
+
+        net2.publish(&TestTopic, test_message.clone()).await.unwrap();
+
+        let (received_message, _peer) = messages.next().await.unwrap();
+        log::info!("Received GossipSub message: {:?}", received_message);
+
+        assert_eq!(received_message, test_message);
     }
 }

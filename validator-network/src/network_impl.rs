@@ -195,14 +195,14 @@ impl<N> ValidatorNetwork for ValidatorNetworkImpl<N>
     async fn publish<TTopic>(&self, topic: &TTopic, item: TTopic::Item) -> Result<(), Self::Error>
         where TTopic: Topic + Sync,
     {
-        self.network.publish(topic, item).await;
+        self.network.publish(topic, item).await?;
         Ok(())
     }
 
-    async fn subscribe<TTopic>(&self, topic: &TTopic) -> Box<dyn Stream<Item = (TTopic::Item, <Self::PeerType as Peer>::Id)> + Send>
+    async fn subscribe<TTopic>(&self, topic: &TTopic) -> Result<Box<dyn Stream<Item = (TTopic::Item, <Self::PeerType as Peer>::Id)> + Send>, Self::Error>
         where TTopic: Topic + Sync,
     {
-        self.network.subscribe(topic).await
+        Ok(self.network.subscribe(topic).await?)
     }
 
     fn cache<M: Message>(&self, _buffer_size: usize, _lifetime: Duration) {

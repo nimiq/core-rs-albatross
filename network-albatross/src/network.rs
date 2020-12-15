@@ -429,9 +429,9 @@ impl NetworkInterface for Network {
         unimplemented!()
     }
 
-    async fn subscribe<T>(&self, _topic: &T) -> Box<dyn Stream<Item = (T::Item, <Self::PeerType as PeerInterface>::Id)> + Send>
-    where
-        T: Topic + Sync,
+    async fn subscribe<T>(&self, _topic: &T) -> Result<Box<dyn Stream<Item = (T::Item, <Self::PeerType as PeerInterface>::Id)> + Send + Unpin>, Self::Error>
+        where
+            T: Topic + Sync,
     {
         unimplemented!()
     }
