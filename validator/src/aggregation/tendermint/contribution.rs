@@ -8,6 +8,8 @@ use nimiq_hash::{Blake2bHash, Blake2sHasher, Hasher, SerializeContent};
 
 use nimiq_handel::contribution::{AggregatableContribution, ContributionError};
 
+use crate::aggregation::registry::ValidatorRegistry;
+
 #[derive(Serialize, Deserialize, std::fmt::Debug, Clone)]
 pub struct TendermintContribution {
     #[beserial(len_type(u16))]
@@ -18,18 +20,18 @@ impl TendermintContribution {
     pub(crate) fn from_vote(
         vote: TendermintVote,
         secret_key: &SecretKey,
-        validator_id: u16,
+        validator_slots: Vec<u16>,
     ) -> Self {
-        // create the to be signed hash
-        let mut hasher = Blake2sHasher::new();
-        vote.serialize_content(&mut hasher);
-        let message_hash = hasher.finish();
-
         // sign the hash
-        let signature = AggregateSignature::from_signatures(&[secret_key.sign_hash(message_hash)]);
+        let signature = AggregateSignature::from_signatures(&[secret_key
+            .sign(&vote)
+            .multiply(validator_slots.len() as u16)]);
 
+        // get the slots of the validator ad insert them into the bitset
         let mut signers = BitSet::new();
-        signers.insert(validator_id as usize);
+        for slot in validator_slots {
+            signers.insert(slot as usize);
+        }
 
         // create a MultiSignature with the single contributor `validator_id`
         let multi_signature = MultiSignature::new(signature, signers);

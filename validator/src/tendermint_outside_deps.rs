@@ -14,6 +14,7 @@ use bls::{KeyPair, PublicKey};
 use database::WriteTransaction;
 use hash::{Blake2bHash, Hash};
 use network_interface::network::Network as NetworkInterface;
+use nimiq_primitives::slot::ValidatorSlots;
 use primitives::policy::{TENDERMINT_TIMEOUT_DELTA, TENDERMINT_TIMEOUT_INIT};
 use primitives::slot::SlotCollection;
 use tendermint::{
@@ -30,9 +31,9 @@ pub struct TendermintInterface<N: NetworkInterface> {
     // The network that is going to be used to communicate with the other validators.
     pub network: Arc<N>,
     // This is used to maintain a network-wide time.
-    pub offset_time: Arc<OffsetTime>,
+    pub offset_time: OffsetTime,
     // Necessary to produce blocks.
-    pub block_producer: Arc<BlockProducer>,
+    pub block_producer: BlockProducer,
     // The main blockchain struct. Contains all of this validator information about the current chain.
     pub blockchain: Arc<Blockchain>,
     // The aggregation adapter allows Tendermint to use Handel functions and networking.
@@ -316,5 +317,35 @@ impl<N: NetworkInterface> TendermintInterface<N> {
         // Evidently, the only way to escape the loop is to receive a valid message. But we need to
         // tell the Rust compiler this.
         unreachable!()
+    }
+
+    pub fn new(
+        validator_key: KeyPair,
+        validator_id: u16,
+        network: Arc<N>,
+        active_validators: ValidatorSlots,
+        blockchain: Arc<Blockchain>,
+        block_producer: BlockProducer,
+        block_height: u32,
+    ) -> Self {
+        // Create the aggregation object.
+        let aggregation_adapter = HandelTendermintAdapter::new(
+            validator_id,
+            active_validators,
+            block_height,
+            network.clone(),
+            validator_key.secret_key,
+        );
+
+        // Create the instance and return it.
+        Self {
+            validator_key,
+            network,
+            aggregation_adapter,
+            cache_body: None,
+            block_producer,
+            blockchain,
+            offset_time: OffsetTime::default(),
+        }
     }
 }

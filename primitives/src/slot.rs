@@ -265,6 +265,25 @@ impl ValidatorSlots {
             .map(|(idx, validator)| (idx as u16, validator.num_slots))
     }
 
+    /// for a given band `idx` returns the curresponding slots or empty vector if there are none.
+    pub fn get_slots(&self, idx: u16) -> Vec<u16> {
+        if idx as usize >= self.bands.len() {
+            return vec![];
+        } else {
+            let mut slot_index = 0;
+            for i in 0..=idx {
+                if i != idx {
+                    slot_index += self.bands.get(i as usize).unwrap().num_slots();
+                } else {
+                    return (slot_index
+                        ..(slot_index + self.bands.get(i as usize).unwrap().num_slots()))
+                        .collect();
+                }
+            }
+        }
+        vec![]
+    }
+
     pub fn iter(&self) -> Iter<ValidatorSlotBand> {
         self.bands.iter()
     }

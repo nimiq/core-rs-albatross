@@ -52,7 +52,6 @@ pub struct TendermintAggregations {
 }
 
 impl TendermintAggregations {
-    #![allow(unused)]
     pub(crate) fn new(
         validator_id: u16,
         validator_registry: Arc<ValidatorRegistry>,
@@ -488,8 +487,11 @@ impl<N: Network> HandelTendermintAdapter<N> {
         };
 
         // Create the signed contribution of this validator
-        let own_contribution =
-            TendermintContribution::from_vote(vote, &self.secret_key, self.validator_id);
+        let own_contribution = TendermintContribution::from_vote(
+            vote,
+            &self.secret_key,
+            self.validator_registry.get_slots(self.validator_id),
+        );
 
         let output_sink = Box::new(NetworkSink::<
             LevelUpdateMessage<TendermintContribution, TendermintIdentifier>,

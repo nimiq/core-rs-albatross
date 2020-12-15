@@ -77,7 +77,7 @@ fn sign_macro_block(
         proposal_hash: Some(proposal.value.hash::<Blake2bHash>()),
         id: TendermintIdentifier {
             block_number: proposal.value.block_number,
-            step: TendermintStep::PreVote,
+            step: TendermintStep::PreCommit,
             round_number: 0,
         },
         validator_merkle_root,
@@ -87,9 +87,10 @@ fn sign_macro_block(
     let message_hash = vote.hash::<Blake2sHash>();
 
     // sign the hash
-    let signature = AggregateSignature::from_signatures(
-        &[keypair.secret_key.sign_hash(message_hash); policy::SLOTS as usize],
-    );
+    let signature = AggregateSignature::from_signatures(&[keypair
+        .secret_key
+        .sign_hash(message_hash)
+        .multiply(policy::SLOTS)]);
 
     // create and populate signers BitSet.
     let mut signers = BitSet::new();

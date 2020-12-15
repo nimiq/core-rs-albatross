@@ -33,6 +33,7 @@ impl<I: IdentityRegistry + Sync + Send + 'static> Verifier for MultithreadedVeri
             if let Some(public_key) = self.identity_registry.public_key(signer) {
                 aggregated_public_key.aggregate(&public_key);
             } else {
+                warn!("Signer public key not found");
                 return VerificationResult::UnknownSigner { signer };
             }
         }

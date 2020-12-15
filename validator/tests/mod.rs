@@ -127,7 +127,7 @@ async fn one_validator_can_create_micro_blocks() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore] // Activate once follow mode is active, as this test cannot pass without it.
 async fn three_validators_can_create_micro_blocks() {
     let mut hub = MockHub::default();
 
@@ -161,7 +161,7 @@ async fn four_validators_can_view_change() {
     let mut events = consensus.blockchain.notifier.write().as_stream();
 
     // Freeze time to immediately trigger the view change timeout.
-    time::pause();
+    // time::pause();
 
     tokio::spawn(future::join_all(validators));
 

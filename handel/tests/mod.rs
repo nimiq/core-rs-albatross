@@ -19,10 +19,11 @@ use nimiq_network_interface::message::Message;
 use nimiq_network_interface::network::Network;
 use nimiq_network_mock::{MockHub, MockNetwork};
 
-use futures::future::Future;
+use futures::future::{BoxFuture, Future};
 use futures::sink::Sink;
-use futures::stream::StreamExt;
+use futures::stream::{Stream, StreamExt};
 use futures::task::{Context, Poll};
+use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::{fmt::Formatter, time::Duration};
@@ -153,49 +154,81 @@ impl protocol::Protocol for Protocol {
     }
 }
 
-/// Dump Sink wrapper for Network trait. (Only to be used with MockNetwork or the like, which have instant sending).
-struct NetworkSink<M: Message, N: Network> {
-    /// The network implementation this Sink is sending messages over
+struct SendingFuture<N: Network> {
     network: Arc<N>,
-    /// The buffered message if there is one
-    buffered_message: Option<M>,
 }
 
-impl<N: Network> Sink<(LevelUpdateMessage<Contribution, u8>, usize)>
-    for NetworkSink<LevelUpdateMessage<Contribution, u8>, N>
-{
+impl<N: Network> SendingFuture<N> {
+    pub async fn send<M: Message + Unpin + std::fmt::Debug>(self, msg: M) {
+        self.network.broadcast(&msg).await
+    }
+}
+
+/// Implementation of a simple Sink Wrapper for the NetworkInterface's Network trait
+pub struct NetworkSink<M: Message + Unpin, N: Network> {
+    /// The network this sink is sending its messages over
+    network: Arc<N>,
+    /// The currently executed future of sending an item.
+    current_future: Option<BoxFuture<'static, ()>>,
+
+    phantom: PhantomData<M>,
+}
+
+impl<M: Message + Unpin, N: Network> NetworkSink<M, N> {
+    pub fn new(network: Arc<N>) -> Self {
+        Self {
+            network,
+            current_future: None,
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<M: Message + Unpin + std::fmt::Debug, N: Network> Sink<(M, usize)> for NetworkSink<M, N> {
     type Error = ();
 
-    fn poll_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        if self.buffered_message.is_some() {
-            Poll::Pending
-        } else {
-            Poll::Ready(Ok(()))
-        }
+    fn poll_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        // As this Sink only bufferes a single message poll_ready is the same as poll_flush
+        self.poll_flush(cx)
     }
 
     fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        // As this Sink only bufferes a single message poll_close is the same as poll_flush
         self.poll_flush(cx)
     }
 
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        let msg = self.buffered_message.take().unwrap();
-        let mut future = Box::pin(self.network.broadcast(&msg));
-        match future.as_mut().poll(cx) {
-            Poll::Pending => Poll::Pending,
-            Poll::Ready(_) => Poll::Ready(Ok(())),
+        // If there is a future being processed
+        if let Some(mut fut) = self.current_future.take() {
+            // Poll it to check its state
+            if let Poll::Pending = fut.as_mut().poll(cx) {
+                // If it is still being processed reset self.current_future and return Pending as no new item can be accepted (and the buffer is occupied).
+                self.current_future = Some(fut);
+                Poll::Pending
+            } else {
+                // If it has completed a new item can be accepted (and the buffer is also empty).
+                Poll::Ready(Ok(()))
+            }
+        } else {
+            // when there is no future the buffer is empty and a new item can be accepted.
+            Poll::Ready(Ok(()))
         }
     }
 
-    fn start_send(
-        mut self: Pin<&mut Self>,
-        item: (LevelUpdateMessage<Contribution, u8>, usize),
-    ) -> Result<(), Self::Error> {
-        // TODO send_to. `item.1` is recipient.
-        if self.buffered_message.is_some() {
+    fn start_send(mut self: Pin<&mut Self>, item: (M, usize)) -> Result<(), Self::Error> {
+        // If there is future poll_ready didnot return Ready(Ok(())) or poll_ready was not called resulting in an error
+        if self.current_future.is_some() {
             Err(())
         } else {
-            self.buffered_message = Some(item.0);
+            // Otherwise, create the future and store it.
+            // Note: This future does not get polled. Only once poll_* is called it will actually be polled.
+            let fut = Box::pin(
+                SendingFuture {
+                    network: self.network.clone(),
+                }
+                .send(item.0),
+            ); //.boxed();
+            self.current_future = Some(fut);
             Ok(())
         }
     }
@@ -250,17 +283,19 @@ async fn it_can_aggregate() {
             ),
             Box::new(NetworkSink {
                 network: net.clone(),
-                buffered_message: None,
+                current_future: None,
+                phantom: PhantomData,
             }),
         );
 
         tokio::spawn(async move {
             // have them just run until the aggregation is finished
-            while let Some(_) = aggregation.next().await {}
+            while let Some(t) = aggregation.next().await {}
+            println!("{} is done", &id);
         });
     }
 
-    // same as in the for loop, execpt we want to keep the handel sinatnce and not spawn it.
+    // same as in the for loop, except we want to keep the handel instance and not spawn it.
     let net = Arc::new(hub.new_network_with_address(contributor_num));
     let protocol = Protocol::new(contributor_num, contributor_num + 1, contributor_num + 1);
     let mut contributors = BitSet::new();
@@ -274,7 +309,7 @@ async fn it_can_aggregate() {
     }
     networks.push(net.clone());
 
-    // instead of spawning the aggregation atsk await its result here.
+    // instead of spawning the aggregation task await its result here.
     let mut aggregation = Aggregation::new(
         protocol,
         1 as u8, // serves as the tag or identifier for this aggregation
@@ -286,7 +321,8 @@ async fn it_can_aggregate() {
         ),
         Box::new(NetworkSink {
             network: net.clone(),
-            buffered_message: None,
+            current_future: None,
+            phantom: PhantomData,
         }),
     );
 

@@ -44,12 +44,6 @@ impl TemporaryBlockProducer {
     fn next_block(&self, view_number: u32, extra_data: Vec<u8>) -> Block {
         let height = self.blockchain.block_number() + 1;
 
-        let view_change_proof = if self.blockchain.next_view_number() == view_number {
-            None
-        } else {
-            Some(self.create_view_change_proof(view_number))
-        };
-
         let block = if policy::is_macro_block_at(height) {
             let macro_block_proposal = self.producer.next_macro_block_proposal(
                 self.blockchain.time.now() + height as u64 * 1000,
@@ -76,6 +70,12 @@ impl TemporaryBlockProducer {
                 validator_merkle_root,
             ))
         } else {
+            let view_change_proof = if self.blockchain.next_view_number() == view_number {
+                None
+            } else {
+                Some(self.create_view_change_proof(view_number))
+            };
+
             Block::Micro(self.producer.next_micro_block(
                 self.blockchain.time.now() + height as u64 * 1000,
                 view_number,
@@ -100,24 +100,22 @@ impl TemporaryBlockProducer {
 
         // Create a TendemrintVote instance out of known properties.
         // round_number is for now fixed at 0 for tests, but it could be anything,
-        // as long as the TendermintProof further down this function does use the same round_umber.
+        // as long as the TendermintProof further down this function does use the same round_number.
         let vote = TendermintVote {
             proposal_hash: Some(proposal.value.hash::<Blake2bHash>()),
             id: TendermintIdentifier {
                 block_number: proposal.value.block_number,
-                step: TendermintStep::PreVote,
+                step: TendermintStep::PreCommit,
                 round_number: 0,
             },
             validator_merkle_root,
         };
 
-        // create the to be signed hash
-        let message_hash = vote.hash::<Blake2sHash>();
-
         // sign the hash
-        let signature = AggregateSignature::from_signatures(
-            &[keypair.secret_key.sign_hash(message_hash); policy::SLOTS as usize],
-        );
+        let signature = AggregateSignature::from_signatures(&[keypair
+            .secret_key
+            .sign(&vote)
+            .multiply(policy::SLOTS)]);
 
         // create and populate signers BitSet.
         let mut signers = BitSet::new();
@@ -147,11 +145,11 @@ impl TemporaryBlockProducer {
             prev_seed: self.blockchain.head().seed().clone(),
         };
 
-        // create signed prepare and commit
+        // create signed view change
         let view_change = SignedViewChange::from_message(view_change, &keypair.secret_key, 0);
-        // println!("{:?}", view_change.)
 
-        let signature = view_change.signature.multiply(policy::SLOTS);
+        let signature =
+            AggregateSignature::from_signatures(&[view_change.signature.multiply(policy::SLOTS)]);
         let mut signers = BitSet::new();
         for i in 0..policy::SLOTS {
             signers.insert(i as usize);
@@ -159,10 +157,7 @@ impl TemporaryBlockProducer {
 
         // create proof
         ViewChangeProof {
-            sig: MultiSignature::new(
-                AggregateSignature::from_signatures(&[signature; policy::SLOTS as usize]),
-                signers,
-            ),
+            sig: MultiSignature::new(signature, signers),
         }
     }
 }
@@ -285,6 +280,7 @@ fn it_cant_rebranch_across_epochs() {
     let ancestor = temp_producer1.next_block(0, vec![]);
     temp_producer2.push(ancestor.clone()).unwrap();
 
+    // progress the chain across an epoch boundary.
     for _ in 0..policy::EPOCH_LENGTH {
         temp_producer1.next_block(0, vec![]);
     }

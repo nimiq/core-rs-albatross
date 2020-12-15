@@ -9,12 +9,15 @@ use tokio::sync::{broadcast, mpsc};
 use block_albatross::{Block, BlockType, ViewChangeProof};
 use blockchain_albatross::{BlockchainEvent, ForkEvent};
 use consensus_albatross::{Consensus, ConsensusEvent};
+use database::{Database, Environment, ReadTransaction, WriteTransaction};
 use hash::Blake2bHash;
 use network_interface::network::Network;
+use nimiq_block_production_albatross::BlockProducer;
+use nimiq_tendermint::TendermintReturn;
 
 use crate::micro::{ProduceMicroBlock, ProduceMicroBlockEvent};
 use crate::mock::ValidatorNetwork;
-use crate::r#macro::ProduceMacroBlock;
+use crate::r#macro::{PersistedMacroState, ProduceMacroBlock};
 use crate::slash::ForkProofPool;
 
 enum ValidatorStakingState {
@@ -42,6 +45,8 @@ pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> {
     network: Arc<TValidatorNetwork>,
     signing_key: bls::KeyPair,
     wallet_key: Option<keys::KeyPair>,
+    database: Database,
+    env: Environment,
 
     consensus_event_rx: broadcast::Receiver<ConsensusEvent<TNetwork>>,
     blockchain_event_rx: mpsc::UnboundedReceiver<BlockchainEvent>,
@@ -51,12 +56,17 @@ pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> {
     blockchain_state: BlockchainState,
 
     macro_producer: Option<ProduceMacroBlock>,
+    macro_state: Option<PersistedMacroState<TValidatorNetwork>>,
 
     micro_producer: Option<ProduceMicroBlock<TValidatorNetwork>>,
     micro_state: ProduceMicroBlockState,
 }
 
-impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Validator<TNetwork, TValidatorNetwork> {
+impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
+    Validator<TNetwork, TValidatorNetwork>
+{
+    const MACRO_STATE_DB_NAME: &'static str = "ValidatorState";
+    const MACRO_STATE_KEY: &'static str = "validatorState";
     const VIEW_CHANGE_DELAY: Duration = Duration::from_secs(10);
     const FORK_PROOFS_MAX_SIZE: usize = 1_000; // bytes
 
@@ -74,11 +84,21 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Validator<TNetwork,
             view_change_proof: None,
         };
 
+        let env = consensus.env.clone();
+        let database = env.open_database(Self::MACRO_STATE_DB_NAME.to_string());
+
+        let macro_state: Option<PersistedMacroState<TValidatorNetwork>> = {
+            let read_transaction = ReadTransaction::new(&env);
+            read_transaction.get(&database, Self::MACRO_STATE_KEY)
+        };
+
         let mut this = Self {
             consensus,
             network,
             signing_key,
             wallet_key,
+            database,
+            env,
 
             consensus_event_rx,
             blockchain_event_rx,
@@ -88,6 +108,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Validator<TNetwork,
             blockchain_state,
 
             macro_producer: None,
+            macro_state,
 
             micro_producer: None,
             micro_state,
@@ -121,7 +142,36 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Validator<TNetwork,
         let _lock = self.consensus.blockchain.lock();
         match self.consensus.blockchain.get_next_block_type(None) {
             BlockType::Macro => {
-                // TODO
+                let block_producer = BlockProducer::new(
+                    self.consensus.blockchain.clone(),
+                    self.consensus.mempool.clone(),
+                    self.signing_key.clone(),
+                );
+
+                // Take the current state and see if it is applicable to the current height.
+                // We do not need to keep it as it is persisted.
+                // This will always result in None in case the validator works as intended.
+                // Only in case of a crashed node this will result in a value from which Tendermint can resume its work.
+                let state = self
+                    .macro_state
+                    .take()
+                    .map(|state| {
+                        if state.height == self.consensus.blockchain.block_number() + 1 {
+                            Some(state)
+                        } else {
+                            None
+                        }
+                    })
+                    .flatten();
+
+                self.macro_producer = Some(ProduceMacroBlock::new(
+                    self.consensus.blockchain.clone(),
+                    self.network.clone(),
+                    block_producer,
+                    self.signing_key.clone(),
+                    self.validator_id(),
+                    state,
+                ));
             }
             BlockType::Micro => {
                 self.micro_state = ProduceMicroBlockState {
@@ -179,8 +229,42 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Validator<TNetwork,
         };
     }
 
-    fn poll_macro(&mut self, _cx: &mut Context<'_>) {
-        unimplemented!()
+    fn poll_macro(&mut self, cx: &mut Context<'_>) {
+        let macro_producer = self.macro_producer.as_mut().unwrap();
+        while let Poll::Ready(Some(event)) = macro_producer.poll_next_unpin(cx) {
+            match event {
+                TendermintReturn::Error(_err) => {}
+                TendermintReturn::Result(result) => {
+                    // If the event is a result meaning the next macro block was produced we push it onto our local chain
+                    self.consensus
+                        .blockchain
+                        .push(Block::Macro(result))
+                        .map_err(|e| error!("Failed to push macro block onto the chain: {:?}", e))
+                        .ok();
+                }
+                // in case of a new state update we need to store th enew version of it disregarding any old state which potentially still lingers.
+                TendermintReturn::StateUpdate(update) => {
+                    let mut write_transaction = WriteTransaction::new(&self.env);
+                    let persistable_state = PersistedMacroState::<TValidatorNetwork> {
+                        height: self.consensus.blockchain.block_number() + 1,
+                        step: update.step.into(),
+                        round: update.round,
+                        locked_round: update.locked_round,
+                        locked_value: update.locked_value,
+                        valid_round: update.valid_round,
+                        valid_value: update.valid_value,
+                    };
+
+                    write_transaction.put::<str, Vec<u8>>(
+                        &self.database,
+                        Self::MACRO_STATE_KEY,
+                        &beserial::Serialize::serialize_to_vec(&persistable_state),
+                    );
+
+                    self.macro_state = Some(persistable_state);
+                }
+            }
+        }
     }
 
     fn poll_micro(&mut self, cx: &mut Context<'_>) {

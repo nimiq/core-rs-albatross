@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use beserial::Serialize;
 use futures::{pin_mut, StreamExt};
-use nimiq_hash::{Blake2sHash, Hash, SerializeContent};
+use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
 use nimiq_primitives::policy::{SLOTS, TWO_THIRD_SLOTS};
 use nimiq_tendermint::*;
 use std::collections::BTreeMap;
@@ -79,12 +79,13 @@ impl TendermintOutsideDeps for TestValidator {
 
     // When it is our turn to propose, the proposal message in `proposal_rounds` is used instead to
     // give us the value that we will propose.
-    fn get_value(&self, round: u32) -> Result<Self::ProposalTy, TendermintError> {
+    fn get_value(&mut self, round: u32) -> Result<Self::ProposalTy, TendermintError> {
         Ok(self.proposal_rounds[round as usize].1)
     }
 
     fn assemble_block(
         &self,
+        round: u32,
         proposal: Self::ProposalTy,
         _proof: Self::ProofTy,
     ) -> Result<Self::ResultTy, TendermintError> {
@@ -101,7 +102,7 @@ impl TendermintOutsideDeps for TestValidator {
     }
 
     async fn await_proposal(
-        &self,
+        &mut self,
         round: u32,
     ) -> Result<ProposalResult<Self::ProposalTy>, TendermintError> {
         if self.proposal_rounds[round as usize].0 {
@@ -122,7 +123,7 @@ impl TendermintOutsideDeps for TestValidator {
         &mut self,
         round: u32,
         step: Step,
-        _proposal: Option<Blake2sHash>,
+        _proposal: Option<Blake2bHash>,
     ) -> Result<AggregationResult<Self::ProofTy>, TendermintError> {
         // Calculate the hashes for the proposals 'A' and 'B'.
         let a_hash = TestProposal('A', 0).hash();

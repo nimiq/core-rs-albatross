@@ -116,17 +116,22 @@ impl<N: Network> ViewChangeAggregation<N> {
         let weights = ValidatorRegistry::new(active_validators.clone());
 
         let protocol = ViewChangeAggregationProtocol::new(
-            active_validators,
+            active_validators.clone(),
             validator_id as usize,
             policy::TWO_THIRD_SLOTS as usize,
             message_hash,
         );
 
-        let mut signature = bls::AggregateSignature::new();
-        signature.aggregate(&view_change.signature);
+        let slots = active_validators.get_slots(validator_id);
+
+        let signature = bls::AggregateSignature::from_signatures(&[view_change
+            .signature
+            .multiply(slots.len() as u16)]);
 
         let mut signers = BitSet::new();
-        signers.insert(validator_id as usize);
+        for slot in slots {
+            signers.insert(slot as usize);
+        }
 
         let own_contribution = MultiSignature::new(signature, signers);
 
