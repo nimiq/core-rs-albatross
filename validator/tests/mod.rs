@@ -12,7 +12,7 @@ use nimiq_consensus_albatross::{Consensus as AbstractConsensus, ConsensusEvent};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_keys::{Address, SecureGenerate};
 use nimiq_mempool::{Mempool, MempoolConfig};
-use nimiq_network_mock::network::MockNetwork;
+use nimiq_network_mock::{MockNetwork, MockHub};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_utils::time::OffsetTime;
@@ -27,22 +27,22 @@ fn seeded_rng(seed: u64) -> StdRng {
     StdRng::seed_from_u64(seed)
 }
 
-fn mock_consensus(peer_id: usize, genesis_info: GenesisInfo) -> Arc<Consensus> {
+fn mock_consensus(hub: &mut MockHub, peer_id: usize, genesis_info: GenesisInfo) -> Arc<Consensus> {
     let env = VolatileEnvironment::new(10).unwrap();
     let time = Arc::new(OffsetTime::new());
     let blockchain = Arc::new(Blockchain::with_genesis(env.clone(), time, NetworkId::UnitAlbatross, genesis_info.block, genesis_info.accounts).unwrap());
     let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
-    let network = Arc::new(MockNetwork::new(peer_id));
+    let network = Arc::new(hub.new_network_with_address(peer_id));
     let sync_protocol = QuickSync::default();
     Consensus::new(env, blockchain, mempool, network, sync_protocol).unwrap()
 }
 
-fn mock_validator(peer_id: usize, signing_key: KeyPair, genesis_info: GenesisInfo) -> Validator {
-    let consensus = mock_consensus(peer_id, genesis_info);
+fn mock_validator(hub: &mut MockHub, peer_id: usize, signing_key: KeyPair, genesis_info: GenesisInfo) -> Validator {
+    let consensus = mock_consensus(hub, peer_id, genesis_info);
     Validator::new(Arc::clone(&consensus), Arc::clone(&consensus.network), signing_key, None)
 }
 
-async fn mock_validators(num_validators: usize) -> Vec<Validator> {
+async fn mock_validators(hub: &mut MockHub, num_validators: usize) -> Vec<Validator> {
     // Generate validator key pairs.
     let mut rng = seeded_rng(0);
     let keys: Vec<KeyPair> = (0..num_validators).map(|_| KeyPair::generate(&mut rng)).collect();
@@ -55,14 +55,14 @@ async fn mock_validators(num_validators: usize) -> Vec<Validator> {
     let genesis = genesis_builder.generate().unwrap();
 
     // Instantiate validators.
-    let validators: Vec<Validator> = keys.into_iter().enumerate().map(|(id, key)| mock_validator(id, key, genesis.clone())).collect();
+    let validators: Vec<Validator> = keys.into_iter().enumerate().map(|(id, key)| mock_validator(hub, id, key, genesis.clone())).collect();
 
     // Connect validators to each other.
     for id in 0..num_validators {
         let validator = validators.get(id).unwrap();
         for other_id in (id + 1)..num_validators {
             let other_validator = validators.get(other_id).unwrap();
-            validator.consensus.network.connect(&other_validator.consensus.network);
+            validator.consensus.network.dial_mock(&other_validator.consensus.network);
         }
     }
 
@@ -90,17 +90,19 @@ fn validator_for_slot(validators: &Vec<Validator>, block_number: u32, view_numbe
 
 #[tokio::test]
 async fn one_validator_can_create_micro_blocks() {
+    let mut hub = MockHub::default();
+
     let key = KeyPair::generate(&mut seeded_rng(0));
     let genesis = GenesisBuilder::default()
         .with_genesis_validator(key.public_key, Address::default(), Coin::from_u64_unchecked(10000))
         .generate()
         .unwrap();
 
-    let validator = mock_validator(1, key, genesis.clone());
+    let validator = mock_validator(&mut hub,1, key, genesis.clone());
     let consensus1 = Arc::clone(&validator.consensus);
 
-    let consensus2 = mock_consensus(2, genesis);
-    consensus2.network.connect(&consensus1.network);
+    let consensus2 = mock_consensus(&mut hub, 2, genesis);
+    consensus2.network.dial_mock(&consensus1.network);
 
     let mut events1 = consensus1.subscribe_events();
     events1.next().await;
@@ -120,7 +122,9 @@ async fn one_validator_can_create_micro_blocks() {
 #[tokio::test]
 #[ignore]
 async fn three_validators_can_create_micro_blocks() {
-    let validators = mock_validators(3).await;
+    let mut hub = MockHub::default();
+
+    let validators = mock_validators(&mut hub, 3).await;
 
     let consensus = Arc::clone(&validators.first().unwrap().consensus);
 
@@ -136,7 +140,9 @@ async fn three_validators_can_create_micro_blocks() {
 
 #[tokio::test]
 async fn four_validators_can_view_change() {
-    let validators = mock_validators(4).await;
+    let mut hub = MockHub::default();
+
+    let validators = mock_validators(&mut hub, 4).await;
 
     // Disconnect the next block producer.
     let validator = validator_for_slot(&validators, 1, 0);

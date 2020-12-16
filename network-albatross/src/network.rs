@@ -1,6 +1,9 @@
-use std::cmp;
-use std::sync::{Arc, Weak};
-use std::time::Duration;
+use std::{
+    cmp,
+    sync::{Arc, Weak},
+    time::Duration,
+    pin::Pin,
+};
 
 use async_trait::async_trait;
 use atomic::Atomic;
@@ -429,7 +432,7 @@ impl NetworkInterface for Network {
         unimplemented!()
     }
 
-    async fn subscribe<T>(&self, _topic: &T) -> Result<Box<dyn Stream<Item = (T::Item, <Self::PeerType as PeerInterface>::Id)> + Send + Unpin>, Self::Error>
+    async fn subscribe<T>(&self, _topic: &T) -> Result<Pin<Box<dyn Stream<Item = (T::Item, <Self::PeerType as PeerInterface>::Id)> + Send>>, Self::Error>
         where
             T: Topic + Sync,
     {
@@ -443,7 +446,7 @@ impl NetworkInterface for Network {
         unimplemented!()
     }
 
-    async fn dht_get<K, V>(&self, _k: &K) -> Result<V, Self::Error>
+    async fn dht_get<K, V>(&self, _k: &K) -> Result<Option<V>, Self::Error>
     where
         K: AsRef<[u8]> + Send + Sync,
         V: Deserialize + Send + Sync,

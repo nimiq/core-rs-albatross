@@ -454,7 +454,7 @@ mod tests {
 
     use nimiq_database::volatile::VolatileEnvironment;
     use nimiq_genesis::NetworkId;
-    use nimiq_network_mock::network::{MockNetwork, MockPeer};
+    use nimiq_network_mock::{MockHub, MockNetwork, MockPeer};
 
     #[tokio::test]
     async fn it_can_cluster_epoch_ids() {
@@ -481,11 +481,13 @@ mod tests {
         let env1 = VolatileEnvironment::new(10).unwrap();
         let blockchain = Arc::new(Blockchain::new(env1.clone(), NetworkId::UnitAlbatross).unwrap());
 
-        let net1 = Arc::new(MockNetwork::new(1));
-        let net2 = Arc::new(MockNetwork::new(2));
-        let net3 = Arc::new(MockNetwork::new(3));
-        net1.connect(&net2);
-        net1.connect(&net3);
+        let mut hub = MockHub::default();
+
+        let net1 = Arc::new(hub.new_network());
+        let net2 = Arc::new(hub.new_network());
+        let net3 = Arc::new(hub.new_network());
+        net1.dial_mock(&net2);
+        net1.dial_mock(&net3);
         let peers = net1.get_peers();
         let consensus_agents: Vec<_> = peers.into_iter().map(ConsensusAgent::new).map(Arc::new).collect();
 

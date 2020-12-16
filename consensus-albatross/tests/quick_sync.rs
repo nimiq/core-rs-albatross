@@ -11,7 +11,7 @@ use nimiq_consensus_albatross::sync::QuickSync;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
 use nimiq_mempool::{Mempool, MempoolConfig};
-use nimiq_network_mock::network::MockNetwork;
+use nimiq_network_mock::MockHub;
 use nimiq_primitives::policy;
 
 /// Secret key of validator. Tests run with `network-primitives/src/genesis/unit-albatross.toml`
@@ -23,6 +23,8 @@ const SECRET_KEY: &str =
 // #[tokio::test]
 #[allow(dead_code)]
 async fn peers_can_sync() {
+    let mut hub = MockHub::default();
+
     // Setup first peer.
     let env1 = VolatileEnvironment::new(10).unwrap();
     let blockchain1 = Arc::new(Blockchain::new(env1.clone(), NetworkId::UnitAlbatross).unwrap());
@@ -41,7 +43,7 @@ async fn peers_can_sync() {
         assert_eq!(blockchain1.push(Block::Macro(block)), Ok(PushResult::Extended));
     }
 
-    let net1 = Arc::new(MockNetwork::new(1));
+    let net1 = Arc::new(hub.new_network());
     let sync1 = QuickSync::default();
     let consensus1 = Consensus::new(env1, blockchain1, mempool1, Arc::clone(&net1), sync1).unwrap();
 
@@ -50,12 +52,12 @@ async fn peers_can_sync() {
     let blockchain2 = Arc::new(Blockchain::new(env2.clone(), NetworkId::UnitAlbatross).unwrap());
     let mempool2 = Mempool::new(Arc::clone(&blockchain2), MempoolConfig::default());
 
-    let net2 = Arc::new(MockNetwork::new(2));
+    let net2 = Arc::new(hub.new_network());
     let sync2 = QuickSync::default();
     let consensus2 = Consensus::new(env2, blockchain2, mempool2, Arc::clone(&net2), sync2).unwrap();
 
     // Connect the two peers.
-    net1.connect(&net2);
+    net1.dial_mock(&net2);
     // Then wait for connection to be established.
     let mut stream = consensus2.subscribe_events();
     stream.recv().await.unwrap();
@@ -90,7 +92,7 @@ async fn peers_can_sync() {
     let blockchain3 = Arc::new(Blockchain::new(env3.clone(), NetworkId::UnitAlbatross).unwrap());
     let mempool3 = Mempool::new(Arc::clone(&blockchain3), MempoolConfig::default());
 
-    let net3 = Arc::new(MockNetwork::new(3));
+    let net3 = Arc::new(hub.new_network());
     let sync3 = QuickSync::default();
     let consensus3 = Consensus::new(env3, blockchain3, mempool3, Arc::clone(&net3), sync3).unwrap();
 
@@ -103,7 +105,7 @@ async fn peers_can_sync() {
     }
 
     // Connect the new peer with macro synced peer.
-    net3.connect(&net2);
+    net3.dial_mock(&net2);
     // Then wait for connection to be established.
     let mut stream = consensus3.subscribe_events();
     stream.recv().await.unwrap();

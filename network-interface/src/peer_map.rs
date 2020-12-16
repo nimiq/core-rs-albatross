@@ -95,6 +95,8 @@ where
     pub fn insert(&self, peer: impl Into<Arc<P>>) {
         let peer = peer.into();
 
+        log::debug!("Inserting into peer list: peer_id={:?}", peer.id());
+
         let mut inner = self.inner.write();
 
         if inner.peers.insert(peer.id(), Arc::clone(&peer)).is_none() {
@@ -111,6 +113,22 @@ where
         } else {
             None
         }
+    }
+
+    /// Remove all peers from map and emit an event for every removed peer.
+    pub fn remove_all(&self) -> Vec<Arc<P>> {
+        let mut inner = self.inner.write();
+
+        let peers = inner.peers
+            .drain()
+            .map(|(_, peer)| peer)
+            .collect();
+
+        for peer in &peers {
+            inner.notify(NetworkEvent::PeerLeft(Arc::clone(peer)));
+        }
+
+        peers
     }
 
     pub fn get_peer(&self, peer_id: &P::Id) -> Option<Arc<P>> {

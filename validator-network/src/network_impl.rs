@@ -5,6 +5,7 @@ use std::{
     },
     time::Duration,
     sync::Arc,
+    pin::Pin,
 };
 
 use async_trait::async_trait;
@@ -118,9 +119,13 @@ impl<N> ValidatorNetworkImpl<N>
 
     /// Looks up the peer ID for a validator public key in the DHT.
     async fn resolve_peer_id(network: &N, public_key: &CompressedPublicKey) -> Result<Option<PeerId<N>>, NetworkError<N::Error>> {
-        let record: SignedValidatorRecord<PeerId<N>> = network.dht_get(&public_key).await?;
-        if record.verify(&public_key.uncompress().unwrap()) {
-            Ok(Some(record.record.peer_id))
+        if let Some(record) = network.dht_get::<_, SignedValidatorRecord<PeerId<N>>>(&public_key).await? {
+            if record.verify(&public_key.uncompress().unwrap()) {
+                Ok(Some(record.record.peer_id))
+            }
+            else {
+                Ok(None)
+            }
         }
         else {
             Ok(None)
@@ -199,7 +204,7 @@ impl<N> ValidatorNetwork for ValidatorNetworkImpl<N>
         Ok(())
     }
 
-    async fn subscribe<TTopic>(&self, topic: &TTopic) -> Result<Box<dyn Stream<Item = (TTopic::Item, <Self::PeerType as Peer>::Id)> + Send>, Self::Error>
+    async fn subscribe<TTopic>(&self, topic: &TTopic) -> Result<Pin<Box<dyn Stream<Item = (TTopic::Item, <Self::PeerType as Peer>::Id)> + Send>>, Self::Error>
         where TTopic: Topic + Sync,
     {
         Ok(self.network.subscribe(topic).await?)

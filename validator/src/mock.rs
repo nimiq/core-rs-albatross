@@ -5,7 +5,7 @@ use futures::Future;
 use block_albatross::{MacroBlock, SignedViewChange, ViewChangeProof};
 use network::Network;
 use network_interface::network::Network as NetworkInterface;
-use nimiq_network_mock::network::MockNetwork;
+use nimiq_network_mock::MockNetwork;
 use primitives::slot::ValidatorSlots;
 
 pub trait ValidatorNetwork: NetworkInterface {}

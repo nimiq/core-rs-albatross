@@ -22,7 +22,7 @@ pub enum NetworkEvent<P> {
 pub trait Topic {
     type Item: Serialize + Deserialize + Send + Sync + 'static;
 
-    fn topic(&self) -> &'static str;
+    fn topic(&self) -> String;
 }
 
 impl<P: Peer> std::fmt::Debug for NetworkEvent<P> {
@@ -55,7 +55,7 @@ pub trait Network: Send + Sync + 'static {
 
     fn get_peers(&self) -> Vec<Arc<Self::PeerType>>;
     fn get_peer(&self, peer_id: <Self::PeerType as Peer>::Id) -> Option<Arc<Self::PeerType>>;
-
+    
     fn subscribe_events(&self) -> broadcast::Receiver<NetworkEvent<Self::PeerType>>;
 
     async fn broadcast<T: Message>(&self, msg: &T) {
@@ -71,7 +71,7 @@ pub trait Network: Send + Sync + 'static {
         ReceiveFromAll::new(self)
     }
 
-    async fn subscribe<T>(&self, topic: &T) -> Result<Box<dyn Stream<Item = (T::Item, <Self::PeerType as Peer>::Id)> + Send + Unpin>, Self::Error>
+    async fn subscribe<T>(&self, topic: &T) -> Result<Pin<Box<dyn Stream<Item = (T::Item, <Self::PeerType as Peer>::Id)> + Send>>, Self::Error>
     where
         T: Topic + Sync;
 
@@ -79,7 +79,7 @@ pub trait Network: Send + Sync + 'static {
     where
         T: Topic + Sync;
 
-    async fn dht_get<K, V>(&self, k: &K) -> Result<V, Self::Error>
+    async fn dht_get<K, V>(&self, k: &K) -> Result<Option<V>, Self::Error>
     where
         K: AsRef<[u8]> + Send + Sync,
         V: Deserialize + Send + Sync;

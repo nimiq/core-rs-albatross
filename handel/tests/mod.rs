@@ -14,7 +14,7 @@ use nimiq_handel::partitioner::BinomialPartitioner;
 use nimiq_handel::protocol;
 use nimiq_handel::store::ReplaceStore;
 use nimiq_handel::verifier;
-use nimiq_network_mock::network;
+use nimiq_network_mock::{MockNetwork, MockHub};
 
 use std::sync::Arc;
 use std::{fmt::Formatter, time::Duration};
@@ -155,13 +155,15 @@ async fn it_can_aggregate() {
         peer_count: 1,
     };
 
+    let mut hub = MockHub::default();
+
     let contributor_num: usize = 8;
 
-    let mut networks: Vec<Arc<network::MockNetwork>> = vec![];
+    let mut networks: Vec<Arc<MockNetwork>> = vec![];
     // Initialize `contributor_num networks and Handel Aggregations. Connect all the networks with each other.
     for id in 0..contributor_num {
         // Create a network with id = `id`
-        let net = Arc::new(network::MockNetwork::new(id));
+        let net = Arc::new(hub.new_network_with_address(id));
         // Create a protocol with `contributor_num + 1` peers set its id to `id`. Require `contributor_num` contributions
         // meaning all contributions need to be aggregated with the additional node initialized after this for loop.
         let protocol = Protocol::new(id, contributor_num + 1, contributor_num);
@@ -176,7 +178,7 @@ async fn it_can_aggregate() {
         };
         // connect the network to all already existing networks.
         for network in &networks {
-            net.connect(network);
+            net.dial_mock(network);
         }
         // remember the network so that subsequently created networks can connect to it.
         networks.push(net.clone());
@@ -190,7 +192,7 @@ async fn it_can_aggregate() {
         ));
     }
     // same as in the for loop, execpt we want to keep the handel sinatnce and not spawn it.
-    let net = Arc::new(network::MockNetwork::new(contributor_num));
+    let net = Arc::new(hub.new_network_with_address(contributor_num));
     let protocol = Protocol::new(contributor_num, contributor_num + 1, contributor_num + 1);
     let mut contributors = BitSet::new();
     contributors.insert(contributor_num);
@@ -199,7 +201,7 @@ async fn it_can_aggregate() {
         contributors,
     };
     for network in &networks {
-        net.connect(network);
+        net.dial_mock(network);
     }
     networks.push(net.clone());
 
@@ -216,6 +218,8 @@ async fn it_can_aggregate() {
 
 #[tokio::test]
 async fn it_can_aggregate_to_treshold() {
+    let mut hub = MockHub::default();
+
     let config = Config {
         update_count: 4,
         update_interval: Duration::from_millis(100),
@@ -226,11 +230,11 @@ async fn it_can_aggregate_to_treshold() {
 
     let contributor_num: usize = 8;
 
-    let mut networks: Vec<Arc<network::MockNetwork>> = vec![];
+    let mut networks: Vec<Arc<MockNetwork>> = vec![];
     // Initialize `contributor_num networks and Handel Aggregations. Connect all the networks with each other.
     for id in 0..contributor_num {
         // Create a network with id = `id`
-        let net = Arc::new(network::MockNetwork::new(id));
+        let net = Arc::new(hub.new_network_with_address(id));
         // Create a protocol with `contributor_num + 1` peers set its id to `id`. Require `contributor_num` contributions
         // meaning all contributions need to be aggregated with the additional node initialized after this for loop.
         let protocol = Protocol::new(id, contributor_num + 1, contributor_num / 2);
@@ -242,7 +246,7 @@ async fn it_can_aggregate_to_treshold() {
         let contribution = Contribution { value: 1u64, contributors };
         // connect the network to all already existing networks.
         for network in &networks {
-            net.connect(network);
+            net.dial_mock(network);
         }
         // remember the network so that subsequently created networks can connect to it.
         networks.push(net.clone());
@@ -256,13 +260,13 @@ async fn it_can_aggregate_to_treshold() {
         ));
     }
     // same as in the for loop, execpt we want to keep the handel sinatnce and not spawn it.
-    let net = Arc::new(network::MockNetwork::new(contributor_num));
+    let net = Arc::new(hub.new_network_with_address(contributor_num));
     let protocol = Protocol::new(contributor_num, contributor_num + 1, contributor_num / 2);
     let mut contributors = BitSet::new();
     contributors.insert(contributor_num);
     let contribution = Contribution { value: 1u64, contributors };
     for network in &networks {
-        net.connect(network);
+        net.dial_mock(network);
     }
     networks.push(net.clone());
 

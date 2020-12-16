@@ -1,6 +1,10 @@
 #![allow(dead_code)]
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::Arc,
+    pin::Pin,
+};
 
 use async_trait::async_trait;
 use futures::{
@@ -118,7 +122,7 @@ pub enum NetworkAction {
     },
     DhtGet {
         key: Vec<u8>,
-        output: oneshot::Sender<Result<Vec<u8>, NetworkError>>,
+        output: oneshot::Sender<Result<Option<Vec<u8>>, NetworkError>>,
     },
     DhtPut {
         key: Vec<u8>,
@@ -126,11 +130,11 @@ pub enum NetworkAction {
         output: oneshot::Sender<Result<(), NetworkError>>,
     },
     Subscribe {
-        topic_name: &'static str,
+        topic_name: String,
         output: mpsc::Sender<(GossipsubMessage, PeerId)>,
     },
     Publish {
-        topic_name: &'static str,
+        topic_name: String,
         data: Vec<u8>,
         output: oneshot::Sender<Result<(), NetworkError>>,
     },
@@ -139,7 +143,7 @@ pub enum NetworkAction {
 #[derive(Default)]
 struct TaskState {
     dht_puts: HashMap<QueryId, oneshot::Sender<Result<(), NetworkError>>>,
-    dht_gets: HashMap<QueryId, oneshot::Sender<Result<Vec<u8>, NetworkError>>>,
+    dht_gets: HashMap<QueryId, oneshot::Sender<Result<Option<Vec<u8>>, NetworkError>>>,
     gossip_topics: HashMap<TopicHash, mpsc::Sender<(GossipsubMessage, PeerId)>>,
 }
 
@@ -274,8 +278,8 @@ impl Network {
                                         if let Some(output) = state.dht_gets.remove(&id) {
                                             let result = result.map_err(Into::into).and_then(|GetRecordOk { mut records }| {
                                                 // TODO: What do we do, if we get multiple records?
-                                                let record = records.pop().unwrap();
-                                                Ok(record.record.value)
+                                                let data_opt = records.pop().map(|r| r.record.value);
+                                                Ok(data_opt)
                                             });
                                             output.send(result).ok();
                                         } else {
@@ -362,7 +366,7 @@ impl Network {
                 }
             },
             NetworkAction::Subscribe { topic_name, output } => {
-                let topic = GossipsubTopic::new(topic_name.into());
+                let topic = GossipsubTopic::new(topic_name.clone());
                 if swarm.gossipsub.subscribe(topic.clone()) {
                     state.gossip_topics.insert(topic.no_hash(), output);
                 } else {
@@ -370,7 +374,7 @@ impl Network {
                 }
             },
             NetworkAction::Publish { topic_name, data, output } => {
-                let topic = GossipsubTopic::new(topic_name.into());
+                let topic = GossipsubTopic::new(topic_name);
                 output.send(swarm.gossipsub.publish(&topic, data).map_err(Into::into)).ok();
             }
         }
@@ -402,7 +406,7 @@ impl NetworkInterface for Network {
     }
 
 
-    async fn subscribe<T>(&self, topic: &T) -> Result<Box<dyn Stream<Item = (T::Item, PeerId)> + Send + Unpin>, Self::Error>
+    async fn subscribe<T>(&self, topic: &T) -> Result<Pin<Box<dyn Stream<Item = (T::Item, PeerId)> + Send>>, Self::Error>
     where
         T: Topic + Sync,
     {
@@ -417,10 +421,10 @@ impl NetworkInterface for Network {
             })
             .await?;
 
-        Ok(Box::new(rx.map(|(msg, peer_id)| {
+        Ok(rx.map(|(msg, peer_id)| {
             let item: <T as Topic>::Item = Deserialize::deserialize_from_vec(&msg.data).unwrap();
             (item, peer_id)
-        })))
+        }).boxed())
     }
 
     async fn publish<T>(&self, topic: &T, item: <T as Topic>::Item) -> Result<(), Self::Error>
@@ -445,7 +449,7 @@ impl NetworkInterface for Network {
         output_rx.await?
     }
 
-    async fn dht_get<K, V>(&self, k: &K) -> Result<V, Self::Error>
+    async fn dht_get<K, V>(&self, k: &K) -> Result<Option<V>, Self::Error>
     where
         K: AsRef<[u8]> + Send + Sync,
         V: Deserialize + Send + Sync,
@@ -460,7 +464,12 @@ impl NetworkInterface for Network {
             })
             .await?;
 
-        Ok(Deserialize::deserialize_from_vec(&output_rx.await??)?)
+        if let Some(data) = output_rx.await?? {
+            Ok(Some(Deserialize::deserialize_from_vec(&data)?))
+        }
+        else {
+            Ok(None)
+        }
     }
 
     async fn dht_put<K, V>(&self, k: &K, v: &V) -> Result<(), Self::Error>
@@ -761,7 +770,7 @@ mod tests {
 
         let fetched_record = net2.dht_get::<_, TestRecord>(b"foo").await.unwrap();
 
-        assert_eq!(fetched_record, put_record);
+        assert_eq!(fetched_record, Some(put_record));
     }
 
     pub struct TestTopic;
@@ -769,8 +778,8 @@ mod tests {
     impl Topic for TestTopic {
         type Item = TestRecord;
 
-        fn topic(&self) -> &'static str {
-            "hello_world"
+        fn topic(&self) -> String {
+            "hello_world".to_owned()
         }
     }
 

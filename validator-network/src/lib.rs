@@ -44,10 +44,11 @@ pub trait ValidatorNetwork: Send + Sync {
 
     async fn publish<TTopic: Topic + Sync>(&self, topic: &TTopic, item: TTopic::Item) -> Result<(), Self::Error>;
 
-    async fn subscribe<TTopic: Topic + Sync>(&self, topic: &TTopic) -> Result<Box<dyn Stream<Item = (TTopic::Item, <Self::PeerType as Peer>::Id)> + Send>, Self::Error>;
+    async fn subscribe<TTopic: Topic + Sync>(&self, topic: &TTopic) -> Result<Pin<Box<dyn Stream<Item = (TTopic::Item, <Self::PeerType as Peer>::Id)> + Send>>, Self::Error>;
 
     /// registers a cache for the specified message type.
     /// Incoming messages of this type shuld be held in a FIFO queue of total size `buffer_size`, each with a lifetime of `lifetime`
     /// `lifetime` or `buffer_size` of 0 should disable the cache.
     fn cache<M: Message>(&self, buffer_size: usize, lifetime: Duration);
 }
+
