@@ -1,23 +1,19 @@
-use failure::Fail;
+use thiserror::Error;
 
 use blockchain_albatross::BlockchainError;
 
-#[derive(Fail, Debug)]
+
+#[derive(Debug, Error)]
 pub enum Error {
-    #[fail(display = "{}", _0)]
-    BlockchainError(#[cause] BlockchainError),
+    #[error("{0}")]
+    BlockchainError(#[from] BlockchainError),
 }
 
-impl From<BlockchainError> for Error {
-    fn from(e: BlockchainError) -> Self {
-        Error::BlockchainError(e)
-    }
-}
 
-#[derive(Fail, Debug)]
+#[derive(Debug, Error)]
 pub enum SyncError {
-    #[fail(display = "Other")]
+    #[error("Other")]
     Other,
-    #[fail(display = "No valid sync target found")]
+    #[error("No valid sync target found")]
     NoValidSyncTarget,
 }
