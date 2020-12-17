@@ -1,12 +1,12 @@
 use std::time::Duration;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use beserial::Deserialize;
 use futures::StreamExt;
-use log::Level;
-use nimiq_block_albatross::Block;
+
 use nimiq_block_production_albatross::{test_utils::*, BlockProducer};
-use nimiq_blockchain_albatross::{Blockchain, PushResult};
+use nimiq_blockchain_albatross::Blockchain;
 use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_consensus_albatross::consensus::Consensus;
 use nimiq_consensus_albatross::consensus_agent::ConsensusAgent;
@@ -20,8 +20,6 @@ use nimiq_mempool::{Mempool, MempoolConfig};
 use nimiq_network_interface::prelude::Network;
 use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_primitives::policy;
-use simple_logger;
-use std::sync::Arc;
 
 /// Secret key of validator. Tests run with `network-primitives/src/genesis/unit-albatross.toml`
 const SECRET_KEY: &str =
@@ -31,7 +29,7 @@ struct DummySync;
 
 #[async_trait]
 impl SyncProtocol<MockNetwork> for DummySync {
-    async fn perform_sync(&self, consensus: Arc<Consensus<MockNetwork>>) -> Result<(), SyncError> {
+    async fn perform_sync(&self, _consensus: Arc<Consensus<MockNetwork>>) -> Result<(), SyncError> {
         Ok(())
     }
 
@@ -178,14 +176,14 @@ async fn sync_ingredients() {
     let mempool2 = Mempool::new(Arc::clone(&blockchain2), MempoolConfig::default());
 
     let net2 = Arc::new(hub.new_network());
-    let mut sync = HistorySync::<MockNetwork>::new(Arc::clone(&blockchain2), net2.subscribe_events());
+    let _sync = HistorySync::<MockNetwork>::new(Arc::clone(&blockchain2), net2.subscribe_events());
     let consensus2 = Consensus::new(env2, blockchain2, mempool2, Arc::clone(&net2), DummySync).unwrap();
 
     // Connect the two peers.
     let mut stream = consensus2.network.subscribe_events();
     net1.dial_mock(&net2);
     // Then wait for connection to be established.
-    stream.recv().await;
+    stream.recv().await.unwrap();
     tokio::time::delay_for(Duration::from_secs(1)).await; // FIXME, Prof. Berrang told me to do this
 
     // Test ingredients:
