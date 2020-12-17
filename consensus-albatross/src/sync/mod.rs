@@ -12,6 +12,7 @@ pub use self::quick::*;
 pub mod history;
 mod quick;
 mod sync_queue;
+pub mod block_queue;
 
 #[async_trait]
 pub trait SyncProtocol<N: Network>: Send + Sync + 'static {

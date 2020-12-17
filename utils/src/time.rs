@@ -3,6 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use atomic::{Atomic, Ordering};
 
+/// Time with fixed offset from wall-clock, in milliseconds
 #[derive(Debug, Default)]
 pub struct OffsetTime {
     offset: Atomic<i64>,
