@@ -1,7 +1,5 @@
 use std::cmp::Ordering;
 use std::collections::{HashMap, VecDeque};
-use std::iter::once;
-use std::mem;
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
 
@@ -221,7 +219,7 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
     fn remove_front(&mut self, at: usize) {
         let mut new_cluster = self.split_off(at);
         new_cluster.adopted_batch_set = self.adopted_batch_set;
-        mem::replace(self, new_cluster);
+        *self = new_cluster;
     }
 }
 
@@ -237,7 +235,7 @@ impl<TPeer: Peer + 'static> Stream for SyncCluster<TPeer> {
                             return Poll::Ready(Some(Err(e)));
                         }
                     }
-                    Err(e) => {
+                    Err(_e) => {
                         return Poll::Ready(Some(Err(SyncClusterResult::Error)));
                     } // TODO Error
                 }
@@ -261,7 +259,7 @@ impl<TPeer: Peer + 'static> Stream for SyncCluster<TPeer> {
                         return Poll::Ready(Some(Ok(epoch)));
                     }
                 }
-                Err(e) => {
+                Err(_e) => {
                     return Poll::Ready(Some(Err(SyncClusterResult::Error)));
                 } // TODO Error
             }
@@ -662,7 +660,6 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
 
                 // Cut off the ids we have already adopted from the start of the next cluster.
                 // Empty clusters will be dealt with automatically.
-                let current_id = self.blockchain.election_head_hash();
                 let current_offset =
                     policy::epoch_at(self.blockchain.election_head().header.block_number) as usize;
 

@@ -1,7 +1,6 @@
 use beserial::{Deserialize, Serialize};
 use block_albatross::{Block, MacroBlock};
 use blockchain_albatross::history_store::HistoryTreeChunk;
-use failure::_core::fmt::{Error, Formatter};
 use hash::Blake2bHash;
 use network_interface::message::*;
 use std::fmt::Debug;

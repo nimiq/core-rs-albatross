@@ -153,7 +153,8 @@ impl<N: Network> Consensus<N> {
         let agent = Arc::new(ConsensusAgent::new(Arc::clone(&peer)));
         self.state.write().agents.insert(peer, Arc::clone(&agent));
 
-        self.events.send(ConsensusEvent::PeerJoined(agent));
+        // if the send fails, there are no receivers, which is fine
+        self.events.send(ConsensusEvent::PeerJoined(agent)).ok();
     }
 
     fn on_peer_left(&self, peer: Arc<N::PeerType>) {

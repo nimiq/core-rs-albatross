@@ -4,16 +4,13 @@ use futures::StreamExt;
 
 use crate::messages::handlers::Handle;
 use crate::messages::{
-    BatchSetInfo, BlockHashes, RequestBatchSet, RequestBlock, RequestBlockHashes,
-    RequestBlockHashesFilter, RequestHistoryChunk,
+    RequestBatchSet, RequestBlock, RequestBlockHashes, RequestHistoryChunk,
 };
 use crate::Consensus;
 
-use block_albatross::Block;
-use blockchain_albatross::{Blockchain, Direction};
-use network_interface::prelude::{Network, Peer, ResponseMessage};
-use nimiq_genesis::NetworkInfo;
-use primitives::policy;
+use blockchain_albatross::Blockchain;
+use network_interface::prelude::{Network, Peer};
+
 
 impl<N: Network> Consensus<N> {
     pub(super) fn init_network_requests(network: &Arc<N>, blockchain: &Arc<Blockchain>) {

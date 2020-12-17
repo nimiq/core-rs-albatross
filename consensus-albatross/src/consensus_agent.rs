@@ -1,7 +1,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use futures::Future;
 use parking_lot::RwLock;
 
 use block_albatross::Block;
