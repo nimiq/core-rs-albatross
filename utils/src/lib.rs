@@ -10,8 +10,6 @@ extern crate log;
 
 #[cfg(feature = "crc")]
 pub mod crc;
-#[cfg(feature = "drop-notify")]
-pub mod drop_notify;
 #[cfg(feature = "hash-rng")]
 pub mod hash_rng;
 #[cfg(feature = "iterators")]

@@ -45,7 +45,6 @@ nimiq-keys = { path = "../keys", version = "0.1" }
 
 [features]
 crc = []
-drop-notify = []
 otp = ["beserial", "clear_on_drop", "nimiq-hash", "rand"]
 key-store = ["failure", "beserial"]
 iterators = []
