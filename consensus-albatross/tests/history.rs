@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use async_trait::async_trait;
 use beserial::Deserialize;
 use futures::StreamExt;
@@ -16,7 +18,7 @@ use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
 use nimiq_mempool::{Mempool, MempoolConfig};
 use nimiq_network_interface::prelude::Network;
-use nimiq_network_mock::network::MockNetwork;
+use nimiq_network_mock::{MockNetwork, MockHub};
 use nimiq_primitives::policy;
 use simple_logger;
 use std::sync::Arc;
@@ -40,7 +42,9 @@ impl SyncProtocol<MockNetwork> for DummySync {
 
 #[tokio::test]
 async fn peers_can_sync() {
-    simple_logger::init_with_level(Level::Debug);
+    //simple_logger::init_with_level(Level::Trace);
+
+    let mut hub = MockHub::default();
 
     // Setup first peer.
     let env1 = VolatileEnvironment::new(10).unwrap();
@@ -62,7 +66,7 @@ async fn peers_can_sync() {
     // Produce the blocks.
     produce_macro_blocks(num_macro_blocks, &producer, &blockchain1);
 
-    let net1 = Arc::new(MockNetwork::new(1));
+    let net1 = Arc::new(hub.new_network());
     let consensus1 =
         Consensus::new(env1, blockchain1, mempool1, Arc::clone(&net1), DummySync).unwrap();
 
@@ -71,13 +75,14 @@ async fn peers_can_sync() {
     let blockchain2 = Arc::new(Blockchain::new(env2.clone(), NetworkId::UnitAlbatross).unwrap());
     let mempool2 = Mempool::new(Arc::clone(&blockchain2), MempoolConfig::default());
 
-    let net2 = Arc::new(MockNetwork::new(2));
+    let net2 = Arc::new(hub.new_network());
     let mut sync =
         HistorySync::<MockNetwork>::new(Arc::clone(&blockchain2), net2.subscribe_events());
     let consensus2 =
         Consensus::new(env2, blockchain2, mempool2, Arc::clone(&net2), DummySync).unwrap();
 
-    net1.connect(&net2);
+    net1.dial_mock(&net2);
+    tokio::time::delay_for(Duration::from_secs(1)).await;
     let sync_result = sync.next().await;
 
     assert!(sync_result.is_some());
@@ -161,7 +166,7 @@ async fn peers_can_sync() {
 
 #[tokio::test]
 async fn sync_ingredients() {
-    simple_logger::init_with_level(Level::Debug);
+    let mut hub = MockHub::default();
 
     // Setup first peer.
     let env1 = VolatileEnvironment::new(10).unwrap();
@@ -183,7 +188,7 @@ async fn sync_ingredients() {
     // Produce the blocks.
     produce_macro_blocks(num_macro_blocks, &producer, &blockchain1);
 
-    let net1 = Arc::new(MockNetwork::new(1));
+    let net1 = Arc::new(hub.new_network());
     let consensus1 =
         Consensus::new(env1, blockchain1, mempool1, Arc::clone(&net1), DummySync).unwrap();
 
@@ -192,7 +197,7 @@ async fn sync_ingredients() {
     let blockchain2 = Arc::new(Blockchain::new(env2.clone(), NetworkId::UnitAlbatross).unwrap());
     let mempool2 = Mempool::new(Arc::clone(&blockchain2), MempoolConfig::default());
 
-    let net2 = Arc::new(MockNetwork::new(2));
+    let net2 = Arc::new(hub.new_network());
     let mut sync =
         HistorySync::<MockNetwork>::new(Arc::clone(&blockchain2), net2.subscribe_events());
     let consensus2 =
@@ -200,9 +205,10 @@ async fn sync_ingredients() {
 
     // Connect the two peers.
     let mut stream = consensus2.network.subscribe_events();
-    net1.connect(&net2);
+    net1.dial_mock(&net2);
     // Then wait for connection to be established.
     stream.recv().await;
+    tokio::time::delay_for(Duration::from_secs(1)).await; // FIXME, Prof. Berrang told me to do this
 
     // Test ingredients:
     // Request hashes

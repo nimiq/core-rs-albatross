@@ -105,6 +105,7 @@ pub struct ReceiveFromAll<T: Message, P> {
 impl<T: Message, P: Peer + 'static> ReceiveFromAll<T, P> {
     pub fn new<N: Network<PeerType = P> + ?Sized>(network: &N) -> Self {
         let (peers, updates) = network.get_peer_updates();
+        log::trace!("peers = {:?}", peers.iter().map(|peer| peer.id()).collect::<Vec<_>>());
 
         ReceiveFromAll {
             inner: stream::select_all(peers.into_iter().map(|peer| {
@@ -124,6 +125,7 @@ impl<T: Message, P: Peer + 'static> Stream for ReceiveFromAll<T, P> {
             match self.event_stream.poll_next_unpin(cx) {
                 Poll::Pending => break,
                 Poll::Ready(Some(Ok(NetworkEvent::PeerJoined(peer)))) => {
+                    log::trace!("peers joined {:?}", peer.id());
                     // We have a new peer to receive from.
                     let peer_inner = Arc::clone(&peer);
                     self.inner.push(peer.receive::<T>().map(move |item| (item, Arc::clone(&peer_inner))).boxed())

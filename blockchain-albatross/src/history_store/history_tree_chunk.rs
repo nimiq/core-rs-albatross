@@ -1,3 +1,4 @@
+use std::fmt::{Debug, Formatter, self};
 use crate::history_store::{ExtendedTransaction, HistoryTreeHash};
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, WriteBytesExt};
 use hash::Blake2bHash;
@@ -12,6 +13,12 @@ pub const CHUNK_SIZE: usize = 1000;
 pub struct HistoryTreeChunk {
     pub(crate) proof: RangeProof<HistoryTreeHash>,
     pub history: Vec<ExtendedTransaction>,
+}
+
+impl Debug for HistoryTreeChunk {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "HistoryTreeChunk {{ /* TODO */ }}")
+    }
 }
 
 impl HistoryTreeChunk {

@@ -145,7 +145,7 @@ impl Message for RequestHistoryChunk {
 }
 
 /// This message contains a chunk of the history.
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct HistoryChunk {
     pub chunk: Option<HistoryTreeChunk>,
     pub request_identifier: u32,
@@ -154,12 +154,6 @@ request_response!(HistoryChunk);
 
 impl Message for HistoryChunk {
     const TYPE_ID: u64 = 205;
-}
-
-impl Debug for HistoryChunk {
-    fn fmt(&self, _f: &mut Formatter<'_>) -> Result<(), Error> {
-        unimplemented!()
-    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

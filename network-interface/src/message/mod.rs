@@ -11,7 +11,7 @@ mod crc;
 
 const MAGIC: u32 = 0x4204_2042;
 
-pub trait Message: Serialize + Deserialize + Send + Sync + 'static {
+pub trait Message: Serialize + Deserialize + Send + Sync + std::fmt::Debug + 'static {
     const TYPE_ID: u64;
 
     // Does CRC stuff and is called by network

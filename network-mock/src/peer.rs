@@ -53,13 +53,15 @@ impl Peer for MockPeer {
 
         let mut sender = {
             let hub = self.hub.lock();
-
             if let Some(sender) = hub.network_senders.get(&k) {
                 sender.clone()
             } else {
+                log::warn!("No such sender: {:?}", k);
                 return Ok(());
             }
         };
+
+        log::trace!("Sending message: {:?}", msg);
 
         let mut data = vec![];
         msg.serialize_message(&mut data).unwrap();
@@ -71,6 +73,8 @@ impl Peer for MockPeer {
 
     fn receive<T: Message>(&self) -> Pin<Box<dyn Stream<Item = T> + Send>> {
         let mut hub = self.hub.lock();
+
+        log::debug!("Peer {} listening on msg_type={} from peer {}", self.network_address, T::TYPE_ID, self.peer_id);
 
         let (tx, rx) = mpsc::channel(16);
 
@@ -85,7 +89,10 @@ impl Peer for MockPeer {
 
         rx.filter_map(|data| async move {
             match T::deserialize_message(&mut Cursor::new(data)) {
-                Ok(message) => Some(message),
+                Ok(message) => {
+                    log::trace!("Received message: {:?}", message);
+                    Some(message)
+                },
                 Err(e) => {
                     // TODO: Give MockHub a config, so that we can panic here if that's what the test wants to do.
                     log::warn!("Failed to deserialize message: {}", e);
