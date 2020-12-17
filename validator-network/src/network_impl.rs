@@ -1,51 +1,37 @@
 use std::{
-    collections::{
-        btree_map::Entry,
-        BTreeMap,
-    },
-    time::Duration,
-    sync::Arc,
+    collections::{btree_map::Entry, BTreeMap},
     pin::Pin,
+    sync::Arc,
+    time::Duration,
 };
 
 use async_trait::async_trait;
-use beserial::{Serialize, Deserialize};
-use futures::{
-    lock::Mutex,
-    future::join_all,
-    Stream, StreamExt,
-};
+use beserial::{Deserialize, Serialize};
+use futures::{future::join_all, lock::Mutex, Stream, StreamExt};
 
-use nimiq_bls::{CompressedPublicKey, Signature, PublicKey};
-use nimiq_network_interface::{
-    message::Message,
-    network::Network,
-    peer::Peer,
-    network::Topic,
-};
+use nimiq_bls::{CompressedPublicKey, PublicKey, Signature};
+use nimiq_network_interface::{message::Message, network::Network, network::Topic, peer::Peer};
 use nimiq_utils::tagged_signing::TaggedSignable;
 
-use super::{ValidatorNetwork, NetworkError, MessageStream};
-
+use super::{MessageStream, NetworkError, ValidatorNetwork};
 
 // Helper to get PeerId type from a network
 type PeerId<N> = <<N as Network>::PeerType as Peer>::Id;
-
 
 //struct ValidatorPeerId<TPeerId: Serialize>(TPeerId);
 
 // TODO: Use a tagged signature for validator records
 impl<TPeerId> TaggedSignable for ValidatorRecord<TPeerId>
-    where TPeerId: Serialize + Deserialize
+where
+    TPeerId: Serialize + Deserialize,
 {
     const TAG: u8 = 0x03;
 }
 
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct ValidatorRecord<TPeerId>
-    where
-        TPeerId: Serialize + Deserialize,
+where
+    TPeerId: Serialize + Deserialize,
 {
     peer_id: TPeerId,
     //public_key: PublicKey,
@@ -54,22 +40,21 @@ struct ValidatorRecord<TPeerId>
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct SignedValidatorRecord<TPeerId>
-    where
-        TPeerId: Serialize + Deserialize,
+where
+    TPeerId: Serialize + Deserialize,
 {
     record: ValidatorRecord<TPeerId>,
     signature: Signature,
 }
 
 impl<TPeerId> SignedValidatorRecord<TPeerId>
-    where
-        TPeerId: Serialize + Deserialize,
+where
+    TPeerId: Serialize + Deserialize,
 {
     pub fn verify(&self, public_key: &PublicKey) -> bool {
         public_key.verify(&self.record.serialize_to_vec(), &self.signature)
     }
 }
-
 
 #[derive(Clone, Debug)]
 pub struct State<TPeerId> {
@@ -79,16 +64,18 @@ pub struct State<TPeerId> {
 
 #[derive(Debug)]
 pub struct ValidatorNetworkImpl<N>
-    where N: Network,
-          <<N as Network>::PeerType as Peer>::Id: Send + Sync + Serialize + Deserialize,
+where
+    N: Network,
+    <<N as Network>::PeerType as Peer>::Id: Send + Sync + Serialize + Deserialize,
 {
     network: N,
     state: Mutex<State<PeerId<N>>>,
 }
 
 impl<N> ValidatorNetworkImpl<N>
-    where N: Network,
-          <<N as Network>::PeerType as Peer>::Id: Send + Sync + Serialize + Deserialize + Clone,
+where
+    N: Network,
+    <<N as Network>::PeerType as Peer>::Id: Send + Sync + Serialize + Deserialize + Clone,
 {
     pub fn new(network: N) -> Self {
         Self {
@@ -96,7 +83,7 @@ impl<N> ValidatorNetworkImpl<N>
             state: Mutex::new(State {
                 validator_keys: vec![],
                 validator_peer_id_cache: BTreeMap::new(),
-            })
+            }),
         }
     }
 
@@ -122,12 +109,10 @@ impl<N> ValidatorNetworkImpl<N>
         if let Some(record) = network.dht_get::<_, SignedValidatorRecord<PeerId<N>>>(&public_key).await? {
             if record.verify(&public_key.uncompress().unwrap()) {
                 Ok(Some(record.record.peer_id))
-            }
-            else {
+            } else {
                 Ok(None)
             }
-        }
-        else {
+        } else {
             Ok(None)
         }
     }
@@ -136,7 +121,9 @@ impl<N> ValidatorNetworkImpl<N>
     async fn get_validator_peer_id(&self, validator_id: usize) -> Result<PeerId<N>, NetworkError<N::Error>> {
         let mut state = self.state.lock().await;
 
-        let public_key = state.validator_keys.get(validator_id)
+        let public_key = state
+            .validator_keys
+            .get(validator_id)
             .ok_or_else(|| NetworkError::UnknownValidator(validator_id))?
             .clone();
 
@@ -147,8 +134,7 @@ impl<N> ValidatorNetworkImpl<N>
             Entry::Vacant(vacant) => {
                 if let Some(peer_id) = Self::resolve_peer_id(&self.network, &public_key).await? {
                     Ok(vacant.insert(peer_id).clone())
-                }
-                else {
+                } else {
                     log::error!("Could not find peer ID for validator in DHT: public_key = {:?}", public_key);
                     Err(NetworkError::UnknownValidator(validator_id))
                 }
@@ -163,10 +149,10 @@ impl<N> ValidatorNetworkImpl<N>
 
 #[async_trait]
 impl<N> ValidatorNetwork for ValidatorNetworkImpl<N>
-    where
-        N: Network,
-        <<N as Network>::PeerType as Peer>::Id: Send + Sync + Serialize + Deserialize + Clone,
-        <N as Network>::Error: Send,
+where
+    N: Network,
+    <<N as Network>::PeerType as Peer>::Id: Send + Sync + Serialize + Deserialize + Clone,
+    <N as Network>::Error: Send,
 {
     type Error = NetworkError<<N as Network>::Error>;
     type PeerType = <N as Network>::PeerType;
@@ -177,35 +163,34 @@ impl<N> ValidatorNetwork for ValidatorNetworkImpl<N>
     }
 
     async fn send_to<M: Message>(&self, validator_ids: &[usize], msg: &M) -> Vec<Result<(), Self::Error>> {
-        let futures = validator_ids.iter()
-            .copied()
-            .map(|validator_id| async move {
-                self.get_validator_peer(validator_id)
-                    .await?
-                    .ok_or_else(|| NetworkError::UnknownValidator(validator_id))?
-                    .send(msg)
-                    .await
-                    .map_err(NetworkError::Send)?;
-                Ok(())
-            });
+        let futures = validator_ids.iter().copied().map(|validator_id| async move {
+            self.get_validator_peer(validator_id)
+                .await?
+                .ok_or_else(|| NetworkError::UnknownValidator(validator_id))?
+                .send(msg)
+                .await
+                .map_err(NetworkError::Send)?;
+            Ok(())
+        });
 
         join_all(futures).await.into_iter().collect::<Vec<Result<(), Self::Error>>>()
     }
 
     fn receive<M: Message>(&self) -> MessageStream<M, PeerId<N>> {
-        Box::pin(self.network.receive_from_all()
-            .map(|(message, peer)| (message, peer.id())))
+        Box::pin(self.network.receive_from_all().map(|(message, peer)| (message, peer.id())))
     }
 
     async fn publish<TTopic>(&self, topic: &TTopic, item: TTopic::Item) -> Result<(), Self::Error>
-        where TTopic: Topic + Sync,
+    where
+        TTopic: Topic + Sync,
     {
         self.network.publish(topic, item).await?;
         Ok(())
     }
 
     async fn subscribe<TTopic>(&self, topic: &TTopic) -> Result<Pin<Box<dyn Stream<Item = (TTopic::Item, <Self::PeerType as Peer>::Id)> + Send>>, Self::Error>
-        where TTopic: Topic + Sync,
+    where
+        TTopic: Topic + Sync,
     {
         Ok(self.network.subscribe(topic).await?)
     }
@@ -214,4 +199,3 @@ impl<N> ValidatorNetwork for ValidatorNetworkImpl<N>
         unimplemented!()
     }
 }
-

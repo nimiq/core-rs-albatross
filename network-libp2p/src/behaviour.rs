@@ -31,10 +31,13 @@ use crate::{
     network::Config,
 };
 
-pub type NimiqNetworkBehaviourAction =
-    NetworkBehaviourAction<EitherOutput<EitherOutput<EitherOutput<EitherOutput<DiscoveryAction, MessageAction>, LimitAction>, KademliaAction<QueryId>>, GossipsubRpc>, NimiqEvent>;
+pub type NimiqNetworkBehaviourAction = NetworkBehaviourAction<
+    EitherOutput<EitherOutput<EitherOutput<EitherOutput<DiscoveryAction, MessageAction>, LimitAction>, KademliaAction<QueryId>>, GossipsubRpc>,
+    NimiqEvent,
+>;
 
-pub type NimiqNetworkBehaviourError = EitherError<EitherError<EitherError<EitherError<DiscoveryError, MessageError>, LimitError>, std::io::Error>, std::io::Error>;
+pub type NimiqNetworkBehaviourError =
+    EitherError<EitherError<EitherError<EitherError<DiscoveryError, MessageError>, LimitError>, std::io::Error>, std::io::Error>;
 
 #[derive(Debug)]
 pub enum NimiqEvent {

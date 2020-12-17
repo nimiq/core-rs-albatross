@@ -119,10 +119,7 @@ where
     pub fn remove_all(&self) -> Vec<Arc<P>> {
         let mut inner = self.inner.write();
 
-        let peers = inner.peers
-            .drain()
-            .map(|(_, peer)| peer)
-            .collect();
+        let peers = inner.peers.drain().map(|(_, peer)| peer).collect();
 
         for peer in &peers {
             inner.notify(NetworkEvent::PeerLeft(Arc::clone(peer)));

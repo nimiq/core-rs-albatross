@@ -12,7 +12,7 @@ use nimiq_consensus_albatross::{Consensus as AbstractConsensus, ConsensusEvent};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_keys::{Address, SecureGenerate};
 use nimiq_mempool::{Mempool, MempoolConfig};
-use nimiq_network_mock::{MockNetwork, MockHub};
+use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_utils::time::OffsetTime;
@@ -55,7 +55,11 @@ async fn mock_validators(hub: &mut MockHub, num_validators: usize) -> Vec<Valida
     let genesis = genesis_builder.generate().unwrap();
 
     // Instantiate validators.
-    let validators: Vec<Validator> = keys.into_iter().enumerate().map(|(id, key)| mock_validator(hub, id, key, genesis.clone())).collect();
+    let validators: Vec<Validator> = keys
+        .into_iter()
+        .enumerate()
+        .map(|(id, key)| mock_validator(hub, id, key, genesis.clone()))
+        .collect();
 
     // Connect validators to each other.
     for id in 0..num_validators {
@@ -98,7 +102,7 @@ async fn one_validator_can_create_micro_blocks() {
         .generate()
         .unwrap();
 
-    let validator = mock_validator(&mut hub,1, key, genesis.clone());
+    let validator = mock_validator(&mut hub, 1, key, genesis.clone());
     let consensus1 = Arc::clone(&validator.consensus);
 
     let consensus2 = mock_consensus(&mut hub, 2, genesis);

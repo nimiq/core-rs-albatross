@@ -14,7 +14,7 @@ use nimiq_handel::partitioner::BinomialPartitioner;
 use nimiq_handel::protocol;
 use nimiq_handel::store::ReplaceStore;
 use nimiq_handel::verifier;
-use nimiq_network_mock::{MockNetwork, MockHub};
+use nimiq_network_mock::{MockHub, MockNetwork};
 
 use std::sync::Arc;
 use std::{fmt::Formatter, time::Duration};

@@ -55,7 +55,7 @@ pub trait Network: Send + Sync + 'static {
 
     fn get_peers(&self) -> Vec<Arc<Self::PeerType>>;
     fn get_peer(&self, peer_id: <Self::PeerType as Peer>::Id) -> Option<Arc<Self::PeerType>>;
-    
+
     fn subscribe_events(&self) -> broadcast::Receiver<NetworkEvent<Self::PeerType>>;
 
     async fn broadcast<T: Message>(&self, msg: &T) {

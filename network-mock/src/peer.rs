@@ -1,27 +1,28 @@
 use std::{
-    sync::Arc,
-    pin::Pin,
-    hash::{Hasher, Hash},
+    hash::{Hash, Hasher},
     io::Cursor,
+    pin::Pin,
+    sync::Arc,
 };
 
+use async_trait::async_trait;
 use futures::{
     channel::mpsc,
-    stream::{StreamExt, Stream},
     sink::SinkExt,
+    stream::{Stream, StreamExt},
 };
 use parking_lot::Mutex;
-use async_trait::async_trait;
 
-use nimiq_network_interface::message::Message;
-use nimiq_network_interface::peer::{Peer, CloseReason, RequestResponse, SendError};
+use nimiq_network_interface::{
+    message::Message,
+    peer::{CloseReason, Peer, RequestResponse, SendError},
+};
 
 use crate::{
     hub::{MockHubInner, SenderKey},
     network::MockNetworkError,
-    MockPeerId, MockAddress,
+    MockAddress, MockPeerId,
 };
-
 
 #[derive(Debug)]
 pub struct MockPeer {
@@ -55,9 +56,8 @@ impl Peer for MockPeer {
 
             if let Some(sender) = hub.network_senders.get(&k) {
                 sender.clone()
-            }
-            else {
-                return Ok(())
+            } else {
+                return Ok(());
             }
         };
 
@@ -74,12 +74,14 @@ impl Peer for MockPeer {
 
         let (tx, rx) = mpsc::channel(16);
 
-        hub.network_senders
-            .insert(SenderKey {
+        hub.network_senders.insert(
+            SenderKey {
                 network_recipient: self.network_address,
                 sender_peer: self.peer_id,
                 message_type: T::TYPE_ID,
-            }, tx);
+            },
+            tx,
+        );
 
         rx.filter_map(|data| async move {
             match T::deserialize_message(&mut Cursor::new(data)) {
@@ -90,24 +92,23 @@ impl Peer for MockPeer {
                     None
                 }
             }
-        }).boxed()
+        })
+        .boxed()
     }
 
     fn close(&self, _ty: CloseReason) {
         let mut hub = self.hub.lock();
 
         // Drops senders and thus the receiver stream will end
-        hub.network_senders.retain(|k, _sender| {
-            k.network_recipient != self.network_address
-        });
+        hub.network_senders.retain(|k, _sender| k.network_recipient != self.network_address);
     }
 
     async fn request<R: RequestResponse>(&self, _request: &<R as RequestResponse>::Request) -> Result<R::Response, Self::Error> {
-        unimplemented!()
+        unimplemented!("In the mean-time you can use `nimiq_network_interface::request_response`");
     }
 
     fn requests<R: RequestResponse>(&self) -> Box<dyn Stream<Item = R::Request>> {
-        unimplemented!()
+        unimplemented!("In the mean-time you can use `nimiq_network_interface::request_response`");
     }
 }
 

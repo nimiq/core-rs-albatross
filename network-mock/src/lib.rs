@@ -12,7 +12,6 @@ pub use hub::MockHub;
 pub use network::MockNetwork;
 pub use peer::MockPeer;
 
-
 /// The address of a MockNetwork or a peer thereof. Peer IDs are always equal to their respective address, thus these
 /// can be converted between each other.
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, Display, From, Into)]
@@ -35,13 +34,10 @@ impl From<MockPeerId> for MockAddress {
     }
 }
 
-
 pub async fn create_mock_validator_network(n: usize, dial: bool) -> Vec<MockNetwork> {
     let mut hub = MockHub::default();
 
-    let networks = (0..n)
-        .map(|_| hub.new_network())
-        .collect::<Vec<MockNetwork>>();
+    let networks = (0..n).map(|_| hub.new_network()).collect::<Vec<MockNetwork>>();
 
     if n > 0 && dial {
         // Peers i>0 dial peer 0
@@ -53,17 +49,15 @@ pub async fn create_mock_validator_network(n: usize, dial: bool) -> Vec<MockNetw
     networks
 }
 
-
-
 #[cfg(test)]
 pub mod tests {
-    use tokio::sync::broadcast;
     use futures::{Stream, StreamExt};
+    use tokio::sync::broadcast;
 
-    use beserial::{Serialize, Deserialize};
+    use beserial::{Deserialize, Serialize};
     use nimiq_network_interface::{
-        network::{Network, NetworkEvent, Topic},
         message::Message,
+        network::{Network, NetworkEvent, Topic},
         peer::Peer,
     };
 
@@ -124,7 +118,6 @@ pub mod tests {
         assert_eq!(peer_ids, expected_peer_ids);
     }
 
-
     // Copied straight from nimiq_network_libp2p::network
 
     #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
@@ -158,10 +151,8 @@ pub mod tests {
         }
     }
 
-    fn consume_stream<T: std::fmt::Debug>(mut stream: impl Stream<Item=T> + Unpin + Send + 'static) {
-        tokio::spawn(async move {
-            while let Some(_) = stream.next().await {}
-        });
+    fn consume_stream<T: std::fmt::Debug>(mut stream: impl Stream<Item = T> + Unpin + Send + 'static) {
+        tokio::spawn(async move { while let Some(_) = stream.next().await {} });
     }
 
     #[tokio::test]

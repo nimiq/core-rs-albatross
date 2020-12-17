@@ -84,8 +84,10 @@ pub enum IncomingStakingTransactionData {
 
 impl IncomingStakingTransactionData {
     pub fn is_signalling(&self) -> bool {
-        !matches!(self, IncomingStakingTransactionData::Stake { .. }
-            | IncomingStakingTransactionData::CreateValidator { .. })
+        !matches!(
+            self,
+            IncomingStakingTransactionData::Stake { .. } | IncomingStakingTransactionData::CreateValidator { .. }
+        )
     }
 
     pub fn parse(transaction: &Transaction) -> Result<Self, TransactionError> {

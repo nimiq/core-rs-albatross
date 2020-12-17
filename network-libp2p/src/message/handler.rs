@@ -131,27 +131,26 @@ impl ProtocolsHandler for MessageHandler {
                     });
                     self.wake();
                 }
-            }
-            /*HandlerInEvent::PeerDisconnected => {
-                unreachable!();
-                // FIXME: Actually I think this is never called.
-                // If `self.peer` is `None`, it was closed by this handler already.
-                // TODO: We can expect `self.peer` to be Some here.
-                if let Some(peer) = self.peer.take() {
-                    self.socket = None;
-                    self.close_rx = None;
-                    self.keep_alive = KeepAlive::No;
+            } /*HandlerInEvent::PeerDisconnected => {
+                  unreachable!();
+                  // FIXME: Actually I think this is never called.
+                  // If `self.peer` is `None`, it was closed by this handler already.
+                  // TODO: We can expect `self.peer` to be Some here.
+                  if let Some(peer) = self.peer.take() {
+                      self.socket = None;
+                      self.close_rx = None;
+                      self.keep_alive = KeepAlive::No;
 
-                    log::debug!("Peer disconnected: {:?}", peer);
+                      log::debug!("Peer disconnected: {:?}", peer);
 
-                    self.events.push_back(ProtocolsHandlerEvent::Custom(HandlerOutEvent::PeerClosed {
-                        reason: CloseReason::Other, // TODO: We might have a reason from the close_rx
-                        peer
-                    }));
+                      self.events.push_back(ProtocolsHandlerEvent::Custom(HandlerOutEvent::PeerClosed {
+                          reason: CloseReason::Other, // TODO: We might have a reason from the close_rx
+                          peer
+                      }));
 
-                    self.wake();
-                }
-            },*/
+                      self.wake();
+                  }
+              },*/
         }
     }
 

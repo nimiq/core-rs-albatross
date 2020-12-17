@@ -1,8 +1,8 @@
 use std::{
     cmp,
+    pin::Pin,
     sync::{Arc, Weak},
     time::Duration,
-    pin::Pin,
 };
 
 use async_trait::async_trait;
@@ -433,8 +433,8 @@ impl NetworkInterface for Network {
     }
 
     async fn subscribe<T>(&self, _topic: &T) -> Result<Pin<Box<dyn Stream<Item = (T::Item, <Self::PeerType as PeerInterface>::Id)> + Send>>, Self::Error>
-        where
-            T: Topic + Sync,
+    where
+        T: Topic + Sync,
     {
         unimplemented!()
     }

@@ -1,10 +1,6 @@
 #![allow(dead_code)]
 
-use std::{
-    collections::HashMap,
-    sync::Arc,
-    pin::Pin,
-};
+use std::{collections::HashMap, pin::Pin, sync::Arc};
 
 use async_trait::async_trait;
 use futures::{
@@ -82,7 +78,7 @@ pub enum NetworkError {
     DhtPutRecord(libp2p::kad::PutRecordError),
 
     #[error("Gossipsub Publish error: {0:?}")]
-    GossipsubPublish(libp2p::gossipsub::error::PublishError)
+    GossipsubPublish(libp2p::gossipsub::error::PublishError),
 }
 
 impl From<libp2p::kad::store::Error> for NetworkError {
@@ -335,16 +331,16 @@ impl Network {
         match action {
             NetworkAction::Dial { peer_id, output } => {
                 output.send(Swarm::dial(swarm, &peer_id).map_err(Into::into)).ok();
-            },
+            }
             NetworkAction::DialAddress { address, output } => {
                 output
                     .send(Swarm::dial_addr(swarm, address).map_err(|l| NetworkError::Dial(libp2p::swarm::DialError::ConnectionLimit(l))))
                     .ok();
-            },
+            }
             NetworkAction::DhtGet { key, output } => {
                 let query_id = swarm.kademlia.get_record(&key.into(), Quorum::One);
                 state.dht_gets.insert(query_id, output);
-            },
+            }
             NetworkAction::DhtPut { key, value, output } => {
                 let local_peer_id = Swarm::local_peer_id(&swarm);
 
@@ -364,7 +360,7 @@ impl Network {
                         output.send(Err(e.into())).ok();
                     }
                 }
-            },
+            }
             NetworkAction::Subscribe { topic_name, output } => {
                 let topic = GossipsubTopic::new(topic_name.clone());
                 if swarm.gossipsub.subscribe(topic.clone()) {
@@ -372,7 +368,7 @@ impl Network {
                 } else {
                     log::warn!("Already subscribed to topic: {:?}", topic_name);
                 }
-            },
+            }
             NetworkAction::Publish { topic_name, data, output } => {
                 let topic = GossipsubTopic::new(topic_name);
                 output.send(swarm.gossipsub.publish(&topic, data).map_err(Into::into)).ok();
@@ -405,7 +401,6 @@ impl NetworkInterface for Network {
         self.events_tx.subscribe()
     }
 
-
     async fn subscribe<T>(&self, topic: &T) -> Result<Pin<Box<dyn Stream<Item = (T::Item, PeerId)> + Send>>, Self::Error>
     where
         T: Topic + Sync,
@@ -421,10 +416,12 @@ impl NetworkInterface for Network {
             })
             .await?;
 
-        Ok(rx.map(|(msg, peer_id)| {
-            let item: <T as Topic>::Item = Deserialize::deserialize_from_vec(&msg.data).unwrap();
-            (item, peer_id)
-        }).boxed())
+        Ok(rx
+            .map(|(msg, peer_id)| {
+                let item: <T as Topic>::Item = Deserialize::deserialize_from_vec(&msg.data).unwrap();
+                (item, peer_id)
+            })
+            .boxed())
     }
 
     async fn publish<T>(&self, topic: &T, item: <T as Topic>::Item) -> Result<(), Self::Error>
@@ -466,8 +463,7 @@ impl NetworkInterface for Network {
 
         if let Some(data) = output_rx.await?? {
             Ok(Some(Deserialize::deserialize_from_vec(&data)?))
-        }
-        else {
+        } else {
             Ok(None)
         }
     }
@@ -515,12 +511,12 @@ impl NetworkInterface for Network {
 mod tests {
     use std::time::Duration;
 
-    use futures::{StreamExt, Stream};
+    use futures::{Stream, StreamExt};
     use libp2p::{
+        gossipsub::GossipsubConfig,
         identity::Keypair,
         multiaddr::{multiaddr, Multiaddr},
         swarm::KeepAlive,
-        gossipsub::GossipsubConfig,
         PeerId,
     };
     use rand::{thread_rng, Rng};
@@ -594,7 +590,6 @@ mod tests {
             panic!("Event is not a NetworkEvent::PeerJoined: {:?}", event);
         }
     }
-
 
     #[derive(Clone, Debug)]
     struct TestNetwork {
@@ -783,10 +778,8 @@ mod tests {
         }
     }
 
-    fn consume_stream<T: std::fmt::Debug>(mut stream: impl Stream<Item=T> + Unpin + Send + 'static) {
-        tokio::spawn(async move {
-            while let Some(_) = stream.next().await {}
-        });
+    fn consume_stream<T: std::fmt::Debug>(mut stream: impl Stream<Item = T> + Unpin + Send + 'static) {
+        tokio::spawn(async move { while let Some(_) = stream.next().await {} });
     }
 
     #[tokio::test]
@@ -796,7 +789,7 @@ mod tests {
         let net1 = net.spawn().await;
         let net2 = net.spawn().await;
 
-        for _ in 0 .. 5i32 {
+        for _ in 0..5i32 {
             let net_n = net.spawn().await;
             net_n.subscribe_events().next().await;
             let stream_n = net_n.subscribe(&TestTopic).await.unwrap();

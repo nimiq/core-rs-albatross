@@ -1,30 +1,17 @@
-use std::{
-    sync::Arc,
-    pin::Pin,
-};
+use std::{pin::Pin, sync::Arc};
 
-use futures::{
-    stream::{StreamExt, Stream},
-};
-use thiserror::Error;
-use parking_lot::Mutex;
 use async_trait::async_trait;
+use futures::stream::{Stream, StreamExt};
+use parking_lot::Mutex;
+use thiserror::Error;
 use tokio::sync::broadcast;
 
-use beserial::{Serialize, Deserialize};
-use nimiq_network_interface::{
-    network::Network,
-    peer_map::ObservablePeerMap,
-};
+use beserial::{Deserialize, Serialize};
 use nimiq_network_interface::network::{NetworkEvent, Topic};
 use nimiq_network_interface::peer::Peer;
+use nimiq_network_interface::{network::Network, peer_map::ObservablePeerMap};
 
-use crate::{
-    hub::MockHubInner,
-    peer::MockPeer,
-    MockAddress, MockPeerId,
-};
-
+use crate::{hub::MockHubInner, peer::MockPeer, MockAddress, MockPeerId};
 
 #[derive(Error, Debug)]
 pub enum MockNetworkError {
@@ -34,8 +21,6 @@ pub enum MockNetworkError {
     #[error("Can't connect to peer: {0}")]
     CantConnect(MockAddress),
 }
-
-
 
 #[derive(Debug)]
 pub struct MockNetwork {
@@ -53,11 +38,7 @@ impl MockNetwork {
             panic!("address/peer_id of MockNetwork must be unique: address={}", address);
         }
 
-        Self {
-            address,
-            peers,
-            hub,
-        }
+        Self { address, peers, hub }
     }
 
     pub fn address(&self) -> MockAddress {
@@ -103,13 +84,17 @@ impl MockNetwork {
         let hub = self.hub.lock();
 
         for peer in self.peers.remove_all() {
-            let peer_map = hub.peer_maps.get(&peer.id().into())
-                .unwrap_or_else(|| panic!("We're connected to a peer that doesn't have a connection to us: our_peer_id={}, their_peer_id={}", self.address, peer.id()));
+            let peer_map = hub.peer_maps.get(&peer.id().into()).unwrap_or_else(|| {
+                panic!(
+                    "We're connected to a peer that doesn't have a connection to us: our_peer_id={}, their_peer_id={}",
+                    self.address,
+                    peer.id()
+                )
+            });
             peer_map.remove(&self.address.into());
         }
     }
 }
-
 
 #[async_trait]
 impl Network for MockNetwork {
@@ -134,33 +119,28 @@ impl Network for MockNetwork {
     }
 
     async fn subscribe<T>(&self, topic: &T) -> Result<Pin<Box<dyn Stream<Item = (T::Item, <Self::PeerType as Peer>::Id)> + Send>>, Self::Error>
-        where
-            T: Topic + Sync
+    where
+        T: Topic + Sync,
     {
         let mut hub = self.hub.lock();
-        let stream = hub.get_topic(topic.topic())
-            .subscribe()
-            .into_stream()
-            .filter_map(|r| async move {
-                match r {
-                    Ok((data, peer_id)) => {
-                        match T::Item::deserialize_from_vec(&data) {
-                            Ok(item) => return Some((item, peer_id)),
-                            Err(e) => log::warn!("Dropped item because deserialization failed: {}", e),
-                        }
-                    }
-                    Err(broadcast::RecvError::Closed) => {},
-                    Err(broadcast::RecvError::Lagged(_)) => log::warn!("Mock gossipsub channel is lagging"),
-                }
-                None
-            });
+        let stream = hub.get_topic(topic.topic()).subscribe().into_stream().filter_map(|r| async move {
+            match r {
+                Ok((data, peer_id)) => match T::Item::deserialize_from_vec(&data) {
+                    Ok(item) => return Some((item, peer_id)),
+                    Err(e) => log::warn!("Dropped item because deserialization failed: {}", e),
+                },
+                Err(broadcast::RecvError::Closed) => {}
+                Err(broadcast::RecvError::Lagged(_)) => log::warn!("Mock gossipsub channel is lagging"),
+            }
+            None
+        });
 
         Ok(stream.boxed())
     }
 
     async fn publish<T: Topic>(&self, topic: &T, item: T::Item) -> Result<(), Self::Error>
-        where
-            T: Topic + Sync
+    where
+        T: Topic + Sync,
     {
         let mut hub = self.hub.lock();
         let data = item.serialize_to_vec();
@@ -169,24 +149,23 @@ impl Network for MockNetwork {
     }
 
     async fn dht_get<K, V>(&self, k: &K) -> Result<Option<V>, Self::Error>
-        where
-            K: AsRef<[u8]> + Send + Sync,
-            V: Deserialize + Send + Sync
+    where
+        K: AsRef<[u8]> + Send + Sync,
+        V: Deserialize + Send + Sync,
     {
         let hub = self.hub.lock();
 
         if let Some(data) = hub.dht.get(k.as_ref()) {
             Ok(Some(V::deserialize_from_vec(&data)?))
-        }
-        else {
+        } else {
             Ok(None)
         }
     }
 
     async fn dht_put<K, V>(&self, k: &K, v: &V) -> Result<(), Self::Error>
-        where
-            K: AsRef<[u8]> + Send + Sync,
-            V: Serialize + Send + Sync
+    where
+        K: AsRef<[u8]> + Send + Sync,
+        V: Serialize + Send + Sync,
     {
         let mut hub = self.hub.lock();
 
@@ -203,4 +182,3 @@ impl Network for MockNetwork {
         self.dial_mock_address(address)
     }
 }
-
