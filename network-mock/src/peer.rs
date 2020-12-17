@@ -92,7 +92,7 @@ impl Peer for MockPeer {
                 Ok(message) => {
                     log::trace!("Received message: {:?}", message);
                     Some(message)
-                },
+                }
                 Err(e) => {
                     // TODO: Give MockHub a config, so that we can panic here if that's what the test wants to do.
                     log::warn!("Failed to deserialize message: {}", e);

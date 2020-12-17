@@ -545,10 +545,7 @@ impl<T: Serialize, V: Serialize> Serialize for (T, V) {
 
 impl<T: Deserialize, V: Deserialize> Deserialize for (T, V) {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        Ok((
-            Deserialize::deserialize(reader)?,
-            Deserialize::deserialize(reader)?,
-        ))
+        Ok((Deserialize::deserialize(reader)?, Deserialize::deserialize(reader)?))
     }
 }
 

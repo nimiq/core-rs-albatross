@@ -11,8 +11,7 @@ use nimiq_subscription::Subscription;
 use transaction::Transaction;
 
 use crate::messages::{
-    BatchSetInfo, BlockHashes, HistoryChunk, RequestBatchSet, RequestBlock, RequestBlockHashes,
-    RequestBlockHashesFilter, RequestHistoryChunk, ResponseBlock,
+    BatchSetInfo, BlockHashes, HistoryChunk, RequestBatchSet, RequestBlock, RequestBlockHashes, RequestBlockHashesFilter, RequestHistoryChunk, ResponseBlock,
 };
 
 pub struct ConsensusAgentState {

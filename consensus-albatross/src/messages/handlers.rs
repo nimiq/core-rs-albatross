@@ -1,6 +1,6 @@
 use crate::messages::{
-    BatchSetInfo, BlockHashType, BlockHashes, HistoryChunk, RequestBatchSet, RequestBlock,
-    RequestBlockHashes, RequestBlockHashesFilter, RequestHistoryChunk, ResponseBlock,
+    BatchSetInfo, BlockHashType, BlockHashes, HistoryChunk, RequestBatchSet, RequestBlock, RequestBlockHashes, RequestBlockHashesFilter, RequestHistoryChunk,
+    ResponseBlock,
 };
 use block_albatross::Block;
 use blockchain_albatross::{history_store::CHUNK_SIZE, Blockchain, Direction};
@@ -34,28 +34,16 @@ impl Handle<BlockHashes> for RequestBlockHashes {
         // Collect up to GETBLOCKS_VECTORS_MAX inventory vectors for the blocks starting right
         // after the identified block on the main chain.
         let blocks = match self.filter {
-            RequestBlockHashesFilter::ElectionOnly
-            | RequestBlockHashesFilter::ElectionAndLatestCheckpoint => blockchain
-                .get_macro_blocks(
-                    &start_block_hash,
-                    self.max_blocks as u32,
-                    false,
-                    Direction::Forward,
-                    true,
-                )
+            RequestBlockHashesFilter::ElectionOnly | RequestBlockHashesFilter::ElectionAndLatestCheckpoint => blockchain
+                .get_macro_blocks(&start_block_hash, self.max_blocks as u32, false, Direction::Forward, true)
                 .unwrap(), // We made sure that start_block_hash is on our chain.
             RequestBlockHashesFilter::All => blockchain.get_blocks(&start_block_hash, self.max_blocks as u32, false, Direction::Forward),
         };
 
-        let mut hashes: Vec<_> = blocks
-            .iter()
-            .map(|block| (BlockHashType::from(block), block.hash()))
-            .collect();
+        let mut hashes: Vec<_> = blocks.iter().map(|block| (BlockHashType::from(block), block.hash())).collect();
 
         // Add latest checkpoint block if requested.
-        if self.filter == RequestBlockHashesFilter::ElectionAndLatestCheckpoint
-            && hashes.len() < self.max_blocks as usize
-        {
+        if self.filter == RequestBlockHashesFilter::ElectionAndLatestCheckpoint && hashes.len() < self.max_blocks as usize {
             let checkpoint_block = blockchain.macro_head();
             if !checkpoint_block.is_election_block() {
                 hashes.push((BlockHashType::Checkpoint, checkpoint_block.hash()));

@@ -18,7 +18,7 @@ use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
 use nimiq_mempool::{Mempool, MempoolConfig};
 use nimiq_network_interface::prelude::Network;
-use nimiq_network_mock::{MockNetwork, MockHub};
+use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_primitives::policy;
 use simple_logger;
 use std::sync::Arc;
@@ -51,13 +51,8 @@ async fn peers_can_sync() {
     let blockchain1 = Arc::new(Blockchain::new(env1.clone(), NetworkId::UnitAlbatross).unwrap());
     let mempool1 = Mempool::new(Arc::clone(&blockchain1), MempoolConfig::default());
 
-    let keypair =
-        KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
-    let producer = BlockProducer::new(
-        Arc::clone(&blockchain1),
-        Arc::clone(&mempool1),
-        keypair.clone(),
-    );
+    let keypair = KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
+    let producer = BlockProducer::new(Arc::clone(&blockchain1), Arc::clone(&mempool1), keypair.clone());
 
     // The minimum number of macro blocks necessary so that we have one election block and one
     // checkpoint block to push.
@@ -67,8 +62,7 @@ async fn peers_can_sync() {
     produce_macro_blocks(num_macro_blocks, &producer, &blockchain1);
 
     let net1 = Arc::new(hub.new_network());
-    let consensus1 =
-        Consensus::new(env1, blockchain1, mempool1, Arc::clone(&net1), DummySync).unwrap();
+    let consensus1 = Consensus::new(env1, blockchain1, mempool1, Arc::clone(&net1), DummySync).unwrap();
 
     // Setup second peer (not synced yet).
     let env2 = VolatileEnvironment::new(10).unwrap();
@@ -76,24 +70,16 @@ async fn peers_can_sync() {
     let mempool2 = Mempool::new(Arc::clone(&blockchain2), MempoolConfig::default());
 
     let net2 = Arc::new(hub.new_network());
-    let mut sync =
-        HistorySync::<MockNetwork>::new(Arc::clone(&blockchain2), net2.subscribe_events());
-    let consensus2 =
-        Consensus::new(env2, blockchain2, mempool2, Arc::clone(&net2), DummySync).unwrap();
+    let mut sync = HistorySync::<MockNetwork>::new(Arc::clone(&blockchain2), net2.subscribe_events());
+    let consensus2 = Consensus::new(env2, blockchain2, mempool2, Arc::clone(&net2), DummySync).unwrap();
 
     net1.dial_mock(&net2);
     tokio::time::delay_for(Duration::from_secs(1)).await;
     let sync_result = sync.next().await;
 
     assert!(sync_result.is_some());
-    assert_eq!(
-        consensus2.blockchain.election_head_hash(),
-        consensus1.blockchain.election_head_hash(),
-    );
-    assert_eq!(
-        consensus2.blockchain.macro_head_hash(),
-        consensus1.blockchain.macro_head_hash(),
-    );
+    assert_eq!(consensus2.blockchain.election_head_hash(), consensus1.blockchain.election_head_hash(),);
+    assert_eq!(consensus2.blockchain.macro_head_hash(), consensus1.blockchain.macro_head_hash(),);
 
     // FIXME: Add more tests
     //    // Setup third peer (not synced yet).
@@ -173,13 +159,8 @@ async fn sync_ingredients() {
     let blockchain1 = Arc::new(Blockchain::new(env1.clone(), NetworkId::UnitAlbatross).unwrap());
     let mempool1 = Mempool::new(Arc::clone(&blockchain1), MempoolConfig::default());
 
-    let keypair =
-        KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
-    let producer = BlockProducer::new(
-        Arc::clone(&blockchain1),
-        Arc::clone(&mempool1),
-        keypair.clone(),
-    );
+    let keypair = KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
+    let producer = BlockProducer::new(Arc::clone(&blockchain1), Arc::clone(&mempool1), keypair.clone());
 
     // The minimum number of macro blocks necessary so that we have one election block and one
     // checkpoint block to push.
@@ -189,8 +170,7 @@ async fn sync_ingredients() {
     produce_macro_blocks(num_macro_blocks, &producer, &blockchain1);
 
     let net1 = Arc::new(hub.new_network());
-    let consensus1 =
-        Consensus::new(env1, blockchain1, mempool1, Arc::clone(&net1), DummySync).unwrap();
+    let consensus1 = Consensus::new(env1, blockchain1, mempool1, Arc::clone(&net1), DummySync).unwrap();
 
     // Setup second peer (not synced yet).
     let env2 = VolatileEnvironment::new(10).unwrap();
@@ -198,10 +178,8 @@ async fn sync_ingredients() {
     let mempool2 = Mempool::new(Arc::clone(&blockchain2), MempoolConfig::default());
 
     let net2 = Arc::new(hub.new_network());
-    let mut sync =
-        HistorySync::<MockNetwork>::new(Arc::clone(&blockchain2), net2.subscribe_events());
-    let consensus2 =
-        Consensus::new(env2, blockchain2, mempool2, Arc::clone(&net2), DummySync).unwrap();
+    let mut sync = HistorySync::<MockNetwork>::new(Arc::clone(&blockchain2), net2.subscribe_events());
+    let consensus2 = Consensus::new(env2, blockchain2, mempool2, Arc::clone(&net2), DummySync).unwrap();
 
     // Connect the two peers.
     let mut stream = consensus2.network.subscribe_events();
@@ -222,10 +200,7 @@ async fn sync_ingredients() {
         .await
         .expect("Should yield hashes");
     assert_eq!(hashes.hashes.len(), 2);
-    assert_eq!(
-        hashes.hashes[0].1,
-        consensus1.blockchain.election_head_hash()
-    );
+    assert_eq!(hashes.hashes[0].1, consensus1.blockchain.election_head_hash());
     assert_eq!(hashes.hashes[1].1, consensus1.blockchain.macro_head_hash());
 
     // Request epoch
@@ -234,15 +209,9 @@ async fn sync_ingredients() {
         .await
         .expect("Should yield epoch");
     assert_eq!(epoch.history_len, 10);
-    assert_eq!(
-        epoch.block.hash(),
-        consensus1.blockchain.election_head_hash()
-    );
+    assert_eq!(epoch.block.hash(), consensus1.blockchain.election_head_hash());
 
-    let epoch = agent
-        .request_epoch(consensus1.blockchain.macro_head_hash())
-        .await
-        .expect("Should yield epoch");
+    let epoch = agent.request_epoch(consensus1.blockchain.macro_head_hash()).await.expect("Should yield epoch");
     assert_eq!(epoch.history_len, 3);
     assert_eq!(epoch.block.hash(), consensus1.blockchain.macro_head_hash());
 
@@ -255,17 +224,7 @@ async fn sync_ingredients() {
         .expect("Should yield history chunk");
     assert_eq!(chunk.history.len(), 10);
     assert_eq!(
-        chunk.verify(
-            consensus1
-                .blockchain
-                .election_head()
-                .body
-                .as_ref()
-                .unwrap()
-                .history_root
-                .clone(),
-            0
-        ),
+        chunk.verify(consensus1.blockchain.election_head().body.as_ref().unwrap().history_root.clone(), 0),
         Some(true)
     );
 
@@ -277,17 +236,7 @@ async fn sync_ingredients() {
         .expect("Should yield history chunk");
     assert_eq!(chunk.history.len(), 3);
     assert_eq!(
-        chunk.verify(
-            consensus1
-                .blockchain
-                .macro_head()
-                .body
-                .as_ref()
-                .unwrap()
-                .history_root
-                .clone(),
-            0
-        ),
+        chunk.verify(consensus1.blockchain.macro_head().body.as_ref().unwrap().history_root.clone(), 0),
         Some(true)
     );
 }

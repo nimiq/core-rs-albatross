@@ -1,8 +1,8 @@
-use std::fmt::{Debug, Formatter, self};
 use crate::history_store::{ExtendedTransaction, HistoryTreeHash};
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, WriteBytesExt};
 use hash::Blake2bHash;
 use mmr::mmr::proof::{Proof, RangeProof};
+use std::fmt::{self, Debug, Formatter};
 
 /// The chunk size used in our protocol.
 /// TODO: Update number.
