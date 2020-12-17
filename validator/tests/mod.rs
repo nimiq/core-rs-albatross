@@ -93,7 +93,6 @@ fn validator_for_slot(validators: &Vec<Validator>, block_number: u32, view_numbe
 }
 
 #[tokio::test]
-#[ignore]
 async fn one_validator_can_create_micro_blocks() {
     let mut hub = MockHub::default();
 
@@ -107,11 +106,14 @@ async fn one_validator_can_create_micro_blocks() {
     let consensus1 = Arc::clone(&validator.consensus);
 
     let consensus2 = mock_consensus(&mut hub, 2, genesis);
-    consensus2.network.dial_mock(&consensus1.network);
 
     let mut events1 = consensus1.subscribe_events();
+    consensus2.network.dial_mock(&consensus1.network);
+
+    log::debug!("Waiting for network event...");
     events1.next().await;
 
+    log::debug!("Syncing blockchain...");
     Consensus::sync_blockchain(Arc::downgrade(&consensus1)).await.expect("Sync failed");
 
     assert_eq!(consensus1.established(), true);
@@ -144,7 +146,6 @@ async fn three_validators_can_create_micro_blocks() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn four_validators_can_view_change() {
     let mut hub = MockHub::default();
 
