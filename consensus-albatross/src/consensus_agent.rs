@@ -11,7 +11,9 @@ use nimiq_subscription::Subscription;
 use transaction::Transaction;
 
 use crate::messages::{
-    BatchSetInfo, BlockHashes, HistoryChunk, RequestBatchSet, RequestBlock, RequestBlockHashes, RequestBlockHashesFilter, RequestHistoryChunk, ResponseBlock,
+    BatchSetInfo, BlockHashes, HistoryChunk, RequestBatchSet, RequestBlock, RequestBlockHashes,
+    RequestBlockHashesFilter, RequestHistoryChunk, RequestMissingBlocks, ResponseBlock,
+    ResponseBlocks,
 };
 
 pub struct ConsensusAgentState {
@@ -35,6 +37,7 @@ pub struct ConsensusAgent<P: Peer> {
     epoch_requests: RequestResponse<P, RequestBatchSet, BatchSetInfo>,
     history_chunk_requests: RequestResponse<P, RequestHistoryChunk, HistoryChunk>,
     block_requests: RequestResponse<P, RequestBlock, ResponseBlock>,
+    missing_block_requests: RequestResponse<P, RequestMissingBlocks, ResponseBlocks>,
 }
 
 impl<P: Peer> ConsensusAgent<P> {
@@ -44,6 +47,7 @@ impl<P: Peer> ConsensusAgent<P> {
         let epoch_requests = RequestResponse::new(Arc::clone(&peer), Duration::new(10, 0));
         let history_chunk_requests = RequestResponse::new(Arc::clone(&peer), Duration::new(10, 0));
         let block_requests = RequestResponse::new(Arc::clone(&peer), Duration::new(10, 0));
+        let missing_block_requests = RequestResponse::new(Arc::clone(&peer), Duration::new(10, 0));
 
         ConsensusAgent {
             peer,
@@ -55,6 +59,7 @@ impl<P: Peer> ConsensusAgent<P> {
             epoch_requests,
             history_chunk_requests,
             block_requests,
+            missing_block_requests,
         }
     }
 
@@ -113,7 +118,11 @@ impl<P: Peer> ConsensusAgent<P> {
         result
     }
 
-    pub async fn request_history_chunk(&self, epoch_number: u32, chunk_index: usize) -> Result<HistoryChunk, RequestError> {
+    pub async fn request_history_chunk(
+        &self,
+        epoch_number: u32,
+        chunk_index: usize,
+    ) -> Result<HistoryChunk, RequestError> {
         let result = self
             .history_chunk_requests
             .request(RequestHistoryChunk {
@@ -126,5 +135,22 @@ impl<P: Peer> ConsensusAgent<P> {
         // TODO filter empty chunks here?
 
         result
+    }
+
+    pub async fn request_missing_blocks(
+        &self,
+        target_block_hash: Blake2bHash,
+        locators: Vec<Blake2bHash>,
+    ) -> Result<Vec<Block>, RequestError> {
+        let result = self
+            .missing_block_requests
+            .request(RequestMissingBlocks {
+                locators,
+                target_hash: target_block_hash,
+                request_identifier: 0, // will automatically be set at a later point
+            })
+            .await;
+
+        result.map(|response_blocks| response_blocks.blocks)
     }
 }

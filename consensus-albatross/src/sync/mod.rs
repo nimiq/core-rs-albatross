@@ -9,10 +9,11 @@ use crate::error::SyncError;
 
 pub use self::quick::*;
 
+pub mod block_queue;
 pub mod history;
 mod quick;
+pub mod request_component;
 mod sync_queue;
-pub mod block_queue;
 
 #[async_trait]
 pub trait SyncProtocol<N: Network>: Send + Sync + 'static {

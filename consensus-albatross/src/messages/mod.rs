@@ -176,3 +176,29 @@ request_response!(RequestBlock);
 impl Message for RequestBlock {
     const TYPE_ID: u64 = 207;
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ResponseBlocks {
+    // TODO: Set to sensible limit (2 * BATCH_SIZE for example).
+    #[beserial(len_type(u16, limit = 256))]
+    pub blocks: Vec<Block>,
+    pub request_identifier: u32,
+}
+request_response!(ResponseBlocks);
+
+impl Message for ResponseBlocks {
+    const TYPE_ID: u64 = 208;
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RequestMissingBlocks {
+    pub target_hash: Blake2bHash,
+    #[beserial(len_type(u16, limit = 128))]
+    pub locators: Vec<Blake2bHash>,
+    pub request_identifier: u32,
+}
+request_response!(RequestMissingBlocks);
+
+impl Message for RequestMissingBlocks {
+    const TYPE_ID: u64 = 209;
+}
