@@ -18,6 +18,7 @@ use parking_lot::RwLock;
 use wasm_timer::Interval;
 
 use nimiq_hash::Blake2bHash;
+use nimiq_utils::time::OffsetTime;
 
 use super::{
     handler::{DiscoveryHandler, HandlerInEvent, HandlerOutEvent},
@@ -55,6 +56,22 @@ pub struct DiscoveryConfig {
     pub keep_alive: KeepAlive,
 }
 
+impl DiscoveryConfig {
+    pub fn new(genesis_hash: Blake2bHash) -> Self {
+        Self {
+            genesis_hash,
+            update_interval: Duration::from_secs(60),
+            min_send_update_interval: Duration::from_secs(30),
+            min_recv_update_interval: Duration::from_secs(30),
+            update_limit: 64,
+            protocols_filter: Protocols::all(),
+            services_filter: Services::all(),
+            house_keeping_interval: Duration::from_secs(60),
+            keep_alive: KeepAlive::Yes,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum DiscoveryEvent {
     Established { peer_id: PeerId },
@@ -65,6 +82,10 @@ pub enum DiscoveryEvent {
 ///
 /// When a connection to a peer is established, a handshake is done to exchange protocols and services filters, and
 /// subscription settings. The peers then send updates to each other in a configurable interval.
+///
+/// # TODO
+///
+///  - Exchange clock time with other peers.
 ///
 pub struct DiscoveryBehaviour {
     /// Configuration for the discovery behaviour
@@ -79,6 +100,9 @@ pub struct DiscoveryBehaviour {
     /// Contains all known peer contacts.
     peer_contact_book: Arc<RwLock<PeerContactBook>>,
 
+    #[allow(dead_code)]
+    clock: Arc<OffsetTime>,
+
     /// Queue with events to emit.
     events: VecDeque<NetworkBehaviourAction<HandlerInEvent, DiscoveryEvent>>,
 
@@ -87,7 +111,7 @@ pub struct DiscoveryBehaviour {
 }
 
 impl DiscoveryBehaviour {
-    pub fn new(config: DiscoveryConfig, keypair: Keypair, peer_contact_book: Arc<RwLock<PeerContactBook>>) -> Self {
+    pub fn new(config: DiscoveryConfig, keypair: Keypair, peer_contact_book: Arc<RwLock<PeerContactBook>>, clock: Arc<OffsetTime>) -> Self {
         let house_keeping_timer = Interval::new(config.house_keeping_interval);
 
         Self {
@@ -95,6 +119,7 @@ impl DiscoveryBehaviour {
             keypair,
             connected_peers: HashSet::new(),
             peer_contact_book,
+            clock,
             events: VecDeque::new(),
             house_keeping_timer,
         }

@@ -1,28 +1,23 @@
 use std::collections::HashMap;
-use std::convert::TryFrom;
 use std::fs::read_to_string;
 use std::path::Path;
 use std::str::FromStr;
 
-use failure::Fail;
-use hex::FromHex;
 use log::LevelFilter;
 use serde_derive::Deserialize;
-use url::Url;
+use thiserror::Error;
 
-use keys::PublicKey;
-use mempool::filter::{MempoolFilter, Rules as MempoolRules};
-use mempool::MempoolConfig;
-use network::network_config::{ReverseProxyConfig, Seed as NetworkSeed};
-use peer_address::address::peer_uri::PeerUriError;
-use peer_address::{address, protocol};
-use primitives::coin::Coin;
-use primitives::networks::NetworkId;
+use nimiq_mempool::{
+    filter::{MempoolFilter, Rules as MempoolRules},
+    MempoolConfig,
+};
+use nimiq_peer_address::{address, protocol}; // TODO: probably not needed anymore
+use nimiq_primitives::{coin::Coin, networks::NetworkId};
 
-use crate::config::command_line::CommandLine;
-use crate::config::config_file::serialization::*;
-use crate::config::{config, consts, paths};
-use crate::error::Error;
+use crate::{
+    config::{command_line::CommandLine, config, config_file::serialization::*, paths},
+    error::Error,
+};
 
 mod serialization;
 
@@ -40,7 +35,7 @@ pub struct ConfigFile {
     pub rpc_server: Option<RpcServerSettings>,
     pub ws_rpc_server: Option<WsRpcServerSettings>,
     pub metrics_server: Option<MetricsServerSettings>,
-    pub reverse_proxy: Option<ReverseProxySettings>,
+    //pub reverse_proxy: Option<ReverseProxySettings>,
     #[serde(default)]
     pub log: LogSettings,
     #[serde(default)]
@@ -93,9 +88,9 @@ impl ConfigFile {
         // if example doesn't exist, create it
         let path_example = paths::home().join("client.toml.example");
         if !path_example.exists() {
-            info!("Creating example config at: {}", path_example.display());
+            log::info!("Creating example config at: {}", path_example.display());
             if let Err(e) = std::fs::write(&path_example, Self::EXAMPLE_CONFIG) {
-                warn!("Failed to create example config file: {}: {}", e, path_example.display());
+                log::warn!("Failed to create example config file: {}: {}", e, path_example.display());
             }
         }
 
@@ -106,7 +101,7 @@ impl ConfigFile {
                 "Config file not found. Please create one. An example config file can be found at: {}",
                 path.display()
             );
-            warn!("{}", msg);
+            log::warn!("{}", msg);
             return Err(Error::config_error(&msg));
         }
 
@@ -118,97 +113,26 @@ impl ConfigFile {
 #[derive(Clone, Debug, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct NetworkSettings {
-    pub host: Option<String>,
-    pub port: Option<u16>,
     #[serde(default)]
-    pub protocol: Protocol,
+    pub listen_addresses: Vec<String>,
+
     #[serde(default)]
     pub seed_nodes: Vec<Seed>,
     #[serde(default)]
     pub user_agent: Option<String>,
+
     pub tls: Option<TlsSettings>,
     pub instant_inbound: Option<bool>,
 }
 
-#[derive(Debug, Fail)]
+#[derive(Debug, Error)]
 pub enum SeedError {
-    #[fail(display = "Failed to parse peer URI: {}", _0)]
-    PeerUri(#[cause] PeerUriError),
-    #[fail(display = "Failed to parse seed list URL: {}", _0)]
-    Url(#[cause] url::ParseError),
-    #[fail(display = "Failed to parse public key: {}", _0)]
-    PublicKey(#[cause] keys::ParseError),
-}
-
-impl From<PeerUriError> for SeedError {
-    fn from(e: PeerUriError) -> Self {
-        SeedError::PeerUri(e)
-    }
-}
-
-impl From<url::ParseError> for SeedError {
-    fn from(e: url::ParseError) -> Self {
-        SeedError::Url(e)
-    }
-}
-
-impl From<keys::ParseError> for SeedError {
-    fn from(e: keys::ParseError) -> Self {
-        SeedError::PublicKey(e)
-    }
+    // TODO
 }
 
 #[derive(Clone, Debug, Deserialize)]
-#[serde(untagged)]
-pub enum Seed {
-    Uri(SeedUri),
-    Info(SeedInfo),
-    List(SeedList),
-}
-
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct SeedUri {
-    pub uri: String,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct SeedInfo {
-    pub host: String,
-    pub port: Option<u16>,
-    pub public_key: Option<String>,
-    pub peer_id: Option<String>,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct SeedList {
-    pub list: String,
-    pub public_key: Option<String>,
-}
-
-impl TryFrom<Seed> for NetworkSeed {
-    type Error = SeedError;
-
-    fn try_from(seed: Seed) -> Result<Self, Self::Error> {
-        Ok(match seed {
-            Seed::Uri(SeedUri { uri }) => NetworkSeed::Peer(Box::new(address::PeerUri::from_str(&uri)?)),
-            Seed::Info(SeedInfo {
-                host,
-                port,
-                public_key,
-                peer_id,
-            }) => {
-                // TODO: Implement this without having to instantiate a PeerUri
-                NetworkSeed::Peer(Box::new(address::PeerUri::new_wss(host, port, peer_id, public_key)))
-            }
-            Seed::List(SeedList { list, public_key }) => NetworkSeed::List(Box::new(address::SeedList::new(
-                Url::from_str(&list)?,
-                public_key.map(PublicKey::from_hex).transpose()?,
-            ))),
-        })
-    }
+pub struct Seed {
+    // TODO
 }
 
 #[derive(Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
@@ -267,8 +191,8 @@ impl Default for ConsensusType {
     }
 }
 
-#[derive(Debug, Fail)]
-#[fail(display = "Invalid consensus type: {}", _0)]
+#[derive(Debug, Error)]
+#[error("Invalid consensus type: {0}")]
 pub struct ConsensusTypeParseError(String);
 
 impl FromStr for ConsensusType {
@@ -374,6 +298,7 @@ pub struct MetricsServerSettings {
     pub password: Option<String>,
 }
 
+/*
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ReverseProxySettings {
@@ -396,6 +321,7 @@ impl From<ReverseProxySettings> for ReverseProxyConfig {
         }
     }
 }
+*/
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -529,6 +455,8 @@ impl From<MempoolFilterSettings> for MempoolRules {
 #[derive(Clone, Debug, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct ValidatorSettings {
-    pub key_file: Option<String>,
-    pub wallet_private_key: Option<String>,
+    pub validator_key: Option<String>,
+    pub wallet_account: String,
+    #[serde(default)]
+    pub wallet_password: String,
 }

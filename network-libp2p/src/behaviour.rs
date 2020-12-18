@@ -12,6 +12,7 @@ use libp2p::{
 use parking_lot::RwLock;
 
 use nimiq_network_interface::network::NetworkEvent;
+use nimiq_utils::time::OffsetTime;
 
 use crate::{
     discovery::{
@@ -81,13 +82,13 @@ pub struct NimiqBehaviour {
 }
 
 impl NimiqBehaviour {
-    pub fn new(config: Config) -> Self {
+    pub fn new(config: Config, clock: Arc<OffsetTime>) -> Self {
         let public_key = config.keypair.public();
         let peer_id = public_key.clone().into_peer_id();
 
         // TODO: persist to disk
         let peer_contact_book = Arc::new(RwLock::new(PeerContactBook::new(Default::default(), config.peer_contact.sign(&config.keypair))));
-        let discovery = DiscoveryBehaviour::new(config.discovery, config.keypair.clone(), peer_contact_book);
+        let discovery = DiscoveryBehaviour::new(config.discovery, config.keypair.clone(), peer_contact_book, clock);
 
         let message = MessageBehaviour::new(config.message);
 

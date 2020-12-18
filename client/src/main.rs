@@ -1,14 +1,17 @@
-#[macro_use]
-extern crate log;
-extern crate nimiq_lib as nimiq;
+use std::{convert::TryFrom, time::Duration};
 
-use std::convert::TryFrom;
-use std::time::Duration;
-
-use nimiq::extras::deadlock::initialize_deadlock_detection;
-use nimiq::extras::logging::{initialize_logging, log_error_cause_chain};
-use nimiq::extras::panic::initialize_panic_reporting;
-use nimiq::prelude::*;
+pub use nimiq::{
+    client::{Client, Consensus},
+    config::command_line::CommandLine,
+    config::config::ClientConfig,
+    config::config_file::ConfigFile,
+    error::Error,
+    extras::{
+        deadlock::initialize_deadlock_detection,
+        logging::{initialize_logging, log_error_cause_chain},
+        panic::initialize_panic_reporting,
+    },
+};
 
 async fn main_inner() -> Result<(), Error> {
     // Initialize deadlock detection
@@ -16,11 +19,11 @@ async fn main_inner() -> Result<(), Error> {
 
     // Parse command line.
     let command_line = CommandLine::from_args();
-    trace!("Command line: {:#?}", command_line);
+    log::trace!("Command line: {:#?}", command_line);
 
     // Parse config file - this will obey the `--config` command line option.
     let config_file = ConfigFile::find(Some(&command_line))?;
-    trace!("Config file: {:#?}", config_file);
+    log::trace!("Config file: {:#?}", config_file);
 
     // Initialize logging with config values.
     initialize_logging(Some(&command_line), Some(&config_file.log))?;
@@ -36,17 +39,16 @@ async fn main_inner() -> Result<(), Error> {
 
     // Finalize config.
     let config = builder.build()?;
-    debug!("Final configuration: {:#?}", config);
+    log::debug!("Final configuration: {:#?}", config);
 
     // Clone config for RPC and metrics server
     let rpc_config = config.rpc_server.clone();
-    let metrics_config = config.metrics_server.clone();
-    let protocol_config = config.protocol.clone();
+    let _metrics_config = config.metrics_server.clone();
 
     // Create client from config.
-    info!("Initializing client");
+    log::info!("Initializing client");
     let client: Client = Client::try_from(config)?;
-    client.initialize()?;
+    //client.initialize()?;
 
     // Initialize RPC server
     if let Some(rpc_config) = rpc_config {
@@ -56,6 +58,7 @@ async fn main_inner() -> Result<(), Error> {
     }
 
     // Initialize metrics server
+    /*
     if let Some(metrics_config) = metrics_config {
         use nimiq::config::config::ProtocolConfig;
         use nimiq::extras::metrics_server::initialize_metrics_server;
@@ -72,12 +75,13 @@ async fn main_inner() -> Result<(), Error> {
                 initialize_metrics_server(&client, metrics_config, pkcs12_key_file, &pkcs12_passphrase).expect("Failed to initialize metrics server");
             //tokio::spawn(metrics_server.into_future());
         } else {
-            error!("Cannot provide metrics when running without a certificate");
+            log::error!("Cannot provide metrics when running without a certificate");
         }
     }
+    */
 
     // Initialize network stack and connect.
-    info!("Connecting to network");
+    log::info!("Connecting to network");
     client.connect()?;
 
     // Create the "monitor" future which never completes to keep the client alive.
@@ -96,9 +100,10 @@ async fn main_inner() -> Result<(), Error> {
         interval.tick().await;
 
         if show_statistics {
-            let peer_count = client.network().connections.peer_count();
+            let network_info = client.network().network_info().await.unwrap(); // handle error?
             let head = client.blockchain().head().clone();
-            info!("Head: #{} - {}, Peers: {}", head.block_number(), head.hash(), peer_count);
+
+            log::info!("Head: #{} - {}, Peers: {}", head.block_number(), head.hash(), network_info.num_peers);
         }
     }
 }

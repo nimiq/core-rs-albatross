@@ -22,6 +22,7 @@ use nimiq_network_libp2p::discovery::{
     behaviour::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryEvent},
     peer_contacts::{PeerContact, Protocols, Services},
 };
+use nimiq_utils::time::OffsetTime;
 
 struct TestNode {
     peer_id: PeerId,
@@ -71,7 +72,8 @@ impl TestNode {
 
         let peer_contact_book = Arc::new(RwLock::new(PeerContactBook::new(Default::default(), peer_contact)));
 
-        let behaviour = DiscoveryBehaviour::new(config, keypair, Arc::clone(&peer_contact_book));
+        let clock = Arc::new(OffsetTime::new());
+        let behaviour = DiscoveryBehaviour::new(config, keypair, Arc::clone(&peer_contact_book), clock);
 
         let mut swarm = Swarm::new(transport, behaviour, peer_id.clone());
 

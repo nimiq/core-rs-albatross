@@ -22,7 +22,8 @@ futures = "0.3"
 log = "0.4"
 tokio = { version = "0.2", features = ["rt-threaded", "time"] }
 
-[dependencies.nimiq-lib]
+[dependencies.nimiq]
+package = "nimiq-lib"
 path = "../lib"
 version = "0.1"
 features = [

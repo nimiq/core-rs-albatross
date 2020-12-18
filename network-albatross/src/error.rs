@@ -2,7 +2,7 @@ use failure::Fail;
 
 use genesis::NetworkId;
 use peer_address::address::peer_uri::PeerUriError;
-use utils::key_store::Error as KeyStoreError;
+use utils::file_store::Error as KeyStoreError;
 
 use crate::websocket::error::ServerStartError;
 

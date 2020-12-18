@@ -1,32 +1,35 @@
-use std::convert::TryFrom;
-use std::sync::Arc;
+use std::{convert::TryFrom, sync::Arc};
 
-use blockchain::Blockchain;
-use consensus::sync::QuickSync;
-use consensus::Consensus as AbstractConsensus;
-use database::Environment;
-use mempool::Mempool as GenericMempool;
-use network::{Network as GenericNetwork, NetworkConfig};
-use peer_address::services::ServiceFlags;
-use utils::time::OffsetTime;
+use nimiq_blockchain_albatross::Blockchain;
+use nimiq_consensus_albatross::{sync::QuickSync, Consensus as AbstractConsensus};
+use nimiq_database::Environment;
+use nimiq_genesis::NetworkInfo;
+use nimiq_mempool::Mempool;
+use nimiq_network_libp2p::{
+    discovery::peer_contacts::{PeerContact, Services},
+    Config as NetworkConfig, Network,
+};
+use nimiq_utils::time::OffsetTime;
+
 #[cfg(feature = "validator")]
-use validator::validator::Validator as AbstractValidator;
+use nimiq_validator::validator::Validator as AbstractValidator;
+#[cfg(feature = "validator")]
+use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
+#[cfg(feature = "wallet")]
+use nimiq_wallet::WalletStore;
 
-use crate::config::config::{ClientConfig, ProtocolConfig};
+use crate::config::config::ClientConfig;
 use crate::error::Error;
 
-/// Alias for the Consensus specialized over Albatross
-pub type Mempool = GenericMempool;
-pub type Network = GenericNetwork;
+/// Alias for the Consensus and Validator specialized over libp2p network
 pub type Consensus = AbstractConsensus<Network>;
-pub type Validator = AbstractValidator<Network, /* TODO */ Network>;
+pub type Validator = AbstractValidator<Network, ValidatorNetworkImpl<Network>>;
 
 /// Holds references to the relevant structs. This is then Arc'd in `Client` and a nice API is
 /// exposed.
 ///
-/// # ToDos
+/// # TODO
 ///
-/// * Add `WalletStore` here.
 /// * Move RPC server, Ws-RPC server and Metrics server out of here
 /// * Move Validator out of here?
 ///
@@ -39,106 +42,93 @@ pub(crate) struct ClientInner {
     /// reach consensus.
     consensus: Arc<Consensus>,
 
+    /*
     /// The block production logic. This is optional and can also be fully disabled at compile-time
     #[cfg(feature = "validator")]
     validator: Option<Arc<Validator>>,
+    */
+    /// Wallet that stores keypairs for transaction signing
+    #[cfg(feature = "wallet")]
+    wallet_store: WalletStore,
 }
 
 impl TryFrom<ClientConfig> for ClientInner {
     type Error = Error;
 
     fn try_from(config: ClientConfig) -> Result<Self, Self::Error> {
-        // Create network config
-        // TODO: `NetworkConfig` could use some refactoring. So we might as well adapt it to the
-        //        client API.
+        // Get network info (i.e. which specific blokchain we're on)
+        if !config.network_id.is_albatross() {
+            return Err(Error::config_error(&format!("{} is not compatible with Albatross", config.network_id)));
+        }
+        let network_info = NetworkInfo::from_network_id(config.network_id);
 
-        let mut network_config = match config.protocol {
-            ProtocolConfig::Dumb => NetworkConfig::new_dumb_network_config(),
-            ProtocolConfig::Rtc => panic!("WebRTC is not yet implemented"),
-            ProtocolConfig::Ws { host, port } => NetworkConfig::new_ws_network_config(host, port, false, config.reverse_proxy),
-            ProtocolConfig::Wss {
-                host,
-                port,
-                pkcs12_key_file,
-                pkcs12_passphrase,
-            } => {
-                let pkcs12_key_file = pkcs12_key_file
-                    .to_str()
-                    .unwrap_or_else(|| panic!("Failed to convert path to PKCS#12 key file to string: {}", pkcs12_key_file.display()))
-                    .to_string();
-                NetworkConfig::new_wss_network_config(host, port, false, pkcs12_key_file, pkcs12_passphrase, config.reverse_proxy)
-            }
-        };
+        // Initialize clock
+        let time = Arc::new(OffsetTime::new());
 
-        // Set user agent
-        network_config.set_user_agent(config.user_agent.into());
+        // Load identity keypair from file store
+        let identity_keypair = config.storage.identity_keypair()?;
+        log::info!("Identity public key: {:?}", identity_keypair.public());
 
-        // Set custom seeds
-        network_config.set_additional_seeds(config.seeds);
+        // Generate peer contact from identity keypair and services/protocols
+        let peer_contact = PeerContact::new(
+            config.network.listen_addresses.clone(),
+            identity_keypair.public(),
+            Services::all(), // TODO
+            None,            // No need to set the timestamp as this will be set before signing anyway.
+        );
 
-        // Initialize peer key
-        config.storage.init_key_store(&mut network_config)?;
-
-        // Load validator wallet key
-        #[cfg(feature = "validator")]
-        let validator_wallet_key = config
-            .validator
-            .as_ref()
-            .map(|config| config.clone().validator_wallet_key())
-            .expect("Failed to load validator configuration")
-            .expect("Failed to load validator wallet key");
+        // Setup libp2p network
+        let network_config = NetworkConfig::new(identity_keypair, peer_contact, network_info.genesis_hash().clone());
+        let network = Arc::new(Network::new(config.network.listen_addresses, Arc::clone(&time), network_config));
 
         // Load validator key (before we give away ownership of the storage config)
         #[cfg(feature = "validator")]
-        let validator_key = config.storage.validator_key().expect("Failed to load validator key");
-
-        // Add validator service flag, if necessary
-        #[cfg(feature = "validator")]
-        {
-            if config.validator.is_some() {
-                let mut services = network_config.services().clone();
-                services.accepted |= ServiceFlags::VALIDATOR;
-                services.provided |= ServiceFlags::VALIDATOR;
-                network_config.set_services(services);
-            }
-        }
+        let _validator_key = config.storage.validator_key();
 
         // Open database
-        let environment = config.storage.database(config.network, config.consensus, config.database)?;
-
-        // Create Nimiq consensus
-        if !config.network.is_albatross() {
-            return Err(Error::config_error(&format!("{} is not compatible with Albatross", config.network)));
-        }
-
-        let time = Arc::new(OffsetTime::new());
-
-        let blockchain = Arc::new(Blockchain::new(environment.clone(), config.network).unwrap());
-
+        let environment = config.storage.database(config.network_id, config.consensus, config.database)?;
+        let blockchain = Arc::new(Blockchain::new(environment.clone(), config.network_id).unwrap());
         let mempool = Mempool::new(Arc::clone(&blockchain), config.mempool);
 
-        let network = Network::new(Arc::clone(&blockchain), network_config, time, config.network)?;
-
-        // Mock
-        #[cfg(feature = "validator")]
-        let validator_network = Arc::clone(&network);
+        // Open wallet
+        #[cfg(feature = "wallet")]
+        let wallet_store = WalletStore::new(env);
 
         // TODO: This will need to be changed from the QuickSync protocol to a more adequate sync
         //       protocol.
         let sync = QuickSync::default();
 
-        let consensus = Consensus::new(environment.clone(), blockchain, mempool, network, sync)?;
+        let consensus = Consensus::new(environment.clone(), blockchain, mempool, Arc::clone(&network), sync)?;
 
+        /*
         #[cfg(feature = "validator")]
-        let validator = config
-            .validator
-            .map(|_config| Arc::new(Validator::new(Arc::clone(&consensus), validator_network, validator_key, validator_wallet_key)));
+        let validator = {
+            let validator_wallet_key = config.validator.map(|c| {
+                #[cfg(not(feature = "wallet"))]
+                {
+                    // TODO: Maybe this should fail
+                    log::error!("Client is compiled without wallet and thus can't load the wallet account for the validator.");
+                    None
+                }
+                #[cfg(feature = "wallet")]
+                Some(wallet_store.get(&c.wallet_account, None).unlock()?.key_pair)
+            });
+
+            let validator_network = ValidatorNetworkImpl::new(network);
+
+            config
+                .validator
+                .map(|_config| Arc::new(Validator::new(Arc::clone(&consensus), validator_network, validator_key, validator_wallet_key)));
+        };
+        */
 
         Ok(ClientInner {
             environment,
             consensus,
-            #[cfg(feature = "validator")]
-            validator,
+            //#[cfg(feature = "validator")]
+            //validator,
+            #[cfg(feature = "wallet")]
+            wallet_store,
         })
     }
 }
@@ -166,16 +156,10 @@ pub struct Client {
 }
 
 impl Client {
-    /// Initializes the Nimiq network stack.
-    pub fn initialize(&self) -> Result<(), Error> {
-        self.inner.consensus.network.initialize()?;
-        Ok(())
-    }
-
     /// After calling this the network stack will start connecting to other peers.
     pub fn connect(&self) -> Result<(), Error> {
-        self.inner.consensus.network.connect()?;
-        Ok(())
+        // Tell the network to connect to seed nodes
+        todo!()
     }
 
     /// Returns a reference to the *Consensus*.
@@ -198,11 +182,13 @@ impl Client {
         Arc::clone(&self.inner.consensus.mempool)
     }
 
+    /*
     /// Returns a reference to the *Validator* or `None`.
     #[cfg(feature = "validator")]
     pub fn validator(&self) -> Option<Arc<Validator>> {
         self.inner.validator.as_ref().map(|v| Arc::clone(v))
     }
+    */
 
     /// Returns the database environment.
     pub fn environment(&self) -> Environment {

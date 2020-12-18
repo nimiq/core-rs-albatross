@@ -24,7 +24,6 @@ colored = { version = "1.7", optional = true }
 derive_builder = "0.9"
 directories = "2.0"
 enum-display-derive = "0.1"
-failure = "0.1"
 fern = { version = "0.5", features = ["colored"], optional = true }
 hex = "0.4"
 # human-panic = { version = "1.0", optional = true } currently unused, might be used in the future
@@ -39,7 +38,9 @@ serde_derive = "1.0"
 structopt = { version = "0.3", features = ["paw"] }
 toml = "0.5"
 url = "1.7"
+thiserror = "1.0"
 
+beserial = { path = "../beserial", version = "0.1" }
 nimiq-blockchain-albatross = { path = "../blockchain-albatross", version = "0.1" }
 nimiq-bls = { path = "../bls", version = "0.1", optional = true }
 nimiq-consensus-albatross = { path = "../consensus-albatross", version = "0.1" }
@@ -47,21 +48,25 @@ nimiq-database = { path = "../database", version = "0.1" }
 nimiq-keys = { path = "../keys", version = "0.1" }
 nimiq-mempool = { path = "../mempool", version = "0.1" }
 nimiq-metrics-server = { path = "../metrics-server", version = "0.1", optional = true }
-nimiq-network-albatross = { path = "../network-albatross", version = "0.1" }
+nimiq-network-libp2p = { path = "../network-libp2p", version = "0.1" }
 nimiq-peer-address = { path = "../peer-address", version = "0.1" }
 nimiq-primitives = { path = "../primitives", version = "0.1", features = ["networks"] }
 nimiq-rpc-server = { path = "../rpc-server-new", version = "0.1", optional = true }
-nimiq-utils = { path = "../utils", version = "0.1" }
+nimiq-utils = { path = "../utils", version = "0.1", features = ["time"] }
 nimiq-validator = { path = "../validator", version = "0.1", optional = true }
+nimiq-validator-network = { path = "../validator-network", version = "0.1", optional = true }
 nimiq-jsonrpc-core = { git = "https://github.com/nimiq/jsonrpc.git" }
 nimiq-jsonrpc-server = { git = "https://github.com/nimiq/jsonrpc.git" }
+nimiq-wallet = { path = "../wallet", optional = true }
+nimiq-genesis = { path = "../genesis" }
 
 [features]
 default = []
-validator = ["nimiq-validator", "nimiq-bls", "nimiq-rpc-server/validator"]
+validator = ["nimiq-validator", "nimiq-validator-network", "nimiq-bls", "nimiq-rpc-server/validator"]
 deadlock = ["parking_lot"]
 panic = ["log-panics"]
 logging = ["fern", "colored"]
 launcher = []
 rpc-server = ["validator", "nimiq-rpc-server", "parking_lot"]
 metrics-server = ["nimiq-metrics-server"]
+wallet = ["nimiq-wallet"]

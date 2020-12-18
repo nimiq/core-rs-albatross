@@ -12,12 +12,12 @@ pub fn initialize_deadlock_detection() {
             continue;
         }
 
-        error!("{} deadlocks detected", deadlocks.len());
+        log::error!("{} deadlocks detected", deadlocks.len());
         for (i, threads) in deadlocks.iter().enumerate() {
-            error!("Deadlock #{}", i);
+            log::error!("Deadlock #{}", i);
             for t in threads {
-                error!("Thread Id {:#?}", t.thread_id());
-                error!("{:#?}", t.backtrace());
+                log::error!("Thread Id {:#?}", t.thread_id());
+                log::error!("{:#?}", t.backtrace());
             }
         }
     });

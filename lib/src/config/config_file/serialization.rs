@@ -1,12 +1,8 @@
-use std::collections::HashMap;
-use std::convert::TryFrom;
-use std::fmt::Display;
-use std::str::FromStr;
+use std::{collections::HashMap, convert::TryFrom, fmt::Display, str::FromStr};
 
-use serde::de::Error;
-use serde::{Deserialize, Deserializer};
+use serde::{de::Error, Deserialize, Deserializer};
 
-use primitives::coin::Coin;
+use nimiq_primitives::coin::Coin;
 
 pub(crate) fn deserialize_coin<'de, D>(deserializer: D) -> Result<Coin, D::Error>
 where
@@ -16,6 +12,7 @@ where
     Coin::try_from(value).map_err(Error::custom)
 }
 
+#[allow(dead_code)]
 pub(crate) fn deserialize_string<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 where
     D: Deserializer<'de>,

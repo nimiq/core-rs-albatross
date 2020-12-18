@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 
-use failure::Fail;
 use log::{LevelFilter, ParseLevelError};
 use structopt::StructOpt;
+use thiserror::Error;
 
-use primitives::networks::NetworkId;
+use nimiq_primitives::networks::NetworkId;
 
 use crate::config::config_file::ConsensusType;
 
@@ -16,24 +16,6 @@ use crate::config::config_file::ConsensusType;
 #[derive(Debug, StructOpt)]
 #[structopt(rename_all = "kebab")]
 pub struct CommandLine {
-    /// Hostname of this Nimiq client.
-    ///
-    /// # Examples
-    ///
-    /// * `nimiq-client --hostname seed1.nimiq.dev`
-    ///
-    #[structopt(long)]
-    pub hostname: Option<String>,
-
-    /// Port to listen on for connections
-    ///
-    /// # Examples
-    ///
-    /// * `nimiq-client --port 8000`
-    ///
-    #[structopt(long)]
-    pub port: Option<u16>,
-
     /// Use a custom configuration file.
     ///
     /// # Examples
@@ -101,12 +83,12 @@ impl CommandLine {
     }
 }
 
-#[derive(Debug, Fail)]
+#[derive(Debug, Error)]
 pub enum LogTagParseError {
-    #[fail(display = "Log tag is missing seperator: {}", _0)]
+    #[error("Log tag is missing seperator: {0}")]
     MissingColon(String),
-    #[fail(display = "Invalid log level: {}", _0)]
-    InvalidLogLevel(#[cause] ParseLevelError),
+    #[error("Invalid log level: {0}")]
+    InvalidLogLevel(#[from] ParseLevelError),
 }
 
 fn parse_log_tags(s: &str) -> Result<(String, LevelFilter), LogTagParseError> {

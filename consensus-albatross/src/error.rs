@@ -4,7 +4,7 @@ use blockchain_albatross::BlockchainError;
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("{0}")]
+    #[error("Blockchain error: {0}")]
     BlockchainError(#[from] BlockchainError),
 }
 

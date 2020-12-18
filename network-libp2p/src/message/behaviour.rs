@@ -14,15 +14,9 @@ use super::{
     peer::Peer,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct MessageConfig {
     // TODO
-}
-
-impl Default for MessageConfig {
-    fn default() -> Self {
-        Self {}
-    }
 }
 
 pub struct MessageBehaviour {

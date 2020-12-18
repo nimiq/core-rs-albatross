@@ -2,36 +2,35 @@ use std::convert::TryFrom;
 use std::fmt::Display;
 use std::net::IpAddr;
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 
 use derive_builder::Builder;
 use enum_display_derive::Display;
-use url::Url;
 
+use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, SerializingError};
 #[cfg(feature = "validator")]
-use bls::KeyPair as BlsKeyPair;
-use database::lmdb::{open as LmdbFlags, LmdbEnvironment};
-use database::volatile::VolatileEnvironment;
-use database::Environment;
-use keys::PublicKey;
-use mempool::filter::Rules as MempoolRules;
-use mempool::MempoolConfig;
-use network::network_config::{NetworkConfig, ReverseProxyConfig, Seed};
-use peer_address::address::{NetAddress, PeerUri, SeedList};
-use primitives::networks::NetworkId;
+use nimiq_bls::KeyPair as BlsKeyPair;
+use nimiq_database::{
+    lmdb::{open as LmdbFlags, LmdbEnvironment},
+    volatile::VolatileEnvironment,
+    Environment,
+};
+use nimiq_mempool::{filter::Rules as MempoolRules, MempoolConfig};
+use nimiq_network_libp2p::{libp2p::identity::ed25519::Keypair as Ed25519Keypair, Keypair as IdentityKeypair, Multiaddr};
+use nimiq_primitives::networks::NetworkId;
+use nimiq_utils::file_store::{Error as FileStoreError, FileStore};
 #[cfg(feature = "validator")]
-use utils::key_rng::SecureGenerate;
-use utils::key_store::Error as KeyStoreError;
-use utils::key_store::KeyStore;
+use nimiq_utils::key_rng::SecureGenerate;
 
-use crate::client::Client;
-use crate::config::command_line::CommandLine;
-use crate::config::config_file;
-use crate::config::config_file::ConfigFile;
-use crate::config::consts;
-use crate::config::paths;
-use crate::config::user_agent::UserAgent;
-use crate::error::Error;
+use crate::{
+    client::Client,
+    config::{
+        command_line::CommandLine,
+        config_file::{self, ConfigFile, Seed},
+        consts, paths,
+        user_agent::UserAgent,
+    },
+    error::Error,
+};
 
 /// The consensus type
 ///
@@ -53,6 +52,27 @@ impl Default for ConsensusConfig {
     fn default() -> Self {
         Self::Full
     }
+}
+
+/// Network config
+#[derive(Debug, Clone, Builder)]
+#[builder(setter(into))]
+pub struct NetworkConfig {
+    #[builder(default)]
+    pub listen_addresses: Vec<Multiaddr>,
+
+    /// The user agent is a custom string that is sent during the handshake. Usually it contains
+    /// the kind of node, Nimiq version, processor architecture and operating system. This enable
+    /// gathering information on which Nimiq versions are being run on the network. A typical
+    /// user agent would be `core-rs-albatross/0.1.0 (native; linux x86_64)`
+    ///
+    /// Default will generate a value from system information. This is recommended.
+    ///
+    #[builder(default)]
+    pub user_agent: UserAgent,
+
+    #[builder(default)]
+    pub seeds: Vec<Seed>,
 }
 
 /// Contains which protocol to use and the configuration needed for that protocol.
@@ -116,18 +136,13 @@ pub enum ProtocolConfig {
 }
 
 #[cfg(feature = "validator")]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Builder)]
+#[builder(setter(into))]
 pub struct ValidatorConfig {
-    // TODO
-    /// Validator wallet key
-    validator_wallet_key: Option<keys::KeyPair>,
-}
-
-#[cfg(feature = "validator")]
-impl ValidatorConfig {
-    pub fn validator_wallet_key(self) -> Result<Option<keys::KeyPair>, Error> {
-        Ok(self.validator_wallet_key)
-    }
+    #[builder(default)]
+    pub wallet_account: String,
+    #[builder(default)]
+    pub wallet_password: String,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -141,6 +156,7 @@ pub struct FileStorageConfig {
     peer_key: PathBuf,
 
     /// Path to validator key
+    #[cfg(feature = "validator")]
     validator_key: Option<PathBuf>,
 }
 
@@ -152,6 +168,7 @@ impl FileStorageConfig {
         Self {
             database_parent: path.to_path_buf(),
             peer_key: path.join("peer_key.dat"),
+            #[cfg(feature = "validator")]
             validator_key: Some(path.join("validator_key.dat")),
         }
     }
@@ -218,6 +235,16 @@ impl From<config_file::DatabaseSettings> for DatabaseConfig {
     }
 }
 
+pub struct IdentityKeypairWrapper(IdentityKeypair);
+
+impl Deserialize for IdentityKeypairWrapper {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        let mut raw: Vec<u8> = DeserializeWithLength::deserialize::<u16, _>(reader)?;
+        let keypair = IdentityKeypair::Ed25519(Ed25519Keypair::decode(&mut raw).map_err(|_| SerializingError::InvalidValue)?);
+        Ok(Self(keypair))
+    }
+}
+
 /// Determines where the database will be stored.
 ///
 /// # ToDo
@@ -261,7 +288,7 @@ impl StorageConfig {
     ///
     pub fn database(&self, network_id: NetworkId, consensus: ConsensusConfig, db_config: DatabaseConfig) -> Result<Environment, Error> {
         let db_name = format!("{}-{}-consensus", network_id, consensus).to_lowercase();
-        info!("Opening database: {}", db_name);
+        log::info!("Opening database: {}", db_name);
 
         Ok(match self {
             StorageConfig::Volatile => VolatileEnvironment::new_with_lmdb_flags(db_config.max_dbs, db_config.flags)?,
@@ -277,28 +304,6 @@ impl StorageConfig {
         })
     }
 
-    pub(crate) fn init_key_store(&self, network_config: &mut NetworkConfig) -> Result<(), Error> {
-        // TODO: Move this out of here and load keys from database
-        match self {
-            StorageConfig::Volatile => network_config.init_volatile(),
-            StorageConfig::Filesystem(file_storage) => {
-                let key_path = file_storage
-                    .peer_key
-                    .to_str()
-                    .ok_or_else(|| Error::config_error(format!("Failed to convert path of peer key to string: {}", file_storage.peer_key.display())))?
-                    .to_string();
-                let key_store = KeyStore::new(key_path.clone());
-                network_config.init_persistent(&key_store).map_err(|e| {
-                    warn!("Failed to initialize network config: {}", e);
-                    warn!("Does the peer key file exist? {}", key_path);
-                    e
-                })?;
-            }
-            _ => return Err(self.not_available()),
-        }
-        Ok(())
-    }
-
     #[cfg(feature = "validator")]
     pub(crate) fn validator_key(&self) -> Result<BlsKeyPair, Error> {
         Ok(match self {
@@ -312,9 +317,9 @@ impl StorageConfig {
                     .to_str()
                     .ok_or_else(|| Error::config_error(format!("Failed to convert path of validator key to string: {}", key_path.display())))?
                     .to_string();
-                let key_store = KeyStore::new(key_path);
+                let key_store = FileStore::new(key_path);
                 match key_store.load_key() {
-                    Err(KeyStoreError::IoError(_)) => {
+                    Err(FileStoreError::IoError(_)) => {
                         let validator_key = BlsKeyPair::generate_default_csprng();
                         key_store.save_key(&validator_key)?;
                         Ok(validator_key)
@@ -324,6 +329,13 @@ impl StorageConfig {
             }
             _ => return Err(self.not_available()),
         })
+    }
+
+    pub(crate) fn identity_keypair(&self) -> Result<IdentityKeypair, Error> {
+        match self {
+            StorageConfig::Filesystem(file_storage) => Ok(FileStore::new(&file_storage.peer_key).load_key::<IdentityKeypairWrapper>()?.0),
+            _ => Err(self.not_available()),
+        }
     }
 
     fn not_available(&self) -> Error {
@@ -457,6 +469,9 @@ pub struct MetricsServerConfig {
 #[derive(Clone, Debug, Builder)]
 #[builder(setter(into), build_fn(private, name = "build_internal"))]
 pub struct ClientConfig {
+    /// Network config
+    pub network: NetworkConfig,
+
     /// Determines which consensus protocol to use.
     ///
     /// Default is full consensus.
@@ -467,17 +482,7 @@ pub struct ClientConfig {
     /// The `ProtocolConfig` that determines how the client accepts incoming connections. This
     /// will also determine how the client advertises itself to the network.
     ///
-    pub protocol: ProtocolConfig,
-
-    /// The user agent is a custom string that is sent during the handshake. Usually it contains
-    /// the kind of node, Nimiq version, processor architecture and operating system. This enable
-    /// gathering information on which Nimiq versions are being run on the network. A typical
-    /// user agent would be `core-rs-albatross/0.1.0 (native; linux x86_64)`
-    ///
-    /// Default will generate a value from system information. This is recommended.
-    ///
-    #[builder(default)]
-    pub user_agent: UserAgent,
+    //pub protocol: ProtocolConfig,
 
     /// The Nimiq network the client should connect to. Usually this should be either `Test` or
     /// `Main` for the Nimiq 1.0 networks. For Albatross there is currently only `TestAlbatross`
@@ -486,14 +491,18 @@ pub struct ClientConfig {
     ///
     /// Default is `DevAlbatross`
     ///
+    /// # TODO
+    ///
+    ///  - Rename, to avoid confusion with the libp2p network
     #[builder(default = "NetworkId::DevAlbatross")]
-    pub network: NetworkId,
+    pub network_id: NetworkId,
 
+    /*
     /// This configuration is needed if your node runs behind a reverse proxy.
     ///
     #[builder(setter(custom), default)]
     pub reverse_proxy: Option<ReverseProxyConfig>,
-
+    */
     /// Determines where the database is stored.
     ///
     #[builder(default)]
@@ -508,11 +517,6 @@ pub struct ClientConfig {
     ///
     #[builder(default, setter(custom))]
     pub mempool: MempoolConfig,
-
-    /// Custom seeds
-    ///
-    #[builder(setter(custom), default)]
-    pub seeds: Vec<Seed>,
 
     /// The optional validator configuration
     ///
@@ -567,13 +571,13 @@ impl ClientConfigBuilder {
     /// Sets the network ID to the Albatross DevNet
     ///
     pub fn dev(&mut self) -> &mut Self {
-        self.network(NetworkId::DevAlbatross)
+        self.network_id(NetworkId::DevAlbatross)
     }
 
     /// Sets the network ID to the Albatross TestNet
     ///
     pub fn test(&mut self) -> &mut Self {
-        self.network(NetworkId::TestAlbatross)
+        self.network_id(NetworkId::TestAlbatross)
     }
 
     /// Sets the client to sync the full block chain.
@@ -589,62 +593,7 @@ impl ClientConfigBuilder {
         self.consensus(ConsensusConfig::MacroSync)
     }
 
-    /// Sets the *Dumb* protocol - i.e. no incoming connections will be accepted.
-    ///
-    /// # Notes
-    ///
-    /// This is currently not supported.
-    ///
-    pub fn dumb(&mut self) -> &mut Self {
-        self.protocol(ProtocolConfig::Dumb)
-    }
-
-    /// Sets the *Rtc* (WebRTC) protocol
-    ///
-    /// # Notes
-    ///
-    /// This is currently not supported.
-    ///
-    pub fn rtc(&mut self) -> &mut Self {
-        self.protocol(ProtocolConfig::Rtc)
-    }
-
-    /// Sets the *Ws* (insecure Websocket) protocol.
-    ///
-    /// # Arguments
-    ///
-    /// * `host` - The hostname at which the client is accepting connections.
-    /// * `port` - The port on which the client is accepting connections.
-    ///
-    pub fn ws<H: Into<String>, P: Into<Option<u16>>>(&mut self, host: H, port: P) -> &mut Self {
-        self.protocol(ProtocolConfig::Ws {
-            host: host.into(),
-            port: port.into().unwrap_or(consts::WS_DEFAULT_PORT),
-        })
-    }
-
-    /// Sets the *Wss* (secure Websocket) protocol
-    ///
-    /// # Arguments
-    ///
-    /// * `host` - The hostname at which the client is accepting connections.
-    /// * `port` - The port on which the client is accepting connections.
-    ///
-    pub fn wss<H: Into<String>, P: Into<Option<u16>>, K: Into<PathBuf>, Q: Into<String>>(
-        &mut self,
-        host: H,
-        port: P,
-        pkcs12_key_file: K,
-        pkcs12_passphrase: Q,
-    ) -> &mut Self {
-        self.protocol(ProtocolConfig::Wss {
-            host: host.into(),
-            port: port.into().unwrap_or(consts::WS_DEFAULT_PORT),
-            pkcs12_key_file: pkcs12_key_file.into(),
-            pkcs12_passphrase: pkcs12_passphrase.into(),
-        })
-    }
-
+    /*
     /// Sets the reverse proxy configuration. You need to set this if you run your node behind
     /// a reverse proxy.
     ///
@@ -664,6 +613,7 @@ impl ClientConfigBuilder {
         }));
         self
     }
+    */
 
     /// Configures the storage to be volatile. All data will be lost after shutdown of the client.
     pub fn volatile(&mut self) -> &mut Self {
@@ -677,65 +627,43 @@ impl ClientConfigBuilder {
         self
     }
 
-    /// Adds a custom seed node or seed list
-    pub fn seed<S: Into<Seed>>(&mut self, seed: S) -> &mut Self {
-        let seeds = self.seeds.get_or_insert_with(Default::default);
-        seeds.push(seed.into());
-        self
-    }
-
-    /// Adds a custom seed node
-    pub fn seed_uri<U: Into<PeerUri>>(&mut self, uri: U) -> &mut Self {
-        self.seed(Seed::new_peer(uri.into()))
-    }
-
-    /// Adds a custom seed url
-    pub fn seed_list(&mut self, url: Url, public_key_opt: Option<PublicKey>) -> &mut Self {
-        self.seed(Seed::new_list(SeedList::new(url, public_key_opt)))
-    }
-
     /// Sets the validator config. Since there is no configuration for validators (except key file)
     /// yet, this will just enable the validator.
     #[cfg(feature = "validator")]
-    pub fn validator(&mut self) -> &mut Self {
-        self.validator = Some(Some(ValidatorConfig { validator_wallet_key: None }));
+    pub fn validator(&mut self, wallet_account: String, wallet_password: Option<String>) -> &mut Self {
+        self.validator = Some(Some(ValidatorConfig {
+            wallet_account,
+            wallet_password: wallet_password.unwrap_or_default(),
+        }));
         self
     }
 
     /// Applies settings from a configuration file
     pub fn config_file(&mut self, config_file: &ConfigFile) -> Result<&mut Self, Error> {
-        // Configure protocol
-        self.protocol(match config_file.network.protocol {
-            config_file::Protocol::Dumb => ProtocolConfig::Dumb,
-            config_file::Protocol::Ws => ProtocolConfig::Ws {
-                host: config_file.network.host.clone().ok_or_else(|| Error::config_error("Hostname not set."))?,
-                port: config_file.network.port.clone().unwrap_or(consts::WS_DEFAULT_PORT),
-            },
-            config_file::Protocol::Wss => {
-                let tls = config_file
-                    .network
-                    .tls
-                    .as_ref()
-                    .ok_or_else(|| Error::config_error("[tls] section missing."))?
-                    .clone();
-                ProtocolConfig::Wss {
-                    host: config_file.network.host.clone().ok_or_else(|| Error::config_error("Hostname not set."))?,
-                    port: config_file.network.port.clone().unwrap_or(consts::WS_DEFAULT_PORT),
-                    pkcs12_key_file: PathBuf::from(tls.identity_file),
-                    pkcs12_passphrase: tls.identity_password,
-                }
-            }
-            config_file::Protocol::Rtc => ProtocolConfig::Rtc,
-        });
+        // TODO: if the config field of `listen_addresses` is empty, we should at least add `/ip4/127.0.0.1/...`
+        self.network(NetworkConfig {
+            listen_addresses: config_file
+                .network
+                .listen_addresses
+                .iter()
+                .map(|addr| addr.parse())
+                .collect::<Result<Vec<Multiaddr>, _>>()?,
 
-        // Configure user agent
-        config_file.network.user_agent.as_ref().map(|user_agent| self.user_agent(user_agent.clone()));
+            user_agent: config_file
+                .network
+                .user_agent
+                .as_ref()
+                .map(|ua| UserAgent::from(ua.to_owned()))
+                .unwrap_or_default(),
+
+            seeds: vec![], // TODO
+        });
 
         // Configure consensus
         self.consensus(config_file.consensus.consensus_type);
 
         // Configure network
-        self.network(config_file.consensus.network);
+        self.network_id(config_file.consensus.network);
 
         // Configure storage config.
         let mut file_storage = FileStorageConfig::default();
@@ -745,9 +673,10 @@ impl ClientConfigBuilder {
         if let Some(path) = config_file.peer_key_file.as_ref() {
             file_storage.peer_key = PathBuf::from(path);
         }
+        #[cfg(feature = "validator")]
         if let Some(validator_config) = config_file.validator.as_ref() {
             validator_config
-                .key_file
+                .validator_key
                 .as_ref()
                 .map(|key_path| file_storage.validator_key = Some(PathBuf::from(key_path)));
         }
@@ -755,11 +684,6 @@ impl ClientConfigBuilder {
 
         // Configure database
         self.database(config_file.database.clone());
-
-        // Configure reverse proxy config
-        if let Some(reverse_proxy) = config_file.reverse_proxy.as_ref() {
-            self.reverse_proxy = Some(Some(reverse_proxy.clone().into()));
-        }
 
         // Configure RPC server
         #[cfg(feature = "rpc-server")]
@@ -795,26 +719,6 @@ impl ClientConfigBuilder {
             }
         }
 
-        // Configure Websocket RPC server
-        #[cfg(feature = "ws-rpc-server")]
-        {
-            if let Some(ws_rpc_config) = &config_file.ws_rpc_server {
-                let bind_to = ws_rpc_config.bind.as_ref().and_then(|addr| addr.into_ip_address());
-
-                let credentials = match (&ws_rpc_config.username, &ws_rpc_config.password) {
-                    (Some(u), Some(p)) => Some(Credentials::new(u.clone(), p.clone())),
-                    (None, None) => None,
-                    _ => return Err(Error::config_error("Either both username and password have to be set or none.")),
-                };
-
-                self.ws_rpc_server = Some(Some(WsRpcServerConfig {
-                    bind_to,
-                    port: ws_rpc_config.port.unwrap_or(consts::WS_RPC_DEFAULT_PORT),
-                    credentials,
-                }));
-            }
-        }
-
         // Configure metrics server
         #[cfg(feature = "metrics-server")]
         {
@@ -831,33 +735,13 @@ impl ClientConfigBuilder {
             }
         }
 
-        // Configure custom seeds
-        for seed in &config_file.network.seed_nodes {
-            self.seed(Seed::try_from(seed.clone()).map_err(|e| Error::config_error(format!("Invalid seed: {:?}: {}", seed, e)))?);
-        }
-
         // Configure validator
         #[cfg(feature = "validator")]
         {
-            if config_file.validator.is_some() {
-                let wallet_private_key = config_file
-                    .validator
-                    .as_ref()
-                    .map(|settings| settings.clone().wallet_private_key)
-                    .expect("Failed to load validator settings");
-
-                let wallet_key = wallet_private_key
-                    .map(|config_private_key| {
-                        Some(keys::KeyPair::from(
-                            keys::PrivateKey::from_str(&config_private_key)
-                                .map_err(|e| Error::config_error(format!("Invalid wallet private key: {:?}: {}", &config_private_key, e)))
-                                .ok()?,
-                        ))
-                    })
-                    .unwrap_or_else(|| None);
-
+            if let Some(validator_config) = &config_file.validator {
                 self.validator = Some(Some(ValidatorConfig {
-                    validator_wallet_key: wallet_key,
+                    wallet_account: validator_config.wallet_account.to_owned(),
+                    wallet_password: validator_config.wallet_password.to_owned(),
                 }));
             }
         }
@@ -867,29 +751,11 @@ impl ClientConfigBuilder {
 
     /// Applies settings from the command line
     pub fn command_line(&mut self, command_line: &CommandLine) -> Result<&mut Self, Error> {
-        // Set hostname for Ws or Wss protocol
-        command_line.hostname.clone().map(|hostname| {
-            match &mut self.protocol {
-                Some(ProtocolConfig::Ws { host, .. }) => *host = hostname,
-                Some(ProtocolConfig::Wss { host, .. }) => *host = hostname,
-                _ => {} // just ignore this. or return an error?
-            }
-        });
-
-        // Set port for Ws or Wss protocol
-        command_line.port.map(|new_port| {
-            match &mut self.protocol {
-                Some(ProtocolConfig::Ws { port, .. }) => *port = new_port,
-                Some(ProtocolConfig::Wss { port, .. }) => *port = new_port,
-                _ => (), // just ignore this. or return an error?
-            }
-        });
-
         // Set consensus type
         command_line.consensus_type.map(|consensus| self.consensus(consensus));
 
         // Set network ID
-        command_line.network.map(|network| self.network(network));
+        command_line.network.map(|network| self.network_id(network));
 
         // NOTE: We're always return `Ok(_)`, but we might want to introduce errors later.
         Ok(self)

@@ -10,7 +10,7 @@ use futures::{
 };
 use libp2p::{
     core,
-    core::{muxing::StreamMuxerBox, transport::Boxed},
+    core::{muxing::StreamMuxerBox, network::NetworkInfo, transport::Boxed},
     dns,
     gossipsub::{GossipsubConfig, GossipsubEvent, GossipsubMessage, Topic as GossipsubTopic, TopicHash},
     identity::Keypair,
@@ -26,10 +26,12 @@ use tokio::sync::broadcast;
 use libp2p::core::transport::MemoryTransport;
 
 use beserial::{Deserialize, Serialize};
+use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{
     network::{Network as NetworkInterface, NetworkEvent, Topic},
     peer_map::ObservablePeerMap,
 };
+use nimiq_utils::time::OffsetTime;
 
 use crate::{
     behaviour::{NimiqBehaviour, NimiqEvent, NimiqNetworkBehaviourError},
@@ -49,6 +51,20 @@ pub struct Config {
     pub limit: LimitConfig,
     pub kademlia: KademliaConfig,
     pub gossipsub: GossipsubConfig,
+}
+
+impl Config {
+    pub fn new(keypair: Keypair, peer_contact: PeerContact, genesis_hash: Blake2bHash) -> Self {
+        Self {
+            keypair,
+            peer_contact,
+            discovery: DiscoveryConfig::new(genesis_hash),
+            message: MessageConfig::default(),
+            limit: LimitConfig::default(),
+            kademlia: KademliaConfig::default(),
+            gossipsub: GossipsubConfig::default(),
+        }
+    }
 }
 
 #[derive(Debug, Error)]
@@ -134,6 +150,9 @@ pub enum NetworkAction {
         data: Vec<u8>,
         output: oneshot::Sender<Result<(), NetworkError>>,
     },
+    NetworkInfo {
+        output: oneshot::Sender<NetworkInfo>,
+    },
 }
 
 #[derive(Default)]
@@ -155,13 +174,15 @@ impl Network {
     ///
     /// # Arguments
     ///
-    ///  - `listen_addr`: The multi-address on which to listen for inbound connections.
+    ///  - `listen_addresses`: The multi-addresses on which to listen for inbound connections.
+    ///  - `clock`: The clock that is used to establish the network time. The discovery behaviour will determine the
+    ///             offset by exchanging their wall-time with other peers.
     ///  - `config`: The network configuration, containing key pair, and other behaviour-specific configuration.
     ///
-    pub fn new(listen_addr: Multiaddr, config: Config) -> Self {
+    pub fn new(listen_addresses: Vec<Multiaddr>, clock: Arc<OffsetTime>, config: Config) -> Self {
         assert!(!config.gossipsub.hash_topics, "Hash topics not supported");
 
-        let swarm = Self::new_swarm(listen_addr, config);
+        let swarm = Self::new_swarm(listen_addresses, clock, config);
         let peers = swarm.message.peers.clone();
 
         let local_peer_id = Swarm::local_peer_id(&swarm).clone();
@@ -202,12 +223,12 @@ impl Network {
             .boxed())
     }
 
-    fn new_swarm(listen_addr: Multiaddr, config: Config) -> Swarm<NimiqBehaviour> {
+    fn new_swarm(listen_addresses: Vec<Multiaddr>, clock: Arc<OffsetTime>, config: Config) -> Swarm<NimiqBehaviour> {
         let local_peer_id = PeerId::from(config.keypair.clone().public());
 
         let transport = Self::new_transport(&config.keypair).unwrap();
 
-        let behaviour = NimiqBehaviour::new(config);
+        let behaviour = NimiqBehaviour::new(config, clock);
 
         // TODO add proper config
         let mut swarm = SwarmBuilder::new(transport, behaviour, local_peer_id)
@@ -216,7 +237,9 @@ impl Network {
             .peer_connection_limit(1)
             .build();
 
-        Swarm::listen_on(&mut swarm, listen_addr).expect("Failed to listen on provided address");
+        for listen_addr in listen_addresses {
+            Swarm::listen_on(&mut swarm, listen_addr).expect("Failed to listen on provided address");
+        }
 
         swarm
     }
@@ -373,9 +396,19 @@ impl Network {
                 let topic = GossipsubTopic::new(topic_name);
                 output.send(swarm.gossipsub.publish(&topic, data).map_err(Into::into)).ok();
             }
+            NetworkAction::NetworkInfo { output } => {
+                output.send(Swarm::network_info(swarm)).ok();
+            }
         }
 
         Ok(())
+    }
+
+    pub async fn network_info(&self) -> Result<NetworkInfo, NetworkError> {
+        let (output_tx, output_rx) = oneshot::channel();
+
+        self.action_tx.lock().await.send(NetworkAction::NetworkInfo { output: output_tx }).await?;
+        Ok(output_rx.await?)
     }
 }
 
@@ -509,7 +542,7 @@ impl NetworkInterface for Network {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
+    use std::{sync::Arc, time::Duration};
 
     use futures::{Stream, StreamExt};
     use libp2p::{
@@ -527,6 +560,7 @@ mod tests {
         network::Network as NetworkInterface,
         peer::{CloseReason, Peer as PeerInterface},
     };
+    use nimiq_utils::time::OffsetTime;
 
     use super::{Config, Network};
     use crate::{
@@ -609,7 +643,8 @@ mod tests {
             let address = multiaddr![Memory(self.next_address)];
             self.next_address += 1;
 
-            let net = Network::new(address.clone(), network_config(address.clone()));
+            let clock = Arc::new(OffsetTime::new());
+            let net = Network::new(vec![address.clone()], clock, network_config(address.clone()));
             log::info!("Creating node: address={}, peer_id={}", address, net.local_peer_id);
 
             if let Some(dial_address) = self.addresses.first() {
@@ -640,8 +675,8 @@ mod tests {
         let addr1 = multiaddr![Memory(thread_rng().gen::<u64>())];
         let addr2 = multiaddr![Memory(thread_rng().gen::<u64>())];
 
-        let net1 = Network::new(addr1.clone(), network_config(addr1.clone()));
-        let net2 = Network::new(addr2.clone(), network_config(addr2.clone()));
+        let net1 = Network::new(vec![addr1.clone()], Arc::new(OffsetTime::new()), network_config(addr1.clone()));
+        let net2 = Network::new(vec![addr2.clone()], Arc::new(OffsetTime::new()), network_config(addr2.clone()));
 
         log::info!("Network 1: address={}, peer_id={}", addr1, net1.local_peer_id);
         log::info!("Network 2: address={}, peer_id={}", addr2, net2.local_peer_id);

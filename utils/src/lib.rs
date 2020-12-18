@@ -10,14 +10,14 @@ extern crate log;
 
 #[cfg(feature = "crc")]
 pub mod crc;
+#[cfg(feature = "key-store")]
+pub mod file_store;
 #[cfg(feature = "hash-rng")]
 pub mod hash_rng;
 #[cfg(feature = "iterators")]
 pub mod iterators;
 #[cfg(feature = "key-rng")]
 pub mod key_rng;
-#[cfg(feature = "key-store")]
-pub mod key_store;
 #[cfg(feature = "locking")]
 pub mod locking;
 #[cfg(feature = "math")]

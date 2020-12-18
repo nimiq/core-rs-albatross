@@ -1,51 +1,44 @@
-use std::io::Error as IoError;
+use thiserror::Error;
 
-use failure::Fail;
-use log::SetLoggerError;
-use toml::de::Error as TomlError;
-
-use consensus::Error as ConsensusError;
-use database::lmdb::LmdbError;
-use database::volatile::VolatileDatabaseError;
-use network::error::Error as NetworkError;
+use nimiq_database::volatile::VolatileDatabaseError;
 #[cfg(feature = "rpc-server")]
-use rpc_server::Error as RpcServerError;
-use utils::key_store::Error as KeyStoreError;
 // #[cfg(feature = "validator")]
 // use validator::error::Error as ValidatorError;
-
-#[derive(Debug, Fail)]
+#[derive(Error, Debug)]
 pub enum Error {
-    #[fail(display = "Configuration error: {}", _0)]
-    Config(String),
+    #[error("Configuration error: {0}")]
+    Config(String), // TODO
 
-    #[fail(display = "LMDB error: {}", _0)]
-    Lmdb(#[cause] LmdbError),
+    #[error("LMDB error: {0}")]
+    Lmdb(#[from] nimiq_database::lmdb::LmdbError),
 
-    #[fail(display = "I/O error: {}", _0)]
-    Io(#[cause] IoError),
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
 
-    #[fail(display = "Network error: {}", _0)]
-    Network(#[cause] NetworkError),
+    #[error("Network error: {0}")]
+    Network(#[from] nimiq_network_libp2p::NetworkError),
 
-    #[fail(display = "Key store error: {}", _0)]
-    KeyStore(#[cause] KeyStoreError),
+    #[error("Key store error: {0}")]
+    FileStore(#[from] nimiq_utils::file_store::Error),
 
-    #[fail(display = "Consensus error: {}", _0)]
-    Consensus(#[cause] ConsensusError),
+    #[error("Consensus error: {0}")]
+    Consensus(#[from] nimiq_consensus_albatross::Error),
 
-    #[fail(display = "Config file parsing error: {}", _0)]
-    Toml(#[cause] TomlError),
+    #[error("Config file parsing error: {0}")]
+    Toml(#[from] toml::de::Error),
 
     // #[cfg(feature = "validator")]
-    // #[fail(display = "Validator error: {}", _0)]
-    // Validator(#[cause] ValidatorError),
+    // #[error("Validator error: {0}")]
+    // Validator(#[from] ValidatorError),
     #[cfg(feature = "rpc-server")]
-    #[fail(display = "RPC server error: {}", _0)]
-    RpcServer(#[cause] RpcServerError),
+    #[error("RPC server error: {0}")]
+    RpcServer(#[from] nimiq_rpc_server::Error),
 
-    #[fail(display = "Logger error: {}", _0)]
-    Logging(#[cause] SetLoggerError),
+    #[error("Logger error: {0}")]
+    Logging(#[from] log::SetLoggerError),
+
+    #[error("Failed to parse multiaddr: {0}")]
+    Multiaddr(#[from] nimiq_network_libp2p::libp2p::core::multiaddr::Error),
 }
 
 impl Error {
@@ -60,67 +53,11 @@ impl Error {
     }
 }
 
-impl From<LmdbError> for Error {
-    fn from(e: LmdbError) -> Self {
-        Self::Lmdb(e)
-    }
-}
-
-impl From<IoError> for Error {
-    fn from(e: IoError) -> Self {
-        Self::Io(e)
-    }
-}
-
 impl From<VolatileDatabaseError> for Error {
     fn from(e: VolatileDatabaseError) -> Self {
         match e {
             VolatileDatabaseError::IoError(e) => e.into(),
             VolatileDatabaseError::LmdbError(e) => e.into(),
         }
-    }
-}
-
-impl From<NetworkError> for Error {
-    fn from(e: NetworkError) -> Self {
-        Self::Network(e)
-    }
-}
-
-impl From<KeyStoreError> for Error {
-    fn from(e: KeyStoreError) -> Self {
-        Self::KeyStore(e)
-    }
-}
-
-impl From<ConsensusError> for Error {
-    fn from(e: ConsensusError) -> Self {
-        Self::Consensus(e)
-    }
-}
-
-impl From<TomlError> for Error {
-    fn from(e: TomlError) -> Self {
-        Self::Toml(e)
-    }
-}
-
-// #[cfg(feature = "validator")]
-// impl From<ValidatorError> for Error {
-//     fn from(e: ValidatorError) -> Self {
-//         Self::Validator(e)
-//     }
-// }
-
-#[cfg(feature = "rpc-server")]
-impl From<RpcServerError> for Error {
-    fn from(e: RpcServerError) -> Self {
-        Self::RpcServer(e)
-    }
-}
-
-impl From<SetLoggerError> for Error {
-    fn from(e: SetLoggerError) -> Self {
-        Self::Logging(e)
     }
 }

@@ -4,7 +4,7 @@ use keys::{KeyPair, PrivateKey, PublicKey, SecureGenerate};
 use peer_address::address::{NetAddress, PeerAddress, PeerAddressType, PeerId, PeerUri, SeedList};
 use peer_address::protocol::{Protocol, ProtocolFlags};
 use peer_address::services::Services;
-use utils::key_store::{Error as KeyStoreError, KeyStore};
+use utils::file_store::{Error as KeyStoreError, FileStore};
 use utils::time::systemtime_to_timestamp;
 
 use crate::error::Error;
@@ -95,7 +95,7 @@ impl NetworkConfig {
         }
     }
 
-    pub fn init_persistent(&mut self, peer_key_store: &KeyStore) -> Result<(), Error> {
+    pub fn init_persistent(&mut self, peer_key_store: &FileStore) -> Result<(), Error> {
         if self.key_pair.is_some() {
             return Ok(());
         }

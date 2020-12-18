@@ -2,15 +2,15 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use chrono::Local;
 use colored::Colorize;
-use failure::Fail;
 use fern::colors::{Color, ColoredLevelConfig};
 use fern::{log_file, Dispatch};
 use lazy_static::lazy_static;
 use log::{Level, LevelFilter};
 
-use crate::config::command_line::CommandLine;
-use crate::config::config_file::LogSettings;
-use crate::error::Error;
+use crate::{
+    config::{command_line::CommandLine, config_file::LogSettings},
+    error::Error,
+};
 
 static MAX_MODULE_WIDTH: AtomicUsize = AtomicUsize::new(20);
 
@@ -138,22 +138,27 @@ impl NimiqDispatch for Dispatch {
 
 macro_rules! force_log {
     ($lvl:expr, $($arg:tt)+) => ({
-        if log_enabled!($lvl) {
-            log!($lvl, $($arg)+);
+        if log::log_enabled!($lvl) {
+            log::log!($lvl, $($arg)+);
         } else {
             eprintln!($($arg)+);
         }
     })
 }
 
-pub fn log_error_cause_chain(mut fail: &dyn Fail) {
+pub fn log_error_cause_chain<E: std::error::Error>(e: &E) {
     let level = Level::Error;
-    force_log!(level, "{}", fail);
-    if fail.cause().is_some() {
+
+    force_log!(level, "{}", e);
+
+    if let Some(mut e) = e.source() {
         force_log!(level, "  caused by");
-        while let Some(cause) = fail.cause() {
-            force_log!(level, "    {}", cause);
-            fail = cause;
+        force_log!(level, "    {}", e);
+
+        while let Some(source) = e.source() {
+            force_log!(level, "    {}", source);
+
+            e = source;
         }
     }
 }

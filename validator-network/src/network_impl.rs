@@ -68,7 +68,7 @@ where
     N: Network,
     <<N as Network>::PeerType as Peer>::Id: Send + Sync + Serialize + Deserialize,
 {
-    network: N,
+    network: Arc<N>,
     state: Mutex<State<PeerId<N>>>,
 }
 
@@ -77,7 +77,7 @@ where
     N: Network,
     <<N as Network>::PeerType as Peer>::Id: Send + Sync + Serialize + Deserialize + Clone,
 {
-    pub fn new(network: N) -> Self {
+    pub fn new(network: Arc<N>) -> Self {
         Self {
             network,
             state: Mutex::new(State {

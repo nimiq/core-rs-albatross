@@ -15,7 +15,7 @@ pub type Server = _Server<AllowListDispatcher<ModularDispatcher>>;
 
 pub fn initialize_rpc_server(client: &Client, config: RpcServerConfig) -> Result<Server, Error> {
     let ip = config.bind_to.unwrap_or_else(default_bind);
-    info!("Initializing RPC server: {}:{}", ip, config.port);
+    log::info!("Initializing RPC server: {}:{}", ip, config.port);
 
     // Configure RPC server
     let basic_auth = config.credentials.map(|credentials| Credentials {
