@@ -1,10 +1,15 @@
-use std::sync::Arc;
+use std::{
+    sync::Arc,
+    task::{Poll, Context},
+    pin::Pin,
+};
 
 use futures::{
     channel::mpsc,
-    stream::StreamExt,
+    stream::{StreamExt, Stream},
     sink::SinkExt,
 };
+use pin_project::pin_project;
 
 use beserial::Deserialize;
 use nimiq_bls::{KeyPair, SecretKey};
@@ -14,12 +19,54 @@ use nimiq_block_production_albatross::BlockProducer;
 use nimiq_mempool::{Mempool, MempoolConfig};
 use nimiq_primitives::networks::NetworkId;
 use nimiq_database::volatile::VolatileEnvironment;
-use nimiq_consensus_albatross::sync::block_queue::{BlockQueue, MockRequestComponent};
+use nimiq_consensus_albatross::sync::{
+    block_queue::BlockQueue,
+    request_component::RequestComponent,
+};
+use nimiq_hash::Blake2bHash;
 
 
 /// Secret key of validator. Tests run with `network-primitives/src/genesis/unit-albatross.toml`
 const SECRET_KEY: &str =
     "196ffdb1a8acc7cbd76a251aeac0600a1d68b3aba1eba823b5e4dc5dbdcdc730afa752c05ab4f6ef8518384ad514f403c5a088a22b17bf1bc14f8ff8decc2a512c0a200f68d7bdf5a319b30356fe8d1d75ef510aed7a8660968c216c328a0000";
+
+
+#[pin_project]
+#[derive(Debug)]
+pub struct MockRequestComponent {
+    pub tx: mpsc::UnboundedSender<(Blake2bHash, Vec<Blake2bHash>)>,
+    #[pin]
+    pub rx: mpsc::UnboundedReceiver<Vec<Block>>,
+}
+
+impl MockRequestComponent {
+    pub fn new() -> (Self, mpsc::UnboundedReceiver<(Blake2bHash, Vec<Blake2bHash>)>, mpsc::UnboundedSender<Vec<Block>>) {
+        let (tx1, rx1) = mpsc::unbounded();
+        let (tx2, rx2) = mpsc::unbounded();
+
+        (Self { tx: tx1, rx: rx2 }, rx1, tx2)
+    }
+}
+
+impl RequestComponent for MockRequestComponent {
+    fn request_missing_blocks(&mut self, target_block_hash: Blake2bHash, locators: Vec<Blake2bHash>) {
+        self.tx.unbounded_send((target_block_hash, locators)).ok(); // ignore error
+    }
+}
+
+impl Default for MockRequestComponent {
+    fn default() -> Self {
+        Self::new().0
+    }
+}
+
+impl Stream for MockRequestComponent {
+    type Item = Vec<Block>;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+        self.project().rx.poll_next(cx)
+    }
+}
 
 
 #[tokio::test]

@@ -9,7 +9,15 @@ use network_interface::peer::Peer;
 use std::pin::Pin;
 use std::sync::Arc;
 
-#[derive(Debug)]
+
+pub trait RequestComponent: Stream<Item=Vec<Block>> + Unpin {
+    fn request_missing_blocks(
+        &mut self,
+        target_block_hash: Blake2bHash,
+        locators: Vec<Blake2bHash>,
+    );
+}
+
 /// Peer Tracking & Request Component
 ///
 /// - Has sync queue
@@ -24,7 +32,7 @@ pub struct BlockRequestComponent<TPeer: Peer> {
     sync_method: BoxStream<'static, Arc<ConsensusAgent<TPeer>>>,
 }
 
-impl<TPeer: Peer> BlockRequestComponent<TPeer> {
+impl<TPeer: Peer + 'static> BlockRequestComponent<TPeer> {
     const NUM_PENDING_BLOCKS: usize = 5;
 
     pub fn new(sync_method: BoxStream<'static, Arc<ConsensusAgent<TPeer>>>) -> Self {
@@ -45,7 +53,9 @@ impl<TPeer: Peer> BlockRequestComponent<TPeer> {
             ),
         }
     }
+}
 
+impl<TPeer: Peer> RequestComponent for BlockRequestComponent<TPeer> {
     fn request_missing_blocks(
         &mut self,
         target_block_hash: Blake2bHash,
@@ -58,7 +68,7 @@ impl<TPeer: Peer> BlockRequestComponent<TPeer> {
 impl<TPeer: Peer> Stream for BlockRequestComponent<TPeer> {
     type Item = Vec<Block>;
 
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         // 1. Poll self.sync_method and add new peers to self.sync_queue.
         while let Poll::Ready(Some(result)) = self.sync_method.poll_next_unpin(cx) {
             self.sync_queue.add_peer(Arc::downgrade(&result));

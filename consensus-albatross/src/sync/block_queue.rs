@@ -5,53 +5,15 @@ use std::{
     pin::Pin,
 };
 
-use futures::{
-    channel::mpsc,
-    stream::{BoxStream, Stream}
-};
+use futures::stream::{BoxStream, Stream};
 use pin_project::pin_project;
 
 use nimiq_blockchain_albatross::{Blockchain, PushResult};
 use nimiq_block_albatross::Block;
 use nimiq_network_interface::network::Topic;
 use nimiq_primitives::policy;
-use nimiq_hash::Blake2bHash;
 
-
-#[pin_project]
-#[derive(Debug)]
-pub struct MockRequestComponent {
-    pub tx: mpsc::UnboundedSender<(Blake2bHash, Vec<Blake2bHash>)>,
-    #[pin]
-    pub rx: mpsc::UnboundedReceiver<Vec<Block>>,
-}
-
-impl MockRequestComponent {
-    pub fn new() -> (Self, mpsc::UnboundedReceiver<(Blake2bHash, Vec<Blake2bHash>)>, mpsc::UnboundedSender<Vec<Block>>) {
-        let (tx1, rx1) = mpsc::unbounded();
-        let (tx2, rx2) = mpsc::unbounded();
-
-        (Self { tx: tx1, rx: rx2 }, rx1, tx2)
-    }
-
-    fn request_missing_blocks(&mut self, target_block_hash: Blake2bHash, locators: Vec<Blake2bHash>) {
-        self.tx.unbounded_send((target_block_hash, locators)).ok(); // ignore error
-    }
-}
-
-impl Default for MockRequestComponent {
-    fn default() -> Self {
-        Self::new().0
-    }
-}
-
-impl Stream for MockRequestComponent {
-    type Item = Vec<Block>;
-
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-        self.project().rx.poll_next(cx)
-    }
-}
+use super::request_component::RequestComponent;
 
 
 pub struct BlockTopic;
@@ -104,7 +66,7 @@ struct Inner {
 }
 
 impl Inner {
-    fn on_block_announced(&mut self, block: Block, mut request_component: Pin<&mut MockRequestComponent>) {
+    fn on_block_announced<TReq: RequestComponent>(&mut self, block: Block, mut request_component: Pin<&mut TReq>) {
         let block_height = block.block_number();
         let head_height = self.blockchain.block_number();
 
@@ -251,10 +213,10 @@ impl Inner {
 
 
 #[pin_project]
-pub struct BlockQueue {
+pub struct BlockQueue<TReq: RequestComponent> {
     /// The Peer Tracking and Request Component.
     #[pin]
-    request_component: MockRequestComponent,
+    request_component: TReq,
 
     /// The blocks received via gossipsub.
     #[pin]
@@ -264,8 +226,8 @@ pub struct BlockQueue {
     inner: Inner,
 }
 
-impl BlockQueue {
-    pub fn new(config: BlockQueueConfig, blockchain: Arc<Blockchain>, request_component: MockRequestComponent, block_stream: BlockStream) -> Self {
+impl<TReq: RequestComponent> BlockQueue<TReq> {
+    pub fn new(config: BlockQueueConfig, blockchain: Arc<Blockchain>, request_component: TReq, block_stream: BlockStream) -> Self {
         let buffer = BTreeMap::new();
 
         Self {
@@ -285,7 +247,7 @@ impl BlockQueue {
     }
 }
 
-impl Stream for BlockQueue {
+impl<TReq: RequestComponent> Stream for BlockQueue<TReq> {
     type Item = ();
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
