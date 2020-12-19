@@ -158,6 +158,8 @@ async fn send_two_micro_blocks_out_of_order() {
 
 #[tokio::test]
 async fn send_block_with_gap_and_respond_to_missing_request() {
+    //simple_logger::init_by_env();
+
     let keypair = KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
     let env1 = VolatileEnvironment::new(10).unwrap();
     let env2 = VolatileEnvironment::new(10).unwrap();

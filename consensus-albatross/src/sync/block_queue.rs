@@ -12,6 +12,7 @@ use nimiq_blockchain_albatross::{Blockchain, PushResult};
 use nimiq_block_albatross::Block;
 use nimiq_network_interface::network::Topic;
 use nimiq_primitives::policy;
+use nimiq_hash::Blake2bHash;
 
 use super::request_component::RequestComponent;
 
@@ -95,14 +96,27 @@ impl Inner {
         }
         else {
             let block_hash = block.hash();
+            let head_hash = self.blockchain.head_hash();
+
+            let prev_macro_block_height = policy::last_macro_block(head_height);
 
             // Put block inside buffer window
             self.insert_into_buffer(block);
 
-            log::trace!("Requesting missing blocks: target_hash = {}", block_hash);
+            log::trace!("Requesting missing blocks: target_hash = {}, head_hash = {}, prev_macro_block_height = {}", block_hash, head_hash, prev_macro_block_height);
+            log::trace!("n = {} = {} - {} + 1", head_height - prev_macro_block_height + 1, head_height, prev_macro_block_height);
 
-            // TODO: Send block locators
-            request_component.request_missing_blocks(block_hash, vec![]);
+            // get block locators
+            let block_locators = self.blockchain
+                .chain_store
+                .get_blocks_backward(&head_hash, block_height - prev_macro_block_height + 1, false, None)
+                .into_iter()
+                .map(|block| block.hash())
+                .collect::<Vec<Blake2bHash>>();
+
+            log::trace!("block_locators = {:?}", block_locators);
+
+            request_component.request_missing_blocks(block_hash, block_locators);
         }
     }
 
