@@ -52,9 +52,11 @@ impl MockNetwork {
     fn dial_mock_address(&self, address: MockAddress) -> Result<(), MockNetworkError> {
         let hub = self.hub.lock();
 
+        log::debug!("Peer {} dialing peer {}", self.address, address);
+
         // Insert ourselves into peer's peer list.
         // This also makes sure the other peer actually exists.
-        hub.peer_maps
+        let is_new = hub.peer_maps
             .get(&address)
             .ok_or_else(|| MockNetworkError::CantConnect(address))?
             .insert(MockPeer {
@@ -63,12 +65,17 @@ impl MockNetwork {
                 hub: Arc::clone(&self.hub),
             });
 
-        // Insert peer into out peer list
-        self.peers.insert(MockPeer {
-            network_address: self.address,
-            peer_id: address.into(),
-            hub: Arc::clone(&self.hub),
-        });
+        if is_new {
+            // Insert peer into out peer list
+            self.peers.insert(MockPeer {
+                network_address: self.address,
+                peer_id: address.into(),
+                hub: Arc::clone(&self.hub),
+            });
+        }
+        else {
+            log::trace!("Peers are already connected.");
+        }
 
         Ok(())
     }
@@ -143,8 +150,13 @@ impl Network for MockNetwork {
         T: Topic + Sync,
     {
         let mut hub = self.hub.lock();
+
+        let topic = topic.topic();
         let data = item.serialize_to_vec();
-        hub.get_topic(topic.topic()).send((Arc::new(data), self.address.into())).unwrap();
+
+        log::debug!("Peer {} publishing on topic '{}': {:?}", self.address, topic, item);
+
+        hub.get_topic(topic).send((Arc::new(data), self.address.into())).unwrap();
         Ok(())
     }
 

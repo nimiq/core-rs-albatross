@@ -17,6 +17,7 @@ use nimiq_hash::Blake2bHash;
 use super::request_component::RequestComponent;
 
 
+#[derive(Clone, Debug, Default)]
 pub struct BlockTopic;
 
 impl Topic for BlockTopic {

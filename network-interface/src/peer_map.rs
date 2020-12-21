@@ -1,5 +1,5 @@
 use parking_lot::RwLock;
-use std::{collections::HashMap, iter::FromIterator, sync::Arc};
+use std::{collections::hash_map::{HashMap, Entry}, iter::FromIterator, sync::Arc};
 use tokio::sync::broadcast;
 
 use crate::{network::NetworkEvent, peer::Peer};
@@ -92,15 +92,21 @@ where
         Self::from_peers(HashMap::new())
     }
 
-    pub fn insert(&self, peer: impl Into<Arc<P>>) {
+    /// Adds a peer to the peer map. Returns `true` if the peer wasn't in the map yet, `false` otherwise.
+    pub fn insert(&self, peer: impl Into<Arc<P>>) -> bool {
         let peer = peer.into();
 
         log::debug!("Inserting into peer list: peer_id={:?}", peer.id());
 
         let mut inner = self.inner.write();
 
-        if inner.peers.insert(peer.id(), Arc::clone(&peer)).is_none() {
-            inner.notify(NetworkEvent::PeerJoined(peer));
+        match inner.peers.entry(peer.id()) {
+            Entry::Occupied(_) => false,
+            Entry::Vacant(vacant) => {
+                vacant.insert(Arc::clone(&peer));
+                inner.notify(NetworkEvent::PeerJoined(peer));
+                true
+            }
         }
     }
 
