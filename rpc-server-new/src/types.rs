@@ -3,19 +3,24 @@
 ///! [1] https://github.com/nimiq/core-js/wiki/JSON-RPC-API#common-data-types
 use std::fmt::{Display, Formatter};
 
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+
 use nimiq_blockchain_albatross::Blockchain;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
 use nimiq_primitives::policy;
 use nimiq_primitives::{account::AccountType, coin::Coin};
 use nimiq_transaction::account::htlc_contract::AnyHash;
-
 use nimiq_block_albatross::{TendermintProof, ViewChangeProof};
 use nimiq_bls::{CompressedPublicKey, CompressedSignature};
 use nimiq_collections::BitSet;
 use nimiq_primitives::slot::{SlotBand, ValidatorSlots};
 use nimiq_vrf::VrfSeed;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use nimiq_transaction::TransactionFlags;
+
+use crate::Error;
+
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -556,5 +561,65 @@ impl Validator {
 
     pub fn from_inactive(public_key: CompressedPublicKey, validator: &nimiq_account::staking_contract::InactiveValidator) -> Self {
         Self::from_validator(public_key, &validator.validator, Some(validator.retire_time))
+    }
+}
+
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransactionParameters {
+    from: Address,
+
+    from_type: AccountType,
+
+    to: Option<Address>,
+
+    to_type: AccountType,
+
+    value: Coin,
+
+    fee: Coin,
+
+    flags: TransactionFlags,
+
+    #[serde(with = "crate::serde_helpers::hex")]
+    data: Vec<u8>,
+
+    validity_start_height: Option<u32>,
+}
+
+impl TransactionParameters {
+    pub fn into_transaction(self, blockchain: &Blockchain) -> Result<nimiq_transaction::Transaction, Error> {
+        let validity_start_height = self.validity_start_height.unwrap_or_else(|| blockchain.block_number());
+        let network_id = blockchain.network_id;
+
+        match self.to {
+            None if self.to_type != AccountType::Basic && self.flags.contains(TransactionFlags::CONTRACT_CREATION) => {
+                Ok(nimiq_transaction::Transaction::new_contract_creation(
+                    self.data,
+                    self.from,
+                    self.from_type,
+                    self.to_type,
+                    self.value,
+                    self.fee,
+                    validity_start_height,
+                    network_id,
+                ))
+            },
+            Some(to) if !self.flags.contains(TransactionFlags::CONTRACT_CREATION) => {
+                Ok(nimiq_transaction::Transaction::new_extended(
+                    self.from,
+                    self.from_type,
+                    to,
+                    self.to_type,
+                    self.value,
+                    self.fee,
+                    self.data,
+                    validity_start_height,
+                    network_id,
+                ))
+            },
+            _ => Err(Error::InvalidTransactionParameters),
+        }
     }
 }

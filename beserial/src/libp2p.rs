@@ -3,7 +3,7 @@
 use std::convert::TryFrom;
 
 use byteorder::{ReadBytesExt, WriteBytesExt};
-use libp2p::{identity::PublicKey, Multiaddr, PeerId};
+use libp2p::{identity::{PublicKey, Keypair}, Multiaddr, PeerId};
 
 use crate::{uvar, Deserialize, DeserializeWithLength, Serialize, SerializeWithLength, SerializingError};
 
@@ -64,5 +64,30 @@ impl Serialize for PeerId {
 impl Deserialize for PeerId {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         PeerId::from_bytes(DeserializeWithLength::deserialize::<u8, R>(reader)?).map_err(|_| SerializingError::InvalidValue)
+    }
+}
+
+impl Serialize for Keypair {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+        match self {
+            Keypair::Ed25519(keypair) => {
+                writer.write_all(&keypair.encode())?;
+                Ok(64)
+            },
+            _ => panic!("Only ed25519 keys are currently supported for serialization."),
+        }
+    }
+
+    fn serialized_size(&self) -> usize {
+        64
+    }
+}
+
+impl Deserialize for Keypair {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        let mut buf = [0u8; 64];
+        reader.read_exact(&mut buf)?;
+        let pk = libp2p::identity::ed25519::Keypair::decode(&mut buf).map_err(|_| SerializingError::InvalidValue)?;
+        Ok(Keypair::Ed25519(pk))
     }
 }

@@ -18,7 +18,7 @@ pub enum Error {
     #[error("Network error: {0}")]
     Network(#[from] nimiq_network_libp2p::NetworkError),
 
-    #[error("Key store error: {0}")]
+    #[error("File store error: {0}")]
     FileStore(#[from] nimiq_utils::file_store::Error),
 
     #[error("Consensus error: {0}")]

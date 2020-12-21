@@ -32,5 +32,6 @@ features = [
     "metrics-server",
     "deadlock",
     "logging",
+    "wallet",
     "panic"
 ]

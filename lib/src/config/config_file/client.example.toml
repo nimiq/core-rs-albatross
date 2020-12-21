@@ -20,34 +20,9 @@
 
 [network]
 
-# Configure hostname/IP address to announce to the network.
-# If the protocol is "wss", this must be a FQDN pointing to this node.
-# Possible values: any fully-qualified domain name or IP address (latter only for protocol "ws").
-host = "my.domain"
-
-# Specifies which port to listen on for connections.
-# Possible values: any valid port number
-# Default: 8443.
-#port = 8443
-
-# Configure the protocol to be used. Options are:
-# - "wss": Requires host, port, and TLS certificate to be set.
-# - "ws": Only requires host (can be an IP address) and port to be set.
-# Possible values: "wss", "ws"
-# Default: "ws"
-#protocol = "ws"
-
-# Details of additional seed node.
-# NOTE: Seed nodes without public key are currently not supported.
-#
-#seed_nodes = [
-#	# Add seed nodes from list (e.g. community seed nodes). The public key specified is used to verify the signature of the file.
-#	{ list = "https://nimiq.community/seeds.txt", public_key = "e65e39616662f2c16d62dc08915e5a1d104619db8c2b9cf9b389f96c8dce9837" },
-#	# Specify a Wss seed node with hostname, port (optional) and peer_id (optional), or public_key (optional).
-#	{ host = "seed-15.nimiq-network.com", port = 8443, peer_id = "c705843de04503656f4965a6672e70f0" },
-#	# Specify seed node using a peer's URI. The last URI segment must be the public key, not the fingerprint.
-#	{ uri = "wss://seed-17.nimiq.com:8443/f1240638c6dd670467f22a04b58f7740" }
-#]
+listen_addresses = [
+	"/ip4/127.0.0.1/tcp/8443/ws",
+]
 
 # User Agent
 #
@@ -119,27 +94,27 @@ host = "my.domain"
 ##############################################################################
 
 # Uncomment the following line to enable the RPC server.
-#[rpc-server]
+[rpc-server]
 
 # Bind the RPC server to specified IP
 # Default: 127.0.0.1
-#bind="127.0.0.1"
+bind="127.0.0.1"
 
 # TCP-Port to use to create a listening socket for the JSON-RPC server.
 # Possible values: any valid port number
 # Default: 8648
-#port = 8648
+port = 8648
 
 # Allow only the RPC methods listed here. All methods are allowed if this is empty.
 # Example: ["getBlockByNumber", "peerCount"],
 # Default: []
-#methods = []
+methods = []
 
 # Declare a username and password required to access the JSON-RPC server.
 # Default: none
-#username = "super"
+username = "super"
 # Default: none
-#password = "secret"
+password = "secret"
 
 
 
@@ -254,14 +229,3 @@ level = "debug"
 #sender_balance = 0
 #recipient_balance = 0
 
-##############################################################################
-##
-## Configure validator wallet
-##
-###############################################################################
-
-[validator]
-
-# Define
-# If the wallet private 
-#wallet_private_key = "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"

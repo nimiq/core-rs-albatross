@@ -4,7 +4,7 @@ use keys::{KeyPair, PrivateKey, PublicKey, SecureGenerate};
 use peer_address::address::{NetAddress, PeerAddress, PeerAddressType, PeerId, PeerUri, SeedList};
 use peer_address::protocol::{Protocol, ProtocolFlags};
 use peer_address::services::Services;
-use utils::file_store::{Error as KeyStoreError, FileStore};
+use utils::file_store::FileStore;
 use utils::time::systemtime_to_timestamp;
 
 use crate::error::Error;
@@ -100,14 +100,7 @@ impl NetworkConfig {
             return Ok(());
         }
 
-        let private_key = match peer_key_store.load_key() {
-            Err(KeyStoreError::IoError(_)) => {
-                let private_key = PrivateKey::generate_default_csprng();
-                peer_key_store.save_key(&private_key)?;
-                Ok(private_key)
-            }
-            res => res,
-        }?;
+        let private_key = peer_key_store.load_or_store(|| PrivateKey::generate_default_csprng())?;
 
         let key_pair = KeyPair::from(private_key);
         self.peer_id = Some(PeerId::from(&key_pair.public));

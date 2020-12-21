@@ -1,10 +1,15 @@
-use std::collections::HashSet;
-use std::iter::FromIterator;
+use std::{
+    collections::HashSet,
+    iter::FromIterator,
+    sync::Arc,
+};
 
 use nimiq_rpc_server::dispatchers::*;
 
 use nimiq_jsonrpc_core::Credentials;
 use nimiq_jsonrpc_server::{AllowListDispatcher, Config, ModularDispatcher, Server as _Server};
+
+use nimiq_wallet::WalletStore;
 
 use crate::client::Client;
 use crate::config::config::RpcServerConfig;
@@ -13,7 +18,7 @@ use crate::error::Error;
 
 pub type Server = _Server<AllowListDispatcher<ModularDispatcher>>;
 
-pub fn initialize_rpc_server(client: &Client, config: RpcServerConfig) -> Result<Server, Error> {
+pub fn initialize_rpc_server(client: &Client, config: RpcServerConfig, wallet_store: Arc<WalletStore>) -> Result<Server, Error> {
     let ip = config.bind_to.unwrap_or_else(default_bind);
     log::info!("Initializing RPC server: {}:{}", ip, config.port);
 
@@ -39,12 +44,14 @@ pub fn initialize_rpc_server(client: &Client, config: RpcServerConfig) -> Result
     }
     */
 
-    dispatcher.add(BlockchainDispatcher::new(client.blockchain()));
-    //dispatcher.add(ConsensusDispatcher::new(client.consensus()));
     //dispatcher.add(NetworkDispatcher::new(client.consensus()));
-    //let wallet_manager = Arc::clone(&wallet_handler.unlocked_wallets);
-    //dispatcher.add(WalletDispatcher::new(wallet_manager));
-    //dispatcher.add(MempoolHandler::new(client.mempool(), client.validator(), Some(wallet_manager)));
+    let wallet_dispatcher = WalletDispatcher::new(wallet_store);
+    let unlocked_wallets = Arc::clone(&wallet_dispatcher.unlocked_wallets);
+
+    dispatcher.add(BlockchainDispatcher::new(client.blockchain()));
+    dispatcher.add(ConsensusDispatcher::new(client.consensus(), Some(unlocked_wallets)));
+    dispatcher.add(wallet_dispatcher);
+    dispatcher.add(MempoolDispatcher::new(client.mempool()));
 
     Ok(Server::new(
         Config {

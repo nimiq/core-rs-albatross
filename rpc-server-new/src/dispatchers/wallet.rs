@@ -4,7 +4,6 @@ use async_trait::async_trait;
 use parking_lot::RwLock;
 
 use beserial::Deserialize;
-use nimiq_database::Environment;
 use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey, Signature};
 use nimiq_utils::otp::Locked;
 use nimiq_wallet::{WalletAccount, WalletStore};
@@ -52,14 +51,14 @@ pub trait WalletInterface {
 }
 
 pub struct WalletDispatcher {
-    wallet_store: WalletStore,
-    unlocked_wallets: Arc<RwLock<UnlockedWallets>>,
+    wallet_store: Arc<WalletStore>,
+    pub unlocked_wallets: Arc<RwLock<UnlockedWallets>>,
 }
 
 impl WalletDispatcher {
-    pub fn new(env: Environment) -> Self {
+    pub fn new(wallet_store: Arc<WalletStore>) -> Self {
         Self {
-            wallet_store: WalletStore::new(env),
+            wallet_store,
             unlocked_wallets: Arc::new(RwLock::new(UnlockedWallets::default())),
         }
     }

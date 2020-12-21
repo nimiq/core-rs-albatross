@@ -6,6 +6,7 @@ use std::str::FromStr;
 use log::LevelFilter;
 use serde_derive::Deserialize;
 use thiserror::Error;
+use nimiq_network_libp2p::Multiaddr;
 
 use nimiq_mempool::{
     filter::{MempoolFilter, Rules as MempoolRules},
@@ -125,14 +126,10 @@ pub struct NetworkSettings {
     pub instant_inbound: Option<bool>,
 }
 
-#[derive(Debug, Error)]
-pub enum SeedError {
-    // TODO
-}
-
 #[derive(Clone, Debug, Deserialize)]
 pub struct Seed {
-    // TODO
+    pub address: Multiaddr,
+    //public_key: PublicKey,
 }
 
 #[derive(Deserialize, Debug, Copy, Clone, PartialEq, Eq)]

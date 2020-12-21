@@ -6,7 +6,6 @@ use std::path::{Path, PathBuf};
 use derive_builder::Builder;
 use enum_display_derive::Display;
 
-use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, SerializingError};
 #[cfg(feature = "validator")]
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_database::{
@@ -15,9 +14,9 @@ use nimiq_database::{
     Environment,
 };
 use nimiq_mempool::{filter::Rules as MempoolRules, MempoolConfig};
-use nimiq_network_libp2p::{libp2p::identity::ed25519::Keypair as Ed25519Keypair, Keypair as IdentityKeypair, Multiaddr};
+use nimiq_network_libp2p::{Keypair as IdentityKeypair, Multiaddr};
 use nimiq_primitives::networks::NetworkId;
-use nimiq_utils::file_store::{Error as FileStoreError, FileStore};
+use nimiq_utils::file_store::FileStore;
 #[cfg(feature = "validator")]
 use nimiq_utils::key_rng::SecureGenerate;
 
@@ -235,15 +234,6 @@ impl From<config_file::DatabaseSettings> for DatabaseConfig {
     }
 }
 
-pub struct IdentityKeypairWrapper(IdentityKeypair);
-
-impl Deserialize for IdentityKeypairWrapper {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let mut raw: Vec<u8> = DeserializeWithLength::deserialize::<u16, _>(reader)?;
-        let keypair = IdentityKeypair::Ed25519(Ed25519Keypair::decode(&mut raw).map_err(|_| SerializingError::InvalidValue)?);
-        Ok(Self(keypair))
-    }
-}
 
 /// Determines where the database will be stored.
 ///
@@ -317,15 +307,9 @@ impl StorageConfig {
                     .to_str()
                     .ok_or_else(|| Error::config_error(format!("Failed to convert path of validator key to string: {}", key_path.display())))?
                     .to_string();
-                let key_store = FileStore::new(key_path);
-                match key_store.load_key() {
-                    Err(FileStoreError::IoError(_)) => {
-                        let validator_key = BlsKeyPair::generate_default_csprng();
-                        key_store.save_key(&validator_key)?;
-                        Ok(validator_key)
-                    }
-                    res => res,
-                }?
+
+                FileStore::new(key_path)
+                    .load_or_store(|| BlsKeyPair::generate_default_csprng())?
             }
             _ => return Err(self.not_available()),
         })
@@ -333,7 +317,10 @@ impl StorageConfig {
 
     pub(crate) fn identity_keypair(&self) -> Result<IdentityKeypair, Error> {
         match self {
-            StorageConfig::Filesystem(file_storage) => Ok(FileStore::new(&file_storage.peer_key).load_key::<IdentityKeypairWrapper>()?.0),
+            StorageConfig::Filesystem(file_storage) => {
+                Ok(FileStore::new(&file_storage.peer_key)
+                    .load_or_store(|| IdentityKeypair::generate_ed25519())?)
+            },
             _ => Err(self.not_available()),
         }
     }

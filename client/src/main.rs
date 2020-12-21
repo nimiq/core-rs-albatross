@@ -53,7 +53,7 @@ async fn main_inner() -> Result<(), Error> {
     // Initialize RPC server
     if let Some(rpc_config) = rpc_config {
         use nimiq::extras::rpc_server::initialize_rpc_server;
-        let rpc_server = initialize_rpc_server(&client, rpc_config).expect("Failed to initialize RPC server");
+        let rpc_server = initialize_rpc_server(&client, rpc_config, client.wallet_store()).expect("Failed to initialize RPC server");
         tokio::spawn(async move { rpc_server.run().await });
     }
 
@@ -82,7 +82,7 @@ async fn main_inner() -> Result<(), Error> {
 
     // Initialize network stack and connect.
     log::info!("Connecting to network");
-    client.connect()?;
+    client.connect().await?;
 
     // Create the "monitor" future which never completes to keep the client alive.
     // This closure is executed after the client has been initialized.

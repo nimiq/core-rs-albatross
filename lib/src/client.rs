@@ -9,6 +9,7 @@ use nimiq_network_libp2p::{
     discovery::peer_contacts::{PeerContact, Services},
     Config as NetworkConfig, Network,
 };
+use nimiq_network_interface::network::{Network as NetworkInterface};
 use nimiq_utils::time::OffsetTime;
 
 #[cfg(feature = "validator")]
@@ -18,7 +19,10 @@ use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
 #[cfg(feature = "wallet")]
 use nimiq_wallet::WalletStore;
 
-use crate::config::config::ClientConfig;
+use crate::config::{
+    config::ClientConfig,
+    config_file::Seed,
+};
 use crate::error::Error;
 
 /// Alias for the Consensus and Validator specialized over libp2p network
@@ -38,6 +42,8 @@ pub(crate) struct ClientInner {
     /// reference is also stored in the consensus though.
     environment: Environment,
 
+    network: Arc<Network>,
+
     /// The consensus object, which maintains the blockchain, the network and other things to
     /// reach consensus.
     consensus: Arc<Consensus>,
@@ -49,7 +55,9 @@ pub(crate) struct ClientInner {
     */
     /// Wallet that stores keypairs for transaction signing
     #[cfg(feature = "wallet")]
-    wallet_store: WalletStore,
+    wallet_store: Arc<WalletStore>,
+
+    seed_nodes: Vec<Seed>,
 }
 
 impl TryFrom<ClientConfig> for ClientInner {
@@ -79,6 +87,9 @@ impl TryFrom<ClientConfig> for ClientInner {
 
         // Setup libp2p network
         let network_config = NetworkConfig::new(identity_keypair, peer_contact, network_info.genesis_hash().clone());
+
+        log::debug!("listen_addresses = {:?}", config.network.listen_addresses);
+
         let network = Arc::new(Network::new(config.network.listen_addresses, Arc::clone(&time), network_config));
 
         // Load validator key (before we give away ownership of the storage config)
@@ -92,7 +103,7 @@ impl TryFrom<ClientConfig> for ClientInner {
 
         // Open wallet
         #[cfg(feature = "wallet")]
-        let wallet_store = WalletStore::new(env);
+        let wallet_store = Arc::new(WalletStore::new(environment.clone()));
 
         // TODO: This will need to be changed from the QuickSync protocol to a more adequate sync
         //       protocol.
@@ -124,11 +135,13 @@ impl TryFrom<ClientConfig> for ClientInner {
 
         Ok(ClientInner {
             environment,
+            network,
             consensus,
             //#[cfg(feature = "validator")]
             //validator,
             #[cfg(feature = "wallet")]
             wallet_store,
+            seed_nodes: config.network.seeds,
         })
     }
 }
@@ -157,9 +170,12 @@ pub struct Client {
 
 impl Client {
     /// After calling this the network stack will start connecting to other peers.
-    pub fn connect(&self) -> Result<(), Error> {
+    pub async fn connect(&self) -> Result<(), Error> {
         // Tell the network to connect to seed nodes
-        todo!()
+        for seed in &self.inner.seed_nodes {
+            self.inner.network.dial_address(seed.address.clone()).await?;
+        }
+        Ok(())
     }
 
     /// Returns a reference to the *Consensus*.
@@ -180,6 +196,11 @@ impl Client {
     /// Returns a reference to the *Mempool*
     pub fn mempool(&self) -> Arc<Mempool> {
         Arc::clone(&self.inner.consensus.mempool)
+    }
+
+    #[cfg(feature = "wallet")]
+    pub fn wallet_store(&self) -> Arc<WalletStore> {
+        Arc::clone(&self.inner.wallet_store)
     }
 
     /*

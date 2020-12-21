@@ -19,14 +19,31 @@ impl FileStore {
         }
     }
 
-    pub fn load_key<T: Deserialize>(&self) -> Result<T, Error> {
+    pub fn load<T: Deserialize>(&self) -> Result<T, Error> {
+        log::debug!("Reading from: {}", self.path.display());
         let file = OpenOptions::new().read(true).open(&self.path)?;
         let mut buf_reader = BufReader::new(file);
         let item = Deserialize::deserialize(&mut buf_reader)?;
         Ok(item)
     }
 
-    pub fn save_key<T: Serialize>(&self, item: &T) -> Result<(), Error> {
+    pub fn load_or_store<T, F>(&self, mut f: F) -> Result<T, Error>
+        where
+            T: Serialize + Deserialize,
+            F: FnMut() -> T
+    {
+        if self.path.exists() {
+            self.load()
+        }
+        else {
+            let x = f();
+            self.store(&x)?;
+            Ok(x)
+        }
+    }
+
+    pub fn store<T: Serialize>(&self, item: &T) -> Result<(), Error> {
+        log::debug!("Writing to: {}", self.path.display());
         let file = OpenOptions::new().write(true).create(true).open(&self.path)?;
         let mut buf_writer = BufWriter::new(file);
         Serialize::serialize(item, &mut buf_writer)?;

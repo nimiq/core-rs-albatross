@@ -45,6 +45,8 @@ nimiq-validator = { path = "../validator", version = "0.1", optional = true }
 nimiq-collections = { path = "../collections", features = ["serde-derive"] }
 nimiq-database = { path = "../database" }
 nimiq-wallet = { path = "../wallet" }
+nimiq-network-libp2p = { path = "../network-libp2p" }
+nimiq-consensus-albatross = { path = "../consensus-albatross" }
 
 [features]
 validator = ["nimiq-validator"]
