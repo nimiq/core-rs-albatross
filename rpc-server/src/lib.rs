@@ -1,79 +1,83 @@
-#[macro_use]
-extern crate log;
-extern crate nimiq_account as account;
-extern crate nimiq_block_albatross as block_albatross;
-extern crate nimiq_blockchain_albatross as blockchain_albatross;
-extern crate nimiq_bls as bls;
-extern crate nimiq_consensus_albatross as consensus;
-extern crate nimiq_genesis as genesis;
-extern crate nimiq_hash as hash;
-extern crate nimiq_keys as keys;
-extern crate nimiq_network_albatross as network;
-extern crate nimiq_peer_address as peer_address;
-extern crate nimiq_primitives as primitives;
-extern crate nimiq_transaction as transaction;
-extern crate nimiq_utils as utils;
-#[cfg(feature = "validator")]
-extern crate nimiq_validator as validator;
+pub mod dispatchers;
+pub(crate) mod serde_helpers;
+pub mod types;
+pub mod wallets;
 
-use std::collections::HashSet;
-use std::net::{IpAddr, SocketAddr};
-use std::sync::Arc;
+use std::fmt::{Display, Formatter};
 
-use futures::future::Future;
-use futures::IntoFuture;
-use hyper::Server;
-use json::{object, JsonValue};
+use nimiq_hash::Blake2bHash;
+use nimiq_jsonrpc_core::RpcError;
+pub use nimiq_jsonrpc_server::{Config, Server};
+use nimiq_keys::Address;
 
-use crate::error::Error;
-pub use crate::handler::Handler;
+use thiserror::Error;
 
-pub mod error;
-pub mod handler;
-pub mod handlers;
-pub mod jsonrpc;
-
-fn rpc_not_implemented<T>() -> Result<T, JsonValue> {
-    Err(object! {"message" => "Not implemented"})
+#[derive(Clone, Debug)]
+pub enum BlockNumberOrHash {
+    Number(u32),
+    Hash(Blake2bHash),
 }
 
-#[derive(Debug, Clone)]
-pub struct JsonRpcConfig {
-    pub username: Option<String>,
-    pub password: Option<String>,
-    pub methods: HashSet<String>,
-    pub allowip: (),
-    pub corsdomain: Vec<String>,
-}
-
-pub type RpcServerFuture = Box<dyn Future<Item = (), Error = ()> + Send + Sync + 'static>;
-
-pub struct RpcServer {
-    future: RpcServerFuture,
-    pub handler: Arc<Handler>,
-}
-
-impl RpcServer {
-    pub fn new(ip: IpAddr, port: u16, config: JsonRpcConfig) -> Result<Self, Error> {
-        let handler = Arc::new(Handler::new(config));
-
-        let handler2 = Arc::clone(&handler);
-        let future = Box::new(
-            Server::try_bind(&SocketAddr::new(ip, port))?
-                .serve(move || jsonrpc::Service::new(Arc::clone(&handler2)))
-                .map_err(|e| error!("RPC server failed: {}", e)),
-        );
-
-        Ok(RpcServer { future, handler })
+impl From<u32> for BlockNumberOrHash {
+    fn from(block_number: u32) -> Self {
+        BlockNumberOrHash::Number(block_number)
     }
 }
 
-impl IntoFuture for RpcServer {
-    type Future = RpcServerFuture;
-    type Item = ();
-    type Error = ();
+impl From<Blake2bHash> for BlockNumberOrHash {
+    fn from(block_hash: Blake2bHash) -> Self {
+        BlockNumberOrHash::Hash(block_hash)
+    }
+}
 
-    fn into_future(self) -> Self::Future {
-        self.future
+impl Display for BlockNumberOrHash {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
+        match self {
+            BlockNumberOrHash::Number(block_number) => write!(f, "{}", block_number),
+            BlockNumberOrHash::Hash(block_hash) => write!(f, "{}", block_hash),
+        }
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("Block not found: {0}")]
+    BlockNotFound(BlockNumberOrHash),
+
+    #[error("Unexpected macro block: {0}")]
+    UnexpectedMacroBlock(BlockNumberOrHash),
+
+    #[error("Method not implemented")]
+    NotImplemented,
+
+    #[error("Invalid combination of transaction parameters")]
+    InvalidTransactionParameters,
+
+    #[error("No account with address: {0}")]
+    AccountNotFound(Address),
+
+    #[error("Wrong passphrase")]
+    WrongPassphrase,
+
+    #[error("No unlocked wallet with address: {0}")]
+    UnlockedWalletNotFound(Address),
+
+    #[error("Invalid hex: {0}")]
+    HexError(#[from] hex::FromHexError),
+
+    #[error("{0}")]
+    Beserial(#[from] beserial::SerializingError),
+
+    #[error("{0}")]
+    Argon2(#[from] nimiq_hash::argon2kdf::Argon2Error),
+
+    #[error("Transaction rejected: {0:?}")]
+    TransactionRejected(nimiq_mempool::ReturnCode),
+}
+
+impl From<Error> for nimiq_jsonrpc_core::RpcError {
+    fn from(e: Error) -> Self {
+        // TODO
+        RpcError::internal_error(Some(e.to_string()))
     }
 }

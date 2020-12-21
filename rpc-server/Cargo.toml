@@ -17,35 +17,36 @@ is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-base64 = "0.10"
-beserial = { path = "../beserial", version = "0.1" }
-clear_on_drop = { version = "0.2" }
-failure = "0.1"
-futures = "0.1"
-hex = "0.4"
-hyper = "0.12"
-json = "0.12"
+serde = { version = "1.0", features = ["derive"] }
+serde_with = "1.4"
+thiserror = "1.0"
+async-trait = "0.1"
+tokio = "0.2"
+hex = "0.4.2"
 log = "0.4"
-parking_lot = "0.9"
+parking_lot = "0.11"
 
-nimiq-account = { path = "../primitives/account", version = "0.1" }
-nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }
-nimiq-blockchain-albatross = { path = "../blockchain-albatross", version = "0.1", features = ["metrics"] }
-nimiq-bls = { path = "../bls", version = "0.1" }
-nimiq-consensus-albatross = { path = "../consensus-albatross", version = "0.1"}
-nimiq-database = { path = "../database", version = "0.1" }
-nimiq-genesis = { path = "../genesis", version = "0.1" }
-nimiq-hash = { path = "../hash", version = "0.1" }
-nimiq-keys = { path = "../keys", version = "0.1" }
-nimiq-mempool = { path = "../mempool", version = "0.1" }
-nimiq-network-albatross = { path = "../network-albatross", version = "0.1", features = ["metrics"] }
-nimiq-peer-address = { path = "../peer-address", version = "0.1" }
-nimiq-primitives = { path = "../primitives", version = "0.1" }
-nimiq-transaction = { path = "../primitives/transaction", version = "0.1" }
-nimiq-transaction-builder = { path = "../transaction-builder", version = "0.1" }
-nimiq-utils = { path = "../utils", version = "0.1", features = ["merkle", "time", "otp"] }
-nimiq-validator = { path = "../validator", version = "0.1", optional = true}
-nimiq-wallet = { path = "../wallet", version = "0.1" }
+beserial = { path = "../beserial" }
+nimiq-jsonrpc-core = { git = "https://github.com/nimiq/jsonrpc.git" }
+nimiq-jsonrpc-derive = { git = "https://github.com/nimiq/jsonrpc.git" }
+nimiq-jsonrpc-server = { git = "https://github.com/nimiq/jsonrpc.git" }
+nimiq-primitives = { path = "../primitives", features = ["coin", "account", "serde-derive"] }
+nimiq-account = { path = "../primitives/account" }
+nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1", features = ["serde-derive"] }
+nimiq-blockchain-albatross = { path = "../blockchain-albatross" }
+nimiq-mempool = { path = "../mempool" }
+nimiq-hash = { path = "../hash", features = ["serde-derive"] }
+nimiq-vrf = { path = "../vrf", features = ["serde-derive"] }
+nimiq-bls = { path = "../bls", features = ["serde-derive"] }
+nimiq-keys = { path = "../keys", features = ["serde-derive"] }
+nimiq-utils = { path = "../utils", features = ["otp"] }
+nimiq-transaction = { path = "../primitives/transaction", features = ["serde-derive"] }
+nimiq-validator = { path = "../validator", version = "0.1", optional = true }
+nimiq-collections = { path = "../collections", features = ["serde-derive"] }
+nimiq-database = { path = "../database" }
+nimiq-wallet = { path = "../wallet" }
+nimiq-network-libp2p = { path = "../network-libp2p" }
+nimiq-consensus-albatross = { path = "../consensus-albatross" }
 
 [features]
 validator = ["nimiq-validator"]

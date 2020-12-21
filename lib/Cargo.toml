@@ -52,7 +52,7 @@ nimiq-network-libp2p = { path = "../network-libp2p", version = "0.1" }
 nimiq-network-interface = { path = "../network-interface", version = "0.1" }
 nimiq-peer-address = { path = "../peer-address", version = "0.1" }
 nimiq-primitives = { path = "../primitives", version = "0.1", features = ["networks"] }
-nimiq-rpc-server = { path = "../rpc-server-new", version = "0.1", optional = true }
+nimiq-rpc-server = { path = "../rpc-server", version = "0.1", optional = true }
 nimiq-utils = { path = "../utils", version = "0.1", features = ["time"] }
 nimiq-validator = { path = "../validator", version = "0.1", optional = true }
 nimiq-validator-network = { path = "../validator-network", version = "0.1", optional = true }

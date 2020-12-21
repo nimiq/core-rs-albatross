@@ -39,7 +39,6 @@ members = [
   "primitives/block-albatross",
   "primitives/subscription",
   "primitives/transaction",
-  #"rpc-server",
   "tools",
   "tendermint",
   "transaction-builder",
@@ -48,8 +47,7 @@ members = [
   "validator-network",
   "vrf",
   "wallet",
-  #"ws-rpc-server",
-  "rpc-server-new",
+  "rpc-server",
 ]
 
 [profile.dev.package.nimiq-bls]
