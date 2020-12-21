@@ -28,7 +28,7 @@ fn seeded_rng(seed: u64) -> StdRng {
     StdRng::seed_from_u64(seed)
 }
 
-async fn mock_consensus(hub: &mut MockHub, peer_id: usize, genesis_info: GenesisInfo) -> Consensus {
+async fn mock_consensus(hub: &mut MockHub, peer_id: u64, genesis_info: GenesisInfo) -> Consensus {
     let env = VolatileEnvironment::new(10).unwrap();
     let time = Arc::new(OffsetTime::new());
     let blockchain = Arc::new(
@@ -50,7 +50,7 @@ async fn mock_consensus(hub: &mut MockHub, peer_id: usize, genesis_info: Genesis
 
 async fn mock_validator(
     hub: &mut MockHub,
-    peer_id: usize,
+    peer_id: u64,
     signing_key: KeyPair,
     genesis_info: GenesisInfo,
 ) -> (Validator, Consensus) {
@@ -88,7 +88,7 @@ async fn mock_validators(hub: &mut MockHub, num_validators: usize) -> Vec<Valida
     let mut validators = vec![];
     let mut consensus = vec![];
     for (id, key) in keys.into_iter().enumerate() {
-        let (v, c) = mock_validator(hub, id, key, genesis.clone()).await;
+        let (v, c) = mock_validator(hub, id as u64, key, genesis.clone()).await;
         validators.push(v);
         consensus.push(c);
     }

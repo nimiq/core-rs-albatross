@@ -1,4 +1,3 @@
-#[cfg(test)]
 #[macro_use]
 extern crate beserial_derive;
 
@@ -6,6 +5,7 @@ mod hub;
 mod network;
 mod peer;
 
+use beserial::{Deserialize, Serialize};
 use derive_more::{Display, From, Into};
 
 pub use hub::MockHub;
@@ -15,12 +15,12 @@ pub use peer::MockPeer;
 /// The address of a MockNetwork or a peer thereof. Peer IDs are always equal to their respective address, thus these
 /// can be converted between each other.
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, Display, From, Into)]
-pub struct MockAddress(usize);
+pub struct MockAddress(u64);
 
 /// The peer ID of a MockNetwork or a peer thereof. Peer IDs are always equal to their respective address, thus these
 /// can be converted between each other.
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Display, From, Into)]
-pub struct MockPeerId(usize);
+#[derive(Copy, Clone, Debug, Deserialize, Serialize, Hash, PartialEq, Eq, PartialOrd, Ord, Display, From, Into)]
+pub struct MockPeerId(u64);
 
 impl From<MockAddress> for MockPeerId {
     fn from(address: MockAddress) -> Self {

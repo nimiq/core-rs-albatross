@@ -42,7 +42,7 @@ impl MockHubInner {
 
 #[derive(Debug, Default)]
 pub struct MockHub {
-    last_address: usize,
+    last_address: u64,
 
     inner: Arc<Mutex<MockHubInner>>,
 }
