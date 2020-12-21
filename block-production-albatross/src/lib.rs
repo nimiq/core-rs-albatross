@@ -13,9 +13,7 @@ use std::sync::Arc;
 
 use block::MicroJustification;
 use block::{ForkProof, MacroBlock};
-use block::{
-    MacroBody, MacroHeader, MicroBlock, MicroBody, MicroHeader, ViewChangeProof, ViewChanges,
-};
+use block::{MacroBody, MacroHeader, MicroBlock, MicroBody, MicroHeader, ViewChangeProof, ViewChanges};
 use blockchain::blockchain::Blockchain;
 use blockchain::history_store::ExtendedTransaction;
 use bls::KeyPair;
@@ -252,10 +250,7 @@ impl BlockProducer {
 
 #[cfg(any(test, feature = "test-utils"))]
 pub mod test_utils {
-    use block::{
-        Block, MacroBlock, MultiSignature, TendermintIdentifier, TendermintProof, TendermintStep,
-        TendermintVote,
-    };
+    use block::{Block, MacroBlock, MultiSignature, TendermintIdentifier, TendermintProof, TendermintStep, TendermintVote};
     use blockchain::PushResult;
     use bls::AggregateSignature;
     use collections::BitSet;
@@ -275,17 +270,12 @@ pub mod test_utils {
         assert_eq!(blockchain.block_number(), macro_block_number - 1);
     }
 
-    pub fn sign_macro_block(
-        keypair: &KeyPair,
-        header: MacroHeader,
-        body: Option<MacroBody>,
-    ) -> MacroBlock {
+    pub fn sign_macro_block(keypair: &KeyPair, header: MacroHeader, body: Option<MacroBody>) -> MacroBlock {
         // Calculate block hash.
         let block_hash = header.hash::<Blake2bHash>();
 
         // Calculate the validator Merkle root (used in the nano sync).
-        let validator_merkle_root =
-            pk_tree_construct(vec![keypair.public_key.public_key; SLOTS as usize]);
+        let validator_merkle_root = pk_tree_construct(vec![keypair.public_key.public_key; SLOTS as usize]);
 
         // Create the precommit tendermint vote.
         let precommit = TendermintVote {
@@ -309,18 +299,12 @@ pub mod test_utils {
 
         // Create multisignature.
         let multisig = MultiSignature {
-            signature: AggregateSignature::from_signatures(&*vec![
-                signed_precommit;
-                TWO_THIRD_SLOTS as usize
-            ]),
+            signature: AggregateSignature::from_signatures(&*vec![signed_precommit; TWO_THIRD_SLOTS as usize]),
             signers,
         };
 
         // Create Tendermint proof.
-        let tendermint_proof = TendermintProof {
-            round: 0,
-            sig: multisig,
-        };
+        let tendermint_proof = TendermintProof { round: 0, sig: multisig };
 
         // Create and return the macro block.
         MacroBlock {
@@ -369,21 +353,10 @@ pub mod test_utils {
             fill_micro_blocks(producer, blockchain);
 
             let _next_block_height = blockchain.block_number() + 1;
-            let macro_block = producer.next_macro_block_proposal(
-                blockchain.time.now() + blockchain.block_number() as u64 * 1000,
-                0u32,
-                vec![],
-            );
+            let macro_block = producer.next_macro_block_proposal(blockchain.time.now() + blockchain.block_number() as u64 * 1000, 0u32, vec![]);
 
-            let block = sign_macro_block(
-                &producer.validator_key,
-                macro_block.header,
-                macro_block.body,
-            );
-            assert_eq!(
-                blockchain.push(Block::Macro(block)),
-                Ok(PushResult::Extended)
-            );
+            let block = sign_macro_block(&producer.validator_key, macro_block.header, macro_block.body);
+            assert_eq!(blockchain.push(Block::Macro(block)), Ok(PushResult::Extended));
         }
     }
 }

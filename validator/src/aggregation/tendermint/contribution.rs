@@ -15,15 +15,9 @@ pub struct TendermintContribution {
 }
 
 impl TendermintContribution {
-    pub(crate) fn from_vote(
-        vote: TendermintVote,
-        secret_key: &SecretKey,
-        validator_slots: Vec<u16>,
-    ) -> Self {
+    pub(crate) fn from_vote(vote: TendermintVote, secret_key: &SecretKey, validator_slots: Vec<u16>) -> Self {
         // sign the hash
-        let signature = AggregateSignature::from_signatures(&[secret_key
-            .sign(&vote)
-            .multiply(validator_slots.len() as u16)]);
+        let signature = AggregateSignature::from_signatures(&[secret_key.sign(&vote).multiply(validator_slots.len() as u16)]);
 
         // get the slots of the validator ad insert them into the bitset
         let mut signers = BitSet::new();
@@ -59,8 +53,7 @@ impl AggregatableContribution for TendermintContribution {
                         // by combining both Multisigs
                         sig
                             .combine(other_sig)
-                            .expect("Non Overlapping TendermintContribution encountered overlapping MultiSignatures"),
-                    )
+                            .expect("Non Overlapping TendermintContribution encountered overlapping MultiSignatures"))
                     // if that entry does not exist, creatte it with the MultiSignature from other_contribution.
                     .or_insert(other_sig.clone());
             });
@@ -73,8 +66,6 @@ impl AggregatableContribution for TendermintContribution {
     fn contributors(&self) -> BitSet {
         self.contributions
             .iter()
-            .fold(BitSet::new(), |aggregated_set, multi_sig| {
-                aggregated_set & multi_sig.1.contributors()
-            })
+            .fold(BitSet::new(), |aggregated_set, multi_sig| aggregated_set & multi_sig.1.contributors())
     }
 }

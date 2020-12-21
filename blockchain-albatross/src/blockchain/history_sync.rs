@@ -96,11 +96,7 @@ impl Blockchain {
         // Note that the hash provided here is the Blake2s hash of the header. It needs to be the
         // Blake2s function since that's what the validator's signatures on the block use (because
         // the nano-sync crate only verifies Blake2s, not Blake2b).
-        if !justification.verify(
-            macro_block.hash(),
-            macro_block.header.block_number,
-            &self.current_validators(),
-        ) {
+        if !justification.verify(macro_block.hash(), macro_block.header.block_number, &self.current_validators()) {
             warn!("Rejecting block - macro block with bad justification");
             return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
         }

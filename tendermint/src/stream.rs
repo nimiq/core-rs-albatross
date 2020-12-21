@@ -29,8 +29,7 @@ where
     ProposalTy: ProposalTrait,
     ProofTy: ProofTrait,
     ResultTy: ResultTrait,
-    DepsTy: TendermintOutsideDeps<ProposalTy = ProposalTy, ResultTy = ResultTy, ProofTy = ProofTy>
-        + 'static,
+    DepsTy: TendermintOutsideDeps<ProposalTy = ProposalTy, ResultTy = ResultTy, ProofTy = ProofTy> + 'static,
 {
     stream! {
     // We check if a state was inputted. If yes (and it is valid), we initialize Tendermint with it.

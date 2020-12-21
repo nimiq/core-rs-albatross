@@ -31,10 +31,7 @@ use crate::update::{LevelUpdate, LevelUpdateMessage};
 pub struct SinkError {} // TODO
 
 /// Future implementation for the next aggregation event
-struct NextAggregation<
-    P: Protocol,
-    T: Clone + Debug + Eq + Serialize + Deserialize + Sized + Send + Sync + Unpin,
-> {
+struct NextAggregation<P: Protocol, T: Clone + Debug + Eq + Serialize + Deserialize + Sized + Send + Sync + Unpin> {
     /// Handel configuration
     config: Config,
 
@@ -66,11 +63,7 @@ struct NextAggregation<
     next_level_timeout: usize,
 }
 
-impl<
-        P: Protocol,
-        T: Clone + Debug + Eq + Serialize + Deserialize + Sized + Send + Sync + Unpin,
-    > NextAggregation<P, T>
-{
+impl<P: Protocol, T: Clone + Debug + Eq + Serialize + Deserialize + Sized + Send + Sync + Unpin> NextAggregation<P, T> {
     pub fn new(
         protocol: P,
         tag: T,
@@ -91,10 +84,7 @@ impl<
 
         // Every `config.update_interval` send Level updates to corresponding peers no matter the aggregations progression
         // (makes sure other peers can catch up).
-        let periodic_update_interval = interval_at(
-            Instant::now() + config.update_interval,
-            config.update_interval,
-        );
+        let periodic_update_interval = interval_at(Instant::now() + config.update_interval, config.update_interval);
 
         // create the NextAggregation struct
         let this = Self {
@@ -111,10 +101,7 @@ impl<
         };
 
         // make sure the contribution of this instance is added to the store
-        this.protocol
-            .store()
-            .write()
-            .put(own_contribution.clone(), 0);
+        this.protocol.store().write().put(own_contribution.clone(), 0);
 
         // and check if that already completes a level
         // Level 0 always only contains a single signature, the one of this instance. Thus it will always complete that level,
@@ -127,10 +114,7 @@ impl<
 
     /// Starts level `level`
     fn start_level(&self, level: usize) {
-        let level = self
-            .levels
-            .get(level)
-            .unwrap_or_else(|| panic!("Attempted to start invalid level {}", level));
+        let level = self.levels.get(level).unwrap_or_else(|| panic!("Attempted to start invalid level {}", level));
         trace!("Starting level {}: Peers: {:?}", level.id, level.peer_ids);
 
         level.start();
@@ -151,12 +135,10 @@ impl<
 
     /// Check if a level was completed TODO: remove contribution parameter as it is not used at all.
     fn check_completed_level(&self, contribution: P::Contribution, level: usize) {
-        let level = self.levels.get(level).unwrap_or_else(|| {
-            panic!(
-                "Attempted to check completeness of invalid level: {}",
-                level
-            )
-        });
+        let level = self
+            .levels
+            .get(level)
+            .unwrap_or_else(|| panic!("Attempted to check completeness of invalid level: {}", level));
 
         trace!(
             "Checking for completed level {}: signers={:?}",
@@ -230,19 +212,10 @@ impl<
         // if there are peers to send the update to send them
         if !peer_ids.is_empty() {
             // incomplete levels will always also continue to send their own contribution, alongside the aggreagte.
-            let individual = if level.receive_complete() {
-                None
-            } else {
-                Some(self.contribution.clone())
-            };
+            let individual = if level.receive_complete() { None } else { Some(self.contribution.clone()) };
 
             // create the LevelUpdate with the aggregate contribution, the level, our node id and, if the level is incomplete, our own contribution
-            let update = LevelUpdate::<P::Contribution>::new(
-                contribution,
-                individual,
-                level.id,
-                self.protocol.node_id(),
-            );
+            let update = LevelUpdate::<P::Contribution>::new(contribution, individual, level.id, self.protocol.node_id());
 
             // Tag the LevelUpdate with the tag this aggregation runs over creating a LevelUpdateMessage.
             let update_msg = update.with_tag(self.tag.clone());
@@ -354,28 +327,19 @@ impl<
 }
 
 /// Stream implementation for consecutive aggregation events
-pub struct Aggregation<
-    P: Protocol,
-    T: Clone + Debug + Eq + Serialize + Deserialize + Sized + Send + Sync + Unpin,
-> {
+pub struct Aggregation<P: Protocol, T: Clone + Debug + Eq + Serialize + Deserialize + Sized + Send + Sync + Unpin> {
     next_aggregation: Option<BoxFuture<'static, (P::Contribution, Option<NextAggregation<P, T>>)>>,
     network_handle: Option<JoinHandle<()>>,
 }
 
-impl<
-        P: Protocol,
-        T: Clone + Debug + Eq + Serialize + Deserialize + Sized + Send + Sync + Unpin + 'static,
-    > Aggregation<P, T>
-{
+impl<P: Protocol, T: Clone + Debug + Eq + Serialize + Deserialize + Sized + Send + Sync + Unpin + 'static> Aggregation<P, T> {
     pub fn new<E: Debug + 'static>(
         protocol: P,
         tag: T,
         config: Config,
         own_contribution: P::Contribution,
         input_stream: BoxStream<'static, LevelUpdate<P::Contribution>>,
-        output_sink: Box<
-            (dyn Sink<(LevelUpdateMessage<P::Contribution, T>, usize), Error = E> + Unpin + Send),
-        >,
+        output_sink: Box<(dyn Sink<(LevelUpdateMessage<P::Contribution, T>, usize), Error = E> + Unpin + Send)>,
     ) -> Self {
         // Create an unbounded mpsc channel to buffer network messages for the actual aggregation not having to wait for them to get send.
         // A future optimization could be to have this task not simply forward all messages but filter out those which have become obsolete
@@ -390,16 +354,9 @@ impl<
             }
         });
 
-        let next_aggregation = NextAggregation::new(
-            protocol,
-            tag,
-            config,
-            own_contribution,
-            input_stream,
-            sender,
-        )
-        .next()
-        .boxed();
+        let next_aggregation = NextAggregation::new(protocol, tag, config, own_contribution, input_stream, sender)
+            .next()
+            .boxed();
 
         Self {
             next_aggregation: Some(next_aggregation),
@@ -419,11 +376,7 @@ impl<
     }
 }
 
-impl<
-        P: Protocol + Debug,
-        T: Clone + Debug + Eq + Serialize + Deserialize + Send + Sync + Unpin + 'static,
-    > Stream for Aggregation<P, T>
-{
+impl<P: Protocol + Debug, T: Clone + Debug + Eq + Serialize + Deserialize + Send + Sync + Unpin + 'static> Stream for Aggregation<P, T> {
     type Item = P::Contribution;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {

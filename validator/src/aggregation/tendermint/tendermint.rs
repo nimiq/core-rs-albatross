@@ -13,9 +13,7 @@ use futures::task::{Context, Poll};
 
 use futures_locks::{Mutex, RwLock};
 
-use nimiq_block_albatross::{
-    create_pk_tree_root, MultiSignature, TendermintIdentifier, TendermintStep, TendermintVote,
-};
+use nimiq_block_albatross::{create_pk_tree_root, MultiSignature, TendermintIdentifier, TendermintStep, TendermintVote};
 use nimiq_bls::SecretKey;
 use nimiq_collections::bitset::BitSet;
 use nimiq_hash::Blake2bHash;
@@ -42,8 +40,7 @@ use super::utils::{AggregationDescriptor, CurrentAggregation, TendermintAggregat
 ///
 /// Note that `TendermintAggregations::broadcast_and_aggregate` needs to have been called at least once before the stream can meaningfully be awaited.
 pub struct TendermintAggregations {
-    combined_aggregation_streams:
-        Pin<Box<SelectAll<BoxStream<'static, ((u32, TendermintStep), TendermintContribution)>>>>,
+    combined_aggregation_streams: Pin<Box<SelectAll<BoxStream<'static, ((u32, TendermintStep), TendermintContribution)>>>>,
     aggregation_descriptors: BTreeMap<(u32, TendermintStep), AggregationDescriptor>,
     input: BoxStream<'static, LevelUpdateMessage<TendermintContribution, TendermintIdentifier>>,
     future_aggregations: BTreeMap<u32, BitSet>,
@@ -73,22 +70,10 @@ impl TendermintAggregations {
         id: TendermintIdentifier,
         own_contribution: TendermintContribution,
         validator_merkle_root: Vec<u8>,
-        output_sink: Box<
-            (dyn Sink<
-                (
-                    LevelUpdateMessage<TendermintContribution, TendermintIdentifier>,
-                    usize,
-                ),
-                Error = E,
-            > + Unpin
-                 + Send),
-        >,
+        output_sink: Box<(dyn Sink<(LevelUpdateMessage<TendermintContribution, TendermintIdentifier>, usize), Error = E> + Unpin + Send)>,
     ) -> Result<(), TendermintError> {
         // TODO: TendermintAggregationEvent
-        if self
-            .aggregation_descriptors
-            .contains_key(&(id.round_number, id.step))
-        {
+        if self.aggregation_descriptors.contains_key(&(id.round_number, id.step)) {
             return Err(TendermintError::AggregationError);
         }
 
@@ -104,14 +89,7 @@ impl TendermintAggregations {
         let (sender, receiver) = mpsc::unbounded_channel::<LevelUpdate<TendermintContribution>>();
 
         // create the aggregation
-        let aggregation = Aggregation::new(
-            protocol,
-            id.clone(),
-            Config::default(),
-            own_contribution,
-            receiver.boxed(),
-            output_sink,
-        );
+        let aggregation = Aggregation::new(protocol, id.clone(), Config::default(), own_contribution, receiver.boxed(), output_sink);
 
         // create the stream closer and wrap in Arc so it can be shared borrow
         let stream_closer = Arc::new(AtomicBool::new(true));
@@ -129,19 +107,14 @@ impl TendermintAggregations {
         let round_number = id.round_number;
 
         // wrap the aggregation stream
-        let aggregation = Box::pin(
-            aggregation
-                .map(move |x| ((id.round_number, id.step), x))
-                .take_while(move |_x| {
-                    future::ready(stream_closer.clone().load(Ordering::Relaxed))
-                    // Todo: Check Ordering
-                }),
-        );
+        let aggregation = Box::pin(aggregation.map(move |x| ((id.round_number, id.step), x)).take_while(move |_x| {
+            future::ready(stream_closer.clone().load(Ordering::Relaxed))
+            // Todo: Check Ordering
+        }));
 
         // Since this instance of Aggregation now becomes the current aggregation all bitsets containing contributors
         // for future aggregations which are older or same age than this one can be discarded.
-        self.future_aggregations
-            .drain_filter(|round, _bitset| round <= &round_number);
+        self.future_aggregations.drain_filter(|round, _bitset| round <= &round_number);
 
         // Push the aggregation to the select_all streams.
         self.combined_aggregation_streams.push(aggregation);
@@ -164,18 +137,13 @@ impl Stream for TendermintAggregations {
         while let Poll::Ready(message) = self.input.poll_next_unpin(cx) {
             match message {
                 Some(message) => {
-                    if let Some(descriptor) = self
-                        .aggregation_descriptors
-                        .get(&(message.tag.round_number, message.tag.step))
-                    {
+                    if let Some(descriptor) = self.aggregation_descriptors.get(&(message.tag.round_number, message.tag.step)) {
                         trace!("New message for ongoing aggregation: {:?}", &message);
                         if let Err(_) = descriptor.input.send(message.update) {
                             () // todo error handling
                         }
                     } else {
-                        if let Some(((highest_round, _), _)) =
-                            self.aggregation_descriptors.last_key_value()
-                        {
+                        if let Some(((highest_round, _), _)) = self.aggregation_descriptors.last_key_value() {
                             // messages of future rounds need to be tracked in terrms of contributors only (without verifying them).
                             // Also note that PreVote and PreCommit are tracked in the same bitset as the protocol requires.
                             if highest_round < &message.tag.round_number {
@@ -183,24 +151,13 @@ impl Stream for TendermintAggregations {
                                 let future_contributors = self
                                     .future_aggregations
                                     .entry(message.tag.round_number)
-                                    .and_modify(|bitset| {
-                                        *bitset |= message.update.aggregate.contributors()
-                                    })
+                                    .and_modify(|bitset| *bitset |= message.update.aggregate.contributors())
                                     .or_insert(message.update.aggregate.contributors())
                                     .clone();
                                 // now check if that suffices for a f+1 contributor weight
-                                if let Some(weight) =
-                                    self.validator_registry.signers_weight(&future_contributors)
-                                {
-                                    if weight
-                                        >= policy::SLOTS as usize - policy::TWO_THIRD_SLOTS as usize
-                                            + 1usize
-                                    {
-                                        return Poll::Ready(Some(
-                                            TendermintAggregationEvent::NewRound(
-                                                message.tag.round_number,
-                                            ),
-                                        ));
+                                if let Some(weight) = self.validator_registry.signers_weight(&future_contributors) {
+                                    if weight >= policy::SLOTS as usize - policy::TWO_THIRD_SLOTS as usize + 1usize {
+                                        return Poll::Ready(Some(TendermintAggregationEvent::NewRound(message.tag.round_number)));
                                     }
                                 }
                             }
@@ -231,9 +188,7 @@ impl Stream for TendermintAggregations {
                 // todo error handling
                 panic!("");
             }
-            Poll::Ready(Some(((round, step), aggregation))) => Poll::Ready(Some(
-                TendermintAggregationEvent::Aggregation(round, step, aggregation),
-            )),
+            Poll::Ready(Some(((round, step), aggregation))) => Poll::Ready(Some(TendermintAggregationEvent::Aggregation(round, step, aggregation))),
         }
     }
 }
@@ -253,13 +208,7 @@ pub struct HandelTendermintAdapter<N: Network> {
 }
 
 impl<N: Network> HandelTendermintAdapter<N> {
-    pub fn new(
-        validator_id: u16,
-        active_validators: ValidatorSlots,
-        block_height: u32,
-        network: Arc<N>,
-        secret_key: SecretKey,
-    ) -> Self {
+    pub fn new(validator_id: u16, active_validators: ValidatorSlots, block_height: u32, network: Arc<N>, secret_key: SecretKey) -> Self {
         let validator_merkle_root = create_pk_tree_root(&active_validators);
 
         // the input stream is all levelUpdateMessages concerning a TendemrintContribution and TendemrintIdentifier.
@@ -272,11 +221,7 @@ impl<N: Network> HandelTendermintAdapter<N> {
 
         let validator_registry = Arc::new(ValidatorRegistry::new(active_validators.clone()));
 
-        let handel_aggregations = Mutex::new(TendermintAggregations::new(
-            validator_id,
-            validator_registry.clone(),
-            input,
-        ));
+        let handel_aggregations = Mutex::new(TendermintAggregations::new(validator_id, validator_registry.clone(), input));
         let current_bests = RwLock::new(BTreeMap::new());
         let current_aggregate = RwLock::new(None);
         let pending_new_round = RwLock::new(None);
@@ -309,21 +254,12 @@ impl<N: Network> HandelTendermintAdapter<N> {
                             // such that it can be send to the next current_aggregate sink if it by then is still relevant.
                             match current_aggregate.write().await.take() {
                                 // if there is a current ongoing aggregation it is retrieved
-                                Some(CurrentAggregation {
-                                    sender,
-                                    round,
-                                    step: _step,
-                                }) => {
+                                Some(CurrentAggregation { sender, round, step: _step }) => {
                                     // check that the next_round is actually higher than the round which is awaiting a result.
                                     if round < next_round {
                                         // Send the me NewRound event through the channel to the currently awaited aggregation for it to resolve.
-                                        if let Err(_err) =
-                                            sender.send(AggregationResult::NewRound(next_round))
-                                        {
-                                            error!(
-                                                "Sending of AggregationEvent::NewRound({}) failed",
-                                                round
-                                            );
+                                        if let Err(_err) = sender.send(AggregationResult::NewRound(next_round)) {
+                                            error!("Sending of AggregationEvent::NewRound({}) failed", round);
                                         }
                                     } else {
                                         // Otheriwse this event is meaningless and is droped, which in reality should never occur.
@@ -361,12 +297,8 @@ impl<N: Network> HandelTendermintAdapter<N> {
                                 .entry((r, s))
                                 .and_modify(|contribution| {
                                     // this test is not strictly necessary as the handel streams will only return a value if it is better  than the previous one.
-                                    if validator_registry
-                                        .signature_weight(contribution)
-                                        .expect("Failed to unwrap signature weight")
-                                        < validator_registry
-                                            .signature_weight(&c)
-                                            .expect("Failed to unwrap signature weight")
+                                    if validator_registry.signature_weight(contribution).expect("Failed to unwrap signature weight")
+                                        < validator_registry.signature_weight(&c).expect("Failed to unwrap signature weight")
                                     {
                                         *contribution = c.clone();
                                     }
@@ -378,40 +310,33 @@ impl<N: Network> HandelTendermintAdapter<N> {
                             // current_aggregate sink present, we send it as well.
                             match current_aggregate.write().await.take() {
                                 // if there is a current ongoing aggregation it is retrieved
-                                Some(CurrentAggregation {
-                                    sender,
-                                    round,
-                                    step,
-                                }) => {
+                                Some(CurrentAggregation { sender, round, step }) => {
                                     // only reply if it is the correct aggregation
                                     if round == r && step == s {
                                         // see if this is actionable
                                         // Actionable here means everything with voter_weight > 2f+1 is potentially actionable.
                                         // On the receiving end of this channel is a timeout, which will wait (if necessary) for better results
                                         // but will, if nothing better is made available also return this aggregate.
-                                        if validator_registry
-                                            .signature_weight(&contribution)
-                                            .expect("Failed to unwrap signature weight")
+                                        if validator_registry.signature_weight(&contribution).expect("Failed to unwrap signature weight")
                                             > policy::TWO_THIRD_SLOTS as usize
                                         {
                                             // Transform to the appropiate result type adding the weight to each proposals Contribution
                                             let result = contribution
                                                 .contributions
                                                 .iter()
-                                                .map(|(hash, contribution)| (
+                                                .map(|(hash, contribution)| {
+                                                    (
                                                         hash.clone(),
                                                         (
                                                             contribution.clone(),
-                                                            validator_registry
-                                                                .signature_weight(contribution)
-                                                                .expect("Cannot compute weight of signatories"),
+                                                            validator_registry.signature_weight(contribution).expect("Cannot compute weight of signatories"),
                                                         ),
-                                                )).collect();
+                                                    )
+                                                })
+                                                .collect();
 
                                             // send the result
-                                            if let Err(err) =
-                                                sender.send(AggregationResult::Aggregation(result))
-                                            {
+                                            if let Err(err) = sender.send(AggregationResult::Aggregation(result)) {
                                                 error!("failed sending message to broadcast_and_aggregate caller: {:?}", err);
                                             }
                                         }
@@ -458,14 +383,9 @@ impl<N: Network> HandelTendermintAdapter<N> {
                 }
                 None => {
                     // create channel foor result propagation
-                    let (sender, aggregate_receiver) =
-                        mpsc::unbounded_channel::<AggregationResult<MultiSignature>>();
+                    let (sender, aggregate_receiver) = mpsc::unbounded_channel::<AggregationResult<MultiSignature>>();
                     // set the current aggregate
-                    *current_aggregate = Some(CurrentAggregation {
-                        sender,
-                        round,
-                        step,
-                    });
+                    *current_aggregate = Some(CurrentAggregation { sender, round, step });
                     // and return the receiver for it to be used later on.
                     aggregate_receiver
                 }
@@ -487,28 +407,18 @@ impl<N: Network> HandelTendermintAdapter<N> {
         };
 
         // Create the signed contribution of this validator
-        let own_contribution = TendermintContribution::from_vote(
-            vote,
-            &self.secret_key,
-            self.validator_registry.get_slots(self.validator_id),
-        );
+        let own_contribution = TendermintContribution::from_vote(vote, &self.secret_key, self.validator_registry.get_slots(self.validator_id));
 
-        let output_sink = Box::new(NetworkSink::<
-            LevelUpdateMessage<TendermintContribution, TendermintIdentifier>,
-            N,
-        >::new(self.network.clone()));
+        let output_sink = Box::new(NetworkSink::<LevelUpdateMessage<TendermintContribution, TendermintIdentifier>, N>::new(
+            self.network.clone(),
+        ));
 
         // Aquire mutex to the aggreagtion SelectAll to add an aggregation
         // scope it such that the lock is droped as soon as the aggregation was added.
         {
             let mut lock = self.handel_aggregations.lock().await;
-            lock.broadcast_and_aggregate(
-                id.clone(),
-                own_contribution,
-                self.validator_merkle_root.clone(),
-                output_sink,
-            )
-            .map_err(|_| TendermintError::AggregationError)
+            lock.broadcast_and_aggregate(id.clone(), own_contribution, self.validator_merkle_root.clone(), output_sink)
+                .map_err(|_| TendermintError::AggregationError)
         }?;
 
         // If a new round event was emitted before it needs to be checked if it is still relevant by
@@ -548,10 +458,7 @@ impl<N: Network> HandelTendermintAdapter<N> {
                 // If the event is a NewRound it is propagated as is.
                 AggregationResult::NewRound(_) => {
                     if step == TendermintStep::PreCommit {
-                        self.handel_aggregations
-                            .lock()
-                            .await
-                            .cancel_aggregation(round, step);
+                        self.handel_aggregations.lock().await.cancel_aggregation(round, step);
                     }
                     return Ok(result);
                 }
@@ -565,14 +472,9 @@ impl<N: Network> HandelTendermintAdapter<N> {
                     for (proposal, (_, weight)) in map.iter() {
                         if let None = proposal {
                             // Nil vote has f+1
-                            if *weight
-                                > policy::SLOTS as usize - policy::TWO_THIRD_SLOTS as usize + 1usize
-                            {
+                            if *weight > policy::SLOTS as usize - policy::TWO_THIRD_SLOTS as usize + 1usize {
                                 if step == TendermintStep::PreCommit {
-                                    self.handel_aggregations
-                                        .lock()
-                                        .await
-                                        .cancel_aggregation(round, step);
+                                    self.handel_aggregations.lock().await.cancel_aggregation(round, step);
                                 }
                                 return Ok(result);
                             }
@@ -585,10 +487,7 @@ impl<N: Network> HandelTendermintAdapter<N> {
                             // any individual proposal got 2f+1 vote weight
                             if *weight > policy::TWO_THIRD_SLOTS as usize {
                                 if step == TendermintStep::PreCommit {
-                                    self.handel_aggregations
-                                        .lock()
-                                        .await
-                                        .cancel_aggregation(round, step);
+                                    self.handel_aggregations.lock().await.cancel_aggregation(round, step);
                                 }
                                 return Ok(result);
                             }
@@ -602,10 +501,7 @@ impl<N: Network> HandelTendermintAdapter<N> {
                     // combined weight of all proposals exclluding the one this node signed reached 2f+1
                     if combined_weight > policy::SLOTS as usize {
                         if step == TendermintStep::PreCommit {
-                            self.handel_aggregations
-                                .lock()
-                                .await
-                                .cancel_aggregation(round, step);
+                            self.handel_aggregations.lock().await.cancel_aggregation(round, step);
                         }
                         return Ok(result);
                     }
@@ -619,10 +515,7 @@ impl<N: Network> HandelTendermintAdapter<N> {
                 Ok(None) => return Err(TendermintError::AggregationError),
                 Err(_) => {
                     if step == TendermintStep::PreCommit {
-                        self.handel_aggregations
-                            .lock()
-                            .await
-                            .cancel_aggregation(round, step);
+                        self.handel_aggregations.lock().await.cancel_aggregation(round, step);
                     }
                     return Ok(result);
                 }
@@ -630,11 +523,7 @@ impl<N: Network> HandelTendermintAdapter<N> {
         }
     }
 
-    pub async fn get_aggregate(
-        &self,
-        round: u32,
-        step: impl Into<TendermintStep>,
-    ) -> Result<AggregationResult<MultiSignature>, TendermintError> {
+    pub async fn get_aggregate(&self, round: u32, step: impl Into<TendermintStep>) -> Result<AggregationResult<MultiSignature>, TendermintError> {
         if let Some(current_best) = self.current_bests.read().await.get(&(round, step.into())) {
             Ok(AggregationResult::Aggregation(
                 current_best

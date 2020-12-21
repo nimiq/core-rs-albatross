@@ -80,11 +80,7 @@ impl<M: Message + Unpin + std::fmt::Debug, N: Network> Sink<(M, usize)> for Netw
         } else {
             // Otherwise, create the future and store it.
             // Note: This future does not get polled. Only once poll_* is called it will actually be polled.
-            let fut = (SendingFuture {
-                network: self.network.clone(),
-            })
-            .send(item.0)
-            .boxed();
+            let fut = (SendingFuture { network: self.network.clone() }).send(item.0).boxed();
             self.current_future = Some(fut);
             Ok(())
         }

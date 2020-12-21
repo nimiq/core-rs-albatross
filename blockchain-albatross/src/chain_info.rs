@@ -3,8 +3,8 @@ use std::io;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use block::{
-    Block, BlockBody, BlockComponents, BlockHeader, BlockJustification, BlockType, MacroBody,
-    MacroHeader, MicroBody, MicroHeader, MicroJustification, TendermintProof,
+    Block, BlockBody, BlockComponents, BlockHeader, BlockJustification, BlockType, MacroBody, MacroHeader, MicroBody, MicroHeader, MicroJustification,
+    TendermintProof,
 };
 use database::{FromDatabaseValue, IntoDatabaseValue};
 use hash::Blake2bHash;
@@ -137,8 +137,7 @@ impl Deserialize for ChainInfo {
                 // Group the deserialized parts in a BlockComponents instance.
                 BlockComponents {
                     header: Some(BlockHeader::Macro(header)),
-                    justification: justification
-                        .and_then(|justification| Some(BlockJustification::Macro(justification))),
+                    justification: justification.and_then(|justification| Some(BlockJustification::Macro(justification))),
                     body: body.and_then(|body| Some(BlockBody::Macro(body))),
                 }
             }
@@ -152,8 +151,7 @@ impl Deserialize for ChainInfo {
                 // Group the deserialized parts in a BlockComponents instance.
                 BlockComponents {
                     header: Some(BlockHeader::Micro(header)),
-                    justification: justification
-                        .and_then(|justification| Some(BlockJustification::Micro(justification))),
+                    justification: justification.and_then(|justification| Some(BlockJustification::Micro(justification))),
                     body: body.and_then(|body| Some(BlockBody::Micro(body))),
                 }
             }

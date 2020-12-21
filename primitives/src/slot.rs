@@ -275,9 +275,7 @@ impl ValidatorSlots {
                 if i != idx {
                     slot_index += self.bands.get(i as usize).unwrap().num_slots();
                 } else {
-                    return (slot_index
-                        ..(slot_index + self.bands.get(i as usize).unwrap().num_slots()))
-                        .collect();
+                    return (slot_index..(slot_index + self.bands.get(i as usize).unwrap().num_slots())).collect();
                 }
             }
         }

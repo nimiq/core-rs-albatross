@@ -11,13 +11,7 @@ use crate::{Blockchain, PushError};
 /// Implements methods to handle the accounts.
 impl Blockchain {
     /// Updates the accounts given a block.
-    pub fn commit_accounts(
-        &self,
-        state: &BlockchainState,
-        block: &Block,
-        first_view_number: u32,
-        txn: &mut WriteTransaction,
-    ) -> Result<(), PushError> {
+    pub fn commit_accounts(&self, state: &BlockchainState, block: &Block, first_view_number: u32, txn: &mut WriteTransaction) -> Result<(), PushError> {
         // Get the accounts from the state.
         let accounts = &state.accounts;
 

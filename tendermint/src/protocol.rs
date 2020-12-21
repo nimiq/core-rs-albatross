@@ -23,8 +23,7 @@ impl<
         ProposalTy: ProposalTrait,
         ProofTy: ProofTrait,
         ResultTy: ResultTrait,
-        DepsTy: TendermintOutsideDeps<ProposalTy = ProposalTy, ResultTy = ResultTy, ProofTy = ProofTy>
-            + 'static,
+        DepsTy: TendermintOutsideDeps<ProposalTy = ProposalTy, ResultTy = ResultTy, ProofTy = ProofTy> + 'static,
     > Tendermint<ProposalTy, ProofTy, ResultTy, DepsTy>
 {
     /// Lines 11-21 of Tendermint consensus algorithm (Algorithm 1)
@@ -48,14 +47,11 @@ impl<
             // Update our state and broadcast our proposal.
             self.state.current_proposal = Some(proposal.clone());
             self.state.current_proposal_vr = valid_round;
-            self.deps
-                .broadcast_proposal(round, proposal, valid_round)
-                .await?;
+            self.deps.broadcast_proposal(round, proposal, valid_round).await?;
 
             // Prevote for our own proposal.
             self.state.step = Step::Prevote;
-            self.broadcast_and_aggregate_prevote(round, VoteDecision::Block)
-                .await?;
+            self.broadcast_and_aggregate_prevote(round, VoteDecision::Block).await?;
         } else {
             self.await_proposal(round).await?;
         }
@@ -71,14 +67,10 @@ impl<
 
         let round = self.state.round;
 
-        if self.state.locked_round.is_none()
-            || self.state.locked_value == self.state.current_proposal
-        {
-            self.broadcast_and_aggregate_prevote(round, VoteDecision::Block)
-                .await?;
+        if self.state.locked_round.is_none() || self.state.locked_value == self.state.current_proposal {
+            self.broadcast_and_aggregate_prevote(round, VoteDecision::Block).await?;
         } else {
-            self.broadcast_and_aggregate_prevote(round, VoteDecision::Nil)
-                .await?;
+            self.broadcast_and_aggregate_prevote(round, VoteDecision::Nil).await?;
         }
 
         Ok(())
@@ -92,14 +84,10 @@ impl<
 
         let round = self.state.round;
 
-        if self.state.locked_round.unwrap_or(0) <= self.state.current_proposal_vr.unwrap()
-            || self.state.locked_value == self.state.current_proposal
-        {
-            self.broadcast_and_aggregate_prevote(round, VoteDecision::Block)
-                .await?;
+        if self.state.locked_round.unwrap_or(0) <= self.state.current_proposal_vr.unwrap() || self.state.locked_value == self.state.current_proposal {
+            self.broadcast_and_aggregate_prevote(round, VoteDecision::Block).await?;
         } else {
-            self.broadcast_and_aggregate_prevote(round, VoteDecision::Nil)
-                .await?;
+            self.broadcast_and_aggregate_prevote(round, VoteDecision::Nil).await?;
         }
 
         Ok(())
@@ -126,8 +114,7 @@ impl<
 
         self.state.step = Step::Precommit;
 
-        self.broadcast_and_aggregate_precommit(round, VoteDecision::Block)
-            .await?;
+        self.broadcast_and_aggregate_precommit(round, VoteDecision::Block).await?;
 
         Ok(())
     }
@@ -140,8 +127,7 @@ impl<
 
         let round = self.state.round;
 
-        self.broadcast_and_aggregate_precommit(round, VoteDecision::Nil)
-            .await?;
+        self.broadcast_and_aggregate_precommit(round, VoteDecision::Nil).await?;
 
         Ok(())
     }
@@ -174,8 +160,7 @@ impl<
 
         let round = self.state.round;
 
-        self.broadcast_and_aggregate_prevote(round, VoteDecision::Nil)
-            .await?;
+        self.broadcast_and_aggregate_prevote(round, VoteDecision::Nil).await?;
 
         Ok(())
     }
@@ -188,8 +173,7 @@ impl<
 
         let round = self.state.round;
 
-        self.broadcast_and_aggregate_precommit(round, VoteDecision::Nil)
-            .await?;
+        self.broadcast_and_aggregate_precommit(round, VoteDecision::Nil).await?;
 
         Ok(())
     }

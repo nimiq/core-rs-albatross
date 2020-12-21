@@ -10,11 +10,7 @@ use beserial::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize, Display)]
 #[repr(u8)]
-#[cfg_attr(
-    feature = "serde-derive",
-    derive(serde::Serialize, serde::Deserialize),
-    serde(try_from = "u8", into = "u8")
-)]
+#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize), serde(try_from = "u8", into = "u8"))]
 pub enum AccountType {
     Basic = 0,
     Vesting = 1,

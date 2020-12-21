@@ -3,9 +3,8 @@ use std::sync::RwLock;
 
 use beserial::Deserialize;
 use nimiq_block_albatross::{
-    create_pk_tree_root, Block, MacroBlock, MacroBody, MultiSignature, SignedViewChange,
-    TendermintIdentifier, TendermintProof, TendermintProposal, TendermintStep, TendermintVote,
-    ViewChange, ViewChangeProof,
+    create_pk_tree_root, Block, MacroBlock, MacroBody, MultiSignature, SignedViewChange, TendermintIdentifier, TendermintProof, TendermintProposal,
+    TendermintStep, TendermintVote, ViewChange, ViewChangeProof,
 };
 use nimiq_block_production_albatross::BlockProducer;
 use nimiq_blockchain_albatross::{Blockchain, ForkEvent, PushError, PushResult};
@@ -45,15 +44,11 @@ impl TemporaryBlockProducer {
         let height = self.blockchain.block_number() + 1;
 
         let block = if policy::is_macro_block_at(height) {
-            let macro_block_proposal = self.producer.next_macro_block_proposal(
-                self.blockchain.time.now() + height as u64 * 1000,
-                0u32,
-                extra_data,
-            );
+            let macro_block_proposal = self
+                .producer
+                .next_macro_block_proposal(self.blockchain.time.now() + height as u64 * 1000, 0u32, extra_data);
             // Get validator set and make sure it exists.
-            let validators = self
-                .blockchain
-                .get_validators_for_epoch(policy::epoch_at(self.blockchain.block_number() + 1));
+            let validators = self.blockchain.get_validators_for_epoch(policy::epoch_at(self.blockchain.block_number() + 1));
             assert!(validators.is_some());
 
             let validator_merkle_root = create_pk_tree_root(&validators.unwrap());
@@ -63,10 +58,7 @@ impl TemporaryBlockProducer {
                     valid_round: None,
                     value: macro_block_proposal.header,
                 },
-                macro_block_proposal
-                    .body
-                    .or(Some(MacroBody::new()))
-                    .unwrap(),
+                macro_block_proposal.body.or(Some(MacroBody::new())).unwrap(),
                 validator_merkle_root,
             ))
         } else {
@@ -89,14 +81,8 @@ impl TemporaryBlockProducer {
         block
     }
 
-    fn finalize_macro_block(
-        proposal: TendermintProposal,
-        extrinsics: MacroBody,
-        validator_merkle_root: Vec<u8>,
-    ) -> MacroBlock {
-        let keypair = KeyPair::from(
-            SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap(),
-        );
+    fn finalize_macro_block(proposal: TendermintProposal, extrinsics: MacroBody, validator_merkle_root: Vec<u8>) -> MacroBlock {
+        let keypair = KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
 
         // Create a TendemrintVote instance out of known properties.
         // round_number is for now fixed at 0 for tests, but it could be anything,
@@ -112,10 +98,7 @@ impl TemporaryBlockProducer {
         };
 
         // sign the hash
-        let signature = AggregateSignature::from_signatures(&[keypair
-            .secret_key
-            .sign(&vote)
-            .multiply(policy::SLOTS)]);
+        let signature = AggregateSignature::from_signatures(&[keypair.secret_key.sign(&vote).multiply(policy::SLOTS)]);
 
         // create and populate signers BitSet.
         let mut signers = BitSet::new();
@@ -148,8 +131,7 @@ impl TemporaryBlockProducer {
         // create signed view change
         let view_change = SignedViewChange::from_message(view_change, &keypair.secret_key, 0);
 
-        let signature =
-            AggregateSignature::from_signatures(&[view_change.signature.multiply(policy::SLOTS)]);
+        let signature = AggregateSignature::from_signatures(&[view_change.signature.multiply(policy::SLOTS)]);
         let mut signers = BitSet::new();
         for i in 0..policy::SLOTS {
             signers.insert(i as usize);

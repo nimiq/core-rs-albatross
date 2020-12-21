@@ -115,18 +115,11 @@ impl<N: Network> ViewChangeAggregation<N> {
         // TODO expose this somewehere else so we don't need to clone here.
         let weights = ValidatorRegistry::new(active_validators.clone());
 
-        let protocol = ViewChangeAggregationProtocol::new(
-            active_validators.clone(),
-            validator_id as usize,
-            policy::TWO_THIRD_SLOTS as usize,
-            message_hash,
-        );
+        let protocol = ViewChangeAggregationProtocol::new(active_validators.clone(), validator_id as usize, policy::TWO_THIRD_SLOTS as usize, message_hash);
 
         let slots = active_validators.get_slots(validator_id);
 
-        let signature = bls::AggregateSignature::from_signatures(&[view_change
-            .signature
-            .multiply(slots.len() as u16)]);
+        let signature = bls::AggregateSignature::from_signatures(&[view_change.signature.multiply(slots.len() as u16)]);
 
         let mut signers = BitSet::new();
         for slot in slots {
@@ -151,10 +144,7 @@ impl<N: Network> ViewChangeAggregation<N> {
                     .receive_from_all::<LevelUpdateMessage<MultiSignature, ViewChange>>()
                     .map(move |msg| msg.0.update),
             ),
-            Box::new(NetworkSink::<
-                LevelUpdateMessage<MultiSignature, ViewChange>,
-                N,
-            >::new(network.clone())),
+            Box::new(NetworkSink::<LevelUpdateMessage<MultiSignature, ViewChange>, N>::new(network.clone())),
         );
 
         while let Some(aggregate) = aggregation.next().await {

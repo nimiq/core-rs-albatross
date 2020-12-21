@@ -62,9 +62,7 @@ pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> {
     micro_state: ProduceMicroBlockState,
 }
 
-impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
-    Validator<TNetwork, TValidatorNetwork>
-{
+impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Validator<TNetwork, TValidatorNetwork> {
     const MACRO_STATE_DB_NAME: &'static str = "ValidatorState";
     const MACRO_STATE_KEY: &'static str = "validatorState";
     const VIEW_CHANGE_DELAY: Duration = Duration::from_secs(10);
@@ -142,11 +140,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         let _lock = self.consensus.blockchain.lock();
         match self.consensus.blockchain.get_next_block_type(None) {
             BlockType::Macro => {
-                let block_producer = BlockProducer::new(
-                    self.consensus.blockchain.clone(),
-                    self.consensus.mempool.clone(),
-                    self.signing_key.clone(),
-                );
+                let block_producer = BlockProducer::new(self.consensus.blockchain.clone(), self.consensus.mempool.clone(), self.signing_key.clone());
 
                 // Take the current state and see if it is applicable to the current height.
                 // We do not need to keep it as it is persisted.

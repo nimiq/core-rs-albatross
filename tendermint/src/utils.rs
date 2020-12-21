@@ -121,9 +121,7 @@ pub(crate) fn aggregation_to_vote<ProofTy: ProofTrait>(
     match aggregation {
         // If we got an aggregation we need to handle it.
         AggregationResult::Aggregation(agg) => {
-            if proposal.is_some()
-                && agg.get(&proposal).map_or(0, |x| x.1) >= TWO_THIRD_SLOTS as usize
-            {
+            if proposal.is_some() && agg.get(&proposal).map_or(0, |x| x.1) >= TWO_THIRD_SLOTS as usize {
                 // If we received 2f+1 votes for the current (assuming that it isn't None), then we
                 // must return Block.
                 VoteResult::Block(agg.get(&proposal).cloned().unwrap().0)
@@ -144,10 +142,7 @@ pub(crate) fn aggregation_to_vote<ProofTy: ProofTrait>(
 
 /// An utility function that checks if a given AggregationResult has 2f+1 votes for a given
 /// proposal.
-pub(crate) fn has_2f1_votes<ProofTy: ProofTrait>(
-    proposal: Blake2bHash,
-    aggregation: AggregationResult<ProofTy>,
-) -> bool {
+pub(crate) fn has_2f1_votes<ProofTy: ProofTrait>(proposal: Blake2bHash, aggregation: AggregationResult<ProofTy>) -> bool {
     let agg = match aggregation {
         AggregationResult::Aggregation(v) => v,
         AggregationResult::NewRound(_) => return false,

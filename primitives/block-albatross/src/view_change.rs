@@ -84,20 +84,16 @@ impl ViewChangeProof {
         }
 
         // Get the public key for each SLOT present in the signature and add them together to get the aggregated public key.
-        let agg_pk =
-            self.sig
-                .signers
-                .iter()
-                .fold(AggregatePublicKey::new(), |mut aggregate, slot| {
-                    let pk = validators
-                        .get_public_key(SlotIndex::Slot(slot as u16))
-                        .expect("PublicKey not found for slot")
-                        .compressed()
-                        .uncompress()
-                        .expect("Failed to uncompress CompressedPublicKey");
-                    aggregate.aggregate(&pk);
-                    aggregate
-                });
+        let agg_pk = self.sig.signers.iter().fold(AggregatePublicKey::new(), |mut aggregate, slot| {
+            let pk = validators
+                .get_public_key(SlotIndex::Slot(slot as u16))
+                .expect("PublicKey not found for slot")
+                .compressed()
+                .uncompress()
+                .expect("Failed to uncompress CompressedPublicKey");
+            aggregate.aggregate(&pk);
+            aggregate
+        });
 
         // Verify the aggregated signature against our aggregated public key.
         agg_pk.verify_hash(view_change.hash_with_prefix(), &self.sig.signature)

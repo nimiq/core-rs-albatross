@@ -101,16 +101,10 @@ pub struct MacroJustification {
 }
 
 impl MacroJustification {
-    fn from_pbft_proof(
-        tendermint_proof_opt: Option<TendermintProof>,
-        _validator_slots_opt: Option<&ValidatorSlots>,
-    ) -> Option<Self> {
+    fn from_pbft_proof(tendermint_proof_opt: Option<TendermintProof>, _validator_slots_opt: Option<&ValidatorSlots>) -> Option<Self> {
         if let Some(tendermint_proof) = tendermint_proof_opt {
             let votes = tendermint_proof.votes();
-            Some(Self {
-                votes,
-                tendermint_proof,
-            })
+            Some(Self { votes, tendermint_proof })
         } else {
             None
         }
@@ -281,11 +275,7 @@ impl Transaction {
 }
 
 impl Block {
-    pub fn from_block(
-        blockchain: &Blockchain,
-        block: nimiq_block_albatross::Block,
-        include_transactions: bool,
-    ) -> Self {
+    pub fn from_block(blockchain: &Blockchain, block: nimiq_block_albatross::Block, include_transactions: bool) -> Self {
         let block_hash = block.hash();
         let block_number = block.block_number();
         let batch = policy::batch_at(block_number);
@@ -300,9 +290,7 @@ impl Block {
                     .and_then(|block| block.body())
                     .and_then(|body| body.unwrap_macro().validators);
 
-                let slots = macro_block
-                    .get_slots()
-                    .map(|slots| Slots::from_slots(slots));
+                let slots = macro_block.get_slots().map(|slots| Slots::from_slots(slots));
 
                 Block {
                     ty: BlockType::Macro,
@@ -321,10 +309,7 @@ impl Block {
                         parent_election_hash: macro_block.header.parent_election_hash,
                         slots,
                         lost_reward_set: macro_block.body.map(|body| body.lost_reward_set),
-                        justification: MacroJustification::from_pbft_proof(
-                            macro_block.justification,
-                            validator_slots_opt.as_ref(),
-                        ),
+                        justification: MacroJustification::from_pbft_proof(macro_block.justification, validator_slots_opt.as_ref()),
                     },
                 }
             }
@@ -339,16 +324,7 @@ impl Block {
                                 body.transactions
                                     .into_iter()
                                     .enumerate()
-                                    .map(|(index, tx)| {
-                                        Transaction::from_blockchain(
-                                            tx,
-                                            index,
-                                            &block_hash,
-                                            block_number,
-                                            timestamp,
-                                            head_height,
-                                        )
-                                    })
+                                    .map(|(index, tx)| Transaction::from_blockchain(tx, index, &block_hash, block_number, timestamp, head_height))
                                     .collect(),
                             )
                         } else {
@@ -555,11 +531,7 @@ pub struct Validator {
 }
 
 impl Validator {
-    pub fn from_validator(
-        public_key: CompressedPublicKey,
-        validator: &nimiq_account::staking_contract::Validator,
-        _retire_time: Option<u32>,
-    ) -> Self {
+    pub fn from_validator(public_key: CompressedPublicKey, validator: &nimiq_account::staking_contract::Validator, _retire_time: Option<u32>) -> Self {
         Validator {
             public_key: public_key.clone(),
             balance: validator.balance,
@@ -578,21 +550,11 @@ impl Validator {
         }
     }
 
-    pub fn from_active(
-        public_key: CompressedPublicKey,
-        validator: &nimiq_account::staking_contract::Validator,
-    ) -> Self {
+    pub fn from_active(public_key: CompressedPublicKey, validator: &nimiq_account::staking_contract::Validator) -> Self {
         Self::from_validator(public_key, validator, None)
     }
 
-    pub fn from_inactive(
-        public_key: CompressedPublicKey,
-        validator: &nimiq_account::staking_contract::InactiveValidator,
-    ) -> Self {
-        Self::from_validator(
-            public_key,
-            &validator.validator,
-            Some(validator.retire_time),
-        )
+    pub fn from_inactive(public_key: CompressedPublicKey, validator: &nimiq_account::staking_contract::InactiveValidator) -> Self {
+        Self::from_validator(public_key, &validator.validator, Some(validator.retire_time))
     }
 }

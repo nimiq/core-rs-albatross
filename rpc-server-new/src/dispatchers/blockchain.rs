@@ -19,20 +19,11 @@ pub trait BlockchainInterface {
 
     async fn batch_number(&self) -> Result<u32, Error>;
 
-    async fn block_by_hash(
-        &self,
-        hash: Blake2bHash,
-        include_transactions: bool,
-    ) -> Result<Block, Error>;
+    async fn block_by_hash(&self, hash: Blake2bHash, include_transactions: bool) -> Result<Block, Error>;
 
-    async fn block_by_number(
-        &self,
-        block_number: OrLatest<u32>,
-        include_transactions: bool,
-    ) -> Result<Block, Error>;
+    async fn block_by_number(&self, block_number: OrLatest<u32>, include_transactions: bool) -> Result<Block, Error>;
 
-    async fn get_slot_at(&self, block_number: u32, view_number: Option<u32>)
-        -> Result<Slot, Error>;
+    async fn get_slot_at(&self, block_number: u32, view_number: Option<u32>) -> Result<Slot, Error>;
 
     // TODO: Previously called `slot_state`. Where is this used?
     async fn slashed_slots(&self) -> Result<SlashedSlots, Error>;
@@ -71,22 +62,14 @@ impl BlockchainInterface for BlockchainDispatcher {
         Ok(policy::batch_at(self.blockchain.block_number()))
     }
 
-    async fn block_by_hash(
-        &self,
-        hash: Blake2bHash,
-        include_transactions: bool,
-    ) -> Result<Block, Error> {
+    async fn block_by_hash(&self, hash: Blake2bHash, include_transactions: bool) -> Result<Block, Error> {
         self.blockchain
             .get_block(&hash, true)
             .map(|block| Block::from_block(&self.blockchain, block, include_transactions))
             .ok_or_else(|| Error::BlockNotFound(hash.into()))
     }
 
-    async fn block_by_number(
-        &self,
-        block_number: OrLatest<u32>,
-        include_transactions: bool,
-    ) -> Result<Block, Error> {
+    async fn block_by_number(&self, block_number: OrLatest<u32>, include_transactions: bool) -> Result<Block, Error> {
         let block = match block_number {
             OrLatest::Value(block_number) => self
                 .blockchain
@@ -95,18 +78,10 @@ impl BlockchainInterface for BlockchainDispatcher {
             OrLatest::Latest => self.blockchain.head().clone(),
         };
 
-        Ok(Block::from_block(
-            &self.blockchain,
-            block,
-            include_transactions,
-        ))
+        Ok(Block::from_block(&self.blockchain, block, include_transactions))
     }
 
-    async fn get_slot_at(
-        &self,
-        block_number: u32,
-        view_number_opt: Option<u32>,
-    ) -> Result<Slot, Error> {
+    async fn get_slot_at(&self, block_number: u32, view_number_opt: Option<u32>) -> Result<Slot, Error> {
         // Check if it's not a macro block
         //
         // TODO: Macro blocks have a slot too. It's just only for the proposal.
@@ -124,11 +99,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                 .view_number()
         };
 
-        Ok(Slot::from_producer(
-            &self.blockchain,
-            block_number,
-            view_number,
-        ))
+        Ok(Slot::from_producer(&self.blockchain, block_number, view_number))
     }
 
     async fn slashed_slots(&self) -> Result<SlashedSlots, Error> {

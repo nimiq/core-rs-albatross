@@ -9,10 +9,7 @@ extern crate nimiq_primitives as primitives;
 
 use beserial::Deserialize;
 use block_albatross::TendermintVote;
-use block_albatross::{
-    MultiSignature, SignedViewChange, TendermintIdentifier, TendermintProof, TendermintStep,
-    ViewChange, ViewChangeProof,
-};
+use block_albatross::{MultiSignature, SignedViewChange, TendermintIdentifier, TendermintProof, TendermintStep, ViewChange, ViewChangeProof};
 use bls::lazy::LazyPublicKey;
 use bls::KeyPair;
 use hash::{Blake2bHash, Hash};
@@ -46,13 +43,9 @@ fn test_view_change_single_signature() {
     };
 
     // sign view change and build view change proof
-    let signature = bls::AggregateSignature::from_signatures(&[SignedViewChange::from_message(
-        view_change.clone(),
-        &key_pair.secret_key,
-        0,
-    )
-    .signature
-    .multiply(policy::SLOTS)]);
+    let signature = bls::AggregateSignature::from_signatures(&[SignedViewChange::from_message(view_change.clone(), &key_pair.secret_key, 0)
+        .signature
+        .multiply(policy::SLOTS)]);
     // ViewChangeProof is just a MultiSiganture, but for ease of getting there an individual Signature is created first.
     let mut signers = BitSet::new();
     for i in 0..policy::SLOTS {
@@ -90,8 +83,7 @@ fn test_replay() {
     let validators = blockchain.current_validators();
 
     // Calculate the validator Merkle root (used in the nano sync).
-    let validator_merkle_root =
-        pk_tree_construct(vec![key_pair.public_key.public_key; policy::SLOTS as usize]);
+    let validator_merkle_root = pk_tree_construct(vec![key_pair.public_key.public_key; policy::SLOTS as usize]);
 
     // create a TendermintVote for the PreVote round
     let vote = TendermintVote {
@@ -104,10 +96,7 @@ fn test_replay() {
         validator_merkle_root: validator_merkle_root.clone(),
     };
 
-    let signature = bls::AggregateSignature::from_signatures(&[key_pair
-        .secret_key
-        .sign(&vote)
-        .multiply(policy::SLOTS)]);
+    let signature = bls::AggregateSignature::from_signatures(&[key_pair.secret_key.sign(&vote).multiply(policy::SLOTS)]);
 
     // create and populate signers BitSet.
     let mut signers = BitSet::new();
@@ -134,10 +123,7 @@ fn test_replay() {
         validator_merkle_root,
     };
 
-    let signature = bls::AggregateSignature::from_signatures(&[key_pair
-        .secret_key
-        .sign(&vote)
-        .multiply(policy::SLOTS)]);
+    let signature = bls::AggregateSignature::from_signatures(&[key_pair.secret_key.sign(&vote).multiply(policy::SLOTS)]);
 
     // create and populate signers BitSet.
     let mut signers = BitSet::new();

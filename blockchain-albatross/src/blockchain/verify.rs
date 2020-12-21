@@ -1,9 +1,6 @@
 use std::cmp::Ordering;
 
-use block::{
-    Block, BlockBody, BlockError, BlockHeader, BlockJustification, BlockType, ForkProof, MacroBody,
-    ViewChange,
-};
+use block::{Block, BlockBody, BlockError, BlockHeader, BlockJustification, BlockType, ForkProof, MacroBody, ViewChange};
 use bls::PublicKey;
 use database::Transaction as DBtx;
 use primitives::policy;
@@ -21,12 +18,7 @@ impl Blockchain {
     /// This only performs checks that can be made BEFORE the state is updated with the block. All
     /// checks that require the updated state (ex: if an account has enough funds) are made on the
     /// verify_block_state method.
-    pub fn verify_block_header(
-        &self,
-        header: &BlockHeader,
-        intended_slot_owner: &PublicKey,
-        txn_opt: Option<&DBtx>,
-    ) -> Result<(), PushError> {
+    pub fn verify_block_header(&self, header: &BlockHeader, intended_slot_owner: &PublicKey, txn_opt: Option<&DBtx>) -> Result<(), PushError> {
         // Check the version
         if header.version() != policy::VERSION {
             warn!("Rejecting block - wrong version");
@@ -89,9 +81,7 @@ impl Blockchain {
         txn_opt: Option<&DBtx>,
     ) -> Result<(), PushError> {
         // Checks if the justification exists. If yes, unwrap it.
-        let justification = justification_opt
-            .as_ref()
-            .ok_or(PushError::InvalidBlock(BlockError::NoJustification))?;
+        let justification = justification_opt.as_ref().ok_or(PushError::InvalidBlock(BlockError::NoJustification))?;
 
         match justification {
             BlockJustification::Micro(justification) => {
@@ -114,10 +104,7 @@ impl Blockchain {
                 }
 
                 // Check if a view change occurred - if so, validate the proof
-                let prev_info = self
-                    .chain_store
-                    .get_chain_info(&header.parent_hash(), false, txn_opt)
-                    .unwrap();
+                let prev_info = self.chain_store.get_chain_info(&header.parent_hash(), false, txn_opt).unwrap();
 
                 let view_number = if policy::is_macro_block_at(header.block_number() - 1) {
                     // Reset view number in new batch
@@ -129,23 +116,15 @@ impl Blockchain {
                 let new_view_number = header.view_number();
 
                 if new_view_number < view_number {
-                    warn!(
-                        "Rejecting block - lower view number {:?} < {:?}",
-                        header.view_number(),
-                        view_number
-                    );
+                    warn!("Rejecting block - lower view number {:?} < {:?}", header.view_number(), view_number);
                     return Err(PushError::InvalidBlock(BlockError::InvalidViewNumber));
-                } else if new_view_number == view_number
-                    && justification.view_change_proof.is_some()
-                {
+                } else if new_view_number == view_number && justification.view_change_proof.is_some() {
                     warn!("Rejecting block - must not contain view change proof");
                     return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
-                } else if new_view_number > view_number && justification.view_change_proof.is_none()
-                {
+                } else if new_view_number > view_number && justification.view_change_proof.is_none() {
                     warn!("Rejecting block - missing view change proof");
                     return Err(PushError::InvalidBlock(BlockError::NoViewChangeProof));
-                } else if new_view_number > view_number && justification.view_change_proof.is_some()
-                {
+                } else if new_view_number > view_number && justification.view_change_proof.is_some() {
                     let view_change = ViewChange {
                         block_number: header.block_number(),
                         new_view_number: header.view_number(),
@@ -165,11 +144,7 @@ impl Blockchain {
             }
             BlockJustification::Macro(justification) => {
                 // If the block is a macro block, verify the Tendermint proof.
-                if !justification.verify(
-                    header.hash(),
-                    header.block_number(),
-                    &self.current_validators(),
-                ) {
+                if !justification.verify(header.hash(), header.block_number(), &self.current_validators()) {
                     warn!("Rejecting block - macro block with bad justification");
                     return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
                 }
@@ -183,16 +158,9 @@ impl Blockchain {
     /// This only performs checks that can be made BEFORE the state is updated with the block. All
     /// checks that require the updated state (ex: if an account has enough funds) are made on the
     /// verify_block_state method.
-    pub fn verify_block_body(
-        &self,
-        header: &BlockHeader,
-        body_opt: &Option<BlockBody>,
-        txn_opt: Option<&DBtx>,
-    ) -> Result<(), PushError> {
+    pub fn verify_block_body(&self, header: &BlockHeader, body_opt: &Option<BlockBody>, txn_opt: Option<&DBtx>) -> Result<(), PushError> {
         // Checks if the body exists. If yes, unwrap it.
-        let body = body_opt
-            .as_ref()
-            .ok_or(PushError::InvalidBlock(BlockError::MissingBody))?;
+        let body = body_opt.as_ref().ok_or(PushError::InvalidBlock(BlockError::MissingBody))?;
 
         match body {
             BlockBody::Micro(body) => {
@@ -210,14 +178,10 @@ impl Blockchain {
                     if let Some(previous) = previous_proof {
                         match previous.cmp(&proof) {
                             Ordering::Equal => {
-                                return Err(PushError::InvalidBlock(
-                                    BlockError::DuplicateForkProof,
-                                ));
+                                return Err(PushError::InvalidBlock(BlockError::DuplicateForkProof));
                             }
                             Ordering::Greater => {
-                                return Err(PushError::InvalidBlock(
-                                    BlockError::ForkProofsNotOrdered,
-                                ));
+                                return Err(PushError::InvalidBlock(BlockError::ForkProofsNotOrdered));
                             }
                             _ => (),
                         }
@@ -229,17 +193,10 @@ impl Blockchain {
                     }
 
                     // Get intended slot owner for that block.
-                    let (slot, _) = self.get_slot_owner_at(
-                        proof.header1.block_number,
-                        proof.header1.view_number,
-                        txn_opt,
-                    );
+                    let (slot, _) = self.get_slot_owner_at(proof.header1.block_number, proof.header1.view_number, txn_opt);
 
                     // Verify fork proof.
-                    if proof
-                        .verify(&slot.public_key().uncompress_unchecked())
-                        .is_err()
-                    {
+                    if proof.verify(&slot.public_key().uncompress_unchecked()).is_err() {
                         warn!("Rejecting block - Bad fork proof: invalid owner signature");
                         return Err(PushError::InvalidBlock(BlockError::InvalidForkProof));
                     }
@@ -255,14 +212,10 @@ impl Blockchain {
                     if let Some(previous) = previous_tx {
                         match previous.cmp_block_order(tx) {
                             Ordering::Equal => {
-                                return Err(PushError::InvalidBlock(
-                                    BlockError::DuplicateTransaction,
-                                ));
+                                return Err(PushError::InvalidBlock(BlockError::DuplicateTransaction));
                             }
                             Ordering::Greater => {
-                                return Err(PushError::InvalidBlock(
-                                    BlockError::TransactionsNotOrdered,
-                                ));
+                                return Err(PushError::InvalidBlock(BlockError::TransactionsNotOrdered));
                             }
                             _ => (),
                         }
@@ -290,8 +243,7 @@ impl Blockchain {
 
                 // In case of an election block make sure it contains validators, if it is not an
                 // election block make sure it doesn't.
-                if policy::is_election_block_at(header.block_number()) != body.validators.is_some()
-                {
+                if policy::is_election_block_at(header.block_number()) != body.validators.is_some() {
                     return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
                 }
             }
@@ -311,12 +263,7 @@ impl Blockchain {
     /// - Without body: we construct a body using fields calculated from our current state and
     ///   compare its hash with the body hash in the header. In this case we return the calculated
     ///   body.
-    pub fn verify_block_state(
-        &self,
-        state: &BlockchainState,
-        block: &Block,
-        txn_opt: Option<&DBtx>,
-    ) -> Result<Option<MacroBody>, PushError> {
+    pub fn verify_block_state(&self, state: &BlockchainState, block: &Block, txn_opt: Option<&DBtx>) -> Result<Option<MacroBody>, PushError> {
         let accounts = &state.accounts;
 
         // Verify accounts hash.

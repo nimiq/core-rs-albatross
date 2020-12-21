@@ -28,10 +28,7 @@ use rand::Rng;
 
 use account::Account;
 use beserial::{uvar, Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, WriteBytesExt};
-use block_albatross::{
-    Block as BlockAlbatross, BlockHeader as BlockHeaderAlbatross, ForkProof, MultiSignature,
-    ViewChange, ViewChangeProof,
-};
+use block_albatross::{Block as BlockAlbatross, BlockHeader as BlockHeaderAlbatross, ForkProof, MultiSignature, ViewChange, ViewChangeProof};
 use handel::update::LevelUpdateMessage;
 use hash::Blake2bHash;
 use keys::{Address, KeyPair, PublicKey, Signature};
@@ -327,30 +324,14 @@ impl Deserialize for Message {
             MessageType::GetHead => Message::GetHead,
             MessageType::VerAck => Message::VerAck(Deserialize::deserialize(&mut crc32_reader)?),
             // Albatross
-            MessageType::BlockAlbatross => {
-                Message::BlockAlbatross(Deserialize::deserialize(&mut crc32_reader)?)
-            }
-            MessageType::HeaderAlbatross => {
-                Message::HeaderAlbatross(Deserialize::deserialize(&mut crc32_reader)?)
-            }
-            MessageType::ForkProof => {
-                Message::ForkProof(Deserialize::deserialize(&mut crc32_reader)?)
-            }
-            MessageType::ViewChange => {
-                Message::ViewChange(Deserialize::deserialize(&mut crc32_reader)?)
-            }
-            MessageType::ViewChangeProof => {
-                Message::ViewChangeProof(Deserialize::deserialize(&mut crc32_reader)?)
-            }
-            MessageType::GetMacroBlocks => {
-                Message::GetMacroBlocks(Deserialize::deserialize(&mut crc32_reader)?)
-            }
-            MessageType::GetEpochTransactions => {
-                Message::GetEpochTransactions(Deserialize::deserialize(&mut crc32_reader)?)
-            }
-            MessageType::EpochTransactions => {
-                Message::EpochTransactions(Deserialize::deserialize(&mut crc32_reader)?)
-            }
+            MessageType::BlockAlbatross => Message::BlockAlbatross(Deserialize::deserialize(&mut crc32_reader)?),
+            MessageType::HeaderAlbatross => Message::HeaderAlbatross(Deserialize::deserialize(&mut crc32_reader)?),
+            MessageType::ForkProof => Message::ForkProof(Deserialize::deserialize(&mut crc32_reader)?),
+            MessageType::ViewChange => Message::ViewChange(Deserialize::deserialize(&mut crc32_reader)?),
+            MessageType::ViewChangeProof => Message::ViewChangeProof(Deserialize::deserialize(&mut crc32_reader)?),
+            MessageType::GetMacroBlocks => Message::GetMacroBlocks(Deserialize::deserialize(&mut crc32_reader)?),
+            MessageType::GetEpochTransactions => Message::GetEpochTransactions(Deserialize::deserialize(&mut crc32_reader)?),
+            MessageType::EpochTransactions => Message::EpochTransactions(Deserialize::deserialize(&mut crc32_reader)?),
         };
 
         // XXX Consume any leftover bytes in the message before computing the checksum.
