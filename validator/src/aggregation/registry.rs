@@ -1,7 +1,7 @@
 use bls::PublicKey;
 use handel::identity::{IdentityRegistry, WeightRegistry};
 use primitives::policy;
-use primitives::slot::{SlotBand, SlotCollection, ValidatorSlots};
+use primitives::slot::{SlotCollection, ValidatorSlots};
 
 /// Implementation for handel registry using a `Validators` list.
 #[derive(Debug)]

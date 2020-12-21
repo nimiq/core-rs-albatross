@@ -1,5 +1,4 @@
 use std::fmt::Debug;
-use std::hash::Hash;
 use std::pin::Pin;
 
 use beserial::{Deserialize, Serialize};

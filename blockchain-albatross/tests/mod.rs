@@ -13,7 +13,7 @@ use nimiq_bls::{AggregateSignature, KeyPair, SecretKey};
 use nimiq_collections::bitset::BitSet;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
-use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
+use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::policy;
 
 mod history_sync;

@@ -30,7 +30,7 @@ use account::Account;
 use beserial::{uvar, Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, WriteBytesExt};
 use block_albatross::{
     Block as BlockAlbatross, BlockHeader as BlockHeaderAlbatross, ForkProof, MultiSignature,
-    SignedTendermintProposal, ViewChange, ViewChangeProof,
+    ViewChange, ViewChangeProof,
 };
 use handel::update::LevelUpdateMessage;
 use hash::Blake2bHash;

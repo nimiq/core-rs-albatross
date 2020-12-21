@@ -29,4 +29,3 @@ nimiq-network-interface = { path = "../network-interface", version = "0.1" }
 
 [dev-dependencies]
 nimiq-network-mock = { path = "../network-mock", version = "0.1" }
-nimiq-validator-network-interface = { path = "../validator-network-interface", version = "0.1" }

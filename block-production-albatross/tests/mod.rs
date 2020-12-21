@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use beserial::{Deserialize, Serialize};
+use beserial::Deserialize;
 use nimiq_block_albatross::{
-    Block, BlockError, ForkProof, MacroBlock, MacroBody, MacroHeader, Message, MultiSignature,
+    Block, BlockError, ForkProof, MacroBlock, MacroBody, MacroHeader, MultiSignature,
     SignedViewChange, TendermintIdentifier, TendermintProof, TendermintStep, TendermintVote,
     ViewChange, ViewChangeProof,
 };
@@ -12,7 +12,7 @@ use nimiq_bls::{AggregateSignature, KeyPair, SecretKey};
 use nimiq_collections::BitSet;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
-use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
+use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_mempool::{Mempool, MempoolConfig};
 use nimiq_nano_sync::primitives::pk_tree_construct;
 use nimiq_primitives::policy;

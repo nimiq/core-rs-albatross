@@ -1,7 +1,7 @@
 use crate::state::TendermintState;
 use crate::ProofTrait;
 use nimiq_block_albatross::TendermintStep;
-use nimiq_hash::{Blake2bHash, Blake2sHash};
+use nimiq_hash::Blake2bHash;
 use nimiq_primitives::policy::TWO_THIRD_SLOTS;
 use std::collections::BTreeMap;
 

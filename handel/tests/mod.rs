@@ -19,9 +19,9 @@ use nimiq_network_interface::message::Message;
 use nimiq_network_interface::network::Network;
 use nimiq_network_mock::{MockHub, MockNetwork};
 
-use futures::future::{BoxFuture, Future};
+use futures::future::BoxFuture;
 use futures::sink::Sink;
-use futures::stream::{Stream, StreamExt};
+use futures::stream::StreamExt;
 use futures::task::{Context, Poll};
 use std::marker::PhantomData;
 use std::pin::Pin;
@@ -290,7 +290,7 @@ async fn it_can_aggregate() {
 
         tokio::spawn(async move {
             // have them just run until the aggregation is finished
-            while let Some(t) = aggregation.next().await {}
+            while let Some(_contribution) = aggregation.next().await {}
             println!("{} is done", &id);
         });
     }

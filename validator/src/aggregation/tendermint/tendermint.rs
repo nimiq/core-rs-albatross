@@ -132,7 +132,7 @@ impl TendermintAggregations {
         let aggregation = Box::pin(
             aggregation
                 .map(move |x| ((id.round_number, id.step), x))
-                .take_while(move |x| {
+                .take_while(move |_x| {
                     future::ready(stream_closer.clone().load(Ordering::Relaxed))
                     // Todo: Check Ordering
                 }),
@@ -141,7 +141,7 @@ impl TendermintAggregations {
         // Since this instance of Aggregation now becomes the current aggregation all bitsets containing contributors
         // for future aggregations which are older or same age than this one can be discarded.
         self.future_aggregations
-            .drain_filter(|round, bitset| round <= &round_number);
+            .drain_filter(|round, _bitset| round <= &round_number);
 
         // Push the aggregation to the select_all streams.
         self.combined_aggregation_streams.push(aggregation);

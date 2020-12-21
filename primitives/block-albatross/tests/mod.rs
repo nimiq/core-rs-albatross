@@ -5,7 +5,7 @@ use beserial::{Deserialize, Serialize};
 use nimiq_block_albatross::{
     IndividualSignature, MacroBlock, MacroBody, MacroHeader, MultiSignature,
 };
-use nimiq_bls::{AggregatePublicKey, AggregateSignature, CompressedPublicKey, KeyPair, Signature};
+use nimiq_bls::{CompressedPublicKey, KeyPair, Signature};
 use nimiq_collections::bitset::BitSet;
 use nimiq_handel::update::LevelUpdate;
 use nimiq_hash::{Blake2bHasher, Hasher};

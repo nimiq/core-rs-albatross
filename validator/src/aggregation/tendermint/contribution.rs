@@ -4,11 +4,9 @@ use beserial::{Deserialize, Serialize};
 use nimiq_block_albatross::{MultiSignature, TendermintVote};
 use nimiq_bls::{AggregateSignature, SecretKey};
 use nimiq_collections::bitset::BitSet;
-use nimiq_hash::{Blake2bHash, Blake2sHasher, Hasher, SerializeContent};
+use nimiq_hash::Blake2bHash;
 
 use nimiq_handel::contribution::{AggregatableContribution, ContributionError};
-
-use crate::aggregation::registry::ValidatorRegistry;
 
 #[derive(Serialize, Deserialize, std::fmt::Debug, Clone)]
 pub struct TendermintContribution {

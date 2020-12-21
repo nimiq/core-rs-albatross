@@ -85,7 +85,7 @@ impl TendermintOutsideDeps for TestValidator {
 
     fn assemble_block(
         &self,
-        round: u32,
+        _round: u32,
         proposal: Self::ProposalTy,
         _proof: Self::ProofTy,
     ) -> Result<Self::ResultTy, TendermintError> {

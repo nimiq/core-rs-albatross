@@ -487,7 +487,7 @@ impl<'de, T> Deserialize<'de> for OrLatest<T>
 where
     T: Deserialize<'de>,
 {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -558,7 +558,7 @@ impl Validator {
     pub fn from_validator(
         public_key: CompressedPublicKey,
         validator: &nimiq_account::staking_contract::Validator,
-        retire_time: Option<u32>,
+        _retire_time: Option<u32>,
     ) -> Self {
         Validator {
             public_key: public_key.clone(),

@@ -4,7 +4,6 @@ use std::sync::Arc;
 
 use futures::stream::{BoxStream, Stream, StreamExt};
 use futures::task::{Context, Poll};
-use futures::Future;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_block_albatross::{MacroBlock, MacroHeader, MultiSignature, TendermintStep};
