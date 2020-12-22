@@ -1,0 +1,39 @@
+[package]
+name = "nimiq-rpc-client"
+version = "0.1.0"
+authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
+license = "Apache-2.0"
+edition = "2018"
+description = "JSON RPC server for the Nimiq Rust implementation"
+homepage = "https://nimiq.com"
+repository = "https://github.com/nimiq/core-rs-albatross"
+categories = ["cryptography::cryptocurrencies"]
+keywords = ["nimiq", "cryptocurrency", "blockchain"]
+
+[[bin]]
+name = "nimiq-rpc"
+path = "src/bin/client.rs"
+required-features = ["app"]
+
+[badges]
+travis-ci = { repository = "nimiq/core-rs", branch = "master" }
+is-it-maintained-issue-resolution = { repository = "nimiq/core-rs" }
+is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
+maintenance = { status = "experimental" }
+
+[dependencies]
+url = "2.2"
+
+nimiq-rpc-interface = { path = "../rpc-interface", features = ["proxy"] }
+nimiq-jsonrpc-core = { git = "https://github.com/nimiq/jsonrpc.git" }
+nimiq-jsonrpc-client = { git = "https://github.com/nimiq/jsonrpc.git" }
+
+# Needed for the command line app
+structopt = { version = "0.3.21", optional = true }
+tokio = { version = "0.2", features = ["macros", "rt-threaded"], optional = true }
+anyhow = { version = "1.0", optional = true }
+dotenv = { version = "0.15", optional = true }
+pretty_env_logger = { version = "0.4", optional = true }
+
+[features]
+app = ["structopt", "tokio", "anyhow", "dotenv", "pretty_env_logger"]

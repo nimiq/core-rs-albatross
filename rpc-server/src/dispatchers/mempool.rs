@@ -5,19 +5,15 @@ use parking_lot::RwLock;
 
 use nimiq_hash::Blake2bHash;
 use nimiq_mempool::Mempool;
+use nimiq_rpc_interface::{
+    mempool::MempoolInterface,
+};
 
-use crate::{wallets::UnlockedWallets, Error};
+use crate::{
+    wallets::UnlockedWallets,
+    error::Error,
+};
 
-#[async_trait]
-pub trait MempoolInterface {
-    async fn get_transaction(&self, txid: Blake2bHash) -> Result<Option<()>, Error>;
-
-    async fn mempool_content(&self, include_transactions: bool) -> Result<Vec<()>, Error>;
-
-    async fn mempool(&self) -> Result<(), Error>;
-
-    async fn get_mempool_transaction(&self) -> Result<(), Error>;
-}
 
 pub struct MempoolDispatcher {
     mempool: Arc<Mempool>,
@@ -41,12 +37,12 @@ impl MempoolDispatcher {
 
 }
 
-#[nimiq_jsonrpc_derive::service(rename_all = "mixedCase")]
+#[nimiq_jsonrpc_derive::service]
 #[async_trait]
 impl MempoolInterface for MempoolDispatcher {
+    type Error = Error;
 
-
-    async fn get_transaction(&self, _txid: Blake2bHash) -> Result<Option<()>, Error> {
+    async fn get_transaction(&mut self, _txid: Blake2bHash) -> Result<Option<()>, Error> {
         /*Ok(self.mempool
         .get_transaction(&txid)
         // TODO: We can return a `Arc<Transaction>`, if we implement `serde::Serialize` for it.
@@ -54,15 +50,15 @@ impl MempoolInterface for MempoolDispatcher {
         Err(Error::NotImplemented)
     }
 
-    async fn mempool_content(&self, _include_transactions: bool) -> Result<Vec<()>, Error> {
+    async fn mempool_content(&mut self, _include_transactions: bool) -> Result<Vec<()>, Error> {
         Err(Error::NotImplemented)
     }
 
-    async fn mempool(&self) -> Result<(), Error> {
+    async fn mempool(&mut self) -> Result<(), Error> {
         Err(Error::NotImplemented)
     }
 
-    async fn get_mempool_transaction(&self) -> Result<(), Error> {
+    async fn get_mempool_transaction(&mut self) -> Result<(), Error> {
         Err(Error::NotImplemented)
     }
 }

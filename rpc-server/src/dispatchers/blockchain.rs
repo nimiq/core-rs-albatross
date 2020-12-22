@@ -5,37 +5,13 @@ use async_trait::async_trait;
 use nimiq_blockchain_albatross::Blockchain;
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::policy;
-
-use crate::{
+use nimiq_rpc_interface::{
     types::{Block, OrLatest, SlashedSlots, Slot, Stake, Stakes, Validator},
-    Error,
+    blockchain::BlockchainInterface,
 };
 
-#[async_trait]
-pub trait BlockchainInterface {
-    async fn block_number(&self) -> Result<u32, Error>;
+use crate::error::Error;
 
-    async fn epoch_number(&self) -> Result<u32, Error>;
-
-    async fn batch_number(&self) -> Result<u32, Error>;
-
-    async fn block_by_hash(&self, hash: Blake2bHash, include_transactions: bool) -> Result<Block, Error>;
-
-    async fn block_by_number(&self, block_number: OrLatest<u32>, include_transactions: bool) -> Result<Block, Error>;
-
-    async fn get_slot_at(&self, block_number: u32, view_number: Option<u32>) -> Result<Slot, Error>;
-
-    // TODO: Previously called `slot_state`. Where is this used?
-    async fn slashed_slots(&self) -> Result<SlashedSlots, Error>;
-
-    async fn get_raw_transaction_info(&self, raw_tx: String) -> Result<(), Error>;
-
-    async fn get_transaction_by_hash(&self, hash: Blake2bHash) -> Result<(), Error>;
-
-    async fn get_transaction_receipt(&self, hash: Blake2bHash) -> Result<(), Error>;
-
-    async fn list_stakes(&self) -> Result<Stakes, Error>;
-}
 
 pub struct BlockchainDispatcher {
     blockchain: Arc<Blockchain>,
@@ -47,29 +23,31 @@ impl BlockchainDispatcher {
     }
 }
 
-#[nimiq_jsonrpc_derive::service(rename_all = "mixedCase")]
+#[nimiq_jsonrpc_derive::service]
 #[async_trait]
 impl BlockchainInterface for BlockchainDispatcher {
-    async fn block_number(&self) -> Result<u32, Error> {
+    type Error = Error;
+
+    async fn block_number(&mut self) -> Result<u32, Error> {
         Ok(self.blockchain.block_number())
     }
 
-    async fn epoch_number(&self) -> Result<u32, Error> {
+    async fn epoch_number(&mut self) -> Result<u32, Error> {
         Ok(policy::epoch_at(self.blockchain.block_number()))
     }
 
-    async fn batch_number(&self) -> Result<u32, Error> {
+    async fn batch_number(&mut self) -> Result<u32, Error> {
         Ok(policy::batch_at(self.blockchain.block_number()))
     }
 
-    async fn block_by_hash(&self, hash: Blake2bHash, include_transactions: bool) -> Result<Block, Error> {
+    async fn block_by_hash(&mut self, hash: Blake2bHash, include_transactions: bool) -> Result<Block, Error> {
         self.blockchain
             .get_block(&hash, true)
             .map(|block| Block::from_block(&self.blockchain, block, include_transactions))
             .ok_or_else(|| Error::BlockNotFound(hash.into()))
     }
 
-    async fn block_by_number(&self, block_number: OrLatest<u32>, include_transactions: bool) -> Result<Block, Error> {
+    async fn block_by_number(&mut self, block_number: OrLatest<u32>, include_transactions: bool) -> Result<Block, Error> {
         let block = match block_number {
             OrLatest::Value(block_number) => self
                 .blockchain
@@ -81,7 +59,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         Ok(Block::from_block(&self.blockchain, block, include_transactions))
     }
 
-    async fn get_slot_at(&self, block_number: u32, view_number_opt: Option<u32>) -> Result<Slot, Error> {
+    async fn get_slot_at(&mut self, block_number: u32, view_number_opt: Option<u32>) -> Result<Slot, Error> {
         // Check if it's not a macro block
         //
         // TODO: Macro blocks have a slot too. It's just only for the proposal.
@@ -102,7 +80,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         Ok(Slot::from_producer(&self.blockchain, block_number, view_number))
     }
 
-    async fn slashed_slots(&self) -> Result<SlashedSlots, Error> {
+    async fn slashed_slots(&mut self) -> Result<SlashedSlots, Error> {
         // FIXME: Race condition
         let block_number = self.blockchain.block_number();
         let staking_contract = self.blockchain.get_staking_contract();
@@ -118,19 +96,19 @@ impl BlockchainInterface for BlockchainDispatcher {
         })
     }
 
-    async fn get_raw_transaction_info(&self, _raw_tx: String) -> Result<(), Error> {
+    async fn get_raw_transaction_info(&mut self, _raw_tx: String) -> Result<(), Error> {
         Err(Error::NotImplemented)
     }
 
-    async fn get_transaction_by_hash(&self, _hash: Blake2bHash) -> Result<(), Error> {
+    async fn get_transaction_by_hash(&mut self, _hash: Blake2bHash) -> Result<(), Error> {
         Err(Error::NotImplemented)
     }
 
-    async fn get_transaction_receipt(&self, _hash: Blake2bHash) -> Result<(), Error> {
+    async fn get_transaction_receipt(&mut self, _hash: Blake2bHash) -> Result<(), Error> {
         Err(Error::NotImplemented)
     }
 
-    async fn list_stakes(&self) -> Result<Stakes, Error> {
+    async fn list_stakes(&mut self) -> Result<Stakes, Error> {
         let staking_contract = self.blockchain.get_staking_contract();
 
         let active_validators = staking_contract

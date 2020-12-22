@@ -10,22 +10,15 @@ use nimiq_transaction::Transaction;
 use nimiq_hash::Hash;
 use nimiq_primitives::account::AccountType;
 use nimiq_network_libp2p::Network;
-
-use crate::{
+use nimiq_rpc_interface::{
     types::TransactionParameters,
-    wallets::UnlockedWallets,
-    Error,
+    consensus::ConsensusInterface,
 };
 
-
-#[async_trait]
-pub trait ConsensusInterface {
-    async fn send_raw_transaction(&self, raw_tx: String) -> Result<String, Error>;
-
-    async fn create_raw_transaction(&self, tx_params: TransactionParameters) -> Result<String, Error>;
-
-    async fn send_transaction(&self, tx_params: TransactionParameters) -> Result<String, Error>;
-}
+use crate::{
+    wallets::UnlockedWallets,
+    error::Error,
+};
 
 
 pub struct ConsensusDispatcher {
@@ -64,15 +57,17 @@ impl ConsensusDispatcher {
     }
 }
 
-#[nimiq_jsonrpc_derive::service(rename_all = "mixedCase")]
+#[nimiq_jsonrpc_derive::service]
 #[async_trait]
 impl ConsensusInterface for ConsensusDispatcher {
-    async fn send_raw_transaction(&self, raw_tx: String) -> Result<String, Error> {
+    type Error = Error;
+
+    async fn send_raw_transaction(&mut self, raw_tx: String) -> Result<String, Error> {
         let tx = Deserialize::deserialize_from_vec(&hex::decode(&raw_tx)?)?;
         Ok(self.push_transaction(tx)?.to_hex())
     }
 
-    async fn create_raw_transaction(&self, tx_params: TransactionParameters) -> Result<String, Error> {
+    async fn create_raw_transaction(&mut self, tx_params: TransactionParameters) -> Result<String, Error> {
         let mut tx = tx_params.into_transaction(&self.consensus.blockchain)?;
 
         if tx.sender_type == AccountType::Basic {
@@ -82,7 +77,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         Ok(hex::encode(&tx.serialize_to_vec()))
     }
 
-    async fn send_transaction(&self, tx_params: TransactionParameters) -> Result<String, Error> {
+    async fn send_transaction(&mut self, tx_params: TransactionParameters) -> Result<String, Error> {
         let mut tx = tx_params.into_transaction(&self.consensus.blockchain)?;
 
         if tx.sender_type == AccountType::Basic {

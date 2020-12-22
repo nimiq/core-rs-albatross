@@ -127,6 +127,8 @@ impl Default for PrivateKey {
 
 #[cfg(feature = "serde-derive")]
 mod serde_derive {
+    use std::borrow::Cow;
+
     use serde::{
         de::{Deserialize, Deserializer, Error},
         ser::{Serialize, Serializer},
@@ -148,7 +150,7 @@ mod serde_derive {
         where
             D: Deserializer<'de>,
         {
-            let data: &'de str = Deserialize::deserialize(deserializer)?;
+            let data: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
             data.parse().map_err(Error::custom)
         }
     }

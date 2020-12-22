@@ -142,6 +142,8 @@ impl<'a> From<&'a KeyPair> for Address {
 
 #[cfg(feature = "serde-derive")]
 mod serde_derive {
+    use std::borrow::Cow;
+
     use serde::{
         de::{Deserialize, Deserializer, Error},
         ser::{Serialize, Serializer},
@@ -163,8 +165,8 @@ mod serde_derive {
         where
             D: Deserializer<'de>,
         {
-            let s: &'de str = Deserialize::deserialize(deserializer)?;
-            Address::from_any_str(s).map_err(Error::custom)
+            let s: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
+            Address::from_any_str(&s).map_err(Error::custom)
         }
     }
 }

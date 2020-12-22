@@ -1,10 +1,17 @@
 ///! Defines the types used by the JSON RPC API[1]
 ///!
 ///! [1] https://github.com/nimiq/core-js/wiki/JSON-RPC-API#common-data-types
-use std::fmt::{Display, Formatter};
+use std::{
+    fmt::{Display, Formatter, self},
+    str::FromStr,
+    marker::PhantomData,
+};
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
+use serde::{
+    de::{Deserializer, Visitor, Error as DeError},
+    ser::{Serializer},
+    Serialize, Deserialize,
+};
 
 use nimiq_blockchain_albatross::Blockchain;
 use nimiq_hash::{Blake2bHash, Hash};
@@ -19,8 +26,49 @@ use nimiq_primitives::slot::{SlotBand, ValidatorSlots};
 use nimiq_vrf::VrfSeed;
 use nimiq_transaction::TransactionFlags;
 
-use crate::Error;
+use crate::error::Error;
+use beserial::SerializingError;
 
+
+#[derive(Clone, Debug)]
+pub enum BlockNumberOrHash {
+    Number(u32),
+    Hash(Blake2bHash),
+}
+
+impl From<u32> for BlockNumberOrHash {
+    fn from(block_number: u32) -> Self {
+        BlockNumberOrHash::Number(block_number)
+    }
+}
+
+impl From<Blake2bHash> for BlockNumberOrHash {
+    fn from(block_hash: Blake2bHash) -> Self {
+        BlockNumberOrHash::Hash(block_hash)
+    }
+}
+
+impl Display for BlockNumberOrHash {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            BlockNumberOrHash::Number(block_number) => write!(f, "{}", block_number),
+            BlockNumberOrHash::Hash(block_hash) => write!(f, "{}", block_hash),
+        }
+    }
+}
+
+impl FromStr for BlockNumberOrHash {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Ok(n) = s.parse::<u32>() {
+            Ok(BlockNumberOrHash::Number(n))
+        }
+        else {
+            Ok(BlockNumberOrHash::Hash(s.parse().map_err(|_| Error::InvalidBlockNumberOrHash(s.to_owned()))?))
+        }
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -32,8 +80,7 @@ pub enum BlockType {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Block {
-    #[serde(rename = "type")]
-    ty: BlockType,
+    block_type: BlockType,
 
     hash: Blake2bHash,
 
@@ -125,7 +172,7 @@ pub struct Slots {
 
     public_key: CompressedPublicKey,
 
-    #[serde(with = "crate::serde_helpers::address_friendly")]
+    //#[serde(with = "crate::serde_helpers::address_friendly")]
     reward_address: Address,
 }
 
@@ -298,7 +345,7 @@ impl Block {
                 let slots = macro_block.get_slots().map(|slots| Slots::from_slots(slots));
 
                 Block {
-                    ty: BlockType::Macro,
+                    block_type: BlockType::Macro,
                     hash: block_hash,
                     block_number,
                     view_number,
@@ -341,7 +388,7 @@ impl Block {
                 };
 
                 Block {
-                    ty: BlockType::Micro,
+                    block_type: BlockType::Micro,
                     hash: block_hash,
                     block_number,
                     view_number,
@@ -465,14 +512,67 @@ where
 }
 
 impl<'de, T> Deserialize<'de> for OrLatest<T>
-where
-    T: Deserialize<'de>,
+    where
+        T: FromStr,
+        <T as FromStr>::Err: std::error::Error,
 {
-    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        unimplemented!()
+        deserializer.deserialize_str(OrLatestVisitor { _t: PhantomData })
+    }
+}
+
+struct OrLatestVisitor<T>
+    where T: FromStr
+{
+    _t: PhantomData<T>,
+}
+
+impl<T> OrLatestVisitor<T>
+    where
+        T: FromStr,
+        <T as FromStr>::Err: std::error::Error,
+{
+    fn or_latest(&self, v: &str) -> Result<OrLatest<T>, <T as FromStr>::Err> {
+        if v == "latest" {
+            Ok(OrLatest::Latest)
+        }
+        else {
+            Ok(OrLatest::Value(v.parse()?))
+        }
+    }
+}
+
+
+impl<'de, T> Visitor<'de> for OrLatestVisitor<T>
+    where
+        T: FromStr,
+        <T as FromStr>::Err: std::error::Error,
+{
+    type Value = OrLatest<T>;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        write!(formatter, "a string")
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+        where E: DeError
+    {
+        self.or_latest(v).map_err(DeError::custom)
+    }
+
+    fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Self::Value, E>
+        where E: DeError
+    {
+        self.or_latest(v).map_err(DeError::custom)
+    }
+
+    fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
+        where E: DeError
+    {
+        self.or_latest(&v).map_err(DeError::custom)
     }
 }
 

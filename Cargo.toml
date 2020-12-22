@@ -8,8 +8,8 @@ members = [
   "accounts/tree-primitives",
   "beserial",
   "beserial/beserial_derive",
-  "blockchain-albatross",
   "block-production-albatross",
+  "blockchain-albatross",
   "bls",
   "build-tools",
   "client",
@@ -20,8 +20,8 @@ members = [
   "handel",
   "hash",
   "hash/hash_derive",
-  "keys",
   "key-derivation",
+  "keys",
   "lib",
   "macros",
   "mempool",
@@ -39,15 +39,17 @@ members = [
   "primitives/block-albatross",
   "primitives/subscription",
   "primitives/transaction",
-  "tools",
+  "rpc-client",
+  "rpc-interface",
+  "rpc-server",
   "tendermint",
+  "tools",
   "transaction-builder",
   "utils",
   "validator",
   "validator-network",
   "vrf",
   "wallet",
-  "rpc-server",
 ]
 
 [profile.dev.package.nimiq-bls]
@@ -55,3 +57,9 @@ opt-level = 3
 
 [profile.dev.package.nimiq-nano-sync]
 opt-level = 3
+
+[patch.'https://github.com/nimiq/jsonrpc.git/']
+nimiq-jsonrpc-core = { path = "/home/janosch/IntelliJ Projects/nimiq-jsonrpc/nimiq-jsonrpc-core" }
+nimiq-jsonrpc-derive = { path = "/home/janosch/IntelliJ Projects/nimiq-jsonrpc/nimiq-jsonrpc-derive" }
+nimiq-jsonrpc-client = { path = "/home/janosch/IntelliJ Projects/nimiq-jsonrpc/nimiq-jsonrpc-client" }
+nimiq-jsonrpc-server = { path = "/home/janosch/IntelliJ Projects/nimiq-jsonrpc/nimiq-jsonrpc-server" }

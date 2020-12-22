@@ -91,7 +91,10 @@ impl FromStr for CompressedPublicKey {
 mod serde_derive {
     // TODO: Replace this with a generic serialization using `ToHex` and `FromHex`.
 
-    use std::str::FromStr;
+    use std::{
+        str::FromStr,
+        borrow::Cow,
+    };
 
     use serde::{
         de::{Deserialize, Deserializer, Error},
@@ -114,8 +117,8 @@ mod serde_derive {
         where
             D: Deserializer<'de>,
         {
-            let s: &'de str = Deserialize::deserialize(deserializer)?;
-            CompressedPublicKey::from_str(s).map_err(Error::custom)
+            let s: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
+            CompressedPublicKey::from_str(&s).map_err(Error::custom)
         }
     }
 }

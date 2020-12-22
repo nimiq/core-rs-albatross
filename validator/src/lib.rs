@@ -1,4 +1,5 @@
 #![feature(map_first_last, btree_drain_filter)]
+#![allow(dead_code)]
 
 #[macro_use]
 extern crate log;
