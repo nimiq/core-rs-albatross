@@ -48,7 +48,10 @@ impl PublicKey {
         if self.public_key.is_zero() {
             return false;
         }
-        let lhs = MNT6_753::pairing(signature.signature, G2Projective::prime_subgroup_generator());
+        let lhs = MNT6_753::pairing(
+            signature.signature,
+            G2Projective::prime_subgroup_generator(),
+        );
         let rhs = MNT6_753::pairing(hash_curve, self.public_key);
         lhs == rhs
     }
@@ -79,8 +82,37 @@ impl PartialOrd<PublicKey> for PublicKey {
 }
 
 impl Ord for PublicKey {
+    /// We order points according to their compressed (affine) encoding. The ordering is
+    /// lexicographical and considers (in order):
+    /// 1. Infinity
+    /// 2. "Parity" bit of the y coordinate
+    /// 3. x coordinate
     fn cmp(&self, other: &Self) -> Ordering {
-        self.public_key.into_affine().lexicographic_cmp(&other.public_key.into_affine())
+        // Convert keys to affine form.
+        let first = self.public_key.into_affine();
+        let second = other.public_key.into_affine();
+
+        // Check if any of the points is at infinity. If not continue.
+        match (first.is_zero(), second.is_zero()) {
+            (true, true) => return Ordering::Equal,
+            (false, true) => return Ordering::Less,
+            (true, false) => return Ordering::Greater,
+            _ => {}
+        }
+
+        // Calculate the parity bits of the y coordinates.
+        let y_bit_first = first.y > -first.y;
+        let y_bit_second = second.y > -second.y;
+
+        // Compare the parity bits. If they are equal, continue.
+        match (y_bit_first, y_bit_second) {
+            (false, true) => return Ordering::Less,
+            (true, false) => return Ordering::Greater,
+            _ => {}
+        }
+
+        // Finally, simply compare the x coordinates.
+        first.x.cmp(&second.x)
     }
 }
 
