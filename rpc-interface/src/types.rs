@@ -79,30 +79,30 @@ pub enum BlockType {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Block {
-    block_type: BlockType,
+    pub block_type: BlockType,
 
-    hash: Blake2bHash,
+    pub hash: Blake2bHash,
 
-    block_number: u32,
+    pub block_number: u32,
 
-    view_number: u32,
+    pub view_number: u32,
 
-    batch: u32,
+    pub batch: u32,
 
-    epoch: u32,
+    pub epoch: u32,
 
-    parent_hash: Blake2bHash,
+    pub parent_hash: Blake2bHash,
 
-    seed: VrfSeed,
+    pub seed: VrfSeed,
 
-    state_root: Blake2bHash,
+    pub state_root: Blake2bHash,
 
-    body_root: Blake2bHash,
+    pub body_root: Blake2bHash,
 
-    timestamp: u64,
+    pub timestamp: u64,
 
     #[serde(flatten)]
-    additional_fields: BlockAdditionalFields,
+    pub additional_fields: BlockAdditionalFields,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -145,10 +145,10 @@ pub enum BlockAdditionalFields {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MacroJustification {
-    votes: u16,
+    pub votes: u16,
 
     #[serde(flatten)]
-    tendermint_proof: TendermintProof,
+    pub tendermint_proof: TendermintProof,
 }
 
 impl MacroJustification {
@@ -165,14 +165,13 @@ impl MacroJustification {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Slots {
-    first_slot_number: u16,
+    pub first_slot_number: u16,
 
-    num_slots: u16,
+    pub num_slots: u16,
 
-    public_key: CompressedPublicKey,
+    pub public_key: CompressedPublicKey,
 
-    //#[serde(with = "crate::serde_helpers::address_friendly")]
-    reward_address: Address,
+    pub reward_address: Address,
 }
 
 impl Slots {
@@ -193,7 +192,6 @@ impl Slots {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MicroJustification {
-    #[serde(with = "serde_with::rust::display_fromstr")]
     signature: CompressedSignature,
 
     view_change_proof: Option<ViewChangeProof>,
@@ -211,12 +209,11 @@ impl From<nimiq_block_albatross::MicroJustification> for MicroJustification {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Slot {
-    slot_number: u16,
+    pub slot_number: u16,
 
-    public_key: CompressedPublicKey,
+    pub public_key: CompressedPublicKey,
 
-    #[serde(with = "crate::serde_helpers::address_friendly")]
-    reward_address: Address,
+    pub reward_address: Address,
 }
 
 impl Slot {
@@ -236,10 +233,10 @@ impl Slot {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ForkProof {
-    block_number: u32,
-    view_number: u32,
-    parent_hash: Blake2bHash,
-    hashes: [Blake2bHash; 2],
+    pub block_number: u32,
+    pub view_number: u32,
+    pub parent_hash: Blake2bHash,
+    pub hashes: [Blake2bHash; 2],
 }
 
 impl From<nimiq_block_albatross::ForkProof> for ForkProof {
@@ -258,42 +255,32 @@ impl From<nimiq_block_albatross::ForkProof> for ForkProof {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Transaction {
-    hash: Blake2bHash,
+    pub hash: Blake2bHash,
 
-    block_hash: Blake2bHash,
+    pub block_hash: Blake2bHash,
 
-    block_number: u32,
+    pub block_number: u32,
 
-    timestamp: u64,
+    pub timestamp: u64,
 
-    confirmations: u32,
+    pub confirmations: u32,
 
-    transaction_index: usize,
+    pub transaction_index: usize,
 
-    // TODO: `from` and `from_address` can be merged into one Address that is a flattened serialization with a
-    // special serilizer and some helper to fix the field names.... I think
-    #[serde(with = "crate::serde_helpers::address_hex")]
-    from: Address,
+    pub from: Address,
 
-    #[serde(with = "crate::serde_helpers::address_friendly")]
-    from_address: Address,
+    pub to: Address,
 
-    #[serde(with = "crate::serde_helpers::address_hex")]
-    to: Address,
+    pub value: Coin,
 
-    #[serde(with = "crate::serde_helpers::address_friendly")]
-    to_address: Address,
-
-    value: Coin,
-
-    fee: Coin,
+    pub fee: Coin,
 
     #[serde(with = "crate::serde_helpers::hex")]
-    data: Vec<u8>,
+    pub data: Vec<u8>,
 
-    flags: u8,
+    pub flags: u8,
 
-    validity_start_height: u32,
+    pub validity_start_height: u32,
 }
 
 impl Transaction {
@@ -312,10 +299,8 @@ impl Transaction {
             timestamp,
             confirmations: head_height.saturating_sub(block_number),
             transaction_index,
-            from: transaction.sender.clone(),
-            from_address: transaction.sender,
-            to: transaction.recipient.clone(),
-            to_address: transaction.recipient,
+            from: transaction.sender,
+            to: transaction.recipient,
             value: transaction.value,
             fee: transaction.fee,
             flags: transaction.flags.bits() as u8,
@@ -413,18 +398,17 @@ impl Block {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Account {
-    id: String,
+    pub id: String,
 
-    #[serde(with = "crate::serde_helpers::address_friendly")]
-    address: Address,
+    pub address: Address,
 
-    balance: Coin,
+    pub balance: Coin,
 
     #[serde(rename = "type", with = "crate::serde_helpers::account_type")]
-    ty: AccountType,
+    pub ty: AccountType,
 
     #[serde(flatten)]
-    account_additional_fields: AccountAdditionalFields,
+    pub account_additional_fields: AccountAdditionalFields,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -621,24 +605,23 @@ impl Validator {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionParameters {
-    from: Address,
+    pub from: Address,
 
-    from_type: AccountType,
+    pub from_type: AccountType,
 
-    to: Option<Address>,
+    pub to: Option<Address>,
 
-    to_type: AccountType,
+    pub to_type: AccountType,
 
-    value: Coin,
+    pub value: Coin,
 
-    fee: Coin,
+    pub fee: Coin,
 
-    flags: TransactionFlags,
+    pub flags: TransactionFlags,
 
-    #[serde(with = "crate::serde_helpers::hex")]
-    data: Vec<u8>,
+    pub data: Vec<u8>,
 
-    validity_start_height: Option<u32>,
+    pub validity_start_height: Option<u32>,
 }
 
 impl TransactionParameters {
