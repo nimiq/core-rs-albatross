@@ -1,4 +1,4 @@
-use futures::{future, FutureExt, StreamExt};
+use futures::{future, StreamExt};
 use rand::prelude::StdRng;
 use rand::SeedableRng;
 use tokio::sync::broadcast;

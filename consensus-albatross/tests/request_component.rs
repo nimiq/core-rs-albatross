@@ -14,7 +14,7 @@ use nimiq_mempool::{Mempool, MempoolConfig};
 use nimiq_network_interface::network::Network;
 use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_primitives::networks::NetworkId;
-use nimiq_primitives::policy;
+
 
 /// Secret key of validator. Tests run with `network-primitives/src/genesis/unit-albatross.toml`
 const SECRET_KEY: &str =
@@ -68,9 +68,8 @@ impl Node {
 
 #[ignore]
 #[tokio::test(core_threads = 4)]
-#[ignore]
 async fn test_request_component() {
-    simple_logger::init_by_env();
+    //simple_logger::init_by_env();
 
     let mut hub = MockHub::default();
 
@@ -85,7 +84,7 @@ async fn test_request_component() {
         keypair1,
     );
 
-    let num_macro_blocks = (policy::BATCHES_PER_EPOCH + 1) as usize;
+    //let num_macro_blocks = (policy::BATCHES_PER_EPOCH + 1) as usize;
     //produce_macro_blocks(num_macro_blocks, &producer1, &node1.blockchain);
 
     node1.consume();
