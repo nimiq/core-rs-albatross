@@ -53,7 +53,7 @@ impl ConsensusDispatcher {
     }
 }
 
-#[nimiq_jsonrpc_derive::service]
+#[nimiq_jsonrpc_derive::service(rename_all="camelCase")]
 #[async_trait]
 impl ConsensusInterface for ConsensusDispatcher {
     type Error = Error;

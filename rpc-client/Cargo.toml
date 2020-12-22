@@ -23,6 +23,7 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 url = "2.2"
+futures = "0.3"
 
 nimiq-rpc-interface = { path = "../rpc-interface", features = ["proxy"] }
 nimiq-jsonrpc-core = { git = "https://github.com/nimiq/jsonrpc.git" }

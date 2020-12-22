@@ -5,7 +5,7 @@ use crate::{
 };
 
 
-#[cfg_attr(feature = "proxy", nimiq_jsonrpc_derive::proxy(name = "ConsensusProxy"))]
+#[cfg_attr(feature = "proxy", nimiq_jsonrpc_derive::proxy(name = "ConsensusProxy", rename_all="camelCase"))]
 #[async_trait]
 pub trait ConsensusInterface {
     type Error;

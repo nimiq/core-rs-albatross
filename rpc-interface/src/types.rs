@@ -4,12 +4,12 @@
 use std::{
     fmt::{Display, Formatter, self},
     str::FromStr,
-    marker::PhantomData,
+    borrow::Cow,
 };
 
 use serde::{
-    de::{Deserializer, Visitor, Error as DeError},
-    ser::{Serializer},
+    de::Deserializer,
+    ser::Serializer,
     Serialize, Deserialize,
 };
 
@@ -27,7 +27,6 @@ use nimiq_vrf::VrfSeed;
 use nimiq_transaction::TransactionFlags;
 
 use crate::error::Error;
-use beserial::SerializingError;
 
 
 #[derive(Clone, Debug)]
@@ -520,59 +519,13 @@ impl<'de, T> Deserialize<'de> for OrLatest<T>
     where
         D: Deserializer<'de>,
     {
-        deserializer.deserialize_str(OrLatestVisitor { _t: PhantomData })
-    }
-}
-
-struct OrLatestVisitor<T>
-    where T: FromStr
-{
-    _t: PhantomData<T>,
-}
-
-impl<T> OrLatestVisitor<T>
-    where
-        T: FromStr,
-        <T as FromStr>::Err: std::error::Error,
-{
-    fn or_latest(&self, v: &str) -> Result<OrLatest<T>, <T as FromStr>::Err> {
-        if v == "latest" {
+        let s: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
+        if s == "latest" {
             Ok(OrLatest::Latest)
         }
         else {
-            Ok(OrLatest::Value(v.parse()?))
+            Ok(OrLatest::Value(s.parse().map_err(serde::de::Error::custom)?))
         }
-    }
-}
-
-
-impl<'de, T> Visitor<'de> for OrLatestVisitor<T>
-    where
-        T: FromStr,
-        <T as FromStr>::Err: std::error::Error,
-{
-    type Value = OrLatest<T>;
-
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        write!(formatter, "a string")
-    }
-
-    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-        where E: DeError
-    {
-        self.or_latest(v).map_err(DeError::custom)
-    }
-
-    fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Self::Value, E>
-        where E: DeError
-    {
-        self.or_latest(v).map_err(DeError::custom)
-    }
-
-    fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
-        where E: DeError
-    {
-        self.or_latest(&v).map_err(DeError::custom)
     }
 }
 

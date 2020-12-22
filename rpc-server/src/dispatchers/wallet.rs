@@ -38,7 +38,7 @@ impl WalletDispatcher {
     }
 }
 
-#[nimiq_jsonrpc_derive::service]
+#[nimiq_jsonrpc_derive::service(rename_all="camelCase")]
 #[async_trait]
 impl WalletInterface for WalletDispatcher {
     type Error = Error;

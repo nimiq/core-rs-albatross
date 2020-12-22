@@ -1,5 +1,6 @@
 use structopt::StructOpt;
 use anyhow::{Error, bail};
+use futures::stream::StreamExt;
 
 use nimiq_jsonrpc_core::Credentials;
 use nimiq_rpc_client::Client;
@@ -26,11 +27,21 @@ struct Opt {
 
 #[derive(Debug, StructOpt)]
 enum Command {
+    /// Query a block from the blockchain
     GetBlock {
+        /// Either a block hash or number. If omitted, the last block is queried.
         hash_or_number: Option<BlockNumberOrHash>,
 
+        /// Include transactions
         #[structopt(short = "t")]
         include_transactions: bool,
+    },
+
+    /// Follow the head of the blockchain
+    Follow {
+        /// Show the full block instead of only the hash
+        #[structopt(short)]
+        block: bool,
     }
 }
 
@@ -45,7 +56,21 @@ impl Command {
                 }?;
 
                 println!("{:#?}", block)
-            }
+            },
+
+            Command::Follow { block: show_block} => {
+                let mut stream = client.blockchain.head_subscribe().await?;
+
+                while let Some(block_hash) = stream.next().await {
+                    if show_block {
+                        let block = client.blockchain.block_by_hash(block_hash, false).await;
+                        println!("{:#?}", block);
+                    }
+                    else {
+                        println!("{}", block_hash);
+                    }
+                }
+            },
         }
 
         Ok(())

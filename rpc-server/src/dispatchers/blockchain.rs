@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use futures::stream::{BoxStream, StreamExt};
 
-use nimiq_blockchain_albatross::Blockchain;
+use nimiq_blockchain_albatross::{Blockchain, BlockchainEvent};
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::policy;
 use nimiq_rpc_interface::{
@@ -23,7 +24,7 @@ impl BlockchainDispatcher {
     }
 }
 
-#[nimiq_jsonrpc_derive::service]
+#[nimiq_jsonrpc_derive::service(rename_all="camelCase")]
 #[async_trait]
 impl BlockchainInterface for BlockchainDispatcher {
     type Error = Error;
@@ -138,5 +139,21 @@ impl BlockchainInterface for BlockchainDispatcher {
             inactive_validators,
             inactive_stakes,
         })
+    }
+
+    #[stream]
+    async fn head_subscribe(&mut self) -> Result<BoxStream<'static, Blake2bHash>, Error> {
+        Ok(self.blockchain
+            .notifier
+            .write()
+            .as_stream()
+            .map(|event| {
+                match event {
+                    BlockchainEvent::Extended(hash) => hash,
+                    BlockchainEvent::Finalized(hash) => hash,
+                    BlockchainEvent::EpochFinalized(hash) => hash,
+                    BlockchainEvent::Rebranched(_, new_branch) => new_branch.into_iter().last().unwrap().0,
+                }
+            }).boxed())
     }
 }

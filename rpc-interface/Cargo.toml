@@ -22,6 +22,7 @@ serde_with = "1.4"
 thiserror = "1.0"
 async-trait = "0.1"
 hex = "0.4"
+futures = "0.3"
 
 beserial = { path = "../beserial" }
 nimiq-hash = { path = "../hash", features = ["serde-derive"] }

@@ -28,9 +28,12 @@ pub fn initialize_rpc_server(
         password: credentials.password,
     });
 
-    // FIXME
-    //let allowed_methods = config.allowed_methods.map(HashSet::from_iter);
-    let allowed_methods = None;
+    let allowed_methods = config.allowed_methods.unwrap_or_default();
+    let allowed_methods = if allowed_methods.is_empty() {
+        None
+    } else {
+        Some(HashSet::from_iter(allowed_methods))
+    };
 
     // TODO: Pass this to the rpc server config
     let _corsdomain = config.corsdomain.unwrap_or_default();
