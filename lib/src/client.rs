@@ -1,4 +1,4 @@
-use std::{convert::TryFrom, sync::Arc};
+use std::sync::Arc;
 
 use nimiq_blockchain_albatross::Blockchain;
 use nimiq_consensus_albatross::{
@@ -119,8 +119,6 @@ impl ClientInner {
         #[cfg(feature = "wallet")]
         let wallet_store = Arc::new(WalletStore::new(environment.clone()));
 
-        // TODO: This will need to be changed from the QuickSync protocol to a more adequate sync
-        //       protocol.
         let sync = HistorySync::<Network>::new(Arc::clone(&blockchain), network.subscribe_events());
 
         let consensus = Consensus::from_network(

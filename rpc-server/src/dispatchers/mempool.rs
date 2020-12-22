@@ -15,6 +15,7 @@ use crate::{
 };
 
 
+#[allow(dead_code)]
 pub struct MempoolDispatcher {
     mempool: Arc<Mempool>,
 

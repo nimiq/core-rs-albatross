@@ -1,3 +1,5 @@
+#![allow(unused_imports, unused_variables, dead_code)]
+
 #[macro_use]
 extern crate log;
 extern crate nimiq_block_albatross as block_albatross;
@@ -7,7 +9,6 @@ extern crate nimiq_mempool as mempool;
 extern crate nimiq_network_albatross as network;
 
 use std::fs::File;
-use std::io;
 use std::io::Read;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;

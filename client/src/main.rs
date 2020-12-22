@@ -1,4 +1,4 @@
-use std::{convert::TryFrom, time::Duration};
+use std::time::Duration;
 
 use futures::StreamExt;
 pub use nimiq::{
