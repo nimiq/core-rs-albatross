@@ -1,35 +1,32 @@
 use std::{
-    sync::Arc,
-    task::{Poll, Context},
     pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
 };
 
 use futures::{
     channel::mpsc,
-    stream::{StreamExt, Stream},
     sink::SinkExt,
+    stream::{Stream, StreamExt},
 };
 use pin_project::pin_project;
 
 use beserial::Deserialize;
-use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_block_albatross::Block;
-use nimiq_blockchain_albatross::Blockchain;
 use nimiq_block_production_albatross::BlockProducer;
+use nimiq_blockchain_albatross::Blockchain;
+use nimiq_bls::{KeyPair, SecretKey};
+use nimiq_consensus_albatross::sync::{
+    block_queue::BlockQueue, request_component::RequestComponent,
+};
+use nimiq_database::volatile::VolatileEnvironment;
+use nimiq_hash::Blake2bHash;
 use nimiq_mempool::{Mempool, MempoolConfig};
 use nimiq_primitives::networks::NetworkId;
-use nimiq_database::volatile::VolatileEnvironment;
-use nimiq_consensus_albatross::sync::{
-    block_queue::BlockQueue,
-    request_component::RequestComponent,
-};
-use nimiq_hash::Blake2bHash;
-
 
 /// Secret key of validator. Tests run with `network-primitives/src/genesis/unit-albatross.toml`
 const SECRET_KEY: &str =
     "196ffdb1a8acc7cbd76a251aeac0600a1d68b3aba1eba823b5e4dc5dbdcdc730afa752c05ab4f6ef8518384ad514f403c5a088a22b17bf1bc14f8ff8decc2a512c0a200f68d7bdf5a319b30356fe8d1d75ef510aed7a8660968c216c328a0000";
-
 
 #[pin_project]
 #[derive(Debug)]
@@ -40,7 +37,11 @@ pub struct MockRequestComponent {
 }
 
 impl MockRequestComponent {
-    pub fn new() -> (Self, mpsc::UnboundedReceiver<(Blake2bHash, Vec<Blake2bHash>)>, mpsc::UnboundedSender<Vec<Block>>) {
+    pub fn new() -> (
+        Self,
+        mpsc::UnboundedReceiver<(Blake2bHash, Vec<Blake2bHash>)>,
+        mpsc::UnboundedSender<Vec<Block>>,
+    ) {
         let (tx1, rx1) = mpsc::unbounded();
         let (tx2, rx2) = mpsc::unbounded();
 
@@ -49,8 +50,16 @@ impl MockRequestComponent {
 }
 
 impl RequestComponent for MockRequestComponent {
-    fn request_missing_blocks(&mut self, target_block_hash: Blake2bHash, locators: Vec<Blake2bHash>) {
+    fn request_missing_blocks(
+        &mut self,
+        target_block_hash: Blake2bHash,
+        locators: Vec<Blake2bHash>,
+    ) {
         self.tx.unbounded_send((target_block_hash, locators)).ok(); // ignore error
+    }
+
+    fn num_peers(&self) -> usize {
+        1
     }
 }
 
@@ -68,10 +77,10 @@ impl Stream for MockRequestComponent {
     }
 }
 
-
 #[tokio::test]
 async fn send_single_micro_block_to_block_queue() {
-    let keypair = KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
+    let keypair =
+        KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(Blockchain::new(env, NetworkId::UnitAlbatross).unwrap());
     let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
@@ -87,7 +96,8 @@ async fn send_single_micro_block_to_block_queue() {
     );
 
     // push one micro block to the queue
-    let block = Block::Micro(producer.next_micro_block(blockchain.time.now(), 0, None, vec![], vec![0x42]));
+    let block =
+        Block::Micro(producer.next_micro_block(blockchain.time.now(), 0, None, vec![], vec![0x42]));
     tx.send(block).await.unwrap();
 
     assert_eq!(blockchain.block_number(), 0);
@@ -102,7 +112,8 @@ async fn send_single_micro_block_to_block_queue() {
 
 #[tokio::test]
 async fn send_two_micro_blocks_out_of_order() {
-    let keypair = KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
+    let keypair =
+        KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
     let env1 = VolatileEnvironment::new(10).unwrap();
     let env2 = VolatileEnvironment::new(10).unwrap();
     let blockchain1 = Arc::new(Blockchain::new(env1, NetworkId::UnitAlbatross).unwrap());
@@ -119,9 +130,21 @@ async fn send_two_micro_blocks_out_of_order() {
         rx.boxed(),
     );
 
-    let block1 = Block::Micro(producer.next_micro_block(blockchain2.time.now(), 0, None, vec![], vec![0x42]));
+    let block1 = Block::Micro(producer.next_micro_block(
+        blockchain2.time.now(),
+        0,
+        None,
+        vec![],
+        vec![0x42],
+    ));
     blockchain2.push(block1.clone()).unwrap(); // push it, so the producer actually produces a block at height 2
-    let block2 = Block::Micro(producer.next_micro_block(blockchain2.time.now() + 1000, 0, None, vec![], vec![0x42]));
+    let block2 = Block::Micro(producer.next_micro_block(
+        blockchain2.time.now() + 1000,
+        0,
+        None,
+        vec![],
+        vec![0x42],
+    ));
 
     // send block2 first
     tx.send(block2.clone()).await.unwrap();
@@ -160,7 +183,8 @@ async fn send_two_micro_blocks_out_of_order() {
 async fn send_block_with_gap_and_respond_to_missing_request() {
     //simple_logger::init_by_env();
 
-    let keypair = KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
+    let keypair =
+        KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
     let env1 = VolatileEnvironment::new(10).unwrap();
     let env2 = VolatileEnvironment::new(10).unwrap();
     let blockchain1 = Arc::new(Blockchain::new(env1, NetworkId::UnitAlbatross).unwrap());
@@ -177,9 +201,21 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
         rx.boxed(),
     );
 
-    let block1 = Block::Micro(producer.next_micro_block(blockchain2.time.now(), 0, None, vec![], vec![0x42]));
+    let block1 = Block::Micro(producer.next_micro_block(
+        blockchain2.time.now(),
+        0,
+        None,
+        vec![],
+        vec![0x42],
+    ));
     blockchain2.push(block1.clone()).unwrap(); // push it, so the producer actually produces a block at height 2
-    let block2 = Block::Micro(producer.next_micro_block(blockchain2.time.now() + 1000, 0, None, vec![], vec![0x42]));
+    let block2 = Block::Micro(producer.next_micro_block(
+        blockchain2.time.now() + 1000,
+        0,
+        None,
+        vec![],
+        vec![0x42],
+    ));
 
     // send block2 first
     tx.send(block2.clone()).await.unwrap();
@@ -214,4 +250,3 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
     assert_eq!(blockchain1.get_block_at(1, true).unwrap(), block1);
     assert_eq!(blockchain1.get_block_at(2, true).unwrap(), block2);
 }
-

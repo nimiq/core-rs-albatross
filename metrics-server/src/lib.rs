@@ -93,44 +93,44 @@ impl MetricsServer {
 
         let srv = TcpListener::bind(&SocketAddr::new(ip, port))?;
 
-        let future = Box::new(
-            Http::new()
-                .serve_incoming(
-                    srv.incoming()
-                        .and_then(move |socket| tls_cx.accept(socket).map_err(|e| io::Error::new(io::ErrorKind::Other, e))),
-                    move || {
-                        server::MetricsServer::new(
-                            vec![
-                                Arc::new(CM::new(consensus.blockchain.clone())),
-                                Arc::new(MempoolMetrics::new(consensus.mempool.clone())),
-                                Arc::new(NetworkMetrics::new(consensus.network.clone())),
-                            ],
-                            attributes! { "peer" => consensus.network.network_config.peer_address() },
-                            username.clone(),
-                            password.clone(),
-                        )
-                    },
-                )
-                .then(|res| match res {
-                    Ok(conn) => Ok(Some(conn)),
-                    Err(e) => {
-                        error!("Metrics server failed: {}", e);
-                        Ok(None)
-                    }
-                })
-                .for_each(|conn_opt| {
-                    if let Some(conn) = conn_opt {
-                        hyper::rt::spawn(
-                            conn.and_then(|c| c.map_err(|e| panic!("Metrics server unrecoverable error {}", e)))
-                                .map_err(|e| error!("Metrics server connection error: {}", e)),
-                        );
-                    }
+        // let future = Box::new(
+        //     Http::new()
+        //         .serve_incoming(
+        //             srv.incoming()
+        //                 .and_then(move |socket| tls_cx.accept(socket).map_err(|e| io::Error::new(io::ErrorKind::Other, e))),
+        //             move || {
+        //                 server::MetricsServer::new(
+        //                     vec![
+        //                         Arc::new(CM::new(consensus.blockchain.clone())),
+        //                         Arc::new(MempoolMetrics::new(consensus.mempool.clone())),
+        //                         Arc::new(NetworkMetrics::new(consensus.network.clone())),
+        //                     ],
+        //                     attributes! { "peer" => consensus.network.network_config.peer_address() },
+        //                     username.clone(),
+        //                     password.clone(),
+        //                 )
+        //             },
+        //         )
+        //         .then(|res| match res {
+        //             Ok(conn) => Ok(Some(conn)),
+        //             Err(e) => {
+        //                 error!("Metrics server failed: {}", e);
+        //                 Ok(None)
+        //             }
+        //         })
+        //         .for_each(|conn_opt| {
+        //             if let Some(conn) = conn_opt {
+        //                 hyper::rt::spawn(
+        //                     conn.and_then(|c| c.map_err(|e| panic!("Metrics server unrecoverable error {}", e)))
+        //                         .map_err(|e| error!("Metrics server connection error: {}", e)),
+        //                 );
+        //             }
+        //
+        //             Ok(())
+        //         }),
+        // );
 
-                    Ok(())
-                }),
-        );
-
-        Ok(MetricsServer { future })
+        unimplemented!()
     }
 }
 

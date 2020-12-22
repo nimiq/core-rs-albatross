@@ -4,11 +4,13 @@ use nimiq_jsonrpc_core::RpcError;
 use nimiq_keys::Address;
 use nimiq_rpc_interface::types::BlockNumberOrHash;
 
-
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("{0}")]
     Core(#[from] nimiq_rpc_interface::error::Error),
+
+    #[error("{0}")]
+    NetworkError(#[from] nimiq_network_libp2p::NetworkError),
 
     #[error("Block not found: {0}")]
     BlockNotFound(BlockNumberOrHash),

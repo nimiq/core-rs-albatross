@@ -234,7 +234,6 @@ impl From<config_file::DatabaseSettings> for DatabaseConfig {
     }
 }
 
-
 /// Determines where the database will be stored.
 ///
 /// # ToDo
@@ -276,17 +275,29 @@ impl StorageConfig {
     ///
     /// Returns a `Result` which is either a `Environment` or a `Error`.
     ///
-    pub fn database(&self, network_id: NetworkId, consensus: ConsensusConfig, db_config: DatabaseConfig) -> Result<Environment, Error> {
+    pub fn database(
+        &self,
+        network_id: NetworkId,
+        consensus: ConsensusConfig,
+        db_config: DatabaseConfig,
+    ) -> Result<Environment, Error> {
         let db_name = format!("{}-{}-consensus", network_id, consensus).to_lowercase();
         log::info!("Opening database: {}", db_name);
 
         Ok(match self {
-            StorageConfig::Volatile => VolatileEnvironment::new_with_lmdb_flags(db_config.max_dbs, db_config.flags)?,
+            StorageConfig::Volatile => {
+                VolatileEnvironment::new_with_lmdb_flags(db_config.max_dbs, db_config.flags)?
+            }
             StorageConfig::Filesystem(file_storage) => {
                 let db_path = file_storage.database_parent.join(db_name);
                 let db_path = db_path
                     .to_str()
-                    .ok_or_else(|| Error::config_error(format!("Failed to convert database path to string: {}", db_path.display())))?
+                    .ok_or_else(|| {
+                        Error::config_error(format!(
+                            "Failed to convert database path to string: {}",
+                            db_path.display()
+                        ))
+                    })?
                     .to_string();
                 LmdbEnvironment::new(&db_path, db_config.size, db_config.max_dbs, db_config.flags)?
             }
@@ -305,11 +316,15 @@ impl StorageConfig {
                     .ok_or_else(|| Error::config_error("No path for validator key specified"))?;
                 let key_path = key_path
                     .to_str()
-                    .ok_or_else(|| Error::config_error(format!("Failed to convert path of validator key to string: {}", key_path.display())))?
+                    .ok_or_else(|| {
+                        Error::config_error(format!(
+                            "Failed to convert path of validator key to string: {}",
+                            key_path.display()
+                        ))
+                    })?
                     .to_string();
 
-                FileStore::new(key_path)
-                    .load_or_store(|| BlsKeyPair::generate_default_csprng())?
+                FileStore::new(key_path).load_or_store(|| BlsKeyPair::generate_default_csprng())?
             }
             _ => return Err(self.not_available()),
         })
@@ -320,7 +335,7 @@ impl StorageConfig {
             StorageConfig::Filesystem(file_storage) => {
                 Ok(FileStore::new(&file_storage.peer_key)
                     .load_or_store(|| IdentityKeypair::generate_ed25519())?)
-            },
+            }
             _ => Err(self.not_available()),
         }
     }
@@ -533,8 +548,8 @@ impl ClientConfig {
 
     /// Instantiates the Nimiq client from this configuration
     ///
-    pub fn instantiate_client(self) -> Result<Client, Error> {
-        Client::try_from(self)
+    pub async fn instantiate_client(self) -> Result<Client, Error> {
+        Client::from_config(self).await
     }
 }
 
@@ -551,8 +566,8 @@ impl ClientConfigBuilder {
 
     /// Short cut to build the config and instantiate the client
     ///
-    pub fn instantiate_client(&self) -> Result<Client, Error> {
-        self.build()?.instantiate_client()
+    pub async fn instantiate_client(&self) -> Result<Client, Error> {
+        self.build()?.instantiate_client().await
     }
 
     /// Sets the network ID to the Albatross DevNet
@@ -610,14 +625,21 @@ impl ClientConfigBuilder {
 
     /// Sets the mempool filter rules
     pub fn mempool(&mut self, filter_rules: MempoolRules, filter_limit: usize) -> &mut Self {
-        self.mempool = Some(MempoolConfig { filter_rules, filter_limit });
+        self.mempool = Some(MempoolConfig {
+            filter_rules,
+            filter_limit,
+        });
         self
     }
 
     /// Sets the validator config. Since there is no configuration for validators (except key file)
     /// yet, this will just enable the validator.
     #[cfg(feature = "validator")]
-    pub fn validator(&mut self, wallet_account: String, wallet_password: Option<String>) -> &mut Self {
+    pub fn validator(
+        &mut self,
+        wallet_account: String,
+        wallet_password: Option<String>,
+    ) -> &mut Self {
         self.validator = Some(Some(ValidatorConfig {
             wallet_account,
             wallet_password: wallet_password.unwrap_or_default(),
@@ -676,7 +698,10 @@ impl ClientConfigBuilder {
         #[cfg(feature = "rpc-server")]
         {
             if let Some(rpc_config) = &config_file.rpc_server {
-                let bind_to = rpc_config.bind.as_ref().and_then(|addr| addr.into_ip_address());
+                let bind_to = rpc_config
+                    .bind
+                    .as_ref()
+                    .and_then(|addr| addr.into_ip_address());
 
                 let allow_ips = if rpc_config.allowip.is_empty() {
                     None
@@ -684,7 +709,10 @@ impl ClientConfigBuilder {
                     let result = rpc_config
                         .allowip
                         .iter()
-                        .map(|s| s.parse::<IpAddr>().map_err(|e| Error::config_error(format!("Invalid IP: {}", e))))
+                        .map(|s| {
+                            s.parse::<IpAddr>()
+                                .map_err(|e| Error::config_error(format!("Invalid IP: {}", e)))
+                        })
                         .collect::<Result<Vec<IpAddr>, Error>>();
                     Some(result?)
                 };
@@ -692,7 +720,11 @@ impl ClientConfigBuilder {
                 let credentials = match (&rpc_config.username, &rpc_config.password) {
                     (Some(u), Some(p)) => Some(Credentials::new(u.clone(), p.clone())),
                     (None, None) => None,
-                    _ => return Err(Error::config_error("Either both username and password have to be set or none.")),
+                    _ => {
+                        return Err(Error::config_error(
+                            "Either both username and password have to be set or none.",
+                        ))
+                    }
                 };
 
                 self.rpc_server = Some(Some(RpcServerConfig {
@@ -710,9 +742,15 @@ impl ClientConfigBuilder {
         #[cfg(feature = "metrics-server")]
         {
             if let Some(metrics_config) = &config_file.metrics_server {
-                let bind_to = metrics_config.bind.as_ref().and_then(|addr| addr.into_ip_address());
+                let bind_to = metrics_config
+                    .bind
+                    .as_ref()
+                    .and_then(|addr| addr.into_ip_address());
 
-                let credentials = metrics_config.password.as_ref().map(|password| Credentials::new("metrics", password));
+                let credentials = metrics_config
+                    .password
+                    .as_ref()
+                    .map(|password| Credentials::new("metrics", password));
 
                 self.metrics_server = Some(Some(MetricsServerConfig {
                     bind_to,
@@ -739,7 +777,9 @@ impl ClientConfigBuilder {
     /// Applies settings from the command line
     pub fn command_line(&mut self, command_line: &CommandLine) -> Result<&mut Self, Error> {
         // Set consensus type
-        command_line.consensus_type.map(|consensus| self.consensus(consensus));
+        command_line
+            .consensus_type
+            .map(|consensus| self.consensus(consensus));
 
         // Set network ID
         command_line.network.map(|network| self.network_id(network));

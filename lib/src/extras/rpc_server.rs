@@ -1,8 +1,4 @@
-use std::{
-    collections::HashSet,
-    iter::FromIterator,
-    sync::Arc,
-};
+use std::{collections::HashSet, iter::FromIterator, sync::Arc};
 
 use nimiq_rpc_server::dispatchers::*;
 
@@ -18,7 +14,11 @@ use crate::error::Error;
 
 pub type Server = _Server<AllowListDispatcher<ModularDispatcher>>;
 
-pub fn initialize_rpc_server(client: &Client, config: RpcServerConfig, wallet_store: Arc<WalletStore>) -> Result<Server, Error> {
+pub fn initialize_rpc_server(
+    client: &Client,
+    config: RpcServerConfig,
+    wallet_store: Arc<WalletStore>,
+) -> Result<Server, Error> {
     let ip = config.bind_to.unwrap_or_else(default_bind);
     log::info!("Initializing RPC server: {}:{}", ip, config.port);
 
@@ -51,7 +51,10 @@ pub fn initialize_rpc_server(client: &Client, config: RpcServerConfig, wallet_st
     let unlocked_wallets = Arc::clone(&wallet_dispatcher.unlocked_wallets);
 
     dispatcher.add(BlockchainDispatcher::new(client.blockchain()));
-    dispatcher.add(ConsensusDispatcher::new(client.consensus(), Some(unlocked_wallets)));
+    dispatcher.add(ConsensusDispatcher::new(
+        client.consensus_proxy(),
+        Some(unlocked_wallets),
+    ));
     dispatcher.add(wallet_dispatcher);
     dispatcher.add(MempoolDispatcher::new(client.mempool()));
 

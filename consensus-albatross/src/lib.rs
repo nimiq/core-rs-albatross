@@ -24,9 +24,8 @@ extern crate nimiq_utils as utils;
 #[macro_use]
 extern crate pin_project;
 
-pub use consensus::{Consensus, ConsensusEvent};
+pub use consensus::{Consensus, ConsensusEvent, ConsensusProxy};
 pub use error::Error;
-pub use sync::SyncProtocol;
 
 pub mod consensus;
 pub mod consensus_agent;

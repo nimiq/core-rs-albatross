@@ -1,40 +1,80 @@
-// If we don't allow absurd comparisons, clippy fails because `MIN_FULL_NODES` can be 0.
-#![allow(clippy::absurd_extreme_comparisons)]
+use std::sync::Arc;
 
-use std::collections::HashMap;
-use std::sync::{Arc, Weak};
-use std::time::Duration;
-
-use futures::StreamExt;
-use parking_lot::{MappedRwLockReadGuard, RwLock, RwLockReadGuard};
-use tokio::sync::broadcast::{channel as broadcast, Receiver as BroadcastReceiver, Sender as BroadcastSender};
+use futures::{Stream, StreamExt};
+use std::sync::atomic::{AtomicBool, Ordering};
+use tokio::sync::broadcast::{
+    channel as broadcast, Receiver as BroadcastReceiver, Sender as BroadcastSender,
+};
 
 use block_albatross::Block;
-use blockchain_albatross::{Blockchain, BlockchainEvent};
+use blockchain_albatross::Blockchain;
 use database::Environment;
-use macros::upgrade_weak;
-use mempool::{Mempool, MempoolEvent};
-use network_interface::{
-    network::{Network, NetworkEvent},
-    peer::Peer,
-};
+use mempool::{Mempool, ReturnCode};
+use network_interface::network::Network;
 use transaction::Transaction;
-use utils::mutable_once::MutableOnce;
 
 use crate::consensus_agent::ConsensusAgent;
-use crate::error::{Error, SyncError};
-use crate::sync::SyncProtocol;
+use crate::sync::block_queue::{BlockQueue, BlockQueueConfig, BlockTopic};
+use crate::sync::request_component::BlockRequestComponent;
+use futures::stream::BoxStream;
+use futures::task::{Context, Poll};
+use nimiq_network_interface::network::Topic;
+use std::pin::Pin;
 
 mod request_response;
+
+#[derive(Clone, Debug, Default)]
+pub struct TransactionTopic;
+
+impl Topic for TransactionTopic {
+    type Item = Transaction;
+
+    fn topic(&self) -> String {
+        "transactions".to_owned()
+    }
+}
+
+pub struct ConsensusProxy<N: Network> {
+    pub blockchain: Arc<Blockchain>,
+    pub network: Arc<N>,
+    pub mempool: Arc<Mempool>,
+    established_flag: Arc<AtomicBool>,
+}
+
+impl<N: Network> Clone for ConsensusProxy<N> {
+    fn clone(&self) -> Self {
+        Self {
+            blockchain: Arc::clone(&self.blockchain),
+            network: Arc::clone(&self.network),
+            mempool: Arc::clone(&self.mempool),
+            established_flag: Arc::clone(&self.established_flag),
+        }
+    }
+}
+
+impl<N: Network> ConsensusProxy<N> {
+    pub async fn send_transaction(&self, tx: Transaction) -> Result<ReturnCode, N::Error> {
+        match self.mempool.push_transaction(tx.clone()) {
+            ReturnCode::Accepted => {}
+            e => return Ok(e),
+        }
+
+        self.network
+            .publish(&TransactionTopic::default(), tx)
+            .await
+            .map(|_| ReturnCode::Accepted)
+    }
+
+    pub fn is_established(&self) -> bool {
+        self.established_flag.load(Ordering::Acquire)
+    }
+}
 
 pub enum ConsensusEvent<N: Network> {
     PeerJoined(Arc<ConsensusAgent<N::PeerType>>),
     //PeerLeft(Arc<P>),
     Established,
     Lost,
-    Syncing,
-    Waiting,
-    SyncFailed,
 }
 
 impl<N: Network> Clone for ConsensusEvent<N> {
@@ -43,9 +83,6 @@ impl<N: Network> Clone for ConsensusEvent<N> {
             ConsensusEvent::PeerJoined(peer) => ConsensusEvent::PeerJoined(Arc::clone(peer)),
             ConsensusEvent::Established => ConsensusEvent::Established,
             ConsensusEvent::Lost => ConsensusEvent::Lost,
-            ConsensusEvent::Syncing => ConsensusEvent::Syncing,
-            ConsensusEvent::Waiting => ConsensusEvent::Waiting,
-            ConsensusEvent::SyncFailed => ConsensusEvent::SyncFailed,
         }
     }
 }
@@ -56,194 +93,148 @@ pub struct Consensus<N: Network> {
     pub network: Arc<N>,
     pub env: Environment,
 
-    //timers: Timers<ConsensusTimer>,
-    pub(crate) state: RwLock<ConsensusState<N>>,
+    block_queue: BlockQueue<BlockRequestComponent<N::PeerType>>,
+    tx_stream: BoxStream<'static, Transaction>,
 
-    self_weak: MutableOnce<Weak<Consensus<N>>>,
     events: BroadcastSender<ConsensusEvent<N>>,
-
-    sync_protocol: Box<dyn SyncProtocol<N>>,
-}
-
-/*#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-enum ConsensusTimer {
-    Sync,
-}*/
-
-type ConsensusAgentMap<P> = HashMap<Arc<P>, Arc<ConsensusAgent<P>>>;
-
-pub(crate) struct ConsensusState<N: Network> {
-    pub(crate) agents: ConsensusAgentMap<N::PeerType>,
+    established_flag: Arc<AtomicBool>,
 }
 
 impl<N: Network> Consensus<N> {
-    pub const MIN_FULL_NODES: usize = 0;
-    const SYNC_THROTTLE: Duration = Duration::from_millis(1500);
+    /// Minimum number of peers for consensus to be established.
+    const MIN_PEERS_ESTABLISHED: usize = 3;
+    /// Minimum number of block announcements extending the chain for consensus to be established.
+    const MIN_BLOCKS_ESTABLISHED: usize = 5;
 
-    pub fn new<S: SyncProtocol<N>>(
+    pub async fn from_network(
         env: Environment,
         blockchain: Arc<Blockchain>,
         mempool: Arc<Mempool>,
         network: Arc<N>,
-        sync_protocol: S,
-    ) -> Result<Arc<Self>, Error> {
+        sync_protocol: BoxStream<'static, Arc<ConsensusAgent<N::PeerType>>>,
+    ) -> Self {
+        let block_stream = network
+            .subscribe::<BlockTopic>(&BlockTopic::default())
+            .await
+            .unwrap()
+            .map(|(block, _peer_id)| block)
+            .boxed();
+
+        let tx_stream = network
+            .subscribe::<TransactionTopic>(&TransactionTopic::default())
+            .await
+            .unwrap()
+            .map(|(tx, _peer_id)| tx)
+            .boxed();
+
+        Self::new(
+            env,
+            blockchain,
+            mempool,
+            network,
+            block_stream,
+            tx_stream,
+            sync_protocol,
+        )
+    }
+
+    pub fn new(
+        env: Environment,
+        blockchain: Arc<Blockchain>,
+        mempool: Arc<Mempool>,
+        network: Arc<N>,
+        block_stream: BoxStream<'static, Block>,
+        tx_stream: BoxStream<'static, Transaction>,
+        sync_protocol: BoxStream<'static, Arc<ConsensusAgent<N::PeerType>>>,
+    ) -> Self {
         let (tx, _rx) = broadcast(256);
-        let this = Arc::new(Consensus {
+
+        let request_component = BlockRequestComponent::new(sync_protocol);
+
+        let block_queue = BlockQueue::new(
+            BlockQueueConfig::default(),
+            Arc::clone(&blockchain),
+            request_component,
+            block_stream,
+        );
+
+        Self::init_network_requests(&network, &blockchain);
+
+        Consensus {
             blockchain,
             mempool,
             network,
             env,
 
-            //timers: Timers::new(),
-            state: RwLock::new(ConsensusState { agents: HashMap::new() }),
-
-            self_weak: MutableOnce::new(Weak::new()),
+            block_queue,
+            tx_stream,
             events: tx,
-            sync_protocol: Box::new(sync_protocol),
-        });
-        Consensus::init_listeners(&this);
-        Ok(this)
+
+            established_flag: Arc::new(AtomicBool::new(false)),
+        }
     }
 
     pub fn subscribe_events(&self) -> BroadcastReceiver<ConsensusEvent<N>> {
         self.events.subscribe()
     }
 
-    pub fn init_listeners(this: &Arc<Consensus<N>>) {
-        unsafe { this.self_weak.replace(Arc::downgrade(this)) };
-
-        Self::init_network_requests(&this.network, &this.blockchain);
-
-        let weak = Arc::downgrade(this);
-        let mut stream = this.network.subscribe_events();
-        tokio::spawn(async move {
-            while let Some(e) = stream.next().await {
-                let this = upgrade_weak!(weak);
-                match e {
-                    Ok(NetworkEvent::PeerJoined(peer)) => this.on_peer_joined(peer),
-                    //NetworkEvent::PeerLeft(peer) => this.on_peer_left(Arc::clone(peer)),
-                    _ => {}
-                }
-            }
-        });
-
-        // Relay new (verified) transactions to peers.
-        let weak = Arc::downgrade(this);
-        this.mempool.notifier.write().register(move |e: &MempoolEvent| {
-            let this = upgrade_weak!(weak);
-            match e {
-                MempoolEvent::TransactionAdded(_, transaction) => this.on_transaction_added(transaction),
-                // TODO: Relay on restore?
-                MempoolEvent::TransactionRestored(transaction) => this.on_transaction_added(transaction),
-                MempoolEvent::TransactionEvicted(transaction) => this.on_transaction_removed(transaction),
-                MempoolEvent::TransactionMined(transaction) => this.on_transaction_removed(transaction),
-            }
-        });
-
-        // Notify peers when our blockchain head changes.
-        let weak = Arc::downgrade(this);
-        this.blockchain.register_listener(move |e: &BlockchainEvent| {
-            let this = upgrade_weak!(weak);
-            this.on_blockchain_event(e);
-        });
-    }
-
-    fn on_peer_joined(&self, peer: Arc<N::PeerType>) {
-        info!("Connected to {:?}", peer.id());
-        let agent = Arc::new(ConsensusAgent::new(Arc::clone(&peer)));
-        self.state.write().agents.insert(peer, Arc::clone(&agent));
-
-        // if the send fails, there are no receivers, which is fine
-        self.events.send(ConsensusEvent::PeerJoined(agent)).ok();
-    }
-
-    fn on_peer_left(&self, peer: Arc<N::PeerType>) {
-        info!("Disconnected from {:?}", peer.id());
-        {
-            let mut state = self.state.write();
-
-            state.agents.remove(&peer);
-        }
-
-        let weak = Weak::clone(&self.self_weak);
-        tokio::spawn(Self::sync_blockchain(weak)); // TODO: Error handling
-    }
-
-    fn on_blockchain_event(&self, event: &BlockchainEvent) {
-        let state = self.state.read();
-
-        let blocks: Vec<&Block>;
-        let block;
-        match event {
-            BlockchainEvent::Extended(_) | BlockchainEvent::Finalized(_) => {
-                // This implicitly takes the lock on the blockchain state.
-                block = self.blockchain.head();
-                blocks = vec![&block];
-            }
-            BlockchainEvent::Rebranched(_, ref adopted_blocks) => {
-                blocks = adopted_blocks.iter().map(|(_, block)| block).collect();
-            }
-            _ => return,
-        }
-
-        // print block height
-        let height = self.blockchain.block_number();
-        if height % 100 == 0 {
-            info!("Now at block #{}", height);
-        } else {
-            trace!("Now at block #{}", height);
-        }
-
-        // Only relay blocks if we are synced up.
-        if self.sync_protocol.is_established() {
-            for agent in state.agents.values() {
-                for &block in blocks.iter() {
-                    agent.relay_block(block);
-                }
-            }
-        }
-    }
-
-    fn on_transaction_added(&self, transaction: &Arc<Transaction>) {
-        let state = self.state.read();
-
-        // Don't relay transactions if we are not synced yet.
-        if !self.sync_protocol.is_established() {
-            return;
-        }
-
-        for agent in state.agents.values() {
-            agent.relay_transaction(transaction.as_ref());
-        }
-    }
-
-    fn on_transaction_removed(&self, transaction: &Arc<Transaction>) {
-        let state = self.state.read();
-        for agent in state.agents.values() {
-            agent.remove_transaction(transaction.as_ref());
-        }
-    }
-
-    pub async fn sync_blockchain(this: Weak<Self>) -> Result<(), SyncError> {
-        info!("Syncing blockchain!");
-        if let Some(this) = Weak::upgrade(&this) {
-            let this2 = Arc::clone(&this);
-            this.sync_protocol.perform_sync(this2).await
-        } else {
-            Ok(())
-        }
-    }
-
-    pub fn established(&self) -> bool {
-        self.sync_protocol.is_established()
+    pub fn is_established(&self) -> bool {
+        self.established_flag.load(Ordering::Acquire)
     }
 
     pub fn num_agents(&self) -> usize {
-        self.state.read().agents.len()
+        self.block_queue.num_peers()
     }
 
-    pub fn agents(&self) -> MappedRwLockReadGuard<ConsensusAgentMap<N::PeerType>> {
-        let state = self.state.read();
-        RwLockReadGuard::map(state, |state| &state.agents)
+    pub fn proxy(&self) -> ConsensusProxy<N> {
+        ConsensusProxy {
+            blockchain: Arc::clone(&self.blockchain),
+            network: Arc::clone(&self.network),
+            mempool: Arc::clone(&self.mempool),
+            established_flag: Arc::clone(&self.established_flag),
+        }
+    }
+
+    /// Calculates and sets established state, returns a ConsensusEvent if the state changed.
+    fn set_established(&mut self) -> Option<ConsensusEvent<N>> {
+        // We can only loose established state right now if we loose all our peers.
+        if self.is_established() {
+            if self.num_agents() == 0 {
+                self.established_flag.swap(false, Ordering::Release);
+                return Some(ConsensusEvent::Lost);
+            }
+        } else {
+            if self.num_agents() >= Self::MIN_PEERS_ESTABLISHED
+                && self.block_queue.accepted_block_announcements() >= Self::MIN_BLOCKS_ESTABLISHED
+            {
+                self.established_flag.swap(true, Ordering::Release);
+                return Some(ConsensusEvent::Established);
+            }
+        }
+        None
+    }
+}
+
+impl<N: Network> Stream for Consensus<N> {
+    type Item = ConsensusEvent<N>;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        // 1. Poll and advance block queue
+        while let Poll::Ready(Some(_)) = self.block_queue.poll_next_unpin(cx) {
+            // TODO: Events?
+            if let Some(event) = self.set_established() {
+                return Poll::Ready(Some(event));
+            }
+        }
+
+        // 2. Poll and push transactions once consensus is established.
+        if self.is_established() {
+            while let Poll::Ready(Some(tx)) = self.tx_stream.poll_next_unpin(cx) {
+                // TODO: React on result.
+                self.mempool.push_transaction(tx);
+            }
+        }
+
+        Poll::Pending
     }
 }

@@ -9,13 +9,14 @@ use network_interface::peer::Peer;
 use std::pin::Pin;
 use std::sync::Arc;
 
-
-pub trait RequestComponent: Stream<Item=Vec<Block>> + Unpin {
+pub trait RequestComponent: Stream<Item = Vec<Block>> + Unpin {
     fn request_missing_blocks(
         &mut self,
         target_block_hash: Blake2bHash,
         locators: Vec<Blake2bHash>,
     );
+
+    fn num_peers(&self) -> usize;
 }
 
 /// Peer Tracking & Request Component
@@ -62,6 +63,10 @@ impl<TPeer: Peer> RequestComponent for BlockRequestComponent<TPeer> {
         locators: Vec<Blake2bHash>,
     ) {
         self.sync_queue.add_ids(vec![(target_block_hash, locators)]);
+    }
+
+    fn num_peers(&self) -> usize {
+        self.sync_queue.num_peers()
     }
 }
 

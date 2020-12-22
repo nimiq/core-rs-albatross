@@ -1,5 +1,6 @@
 use std::{convert::TryFrom, time::Duration};
 
+use futures::StreamExt;
 pub use nimiq::{
     client::{Client, Consensus},
     config::command_line::CommandLine,
@@ -47,13 +48,14 @@ async fn main_inner() -> Result<(), Error> {
 
     // Create client from config.
     log::info!("Initializing client");
-    let client: Client = Client::try_from(config)?;
+    let mut client: Client = Client::from_config(config).await?;
     //client.initialize()?;
 
     // Initialize RPC server
     if let Some(rpc_config) = rpc_config {
         use nimiq::extras::rpc_server::initialize_rpc_server;
-        let rpc_server = initialize_rpc_server(&client, rpc_config, client.wallet_store()).expect("Failed to initialize RPC server");
+        let rpc_server = initialize_rpc_server(&client, rpc_config, client.wallet_store())
+            .expect("Failed to initialize RPC server");
         tokio::spawn(async move { rpc_server.run().await });
     }
 
@@ -80,6 +82,10 @@ async fn main_inner() -> Result<(), Error> {
     }
     */
 
+    // Start consensus.
+    let consensus = client.consensus().unwrap();
+    tokio::spawn(async move { consensus.for_each(|_| async {}).await });
+
     // Initialize network stack and connect.
     log::info!("Connecting to network");
     client.connect().await?;
@@ -103,7 +109,12 @@ async fn main_inner() -> Result<(), Error> {
             let network_info = client.network().network_info().await.unwrap(); // handle error?
             let head = client.blockchain().head().clone();
 
-            log::info!("Head: #{} - {}, Peers: {}", head.block_number(), head.hash(), network_info.num_peers);
+            log::info!(
+                "Head: #{} - {}, Peers: {}",
+                head.block_number(),
+                head.hash(),
+                network_info.num_peers
+            );
         }
     }
 }
