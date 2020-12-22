@@ -21,7 +21,8 @@
 [network]
 
 listen_addresses = [
-	"/ip4/127.0.0.1/tcp/8443/ws",
+	"/ip4/127.0.0.1/tcp/8443",
+	"/ip6/[::1]/tcp/8443",
 ]
 
 # User Agent
