@@ -1,4 +1,4 @@
-use futures::{future, StreamExt};
+use futures::{future, FutureExt, StreamExt};
 use rand::prelude::StdRng;
 use rand::SeedableRng;
 use tokio::sync::broadcast;
@@ -7,11 +7,12 @@ use tokio::time;
 use nimiq_blockchain_albatross::Blockchain;
 use nimiq_bls::KeyPair;
 use nimiq_build_tools::genesis::{GenesisBuilder, GenesisInfo};
-use nimiq_consensus_albatross::sync::QuickSync;
+use nimiq_consensus_albatross::sync::history::HistorySync;
 use nimiq_consensus_albatross::{Consensus as AbstractConsensus, ConsensusEvent};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_keys::{Address, SecureGenerate};
 use nimiq_mempool::{Mempool, MempoolConfig};
+use nimiq_network_interface::network::Network;
 use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
@@ -27,68 +28,111 @@ fn seeded_rng(seed: u64) -> StdRng {
     StdRng::seed_from_u64(seed)
 }
 
-fn mock_consensus(hub: &mut MockHub, peer_id: usize, genesis_info: GenesisInfo) -> Arc<Consensus> {
+async fn mock_consensus(hub: &mut MockHub, peer_id: usize, genesis_info: GenesisInfo) -> Consensus {
     let env = VolatileEnvironment::new(10).unwrap();
     let time = Arc::new(OffsetTime::new());
-    let blockchain = Arc::new(Blockchain::with_genesis(env.clone(), time, NetworkId::UnitAlbatross, genesis_info.block, genesis_info.accounts).unwrap());
+    let blockchain = Arc::new(
+        Blockchain::with_genesis(
+            env.clone(),
+            time,
+            NetworkId::UnitAlbatross,
+            genesis_info.block,
+            genesis_info.accounts,
+        )
+        .unwrap(),
+    );
     let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
     let network = Arc::new(hub.new_network_with_address(peer_id));
-    let sync_protocol = QuickSync::default();
-    Consensus::new(env, blockchain, mempool, network, sync_protocol).unwrap()
+    let sync_protocol =
+        HistorySync::<MockNetwork>::new(Arc::clone(&blockchain), network.subscribe_events());
+    Consensus::from_network(env, blockchain, mempool, network, sync_protocol.boxed()).await
 }
 
-fn mock_validator(hub: &mut MockHub, peer_id: usize, signing_key: KeyPair, genesis_info: GenesisInfo) -> Validator {
-    let consensus = mock_consensus(hub, peer_id, genesis_info);
-    Validator::new(Arc::clone(&consensus), Arc::clone(&consensus.network), signing_key, None)
+async fn mock_validator(
+    hub: &mut MockHub,
+    peer_id: usize,
+    signing_key: KeyPair,
+    genesis_info: GenesisInfo,
+) -> (Validator, Consensus) {
+    let consensus = mock_consensus(hub, peer_id, genesis_info).await;
+    (
+        Validator::new(
+            &consensus,
+            Arc::clone(&consensus.network),
+            signing_key,
+            None,
+        ),
+        consensus,
+    )
 }
 
 async fn mock_validators(hub: &mut MockHub, num_validators: usize) -> Vec<Validator> {
     // Generate validator key pairs.
     let mut rng = seeded_rng(0);
-    let keys: Vec<KeyPair> = (0..num_validators).map(|_| KeyPair::generate(&mut rng)).collect();
+    let keys: Vec<KeyPair> = (0..num_validators)
+        .map(|_| KeyPair::generate(&mut rng))
+        .collect();
 
     // Generate genesis block.
     let mut genesis_builder = GenesisBuilder::default();
     for key in &keys {
-        genesis_builder.with_genesis_validator(key.public_key, Address::default(), Coin::from_u64_unchecked(10000));
+        genesis_builder.with_genesis_validator(
+            key.public_key,
+            Address::default(),
+            Coin::from_u64_unchecked(10000),
+        );
     }
     let genesis = genesis_builder.generate().unwrap();
 
     // Instantiate validators.
-    let validators: Vec<Validator> = keys
-        .into_iter()
-        .enumerate()
-        .map(|(id, key)| mock_validator(hub, id, key, genesis.clone()))
-        .collect();
+    let mut validators = vec![];
+    let mut consensus = vec![];
+    for (id, key) in keys.into_iter().enumerate() {
+        let (v, c) = mock_validator(hub, id, key, genesis.clone()).await;
+        validators.push(v);
+        consensus.push(c);
+    }
 
     // Connect validators to each other.
     for id in 0..num_validators {
         let validator = validators.get(id).unwrap();
         for other_id in (id + 1)..num_validators {
             let other_validator = validators.get(other_id).unwrap();
-            validator.consensus.network.dial_mock(&other_validator.consensus.network);
+            validator
+                .consensus
+                .network
+                .dial_mock(&other_validator.consensus.network);
         }
     }
 
     // Wait until validators are connected.
-    let mut events: Vec<broadcast::Receiver<ConsensusEvent<MockNetwork>>> = validators.iter().map(|v| v.consensus.subscribe_events()).collect();
-    future::join_all(events.iter_mut().map(|e| e.next())).await;
+    let mut events: Vec<broadcast::Receiver<ConsensusEvent<MockNetwork>>> =
+        consensus.iter().map(|v| v.subscribe_events()).collect();
 
-    // Sync blockchains.
-    for validator in &validators {
-        Consensus::sync_blockchain(Arc::downgrade(&validator.consensus)).await.expect("Sync failed");
-        assert_eq!(validator.consensus.established(), true);
+    // Start consensus.
+    for consensus in consensus {
+        tokio::spawn(consensus.for_each(|_| async {}));
     }
+
+    future::join_all(events.iter_mut().map(|e| e.next())).await;
 
     validators
 }
 
-fn validator_for_slot(validators: &Vec<Validator>, block_number: u32, view_number: u32) -> &Validator {
-    let consensus = Arc::clone(&validators.first().unwrap().consensus);
-    let (slot, _) = consensus.blockchain.get_slot_owner_at(block_number, view_number, None);
+fn validator_for_slot(
+    validators: &Vec<Validator>,
+    block_number: u32,
+    view_number: u32,
+) -> &Validator {
+    let consensus = &validators.first().unwrap().consensus;
+    let (slot, _) = consensus
+        .blockchain
+        .get_slot_owner_at(block_number, view_number, None);
     validators
         .iter()
-        .find(|validator| &validator.signing_key().public_key.compress() == slot.public_key().compressed())
+        .find(|validator| {
+            &validator.signing_key().public_key.compress() == slot.public_key().compressed()
+        })
         .unwrap()
 }
 
@@ -98,14 +142,17 @@ async fn one_validator_can_create_micro_blocks() {
 
     let key = KeyPair::generate(&mut seeded_rng(0));
     let genesis = GenesisBuilder::default()
-        .with_genesis_validator(key.public_key, Address::default(), Coin::from_u64_unchecked(10000))
+        .with_genesis_validator(
+            key.public_key,
+            Address::default(),
+            Coin::from_u64_unchecked(10000),
+        )
         .generate()
         .unwrap();
 
-    let validator = mock_validator(&mut hub, 1, key, genesis.clone());
-    let consensus1 = Arc::clone(&validator.consensus);
+    let (validator, mut consensus1) = mock_validator(&mut hub, 1, key, genesis.clone()).await;
 
-    let consensus2 = mock_consensus(&mut hub, 2, genesis);
+    let consensus2 = mock_consensus(&mut hub, 2, genesis).await;
 
     let mut events1 = consensus1.subscribe_events();
     consensus2.network.dial_mock(&consensus1.network);
@@ -114,9 +161,9 @@ async fn one_validator_can_create_micro_blocks() {
     events1.next().await;
 
     log::debug!("Syncing blockchain...");
-    Consensus::sync_blockchain(Arc::downgrade(&consensus1)).await.expect("Sync failed");
+    consensus1.next().await.expect("Sync failed");
 
-    assert_eq!(consensus1.established(), true);
+    assert_eq!(consensus1.is_established(), true);
 
     tokio::spawn(validator);
 
@@ -133,16 +180,19 @@ async fn three_validators_can_create_micro_blocks() {
 
     let validators = mock_validators(&mut hub, 3).await;
 
-    let consensus = Arc::clone(&validators.first().unwrap().consensus);
+    let blockchain = Arc::clone(&validators.first().unwrap().consensus.blockchain);
 
     tokio::spawn(future::join_all(validators));
 
-    let events = consensus.blockchain.notifier.write().as_stream();
-    time::timeout(Duration::from_secs(3), events.take(30).for_each(|_| future::ready(())))
-        .await
-        .unwrap();
+    let events = blockchain.notifier.write().as_stream();
+    time::timeout(
+        Duration::from_secs(3),
+        events.take(30).for_each(|_| future::ready(())),
+    )
+    .await
+    .unwrap();
 
-    assert!(consensus.blockchain.block_number() >= 30);
+    assert!(blockchain.block_number() >= 30);
 }
 
 #[tokio::test]
@@ -157,8 +207,8 @@ async fn four_validators_can_view_change() {
 
     // Listen for blockchain events from the new block producer (after view change).
     let validator = validator_for_slot(&validators, 1, 1);
-    let consensus = Arc::clone(&validator.consensus);
-    let mut events = consensus.blockchain.notifier.write().as_stream();
+    let blockchain = Arc::clone(&validator.consensus.blockchain);
+    let mut events = blockchain.notifier.write().as_stream();
 
     // Freeze time to immediately trigger the view change timeout.
     // time::pause();
@@ -168,6 +218,6 @@ async fn four_validators_can_view_change() {
     // Wait for the new block producer to create a block.
     events.next().await;
 
-    assert_eq!(consensus.blockchain.block_number(), 1);
-    assert_eq!(consensus.blockchain.view_number(), 1);
+    assert_eq!(blockchain.block_number(), 1);
+    assert_eq!(blockchain.view_number(), 1);
 }
