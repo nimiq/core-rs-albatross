@@ -8,6 +8,7 @@ use crate::inherent::{AccountInherentInteraction, Inherent};
 use crate::{Account, AccountError, AccountTransactionInteraction, AccountType};
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub struct VestingContract {
     pub balance: Coin,
     pub owner: Address,

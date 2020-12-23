@@ -547,7 +547,6 @@ pub struct Stakes {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Stake {
-    #[serde(with = "crate::serde_helpers::address_friendly")]
     pub staker_address: Address,
 
     pub balance: Coin,
@@ -563,7 +562,6 @@ pub struct Validator {
 
     pub balance: Coin,
 
-    #[serde(with = "crate::serde_helpers::address_friendly")]
     pub reward_address: Address,
 
     pub stakes: Vec<Stake>,

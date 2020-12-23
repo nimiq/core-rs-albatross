@@ -7,7 +7,14 @@ use nimiq_rpc_client::Client;
 use nimiq_rpc_interface::{
     types::{BlockNumberOrHash, OrLatest},
     blockchain::BlockchainInterface,
+    consensus::ConsensusInterface,
+    wallet::WalletInterface,
 };
+use nimiq_keys::Address;
+use nimiq_primitives::coin::Coin;
+use nimiq_rpc_interface::types::TransactionParameters;
+use nimiq_transaction::TransactionFlags;
+use nimiq_account::AccountType;
 
 
 #[derive(Debug, StructOpt)]
@@ -27,8 +34,8 @@ struct Opt {
 
 #[derive(Debug, StructOpt)]
 enum Command {
-    /// Query a block from the blockchain
-    GetBlock {
+    /// Query a block from the blockchain.
+    Block {
         /// Either a block hash or number. If omitted, the last block is queried.
         hash_or_number: Option<BlockNumberOrHash>,
 
@@ -37,18 +44,75 @@ enum Command {
         include_transactions: bool,
     },
 
-    /// Follow the head of the blockchain
+    /// Lists the current stakes from the staking contract.
+    Stakes {},
+
+    /// Follow the head of the blockchain.
     Follow {
-        /// Show the full block instead of only the hash
+        /// Show the full block instead of only the hash.
         #[structopt(short)]
         block: bool,
-    }
+    },
+
+    /// Show wallet accounts and their balances.
+    Account(AccountCommand),
+
+    /// Create, sign and send transactions.
+    #[structopt(name = "tx")]
+    Transaction(TransactionCommand),
+}
+
+#[derive(Debug, StructOpt)]
+enum AccountCommand {
+    List {
+        #[structopt(short)]
+        short: bool,
+    },
+    New {
+        #[structopt(short = "P")]
+        password: Option<String>,
+    },
+    Import {
+        #[structopt(short = "P")]
+        password: Option<String>,
+
+        key_data: String,
+    },
+    Lock {
+        address: Address,
+    },
+    Unlock {
+        #[structopt(short = "P")]
+        password: Option<String>,
+
+        address: Address,
+    },
+    /// Queries the account state (e.g. account balance for basic accounts).
+    Get {
+        address: Address,
+    },
+}
+
+#[derive(Debug, StructOpt)]
+enum TransactionCommand {
+    Send {
+        from: Address,
+        to: Address,
+        value: Coin,
+        fee: Coin,
+    },
+    Stake {
+
+    },
+    Unstake {
+
+    },
 }
 
 impl Command {
     async fn run(self, mut client: Client) -> Result<(), Error> {
         match self {
-            Command::GetBlock { hash_or_number, include_transactions } => {
+            Command::Block { hash_or_number, include_transactions } => {
                 let block = match hash_or_number {
                     Some(BlockNumberOrHash::Hash(hash)) => client.blockchain.block_by_hash(hash, include_transactions).await,
                     Some(BlockNumberOrHash::Number(number)) =>  client.blockchain.block_by_number(OrLatest::Value(number), include_transactions).await,
@@ -56,6 +120,11 @@ impl Command {
                 }?;
 
                 println!("{:#?}", block)
+            },
+
+            Command::Stakes {} => {
+                let stakes = client.blockchain.list_stakes().await?;
+                println!("{:#?}", stakes);
             },
 
             Command::Follow { block: show_block} => {
@@ -71,6 +140,69 @@ impl Command {
                     }
                 }
             },
+
+            Command::Account(command) => {
+                match command {
+                    AccountCommand::List { short } => {
+                        let accounts = client.wallet.list_accounts().await?;
+                        for address in &accounts {
+                            if short {
+                                println!("{}", address);
+                            }
+                            else {
+                                let account = client.blockchain.get_account(address.clone()).await?;
+                                println!("{}: {:#?}", address, account);
+                            }
+                        }
+                    },
+
+                    AccountCommand::New { password } => {
+                        let account = client.wallet.create_account(password).await?;
+                        println!("{:#?}", account);
+                    },
+
+                    AccountCommand::Import { password, key_data, } => {
+                        let address = client.wallet.import_raw_key(key_data, password).await?;
+                        println!("{}", address);
+                    },
+
+                    AccountCommand::Lock { address } => {
+                        client.wallet.lock_account(address).await?;
+                    },
+
+                    AccountCommand::Unlock { address, password, .. } => {
+                        // TODO: Duration
+                        client.wallet.unlock_account(address, password, None).await?;
+                    },
+
+                    AccountCommand::Get { address } => {
+                        let account = client.blockchain.get_account(address).await?;
+                        println!("{:#?}", account);
+                    },
+
+                }
+            },
+
+            Command::Transaction(command) => {
+                match command {
+                    TransactionCommand::Send { from, to, value, fee } => {
+                        let txid = client.consensus.send_transaction(TransactionParameters {
+                            from,
+                            from_type: AccountType::Basic,
+                            to: Some(to),
+                            to_type: AccountType::Basic,
+                            value,
+                            fee,
+                            flags: TransactionFlags::empty(),
+                            data: vec![],
+                            validity_start_height: None
+                        }).await?;
+                        println!("{}", txid);
+                    },
+                    TransactionCommand::Stake {} => todo!(),
+                    TransactionCommand::Unstake {} => todo!(),
+                }
+            }
         }
 
         Ok(())

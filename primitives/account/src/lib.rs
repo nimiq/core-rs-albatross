@@ -76,10 +76,12 @@ pub trait AccountsTreeLeave: Serialize + Deserialize + Clone {
 }
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug)]
+#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub enum Account {
     Basic(BasicAccount),
     Vesting(VestingContract),
     HTLC(HashedTimeLockedContract),
+    #[cfg_attr(feature = "serde-derive", serde(skip))]
     Staking(StakingContract),
 }
 

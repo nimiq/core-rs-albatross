@@ -10,6 +10,8 @@ use nimiq_rpc_interface::{
     types::{Block, OrLatest, SlashedSlots, Slot, Stake, Stakes, Validator},
     blockchain::BlockchainInterface,
 };
+use nimiq_keys::Address;
+use nimiq_account::Account;
 
 use crate::error::Error;
 
@@ -155,5 +157,9 @@ impl BlockchainInterface for BlockchainDispatcher {
                     BlockchainEvent::Rebranched(_, new_branch) => new_branch.into_iter().last().unwrap().0,
                 }
             }).boxed())
+    }
+
+    async fn get_account(&mut self, account: Address) -> Result<Account, Error> {
+        Ok(self.blockchain.get_account(&account))
     }
 }

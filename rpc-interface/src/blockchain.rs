@@ -1,13 +1,15 @@
 use async_trait::async_trait;
 
 use nimiq_hash::Blake2bHash;
+use nimiq_keys::Address;
+use nimiq_account::Account;
 use futures::stream::BoxStream;
 
 use crate::{
     types::{Block, OrLatest, SlashedSlots, Slot, Stakes},
 };
 
-#[cfg_attr(feature = "proxy", nimiq_jsonrpc_derive::proxy(name = "BlockchainProxy", rename_all="camelCase"))]
+#[cfg_attr(feature = "proxy", nimiq_jsonrpc_derive::proxy(name = "BlockchainProxy", rename_all = "camelCase"))]
 #[async_trait]
 pub trait BlockchainInterface {
     type Error;
@@ -37,4 +39,6 @@ pub trait BlockchainInterface {
 
     #[stream]
     async fn head_subscribe(&mut self) -> Result<BoxStream<'static, Blake2bHash>, Self::Error>;
+
+    async fn get_account(&mut self, account: Address) -> Result<Account, Self::Error>;
 }

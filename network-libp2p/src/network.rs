@@ -478,6 +478,7 @@ impl Network {
                 }
             }
             NetworkAction::Publish { topic_name, data, output } => {
+                // TODO: Check if we're subscribed to the topic, otherwise we can't publish
                 let topic = GossipsubTopic::new(topic_name);
                 output.send(swarm.gossipsub.publish(&topic, data).map_err(Into::into)).ok();
             }

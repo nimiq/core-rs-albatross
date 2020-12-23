@@ -141,7 +141,7 @@ mod serde_derive {
         where
             S: Serializer,
         {
-            serializer.serialize_bytes(self.as_bytes())
+            serializer.serialize_str(&self.to_hex())
         }
     }
 

@@ -122,6 +122,7 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize, Display)]
 #[repr(u8)]
+#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub enum HashAlgorithm {
     Blake2b = 1,
     Sha256 = 3,
@@ -171,5 +172,37 @@ impl CreationTransactionData {
             return Err(TransactionError::InvalidData);
         }
         Ok(())
+    }
+}
+
+
+#[cfg(feature = "serde-derive")]
+mod serde_derive {
+    use std::borrow::Cow;
+
+    use serde::{
+        de::{Deserialize, Deserializer, Error},
+        ser::{Serialize, Serializer},
+    };
+
+    use super::AnyHash;
+
+    impl Serialize for AnyHash {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: Serializer,
+        {
+            serializer.serialize_str(&self.to_hex())
+        }
+    }
+
+    impl<'de> Deserialize<'de> for AnyHash {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: Deserializer<'de>,
+        {
+            let data: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
+            data.parse().map_err(Error::custom)
+        }
     }
 }

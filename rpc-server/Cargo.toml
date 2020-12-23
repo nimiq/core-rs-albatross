@@ -32,7 +32,7 @@ nimiq-jsonrpc-core = { git = "https://github.com/nimiq/jsonrpc.git" }
 nimiq-jsonrpc-derive = { git = "https://github.com/nimiq/jsonrpc.git" }
 nimiq-jsonrpc-server = { git = "https://github.com/nimiq/jsonrpc.git" }
 nimiq-primitives = { path = "../primitives", features = ["coin", "account", "serde-derive"] }
-nimiq-account = { path = "../primitives/account" }
+nimiq-account = { path = "../primitives/account", features = ["serde-derive"] }
 nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1", features = ["serde-derive"] }
 nimiq-blockchain-albatross = { path = "../blockchain-albatross" }
 nimiq-mempool = { path = "../mempool" }
