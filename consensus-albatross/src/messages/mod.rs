@@ -202,3 +202,24 @@ request_response!(RequestMissingBlocks);
 impl Message for RequestMissingBlocks {
     const TYPE_ID: u64 = 209;
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RequestHead {
+    pub request_identifier: u32,
+}
+request_response!(RequestHead);
+
+impl Message for RequestHead {
+    const TYPE_ID: u64 = 210;
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HeadResponse {
+    pub hash: Blake2bHash,
+    pub request_identifier: u32,
+}
+request_response!(HeadResponse);
+
+impl Message for HeadResponse {
+    const TYPE_ID: u64 = 211;
+}

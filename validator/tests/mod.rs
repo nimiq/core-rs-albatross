@@ -152,19 +152,11 @@ async fn one_validator_can_create_micro_blocks() {
 
     let (validator, mut consensus1) = mock_validator(&mut hub, 1, key, genesis.clone()).await;
 
-    let consensus2 = mock_consensus(&mut hub, 2, genesis).await;
-
-    let mut events1 = consensus1.subscribe_events();
-    consensus2.network.dial_mock(&consensus1.network);
-
-    log::debug!("Waiting for network event...");
-    events1.next().await;
-
-    log::debug!("Syncing blockchain...");
-    consensus1.next().await.expect("Sync failed");
-
+    log::debug!("Establishing consensus...");
+    consensus1.force_established();
     assert_eq!(consensus1.is_established(), true);
 
+    log::debug!("Spawning validator...");
     tokio::spawn(validator);
 
     let events1 = consensus1.blockchain.notifier.write().as_stream();
@@ -174,11 +166,11 @@ async fn one_validator_can_create_micro_blocks() {
 }
 
 #[tokio::test]
-#[ignore] // Activate once follow mode is active, as this test cannot pass without it.
-async fn three_validators_can_create_micro_blocks() {
+#[ignore] // TODO: Enable once blocks are published.
+async fn four_validators_can_create_micro_blocks() {
     let mut hub = MockHub::default();
 
-    let validators = mock_validators(&mut hub, 3).await;
+    let validators = mock_validators(&mut hub, 4).await;
 
     let blockchain = Arc::clone(&validators.first().unwrap().consensus.blockchain);
 

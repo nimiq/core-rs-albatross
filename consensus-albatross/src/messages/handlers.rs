@@ -1,8 +1,4 @@
-use crate::messages::{
-    BatchSetInfo, BlockHashType, BlockHashes, HistoryChunk, RequestBatchSet, RequestBlock,
-    RequestBlockHashes, RequestBlockHashesFilter, RequestHistoryChunk, RequestMissingBlocks,
-    ResponseBlock, ResponseBlocks,
-};
+use crate::messages::*;
 use block_albatross::Block;
 use blockchain_albatross::{history_store::CHUNK_SIZE, Blockchain, Direction};
 use network_interface::message::ResponseMessage;
@@ -164,5 +160,16 @@ impl Handle<ResponseBlocks> for RequestMissingBlocks {
             blocks,
             request_identifier: self.get_request_identifier(),
         })
+    }
+}
+
+impl Handle<HeadResponse> for RequestHead {
+    fn handle(&self, blockchain: &Arc<Blockchain>) -> Option<HeadResponse> {
+        let hash = blockchain.head_hash();
+        let response = HeadResponse {
+            hash,
+            request_identifier: self.get_request_identifier(),
+        };
+        Some(response)
     }
 }

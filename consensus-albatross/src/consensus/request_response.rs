@@ -4,7 +4,8 @@ use futures::StreamExt;
 
 use crate::messages::handlers::Handle;
 use crate::messages::{
-    RequestBatchSet, RequestBlock, RequestBlockHashes, RequestHistoryChunk, RequestMissingBlocks,
+    RequestBatchSet, RequestBlock, RequestBlockHashes, RequestHead, RequestHistoryChunk,
+    RequestMissingBlocks,
 };
 use crate::Consensus;
 
@@ -92,6 +93,19 @@ impl<N: Network> Consensus<N> {
                     msg.target_hash,
                     peer.id()
                 );
+
+                if let Some(response) = msg.handle(&blockchain) {
+                    // We do not care about the result.
+                    let _ = peer.send(&response).await;
+                }
+            }
+        });
+
+        let blockchain = Arc::clone(blockchain_outer);
+        let mut stream = network.receive_from_all::<RequestHead>();
+        tokio::spawn(async move {
+            while let Some((msg, peer)) = stream.next().await {
+                trace!("[REQUEST_HEAD] received from {:?}", peer.id());
 
                 if let Some(response) = msg.handle(&blockchain) {
                     // We do not care about the result.

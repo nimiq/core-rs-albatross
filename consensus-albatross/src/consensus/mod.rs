@@ -1,6 +1,6 @@
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
-use futures::{Stream, StreamExt};
+use futures::{FutureExt, Stream, StreamExt};
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::broadcast::{
     channel as broadcast, Receiver as BroadcastReceiver, Sender as BroadcastSender,
@@ -13,14 +13,17 @@ use mempool::{Mempool, ReturnCode};
 use network_interface::network::Network;
 use transaction::Transaction;
 
+use crate::consensus::head_requests::{HeadRequests, HeadRequestsResult};
 use crate::consensus_agent::ConsensusAgent;
-use crate::sync::block_queue::{BlockQueue, BlockQueueConfig, BlockTopic};
+use crate::sync::block_queue::{BlockQueue, BlockQueueConfig, BlockQueueEvent, BlockTopic};
 use crate::sync::request_component::BlockRequestComponent;
 use futures::stream::BoxStream;
 use futures::task::{Context, Poll};
 use nimiq_network_interface::network::Topic;
 use std::pin::Pin;
+use std::time::{Duration, Instant};
 
+mod head_requests;
 mod request_response;
 
 #[derive(Clone, Debug, Default)]
@@ -71,8 +74,8 @@ impl<N: Network> ConsensusProxy<N> {
 }
 
 pub enum ConsensusEvent<N: Network> {
-    PeerJoined(Arc<ConsensusAgent<N::PeerType>>),
-    //PeerLeft(Arc<P>),
+    PeerMacroSynced(Weak<ConsensusAgent<N::PeerType>>),
+    PeerLeft,
     Established,
     Lost,
 }
@@ -80,9 +83,10 @@ pub enum ConsensusEvent<N: Network> {
 impl<N: Network> Clone for ConsensusEvent<N> {
     fn clone(&self) -> Self {
         match self {
-            ConsensusEvent::PeerJoined(peer) => ConsensusEvent::PeerJoined(Arc::clone(peer)),
+            ConsensusEvent::PeerMacroSynced(peer) => ConsensusEvent::PeerMacroSynced(peer.clone()),
             ConsensusEvent::Established => ConsensusEvent::Established,
             ConsensusEvent::Lost => ConsensusEvent::Lost,
+            ConsensusEvent::PeerLeft => ConsensusEvent::PeerLeft,
         }
     }
 }
@@ -93,11 +97,13 @@ pub struct Consensus<N: Network> {
     pub network: Arc<N>,
     pub env: Environment,
 
-    block_queue: BlockQueue<BlockRequestComponent<N::PeerType>>,
+    block_queue: BlockQueue<N::PeerType, BlockRequestComponent<N::PeerType>>,
     tx_stream: BoxStream<'static, Transaction>,
 
     events: BroadcastSender<ConsensusEvent<N>>,
     established_flag: Arc<AtomicBool>,
+    head_requests: Option<HeadRequests<N::PeerType>>,
+    head_requests_time: Option<Instant>,
 }
 
 impl<N: Network> Consensus<N> {
@@ -105,6 +111,8 @@ impl<N: Network> Consensus<N> {
     const MIN_PEERS_ESTABLISHED: usize = 3;
     /// Minimum number of block announcements extending the chain for consensus to be established.
     const MIN_BLOCKS_ESTABLISHED: usize = 5;
+    /// Timeout after which head requests will be performed again to determine consensus established state.
+    const HEAD_REQUESTS_TIMEOUT: Duration = Duration::from_secs(20); // currently 2 * view change delay
 
     pub async fn from_network(
         env: Environment,
@@ -149,7 +157,8 @@ impl<N: Network> Consensus<N> {
     ) -> Self {
         let (tx, _rx) = broadcast(256);
 
-        let request_component = BlockRequestComponent::new(sync_protocol);
+        let request_component =
+            BlockRequestComponent::new(sync_protocol, network.subscribe_events());
 
         let block_queue = BlockQueue::new(
             BlockQueueConfig::default(),
@@ -171,6 +180,8 @@ impl<N: Network> Consensus<N> {
             events: tx,
 
             established_flag: Arc::new(AtomicBool::new(false)),
+            head_requests: None,
+            head_requests_time: None,
         }
     }
 
@@ -195,20 +206,86 @@ impl<N: Network> Consensus<N> {
         }
     }
 
+    /// Forcefully sets consensus established, should be used for tests only.
+    pub fn force_established(&mut self) {
+        trace!("Consensus forcefully established.");
+        self.established_flag.swap(true, Ordering::Release);
+
+        // Also stop any other checks.
+        self.head_requests = None;
+        self.head_requests_time = None;
+        self.events.send(ConsensusEvent::Established).ok();
+    }
+
     /// Calculates and sets established state, returns a ConsensusEvent if the state changed.
-    fn set_established(&mut self) -> Option<ConsensusEvent<N>> {
+    /// Once consensus is established, we can only loose it if we loose all our peers.
+    /// To reach consensus established state, we need at least `MIN_PEERS_ESTABLISHED` peers and
+    /// one of the following conditions must be true:
+    /// - we accepted at least `MIN_BLOCKS_ESTABLISHED` block announcements
+    /// - we know at least 2/3 of the head blocks of our peers
+    ///
+    /// The latter check is started immediately once we reach the minimum number of peers
+    /// and is potentially repeated in an interval of `HEAD_REQUESTS_TIMEOUT` until one
+    /// of the conditions above is true.
+    /// Any unknown blocks resulting of the head check are handled similarly as block announcements
+    /// via the block queue.
+    fn set_established(
+        &mut self,
+        finished_head_request: Option<HeadRequestsResult>,
+    ) -> Option<ConsensusEvent<N>> {
         // We can only loose established state right now if we loose all our peers.
         if self.is_established() {
             if self.num_agents() == 0 {
+                warn!("Lost consensus!");
                 self.established_flag.swap(false, Ordering::Release);
                 return Some(ConsensusEvent::Lost);
             }
         } else {
-            if self.num_agents() >= Self::MIN_PEERS_ESTABLISHED
-                && self.block_queue.accepted_block_announcements() >= Self::MIN_BLOCKS_ESTABLISHED
-            {
-                self.established_flag.swap(true, Ordering::Release);
-                return Some(ConsensusEvent::Established);
+            // We have two conditions on whether we move to the established state.
+            // First, we always need a minimum number of peers connected.
+            // Then, we check that we either:
+            // - accepted a minimum number of block announcements, or
+            // - know the head state of a majority of our peers
+            if self.num_agents() >= Self::MIN_PEERS_ESTABLISHED {
+                trace!("Trying to establish consensus, number of synced peers satisfied.");
+                if self.block_queue.accepted_block_announcements() >= Self::MIN_BLOCKS_ESTABLISHED {
+                    trace!("Consensus established, number of accepted announcements satisfied.");
+                    self.established_flag.swap(true, Ordering::Release);
+
+                    // Also stop any other checks.
+                    self.head_requests = None;
+                    self.head_requests_time = None;
+                    return Some(ConsensusEvent::Established);
+                } else {
+                    // The head state check is carried out immediately after we reach the minimum
+                    // number of peers and then after certain time intervals until consensus is reached.
+                    // If we have a finished one, check its outcome.
+                    if let Some(head_request) = finished_head_request {
+                        trace!("Trying to establish consensus, checking head request ({} known, {} unknown).", head_request.num_known_blocks, head_request.num_unknown_blocks);
+                        // We would like that 2/3 of our peers have a known state.
+                        if head_request.num_known_blocks > 2 * head_request.num_unknown_blocks {
+                            trace!("Consensus established, 2/3 of heads known.");
+                            self.established_flag.swap(true, Ordering::Release);
+                            return Some(ConsensusEvent::Established);
+                        }
+                    }
+                    // If there's no ongoing head request, check whether we should start a new one.
+                    if let None = self.head_requests {
+                        // This is the case if `head_requests_time` is unset or the timeout is hit.
+                        let should_start_request = self
+                            .head_requests_time
+                            .map(|time| time.elapsed() >= Self::HEAD_REQUESTS_TIMEOUT)
+                            .unwrap_or(true);
+                        if should_start_request {
+                            trace!("Trying to establish consensus, initiating head requests.");
+                            self.head_requests = Some(HeadRequests::new(
+                                self.block_queue.peers(),
+                                Arc::clone(&self.blockchain),
+                            ));
+                            self.head_requests_time = Some(Instant::now());
+                        }
+                    }
+                }
             }
         }
         None
@@ -219,12 +296,30 @@ impl<N: Network> Stream for Consensus<N> {
     type Item = ConsensusEvent<N>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        macro_rules! return_event {
+            ($event:expr) => {
+                self.events.send($event.clone()).ok(); // Ignore result.
+                return Poll::Ready(Some($event));
+            };
+        }
+
         // 1. Poll and advance block queue
-        while let Poll::Ready(Some(_)) = self.block_queue.poll_next_unpin(cx) {
-            // TODO: Events?
-            if let Some(event) = self.set_established() {
-                return Poll::Ready(Some(event));
+        while let Poll::Ready(Some(event)) = self.block_queue.poll_next_unpin(cx) {
+            match event {
+                BlockQueueEvent::PeerMacroSynced(peer) => {
+                    let e = ConsensusEvent::PeerMacroSynced(peer);
+                    return_event!(e);
+                }
+                BlockQueueEvent::PeerLeft(_) => {
+                    return_event!(ConsensusEvent::PeerLeft);
+                }
+                _ => {}
             }
+        }
+
+        // Check consensus established state on changes.
+        if let Some(event) = self.set_established(None) {
+            return_event!(event);
         }
 
         // 2. Poll and push transactions once consensus is established.
@@ -232,6 +327,20 @@ impl<N: Network> Stream for Consensus<N> {
             while let Poll::Ready(Some(tx)) = self.tx_stream.poll_next_unpin(cx) {
                 // TODO: React on result.
                 self.mempool.push_transaction(tx);
+            }
+        }
+
+        // 3. Poll any head requests if active.
+        if let Some(ref mut head_requests) = self.head_requests {
+            if let Poll::Ready(mut result) = head_requests.poll_unpin(cx) {
+                // Push unknown blocks to the block queue, trying to sync.
+                for block in result.unknown_blocks.drain(..) {
+                    self.block_queue.push_block(block);
+                }
+                // Update established state using the result.
+                if let Some(event) = self.set_established(Some(result)) {
+                    return_event!(event);
+                }
             }
         }
 

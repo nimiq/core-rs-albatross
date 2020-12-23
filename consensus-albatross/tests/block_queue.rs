@@ -12,17 +12,24 @@ use futures::{
 use pin_project::pin_project;
 
 use beserial::Deserialize;
+use futures::ready;
 use nimiq_block_albatross::Block;
 use nimiq_block_production_albatross::BlockProducer;
 use nimiq_blockchain_albatross::Blockchain;
 use nimiq_bls::{KeyPair, SecretKey};
+use nimiq_consensus_albatross::consensus_agent::ConsensusAgent;
+use nimiq_consensus_albatross::sync::request_component::RequestComponentEvent;
 use nimiq_consensus_albatross::sync::{
     block_queue::BlockQueue, request_component::RequestComponent,
 };
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_hash::Blake2bHash;
 use nimiq_mempool::{Mempool, MempoolConfig};
+use nimiq_network_interface::peer::Peer;
+use nimiq_network_mock::MockPeer;
 use nimiq_primitives::networks::NetworkId;
+use std::marker::PhantomData;
+use std::sync::Weak;
 
 /// Secret key of validator. Tests run with `network-primitives/src/genesis/unit-albatross.toml`
 const SECRET_KEY: &str =
@@ -30,13 +37,14 @@ const SECRET_KEY: &str =
 
 #[pin_project]
 #[derive(Debug)]
-pub struct MockRequestComponent {
+pub struct MockRequestComponent<P> {
     pub tx: mpsc::UnboundedSender<(Blake2bHash, Vec<Blake2bHash>)>,
     #[pin]
     pub rx: mpsc::UnboundedReceiver<Vec<Block>>,
+    peer_type: PhantomData<P>,
 }
 
-impl MockRequestComponent {
+impl<P> MockRequestComponent<P> {
     pub fn new() -> (
         Self,
         mpsc::UnboundedReceiver<(Blake2bHash, Vec<Blake2bHash>)>,
@@ -45,11 +53,19 @@ impl MockRequestComponent {
         let (tx1, rx1) = mpsc::unbounded();
         let (tx2, rx2) = mpsc::unbounded();
 
-        (Self { tx: tx1, rx: rx2 }, rx1, tx2)
+        (
+            Self {
+                tx: tx1,
+                rx: rx2,
+                peer_type: PhantomData,
+            },
+            rx1,
+            tx2,
+        )
     }
 }
 
-impl RequestComponent for MockRequestComponent {
+impl<P: Peer> RequestComponent<P> for MockRequestComponent<P> {
     fn request_missing_blocks(
         &mut self,
         target_block_hash: Blake2bHash,
@@ -61,19 +77,25 @@ impl RequestComponent for MockRequestComponent {
     fn num_peers(&self) -> usize {
         1
     }
+
+    fn peers(&self) -> Vec<Weak<ConsensusAgent<P>>> {
+        unimplemented!()
+    }
 }
 
-impl Default for MockRequestComponent {
+impl<P> Default for MockRequestComponent<P> {
     fn default() -> Self {
         Self::new().0
     }
 }
 
-impl Stream for MockRequestComponent {
-    type Item = Vec<Block>;
+impl<P: Peer> Stream for MockRequestComponent<P> {
+    type Item = RequestComponentEvent<P>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-        self.project().rx.poll_next(cx)
+        Poll::Ready(
+            ready!(self.project().rx.poll_next(cx)).map(RequestComponentEvent::ReceivedBlocks),
+        )
     }
 }
 
@@ -85,7 +107,7 @@ async fn send_single_micro_block_to_block_queue() {
     let blockchain = Arc::new(Blockchain::new(env, NetworkId::UnitAlbatross).unwrap());
     let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
     let producer = BlockProducer::new(Arc::clone(&blockchain), Arc::clone(&mempool), keypair);
-    let request_component = MockRequestComponent::default();
+    let request_component = MockRequestComponent::<MockPeer>::default();
     let (mut tx, rx) = mpsc::channel(32);
 
     let mut block_queue = BlockQueue::new(
@@ -120,7 +142,8 @@ async fn send_two_micro_blocks_out_of_order() {
     let blockchain2 = Arc::new(Blockchain::new(env2, NetworkId::UnitAlbatross).unwrap());
     let mempool = Mempool::new(Arc::clone(&blockchain2), MempoolConfig::default());
     let producer = BlockProducer::new(Arc::clone(&blockchain2), Arc::clone(&mempool), keypair);
-    let (request_component, mut mock_ptarc_rx, _mock_ptarc_tx) = MockRequestComponent::new();
+    let (request_component, mut mock_ptarc_rx, _mock_ptarc_tx) =
+        MockRequestComponent::<MockPeer>::new();
     let (mut tx, rx) = mpsc::channel(32);
 
     let mut block_queue = BlockQueue::new(
@@ -191,7 +214,8 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
     let blockchain2 = Arc::new(Blockchain::new(env2, NetworkId::UnitAlbatross).unwrap());
     let mempool = Mempool::new(Arc::clone(&blockchain2), MempoolConfig::default());
     let producer = BlockProducer::new(Arc::clone(&blockchain2), Arc::clone(&mempool), keypair);
-    let (request_component, mut mock_ptarc_rx, mock_ptarc_tx) = MockRequestComponent::new();
+    let (request_component, mut mock_ptarc_rx, mock_ptarc_tx) =
+        MockRequestComponent::<MockPeer>::new();
     let (mut tx, rx) = mpsc::channel(32);
 
     let mut block_queue = BlockQueue::new(

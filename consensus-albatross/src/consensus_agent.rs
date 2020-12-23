@@ -1,3 +1,4 @@
+use std::fmt::{Debug, Formatter, Result as FmtResult};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -8,13 +9,8 @@ use hash::Blake2bHash;
 use network_interface::peer::Peer;
 use network_interface::request_response::{RequestError, RequestResponse};
 use nimiq_subscription::Subscription;
-use transaction::Transaction;
 
-use crate::messages::{
-    BatchSetInfo, BlockHashes, HistoryChunk, RequestBatchSet, RequestBlock, RequestBlockHashes,
-    RequestBlockHashesFilter, RequestHistoryChunk, RequestMissingBlocks, ResponseBlock,
-    ResponseBlocks,
-};
+use crate::messages::*;
 
 pub struct ConsensusAgentState {
     local_subscription: Subscription,
@@ -38,6 +34,13 @@ pub struct ConsensusAgent<P: Peer> {
     history_chunk_requests: RequestResponse<P, RequestHistoryChunk, HistoryChunk>,
     block_requests: RequestResponse<P, RequestBlock, ResponseBlock>,
     missing_block_requests: RequestResponse<P, RequestMissingBlocks, ResponseBlocks>,
+    head_requests: RequestResponse<P, RequestHead, HeadResponse>,
+}
+
+impl<P: Peer> Debug for ConsensusAgent<P> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        self.peer.id().fmt(f)
+    }
 }
 
 impl<P: Peer> ConsensusAgent<P> {
@@ -48,6 +51,7 @@ impl<P: Peer> ConsensusAgent<P> {
         let history_chunk_requests = RequestResponse::new(Arc::clone(&peer), Duration::new(10, 0));
         let block_requests = RequestResponse::new(Arc::clone(&peer), Duration::new(10, 0));
         let missing_block_requests = RequestResponse::new(Arc::clone(&peer), Duration::new(10, 0));
+        let head_requests = RequestResponse::new(Arc::clone(&peer), Duration::new(10, 0));
 
         ConsensusAgent {
             peer,
@@ -60,20 +64,11 @@ impl<P: Peer> ConsensusAgent<P> {
             history_chunk_requests,
             block_requests,
             missing_block_requests,
+            head_requests,
         }
     }
 
-    pub fn relay_block(&self, _block: &Block) -> bool {
-        true
-    }
-
-    pub fn relay_transaction(&self, _transaction: &Transaction) -> bool {
-        true
-    }
-
-    pub fn remove_transaction(&self, _transaction: &Transaction) {}
-
-    pub async fn request_block(&self, hash: Blake2bHash) -> Result<ResponseBlock, RequestError> {
+    pub async fn request_block(&self, hash: Blake2bHash) -> Result<Option<Block>, RequestError> {
         let result = self
             .block_requests
             .request(RequestBlock {
@@ -82,7 +77,7 @@ impl<P: Peer> ConsensusAgent<P> {
             })
             .await;
 
-        result
+        result.map(|response_block| response_block.block)
     }
 
     pub async fn request_epoch(&self, hash: Blake2bHash) -> Result<BatchSetInfo, RequestError> {
@@ -152,5 +147,16 @@ impl<P: Peer> ConsensusAgent<P> {
             .await;
 
         result.map(|response_blocks| response_blocks.blocks)
+    }
+
+    pub async fn request_head(&self) -> Result<Blake2bHash, RequestError> {
+        let result = self
+            .head_requests
+            .request(RequestHead {
+                request_identifier: 0, // will automatically be set at a later point
+            })
+            .await;
+
+        result.map(|response_blocks| response_blocks.hash)
     }
 }

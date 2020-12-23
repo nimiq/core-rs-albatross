@@ -1,13 +1,15 @@
 use std::{
     collections::{BTreeMap, HashSet},
+    marker::PhantomData,
     pin::Pin,
-    sync::Arc,
+    sync::{Arc, Weak},
     task::{Context, Poll},
 };
 
 use futures::stream::{BoxStream, Stream};
 use pin_project::pin_project;
 
+use network_interface::peer::Peer;
 use nimiq_block_albatross::Block;
 use nimiq_blockchain_albatross::{Blockchain, PushResult};
 use nimiq_hash::Blake2bHash;
@@ -15,6 +17,8 @@ use nimiq_network_interface::network::Topic;
 use nimiq_primitives::policy;
 
 use super::request_component::RequestComponent;
+use crate::consensus_agent::ConsensusAgent;
+use crate::sync::request_component::RequestComponentEvent;
 
 #[derive(Clone, Debug, Default)]
 pub struct BlockTopic;
@@ -29,12 +33,11 @@ impl Topic for BlockTopic {
 
 pub type BlockStream = BoxStream<'static, Block>;
 
-#[derive(Clone, Copy, Debug)]
-pub enum BlockQueueEvent {
-    /// Applied a block announcement with the success given as a bool.
-    AppliedAnnouncedBlock(bool),
-    RequestedMissingBlocks,
-    ReceivedMissingBlocks,
+#[derive(Clone, Debug)]
+pub enum BlockQueueEvent<TPeer: Peer> {
+    ReceivedBlocks,
+    PeerMacroSynced(Weak<ConsensusAgent<TPeer>>),
+    PeerLeft(Arc<ConsensusAgent<TPeer>>),
 }
 
 #[derive(Clone, Debug)]
@@ -74,7 +77,7 @@ struct Inner {
 impl Inner {
     /// Handles a block announcement and returns true if the block has successfully extended
     /// the blockchain.
-    fn on_block_announced<TReq: RequestComponent>(
+    fn on_block_announced<TPeer: Peer, TReq: RequestComponent<TPeer>>(
         &mut self,
         block: Block,
         mut request_component: Pin<&mut TReq>,
@@ -258,7 +261,7 @@ impl Inner {
 }
 
 #[pin_project]
-pub struct BlockQueue<TReq: RequestComponent> {
+pub struct BlockQueue<TPeer: Peer, TReq: RequestComponent<TPeer>> {
     /// The Peer Tracking and Request Component.
     #[pin]
     request_component: TReq,
@@ -272,9 +275,11 @@ pub struct BlockQueue<TReq: RequestComponent> {
 
     /// The number of extended blocks through announcements.
     accepted_announcements: usize,
+
+    peer_type: PhantomData<TPeer>,
 }
 
-impl<TReq: RequestComponent> BlockQueue<TReq> {
+impl<TPeer: Peer, TReq: RequestComponent<TPeer>> BlockQueue<TPeer, TReq> {
     pub fn new(
         config: BlockQueueConfig,
         blockchain: Arc<Blockchain>,
@@ -292,6 +297,7 @@ impl<TReq: RequestComponent> BlockQueue<TReq> {
                 buffer,
             },
             accepted_announcements: 0,
+            peer_type: PhantomData,
         }
     }
 
@@ -307,13 +313,22 @@ impl<TReq: RequestComponent> BlockQueue<TReq> {
         self.request_component.num_peers()
     }
 
+    pub fn peers(&self) -> Vec<Weak<ConsensusAgent<TPeer>>> {
+        self.request_component.peers()
+    }
+
     pub fn accepted_block_announcements(&self) -> usize {
         self.accepted_announcements
     }
+
+    pub fn push_block(&mut self, block: Block) {
+        self.inner
+            .on_block_announced(block, Pin::new(&mut self.request_component));
+    }
 }
 
-impl<TReq: RequestComponent> Stream for BlockQueue<TReq> {
-    type Item = ();
+impl<TPeer: Peer, TReq: RequestComponent<TPeer>> Stream for BlockQueue<TPeer, TReq> {
+    type Item = BlockQueueEvent<TPeer>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         let this = self.project();
@@ -328,7 +343,7 @@ impl<TReq: RequestComponent> Stream for BlockQueue<TReq> {
                     *this.accepted_announcements = this.accepted_announcements.saturating_add(1);
                 }
 
-                return Poll::Ready(Some(()));
+                return Poll::Ready(Some(BlockQueueEvent::ReceivedBlocks));
             }
 
             // If the block_stream is exhausted, we quit as well
@@ -339,9 +354,15 @@ impl<TReq: RequestComponent> Stream for BlockQueue<TReq> {
 
         // Then, read all the responses we got for our missing blocks requests
         match this.request_component.poll_next(cx) {
-            Poll::Ready(Some(blocks)) => {
+            Poll::Ready(Some(RequestComponentEvent::ReceivedBlocks(blocks))) => {
                 this.inner.on_missing_blocks_received(blocks);
-                return Poll::Ready(Some(()));
+                return Poll::Ready(Some(BlockQueueEvent::ReceivedBlocks));
+            }
+            Poll::Ready(Some(RequestComponentEvent::PeerMacroSynced(peer))) => {
+                return Poll::Ready(Some(BlockQueueEvent::PeerMacroSynced(peer)));
+            }
+            Poll::Ready(Some(RequestComponentEvent::PeerLeft(peer))) => {
+                return Poll::Ready(Some(BlockQueueEvent::PeerLeft(peer)));
             }
             Poll::Ready(None) => panic!("The request_component stream is exhausted"),
             Poll::Pending => {}
