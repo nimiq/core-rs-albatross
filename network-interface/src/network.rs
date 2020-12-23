@@ -100,6 +100,8 @@ pub trait Network: Send + Sync + 'static {
     async fn dial_peer(&self, peer_id: <Self::PeerType as Peer>::Id) -> Result<(), Self::Error>;
 
     async fn dial_address(&self, address: Self::AddressType) -> Result<(), Self::Error>;
+
+    fn get_local_peer_id(&self) -> <Self::PeerType as Peer>::Id;
 }
 
 // .next() To get next item of stream.

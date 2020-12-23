@@ -9,8 +9,12 @@ use std::{pin::Pin, sync::Arc, time::Duration};
 use async_trait::async_trait;
 use futures::Stream;
 
-use nimiq_network_interface::network::{PubsubId, Topic};
-use nimiq_network_interface::{message::Message, peer::Peer};
+use nimiq_network_interface::{
+    network::{PubsubId, Topic},
+    message::Message,
+    peer::Peer,
+};
+use nimiq_bls::{CompressedPublicKey, SecretKey};
 
 pub use crate::error::NetworkError;
 
@@ -44,4 +48,6 @@ pub trait ValidatorNetwork: Send + Sync {
     /// Incoming messages of this type shuld be held in a FIFO queue of total size `buffer_size`, each with a lifetime of `lifetime`
     /// `lifetime` or `buffer_size` of 0 should disable the cache.
     fn cache<M: Message>(&self, buffer_size: usize, lifetime: Duration);
+
+    async fn set_public_key(&self, public_key: &CompressedPublicKey, secret_key: &SecretKey) -> Result<(), Self::Error>;
 }

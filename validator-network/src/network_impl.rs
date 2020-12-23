@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use beserial::{Deserialize, Serialize};
 use futures::{future::join_all, lock::Mutex, Stream, StreamExt};
 
-use nimiq_bls::{CompressedPublicKey, PublicKey, Signature};
+use nimiq_bls::{CompressedPublicKey, PublicKey, Signature, SecretKey};
 use nimiq_network_interface::{message::Message, network::Network, network::Topic, peer::Peer};
 use nimiq_utils::tagged_signing::TaggedSignable;
 
@@ -33,9 +33,30 @@ struct ValidatorRecord<TPeerId>
 where
     TPeerId: Serialize + Deserialize,
 {
-    peer_id: TPeerId,
+    pub peer_id: TPeerId,
     //public_key: PublicKey,
     // TODO: other info?
+}
+
+impl<TPeerId> ValidatorRecord<TPeerId>
+where
+    TPeerId: Serialize + Deserialize,
+{
+    pub fn new(peer_id: TPeerId) -> Self {
+        Self {
+            peer_id,
+        }
+    }
+
+    pub fn sign(self, secret_key: &SecretKey) -> SignedValidatorRecord<TPeerId> {
+        let data = self.serialize_to_vec();
+        let signature = secret_key.sign(&data);
+
+        SignedValidatorRecord {
+            record: self,
+            signature,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -43,8 +64,8 @@ struct SignedValidatorRecord<TPeerId>
 where
     TPeerId: Serialize + Deserialize,
 {
-    record: ValidatorRecord<TPeerId>,
-    signature: Signature,
+    pub record: ValidatorRecord<TPeerId>,
+    pub signature: Signature,
 }
 
 impl<TPeerId> SignedValidatorRecord<TPeerId>
@@ -196,5 +217,13 @@ where
 
     fn cache<M: Message>(&self, _buffer_size: usize, _lifetime: Duration) {
         unimplemented!()
+    }
+
+    async fn set_public_key(&self, public_key: &CompressedPublicKey, secret_key: &SecretKey) -> Result<(), Self::Error> {
+        let peer_id = self.network.get_local_peer_id().clone();
+        let record = ValidatorRecord::new(peer_id);
+        self.network.dht_put(public_key, &record.sign(secret_key)).await?;
+
+        Ok(())
     }
 }

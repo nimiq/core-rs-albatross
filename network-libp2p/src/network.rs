@@ -29,6 +29,7 @@ use beserial::{Deserialize, Serialize};
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{
     network::{Network as NetworkInterface, NetworkEvent, PubsubId, Topic},
+    peer::{Peer as PeerInterface},
     peer_map::ObservablePeerMap,
 };
 use nimiq_utils::time::OffsetTime;
@@ -587,6 +588,10 @@ impl NetworkInterface for Network {
             .send(NetworkAction::DialAddress { address, output: output_tx })
             .await?;
         output_rx.await?
+    }
+
+    fn get_local_peer_id(&self) -> <Self::PeerType as PeerInterface>::Id {
+        self.local_peer_id.clone()
     }
 }
 
