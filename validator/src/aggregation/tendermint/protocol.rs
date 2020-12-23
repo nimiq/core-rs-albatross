@@ -40,7 +40,7 @@ impl TendermintAggregationProtocol {
             partitioner,
             evaluator,
             store,
-            registry: validators.clone(),
+            registry: validators,
             node_id,
         }
     }

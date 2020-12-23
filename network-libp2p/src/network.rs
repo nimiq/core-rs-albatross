@@ -224,7 +224,7 @@ impl Network {
     }
 
     fn new_swarm(listen_addresses: Vec<Multiaddr>, clock: Arc<OffsetTime>, config: Config) -> Swarm<NimiqBehaviour> {
-        let local_peer_id = PeerId::from(config.keypair.clone().public());
+        let local_peer_id = PeerId::from(config.keypair.public());
 
         let transport = Self::new_transport(&config.keypair).unwrap();
 
@@ -586,7 +586,7 @@ mod tests {
 
         let mut peer_contact = PeerContact {
             addresses: vec![address],
-            public_key: keypair.public().clone(),
+            public_key: keypair.public(),
             services: Services::all(),
             timestamp: None,
         };
@@ -814,7 +814,7 @@ mod tests {
     }
 
     fn consume_stream<T: std::fmt::Debug>(mut stream: impl Stream<Item = T> + Unpin + Send + 'static) {
-        tokio::spawn(async move { while let Some(_) = stream.next().await {} });
+        tokio::spawn(async move { while stream.next().await.is_some() {} });
     }
 
     #[tokio::test]

@@ -108,7 +108,7 @@ where
 
     fn get_next_peer(&mut self, start_index: usize) -> Option<Arc<ConsensusAgent<TPeer>>> {
         let index = start_index % self.peers.len();
-        while self.peers.len() > 0 {
+        while !self.peers.is_empty() {
             match Weak::upgrade(&self.peers[index]) {
                 Some(peer) => {
                     return Some(peer);

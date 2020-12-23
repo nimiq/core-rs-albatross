@@ -100,7 +100,7 @@ impl NetworkConfig {
             return Ok(());
         }
 
-        let private_key = peer_key_store.load_or_store(|| PrivateKey::generate_default_csprng())?;
+        let private_key = peer_key_store.load_or_store(PrivateKey::generate_default_csprng)?;
 
         let key_pair = KeyPair::from(private_key);
         self.peer_id = Some(PeerId::from(&key_pair.public));

@@ -139,33 +139,31 @@ impl Stream for TendermintAggregations {
                 Some(message) => {
                     if let Some(descriptor) = self.aggregation_descriptors.get(&(message.tag.round_number, message.tag.step)) {
                         trace!("New message for ongoing aggregation: {:?}", &message);
-                        if let Err(_) = descriptor.input.send(message.update) {
-                            () // todo error handling
+                        if descriptor.input.send(message.update).is_err() {
+                             // todo error handling
                         }
-                    } else {
-                        if let Some(((highest_round, _), _)) = self.aggregation_descriptors.last_key_value() {
-                            // messages of future rounds need to be tracked in terrms of contributors only (without verifying them).
-                            // Also note that PreVote and PreCommit are tracked in the same bitset as the protocol requires.
-                            if highest_round < &message.tag.round_number {
-                                trace!("New contribution for future round: {:?}", &message);
-                                let future_contributors = self
-                                    .future_aggregations
-                                    .entry(message.tag.round_number)
-                                    .and_modify(|bitset| *bitset |= message.update.aggregate.contributors())
-                                    .or_insert(message.update.aggregate.contributors())
-                                    .clone();
-                                // now check if that suffices for a f+1 contributor weight
-                                if let Some(weight) = self.validator_registry.signers_weight(&future_contributors) {
-                                    if weight >= policy::SLOTS as usize - policy::TWO_THIRD_SLOTS as usize + 1usize {
-                                        return Poll::Ready(Some(TendermintAggregationEvent::NewRound(message.tag.round_number)));
-                                    }
+                    } else if let Some(((highest_round, _), _)) = self.aggregation_descriptors.last_key_value() {
+                        // messages of future rounds need to be tracked in terrms of contributors only (without verifying them).
+                        // Also note that PreVote and PreCommit are tracked in the same bitset as the protocol requires.
+                        if highest_round < &message.tag.round_number {
+                            trace!("New contribution for future round: {:?}", &message);
+                            let future_contributors = self
+                                .future_aggregations
+                                .entry(message.tag.round_number)
+                                .and_modify(|bitset| *bitset |= message.update.aggregate.contributors())
+                                .or_insert(message.update.aggregate.contributors())
+                                .clone();
+                            // now check if that suffices for a f+1 contributor weight
+                            if let Some(weight) = self.validator_registry.signers_weight(&future_contributors) {
+                                if weight > policy::SLOTS as usize - policy::TWO_THIRD_SLOTS as usize {
+                                    return Poll::Ready(Some(TendermintAggregationEvent::NewRound(message.tag.round_number)));
                                 }
                             }
-                        } else {
-                            // No last_key_value means there is no aggregation whatsoever.
-                            // That really should never happen, thus we log an error.
-                            error!("Found no agggregations, but received a LevelUpdateMessage");
                         }
+                    } else {
+                        // No last_key_value means there is no aggregation whatsoever.
+                        // That really should never happen, thus we log an error.
+                        error!("Found no agggregations, but received a LevelUpdateMessage");
                     }
                 }
                 // Poll::Ready(None) means the stream has terminated, which is likelt the network having droped.
@@ -219,7 +217,7 @@ impl<N: Network> HandelTendermintAdapter<N> {
                 .map(move |msg| msg.0),
         );
 
-        let validator_registry = Arc::new(ValidatorRegistry::new(active_validators.clone()));
+        let validator_registry = Arc::new(ValidatorRegistry::new(active_validators));
 
         let handel_aggregations = Mutex::new(TendermintAggregations::new(validator_id, validator_registry.clone(), input));
         let current_bests = RwLock::new(BTreeMap::new());
@@ -470,7 +468,7 @@ impl<N: Network> HandelTendermintAdapter<N> {
 
                     // iterate all proposals present in this contribution
                     for (proposal, (_, weight)) in map.iter() {
-                        if let None = proposal {
+                        if proposal.is_none() {
                             // Nil vote has f+1
                             if *weight > policy::SLOTS as usize - policy::TWO_THIRD_SLOTS as usize + 1usize {
                                 if step == TendermintStep::PreCommit {

@@ -57,8 +57,7 @@ impl MockNetwork {
         // Insert ourselves into peer's peer list.
         // This also makes sure the other peer actually exists.
         let is_new = hub.peer_maps
-            .get(&address)
-            .ok_or_else(|| MockNetworkError::CantConnect(address))?
+            .get(&address).ok_or(MockNetworkError::CantConnect(address))?
             .insert(MockPeer {
                 network_address: address,
                 peer_id: self.address.into(),

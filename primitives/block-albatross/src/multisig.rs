@@ -1,5 +1,5 @@
 use beserial::{BigEndian, Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
-use bls;
+
 use collections::bitset::BitSet;
 use handel::contribution::{AggregatableContribution, ContributionError};
 

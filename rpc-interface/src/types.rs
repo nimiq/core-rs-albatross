@@ -326,7 +326,7 @@ impl Block {
                     .and_then(|block| block.body())
                     .and_then(|body| body.unwrap_macro().validators);
 
-                let slots = macro_block.get_slots().map(|slots| Slots::from_slots(slots));
+                let slots = macro_block.get_slots().map(Slots::from_slots);
 
                 Block {
                     block_type: BlockType::Macro,
@@ -575,7 +575,7 @@ pub struct Validator {
 impl Validator {
     pub fn from_validator(public_key: CompressedPublicKey, validator: &nimiq_account::staking_contract::Validator, _retire_time: Option<u32>) -> Self {
         Validator {
-            public_key: public_key.clone(),
+            public_key,
             balance: validator.balance,
             reward_address: validator.reward_address.clone(),
             stakes: validator

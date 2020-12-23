@@ -672,7 +672,7 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
             }
         }
 
-        return Poll::Pending;
+        Poll::Pending
     }
 }
 
@@ -708,7 +708,7 @@ mod tests {
         }
 
         let env1 = VolatileEnvironment::new(10).unwrap();
-        let blockchain = Arc::new(Blockchain::new(env1.clone(), NetworkId::UnitAlbatross).unwrap());
+        let blockchain = Arc::new(Blockchain::new(env1, NetworkId::UnitAlbatross).unwrap());
 
         let mut hub = MockHub::default();
 
@@ -728,7 +728,7 @@ mod tests {
             test: F,
             symmetric: bool,
         ) where
-            F: Fn(HistorySync<MockNetwork>) -> (),
+            F: Fn(HistorySync<MockNetwork>),
         {
             let mut sync = HistorySync::<MockNetwork>::new(Arc::clone(&blockchain), net.subscribe_events());
             sync.cluster_epoch_ids(epoch_ids1.clone());

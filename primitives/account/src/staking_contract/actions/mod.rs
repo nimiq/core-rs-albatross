@@ -152,7 +152,7 @@ impl AccountTransactionInteraction for StakingContract {
                     self.revert_unpark_validator(&validator_key, receipt)?;
                 }
                 IncomingStakingTransactionData::Stake { validator_key, staker_address } => {
-                    let staker_address_ref = staker_address.as_ref().unwrap_or_else(|| &transaction.sender);
+                    let staker_address_ref = staker_address.as_ref().unwrap_or(&transaction.sender);
                     self.revert_stake(staker_address_ref, transaction.value, &validator_key)?;
                 }
             }

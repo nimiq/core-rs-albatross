@@ -30,7 +30,7 @@ use std::{fmt::Formatter, time::Duration};
 
 use parking_lot::RwLock;
 
-use tokio;
+
 
 /// Dump Aggregate adding numbers.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -201,7 +201,7 @@ impl<M: Message + Unpin + std::fmt::Debug, N: Network> Sink<(M, usize)> for Netw
         // If there is a future being processed
         if let Some(mut fut) = self.current_future.take() {
             // Poll it to check its state
-            if let Poll::Pending = fut.as_mut().poll(cx) {
+            if fut.as_mut().poll(cx).is_pending() {
                 // If it is still being processed reset self.current_future and return Pending as no new item can be accepted (and the buffer is occupied).
                 self.current_future = Some(fut);
                 Poll::Pending
@@ -269,7 +269,7 @@ async fn it_can_aggregate() {
         // spawn a task for this Handel Aggregation and Network instance.
         let mut aggregation = Aggregation::new(
             protocol,
-            1 as u8, // serves as the tag or identifier for this aggregation
+            1_u8, // serves as the tag or identifier for this aggregation
             config.clone(),
             contribution,
             Box::pin(net.receive_from_all::<LevelUpdateMessage<Contribution, u8>>().map(move |msg| msg.0.update)),
@@ -304,7 +304,7 @@ async fn it_can_aggregate() {
     // instead of spawning the aggregation task await its result here.
     let mut aggregation = Aggregation::new(
         protocol,
-        1 as u8, // serves as the tag or identifier for this aggregation
+        1_u8, // serves as the tag or identifier for this aggregation
         config.clone(),
         contribution,
         Box::pin(net.receive_from_all::<LevelUpdateMessage<Contribution, u8>>().map(move |msg| msg.0.update)),

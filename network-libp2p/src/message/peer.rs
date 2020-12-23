@@ -83,7 +83,7 @@ impl PeerInterface for Peer {
         let close_tx_opt = self.close_tx.lock().take();
 
         if let Some(close_tx) = close_tx_opt {
-            if let Err(_) = close_tx.send(reason) {
+            if close_tx.send(reason).is_err() {
                 log::error!("The receiver for Peer::close was already dropped.");
             }
         } else {

@@ -270,7 +270,7 @@ impl<N: Network> Consensus<N> {
                         }
                     }
                     // If there's no ongoing head request, check whether we should start a new one.
-                    if let None = self.head_requests {
+                    if self.head_requests.is_none() {
                         // This is the case if `head_requests_time` is unset or the timeout is hit.
                         let should_start_request = self
                             .head_requests_time

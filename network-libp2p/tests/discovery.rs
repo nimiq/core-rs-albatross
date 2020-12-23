@@ -64,7 +64,7 @@ impl TestNode {
 
         let peer_contact = PeerContact {
             addresses: Some(address.clone()).into_iter().collect(),
-            public_key: keypair.public().clone(),
+            public_key: keypair.public(),
             services: Services::FULL_BLOCKS,
             timestamp: None,
         }
@@ -101,7 +101,7 @@ fn random_peer_contact(n: usize, services: Services) -> SignedPeerContact {
 
     let mut peer_contact = PeerContact {
         addresses: vec![format!("/dns/test{}.local/tcp/443/wss", n).parse().unwrap()],
-        public_key: keypair.public().clone(),
+        public_key: keypair.public(),
         services,
         timestamp: None,
     };
@@ -221,7 +221,7 @@ fn test_housekeeping() {
 
         let mut peer_contact = PeerContact {
             addresses: vec!["/dns/test_old.local/tcp/443/wss".parse().unwrap()],
-            public_key: keypair.public().clone(),
+            public_key: keypair.public(),
             services: Services::FULL_BLOCKS,
             timestamp: None,
         };

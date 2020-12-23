@@ -484,7 +484,7 @@ impl NetworkAgent {
             return;
         }
 
-        let address_request = self.address_request.take().unwrap_or_else(|| AddressRequest {
+        let address_request = self.address_request.take().unwrap_or(AddressRequest {
             max_results: Self::MAX_ADDR_PER_REQUEST,
         });
 

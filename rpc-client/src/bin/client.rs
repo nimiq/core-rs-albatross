@@ -79,10 +79,7 @@ impl Command {
 
 
 async fn run_app(opt: Opt) -> Result<(), Error> {
-    let url = opt.url
-        .as_ref()
-        .map(|s| s.as_str())
-        .unwrap_or_else(|| "ws://127.0.0.1:8648/ws")
+    let url = opt.url.as_deref().unwrap_or("ws://127.0.0.1:8648/ws")
         .parse()?;
 
     let credentials = match (&opt.username, &opt.password) {

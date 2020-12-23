@@ -59,7 +59,7 @@ impl<M: Message + Unpin + std::fmt::Debug, N: Network> Sink<(M, usize)> for Netw
         // If there is a future being processed
         if let Some(mut fut) = self.current_future.take() {
             // Poll it to check its state
-            if let Poll::Pending = fut.as_mut().poll(cx) {
+            if fut.as_mut().poll(cx).is_pending() {
                 // If it is still being processed reset self.current_future and return Pending as no new item can be accepted (and the buffer is occupied).
                 self.current_future = Some(fut);
                 Poll::Pending

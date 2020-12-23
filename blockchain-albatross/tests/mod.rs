@@ -260,7 +260,7 @@ fn it_cant_rebranch_across_epochs() {
     //          \- [0] - ... - [0] - [1]
 
     let ancestor = temp_producer1.next_block(0, vec![]);
-    temp_producer2.push(ancestor.clone()).unwrap();
+    temp_producer2.push(ancestor).unwrap();
 
     // progress the chain across an epoch boundary.
     for _ in 0..policy::EPOCH_LENGTH {

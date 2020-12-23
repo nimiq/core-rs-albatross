@@ -73,7 +73,7 @@ impl<TPeer: Peer + 'static> Future for HeadRequests<TPeer> {
             // If we got a result, check it and classify it as known block/unknown block.
             match result {
                 Ok(hash) => {
-                    if let Some(_) = self.blockchain.get_block(&hash, false) {
+                    if self.blockchain.get_block(&hash, false).is_some() {
                         self.num_known_blocks += 1;
                     } else {
                         // Request unknown blocks from peer that gave it to us.

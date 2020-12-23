@@ -69,7 +69,7 @@ impl TryFrom<u8> for TransactionFlags {
     type Error = TransactionFlagsConvertError;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
-        TransactionFlags::from_bits(value).ok_or_else(|| TransactionFlagsConvertError(value))
+        TransactionFlags::from_bits(value).ok_or(TransactionFlagsConvertError(value))
     }
 }
 

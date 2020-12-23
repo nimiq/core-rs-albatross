@@ -217,10 +217,10 @@ where
         *self_projected.state = new_state;
 
         if let Some(message) = message {
-            return Poll::Ready(Some(Ok(message)));
+            Poll::Ready(Some(Ok(message)))
         } else {
             cx.waker().wake_by_ref();
-            return Poll::Pending;
+            Poll::Pending
         }
     }
 }

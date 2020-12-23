@@ -173,7 +173,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
         self.events.push_back(NetworkBehaviourAction::NotifyHandler {
             peer_id: peer_id.clone(),
-            handler: NotifyHandler::One(connection_id.clone()),
+            handler: NotifyHandler::One(*connection_id),
             event: HandlerInEvent::ObservedAddress(remote_address.clone()),
         });
     }

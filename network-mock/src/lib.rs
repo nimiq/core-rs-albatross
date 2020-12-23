@@ -152,7 +152,7 @@ pub mod tests {
     }
 
     fn consume_stream<T: std::fmt::Debug>(mut stream: impl Stream<Item = T> + Unpin + Send + 'static) {
-        tokio::spawn(async move { while let Some(_) = stream.next().await {} });
+        tokio::spawn(async move { while stream.next().await.is_some() {} });
     }
 
     #[tokio::test]

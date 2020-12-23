@@ -72,7 +72,7 @@ where
     P: Peer,
 {
     fn from_iter<I: IntoIterator<Item = P>>(iter: I) -> Self {
-        Self::from_iter(iter.into_iter().map(|peer| Arc::new(peer)))
+        Self::from_iter(iter.into_iter().map(Arc::new))
     }
 }
 

@@ -34,8 +34,9 @@ pub trait TaggedSignable: Serialize {
         let mut buf = Cursor::new(Vec::with_capacity(n + 1));
 
         let tag = [Self::TAG; 1];
-        buf.write(&tag).expect("Failed to write tag");
-        self.serialize(&mut buf).expect("Failed to serialize message");
+        buf.write_all(&tag).expect("Failed to write tag");
+        self.serialize(&mut buf)
+            .expect("Failed to serialize message");
 
         buf.into_inner()
     }
@@ -151,7 +152,7 @@ mod tests {
         }
 
         pub fn public_key(&self) -> TestPublicKey {
-            TestPublicKey(self.0.public.clone())
+            TestPublicKey(self.0.public)
         }
     }
 

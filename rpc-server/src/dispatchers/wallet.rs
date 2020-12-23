@@ -93,7 +93,7 @@ impl WalletInterface for WalletDispatcher {
     ///
     async fn unlock_account(&mut self, address: Address, passphrase: Option<String>, _duration: Option<u64>) -> Result<(), Error> {
         let passphrase = passphrase.unwrap_or_default();
-        let account = self.wallet_store.get(&address, None).ok_or_else(|| Error::AccountNotFound(address))?;
+        let account = self.wallet_store.get(&address, None).ok_or(Error::AccountNotFound(address))?;
 
         let unlocked_account = account.unlock(passphrase.as_bytes()).map_err(|_locked| Error::WrongPassphrase)?;
 
@@ -115,8 +115,7 @@ impl WalletInterface for WalletDispatcher {
         } else {
             wallet_account = self
                 .wallet_store
-                .get(&address, None)
-                .ok_or_else(|| Error::AccountNotFound(address))?
+                .get(&address, None).ok_or(Error::AccountNotFound(address))?
                 .unlock(passphrase.as_bytes())
                 .map_err(|_locked| Error::WrongPassphrase)?
                 .key_pair

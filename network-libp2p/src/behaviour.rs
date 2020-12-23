@@ -84,7 +84,7 @@ pub struct NimiqBehaviour {
 impl NimiqBehaviour {
     pub fn new(config: Config, clock: Arc<OffsetTime>) -> Self {
         let public_key = config.keypair.public();
-        let peer_id = public_key.clone().into_peer_id();
+        let peer_id = public_key.into_peer_id();
 
         // TODO: persist to disk
         let peer_contact_book = Arc::new(RwLock::new(PeerContactBook::new(Default::default(), config.peer_contact.sign(&config.keypair))));

@@ -88,7 +88,7 @@ impl Address {
         let mut num = String::with_capacity(s.len() * 2);
         for c in s.to_uppercase().chars() {
             let code = c as u32;
-            if code >= 48 && code <= 57 {
+            if (48..=57).contains(&code) {
                 num.push(char::from_u32(code).unwrap());
             } else {
                 num.push_str(&(code - 55).to_string());

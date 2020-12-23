@@ -90,7 +90,7 @@ fn sign_view_change(prev_seed: VrfSeed, block_number: u32, new_view_number: u32)
     };
 
     // Sign the view change.
-    let signed_view_change = SignedViewChange::from_message(view_change.clone(), &keypair.secret_key, 0).signature;
+    let signed_view_change = SignedViewChange::from_message(view_change, &keypair.secret_key, 0).signature;
 
     // Create signers Bitset.
     let mut signers = BitSet::new();

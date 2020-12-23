@@ -34,7 +34,7 @@ impl IdentityRegistry for ValidatorRegistry {
                     .public_key()
                     // and uncompress it
                     .uncompress()
-                    .map(|c| c.clone()) // necessary?
+                    .map(|c| *c) // necessary?
             })
     }
 }

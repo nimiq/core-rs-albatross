@@ -154,7 +154,7 @@ impl<N: NetworkInterface> TendermintOutsideDeps for TendermintInterface<N> {
             .ok_or(TendermintError::CannotReceiveProposal)?;
 
         // Get the validator key.
-        let validator_key = slot.public_key().uncompress_unchecked().clone();
+        let validator_key = *slot.public_key().uncompress_unchecked();
 
         // Calculate the timeout duration.
         let timeout = Duration::from_millis(TENDERMINT_TIMEOUT_INIT + round as u64 * TENDERMINT_TIMEOUT_DELTA);

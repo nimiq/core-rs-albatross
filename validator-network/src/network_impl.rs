@@ -123,8 +123,7 @@ where
 
         let public_key = state
             .validator_keys
-            .get(validator_id)
-            .ok_or_else(|| NetworkError::UnknownValidator(validator_id))?
+            .get(validator_id).ok_or(NetworkError::UnknownValidator(validator_id))?
             .clone();
 
         let entry = state.validator_peer_id_cache.entry(public_key.clone());
@@ -165,8 +164,7 @@ where
     async fn send_to<M: Message>(&self, validator_ids: &[usize], msg: &M) -> Vec<Result<(), Self::Error>> {
         let futures = validator_ids.iter().copied().map(|validator_id| async move {
             self.get_validator_peer(validator_id)
-                .await?
-                .ok_or_else(|| NetworkError::UnknownValidator(validator_id))?
+                .await?.ok_or(NetworkError::UnknownValidator(validator_id))?
                 .send(msg)
                 .await
                 .map_err(NetworkError::Send)?;

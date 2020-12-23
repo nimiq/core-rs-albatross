@@ -323,7 +323,7 @@ impl StorageConfig {
                     })?
                     .to_string();
 
-                FileStore::new(key_path).load_or_store(|| BlsKeyPair::generate_default_csprng())?
+                FileStore::new(key_path).load_or_store(BlsKeyPair::generate_default_csprng)?
             }
             _ => return Err(self.not_available()),
         })
@@ -333,7 +333,7 @@ impl StorageConfig {
         match self {
             StorageConfig::Filesystem(file_storage) => {
                 Ok(FileStore::new(&file_storage.peer_key)
-                    .load_or_store(|| IdentityKeypair::generate_ed25519())?)
+                    .load_or_store(IdentityKeypair::generate_ed25519)?)
             }
             _ => Err(self.not_available()),
         }
