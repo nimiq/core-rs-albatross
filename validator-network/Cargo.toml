@@ -26,7 +26,7 @@ log = "0.4"
 
 nimiq-network-interface = { path = "../network-interface", version = "0.1" }
 nimiq-bls = { path = "../bls", version = "0.1" }
-nimiq-utils = { path = "../utils", version = "0.1" }
+nimiq-utils = { path = "../utils", version = "0.1", features = ["tagged-signing"] }
 
 [dev-dependencies]
 nimiq-network-mock = { path = "../network-mock", version = "0.1" }
