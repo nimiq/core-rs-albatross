@@ -11,12 +11,13 @@ use nimiq_block_production_albatross::BlockProducer;
 use nimiq_blockchain_albatross::blockchain::Blockchain;
 use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_tendermint::{Checkpoint, Step, TendermintOutsideDeps, TendermintReturn, TendermintState};
+use nimiq_validator_network::ValidatorNetwork;
 
-use crate::mock::ValidatorNetwork;
+
 use crate::tendermint_outside_deps::TendermintInterface;
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub(crate) struct PersistedMacroState<TValidatorNetwork: ValidatorNetwork> {
+pub(crate) struct PersistedMacroState<TValidatorNetwork: ValidatorNetwork + 'static> {
     pub height: u32,
     pub round: u32,
     pub step: TendermintStep,
@@ -51,7 +52,7 @@ pub(crate) struct ProduceMacroBlock {
 }
 
 impl ProduceMacroBlock {
-    pub fn new<TValidatorNetwork: ValidatorNetwork>(
+    pub fn new<TValidatorNetwork: ValidatorNetwork + 'static>(
         blockchain: Arc<Blockchain>,
         network: Arc<TValidatorNetwork>,
         block_producer: BlockProducer,

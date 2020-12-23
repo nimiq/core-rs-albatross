@@ -8,15 +8,16 @@ use tokio::sync::{broadcast, mpsc};
 
 use block_albatross::{Block, BlockType, ViewChangeProof};
 use blockchain_albatross::{BlockchainEvent, ForkEvent};
+use bls::CompressedPublicKey;
 use consensus_albatross::{Consensus, ConsensusEvent, ConsensusProxy};
 use database::{Database, Environment, ReadTransaction, WriteTransaction};
 use hash::Blake2bHash;
 use network_interface::network::Network;
 use nimiq_block_production_albatross::BlockProducer;
 use nimiq_tendermint::TendermintReturn;
+use nimiq_validator_network::ValidatorNetwork;
 
 use crate::micro::{ProduceMicroBlock, ProduceMicroBlockEvent};
-use crate::mock::ValidatorNetwork;
 use crate::r#macro::{PersistedMacroState, ProduceMacroBlock};
 use crate::slash::ForkProofPool;
 
@@ -40,7 +41,7 @@ struct ProduceMicroBlockState {
     view_change_proof: Option<ViewChangeProof>,
 }
 
-pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> {
+pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork + 'static> {
     pub consensus: ConsensusProxy<TNetwork>,
     network: Arc<TValidatorNetwork>,
     signing_key: bls::KeyPair,
@@ -134,6 +135,25 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             .current_validators()
             .find_idx_and_num_slots_by_public_key(&self.signing_key.public_key.compress())
             .map(|(validator_id, _)| ActiveEpochState { validator_id });
+        let validator_keys: Vec<CompressedPublicKey> = self
+            .consensus
+            .blockchain
+            .current_validators()
+            .iter()
+            .map(|slot_band| slot_band.public_key().compressed().clone())
+            .collect();
+        let key = self.signing_key.clone();
+        let nw = self.network.clone();
+
+        // TODO might better be done without the task.
+        // However we have an entire batch to execute the task so it should not be extremely bad.
+        // Also the setting up of our own public key record should probably not be done here but in `init` instead.
+        tokio::spawn(async move {
+            if let Err(err) = nw.set_public_key(&key.public_key.compress(), &key.secret_key).await {
+                error!("could not set up DHT rwcord: {:?}", err);
+            }
+            nw.set_validators(validator_keys).await;
+        });
     }
 
     fn init_block_producer(&mut self) {

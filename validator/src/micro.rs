@@ -11,11 +11,11 @@ use block_albatross::{ForkProof, MicroBlock, SignedViewChange, ViewChange, ViewC
 use block_production_albatross::BlockProducer;
 use blockchain_albatross::Blockchain;
 use mempool::Mempool;
+use nimiq_validator_network::ValidatorNetwork;
 use utils::time::systemtime_to_timestamp;
 use vrf::VrfSeed;
 
 use crate::aggregation::view_change::ViewChangeAggregation;
-use crate::mock::ValidatorNetwork;
 
 pub(crate) enum ProduceMicroBlockEvent {
     MicroBlock(MicroBlock),
@@ -37,7 +37,7 @@ struct NextProduceMicroBlockEvent<TValidatorNetwork> {
     prev_seed: VrfSeed,
 }
 
-impl<TValidatorNetwork: ValidatorNetwork> NextProduceMicroBlockEvent<TValidatorNetwork> {
+impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<TValidatorNetwork> {
     fn new(
         blockchain: Arc<Blockchain>,
         mempool: Arc<Mempool>,
@@ -132,7 +132,7 @@ pub(crate) struct ProduceMicroBlock<TValidatorNetwork> {
     next_event: Option<BoxFuture<'static, (ProduceMicroBlockEvent, NextProduceMicroBlockEvent<TValidatorNetwork>)>>,
 }
 
-impl<TValidatorNetwork: ValidatorNetwork> ProduceMicroBlock<TValidatorNetwork> {
+impl<TValidatorNetwork: ValidatorNetwork + 'static> ProduceMicroBlock<TValidatorNetwork> {
     pub fn new(
         blockchain: Arc<Blockchain>,
         mempool: Arc<Mempool>,
@@ -161,7 +161,7 @@ impl<TValidatorNetwork: ValidatorNetwork> ProduceMicroBlock<TValidatorNetwork> {
     }
 }
 
-impl<TValidatorNetwork: ValidatorNetwork> Stream for ProduceMicroBlock<TValidatorNetwork> {
+impl<TValidatorNetwork: ValidatorNetwork + 'static> Stream for ProduceMicroBlock<TValidatorNetwork> {
     type Item = ProduceMicroBlockEvent;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {

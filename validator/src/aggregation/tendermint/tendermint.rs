@@ -17,7 +17,6 @@ use nimiq_block_albatross::{create_pk_tree_root, MultiSignature, TendermintIdent
 use nimiq_bls::SecretKey;
 use nimiq_collections::bitset::BitSet;
 use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::network::Network;
 use nimiq_primitives::policy;
 use nimiq_primitives::slot::ValidatorSlots;
 
@@ -28,6 +27,7 @@ use nimiq_handel::identity::WeightRegistry;
 use nimiq_handel::update::{LevelUpdate, LevelUpdateMessage};
 
 use nimiq_tendermint::{AggregationResult, TendermintError};
+use nimiq_validator_network::ValidatorNetwork;
 
 use super::super::network_sink::NetworkSink;
 use super::super::registry::ValidatorRegistry;
@@ -192,7 +192,7 @@ impl Stream for TendermintAggregations {
 }
 
 /// Adaption for tendermint not using the handel stream directly. Ideally all of what this Adapter does would be done callerside just using the stream
-pub struct HandelTendermintAdapter<N: Network> {
+pub struct HandelTendermintAdapter<N: ValidatorNetwork> {
     current_bests: RwLock<BTreeMap<(u32, TendermintStep), TendermintContribution>>,
     handel_aggregations: Mutex<TendermintAggregations>,
     current_aggregate: RwLock<Option<CurrentAggregation>>,
@@ -205,7 +205,8 @@ pub struct HandelTendermintAdapter<N: Network> {
     network: Arc<N>,
 }
 
-impl<N: Network> HandelTendermintAdapter<N> {
+impl<N: ValidatorNetwork + 'static> HandelTendermintAdapter<N>
+where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 'static {
     pub fn new(validator_id: u16, active_validators: ValidatorSlots, block_height: u32, network: Arc<N>, secret_key: SecretKey) -> Self {
         let validator_merkle_root = create_pk_tree_root(&active_validators);
 
@@ -213,7 +214,7 @@ impl<N: Network> HandelTendermintAdapter<N> {
         // We get rid of the sender, but while processing these messages they need to be dispatched to the appropriate Aggregation.
         let input = Box::pin(
             network
-                .receive_from_all::<LevelUpdateMessage<TendermintContribution, TendermintIdentifier>>()
+                .receive::<LevelUpdateMessage<TendermintContribution, TendermintIdentifier>>()
                 .map(move |msg| msg.0),
         );
 

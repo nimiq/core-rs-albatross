@@ -18,9 +18,9 @@ use handel::protocol::Protocol;
 use handel::store::ReplaceStore;
 use handel::update::LevelUpdateMessage;
 use hash::{Blake2sHash, Blake2sHasher, Hasher, SerializeContent};
-use network_interface::network::Network;
 use primitives::policy;
 use primitives::slot::{SlotCollection, ValidatorSlots};
+use nimiq_validator_network::ValidatorNetwork;
 
 use super::network_sink::NetworkSink;
 use super::registry::ValidatorRegistry;
@@ -98,11 +98,11 @@ impl Protocol for ViewChangeAggregationProtocol {
     }
 }
 
-pub struct ViewChangeAggregation<N: Network> {
+pub struct ViewChangeAggregation<N: ValidatorNetwork> {
     _phantom: std::marker::PhantomData<N>,
 }
 
-impl<N: Network> ViewChangeAggregation<N> {
+impl<N: ValidatorNetwork + 'static> ViewChangeAggregation<N> {
     pub async fn start(view_change: SignedViewChange, validator_id: u16, active_validators: ValidatorSlots, network: Arc<N>) -> ViewChangeProof {
         let mut hasher = Blake2sHasher::new();
         hasher.write_u8(PREFIX_VIEW_CHANGE).expect("Failed to write prefix to hasher for signature.");
@@ -141,7 +141,7 @@ impl<N: Network> ViewChangeAggregation<N> {
             own_contribution,
             Box::pin(
                 network
-                    .receive_from_all::<LevelUpdateMessage<MultiSignature, ViewChange>>()
+                    .receive::<LevelUpdateMessage<MultiSignature, ViewChange>>()
                     .map(move |msg| msg.0.update),
             ),
             Box::new(NetworkSink::<LevelUpdateMessage<MultiSignature, ViewChange>, N>::new(network.clone())),

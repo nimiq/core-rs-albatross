@@ -48,6 +48,7 @@ nimiq-network-mock = { path = "../network-mock", version = "0.1" }
 nimiq-primitives = { path = "../primitives", version = "0.1" }
 nimiq-tendermint = { path = "../tendermint", version = "0.1" }
 nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "timers", "time", "mutable-once", "throttled-queue", "rate-limit"] }
+nimiq-validator-network = { path = "../validator-network", version = "0.1" }
 nimiq-vrf = { path = "../vrf", version = "0.1" }
 
 [dev-dependencies]

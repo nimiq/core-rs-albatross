@@ -29,7 +29,6 @@ extern crate nimiq_vrf as vrf;
 mod aggregation;
 mod r#macro;
 mod micro;
-mod mock;
 mod slash;
 mod tendermint_outside_deps;
 pub mod validator;

@@ -28,6 +28,10 @@ pub trait ValidatorNetwork: Send + Sync {
     type PeerType: Peer;
     type PubsubId: PubsubId<<Self::PeerType as Peer>::Id>;
 
+    /// Tells the validator network the validator keys for the current set of active validators. The keys must be
+    /// ordered, such that the k-th entry is the validator with ID k.
+    async fn set_validators(&self, validator_keys: Vec<CompressedPublicKey>);
+
     async fn get_validator_peer(&self, validator_id: usize) -> Result<Option<Arc<Self::PeerType>>, Self::Error>;
 
     /// must make a reasonable efford to establish a connection to the peer denoted with `validator_id`

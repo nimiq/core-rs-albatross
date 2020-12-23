@@ -7,23 +7,27 @@ use futures::sink::Sink;
 use futures::task::{Context, Poll};
 
 use nimiq_network_interface::message::Message;
-use nimiq_network_interface::network::Network;
+use nimiq_validator_network::ValidatorNetwork;
 
 // TODO:
 // * future per peer.
+// * one message to multiple peers
 
-struct SendingFuture<N: Network> {
+struct SendingFuture<N: ValidatorNetwork> {
     network: Arc<N>,
 }
 
-impl<N: Network> SendingFuture<N> {
-    pub async fn send<M: Message + Unpin + std::fmt::Debug>(self, msg: M) {
-        self.network.broadcast(&msg).await
+impl<N: ValidatorNetwork> SendingFuture<N> {
+    pub async fn send<M: Message + Unpin + std::fmt::Debug>(self, msg: (M, usize)) {
+        let result = self.network.send_to(&[msg.1], &msg.0).await;
+        if let Some(Err(err)) = result.get(0) {
+            error!("Sending msg: {:?} to validator #{} failed: {:?}", &msg.0, &msg.1, err);
+        }
     }
 }
 
 /// Implementation of a simple Sink Wrapper for the NetworkInterface's Network trait
-pub struct NetworkSink<M: Message + Unpin, N: Network> {
+pub struct NetworkSink<M: Message + Unpin, N: ValidatorNetwork> {
     /// The network this sink is sending its messages over
     network: Arc<N>,
     /// The currently executed future of sending an item.
@@ -32,7 +36,7 @@ pub struct NetworkSink<M: Message + Unpin, N: Network> {
     phantom: PhantomData<M>,
 }
 
-impl<M: Message + Unpin, N: Network> NetworkSink<M, N> {
+impl<M: Message + Unpin, N: ValidatorNetwork> NetworkSink<M, N> {
     pub fn new(network: Arc<N>) -> Self {
         Self {
             network,
@@ -42,7 +46,7 @@ impl<M: Message + Unpin, N: Network> NetworkSink<M, N> {
     }
 }
 
-impl<M: Message + Unpin + std::fmt::Debug, N: Network> Sink<(M, usize)> for NetworkSink<M, N> {
+impl<M: Message + Unpin + std::fmt::Debug, N: ValidatorNetwork + 'static> Sink<(M, usize)> for NetworkSink<M, N> {
     type Error = ();
 
     fn poll_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -80,7 +84,7 @@ impl<M: Message + Unpin + std::fmt::Debug, N: Network> Sink<(M, usize)> for Netw
         } else {
             // Otherwise, create the future and store it.
             // Note: This future does not get polled. Only once poll_* is called it will actually be polled.
-            let fut = (SendingFuture { network: self.network.clone() }).send(item.0).boxed();
+            let fut = (SendingFuture { network: self.network.clone() }).send(item).boxed();
             self.current_future = Some(fut);
             Ok(())
         }

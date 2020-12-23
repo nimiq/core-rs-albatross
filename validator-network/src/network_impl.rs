@@ -108,23 +108,6 @@ where
         }
     }
 
-    /// Tells the validator network the validator keys for the current set of active validators. The keys must be
-    /// ordered, such that the k-th entry is the validator with ID k.
-    pub async fn set_validators(&self, validator_keys: Vec<CompressedPublicKey>) {
-        // Create new peer ID cache, but keep validators that are still active.
-        let mut state = self.state.lock().await;
-
-        let mut keep_cached = BTreeMap::new();
-        for validator_key in &validator_keys {
-            if let Some(peer_id) = state.validator_peer_id_cache.remove(validator_key) {
-                keep_cached.insert(validator_key.clone(), peer_id);
-            }
-        }
-
-        state.validator_keys = validator_keys;
-        state.validator_peer_id_cache = keep_cached;
-    }
-
     /// Looks up the peer ID for a validator public key in the DHT.
     async fn resolve_peer_id(network: &N, public_key: &CompressedPublicKey) -> Result<Option<PeerId<N>>, NetworkError<N::Error>> {
         if let Some(record) = network.dht_get::<_, SignedValidatorRecord<PeerId<N>>>(&public_key).await? {
@@ -177,6 +160,26 @@ where
     type Error = NetworkError<<N as Network>::Error>;
     type PeerType = <N as Network>::PeerType;
     type PubsubId = <N as Network>::PubsubId;
+
+
+
+    /// Tells the validator network the validator keys for the current set of active validators. The keys must be
+    /// ordered, such that the k-th entry is the validator with ID k.
+    async fn set_validators(&self, validator_keys: Vec<CompressedPublicKey>) {
+        log::trace!("setting Validators for ValidatorNetwork: {:?}", &validator_keys);
+        // Create new peer ID cache, but keep validators that are still active.
+        let mut state = self.state.lock().await;
+
+        let mut keep_cached = BTreeMap::new();
+        for validator_key in &validator_keys {
+            if let Some(peer_id) = state.validator_peer_id_cache.remove(validator_key) {
+                keep_cached.insert(validator_key.clone(), peer_id);
+            }
+        }
+
+        state.validator_keys = validator_keys;
+        state.validator_peer_id_cache = keep_cached;
+    }
 
     async fn get_validator_peer(&self, validator_id: usize) -> Result<Option<Arc<<N as Network>::PeerType>>, Self::Error> {
         let peer_id = self.get_validator_peer_id(validator_id).await?;

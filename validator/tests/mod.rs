@@ -18,11 +18,12 @@ use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_utils::time::OffsetTime;
 use nimiq_validator::validator::Validator as AbstractValidator;
+use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
 use std::sync::Arc;
 use std::time::Duration;
 
 type Consensus = AbstractConsensus<MockNetwork>;
-type Validator = AbstractValidator<MockNetwork, MockNetwork>;
+type Validator = AbstractValidator<MockNetwork, ValidatorNetworkImpl<MockNetwork>>;
 
 fn seeded_rng(seed: u64) -> StdRng {
     StdRng::seed_from_u64(seed)
@@ -55,10 +56,11 @@ async fn mock_validator(
     genesis_info: GenesisInfo,
 ) -> (Validator, Consensus) {
     let consensus = mock_consensus(hub, peer_id, genesis_info).await;
+    let validator_network = Arc::new(ValidatorNetworkImpl::new(consensus.network.clone()));
     (
         Validator::new(
             &consensus,
-            Arc::clone(&consensus.network),
+            validator_network,
             signing_key,
             None,
         ),

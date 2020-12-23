@@ -10,8 +10,9 @@ use blockchain_albatross::Blockchain;
 use bls::{KeyPair, PublicKey};
 use database::WriteTransaction;
 use hash::{Blake2bHash, Hash};
-use network_interface::network::Network as NetworkInterface;
+use network_interface::network::Topic;
 use nimiq_primitives::slot::ValidatorSlots;
+use nimiq_validator_network::ValidatorNetwork;
 use primitives::policy::{TENDERMINT_TIMEOUT_DELTA, TENDERMINT_TIMEOUT_INIT};
 use primitives::slot::SlotCollection;
 use tendermint::{AggregationResult, ProposalResult, Step, TendermintError, TendermintOutsideDeps, TendermintState};
@@ -19,9 +20,20 @@ use utils::time::OffsetTime;
 
 use crate::aggregation::tendermint::HandelTendermintAdapter;
 
+// TODO create stream immediately
+
+struct ProposalTopic;
+impl Topic for ProposalTopic {
+    type Item = SignedTendermintProposal;
+
+    fn topic(&self) -> String {
+        "tendermint-proposal".to_owned()
+    }
+}
+
 /// The struct that interfaces with the Tendermint crate. It only has to implement the
 /// TendermintOutsideDeps trait in order to do this.
-pub struct TendermintInterface<N: NetworkInterface> {
+pub struct TendermintInterface<N: ValidatorNetwork> {
     // The network that is going to be used to communicate with the other validators.
     pub network: Arc<N>,
     // This is used to maintain a network-wide time.
@@ -43,7 +55,7 @@ pub struct TendermintInterface<N: NetworkInterface> {
 }
 
 #[async_trait]
-impl<N: NetworkInterface> TendermintOutsideDeps for TendermintInterface<N> {
+impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterface<N> {
     type ProposalTy = MacroHeader;
     type ProofTy = MultiSignature;
     type ResultTy = MacroBlock;
@@ -131,7 +143,9 @@ impl<N: NetworkInterface> TendermintOutsideDeps for TendermintInterface<N> {
         let signed_proposal = SignedTendermintProposal::from_message(proposal_message, &self.validator_key.secret_key, validator_index);
 
         // Broadcast the signed proposal to the network.
-        self.network.broadcast(&signed_proposal).await;
+        if let Err(err) = self.network.publish(&ProposalTopic, signed_proposal).await {
+            error!("Publishing proposal failed: {:?}", err);
+        }
 
         Ok(())
     }
@@ -245,12 +259,12 @@ impl<N: NetworkInterface> TendermintOutsideDeps for TendermintInterface<N> {
     }
 }
 
-impl<N: NetworkInterface> TendermintInterface<N> {
+impl<N: ValidatorNetwork + 'static> TendermintInterface<N> {
     /// This function waits in a loop until it gets a proposal message from a given validator with a
     /// valid signature. It is just a helper function for the await_proposal function in this file.
     async fn await_proposal_loop(&self, validator_id: u16, validator_key: &PublicKey) -> TendermintProposal {
         // Get the ReceiveFromAll stream from the network.
-        let mut stream = self.network.receive_from_all::<SignedTendermintProposal>();
+        let mut stream = self.network.receive::<<ProposalTopic as Topic>::Item>();
 
         while let Some((msg, _)) = stream.next().await {
             // Check if the proposal comes from the correct validator and the signature of the
