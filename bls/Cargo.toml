@@ -19,9 +19,12 @@ parking_lot = { version = "0.9", optional = true }
 rand = "0.7"
 serde = { version = "1.0", features = ["derive"], optional = true }
 
-algebra = { git = "https://github.com/nimiq/zexe", branch = "nimiq", features=["mnt6_753", "mnt4_753"]}
-algebra-core = { git = "https://github.com/nimiq/zexe", branch = "nimiq"}
-crypto-primitives = { git = "https://github.com/nimiq/zexe.git", branch = "nimiq" }
+ark-std = { git = "https://github.com/arkworks-rs/utils" }
+ark-ff = { git = "https://github.com/arkworks-rs/algebra" }
+ark-ec = { git = "https://github.com/arkworks-rs/algebra" }
+ark-mnt4-753 = { git = "https://github.com/arkworks-rs/curves" }
+ark-mnt6-753 = { git = "https://github.com/arkworks-rs/curves" }
+ark-crypto-primitives = { git = "https://github.com/arkworks-rs/crypto-primitives", branch = "main", default-features = false }
 
 beserial = { path = "../beserial", version = "0.1", optional = true }
 nimiq-hash = { path = "../hash", version = "0.1" }

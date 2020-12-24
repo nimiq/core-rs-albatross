@@ -1,7 +1,7 @@
 use std::fmt;
 
-use algebra::mnt6_753::{Fr, G1Projective};
-use algebra_core::curves::ProjectiveCurve;
+use ark_ec::ProjectiveCurve;
+use ark_mnt6_753::G1Projective;
 
 use nimiq_hash::HashOutput;
 
@@ -30,9 +30,7 @@ impl Signature {
         let generators = pedersen_generators(2);
 
         // Calculate the Pedersen hash.
-        let point = pedersen_hash(bits, generators);
-
-        point
+        pedersen_hash(bits, generators)
     }
 
     /// Transforms a signature into a serialized compressed form.
@@ -49,7 +47,7 @@ impl Signature {
     /// number of slots.
     pub fn multiply(&self, x: u16) -> Self {
         Signature {
-            signature: self.signature.mul(Fr::from(x)),
+            signature: self.signature.mul(&[x as u64]),
         }
     }
 }

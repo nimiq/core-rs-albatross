@@ -2,11 +2,12 @@
 //! easily here, without needing to change them in several places in the code.
 
 use algebra::mnt4_753::{
-    Fq as MNT4Fq, Fq2 as MNT4Fq2, FqParameters, G1Affine as MNT4G1Affine, G1Projective as MNT4G1Projective, G2Affine as MNT4G2Affine,
-    G2Projective as MNT4G2Projective,
+    Fq as MNT4Fq, Fq2 as MNT4Fq2, FqParameters, G1Affine as MNT4G1Affine,
+    G1Projective as MNT4G1Projective, G2Affine as MNT4G2Affine, G2Projective as MNT4G2Projective,
 };
 use algebra::mnt6_753::{
-    Fq as MNT6Fq, Fq3 as MNT6Fq3, G1Affine as MNT6G1Affine, G1Projective as MNT6G1Projective, G2Affine as MNT6G2Affine, G2Projective as MNT6G2Projective,
+    Fq as MNT6Fq, Fq3 as MNT6Fq3, G1Affine as MNT6G1Affine, G1Projective as MNT6G1Projective,
+    G2Affine as MNT6G2Affine, G2Projective as MNT6G2Projective,
 };
 use algebra::{FpParameters, PrimeField};
 use algebra_core::One;
@@ -70,8 +71,9 @@ pub fn sum_generator_g1_mnt4() -> MNT4G1Projective {
             inner_length: 32,
             salt: [0; 8],
             // This needs to be set to an unique value, since we want a different random stream for
-            // each sum generator that we create.
-            personalization: [1; 8],
+            // each sum generator that we create. So we take a random u64 and convert it to bytes.
+            // The random u64 came from random.org.
+            personalization: 641062334549804086_u64.to_be_bytes(),
         };
 
         let mut state = Blake2s::with_parameter_block(&blake2x.parameters());
@@ -150,8 +152,9 @@ pub fn sum_generator_g2_mnt4() -> MNT4G2Projective {
             inner_length: 32,
             salt: [0; 8],
             // This needs to be set to an unique value, since we want a different random stream for
-            // each sum generator that we create.
-            personalization: [2; 8],
+            // each sum generator that we create. So we take a random u64 and convert it to bytes.
+            // The random u64 came from random.org.
+            personalization: 11645674955082772251_u64.to_be_bytes(),
         };
 
         let mut state = Blake2s::with_parameter_block(&blake2x.parameters());
@@ -238,8 +241,9 @@ pub fn sum_generator_g1_mnt6() -> MNT6G1Projective {
             inner_length: 32,
             salt: [0; 8],
             // This needs to be set to an unique value, since we want a different random stream for
-            // each sum generator that we create.
-            personalization: [3; 8],
+            // each sum generator that we create. So we take a random u64 and convert it to bytes.
+            // The random u64 came from random.org.
+            personalization: 11360233306655289524_u64.to_be_bytes(),
         };
 
         let mut state = Blake2s::with_parameter_block(&blake2x.parameters());
@@ -317,8 +321,9 @@ pub fn sum_generator_g2_mnt6() -> MNT6G2Projective {
             inner_length: 32,
             salt: [0; 8],
             // This needs to be set to an unique value, since we want a different random stream for
-            // each sum generator that we create.
-            personalization: [4; 8],
+            // each sum generator that we create. So we take a random u64 and convert it to bytes.
+            // The random u64 came from random.org.
+            personalization: 14555167456590665711_u64.to_be_bytes(),
         };
 
         let mut state = Blake2s::with_parameter_block(&blake2x.parameters());

@@ -1,6 +1,6 @@
 use std::fmt;
 
-use algebra::mnt6_753::G2Projective;
+use ark_mnt6_753::G2Projective;
 use num_traits::Zero;
 
 use nimiq_hash::Hash;
@@ -27,7 +27,9 @@ impl AggregatePublicKey {
         for x in public_keys {
             agg_key += &x.public_key;
         }
-        AggregatePublicKey(PublicKey { public_key: agg_key })
+        AggregatePublicKey(PublicKey {
+            public_key: agg_key,
+        })
     }
 
     /// Adds a single regular public key to an aggregated public keys.

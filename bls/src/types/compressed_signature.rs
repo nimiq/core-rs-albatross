@@ -1,9 +1,9 @@
+use std::io::Error;
 use std::str::FromStr;
 use std::{cmp::Ordering, fmt};
 
-use algebra::mnt6_753::G1Affine;
-use algebra::SerializationError;
-use algebra_core::curves::AffineCurve;
+use ark_ec::AffineCurve;
+use ark_mnt6_753::G1Affine;
 
 use beserial::Deserialize;
 
@@ -24,7 +24,7 @@ impl CompressedSignature {
     pub const SIZE: usize = 95;
 
     /// Transforms the compressed form back into the projective form.
-    pub fn uncompress(&self) -> Result<Signature, SerializationError> {
+    pub fn uncompress(&self) -> Result<Signature, Error> {
         let affine_point: G1Affine = BeDeserialize::deserialize(&mut &self.signature[..])?;
         Ok(Signature {
             signature: affine_point.into_projective(),
@@ -105,10 +105,7 @@ impl AsMut<[u8]> for CompressedSignature {
 mod serde_derive {
     // TODO: Replace this with a generic serialization using `ToHex` and `FromHex`.
 
-    use std::{
-        str::FromStr,
-        borrow::Cow,
-    };
+    use std::{borrow::Cow, str::FromStr};
 
     use serde::{
         de::{Deserialize, Deserializer, Error},

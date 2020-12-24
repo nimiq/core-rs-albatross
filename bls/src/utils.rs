@@ -1,11 +1,10 @@
-use algebra::BigInteger768;
+use ark_ff::BigInteger768;
 
 /// Transforms a vector of bytes into the corresponding vector of bits (booleans).
 pub fn bytes_to_bits(bytes: &[u8]) -> Vec<bool> {
     let mut bits = vec![];
 
-    for i in 0..bytes.len() {
-        let byte = bytes[i];
+    for byte in bytes {
         for j in (0..8).rev() {
             bits.push((byte >> j) & 1 == 1);
         }

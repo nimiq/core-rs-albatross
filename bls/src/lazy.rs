@@ -1,6 +1,8 @@
 use std::{cmp::Ordering, fmt};
 
-use parking_lot::{MappedRwLockReadGuard, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard, RwLockWriteGuard};
+use parking_lot::{
+    MappedRwLockReadGuard, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard, RwLockWriteGuard,
+};
 
 use nimiq_hash::Hash;
 
@@ -83,7 +85,9 @@ impl LazyPublicKey {
             read_guard = RwLockWriteGuard::downgrade(upgraded);
         }
 
-        Some(RwLockReadGuard::map(read_guard, |opt| opt.as_ref().unwrap()))
+        Some(RwLockReadGuard::map(read_guard, |opt| {
+            opt.as_ref().unwrap()
+        }))
     }
 
     pub fn uncompress_unchecked(&self) -> MappedRwLockReadGuard<PublicKey> {
@@ -150,7 +154,9 @@ mod serialization {
 
     impl Deserialize for LazyPublicKey {
         fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-            Ok(LazyPublicKey::from_compressed(&Deserialize::deserialize(reader)?))
+            Ok(LazyPublicKey::from_compressed(&Deserialize::deserialize(
+                reader,
+            )?))
         }
     }
 }
