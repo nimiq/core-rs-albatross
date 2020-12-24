@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use futures::StreamExt;
+use futures::{stream::BoxStream, StreamExt};
 
 use block_albatross::{Block, BlockHeader, MacroBlock, MacroBody, MacroHeader, MultiSignature, SignedTendermintProposal, TendermintProof, TendermintProposal};
 use block_production_albatross::BlockProducer;
@@ -10,7 +10,7 @@ use blockchain_albatross::Blockchain;
 use bls::{KeyPair, PublicKey};
 use database::WriteTransaction;
 use hash::{Blake2bHash, Hash};
-use network_interface::network::Topic;
+use network_interface::{network::Topic, peer::Peer};
 use nimiq_primitives::slot::ValidatorSlots;
 use nimiq_validator_network::ValidatorNetwork;
 use primitives::policy::{TENDERMINT_TIMEOUT_DELTA, TENDERMINT_TIMEOUT_INIT};
@@ -52,6 +52,8 @@ pub struct TendermintInterface<N: ValidatorNetwork> {
     // However, calculating the body is an expensive operation. To avoid having to calculate the
     // body several times, we can cache it here.
     pub cache_body: Option<MacroBody>,
+
+    proposal_stream: Option<BoxStream<'static, (SignedTendermintProposal, <<N as ValidatorNetwork>::PeerType as Peer>::Id)>>,
 }
 
 #[async_trait]
@@ -128,7 +130,18 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
     // macro block). In that case, we will lose a Tendermint round unnecessarily. If this happens
     // frequently, it might make sense for us to have the validator broadcast his proposal twice.
     // One at the beginning and another at half of the timeout duration.
-    async fn broadcast_proposal(&self, _round: u32, proposal: Self::ProposalTy, valid_round: Option<u32>) -> Result<(), TendermintError> {
+    async fn broadcast_proposal(&mut self, _round: u32, proposal: Self::ProposalTy, valid_round: Option<u32>) -> Result<(), TendermintError> {
+        // Get the subscription stream from the network and store it if necessary
+        // This needs to be done here, as publishing on a topic is only allowed when also subscribed to it.
+        if self.proposal_stream.is_none() {
+            let stream_result = self.network.subscribe(&ProposalTopic).await;
+            if let Err(err) = stream_result {
+                panic!("Could not open proposal stream: {:?}", err);
+            } else {
+                self.proposal_stream = stream_result.ok();
+            }
+        }
+
         // Get our validator index.
         let (validator_index, _) = self
             .blockchain
@@ -254,7 +267,7 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
 
     /// Returns the vote aggregation for a given proposal and round. It simply calls the aggregation
     /// adapter, which does all the work.
-    async fn get_aggregation(&self, round: u32, step: Step) -> Result<AggregationResult<Self::ProofTy>, TendermintError> {
+    async fn get_aggregation(&mut self, round: u32, step: Step) -> Result<AggregationResult<Self::ProofTy>, TendermintError> {
         self.aggregation_adapter.get_aggregate(round, step).await
     }
 }
@@ -262,11 +275,18 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
 impl<N: ValidatorNetwork + 'static> TendermintInterface<N> {
     /// This function waits in a loop until it gets a proposal message from a given validator with a
     /// valid signature. It is just a helper function for the await_proposal function in this file.
-    async fn await_proposal_loop(&self, validator_id: u16, validator_key: &PublicKey) -> TendermintProposal {
-        // Get the ReceiveFromAll stream from the network.
-        let mut stream = self.network.subscribe(&ProposalTopic).await.unwrap();
+    async fn await_proposal_loop(&mut self, validator_id: u16, validator_key: &PublicKey) -> TendermintProposal {
+        // Get the subscription stream from the network and store it if necessary
+        if self.proposal_stream.is_none() {
+            let stream_result = self.network.subscribe(&ProposalTopic).await;
+            if let Err(err) = stream_result {
+                panic!("Could not open proposal stream: {:?}", err);
+            } else {
+                self.proposal_stream = stream_result.ok();
+            }
+        }
 
-        while let Some((msg, _)) = stream.next().await {
+        while let Some((msg, _)) = self.proposal_stream.as_mut().unwrap().next().await {
             // Check if the proposal comes from the correct validator and the signature of the
             // proposal is valid. If not, keep awaiting.
             if validator_id == msg.signer_idx && msg.verify(&validator_key) {
@@ -302,6 +322,7 @@ impl<N: ValidatorNetwork + 'static> TendermintInterface<N> {
             block_producer,
             blockchain,
             offset_time: OffsetTime::default(),
+            proposal_stream: None,
         }
     }
 }

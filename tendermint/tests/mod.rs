@@ -87,7 +87,7 @@ impl TendermintOutsideDeps for TestValidator {
         Ok(proposal)
     }
 
-    async fn broadcast_proposal(&self, _round: u32, _proposal: Self::ProposalTy, _valid_round: Option<u32>) -> Result<(), TendermintError> {
+    async fn broadcast_proposal(&mut self, _round: u32, _proposal: Self::ProposalTy, _valid_round: Option<u32>) -> Result<(), TendermintError> {
         Ok(())
     }
 
@@ -148,7 +148,7 @@ impl TendermintOutsideDeps for TestValidator {
     }
 
     // Same as ´broadcast_and_aggregate´ but here we only check for prevotes.
-    async fn get_aggregation(&self, round: u32, _step: Step) -> Result<AggregationResult<Self::ProofTy>, TendermintError> {
+    async fn get_aggregation(&mut self, round: u32, _step: Step) -> Result<AggregationResult<Self::ProofTy>, TendermintError> {
         // Calculate the hashes for the proposals 'A' and 'B'.
         let a_hash = TestProposal('A', 0).hash();
         let b_hash = TestProposal('B', 0).hash();

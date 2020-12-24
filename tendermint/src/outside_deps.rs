@@ -28,7 +28,7 @@ pub trait TendermintOutsideDeps {
 
     /// Broadcasts a proposal message (which includes the proposal and the proposer's valid round).
     /// This is a Future and it is allowed to fail.
-    async fn broadcast_proposal(&self, round: u32, proposal: Self::ProposalTy, valid_round: Option<u32>) -> Result<(), TendermintError>;
+    async fn broadcast_proposal(&mut self, round: u32, proposal: Self::ProposalTy, valid_round: Option<u32>) -> Result<(), TendermintError>;
 
     /// Waits for a proposal message (which includes the proposal and the proposer's valid round).
     /// The received proposal (if any) is guaranteed to be valid. This function also has to take
@@ -52,5 +52,5 @@ pub trait TendermintOutsideDeps {
     /// or not have 2f+1 votes, this function only returns all the votes that we have so far.
     /// It will fail if no aggregation was started for the given round and step.
     /// This is a Future and it is allowed to fail.
-    async fn get_aggregation(&self, round: u32, step: Step) -> Result<AggregationResult<Self::ProofTy>, TendermintError>;
+    async fn get_aggregation(&mut self, round: u32, step: Step) -> Result<AggregationResult<Self::ProofTy>, TendermintError>;
 }
