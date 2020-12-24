@@ -95,6 +95,7 @@ impl TendermintProof {
 pub enum TendermintStep {
     PreVote = PREFIX_TENDERMINT_PREPARE,
     PreCommit = PREFIX_TENDERMINT_COMMIT,
+    Propose = 0x77,
 }
 
 /// Unique identifier for a single instance of TendermintAggregation

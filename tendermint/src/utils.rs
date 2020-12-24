@@ -31,10 +31,12 @@ pub enum Step {
 /// A method for easy conversion of Step into TendermintStep.
 impl Into<TendermintStep> for Step {
     fn into(self) -> TendermintStep {
+
         match self {
             Step::Prevote => TendermintStep::PreVote,
             Step::Precommit => TendermintStep::PreCommit,
-            _ => panic!("Aggregations can not have a different Step than Prevote or Precommit"),
+            Step::Propose => TendermintStep::Propose,
+            _ => panic!("Aggregations can not have a different Step than Prevote or Precommit: {:?}", self),
         }
     }
 }

@@ -79,6 +79,7 @@ impl ProduceMacroBlock {
             step: match s.step {
                 TendermintStep::PreVote => Step::Prevote,
                 TendermintStep::PreCommit => Step::Precommit,
+                TendermintStep::Propose => Step::Propose,
             },
             round: s.round,
             locked_value: s.locked_value,
