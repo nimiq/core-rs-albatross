@@ -7,9 +7,9 @@ use futures::{Future, StreamExt};
 use tokio::sync::{broadcast, mpsc};
 
 use block_albatross::{Block, BlockType, ViewChangeProof};
-use blockchain_albatross::{BlockchainEvent, ForkEvent};
+use blockchain_albatross::{BlockchainEvent, ForkEvent, PushResult};
 use bls::CompressedPublicKey;
-use consensus_albatross::{Consensus, ConsensusEvent, ConsensusProxy};
+use consensus_albatross::{sync::block_queue::BlockTopic, Consensus, ConsensusEvent, ConsensusProxy};
 use database::{Database, Environment, ReadTransaction, WriteTransaction};
 use hash::Blake2bHash;
 use network_interface::network::Network;
@@ -272,13 +272,24 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         while let Poll::Ready(Some(event)) = macro_producer.poll_next_unpin(cx) {
             match event {
                 TendermintReturn::Error(_err) => {}
-                TendermintReturn::Result(result) => {
+                TendermintReturn::Result(block) => {
                     // If the event is a result meaning the next macro block was produced we push it onto our local chain
-                    self.consensus
+                    let block_copy = block.clone();
+                    let result = self.consensus
                         .blockchain
-                        .push(Block::Macro(result))
+                        .push(Block::Macro(block))
                         .map_err(|e| error!("Failed to push macro block onto the chain: {:?}", e))
                         .ok();
+                    if result == Some(PushResult::Extended) || result == Some(PushResult::Rebranched) {
+                        // todo get rid of spawn
+                        let nw = self.network.clone();
+                        tokio::spawn(async move {
+                            trace!("publishing macro block: {:?}", &block_copy);
+                            if let Err(_) = nw.publish(&BlockTopic, Block::Macro(block_copy)).await {
+                                error!("Failed to publish Block");
+                            }
+                        });
+                    }
                 }
                 // in case of a new state update we need to store th enew version of it disregarding any old state which potentially still lingers.
                 TendermintReturn::StateUpdate(update) => {
@@ -310,11 +321,22 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         while let Poll::Ready(Some(event)) = micro_producer.poll_next_unpin(cx) {
             match event {
                 ProduceMicroBlockEvent::MicroBlock(block) => {
-                    self.consensus
+                    let block_copy = block.clone();
+                    let result = self.consensus
                         .blockchain
                         .push(Block::Micro(block))
                         .map_err(|e| error!("Failed to push our block onto the chain: {:?}", e))
                         .ok();
+                    if result == Some(PushResult::Extended) || result == Some(PushResult::Rebranched) {
+                        // todo get rid of spawn
+                        let nw = self.network.clone();
+                        tokio::spawn(async move {
+                            trace!("publishing micro block: {:?}", &block_copy);
+                            if let Err(_) = nw.publish(&BlockTopic, Block::Micro(block_copy)).await {
+                                error!("Failed to publish Block");
+                            }
+                        });
+                    }
                 }
                 ProduceMicroBlockEvent::ViewChange(new_view_number, view_change_proof) => {
                     self.micro_state.view_number = new_view_number;

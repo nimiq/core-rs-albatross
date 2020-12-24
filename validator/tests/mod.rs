@@ -168,7 +168,6 @@ async fn one_validator_can_create_micro_blocks() {
 }
 
 #[tokio::test]
-#[ignore] // TODO: Enable once blocks are published.
 async fn four_validators_can_create_micro_blocks() {
     let mut hub = MockHub::default();
 
@@ -180,7 +179,7 @@ async fn four_validators_can_create_micro_blocks() {
 
     let events = blockchain.notifier.write().as_stream();
     time::timeout(
-        Duration::from_secs(3),
+        Duration::from_secs(20),
         events.take(30).for_each(|_| future::ready(())),
     )
     .await
@@ -212,6 +211,6 @@ async fn four_validators_can_view_change() {
     // Wait for the new block producer to create a block.
     events.next().await;
 
-    assert_eq!(blockchain.block_number(), 1);
+    assert!(blockchain.block_number() > 1);
     assert_eq!(blockchain.view_number(), 1);
 }

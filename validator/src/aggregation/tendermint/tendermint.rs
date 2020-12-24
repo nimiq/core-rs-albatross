@@ -181,11 +181,7 @@ impl Stream for TendermintAggregations {
         }
         // after that return whatever combined_aggregation_streams returns
         match self.combined_aggregation_streams.poll_next_unpin(cx) {
-            Poll::Pending => Poll::Pending,
-            Poll::Ready(None) => {
-                // todo error handling
-                panic!("");
-            }
+            Poll::Pending | Poll::Ready(None) => Poll::Pending,
             Poll::Ready(Some(((round, step), aggregation))) => Poll::Ready(Some(TendermintAggregationEvent::Aggregation(round, step, aggregation))),
         }
     }

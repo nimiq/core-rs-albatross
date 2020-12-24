@@ -264,7 +264,7 @@ impl<N: ValidatorNetwork + 'static> TendermintInterface<N> {
     /// valid signature. It is just a helper function for the await_proposal function in this file.
     async fn await_proposal_loop(&self, validator_id: u16, validator_key: &PublicKey) -> TendermintProposal {
         // Get the ReceiveFromAll stream from the network.
-        let mut stream = self.network.receive::<<ProposalTopic as Topic>::Item>();
+        let mut stream = self.network.subscribe(&ProposalTopic).await.unwrap();
 
         while let Some((msg, _)) = stream.next().await {
             // Check if the proposal comes from the correct validator and the signature of the
