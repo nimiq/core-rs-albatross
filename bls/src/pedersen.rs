@@ -1,7 +1,9 @@
-use algebra::mnt6_753::{Fq, FqParameters, G1Affine, G1Projective};
-use algebra_core::{FpParameters, Group, One, PrimeField};
+use ark_crypto_primitives::prf::Blake2sWithParameterBlock;
+use ark_ec::group::Group;
+use ark_ff::{FpParameters, PrimeField};
+use ark_mnt6_753::{Fq, FqParameters, G1Affine, G1Projective};
 use blake2_rfc::blake2s::Blake2s;
-use crypto_primitives::prf::Blake2sWithParameterBlock;
+use num_traits::One;
 
 use crate::rand_gen::generate_random_seed;
 use crate::utils::big_int_from_bytes_be;
@@ -36,8 +38,9 @@ pub fn pedersen_generators(number: usize) -> Vec<G1Projective> {
             inner_length: 32,
             salt: [1; 8],
             // This needs to be set to an unique value, since we want a different random stream for
-            // each generator series that we create.
-            personalization: [5; 8],
+            // each generator series that we create. So we take a random u64 and convert it to bytes.
+            // The random u64 came from random.org.
+            personalization: 2813876015388210123_u64.to_be_bytes(),
         };
 
         let mut state = Blake2s::with_parameter_block(&blake2x.parameters());
@@ -77,17 +80,18 @@ pub fn pedersen_generators(number: usize) -> Vec<G1Projective> {
 
         bytes[96 * i + 1] = 0;
 
-        let mut x_coordinate = Fq::from_repr(big_int_from_bytes_be(&mut &bytes[96 * i..96 * (i + 1)]));
+        let mut x_coordinate =
+            Fq::from_repr(big_int_from_bytes_be(&mut &bytes[96 * i..96 * (i + 1)])).unwrap();
 
         // This implements the try-and-increment method of converting an integer to an elliptic curve point.
         // See https://eprint.iacr.org/2009/226.pdf for more details.
         loop {
             let point = G1Affine::get_point_from_x(x_coordinate, y_coordinate);
 
-            if point.is_some() {
-                let g1 = point.unwrap().scale_by_cofactor();
+            if let Some(g1) = point {
+                let scaled_g1 = g1.scale_by_cofactor();
 
-                generators.push(g1);
+                generators.push(scaled_g1);
 
                 break;
             }

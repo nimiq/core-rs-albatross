@@ -50,7 +50,7 @@
 //!
 //! 624314 -> 000000000000000000132006558a816203cb442aeb9162ba1d8f6dac5f0a00ec
 
-use crypto_primitives::prf::Blake2sWithParameterBlock;
+use ark_crypto_primitives::prf::Blake2sWithParameterBlock;
 
 /// This function will return 32 verifiably random bytes.
 pub fn generate_random_seed() -> Vec<u8> {
@@ -73,7 +73,21 @@ pub fn generate_random_seed() -> Vec<u8> {
 
     let concatenated = format!(
         "{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}",
-        block_00, block_01, block_02, block_03, block_04, block_05, block_06, block_07, block_08, block_09, block_10, block_11, block_12, block_13, block_14
+        block_00,
+        block_01,
+        block_02,
+        block_03,
+        block_04,
+        block_05,
+        block_06,
+        block_07,
+        block_08,
+        block_09,
+        block_10,
+        block_11,
+        block_12,
+        block_13,
+        block_14
     );
 
     let random_bytes = hex::decode(concatenated).unwrap();

@@ -1,15 +1,13 @@
 use std::{cmp::Ordering, fmt, str::FromStr};
 
-use algebra::mnt6_753::G2Affine;
-use algebra::SerializationError;
-use algebra_core::curves::AffineCurve;
+use ark_ec::AffineCurve;
+use ark_mnt6_753::G2Affine;
 
 #[cfg(feature = "beserial")]
 use beserial::Deserialize;
 
 use crate::compression::BeDeserialize;
 use crate::{ParseError, PublicKey};
-
 
 pub type UncompressError = SerializationError;
 
@@ -94,10 +92,7 @@ impl FromStr for CompressedPublicKey {
 mod serde_derive {
     // TODO: Replace this with a generic serialization using `ToHex` and `FromHex`.
 
-    use std::{
-        str::FromStr,
-        borrow::Cow,
-    };
+    use std::{borrow::Cow, str::FromStr};
 
     use serde::{
         de::{Deserialize, Deserializer, Error},

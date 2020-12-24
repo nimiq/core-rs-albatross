@@ -1,7 +1,7 @@
 use std::{fmt, ops::MulAssign};
 
-use algebra::mnt6_753::{Fr, G1Projective};
-use algebra_core::UniformRand;
+use ark_ff::UniformRand;
+use ark_mnt6_753::{Fr, G1Projective};
 use num_traits::Zero;
 
 #[cfg(feature = "beserial")]

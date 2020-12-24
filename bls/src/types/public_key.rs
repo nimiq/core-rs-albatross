@@ -1,7 +1,7 @@
 use std::{cmp::Ordering, fmt, ops::MulAssign};
 
-use algebra::mnt6_753::{G1Projective, G2Projective, MNT6_753};
-use algebra_core::curves::{PairingEngine, ProjectiveCurve};
+use ark_ec::{PairingEngine, ProjectiveCurve};
+use ark_mnt6_753::{G1Projective, G2Projective, MNT6_753};
 use log::error;
 use num_traits::Zero;
 

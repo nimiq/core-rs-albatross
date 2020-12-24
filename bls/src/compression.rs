@@ -1,13 +1,12 @@
 use std::io::{Error, ErrorKind};
 
-use algebra::mnt4_753::{Fq as MNT4Fq, Fq2 as MNT4Fq2};
-use algebra::mnt6_753::{Fq as MNT6Fq, Fq3 as MNT6Fq3};
-use algebra::short_weierstrass_jacobian::GroupAffine;
-use algebra::BigInteger768;
-use algebra_core::curves::models::SWModelParameters;
-use algebra_core::fields::PrimeField;
-use algebra_core::Zero;
+use ark_ec::short_weierstrass_jacobian::GroupAffine;
+use ark_ec::SWModelParameters;
+use ark_ff::{BigInteger768, PrimeField};
+use ark_mnt4_753::{Fq as MNT4Fq, Fq2 as MNT4Fq2};
+use ark_mnt6_753::{Fq as MNT6Fq, Fq3 as MNT6Fq3};
 use byteorder::{BigEndian, ByteOrder, ReadBytesExt, WriteBytesExt};
+use num_traits::Zero;
 
 /// Serializer in big endian format.
 pub trait BeSerialize {
@@ -17,7 +16,11 @@ pub trait BeSerialize {
     }
 
     /// Serializes `self` and `flags` into `writer`.
-    fn serialize_with_flags<W: WriteBytesExt>(&self, writer: &mut W, _flags: Flags) -> Result<(), Error>;
+    fn serialize_with_flags<W: WriteBytesExt>(
+        &self,
+        writer: &mut W,
+        _flags: Flags,
+    ) -> Result<(), Error>;
 
     fn serialized_size(&self) -> usize;
 }
@@ -36,14 +39,22 @@ pub trait BeDeserialize: Sized {
 /// This is used for the BigInteger types that always are a multiple of 64 bits.
 trait CustomLengthDeSerialize: Sized {
     /// Serializes `self` and `flags` into `writer` with a custom length `length`.
-    fn serialize_with_flags<W: WriteBytesExt>(&self, writer: &mut W, flags: Flags, length: usize) -> Result<(), Error>;
+    fn serialize_with_flags<W: WriteBytesExt>(
+        &self,
+        writer: &mut W,
+        flags: Flags,
+        length: usize,
+    ) -> Result<(), Error>;
 
     /// Reads `Self` from `reader`, reading `length` bytes and padding with 0s.
     fn deserialize<R: ReadBytesExt>(reader: &mut R, length: usize) -> Result<Self, Error>;
 
     /// Reads `Self` and `Flags` from `reader`, reading `length` bytes and padding with 0s.
     /// Returns empty flags by default.
-    fn deserialize_with_flags<R: ReadBytesExt>(reader: &mut R, length: usize) -> Result<(Self, Flags), Error>;
+    fn deserialize_with_flags<R: ReadBytesExt>(
+        reader: &mut R,
+        length: usize,
+    ) -> Result<(Self, Flags), Error>;
 }
 
 /// Flags to be encoded into the serialization.
@@ -87,7 +98,10 @@ impl Flags {
     pub fn from_u64(value: u64, offset: u64) -> Self {
         let x_sign = (value >> (63 - offset)) & 1 == 1;
         let is_infinity = (value >> (62 - offset)) & 1 == 1;
-        Flags { y_sign: x_sign, is_infinity }
+        Flags {
+            y_sign: x_sign,
+            is_infinity,
+        }
     }
 
     /// Removes and returns the flags encoded into a u64 into the most significant bits (minus a bit offset).
@@ -103,7 +117,11 @@ impl<P: SWModelParameters> BeSerialize for GroupAffine<P>
 where
     P::BaseField: BeSerialize,
 {
-    fn serialize_with_flags<W: WriteBytesExt>(&self, writer: &mut W, _flags: Flags) -> Result<(), Error> {
+    fn serialize_with_flags<W: WriteBytesExt>(
+        &self,
+        writer: &mut W,
+        _flags: Flags,
+    ) -> Result<(), Error> {
         // We always ignore flags here.
         if self.is_zero() {
             let flags = Flags::infinity();
@@ -135,7 +153,8 @@ where
             Ok((Self::zero(), flags))
         } else {
             Ok((
-                GroupAffine::get_point_from_x(x, flags.y_sign).ok_or(Error::from(std::io::ErrorKind::InvalidData))?,
+                GroupAffine::get_point_from_x(x, flags.y_sign)
+                    .ok_or_else(|| Error::from(std::io::ErrorKind::InvalidData))?,
                 flags,
             ))
         }
@@ -144,7 +163,11 @@ where
 
 // MNT6 Fq
 impl BeSerialize for MNT6Fq {
-    fn serialize_with_flags<W: WriteBytesExt>(&self, writer: &mut W, flags: Flags) -> Result<(), Error> {
+    fn serialize_with_flags<W: WriteBytesExt>(
+        &self,
+        writer: &mut W,
+        flags: Flags,
+    ) -> Result<(), Error> {
         CustomLengthDeSerialize::serialize_with_flags(&self.into_repr(), writer, flags, 95)
     }
 
@@ -156,25 +179,32 @@ impl BeSerialize for MNT6Fq {
 impl BeDeserialize for MNT6Fq {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, Error> {
         let value: BigInteger768 = CustomLengthDeSerialize::deserialize(reader, 95)?;
-        Ok(MNT6Fq::from_repr(value))
+        Ok(MNT6Fq::from_repr(value).unwrap())
     }
 
     fn deserialize_with_flags<R: ReadBytesExt>(reader: &mut R) -> Result<(Self, Flags), Error> {
-        let (value, flags): (BigInteger768, _) = CustomLengthDeSerialize::deserialize_with_flags(reader, 95)?;
-        Ok((MNT6Fq::from_repr(value), flags))
+        let (value, flags): (BigInteger768, _) =
+            CustomLengthDeSerialize::deserialize_with_flags(reader, 95)?;
+        Ok((MNT6Fq::from_repr(value).unwrap(), flags))
     }
 }
 
 // MNT6 Fq3
 impl BeSerialize for MNT6Fq3 {
-    fn serialize_with_flags<W: WriteBytesExt>(&self, writer: &mut W, flags: Flags) -> Result<(), Error> {
+    fn serialize_with_flags<W: WriteBytesExt>(
+        &self,
+        writer: &mut W,
+        flags: Flags,
+    ) -> Result<(), Error> {
         BeSerialize::serialize_with_flags(&self.c0, writer, flags)?;
         BeSerialize::serialize(&self.c1, writer)?;
         BeSerialize::serialize(&self.c2, writer)
     }
 
     fn serialized_size(&self) -> usize {
-        BeSerialize::serialized_size(&self.c0) + BeSerialize::serialized_size(&self.c1) + BeSerialize::serialized_size(&self.c2)
+        BeSerialize::serialized_size(&self.c0)
+            + BeSerialize::serialized_size(&self.c1)
+            + BeSerialize::serialized_size(&self.c2)
     }
 }
 
@@ -196,7 +226,11 @@ impl BeDeserialize for MNT6Fq3 {
 
 // MNT4 Fq
 impl BeSerialize for MNT4Fq {
-    fn serialize_with_flags<W: WriteBytesExt>(&self, writer: &mut W, flags: Flags) -> Result<(), Error> {
+    fn serialize_with_flags<W: WriteBytesExt>(
+        &self,
+        writer: &mut W,
+        flags: Flags,
+    ) -> Result<(), Error> {
         CustomLengthDeSerialize::serialize_with_flags(&self.into_repr(), writer, flags, 95)
     }
 
@@ -208,18 +242,23 @@ impl BeSerialize for MNT4Fq {
 impl BeDeserialize for MNT4Fq {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, Error> {
         let value: BigInteger768 = CustomLengthDeSerialize::deserialize(reader, 95)?;
-        Ok(MNT4Fq::from_repr(value))
+        Ok(MNT4Fq::from_repr(value).unwrap())
     }
 
     fn deserialize_with_flags<R: ReadBytesExt>(reader: &mut R) -> Result<(Self, Flags), Error> {
-        let (value, flags): (BigInteger768, _) = CustomLengthDeSerialize::deserialize_with_flags(reader, 95)?;
-        Ok((MNT4Fq::from_repr(value), flags))
+        let (value, flags): (BigInteger768, _) =
+            CustomLengthDeSerialize::deserialize_with_flags(reader, 95)?;
+        Ok((MNT4Fq::from_repr(value).unwrap(), flags))
     }
 }
 
 // MNT4 Fq2
 impl BeSerialize for MNT4Fq2 {
-    fn serialize_with_flags<W: WriteBytesExt>(&self, writer: &mut W, flags: Flags) -> Result<(), Error> {
+    fn serialize_with_flags<W: WriteBytesExt>(
+        &self,
+        writer: &mut W,
+        flags: Flags,
+    ) -> Result<(), Error> {
         BeSerialize::serialize_with_flags(&self.c0, writer, flags)?;
         BeSerialize::serialize(&self.c1, writer)
     }
@@ -245,7 +284,12 @@ impl BeDeserialize for MNT4Fq2 {
 
 // BigInteger768
 impl CustomLengthDeSerialize for BigInteger768 {
-    fn serialize_with_flags<W: WriteBytesExt>(&self, writer: &mut W, flags: Flags, length: usize) -> Result<(), Error> {
+    fn serialize_with_flags<W: WriteBytesExt>(
+        &self,
+        writer: &mut W,
+        flags: Flags,
+        length: usize,
+    ) -> Result<(), Error> {
         // Calculate number of limbs required to pack `length` bytes: ceil(length / 8).
         let num_limbs = (length + 7) / 8;
 
@@ -300,7 +344,10 @@ impl CustomLengthDeSerialize for BigInteger768 {
         Ok(BigInteger768::new(limbs))
     }
 
-    fn deserialize_with_flags<R: ReadBytesExt>(reader: &mut R, length: usize) -> Result<(Self, Flags), Error> {
+    fn deserialize_with_flags<R: ReadBytesExt>(
+        reader: &mut R,
+        length: usize,
+    ) -> Result<(Self, Flags), Error> {
         // Calculate number of limbs required to pack `length` bytes: ceil(length / 8).
         let num_limbs = (length + 7) / 8;
 
@@ -334,7 +381,10 @@ impl CustomLengthDeSerialize for BigInteger768 {
 /// Reads a maximum of `max_length` bytes from the reader, padding it with 0s
 /// to construct a u64.
 #[inline]
-fn read_u64<R: ReadBytesExt, T: ByteOrder>(reader: &mut R, byte_offset: usize) -> Result<u64, Error> {
+fn read_u64<R: ReadBytesExt, T: ByteOrder>(
+    reader: &mut R,
+    byte_offset: usize,
+) -> Result<u64, Error> {
     let mut buf = [0; 8];
     reader.read_exact(&mut buf[byte_offset..])?;
     Ok(T::read_u64(&buf))
@@ -343,7 +393,11 @@ fn read_u64<R: ReadBytesExt, T: ByteOrder>(reader: &mut R, byte_offset: usize) -
 /// Reads a maximum of `max_length` bytes from the reader, padding it with 0s
 /// to construct a u64.
 #[inline]
-fn write_u64<W: WriteBytesExt, T: ByteOrder>(writer: &mut W, n: u64, byte_offset: usize) -> Result<(), Error> {
+fn write_u64<W: WriteBytesExt, T: ByteOrder>(
+    writer: &mut W,
+    n: u64,
+    byte_offset: usize,
+) -> Result<(), Error> {
     let mut buf = [0; 8];
     T::write_u64(&mut buf, n);
     writer.write_all(&buf[byte_offset..])

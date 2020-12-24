@@ -1,12 +1,15 @@
 use std::io;
 
-use algebra::mnt6_753::Fr;
-use algebra_core::bytes::{FromBytes, ToBytes};
+use ark_ff::{FromBytes, ToBytes};
+use ark_mnt6_753::Fr;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use nimiq_hash::{Hash, SerializeContent};
 
-use crate::{AggregatePublicKey, AggregateSignature, CompressedPublicKey, CompressedSignature, KeyPair, PublicKey, SecretKey, Signature};
+use crate::{
+    AggregatePublicKey, AggregateSignature, CompressedPublicKey, CompressedSignature, KeyPair,
+    PublicKey, SecretKey, Signature,
+};
 
 impl Serialize for CompressedPublicKey {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
@@ -99,7 +102,9 @@ impl Hash for PublicKey {}
 impl Deserialize for PublicKey {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let public_key: CompressedPublicKey = Deserialize::deserialize(reader)?;
-        public_key.uncompress().map_err(|_| SerializingError::InvalidValue)
+        public_key
+            .uncompress()
+            .map_err(|_| SerializingError::InvalidValue)
     }
 }
 
@@ -124,7 +129,9 @@ impl Hash for Signature {}
 impl Deserialize for Signature {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let signature: CompressedSignature = Deserialize::deserialize(reader)?;
-        signature.uncompress().map_err(|_| SerializingError::InvalidValue)
+        signature
+            .uncompress()
+            .map_err(|_| SerializingError::InvalidValue)
     }
 }
 
