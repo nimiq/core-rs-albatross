@@ -1,4 +1,4 @@
-use std::{pin::Pin, sync::Arc, unimplemented};
+use std::{pin::Pin, sync::{atomic::{AtomicBool, Ordering}, Arc}};
 
 use async_trait::async_trait;
 use futures::stream::{Stream, StreamExt};
@@ -20,6 +20,9 @@ pub enum MockNetworkError {
 
     #[error("Can't connect to peer: {0}")]
     CantConnect(MockAddress),
+
+    #[error("Network is not connected")]
+    NotConnected,
 }
 
 #[derive(Debug)]
@@ -38,18 +41,34 @@ pub struct MockNetwork {
     address: MockAddress,
     peers: ObservablePeerMap<MockPeer>,
     hub: Arc<Mutex<MockHubInner>>,
+    is_connected: Arc<AtomicBool>,
 }
 
 impl MockNetwork {
     pub(crate) fn new(address: MockAddress, hub: Arc<Mutex<MockHubInner>>) -> Self {
         let peers = ObservablePeerMap::default();
 
-        // Insert out peer map into global peer maps table
-        if hub.lock().peer_maps.insert(address, peers.clone()).is_some() {
-            panic!("address/peer_id of MockNetwork must be unique: address={}", address);
-        }
+        let is_connected = {
+            let mut hub = hub.lock();
 
-        Self { address, peers, hub }
+            // Insert out peer map into global peer maps table
+            if hub.peer_maps.insert(address, peers.clone()).is_some() {
+                panic!("address/peer_id of MockNetwork must be unique: address={}", address);
+            }
+
+            // Insert our is_connected bool into the hub
+            let is_connected = Arc::new(AtomicBool::new(false));
+            hub.is_connected.insert(address, Arc::clone(&is_connected));
+
+            is_connected
+        };
+
+        Self {
+            address,
+            peers,
+            hub,
+            is_connected,
+        }
     }
 
     pub fn address(&self) -> MockAddress {
@@ -82,6 +101,14 @@ impl MockNetwork {
                 peer_id: address.into(),
                 hub: Arc::clone(&self.hub),
             });
+
+            // Set is_connected flag for this network
+            self.is_connected.store(true, Ordering::SeqCst);
+
+            // Set is_connected flag for other network
+            let hub = self.hub.lock();
+            let is_connected = hub.is_connected.get(&address).unwrap();
+            is_connected.store(true, Ordering::SeqCst);
         }
         else {
             log::trace!("Peers are already connected.");
@@ -110,6 +137,8 @@ impl MockNetwork {
             });
             peer_map.remove(&self.address.into());
         }
+
+        self.is_connected.store(false, Ordering::SeqCst);
     }
 }
 
@@ -141,16 +170,28 @@ impl Network for MockNetwork {
         T: Topic + Sync,
     {
         let mut hub = self.hub.lock();
-        let stream = hub.get_topic(topic.topic()).subscribe().into_stream().filter_map(|r| async move {
-            match r {
-                Ok((data, peer_id)) => match T::Item::deserialize_from_vec(&data) {
-                    Ok(item) => return Some((item, peer_id)),
-                    Err(e) => log::warn!("Dropped item because deserialization failed: {}", e),
-                },
-                Err(broadcast::RecvError::Closed) => {}
-                Err(broadcast::RecvError::Lagged(_)) => log::warn!("Mock gossipsub channel is lagging"),
+        let is_connected = Arc::clone(&self.is_connected);
+
+        let stream = hub.get_topic(topic.topic()).subscribe().into_stream().filter_map(move |r| {
+            let is_connected = Arc::clone(&is_connected);
+
+            async move {
+                if is_connected.load(Ordering::SeqCst) {
+                    match r {
+                        Ok((data, peer_id)) => match T::Item::deserialize_from_vec(&data) {
+                            Ok(item) => return Some((item, peer_id)),
+                            Err(e) => log::warn!("Dropped item because deserialization failed: {}", e),
+                        },
+                        Err(broadcast::RecvError::Closed) => {}
+                        Err(broadcast::RecvError::Lagged(_)) => log::warn!("Mock gossipsub channel is lagging"),
+                    }
+                }
+                else {
+                    log::debug!("Network not connected: Dropping gossipsub message.");
+                }
+
+                None
             }
-            None
         });
 
         Ok(stream
@@ -176,8 +217,13 @@ impl Network for MockNetwork {
 
         log::debug!("Peer {} publishing on topic '{}': {:?}", self.address, topic, item);
 
-        hub.get_topic(topic).send((Arc::new(data), self.address.into())).unwrap();
-        Ok(())
+        if self.is_connected.load(Ordering::SeqCst) {
+            hub.get_topic(topic).send((Arc::new(data), self.address.into())).unwrap();
+            Ok(())
+        }
+        else {
+            Err(MockNetworkError::NotConnected)
+        }
     }
 
     async fn validate_message(&self, _id: Self::PubsubId) -> Result<bool, Self::Error> {
@@ -189,13 +235,19 @@ impl Network for MockNetwork {
         K: AsRef<[u8]> + Send + Sync,
         V: Deserialize + Send + Sync,
     {
-        let hub = self.hub.lock();
+        if self.is_connected.load(Ordering::SeqCst) {
+            let hub = self.hub.lock();
 
-        if let Some(data) = hub.dht.get(k.as_ref()) {
-            Ok(Some(V::deserialize_from_vec(&data)?))
-        } else {
-            Ok(None)
+            if let Some(data) = hub.dht.get(k.as_ref()) {
+                Ok(Some(V::deserialize_from_vec(&data)?))
+            } else {
+                Ok(None)
+            }
         }
+        else {
+            Err(MockNetworkError::NotConnected)
+        }
+
     }
 
     async fn dht_put<K, V>(&self, k: &K, v: &V) -> Result<(), Self::Error>
@@ -203,11 +255,16 @@ impl Network for MockNetwork {
         K: AsRef<[u8]> + Send + Sync,
         V: Serialize + Send + Sync,
     {
-        let mut hub = self.hub.lock();
+        if self.is_connected.load(Ordering::SeqCst) {
+            let mut hub = self.hub.lock();
 
-        let data = v.serialize_to_vec();
-        hub.dht.insert(k.as_ref().to_owned(), data);
-        Ok(())
+            let data = v.serialize_to_vec();
+            hub.dht.insert(k.as_ref().to_owned(), data);
+            Ok(())
+        }
+        else {
+            Err(MockNetworkError::NotConnected)
+        }
     }
 
     async fn dial_peer(&self, peer_id: MockPeerId) -> Result<(), Self::Error> {

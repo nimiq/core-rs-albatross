@@ -1,4 +1,4 @@
-use std::{collections::HashMap, hash::Hash, sync::Arc};
+use std::{collections::HashMap, hash::Hash, sync::{atomic::AtomicBool, Arc}};
 
 use futures::channel::mpsc;
 use parking_lot::Mutex;
@@ -29,6 +29,9 @@ pub(crate) struct MockHubInner {
 
     /// DHT
     pub dht: HashMap<Vec<u8>, Vec<u8>>,
+
+    /// Arcs to `AtomicBool`s for each network if they're connected.
+    pub is_connected: HashMap<MockAddress, Arc<AtomicBool>>,
 }
 
 impl MockHubInner {
