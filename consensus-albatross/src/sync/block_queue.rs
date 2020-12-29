@@ -29,6 +29,10 @@ impl Topic for BlockTopic {
     fn topic(&self) -> String {
         "blocks".to_owned()
     }
+
+    fn validate(&self) -> bool {
+        false
+    }
 }
 
 pub type BlockStream = BoxStream<'static, Block>;

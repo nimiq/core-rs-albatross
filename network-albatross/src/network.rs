@@ -21,7 +21,7 @@ use blockchain_albatross::Blockchain;
 use genesis::NetworkId;
 use macros::upgrade_weak;
 use network_interface::{
-    network::Topic,
+    network::{PubsubId, Topic},
     prelude::{Network as NetworkInterface, NetworkEvent as NetworkEventI, Peer as PeerInterface},
 };
 use utils::mutable_once::MutableOnce;
@@ -37,9 +37,21 @@ use crate::connection::connection_pool::ConnectionPool;
 use crate::connection::connection_pool::ConnectionPoolEvent;
 use crate::error::Error;
 use crate::network_config::NetworkConfig;
+use crate::peer_address::address::PeerAddress;
 use crate::peer_channel::PeerChannel;
 use crate::peer_scorer::PeerScorer;
 use crate::Peer;
+
+#[derive(Debug)]
+pub struct AlbatrossPubsubId<P> {
+    propagation_source: P,
+}
+
+impl PubsubId<Arc<PeerAddress>> for AlbatrossPubsubId<Arc<PeerAddress>> {
+    fn propagation_source(&self) -> Arc<PeerAddress> {
+        self.propagation_source.clone()
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum NetworkError {}
@@ -406,6 +418,7 @@ impl NetworkInterface for Network {
     type PeerType = PeerChannel;
     type AddressType = String;
     type Error = NetworkError;
+    type PubsubId = AlbatrossPubsubId<Arc<PeerAddress>>;
 
     fn get_peer_updates(&self) -> (Vec<Arc<Self::PeerType>>, broadcast::Receiver<NetworkEventI<Self::PeerType>>) {
         unimplemented!();
@@ -432,7 +445,7 @@ impl NetworkInterface for Network {
         unimplemented!()
     }
 
-    async fn subscribe<T>(&self, _topic: &T) -> Result<Pin<Box<dyn Stream<Item = (T::Item, <Self::PeerType as PeerInterface>::Id)> + Send>>, Self::Error>
+    async fn subscribe<T>(&self, _topic: &T) -> Result<Pin<Box<dyn Stream<Item = (T::Item, Self::PubsubId)> + Send>>, Self::Error>
     where
         T: Topic + Sync,
     {
@@ -443,6 +456,10 @@ impl NetworkInterface for Network {
     where
         T: Topic + Sync,
     {
+        unimplemented!()
+    }
+
+    async fn validate_message(&self, _id: Self::PubsubId) -> Result<bool, Self::Error> {
         unimplemented!()
     }
 

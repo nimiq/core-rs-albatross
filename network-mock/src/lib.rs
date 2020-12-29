@@ -149,6 +149,10 @@ pub mod tests {
         fn topic(&self) -> String {
             "hello_world".to_owned()
         }
+
+        fn validate(&self) -> bool {
+            false
+        }
     }
 
     fn consume_stream<T: std::fmt::Debug>(mut stream: impl Stream<Item = T> + Unpin + Send + 'static) {

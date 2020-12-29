@@ -23,6 +23,7 @@ pub trait Topic {
     type Item: Serialize + Deserialize + Send + Sync + std::fmt::Debug + 'static;
 
     fn topic(&self) -> String;
+    fn validate(&self) -> bool;
 }
 
 impl<P: Peer> std::fmt::Debug for NetworkEvent<P> {
@@ -45,11 +46,16 @@ impl<P> Clone for NetworkEvent<P> {
     }
 }
 
+pub trait PubsubId<PeerId> {
+    fn propagation_source(&self) -> PeerId;
+}
+
 #[async_trait]
 pub trait Network: Send + Sync + 'static {
     type PeerType: Peer + 'static;
     type AddressType: std::fmt::Display + std::fmt::Debug;
     type Error: std::error::Error;
+    type PubsubId: PubsubId<<Self::PeerType as Peer>::Id>;
 
     fn get_peer_updates(&self) -> (Vec<Arc<Self::PeerType>>, broadcast::Receiver<NetworkEvent<Self::PeerType>>);
 
@@ -71,13 +77,15 @@ pub trait Network: Send + Sync + 'static {
         ReceiveFromAll::new(self)
     }
 
-    async fn subscribe<T>(&self, topic: &T) -> Result<Pin<Box<dyn Stream<Item = (T::Item, <Self::PeerType as Peer>::Id)> + Send>>, Self::Error>
+    async fn subscribe<T>(&self, topic: &T) -> Result<Pin<Box<dyn Stream<Item = (T::Item, Self::PubsubId)> + Send>>, Self::Error>
     where
         T: Topic + Sync;
 
     async fn publish<T: Topic>(&self, topic: &T, item: T::Item) -> Result<(), Self::Error>
     where
         T: Topic + Sync;
+
+    async fn validate_message(&self, id: Self::PubsubId) -> Result<bool, Self::Error>;
 
     async fn dht_get<K, V>(&self, k: &K) -> Result<Option<V>, Self::Error>
     where

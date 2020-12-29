@@ -155,6 +155,7 @@ where
 {
     type Error = NetworkError<<N as Network>::Error>;
     type PeerType = <N as Network>::PeerType;
+    type PubsubId = <N as Network>::PubsubId;
 
     async fn get_validator_peer(&self, validator_id: usize) -> Result<Option<Arc<<N as Network>::PeerType>>, Self::Error> {
         let peer_id = self.get_validator_peer_id(validator_id).await?;
@@ -186,7 +187,7 @@ where
         Ok(())
     }
 
-    async fn subscribe<TTopic>(&self, topic: &TTopic) -> Result<Pin<Box<dyn Stream<Item = (TTopic::Item, <Self::PeerType as Peer>::Id)> + Send>>, Self::Error>
+    async fn subscribe<TTopic>(&self, topic: &TTopic) -> Result<Pin<Box<dyn Stream<Item = (TTopic::Item, Self::PubsubId)> + Send>>, Self::Error>
     where
         TTopic: Topic + Sync,
     {

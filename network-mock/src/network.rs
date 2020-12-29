@@ -1,4 +1,4 @@
-use std::{pin::Pin, sync::Arc};
+use std::{pin::Pin, sync::Arc, unimplemented};
 
 use async_trait::async_trait;
 use futures::stream::{Stream, StreamExt};
@@ -7,7 +7,7 @@ use thiserror::Error;
 use tokio::sync::broadcast;
 
 use beserial::{Deserialize, Serialize};
-use nimiq_network_interface::network::{NetworkEvent, Topic};
+use nimiq_network_interface::network::{NetworkEvent, PubsubId, Topic};
 use nimiq_network_interface::peer::Peer;
 use nimiq_network_interface::{network::Network, peer_map::ObservablePeerMap};
 
@@ -20,6 +20,17 @@ pub enum MockNetworkError {
 
     #[error("Can't connect to peer: {0}")]
     CantConnect(MockAddress),
+}
+
+#[derive(Debug)]
+pub struct MockPubsubId<P> {
+	propagation_source: P,
+}
+
+impl PubsubId<MockPeerId> for MockPubsubId<MockPeerId> {
+    fn propagation_source(&self) -> MockPeerId {
+        self.propagation_source.clone()
+    }
 }
 
 #[derive(Debug)]
@@ -107,6 +118,7 @@ impl Network for MockNetwork {
     type PeerType = MockPeer;
     type AddressType = MockAddress;
     type Error = MockNetworkError;
+    type PubsubId = MockPubsubId<MockPeerId>;
 
     fn get_peer_updates(&self) -> (Vec<Arc<MockPeer>>, broadcast::Receiver<NetworkEvent<MockPeer>>) {
         self.peers.subscribe()
@@ -124,7 +136,7 @@ impl Network for MockNetwork {
         self.get_peer_updates().1
     }
 
-    async fn subscribe<T>(&self, topic: &T) -> Result<Pin<Box<dyn Stream<Item = (T::Item, <Self::PeerType as Peer>::Id)> + Send>>, Self::Error>
+    async fn subscribe<T>(&self, topic: &T) -> Result<Pin<Box<dyn Stream<Item = (T::Item, Self::PubsubId)> + Send>>, Self::Error>
     where
         T: Topic + Sync,
     {
@@ -141,7 +153,16 @@ impl Network for MockNetwork {
             None
         });
 
-        Ok(stream.boxed())
+        Ok(stream
+            .map(|(topic, peer_id)| {
+                let id = MockPubsubId {
+                    propagation_source: peer_id,
+                };
+                (topic, id)
+            })
+            .boxed())
+
+     //   Ok(stream.boxed())
     }
 
     async fn publish<T: Topic>(&self, topic: &T, item: T::Item) -> Result<(), Self::Error>
@@ -157,6 +178,10 @@ impl Network for MockNetwork {
 
         hub.get_topic(topic).send((Arc::new(data), self.address.into())).unwrap();
         Ok(())
+    }
+
+    async fn validate_message(&self, _id: Self::PubsubId) -> Result<bool, Self::Error> {
+        unimplemented!()
     }
 
     async fn dht_get<K, V>(&self, k: &K) -> Result<Option<V>, Self::Error>

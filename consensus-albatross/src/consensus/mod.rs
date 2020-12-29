@@ -35,6 +35,10 @@ impl Topic for TransactionTopic {
     fn topic(&self) -> String {
         "transactions".to_owned()
     }
+
+    fn validate(&self) -> bool {
+        false
+    }
 }
 
 pub struct ConsensusProxy<N: Network> {

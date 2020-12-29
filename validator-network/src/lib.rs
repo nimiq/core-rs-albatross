@@ -9,7 +9,7 @@ use std::{pin::Pin, sync::Arc, time::Duration};
 use async_trait::async_trait;
 use futures::Stream;
 
-use nimiq_network_interface::network::Topic;
+use nimiq_network_interface::network::{PubsubId, Topic};
 use nimiq_network_interface::{message::Message, peer::Peer};
 
 pub use crate::error::NetworkError;
@@ -22,6 +22,7 @@ pub type MessageStream<TMessage, TPeerId> = Pin<Box<dyn Stream<Item = (TMessage,
 pub trait ValidatorNetwork: Send + Sync {
     type Error: std::error::Error;
     type PeerType: Peer;
+    type PubsubId: PubsubId<<Self::PeerType as Peer>::Id>;
 
     async fn get_validator_peer(&self, validator_id: usize) -> Result<Option<Arc<Self::PeerType>>, Self::Error>;
 
@@ -37,7 +38,7 @@ pub trait ValidatorNetwork: Send + Sync {
     async fn subscribe<TTopic: Topic + Sync>(
         &self,
         topic: &TTopic,
-    ) -> Result<Pin<Box<dyn Stream<Item = (TTopic::Item, <Self::PeerType as Peer>::Id)> + Send>>, Self::Error>;
+    ) -> Result<Pin<Box<dyn Stream<Item = (TTopic::Item, Self::PubsubId)> + Send>>, Self::Error>;
 
     /// registers a cache for the specified message type.
     /// Incoming messages of this type shuld be held in a FIFO queue of total size `buffer_size`, each with a lifetime of `lifetime`

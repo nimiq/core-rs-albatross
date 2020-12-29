@@ -12,7 +12,7 @@ use libp2p::{
     core,
     core::{muxing::StreamMuxerBox, network::NetworkInfo, transport::Boxed},
     dns,
-    gossipsub::{GossipsubConfig, GossipsubEvent, GossipsubMessage, Topic as GossipsubTopic, TopicHash},
+    gossipsub::{GossipsubConfig, GossipsubEvent, GossipsubMessage, MessageId, Topic as GossipsubTopic, TopicHash},
     identity::Keypair,
     kad::{GetRecordOk, KademliaConfig, KademliaEvent, QueryId, QueryResult, Quorum, Record},
     noise,
@@ -28,7 +28,7 @@ use libp2p::core::transport::MemoryTransport;
 use beserial::{Deserialize, Serialize};
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{
-    network::{Network as NetworkInterface, NetworkEvent, Topic},
+    network::{Network as NetworkInterface, NetworkEvent, PubsubId, Topic},
     peer_map::ObservablePeerMap,
 };
 use nimiq_utils::time::OffsetTime;
@@ -55,6 +55,9 @@ pub struct Config {
 
 impl Config {
     pub fn new(keypair: Keypair, peer_contact: PeerContact, genesis_hash: Blake2bHash) -> Self {
+        let mut gossipsub_config = GossipsubConfig::default();
+        gossipsub_config.validate_messages = true;
+
         Self {
             keypair,
             peer_contact,
@@ -62,7 +65,7 @@ impl Config {
             message: MessageConfig::default(),
             limit: LimitConfig::default(),
             kademlia: KademliaConfig::default(),
-            gossipsub: GossipsubConfig::default(),
+            gossipsub: gossipsub_config,
         }
     }
 }
@@ -143,7 +146,8 @@ pub enum NetworkAction {
     },
     Subscribe {
         topic_name: String,
-        output: mpsc::Sender<(GossipsubMessage, PeerId)>,
+        validate: bool,
+        output: mpsc::Sender<(GossipsubMessage, MessageId, PeerId)>,
     },
     Publish {
         topic_name: String,
@@ -153,13 +157,30 @@ pub enum NetworkAction {
     NetworkInfo {
         output: oneshot::Sender<NetworkInfo>,
     },
+    Validate {
+        message_id: MessageId,
+        source: PeerId,
+        output: oneshot::Sender<Result<bool, NetworkError>>,
+    },
 }
 
 #[derive(Default)]
 struct TaskState {
     dht_puts: HashMap<QueryId, oneshot::Sender<Result<(), NetworkError>>>,
     dht_gets: HashMap<QueryId, oneshot::Sender<Result<Option<Vec<u8>>, NetworkError>>>,
-    gossip_topics: HashMap<TopicHash, mpsc::Sender<(GossipsubMessage, PeerId)>>,
+    gossip_topics: HashMap<TopicHash, (mpsc::Sender<(GossipsubMessage, MessageId, PeerId)>, bool)>,
+}
+
+#[derive(Debug)]
+pub struct GossipsubId<P> {
+    message_id: MessageId,
+    propagation_source: P,
+}
+
+impl PubsubId<PeerId> for GossipsubId<PeerId> {
+    fn propagation_source(&self) -> PeerId {
+        self.propagation_source.clone()
+    }
 }
 
 pub struct Network {
@@ -324,8 +345,12 @@ impl Network {
                             GossipsubEvent::Message(peer_id, msg_id, msg) => {
                                 log::debug!("Received message {:?} from peer {:?}: {:?}", msg_id, peer_id, msg);
                                 for topic in msg.topics.iter() {
-                                    if let Some(output) = state.gossip_topics.get_mut(&topic) {
-                                        output.send((msg.clone(), peer_id.clone())).await.ok();
+                                    if let Some(topic_info) = state.gossip_topics.get_mut(&topic) {
+                                        let (output, validate) = topic_info;
+                                        output.send((msg.clone(), msg_id.clone(), peer_id.clone())).await.ok();
+                                        if !&*validate {
+                                            swarm.gossipsub.validate_message(&msg_id, &peer_id);
+                                        }
                                     } else {
                                         log::warn!("Unknown topic hash: {:?}", topic);
                                     }
@@ -384,10 +409,10 @@ impl Network {
                     }
                 }
             }
-            NetworkAction::Subscribe { topic_name, output } => {
+            NetworkAction::Subscribe { topic_name, validate, output } => {
                 let topic = GossipsubTopic::new(topic_name.clone());
                 if swarm.gossipsub.subscribe(topic.clone()) {
-                    state.gossip_topics.insert(topic.no_hash(), output);
+                    state.gossip_topics.insert(topic.no_hash(), (output, validate));
                 } else {
                     log::warn!("Already subscribed to topic: {:?}", topic_name);
                 }
@@ -398,6 +423,9 @@ impl Network {
             }
             NetworkAction::NetworkInfo { output } => {
                 output.send(Swarm::network_info(swarm)).ok();
+            }
+            NetworkAction::Validate { message_id, source, output } => {
+                output.send(Ok(swarm.gossipsub.validate_message(&message_id, &source))).ok();
             }
         }
 
@@ -417,6 +445,7 @@ impl NetworkInterface for Network {
     type PeerType = Peer;
     type AddressType = Multiaddr;
     type Error = NetworkError;
+    type PubsubId = GossipsubId<PeerId>;
 
     fn get_peer_updates(&self) -> (Vec<Arc<Self::PeerType>>, broadcast::Receiver<NetworkEvent<Self::PeerType>>) {
         self.peers.subscribe()
@@ -434,7 +463,7 @@ impl NetworkInterface for Network {
         self.events_tx.subscribe()
     }
 
-    async fn subscribe<T>(&self, topic: &T) -> Result<Pin<Box<dyn Stream<Item = (T::Item, PeerId)> + Send>>, Self::Error>
+    async fn subscribe<T>(&self, topic: &T) -> Result<Pin<Box<dyn Stream<Item = (T::Item, Self::PubsubId)> + Send>>, Self::Error>
     where
         T: Topic + Sync,
     {
@@ -445,14 +474,19 @@ impl NetworkInterface for Network {
             .await
             .send(NetworkAction::Subscribe {
                 topic_name: topic.topic(),
+                validate: topic.validate(),
                 output: tx,
             })
             .await?;
 
         Ok(rx
-            .map(|(msg, peer_id)| {
+            .map(|(msg, msg_id, source)| {
                 let item: <T as Topic>::Item = Deserialize::deserialize_from_vec(&msg.data).unwrap();
-                (item, peer_id)
+                let id = GossipsubId {
+                    message_id: msg_id,
+                    propagation_source: source,
+                };
+                (item, id)
             })
             .boxed())
     }
@@ -472,6 +506,22 @@ impl NetworkInterface for Network {
             .send(NetworkAction::Publish {
                 topic_name: topic.topic(),
                 data: buf,
+                output: output_tx,
+            })
+            .await?;
+
+        output_rx.await?
+    }
+
+    async fn validate_message(&self, id: Self::PubsubId) -> Result<bool, Self::Error> {
+        let (output_tx, output_rx) = oneshot::channel();
+
+        self.action_tx
+            .lock()
+            .await
+            .send(NetworkAction::Validate {
+                message_id: id.message_id,
+                source: id.propagation_source,
                 output: output_tx,
             })
             .await?;
@@ -811,6 +861,10 @@ mod tests {
         fn topic(&self) -> String {
             "hello_world".to_owned()
         }
+
+        fn validate(&self) -> bool {
+            true
+        }
     }
 
     fn consume_stream<T: std::fmt::Debug>(mut stream: impl Stream<Item = T> + Unpin + Send + 'static) {
@@ -840,9 +894,11 @@ mod tests {
 
         net2.publish(&TestTopic, test_message.clone()).await.unwrap();
 
-        let (received_message, _peer) = messages.next().await.unwrap();
+        let (received_message, message_id) = messages.next().await.unwrap();
         log::info!("Received GossipSub message: {:?}", received_message);
 
         assert_eq!(received_message, test_message);
+
+        assert!(net1.validate_message(message_id).await.unwrap());
     }
 }
