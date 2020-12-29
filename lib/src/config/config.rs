@@ -138,9 +138,9 @@ pub enum ProtocolConfig {
 #[builder(setter(into))]
 pub struct ValidatorConfig {
     #[builder(default)]
-    pub wallet_account: String,
+    pub wallet_account: Option<String>,
     #[builder(default)]
-    pub wallet_password: String,
+    pub wallet_password: Option<String>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -640,8 +640,8 @@ impl ClientConfigBuilder {
         wallet_password: Option<String>,
     ) -> &mut Self {
         self.validator = Some(Some(ValidatorConfig {
-            wallet_account,
-            wallet_password: wallet_password.unwrap_or_default(),
+            wallet_account: Some(wallet_account),
+            wallet_password,
         }));
         self
     }

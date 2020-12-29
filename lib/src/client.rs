@@ -50,11 +50,10 @@ pub(crate) struct ClientInner {
     /// reach consensus.
     consensus: ConsensusProxy,
 
-    /*
     /// The block production logic. This is optional and can also be fully disabled at compile-time
     #[cfg(feature = "validator")]
     validator: Option<Arc<Validator>>,
-    */
+
     /// Wallet that stores keypairs for transaction signing
     #[cfg(feature = "wallet")]
     wallet_store: Arc<WalletStore>,
@@ -105,7 +104,7 @@ impl ClientInner {
 
         // Load validator key (before we give away ownership of the storage config)
         #[cfg(feature = "validator")]
-        let _validator_key = config.storage.validator_key();
+        let validator_key = config.storage.validator_key()?;
 
         // Open database
         let environment =
@@ -130,35 +129,49 @@ impl ClientInner {
         )
         .await;
 
-        /*
         #[cfg(feature = "validator")]
         let validator = {
-            let validator_wallet_key = config.validator.map(|c| {
+            if let Some(config) = &config.validator {
                 #[cfg(not(feature = "wallet"))]
-                {
-                    // TODO: Maybe this should fail
-                    log::error!("Client is compiled without wallet and thus can't load the wallet account for the validator.");
+                let validator_wallet_key = {
+                    log::warn!("Client is compiled without wallet and thus can't load the wallet account for the validator.");
                     None
-                }
+                };
+
                 #[cfg(feature = "wallet")]
-                Some(wallet_store.get(&c.wallet_account, None).unlock()?.key_pair)
-            });
+                let validator_wallet_key = {
+                    if let Some(wallet_account) = &config.wallet_account {
+                        let address = wallet_account.parse()
+                            .map_err(|_| Error::config_error(format!("Failed to parse validator wallet address: {}", wallet_account)))?;
+                        let locked = wallet_store.get(&address, None)
+                            .ok_or_else(|| Error::config_error(format!("Could not find wallet account: {}", wallet_account)))?;
+                        let unlocked = locked.unlock(config.wallet_password.clone().unwrap_or_default().as_bytes())
+                            .map_err(|_| Error::config_error(format!("Failed to unlock validator wallet account: {}", wallet_account)))?;
+                        Some(unlocked.key_pair.clone())
+                    }
+                    else {
+                        None
+                    }
+                };
 
-            let validator_network = ValidatorNetworkImpl::new(network);
+                let validator_network = Arc::new(ValidatorNetworkImpl::new(Arc::clone(&network)));
 
-            config
-                .validator
-                .map(|_config| Arc::new(Validator::new(Arc::clone(&consensus), validator_network, validator_key, validator_wallet_key)));
+                let validator = Arc::new(Validator::new(&consensus, validator_network, validator_key, validator_wallet_key));
+
+                Some(validator)
+            }
+            else {
+                None
+            }
         };
-        */
 
         Ok((
             ClientInner {
                 environment,
                 network,
                 consensus: consensus.proxy(),
-                //#[cfg(feature = "validator")]
-                //validator,
+                #[cfg(feature = "validator")]
+                validator,
                 #[cfg(feature = "wallet")]
                 wallet_store,
                 seed_nodes: config.network.seeds,
@@ -241,13 +254,11 @@ impl Client {
         Arc::clone(&self.inner.wallet_store)
     }
 
-    /*
     /// Returns a reference to the *Validator* or `None`.
     #[cfg(feature = "validator")]
     pub fn validator(&self) -> Option<Arc<Validator>> {
         self.inner.validator.as_ref().map(|v| Arc::clone(v))
     }
-    */
 
     /// Returns the database environment.
     pub fn environment(&self) -> Environment {
