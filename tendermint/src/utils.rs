@@ -36,7 +36,7 @@ impl Into<TendermintStep> for Step {
             Step::Prevote => TendermintStep::PreVote,
             Step::Precommit => TendermintStep::PreCommit,
             Step::Propose => TendermintStep::Propose,
-            _ => panic!("Aggregations can not have a different Step than Prevote or Precommit: {:?}", self),
+            // _ => panic!("Aggregations can not have a different Step than Prevote or Precommit: {:?}", self),
         }
     }
 }

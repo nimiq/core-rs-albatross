@@ -11,7 +11,7 @@ use futures::sink::Sink;
 use futures::stream::{BoxStream, SelectAll, Stream, StreamExt};
 use futures::task::{Context, Poll};
 
-use futures_locks::{Mutex, RwLock};
+use futures_locks::RwLock;
 
 use nimiq_block_albatross::{create_pk_tree_root, MultiSignature, TendermintIdentifier, TendermintStep, TendermintVote};
 use nimiq_bls::SecretKey;
@@ -36,10 +36,25 @@ use super::contribution::TendermintContribution;
 use super::protocol::TendermintAggregationProtocol;
 use super::utils::{AggregationDescriptor, CurrentAggregation, TendermintAggregationEvent};
 
+/// Used to pass events from HandelTendermintAdapter to and from TendermintAggregations
+enum AggregationEvent<N: ValidatorNetwork> {
+    Start(
+        TendermintIdentifier,
+        TendermintContribution,
+        Vec<u8>,
+        Box<NetworkSink<LevelUpdateMessage<TendermintContribution, TendermintIdentifier>, N>>,
+    ),
+    Cancel(
+        u32,
+        TendermintStep,
+    ),
+}
+
 /// Maintains various aggregations for different rounds and steps of Tendermint.
 ///
 /// Note that `TendermintAggregations::broadcast_and_aggregate` needs to have been called at least once before the stream can meaningfully be awaited.
-pub struct TendermintAggregations {
+pub struct TendermintAggregations<N: ValidatorNetwork> {
+    event_receiver: mpsc::Receiver<AggregationEvent<N>>,
     combined_aggregation_streams: Pin<Box<SelectAll<BoxStream<'static, ((u32, TendermintStep), TendermintContribution)>>>>,
     aggregation_descriptors: BTreeMap<(u32, TendermintStep), AggregationDescriptor>,
     input: BoxStream<'static, LevelUpdateMessage<TendermintContribution, TendermintIdentifier>>,
@@ -48,11 +63,12 @@ pub struct TendermintAggregations {
     validator_registry: Arc<ValidatorRegistry>,
 }
 
-impl TendermintAggregations {
-    pub(crate) fn new(
+impl<N: ValidatorNetwork> TendermintAggregations<N> {
+    fn new(
         validator_id: u16,
         validator_registry: Arc<ValidatorRegistry>,
         input: BoxStream<'static, LevelUpdateMessage<TendermintContribution, TendermintIdentifier>>,
+        event_receiver: mpsc::Receiver<AggregationEvent<N>>,
     ) -> Self {
         // Create the instance and return it
         TendermintAggregations {
@@ -62,77 +78,91 @@ impl TendermintAggregations {
             input,
             validator_id,
             validator_registry,
+            event_receiver,
         }
     }
 
-    pub(crate) fn broadcast_and_aggregate<E: std::fmt::Debug + Send + 'static>(
+    fn broadcast_and_aggregate<E: std::fmt::Debug + Send + 'static>(
         &mut self,
         id: TendermintIdentifier,
         own_contribution: TendermintContribution,
         validator_merkle_root: Vec<u8>,
         output_sink: Box<(dyn Sink<(LevelUpdateMessage<TendermintContribution, TendermintIdentifier>, usize), Error = E> + Unpin + Send)>,
-    ) -> Result<(), TendermintError> {
+    ) {
         // TODO: TendermintAggregationEvent
-        if self.aggregation_descriptors.contains_key(&(id.round_number, id.step)) {
-            return Err(TendermintError::AggregationError);
+        if !self.aggregation_descriptors.contains_key(&(id.round_number, id.step)) {
+            debug!("starting aggregation for {:?}", &id);
+            // crate the correct protocol instance
+            let protocol = TendermintAggregationProtocol::new(
+                self.validator_registry.clone(),
+                self.validator_id as usize,
+                1, // To be removed
+                id.clone(),
+                validator_merkle_root,
+            );
+
+            let (sender, receiver) = mpsc::unbounded_channel::<LevelUpdate<TendermintContribution>>();
+
+            // create the aggregation
+            let aggregation = Aggregation::new(protocol, id.clone(), Config::default(), own_contribution, receiver.boxed(), output_sink);
+
+            // create the stream closer and wrap in Arc so it can be shared borrow
+            let stream_closer = Arc::new(AtomicBool::new(true));
+
+            // Create and store AggregationDescriptor
+            self.aggregation_descriptors.insert(
+                (id.round_number, id.step),
+                AggregationDescriptor {
+                    input: sender,
+                    is_running: stream_closer.clone(),
+                },
+            );
+
+            // copy round_number for use in drain_filter couple of lines down so that id can be moved into closure.
+            let round_number = id.round_number;
+
+            // wrap the aggregation stream
+            let aggregation = Box::pin(aggregation.map(move |x| ((id.round_number, id.step), x)).take_while(move |_x| {
+                future::ready(stream_closer.clone().load(Ordering::Relaxed))
+                // Todo: Check Ordering
+            }));
+
+            // Since this instance of Aggregation now becomes the current aggregation all bitsets containing contributors
+            // for future aggregations which are older or same age than this one can be discarded.
+            self.future_aggregations.drain_filter(|round, _bitset| round <= &round_number);
+
+            // Push the aggregation to the select_all streams.
+            self.combined_aggregation_streams.push(aggregation);
         }
-
-        // crate the correct protocol instance
-        let protocol = TendermintAggregationProtocol::new(
-            self.validator_registry.clone(),
-            self.validator_id as usize,
-            1, // To be removed
-            id.clone(),
-            validator_merkle_root,
-        );
-
-        let (sender, receiver) = mpsc::unbounded_channel::<LevelUpdate<TendermintContribution>>();
-
-        // create the aggregation
-        let aggregation = Aggregation::new(protocol, id.clone(), Config::default(), own_contribution, receiver.boxed(), output_sink);
-
-        // create the stream closer and wrap in Arc so it can be shared borrow
-        let stream_closer = Arc::new(AtomicBool::new(true));
-
-        // Create and store AggregationDescriptor
-        self.aggregation_descriptors.insert(
-            (id.round_number, id.step),
-            AggregationDescriptor {
-                input: sender,
-                is_running: stream_closer.clone(),
-            },
-        );
-
-        // copy round_number for use in drain_filter couple of lines down so that id can be moved into closure.
-        let round_number = id.round_number;
-
-        // wrap the aggregation stream
-        let aggregation = Box::pin(aggregation.map(move |x| ((id.round_number, id.step), x)).take_while(move |_x| {
-            future::ready(stream_closer.clone().load(Ordering::Relaxed))
-            // Todo: Check Ordering
-        }));
-
-        // Since this instance of Aggregation now becomes the current aggregation all bitsets containing contributors
-        // for future aggregations which are older or same age than this one can be discarded.
-        self.future_aggregations.drain_filter(|round, _bitset| round <= &round_number);
-
-        // Push the aggregation to the select_all streams.
-        self.combined_aggregation_streams.push(aggregation);
-
-        Ok(())
     }
 
     pub fn cancel_aggregation(&self, round: u32, step: TendermintStep) {
         if let Some(descriptor) = self.aggregation_descriptors.get(&(round, step)) {
+            debug!("canceling aggregation for {}-{:?}", &round, &step);
             descriptor.is_running.store(false, Ordering::Relaxed);
         }
     }
 }
 
-impl Stream for TendermintAggregations {
+impl<N: ValidatorNetwork + 'static> Stream for TendermintAggregations<N> {
     type Item = TendermintAggregationEvent;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        match self.event_receiver.poll_recv(cx) {
+            Poll::Pending => {},
+            Poll::Ready(None) => return Poll::Ready(None),
+            Poll::Ready(Some(AggregationEvent::Start(
+                id,
+                own_contribution,
+                validator_merkle_root,
+                output_sink,
+            ))) => self.broadcast_and_aggregate(id, own_contribution, validator_merkle_root, output_sink),
+            Poll::Ready(Some(AggregationEvent::Cancel(
+                round,
+                step,
+            ))) => self.cancel_aggregation(round, step),
+        }
+
         // empty out the input stream dispatching messages tothe appropriate aggregations
         while let Poll::Ready(message) = self.input.poll_next_unpin(cx) {
             match message {
@@ -140,13 +170,13 @@ impl Stream for TendermintAggregations {
                     if let Some(descriptor) = self.aggregation_descriptors.get(&(message.tag.round_number, message.tag.step)) {
                         trace!("New message for ongoing aggregation: {:?}", &message);
                         if descriptor.input.send(message.update).is_err() {
-                             // todo error handling
+                             error!("Failed to relay LevelUpdate to aggregation");
                         }
                     } else if let Some(((highest_round, _), _)) = self.aggregation_descriptors.last_key_value() {
                         // messages of future rounds need to be tracked in terrms of contributors only (without verifying them).
                         // Also note that PreVote and PreCommit are tracked in the same bitset as the protocol requires.
                         if highest_round < &message.tag.round_number {
-                            trace!("New contribution for future round: {:?}", &message);
+                            debug!("New contribution for future round: {:?}", &message);
                             let future_contributors = self
                                 .future_aggregations
                                 .entry(message.tag.round_number)
@@ -190,7 +220,6 @@ impl Stream for TendermintAggregations {
 /// Adaption for tendermint not using the handel stream directly. Ideally all of what this Adapter does would be done callerside just using the stream
 pub struct HandelTendermintAdapter<N: ValidatorNetwork> {
     current_bests: RwLock<BTreeMap<(u32, TendermintStep), TendermintContribution>>,
-    handel_aggregations: Mutex<TendermintAggregations>,
     current_aggregate: RwLock<Option<CurrentAggregation>>,
     pending_new_round: RwLock<Option<u32>>,
     validator_merkle_root: Vec<u8>,
@@ -199,6 +228,7 @@ pub struct HandelTendermintAdapter<N: ValidatorNetwork> {
     validator_id: u16,
     validator_registry: Arc<ValidatorRegistry>,
     network: Arc<N>,
+    event_sender: mpsc::Sender<AggregationEvent<N>>,
 }
 
 impl<N: ValidatorNetwork + 'static> HandelTendermintAdapter<N>
@@ -216,14 +246,15 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
 
         let validator_registry = Arc::new(ValidatorRegistry::new(active_validators));
 
-        let handel_aggregations = Mutex::new(TendermintAggregations::new(validator_id, validator_registry.clone(), input));
+        let (event_sender, event_receiver) = mpsc::channel::<AggregationEvent<N>>(1);
+
+        let mut aggregations = TendermintAggregations::new(validator_id, validator_registry.clone(), input, event_receiver);
         let current_bests = RwLock::new(BTreeMap::new());
         let current_aggregate = RwLock::new(None);
         let pending_new_round = RwLock::new(None);
 
         let this = Self {
             current_bests: current_bests.clone(),
-            handel_aggregations: handel_aggregations.clone(),
             current_aggregate: current_aggregate.clone(),
             pending_new_round: pending_new_round.clone(),
             validator_merkle_root,
@@ -232,16 +263,14 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
             validator_id,
             validator_registry: validator_registry.clone(),
             network,
+            event_sender,
         };
 
         // Here all the streams are polled to get each and every new aggregate and new round event.
         // Special care needs to be taken to release locks as early as possible
         tokio::spawn(async move {
             loop {
-                let mut lock = handel_aggregations.lock().await;
-                if let Some(event) = lock.next().await {
-                    // we have an event so it is time to drop the lock for someone else to aquire it.
-                    drop(lock);
+                if let Some(event) = aggregations.next().await {
                     match event {
                         TendermintAggregationEvent::NewRound(next_round) => {
                             // This needs to be forwarded to a waiting current_aggregate sink if there is one.
@@ -284,6 +313,7 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
                             };
                         }
                         TendermintAggregationEvent::Aggregation(r, s, c) => {
+                            debug!("New Aggregate for {}-{:?}: {:?}", &r, &s, &c);
                             // There is a new aggregate, check if it is a better aggregate for (round, step) than we curretly have
                             // if so, store it.
                             let contribution = current_bests
@@ -346,7 +376,8 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
                 } else {
                     // Once there is no items left on the combined handel stream then there is nothing being aggregated
                     // so this task is finished and will terminate.
-                    // break;
+                    debug!("Finished Aggregating");
+                    break;
                     // TODO how to terminate this
                 }
             }
@@ -408,13 +439,17 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
             self.network.clone(),
         ));
 
-        // Aquire mutex to the aggreagtion SelectAll to add an aggregation
-        // scope it such that the lock is droped as soon as the aggregation was added.
-        {
-            let mut lock = self.handel_aggregations.lock().await;
-            lock.broadcast_and_aggregate(id.clone(), own_contribution, self.validator_merkle_root.clone(), output_sink)
-                .map_err(|_| TendermintError::AggregationError)
-        }?;
+        // Relay the AggregationEvent to TendermintAggregations
+        self.event_sender
+            .send(AggregationEvent::Start(
+                id.clone(),
+                own_contribution,
+                self.validator_merkle_root.clone(),
+                output_sink,
+            ))
+            .await
+            .map_err(|_| TendermintError::AggregationError)?;
+
 
         // If a new round event was emitted before it needs to be checked if it is still relevant by
         // checking if it concerned a round higher than the one which is currently starting.
@@ -453,7 +488,11 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
                 // If the event is a NewRound it is propagated as is.
                 AggregationResult::NewRound(_) => {
                     if step == TendermintStep::PreCommit {
-                        self.handel_aggregations.lock().await.cancel_aggregation(round, step);
+                        // PreCommit Aggreations are never requested again, so the aggregation can be canceled.
+                        self.event_sender
+                            .send(AggregationEvent::Cancel(round, step))
+                            .await
+                            .map_err(|_| TendermintError::AggregationError)?;
                     }
                     return Ok(result);
                 }
@@ -469,7 +508,11 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
                             // Nil vote has f+1
                             if *weight > policy::SLOTS as usize - policy::TWO_THIRD_SLOTS as usize + 1usize {
                                 if step == TendermintStep::PreCommit {
-                                    self.handel_aggregations.lock().await.cancel_aggregation(round, step);
+                                    // PreCommit Aggreations are never requested again, so the aggregation can be canceled.
+                                    self.event_sender
+                                        .send(AggregationEvent::Cancel(round, step))
+                                        .await
+                                        .map_err(|_| TendermintError::AggregationError)?;
                                 }
                                 return Ok(result);
                             }
@@ -482,7 +525,11 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
                             // any individual proposal got 2f+1 vote weight
                             if *weight > policy::TWO_THIRD_SLOTS as usize {
                                 if step == TendermintStep::PreCommit {
-                                    self.handel_aggregations.lock().await.cancel_aggregation(round, step);
+                                    // PreCommit Aggreations are never requested again, so the aggregation can be canceled.
+                                    self.event_sender
+                                        .send(AggregationEvent::Cancel(round, step))
+                                        .await
+                                        .map_err(|_| TendermintError::AggregationError)?;
                                 }
                                 return Ok(result);
                             }
@@ -496,7 +543,11 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
                     // combined weight of all proposals exclluding the one this node signed reached 2f+1
                     if combined_weight > policy::SLOTS as usize {
                         if step == TendermintStep::PreCommit {
-                            self.handel_aggregations.lock().await.cancel_aggregation(round, step);
+                            // PreCommit Aggreations are never requested again, so the aggregation can be canceled.
+                            self.event_sender
+                                .send(AggregationEvent::Cancel(round, step))
+                                .await
+                                .map_err(|_| TendermintError::AggregationError)?;
                         }
                         return Ok(result);
                     }
@@ -510,7 +561,11 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
                 Ok(None) => return Err(TendermintError::AggregationError),
                 Err(_) => {
                     if step == TendermintStep::PreCommit {
-                        self.handel_aggregations.lock().await.cancel_aggregation(round, step);
+                        // PreCommit Aggreations are never requested again, so the aggregation can be canceled.
+                        self.event_sender
+                            .send(AggregationEvent::Cancel(round, step))
+                            .await
+                            .map_err(|_| TendermintError::AggregationError)?;
                     }
                     return Ok(result);
                 }
