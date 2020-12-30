@@ -224,7 +224,6 @@ impl FromStr for Coin {
 
         let frac_part = if let Some(frac_part_capture) = captures.name("frac_part") {
             let frac_part_str = frac_part_capture.as_str();
-            println!("frac_part_str = {}", frac_part_str);
             let mut frac_part = frac_part_str.parse::<u64>().map_err(|_| e())?;
             frac_part *= 10_u64.pow(Coin::FRAC_DIGITS - frac_part_str.len() as u32);
             frac_part

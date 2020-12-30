@@ -9,7 +9,7 @@ use nimiq_keys::Address;
 fn write_genesis_rs(directory: &PathBuf, name: &str, genesis_hash: &Blake2bHash, validator_registry: Option<Address>) {
     let validator_registry_str;
     if let Some(address) = validator_registry {
-        validator_registry_str = format!("Some(\"{}\".into())", address);
+        validator_registry_str = format!("Some(\"{}\".parse().unwrap())", address);
     } else {
         validator_registry_str = "None".to_string();
     }

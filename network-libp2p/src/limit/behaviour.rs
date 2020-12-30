@@ -99,8 +99,8 @@ impl NetworkBehaviour for LimitBehaviour {
 
         // Get the IP for this new peer connection
         let ip = match address.iter().next() {
-            Some(Protocol::Ip4(ip)) => IpNetwork::new(ip, self.config.ipv4_subnet_mask).unwrap(),
-            Some(Protocol::Ip6(ip)) => IpNetwork::new(ip, self.config.ipv6_subnet_mask).unwrap(),
+            Some(Protocol::Ip4(ip)) => IpNetwork::new_truncate(ip, self.config.ipv4_subnet_mask).unwrap(),
+            Some(Protocol::Ip6(ip)) => IpNetwork::new_truncate(ip, self.config.ipv6_subnet_mask).unwrap(),
             _ => return,
         };
 

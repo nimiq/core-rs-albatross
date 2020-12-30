@@ -3,31 +3,34 @@ use std::convert::From;
 use std::io;
 use std::iter::Iterator;
 use std::str::FromStr;
+use std::fmt::{Display, Debug, Formatter, self};
+
+use thiserror::Error;
+use hex::FromHex;
 
 use hash::{hash_typed_array, Blake2bHash, Blake2bHasher, Hasher};
-use macros::{add_hex_io_fns_typed_arr, create_typed_array};
+use macros::{create_typed_array};
 
 use crate::key_pair::KeyPair;
 use crate::PublicKey;
 
 create_typed_array!(Address, u8, 20);
 hash_typed_array!(Address);
-add_hex_io_fns_typed_arr!(Address, Address::SIZE);
 
-#[derive(Debug, Fail)]
+#[derive(Debug, Error)]
 pub enum AddressParseError {
     // User-friendly
-    #[fail(display = "Wrong country code")]
+    #[error("Wrong country code")]
     WrongCountryCode,
-    #[fail(display = "Wrong length")]
+    #[error("Wrong length")]
     WrongLength,
-    #[fail(display = "Invalid checksum")]
+    #[error("Invalid checksum")]
     InvalidChecksum,
     // from Hash
-    #[fail(display = "Invalid hash")]
+    #[error("Invalid hash")]
     InvalidHash,
     // trying both
-    #[fail(display = "Unknown format")]
+    #[error("Unknown format")]
     UnknownFormat,
 }
 
@@ -106,7 +109,7 @@ impl Address {
 
     pub fn from_any_str(s: &str) -> Result<Address, AddressParseError> {
         Address::from_user_friendly_address(&String::from(s))
-            .or_else(|_| Address::from_str(s))
+            .or_else(|_| Address::from_hex(s))
             .map_err(|_| AddressParseError::UnknownFormat)
     }
 
@@ -117,6 +120,20 @@ impl Address {
     pub fn burn_address() -> Address {
         // We use unwrap here because we know this will not produce an error.
         Self::from_user_friendly_address("NQ07 0000 0000 0000 0000 0000 0000 0000 0000").unwrap()
+    }
+
+    pub fn to_hex(&self) -> String {
+        hex::encode(&self.0)
+    }
+
+    pub fn from_hex(s: &str) -> Result<Self, AddressParseError> {
+        let vec = Vec::from_hex(s).map_err(|_| AddressParseError::InvalidHash)?;
+        if vec.len() == Self::SIZE {
+            Ok(Self::from(&vec[..]))
+        }
+        else {
+            Err(AddressParseError::WrongLength)
+        }
     }
 }
 
@@ -137,6 +154,28 @@ impl<'a> From<&'a PublicKey> for Address {
 impl<'a> From<&'a KeyPair> for Address {
     fn from(key_pair: &'a KeyPair) -> Self {
         Address::from(&key_pair.public)
+    }
+}
+
+impl FromStr for Address {
+    type Err = AddressParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::from_any_str(s)
+    }
+}
+
+impl Display for Address {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{}", self.to_user_friendly_address())
+    }
+}
+
+impl Debug for Address {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("Address")
+            .field(&self.to_hex())
+            .finish()
     }
 }
 

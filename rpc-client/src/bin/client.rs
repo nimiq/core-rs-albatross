@@ -65,15 +65,15 @@ enum Command {
 #[derive(Debug, StructOpt)]
 enum AccountCommand {
     List {
-        #[structopt(short)]
+        #[structopt(short, long)]
         short: bool,
     },
     New {
-        #[structopt(short = "P")]
+        #[structopt(short = "P", long)]
         password: Option<String>,
     },
     Import {
-        #[structopt(short = "P")]
+        #[structopt(short = "P", long)]
         password: Option<String>,
 
         key_data: String,
@@ -82,7 +82,7 @@ enum AccountCommand {
         address: Address,
     },
     Unlock {
-        #[structopt(short = "P")]
+        #[structopt(short = "P", long)]
         password: Option<String>,
 
         address: Address,
@@ -147,11 +147,11 @@ impl Command {
                         let accounts = client.wallet.list_accounts().await?;
                         for address in &accounts {
                             if short {
-                                println!("{}", address);
+                                println!("{}", address.to_user_friendly_address());
                             }
                             else {
                                 let account = client.blockchain.get_account(address.clone()).await?;
-                                println!("{}: {:#?}", address, account);
+                                println!("{}: {:#?}", address.to_user_friendly_address(), account);
                             }
                         }
                     },

@@ -20,10 +20,10 @@ use crate::{
         handler::{HandlerError as DiscoveryError, HandlerInEvent as DiscoveryAction},
         peer_contacts::PeerContactBook,
     },
-    limit::{
+    /*limit::{
         behaviour::{LimitBehaviour, LimitEvent},
         handler::{HandlerError as LimitError, HandlerInEvent as LimitAction},
-    },
+    },*/
     message::{
         behaviour::MessageBehaviour,
         handler::{HandlerError as MessageError, HandlerInEvent as MessageAction},
@@ -33,12 +33,12 @@ use crate::{
 };
 
 pub type NimiqNetworkBehaviourAction = NetworkBehaviourAction<
-    EitherOutput<EitherOutput<EitherOutput<EitherOutput<DiscoveryAction, MessageAction>, LimitAction>, KademliaAction<QueryId>>, GossipsubRpc>,
+    EitherOutput<EitherOutput<EitherOutput<DiscoveryAction, MessageAction>, KademliaAction<QueryId>>, GossipsubRpc>,
     NimiqEvent,
 >;
 
 pub type NimiqNetworkBehaviourError =
-    EitherError<EitherError<EitherError<EitherError<DiscoveryError, MessageError>, LimitError>, std::io::Error>, std::io::Error>;
+    EitherError<EitherError<EitherError<DiscoveryError, MessageError>, std::io::Error>, std::io::Error>;
 
 #[derive(Debug)]
 pub enum NimiqEvent {
@@ -70,7 +70,7 @@ impl From<GossipsubEvent> for NimiqEvent {
 pub struct NimiqBehaviour {
     pub discovery: DiscoveryBehaviour,
     pub message: MessageBehaviour,
-    pub limit: LimitBehaviour,
+    //pub limit: LimitBehaviour,
     pub kademlia: Kademlia<MemoryStore>,
     pub gossipsub: Gossipsub,
 
@@ -92,7 +92,7 @@ impl NimiqBehaviour {
 
         let message = MessageBehaviour::new(config.message);
 
-        let limit = LimitBehaviour::new(config.limit);
+        //let limit = LimitBehaviour::new(config.limit);
 
         let store = MemoryStore::new(peer_id.clone());
         let kademlia = Kademlia::with_config(peer_id, store, config.kademlia);
@@ -101,7 +101,7 @@ impl NimiqBehaviour {
         Self {
             discovery,
             message,
-            limit,
+            //limit,
             kademlia,
             gossipsub,
             events: VecDeque::new(),
@@ -167,22 +167,22 @@ impl NetworkBehaviourEventProcess<NetworkEvent<Peer>> for NimiqBehaviour {
     }
 }
 
-impl NetworkBehaviourEventProcess<LimitEvent> for NimiqBehaviour {
+/*impl NetworkBehaviourEventProcess<LimitEvent> for NimiqBehaviour {
     fn inject_event(&mut self, event: LimitEvent) {
         log::trace!("NimiqBehaviour::inject_event: {:?}", event);
     }
-}
+}*/
 
 impl NetworkBehaviourEventProcess<KademliaEvent> for NimiqBehaviour {
     fn inject_event(&mut self, event: KademliaEvent) {
-        log::debug!("NimiqBehaviour::inject_event: {:?}", event);
+        log::trace!("NimiqBehaviour::inject_event: {:?}", event);
         self.emit_event(event);
     }
 }
 
 impl NetworkBehaviourEventProcess<GossipsubEvent> for NimiqBehaviour {
     fn inject_event(&mut self, event: GossipsubEvent) {
-        log::debug!("NimiqBehaviour::gossipsub_event: {:?}", event);
+        log::trace!("NimiqBehaviour::inject_event: {:?}", event);
         self.emit_event(event);
     }
 }

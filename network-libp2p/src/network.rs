@@ -187,7 +187,7 @@ impl TaskState {
     }
 
     fn is_connected(&self) -> bool {
-        self.connected_tx.is_some()
+        self.connected_tx.is_none()
     }
 
     fn set_connected(&mut self) {
@@ -214,6 +214,7 @@ pub struct Network {
     events_tx: broadcast::Sender<NetworkEvent<Peer>>,
     action_tx: AsyncMutex<mpsc::Sender<NetworkAction>>,
     peers: ObservablePeerMap<Peer>,
+    connected_rx: AsyncMutex<Option<oneshot::Receiver<()>>>,
 }
 
 impl Network {
@@ -243,16 +244,19 @@ impl Network {
 
         async_std::task::spawn(Self::swarm_task(swarm, events_tx.clone(), action_rx, connected_tx, min_peers));
 
-        if min_peers != 0 {
-            log::info!("Waiting to connect to {} peers", min_peers);
-            connected_rx.await.unwrap();
-        }
-
         Self {
             local_peer_id,
             events_tx,
             action_tx: AsyncMutex::new(action_tx),
             peers,
+            connected_rx: AsyncMutex::new(Some(connected_rx)),
+        }
+    }
+
+    pub async fn wait_connected(&self) {
+        log::info!("Waiting for peers to connect");
+        if let Some(connected_rx) = self.connected_rx.lock().await.take() {
+            connected_rx.await.unwrap()
         }
     }
 
@@ -340,15 +344,13 @@ impl Network {
         min_peers: usize,
     ) {
         match event {
-            SwarmEvent::ConnectionEstablished { peer_id, endpoint, .. } => {
+            SwarmEvent::ConnectionEstablished { peer_id, endpoint, num_established } => {
                 swarm.kademlia.add_address(&peer_id, endpoint.get_remote_address().clone());
 
-                let num_peers = Swarm::network_info(swarm).num_connections_established;
-
                 if !state.is_connected() {
-                    log::info!("Connected to {} peers", num_peers);
+                    log::debug!("Connected to {} peers (waiting for {})", num_established, min_peers);
 
-                    if num_peers >= min_peers {
+                    if num_established.get() as usize >= min_peers {
                         state.set_connected();
                     }
 

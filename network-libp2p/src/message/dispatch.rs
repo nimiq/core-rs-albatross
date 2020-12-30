@@ -93,22 +93,22 @@ impl MessageReceiver {
         let mut close_rx = close_rx.fuse();
 
         loop {
-            log::info!("Waiting for incoming message...");
+            log::trace!("Waiting for incoming message...");
             let data = futures::select! {
                 result = read_message(&mut inbound).fuse() => {
-                    log::warn!("read_message = {:?}", result);
+                    log::trace!("read_message = {:?}", result);
                     result?
                 },
                 _ = close_rx => {
-                    log::info!("Received close event");
+                    log::trace!("Received close event");
                     break;
                 },
             };
 
             let message_type = peek_type(&data)?;
 
-            log::debug!("Receiving message: type={}", message_type);
-            log::debug!("Raw: {:?}", data);
+            log::trace!("Receiving message: type={}", message_type);
+            log::trace!("Raw: {:?}", data);
 
             let mut tx = {
                 let mut channels = channels.lock();
@@ -135,7 +135,7 @@ impl MessageReceiver {
             }
         }
 
-        log::debug!("Message dispatcher task terminated");
+        log::trace!("Message dispatcher task terminated");
 
         // Remove all channels (i.e. senders, which closes readers too?
         channels.lock().clear();
@@ -162,11 +162,11 @@ where
     }
 
     pub async fn close(&self) {
-        log::debug!("Waiting for outbound lock...");
+        log::trace!("Waiting for outbound lock...");
         let mut outbound = self.outbound.lock().await;
 
         if let Some(mut outbound) = outbound.take() {
-            log::debug!("Closing outbound...");
+            log::trace!("Closing outbound...");
             outbound.close().await.unwrap()
         } else {
             log::error!("Outbound already closed.");
@@ -178,7 +178,7 @@ where
 
         message.serialize_message(&mut serialized)?;
 
-        log::debug!("Sending message: {:?}", serialized);
+        log::trace!("Sending message: {:?}", serialized);
 
         let mut outbound = self.outbound.lock().await;
 
@@ -214,12 +214,12 @@ where
     }
 
     pub async fn close(&self) {
-        log::debug!("MessageDispatch::close: Closing outbound");
+        log::trace!("MessageDispatch::close: Closing outbound");
         self.outbound.close().await;
 
-        log::debug!("MessageDispatch::close: Closing inbound");
+        log::trace!("MessageDispatch::close: Closing inbound");
         self.inbound.close();
 
-        log::debug!("MessageDispatch::close: Closed.");
+        log::trace!("MessageDispatch::close: Closed.");
     }
 }

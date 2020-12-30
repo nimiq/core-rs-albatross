@@ -19,8 +19,8 @@ const HTLC: &str = "00000000000000001b215589344cf570d36bec770825eae30b7321392478
 fn create_serialized_contract() {
     let contract = HashedTimeLockedContract {
         balance: Coin::ZERO,
-        sender: Address::from("1b215589344cf570d36bec770825eae30b732139"),
-        recipient: Address::from("24786862babbdb05e7c4430612135eb2a8368123"),
+        sender: "1b215589344cf570d36bec770825eae30b732139".parse().unwrap(),
+        recipient: "24786862babbdb05e7c4430612135eb2a8368123".parse().unwrap(),
         hash_algorithm: HashAlgorithm::Sha256,
         hash_root: AnyHash::from("daebe368963c60d22098a5e9f1ebcb8e54d0b7beca942a2a0a9d95391804fe8f"),
         hash_count: 1,
@@ -44,8 +44,8 @@ fn it_can_deserialize_a_htlc() {
         htlc.hash_root,
         AnyHash::from("daebe368963c60d22098a5e9f1ebcb8e54d0b7beca942a2a0a9d95391804fe8f")
     );
-    assert_eq!(htlc.sender, Address::from("1b215589344cf570d36bec770825eae30b732139"));
-    assert_eq!(htlc.recipient, Address::from("24786862babbdb05e7c4430612135eb2a8368123"));
+    assert_eq!(htlc.sender, "1b215589344cf570d36bec770825eae30b732139".parse().unwrap());
+    assert_eq!(htlc.recipient, "24786862babbdb05e7c4430612135eb2a8368123".parse().unwrap());
     assert_eq!(htlc.timeout, 169525);
     assert_eq!(htlc.total_amount, 1.try_into().unwrap());
 }

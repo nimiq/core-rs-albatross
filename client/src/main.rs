@@ -49,7 +49,6 @@ async fn main_inner() -> Result<(), Error> {
     // Create client from config.
     log::info!("Initializing client");
     let mut client: Client = Client::from_config(config).await?;
-    //client.initialize()?;
 
     // Initialize RPC server
     if let Some(rpc_config) = rpc_config {

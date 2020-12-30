@@ -147,22 +147,22 @@ impl NetworkBehaviour for DiscoveryBehaviour {
     }
 
     fn inject_connected(&mut self, peer_id: &PeerId) {
-        log::debug!("DiscoveryBehaviour::inject_connected: {}", peer_id);
+        log::trace!("DiscoveryBehaviour::inject_connected: {}", peer_id);
 
         self.connected_peers.insert(peer_id.clone());
     }
 
     fn inject_disconnected(&mut self, peer_id: &PeerId) {
-        log::debug!("DiscoveryBehaviour::inject_disconnected: {}", peer_id);
+        log::trace!("DiscoveryBehaviour::inject_disconnected: {}", peer_id);
 
         self.connected_peers.remove(peer_id);
     }
 
     fn inject_connection_established(&mut self, peer_id: &PeerId, connection_id: &ConnectionId, connected_point: &ConnectedPoint) {
-        log::debug!("DiscoveryBehaviour::inject_connection_established:");
-        log::debug!("  - peer_id: {:?}", peer_id);
-        log::debug!("  - connection_id: {:?}", connection_id);
-        log::debug!("  - connected_point: {:?}", connected_point);
+        log::trace!("DiscoveryBehaviour::inject_connection_established:");
+        log::trace!("  - peer_id: {:?}", peer_id);
+        log::trace!("  - connection_id: {:?}", connection_id);
+        log::trace!("  - connected_point: {:?}", connected_point);
 
         // TODO: In libp2p 0.29 there is a method for this:
         // connected_point.get_remote_address()
@@ -179,7 +179,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
     }
 
     fn inject_event(&mut self, peer_id: PeerId, _connection: ConnectionId, event: HandlerOutEvent) {
-        log::debug!("DiscoveryBehaviour::inject_event: peer_id={}: {:?}", peer_id, event);
+        log::trace!("DiscoveryBehaviour::inject_event: peer_id={}: {:?}", peer_id, event);
 
         match event {
             HandlerOutEvent::PeerExchangeEstablished { peer_contact } => {

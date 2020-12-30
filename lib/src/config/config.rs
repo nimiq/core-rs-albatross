@@ -666,7 +666,7 @@ impl ClientConfigBuilder {
                 .map(|ua| UserAgent::from(ua.to_owned()))
                 .unwrap_or_default(),
 
-            seeds: vec![], // TODO
+            seeds: config_file.network.seed_nodes.clone(),
 
             min_peers: config_file.network.min_peers,
         });

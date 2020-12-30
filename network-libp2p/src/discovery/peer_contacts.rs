@@ -465,10 +465,7 @@ impl PeerContactBook {
     }
 
     pub fn self_add_addresses<I: IntoIterator<Item = Multiaddr>>(&mut self, addresses: I) {
-        log::info!("Addresses observed for us:");
-        for address in addresses {
-            log::info!("  - {}", address);
-        }
+        log::info!("Addresses observed for us: {:#?}", addresses.into_iter().collect::<Vec<Multiaddr>>());
         // TODO: We could add these observed addresses to our advertised addresses (with restrictions).
     }
 

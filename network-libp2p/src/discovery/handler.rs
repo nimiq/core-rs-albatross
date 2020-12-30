@@ -213,12 +213,12 @@ impl ProtocolsHandler for DiscoveryHandler {
     type OutboundOpenInfo = ();
 
     fn listen_protocol(&self) -> SubstreamProtocol<DiscoveryProtocol, ()> {
-        log::debug!("DiscoveryHandler::listen_protocol");
+        log::trace!("DiscoveryHandler::listen_protocol");
         SubstreamProtocol::new(DiscoveryProtocol, ())
     }
 
     fn inject_fully_negotiated_inbound(&mut self, protocol: MessageReader<NegotiatedSubstream, DiscoveryMessage>, _info: ()) {
-        log::debug!("DiscoveryHandler::inject_fully_negotiated_inbound");
+        log::trace!("DiscoveryHandler::inject_fully_negotiated_inbound");
 
         if self.inbound.is_some() {
             panic!("Inbound already connected");
@@ -230,7 +230,7 @@ impl ProtocolsHandler for DiscoveryHandler {
     }
 
     fn inject_fully_negotiated_outbound(&mut self, protocol: MessageWriter<NegotiatedSubstream, DiscoveryMessage>, _info: ()) {
-        log::debug!("DiscoveryHandler::inject_fully_negotiated_outbound");
+        log::trace!("DiscoveryHandler::inject_fully_negotiated_outbound");
 
         if self.outbound.is_some() {
             panic!("Outbound already connected");
@@ -246,7 +246,7 @@ impl ProtocolsHandler for DiscoveryHandler {
     }
 
     fn inject_event(&mut self, event: HandlerInEvent) {
-        log::debug!("DiscoveryHandler::inject_event: {:?}", event);
+        log::trace!("DiscoveryHandler::inject_event: {:?}", event);
 
         match event {
             HandlerInEvent::ObservedAddress(address) => {
@@ -426,7 +426,7 @@ impl ProtocolsHandler for DiscoveryHandler {
 
                                     // Timer for periodic updates
                                     if let Some(mut update_interval) = update_interval {
-                                        log::debug!("Update interval: {:?}", update_interval);
+                                        log::trace!("Update interval: {:?}", update_interval);
 
                                         let min_secs = self.config.min_send_update_interval.as_secs();
                                         if update_interval < min_secs {

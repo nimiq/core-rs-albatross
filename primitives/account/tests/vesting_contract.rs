@@ -17,7 +17,7 @@ const CONTRACT: &str = "00002fbf9bd9c800fd34ab7265a0e48c454ccbf4c9c61dfdf68f9a22
 fn create_serialized_contract() {
     let contract = VestingContract {
         balance: Coin::from_u64_unchecked(52500000000000),
-        owner: Address::from("fd34ab7265a0e48c454ccbf4c9c61dfdf68f9a22"),
+        owner: "fd34ab7265a0e48c454ccbf4c9c61dfdf68f9a22".parse().unwrap(),
         start_time: 1,
         time_step: 259200,
         step_amount: Coin::from_u64_unchecked(2625000000000),
@@ -34,7 +34,7 @@ fn it_can_deserialize_a_vesting_contract() {
     let bytes: Vec<u8> = hex::decode(CONTRACT).unwrap();
     let contract: VestingContract = Deserialize::deserialize(&mut &bytes[..]).unwrap();
     assert_eq!(contract.balance, 52500000000000.try_into().unwrap());
-    assert_eq!(contract.owner, Address::from("fd34ab7265a0e48c454ccbf4c9c61dfdf68f9a22"));
+    assert_eq!(contract.owner, "fd34ab7265a0e48c454ccbf4c9c61dfdf68f9a22".parse().unwrap());
     assert_eq!(contract.start_time, 1);
     assert_eq!(contract.step_amount, 2625000000000.try_into().unwrap());
     assert_eq!(contract.time_step, 259200);

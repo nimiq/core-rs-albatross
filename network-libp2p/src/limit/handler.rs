@@ -26,12 +26,12 @@ impl ProtocolsHandler for LimitHandler {
     type OutboundOpenInfo = ();
 
     fn listen_protocol(&self) -> SubstreamProtocol<LimitProtocol, ()> {
-        log::debug!("LimitHandler::listen_protocol");
+        log::trace!("LimitHandler::listen_protocol");
         SubstreamProtocol::new(LimitProtocol, ())
     }
 
     fn inject_fully_negotiated_inbound(&mut self, _protocol: (), _info: ()) {
-        log::debug!("LimitHandler::inject_fully_negotiated_inbound");
+        log::trace!("LimitHandler::inject_fully_negotiated_inbound");
         todo!();
     }
 

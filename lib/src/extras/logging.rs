@@ -43,7 +43,7 @@ lazy_static! {
         "nimiq_messages",
         "nimiq_metrics_server",
         "nimiq_mnemonic",
-        "nimiq_network",
+        "nimiq_network_libp2p",
         "nimiq_peer_address",
         "nimiq_primitives",
         "nimiq_rpc_server",

@@ -383,7 +383,7 @@ mod tests {
 
         let vesting = VestingContract {
             balance: Coin::from_u64_unchecked(52500000000000),
-            owner: Address::from("fd34ab7265a0e48c454ccbf4c9c61dfdf68f9a22"),
+            owner: "fd34ab7265a0e48c454ccbf4c9c61dfdf68f9a22".parse().unwrap(),
             start_time: 1,
             time_step: 259200,
             step_amount: Coin::from_u64_unchecked(2625000000000),
@@ -396,8 +396,8 @@ mod tests {
 
         let htlc = HashedTimeLockedContract {
             balance: Coin::ZERO,
-            sender: Address::from("1b215589344cf570d36bec770825eae30b732139"),
-            recipient: Address::from("24786862babbdb05e7c4430612135eb2a8368123"),
+            sender: "1b215589344cf570d36bec770825eae30b732139".parse().unwrap(),
+            recipient: "24786862babbdb05e7c4430612135eb2a8368123".parse().unwrap(),
             hash_algorithm: HashAlgorithm::Sha256,
             hash_root: AnyHash::from("daebe368963c60d22098a5e9f1ebcb8e54d0b7beca942a2a0a9d95391804fe8f"),
             hash_count: 1,
@@ -413,7 +413,7 @@ mod tests {
     }
 
     fn terminal_node_printer(account: Account, name: &str) {
-        let nibbles = AddressNibbles::from(&Address::from("fd34ab7265a0e48c454ccbf4c9c61dfdf68f9a22"));
+        let nibbles = AddressNibbles::from(&"fd34ab7265a0e48c454ccbf4c9c61dfdf68f9a22".parse::<Address>().unwrap());
 
         let node = AccountsTreeNode::new_terminal(nibbles, account);
 

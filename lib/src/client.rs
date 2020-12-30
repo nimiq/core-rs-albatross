@@ -96,6 +96,7 @@ impl ClientInner {
         if let Some(min_peers) = config.network.min_peers {
             network_config.min_peers = min_peers;
         }
+        network_config.gossipsub.mesh_n_low = 2;
 
         log::debug!("listen_addresses = {:?}", config.network.listen_addresses);
 
@@ -218,13 +219,19 @@ impl Client {
 
     /// After calling this the network stack will start connecting to other peers.
     pub async fn connect(&self) -> Result<(), Error> {
+        log::debug!("Seeds: {:#?}", self.inner.seed_nodes);
+
         // Tell the network to connect to seed nodes
         for seed in &self.inner.seed_nodes {
+            log::debug!("Dialing seed: {:?}", seed);
             self.inner
                 .network
                 .dial_address(seed.address.clone())
                 .await?;
         }
+
+        self.inner.network.wait_connected().await;
+
         Ok(())
     }
 
