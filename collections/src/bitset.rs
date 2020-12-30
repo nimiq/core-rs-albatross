@@ -35,7 +35,8 @@ impl BitSet {
     }
 
     pub fn clear(&mut self) {
-        self.store.clear()
+        self.store.clear();
+        self.count = 0;
     }
 
     pub fn len(&self) -> usize {
@@ -83,9 +84,9 @@ impl BitSet {
 
         for t in self.store.iter().zip_longest(other.store.iter()) {
             let x = match t {
-                EitherOrBoth::Both(&a, &b) => op(a, b),
-                EitherOrBoth::Left(&a) => op(a, 0),
-                EitherOrBoth::Right(&b) => op(0, b),
+                EitherOrBoth::Both(a, b) => op(*a, *b),
+                EitherOrBoth::Left(a) => op(*a, 0),
+                EitherOrBoth::Right(b) => op(0, *b),
             };
             store.push(x);
             count += x.count_ones() as usize;
@@ -98,20 +99,30 @@ impl BitSet {
 
     fn apply_op_assign<O: Fn(&mut u64, u64)>(&mut self, other: Self, op: O) {
         let mut count: usize = 0;
+        let mut new = vec![];
+
         for t in self.store.iter_mut().zip_longest(other.store.iter()) {
             match t {
-                EitherOrBoth::Both(a, &b) => {
-                    op(a, b);
+                EitherOrBoth::Both(a, b) => {
+                    op(a, *b);
                     count += a.count_ones() as usize;
                 }
-                EitherOrBoth::Left(_) => break,
-                EitherOrBoth::Right(&b) => {
+                EitherOrBoth::Left(a) => {
+                    let x = 0u64;
+                    op(a, x);
+                    count += a.count_ones() as usize;
+                }
+                EitherOrBoth::Right(b) => {
                     let mut x = 0u64;
-                    op(&mut x, b);
-                    count += b.count_ones() as usize;
+                    op(&mut x, *b);
+                    new.push(x);
+                    count += x.count_ones() as usize;
                 }
             }
         }
+
+        self.store.append(&mut new);
+
         self.count = count;
         self.compact();
     }
