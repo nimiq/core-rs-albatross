@@ -47,6 +47,8 @@ pub struct Config {
 
     pub peer_contact: PeerContact,
 
+    pub min_peers: usize,
+
     pub discovery: DiscoveryConfig,
     pub message: MessageConfig,
     pub limit: LimitConfig,
@@ -67,6 +69,7 @@ impl Config {
             limit: LimitConfig::default(),
             kademlia: KademliaConfig::default(),
             gossipsub: gossipsub_config,
+            min_peers: 5,
         }
     }
 }
@@ -165,11 +168,33 @@ pub enum NetworkAction {
     },
 }
 
-#[derive(Default)]
+
 struct TaskState {
     dht_puts: HashMap<QueryId, oneshot::Sender<Result<(), NetworkError>>>,
     dht_gets: HashMap<QueryId, oneshot::Sender<Result<Option<Vec<u8>>, NetworkError>>>,
     gossip_topics: HashMap<TopicHash, (mpsc::Sender<(GossipsubMessage, MessageId, PeerId)>, bool)>,
+    connected_tx: Option<oneshot::Sender<()>>,
+}
+
+impl TaskState {
+    pub fn new(connected_tx: oneshot::Sender<()>) -> Self {
+        Self {
+            dht_puts: HashMap::new(),
+            dht_gets: HashMap::new(),
+            gossip_topics: HashMap::new(),
+            connected_tx: Some(connected_tx),
+        }
+    }
+
+    fn is_connected(&self) -> bool {
+        self.connected_tx.is_some()
+    }
+
+    fn set_connected(&mut self) {
+        if let Some(connected_tx) = self.connected_tx.take() {
+            connected_tx.send(()).ok();
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -201,8 +226,10 @@ impl Network {
     ///             offset by exchanging their wall-time with other peers.
     ///  - `config`: The network configuration, containing key pair, and other behaviour-specific configuration.
     ///
-    pub fn new(listen_addresses: Vec<Multiaddr>, clock: Arc<OffsetTime>, config: Config) -> Self {
+    pub async fn new(listen_addresses: Vec<Multiaddr>, clock: Arc<OffsetTime>, config: Config) -> Self {
         assert!(!config.gossipsub.hash_topics, "Hash topics not supported");
+
+        let min_peers = config.min_peers;
 
         let swarm = Self::new_swarm(listen_addresses, clock, config);
         let peers = swarm.message.peers.clone();
@@ -212,7 +239,14 @@ impl Network {
         let (events_tx, _) = broadcast::channel(64);
         let (action_tx, action_rx) = mpsc::channel(64);
 
-        async_std::task::spawn(Self::swarm_task(swarm, events_tx.clone(), action_rx));
+        let (connected_tx, connected_rx) = oneshot::channel();
+
+        async_std::task::spawn(Self::swarm_task(swarm, events_tx.clone(), action_rx, connected_tx, min_peers));
+
+        if min_peers != 0 {
+            log::info!("Waiting to connect to {} peers", min_peers);
+            connected_rx.await.unwrap();
+        }
 
         Self {
             local_peer_id,
@@ -270,14 +304,20 @@ impl Network {
         &self.local_peer_id
     }
 
-    async fn swarm_task(mut swarm: NimiqSwarm, events_tx: broadcast::Sender<NetworkEvent<Peer>>, mut action_rx: mpsc::Receiver<NetworkAction>) {
-        let mut task_state = TaskState::default();
+    async fn swarm_task(
+        mut swarm: NimiqSwarm,
+        events_tx: broadcast::Sender<NetworkEvent<Peer>>,
+        mut action_rx: mpsc::Receiver<NetworkAction>,
+        connected_tx: oneshot::Sender<()>,
+        min_peers: usize
+    ) {
+        let mut task_state = TaskState::new(connected_tx);
 
         loop {
             futures::select! {
                 event = swarm.next_event().fuse() => {
                     log::debug!("Swarm task received event: {:?}", event);
-                    Self::handle_event(event, &events_tx, &mut swarm, &mut task_state).await;
+                    Self::handle_event(event, &events_tx, &mut swarm, &mut task_state, min_peers).await;
                 },
                 action_opt = action_rx.next().fuse() => {
                     if let Some(action) = action_opt {
@@ -297,19 +337,32 @@ impl Network {
         events_tx: &broadcast::Sender<NetworkEvent<Peer>>,
         swarm: &mut NimiqSwarm,
         state: &mut TaskState,
+        min_peers: usize,
     ) {
         match event {
             SwarmEvent::ConnectionEstablished { peer_id, endpoint, .. } => {
                 swarm.kademlia.add_address(&peer_id, endpoint.get_remote_address().clone());
+
+                let num_peers = Swarm::network_info(swarm).num_connections_established;
+
+                if !state.is_connected() {
+                    log::info!("Connected to {} peers", num_peers);
+
+                    if num_peers >= min_peers {
+                        state.set_connected();
+                    }
+
+                    // Bootstrap Kademlia
+                    log::debug!("Bootstrapping DHT");
+                    swarm.kademlia.bootstrap().unwrap();
+                }
             }
 
             //SwarmEvent::ConnectionClosed { .. } => {},
             SwarmEvent::Behaviour(event) => {
                 match event {
                     NimiqEvent::Message(event) => {
-                        if let Err(event) = events_tx.send(event) {
-                            log::error!("Failed to notify subscribers about network event: {:?}", event);
-                        }
+                        events_tx.send(event).ok();
                     }
                     NimiqEvent::Dht(event) => {
                         match event {
@@ -333,6 +386,12 @@ impl Network {
                                             output.send(result.map(|_| ()).map_err(Into::into)).ok();
                                         } else {
                                             log::warn!("PutRecord query result for unknown query ID: {:?}", id);
+                                        }
+                                    }
+                                    QueryResult::Bootstrap(result) => {
+                                        match result {
+                                            Ok(result) => log::debug!("DHT bootstrap successful: {:?}", result),
+                                            Err(e) => log::error!("DHT bootstrap error: {:?}", e),
                                         }
                                     }
                                     _ => {}
@@ -654,6 +713,7 @@ mod tests {
         Config {
             keypair,
             peer_contact,
+            min_peers: 0,
             discovery: DiscoveryConfig {
                 genesis_hash: Default::default(),
                 update_interval: Duration::from_secs(60),
@@ -699,7 +759,7 @@ mod tests {
             self.next_address += 1;
 
             let clock = Arc::new(OffsetTime::new());
-            let net = Network::new(vec![address.clone()], clock, network_config(address.clone()));
+            let net = Network::new(vec![address.clone()], clock, network_config(address.clone())).await;
             log::info!("Creating node: address={}, peer_id={}", address, net.local_peer_id);
 
             if let Some(dial_address) = self.addresses.first() {
@@ -730,8 +790,8 @@ mod tests {
         let addr1 = multiaddr![Memory(thread_rng().gen::<u64>())];
         let addr2 = multiaddr![Memory(thread_rng().gen::<u64>())];
 
-        let net1 = Network::new(vec![addr1.clone()], Arc::new(OffsetTime::new()), network_config(addr1.clone()));
-        let net2 = Network::new(vec![addr2.clone()], Arc::new(OffsetTime::new()), network_config(addr2.clone()));
+        let net1 = Network::new(vec![addr1.clone()], Arc::new(OffsetTime::new()), network_config(addr1.clone())).await;
+        let net2 = Network::new(vec![addr2.clone()], Arc::new(OffsetTime::new()), network_config(addr2.clone())).await;
 
         log::info!("Network 1: address={}, peer_id={}", addr1, net1.local_peer_id);
         log::info!("Network 2: address={}, peer_id={}", addr2, net2.local_peer_id);

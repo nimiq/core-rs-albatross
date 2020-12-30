@@ -71,6 +71,8 @@ pub struct NetworkConfig {
 
     #[builder(default)]
     pub seeds: Vec<Seed>,
+
+    pub min_peers: Option<usize>,
 }
 
 /// Contains which protocol to use and the configuration needed for that protocol.
@@ -665,6 +667,8 @@ impl ClientConfigBuilder {
                 .unwrap_or_default(),
 
             seeds: vec![], // TODO
+
+            min_peers: config_file.network.min_peers,
         });
 
         // Configure consensus
