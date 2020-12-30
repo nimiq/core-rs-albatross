@@ -1,0 +1,19 @@
+
+[network]
+peer_key_file = "peer_key.dat"
+listen_addresses = [
+	"/ip4/127.0.0.1/tcp/8443/ws",
+]
+min_peers = 0
+
+[rpc-server]
+bind="127.0.0.1"
+port = 8648
+
+[log]
+level = "debug"
+
+[validator]
+#wallet_account = ""
+#wallet_password = ""
+validator_key_file = "validator_key.dat"

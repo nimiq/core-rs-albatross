@@ -682,13 +682,13 @@ impl ClientConfigBuilder {
         if let Some(path) = config_file.database.path.as_ref() {
             file_storage.database_parent = PathBuf::from(path);
         }
-        if let Some(path) = config_file.peer_key_file.as_ref() {
+        if let Some(path) = config_file.network.peer_key_file.as_ref() {
             file_storage.peer_key = PathBuf::from(path);
         }
         #[cfg(feature = "validator")]
         if let Some(validator_config) = config_file.validator.as_ref() {
             validator_config
-                .validator_key
+                .validator_key_file
                 .as_ref()
                 .map(|key_path| file_storage.validator_key = Some(PathBuf::from(key_path)));
         }

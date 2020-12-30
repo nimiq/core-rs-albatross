@@ -43,8 +43,6 @@ pub struct ConfigFile {
     pub database: DatabaseSettings,
     pub mempool: Option<MempoolSettings>,
     #[serde(default)]
-    pub peer_key_file: Option<String>,
-    #[serde(default)]
     pub validator: Option<ValidatorSettings>,
 }
 
@@ -114,6 +112,8 @@ impl ConfigFile {
 #[derive(Clone, Debug, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct NetworkSettings {
+    pub peer_key_file: Option<String>,
+
     #[serde(default)]
     pub listen_addresses: Vec<String>,
 
@@ -453,7 +453,7 @@ impl From<MempoolFilterSettings> for MempoolRules {
 #[derive(Clone, Debug, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct ValidatorSettings {
-    pub validator_key: Option<String>,
+    pub validator_key_file: Option<String>,
     pub wallet_account: Option<String>,
     pub wallet_password: Option<String>,
 }
