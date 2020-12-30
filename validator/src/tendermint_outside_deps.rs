@@ -10,7 +10,7 @@ use blockchain_albatross::Blockchain;
 use bls::{KeyPair, PublicKey};
 use database::WriteTransaction;
 use hash::{Blake2bHash, Hash};
-use network_interface::{network::Topic, peer::Peer};
+use network_interface::network::Topic;
 use nimiq_primitives::slot::ValidatorSlots;
 use nimiq_validator_network::ValidatorNetwork;
 use primitives::policy::{TENDERMINT_TIMEOUT_DELTA, TENDERMINT_TIMEOUT_INIT};
@@ -28,6 +28,10 @@ impl Topic for ProposalTopic {
 
     fn topic(&self) -> String {
         "tendermint-proposal".to_owned()
+    }
+
+    fn validate(&self) -> bool {
+        false
     }
 }
 
@@ -53,7 +57,7 @@ pub struct TendermintInterface<N: ValidatorNetwork> {
     // body several times, we can cache it here.
     pub cache_body: Option<MacroBody>,
 
-    proposal_stream: Option<BoxStream<'static, (SignedTendermintProposal, <<N as ValidatorNetwork>::PeerType as Peer>::Id)>>,
+    proposal_stream: Option<BoxStream<'static, (SignedTendermintProposal, <N as ValidatorNetwork>::PubsubId)>>,
 }
 
 #[async_trait]
