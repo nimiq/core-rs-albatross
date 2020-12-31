@@ -6,7 +6,8 @@ use derive_builder::Builder;
 use enum_display_derive::Display;
 
 #[cfg(feature = "validator")]
-use nimiq_bls::KeyPair as BlsKeyPair;
+use beserial::Deserialize;
+use nimiq_bls::{KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
 use nimiq_database::{
     lmdb::{open as LmdbFlags, LmdbEnvironment},
     volatile::VolatileEnvironment,
@@ -29,6 +30,7 @@ use crate::{
     },
     error::Error,
 };
+
 
 /// The consensus type
 ///
@@ -157,7 +159,12 @@ pub struct FileStorageConfig {
 
     /// Path to validator key
     #[cfg(feature = "validator")]
-    validator_key: Option<PathBuf>,
+    validator_key_path: Option<PathBuf>,
+
+    /// The key used for the validator, if the file is not present.
+    #[cfg(feature = "validator")]
+    validator_key: Option<String>,
+
 }
 
 impl FileStorageConfig {
@@ -169,7 +176,9 @@ impl FileStorageConfig {
             database_parent: path.to_path_buf(),
             peer_key: path.join("peer_key.dat"),
             #[cfg(feature = "validator")]
-            validator_key: Some(path.join("validator_key.dat")),
+            validator_key_path: Some(path.join("validator_key.dat")),
+            #[cfg(feature = "validator")]
+            validator_key: None,
         }
     }
 
@@ -312,7 +321,7 @@ impl StorageConfig {
             StorageConfig::Volatile => BlsKeyPair::generate_default_csprng(),
             StorageConfig::Filesystem(file_storage) => {
                 let key_path = file_storage
-                    .validator_key
+                    .validator_key_path
                     .as_ref()
                     .ok_or_else(|| Error::config_error("No path for validator key specified"))?;
                 let key_path = key_path
@@ -325,7 +334,17 @@ impl StorageConfig {
                     })?
                     .to_string();
 
-                FileStore::new(key_path).load_or_store(BlsKeyPair::generate_default_csprng)?
+                FileStore::new(key_path).load_or_store(|| {
+                    if let Some(key) = file_storage.validator_key.as_ref() {
+                        // TODO: handle errors
+                        let secret_key = BlsSecretKey::deserialize_from_vec(&hex::decode(key).unwrap()).unwrap();
+                        secret_key.into()
+                    }
+                    else {
+                        //BlsKeyPair::generate_default_csprng()
+                        todo!("Load hex string");
+                    }
+                })?
             }
             _ => return Err(self.not_available()),
         })
@@ -687,10 +706,12 @@ impl ClientConfigBuilder {
         }
         #[cfg(feature = "validator")]
         if let Some(validator_config) = config_file.validator.as_ref() {
-            validator_config
-                .validator_key_file
-                .as_ref()
-                .map(|key_path| file_storage.validator_key = Some(PathBuf::from(key_path)));
+            if let Some(key_path) = &validator_config.validator_key_file {
+                file_storage.validator_key_path = Some(PathBuf::from(key_path));
+            }
+            if let Some(key) = &validator_config.validator_key {
+                file_storage.validator_key = Some(key.to_owned());
+            }
         }
         self.storage = Some(file_storage.into());
 

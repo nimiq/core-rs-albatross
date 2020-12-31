@@ -259,6 +259,8 @@ impl ValidatorSlots {
     }
 
     pub fn find_idx_and_num_slots_by_public_key(&self, public_key: &CompressedPublicKey) -> Option<(u16, u16)> {
+        log::debug!("secret_key = {:?}", public_key);
+
         self.bands
             .iter()
             .find_position(|validator| validator.public_key.compressed() == public_key)

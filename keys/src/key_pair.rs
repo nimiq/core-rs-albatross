@@ -3,7 +3,7 @@ use utils::key_rng::{CryptoRng, Rng, SecureGenerate};
 
 use crate::{PrivateKey, PublicKey, Signature};
 
-#[derive(Default, Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Default, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct KeyPair {
     pub public: PublicKey,
     pub private: PrivateKey,

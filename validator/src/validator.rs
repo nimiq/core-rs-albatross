@@ -129,6 +129,8 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
     }
 
     fn init_epoch(&mut self) {
+        log::debug!("Initializing epoch");
+
         self.epoch_state = self
             .consensus
             .blockchain
@@ -160,7 +162,11 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         self.macro_producer = None;
         self.micro_producer = None;
 
+        log::debug!("Initializing block producer");
+
         if !self.is_active() {
+            log::debug!("Validator not active");
+
             return;
         }
 

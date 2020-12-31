@@ -21,7 +21,7 @@ use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
 #[cfg(feature = "wallet")]
 use nimiq_wallet::WalletStore;
 
-use crate::config::{config::ClientConfig, config_file::Seed};
+use crate::config::config::ClientConfig;
 use crate::error::Error;
 use nimiq_consensus_albatross::sync::history::HistorySync;
 use nimiq_network_libp2p::libp2p::futures::StreamExt;
@@ -50,19 +50,13 @@ pub(crate) struct ClientInner {
     /// reach consensus.
     consensus: ConsensusProxy,
 
-    /// The block production logic. This is optional and can also be fully disabled at compile-time
-    #[cfg(feature = "validator")]
-    validator: Option<Arc<Validator>>,
-
     /// Wallet that stores keypairs for transaction signing
     #[cfg(feature = "wallet")]
     wallet_store: Arc<WalletStore>,
-
-    seed_nodes: Vec<Seed>,
 }
 
 impl ClientInner {
-    async fn from_config(config: ClientConfig) -> Result<(Self, Consensus), Error> {
+    async fn from_config(config: ClientConfig) -> Result<(Self, Consensus, Option<Validator>), Error> {
         // Get network info (i.e. which specific blokchain we're on)
         if !config.network_id.is_albatross() {
             return Err(Error::config_error(&format!(
@@ -105,6 +99,15 @@ impl ClientInner {
             Arc::clone(&time),
             network_config,
         ).await);
+
+        // Tell the network to connect to seed nodes
+        for seed in &config.network.seeds {
+            log::debug!("Dialing seed: {:?}", seed);
+            network
+                .dial_address(seed.address.clone())
+                .await?;
+        }
+        network.wait_connected().await;
 
         // Load validator key (before we give away ownership of the storage config)
         #[cfg(feature = "validator")]
@@ -160,7 +163,7 @@ impl ClientInner {
 
                 let validator_network = Arc::new(ValidatorNetworkImpl::new(Arc::clone(&network)));
 
-                let validator = Arc::new(Validator::new(&consensus, validator_network, validator_key, validator_wallet_key));
+                let validator = Validator::new(&consensus, validator_network, validator_key, validator_wallet_key);
 
                 Some(validator)
             }
@@ -174,13 +177,11 @@ impl ClientInner {
                 environment,
                 network,
                 consensus: consensus.proxy(),
-                #[cfg(feature = "validator")]
-                validator,
                 #[cfg(feature = "wallet")]
                 wallet_store,
-                seed_nodes: config.network.seeds,
             },
             consensus,
+            validator,
         ))
     }
 }
@@ -206,33 +207,17 @@ impl ClientInner {
 pub struct Client {
     inner: Arc<ClientInner>,
     consensus: Option<Consensus>,
+    validator: Option<Validator>,
 }
 
 impl Client {
     pub async fn from_config(config: ClientConfig) -> Result<Self, Error> {
-        let (inner, consensus) = ClientInner::from_config(config).await?;
+        let (inner, consensus, validator) = ClientInner::from_config(config).await?;
         Ok(Client {
             inner: Arc::new(inner),
             consensus: Some(consensus),
+            validator,
         })
-    }
-
-    /// After calling this the network stack will start connecting to other peers.
-    pub async fn connect(&self) -> Result<(), Error> {
-        log::debug!("Seeds: {:#?}", self.inner.seed_nodes);
-
-        // Tell the network to connect to seed nodes
-        for seed in &self.inner.seed_nodes {
-            log::debug!("Dialing seed: {:?}", seed);
-            self.inner
-                .network
-                .dial_address(seed.address.clone())
-                .await?;
-        }
-
-        self.inner.network.wait_connected().await;
-
-        Ok(())
     }
 
     pub fn consensus(&mut self) -> Option<Consensus> {
@@ -246,7 +231,7 @@ impl Client {
 
     /// Returns a reference to the *Network* stack
     pub fn network(&self) -> Arc<Network> {
-        Arc::clone(&self.inner.consensus.network)
+        Arc::clone(&self.inner.network)
     }
 
     /// Returns a reference to the blockchain
@@ -266,8 +251,8 @@ impl Client {
 
     /// Returns a reference to the *Validator* or `None`.
     #[cfg(feature = "validator")]
-    pub fn validator(&self) -> Option<Arc<Validator>> {
-        self.inner.validator.as_ref().map(|v| Arc::clone(v))
+    pub fn validator(&mut self) -> Option<Validator> {
+        self.validator.take()
     }
 
     /// Returns the database environment.
@@ -276,11 +261,3 @@ impl Client {
     }
 }
 
-impl Clone for Client {
-    fn clone(&self) -> Self {
-        Client {
-            inner: Arc::clone(&self.inner),
-            consensus: None, // TODO: Only available on first Client object.
-        }
-    }
-}

@@ -49,6 +49,7 @@ async fn main_inner() -> Result<(), Error> {
     // Create client from config.
     log::info!("Initializing client");
     let mut client: Client = Client::from_config(config).await?;
+    log::info!("Client initialized");
 
     // Initialize RPC server
     if let Some(rpc_config) = rpc_config {
@@ -82,12 +83,23 @@ async fn main_inner() -> Result<(), Error> {
     */
 
     // Start consensus.
-    let consensus = client.consensus().unwrap();
-    tokio::spawn(async move { consensus.for_each(|_| async {}).await });
+    let mut consensus = client.consensus().unwrap();
 
-    // Initialize network stack and connect.
-    log::info!("Connecting to network");
-    client.connect().await?;
+    log::info!("Forcing consensus!");
+    consensus.force_established();
+
+    log::info!("Spawning consensus");
+    tokio::spawn(async move { consensus.for_each(|_| async {}).await });
+    let consensus = client.consensus_proxy();
+
+    // Start validator
+    if let Some(validator) = client.validator() {
+        log::info!("Spawning validator");
+        tokio::spawn(validator);
+    }
+    else {
+        todo!("Must use validator");
+    }
 
     // Create the "monitor" future which never completes to keep the client alive.
     // This closure is executed after the client has been initialized.
@@ -109,7 +121,8 @@ async fn main_inner() -> Result<(), Error> {
             let head = client.blockchain().head().clone();
 
             log::info!(
-                "Head: #{} - {}, Peers: {}",
+                "Consensus established: {:?} - Head: #{} - {}, Peers: {}",
+                consensus.is_established(),
                 head.block_number(),
                 head.hash(),
                 network_info.num_peers

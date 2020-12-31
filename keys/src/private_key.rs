@@ -88,6 +88,12 @@ impl SerializeContent for PrivateKey {
 
 impl Hash for PrivateKey {}
 
+impl std::hash::Hash for PrivateKey {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::hash::Hash::hash(self.as_bytes(), state);
+    }
+}
+
 impl Debug for PrivateKey {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         write!(f, "PrivateKey")
