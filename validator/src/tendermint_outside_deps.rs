@@ -4,7 +4,10 @@ use std::time::Duration;
 use async_trait::async_trait;
 use futures::{stream::BoxStream, StreamExt};
 
-use block_albatross::{Block, BlockHeader, MacroBlock, MacroBody, MacroHeader, MultiSignature, SignedTendermintProposal, TendermintProof, TendermintProposal};
+use block_albatross::{
+    Block, BlockHeader, MacroBlock, MacroBody, MacroHeader, MultiSignature,
+    SignedTendermintProposal, TendermintProof, TendermintProposal,
+};
 use block_production_albatross::BlockProducer;
 use blockchain_albatross::Blockchain;
 use bls::{KeyPair, PublicKey};
@@ -15,7 +18,10 @@ use nimiq_primitives::slot::ValidatorSlots;
 use nimiq_validator_network::ValidatorNetwork;
 use primitives::policy::{TENDERMINT_TIMEOUT_DELTA, TENDERMINT_TIMEOUT_INIT};
 use primitives::slot::SlotCollection;
-use tendermint::{AggregationResult, ProposalResult, Step, TendermintError, TendermintOutsideDeps, TendermintState};
+use tendermint::{
+    AggregationResult, ProposalResult, Step, TendermintError, TendermintOutsideDeps,
+    TendermintState,
+};
 use utils::time::OffsetTime;
 
 use crate::aggregation::tendermint::HandelTendermintAdapter;
@@ -57,7 +63,8 @@ pub struct TendermintInterface<N: ValidatorNetwork> {
     // body several times, we can cache it here.
     pub cache_body: Option<MacroBody>,
 
-    proposal_stream: Option<BoxStream<'static, (SignedTendermintProposal, <N as ValidatorNetwork>::PubsubId)>>,
+    proposal_stream:
+        Option<BoxStream<'static, (SignedTendermintProposal, <N as ValidatorNetwork>::PubsubId)>>,
 }
 
 #[async_trait]
@@ -80,7 +87,9 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
     /// States if it is our turn to be the Tendermint proposer or not.
     fn is_our_turn(&self, round: u32) -> bool {
         // Get the validator slot for this round.
-        let (slot, _) = self.blockchain.get_slot_owner_at(self.blockchain.block_number() + 1, round, None);
+        let (slot, _) =
+            self.blockchain
+                .get_slot_owner_at(self.blockchain.block_number() + 1, round, None);
 
         // Get our public key.
         let our_public_key = self.validator_key.public_key.compress();
@@ -92,7 +101,9 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
     /// Produces a proposal. Evidently, used when we are the proposer.
     fn get_value(&mut self, round: u32) -> Result<Self::ProposalTy, TendermintError> {
         // Call the block producer to produce the next macro block (minus the justification, of course).
-        let block = self.block_producer.next_macro_block_proposal(self.offset_time.now(), round, vec![]);
+        let block =
+            self.block_producer
+                .next_macro_block_proposal(self.offset_time.now(), round, vec![]);
 
         // Cache the block body for future use.
         self.cache_body = block.body;
@@ -102,7 +113,12 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
     }
 
     /// Assembles a block from a proposal and a proof.
-    fn assemble_block(&self, round: u32, proposal: Self::ProposalTy, proof: Self::ProofTy) -> Result<Self::ResultTy, TendermintError> {
+    fn assemble_block(
+        &self,
+        round: u32,
+        proposal: Self::ProposalTy,
+        proof: Self::ProofTy,
+    ) -> Result<Self::ResultTy, TendermintError> {
         // Get the body from our cache.
         let body = self.cache_body.clone();
 
@@ -134,7 +150,12 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
     // macro block). In that case, we will lose a Tendermint round unnecessarily. If this happens
     // frequently, it might make sense for us to have the validator broadcast his proposal twice.
     // One at the beginning and another at half of the timeout duration.
-    async fn broadcast_proposal(&mut self, _round: u32, proposal: Self::ProposalTy, valid_round: Option<u32>) -> Result<(), TendermintError> {
+    async fn broadcast_proposal(
+        &mut self,
+        _round: u32,
+        proposal: Self::ProposalTy,
+        valid_round: Option<u32>,
+    ) -> Result<(), TendermintError> {
         // Get the subscription stream from the network and store it if necessary
         // This needs to be done here, as publishing on a topic is only allowed when also subscribed to it.
         if self.proposal_stream.is_none() {
@@ -154,10 +175,17 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
             .ok_or(TendermintError::ProposalBroadcastError)?;
 
         // Create the Tendermint proposal message.
-        let proposal_message = TendermintProposal { value: proposal, valid_round };
+        let proposal_message = TendermintProposal {
+            value: proposal,
+            valid_round,
+        };
 
         // Sign the message with our validator key.
-        let signed_proposal = SignedTendermintProposal::from_message(proposal_message, &self.validator_key.secret_key, validator_index);
+        let signed_proposal = SignedTendermintProposal::from_message(
+            proposal_message,
+            &self.validator_key.secret_key,
+            validator_index,
+        );
 
         // Broadcast the signed proposal to the network.
         if let Err(err) = self.network.publish(&ProposalTopic, signed_proposal).await {
@@ -173,9 +201,16 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
     /// Note that it only accepts the first proposal sent by the proposer, valid or invalid. If it is
     /// invalid, then it will immediately return Timeout, even if the timeout duration hasn't elapsed
     /// yet.
-    async fn await_proposal(&mut self, round: u32) -> Result<ProposalResult<Self::ProposalTy>, TendermintError> {
+    async fn await_proposal(
+        &mut self,
+        round: u32,
+    ) -> Result<ProposalResult<Self::ProposalTy>, TendermintError> {
         // Get the proposer's slot and slot number for this round.
-        let (slot, slot_number) = self.blockchain.get_slot_owner_at(self.blockchain.block_number() + 1, round, None);
+        let (slot, slot_number) = self.blockchain.get_slot_owner_at(
+            self.blockchain.block_number() + 1,
+            self.blockchain.view_number() + round,
+            None,
+        );
 
         // Calculate the validator id from the slot number.
         let validator_id = self
@@ -188,10 +223,16 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
         let validator_key = *slot.public_key().uncompress_unchecked();
 
         // Calculate the timeout duration.
-        let timeout = Duration::from_millis(TENDERMINT_TIMEOUT_INIT + round as u64 * TENDERMINT_TIMEOUT_DELTA);
+        let timeout = Duration::from_millis(
+            TENDERMINT_TIMEOUT_INIT + round as u64 * TENDERMINT_TIMEOUT_DELTA,
+        );
 
         // This waits for a proposal from the proposer until it timeouts.
-        let await_res = tokio::time::timeout(timeout, self.await_proposal_loop(validator_id, &validator_key)).await;
+        let await_res = tokio::time::timeout(
+            timeout,
+            self.await_proposal_loop(validator_id, &validator_key),
+        )
+        .await;
 
         // Unwrap our await result. If we timed out, we return a proposal timeout right here.
         let proposal = match await_res {
@@ -232,7 +273,11 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
 
         // Update our blockchain state using the received proposal. If we can't update the state, we
         // return a proposal timeout right here.
-        if self.blockchain.commit_accounts(&state, &block, 0, &mut txn).is_err() {
+        if self
+            .blockchain
+            .commit_accounts(&state, &block, 0, &mut txn)
+            .is_err()
+        {
             debug!("Tendermint - await_proposal: Can't update state");
             return Ok(ProposalResult::Timeout);
         }
@@ -266,12 +311,18 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
         step: Step,
         proposal: Option<Blake2bHash>,
     ) -> Result<AggregationResult<Self::ProofTy>, TendermintError> {
-        self.aggregation_adapter.broadcast_and_aggregate(round, step, proposal).await
+        self.aggregation_adapter
+            .broadcast_and_aggregate(round, step, proposal)
+            .await
     }
 
     /// Returns the vote aggregation for a given proposal and round. It simply calls the aggregation
     /// adapter, which does all the work.
-    async fn get_aggregation(&mut self, round: u32, step: Step) -> Result<AggregationResult<Self::ProofTy>, TendermintError> {
+    async fn get_aggregation(
+        &mut self,
+        round: u32,
+        step: Step,
+    ) -> Result<AggregationResult<Self::ProofTy>, TendermintError> {
         self.aggregation_adapter.get_aggregate(round, step).await
     }
 }
@@ -279,7 +330,11 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
 impl<N: ValidatorNetwork + 'static> TendermintInterface<N> {
     /// This function waits in a loop until it gets a proposal message from a given validator with a
     /// valid signature. It is just a helper function for the await_proposal function in this file.
-    async fn await_proposal_loop(&mut self, validator_id: u16, validator_key: &PublicKey) -> TendermintProposal {
+    async fn await_proposal_loop(
+        &mut self,
+        validator_id: u16,
+        validator_key: &PublicKey,
+    ) -> TendermintProposal {
         // Get the subscription stream from the network and store it if necessary
         if self.proposal_stream.is_none() {
             let stream_result = self.network.subscribe(&ProposalTopic).await;
@@ -315,7 +370,13 @@ impl<N: ValidatorNetwork + 'static> TendermintInterface<N> {
         block_height: u32,
     ) -> Self {
         // Create the aggregation object.
-        let aggregation_adapter = HandelTendermintAdapter::new(validator_id, active_validators, block_height, network.clone(), validator_key.secret_key);
+        let aggregation_adapter = HandelTendermintAdapter::new(
+            validator_id,
+            active_validators,
+            block_height,
+            network.clone(),
+            validator_key.secret_key,
+        );
 
         // Create the instance and return it.
         Self {
