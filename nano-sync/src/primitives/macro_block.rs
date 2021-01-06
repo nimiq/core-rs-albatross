@@ -1,7 +1,7 @@
-use algebra::mnt6_753::{Fr, G1Projective};
-use algebra::ProjectiveCurve;
-use algebra_core::Zero;
-use crypto_primitives::prf::Blake2sWithParameterBlock;
+use ark_crypto_primitives::prf::Blake2sWithParameterBlock;
+use ark_ec::ProjectiveCurve;
+use ark_ff::Zero;
+use ark_mnt6_753::{Fr, G1Projective};
 
 use crate::constants::{POINT_CAPACITY, VALIDATOR_SLOTS};
 use crate::primitives::{pedersen_generators, pedersen_hash};
@@ -43,12 +43,18 @@ impl MacroBlock {
 
     /// This function signs a macro block, for only the prepare round, given a validator's
     /// key pair and signer id (which is simply the position in the signer bitmap).
-    pub fn sign_prepare(&mut self, sk: Fr, signer_id: usize, block_number: u32, pks_commitment: Vec<u8>) {
+    pub fn sign_prepare(
+        &mut self,
+        sk: Fr,
+        signer_id: usize,
+        block_number: u32,
+        pks_commitment: Vec<u8>,
+    ) {
         // Generate the hash point for the signature.
-        let hash_point = self.hash(0, block_number, pks_commitment);
+        let mut signature = self.hash(0, block_number, pks_commitment);
 
         // Generates the signature.
-        let signature = hash_point.mul(sk);
+        signature *= sk;
 
         // Adds the signature to the aggregated signature on the block.
         self.prepare_signature += &signature;
@@ -59,12 +65,18 @@ impl MacroBlock {
 
     /// This function signs a macro block, for only the prepare round, given a validator's
     /// key pair and signer id (which is simply the position in the signer bitmap).
-    pub fn sign_commit(&mut self, sk: Fr, signer_id: usize, block_number: u32, pks_commitment: Vec<u8>) {
+    pub fn sign_commit(
+        &mut self,
+        sk: Fr,
+        signer_id: usize,
+        block_number: u32,
+        pks_commitment: Vec<u8>,
+    ) {
         // Generate the hash point for the signature.
-        let hash_point = self.hash(1, block_number, pks_commitment);
+        let mut signature = self.hash(1, block_number, pks_commitment);
 
         // Generates the signature.
-        let signature = hash_point.mul(sk);
+        signature *= sk;
 
         // Adds the signature to the aggregated signature on the block.
         self.commit_signature += &signature;
@@ -81,7 +93,12 @@ impl MacroBlock {
     /// necessary because the Pedersen commitment is not pseudo-random and we need pseudo-randomness
     /// for the BLS signature scheme. Finally we use the Pedersen hash algorithm on those 256 bits
     /// to obtain a single EC point.
-    pub fn hash(&self, round_number: u8, block_number: u32, pks_commitment: Vec<u8>) -> G1Projective {
+    pub fn hash(
+        &self,
+        round_number: u8,
+        block_number: u32,
+        pks_commitment: Vec<u8>,
+    ) -> G1Projective {
         // Serialize the input into bits.
         let mut bytes = vec![round_number];
 

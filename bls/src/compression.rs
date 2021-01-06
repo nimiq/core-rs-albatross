@@ -2,11 +2,10 @@ use std::io::{Error, ErrorKind};
 
 use ark_ec::short_weierstrass_jacobian::GroupAffine;
 use ark_ec::SWModelParameters;
-use ark_ff::{BigInteger768, PrimeField};
+use ark_ff::{BigInteger768, PrimeField, Zero};
 use ark_mnt4_753::{Fq as MNT4Fq, Fq2 as MNT4Fq2};
 use ark_mnt6_753::{Fq as MNT6Fq, Fq3 as MNT6Fq3};
 use byteorder::{BigEndian, ByteOrder, ReadBytesExt, WriteBytesExt};
-use num_traits::Zero;
 
 /// Serializer in big endian format.
 pub trait BeSerialize {

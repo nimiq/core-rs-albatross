@@ -1,9 +1,9 @@
-use algebra::mnt4_753::FqParameters;
-use algebra::mnt6_753::Fr as MNT6Fr;
-use r1cs_core::SynthesisError;
-use r1cs_std::bits::boolean::Boolean;
-use r1cs_std::mnt4_753::{G1Gadget, G2Gadget};
-use r1cs_std::ToBitsGadget;
+use ark_mnt4_753::FqParameters;
+use ark_mnt6_753::Fr as MNT6Fr;
+use ark_r1cs_std::boolean::Boolean;
+use ark_r1cs_std::mnt4_753::{G1Gadget, G2Gadget};
+use ark_r1cs_std::ToBitsGadget;
+use ark_relations::r1cs::SynthesisError;
 
 use crate::gadgets::mnt6::YToBitGadget;
 use crate::utils::pad_point_bits;
@@ -12,7 +12,10 @@ use crate::utils::pad_point_bits;
 pub struct SerializeGadget;
 
 impl SerializeGadget {
-    pub fn serialize_g1<CS: r1cs_core::ConstraintSystem<MNT6Fr>>(mut cs: CS, point: &G1Gadget) -> Result<Vec<Boolean>, SynthesisError> {
+    pub fn serialize_g1<CS: r1cs_core::ConstraintSystem<MNT6Fr>>(
+        mut cs: CS,
+        point: &G1Gadget,
+    ) -> Result<Vec<Boolean>, SynthesisError> {
         // Get bits from the x coordinate.
         let x_bits = point.x.to_bits(cs.ns(|| "x to bits"))?;
 
@@ -25,7 +28,10 @@ impl SerializeGadget {
         Ok(bits)
     }
 
-    pub fn serialize_g2<CS: r1cs_core::ConstraintSystem<MNT6Fr>>(mut cs: CS, point: &G2Gadget) -> Result<Vec<Boolean>, SynthesisError> {
+    pub fn serialize_g2<CS: r1cs_core::ConstraintSystem<MNT6Fr>>(
+        mut cs: CS,
+        point: &G2Gadget,
+    ) -> Result<Vec<Boolean>, SynthesisError> {
         // Get bits from the x coordinate.
         let x_bits = point.x.to_bits(cs.ns(|| "x to bits"))?;
 

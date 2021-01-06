@@ -1,15 +1,15 @@
+use ark_crypto_primitives::nizk::groth16::constraints::{
+    Groth16VerifierGadget, ProofGadget, VerifyingKeyGadget,
+};
+use ark_crypto_primitives::NIZKVerifierGadget;
+use ark_groth16::{Groth16, Proof, VerifyingKey};
+use ark_mnt4_753::Fr as MNT4Fr;
+use ark_mnt6_753::{Fq, Fr, MNT6_753};
+use ark_r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisError};
+use ark_r1cs_std::mnt6_753::{G1Gadget, PairingGadget};
+use ark_r1cs_std::prelude::*;
+use ark_serialize::CanonicalDeserialize;
 use std::fs::File;
-
-use algebra::mnt4_753::Fr as MNT4Fr;
-use algebra::mnt6_753::{Fq, Fr, MNT6_753};
-use algebra_core::CanonicalDeserialize;
-use crypto_primitives::nizk::groth16::constraints::{Groth16VerifierGadget, ProofGadget, VerifyingKeyGadget};
-use crypto_primitives::nizk::groth16::Groth16;
-use crypto_primitives::NIZKVerifierGadget;
-use groth16::{Proof, VerifyingKey};
-use r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisError};
-use r1cs_std::mnt6_753::{G1Gadget, PairingGadget};
-use r1cs_std::prelude::*;
 
 use crate::circuits::mnt6::{MacroBlockWrapperCircuit, MergerWrapperCircuit};
 use crate::gadgets::input::RecursiveInputGadget;
@@ -91,7 +91,10 @@ impl MergerCircuit {
 
 impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
     /// This function generates the constraints for the circuit.
-    fn generate_constraints<CS: ConstraintSystem<MNT4Fr>>(self, cs: &mut CS) -> Result<(), SynthesisError> {
+    fn generate_constraints<CS: ConstraintSystem<MNT4Fr>>(
+        self,
+        cs: &mut CS,
+    ) -> Result<(), SynthesisError> {
         // Load the verifying key from file.
         let mut file = File::open(format!("verifying_keys/{}", &self.vk_file))?;
 
@@ -101,44 +104,79 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
         #[allow(unused_mut)]
         let mut cost = start_cost_analysis!(cs, || "Alloc constants");
 
-        let pedersen_generators_var = Vec::<G1Gadget>::alloc_constant(cs.ns(|| "alloc pedersen_generators"), pedersen_generators(19))?;
+        let pedersen_generators_var = Vec::<G1Gadget>::alloc_constant(
+            cs.ns(|| "alloc pedersen_generators"),
+            pedersen_generators(19),
+        )?;
 
-        let vk_macro_block_wrapper_var = TheVkGadget::alloc_constant(cs.ns(|| "alloc vk macro block wrapper"), &vk_macro_block_wrapper)?;
+        let vk_macro_block_wrapper_var = TheVkGadget::alloc_constant(
+            cs.ns(|| "alloc vk macro block wrapper"),
+            &vk_macro_block_wrapper,
+        )?;
 
         // Allocate all the private inputs.
         next_cost_analysis!(cs, cost, || { "Alloc private inputs" });
 
-        let proof_merger_wrapper_var = TheProofGadget::alloc(cs.ns(|| "alloc proof merger wrapper"), || Ok(&self.proof_merger_wrapper))?;
+        let proof_merger_wrapper_var =
+            TheProofGadget::alloc(cs.ns(|| "alloc proof merger wrapper"), || {
+                Ok(&self.proof_merger_wrapper)
+            })?;
 
-        let proof_macro_block_wrapper_var = TheProofGadget::alloc(cs.ns(|| "alloc proof macro block wrapper"), || Ok(&self.proof_macro_block_wrapper))?;
+        let proof_macro_block_wrapper_var =
+            TheProofGadget::alloc(cs.ns(|| "alloc proof macro block wrapper"), || {
+                Ok(&self.proof_macro_block_wrapper)
+            })?;
 
-        let vk_merger_wrapper_var = TheVkGadget::alloc(cs.ns(|| "alloc vk merger wrapper"), || Ok(&self.vk_merger_wrapper))?;
+        let vk_merger_wrapper_var =
+            TheVkGadget::alloc(cs.ns(|| "alloc vk merger wrapper"), || {
+                Ok(&self.vk_merger_wrapper)
+            })?;
 
-        let intermediate_state_commitment_var = UInt8::alloc_vec(cs.ns(|| "alloc intermediate state commitment"), self.intermediate_state_commitment.as_ref())?;
+        let intermediate_state_commitment_var = UInt8::alloc_vec(
+            cs.ns(|| "alloc intermediate state commitment"),
+            self.intermediate_state_commitment.as_ref(),
+        )?;
 
-        let genesis_flag_var = Boolean::alloc(cs.ns(|| "alloc genesis flag"), || Ok(self.genesis_flag))?;
+        let genesis_flag_var =
+            Boolean::alloc(cs.ns(|| "alloc genesis flag"), || Ok(self.genesis_flag))?;
 
         // Allocate all the public inputs.
         next_cost_analysis!(cs, cost, || { "Alloc public inputs" });
 
-        let initial_state_commitment_var = UInt8::alloc_input_vec(cs.ns(|| "alloc initial state commitment"), self.initial_state_commitment.as_ref())?;
+        let initial_state_commitment_var = UInt8::alloc_input_vec(
+            cs.ns(|| "alloc initial state commitment"),
+            self.initial_state_commitment.as_ref(),
+        )?;
 
-        let final_state_commitment_var = UInt8::alloc_input_vec(cs.ns(|| "alloc final state commitment"), self.final_state_commitment.as_ref())?;
+        let final_state_commitment_var = UInt8::alloc_input_vec(
+            cs.ns(|| "alloc final state commitment"),
+            self.final_state_commitment.as_ref(),
+        )?;
 
-        let vk_commitment_var = UInt8::alloc_input_vec(cs.ns(|| "alloc vk commitment"), self.vk_commitment.as_ref())?;
+        let vk_commitment_var =
+            UInt8::alloc_input_vec(cs.ns(|| "alloc vk commitment"), self.vk_commitment.as_ref())?;
 
         // Verify equality for vk commitment. It just checks that the private input is correct by
         // committing to it and then comparing the result with the vk commitment given as a public input.
         next_cost_analysis!(cs, cost, || { "Verify vk commitment" });
 
-        let reference_commitment = VKCommitmentGadget::evaluate(cs.ns(|| "reference vk commitment"), &vk_merger_wrapper_var, &pedersen_generators_var)?;
+        let reference_commitment = VKCommitmentGadget::evaluate(
+            cs.ns(|| "reference vk commitment"),
+            &vk_merger_wrapper_var,
+            &pedersen_generators_var,
+        )?;
 
-        vk_commitment_var.enforce_equal(cs.ns(|| "vk commitment == reference commitment"), &reference_commitment)?;
+        vk_commitment_var.enforce_equal(
+            cs.ns(|| "vk commitment == reference commitment"),
+            &reference_commitment,
+        )?;
 
         // Verify equality of initial and intermediate state commitments. If the genesis flag is set to
         // true, it enforces the equality. If it is set to false, it doesn't. This is necessary for
         // the genesis block, for the first merger circuit.
-        next_cost_analysis!(cs, cost, || { "Conditionally verify initial and intermediate state commitments" });
+        next_cost_analysis!(cs, cost, || {
+            "Conditionally verify initial and intermediate state commitments"
+        });
 
         initial_state_commitment_var.conditional_enforce_equal(
             cs.ns(|| "initial state commitment == intermediate state commitment"),
@@ -151,11 +189,16 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
         // the genesis block, for the first merger circuit.
         next_cost_analysis!(cs, cost, || { "Conditionally verify proof merger wrapper" });
 
-        let mut proof_inputs = RecursiveInputGadget::to_field_elements::<Fr>(&initial_state_commitment_var)?;
+        let mut proof_inputs =
+            RecursiveInputGadget::to_field_elements::<Fr>(&initial_state_commitment_var)?;
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(&intermediate_state_commitment_var)?);
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
+            &intermediate_state_commitment_var,
+        )?);
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(&vk_commitment_var)?);
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
+            &vk_commitment_var,
+        )?);
 
         let neg_genesis_flag_var = genesis_flag_var.not();
 
@@ -170,8 +213,11 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
         // Verify the ZK proof for the Macro Block Wrapper circuit.
         next_cost_analysis!(cs, cost, || { "Verify proof macro block wrapper" });
 
-        let mut proof_inputs = RecursiveInputGadget::to_field_elements::<Fr>(&intermediate_state_commitment_var)?;
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(&final_state_commitment_var)?);
+        let mut proof_inputs =
+            RecursiveInputGadget::to_field_elements::<Fr>(&intermediate_state_commitment_var)?;
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
+            &final_state_commitment_var,
+        )?);
 
         <TheVerifierGadget as NIZKVerifierGadget<SecondProofSystem, Fq>>::check_verify(
             cs.ns(|| "verify macro block wrapper groth16 proof"),

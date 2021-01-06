@@ -1,9 +1,9 @@
-use algebra::mnt4_753::Fr as MNT4Fr;
-use algebra::mnt6_753::{Fq, MNT6_753};
-use crypto_primitives::nizk::groth16::constraints::VerifyingKeyGadget;
-use r1cs_core::SynthesisError;
-use r1cs_std::bits::{boolean::Boolean, uint8::UInt8};
-use r1cs_std::mnt6_753::{G1Gadget, PairingGadget};
+use ark_groth16::constraints::VerifyingKeyVar;
+use ark_mnt4_753::Fr as MNT4Fr;
+use ark_mnt6_753::constraints::{G1Var, PairingVar};
+use ark_mnt6_753::MNT6_753;
+use ark_r1cs_std::prelude::UInt8;
+use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 
 use crate::gadgets::mnt4::{PedersenHashGadget, SerializeGadget};
 use crate::utils::reverse_inner_byte_order;
@@ -18,40 +18,40 @@ pub struct VKCommitmentGadget;
 
 impl VKCommitmentGadget {
     /// Calculates the verifying key commitment.
-    pub fn evaluate<CS: r1cs_core::ConstraintSystem<MNT4Fr>>(
-        mut cs: CS,
-        vk: &VerifyingKeyGadget<MNT6_753, Fq, PairingGadget>,
-        pedersen_generators: &Vec<G1Gadget>,
-    ) -> Result<Vec<UInt8>, SynthesisError> {
+    pub fn evaluate(
+        cs: ConstraintSystemRef<MNT4Fr>,
+        vk: &VerifyingKeyVar<MNT6_753, PairingVar>,
+        pedersen_generators: &Vec<G1Var>,
+    ) -> Result<Vec<UInt8<MNT4Fr>>, SynthesisError> {
         // Initialize Boolean vector.
-        let mut bits: Vec<Boolean> = vec![];
+        let mut bits = vec![];
 
         // Serialize the verifying key into bits.
         // Alpha G1
-        bits.extend(SerializeGadget::serialize_g1(cs.ns(|| "serialize alpha g1"), &vk.alpha_g1)?);
+        bits.extend(SerializeGadget::serialize_g1(cs.clone(), &vk.alpha_g1)?);
 
         // Beta G2
-        bits.extend(SerializeGadget::serialize_g2(cs.ns(|| "serialize beta g2"), &vk.beta_g2)?);
+        bits.extend(SerializeGadget::serialize_g2(cs.clone(), &vk.beta_g2)?);
 
         // Gamma G2
-        bits.extend(SerializeGadget::serialize_g2(cs.ns(|| "serialize gamma g2"), &vk.gamma_g2)?);
+        bits.extend(SerializeGadget::serialize_g2(cs.clone(), &vk.gamma_g2)?);
 
         // Delta G2
-        bits.extend(SerializeGadget::serialize_g2(cs.ns(|| "serialize delta g2"), &vk.delta_g2)?);
+        bits.extend(SerializeGadget::serialize_g2(cs.clone(), &vk.delta_g2)?);
 
         // Gamma ABC G1
         for i in 0..vk.gamma_abc_g1.len() {
             bits.extend(SerializeGadget::serialize_g1(
-                cs.ns(|| format!("serialize gamma abc g1: point {}", i)),
+                cs.clone(),
                 &vk.gamma_abc_g1[i],
             )?);
         }
 
         // Calculate the Pedersen hash.
-        let hash = PedersenHashGadget::evaluate(cs.ns(|| "calculate pedersen hash"), &bits, pedersen_generators)?;
+        let hash = PedersenHashGadget::evaluate(&bits, pedersen_generators)?;
 
         // Serialize the Pedersen hash.
-        let serialized_bits = SerializeGadget::serialize_g1(cs.ns(|| "serialize pedersen hash"), &hash)?;
+        let serialized_bits = SerializeGadget::serialize_g1(cs.clone(), &hash)?;
 
         let serialized_bits = reverse_inner_byte_order(&serialized_bits[..]);
 

@@ -1,16 +1,16 @@
+use ark_crypto_primitives::nizk::groth16::constraints::{
+    Groth16VerifierGadget, ProofGadget, VerifyingKeyGadget,
+};
+use ark_crypto_primitives::NIZKVerifierGadget;
+use ark_groth16::{Groth16, Proof, VerifyingKey};
+use ark_mnt4_753::{Fq, Fr, MNT4_753};
+use ark_mnt6_753::Fr as MNT6Fr;
+use ark_r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisError};
+use ark_r1cs_std::mnt4_753::PairingGadget;
+use ark_r1cs_std::prelude::*;
+use ark_serialize::CanonicalDeserialize;
 use std::fs::File;
 use std::marker::PhantomData;
-
-use algebra::mnt4_753::{Fq, Fr, MNT4_753};
-use algebra::mnt6_753::Fr as MNT6Fr;
-use algebra_core::CanonicalDeserialize;
-use crypto_primitives::nizk::groth16::constraints::{Groth16VerifierGadget, ProofGadget, VerifyingKeyGadget};
-use crypto_primitives::nizk::groth16::Groth16;
-use crypto_primitives::NIZKVerifierGadget;
-use groth16::{Proof, VerifyingKey};
-use r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisError};
-use r1cs_std::mnt4_753::PairingGadget;
-use r1cs_std::prelude::*;
 
 use crate::gadgets::input::RecursiveInputGadget;
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
@@ -77,9 +77,14 @@ impl<SubCircuit> PKTreeNodeCircuit<SubCircuit> {
     }
 }
 
-impl<SubCircuit: ConstraintSynthesizer<Fr>> ConstraintSynthesizer<MNT6Fr> for PKTreeNodeCircuit<SubCircuit> {
+impl<SubCircuit: ConstraintSynthesizer<Fr>> ConstraintSynthesizer<MNT6Fr>
+    for PKTreeNodeCircuit<SubCircuit>
+{
     /// This function generates the constraints for the circuit.
-    fn generate_constraints<CS: ConstraintSystem<MNT6Fr>>(self, cs: &mut CS) -> Result<(), SynthesisError> {
+    fn generate_constraints<CS: ConstraintSystem<MNT6Fr>>(
+        self,
+        cs: &mut CS,
+    ) -> Result<(), SynthesisError> {
         // Load the verifying key from file.
         let mut file = File::open(format!("verifying_keys/{}", &self.vk_file))?;
 
@@ -94,16 +99,24 @@ impl<SubCircuit: ConstraintSynthesizer<Fr>> ConstraintSynthesizer<MNT6Fr> for PK
         // Allocate all the private inputs.
         next_cost_analysis!(cs, cost, || { "Alloc private inputs" });
 
-        let left_proof_var = TheProofGadget::alloc(cs.ns(|| "alloc left proof"), || Ok(&self.left_proof))?;
+        let left_proof_var =
+            TheProofGadget::alloc(cs.ns(|| "alloc left proof"), || Ok(&self.left_proof))?;
 
-        let right_proof_var = TheProofGadget::alloc(cs.ns(|| "alloc right proof"), || Ok(&self.right_proof))?;
+        let right_proof_var =
+            TheProofGadget::alloc(cs.ns(|| "alloc right proof"), || Ok(&self.right_proof))?;
 
         // Allocate all the public inputs.
         next_cost_analysis!(cs, cost, || { "Alloc public inputs" });
 
-        let pk_commitment_var = UInt8::alloc_input_vec(cs.ns(|| "alloc public keys commitment"), self.pks_commitment.as_ref())?;
+        let pk_commitment_var = UInt8::alloc_input_vec(
+            cs.ns(|| "alloc public keys commitment"),
+            self.pks_commitment.as_ref(),
+        )?;
 
-        let prepare_signer_bitmap_var = UInt8::alloc_input_vec(cs.ns(|| "alloc prepare signer bitmap"), self.prepare_signer_bitmap.as_ref())?;
+        let prepare_signer_bitmap_var = UInt8::alloc_input_vec(
+            cs.ns(|| "alloc prepare signer bitmap"),
+            self.prepare_signer_bitmap.as_ref(),
+        )?;
 
         let left_prepare_agg_pk_commitment_var = UInt8::alloc_input_vec(
             cs.ns(|| "alloc left prepare aggregate pk commitment"),
@@ -115,7 +128,10 @@ impl<SubCircuit: ConstraintSynthesizer<Fr>> ConstraintSynthesizer<MNT6Fr> for PK
             self.right_prepare_agg_pk_commitment.as_ref(),
         )?;
 
-        let commit_signer_bitmap_var = UInt8::alloc_input_vec(cs.ns(|| "alloc commit signer bitmap"), self.commit_signer_bitmap.as_ref())?;
+        let commit_signer_bitmap_var = UInt8::alloc_input_vec(
+            cs.ns(|| "alloc commit signer bitmap"),
+            self.commit_signer_bitmap.as_ref(),
+        )?;
 
         let left_commit_agg_pk_commitment_var = UInt8::alloc_input_vec(
             cs.ns(|| "alloc left commit aggregate pk commitment"),
@@ -127,7 +143,9 @@ impl<SubCircuit: ConstraintSynthesizer<Fr>> ConstraintSynthesizer<MNT6Fr> for PK
             self.right_commit_agg_pk_commitment.as_ref(),
         )?;
 
-        let position_var = UInt8::alloc_input_vec(cs.ns(|| "alloc position"), &[self.position])?.pop().unwrap();
+        let position_var = UInt8::alloc_input_vec(cs.ns(|| "alloc position"), &[self.position])?
+            .pop()
+            .unwrap();
 
         // Calculate the position for the left and right child nodes. Given the current position P,
         // the left position L and the right position R are given as:
@@ -154,15 +172,25 @@ impl<SubCircuit: ConstraintSynthesizer<Fr>> ConstraintSynthesizer<MNT6Fr> for PK
 
         let mut proof_inputs = RecursiveInputGadget::to_field_elements::<Fr>(&pk_commitment_var)?;
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(&prepare_signer_bitmap_var)?);
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
+            &prepare_signer_bitmap_var,
+        )?);
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(&left_prepare_agg_pk_commitment_var)?);
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
+            &left_prepare_agg_pk_commitment_var,
+        )?);
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(&commit_signer_bitmap_var)?);
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
+            &commit_signer_bitmap_var,
+        )?);
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(&left_commit_agg_pk_commitment_var)?);
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
+            &left_commit_agg_pk_commitment_var,
+        )?);
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(&[left_position])?);
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(&[
+            left_position,
+        ])?);
 
         <TheVerifierGadget as NIZKVerifierGadget<TheProofSystem<SubCircuit>, Fq>>::check_verify(
             cs.ns(|| "verify left groth16 proof"),
@@ -176,15 +204,25 @@ impl<SubCircuit: ConstraintSynthesizer<Fr>> ConstraintSynthesizer<MNT6Fr> for PK
 
         let mut proof_inputs = RecursiveInputGadget::to_field_elements::<Fr>(&pk_commitment_var)?;
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(&prepare_signer_bitmap_var)?);
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
+            &prepare_signer_bitmap_var,
+        )?);
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(&right_prepare_agg_pk_commitment_var)?);
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
+            &right_prepare_agg_pk_commitment_var,
+        )?);
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(&commit_signer_bitmap_var)?);
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
+            &commit_signer_bitmap_var,
+        )?);
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(&right_commit_agg_pk_commitment_var)?);
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
+            &right_commit_agg_pk_commitment_var,
+        )?);
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(&[right_position])?);
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(&[
+            right_position,
+        ])?);
 
         <TheVerifierGadget as NIZKVerifierGadget<TheProofSystem<SubCircuit>, Fq>>::check_verify(
             cs.ns(|| "verify right groth16 proof"),

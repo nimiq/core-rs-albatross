@@ -1,9 +1,12 @@
-use algebra::mnt4_753::{Fr as MNT4Fr, G1Projective as MNT4G1Projective, G2Projective as MNT4G2Projective};
-use algebra::mnt6_753::{Fr as MNT6Fr, G1Projective as MNT6G1Projective, G2Projective as MNT6G2Projective};
-use algebra::FpParameters;
-use algebra_core::fields::Field;
-use algebra_core::ProjectiveCurve;
-use r1cs_std::prelude::*;
+use ark_ec::ProjectiveCurve;
+use ark_ff::{Field, FpParameters};
+use ark_mnt4_753::{
+    Fr as MNT4Fr, G1Projective as MNT4G1Projective, G2Projective as MNT4G2Projective,
+};
+use ark_mnt6_753::{
+    Fr as MNT6Fr, G1Projective as MNT6G1Projective, G2Projective as MNT6G2Projective,
+};
+use ark_r1cs_std::boolean::Boolean;
 use rand::{thread_rng, RngCore};
 
 // Re-export bls utility functions.
@@ -48,7 +51,9 @@ pub fn gen_rand_g1_mnt4() -> MNT4G1Projective {
         rng.fill_bytes(&mut bytes[2..]);
         x = MNT4Fr::from_random_bytes(&bytes);
     }
-    MNT4G1Projective::prime_subgroup_generator().mul(x.unwrap())
+    let mut point = MNT4G1Projective::prime_subgroup_generator();
+    point *= x.unwrap();
+    point
 }
 
 /// Creates a random G2 point in the MNT4-753 curve.
@@ -60,7 +65,9 @@ pub fn gen_rand_g2_mnt4() -> MNT4G2Projective {
         rng.fill_bytes(&mut bytes[2..]);
         x = MNT4Fr::from_random_bytes(&bytes);
     }
-    MNT4G2Projective::prime_subgroup_generator().mul(x.unwrap())
+    let mut point = MNT4G2Projective::prime_subgroup_generator();
+    point *= x.unwrap();
+    point
 }
 
 /// Creates a random G1 point in the MNT6-753 curve.
@@ -72,7 +79,9 @@ pub fn gen_rand_g1_mnt6() -> MNT6G1Projective {
         rng.fill_bytes(&mut bytes[2..]);
         x = MNT6Fr::from_random_bytes(&bytes);
     }
-    MNT6G1Projective::prime_subgroup_generator().mul(x.unwrap())
+    let mut point = MNT6G1Projective::prime_subgroup_generator();
+    point *= x.unwrap();
+    point
 }
 
 /// Creates a random G2 point in the MNT6-753 curve.
@@ -84,7 +93,9 @@ pub fn gen_rand_g2_mnt6() -> MNT6G2Projective {
         rng.fill_bytes(&mut bytes[2..]);
         x = MNT6Fr::from_random_bytes(&bytes);
     }
-    MNT6G2Projective::prime_subgroup_generator().mul(x.unwrap())
+    let mut point = MNT6G2Projective::prime_subgroup_generator();
+    point *= x.unwrap();
+    point
 }
 
 /// Takes multiple bit representations of a point (Fp/Fp2/Fp3).
@@ -93,12 +104,19 @@ pub fn gen_rand_g2_mnt6() -> MNT6G2Projective {
 /// This function pads each chunk of `MODULUS_BITS` to full bytes, prepending the `y_bit`
 /// in the very front.
 /// This maintains *Big-Endian* representation.
-pub fn pad_point_bits<P: FpParameters>(mut bits: Vec<Boolean>, y_bit: Boolean) -> Vec<Boolean> {
+pub fn pad_point_bits<P: FpParameters, F: Field>(
+    mut bits: Vec<Boolean<F>>,
+    y_bit: Boolean<F>,
+) -> Vec<Boolean<F>> {
     let point_len = P::MODULUS_BITS;
 
     let padding = 8 - (point_len % 8);
 
-    assert_eq!(bits.len() % point_len as usize, 0, "Can only pad multiples of point size");
+    assert_eq!(
+        bits.len() % point_len as usize,
+        0,
+        "Can only pad multiples of point size"
+    );
 
     let mut serialization = vec![];
 
@@ -132,7 +150,11 @@ pub fn pad_point_bits<P: FpParameters>(mut bits: Vec<Boolean>, y_bit: Boolean) -
         bits = new_bits;
     }
 
-    assert_eq!(serialization.len() % 8, 0, "Padded serialization should be of byte length");
+    assert_eq!(
+        serialization.len() % 8,
+        0,
+        "Padded serialization should be of byte length"
+    );
 
     serialization
 }
@@ -140,13 +162,13 @@ pub fn pad_point_bits<P: FpParameters>(mut bits: Vec<Boolean>, y_bit: Boolean) -
 /// Takes a data vector in *Big-Endian* representation and transforms it,
 /// such that each byte starts with the least significant bit (as expected by blake2 gadgets).
 /// b0 b1 b2 b3 b4 b5 b6 b7 b8 -> b8 b7 b6 b5 b4 b3 b2 b1 b0
-pub fn reverse_inner_byte_order(data: &[Boolean]) -> Vec<Boolean> {
+pub fn reverse_inner_byte_order<F: Field>(data: &[Boolean<F>]) -> Vec<Boolean<F>> {
     assert_eq!(data.len() % 8, 0);
 
     data.chunks(8)
         // Reverse each 8 bit chunk.
         .flat_map(|chunk| chunk.iter().rev().cloned())
-        .collect::<Vec<Boolean>>()
+        .collect::<Vec<Boolean<F>>>()
 }
 
 /// Transforms a vector of little endian bits into a u8.

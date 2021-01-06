@@ -1,8 +1,7 @@
-use std::{fmt, ops::MulAssign};
+use std::fmt;
 
-use ark_ff::UniformRand;
+use ark_ff::{UniformRand, Zero};
 use ark_mnt6_753::{Fr, G1Projective};
-use num_traits::Zero;
 
 #[cfg(feature = "beserial")]
 use beserial::Serialize;
@@ -35,7 +34,7 @@ impl SecretKey {
     /// Creates a signature given a G1 point.
     pub fn sign_g1(&self, hash_curve: G1Projective) -> Signature {
         let mut sig = hash_curve;
-        sig.mul_assign(self.secret_key);
+        sig *= self.secret_key;
         Signature { signature: sig }
     }
 }

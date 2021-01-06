@@ -1,4 +1,4 @@
-use algebra::mnt6_753::G2Projective;
+use ark_mnt6_753::G2Projective;
 
 use crate::constants::{PK_TREE_BREADTH, VALIDATOR_SLOTS};
 use crate::primitives::merkle_tree_construct;

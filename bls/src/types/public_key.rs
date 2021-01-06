@@ -1,9 +1,9 @@
 use std::{cmp::Ordering, fmt, ops::MulAssign};
 
 use ark_ec::{PairingEngine, ProjectiveCurve};
+use ark_ff::Zero;
 use ark_mnt6_753::{G1Projective, G2Projective, MNT6_753};
 use log::error;
-use num_traits::Zero;
 
 use nimiq_hash::Hash;
 

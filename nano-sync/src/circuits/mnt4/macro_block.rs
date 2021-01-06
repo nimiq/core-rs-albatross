@@ -1,22 +1,27 @@
+use ark_crypto_primitives::nizk::groth16::constraints::{
+    Groth16VerifierGadget, ProofGadget, VerifyingKeyGadget,
+};
+use ark_crypto_primitives::NIZKVerifierGadget;
+use ark_ec::ProjectiveCurve;
+use ark_groth16::{Groth16, Proof, VerifyingKey};
+use ark_mnt4_753::Fr as MNT4Fr;
+use ark_mnt6_753::{Fq, Fr, G2Projective, MNT6_753};
+use ark_r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisError};
+use ark_r1cs_std::mnt6_753::{FqGadget, G1Gadget, G2Gadget, PairingGadget};
+use ark_r1cs_std::prelude::*;
+use ark_serialize::CanonicalDeserialize;
 use std::fs::File;
-
-use algebra::mnt4_753::Fr as MNT4Fr;
-use algebra::mnt6_753::{Fq, Fr, G2Projective, MNT6_753};
-use algebra_core::{CanonicalDeserialize, ProjectiveCurve};
-use crypto_primitives::nizk::groth16::constraints::{Groth16VerifierGadget, ProofGadget, VerifyingKeyGadget};
-use crypto_primitives::nizk::Groth16;
-use crypto_primitives::NIZKVerifierGadget;
-use groth16::{Proof, VerifyingKey};
-use r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisError};
-use r1cs_std::mnt6_753::{FqGadget, G1Gadget, G2Gadget, PairingGadget};
-use r1cs_std::prelude::*;
 
 use crate::circuits::mnt4::PKTreeLeafCircuit as LeafMNT4;
 use crate::circuits::mnt4::PKTreeNodeCircuit as NodeMNT4;
 use crate::circuits::mnt6::PKTreeNodeCircuit as NodeMNT6;
-use crate::constants::{sum_generator_g1_mnt6, sum_generator_g2_mnt6, EPOCH_LENGTH, MAX_NON_SIGNERS, VALIDATOR_SLOTS};
+use crate::constants::{
+    sum_generator_g1_mnt6, sum_generator_g2_mnt6, EPOCH_LENGTH, MAX_NON_SIGNERS, VALIDATOR_SLOTS,
+};
 use crate::gadgets::input::RecursiveInputGadget;
-use crate::gadgets::mnt4::{MacroBlockGadget, PedersenHashGadget, SerializeGadget, StateCommitmentGadget};
+use crate::gadgets::mnt4::{
+    MacroBlockGadget, PedersenHashGadget, SerializeGadget, StateCommitmentGadget,
+};
 use crate::primitives::{pedersen_generators, MacroBlock};
 use crate::utils::reverse_inner_byte_order;
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
@@ -87,7 +92,10 @@ impl MacroBlockCircuit {
 
 impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
     /// This function generates the constraints for the circuit.
-    fn generate_constraints<CS: ConstraintSystem<MNT4Fr>>(self, cs: &mut CS) -> Result<(), SynthesisError> {
+    fn generate_constraints<CS: ConstraintSystem<MNT4Fr>>(
+        self,
+        cs: &mut CS,
+    ) -> Result<(), SynthesisError> {
         // Load the verifying key from file.
         let mut file = File::open(format!("verifying_keys/{}", &self.vk_file))?;
 
@@ -99,30 +107,57 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
 
         let epoch_length_var = UInt32::constant(EPOCH_LENGTH);
 
-        let max_non_signers_var = FqGadget::alloc_constant(cs.ns(|| "alloc max non signers"), &Fq::from(MAX_NON_SIGNERS as u64))?;
+        let max_non_signers_var = FqGadget::alloc_constant(
+            cs.ns(|| "alloc max non signers"),
+            &Fq::from(MAX_NON_SIGNERS as u64),
+        )?;
 
-        let sig_generator_var = G2Gadget::alloc_constant(cs.ns(|| "alloc signature generator"), &G2Projective::prime_subgroup_generator())?;
+        let sig_generator_var = G2Gadget::alloc_constant(
+            cs.ns(|| "alloc signature generator"),
+            &G2Projective::prime_subgroup_generator(),
+        )?;
 
-        let sum_generator_g1_var = G1Gadget::alloc_constant(cs.ns(|| "alloc sum generator g1"), &sum_generator_g1_mnt6())?;
+        let sum_generator_g1_var =
+            G1Gadget::alloc_constant(cs.ns(|| "alloc sum generator g1"), &sum_generator_g1_mnt6())?;
 
-        let sum_generator_g2_var = G2Gadget::alloc_constant(cs.ns(|| "alloc sum generator g2"), &sum_generator_g2_mnt6())?;
+        let sum_generator_g2_var =
+            G2Gadget::alloc_constant(cs.ns(|| "alloc sum generator g2"), &sum_generator_g2_mnt6())?;
 
-        let pedersen_generators_var = Vec::<G1Gadget>::alloc_constant(cs.ns(|| "alloc pedersen_generators"), pedersen_generators(5))?;
+        let pedersen_generators_var = Vec::<G1Gadget>::alloc_constant(
+            cs.ns(|| "alloc pedersen_generators"),
+            pedersen_generators(5),
+        )?;
 
-        let vk_pk_tree_var = TheVkGadget::alloc_constant(cs.ns(|| "alloc vk pk tree"), &vk_pk_tree)?;
+        let vk_pk_tree_var =
+            TheVkGadget::alloc_constant(cs.ns(|| "alloc vk pk tree"), &vk_pk_tree)?;
 
         // Allocate all the private inputs.
         next_cost_analysis!(cs, cost, || "Alloc private inputs");
 
-        let prepare_agg_pk_chunks_var = Vec::<G2Gadget>::alloc(cs.ns(|| "alloc prepare agg pk chunks"), || Ok(&self.prepare_agg_pk_chunks[..]))?;
+        let prepare_agg_pk_chunks_var =
+            Vec::<G2Gadget>::alloc(cs.ns(|| "alloc prepare agg pk chunks"), || {
+                Ok(&self.prepare_agg_pk_chunks[..])
+            })?;
 
-        let commit_agg_pk_chunks_var = Vec::<G2Gadget>::alloc(cs.ns(|| "alloc commit agg pk chunks"), || Ok(&self.commit_agg_pk_chunks[..]))?;
+        let commit_agg_pk_chunks_var =
+            Vec::<G2Gadget>::alloc(cs.ns(|| "alloc commit agg pk chunks"), || {
+                Ok(&self.commit_agg_pk_chunks[..])
+            })?;
 
-        let initial_pks_commitment_var = UInt8::alloc_vec(cs.ns(|| "alloc initial pks commitment"), self.initial_pks_commitment.as_ref())?;
+        let initial_pks_commitment_var = UInt8::alloc_vec(
+            cs.ns(|| "alloc initial pks commitment"),
+            self.initial_pks_commitment.as_ref(),
+        )?;
 
-        let initial_block_number_var = UInt32::alloc(cs.ns(|| "alloc initial block number"), Some(self.initial_block_number))?;
+        let initial_block_number_var = UInt32::alloc(
+            cs.ns(|| "alloc initial block number"),
+            Some(self.initial_block_number),
+        )?;
 
-        let final_pks_commitment_var = UInt8::alloc_vec(cs.ns(|| "alloc final pks commitment"), self.final_pks_commitment.as_ref())?;
+        let final_pks_commitment_var = UInt8::alloc_vec(
+            cs.ns(|| "alloc final pks commitment"),
+            self.final_pks_commitment.as_ref(),
+        )?;
 
         let block_var = MacroBlockGadget::alloc(cs.ns(|| "alloc macro block"), || Ok(&self.block))?;
 
@@ -131,9 +166,15 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         // Allocate all the public inputs.
         next_cost_analysis!(cs, cost, || { "Alloc public inputs" });
 
-        let initial_state_commitment_var = UInt8::alloc_input_vec(cs.ns(|| "alloc initial state commitment"), self.initial_state_commitment.as_ref())?;
+        let initial_state_commitment_var = UInt8::alloc_input_vec(
+            cs.ns(|| "alloc initial state commitment"),
+            self.initial_state_commitment.as_ref(),
+        )?;
 
-        let final_state_commitment_var = UInt8::alloc_input_vec(cs.ns(|| "alloc final state commitment"), self.final_state_commitment.as_ref())?;
+        let final_state_commitment_var = UInt8::alloc_input_vec(
+            cs.ns(|| "alloc final state commitment"),
+            self.final_state_commitment.as_ref(),
+        )?;
 
         // Verifying equality for initial state commitment. It just checks that the initial block
         // number and the initial public keys commitment given as private inputs are correct by
@@ -148,7 +189,10 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
             &pedersen_generators_var,
         )?;
 
-        initial_state_commitment_var.enforce_equal(cs.ns(|| "initial state commitment == reference commitment"), &reference_commitment)?;
+        initial_state_commitment_var.enforce_equal(
+            cs.ns(|| "initial state commitment == reference commitment"),
+            &reference_commitment,
+        )?;
 
         // Verifying equality for final state commitment. It just checks that the calculated final
         // block number and the final public keys commitment given as private input are correct by
@@ -168,7 +212,10 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
             &pedersen_generators_var,
         )?;
 
-        final_state_commitment_var.enforce_equal(cs.ns(|| "final state commitment == reference commitment"), &reference_commitment)?;
+        final_state_commitment_var.enforce_equal(
+            cs.ns(|| "final state commitment == reference commitment"),
+            &reference_commitment,
+        )?;
 
         // Calculating the prepare aggregate public key. All the chunks come with the generator added,
         // so we need to subtract it in order to get the correct aggregate public key. This is necessary
@@ -179,21 +226,35 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         let mut prepare_agg_pk = sum_generator_g2_var.clone();
 
         for i in 0..self.prepare_agg_pk_chunks.len() {
-            prepare_agg_pk = prepare_agg_pk.add(cs.ns(|| format!("add next key, prepare {}", i)), &prepare_agg_pk_chunks_var[i])?;
+            prepare_agg_pk = prepare_agg_pk.add(
+                cs.ns(|| format!("add next key, prepare {}", i)),
+                &prepare_agg_pk_chunks_var[i],
+            )?;
 
-            prepare_agg_pk = prepare_agg_pk.sub(cs.ns(|| format!("subtract generator, prepare {}", i)), &sum_generator_g2_var)?;
+            prepare_agg_pk = prepare_agg_pk.sub(
+                cs.ns(|| format!("subtract generator, prepare {}", i)),
+                &sum_generator_g2_var,
+            )?;
         }
 
-        prepare_agg_pk = prepare_agg_pk.sub(cs.ns(|| "subtract generator, prepare"), &sum_generator_g2_var)?;
+        prepare_agg_pk = prepare_agg_pk.sub(
+            cs.ns(|| "subtract generator, prepare"),
+            &sum_generator_g2_var,
+        )?;
 
         // Calculating the commitments to each of the prepare aggregate public keys chunks. These
         // will be given as inputs to the PKTree SNARK circuit.
-        next_cost_analysis!(cs, cost, || { "Calculate prepare agg pk chunks commitments" });
+        next_cost_analysis!(cs, cost, || {
+            "Calculate prepare agg pk chunks commitments"
+        });
 
         let mut prepare_agg_pk_chunks_commitments = Vec::new();
 
         for i in 0..prepare_agg_pk_chunks_var.len() {
-            let chunk_bits = SerializeGadget::serialize_g2(cs.ns(|| format!("serialize prepare agg pk chunk {}", i)), &prepare_agg_pk_chunks_var[i])?;
+            let chunk_bits = SerializeGadget::serialize_g2(
+                cs.ns(|| format!("serialize prepare agg pk chunk {}", i)),
+                &prepare_agg_pk_chunks_var[i],
+            )?;
 
             let pedersen_hash = PedersenHashGadget::evaluate(
                 cs.ns(|| format!("pedersen hash prepare agg pk chunk {}", i)),
@@ -201,7 +262,10 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
                 &pedersen_generators_var,
             )?;
 
-            let pedersen_bits = SerializeGadget::serialize_g1(cs.ns(|| format!("serialize pedersen hash, prepare chunk {}", i)), &pedersen_hash)?;
+            let pedersen_bits = SerializeGadget::serialize_g1(
+                cs.ns(|| format!("serialize pedersen hash, prepare chunk {}", i)),
+                &pedersen_hash,
+            )?;
 
             let pedersen_bits = reverse_inner_byte_order(&pedersen_bits[..]);
 
@@ -223,21 +287,35 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         let mut commit_agg_pk = sum_generator_g2_var.clone();
 
         for i in 0..self.commit_agg_pk_chunks.len() {
-            commit_agg_pk = commit_agg_pk.add(cs.ns(|| format!("add next key, commit {}", i)), &commit_agg_pk_chunks_var[i])?;
+            commit_agg_pk = commit_agg_pk.add(
+                cs.ns(|| format!("add next key, commit {}", i)),
+                &commit_agg_pk_chunks_var[i],
+            )?;
 
-            commit_agg_pk = commit_agg_pk.sub(cs.ns(|| format!("subtract generator, commit {}", i)), &sum_generator_g2_var)?;
+            commit_agg_pk = commit_agg_pk.sub(
+                cs.ns(|| format!("subtract generator, commit {}", i)),
+                &sum_generator_g2_var,
+            )?;
         }
 
-        commit_agg_pk = commit_agg_pk.sub(cs.ns(|| "subtract generator, commit"), &sum_generator_g2_var)?;
+        commit_agg_pk = commit_agg_pk.sub(
+            cs.ns(|| "subtract generator, commit"),
+            &sum_generator_g2_var,
+        )?;
 
         // Calculating the commitments to each of the commit aggregate public keys chunks. These
         // will be given as input to the PKTree SNARK circuit.
-        next_cost_analysis!(cs, cost, || { "Calculate commit agg pk chunks commitments" });
+        next_cost_analysis!(cs, cost, || {
+            "Calculate commit agg pk chunks commitments"
+        });
 
         let mut commit_agg_pk_chunks_commitments = Vec::new();
 
         for i in 0..commit_agg_pk_chunks_var.len() {
-            let chunk_bits = SerializeGadget::serialize_g2(cs.ns(|| format!("serialize commit agg pk chunk {}", i)), &commit_agg_pk_chunks_var[i])?;
+            let chunk_bits = SerializeGadget::serialize_g2(
+                cs.ns(|| format!("serialize commit agg pk chunk {}", i)),
+                &commit_agg_pk_chunks_var[i],
+            )?;
 
             let pedersen_hash = PedersenHashGadget::evaluate(
                 cs.ns(|| format!("pedersen hash commit agg pk chunk {}", i)),
@@ -245,7 +323,10 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
                 &pedersen_generators_var,
             )?;
 
-            let pedersen_bits = SerializeGadget::serialize_g1(cs.ns(|| format!("serialize pedersen hash, commit chunk {}", i)), &pedersen_hash)?;
+            let pedersen_bits = SerializeGadget::serialize_g1(
+                cs.ns(|| format!("serialize pedersen hash, commit chunk {}", i)),
+                &pedersen_hash,
+            )?;
 
             let pedersen_bits = reverse_inner_byte_order(&pedersen_bits[..]);
 
@@ -267,13 +348,17 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         let mut prepare_signer_bitmap_bytes = Vec::new();
 
         for i in 0..VALIDATOR_SLOTS / 8 {
-            prepare_signer_bitmap_bytes.push(UInt8::from_bits_le(&block_var.prepare_signer_bitmap[i * 8..(i + 1) * 8]));
+            prepare_signer_bitmap_bytes.push(UInt8::from_bits_le(
+                &block_var.prepare_signer_bitmap[i * 8..(i + 1) * 8],
+            ));
         }
 
         let mut commit_signer_bitmap_bytes = Vec::new();
 
         for i in 0..VALIDATOR_SLOTS / 8 {
-            commit_signer_bitmap_bytes.push(UInt8::from_bits_le(&block_var.prepare_signer_bitmap[i * 8..(i + 1) * 8]));
+            commit_signer_bitmap_bytes.push(UInt8::from_bits_le(
+                &block_var.prepare_signer_bitmap[i * 8..(i + 1) * 8],
+            ));
         }
 
         // Verifying the SNARK proof. This is a proof that the aggregate public keys chunks are indeed
@@ -282,21 +367,36 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         // Internally, this SNARK circuit is very complex. See the PKTreeLeafCircuit for more details.
         next_cost_analysis!(cs, cost, || { "Verify SNARK proof" });
 
-        let mut proof_inputs = RecursiveInputGadget::to_field_elements::<Fr>(&initial_pks_commitment_var)?;
+        let mut proof_inputs =
+            RecursiveInputGadget::to_field_elements::<Fr>(&initial_pks_commitment_var)?;
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(&prepare_signer_bitmap_bytes)?);
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
+            &prepare_signer_bitmap_bytes,
+        )?);
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(&prepare_agg_pk_chunks_commitments[0])?);
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
+            &prepare_agg_pk_chunks_commitments[0],
+        )?);
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(&prepare_agg_pk_chunks_commitments[1])?);
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
+            &prepare_agg_pk_chunks_commitments[1],
+        )?);
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(&commit_signer_bitmap_bytes)?);
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
+            &commit_signer_bitmap_bytes,
+        )?);
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(&commit_agg_pk_chunks_commitments[0])?);
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
+            &commit_agg_pk_chunks_commitments[0],
+        )?);
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(&commit_agg_pk_chunks_commitments[1])?);
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
+            &commit_agg_pk_chunks_commitments[1],
+        )?);
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(&position)?);
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
+            &position,
+        )?);
 
         <TheVerifierGadget as NIZKVerifierGadget<TheProofSystem, Fq>>::check_verify(
             cs.ns(|| "verify groth16 proof"),

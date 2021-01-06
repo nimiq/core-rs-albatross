@@ -1,7 +1,6 @@
-use algebra_core::biginteger::BigInteger;
-use algebra_core::{FpParameters, PrimeField};
-use r1cs_core::SynthesisError;
-use r1cs_std::uint8::UInt8;
+use ark_ff::{BigInteger, FpParameters, PrimeField};
+use ark_r1cs_std::uint8::UInt8;
+use ark_relations::r1cs::SynthesisError;
 
 /// This is a gadget that packs a `Vec<Uint8>` into field elements of a target field
 /// `TargetConstraintF`, so that the vector can be read using `Uint8::alloc_input_vec`
@@ -11,7 +10,9 @@ pub struct RecursiveInputGadget;
 impl RecursiveInputGadget {
     /// Converts a `Vec<Uint8>` into field elements, each represented by a `Vec<UInt8>`,
     /// that can be read by `Uint8::alloc_input_vec` when passing to a proof verification.
-    pub fn to_field_elements<TargetConstraintF: PrimeField>(input_bytes: &[UInt8]) -> Result<Vec<Vec<UInt8>>, SynthesisError> {
+    pub fn to_field_elements<F: PrimeField, TargetConstraintF: PrimeField>(
+        input_bytes: &[UInt8<F>],
+    ) -> Result<Vec<Vec<UInt8<F>>>, SynthesisError> {
         let max_size = TargetConstraintF::Params::CAPACITY / 8;
 
         let max_size = max_size as usize;

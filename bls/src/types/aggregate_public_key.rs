@@ -1,7 +1,7 @@
 use std::fmt;
 
+use ark_ff::Zero;
 use ark_mnt6_753::G2Projective;
-use num_traits::Zero;
 
 use nimiq_hash::Hash;
 

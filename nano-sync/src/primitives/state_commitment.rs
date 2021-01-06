@@ -1,4 +1,4 @@
-use algebra::mnt6_753::G2Projective;
+use ark_mnt6_753::G2Projective;
 
 use crate::constants::POINT_CAPACITY;
 use crate::primitives::{pedersen_generators, pedersen_hash, pk_tree_construct};

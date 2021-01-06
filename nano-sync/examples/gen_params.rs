@@ -4,18 +4,24 @@ use std::fs::{DirBuilder, File};
 use std::path::Path;
 use std::{error::Error, time::Instant};
 
+use rand::{thread_rng, Rng, RngCore};
+
 use algebra::mnt4_753::{Fr as MNT4Fr, MNT4_753};
 use algebra::mnt6_753::{Fr as MNT6Fr, MNT6_753};
 use algebra_core::{CanonicalSerialize, PairingEngine, ProjectiveCurve};
 use groth16::{generate_random_parameters, Parameters, Proof, VerifyingKey};
-use r1cs_core::ConstraintSynthesizer;
-use rand::{thread_rng, Rng, RngCore};
-
-use nimiq_nano_sync::circuits::mnt4::{MacroBlockCircuit, MergerCircuit, PKTreeLeafCircuit as LeafMNT4, PKTreeNodeCircuit as NodeMNT4};
-use nimiq_nano_sync::circuits::mnt6::{MacroBlockWrapperCircuit, MergerWrapperCircuit, PKTreeNodeCircuit as NodeMNT6};
+use nimiq_nano_sync::circuits::mnt4::{
+    MacroBlockCircuit, MergerCircuit, PKTreeLeafCircuit as LeafMNT4, PKTreeNodeCircuit as NodeMNT4,
+};
+use nimiq_nano_sync::circuits::mnt6::{
+    MacroBlockWrapperCircuit, MergerWrapperCircuit, PKTreeNodeCircuit as NodeMNT6,
+};
 use nimiq_nano_sync::constants::{PK_TREE_BREADTH, PK_TREE_DEPTH, VALIDATOR_SLOTS};
 use nimiq_nano_sync::primitives::MacroBlock;
-use nimiq_nano_sync::utils::{bytes_to_bits, gen_rand_g1_mnt4, gen_rand_g1_mnt6, gen_rand_g2_mnt4, gen_rand_g2_mnt6};
+use nimiq_nano_sync::utils::{
+    bytes_to_bits, gen_rand_g1_mnt4, gen_rand_g1_mnt6, gen_rand_g2_mnt4, gen_rand_g2_mnt6,
+};
+use r1cs_core::ConstraintSynthesizer;
 
 /// This example generates the parameters (proving and verifying keys) for the entire nano sync
 /// program. It does this by generating the parameters for each circuit, "from bottom to top". The
@@ -117,13 +123,19 @@ fn gen_params_pk_tree_leaf(name: &str) -> Result<(), Box<dyn Error>> {
         generate_random_parameters::<MNT4_753, _, _>(c, rng)?
     };
 
-    println!("Parameter generation finished. It took {:?} seconds.", start.elapsed());
+    println!(
+        "Parameter generation finished. It took {:?} seconds.",
+        start.elapsed()
+    );
 
     // Save keys to file.
     to_file(params, name)
 }
 
-fn gen_params_pk_tree_node_mnt6<SubCircuit: ConstraintSynthesizer<MNT4Fr>>(vk_file: &'static str, name: &str) -> Result<(), Box<dyn Error>> {
+fn gen_params_pk_tree_node_mnt6<SubCircuit: ConstraintSynthesizer<MNT4Fr>>(
+    vk_file: &'static str,
+    name: &str,
+) -> Result<(), Box<dyn Error>> {
     // Initialize rng.
     let rng = &mut thread_rng();
 
@@ -185,13 +197,19 @@ fn gen_params_pk_tree_node_mnt6<SubCircuit: ConstraintSynthesizer<MNT4Fr>>(vk_fi
         generate_random_parameters::<MNT6_753, _, _>(c, rng)?
     };
 
-    println!("Parameter generation finished. It took {:?} seconds.", start.elapsed());
+    println!(
+        "Parameter generation finished. It took {:?} seconds.",
+        start.elapsed()
+    );
 
     // Save keys to file.
     to_file(params, name)
 }
 
-fn gen_params_pk_tree_node_mnt4<SubCircuit: ConstraintSynthesizer<MNT6Fr>>(vk_file: &'static str, name: &str) -> Result<(), Box<dyn Error>> {
+fn gen_params_pk_tree_node_mnt4<SubCircuit: ConstraintSynthesizer<MNT6Fr>>(
+    vk_file: &'static str,
+    name: &str,
+) -> Result<(), Box<dyn Error>> {
     // Initialize rng.
     let rng = &mut thread_rng();
 
@@ -257,7 +275,10 @@ fn gen_params_pk_tree_node_mnt4<SubCircuit: ConstraintSynthesizer<MNT6Fr>>(vk_fi
         generate_random_parameters::<MNT4_753, _, _>(c, rng)?
     };
 
-    println!("Parameter generation finished. It took {:?} seconds.", start.elapsed());
+    println!(
+        "Parameter generation finished. It took {:?} seconds.",
+        start.elapsed()
+    );
 
     // Save keys to file.
     to_file(params, name)
@@ -342,7 +363,10 @@ fn gen_params_macro_block(vk_file: &'static str, name: &str) -> Result<(), Box<d
         generate_random_parameters::<MNT4_753, _, _>(c, rng)?
     };
 
-    println!("Parameter generation finished. It took {:?} seconds.", start.elapsed());
+    println!(
+        "Parameter generation finished. It took {:?} seconds.",
+        start.elapsed()
+    );
 
     // Save keys to file.
     to_file(params, name)
@@ -371,11 +395,19 @@ fn gen_params_macro_block_wrapper(vk_file: &'static str, name: &str) -> Result<(
     let start = Instant::now();
 
     let params: Parameters<MNT6_753> = {
-        let c = MacroBlockWrapperCircuit::new(vk_file, proof, initial_state_commitment.to_vec(), final_state_commitment.to_vec());
+        let c = MacroBlockWrapperCircuit::new(
+            vk_file,
+            proof,
+            initial_state_commitment.to_vec(),
+            final_state_commitment.to_vec(),
+        );
         generate_random_parameters::<MNT6_753, _, _>(c, rng)?
     };
 
-    println!("Parameter generation finished. It took {:?} seconds.", start.elapsed());
+    println!(
+        "Parameter generation finished. It took {:?} seconds.",
+        start.elapsed()
+    );
 
     // Save keys to file.
     to_file(params, name)
@@ -440,7 +472,10 @@ fn gen_params_merger(vk_file: &'static str, name: &str) -> Result<(), Box<dyn Er
         generate_random_parameters::<MNT4_753, _, _>(c, rng)?
     };
 
-    println!("Parameter generation finished. It took {:?} seconds.", start.elapsed());
+    println!(
+        "Parameter generation finished. It took {:?} seconds.",
+        start.elapsed()
+    );
 
     // Save keys to file.
     to_file(params, name)
@@ -482,7 +517,10 @@ fn gen_params_merger_wrapper(vk_file: &'static str, name: &str) -> Result<(), Bo
         generate_random_parameters::<MNT6_753, _, _>(c, rng)?
     };
 
-    println!("Parameter generation finished. It took {:?} seconds.", start.elapsed());
+    println!(
+        "Parameter generation finished. It took {:?} seconds.",
+        start.elapsed()
+    );
 
     // Save keys to file.
     to_file(params, name)

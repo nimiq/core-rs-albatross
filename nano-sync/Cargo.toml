@@ -15,12 +15,16 @@ colored = { version = "1.9", optional = true }
 hex = "0.4"
 rand = "0.7"
 
-algebra = { git = "https://github.com/nimiq/zexe.git", branch = "nimiq", features = ["mnt4_753", "mnt6_753"] }
-algebra-core = { git = "https://github.com/nimiq/zexe.git", branch = "nimiq"}
-crypto-primitives = { git = "https://github.com/nimiq/zexe.git", branch = "nimiq", features = ["r1cs", "groth16"] }
-groth16 = { git = "https://github.com/nimiq/zexe.git", branch = "nimiq", features = ["parallel"] }
-r1cs-core = { git = "https://github.com/nimiq/zexe.git", branch = "nimiq" }
-r1cs-std = { git = "https://github.com/nimiq/zexe.git", branch = "nimiq", features = ["mnt4_753", "mnt6_753"] }
+ark-std = { git = "https://github.com/arkworks-rs/utils" }
+ark-ff = { git = "https://github.com/arkworks-rs/algebra" }
+ark-ec = { git = "https://github.com/arkworks-rs/algebra" }
+ark-relations = { git = "https://github.com/arkworks-rs/snark" }
+ark-serialize = { git = "https://github.com/arkworks-rs/algebra" }
+ark-mnt4-753 = { git = "https://github.com/arkworks-rs/curves", features = ["r1cs"] }
+ark-mnt6-753 = { git = "https://github.com/arkworks-rs/curves", features = ["r1cs"] }
+ark-crypto-primitives = { git = "https://github.com/arkworks-rs/crypto-primitives", branch = "main", features = ["r1cs"] }
+ark-r1cs-std = { git = "https://github.com/arkworks-rs/r1cs-std" }
+ark-groth16 = { git = "https://github.com/arkworks-rs/groth16", features = ["r1cs"] }
 
 nimiq-bls = { path = "../bls", version = "0.1" }
 nimiq-primitives = { path = "../primitives", version = "0.1", features = ["policy"] }
@@ -28,4 +32,4 @@ nimiq-primitives = { path = "../primitives", version = "0.1", features = ["polic
 [features]
 default = []
 cost-analysis = ["colored"]
-print-trace = ["groth16/print-trace"]
+print-trace = ["ark-groth16/print-trace"]
