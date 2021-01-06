@@ -1,18 +1,18 @@
 //! This module contains several constants that are used throughout the library. They can be changed
 //! easily here, without needing to change them in several places in the code.
 
-use algebra::mnt4_753::{
+use ark_crypto_primitives::prf::Blake2sWithParameterBlock;
+use ark_ff::{FpParameters, One, PrimeField};
+use ark_mnt4_753::{
     Fq as MNT4Fq, Fq2 as MNT4Fq2, FqParameters, G1Affine as MNT4G1Affine,
     G1Projective as MNT4G1Projective, G2Affine as MNT4G2Affine, G2Projective as MNT4G2Projective,
 };
-use algebra::mnt6_753::{
+use ark_mnt6_753::{
     Fq as MNT6Fq, Fq3 as MNT6Fq3, G1Affine as MNT6G1Affine, G1Projective as MNT6G1Projective,
     G2Affine as MNT6G2Affine, G2Projective as MNT6G2Projective,
 };
-use algebra::{FpParameters, PrimeField};
-use algebra_core::One;
 use blake2_rfc::blake2s::Blake2s;
-use crypto_primitives::prf::Blake2sWithParameterBlock;
+
 use nimiq_primitives::policy;
 
 use crate::rand_gen::generate_random_seed;
@@ -105,10 +105,9 @@ pub fn sum_generator_g1_mnt4() -> MNT4G1Projective {
     // In order to easily read the BigInt from the bytes, we use the first 16 bits as padding.
     // However, because of the previous explanation, we need to nullify the whole first two bytes.
     bytes[0] = 0;
-
     bytes[1] = 0;
 
-    let mut x_coordinate = MNT4Fq::from_repr(big_int_from_bytes_be(&mut &bytes[..96]));
+    let mut x_coordinate = MNT4Fq::from_repr(big_int_from_bytes_be(&mut &bytes[..96])).unwrap();
 
     // This implements the try-and-increment method of converting an integer to an elliptic curve point.
     // See https://eprint.iacr.org/2009/226.pdf for more details.
@@ -187,16 +186,14 @@ pub fn sum_generator_g2_mnt4() -> MNT4G2Projective {
     // However, because of the previous explanation, we need to nullify the whole first two bytes.
     // We do this for each of the two prime fields in the x-coordinate.
     bytes[0] = 0;
-
     bytes[1] = 0;
 
     bytes[96] = 0;
-
     bytes[97] = 0;
 
-    let c0 = MNT4Fq::from_repr(big_int_from_bytes_be(&mut &bytes[..96]));
+    let c0 = MNT4Fq::from_repr(big_int_from_bytes_be(&mut &bytes[..96])).unwrap();
 
-    let c1 = MNT4Fq::from_repr(big_int_from_bytes_be(&mut &bytes[96..192]));
+    let c1 = MNT4Fq::from_repr(big_int_from_bytes_be(&mut &bytes[96..192])).unwrap();
 
     let mut x_coordinate = MNT4Fq2::new(c0, c1);
 
@@ -275,10 +272,9 @@ pub fn sum_generator_g1_mnt6() -> MNT6G1Projective {
     // In order to easily read the BigInt from the bytes, we use the first 16 bits as padding.
     // However, because of the previous explanation, we need to nullify the whole first two bytes.
     bytes[0] = 0;
-
     bytes[1] = 0;
 
-    let mut x_coordinate = MNT6Fq::from_repr(big_int_from_bytes_be(&mut &bytes[..96]));
+    let mut x_coordinate = MNT6Fq::from_repr(big_int_from_bytes_be(&mut &bytes[..96])).unwrap();
 
     // This implements the try-and-increment method of converting an integer to an elliptic curve point.
     // See https://eprint.iacr.org/2009/226.pdf for more details.
@@ -356,22 +352,19 @@ pub fn sum_generator_g2_mnt6() -> MNT6G2Projective {
     // However, because of the previous explanation, we need to nullify the whole first two bytes.
     // We do this for each of the three prime fields in the x-coordinate.
     bytes[0] = 0;
-
     bytes[1] = 0;
 
     bytes[96] = 0;
-
     bytes[97] = 0;
 
     bytes[192] = 0;
-
     bytes[193] = 0;
 
-    let c0 = MNT6Fq::from_repr(big_int_from_bytes_be(&mut &bytes[..96]));
+    let c0 = MNT6Fq::from_repr(big_int_from_bytes_be(&mut &bytes[..96])).unwrap();
 
-    let c1 = MNT6Fq::from_repr(big_int_from_bytes_be(&mut &bytes[96..192]));
+    let c1 = MNT6Fq::from_repr(big_int_from_bytes_be(&mut &bytes[96..192])).unwrap();
 
-    let c2 = MNT6Fq::from_repr(big_int_from_bytes_be(&mut &bytes[192..288]));
+    let c2 = MNT6Fq::from_repr(big_int_from_bytes_be(&mut &bytes[192..288])).unwrap();
 
     let mut x_coordinate = MNT6Fq3::new(c0, c1, c2);
 

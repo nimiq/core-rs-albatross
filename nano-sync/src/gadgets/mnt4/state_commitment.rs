@@ -1,7 +1,7 @@
-use algebra::mnt4_753::Fr as MNT4Fr;
-use r1cs_core::SynthesisError;
-use r1cs_std::bits::{boolean::Boolean, uint32::UInt32, uint8::UInt8};
-use r1cs_std::mnt6_753::G1Gadget;
+use ark_mnt4_753::Fr as MNT4Fr;
+use ark_mnt6_753::constraints::G1Var;
+use ark_r1cs_std::prelude::{ToBitsGadget, UInt32, UInt8};
+use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 
 use crate::gadgets::mnt4::{PedersenHashGadget, SerializeGadget};
 use crate::utils::reverse_inner_byte_order;
@@ -16,14 +16,14 @@ pub struct StateCommitmentGadget;
 
 impl StateCommitmentGadget {
     /// Calculates the state commitment.
-    pub fn evaluate<CS: r1cs_core::ConstraintSystem<MNT4Fr>>(
-        mut cs: CS,
-        block_number: &UInt32,
-        pks_commitment: &Vec<UInt8>,
-        pedersen_generators: &Vec<G1Gadget>,
-    ) -> Result<Vec<UInt8>, SynthesisError> {
+    pub fn evaluate(
+        cs: ConstraintSystemRef<MNT4Fr>,
+        block_number: &UInt32<MNT4Fr>,
+        pks_commitment: &Vec<UInt8<MNT4Fr>>,
+        pedersen_generators: &Vec<G1Var>,
+    ) -> Result<Vec<UInt8<MNT4Fr>>, SynthesisError> {
         // Initialize Boolean vector.
-        let mut bits: Vec<Boolean> = vec![];
+        let mut bits = vec![];
 
         // The block number comes in little endian all the way.
         // So, a reverse will put it into big endian.
@@ -39,7 +39,7 @@ impl StateCommitmentGadget {
         let mut byte;
 
         for i in 0..pks_commitment.len() {
-            byte = pks_commitment[i].into_bits_le();
+            byte = pks_commitment[i].to_bits_le()?;
             byte.reverse();
             pks_bits.extend(byte);
         }
@@ -47,10 +47,10 @@ impl StateCommitmentGadget {
         bits.append(&mut pks_bits);
 
         // Calculate the Pedersen hash.
-        let hash = PedersenHashGadget::evaluate(cs.ns(|| "calculate pedersen hash"), &bits, pedersen_generators)?;
+        let hash = PedersenHashGadget::evaluate(&bits, pedersen_generators)?;
 
         // Serialize the Pedersen hash.
-        let serialized_bits = SerializeGadget::serialize_g1(cs.ns(|| "serialize pedersen hash"), &hash)?;
+        let serialized_bits = SerializeGadget::serialize_g1(cs, &hash)?;
 
         let serialized_bits = reverse_inner_byte_order(&serialized_bits[..]);
 

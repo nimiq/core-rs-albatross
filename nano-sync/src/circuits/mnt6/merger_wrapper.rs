@@ -1,15 +1,15 @@
-use std::fs::File;
-
-use algebra::mnt4_753::{Fq, Fr, MNT4_753};
-use algebra::mnt6_753::Fr as MNT6Fr;
 use algebra_core::CanonicalDeserialize;
-use crypto_primitives::nizk::groth16::constraints::{Groth16VerifierGadget, ProofGadget, VerifyingKeyGadget};
-use crypto_primitives::nizk::groth16::Groth16;
-use crypto_primitives::NIZKVerifierGadget;
-use groth16::{Proof, VerifyingKey};
-use r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisError};
-use r1cs_std::mnt4_753::PairingGadget;
-use r1cs_std::prelude::*;
+use ark_crypto_primitives::nizk::groth16::constraints::{
+    Groth16VerifierGadget, ProofGadget, VerifyingKeyGadget,
+};
+use ark_crypto_primitives::NIZKVerifierGadget;
+use ark_groth16::{Groth16, Proof, VerifyingKey};
+use ark_mnt4_753::{Fq, Fr, MNT4_753};
+use ark_mnt6_753::Fr as MNT6Fr;
+use ark_r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisError};
+use ark_r1cs_std::mnt4_753::PairingGadget;
+use ark_r1cs_std::prelude::*;
+use std::fs::File;
 
 use crate::circuits::mnt4::MergerCircuit;
 use crate::gadgets::input::RecursiveInputGadget;
@@ -63,7 +63,10 @@ impl MergerWrapperCircuit {
 
 impl ConstraintSynthesizer<MNT6Fr> for MergerWrapperCircuit {
     /// This function generates the constraints for the circuit.
-    fn generate_constraints<CS: ConstraintSystem<MNT6Fr>>(self, cs: &mut CS) -> Result<(), SynthesisError> {
+    fn generate_constraints<CS: ConstraintSystem<MNT6Fr>>(
+        self,
+        cs: &mut CS,
+    ) -> Result<(), SynthesisError> {
         // Load the verifying key from file.
         let mut file = File::open(format!("verifying_keys/{}", &self.vk_file))?;
 
@@ -83,20 +86,34 @@ impl ConstraintSynthesizer<MNT6Fr> for MergerWrapperCircuit {
         // Allocate all the public inputs.
         next_cost_analysis!(cs, cost, || { "Alloc public inputs" });
 
-        let initial_state_commitment_var = UInt8::alloc_input_vec(cs.ns(|| "alloc initial state commitment"), self.initial_state_commitment.as_ref())?;
+        let initial_state_commitment_var = UInt8::alloc_input_vec(
+            cs.ns(|| "alloc initial state commitment"),
+            self.initial_state_commitment.as_ref(),
+        )?;
 
-        let final_state_commitment_var = UInt8::alloc_input_vec(cs.ns(|| "alloc final state commitment"), self.final_state_commitment.as_ref())?;
+        let final_state_commitment_var = UInt8::alloc_input_vec(
+            cs.ns(|| "alloc final state commitment"),
+            self.final_state_commitment.as_ref(),
+        )?;
 
-        let vk_commitment_var = UInt8::alloc_input_vec(cs.ns(|| "alloc vk merger commitment"), self.vk_commitment.as_ref())?;
+        let vk_commitment_var = UInt8::alloc_input_vec(
+            cs.ns(|| "alloc vk merger commitment"),
+            self.vk_commitment.as_ref(),
+        )?;
 
         // Verify the ZK proof.
         next_cost_analysis!(cs, cost, || { "Verify ZK proof" });
 
-        let mut proof_inputs = RecursiveInputGadget::to_field_elements::<Fr>(&initial_state_commitment_var)?;
+        let mut proof_inputs =
+            RecursiveInputGadget::to_field_elements::<Fr>(&initial_state_commitment_var)?;
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(&final_state_commitment_var)?);
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
+            &final_state_commitment_var,
+        )?);
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(&vk_commitment_var)?);
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
+            &vk_commitment_var,
+        )?);
 
         <TheVerifierGadget as NIZKVerifierGadget<TheProofSystem, Fq>>::check_verify(
             cs.ns(|| "verify groth16 proof"),

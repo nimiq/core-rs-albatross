@@ -1,6 +1,6 @@
-use algebra::mnt6_753::MNT6_753;
-use algebra_core::AffineCurve;
-use groth16::VerifyingKey;
+use ark_ec::AffineCurve;
+use ark_groth16::VerifyingKey;
+use ark_mnt6_753::MNT6_753;
 
 use crate::constants::POINT_CAPACITY;
 use crate::primitives::{pedersen_generators, pedersen_hash};

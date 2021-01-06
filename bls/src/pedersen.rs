@@ -1,9 +1,8 @@
 use ark_crypto_primitives::prf::Blake2sWithParameterBlock;
 use ark_ec::group::Group;
-use ark_ff::{FpParameters, PrimeField};
+use ark_ff::{FpParameters, One, PrimeField};
 use ark_mnt6_753::{Fq, FqParameters, G1Affine, G1Projective};
 use blake2_rfc::blake2s::Blake2s;
-use num_traits::One;
 
 use crate::rand_gen::generate_random_seed;
 use crate::utils::big_int_from_bytes_be;
