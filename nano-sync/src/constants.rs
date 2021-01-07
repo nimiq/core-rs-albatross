@@ -36,14 +36,10 @@ pub const EPOCH_LENGTH: u32 = policy::EPOCH_LENGTH;
 pub const VALIDATOR_SLOTS: usize = policy::SLOTS as usize;
 
 /// This is the minimum number of validator slots that must sign a macro block in order to be valid.
-/// MIN_SIGNERS = ceiling( VALIDATOR_SLOTS * 2/3 )
-/// The formula used for the ceiling division of x/y is (x+y-1)/y.
-pub const MIN_SIGNERS: usize = (VALIDATOR_SLOTS * 2 + 3 - 1) / 3;
+pub const MIN_SIGNERS: usize = policy::TWO_THIRD_SLOTS as usize;
 
-/// This the maximum number of validator slots that can NOT sign a macro block and it still being valid.
-/// MAX_NON_SIGNERS = floor( VALIDATOR_SLOTS/3 )
-pub const MAX_NON_SIGNERS: usize = VALIDATOR_SLOTS / 3;
-
+// TODO: Change these 4 generators to constants. They don't really need to be generated securely
+//       since they are only used as buffers.
 /// Creates a generator point for the G1 group in the MNT4-753 curve, from a verifiably random seed.
 /// The generator is mainly used as a "buffer" when adding elliptic curves. The buffer is necessary
 /// sometimes because the addition formula for elliptic curves in the gadgets is incomplete and can't
