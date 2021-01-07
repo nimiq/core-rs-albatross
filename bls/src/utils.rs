@@ -1,6 +1,8 @@
 use ark_ff::BigInteger768;
 
 /// Transforms a vector of bytes into the corresponding vector of bits (booleans).
+/// The output is in the same format as the input (e.g. if the input is in big-endian, the output
+/// will also be in big-endian).
 pub fn bytes_to_bits(bytes: &[u8]) -> Vec<bool> {
     let mut bits = vec![];
 

@@ -326,8 +326,8 @@ fn gen_params_macro_block(vk_file: &'static str, name: &str) -> Result<(), Box<d
         header_hash,
         prepare_signature,
         prepare_signer_bitmap,
-        commit_signature,
-        commit_signer_bitmap,
+        signature: commit_signature,
+        signer_bitmap: commit_signer_bitmap,
     };
 
     let proof = Proof {
