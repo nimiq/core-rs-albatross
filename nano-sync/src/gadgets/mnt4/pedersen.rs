@@ -18,9 +18,8 @@ impl PedersenHashGadget {
     /// s = b_0 * 2^0 + b_1 * 2^1 + ... + b_750 * 2^750 + b_751 * 2^751
     /// We then calculate the hash like so:
     /// H = G_0 + s_1 * G_1 + ... + s_n * G_n
-    /// where G_0 is a sum generator that is used to avoid that the sum starts at zero (which is
-    /// problematic because the circuit can't handle addition with zero) and to guarantee that the
-    /// exponent of the resulting EC point is not known (necessary for BLS signatures).
+    /// where G_0 is a sum generator that is used to guarantee that the exponent of the resulting
+    /// EC point is not known (necessary for BLS signatures).
     pub fn evaluate(
         input: &Vec<Boolean<MNT4Fr>>,
         generators: &Vec<G1Var>,
@@ -28,25 +27,26 @@ impl PedersenHashGadget {
         // Check that the input can be stored using the available generators.
         assert!((generators.len() - 1) * POINT_CAPACITY >= input.len());
 
-        // Initiate the result with the sum generator. We can't initiate it with the neutral element
-        // because that would result in an error. The addition function for EC points is incomplete
-        // and can't handle the neutral element (aka zero, point-at-infinity).
+        // Initiate the result with the sum generator.
         let mut result = generators[0].clone();
 
         // Start calculating the Pedersen hash. We use the double-and-add method for EC point
         // multiplication for each generator.
-        // Note that Rust forces us to initialize base to something.
+        // Note that Rust forces us to initialize the base to something.
         let mut base = G1Var::zero();
         for i in 0..input.len() {
             // Whenever i is a multiple of POINT_CAPACITY, it's time to get the next generator.
             if i % POINT_CAPACITY == 0 {
                 base = generators[i / POINT_CAPACITY + 1].clone();
             }
+
             // Add the base to the result.
-            let alt_result = result.clone() + base.clone();
+            let alt_result = &result + &base;
+
             // Depending on the bit, either select the new result (with the base added) or
             // continue with the previous result.
             result = G1Var::conditionally_select(&input[i], &alt_result, &result)?;
+
             // Double the base.
             base.double_in_place()?;
         }
