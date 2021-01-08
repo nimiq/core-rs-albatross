@@ -1,15 +1,11 @@
-use ark_crypto_primitives::nizk::groth16::constraints::{
-    Groth16VerifierGadget, ProofGadget, VerifyingKeyGadget,
-};
-use ark_crypto_primitives::NIZKVerifierGadget;
 use ark_ec::ProjectiveCurve;
+use ark_groth16::constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar};
 use ark_groth16::{Groth16, Proof, VerifyingKey};
 use ark_mnt4_753::Fr as MNT4Fr;
 use ark_mnt6_753::{Fq, Fr, G2Projective, MNT6_753};
-use ark_r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisError};
 use ark_r1cs_std::mnt6_753::{FqGadget, G1Gadget, G2Gadget, PairingGadget};
 use ark_r1cs_std::prelude::*;
-use ark_serialize::CanonicalDeserialize;
+use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystem, SynthesisError};
 use std::fs::File;
 
 use crate::circuits::mnt4::PKTreeLeafCircuit as LeafMNT4;

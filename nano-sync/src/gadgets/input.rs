@@ -3,7 +3,7 @@ use ark_r1cs_std::uint8::UInt8;
 use ark_relations::r1cs::SynthesisError;
 
 /// This is a gadget that packs a `Vec<Uint8>` into field elements of a target field
-/// `TargetConstraintF`, so that the vector can be read using `Uint8::alloc_input_vec`
+/// `TargetConstraintF`, so that the vector can be read using `Uint8::new_input_vec`
 /// on a circuit with this target field.
 pub struct RecursiveInputGadget;
 

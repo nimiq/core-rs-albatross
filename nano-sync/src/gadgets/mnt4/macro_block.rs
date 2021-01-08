@@ -165,7 +165,7 @@ impl MacroBlockGadget {
         for bit in &self.signer_bitmap {
             num_signers = CondSelectGadget::conditionally_select(
                 bit,
-                &(num_signers.clone() + Fq::one()),
+                &(&num_signers + Fq::one()),
                 &num_signers,
             )?;
         }

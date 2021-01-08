@@ -17,9 +17,9 @@ rand = "0.7"
 
 ark-std = { git = "https://github.com/arkworks-rs/utils" }
 ark-ff = { git = "https://github.com/arkworks-rs/algebra" }
+ark-serialize = { git = "https://github.com/arkworks-rs/algebra" }
 ark-ec = { git = "https://github.com/arkworks-rs/algebra" }
 ark-relations = { git = "https://github.com/arkworks-rs/snark" }
-ark-serialize = { git = "https://github.com/arkworks-rs/algebra" }
 ark-mnt4-753 = { git = "https://github.com/arkworks-rs/curves", features = ["r1cs"] }
 ark-mnt6-753 = { git = "https://github.com/arkworks-rs/curves", features = ["r1cs"] }
 ark-crypto-primitives = { git = "https://github.com/arkworks-rs/crypto-primitives", branch = "main", features = ["r1cs"] }
