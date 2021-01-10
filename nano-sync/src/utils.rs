@@ -42,6 +42,9 @@ pub fn serialize_g2_mnt6(point: MNT6G2Projective) -> [u8; 285] {
     buffer
 }
 
+// TODO: Possibly remove this since it looks like we can generate EC points directly:
+// let mut rng = test_rng();
+// let a = MNT4Fr::rand(&mut rng);
 /// Creates a random G1 point in the MNT4-753 curve.
 pub fn gen_rand_g1_mnt4() -> MNT4G1Projective {
     let rng = &mut thread_rng();
@@ -104,6 +107,7 @@ pub fn gen_rand_g2_mnt6() -> MNT6G2Projective {
 /// This function pads each chunk of `MODULUS_BITS` to full bytes, prepending the `y_bit`
 /// in the very front.
 /// This maintains *Big-Endian* representation.
+// TODO: Can use just one field type parameter. Use F::size_in_bits() to get the modulus bits!
 pub fn pad_point_bits<P: FpParameters, F: Field>(
     mut bits: Vec<Boolean<F>>,
     y_bit: Boolean<F>,

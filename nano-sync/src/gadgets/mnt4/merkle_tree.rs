@@ -1,10 +1,9 @@
 use ark_mnt4_753::Fr as MNT4Fr;
 use ark_mnt6_753::constraints::G1Var;
-use ark_r1cs_std::prelude::{Boolean, CondSelectGadget, EqGadget, UInt8};
+use ark_r1cs_std::prelude::{Boolean, CondSelectGadget, EqGadget};
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 
 use crate::gadgets::mnt4::{PedersenHashGadget, SerializeGadget};
-use crate::utils::reverse_inner_byte_order;
 
 /// This gadgets contains utilities to create and verify proofs for Merkle trees. It uses Pedersen
 /// hashes to construct the tree instead of cryptographic hash functions in order to be more
@@ -26,7 +25,7 @@ impl MerkleTreeGadget {
         cs: ConstraintSystemRef<MNT4Fr>,
         inputs: &Vec<Vec<Boolean<MNT4Fr>>>,
         pedersen_generators: &Vec<G1Var>,
-    ) -> Result<Vec<UInt8<MNT4Fr>>, SynthesisError> {
+    ) -> Result<Vec<Boolean<MNT4Fr>>, SynthesisError> {
         // Checking that the inputs vector is not empty.
         assert!(!inputs.is_empty());
 
@@ -70,18 +69,9 @@ impl MerkleTreeGadget {
         }
 
         // Serialize the root node.
-        let serialized_bits = SerializeGadget::serialize_g1(cs, &nodes[0])?;
+        let bits = SerializeGadget::serialize_g1(cs, &nodes[0])?;
 
-        let serialized_bits = reverse_inner_byte_order(&serialized_bits[..]);
-
-        // Convert to bytes.
-        let mut bytes = Vec::new();
-
-        for i in 0..serialized_bits.len() / 8 {
-            bytes.push(UInt8::from_bits_le(&serialized_bits[i * 8..(i + 1) * 8]));
-        }
-
-        Ok(bytes)
+        Ok(bits)
     }
 
     /// Verifies a Merkle proof. More specifically, given an input and all of the tree nodes up to
@@ -100,7 +90,7 @@ impl MerkleTreeGadget {
         input: &Vec<Boolean<MNT4Fr>>,
         nodes: &Vec<G1Var>,
         path: &Vec<Boolean<MNT4Fr>>,
-        root: &Vec<UInt8<MNT4Fr>>,
+        root: &Vec<Boolean<MNT4Fr>>,
         pedersen_generators: &Vec<G1Var>,
     ) -> Result<(), SynthesisError> {
         // Checking that the inputs vector is not empty.
@@ -134,19 +124,10 @@ impl MerkleTreeGadget {
         }
 
         // Serialize the root node.
-        let serialized_bits = SerializeGadget::serialize_g1(cs, &result)?;
-
-        let serialized_bits = reverse_inner_byte_order(&serialized_bits[..]);
-
-        // Convert to bytes.
-        let mut bytes = Vec::new();
-
-        for i in 0..serialized_bits.len() / 8 {
-            bytes.push(UInt8::from_bits_le(&serialized_bits[i * 8..(i + 1) * 8]));
-        }
+        let bits = SerializeGadget::serialize_g1(cs, &result)?;
 
         // Check that the calculated root is equal to the given root.
-        root.enforce_equal(&bytes)?;
+        root.enforce_equal(&bits)?;
 
         Ok(())
     }
