@@ -1,14 +1,14 @@
 use ark_groth16::constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar};
 use ark_groth16::{Groth16, Proof, VerifyingKey};
 use ark_mnt4_753::Fr as MNT4Fr;
-use ark_mnt6_753::constraints::{G1Var, G2Var, PairingVar};
-use ark_mnt6_753::{Fq, Fr, G2Projective, MNT6_753};
+use ark_mnt6_753::constraints::{FqVar, G1Var, G2Var, PairingVar};
+use ark_mnt6_753::{Fq, Fr as MNT6Fr, G2Projective, MNT6_753};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 use ark_serialize::CanonicalDeserialize;
 use std::fs::File;
 use std::marker::PhantomData;
 
-use crate::gadgets::input::RecursiveInputGadget;
+use crate::constants::PK_TREE_DEPTH;
 use crate::gadgets::mnt4::{PedersenHashGadget, SerializeGadget};
 use crate::primitives::pedersen_generators;
 use crate::utils::reverse_inner_byte_order;
@@ -21,9 +21,7 @@ use ark_r1cs_std::ToBitsGadget;
 /// It is different from the other node subcircuit on the MNT6 curve in that it does recalculate
 /// the aggregate public key commitments.
 #[derive(Clone)]
-pub struct PKTreeNodeCircuit<SubCircuit> {
-    _subcircuit: PhantomData<SubCircuit>,
-
+pub struct PKTreeNodeCircuit {
     // Path to the verifying key file. Not an input to the SNARK circuit.
     vk_file: &'static str,
 
@@ -33,40 +31,37 @@ pub struct PKTreeNodeCircuit<SubCircuit> {
     agg_pk_chunks: Vec<G2Projective>,
 
     // Inputs (public)
-    pks_commitment: Vec<u8>,
-    signer_bitmap: Vec<u8>,
-    agg_pk_commitment: Vec<u8>,
-    position: u8,
+    pk_tree_commitment: Vec<Fq>,
+    agg_pk_commitment: Vec<Fq>,
+    signer_bitmap: Fq,
+    path: Fq,
 }
 
-impl<SubCircuit> PKTreeNodeCircuit<SubCircuit> {
+impl PKTreeNodeCircuit {
     pub fn new(
         vk_file: &'static str,
         left_proof: Proof<MNT6_753>,
         right_proof: Proof<MNT6_753>,
         agg_pk_chunks: Vec<G2Projective>,
-        pks_commitment: Vec<u8>,
-        signer_bitmap: Vec<u8>,
-        agg_pk_commitment: Vec<u8>,
-        position: u8,
+        pk_tree_commitment: Vec<Fq>,
+        agg_pk_commitment: Vec<Fq>,
+        signer_bitmap: Fq,
+        path: Fq,
     ) -> Self {
         Self {
-            _subcircuit: PhantomData,
             vk_file,
             left_proof,
             right_proof,
             agg_pk_chunks,
-            pks_commitment,
-            signer_bitmap,
+            pk_tree_commitment,
             agg_pk_commitment,
-            position,
+            signer_bitmap,
+            path,
         }
     }
 }
 
-impl<SubCircuit: ConstraintSynthesizer<Fr>> ConstraintSynthesizer<MNT4Fr>
-    for PKTreeNodeCircuit<SubCircuit>
-{
+impl ConstraintSynthesizer<MNT4Fr> for PKTreeNodeCircuit {
     /// This function generates the constraints for the circuit.
     fn generate_constraints(self, cs: ConstraintSystemRef<MNT4Fr>) -> Result<(), SynthesisError> {
         // Load the verifying key from file.
@@ -99,15 +94,33 @@ impl<SubCircuit: ConstraintSynthesizer<Fr>> ConstraintSynthesizer<MNT4Fr>
         // Allocate all the inputs.
         next_cost_analysis!(cs, cost, || { "Alloc inputs" });
 
-        let pk_commitment_var = UInt8::new_input_vec(cs.clone(), &self.pks_commitment)?;
+        let pk_tree_commitment_var =
+            Vec::<FqVar>::new_input(cs.clone(), || Ok(&self.pk_tree_commitment[..]))?;
 
-        let signer_bitmap_var = UInt8::new_input_vec(cs.clone(), &self.signer_bitmap)?;
+        let agg_pk_commitment_var =
+            Vec::<FqVar>::new_input(cs.clone(), || Ok(&self.agg_pk_commitment[..]))?;
 
-        let agg_pk_commitment_var = UInt8::new_input_vec(cs.clone(), &self.agg_pk_commitment)?;
+        let signer_bitmap_var = FqVar::new_input(cs.clone(), || Ok(&self.signer_bitmap))?;
 
-        let position_var = UInt8::new_input_vec(cs.clone(), &[self.position])?
-            .pop()
-            .unwrap();
+        let path_var = FqVar::new_input(cs.clone(), || Ok(&self.path))?;
+
+        // Process the inputs.
+        next_cost_analysis!(cs, cost, || { "Process inputs" });
+
+        // Convert the pk_tree_commitment and agg_pk_commitment from field elements to bits.
+        let mut pk_tree_commitment_bits = vec![];
+
+        for fp in pk_tree_commitment_var {
+            let mut bits = fp.to_bits_le()?;
+            pk_tree_commitment_bits.append(&mut bits);
+        }
+
+        let mut agg_pk_commitment_bits = vec![];
+
+        for fp in agg_pk_commitment_var {
+            let mut bits = fp.to_bits_le()?;
+            agg_pk_commitment_bits.append(&mut bits);
+        }
 
         // Calculating the aggregate public key.
         next_cost_analysis!(cs, cost, || { "Calculate agg pk" });
@@ -118,10 +131,10 @@ impl<SubCircuit: ConstraintSynthesizer<Fr>> ConstraintSynthesizer<MNT4Fr>
             agg_pk += key;
         }
 
-        // Verifying aggregate public key commitment. It just checks that the aggregate public key
-        // given as a witness is correct by committing to it and comparing the result with the
-        // aggregate public key commitment given as an input.
-        next_cost_analysis!(cs, cost, || { "Verify agg pk commitment" });
+        // Verifying aggregate public key commitment. It just checks that the calculated aggregate
+        // public key is correct by comparing it with the aggregate public key commitment given as
+        // an input.
+        next_cost_analysis!(cs, cost, || { "Verify agg pk" });
 
         let agg_pk_bits = SerializeGadget::serialize_g2(cs.clone(), &agg_pk)?;
 
@@ -131,13 +144,7 @@ impl<SubCircuit: ConstraintSynthesizer<Fr>> ConstraintSynthesizer<MNT4Fr>
 
         let pedersen_bits = reverse_inner_byte_order(&pedersen_bits[..]);
 
-        let mut reference_commitment = Vec::new();
-
-        for i in 0..pedersen_bits.len() / 8 {
-            reference_commitment.push(UInt8::from_bits_le(&pedersen_bits[i * 8..(i + 1) * 8]));
-        }
-
-        agg_pk_commitment_var.enforce_equal(&reference_commitment)?;
+        agg_pk_commitment_bits.enforce_equal(&pedersen_bits)?;
 
         // Calculating the commitments to each of the aggregate public keys chunks. These
         // will be given as input to the SNARK circuits lower on the tree.
@@ -155,59 +162,58 @@ impl<SubCircuit: ConstraintSynthesizer<Fr>> ConstraintSynthesizer<MNT4Fr>
 
             let pedersen_bits = reverse_inner_byte_order(&pedersen_bits[..]);
 
-            let mut commitment = Vec::new();
-
-            for i in 0..pedersen_bits.len() / 8 {
-                commitment.push(UInt8::from_bits_le(&pedersen_bits[i * 8..(i + 1) * 8]));
-            }
-
-            agg_pk_chunks_commitments.push(commitment);
+            agg_pk_chunks_commitments.push(pedersen_bits);
         }
 
-        // Calculate the position for the left and right child nodes. Given the current position P,
+        // Calculate the path for the left and right child nodes. Given the current position P,
         // the left position L and the right position R are given as:
         //    L = 2 * P
         //    R = 2 * P + 1
-        // For efficiency reasons, we actually calculate the positions using bit manipulation.
-        next_cost_analysis!(cs, cost, || { "Calculate positions" });
+        // For efficiency reasons, we actually calculate the path using bit manipulation.
+        next_cost_analysis!(cs, cost, || { "Calculate paths" });
 
-        // Get P.
-        let mut bits = position_var.to_bits_le()?;
+        // We take the path, turn it into bits and keep only the first (in little-endian)
+        // PK_TREE_DEPTH bits.
+        let mut path_bits = path_var.to_bits_le()?[..PK_TREE_DEPTH].to_vec();
 
-        // Calculate P << 1, which is equivalent to calculating 2 * P.
-        bits.pop();
-        bits.insert(0, Boolean::Constant(false));
-        let left_position = UInt8::from_bits_le(&bits);
+        // Calculate P >> 1, which is equivalent to calculating 2 * P (in little-endian).
+        path_bits.pop();
+        path_bits.insert(0, Boolean::Constant(false));
+        let left_path = path_bits.clone();
 
-        // bits is currently P << 1 = L. Calculate L & 1, which is equivalent to L + 1.
-        bits.remove(0);
-        bits.insert(0, Boolean::Constant(true));
-        let right_position = UInt8::from_bits_le(&bits);
+        // path_bits is currently P >> 1 = L. Calculate L & 1, which is equivalent to L + 1 (in little-endian).
+        path_bits.remove(0);
+        path_bits.insert(0, Boolean::Constant(true));
+        let right_path = path_bits;
 
         // Verify the ZK proof for the left child node.
         next_cost_analysis!(cs, cost, || { "Verify left ZK proof" });
         let mut proof_inputs =
-            RecursiveInputGadget::to_field_elements::<MNT4Fr, Fr>(&pk_commitment_var)?;
+            RecursiveInputGadget::to_field_elements::<MNT4Fr, MNT6Fr>(&pk_commitment_var)?;
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<MNT4Fr, Fr>(
-            &signer_bitmap_var,
-        )?);
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<
+            MNT4Fr,
+            MNT6Fr,
+        >(&signer_bitmap_var)?);
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<MNT4Fr, Fr>(
-            &agg_pk_chunks_commitments[0],
-        )?);
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<
+            MNT4Fr,
+            MNT6Fr,
+        >(&agg_pk_chunks_commitments[0])?);
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<MNT4Fr, Fr>(
-            &agg_pk_chunks_commitments[1],
-        )?);
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<
+            MNT4Fr,
+            MNT6Fr,
+        >(&agg_pk_chunks_commitments[1])?);
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<MNT4Fr, Fr>(
-            &[left_position],
-        )?);
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<
+            MNT4Fr,
+            MNT6Fr,
+        >(&[left_position])?);
 
         Groth16VerifierGadget::<MNT6_753, PairingVar>::verify(
             &vk_child_var,
-            proof_inputs,
+            Groth16VerifierGadget::InputVar::new(proof_inputs),
             &left_proof_var,
         )?;
 
