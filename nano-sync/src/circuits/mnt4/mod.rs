@@ -6,7 +6,7 @@
 pub use pk_tree_leaf::PKTreeLeafCircuit;
 pub use pk_tree_node::PKTreeNodeCircuit;
 
-//pub mod macro_block;
+pub mod macro_block;
 // pub mod merger;
 pub mod pk_tree_leaf;
 pub mod pk_tree_node;

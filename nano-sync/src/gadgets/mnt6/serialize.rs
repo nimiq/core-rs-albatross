@@ -1,5 +1,4 @@
 use ark_mnt4_753::constraints::{G1Var, G2Var};
-use ark_mnt4_753::FqParameters;
 use ark_mnt6_753::Fr as MNT6Fr;
 use ark_r1cs_std::prelude::{Boolean, ToBitsGadget};
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
@@ -22,7 +21,7 @@ impl SerializeGadget {
         let y_bit = YToBitGadget::y_to_bit_g1(cs, point)?;
 
         // Pad points and get *Big-Endian* representation.
-        let bits = pad_point_bits::<FqParameters, MNT6Fr>(x_bits, y_bit);
+        let bits = pad_point_bits::<MNT6Fr>(x_bits, y_bit);
 
         Ok(bits)
     }
@@ -38,7 +37,7 @@ impl SerializeGadget {
         let y_bit = YToBitGadget::y_to_bit_g2(cs, point)?;
 
         // Pad points and get *Big-Endian* representation.
-        let bits = pad_point_bits::<FqParameters, MNT6Fr>(x_bits, y_bit);
+        let bits = pad_point_bits::<MNT6Fr>(x_bits, y_bit);
 
         Ok(bits)
     }

@@ -9,16 +9,16 @@ use ark_ff::One;
 use ark_mnt4_753::Fr as MNT4Fr;
 use ark_mnt6_753::constraints::{FqVar, G1Var, G2Var};
 use ark_mnt6_753::Fq;
+use ark_r1cs_std::alloc::AllocationMode;
 use ark_r1cs_std::prelude::{
     AllocVar, Boolean, CondSelectGadget, FieldVar, ToBitsGadget, UInt32, UInt8,
 };
-use ark_relations::r1cs::{Namespace, SynthesisError};
+use ark_relations::r1cs::{ConstraintSystemRef, Namespace, SynthesisError};
 
-use crate::constants::VALIDATOR_SLOTS;
+use crate::constants::{MIN_SIGNERS, VALIDATOR_SLOTS};
 use crate::gadgets::mnt4::{CheckSigGadget, PedersenHashGadget};
 use crate::primitives::MacroBlock;
 use crate::utils::reverse_inner_byte_order;
-use ark_r1cs_std::alloc::AllocationMode;
 
 /// A gadget that contains utilities to verify the validity of a macro block. Mainly it checks that:
 ///  1. The macro block was signed by aggregate public keys.
@@ -36,6 +36,7 @@ impl MacroBlockGadget {
     /// the macro block gadget.
     pub fn verify(
         &self,
+        cs: ConstraintSystemRef<MNT4Fr>,
         // This is the commitment for the set of public keys that are owned by the next set of validators.
         pks_commitment: &Vec<UInt8<MNT4Fr>>,
         // Simply the number of the macro block.
@@ -44,16 +45,11 @@ impl MacroBlockGadget {
         round_number: &UInt32<MNT4Fr>,
         // This is the aggregated public key.
         agg_pk: &G2Var,
-        // This is the minimum number of signers for the block.
-        min_signers: &FqVar,
-        // The generator used in the BLS signature scheme. It is the generator used to create public
-        // keys.
-        sig_generator: &G2Var,
         // These are just the generators for the Pedersen hash gadget.
         pedersen_generators: &Vec<G1Var>,
     ) -> Result<(), SynthesisError> {
         // Verify that there are enough signers.
-        self.check_signers(min_signers)?;
+        self.check_signers(cs.clone())?;
 
         // Get the hash point for the signature.
         let hash = self.get_hash(
@@ -64,7 +60,7 @@ impl MacroBlockGadget {
         )?;
 
         // Verify the validity of the signature.
-        CheckSigGadget::check_signature(agg_pk, &hash, &self.signature, sig_generator)
+        CheckSigGadget::check_signature(cs, agg_pk, &hash, &self.signature)
     }
 
     /// A function that calculates the hash for the block from:
@@ -157,7 +153,10 @@ impl MacroBlockGadget {
     }
 
     /// A function that checks if there are enough signers.
-    pub fn check_signers(&self, min_signers: &FqVar) -> Result<(), SynthesisError> {
+    pub fn check_signers(&self, cs: ConstraintSystemRef<MNT4Fr>) -> Result<(), SynthesisError> {
+        // Get the minimum number of signers.
+        let min_signers = FqVar::new_constant(cs, &Fq::from(MIN_SIGNERS as u64))?;
+
         // Initialize the running sum.
         let mut num_signers = FqVar::zero();
 
@@ -172,7 +171,7 @@ impl MacroBlockGadget {
 
         // Enforce that there are enough signers. Specifically that:
         // num_signers >= min_signers
-        num_signers.enforce_cmp(min_signers, Ordering::Greater, true)
+        num_signers.enforce_cmp(&min_signers, Ordering::Greater, true)
     }
 }
 

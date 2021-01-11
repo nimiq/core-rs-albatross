@@ -1,8 +1,8 @@
 use ark_mnt6_753::G2Projective;
 
 use crate::constants::{PK_TREE_BREADTH, VALIDATOR_SLOTS};
-use crate::primitives::merkle_tree_construct;
-use crate::utils::{bytes_to_bits, serialize_g2_mnt6};
+use crate::primitives::{merkle_tree_construct, serialize_g2_mnt6};
+use crate::utils::bytes_to_bits;
 
 /// This function is meant to calculate the public key tree "off-circuit". Generating the public key
 /// tree with this function guarantees that it is compatible with the ZK circuit.

@@ -1,21 +1,22 @@
+use std::fs::File;
+
+use ark_crypto_primitives::snark::BooleanInputVar;
+use ark_crypto_primitives::SNARKGadget;
 use ark_groth16::constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar};
-use ark_groth16::{Groth16, Proof, VerifyingKey};
+use ark_groth16::{Proof, VerifyingKey};
 use ark_mnt4_753::Fr as MNT4Fr;
 use ark_mnt6_753::constraints::{FqVar, G1Var, G2Var, PairingVar};
-use ark_mnt6_753::{Fq, Fr as MNT6Fr, G2Projective, MNT6_753};
+use ark_mnt6_753::{Fq, G2Projective, MNT6_753};
+use ark_r1cs_std::prelude::{AllocVar, Boolean, CurveVar, EqGadget};
+use ark_r1cs_std::ToBitsGadget;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 use ark_serialize::CanonicalDeserialize;
-use std::fs::File;
-use std::marker::PhantomData;
 
-use crate::constants::PK_TREE_DEPTH;
+use crate::constants::{PK_TREE_DEPTH, VALIDATOR_SLOTS};
 use crate::gadgets::mnt4::{PedersenHashGadget, SerializeGadget};
 use crate::primitives::pedersen_generators;
-use crate::utils::reverse_inner_byte_order;
+use crate::utils::{pack_inputs, reverse_inner_byte_order, unpack_inputs};
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
-use ark_crypto_primitives::SNARKGadget;
-use ark_r1cs_std::prelude::{AllocVar, Boolean, CurveVar, EqGadget, UInt8};
-use ark_r1cs_std::ToBitsGadget;
 
 /// This is the node subcircuit of the PKTreeCircuit. See PKTreeLeafCircuit for more details.
 /// It is different from the other node subcircuit on the MNT6 curve in that it does recalculate
@@ -31,7 +32,12 @@ pub struct PKTreeNodeCircuit {
     agg_pk_chunks: Vec<G2Projective>,
 
     // Inputs (public)
-    pk_tree_commitment: Vec<Fq>,
+    // Our inputs are always vectors of booleans (semantically), so that they are consistent across
+    // the different elliptic curves that we use. However, for compactness, we represent them as
+    // field elements. Both of the curves that we use have a modulus of 753 bits and a capacity
+    // of 752 bits. So, the first 752 bits (in little-endian) of each field element is data, and the
+    // last bit is always set to zero.
+    pk_tree_root: Vec<Fq>,
     agg_pk_commitment: Vec<Fq>,
     signer_bitmap: Fq,
     path: Fq,
@@ -43,7 +49,7 @@ impl PKTreeNodeCircuit {
         left_proof: Proof<MNT6_753>,
         right_proof: Proof<MNT6_753>,
         agg_pk_chunks: Vec<G2Projective>,
-        pk_tree_commitment: Vec<Fq>,
+        pk_tree_root: Vec<Fq>,
         agg_pk_commitment: Vec<Fq>,
         signer_bitmap: Fq,
         path: Fq,
@@ -53,7 +59,7 @@ impl PKTreeNodeCircuit {
             left_proof,
             right_proof,
             agg_pk_chunks,
-            pk_tree_commitment,
+            pk_tree_root,
             agg_pk_commitment,
             signer_bitmap,
             path,
@@ -94,8 +100,7 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeNodeCircuit {
         // Allocate all the inputs.
         next_cost_analysis!(cs, cost, || { "Alloc inputs" });
 
-        let pk_tree_commitment_var =
-            Vec::<FqVar>::new_input(cs.clone(), || Ok(&self.pk_tree_commitment[..]))?;
+        let pk_tree_root_var = Vec::<FqVar>::new_input(cs.clone(), || Ok(&self.pk_tree_root[..]))?;
 
         let agg_pk_commitment_var =
             Vec::<FqVar>::new_input(cs.clone(), || Ok(&self.agg_pk_commitment[..]))?;
@@ -104,31 +109,25 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeNodeCircuit {
 
         let path_var = FqVar::new_input(cs.clone(), || Ok(&self.path))?;
 
-        // Process the inputs.
-        next_cost_analysis!(cs, cost, || { "Process inputs" });
+        // Unpack the inputs by converting them from field elements to bits and truncating appropriately.
+        next_cost_analysis!(cs, cost, || { "Unpack inputs" });
 
-        // Convert the pk_tree_commitment and agg_pk_commitment from field elements to bits.
-        let mut pk_tree_commitment_bits = vec![];
+        let pk_tree_root_bits = unpack_inputs(pk_tree_root_var)?[..760].to_vec();
 
-        for fp in pk_tree_commitment_var {
-            let mut bits = fp.to_bits_le()?;
-            pk_tree_commitment_bits.append(&mut bits);
-        }
+        let agg_pk_commitment_bits = unpack_inputs(agg_pk_commitment_var)?[..760].to_vec();
 
-        let mut agg_pk_commitment_bits = vec![];
+        let signer_bitmap_bits =
+            unpack_inputs(vec![signer_bitmap_var])?[..VALIDATOR_SLOTS].to_vec();
 
-        for fp in agg_pk_commitment_var {
-            let mut bits = fp.to_bits_le()?;
-            agg_pk_commitment_bits.append(&mut bits);
-        }
+        let mut path_bits = unpack_inputs(vec![path_var])?[..PK_TREE_DEPTH].to_vec();
 
         // Calculating the aggregate public key.
         next_cost_analysis!(cs, cost, || { "Calculate agg pk" });
 
         let mut agg_pk = G2Var::zero();
 
-        for key in &agg_pk_chunks_var {
-            agg_pk += key;
+        for pk in &agg_pk_chunks_var {
+            agg_pk += pk;
         }
 
         // Verifying aggregate public key commitment. It just checks that the calculated aggregate
@@ -172,91 +171,59 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeNodeCircuit {
         // For efficiency reasons, we actually calculate the path using bit manipulation.
         next_cost_analysis!(cs, cost, || { "Calculate paths" });
 
-        // We take the path, turn it into bits and keep only the first (in little-endian)
-        // PK_TREE_DEPTH bits.
-        let mut path_bits = path_var.to_bits_le()?[..PK_TREE_DEPTH].to_vec();
-
         // Calculate P >> 1, which is equivalent to calculating 2 * P (in little-endian).
         path_bits.pop();
         path_bits.insert(0, Boolean::Constant(false));
         let left_path = path_bits.clone();
 
         // path_bits is currently P >> 1 = L. Calculate L & 1, which is equivalent to L + 1 (in little-endian).
-        path_bits.remove(0);
+        let _ = path_bits.remove(0);
         path_bits.insert(0, Boolean::Constant(true));
         let right_path = path_bits;
 
         // Verify the ZK proof for the left child node.
         next_cost_analysis!(cs, cost, || { "Verify left ZK proof" });
-        let mut proof_inputs =
-            RecursiveInputGadget::to_field_elements::<MNT4Fr, MNT6Fr>(&pk_commitment_var)?;
+        let mut proof_inputs = pack_inputs(pk_tree_root_bits.clone());
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<
-            MNT4Fr,
-            MNT6Fr,
-        >(&signer_bitmap_var)?);
+        proof_inputs.append(&mut pack_inputs(agg_pk_chunks_commitments[0].to_bits_le()?));
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<
-            MNT4Fr,
-            MNT6Fr,
-        >(&agg_pk_chunks_commitments[0])?);
+        proof_inputs.append(&mut pack_inputs(agg_pk_chunks_commitments[1].to_bits_le()?));
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<
-            MNT4Fr,
-            MNT6Fr,
-        >(&agg_pk_chunks_commitments[1])?);
+        proof_inputs.append(&mut pack_inputs(signer_bitmap_bits.clone()));
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<
-            MNT4Fr,
-            MNT6Fr,
-        >(&[left_position])?);
+        proof_inputs.append(&mut pack_inputs(left_path));
+
+        let input_var = BooleanInputVar::new(proof_inputs);
 
         Groth16VerifierGadget::<MNT6_753, PairingVar>::verify(
             &vk_child_var,
-            Groth16VerifierGadget::InputVar::new(proof_inputs),
+            &input_var,
             &left_proof_var,
-        )?;
+        )?
+        .enforce_equal(&Boolean::constant(true))?;
 
-        // // Verify the ZK proof for the right child node.
-        // next_cost_analysis!(cs, cost, || { "Verify right ZK proof" });
-        // let mut proof_inputs = RecursiveInputGadget::to_field_elements::<Fr>(&pk_commitment_var)?;
-        //
-        // proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
-        //     &prepare_signer_bitmap_var,
-        // )?);
-        //
-        // proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
-        //     &prepare_agg_pk_chunks_commitments[2],
-        // )?);
-        //
-        // proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
-        //     &prepare_agg_pk_chunks_commitments[3],
-        // )?);
-        //
-        // proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
-        //     &commit_signer_bitmap_var,
-        // )?);
-        //
-        // proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
-        //     &commit_agg_pk_chunks_commitments[2],
-        // )?);
-        //
-        // proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
-        //     &commit_agg_pk_chunks_commitments[3],
-        // )?);
-        //
-        // proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(&[
-        //     right_position,
-        // ])?);
-        //
-        // <TheVerifierGadget as NIZKVerifierGadget<TheProofSystem<SubCircuit>, Fq>>::check_verify(
-        //     cs.ns(|| "verify right groth16 proof"),
-        //     &vk_child_var,
-        //     proof_inputs.iter(),
-        //     &right_proof_var,
-        // )?;
-        //
-        // end_cost_analysis!(cs, cost);
+        // Verify the ZK proof for the right child node.
+        next_cost_analysis!(cs, cost, || { "Verify right ZK proof" });
+        let mut proof_inputs = pack_inputs(pk_tree_root_bits);
+
+        proof_inputs.append(&mut pack_inputs(agg_pk_chunks_commitments[2].to_bits_le()?));
+
+        proof_inputs.append(&mut pack_inputs(agg_pk_chunks_commitments[3].to_bits_le()?));
+
+        proof_inputs.append(&mut pack_inputs(signer_bitmap_bits));
+
+        proof_inputs.append(&mut pack_inputs(right_path));
+
+        let input_var = BooleanInputVar::new(proof_inputs);
+
+        Groth16VerifierGadget::<MNT6_753, PairingVar>::verify(
+            &vk_child_var,
+            &input_var,
+            &right_proof_var,
+        )?
+        .enforce_equal(&Boolean::constant(true))?;
+
+        end_cost_analysis!(cs, cost);
 
         Ok(())
     }
