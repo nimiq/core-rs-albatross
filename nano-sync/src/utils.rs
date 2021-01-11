@@ -1,118 +1,24 @@
-use ark_ec::ProjectiveCurve;
-use ark_ff::{Field, FpParameters};
-use ark_mnt4_753::{
-    Fr as MNT4Fr, G1Projective as MNT4G1Projective, G2Projective as MNT4G2Projective,
-};
-use ark_mnt6_753::{
-    Fr as MNT6Fr, G1Projective as MNT6G1Projective, G2Projective as MNT6G2Projective,
-};
-use ark_r1cs_std::boolean::Boolean;
-use rand::{thread_rng, RngCore};
+use std::cmp::min;
+
+use ark_ff::{Field, PrimeField};
+use ark_r1cs_std::fields::fp::FpVar;
+use ark_r1cs_std::prelude::{Boolean, ToBitsGadget};
+use ark_relations::r1cs::SynthesisError;
 
 // Re-export bls utility functions.
 pub use nimiq_bls::utils::*;
 
-use crate::compression::BeSerialize;
-
-/// Serializes a G1 point in the MNT4-753 curve.
-pub fn serialize_g1_mnt4(point: MNT4G1Projective) -> [u8; 95] {
-    let mut buffer = [0u8; 95];
-    BeSerialize::serialize(&point.into_affine(), &mut &mut buffer[..]).unwrap();
-    buffer
-}
-
-/// Serializes a G2 point in the MNT4-753 curve.
-pub fn serialize_g2_mnt4(point: MNT4G2Projective) -> [u8; 190] {
-    let mut buffer = [0u8; 190];
-    BeSerialize::serialize(&point.into_affine(), &mut &mut buffer[..]).unwrap();
-    buffer
-}
-
-/// Serializes a G1 point in the MNT6-753 curve.
-pub fn serialize_g1_mnt6(point: MNT6G1Projective) -> [u8; 95] {
-    let mut buffer = [0u8; 95];
-    BeSerialize::serialize(&point.into_affine(), &mut &mut buffer[..]).unwrap();
-    buffer
-}
-
-/// Serializes a G2 point in the MNT6-753 curve.
-pub fn serialize_g2_mnt6(point: MNT6G2Projective) -> [u8; 285] {
-    let mut buffer = [0u8; 285];
-    BeSerialize::serialize(&point.into_affine(), &mut &mut buffer[..]).unwrap();
-    buffer
-}
-
-// TODO: Possibly remove this since it looks like we can generate EC points directly:
-// let mut rng = test_rng();
-// let a = MNT4Fr::rand(&mut rng);
-/// Creates a random G1 point in the MNT4-753 curve.
-pub fn gen_rand_g1_mnt4() -> MNT4G1Projective {
-    let rng = &mut thread_rng();
-    let mut bytes = [0u8; 96];
-    let mut x = None;
-    while x.is_none() {
-        rng.fill_bytes(&mut bytes[2..]);
-        x = MNT4Fr::from_random_bytes(&bytes);
-    }
-    let mut point = MNT4G1Projective::prime_subgroup_generator();
-    point *= x.unwrap();
-    point
-}
-
-/// Creates a random G2 point in the MNT4-753 curve.
-pub fn gen_rand_g2_mnt4() -> MNT4G2Projective {
-    let rng = &mut thread_rng();
-    let mut bytes = [0u8; 96];
-    let mut x = None;
-    while x.is_none() {
-        rng.fill_bytes(&mut bytes[2..]);
-        x = MNT4Fr::from_random_bytes(&bytes);
-    }
-    let mut point = MNT4G2Projective::prime_subgroup_generator();
-    point *= x.unwrap();
-    point
-}
-
-/// Creates a random G1 point in the MNT6-753 curve.
-pub fn gen_rand_g1_mnt6() -> MNT6G1Projective {
-    let rng = &mut thread_rng();
-    let mut bytes = [0u8; 96];
-    let mut x = None;
-    while x.is_none() {
-        rng.fill_bytes(&mut bytes[2..]);
-        x = MNT6Fr::from_random_bytes(&bytes);
-    }
-    let mut point = MNT6G1Projective::prime_subgroup_generator();
-    point *= x.unwrap();
-    point
-}
-
-/// Creates a random G2 point in the MNT6-753 curve.
-pub fn gen_rand_g2_mnt6() -> MNT6G2Projective {
-    let rng = &mut thread_rng();
-    let mut bytes = [0u8; 96];
-    let mut x = None;
-    while x.is_none() {
-        rng.fill_bytes(&mut bytes[2..]);
-        x = MNT6Fr::from_random_bytes(&bytes);
-    }
-    let mut point = MNT6G2Projective::prime_subgroup_generator();
-    point *= x.unwrap();
-    point
-}
-
 /// Takes multiple bit representations of a point (Fp/Fp2/Fp3).
-/// Its length must be a multiple of `P::MODULUS_BITS`.
-/// None of the underlying points must be zero!
+/// Its length must be a multiple of the field size (in bits).
+/// None of the underlying points can be zero!
 /// This function pads each chunk of `MODULUS_BITS` to full bytes, prepending the `y_bit`
 /// in the very front.
 /// This maintains *Big-Endian* representation.
-// TODO: Can use just one field type parameter. Use F::size_in_bits() to get the modulus bits!
-pub fn pad_point_bits<P: FpParameters, F: Field>(
+pub fn pad_point_bits<F: PrimeField>(
     mut bits: Vec<Boolean<F>>,
     y_bit: Boolean<F>,
 ) -> Vec<Boolean<F>> {
-    let point_len = P::MODULUS_BITS;
+    let point_len = F::size_in_bits();
 
     let padding = 8 - (point_len % 8);
 
@@ -161,6 +67,54 @@ pub fn pad_point_bits<P: FpParameters, F: Field>(
     );
 
     serialization
+}
+
+/// Takes a vector of Booleans and transforms it into a vector of a vector of Booleans, ready to be
+/// transformed into field elements, which is the way we represent inputs to circuits. This assumes
+/// that both the constraint field and the target field have the same size in bits (which is true
+/// for the MNT curves).
+/// Each field element has his last bit set to zero (since the capacity of a field is always one bit
+/// less than its size). We also pad the last field element with zeros so that it has the correct
+/// size.
+pub fn pack_inputs<F: PrimeField>(mut input: Vec<Boolean<F>>) -> Vec<Vec<Boolean<F>>> {
+    let capacity = F::size_in_bits() - 1;
+
+    let mut result = vec![];
+
+    while !input.is_empty() {
+        let length = min(input.len(), capacity);
+
+        let padding = F::size_in_bits() - length;
+
+        let new_input = input.split_off(length);
+
+        for _ in 0..padding {
+            input.push(Boolean::constant(false));
+        }
+
+        result.push(input);
+
+        input = new_input;
+    }
+
+    result
+}
+
+/// Takes a vector of public inputs to a circuit, represented as field elements, and converts it
+/// to the canonical representation of a vector of Booleans. Internally, it just converts the field
+/// elements to bits and discards the most significant bit (which never contains any data).
+pub fn unpack_inputs<F: PrimeField>(
+    inputs: Vec<FpVar<F>>,
+) -> Result<Vec<Boolean<F>>, SynthesisError> {
+    let mut result = vec![];
+
+    for elem in inputs {
+        let mut bits = elem.to_bits_le()?;
+        bits.pop();
+        result.append(&mut bits);
+    }
+
+    Ok(result)
 }
 
 /// Takes a data vector in *Big-Endian* representation and transforms it,

@@ -2,4 +2,4 @@
 //! a proof and they can be "chained" together by using one's output as another's input.
 
 pub mod mnt4;
-//pub mod mnt6;
+pub mod mnt6;
