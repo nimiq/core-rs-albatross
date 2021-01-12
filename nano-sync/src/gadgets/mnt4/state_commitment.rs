@@ -1,11 +1,10 @@
 use ark_mnt4_753::Fr as MNT4Fr;
 use ark_mnt6_753::constraints::G1Var;
-use ark_r1cs_std::prelude::{ToBitsGadget, UInt32, UInt8};
+use ark_r1cs_std::bits::boolean::Boolean;
+use ark_r1cs_std::prelude::UInt32;
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 
 use crate::gadgets::mnt4::{PedersenHashGadget, SerializeGadget};
-use crate::utils::reverse_inner_byte_order;
-use ark_r1cs_std::bits::boolean::Boolean;
 
 /// This gadget is meant to calculate the "state commitment" in-circuit, which is simply a commitment,
 /// for a given block, of the block number concatenated with the root of a Merkle tree over the public
@@ -19,7 +18,7 @@ impl StateCommitmentGadget {
     pub fn evaluate(
         cs: ConstraintSystemRef<MNT4Fr>,
         block_number: &UInt32<MNT4Fr>,
-        pk_tree_root: &mut Vec<Boolean<MNT4Fr>>,
+        pk_tree_root: &Vec<Boolean<MNT4Fr>>,
         pedersen_generators: &Vec<G1Var>,
     ) -> Result<Vec<Boolean<MNT4Fr>>, SynthesisError> {
         // Initialize Boolean vector.
@@ -34,7 +33,7 @@ impl StateCommitmentGadget {
         bits.extend(block_number_be);
 
         // Append the public key tree root.
-        bits.append(pk_tree_root);
+        bits.extend_from_slice(pk_tree_root);
 
         // Calculate the Pedersen hash.
         let hash = PedersenHashGadget::evaluate(&bits, pedersen_generators)?;

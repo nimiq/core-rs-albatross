@@ -183,6 +183,7 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeNodeCircuit {
 
         // Verify the ZK proof for the left child node.
         next_cost_analysis!(cs, cost, || { "Verify left ZK proof" });
+
         let mut proof_inputs = pack_inputs(pk_tree_root_bits.clone());
 
         proof_inputs.append(&mut pack_inputs(agg_pk_chunks_commitments[0].to_bits_le()?));
@@ -204,6 +205,7 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeNodeCircuit {
 
         // Verify the ZK proof for the right child node.
         next_cost_analysis!(cs, cost, || { "Verify right ZK proof" });
+
         let mut proof_inputs = pack_inputs(pk_tree_root_bits);
 
         proof_inputs.append(&mut pack_inputs(agg_pk_chunks_commitments[2].to_bits_le()?));

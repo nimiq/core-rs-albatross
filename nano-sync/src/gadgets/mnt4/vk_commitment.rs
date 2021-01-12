@@ -2,11 +2,10 @@ use ark_groth16::constraints::VerifyingKeyVar;
 use ark_mnt4_753::Fr as MNT4Fr;
 use ark_mnt6_753::constraints::{G1Var, PairingVar};
 use ark_mnt6_753::MNT6_753;
-use ark_r1cs_std::prelude::UInt8;
+use ark_r1cs_std::prelude::Boolean;
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 
 use crate::gadgets::mnt4::{PedersenHashGadget, SerializeGadget};
-use crate::utils::reverse_inner_byte_order;
 
 /// This gadget is meant to calculate a commitment in-circuit for a verifying key of a SNARK in the
 /// MNT6-753 curve. This means we can open this commitment inside of a circuit in the MNT4-753 curve
@@ -22,7 +21,7 @@ impl VKCommitmentGadget {
         cs: ConstraintSystemRef<MNT4Fr>,
         vk: &VerifyingKeyVar<MNT6_753, PairingVar>,
         pedersen_generators: &Vec<G1Var>,
-    ) -> Result<Vec<UInt8<MNT4Fr>>, SynthesisError> {
+    ) -> Result<Vec<Boolean<MNT4Fr>>, SynthesisError> {
         // Initialize Boolean vector.
         let mut bits = vec![];
 
@@ -53,15 +52,6 @@ impl VKCommitmentGadget {
         // Serialize the Pedersen hash.
         let serialized_bits = SerializeGadget::serialize_g1(cs.clone(), &hash)?;
 
-        let serialized_bits = reverse_inner_byte_order(&serialized_bits[..]);
-
-        // Convert to bytes.
-        let mut bytes = Vec::new();
-
-        for i in 0..serialized_bits.len() / 8 {
-            bytes.push(UInt8::from_bits_le(&serialized_bits[i * 8..(i + 1) * 8]));
-        }
-
-        Ok(bytes)
+        Ok(serialized_bits)
     }
 }

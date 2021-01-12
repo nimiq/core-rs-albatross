@@ -1,26 +1,18 @@
-use algebra_core::CanonicalDeserialize;
-use ark_crypto_primitives::nizk::groth16::constraints::{
-    Groth16VerifierGadget, ProofGadget, VerifyingKeyGadget,
-};
-use ark_crypto_primitives::NIZKVerifierGadget;
-use ark_groth16::{Groth16, Proof, VerifyingKey};
-use ark_mnt4_753::{Fq, Fr, MNT4_753};
-use ark_mnt6_753::Fr as MNT6Fr;
-use ark_r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisError};
-use ark_r1cs_std::mnt4_753::PairingGadget;
-use ark_r1cs_std::prelude::*;
 use std::fs::File;
 
-use crate::circuits::mnt4::MergerCircuit;
-use crate::gadgets::input::RecursiveInputGadget;
-use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
+use ark_crypto_primitives::snark::BooleanInputVar;
+use ark_crypto_primitives::SNARKGadget;
+use ark_groth16::constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar};
+use ark_groth16::{Proof, VerifyingKey};
+use ark_mnt4_753::constraints::{FqVar, PairingVar};
+use ark_mnt4_753::{Fq, MNT4_753};
+use ark_mnt6_753::Fr as MNT6Fr;
+use ark_r1cs_std::prelude::{AllocVar, Boolean, EqGadget};
+use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
+use ark_serialize::CanonicalDeserialize;
 
-// Renaming some types for convenience. We can change the circuit and elliptic curve of the input
-// proof to the wrapper circuit just by editing these types.
-type TheProofSystem = Groth16<MNT4_753, MergerCircuit, Fr>;
-type TheProofGadget = ProofGadget<MNT4_753, Fq, PairingGadget>;
-type TheVkGadget = VerifyingKeyGadget<MNT4_753, Fq, PairingGadget>;
-type TheVerifierGadget = Groth16VerifierGadget<MNT4_753, Fq, PairingGadget>;
+use crate::utils::{pack_inputs, unpack_inputs};
+use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 /// This is the merger wrapper circuit. It takes as inputs an initial state commitment, a final state
 /// commitment and a verifying key and it produces a proof that there exists a valid SNARK proof that
@@ -34,22 +26,27 @@ pub struct MergerWrapperCircuit {
     // Path to the verifying key file. Not an input to the SNARK circuit.
     vk_file: &'static str,
 
-    // Private inputs
+    // Witnesses (private)
     proof: Proof<MNT4_753>,
 
-    // Public inputs
-    initial_state_commitment: Vec<u8>,
-    final_state_commitment: Vec<u8>,
-    vk_commitment: Vec<u8>,
+    // Inputs (public)
+    // Our inputs are always vectors of booleans (semantically), so that they are consistent across
+    // the different elliptic curves that we use. However, for compactness, we represent them as
+    // field elements. Both of the curves that we use have a modulus of 753 bits and a capacity
+    // of 752 bits. So, the first 752 bits (in little-endian) of each field element is data, and the
+    // last bit is always set to zero.
+    initial_state_commitment: Vec<Fq>,
+    final_state_commitment: Vec<Fq>,
+    vk_commitment: Vec<Fq>,
 }
 
 impl MergerWrapperCircuit {
     pub fn new(
         vk_file: &'static str,
         proof: Proof<MNT4_753>,
-        initial_state_commitment: Vec<u8>,
-        final_state_commitment: Vec<u8>,
-        vk_commitment: Vec<u8>,
+        initial_state_commitment: Vec<Fq>,
+        final_state_commitment: Vec<Fq>,
+        vk_commitment: Vec<Fq>,
     ) -> Self {
         Self {
             vk_file,
@@ -63,12 +60,9 @@ impl MergerWrapperCircuit {
 
 impl ConstraintSynthesizer<MNT6Fr> for MergerWrapperCircuit {
     /// This function generates the constraints for the circuit.
-    fn generate_constraints<CS: ConstraintSystem<MNT6Fr>>(
-        self,
-        cs: &mut CS,
-    ) -> Result<(), SynthesisError> {
+    fn generate_constraints(self, cs: ConstraintSystemRef<MNT6Fr>) -> Result<(), SynthesisError> {
         // Load the verifying key from file.
-        let mut file = File::open(format!("verifying_keys/{}", &self.vk_file))?;
+        let mut file = File::open(format!("verifying_keys/{}", &self.vk_file)).unwrap();
 
         let vk_merger = VerifyingKey::deserialize(&mut file).unwrap();
 
@@ -76,51 +70,55 @@ impl ConstraintSynthesizer<MNT6Fr> for MergerWrapperCircuit {
         #[allow(unused_mut)]
         let mut cost = start_cost_analysis!(cs, || "Alloc constants");
 
-        let vk_merger_var = TheVkGadget::alloc_constant(cs.ns(|| "alloc vk merger"), &vk_merger)?;
+        let vk_merger_var =
+            VerifyingKeyVar::<MNT4_753, PairingVar>::new_constant(cs.clone(), vk_merger)?;
 
-        // Allocate all the private inputs.
-        next_cost_analysis!(cs, cost, || { "Alloc private inputs" });
+        // Allocate all the witnesses.
+        next_cost_analysis!(cs, cost, || { "Alloc witnesses" });
 
-        let proof_var = TheProofGadget::alloc(cs.ns(|| "alloc proof"), || Ok(&self.proof))?;
+        let proof_var =
+            ProofVar::<MNT4_753, PairingVar>::new_witness(cs.clone(), || Ok(&self.proof))?;
 
-        // Allocate all the public inputs.
-        next_cost_analysis!(cs, cost, || { "Alloc public inputs" });
+        // Allocate all the inputs.
+        next_cost_analysis!(cs, cost, || { "Alloc inputs" });
 
-        let initial_state_commitment_var = UInt8::alloc_input_vec(
-            cs.ns(|| "alloc initial state commitment"),
-            self.initial_state_commitment.as_ref(),
-        )?;
+        let initial_state_commitment_var =
+            Vec::<FqVar>::new_input(cs.clone(), || Ok(&self.initial_state_commitment[..]))?;
 
-        let final_state_commitment_var = UInt8::alloc_input_vec(
-            cs.ns(|| "alloc final state commitment"),
-            self.final_state_commitment.as_ref(),
-        )?;
+        let final_state_commitment_var =
+            Vec::<FqVar>::new_input(cs.clone(), || Ok(&self.final_state_commitment[..]))?;
 
-        let vk_commitment_var = UInt8::alloc_input_vec(
-            cs.ns(|| "alloc vk merger commitment"),
-            self.vk_commitment.as_ref(),
-        )?;
+        let vk_commitment_var =
+            Vec::<FqVar>::new_input(cs.clone(), || Ok(&self.vk_commitment[..]))?;
+
+        // Unpack the inputs by converting them from field elements to bits and truncating appropriately.
+        next_cost_analysis!(cs, cost, || { "Unpack inputs" });
+
+        let initial_state_commitment_bits =
+            unpack_inputs(initial_state_commitment_var)?[..760].to_vec();
+
+        let final_state_commitment_bits =
+            unpack_inputs(final_state_commitment_var)?[..760].to_vec();
+
+        let vk_commitment_bits = unpack_inputs(vk_commitment_var)?[..760].to_vec();
 
         // Verify the ZK proof.
         next_cost_analysis!(cs, cost, || { "Verify ZK proof" });
 
-        let mut proof_inputs =
-            RecursiveInputGadget::to_field_elements::<Fr>(&initial_state_commitment_var)?;
+        let mut proof_inputs = pack_inputs(initial_state_commitment_bits);
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
-            &final_state_commitment_var,
-        )?);
+        proof_inputs.append(&mut pack_inputs(final_state_commitment_bits));
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
-            &vk_commitment_var,
-        )?);
+        proof_inputs.append(&mut pack_inputs(vk_commitment_bits));
 
-        <TheVerifierGadget as NIZKVerifierGadget<TheProofSystem, Fq>>::check_verify(
-            cs.ns(|| "verify groth16 proof"),
+        let input_var = BooleanInputVar::new(proof_inputs);
+
+        Groth16VerifierGadget::<MNT4_753, PairingVar>::verify(
             &vk_merger_var,
-            proof_inputs.iter(),
+            &input_var,
             &proof_var,
-        )?;
+        )?
+        .enforce_equal(&Boolean::constant(true))?;
 
         end_cost_analysis!(cs, cost);
 
