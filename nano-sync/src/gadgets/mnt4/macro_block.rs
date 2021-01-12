@@ -38,7 +38,7 @@ impl MacroBlockGadget {
         &self,
         cs: ConstraintSystemRef<MNT4Fr>,
         // This is the commitment for the set of public keys that are owned by the next set of validators.
-        pks_commitment: &Vec<UInt8<MNT4Fr>>,
+        pk_tree_root: &Vec<Boolean<MNT4Fr>>,
         // Simply the number of the macro block.
         block_number: &UInt32<MNT4Fr>,
         // The round number of the macro block.
@@ -55,7 +55,7 @@ impl MacroBlockGadget {
         let hash = self.get_hash(
             block_number,
             round_number,
-            pks_commitment,
+            pk_tree_root,
             pedersen_generators,
         )?;
 
@@ -64,7 +64,7 @@ impl MacroBlockGadget {
     }
 
     /// A function that calculates the hash for the block from:
-    /// step || block number || round number || header_hash || pks_commitment
+    /// step || block number || round number || header_hash || pk_tree_root
     /// where || means concatenation.
     /// First we hash the input with the Blake2s hash algorithm, getting an output of 256 bits. This
     /// is necessary because the Pedersen commitment is not pseudo-random and we need pseudo-randomness
@@ -74,7 +74,7 @@ impl MacroBlockGadget {
         &self,
         block_number: &UInt32<MNT4Fr>,
         round_number: &UInt32<MNT4Fr>,
-        pks_commitment: &Vec<UInt8<MNT4Fr>>,
+        pk_tree_root: &Vec<Boolean<MNT4Fr>>,
         pedersen_generators: &Vec<G1Var>,
     ) -> Result<G1Var, SynthesisError> {
         // Initialize Boolean vector.
@@ -105,18 +105,8 @@ impl MacroBlockGadget {
         // Append the header hash.
         bits.extend_from_slice(&self.header_hash);
 
-        // Convert the public keys commitment to bits and append it.
-        let mut pks_bits = Vec::new();
-
-        let mut byte;
-
-        for i in 0..pks_commitment.len() {
-            byte = pks_commitment[i].to_bits_le()?;
-            byte.reverse();
-            pks_bits.extend(byte);
-        }
-
-        bits.append(&mut pks_bits);
+        // Append the public keys commitment.
+        bits.extend_from_slice(pk_tree_root);
 
         // Initialize Blake2s parameters.
         let blake2s_parameters = Blake2sWithParameterBlock {

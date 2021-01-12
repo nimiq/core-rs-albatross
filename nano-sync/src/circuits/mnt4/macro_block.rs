@@ -1,24 +1,25 @@
-use ark_ec::ProjectiveCurve;
-use ark_groth16::constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar};
-use ark_groth16::{Groth16, Proof, VerifyingKey};
-use ark_mnt4_753::Fr as MNT4Fr;
-use ark_mnt6_753::constraints::{FqVar, G1Var, G2Var, PairingVar};
-use ark_mnt6_753::{Fq, Fr, G2Projective, MNT6_753};
-use ark_r1cs_std::prelude::{AllocVar, CondSelectGadget, CurveVar, EqGadget, UInt32};
-use ark_relations::r1cs::{
-    ConstraintSynthesizer, ConstraintSystem, ConstraintSystemRef, SynthesisError,
-};
-use ark_serialize::CanonicalDeserialize;
 use std::fs::File;
 
-use crate::constants::{EPOCH_LENGTH, MIN_SIGNERS, VALIDATOR_SLOTS};
+use ark_crypto_primitives::snark::BooleanInputVar;
+use ark_crypto_primitives::SNARKGadget;
+use ark_groth16::constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar};
+use ark_groth16::{Proof, VerifyingKey};
+use ark_mnt4_753::Fr as MNT4Fr;
+use ark_mnt6_753::constraints::{FqVar, G1Var, G2Var, PairingVar};
+use ark_mnt6_753::{Fq, G2Projective, MNT6_753};
+use ark_r1cs_std::prelude::{
+    AllocVar, Boolean, CurveVar, EqGadget, FieldVar, ToBitsGadget, UInt32,
+};
+use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
+use ark_serialize::CanonicalDeserialize;
+
+use crate::constants::EPOCH_LENGTH;
 use crate::gadgets::mnt4::{
     MacroBlockGadget, PedersenHashGadget, SerializeGadget, StateCommitmentGadget,
 };
 use crate::primitives::{pedersen_generators, MacroBlock};
-use crate::utils::{reverse_inner_byte_order, unpack_inputs};
+use crate::utils::{pack_inputs, reverse_inner_byte_order, unpack_inputs};
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
-use ark_r1cs_std::bits::boolean::Boolean;
 
 /// This is the macro block circuit. It takes as inputs an initial state commitment and final state commitment
 /// and it produces a proof that there exists a valid macro block that transforms the initial state
@@ -36,6 +37,7 @@ pub struct MacroBlockCircuit {
     proof: Proof<MNT6_753>,
     initial_pk_tree_root: Vec<bool>,
     initial_block_number: u32,
+    initial_round_number: u32,
     final_pk_tree_root: Vec<bool>,
     block: MacroBlock,
 
@@ -56,6 +58,7 @@ impl MacroBlockCircuit {
         proof: Proof<MNT6_753>,
         initial_pk_tree_root: Vec<bool>,
         initial_block_number: u32,
+        initial_round_number: u32,
         final_pk_tree_root: Vec<bool>,
         block: MacroBlock,
         initial_state_commitment: Vec<Fq>,
@@ -67,6 +70,7 @@ impl MacroBlockCircuit {
             proof,
             initial_pk_tree_root,
             initial_block_number,
+            initial_round_number,
             final_pk_tree_root,
             block,
             initial_state_commitment,
@@ -104,13 +108,16 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         let proof_var =
             ProofVar::<MNT6_753, PairingVar>::new_witness(cs.clone(), || Ok(&self.proof))?;
 
-        let mut initial_pk_tree_root_var =
+        let initial_pk_tree_root_var =
             Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(&self.initial_pk_tree_root[..]))?;
 
         let initial_block_number_var =
             UInt32::new_witness(cs.clone(), || Ok(&self.initial_block_number))?;
 
-        let mut final_pk_tree_root_var =
+        let initial_round_number_var =
+            UInt32::new_witness(cs.clone(), || Ok(&self.initial_round_number))?;
+
+        let final_pk_tree_root_var =
             Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(&self.final_pk_tree_root[..]))?;
 
         let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(&self.block))?;
@@ -141,7 +148,7 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         let reference_commitment = StateCommitmentGadget::evaluate(
             cs.clone(),
             &initial_block_number_var,
-            &mut initial_pk_tree_root_var,
+            &initial_pk_tree_root_var,
             &pedersen_generators_var,
         )?;
 
@@ -158,157 +165,85 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         let reference_commitment = StateCommitmentGadget::evaluate(
             cs.clone(),
             &final_block_number_var,
-            &mut final_pk_tree_root_var,
+            &final_pk_tree_root_var,
             &pedersen_generators_var,
         )?;
 
         final_state_commitment_bits.enforce_equal(&reference_commitment)?;
 
-        // // Calculating the commit aggregate public key. All the chunks come with the generator added,
-        // // so we need to subtract it in order to get the correct aggregate public key. This is necessary
-        // // because we could have a chunk of public keys with no signers, thus resulting in it being
-        // // zero.
-        // next_cost_analysis!(cs, cost, || { "Calculate commit agg pk" });
-        //
-        // let mut commit_agg_pk = sum_generator_g2_var.clone();
-        //
-        // for i in 0..self.commit_agg_pk_chunks.len() {
-        //     commit_agg_pk = commit_agg_pk.add(
-        //         cs.ns(|| format!("add next key, commit {}", i)),
-        //         &commit_agg_pk_chunks_var[i],
-        //     )?;
-        //
-        //     commit_agg_pk = commit_agg_pk.sub(
-        //         cs.ns(|| format!("subtract generator, commit {}", i)),
-        //         &sum_generator_g2_var,
-        //     )?;
-        // }
-        //
-        // commit_agg_pk = commit_agg_pk.sub(
-        //     cs.ns(|| "subtract generator, commit"),
-        //     &sum_generator_g2_var,
-        // )?;
-        //
-        // // Calculating the commitments to each of the commit aggregate public keys chunks. These
-        // // will be given as input to the PKTree SNARK circuit.
-        // next_cost_analysis!(cs, cost, || {
-        //     "Calculate commit agg pk chunks commitments"
-        // });
-        //
-        // let mut commit_agg_pk_chunks_commitments = Vec::new();
-        //
-        // for i in 0..commit_agg_pk_chunks_var.len() {
-        //     let chunk_bits = SerializeGadget::serialize_g2(
-        //         cs.ns(|| format!("serialize commit agg pk chunk {}", i)),
-        //         &commit_agg_pk_chunks_var[i],
-        //     )?;
-        //
-        //     let pedersen_hash = PedersenHashGadget::evaluate(
-        //         cs.ns(|| format!("pedersen hash commit agg pk chunk {}", i)),
-        //         &chunk_bits,
-        //         &pedersen_generators_var,
-        //     )?;
-        //
-        //     let pedersen_bits = SerializeGadget::serialize_g1(
-        //         cs.ns(|| format!("serialize pedersen hash, commit chunk {}", i)),
-        //         &pedersen_hash,
-        //     )?;
-        //
-        //     let pedersen_bits = reverse_inner_byte_order(&pedersen_bits[..]);
-        //
-        //     let mut commitment = Vec::new();
-        //
-        //     for i in 0..pedersen_bits.len() / 8 {
-        //         commitment.push(UInt8::from_bits_le(&pedersen_bits[i * 8..(i + 1) * 8]));
-        //     }
-        //
-        //     commit_agg_pk_chunks_commitments.push(commitment);
-        // }
-        //
-        // // Preparing the inputs for the SNARK proof verification. All the inputs need to be Vec<UInt8>,
-        // // so they need to be converted to such.
-        // next_cost_analysis!(cs, cost, || { "Prepare inputs for SNARK" });
-        //
-        // let position = vec![UInt8::constant(0)];
-        //
-        // let mut prepare_signer_bitmap_bytes = Vec::new();
-        //
-        // for i in 0..VALIDATOR_SLOTS / 8 {
-        //     prepare_signer_bitmap_bytes.push(UInt8::from_bits_le(
-        //         &block_var.prepare_signer_bitmap[i * 8..(i + 1) * 8],
-        //     ));
-        // }
-        //
-        // let mut commit_signer_bitmap_bytes = Vec::new();
-        //
-        // for i in 0..VALIDATOR_SLOTS / 8 {
-        //     commit_signer_bitmap_bytes.push(UInt8::from_bits_le(
-        //         &block_var.prepare_signer_bitmap[i * 8..(i + 1) * 8],
-        //     ));
-        // }
-        //
-        // // Verifying the SNARK proof. This is a proof that the aggregate public keys chunks are indeed
-        // // correct. It simply takes the public keys and the signer bitmaps and recalculates the aggregate
-        // // public keys chunks, then compares them to the aggregate public keys chunks given as public input.
-        // // Internally, this SNARK circuit is very complex. See the PKTreeLeafCircuit for more details.
-        // next_cost_analysis!(cs, cost, || { "Verify SNARK proof" });
-        //
-        // let mut proof_inputs =
-        //     RecursiveInputGadget::to_field_elements::<Fr>(&initial_pk_tree_root_var)?;
-        //
-        // proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
-        //     &prepare_signer_bitmap_bytes,
-        // )?);
-        //
-        // proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
-        //     &prepare_agg_pk_chunks_commitments[0],
-        // )?);
-        //
-        // proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
-        //     &prepare_agg_pk_chunks_commitments[1],
-        // )?);
-        //
-        // proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
-        //     &commit_signer_bitmap_bytes,
-        // )?);
-        //
-        // proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
-        //     &commit_agg_pk_chunks_commitments[0],
-        // )?);
-        //
-        // proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
-        //     &commit_agg_pk_chunks_commitments[1],
-        // )?);
-        //
-        // proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
-        //     &position,
-        // )?);
-        //
-        // <TheVerifierGadget as NIZKVerifierGadget<TheProofSystem, Fq>>::check_verify(
-        //     cs.ns(|| "verify groth16 proof"),
-        //     &vk_pk_tree_var,
-        //     proof_inputs.iter(),
-        //     &proof_var,
-        // )?;
-        //
-        // // Verifying that the block is valid. Note that we give it the initial block number and the
-        // // final public keys commitment. That's because the "state" is composed of the public keys of
-        // // the current validator list and the block number of the next macro block. So, a macro block
-        // // actually has the number from the previous state and contains the public keys of the next
-        // // state.
-        // next_cost_analysis!(cs, cost, || "Verify block");
-        //
-        // block_var.verify(
-        //     cs.ns(|| "verify block"),
-        //     &final_pk_tree_root_var,
-        //     &initial_block_number_var,
-        //     &prepare_agg_pk,
-        //     &commit_agg_pk,
-        //     &min_signers_var,
-        //     &sig_generator_var,
-        //     &sum_generator_g1_var,
-        //     &pedersen_generators_var,
-        // )?;
+        // Calculating the commitments to each of the aggregate public keys chunks. These will be
+        // given as input to the PKTree SNARK circuit.
+        next_cost_analysis!(cs, cost, || { "Calculate agg pk chunks commitments" });
+
+        let mut agg_pk_chunks_commitments = Vec::new();
+
+        for chunk in &agg_pk_chunks_var {
+            let chunk_bits = SerializeGadget::serialize_g2(cs.clone(), chunk)?;
+
+            let pedersen_hash =
+                PedersenHashGadget::evaluate(&chunk_bits, &pedersen_generators_var)?;
+
+            let pedersen_bits = SerializeGadget::serialize_g1(cs.clone(), &pedersen_hash)?;
+
+            let pedersen_bits = reverse_inner_byte_order(&pedersen_bits[..]);
+
+            agg_pk_chunks_commitments.push(pedersen_bits);
+        }
+
+        // Verifying the SNARK proof. This is a proof that the aggregate public key is indeed
+        // correct. It simply takes the public keys and the signers bitmap and recalculates the
+        // aggregate public key and then compares it to the aggregate public key given as public
+        // input.
+        // Internally, this SNARK circuit is very complex. See the PKTreeLeaf circuit for more details.
+        // Note that in this particular case, we don't pass the aggregated public key to the SNARK.
+        // Instead we pass two chunks of the aggregated public key to it. This is just because the
+        // PKTreeNode circuit in the MNT6 curve takes two chunks as inputs.
+        next_cost_analysis!(cs, cost, || { "Verify SNARK proof" });
+
+        let mut proof_inputs = pack_inputs(initial_pk_tree_root_var);
+
+        proof_inputs.append(&mut pack_inputs(agg_pk_chunks_commitments[0].to_bits_le()?));
+
+        proof_inputs.append(&mut pack_inputs(agg_pk_chunks_commitments[1].to_bits_le()?));
+
+        proof_inputs.append(&mut pack_inputs(block_var.signer_bitmap.clone()));
+
+        // Since we are beginning at the root of the PKTree our path is all zeros.
+        proof_inputs.append(&mut pack_inputs(FqVar::zero().to_bits_le()?));
+
+        let input_var = BooleanInputVar::new(proof_inputs);
+
+        Groth16VerifierGadget::<MNT6_753, PairingVar>::verify(
+            &vk_pk_tree_var,
+            &input_var,
+            &proof_var,
+        )?
+        .enforce_equal(&Boolean::constant(true))?;
+
+        // Calculating the aggregate public key.
+        next_cost_analysis!(cs, cost, || { "Calculate agg pk" });
+
+        let mut agg_pk_var = G2Var::zero();
+
+        for pk in &agg_pk_chunks_var {
+            agg_pk_var += pk;
+        }
+
+        // Verifying that the block is valid. Note that we give it the initial block number and the
+        // final public keys commitment. That's because the "state" is composed of the public keys of
+        // the current validator list and the block number of the next macro block. So, a macro block
+        // actually has the number from the previous state and contains the public keys of the next
+        // state.
+        next_cost_analysis!(cs, cost, || "Verify block");
+
+        block_var.verify(
+            cs.clone(),
+            &final_pk_tree_root_var,
+            &initial_block_number_var,
+            &initial_round_number_var,
+            &agg_pk_var,
+            &pedersen_generators_var,
+        )?;
 
         end_cost_analysis!(cs, cost);
 
