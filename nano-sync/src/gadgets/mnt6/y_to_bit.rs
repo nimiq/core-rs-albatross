@@ -1,7 +1,9 @@
-use ark_mnt4_753::Parameters as MNT4Parameters;
+use ark_ec::mnt4::MNT4Parameters;
+use ark_mnt4_753::constraints::{Fq2Var, FqVar};
+use ark_mnt4_753::Parameters;
 use ark_mnt6_753::Fr as MNT6Fr;
 use ark_r1cs_std::boolean::Boolean;
-use ark_r1cs_std::groups::mnt4::{G1Var, G2Var};
+use ark_r1cs_std::groups::curves::short_weierstrass::AffineVar;
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 
 use crate::gadgets::y_to_bit::YToBitGadget as Y2BG;
@@ -17,7 +19,7 @@ impl YToBitGadget {
     /// where half means the half point of the modulus of the underlying field. So, half = (p-1)/2.
     pub fn y_to_bit_g1(
         cs: ConstraintSystemRef<MNT6Fr>,
-        point: &G1Var<MNT4Parameters>,
+        point: &AffineVar<<Parameters as MNT4Parameters>::G1Parameters, FqVar>,
     ) -> Result<Boolean<MNT6Fr>, SynthesisError> {
         let y_bit = Self::is_greater_half(cs.clone(), &point.y)?;
 
@@ -29,7 +31,7 @@ impl YToBitGadget {
     /// where half means the half point of the modulus of the underlying field. So, half = (p-1)/2.
     pub fn y_to_bit_g2(
         cs: ConstraintSystemRef<MNT6Fr>,
-        point: &G2Var<MNT4Parameters>,
+        point: &AffineVar<<Parameters as MNT4Parameters>::G2Parameters, Fq2Var>,
     ) -> Result<Boolean<MNT6Fr>, SynthesisError> {
         // Calculate the required inputs to the formula.
         let y_c1_bit = Self::is_greater_half(cs.clone(), &point.y.c1)?;

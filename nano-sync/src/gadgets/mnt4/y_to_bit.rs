@@ -1,5 +1,8 @@
+use ark_ec::mnt6::MNT6Parameters;
 use ark_mnt4_753::Fr as MNT4Fr;
-use ark_mnt6_753::constraints::{G1Var, G2Var};
+use ark_mnt6_753::constraints::{Fq3Var, FqVar};
+use ark_mnt6_753::Parameters;
+use ark_r1cs_std::groups::curves::short_weierstrass::AffineVar;
 use ark_r1cs_std::prelude::Boolean;
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 
@@ -16,7 +19,7 @@ impl YToBitGadget {
     /// where half means the half point of the modulus of the underlying field. So, half = (p-1)/2.
     pub fn y_to_bit_g1(
         cs: ConstraintSystemRef<MNT4Fr>,
-        point: &G1Var,
+        point: &AffineVar<<Parameters as MNT6Parameters>::G1Parameters, FqVar>,
     ) -> Result<Boolean<MNT4Fr>, SynthesisError> {
         let y_bit = Self::is_greater_half(cs.clone(), &point.y)?;
 
@@ -28,7 +31,7 @@ impl YToBitGadget {
     /// where half means the half point of the modulus of the underlying field. So, half = (p-1)/2.
     pub fn y_to_bit_g2(
         cs: ConstraintSystemRef<MNT4Fr>,
-        point: &G2Var,
+        point: &AffineVar<<Parameters as MNT6Parameters>::G2Parameters, Fq3Var>,
     ) -> Result<Boolean<MNT4Fr>, SynthesisError> {
         // Calculate the required inputs to the formula.
         let y_c2_bit = Self::is_greater_half(cs.clone(), &point.y.c2)?;

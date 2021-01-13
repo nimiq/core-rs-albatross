@@ -91,7 +91,7 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         #[allow(unused_mut)]
         let mut cost = start_cost_analysis!(cs, || "Alloc constants");
 
-        let epoch_length_var = UInt32::<MNT4Fr>::constant(EPOCH_LENGTH);
+        let epoch_length_var = UInt32::<MNT4Fr>::new_constant(cs.clone(), EPOCH_LENGTH)?;
 
         let pedersen_generators_var =
             Vec::<G1Var>::new_constant(cs.clone(), pedersen_generators(5))?;

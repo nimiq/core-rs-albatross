@@ -14,11 +14,17 @@ impl SerializeGadget {
         cs: ConstraintSystemRef<MNT4Fr>,
         point: &G1Var,
     ) -> Result<Vec<Boolean<MNT4Fr>>, SynthesisError> {
+        // Convert the point to affine coordinates.
+        let aff_point = point.to_affine()?;
+
         // Get bits from the x coordinate.
-        let x_bits = point.x.to_bits_le()?;
+        let x_bits = aff_point.x.to_bits_le()?;
 
         // Get one bit from the y coordinate.
-        let y_bit = YToBitGadget::y_to_bit_g1(cs, point)?;
+        let y_bit = YToBitGadget::y_to_bit_g1(cs, &aff_point)?;
+
+        // Get the infinity flag.
+        let infinity_bit = aff_point.infinity;
 
         // Pad points and get *Big-Endian* representation.
         let bits = pad_point_bits::<MNT4Fr>(x_bits, y_bit);
@@ -30,11 +36,17 @@ impl SerializeGadget {
         cs: ConstraintSystemRef<MNT4Fr>,
         point: &G2Var,
     ) -> Result<Vec<Boolean<MNT4Fr>>, SynthesisError> {
+        // Convert the point to affine coordinates.
+        let aff_point = point.to_affine()?;
+
         // Get bits from the x coordinate.
-        let x_bits = point.x.to_bits_le()?;
+        let x_bits = aff_point.x.to_bits_le()?;
 
         // Get one bit from the y coordinate.
-        let y_bit = YToBitGadget::y_to_bit_g2(cs, point)?;
+        let y_bit = YToBitGadget::y_to_bit_g2(cs, &aff_point)?;
+
+        // Get the infinity flag.
+        let infinity_bit = aff_point.infinity;
 
         // Pad points and get *Big-Endian* representation.
         let bits = pad_point_bits::<MNT4Fr>(x_bits, y_bit);

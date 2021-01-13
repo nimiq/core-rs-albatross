@@ -14,6 +14,7 @@ pub use nimiq_bls::utils::*;
 /// This function pads each chunk of `MODULUS_BITS` to full bytes, prepending the `y_bit`
 /// in the very front.
 /// This maintains *Big-Endian* representation.
+// TODO: Make this handle infinity!
 pub fn pad_point_bits<F: PrimeField>(
     mut bits: Vec<Boolean<F>>,
     y_bit: Boolean<F>,
@@ -59,12 +60,6 @@ pub fn pad_point_bits<F: PrimeField>(
 
         bits = new_bits;
     }
-
-    assert_eq!(
-        serialization.len() % 8,
-        0,
-        "Padded serialization should be of byte length"
-    );
 
     serialization
 }
