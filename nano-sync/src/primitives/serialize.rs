@@ -4,8 +4,6 @@ use ark_mnt6_753::{G1Projective as MNT6G1Projective, G2Projective as MNT6G2Proje
 
 use crate::compression::BeSerialize;
 
-// TODO: Make it return Vec<bool> instead???. It should match the
-//       behavior of the serialization gadgets.
 /// Serializes a G1 point in the MNT4-753 curve.
 pub fn serialize_g1_mnt4(point: MNT4G1Projective) -> [u8; 95] {
     let mut buffer = [0u8; 95];
