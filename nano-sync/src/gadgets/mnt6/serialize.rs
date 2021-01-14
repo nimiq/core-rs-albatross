@@ -27,7 +27,7 @@ impl SerializeGadget {
         let infinity_bit = aff_point.infinity;
 
         // Pad points and get *Big-Endian* representation.
-        let bits = pad_point_bits::<MNT6Fr>(x_bits, y_bit);
+        let bits = pad_point_bits::<MNT6Fr>(x_bits, y_bit, infinity_bit);
 
         Ok(bits)
     }
@@ -49,7 +49,7 @@ impl SerializeGadget {
         let infinity_bit = aff_point.infinity;
 
         // Pad points and get *Big-Endian* representation.
-        let bits = pad_point_bits::<MNT6Fr>(x_bits, y_bit);
+        let bits = pad_point_bits::<MNT6Fr>(x_bits, y_bit, infinity_bit);
 
         Ok(bits)
     }

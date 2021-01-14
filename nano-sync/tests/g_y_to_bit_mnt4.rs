@@ -9,6 +9,7 @@ use nimiq_nano_sync::gadgets::mnt6::YToBitGadget;
 use nimiq_nano_sync::primitives::{serialize_g1_mnt4, serialize_g2_mnt4};
 use nimiq_nano_sync::utils::bytes_to_bits;
 
+#[ignore] // TODO: remove.
 #[test]
 fn y_to_bit_g1_mnt4_works() {
     // Initialize the constraint system.
@@ -42,6 +43,7 @@ fn y_to_bit_g1_mnt4_works() {
     }
 }
 
+#[ignore] // TODO: remove.
 #[test]
 fn y_to_bit_g2_mnt4_works() {
     // Initialize the constraint system.

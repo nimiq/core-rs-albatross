@@ -8,54 +8,44 @@ use ark_relations::r1cs::SynthesisError;
 // Re-export bls utility functions.
 pub use nimiq_bls::utils::*;
 
-/// Takes multiple bit representations of a point (Fp/Fp2/Fp3).
-/// Its length must be a multiple of the field size (in bits).
-/// None of the underlying points can be zero!
-/// This function pads each chunk of `MODULUS_BITS` to full bytes, prepending the `y_bit`
-/// in the very front.
-/// This maintains *Big-Endian* representation.
-// TODO: Make this handle infinity!
+/// Takes the bit representation of a point coordinate (like Fp, Fp2,
+/// Fp3, etc) and pads each field element to full bytes, prepending y_bit and infinity_bit in the
+/// very front of the serialization.
+/// The input length must be a multiple of the field size (in bits).
+/// This assumes the field elements come in little-endian, but it outputs in big-endian.
 pub fn pad_point_bits<F: PrimeField>(
     mut bits: Vec<Boolean<F>>,
     y_bit: Boolean<F>,
+    infinity_bit: Boolean<F>,
 ) -> Vec<Boolean<F>> {
     let point_len = F::size_in_bits();
 
-    let padding = 8 - (point_len % 8);
+    assert_eq!(bits.len() % point_len, 0,);
 
-    assert_eq!(
-        bits.len() % point_len as usize,
-        0,
-        "Can only pad multiples of point size"
-    );
+    let padding = 8 - (point_len % 8);
 
     let mut serialization = vec![];
 
-    // Start with y_bit.
+    // The serialization begins with the y_bit, followed by the infinity flag.
     serialization.push(y_bit);
+    serialization.push(infinity_bit);
 
-    let mut first = true;
+    for i in 0..bits.len() / point_len {
+        // If we are in the first round, skip two bits of padding.
+        let padding_len = if i == 0 { padding - 2 } else { padding };
 
-    while !bits.is_empty() {
-        // First, add padding.
-        // If we are in the first round, skip one bit of padding.
-        // The serialization begins with the y_bit, followed by the infinity flag.
-        // By definition, the point must not be infinity, thus we can skip this flag.
-        let padding_len = if first {
-            first = false;
-            padding - 1
-        } else {
-            padding
-        };
-
+        // Add the padding.
         for _ in 0..padding_len {
             serialization.push(Boolean::constant(false));
         }
 
-        // Then, split bits at `MODULUS_BITS`:
-        // `new_bits` contains the elements in the range [MODULUS, len).
+        // Split bits at point_len. Now new_bits contains the elements in the range [MODULUS, len).
         let new_bits = bits.split_off(point_len as usize);
 
+        // Reverse the bits to get the big-endian representation.
+        bits.reverse();
+
+        // Append the bits to the serialization.
         serialization.append(&mut bits);
 
         bits = new_bits;

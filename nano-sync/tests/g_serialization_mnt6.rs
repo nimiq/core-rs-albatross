@@ -1,88 +1,68 @@
-// use ark_mnt4_753::Fr as MNT4Fr;
-// use ark_mnt6_753::{FqParameters, Fr, G1Projective, G2Projective};
-// use rand::RngCore;
-//
-// use algebra_core::fields::Field;
-// use algebra_core::{test_rng, ProjectiveCurve};
-// use nimiq_nano_sync::gadgets::mnt4::YToBitGadget;
-// use nimiq_nano_sync::utils::{bytes_to_bits, pad_point_bits, serialize_g1_mnt6, serialize_g2_mnt6};
-// use r1cs_core::ConstraintSystem;
-// use r1cs_std::bits::boolean::Boolean;
-// use r1cs_std::mnt6_753::{G1Gadget, G2Gadget};
-// use r1cs_std::prelude::AllocGadget;
-// use r1cs_std::test_constraint_system::TestConstraintSystem;
-// use r1cs_std::ToBitsGadget;
-//
-// // When running tests you are advised to run only one test at a time or you might run out of RAM.
-// // Also they take a long time to run. This is why they have the ignore flag.
-//
-// #[test]
-// #[ignore]
-// fn serialization_mnt6_works() {
-//     // Initialize the constraint system.
-//     let mut cs = TestConstraintSystem::<MNT4Fr>::new();
-//
-//     // Create random integer.
-//     let rng = &mut test_rng();
-//     let mut bytes = [0u8; 96];
-//     rng.fill_bytes(&mut bytes[2..]);
-//     let x = Fr::from_random_bytes(&bytes).unwrap();
-//
-//     // Create random points.
-//     let g2_point = G2Projective::prime_subgroup_generator().mul(x);
-//     let g1_point = G1Projective::prime_subgroup_generator().mul(x);
-//
-//     // Allocate the random inputs in the circuit.
-//     let g2_point_var = G2Gadget::alloc(cs.ns(|| "alloc g1 point"), || Ok(&g2_point)).unwrap();
-//     let g1_point_var = G1Gadget::alloc(cs.ns(|| "alloc g2 point"), || Ok(&g1_point)).unwrap();
-//
-//     // -----------  G2  -----------
-//     // Serialize using the primitive version.
-//     let bytes = serialize_g2_mnt6(g2_point);
-//     let bits = bytes_to_bits(&bytes);
-//
-//     // Allocate the primitive result for easier comparison.
-//     let mut primitive_var: Vec<Boolean> = Vec::new();
-//     for i in 0..bits.len() {
-//         primitive_var.push(
-//             Boolean::alloc(
-//                 cs.ns(|| format!("allocate primitive result g2: bit {}", i)),
-//                 || Ok(bits[i]),
-//             )
-//             .unwrap(),
-//         );
-//     }
-//
-//     // Serialize using the gadget version.
-//     let mut gadget_var = vec![];
-//     let x_bits = g2_point_var.x.to_bits(cs.ns(|| "g2 x to bits")).unwrap();
-//     let y_bit = YToBitGadget::y_to_bit_g2(cs.ns(|| "g2 y to bit"), &g2_point_var).unwrap();
-//     gadget_var.extend(pad_point_bits::<FqParameters>(x_bits, y_bit));
-//
-//     assert_eq!(primitive_var, gadget_var);
-//
-//     // -----------  G1  -----------
-//     // Serialize using the primitive version.
-//     let bytes = serialize_g1_mnt6(g1_point);
-//     let bits = bytes_to_bits(&bytes);
-//
-//     // Allocate the primitive result for easier comparison.
-//     let mut primitive_var: Vec<Boolean> = Vec::new();
-//     for i in 0..bits.len() {
-//         primitive_var.push(
-//             Boolean::alloc(
-//                 cs.ns(|| format!("allocate primitive result g1: bit {}", i)),
-//                 || Ok(bits[i]),
-//             )
-//             .unwrap(),
-//         );
-//     }
-//
-//     // Serialize using the gadget version.
-//     let mut gadget_var = vec![];
-//     let x_bits = g1_point_var.x.to_bits(cs.ns(|| "g1 x to bits")).unwrap();
-//     let y_bit = YToBitGadget::y_to_bit_g1(cs.ns(|| "g1 y to bit"), &g1_point_var).unwrap();
-//     gadget_var.extend(pad_point_bits::<FqParameters>(x_bits, y_bit));
-//
-//     assert_eq!(primitive_var, gadget_var);
-// }
+use ark_mnt4_753::Fr as MNT4Fr;
+use ark_mnt6_753::constraints::{G1Var, G2Var};
+use ark_mnt6_753::{G1Projective, G2Projective};
+use ark_r1cs_std::prelude::AllocVar;
+use ark_r1cs_std::R1CSVar;
+use ark_relations::r1cs::ConstraintSystem;
+use ark_std::{test_rng, UniformRand};
+use nimiq_nano_sync::gadgets::mnt4::SerializeGadget;
+use nimiq_nano_sync::primitives::{serialize_g1_mnt6, serialize_g2_mnt6};
+use nimiq_nano_sync::utils::bytes_to_bits;
+
+#[ignore] // TODO: remove.
+#[test]
+fn serialization_g1_mnt6_works() {
+    // Initialize the constraint system.
+    let cs = ConstraintSystem::<MNT4Fr>::new_ref();
+
+    // Create random number generator.
+    let rng = &mut test_rng();
+
+    // Create random point.
+    let g1_point = G1Projective::rand(rng);
+
+    // Allocate the random inputs in the circuit.
+    let g1_point_var = G1Var::new_witness(cs.clone(), || Ok(g1_point.clone())).unwrap();
+
+    // Serialize using the primitive version.
+    let primitive_bytes = serialize_g1_mnt6(g1_point);
+    let primitive_bits = bytes_to_bits(&primitive_bytes);
+
+    // Serialize using the gadget version.
+    let gadget_bits = SerializeGadget::serialize_g1(cs.clone(), &g1_point_var).unwrap();
+
+    // Compare the two versions bit by bit.
+    assert_eq!(primitive_bits.len(), gadget_bits.len());
+    for i in 0..primitive_bits.len() {
+        assert_eq!(primitive_bits[i], gadget_bits[i].value().unwrap());
+    }
+}
+
+#[ignore] // TODO: remove.
+#[test]
+fn serialization_g2_mnt6_works() {
+    // Initialize the constraint system.
+    let cs = ConstraintSystem::<MNT4Fr>::new_ref();
+
+    // Create random number generator.
+    let rng = &mut test_rng();
+
+    // Create random point.
+    let g2_point = G2Projective::rand(rng);
+
+    // Allocate the random inputs in the circuit.
+    let g2_point_var = G2Var::new_witness(cs.clone(), || Ok(g2_point.clone())).unwrap();
+
+    // Serialize using the primitive version.
+    let primitive_bytes = serialize_g2_mnt6(g2_point);
+    let primitive_bits = bytes_to_bits(&primitive_bytes);
+
+    // Serialize using the gadget version.
+    let gadget_bits = SerializeGadget::serialize_g2(cs.clone(), &g2_point_var).unwrap();
+
+    // Compare the two versions bit by bit.
+    assert_eq!(primitive_bits.len(), gadget_bits.len());
+    for i in 0..primitive_bits.len() {
+        assert_eq!(primitive_bits[i], gadget_bits[i].value().unwrap());
+    }
+}
