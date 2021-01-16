@@ -1,12 +1,6 @@
 //! This module contains several constants that are used throughout the library. They can be changed
 //! easily here, without needing to change them in several places in the code.
-use ark_ff::FpParameters;
-use ark_mnt4_753::FqParameters;
-
 use nimiq_primitives::policy;
-
-/// This is the number of bits that each point in the elliptic curves MNT4-768 and MNT6-768 can store.
-pub const POINT_CAPACITY: usize = FqParameters::CAPACITY as usize;
 
 /// This is the depth of the PKTree circuit.
 pub const PK_TREE_DEPTH: usize = 5;

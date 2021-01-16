@@ -1,6 +1,5 @@
 use ark_mnt6_753::G2Projective;
 
-use crate::constants::POINT_CAPACITY;
 use crate::primitives::{pedersen_generators, pedersen_hash, pk_tree_construct, serialize_g1_mnt6};
 use crate::utils::bytes_to_bits;
 
@@ -25,7 +24,9 @@ pub fn state_commitment(block_number: u32, public_keys: Vec<G2Projective>) -> Ve
 
     // Calculate the Pedersen generators and the sum generator. The formula used for the ceiling
     // division of x/y is (x+y-1)/y.
-    let generators_needed = (bits.len() + POINT_CAPACITY - 1) / POINT_CAPACITY + 1;
+    let capacity = 752;
+
+    let generators_needed = (bits.len() + capacity - 1) / capacity + 1;
 
     let generators = pedersen_generators(generators_needed);
 

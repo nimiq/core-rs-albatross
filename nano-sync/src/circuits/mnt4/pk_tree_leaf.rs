@@ -1,7 +1,7 @@
 use ark_mnt4_753::Fr as MNT4Fr;
 use ark_mnt6_753::constraints::{FqVar, G1Var, G2Var};
 use ark_mnt6_753::{Fq, G1Projective, G2Projective};
-use ark_r1cs_std::prelude::{AllocVar, CondSelectGadget, CurveVar, EqGadget};
+use ark_r1cs_std::prelude::{AllocVar, Boolean, CondSelectGadget, CurveVar, EqGadget};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
 use crate::constants::{PK_TREE_BREADTH, PK_TREE_DEPTH, VALIDATOR_SLOTS};
@@ -139,7 +139,8 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeLeafCircuit {
             &path_bits,
             &pk_tree_root_bits,
             &pedersen_generators_var,
-        )?;
+        )?
+        .enforce_equal(&Boolean::constant(true))?;
 
         // Calculate the aggregate public key.
         next_cost_analysis!(cs, cost, || { "Calculate agg key" });

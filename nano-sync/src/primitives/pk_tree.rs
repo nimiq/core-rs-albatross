@@ -14,10 +14,10 @@ pub fn pk_tree_construct(public_keys: Vec<G2Projective>) -> Vec<u8> {
     assert_eq!(public_keys.len() % PK_TREE_BREADTH, 0);
 
     // Serialize the public keys into bits.
-    let mut bytes: Vec<u8> = Vec::new();
+    let mut bytes = Vec::new();
 
     for i in 0..public_keys.len() {
-        bytes.extend_from_slice(serialize_g2_mnt6(public_keys[i]).as_ref());
+        bytes.extend_from_slice(&serialize_g2_mnt6(public_keys[i]));
     }
 
     let bits = bytes_to_bits(&bytes);
@@ -26,7 +26,9 @@ pub fn pk_tree_construct(public_keys: Vec<G2Projective>) -> Vec<u8> {
     let mut inputs = Vec::new();
 
     for i in 0..PK_TREE_BREADTH {
-        inputs.push(bits[i * PK_TREE_BREADTH..(i + 1) * PK_TREE_BREADTH].to_vec());
+        inputs.push(
+            bits[i * bits.len() / PK_TREE_BREADTH..(i + 1) * bits.len() / PK_TREE_BREADTH].to_vec(),
+        );
     }
 
     // Calculate the merkle tree root.
