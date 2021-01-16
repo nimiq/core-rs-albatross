@@ -2,7 +2,6 @@ use std::cmp;
 
 use ark_mnt6_753::G1Projective;
 
-use crate::constants::POINT_CAPACITY;
 use crate::primitives::{pedersen_generators, pedersen_hash, serialize_g1_mnt6};
 use crate::utils::{byte_from_le_bits, bytes_to_bits};
 
@@ -25,12 +24,14 @@ pub fn merkle_tree_construct(inputs: Vec<Vec<bool>>) -> Vec<u8> {
 
     // Calculate the required number of Pedersen generators. The formula used for the ceiling
     // division of x/y is (x+y-1)/y.
+    let capacity = 752;
+
     let mut generators_needed = 4; // At least this much is required for the non-leaf nodes.
 
     for i in 0..inputs.len() {
         generators_needed = cmp::max(
             generators_needed,
-            (inputs[i].len() + POINT_CAPACITY - 1) / POINT_CAPACITY + 1,
+            (inputs[i].len() + capacity - 1) / capacity + 1,
         );
     }
 
@@ -103,7 +104,9 @@ pub fn merkle_tree_verify(
 
     // Calculate the required number of Pedersen generators. The formula used for the ceiling
     // division of x/y is (x+y-1)/y.
-    let generators_needed = cmp::max(4, (input.len() + POINT_CAPACITY - 1) / POINT_CAPACITY + 1);
+    let capacity = 752;
+
+    let generators_needed = cmp::max(4, (input.len() + capacity - 1) / capacity + 1);
 
     let generators = pedersen_generators(generators_needed);
 
@@ -173,12 +176,14 @@ pub fn merkle_tree_prove(inputs: Vec<Vec<bool>>, path: Vec<bool>) -> Vec<G1Proje
 
     // Calculate the required number of Pedersen generators. The formula used for the ceiling
     // division of x/y is (x+y-1)/y.
+    let capacity = 752;
+
     let mut generators_needed = 4; // At least this much is required for the non-leaf nodes.
 
     for i in 0..inputs.len() {
         generators_needed = cmp::max(
             generators_needed,
-            (inputs[i].len() + POINT_CAPACITY - 1) / POINT_CAPACITY + 1,
+            (inputs[i].len() + capacity - 1) / capacity + 1,
         );
     }
 

@@ -2,7 +2,6 @@ use ark_ec::AffineCurve;
 use ark_groth16::VerifyingKey;
 use ark_mnt6_753::MNT6_753;
 
-use crate::constants::POINT_CAPACITY;
 use crate::primitives::{pedersen_generators, pedersen_hash, serialize_g1_mnt6, serialize_g2_mnt6};
 use crate::utils::bytes_to_bits;
 
@@ -32,7 +31,9 @@ pub fn vk_commitment(vk: VerifyingKey<MNT6_753>) -> Vec<u8> {
 
     // Calculate the Pedersen generators and the sum generator. The formula used for the ceiling
     // division of x/y is (x+y-1)/y.
-    let generators_needed = (bits.len() + POINT_CAPACITY - 1) / POINT_CAPACITY + 1;
+    let capacity = 752;
+
+    let generators_needed = (bits.len() + capacity - 1) / capacity + 1;
 
     let generators = pedersen_generators(generators_needed);
 

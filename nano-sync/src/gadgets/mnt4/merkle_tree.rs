@@ -92,7 +92,7 @@ impl MerkleTreeGadget {
         path: &Vec<Boolean<MNT4Fr>>,
         root: &Vec<Boolean<MNT4Fr>>,
         pedersen_generators: &Vec<G1Var>,
-    ) -> Result<(), SynthesisError> {
+    ) -> Result<Boolean<MNT4Fr>, SynthesisError> {
         // Checking that the inputs vector is not empty.
         assert!(!input.is_empty());
 
@@ -127,8 +127,6 @@ impl MerkleTreeGadget {
         let bits = SerializeGadget::serialize_g1(cs, &result)?;
 
         // Check that the calculated root is equal to the given root.
-        root.enforce_equal(&bits)?;
-
-        Ok(())
+        root.is_eq(&bits)
     }
 }

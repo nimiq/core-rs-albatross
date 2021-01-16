@@ -3,8 +3,6 @@ use ark_mnt6_753::constraints::G1Var;
 use ark_r1cs_std::prelude::{Boolean, CondSelectGadget, CurveVar};
 use ark_relations::r1cs::SynthesisError;
 
-use crate::constants::POINT_CAPACITY;
-
 /// This is a gadget that calculates a Pedersen hash. It is collision resistant, but it's not
 /// pseudo-random. Furthermore, its input must have a fixed-length. The main advantage is that it
 /// is purely algebraic and its output is an elliptic curve point.
@@ -24,8 +22,10 @@ impl PedersenHashGadget {
         input: &Vec<Boolean<MNT4Fr>>,
         generators: &Vec<G1Var>,
     ) -> Result<G1Var, SynthesisError> {
+        let capacity = 752;
+
         // Check that the input can be stored using the available generators.
-        assert!((generators.len() - 1) * POINT_CAPACITY >= input.len());
+        assert!((generators.len() - 1) * capacity >= input.len());
 
         // Initiate the result with the sum generator.
         let mut result = generators[0].clone();
@@ -36,8 +36,8 @@ impl PedersenHashGadget {
         let mut base = G1Var::zero();
         for i in 0..input.len() {
             // Whenever i is a multiple of POINT_CAPACITY, it's time to get the next generator.
-            if i % POINT_CAPACITY == 0 {
-                base = generators[i / POINT_CAPACITY + 1].clone();
+            if i % capacity == 0 {
+                base = generators[i / capacity + 1].clone();
             }
 
             // Add the base to the result.

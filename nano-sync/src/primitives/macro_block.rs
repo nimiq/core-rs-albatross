@@ -3,7 +3,7 @@ use ark_ec::ProjectiveCurve;
 use ark_ff::Zero;
 use ark_mnt6_753::{Fr, G1Projective};
 
-use crate::constants::{POINT_CAPACITY, VALIDATOR_SLOTS};
+use crate::constants::VALIDATOR_SLOTS;
 use crate::primitives::{pedersen_generators, pedersen_hash};
 use crate::utils::bytes_to_bits;
 
@@ -106,7 +106,9 @@ impl MacroBlock {
 
         // Calculate the Pedersen generators and the sum generator. The formula used for the ceiling
         // division of x/y is (x+y-1)/y.
-        let generators_needed = (bits.len() + POINT_CAPACITY - 1) / POINT_CAPACITY + 1;
+        let capacity = 752;
+
+        let generators_needed = (bits.len() + capacity - 1) / capacity + 1;
 
         let generators = pedersen_generators(generators_needed);
 
