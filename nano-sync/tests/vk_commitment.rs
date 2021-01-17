@@ -9,11 +9,11 @@ use ark_r1cs_std::prelude::AllocVar;
 use ark_r1cs_std::R1CSVar;
 use ark_relations::r1cs::ConstraintSystem;
 use ark_std::{test_rng, UniformRand};
+
 use nimiq_bls::utils::bytes_to_bits;
 use nimiq_nano_sync::gadgets::mnt4::VKCommitmentGadget;
 use nimiq_nano_sync::primitives::{pedersen_generators, vk_commitment};
 
-#[ignore] // TODO: remove.
 #[test]
 fn vk_commitment_test() {
     // Initialize the constraint system.

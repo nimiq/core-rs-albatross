@@ -1,19 +1,19 @@
-use ark_mnt4_753::Fr as MNT4Fr;
-use ark_mnt6_753::constraints::{G1Var, G2Var};
-use ark_mnt6_753::{G1Projective, G2Projective};
+use ark_mnt4_753::constraints::{G1Var, G2Var};
+use ark_mnt4_753::{G1Projective, G2Projective};
+use ark_mnt6_753::Fr as MNT6Fr;
 use ark_r1cs_std::prelude::AllocVar;
 use ark_r1cs_std::R1CSVar;
 use ark_relations::r1cs::ConstraintSystem;
 use ark_std::{test_rng, UniformRand};
-use nimiq_nano_sync::gadgets::mnt4::YToBitGadget;
-use nimiq_nano_sync::primitives::{serialize_g1_mnt6, serialize_g2_mnt6};
+
+use nimiq_nano_sync::gadgets::mnt6::YToBitGadget;
+use nimiq_nano_sync::primitives::{serialize_g1_mnt4, serialize_g2_mnt4};
 use nimiq_nano_sync::utils::bytes_to_bits;
 
-#[ignore] // TODO: remove.
 #[test]
-fn y_to_bit_g1_mnt6_works() {
+fn y_to_bit_g1_mnt4_works() {
     // Initialize the constraint system.
-    let cs = ConstraintSystem::<MNT4Fr>::new_ref();
+    let cs = ConstraintSystem::<MNT6Fr>::new_ref();
 
     // Create random number generator.
     let rng = &mut test_rng();
@@ -29,7 +29,7 @@ fn y_to_bit_g1_mnt6_works() {
             .unwrap();
 
         // Serialize using the primitive version and get the first bit (which is the y flag).
-        let bytes = serialize_g1_mnt6(g1_point);
+        let bytes = serialize_g1_mnt4(g1_point);
         let bits = bytes_to_bits(&bytes);
         let primitive_y_bit = bits[0];
 
@@ -43,11 +43,10 @@ fn y_to_bit_g1_mnt6_works() {
     }
 }
 
-#[ignore] // TODO: remove.
 #[test]
-fn y_to_bit_g2_mnt6_works() {
+fn y_to_bit_g2_mnt4_works() {
     // Initialize the constraint system.
-    let cs = ConstraintSystem::<MNT4Fr>::new_ref();
+    let cs = ConstraintSystem::<MNT6Fr>::new_ref();
 
     // Create random number generator.
     let rng = &mut test_rng();
@@ -63,7 +62,7 @@ fn y_to_bit_g2_mnt6_works() {
             .unwrap();
 
         // Serialize using the primitive version and get the first bit (which is the y flag).
-        let bytes = serialize_g2_mnt6(g2_point);
+        let bytes = serialize_g2_mnt4(g2_point);
         let bits = bytes_to_bits(&bytes);
         let primitive_y_bit = bits[0];
 

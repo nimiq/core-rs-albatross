@@ -7,7 +7,7 @@ use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisE
 use crate::constants::{PK_TREE_BREADTH, PK_TREE_DEPTH, VALIDATOR_SLOTS};
 use crate::gadgets::mnt4::{MerkleTreeGadget, PedersenHashGadget, SerializeGadget};
 use crate::primitives::pedersen_generators;
-use crate::utils::{reverse_inner_byte_order, unpack_inputs};
+use crate::utils::unpack_inputs;
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 /// This is the leaf subcircuit of the PKTreeCircuit. This circuit main function is to process the
@@ -168,8 +168,6 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeLeafCircuit {
         let pedersen_hash = PedersenHashGadget::evaluate(&agg_pk_bits, &pedersen_generators_var)?;
 
         let pedersen_bits = SerializeGadget::serialize_g1(cs.clone(), &pedersen_hash)?;
-
-        let pedersen_bits = reverse_inner_byte_order(&pedersen_bits[..]);
 
         agg_pk_commitment_bits.enforce_equal(&pedersen_bits)?;
 

@@ -4,15 +4,15 @@ use ark_r1cs_std::prelude::{AllocVar, Boolean};
 use ark_r1cs_std::R1CSVar;
 use ark_relations::r1cs::ConstraintSystem;
 use ark_std::test_rng;
+use rand::RngCore;
+
 use nimiq_nano_sync::gadgets::mnt4::MerkleTreeGadget;
 use nimiq_nano_sync::primitives::{
     merkle_tree_construct, merkle_tree_prove, merkle_tree_verify, pedersen_generators,
     pedersen_hash, serialize_g1_mnt6,
 };
 use nimiq_nano_sync::utils::{byte_from_le_bits, bytes_to_bits};
-use rand::RngCore;
 
-#[ignore] // TODO: remove.
 #[test]
 fn merkle_tree_construct_works() {
     // Initialize the constraint system.
@@ -62,7 +62,6 @@ fn merkle_tree_construct_works() {
     }
 }
 
-#[ignore] // TODO: remove.
 #[test]
 fn merkle_tree_prove_works() {
     // Create random number generator.
@@ -95,7 +94,6 @@ fn merkle_tree_prove_works() {
     assert!(merkle_tree_verify(input, proof, path, root))
 }
 
-#[ignore] // TODO: remove.
 #[test]
 fn merkle_tree_verify_works() {
     // Initialize the constraint system.
@@ -179,7 +177,6 @@ fn merkle_tree_verify_works() {
     .unwrap())
 }
 
-#[ignore] // TODO: remove.
 #[test]
 fn merkle_tree_verify_wrong_root() {
     // Initialize the constraint system.
