@@ -5,12 +5,12 @@ use ark_r1cs_std::prelude::{AllocVar, Boolean, UInt32};
 use ark_r1cs_std::R1CSVar;
 use ark_relations::r1cs::ConstraintSystem;
 use ark_std::{test_rng, UniformRand};
+
 use nimiq_nano_sync::constants::VALIDATOR_SLOTS;
 use nimiq_nano_sync::gadgets::mnt4::StateCommitmentGadget;
 use nimiq_nano_sync::primitives::{pedersen_generators, pk_tree_construct, state_commitment};
 use nimiq_nano_sync::utils::bytes_to_bits;
 
-#[ignore] // TODO: remove.
 #[test]
 fn state_commitment_works() {
     // Initialize the constraint system.

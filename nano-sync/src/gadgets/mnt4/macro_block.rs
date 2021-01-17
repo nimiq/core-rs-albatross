@@ -47,9 +47,9 @@ impl MacroBlockGadget {
         agg_pk: &G2Var,
         // These are just the generators for the Pedersen hash gadget.
         pedersen_generators: &Vec<G1Var>,
-    ) -> Result<(), SynthesisError> {
+    ) -> Result<Boolean<MNT4Fr>, SynthesisError> {
         // Verify that there are enough signers.
-        self.check_signers(cs.clone())?;
+        let enough_signers = self.check_signers(cs.clone())?;
 
         // Get the hash point for the signature.
         let hash = self.get_hash(
@@ -59,8 +59,11 @@ impl MacroBlockGadget {
             pedersen_generators,
         )?;
 
-        // Verify the validity of the signature.
-        CheckSigGadget::check_signature(cs, agg_pk, &hash, &self.signature)
+        // Check the validity of the signature.
+        let valid_sig = CheckSigGadget::check_signature(cs, agg_pk, &hash, &self.signature)?;
+
+        // Only return true if we have enough signers and a valid signature.
+        enough_signers.and(&valid_sig)
     }
 
     /// A function that calculates the hash for the block from:
@@ -105,8 +108,11 @@ impl MacroBlockGadget {
         // Append the header hash.
         bits.extend_from_slice(&self.header_hash);
 
-        // Append the public keys commitment.
+        // Append the public key tree root.
         bits.extend_from_slice(pk_tree_root);
+
+        // Prepare order of booleans for blake2s (it doesn't expect Big-Endian)!
+        let prepared_bits = reverse_inner_byte_order(&bits);
 
         // Initialize Blake2s parameters.
         let blake2s_parameters = Blake2sWithParameterBlock {
@@ -124,7 +130,8 @@ impl MacroBlockGadget {
         };
 
         // Calculate first hash using Blake2s.
-        let first_hash = evaluate_blake2s_with_parameters(&bits, &blake2s_parameters.parameters())?;
+        let first_hash =
+            evaluate_blake2s_with_parameters(&prepared_bits, &blake2s_parameters.parameters())?;
 
         // Convert to bits.
         let mut hash_bits = Vec::new();
@@ -143,7 +150,10 @@ impl MacroBlockGadget {
     }
 
     /// A function that checks if there are enough signers.
-    pub fn check_signers(&self, cs: ConstraintSystemRef<MNT4Fr>) -> Result<(), SynthesisError> {
+    pub fn check_signers(
+        &self,
+        cs: ConstraintSystemRef<MNT4Fr>,
+    ) -> Result<Boolean<MNT4Fr>, SynthesisError> {
         // Get the minimum number of signers.
         let min_signers = FqVar::new_constant(cs, &Fq::from(MIN_SIGNERS as u64))?;
 
@@ -161,7 +171,7 @@ impl MacroBlockGadget {
 
         // Enforce that there are enough signers. Specifically that:
         // num_signers >= min_signers
-        num_signers.enforce_cmp(&min_signers, Ordering::Greater, true)
+        num_signers.is_cmp(&min_signers, Ordering::Greater, true)
     }
 }
 

@@ -4,12 +4,12 @@ use ark_r1cs_std::prelude::{AllocVar, Boolean};
 use ark_r1cs_std::R1CSVar;
 use ark_relations::r1cs::ConstraintSystem;
 use ark_std::test_rng;
+use rand::RngCore;
+
 use nimiq_nano_sync::gadgets::mnt4::PedersenHashGadget;
 use nimiq_nano_sync::primitives::{pedersen_generators, pedersen_hash};
 use nimiq_nano_sync::utils::bytes_to_bits;
-use rand::RngCore;
 
-#[ignore] // TODO: remove.
 #[test]
 fn pedersen_hash_works() {
     // Initialize the constraint system.

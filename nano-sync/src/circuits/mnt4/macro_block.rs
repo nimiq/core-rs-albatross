@@ -18,7 +18,7 @@ use crate::gadgets::mnt4::{
     MacroBlockGadget, PedersenHashGadget, SerializeGadget, StateCommitmentGadget,
 };
 use crate::primitives::{pedersen_generators, MacroBlock};
-use crate::utils::{pack_inputs, reverse_inner_byte_order, unpack_inputs};
+use crate::utils::{pack_inputs, unpack_inputs};
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 /// This is the macro block circuit. It takes as inputs an initial state commitment and final state commitment
@@ -185,8 +185,6 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
 
             let pedersen_bits = SerializeGadget::serialize_g1(cs.clone(), &pedersen_hash)?;
 
-            let pedersen_bits = reverse_inner_byte_order(&pedersen_bits[..]);
-
             agg_pk_chunks_commitments.push(pedersen_bits);
         }
 
@@ -236,14 +234,16 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         // state.
         next_cost_analysis!(cs, cost, || "Verify block");
 
-        block_var.verify(
-            cs.clone(),
-            &final_pk_tree_root_var,
-            &initial_block_number_var,
-            &initial_round_number_var,
-            &agg_pk_var,
-            &pedersen_generators_var,
-        )?;
+        block_var
+            .verify(
+                cs.clone(),
+                &final_pk_tree_root_var,
+                &initial_block_number_var,
+                &initial_round_number_var,
+                &agg_pk_var,
+                &pedersen_generators_var,
+            )?
+            .enforce_equal(&Boolean::constant(true))?;
 
         end_cost_analysis!(cs, cost);
 

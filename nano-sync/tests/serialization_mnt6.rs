@@ -5,11 +5,11 @@ use ark_r1cs_std::prelude::AllocVar;
 use ark_r1cs_std::R1CSVar;
 use ark_relations::r1cs::ConstraintSystem;
 use ark_std::{test_rng, UniformRand};
+
 use nimiq_nano_sync::gadgets::mnt4::SerializeGadget;
 use nimiq_nano_sync::primitives::{serialize_g1_mnt6, serialize_g2_mnt6};
 use nimiq_nano_sync::utils::bytes_to_bits;
 
-#[ignore] // TODO: remove.
 #[test]
 fn serialization_g1_mnt6_works() {
     // Initialize the constraint system.
@@ -38,7 +38,6 @@ fn serialization_g1_mnt6_works() {
     }
 }
 
-#[ignore] // TODO: remove.
 #[test]
 fn serialization_g2_mnt6_works() {
     // Initialize the constraint system.

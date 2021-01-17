@@ -2,7 +2,7 @@ use ark_ec::ProjectiveCurve;
 use ark_mnt4_753::Fr as MNT4Fr;
 use ark_mnt6_753::constraints::{G1Var, G2Var, PairingVar};
 use ark_mnt6_753::G2Projective;
-use ark_r1cs_std::prelude::{AllocVar, EqGadget, PairingVar as PV};
+use ark_r1cs_std::prelude::{AllocVar, Boolean, EqGadget, PairingVar as PV};
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 
 /// This gadget checks that a given BLS signature is correct. But it only works when given the hash
@@ -18,7 +18,7 @@ impl CheckSigGadget {
         public_key: &G2Var,
         hash_point: &G1Var,
         signature: &G1Var,
-    ) -> Result<(), SynthesisError> {
+    ) -> Result<Boolean<MNT4Fr>, SynthesisError> {
         // Prepare all the public key elliptic curve point.
         let pub_key_p_var = PairingVar::prepare_g2(public_key)?;
 
@@ -41,9 +41,7 @@ impl CheckSigGadget {
         // e(hash, pk)
         let pairing2_var = PairingVar::pairing(hash_p_var, pub_key_p_var)?;
 
-        // Enforce the equality of both sides of the verification equation.
-        pairing1_var.enforce_equal(&pairing2_var)?;
-
-        Ok(())
+        // Check the equality of both sides of the verification equation.
+        pairing1_var.is_eq(&pairing2_var)
     }
 }
