@@ -37,10 +37,10 @@ impl MacroBlock {
         signer_id: usize,
         block_number: u32,
         round_number: u32,
-        pks_commitment: Vec<u8>,
+        pk_tree_root: Vec<u8>,
     ) {
         // Generate the hash point for the signature.
-        let mut signature = self.hash(block_number, round_number, pks_commitment);
+        let mut signature = self.hash(block_number, round_number, pk_tree_root);
 
         // Generates the signature.
         signature *= sk;

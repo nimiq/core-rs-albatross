@@ -16,8 +16,8 @@ pub fn pk_tree_construct(public_keys: Vec<G2Projective>) -> Vec<u8> {
     // Serialize the public keys into bits.
     let mut bytes = Vec::new();
 
-    for i in 0..public_keys.len() {
-        bytes.extend_from_slice(&serialize_g2_mnt6(public_keys[i]));
+    for pk in public_keys {
+        bytes.extend_from_slice(&serialize_g2_mnt6(pk));
     }
 
     let bits = bytes_to_bits(&bytes);
