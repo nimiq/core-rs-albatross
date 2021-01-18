@@ -54,54 +54,6 @@ pub fn pad_point_bits<F: PrimeField>(
     serialization
 }
 
-/// Takes a vector of Booleans and transforms it into a vector of a vector of Booleans, ready to be
-/// transformed into field elements, which is the way we represent inputs to circuits. This assumes
-/// that both the constraint field and the target field have the same size in bits (which is true
-/// for the MNT curves).
-/// Each field element has his last bit set to zero (since the capacity of a field is always one bit
-/// less than its size). We also pad the last field element with zeros so that it has the correct
-/// size.
-pub fn pack_inputs<F: PrimeField>(mut input: Vec<Boolean<F>>) -> Vec<Vec<Boolean<F>>> {
-    let capacity = F::size_in_bits() - 1;
-
-    let mut result = vec![];
-
-    while !input.is_empty() {
-        let length = min(input.len(), capacity);
-
-        let padding = F::size_in_bits() - length;
-
-        let new_input = input.split_off(length);
-
-        for _ in 0..padding {
-            input.push(Boolean::constant(false));
-        }
-
-        result.push(input);
-
-        input = new_input;
-    }
-
-    result
-}
-
-/// Takes a vector of public inputs to a circuit, represented as field elements, and converts it
-/// to the canonical representation of a vector of Booleans. Internally, it just converts the field
-/// elements to bits and discards the most significant bit (which never contains any data).
-pub fn unpack_inputs<F: PrimeField>(
-    inputs: Vec<FpVar<F>>,
-) -> Result<Vec<Boolean<F>>, SynthesisError> {
-    let mut result = vec![];
-
-    for elem in inputs {
-        let mut bits = elem.to_bits_le()?;
-        bits.pop();
-        result.append(&mut bits);
-    }
-
-    Ok(result)
-}
-
 /// Takes a data vector in *Big-Endian* representation and transforms it,
 /// such that each byte starts with the least significant bit (as expected by blake2 gadgets).
 /// b0 b1 b2 b3 b4 b5 b6 b7 b8 -> b8 b7 b6 b5 b4 b3 b2 b1 b0
@@ -129,4 +81,16 @@ pub fn byte_from_le_bits(bits: &[bool]) -> u8 {
     }
 
     byte
+}
+
+/// Transforms a u8 into a vector of little endian bits.
+pub fn byte_to_le_bits(mut byte: u8) -> Vec<bool> {
+    let mut bits = vec![];
+
+    for _ in 0..8 {
+        bits.push(byte % 2 != 0);
+        byte = byte >> 1;
+    }
+
+    bits
 }
