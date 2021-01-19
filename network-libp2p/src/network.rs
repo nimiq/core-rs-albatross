@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use std::{collections::HashMap, pin::Pin, sync::Arc};
+use std::time::{Duration, SystemTime};
 
 use async_trait::async_trait;
 use futures::{
@@ -8,6 +9,7 @@ use futures::{
     lock::Mutex as AsyncMutex,
     FutureExt, SinkExt, Stream, StreamExt,
 };
+use ip_network::IpNetwork;
 use libp2p::{
     core,
     core::{connection::ConnectionLimits, muxing::StreamMuxerBox, network::NetworkInfo, transport::Boxed},
@@ -37,7 +39,7 @@ use nimiq_utils::time::OffsetTime;
 use crate::{
     behaviour::{NimiqBehaviour, NimiqEvent, NimiqNetworkBehaviourError},
     discovery::{behaviour::DiscoveryConfig, peer_contacts::PeerContact},
-    limit::behaviour::LimitConfig,
+    limit::behaviour::{LimitConfig, LimitEvent},
     message::behaviour::MessageConfig,
     message::peer::Peer,
 };
@@ -187,6 +189,10 @@ pub enum NetworkAction {
         message_id: MessageId,
         source: PeerId,
         output: oneshot::Sender<Result<bool, NetworkError>>,
+    },
+    BanIp {
+        ip: IpNetwork,
+        ban_time: Duration,
     },
 }
 
@@ -456,6 +462,19 @@ impl Network {
                             }
                         }
                     }
+                    NimiqEvent::Limit(event) => {
+                        match event {
+                            LimitEvent::ClosePeers { peers } => {
+                                for peer in peers {
+                                    // Workaround to disconnect the peers because swarms doesn't have a dedicated function to
+                                    // do that. The ban_peer_id disconnects the peer after banning, so we ban and unban to just
+                                    // disconnect.
+                                    Swarm::ban_peer_id(swarm, peer.clone());
+                                    Swarm::unban_peer_id(swarm, peer);
+                                }
+                            }
+                        }
+                    }
                 }
             }
             _ => {}
@@ -536,6 +555,9 @@ impl Network {
                     &source,
                     MessageAcceptance::Accept,
                 )?)).ok();
+            }
+            NetworkAction::BanIp { ip, ban_time } => {
+                swarm.limit.ip_ban.insert(ip, SystemTime::now() + ban_time);
             }
         }
 

@@ -40,6 +40,7 @@ pub enum NimiqEvent {
     Message(NetworkEvent<Peer>),
     Dht(KademliaEvent),
     Gossip(GossipsubEvent),
+    Limit(LimitEvent),
 }
 
 impl From<NetworkEvent<Peer>> for NimiqEvent {
@@ -57,6 +58,12 @@ impl From<KademliaEvent> for NimiqEvent {
 impl From<GossipsubEvent> for NimiqEvent {
     fn from(event: GossipsubEvent) -> Self {
         Self::Gossip(event)
+    }
+}
+
+impl From<LimitEvent> for NimiqEvent {
+    fn from(event: LimitEvent) -> Self {
+        Self::Limit(event)
     }
 }
 
@@ -135,7 +142,7 @@ impl NimiqBehaviour {
 
 impl NetworkBehaviourEventProcess<DiscoveryEvent> for NimiqBehaviour {
     fn inject_event(&mut self, event: DiscoveryEvent) {
-        log::trace!("discovery event: {:?}", event);
+        log::trace!("Discovery event: {:?}", event);
     }
 }
 
@@ -164,7 +171,8 @@ impl NetworkBehaviourEventProcess<NetworkEvent<Peer>> for NimiqBehaviour {
 
 /*impl NetworkBehaviourEventProcess<LimitEvent> for NimiqBehaviour {
     fn inject_event(&mut self, event: LimitEvent) {
-        log::trace!("NimiqBehaviour::inject_event: {:?}", event);
+        log::trace!("Limit event: {:?}", event);
+        self.emit_event(event);
     }
 }*/
 
