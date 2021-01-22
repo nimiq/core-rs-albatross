@@ -56,6 +56,7 @@ impl AccountTransactionVerification for VestingContractVerifier {
 }
 
 #[derive(Default, Clone, Debug)]
+#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub struct CreationTransactionData {
     pub owner: Address,
     pub start_time: u64,

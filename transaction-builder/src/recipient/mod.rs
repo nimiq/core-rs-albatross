@@ -27,11 +27,13 @@ pub mod vesting_contract;
 /// [`new_htlc_builder`]: enum.Recipient.html#method.new_htlc_builder
 /// [`new_vesting_builder`]: enum.Recipient.html#method.new_vesting_builder
 /// [`new_staking_builder`]: enum.Recipient.html#method.new_staking_builder
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub enum Recipient {
     Basic { address: Address },
     HtlcCreation { data: HtlcCreationData },
     VestingCreation { data: VestingCreationData },
-    Staking { address: Address, data: StakingTransaction },
+    Staking { address: Option<Address>, data: StakingTransaction },
 }
 
 impl Recipient {
@@ -145,7 +147,7 @@ impl Recipient {
     ///
     /// [`StakingRecipientBuilder`]: staking_contract/struct.StakingRecipientBuilder.html
     /// [`generate`]: staking_contract/struct.StakingRecipientBuilder.html#method.generate
-    pub fn new_staking_builder(staking_contract: Address) -> StakingRecipientBuilder {
+    pub fn new_staking_builder(staking_contract: Option<Address>) -> StakingRecipientBuilder {
         StakingRecipientBuilder::new(staking_contract)
     }
 
@@ -188,7 +190,8 @@ impl Recipient {
     /// Returns the recipient address if this is not a contract creation.
     pub fn address(&self) -> Option<&Address> {
         match self {
-            Recipient::Basic { address } | Recipient::Staking { address, .. } => Some(address),
+            Recipient::Basic { address } => Some(address),
+            Recipient::Staking { address, .. } => address.as_ref(),
             _ => None,
         }
     }
@@ -215,12 +218,14 @@ impl Recipient {
         match self {
             Recipient::Staking { address, data } => {
                 if data.is_self_transaction() {
-                    address == sender && sender_type == Some(AccountType::Staking)
-                } else {
-                    true
+                    if let Some(address) = address {
+                        return address == sender && sender_type == Some(AccountType::Staking)
+                    }
                 }
             }
-            _ => true,
+            _ => {},
         }
+
+        true
     }
 }

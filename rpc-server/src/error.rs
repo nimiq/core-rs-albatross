@@ -24,6 +24,9 @@ pub enum Error {
     #[error("Invalid combination of transaction parameters")]
     InvalidTransactionParameters,
 
+    #[error("Failed to build a transaction: {0}")]
+    TransactionBuilder(#[from] nimiq_transaction_builder::TransactionBuilderError),
+
     #[error("No account with address: {0}")]
     AccountNotFound(Address),
 
@@ -44,6 +47,9 @@ pub enum Error {
 
     #[error("Transaction rejected: {0:?}")]
     TransactionRejected(nimiq_mempool::ReturnCode),
+
+    #[error("Failed to uncompress BLS public key: {0}")]
+    BlsUncompress(#[from] nimiq_bls::UncompressError)
 }
 
 impl From<Error> for nimiq_jsonrpc_core::RpcError {

@@ -6,6 +6,7 @@ use thiserror::Error;
 use beserial::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum NetworkId {
     Test = 1,

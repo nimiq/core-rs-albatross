@@ -4,8 +4,9 @@ extern crate nimiq_keys as keys;
 extern crate nimiq_primitives as primitives;
 extern crate nimiq_transaction as transaction;
 extern crate nimiq_utils as utils;
+extern crate nimiq_genesis as genesis;
 
-use failure::Fail;
+use thiserror::Error;
 
 use bls::PublicKey as BlsPublicKey;
 use keys::{Address, KeyPair};
@@ -13,6 +14,7 @@ use primitives::account::AccountType;
 use primitives::coin::Coin;
 use primitives::networks::NetworkId;
 use transaction::Transaction;
+use genesis::NetworkInfo;
 
 pub use crate::proof::TransactionProofBuilder;
 pub use crate::recipient::Recipient;
@@ -20,44 +22,55 @@ pub use crate::recipient::Recipient;
 pub mod proof;
 pub mod recipient;
 
+
+fn fill_in_staking_contract_address(address: Option<Address>, network_id: NetworkId) -> Address {
+    address.unwrap_or_else(|| {
+        NetworkInfo::from_network_id(network_id)
+            .staking_contract()
+            .expect("NetworkInfo doesn't have a staking contract address set")
+            .clone()
+    })
+}
+
+
 /// Building a transaction can fail if mandatory fields are not set.
 /// In these cases, a `TransactionBuilderError` is returned.
-#[derive(Debug, Fail)]
+#[derive(Debug, Error)]
 pub enum TransactionBuilderError {
     /// The `sender` field of the [`TransactionBuilder`] has not been set.
     /// Call [`with_sender`] to set this field.
     ///
     /// [`TransactionBuilder`]: struct.TransactionBuilder.html
     /// [`with_sender`]: struct.TransactionBuilder.html#method.with_sender
-    #[fail(display = "The transaction sender address is missing.")]
+    #[error("The transaction sender address is missing.")]
     NoSender,
     /// The `recipient` field of the [`TransactionBuilder`] has not been set.
     /// Call [`with_recipient`] to set this field.
     ///
     /// [`TransactionBuilder`]: struct.TransactionBuilder.html
     /// [`with_recipient`]: struct.TransactionBuilder.html#method.with_recipient
-    #[fail(display = "The transaction recipient is missing.")]
+    #[error("The transaction recipient is missing.")]
     NoRecipient,
     /// The `value` field of the [`TransactionBuilder`] has not been set.
     /// Call [`with_value`] to set this field.
     ///
     /// [`TransactionBuilder`]: struct.TransactionBuilder.html
     /// [`with_value`]: struct.TransactionBuilder.html#method.with_value
-    #[fail(display = "The transaction value is missing.")]
+    #[error("The transaction value is missing.")]
     NoValue,
     /// The `validity_start_height` field of the [`TransactionBuilder`] has not been set.
     /// Call [`with_validity_start_height`] to set this field.
     ///
     /// [`TransactionBuilder`]: struct.TransactionBuilder.html
     /// [`with_validity_start_height`]: struct.TransactionBuilder.html#method.with_validity_start_height
-    #[fail(display = "The transaction's validity start height is missing.")]
+    #[error("The transaction's validity start height is missing.")]
     NoValidityStartHeight,
     /// The `network_id` field of the [`TransactionBuilder`] has not been set.
     /// Call [`with_network_id`] to set this field.
     ///
     /// [`TransactionBuilder`]: struct.TransactionBuilder.html
     /// [`with_network_id`]: struct.TransactionBuilder.html#method.with_network_id
-    #[fail(display = "The network id is missing.")]
+    #[error("The network id is missing.")]
     NoNetworkId,
     /// This error occurs if there are extra restrictions on the sender field induced by the [`Recipient`].
     /// Currently, this is only the case for self transactions on the staking contract that require
@@ -66,13 +79,13 @@ pub enum TransactionBuilderError {
     /// This is only the case when retiring or re-activating stake.
     ///
     /// [`Recipient`]: recipient/enum.Recipient.html
-    #[fail(display = "The sender is invalid for this recipient.")]
+    #[error("The sender is invalid for this recipient.")]
     InvalidSender,
     /// Some transactions require the value to be set to zero (whereas most transactions require a non-zero value).
     /// Zero value transactions are called [`signalling transaction`] (also see there for a list of signalling transactions).
     ///
     /// [`signalling transaction`]: struct.TransactionBuilder.html#method.with_value
-    #[fail(display = "The value must be zero for signalling transactions and cannot be zero for others.")]
+    #[error("The value must be zero for signalling transactions and cannot be zero for others.")]
     InvalidValue,
 }
 
@@ -95,7 +108,8 @@ pub enum TransactionBuilderError {
 ///
 /// [`generate`]: struct.TransactionBuilder.html#method.generate
 /// [`TransactionProofBuilder`]: proof/enum.TransactionProofBuilder.html
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub struct TransactionBuilder {
     sender: Option<Address>,
     sender_type: Option<AccountType>,
@@ -494,7 +508,7 @@ impl TransactionBuilder {
 
     /// Creates a staking transaction from the address of a given `key_pair` to a specified `validator_key`.
     pub fn new_stake(
-        staking_contract: Address,
+        staking_contract: Option<Address>,
         key_pair: &KeyPair,
         validator_key: &BlsPublicKey,
         value: Coin,
@@ -526,7 +540,7 @@ impl TransactionBuilder {
 
     /// Retires the stake from the address of a given `key_pair` and a specified `validator_key`.
     pub fn new_retire(
-        staking_contract: Address,
+        staking_contract: Option<Address>,
         key_pair: &KeyPair,
         validator_key: &BlsPublicKey,
         value: Coin,
@@ -539,7 +553,7 @@ impl TransactionBuilder {
 
         let mut builder = Self::new();
         builder
-            .with_sender(staking_contract)
+            .with_sender(fill_in_staking_contract_address(staking_contract, network_id))
             .with_sender_type(AccountType::Staking)
             .with_recipient(recipient.generate().unwrap())
             .with_value(value)
@@ -559,7 +573,7 @@ impl TransactionBuilder {
 
     /// Re-activates the stake from the address of a given `key_pair` to a new `validator_key`.
     pub fn new_reactivate(
-        staking_contract: Address,
+        staking_contract: Option<Address>,
         key_pair: &KeyPair,
         validator_key: &BlsPublicKey,
         value: Coin,
@@ -572,7 +586,7 @@ impl TransactionBuilder {
 
         let mut builder = Self::new();
         builder
-            .with_sender(staking_contract)
+            .with_sender(fill_in_staking_contract_address(staking_contract, network_id))
             .with_sender_type(AccountType::Staking)
             .with_recipient(recipient.generate().unwrap())
             .with_value(value)
@@ -595,7 +609,7 @@ impl TransactionBuilder {
     ///
     /// Note that unstaking transactions can only be executed after the cooldown period has passed.
     pub fn new_unstake(
-        staking_contract: Address,
+        staking_contract: Option<Address>,
         key_pair: &KeyPair,
         recipient: Address,
         value: Coin,
@@ -607,7 +621,7 @@ impl TransactionBuilder {
 
         let mut builder = Self::new();
         builder
-            .with_sender(staking_contract)
+            .with_sender(fill_in_staking_contract_address(staking_contract, network_id))
             .with_sender_type(AccountType::Staking)
             .with_recipient(recipient)
             .with_value(value)

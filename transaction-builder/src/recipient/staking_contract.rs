@@ -10,6 +10,8 @@ use crate::recipient::Recipient;
 /// as recipient:
 /// - Incoming transactions (such as staking or signalling transactions)
 /// - Self transactions (to retire/re-activate a stake)
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub enum StakingTransaction {
     IncomingTransaction(IncomingStakingTransactionData),
     SelfTransaction(SelfStakingTransactionData),
@@ -71,16 +73,23 @@ impl Serialize for StakingTransaction {
 /// Also see [`SignallingProofBuilder`].
 ///
 /// [`SignallingProofBuilder`]: ../../proof/staking_contract/struct.SignallingProofBuilder.html
+#[derive(Clone, Debug)]
 pub struct StakingRecipientBuilder {
-    staking_contract: Address,
+    staking_contract: Option<Address>,
     staking_data: Option<StakingTransaction>,
+}
+
+impl Default for StakingRecipientBuilder {
+    fn default() -> Self {
+        Self::new(None)
+    }
 }
 
 impl StakingRecipientBuilder {
     /// Creates a new `StakingRecipientBuilder` for the staking contract
     /// at address `staking_contract`.
-    pub fn new(staking_contract: Address) -> Self {
-        StakingRecipientBuilder {
+    pub fn new(staking_contract: Option<Address>) -> Self {
+        Self {
             staking_contract,
             staking_data: Default::default(),
         }

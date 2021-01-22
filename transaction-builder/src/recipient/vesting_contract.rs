@@ -1,6 +1,6 @@
 use std::ops::Div;
 
-use failure::Fail;
+use thiserror::Error;
 
 use keys::Address;
 use primitives::coin::Coin;
@@ -10,42 +10,42 @@ use crate::recipient::Recipient;
 
 /// Building a vesting recipient can fail if mandatory fields are not set.
 /// In these cases, a `VestingRecipientBuilderError` is returned.
-#[derive(Debug, Fail)]
+#[derive(Debug, Error)]
 pub enum VestingRecipientBuilderError {
     /// The `owner` field of the [`VestingRecipientBuilder`] has not been set.
     /// Call [`with_owner`] to set this field.
     ///
     /// [`VestingRecipientBuilder`]: struct.VestingRecipientBuilder.html
     /// [`with_owner`]: struct.VestingRecipientBuilder.html#method.with_owner
-    #[fail(display = "The vesting owner address is missing.")]
+    #[error("The vesting owner address is missing.")]
     NoOwner,
     /// The `start` field of the [`VestingRecipientBuilder`] has not been set.
     /// Call [`with_start_block`] to set this field.
     ///
     /// [`VestingRecipientBuilder`]: struct.VestingRecipientBuilder.html
     /// [`with_start_block`]: struct.VestingRecipientBuilder.html#method.with_start_block
-    #[fail(display = "The vesting start block is missing.")]
+    #[error("The vesting start block is missing.")]
     NoStartBlock,
     /// The `step_blocks` field of the [`VestingRecipientBuilder`] has not been set.
     /// Call [`with_step_distance`] to set this field.
     ///
     /// [`VestingRecipientBuilder`]: struct.VestingRecipientBuilder.html
     /// [`with_step_distance`]: struct.VestingRecipientBuilder.html#method.with_step_distance
-    #[fail(display = "The vesting step distance is missing.")]
+    #[error("The vesting step distance is missing.")]
     NoStepDistance,
     /// The `step_amount` field of the [`VestingRecipientBuilder`] has not been set.
     /// Call [`with_step_amount`] to set this field.
     ///
     /// [`VestingRecipientBuilder`]: struct.VestingRecipientBuilder.html
     /// [`with_step_amount`]: struct.VestingRecipientBuilder.html#method.with_step_amount
-    #[fail(display = "The vesting step amount is missing.")]
+    #[error("The vesting step amount is missing.")]
     NoStepAmount,
     /// The `total_amount` field of the [`VestingRecipientBuilder`] has not been set.
     /// Call [`with_total_amount`] to set this field.
     ///
     /// [`VestingRecipientBuilder`]: struct.VestingRecipientBuilder.html
     /// [`with_total_amount`]: struct.VestingRecipientBuilder.html#method.with_total_amount
-    #[fail(display = "The vesting total amount is missing.")]
+    #[error("The vesting total amount is missing.")]
     NoTotalAmount,
 }
 

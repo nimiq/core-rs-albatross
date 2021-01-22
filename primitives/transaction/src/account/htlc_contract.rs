@@ -152,6 +152,7 @@ impl AnyHash {
 }
 
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub struct CreationTransactionData {
     pub sender: Address,
     pub recipient: Address,

@@ -12,6 +12,7 @@ use serde::{
     ser::Serializer,
     Serialize, Deserialize,
 };
+use serde_with::{SerializeDisplay, DeserializeFromStr};
 
 use nimiq_blockchain_albatross::Blockchain;
 use nimiq_hash::{Blake2bHash, Hash};
@@ -24,7 +25,6 @@ use nimiq_bls::{CompressedPublicKey, CompressedSignature};
 use nimiq_collections::BitSet;
 use nimiq_primitives::slot::{SlotBand, ValidatorSlots};
 use nimiq_vrf::VrfSeed;
-use nimiq_transaction::TransactionFlags;
 
 use crate::error::Error;
 
@@ -599,61 +599,46 @@ impl Validator {
     }
 }
 
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TransactionParameters {
-    pub from: Address,
-
-    pub from_type: AccountType,
-
-    pub to: Option<Address>,
-
-    pub to_type: AccountType,
-
-    pub value: Coin,
-
-    pub fee: Coin,
-
-    pub flags: TransactionFlags,
-
-    pub data: Vec<u8>,
-
-    pub validity_start_height: Option<u32>,
+#[derive(Copy, Clone, Debug, SerializeDisplay, DeserializeFromStr)]
+pub enum ValidityStartHeight {
+    Absolute(u32),
+    Relative(u32),
 }
 
-impl TransactionParameters {
-    pub fn into_transaction(self, blockchain: &Blockchain) -> Result<nimiq_transaction::Transaction, Error> {
-        let validity_start_height = self.validity_start_height.unwrap_or_else(|| blockchain.block_number());
-        let network_id = blockchain.network_id;
+impl ValidityStartHeight {
+    pub fn block_number(self, current_block_number: u32) -> u32 {
+        match self {
+            Self::Absolute(n) => n,
+            Self::Relative(n) => n + current_block_number,
+        }
+    }
+}
 
-        match self.to {
-            None if self.to_type != AccountType::Basic && self.flags.contains(TransactionFlags::CONTRACT_CREATION) => {
-                Ok(nimiq_transaction::Transaction::new_contract_creation(
-                    self.data,
-                    self.from,
-                    self.from_type,
-                    self.to_type,
-                    self.value,
-                    self.fee,
-                    validity_start_height,
-                    network_id,
-                ))
-            },
-            Some(to) if !self.flags.contains(TransactionFlags::CONTRACT_CREATION) => {
-                Ok(nimiq_transaction::Transaction::new_extended(
-                    self.from,
-                    self.from_type,
-                    to,
-                    self.to_type,
-                    self.value,
-                    self.fee,
-                    self.data,
-                    validity_start_height,
-                    network_id,
-                ))
-            },
-            _ => Err(Error::InvalidTransactionParameters),
+impl Default for ValidityStartHeight {
+    fn default() -> Self {
+        Self::Relative(0)
+    }
+}
+
+impl Display for ValidityStartHeight {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            Self::Absolute(n) => write!(f, "{}", n),
+            Self::Relative(n) => write!(f, "+{}", n),
+        }
+    }
+}
+
+impl FromStr for ValidityStartHeight {
+    type Err = <u32 as FromStr>::Err;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s.trim();
+        if s.starts_with('+') {
+            Ok(Self::Relative(s[1..].parse()?))
+        }
+        else {
+            Ok(Self::Absolute(s.parse()?))
         }
     }
 }

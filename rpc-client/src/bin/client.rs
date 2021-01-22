@@ -5,16 +5,14 @@ use futures::stream::StreamExt;
 use nimiq_jsonrpc_core::Credentials;
 use nimiq_rpc_client::Client;
 use nimiq_rpc_interface::{
-    types::{BlockNumberOrHash, OrLatest},
+    types::{BlockNumberOrHash, OrLatest, ValidityStartHeight},
     blockchain::BlockchainInterface,
     consensus::ConsensusInterface,
     wallet::WalletInterface,
 };
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
-use nimiq_rpc_interface::types::TransactionParameters;
-use nimiq_transaction::TransactionFlags;
-use nimiq_account::AccountType;
+use nimiq_bls::CompressedPublicKey;
 
 
 #[derive(Debug, StructOpt)]
@@ -95,17 +93,107 @@ enum AccountCommand {
 
 #[derive(Debug, StructOpt)]
 enum TransactionCommand {
-    Send {
-        from: Address,
-        to: Address,
+    /// Sends a simple transaction from the wallet `wallet` to a basic `recipient`.
+    Basic {
+        /// Transaction will be sent from this address. An wallet with this address must be unlocked.
+        wallet: Address,
+
+        /// Recipient for this transaction. This must be a basic account.
+        recipient: Address,
+
+        /// The amount of NIM to send to the recipient.
         value: Coin,
+
+        #[structopt(short, long, default_value = "0")]
         fee: Coin,
+
+        #[structopt(short, long, default_value)]
+        validity_start_height: ValidityStartHeight,
+
+        /// Don't actually send the transaction, but output the transaction as hex string.
+        #[structopt(long = "dry")]
+        dry: bool,
     },
+
+    /// Sends a staking transaction from the address of a given `key_pair` to a specified `validator_key`.
     Stake {
+        /// The stake will be sent from this wallet.
+        wallet: Address,
 
+        /// The public key of the validator to stake for.
+        validator_key: CompressedPublicKey,
+
+        /// The amount of NIM to stake.
+        value: Coin,
+
+        #[structopt(short, long, default_value = "0")]
+        fee: Coin,
+
+        #[structopt(short, long, default_value)]
+        validity_start_height: ValidityStartHeight,
+
+        /// Don't actually send the transaction, but output the transaction as hex string.
+        #[structopt(long = "dry")]
+        dry: bool,
     },
-    Unstake {
 
+    /// Retires the stake from the address of a given `key_pair` and a specified `validator_key`.
+    Retire {
+        /// The stake will be sent from this wallet.
+        wallet: Address,
+
+        validator_key: CompressedPublicKey,
+
+        value: Coin,
+
+        #[structopt(short, long, default_value = "0")]
+        fee: Coin,
+
+        #[structopt(short, long, default_value)]
+        validity_start_height: ValidityStartHeight,
+
+        /// Don't actually send the transaction, but output the transaction as hex string.
+        #[structopt(long = "dry")]
+        dry: bool,
+    },
+
+    Reactivate {
+        /// The stake will be sent from this wallet.
+        wallet: Address,
+
+        validator_key: CompressedPublicKey,
+
+        value: Coin,
+
+        #[structopt(short, long, default_value = "0")]
+        fee: Coin,
+
+        #[structopt(short, long, default_value)]
+        validity_start_height: ValidityStartHeight,
+
+        /// Don't actually send the transaction, but output the transaction as hex string.
+        #[structopt(long = "dry")]
+        dry: bool,
+    },
+
+    Unstake {
+        /// The stake will be sent from this wallet.
+        wallet: Address,
+
+        /// The recipients of the previously staked coins.
+        recipient: Address,
+
+        value: Coin,
+
+        #[structopt(short, long, default_value = "0")]
+        fee: Coin,
+
+        #[structopt(short, long, default_value)]
+        validity_start_height: ValidityStartHeight,
+
+        /// Don't actually send the transaction, but output the transaction as hex string.
+        #[structopt(long = "dry")]
+        dry: bool,
     },
 }
 
@@ -185,22 +273,60 @@ impl Command {
 
             Command::Transaction(command) => {
                 match command {
-                    TransactionCommand::Send { from, to, value, fee } => {
-                        let txid = client.consensus.send_transaction(TransactionParameters {
-                            from,
-                            from_type: AccountType::Basic,
-                            to: Some(to),
-                            to_type: AccountType::Basic,
-                            value,
-                            fee,
-                            flags: TransactionFlags::empty(),
-                            data: vec![],
-                            validity_start_height: None
-                        }).await?;
-                        println!("{}", txid);
+                    TransactionCommand::Basic { wallet, recipient, value, fee, validity_start_height, dry } => {
+                        if dry {
+                            let tx = client.consensus.create_basic_transaction(wallet, recipient, value, fee, validity_start_height).await?;
+                            println!("{}", tx);
+                        }
+                        else {
+                            let txid = client.consensus.send_basic_transaction(wallet, recipient, value, fee, validity_start_height).await?;
+                            println!("{}", txid);
+                        }
                     },
-                    TransactionCommand::Stake {} => todo!(),
-                    TransactionCommand::Unstake {} => todo!(),
+
+                    TransactionCommand::Stake { wallet, validator_key, value, fee, validity_start_height, dry } => {
+                        if dry {
+                            let tx = client.consensus.create_stake_transaction(wallet, validator_key, value, fee, validity_start_height).await?;
+                            println!("{}", tx);
+                        }
+                        else {
+                            let txid = client.consensus.send_stake_transaction(wallet, validator_key, value, fee, validity_start_height).await?;
+                            println!("{}", txid);
+                        }
+                    },
+
+                    TransactionCommand::Retire { wallet, validator_key, value, fee, validity_start_height, dry } => {
+                        if dry {
+                            let tx = client.consensus.create_retire_transaction(wallet, validator_key, value, fee, validity_start_height).await?;
+                            println!("{}", tx);
+                        }
+                        else {
+                            let txid = client.consensus.send_retire_transaction(wallet, validator_key, value, fee, validity_start_height).await?;
+                            println!("{}", txid);
+                        }
+                    },
+
+                    TransactionCommand::Reactivate { wallet, validator_key, value, fee, validity_start_height, dry } => {
+                        if dry {
+                            let tx = client.consensus.create_reactivate_transaction(wallet, validator_key, value, fee, validity_start_height).await?;
+                            println!("{}", tx);
+                        }
+                        else {
+                            let txid = client.consensus.send_reactivate_transaction(wallet, validator_key, value, fee, validity_start_height).await?;
+                            println!("{}", txid);
+                        }
+                    },
+
+                    TransactionCommand::Unstake { wallet, recipient, value, fee, validity_start_height, dry } => {
+                        if dry {
+                            let tx = client.consensus.create_unstake_transaction(wallet, recipient, value, fee, validity_start_height).await?;
+                            println!("{}", tx);
+                        }
+                        else {
+                            let txid = client.consensus.send_unstake_transaction(wallet, recipient, value, fee, validity_start_height).await?;
+                            println!("{}", txid);
+                        }
+                    },
                 }
             }
         }

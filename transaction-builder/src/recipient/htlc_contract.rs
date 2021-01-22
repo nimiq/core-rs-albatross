@@ -1,4 +1,4 @@
-use failure::Fail;
+use thiserror::Error;
 
 use hash::{Blake2bHash, Sha256Hash};
 use keys::Address;
@@ -9,21 +9,21 @@ use crate::recipient::Recipient;
 
 /// Building a HTLC recipient can fail if mandatory fields are not set.
 /// In these cases, a `HtlcRecipientBuilderError` is returned.
-#[derive(Debug, Fail)]
+#[derive(Debug, Error)]
 pub enum HtlcRecipientBuilderError {
     /// The `sender` field of the [`HtlcRecipientBuilder`] has not been set.
     /// Call [`with_sender`] to set this field.
     ///
     /// [`HtlcRecipientBuilder`]: struct.HtlcRecipientBuilder.html
     /// [`with_sender`]: struct.HtlcRecipientBuilder.html#method.with_sender
-    #[fail(display = "The HTLC sender address is missing.")]
+    #[error("The HTLC sender address is missing.")]
     NoSender,
     /// The `recipient` field of the [`HtlcRecipientBuilder`] has not been set.
     /// Call [`with_recipient`] to set this field.
     ///
     /// [`HtlcRecipientBuilder`]: struct.HtlcRecipientBuilder.html
     /// [`with_recipient`]: struct.HtlcRecipientBuilder.html#method.with_recipient
-    #[fail(display = "The HTLC recipient address is missing.")]
+    #[error("The HTLC recipient address is missing.")]
     NoRecipient,
     /// The hash data of the [`HtlcRecipientBuilder`] has not been set.
     /// Call [`with_hash`], [`with_sha256_hash`], or [`with_blake2b_hash`] to set this field.
@@ -32,14 +32,14 @@ pub enum HtlcRecipientBuilderError {
     /// [`with_hash`]: struct.HtlcRecipientBuilder.html#method.with_hash
     /// [`with_sha256_hash`]: struct.HtlcRecipientBuilder.html#method.with_sha256_hash
     /// [`with_blake2b_hash`]: struct.HtlcRecipientBuilder.html#method.with_blake2b_hash
-    #[fail(display = "The HTLC hash data is missing.")]
+    #[error("The HTLC hash data is missing.")]
     NoHash,
     /// The `timeout` field of the [`HtlcRecipientBuilder`] has not been set.
     /// Call [`with_timeout`] to set this field.
     ///
     /// [`HtlcRecipientBuilder`]: struct.HtlcRecipientBuilder.html
     /// [`with_timeout`]: struct.HtlcRecipientBuilder.html#method.with_timeout
-    #[fail(display = "The HTLC's timeout is missing.")]
+    #[error("The HTLC's timeout is missing.")]
     NoTimeout,
 }
 
@@ -58,7 +58,8 @@ pub enum HtlcRecipientBuilderError {
 ///     (called `RegularTransfer`)
 /// 3. If both `sender` and `recipient` sign the transaction, the funds can be withdrawn at any time.
 ///     (called `EarlyResolve`)
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub struct HtlcRecipientBuilder {
     sender: Option<Address>,
     recipient: Option<Address>,

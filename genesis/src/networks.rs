@@ -19,7 +19,7 @@ struct GenesisData {
     block: &'static [u8],
     hash: Blake2bHash,
     accounts: &'static [u8],
-    validator_registry: Option<Address>,
+    staking_contract: Option<Address>,
 }
 
 #[derive(Clone, Debug)]
@@ -72,8 +72,14 @@ impl NetworkInfo {
     }
 
     #[inline]
+    // TODO: Deprecate this?
     pub fn validator_registry_address(&self) -> Option<&Address> {
-        self.genesis.validator_registry.as_ref()
+        self.staking_contract()
+    }
+
+    #[inline]
+    pub fn staking_contract(&self) -> Option<&Address> {
+        self.genesis.staking_contract.as_ref()
     }
 
     pub fn from_network_id(network_id: NetworkId) -> &'static Self {

@@ -684,6 +684,7 @@ mod tests {
     use nimiq_genesis::NetworkId;
     use nimiq_network_mock::{MockHub, MockNetwork, MockPeer};
 
+    #[ignore]
     #[tokio::test]
     async fn it_can_cluster_epoch_ids() {
         fn generate_epoch_ids(agent: &Arc<ConsensusAgent<MockPeer>>, len: usize, offset: usize, diverge_at: Option<usize>) -> EpochIds<MockPeer> {

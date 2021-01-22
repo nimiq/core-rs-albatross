@@ -18,7 +18,7 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
-serde_with = "1.4"
+serde_with = "1.6"
 thiserror = "1.0"
 async-trait = "0.1"
 hex = "0.4"
@@ -39,6 +39,7 @@ nimiq-mempool = { path = "../mempool" }
 nimiq-jsonrpc-core = { git = "https://github.com/nimiq/jsonrpc.git" }
 nimiq-jsonrpc-derive = { git = "https://github.com/nimiq/jsonrpc.git", optional = true }
 nimiq-jsonrpc-client = { git = "https://github.com/nimiq/jsonrpc.git", optional = true }
+nimiq-transaction-builder = { path = "../transaction-builder", features = ["serde-derive"] }
 
 [features]
 proxy = ["nimiq-jsonrpc-derive", "nimiq-jsonrpc-client"]

@@ -6,21 +6,21 @@ use nimiq_build_tools::genesis::GenesisBuilder;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 
-fn write_genesis_rs(directory: &PathBuf, name: &str, genesis_hash: &Blake2bHash, validator_registry: Option<Address>) {
-    let validator_registry_str;
-    if let Some(address) = validator_registry {
-        validator_registry_str = format!("Some(\"{}\".parse().unwrap())", address);
+fn write_genesis_rs(directory: &PathBuf, name: &str, genesis_hash: &Blake2bHash, staking_contract: Option<Address>) {
+    let staking_contract_str;
+    if let Some(address) = staking_contract {
+        staking_contract_str = format!("Some(\"{}\".parse().unwrap())", address);
     } else {
-        validator_registry_str = "None".to_string();
+        staking_contract_str = "None".to_string();
     }
     let genesis_rs = format!(
         r#"GenesisData {{
             block: include_bytes!(concat!(env!("OUT_DIR"), "/genesis/{}/block.dat")),
             hash: "{}".into(),
             accounts: include_bytes!(concat!(env!("OUT_DIR"), "/genesis/{}/accounts.dat")),
-            validator_registry: {},
+            staking_contract: {},
     }}"#,
-        name, genesis_hash, name, validator_registry_str
+        name, genesis_hash, name, staking_contract_str
     );
     log::debug!("Writing genesis source code: {}", &genesis_rs);
     fs::write(directory.join("genesis.rs"), genesis_rs.as_bytes()).unwrap();

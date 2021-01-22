@@ -29,7 +29,7 @@ fn it_can_verify_staker_transactions() {
     );
 
     let tx2 = TransactionBuilder::new_stake(
-        Address::from([1u8; 20]),
+        Some(Address::from([1u8; 20])),
         &key_pair,
         &bls_pair.public_key,
         150_000_000.try_into().unwrap(),
@@ -44,7 +44,7 @@ fn it_can_verify_staker_transactions() {
     let tx = make_self_transaction(SelfStakingTransactionData::RetireStake(bls_pair.public_key.compress()), 150_000_000);
 
     let tx2 = TransactionBuilder::new_retire(
-        Address::from([1u8; 20]),
+        Some(Address::from([1u8; 20])),
         &key_pair,
         &bls_pair.public_key,
         150_000_000.try_into().unwrap(),
@@ -59,7 +59,7 @@ fn it_can_verify_staker_transactions() {
     let tx = make_self_transaction(SelfStakingTransactionData::ReactivateStake(bls_pair.public_key.compress()), 150_000_000);
 
     let tx2 = TransactionBuilder::new_reactivate(
-        Address::from([1u8; 20]),
+        Some(Address::from([1u8; 20])),
         &key_pair,
         &bls_pair.public_key,
         150_000_000.try_into().unwrap(),
@@ -74,7 +74,7 @@ fn it_can_verify_staker_transactions() {
     let tx = make_unstake_transaction(&key_pair, 150_000_000);
 
     let tx2 = TransactionBuilder::new_unstake(
-        Address::from([1u8; 20]),
+        Some(Address::from([1u8; 20])),
         &key_pair,
         Address::from_any_str(STAKER_ADDRESS).unwrap(),
         150_000_000.try_into().unwrap(),
@@ -103,7 +103,7 @@ fn it_can_verify_validator_transactions() {
         &key_pair,
     );
 
-    let mut recipient = Recipient::new_staking_builder(Address::from([1u8; 20]));
+    let mut recipient = Recipient::new_staking_builder(Some(Address::from([1u8; 20])));
     recipient.create_validator(&bls_pair, Address::from_any_str(STAKER_ADDRESS).unwrap());
 
     let mut tx_builder = TransactionBuilder::new();
@@ -134,7 +134,7 @@ fn it_can_verify_validator_transactions() {
         &key_pair,
     );
 
-    let mut recipient = Recipient::new_staking_builder(Address::from([1u8; 20]));
+    let mut recipient = Recipient::new_staking_builder(Some(Address::from([1u8; 20])));
     recipient.update_validator(&bls_pair.public_key, None, Some(Address::from([1u8; 20])));
 
     let mut tx_builder = TransactionBuilder::new();
@@ -164,7 +164,7 @@ fn it_can_verify_validator_transactions() {
         &key_pair,
     );
 
-    let mut recipient = Recipient::new_staking_builder(Address::from([1u8; 20]));
+    let mut recipient = Recipient::new_staking_builder(Some(Address::from([1u8; 20])));
     recipient.retire_validator(&bls_pair.public_key);
 
     let mut tx_builder = TransactionBuilder::new();
@@ -194,7 +194,7 @@ fn it_can_verify_validator_transactions() {
         &key_pair,
     );
 
-    let mut recipient = Recipient::new_staking_builder(Address::from([1u8; 20]));
+    let mut recipient = Recipient::new_staking_builder(Some(Address::from([1u8; 20])));
     recipient.reactivate_validator(&bls_pair.public_key);
 
     let mut tx_builder = TransactionBuilder::new();
@@ -224,7 +224,7 @@ fn it_can_verify_validator_transactions() {
         &key_pair,
     );
 
-    let mut recipient = Recipient::new_staking_builder(Address::from([1u8; 20]));
+    let mut recipient = Recipient::new_staking_builder(Some(Address::from([1u8; 20])));
     recipient.unpark_validator(&bls_pair.public_key);
 
     let mut tx_builder = TransactionBuilder::new();

@@ -10,6 +10,9 @@ use beserial::Deserialize;
 use crate::compression::BeDeserialize;
 use crate::{ParseError, PublicKey};
 
+
+pub type UncompressError = SerializationError;
+
 /// The serialized compressed form of a public key.
 /// This form consists of the x-coordinate of the point (in the affine form),
 /// one bit indicating the sign of the y-coordinate
@@ -23,7 +26,7 @@ impl CompressedPublicKey {
     pub const SIZE: usize = 285;
 
     /// Transforms the compressed form back into the projective form.
-    pub fn uncompress(&self) -> Result<PublicKey, SerializationError> {
+    pub fn uncompress(&self) -> Result<PublicKey, UncompressError> {
         let affine_point: G2Affine = BeDeserialize::deserialize(&mut &self.public_key[..])?;
         Ok(PublicKey {
             public_key: affine_point.into_projective(),

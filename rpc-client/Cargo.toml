@@ -39,10 +39,13 @@ nimiq-keys = { path = "../keys", optional = true }
 nimiq-primitives = { path = "../primitives", optional = true }
 nimiq-transaction = { path = "../primitives/transaction", optional = true }
 nimiq-account = { path = "../primitives/account", optional = true }
+nimiq-bls = { path = "../bls", optional = true }
+nimiq-hash = { path = "../hash", optional = true }
+nimiq-transaction-builder = { path = "../transaction-builder", version = "0.1", features = ["serde-derive"] }
 
 [features]
 default = ["app"]
 app = [
     "structopt", "tokio", "anyhow", "dotenv", "pretty_env_logger",
-    "nimiq-keys", "nimiq-primitives", "nimiq-transaction", "nimiq-account"
+    "nimiq-keys", "nimiq-primitives", "nimiq-transaction", "nimiq-account", "nimiq-bls", "nimiq-hash",
 ]
