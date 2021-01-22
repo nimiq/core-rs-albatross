@@ -5,13 +5,18 @@ use std::time::Instant;
 use ark_crypto_primitives::{CircuitSpecificSetupSNARK, SNARK};
 use ark_ec::{PairingEngine, ProjectiveCurve};
 use ark_groth16::{Groth16, Proof, ProvingKey, VerifyingKey};
-use ark_mnt4_753::{Fr as MNT4Fr, G1Projective as G1MNT4, G2Projective as G2MNT4, MNT4_753};
-use ark_mnt6_753::{Fr as MNT6Fr, G1Projective as G1MNT6, G2Projective as G2MNT6, MNT6_753};
+use ark_mnt4_753::{
+    FqParameters, Fr as MNT4Fr, G1Projective as G1MNT4, G2Projective as G2MNT4, MNT4_753,
+};
+use ark_mnt6_753::{
+    Fr as MNT6Fr, G1Projective as G1MNT6, G1Projective, G2Projective as G2MNT6, MNT6_753,
+};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::UniformRand;
 use rand::{thread_rng, RngCore};
 
-use ark_ff::Zero;
+use ark_ec::models::short_weierstrass_jacobian::GroupProjective;
+use ark_ff::{Fp768, Zero};
 use ark_std::ops::MulAssign;
 use ark_std::usize::MIN;
 use nimiq_bls::pedersen::{pedersen_generators, pedersen_hash};
@@ -32,7 +37,86 @@ fn main() {
     println!("====== Proof generation for Nano Sync initiated ======");
     let start = Instant::now();
 
+    println!("====== Loading proving keys from file ======");
+    let (proving_keys_mnt4, proving_keys_mnt6) = load_proving_keys();
+
     println!("====== Generating random inputs ======");
+    let (sks, pks, pk_tree_proofs, pk_tree_root, signer_bitmap, block_number, round_number, block) =
+        generate_inputs();
+
+    println!("====== Generating proofs ======");
+    // Start generating proofs for PKTree level 5.
+    for i in 0..32 {
+        println!("PKTree 5 circuit - number {}:", i);
+        prove_pk_tree_leaf(
+            "pk_tree_5",
+            i,
+            &pks[i * VALIDATOR_SLOTS / PK_TREE_BREADTH
+                ..(i + 1) * VALIDATOR_SLOTS / PK_TREE_BREADTH],
+            &pk_tree_proofs[i],
+            &pk_tree_root,
+            &signer_bitmap,
+            &proving_keys_mnt4[0],
+        )
+    }
+
+    println!("====== Proof generation for Nano Sync finished ======");
+    println!("Total time elapsed: {:?} seconds", start.elapsed());
+}
+
+fn load_proving_keys() -> (Vec<ProvingKey<MNT4_753>>, Vec<ProvingKey<MNT6_753>>) {
+    let start = Instant::now();
+
+    let mnt4_circs = vec![
+        "pk_tree_5",
+        "pk_tree_3",
+        "pk_tree_1",
+        "macro_block",
+        "merger",
+    ];
+
+    let mnt6_circs = vec![
+        "pk_tree_4",
+        "pk_tree_2",
+        "pk_tree_0",
+        "macro_block_wrapper",
+        "merger_wrapper",
+    ];
+
+    let mut proving_keys_mnt4 = vec![];
+
+    for name in mnt4_circs {
+        let mut file = File::open(format!("proving_keys/{}.bin", name)).unwrap();
+        proving_keys_mnt4.push(ProvingKey::deserialize(&mut file).unwrap());
+    }
+
+    let mut proving_keys_mnt6 = vec![];
+
+    for name in mnt6_circs {
+        let mut file = File::open(format!("proving_keys/{}.bin", name)).unwrap();
+        proving_keys_mnt6.push(ProvingKey::deserialize(&mut file).unwrap());
+    }
+
+    println!(
+        "Proving keys loading finished. It took {:?} seconds.",
+        start.elapsed()
+    );
+
+    (proving_keys_mnt4, proving_keys_mnt6)
+}
+
+fn generate_inputs() -> (
+    Vec<MNT6Fr>,
+    Vec<G2MNT6>,
+    Vec<Vec<G1MNT6>>,
+    Vec<u8>,
+    Vec<bool>,
+    u32,
+    u32,
+    MacroBlock,
+) {
+    let start = Instant::now();
+
     // Initialize rng.
     let rng = &mut thread_rng();
 
@@ -113,33 +197,29 @@ fn main() {
         start.elapsed()
     );
 
-    println!("====== Generating proofs ======");
-    // Start generating proofs for PKTree level 5.
-    for i in 0..32 {
-        println!("PKTree 5 circuit - number {}:", i);
-        prove_pk_tree_leaf(
-            i,
-            &pks[i * VALIDATOR_SLOTS / PK_TREE_BREADTH
-                ..(i + 1) * VALIDATOR_SLOTS / PK_TREE_BREADTH],
-            &pk_tree_proofs[i],
-            &pk_tree_root,
-            &signer_bitmap,
-            "pk_tree_5.bin",
-        )
-    }
-
-    println!("====== Proof generation for Nano Sync finished ======");
-    println!("Total time elapsed: {:?} seconds", start.elapsed());
+    (
+        sks,
+        pks,
+        pk_tree_proofs,
+        pk_tree_root,
+        signer_bitmap,
+        block_number,
+        round_number,
+        block,
+    )
 }
 
 fn prove_pk_tree_leaf(
+    name: &str,
     position: usize,
     pks: &[G2MNT6],
     pk_tree_nodes: &Vec<G1MNT6>,
     pk_tree_root: &Vec<u8>,
     signer_bitmap: &Vec<bool>,
-    pk_file: &str,
+    proving_key: &ProvingKey<MNT4_753>,
 ) {
+    let start = Instant::now();
+
     // Initialize rng.
     let rng = &mut thread_rng();
 
@@ -169,15 +249,8 @@ fn prove_pk_tree_leaf(
         .pop()
         .unwrap();
 
-    // Get proving key.
-    let mut file = File::open(format!("proving_keys/{}", pk_file)).unwrap();
-
-    let proving_key = ProvingKey::deserialize(&mut file).unwrap();
-
     // Create parameters for our circuit
     println!("Starting proof generation.");
-
-    let start = Instant::now();
 
     let circuit = LeafMNT4::new(
         position,
@@ -196,8 +269,8 @@ fn prove_pk_tree_leaf(
         start.elapsed()
     );
 
-    // Save keys to file.
-    to_file(proof, pk_file, Some(position))
+    // Save proof to file.
+    to_file(proof, name, Some(position))
 }
 
 // fn gen_params_pk_tree_node_mnt6(vk_file: &'static str, name: &str) {
@@ -533,13 +606,12 @@ fn to_file<T: PairingEngine>(pk: Proof<T>, name: &str, number: Option<usize>) {
         DirBuilder::new().create("proofs/").unwrap();
     }
 
-    if number.is_some() {
-        let pos = name.len() - 5;
-        name.to_string()
-            .insert_str(pos, &number.unwrap().to_string());
-    }
+    let suffix = match number {
+        None => "".to_string(),
+        Some(n) => format!("_{}", n),
+    };
 
-    let mut file = File::create(format!("proofs/{}", name)).unwrap();
+    let mut file = File::create(format!("proofs/{}{}.bin", name, suffix)).unwrap();
 
     pk.serialize(&mut file).unwrap();
 
