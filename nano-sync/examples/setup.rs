@@ -30,34 +30,34 @@ fn main() {
     let start = Instant::now();
 
     println!("====== PK Tree 5 Circuit ======");
-    gen_params_pk_tree_leaf("pk_tree_5.bin");
+    gen_params_pk_tree_leaf("pk_tree_5");
 
     println!("====== PK Tree 4 Circuit ======");
-    gen_params_pk_tree_node_mnt6("pk_tree_5.bin", "pk_tree_4.bin");
+    gen_params_pk_tree_node_mnt6("pk_tree_5", "pk_tree_4");
 
     println!("====== PK Tree 3 Circuit ======");
-    gen_params_pk_tree_node_mnt4("pk_tree_4.bin", "pk_tree_3.bin");
+    gen_params_pk_tree_node_mnt4("pk_tree_4", "pk_tree_3");
 
     println!("====== PK Tree 2 Circuit ======");
-    gen_params_pk_tree_node_mnt6("pk_tree_3.bin", "pk_tree_2.bin");
+    gen_params_pk_tree_node_mnt6("pk_tree_3", "pk_tree_2");
 
     println!("====== PK Tree 1 Circuit ======");
-    gen_params_pk_tree_node_mnt4("pk_tree_2.bin", "pk_tree_1.bin");
+    gen_params_pk_tree_node_mnt4("pk_tree_2", "pk_tree_1");
 
     println!("====== PK Tree 0 Circuit ======");
-    gen_params_pk_tree_node_mnt6("pk_tree_1.bin", "pk_tree_0.bin");
+    gen_params_pk_tree_node_mnt6("pk_tree_1", "pk_tree_0");
 
     println!("====== Macro Block Circuit ======");
-    gen_params_macro_block("pk_tree_0.bin", "macro_block.bin");
+    gen_params_macro_block("pk_tree_0", "macro_block");
 
     println!("====== Macro Block Wrapper Circuit ======");
-    gen_params_macro_block_wrapper("macro_block.bin", "macro_block_wrapper.bin");
+    gen_params_macro_block_wrapper("macro_block", "macro_block_wrapper");
 
     println!("====== Merger Circuit ======");
-    gen_params_merger("macro_block_wrapper.bin", "merger.bin");
+    gen_params_merger("macro_block_wrapper", "merger");
 
     println!("====== Merger Wrapper Circuit ======");
-    gen_params_merger_wrapper("merger.bin", "merger_wrapper.bin");
+    gen_params_merger_wrapper("merger", "merger_wrapper");
 
     println!("====== Parameter generation for Nano Sync finished ======");
     println!("Total time elapsed: {:?} seconds", start.elapsed());
@@ -441,7 +441,7 @@ fn to_file<T: PairingEngine>(pk: ProvingKey<T>, vk: VerifyingKey<T>, name: &str)
         DirBuilder::new().create("proving_keys/").unwrap();
     }
 
-    let mut file = File::create(format!("proving_keys/{}", name)).unwrap();
+    let mut file = File::create(format!("proving_keys/{}.bin", name)).unwrap();
 
     pk.serialize(&mut file).unwrap();
 
@@ -454,7 +454,7 @@ fn to_file<T: PairingEngine>(pk: ProvingKey<T>, vk: VerifyingKey<T>, name: &str)
         DirBuilder::new().create("verifying_keys/").unwrap();
     }
 
-    let mut file = File::create(format!("verifying_keys/{}", name)).unwrap();
+    let mut file = File::create(format!("verifying_keys/{}.bin", name)).unwrap();
 
     vk.serialize(&mut file).unwrap();
 
