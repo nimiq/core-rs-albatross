@@ -1,4 +1,4 @@
-use std::fs::File;
+
 
 use ark_crypto_primitives::snark::BooleanInputVar;
 use ark_crypto_primitives::SNARKGadget;
@@ -11,7 +11,7 @@ use ark_r1cs_std::prelude::{
     AllocVar, Boolean, CurveVar, EqGadget, FieldVar, ToBitsGadget, UInt32,
 };
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
-use ark_serialize::CanonicalDeserialize;
+
 
 use crate::constants::EPOCH_LENGTH;
 use crate::gadgets::mnt4::{
@@ -29,8 +29,8 @@ use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 /// public keys with the public keys of the new validator list.
 #[derive(Clone)]
 pub struct MacroBlockCircuit {
-    // Path to the verifying key file. Not an input to the SNARK circuit.
-    vk_file: &'static str,
+    // Verifying key for the PKTree circuit. Not an input to the SNARK circuit.
+    vk_pk_tree: VerifyingKey<MNT6_753>,
 
     // Witnesses (private)
     agg_pk_chunks: Vec<G2Projective>,
@@ -53,7 +53,7 @@ pub struct MacroBlockCircuit {
 
 impl MacroBlockCircuit {
     pub fn new(
-        vk_file: &'static str,
+        vk_pk_tree: VerifyingKey<MNT6_753>,
         agg_pk_chunks: Vec<G2Projective>,
         proof: Proof<MNT6_753>,
         initial_pk_tree_root: Vec<bool>,
@@ -65,7 +65,7 @@ impl MacroBlockCircuit {
         final_state_commitment: Vec<Fq>,
     ) -> Self {
         Self {
-            vk_file,
+            vk_pk_tree,
             agg_pk_chunks,
             proof,
             initial_pk_tree_root,
@@ -82,11 +82,6 @@ impl MacroBlockCircuit {
 impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
     /// This function generates the constraints for the circuit.
     fn generate_constraints(self, cs: ConstraintSystemRef<MNT4Fr>) -> Result<(), SynthesisError> {
-        // Load the verifying key from file.
-        let mut file = File::open(format!("verifying_keys/{}", &self.vk_file)).unwrap();
-
-        let vk_pk_tree = VerifyingKey::deserialize(&mut file).unwrap();
-
         // Allocate all the constants.
         #[allow(unused_mut)]
         let mut cost = start_cost_analysis!(cs, || "Alloc constants");
@@ -97,7 +92,7 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
             Vec::<G1Var>::new_constant(cs.clone(), pedersen_generators(5))?;
 
         let vk_pk_tree_var =
-            VerifyingKeyVar::<MNT6_753, PairingVar>::new_constant(cs.clone(), vk_pk_tree)?;
+            VerifyingKeyVar::<MNT6_753, PairingVar>::new_constant(cs.clone(), &self.vk_pk_tree)?;
 
         // Allocate all the witnesses.
         next_cost_analysis!(cs, cost, || { "Alloc witnesses" });
