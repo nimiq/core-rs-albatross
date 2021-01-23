@@ -1,4 +1,4 @@
-use std::fs::File;
+
 
 use ark_crypto_primitives::snark::BooleanInputVar;
 use ark_crypto_primitives::SNARKGadget;
@@ -9,7 +9,7 @@ use ark_mnt6_753::constraints::{FqVar, G1Var, PairingVar};
 use ark_mnt6_753::{Fq, MNT6_753};
 use ark_r1cs_std::prelude::{AllocVar, Boolean, EqGadget};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
-use ark_serialize::CanonicalDeserialize;
+
 
 use crate::gadgets::mnt4::VKCommitmentGadget;
 use crate::primitives::pedersen_generators;
@@ -38,8 +38,8 @@ use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 /// and intermediate states must be equal by definition.
 #[derive(Clone)]
 pub struct MergerCircuit {
-    // Path to the verifying key file. Not an input to the SNARK circuit.
-    vk_file: &'static str,
+    // Verifying key for the macro block wrapper circuit. Not an input to the SNARK circuit.
+    vk_macro_block_wrapper: VerifyingKey<MNT6_753>,
 
     // Witnesses (private)
     proof_merger_wrapper: Proof<MNT6_753>,
@@ -61,7 +61,7 @@ pub struct MergerCircuit {
 
 impl MergerCircuit {
     pub fn new(
-        vk_file: &'static str,
+        vk_macro_block_wrapper: VerifyingKey<MNT6_753>,
         proof_merger_wrapper: Proof<MNT6_753>,
         proof_macro_block_wrapper: Proof<MNT6_753>,
         vk_merger_wrapper: VerifyingKey<MNT6_753>,
@@ -72,7 +72,7 @@ impl MergerCircuit {
         vk_commitment: Vec<Fq>,
     ) -> Self {
         Self {
-            vk_file,
+            vk_macro_block_wrapper,
             proof_merger_wrapper,
             proof_macro_block_wrapper,
             vk_merger_wrapper,
@@ -88,11 +88,6 @@ impl MergerCircuit {
 impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
     /// This function generates the constraints for the circuit.
     fn generate_constraints(self, cs: ConstraintSystemRef<MNT4Fr>) -> Result<(), SynthesisError> {
-        // Load the verifying key from file.
-        let mut file = File::open(format!("verifying_keys/{}", &self.vk_file)).unwrap();
-
-        let vk_macro_block_wrapper = VerifyingKey::deserialize(&mut file).unwrap();
-
         // Allocate all the constants.
         #[allow(unused_mut)]
         let mut cost = start_cost_analysis!(cs, || "Alloc constants");
@@ -102,7 +97,7 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
 
         let vk_macro_block_wrapper_var = VerifyingKeyVar::<MNT6_753, PairingVar>::new_constant(
             cs.clone(),
-            vk_macro_block_wrapper,
+            &self.vk_macro_block_wrapper,
         )?;
 
         // Allocate all the witnesses.

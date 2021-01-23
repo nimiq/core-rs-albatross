@@ -1,4 +1,4 @@
-use std::fs::File;
+
 
 use ark_crypto_primitives::snark::BooleanInputVar;
 use ark_crypto_primitives::SNARKGadget;
@@ -10,7 +10,7 @@ use ark_mnt6_753::{Fq, G2Projective, MNT6_753};
 use ark_r1cs_std::prelude::{AllocVar, Boolean, CurveVar, EqGadget};
 use ark_r1cs_std::ToBitsGadget;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
-use ark_serialize::CanonicalDeserialize;
+
 
 use crate::constants::{PK_TREE_DEPTH, VALIDATOR_SLOTS};
 use crate::gadgets::mnt4::{PedersenHashGadget, SerializeGadget};
@@ -23,8 +23,8 @@ use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 /// the aggregate public key commitments.
 #[derive(Clone)]
 pub struct PKTreeNodeCircuit {
-    // Path to the verifying key file. Not an input to the SNARK circuit.
-    vk_file: &'static str,
+    // Verifying key of the circuit of the child node. Not an input to the SNARK circuit.
+    vk_child: VerifyingKey<MNT6_753>,
 
     // Witnesses (private)
     left_proof: Proof<MNT6_753>,
@@ -45,7 +45,7 @@ pub struct PKTreeNodeCircuit {
 
 impl PKTreeNodeCircuit {
     pub fn new(
-        vk_file: &'static str,
+        vk_child: VerifyingKey<MNT6_753>,
         left_proof: Proof<MNT6_753>,
         right_proof: Proof<MNT6_753>,
         agg_pk_chunks: Vec<G2Projective>,
@@ -55,7 +55,7 @@ impl PKTreeNodeCircuit {
         path: Fq,
     ) -> Self {
         Self {
-            vk_file,
+            vk_child,
             left_proof,
             right_proof,
             agg_pk_chunks,
@@ -70,11 +70,6 @@ impl PKTreeNodeCircuit {
 impl ConstraintSynthesizer<MNT4Fr> for PKTreeNodeCircuit {
     /// This function generates the constraints for the circuit.
     fn generate_constraints(self, cs: ConstraintSystemRef<MNT4Fr>) -> Result<(), SynthesisError> {
-        // Load the verifying key from file.
-        let mut file = File::open(format!("verifying_keys/{}", &self.vk_file)).unwrap();
-
-        let vk_child = VerifyingKey::deserialize(&mut file).unwrap();
-
         // Allocate all the constants.
         #[allow(unused_mut)]
         let mut cost = start_cost_analysis!(cs, || "Alloc constants");
@@ -83,7 +78,7 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeNodeCircuit {
             Vec::<G1Var>::new_constant(cs.clone(), pedersen_generators(5))?;
 
         let vk_child_var =
-            VerifyingKeyVar::<MNT6_753, PairingVar>::new_constant(cs.clone(), vk_child)?;
+            VerifyingKeyVar::<MNT6_753, PairingVar>::new_constant(cs.clone(), &self.vk_child)?;
 
         // Allocate all the witnesses.
         next_cost_analysis!(cs, cost, || { "Alloc witnesses" });

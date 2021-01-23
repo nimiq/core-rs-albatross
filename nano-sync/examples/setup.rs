@@ -7,7 +7,7 @@ use ark_ec::{PairingEngine, ProjectiveCurve};
 use ark_groth16::{Groth16, Proof, ProvingKey, VerifyingKey};
 use ark_mnt4_753::{Fr as MNT4Fr, G1Projective as G1MNT4, G2Projective as G2MNT4, MNT4_753};
 use ark_mnt6_753::{Fr as MNT6Fr, G1Projective as G1MNT6, G2Projective as G2MNT6, MNT6_753};
-use ark_serialize::CanonicalSerialize;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::UniformRand;
 use rand::{thread_rng, RngCore};
 
@@ -30,40 +30,40 @@ fn main() {
     let start = Instant::now();
 
     println!("====== PK Tree 5 Circuit ======");
-    gen_params_pk_tree_leaf("pk_tree_5");
+    setup_pk_tree_leaf("pk_tree_5");
 
     println!("====== PK Tree 4 Circuit ======");
-    gen_params_pk_tree_node_mnt6("pk_tree_5", "pk_tree_4");
+    setup_pk_tree_node_mnt6("pk_tree_5", "pk_tree_4");
 
     println!("====== PK Tree 3 Circuit ======");
-    gen_params_pk_tree_node_mnt4("pk_tree_4", "pk_tree_3");
+    setup_pk_tree_node_mnt4("pk_tree_4", "pk_tree_3");
 
     println!("====== PK Tree 2 Circuit ======");
-    gen_params_pk_tree_node_mnt6("pk_tree_3", "pk_tree_2");
+    setup_pk_tree_node_mnt6("pk_tree_3", "pk_tree_2");
 
     println!("====== PK Tree 1 Circuit ======");
-    gen_params_pk_tree_node_mnt4("pk_tree_2", "pk_tree_1");
+    setup_pk_tree_node_mnt4("pk_tree_2", "pk_tree_1");
 
     println!("====== PK Tree 0 Circuit ======");
-    gen_params_pk_tree_node_mnt6("pk_tree_1", "pk_tree_0");
+    setup_pk_tree_node_mnt6("pk_tree_1", "pk_tree_0");
 
     println!("====== Macro Block Circuit ======");
-    gen_params_macro_block("pk_tree_0", "macro_block");
+    setup_macro_block("pk_tree_0", "macro_block");
 
     println!("====== Macro Block Wrapper Circuit ======");
-    gen_params_macro_block_wrapper("macro_block", "macro_block_wrapper");
+    setup_macro_block_wrapper("macro_block", "macro_block_wrapper");
 
     println!("====== Merger Circuit ======");
-    gen_params_merger("macro_block_wrapper", "merger");
+    setup_merger("macro_block_wrapper", "merger");
 
     println!("====== Merger Wrapper Circuit ======");
-    gen_params_merger_wrapper("merger", "merger_wrapper");
+    setup_merger_wrapper("merger", "merger_wrapper");
 
     println!("====== Parameter generation for Nano Sync finished ======");
     println!("Total time elapsed: {:?} seconds", start.elapsed());
 }
 
-fn gen_params_pk_tree_leaf(name: &str) {
+fn setup_pk_tree_leaf(name: &str) {
     // Initialize rng.
     let rng = &mut thread_rng();
 
@@ -108,9 +108,14 @@ fn gen_params_pk_tree_leaf(name: &str) {
     to_file(pk, vk, name)
 }
 
-fn gen_params_pk_tree_node_mnt6(vk_file: &'static str, name: &str) {
+fn setup_pk_tree_node_mnt6(vk_file: &'static str, name: &str) {
     // Initialize rng.
     let rng = &mut thread_rng();
+
+    // Load the verifying key from file.
+    let mut file = File::open(format!("verifying_keys/{}.bin", vk_file)).unwrap();
+
+    let vk_child = VerifyingKey::deserialize_unchecked(&mut file).unwrap();
 
     // Create dummy inputs.
     let left_proof = Proof {
@@ -141,7 +146,7 @@ fn gen_params_pk_tree_node_mnt6(vk_file: &'static str, name: &str) {
     let start = Instant::now();
 
     let circuit = NodeMNT6::new(
-        vk_file,
+        vk_child,
         left_proof,
         right_proof,
         pk_tree_root,
@@ -162,9 +167,14 @@ fn gen_params_pk_tree_node_mnt6(vk_file: &'static str, name: &str) {
     to_file(pk, vk, name)
 }
 
-fn gen_params_pk_tree_node_mnt4(vk_file: &'static str, name: &str) {
+fn setup_pk_tree_node_mnt4(vk_file: &'static str, name: &str) {
     // Initialize rng.
     let rng = &mut thread_rng();
+
+    // Load the verifying key from file.
+    let mut file = File::open(format!("verifying_keys/{}.bin", vk_file)).unwrap();
+
+    let vk_child = VerifyingKey::deserialize_unchecked(&mut file).unwrap();
 
     // Create dummy inputs.
     let left_proof = Proof {
@@ -195,7 +205,7 @@ fn gen_params_pk_tree_node_mnt4(vk_file: &'static str, name: &str) {
     let start = Instant::now();
 
     let circuit = NodeMNT4::new(
-        vk_file,
+        vk_child,
         left_proof,
         right_proof,
         agg_pk_chunks,
@@ -216,9 +226,14 @@ fn gen_params_pk_tree_node_mnt4(vk_file: &'static str, name: &str) {
     to_file(pk, vk, name)
 }
 
-fn gen_params_macro_block(vk_file: &'static str, name: &str) {
+fn setup_macro_block(vk_file: &'static str, name: &str) {
     // Initialize rng.
     let rng = &mut thread_rng();
+
+    // Load the verifying key from file.
+    let mut file = File::open(format!("verifying_keys/{}.bin", vk_file)).unwrap();
+
+    let vk_pk_tree = VerifyingKey::deserialize_unchecked(&mut file).unwrap();
 
     // Create dummy inputs.
     let agg_pk_chunks = vec![G2MNT6::rand(rng); 2];
@@ -266,7 +281,7 @@ fn gen_params_macro_block(vk_file: &'static str, name: &str) {
     let start = Instant::now();
 
     let circuit = MacroBlockCircuit::new(
-        vk_file,
+        vk_pk_tree,
         agg_pk_chunks,
         proof,
         initial_pk_tree_root,
@@ -289,9 +304,14 @@ fn gen_params_macro_block(vk_file: &'static str, name: &str) {
     to_file(pk, vk, name)
 }
 
-fn gen_params_macro_block_wrapper(vk_file: &'static str, name: &str) {
+fn setup_macro_block_wrapper(vk_file: &'static str, name: &str) {
     // Initialize rng.
     let rng = &mut thread_rng();
+
+    // Load the verifying key from file.
+    let mut file = File::open(format!("verifying_keys/{}.bin", vk_file)).unwrap();
+
+    let vk_macro_block = VerifyingKey::deserialize_unchecked(&mut file).unwrap();
 
     // Create dummy inputs.
     let proof = Proof {
@@ -310,7 +330,7 @@ fn gen_params_macro_block_wrapper(vk_file: &'static str, name: &str) {
     let start = Instant::now();
 
     let circuit = MacroBlockWrapperCircuit::new(
-        vk_file,
+        vk_macro_block,
         proof,
         initial_state_commitment,
         final_state_commitment,
@@ -327,9 +347,14 @@ fn gen_params_macro_block_wrapper(vk_file: &'static str, name: &str) {
     to_file(pk, vk, name)
 }
 
-fn gen_params_merger(vk_file: &'static str, name: &str) {
+fn setup_merger(vk_file: &'static str, name: &str) {
     // Initialize rng.
     let rng = &mut thread_rng();
+
+    // Load the verifying key from file.
+    let mut file = File::open(format!("verifying_keys/{}.bin", vk_file)).unwrap();
+
+    let vk_macro_block_wrapper = VerifyingKey::deserialize_unchecked(&mut file).unwrap();
 
     // Create dummy inputs.
     let proof_merger_wrapper = Proof {
@@ -370,7 +395,7 @@ fn gen_params_merger(vk_file: &'static str, name: &str) {
     let start = Instant::now();
 
     let circuit = MergerCircuit::new(
-        vk_file,
+        vk_macro_block_wrapper,
         proof_merger_wrapper,
         proof_macro_block_wrapper,
         vk_merger_wrapper,
@@ -392,9 +417,14 @@ fn gen_params_merger(vk_file: &'static str, name: &str) {
     to_file(pk, vk, name)
 }
 
-fn gen_params_merger_wrapper(vk_file: &'static str, name: &str) {
+fn setup_merger_wrapper(vk_file: &'static str, name: &str) {
     // Initialize rng.
     let rng = &mut thread_rng();
+
+    // Load the verifying key from file.
+    let mut file = File::open(format!("verifying_keys/{}.bin", vk_file)).unwrap();
+
+    let vk_merger = VerifyingKey::deserialize_unchecked(&mut file).unwrap();
 
     // Create dummy inputs.
     let proof = Proof {
@@ -415,7 +445,7 @@ fn gen_params_merger_wrapper(vk_file: &'static str, name: &str) {
     let start = Instant::now();
 
     let circuit = MergerWrapperCircuit::new(
-        vk_file,
+        vk_merger,
         proof,
         initial_state_commitment,
         final_state_commitment,
@@ -443,7 +473,7 @@ fn to_file<T: PairingEngine>(pk: ProvingKey<T>, vk: VerifyingKey<T>, name: &str)
 
     let mut file = File::create(format!("proving_keys/{}.bin", name)).unwrap();
 
-    pk.serialize(&mut file).unwrap();
+    pk.serialize_unchecked(&mut file).unwrap();
 
     file.sync_all().unwrap();
 
@@ -456,7 +486,7 @@ fn to_file<T: PairingEngine>(pk: ProvingKey<T>, vk: VerifyingKey<T>, name: &str)
 
     let mut file = File::create(format!("verifying_keys/{}.bin", name)).unwrap();
 
-    vk.serialize(&mut file).unwrap();
+    vk.serialize_unchecked(&mut file).unwrap();
 
     file.sync_all().unwrap();
 }

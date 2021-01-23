@@ -1,4 +1,4 @@
-use std::fs::File;
+
 
 use ark_crypto_primitives::snark::BooleanInputVar;
 use ark_crypto_primitives::SNARKGadget;
@@ -9,7 +9,7 @@ use ark_mnt4_753::{Fq, MNT4_753};
 use ark_mnt6_753::Fr as MNT6Fr;
 use ark_r1cs_std::prelude::{AllocVar, Boolean, EqGadget};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
-use ark_serialize::CanonicalDeserialize;
+
 
 use crate::utils::{pack_inputs, unpack_inputs};
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
@@ -23,8 +23,8 @@ use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 /// verification key hard-coded as a constant.
 #[derive(Clone)]
 pub struct MergerWrapperCircuit {
-    // Path to the verifying key file. Not an input to the SNARK circuit.
-    vk_file: &'static str,
+    // Verifying key for the merger circuit. Not an input to the SNARK circuit.
+    vk_merger: VerifyingKey<MNT4_753>,
 
     // Witnesses (private)
     proof: Proof<MNT4_753>,
@@ -42,14 +42,14 @@ pub struct MergerWrapperCircuit {
 
 impl MergerWrapperCircuit {
     pub fn new(
-        vk_file: &'static str,
+        vk_merger: VerifyingKey<MNT4_753>,
         proof: Proof<MNT4_753>,
         initial_state_commitment: Vec<Fq>,
         final_state_commitment: Vec<Fq>,
         vk_commitment: Vec<Fq>,
     ) -> Self {
         Self {
-            vk_file,
+            vk_merger,
             proof,
             initial_state_commitment,
             final_state_commitment,
@@ -61,17 +61,12 @@ impl MergerWrapperCircuit {
 impl ConstraintSynthesizer<MNT6Fr> for MergerWrapperCircuit {
     /// This function generates the constraints for the circuit.
     fn generate_constraints(self, cs: ConstraintSystemRef<MNT6Fr>) -> Result<(), SynthesisError> {
-        // Load the verifying key from file.
-        let mut file = File::open(format!("verifying_keys/{}", &self.vk_file)).unwrap();
-
-        let vk_merger = VerifyingKey::deserialize(&mut file).unwrap();
-
         // Allocate all the constants.
         #[allow(unused_mut)]
         let mut cost = start_cost_analysis!(cs, || "Alloc constants");
 
         let vk_merger_var =
-            VerifyingKeyVar::<MNT4_753, PairingVar>::new_constant(cs.clone(), vk_merger)?;
+            VerifyingKeyVar::<MNT4_753, PairingVar>::new_constant(cs.clone(), &self.vk_merger)?;
 
         // Allocate all the witnesses.
         next_cost_analysis!(cs, cost, || { "Alloc witnesses" });

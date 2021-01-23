@@ -1,4 +1,4 @@
-use std::fs::File;
+
 
 use ark_crypto_primitives::snark::BooleanInputVar;
 use ark_crypto_primitives::SNARKGadget;
@@ -9,7 +9,7 @@ use ark_mnt4_753::{Fq, MNT4_753};
 use ark_mnt6_753::Fr as MNT6Fr;
 use ark_r1cs_std::prelude::{AllocVar, Boolean, EqGadget};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
-use ark_serialize::CanonicalDeserialize;
+
 
 use crate::constants::{PK_TREE_DEPTH, VALIDATOR_SLOTS};
 use crate::utils::{pack_inputs, unpack_inputs};
@@ -20,8 +20,8 @@ use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 /// the aggregate public key commitments, it just passes them on to the next level.
 #[derive(Clone)]
 pub struct PKTreeNodeCircuit {
-    // Path to the verifying key file. Not an input to the SNARK circuit.
-    vk_file: &'static str,
+    // Verifying key of the circuit of the child node. Not an input to the SNARK circuit.
+    vk_child: VerifyingKey<MNT4_753>,
 
     // Witnesses (private)
     left_proof: Proof<MNT4_753>,
@@ -42,7 +42,7 @@ pub struct PKTreeNodeCircuit {
 
 impl PKTreeNodeCircuit {
     pub fn new(
-        vk_file: &'static str,
+        vk_child: VerifyingKey<MNT4_753>,
         left_proof: Proof<MNT4_753>,
         right_proof: Proof<MNT4_753>,
         pk_tree_root: Vec<Fq>,
@@ -52,7 +52,7 @@ impl PKTreeNodeCircuit {
         path: Fq,
     ) -> Self {
         Self {
-            vk_file,
+            vk_child,
             left_proof,
             right_proof,
             pk_tree_root,
@@ -67,17 +67,12 @@ impl PKTreeNodeCircuit {
 impl ConstraintSynthesizer<MNT6Fr> for PKTreeNodeCircuit {
     /// This function generates the constraints for the circuit.
     fn generate_constraints(self, cs: ConstraintSystemRef<MNT6Fr>) -> Result<(), SynthesisError> {
-        // Load the verifying key from file.
-        let mut file = File::open(format!("verifying_keys/{}", &self.vk_file)).unwrap();
-
-        let vk_child = VerifyingKey::deserialize(&mut file).unwrap();
-
         // Allocate all the constants.
         #[allow(unused_mut)]
         let mut cost = start_cost_analysis!(cs, || "Alloc constants");
 
         let vk_child_var =
-            VerifyingKeyVar::<MNT4_753, PairingVar>::new_constant(cs.clone(), vk_child)?;
+            VerifyingKeyVar::<MNT4_753, PairingVar>::new_constant(cs.clone(), &self.vk_child)?;
 
         // Allocate all the witnesses.
         next_cost_analysis!(cs, cost, || { "Alloc witnesses" });

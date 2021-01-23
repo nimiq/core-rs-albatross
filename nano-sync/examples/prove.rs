@@ -37,9 +37,6 @@ fn main() {
     println!("====== Proof generation for Nano Sync initiated ======");
     let start = Instant::now();
 
-    println!("====== Loading proving keys from file ======");
-    let (proving_keys_mnt4, proving_keys_mnt6) = load_proving_keys();
-
     println!("====== Generating random inputs ======");
     let (sks, pks, pk_tree_proofs, pk_tree_root, signer_bitmap, block_number, round_number, block) =
         generate_inputs();
@@ -56,53 +53,11 @@ fn main() {
             &pk_tree_proofs[i],
             &pk_tree_root,
             &signer_bitmap,
-            &proving_keys_mnt4[0],
         )
     }
 
     println!("====== Proof generation for Nano Sync finished ======");
     println!("Total time elapsed: {:?} seconds", start.elapsed());
-}
-
-fn load_proving_keys() -> (Vec<ProvingKey<MNT4_753>>, Vec<ProvingKey<MNT6_753>>) {
-    let start = Instant::now();
-
-    let mnt4_circs = vec![
-        "pk_tree_5",
-        "pk_tree_3",
-        "pk_tree_1",
-        "macro_block",
-        "merger",
-    ];
-
-    let mnt6_circs = vec![
-        "pk_tree_4",
-        "pk_tree_2",
-        "pk_tree_0",
-        "macro_block_wrapper",
-        "merger_wrapper",
-    ];
-
-    let mut proving_keys_mnt4 = vec![];
-
-    for name in mnt4_circs {
-        let mut file = File::open(format!("proving_keys/{}.bin", name)).unwrap();
-        proving_keys_mnt4.push(ProvingKey::deserialize(&mut file).unwrap());
-    }
-
-    let mut proving_keys_mnt6 = vec![];
-
-    for name in mnt6_circs {
-        let mut file = File::open(format!("proving_keys/{}.bin", name)).unwrap();
-        proving_keys_mnt6.push(ProvingKey::deserialize(&mut file).unwrap());
-    }
-
-    println!(
-        "Proving keys loading finished. It took {:?} seconds.",
-        start.elapsed()
-    );
-
-    (proving_keys_mnt4, proving_keys_mnt6)
 }
 
 fn generate_inputs() -> (
@@ -216,12 +171,16 @@ fn prove_pk_tree_leaf(
     pk_tree_nodes: &Vec<G1MNT6>,
     pk_tree_root: &Vec<u8>,
     signer_bitmap: &Vec<bool>,
-    proving_key: &ProvingKey<MNT4_753>,
 ) {
     let start = Instant::now();
 
     // Initialize rng.
     let rng = &mut thread_rng();
+
+    // Load the proving key from file.
+    let mut file = File::open(format!("proving_keys/{}.bin", name)).unwrap();
+
+    let proving_key = ProvingKey::deserialize_unchecked(&mut file).unwrap();
 
     // Calculate the aggregate public key commitment.
     let mut agg_pk = G2MNT6::zero();
@@ -613,7 +572,7 @@ fn to_file<T: PairingEngine>(pk: Proof<T>, name: &str, number: Option<usize>) {
 
     let mut file = File::create(format!("proofs/{}{}.bin", name, suffix)).unwrap();
 
-    pk.serialize(&mut file).unwrap();
+    pk.serialize_unchecked(&mut file).unwrap();
 
     file.sync_all().unwrap();
 }
