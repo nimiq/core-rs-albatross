@@ -48,9 +48,34 @@ fn main() {
         prove_pk_tree_leaf(
             "pk_tree_5",
             i,
-            &pks[i * VALIDATOR_SLOTS / PK_TREE_BREADTH
-                ..(i + 1) * VALIDATOR_SLOTS / PK_TREE_BREADTH],
+            &pks,
             &pk_tree_proofs[i],
+            &pk_tree_root,
+            &signer_bitmap,
+        )
+    }
+
+    // Start generating proofs for PKTree level 4.
+    for i in 0..16 {
+        println!("PKTree 4 circuit - number {}:", i);
+        prove_pk_tree_node_mnt6(
+            "pk_tree_4",
+            i,
+            "pk_tree_5",
+            &pks,
+            &pk_tree_root,
+            &signer_bitmap,
+        )
+    }
+
+    // Start generating proofs for PKTree level 3.
+    for i in 0..8 {
+        println!("PKTree 3 circuit - number {}:", i);
+        prove_pk_tree_node_mnt4(
+            "pk_tree_3",
+            i,
+            "pk_tree_4",
+            &pks,
             &pk_tree_root,
             &signer_bitmap,
         )
@@ -172,8 +197,6 @@ fn prove_pk_tree_leaf(
     pk_tree_root: &Vec<u8>,
     signer_bitmap: &Vec<bool>,
 ) {
-    let start = Instant::now();
-
     // Initialize rng.
     let rng = &mut thread_rng();
 
@@ -185,8 +208,10 @@ fn prove_pk_tree_leaf(
     // Calculate the aggregate public key commitment.
     let mut agg_pk = G2MNT6::zero();
 
-    for i in 0..VALIDATOR_SLOTS / PK_TREE_BREADTH {
-        if signer_bitmap[position * VALIDATOR_SLOTS / PK_TREE_BREADTH + i] {
+    for i in position * VALIDATOR_SLOTS / PK_TREE_BREADTH
+        ..(position + 1) * VALIDATOR_SLOTS / PK_TREE_BREADTH
+    {
+        if signer_bitmap[i] {
             agg_pk += pks[i];
         }
     }
@@ -195,12 +220,12 @@ fn prove_pk_tree_leaf(
 
     let hash = pedersen_hash(agg_pk_bits, pedersen_generators(5));
 
-    let hash_bits = bytes_to_bits(&serialize_g1_mnt6(hash));
+    let agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(hash));
 
     // Calculate inputs.
     let pk_tree_root = prepare_inputs(bytes_to_bits(pk_tree_root));
 
-    let agg_pk_commitment = prepare_inputs(hash_bits);
+    let agg_pk_commitment = prepare_inputs(agg_pk_comm);
 
     let signer_bitmap = prepare_inputs(signer_bitmap.clone()).pop().unwrap();
 
@@ -208,12 +233,16 @@ fn prove_pk_tree_leaf(
         .pop()
         .unwrap();
 
-    // Create parameters for our circuit
+    // Create the proof.
     println!("Starting proof generation.");
+
+    let start = Instant::now();
 
     let circuit = LeafMNT4::new(
         position,
-        pks.to_vec(),
+        pks[position * VALIDATOR_SLOTS / PK_TREE_BREADTH
+            ..(position + 1) * VALIDATOR_SLOTS / PK_TREE_BREADTH]
+            .to_vec(),
         pk_tree_nodes.to_vec(),
         pk_tree_root,
         agg_pk_commitment,
@@ -232,114 +261,217 @@ fn prove_pk_tree_leaf(
     to_file(proof, name, Some(position))
 }
 
-// fn gen_params_pk_tree_node_mnt6(vk_file: &'static str, name: &str) {
-//     // Initialize rng.
-//     let rng = &mut thread_rng();
-//
-//     // Create dummy inputs.
-//     let left_proof = Proof {
-//         a: G1MNT4::rand(rng).into_affine(),
-//         b: G2MNT4::rand(rng).into_affine(),
-//         c: G1MNT4::rand(rng).into_affine(),
-//     };
-//
-//     let right_proof = Proof {
-//         a: G1MNT4::rand(rng).into_affine(),
-//         b: G2MNT4::rand(rng).into_affine(),
-//         c: G1MNT4::rand(rng).into_affine(),
-//     };
-//
-//     let pk_tree_root = vec![MNT6Fr::rand(rng); 2];
-//
-//     let left_agg_pk_commitment = vec![MNT6Fr::rand(rng); 2];
-//
-//     let right_agg_pk_commitment = vec![MNT6Fr::rand(rng); 2];
-//
-//     let signer_bitmap = MNT6Fr::rand(rng);
-//
-//     let path = MNT6Fr::rand(rng);
-//
-//     // Create parameters for our circuit
-//     println!("Starting parameter generation.");
-//
-//     let start = Instant::now();
-//
-//     let circuit = NodeMNT6::new(
-//         vk_file,
-//         left_proof,
-//         right_proof,
-//         pk_tree_root,
-//         left_agg_pk_commitment,
-//         right_agg_pk_commitment,
-//         signer_bitmap,
-//         path,
-//     );
-//
-//     let (pk, vk) = Groth16::<MNT6_753>::setup(circuit, rng).unwrap();
-//
-//     println!(
-//         "Parameter generation finished. It took {:?} seconds.",
-//         start.elapsed()
-//     );
-//
-//     // Save keys to file.
-//     to_file(pk, vk, name)
-// }
-//
-// fn gen_params_pk_tree_node_mnt4(vk_file: &'static str, name: &str) {
-//     // Initialize rng.
-//     let rng = &mut thread_rng();
-//
-//     // Create dummy inputs.
-//     let left_proof = Proof {
-//         a: G1MNT6::rand(rng).into_affine(),
-//         b: G2MNT6::rand(rng).into_affine(),
-//         c: G1MNT6::rand(rng).into_affine(),
-//     };
-//
-//     let right_proof = Proof {
-//         a: G1MNT6::rand(rng).into_affine(),
-//         b: G2MNT6::rand(rng).into_affine(),
-//         c: G1MNT6::rand(rng).into_affine(),
-//     };
-//
-//     let agg_pk_chunks = vec![G2MNT6::rand(rng); 4];
-//
-//     let pk_tree_root = vec![MNT4Fr::rand(rng); 2];
-//
-//     let agg_pk_commitment = vec![MNT4Fr::rand(rng); 2];
-//
-//     let signer_bitmap = MNT4Fr::rand(rng);
-//
-//     let path = MNT4Fr::rand(rng);
-//
-//     // Create parameters for our circuit
-//     println!("Starting parameter generation.");
-//
-//     let start = Instant::now();
-//
-//     let circuit = NodeMNT4::new(
-//         vk_file,
-//         left_proof,
-//         right_proof,
-//         agg_pk_chunks,
-//         pk_tree_root,
-//         agg_pk_commitment,
-//         signer_bitmap,
-//         path,
-//     );
-//
-//     let (pk, vk) = Groth16::<MNT4_753>::setup(circuit, rng).unwrap();
-//
-//     println!(
-//         "Parameter generation finished. It took {:?} seconds.",
-//         start.elapsed()
-//     );
-//
-//     // Save keys to file.
-//     to_file(pk, vk, name)
-// }
-//
+fn prove_pk_tree_node_mnt6(
+    name: &str,
+    position: usize,
+    vk_file: &str,
+    pks: &[G2MNT6],
+    pk_tree_root: &Vec<u8>,
+    signer_bitmap: &Vec<bool>,
+) {
+    // Initialize rng.
+    let rng = &mut thread_rng();
+
+    // Load the proving key from file.
+    let mut file = File::open(format!("proving_keys/{}.bin", name)).unwrap();
+
+    let proving_key = ProvingKey::deserialize_unchecked(&mut file).unwrap();
+
+    // Load the verifying key from file.
+    let mut file = File::open(format!("verifying_keys/{}.bin", vk_file)).unwrap();
+
+    let vk_child = VerifyingKey::deserialize_unchecked(&mut file).unwrap();
+
+    // Load the left proof from file.
+    let left_position = 2 * position;
+
+    let mut file = File::open(format!("proofs/{}_{}.bin", vk_file, left_position)).unwrap();
+
+    let left_proof = Proof::deserialize_unchecked(&mut file).unwrap();
+
+    // Load the right proof from file.
+    let right_position = 2 * position + 1;
+
+    let mut file = File::open(format!("proofs/{}_{}.bin", vk_file, right_position)).unwrap();
+
+    let right_proof = Proof::deserialize_unchecked(&mut file).unwrap();
+
+    // Calculate the left aggregate public key commitment.
+    let mut agg_pk = G2MNT6::zero();
+
+    for i in left_position * VALIDATOR_SLOTS / PK_TREE_BREADTH
+        ..(left_position + 1) * VALIDATOR_SLOTS / PK_TREE_BREADTH
+    {
+        if signer_bitmap[i] {
+            agg_pk += pks[i];
+        }
+    }
+
+    let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk));
+
+    let hash = pedersen_hash(agg_pk_bits, pedersen_generators(5));
+
+    let left_agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(hash));
+
+    // Calculate the right aggregate public key commitment.
+    let mut agg_pk = G2MNT6::zero();
+
+    for i in right_position * VALIDATOR_SLOTS / PK_TREE_BREADTH
+        ..(right_position + 1) * VALIDATOR_SLOTS / PK_TREE_BREADTH
+    {
+        if signer_bitmap[i] {
+            agg_pk += pks[i];
+        }
+    }
+
+    let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk));
+
+    let hash = pedersen_hash(agg_pk_bits, pedersen_generators(5));
+
+    let right_agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(hash));
+
+    // Calculate inputs.
+    let pk_tree_root = prepare_inputs(bytes_to_bits(pk_tree_root));
+
+    let left_agg_pk_commitment = prepare_inputs(left_agg_pk_comm);
+
+    let right_agg_pk_commitment = prepare_inputs(right_agg_pk_comm);
+
+    let signer_bitmap = prepare_inputs(signer_bitmap.clone()).pop().unwrap();
+
+    let path = prepare_inputs(byte_to_le_bits(position as u8))
+        .pop()
+        .unwrap();
+
+    // Create the proof.
+    println!("Starting proof generation.");
+
+    let start = Instant::now();
+
+    let circuit = NodeMNT6::new(
+        vk_child,
+        left_proof,
+        right_proof,
+        pk_tree_root,
+        left_agg_pk_commitment,
+        right_agg_pk_commitment,
+        signer_bitmap,
+        path,
+    );
+
+    let proof = Groth16::<MNT6_753>::prove(&proving_key, circuit, rng).unwrap();
+
+    println!(
+        "Proof generation finished. It took {:?} seconds.",
+        start.elapsed()
+    );
+
+    // Save proof to file.
+    to_file(proof, name, Some(position))
+}
+
+fn prove_pk_tree_node_mnt4(
+    name: &str,
+    position: usize,
+    vk_file: &str,
+    pks: &[G2MNT6],
+    pk_tree_root: &Vec<u8>,
+    signer_bitmap: &Vec<bool>,
+) {
+    // Initialize rng.
+    let rng = &mut thread_rng();
+
+    // Load the proving key from file.
+    let mut file = File::open(format!("proving_keys/{}.bin", name)).unwrap();
+
+    let proving_key = ProvingKey::deserialize_unchecked(&mut file).unwrap();
+
+    // Load the verifying key from file.
+    let mut file = File::open(format!("verifying_keys/{}.bin", vk_file)).unwrap();
+
+    let vk_child = VerifyingKey::deserialize_unchecked(&mut file).unwrap();
+
+    // Load the left proof from file.
+    let left_position = 2 * position;
+
+    let mut file = File::open(format!("proofs/{}_{}.bin", vk_file, left_position)).unwrap();
+
+    let left_proof = Proof::deserialize_unchecked(&mut file).unwrap();
+
+    // Load the right proof from file.
+    let right_position = 2 * position + 1;
+
+    let mut file = File::open(format!("proofs/{}_{}.bin", vk_file, right_position)).unwrap();
+
+    let right_proof = Proof::deserialize_unchecked(&mut file).unwrap();
+
+    // Calculate the aggregate public key chunks.
+    let mut agg_pk_chunks = vec![];
+
+    for i in position * 4..(position + 1) * 4 {
+        let mut agg_pk = G2MNT6::zero();
+
+        for j in i * VALIDATOR_SLOTS / PK_TREE_BREADTH..(i + 1) * VALIDATOR_SLOTS / PK_TREE_BREADTH
+        {
+            if signer_bitmap[j] {
+                agg_pk += pks[j];
+            }
+        }
+
+        agg_pk_chunks.push(agg_pk);
+    }
+
+    // Calculate the aggregate public key commitment.
+    let mut agg_pk = G2MNT6::zero();
+
+    for chunk in &agg_pk_chunks {
+        agg_pk += chunk;
+    }
+
+    let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk));
+
+    let hash = pedersen_hash(agg_pk_bits, pedersen_generators(5));
+
+    let agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(hash));
+
+    // Calculate inputs.
+    let pk_tree_root = prepare_inputs(bytes_to_bits(pk_tree_root));
+
+    let agg_pk_commitment = prepare_inputs(agg_pk_comm);
+
+    let signer_bitmap = prepare_inputs(signer_bitmap.clone()).pop().unwrap();
+
+    let path = prepare_inputs(byte_to_le_bits(position as u8))
+        .pop()
+        .unwrap();
+
+    // Create the proof.
+    println!("Starting proof generation.");
+
+    let start = Instant::now();
+
+    let circuit = NodeMNT4::new(
+        vk_child,
+        left_proof,
+        right_proof,
+        agg_pk_chunks,
+        pk_tree_root,
+        agg_pk_commitment,
+        signer_bitmap,
+        path,
+    );
+
+    let proof = Groth16::<MNT4_753>::prove(&proving_key, circuit, rng).unwrap();
+
+    println!(
+        "Proof generation finished. It took {:?} seconds.",
+        start.elapsed()
+    );
+
+    // Save proof to file.
+    to_file(proof, name, Some(position))
+}
+
 // fn gen_params_macro_block(vk_file: &'static str, name: &str) {
 //     // Initialize rng.
 //     let rng = &mut thread_rng();
