@@ -108,7 +108,7 @@ fn setup_pk_tree_leaf(name: &str) {
     to_file(pk, vk, name)
 }
 
-fn setup_pk_tree_node_mnt6(vk_file: &'static str, name: &str) {
+fn setup_pk_tree_node_mnt6(vk_file: &str, name: &str) {
     // Initialize rng.
     let rng = &mut thread_rng();
 
@@ -167,7 +167,7 @@ fn setup_pk_tree_node_mnt6(vk_file: &'static str, name: &str) {
     to_file(pk, vk, name)
 }
 
-fn setup_pk_tree_node_mnt4(vk_file: &'static str, name: &str) {
+fn setup_pk_tree_node_mnt4(vk_file: &str, name: &str) {
     // Initialize rng.
     let rng = &mut thread_rng();
 
@@ -226,7 +226,7 @@ fn setup_pk_tree_node_mnt4(vk_file: &'static str, name: &str) {
     to_file(pk, vk, name)
 }
 
-fn setup_macro_block(vk_file: &'static str, name: &str) {
+fn setup_macro_block(vk_file: &str, name: &str) {
     // Initialize rng.
     let rng = &mut thread_rng();
 
@@ -304,7 +304,7 @@ fn setup_macro_block(vk_file: &'static str, name: &str) {
     to_file(pk, vk, name)
 }
 
-fn setup_macro_block_wrapper(vk_file: &'static str, name: &str) {
+fn setup_macro_block_wrapper(vk_file: &str, name: &str) {
     // Initialize rng.
     let rng = &mut thread_rng();
 
@@ -347,7 +347,7 @@ fn setup_macro_block_wrapper(vk_file: &'static str, name: &str) {
     to_file(pk, vk, name)
 }
 
-fn setup_merger(vk_file: &'static str, name: &str) {
+fn setup_merger(vk_file: &str, name: &str) {
     // Initialize rng.
     let rng = &mut thread_rng();
 
@@ -417,7 +417,7 @@ fn setup_merger(vk_file: &'static str, name: &str) {
     to_file(pk, vk, name)
 }
 
-fn setup_merger_wrapper(vk_file: &'static str, name: &str) {
+fn setup_merger_wrapper(vk_file: &str, name: &str) {
     // Initialize rng.
     let rng = &mut thread_rng();
 
