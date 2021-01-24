@@ -9,4 +9,3 @@
 Cargo.lock
 /fixed-unsigned/target
 /devnet-environments/*/build/
-/nano-sync/proving_keys

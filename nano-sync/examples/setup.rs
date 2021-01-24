@@ -48,16 +48,16 @@ fn main() {
     setup_pk_tree_node_mnt6("pk_tree_1", "pk_tree_0");
 
     println!("====== Macro Block Circuit ======");
-    setup_macro_block("pk_tree_0", "macro_block");
+    setup_macro_block();
 
     println!("====== Macro Block Wrapper Circuit ======");
-    setup_macro_block_wrapper("macro_block", "macro_block_wrapper");
+    setup_macro_block_wrapper();
 
     println!("====== Merger Circuit ======");
-    setup_merger("macro_block_wrapper", "merger");
+    setup_merger();
 
     println!("====== Merger Wrapper Circuit ======");
-    setup_merger_wrapper("merger", "merger_wrapper");
+    setup_merger_wrapper();
 
     println!("====== Parameter generation for Nano Sync finished ======");
     println!("Total time elapsed: {:?} seconds", start.elapsed());
@@ -226,12 +226,12 @@ fn setup_pk_tree_node_mnt4(vk_file: &str, name: &str) {
     to_file(pk, vk, name)
 }
 
-fn setup_macro_block(vk_file: &str, name: &str) {
+fn setup_macro_block() {
     // Initialize rng.
     let rng = &mut thread_rng();
 
     // Load the verifying key from file.
-    let mut file = File::open(format!("verifying_keys/{}.bin", vk_file)).unwrap();
+    let mut file = File::open(format!("verifying_keys/pk_tree_0.bin")).unwrap();
 
     let vk_pk_tree = VerifyingKey::deserialize_unchecked(&mut file).unwrap();
 
@@ -301,15 +301,15 @@ fn setup_macro_block(vk_file: &str, name: &str) {
     );
 
     // Save keys to file.
-    to_file(pk, vk, name)
+    to_file(pk, vk, "macro_block")
 }
 
-fn setup_macro_block_wrapper(vk_file: &str, name: &str) {
+fn setup_macro_block_wrapper() {
     // Initialize rng.
     let rng = &mut thread_rng();
 
     // Load the verifying key from file.
-    let mut file = File::open(format!("verifying_keys/{}.bin", vk_file)).unwrap();
+    let mut file = File::open(format!("verifying_keys/macro_block.bin")).unwrap();
 
     let vk_macro_block = VerifyingKey::deserialize_unchecked(&mut file).unwrap();
 
@@ -344,15 +344,15 @@ fn setup_macro_block_wrapper(vk_file: &str, name: &str) {
     );
 
     // Save keys to file.
-    to_file(pk, vk, name)
+    to_file(pk, vk, "macro_block_wrapper")
 }
 
-fn setup_merger(vk_file: &str, name: &str) {
+fn setup_merger() {
     // Initialize rng.
     let rng = &mut thread_rng();
 
     // Load the verifying key from file.
-    let mut file = File::open(format!("verifying_keys/{}.bin", vk_file)).unwrap();
+    let mut file = File::open(format!("verifying_keys/macro_block_wrapper.bin")).unwrap();
 
     let vk_macro_block_wrapper = VerifyingKey::deserialize_unchecked(&mut file).unwrap();
 
@@ -414,15 +414,15 @@ fn setup_merger(vk_file: &str, name: &str) {
     );
 
     // Save keys to file.
-    to_file(pk, vk, name)
+    to_file(pk, vk, "merger")
 }
 
-fn setup_merger_wrapper(vk_file: &str, name: &str) {
+fn setup_merger_wrapper() {
     // Initialize rng.
     let rng = &mut thread_rng();
 
     // Load the verifying key from file.
-    let mut file = File::open(format!("verifying_keys/{}.bin", vk_file)).unwrap();
+    let mut file = File::open(format!("verifying_keys/merger.bin")).unwrap();
 
     let vk_merger = VerifyingKey::deserialize_unchecked(&mut file).unwrap();
 
@@ -460,7 +460,7 @@ fn setup_merger_wrapper(vk_file: &str, name: &str) {
     );
 
     // Save keys to file.
-    to_file(pk, vk, name)
+    to_file(pk, vk, "merger_wrapper")
 }
 
 fn to_file<T: PairingEngine>(pk: ProvingKey<T>, vk: VerifyingKey<T>, name: &str) {
