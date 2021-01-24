@@ -1,18 +1,19 @@
+use std::fs;
 use std::fs::{DirBuilder, File};
 use std::path::Path;
 use std::time::Instant;
 
 use ark_crypto_primitives::SNARK;
 use ark_ec::{PairingEngine, ProjectiveCurve};
+use ark_ff::Zero;
 use ark_groth16::{Groth16, Proof, ProvingKey, VerifyingKey};
 use ark_mnt4_753::MNT4_753;
 use ark_mnt6_753::{Fr as MNT6Fr, G1Projective as G1MNT6, G2Projective as G2MNT6, MNT6_753};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_std::UniformRand;
-use rand::{thread_rng, RngCore};
-
-use ark_ff::Zero;
 use ark_std::ops::MulAssign;
+use ark_std::UniformRand;
+use rand::prelude::SliceRandom;
+use rand::{thread_rng, RngCore};
 
 use nimiq_bls::pedersen::{pedersen_generators, pedersen_hash};
 use nimiq_nano_sync::circuits::mnt4::{
@@ -29,8 +30,6 @@ use nimiq_nano_sync::primitives::{
     vk_commitment, MacroBlock,
 };
 use nimiq_nano_sync::utils::{byte_to_le_bits, bytes_to_bits, prepare_inputs};
-use rand::prelude::SliceRandom;
-use std::fs;
 
 /// This example generates a proof for a genesis block, it uses the entire nano sync program. It
 /// also stores the random inputs on which the proof was created so that the proof can be verified
@@ -197,7 +196,7 @@ fn main() {
     fs::rename("proofs/merger_wrapper.bin", "proofs/proof_epoch_0.bin").unwrap();
 
     println!("====== Proof generation for Nano Sync finished ======");
-    println!("Total time elapsed: {:?} seconds", start.elapsed());
+    println!("Total time elapsed: {:?}", start.elapsed());
 }
 
 fn generate_inputs() -> (
@@ -302,10 +301,7 @@ fn generate_inputs() -> (
         }
     }
 
-    println!(
-        "Input generation finished. It took {:?} seconds.",
-        start.elapsed()
-    );
+    println!("Input generation finished. It took {:?}.", start.elapsed());
 
     (
         initial_pks,
@@ -382,10 +378,7 @@ fn prove_pk_tree_leaf(
 
     let proof = Groth16::<MNT4_753>::prove(&proving_key, circuit, rng).unwrap();
 
-    println!(
-        "Proof generation finished. It took {:?} seconds.",
-        start.elapsed()
-    );
+    println!("Proof generation finished. It took {:?}.", start.elapsed());
 
     // Save proof to file.
     proof_to_file(proof, name, Some(position))
@@ -492,10 +485,7 @@ fn prove_pk_tree_node_mnt6(
 
     let proof = Groth16::<MNT6_753>::prove(&proving_key, circuit, rng).unwrap();
 
-    println!(
-        "Proof generation finished. It took {:?} seconds.",
-        start.elapsed()
-    );
+    println!("Proof generation finished. It took {:?}.", start.elapsed());
 
     // Save proof to file.
     proof_to_file(proof, name, Some(position))
@@ -596,10 +586,7 @@ fn prove_pk_tree_node_mnt4(
 
     let proof = Groth16::<MNT4_753>::prove(&proving_key, circuit, rng).unwrap();
 
-    println!(
-        "Proof generation finished. It took {:?} seconds.",
-        start.elapsed()
-    );
+    println!("Proof generation finished. It took {:?}.", start.elapsed());
 
     // Save proof to file.
     proof_to_file(proof, name, Some(position))
@@ -678,10 +665,7 @@ fn prove_macro_block(
 
     let proof = Groth16::<MNT4_753>::prove(&proving_key, circuit, rng).unwrap();
 
-    println!(
-        "Proof generation finished. It took {:?} seconds.",
-        start.elapsed()
-    );
+    println!("Proof generation finished. It took {:?}.", start.elapsed());
 
     // Save proof to file.
     proof_to_file(proof, "macro_block", None)
@@ -731,10 +715,7 @@ fn prove_macro_block_wrapper(initial_pks: &[G2MNT6], final_pks: &[G2MNT6], block
 
     let proof = Groth16::<MNT6_753>::prove(&proving_key, circuit, rng).unwrap();
 
-    println!(
-        "Proof generation finished. It took {:?} seconds.",
-        start.elapsed()
-    );
+    println!("Proof generation finished. It took {:?}.", start.elapsed());
 
     // Save proof to file.
     proof_to_file(proof, "macro_block_wrapper", None)
@@ -804,10 +785,7 @@ fn prove_merger(initial_pks: &[G2MNT6], final_pks: &[G2MNT6], block_number: u32)
 
     let proof = Groth16::<MNT4_753>::prove(&proving_key, circuit, rng).unwrap();
 
-    println!(
-        "Proof generation finished. It took {:?} seconds.",
-        start.elapsed()
-    );
+    println!("Proof generation finished. It took {:?}.", start.elapsed());
 
     // Save proof to file.
     proof_to_file(proof, "merger", None)
@@ -865,10 +843,7 @@ fn prove_merger_wrapper(initial_pks: &[G2MNT6], final_pks: &[G2MNT6], block_numb
 
     let proof = Groth16::<MNT6_753>::prove(&proving_key, circuit, rng).unwrap();
 
-    println!(
-        "Proof generation finished. It took {:?} seconds.",
-        start.elapsed()
-    );
+    println!("Proof generation finished. It took {:?}.", start.elapsed());
 
     // Save proof to file.
     proof_to_file(proof, "merger_wrapper", None)
