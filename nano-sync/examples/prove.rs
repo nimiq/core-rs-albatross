@@ -9,11 +9,12 @@ use ark_ff::Zero;
 use ark_groth16::{Groth16, Proof, ProvingKey, VerifyingKey};
 use ark_mnt4_753::MNT4_753;
 use ark_mnt6_753::{Fr as MNT6Fr, G1Projective as G1MNT6, G2Projective as G2MNT6, MNT6_753};
+use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystem};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::ops::MulAssign;
-use ark_std::UniformRand;
+use ark_std::{test_rng, UniformRand};
 use rand::prelude::SliceRandom;
-use rand::{thread_rng, RngCore};
+use rand::{CryptoRng, Rng};
 
 use nimiq_bls::pedersen::{pedersen_generators, pedersen_hash};
 use nimiq_nano_sync::circuits::mnt4::{
@@ -35,6 +36,12 @@ use nimiq_nano_sync::utils::{byte_to_le_bits, bytes_to_bits, prepare_inputs};
 /// also stores the random inputs on which the proof was created so that the proof can be verified
 /// later. Note that the proof generation can easily take longer than 12 hours.
 fn main() {
+    // This is a flag indicating if we want to check the constraint system before creating the
+    // proofs. It takes longer but is useful for debugging.
+    let constraint_check = true;
+
+    let rng = &mut test_rng();
+
     println!("====== Proof generation for Nano Sync initiated ======");
     let start = Instant::now();
 
@@ -48,13 +55,15 @@ fn main() {
         block_number,
         round_number,
         block,
-    ) = generate_inputs();
+    ) = generate_inputs(rng);
 
     println!("====== Generating proofs ======");
     // Start generating proofs for PKTree level 5.
     for i in 0..32 {
         println!("PKTree 5 circuit - number {}:", i);
         prove_pk_tree_leaf(
+            rng,
+            constraint_check,
             "pk_tree_5",
             i,
             &initial_pks,
@@ -68,6 +77,8 @@ fn main() {
     for i in 0..16 {
         println!("PKTree 4 circuit - number {}:", i);
         prove_pk_tree_node_mnt6(
+            rng,
+            constraint_check,
             "pk_tree_4",
             i,
             4,
@@ -82,6 +93,8 @@ fn main() {
     for i in 0..8 {
         println!("PKTree 3 circuit - number {}:", i);
         prove_pk_tree_node_mnt4(
+            rng,
+            constraint_check,
             "pk_tree_3",
             i,
             3,
@@ -96,6 +109,8 @@ fn main() {
     for i in 0..4 {
         println!("PKTree 2 circuit - number {}:", i);
         prove_pk_tree_node_mnt6(
+            rng,
+            constraint_check,
             "pk_tree_2",
             i,
             2,
@@ -110,6 +125,8 @@ fn main() {
     for i in 0..2 {
         println!("PKTree 1 circuit - number {}:", i);
         prove_pk_tree_node_mnt4(
+            rng,
+            constraint_check,
             "pk_tree_1",
             i,
             1,
@@ -123,6 +140,8 @@ fn main() {
     // Start generating proof for PKTree level 0.
     println!("PKTree 0 circuit");
     prove_pk_tree_node_mnt6(
+        rng,
+        constraint_check,
         "pk_tree_0",
         0,
         0,
@@ -135,6 +154,8 @@ fn main() {
     // Start generating proof for Macro Block.
     println!("Macro Block circuit");
     prove_macro_block(
+        rng,
+        constraint_check,
         &initial_pks,
         &initial_pk_tree_root,
         &final_pks,
@@ -146,15 +167,33 @@ fn main() {
 
     // Start generating proof for Macro Block Wrapper.
     println!("Macro Block Wrapper circuit");
-    prove_macro_block_wrapper(&initial_pks, &final_pks, block_number);
+    prove_macro_block_wrapper(
+        rng,
+        constraint_check,
+        &initial_pks,
+        &final_pks,
+        block_number,
+    );
 
     // Start generating proof for Merger.
     println!("Merger circuit");
-    prove_merger(&initial_pks, &final_pks, block_number);
+    prove_merger(
+        rng,
+        constraint_check,
+        &initial_pks,
+        &final_pks,
+        block_number,
+    );
 
     // Start generating proof for Merger Wrapper.
     println!("Merger Wrapper circuit");
-    prove_merger_wrapper(&initial_pks, &final_pks, block_number);
+    prove_merger_wrapper(
+        rng,
+        constraint_check,
+        &initial_pks,
+        &final_pks,
+        block_number,
+    );
 
     println!("====== Cleaning up ======");
     // Save state commitments to file.
@@ -199,7 +238,9 @@ fn main() {
     println!("Total time elapsed: {:?}", start.elapsed());
 }
 
-fn generate_inputs() -> (
+fn generate_inputs<R: CryptoRng + Rng>(
+    rng: &mut R,
+) -> (
     Vec<G2MNT6>,
     Vec<Vec<G1MNT6>>,
     Vec<u8>,
@@ -210,9 +251,6 @@ fn generate_inputs() -> (
     MacroBlock,
 ) {
     let start = Instant::now();
-
-    // Initialize rng.
-    let rng = &mut thread_rng();
 
     // Create key pairs for all the initial validators.
     let mut initial_sks = vec![];
@@ -315,7 +353,9 @@ fn generate_inputs() -> (
     )
 }
 
-fn prove_pk_tree_leaf(
+fn prove_pk_tree_leaf<R: CryptoRng + Rng>(
+    rng: &mut R,
+    constraint_check: bool,
     name: &str,
     position: usize,
     pks: &[G2MNT6],
@@ -323,9 +363,6 @@ fn prove_pk_tree_leaf(
     pk_tree_root: &Vec<u8>,
     signer_bitmap: &Vec<bool>,
 ) {
-    // Initialize rng.
-    let rng = &mut thread_rng();
-
     // Load the proving key from file.
     let mut file = File::open(format!("proving_keys/{}.bin", name)).unwrap();
 
@@ -359,11 +396,7 @@ fn prove_pk_tree_leaf(
         .pop()
         .unwrap();
 
-    // Create the proof.
-    println!("Starting proof generation.");
-
-    let start = Instant::now();
-
+    // Create the circuit.
     let circuit = LeafMNT4::new(
         position,
         pks[position * VALIDATOR_SLOTS / PK_TREE_BREADTH
@@ -376,6 +409,26 @@ fn prove_pk_tree_leaf(
         path,
     );
 
+    // Optionally check the constraint system.
+    if constraint_check {
+        let cs = ConstraintSystem::new_ref();
+
+        circuit.clone().generate_constraints(cs.clone()).unwrap();
+
+        match cs.which_is_unsatisfied().unwrap() {
+            None => {}
+            Some(s) => {
+                println!("Unsatisfied @ {}", s);
+                assert!(false);
+            }
+        }
+    }
+
+    // Create the proof.
+    println!("Starting proof generation.");
+
+    let start = Instant::now();
+
     let proof = Groth16::<MNT4_753>::prove(&proving_key, circuit, rng).unwrap();
 
     println!("Proof generation finished. It took {:?}.", start.elapsed());
@@ -384,7 +437,9 @@ fn prove_pk_tree_leaf(
     proof_to_file(proof, name, Some(position))
 }
 
-fn prove_pk_tree_node_mnt6(
+fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
+    rng: &mut R,
+    constraint_check: bool,
     name: &str,
     position: usize,
     level: usize,
@@ -393,9 +448,6 @@ fn prove_pk_tree_node_mnt6(
     pk_tree_root: &Vec<u8>,
     signer_bitmap: &Vec<bool>,
 ) {
-    // Initialize rng.
-    let rng = &mut thread_rng();
-
     // Load the proving key from file.
     let mut file = File::open(format!("proving_keys/{}.bin", name)).unwrap();
 
@@ -467,11 +519,7 @@ fn prove_pk_tree_node_mnt6(
         .pop()
         .unwrap();
 
-    // Create the proof.
-    println!("Starting proof generation.");
-
-    let start = Instant::now();
-
+    // Create the circuit.
     let circuit = NodeMNT6::new(
         vk_child,
         left_proof,
@@ -483,6 +531,26 @@ fn prove_pk_tree_node_mnt6(
         path,
     );
 
+    // Optionally check the constraint system.
+    if constraint_check {
+        let cs = ConstraintSystem::new_ref();
+
+        circuit.clone().generate_constraints(cs.clone()).unwrap();
+
+        match cs.which_is_unsatisfied().unwrap() {
+            None => {}
+            Some(s) => {
+                println!("Unsatisfied @ {}", s);
+                assert!(false);
+            }
+        }
+    }
+
+    // Create the proof.
+    println!("Starting proof generation.");
+
+    let start = Instant::now();
+
     let proof = Groth16::<MNT6_753>::prove(&proving_key, circuit, rng).unwrap();
 
     println!("Proof generation finished. It took {:?}.", start.elapsed());
@@ -491,7 +559,9 @@ fn prove_pk_tree_node_mnt6(
     proof_to_file(proof, name, Some(position))
 }
 
-fn prove_pk_tree_node_mnt4(
+fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
+    rng: &mut R,
+    constraint_check: bool,
     name: &str,
     position: usize,
     level: usize,
@@ -500,9 +570,6 @@ fn prove_pk_tree_node_mnt4(
     pk_tree_root: &Vec<u8>,
     signer_bitmap: &Vec<bool>,
 ) {
-    // Initialize rng.
-    let rng = &mut thread_rng();
-
     // Load the proving key from file.
     let mut file = File::open(format!("proving_keys/{}.bin", name)).unwrap();
 
@@ -568,11 +635,7 @@ fn prove_pk_tree_node_mnt4(
         .pop()
         .unwrap();
 
-    // Create the proof.
-    println!("Starting proof generation.");
-
-    let start = Instant::now();
-
+    // Create the circuit.
     let circuit = NodeMNT4::new(
         vk_child,
         left_proof,
@@ -584,6 +647,26 @@ fn prove_pk_tree_node_mnt4(
         path,
     );
 
+    // Optionally check the constraint system.
+    if constraint_check {
+        let cs = ConstraintSystem::new_ref();
+
+        circuit.clone().generate_constraints(cs.clone()).unwrap();
+
+        match cs.which_is_unsatisfied().unwrap() {
+            None => {}
+            Some(s) => {
+                println!("Unsatisfied @ {}", s);
+                assert!(false);
+            }
+        }
+    }
+
+    // Create the proof.
+    println!("Starting proof generation.");
+
+    let start = Instant::now();
+
     let proof = Groth16::<MNT4_753>::prove(&proving_key, circuit, rng).unwrap();
 
     println!("Proof generation finished. It took {:?}.", start.elapsed());
@@ -592,7 +675,9 @@ fn prove_pk_tree_node_mnt4(
     proof_to_file(proof, name, Some(position))
 }
 
-fn prove_macro_block(
+fn prove_macro_block<R: CryptoRng + Rng>(
+    rng: &mut R,
+    constraint_check: bool,
     initial_pks: &[G2MNT6],
     initial_pk_tree_root: &Vec<u8>,
     final_pks: &[G2MNT6],
@@ -601,9 +686,6 @@ fn prove_macro_block(
     round_number: u32,
     block: MacroBlock,
 ) {
-    // Initialize rng.
-    let rng = &mut thread_rng();
-
     // Load the proving key from file.
     let mut file = File::open(format!("proving_keys/macro_block.bin")).unwrap();
 
@@ -645,11 +727,7 @@ fn prove_macro_block(
         final_pks.to_vec(),
     )));
 
-    // Create the proof.
-    println!("Starting proof generation.");
-
-    let start = Instant::now();
-
+    // Create the circuit.
     let circuit = MacroBlockCircuit::new(
         vk_pk_tree,
         agg_pk_chunks,
@@ -663,6 +741,26 @@ fn prove_macro_block(
         final_state_commitment,
     );
 
+    // Optionally check the constraint system.
+    if constraint_check {
+        let cs = ConstraintSystem::new_ref();
+
+        circuit.clone().generate_constraints(cs.clone()).unwrap();
+
+        match cs.which_is_unsatisfied().unwrap() {
+            None => {}
+            Some(s) => {
+                println!("Unsatisfied @ {}", s);
+                assert!(false);
+            }
+        }
+    }
+
+    // Create the proof.
+    println!("Starting proof generation.");
+
+    let start = Instant::now();
+
     let proof = Groth16::<MNT4_753>::prove(&proving_key, circuit, rng).unwrap();
 
     println!("Proof generation finished. It took {:?}.", start.elapsed());
@@ -671,10 +769,13 @@ fn prove_macro_block(
     proof_to_file(proof, "macro_block", None)
 }
 
-fn prove_macro_block_wrapper(initial_pks: &[G2MNT6], final_pks: &[G2MNT6], block_number: u32) {
-    // Initialize rng.
-    let rng = &mut thread_rng();
-
+fn prove_macro_block_wrapper<R: CryptoRng + Rng>(
+    rng: &mut R,
+    constraint_check: bool,
+    initial_pks: &[G2MNT6],
+    final_pks: &[G2MNT6],
+    block_number: u32,
+) {
     // Load the proving key from file.
     let mut file = File::open(format!("proving_keys/macro_block_wrapper.bin")).unwrap();
 
@@ -701,17 +802,33 @@ fn prove_macro_block_wrapper(initial_pks: &[G2MNT6], final_pks: &[G2MNT6], block
         final_pks.to_vec(),
     )));
 
-    // Create the proof.
-    println!("Starting proof generation.");
-
-    let start = Instant::now();
-
+    // Create the circuit.
     let circuit = MacroBlockWrapperCircuit::new(
         vk_macro_block,
         proof,
         initial_state_commitment,
         final_state_commitment,
     );
+
+    // Optionally check the constraint system.
+    if constraint_check {
+        let cs = ConstraintSystem::new_ref();
+
+        circuit.clone().generate_constraints(cs.clone()).unwrap();
+
+        match cs.which_is_unsatisfied().unwrap() {
+            None => {}
+            Some(s) => {
+                println!("Unsatisfied @ {}", s);
+                assert!(false);
+            }
+        }
+    }
+
+    // Create the proof.
+    println!("Starting proof generation.");
+
+    let start = Instant::now();
 
     let proof = Groth16::<MNT6_753>::prove(&proving_key, circuit, rng).unwrap();
 
@@ -721,10 +838,13 @@ fn prove_macro_block_wrapper(initial_pks: &[G2MNT6], final_pks: &[G2MNT6], block
     proof_to_file(proof, "macro_block_wrapper", None)
 }
 
-fn prove_merger(initial_pks: &[G2MNT6], final_pks: &[G2MNT6], block_number: u32) {
-    // Initialize rng.
-    let rng = &mut thread_rng();
-
+fn prove_merger<R: CryptoRng + Rng>(
+    rng: &mut R,
+    constraint_check: bool,
+    initial_pks: &[G2MNT6],
+    final_pks: &[G2MNT6],
+    block_number: u32,
+) {
     // Load the proving key from file.
     let mut file = File::open(format!("proving_keys/merger.bin")).unwrap();
 
@@ -766,11 +886,7 @@ fn prove_merger(initial_pks: &[G2MNT6], final_pks: &[G2MNT6], block_number: u32)
 
     let vk_commitment = prepare_inputs(bytes_to_bits(&vk_commitment(vk_merger_wrapper.clone())));
 
-    // Create the proof.
-    println!("Starting proof generation.");
-
-    let start = Instant::now();
-
+    // Create the circuit.
     let circuit = MergerCircuit::new(
         vk_macro_block_wrapper,
         proof_merger_wrapper,
@@ -783,6 +899,26 @@ fn prove_merger(initial_pks: &[G2MNT6], final_pks: &[G2MNT6], block_number: u32)
         vk_commitment,
     );
 
+    // Optionally check the constraint system.
+    if constraint_check {
+        let cs = ConstraintSystem::new_ref();
+
+        circuit.clone().generate_constraints(cs.clone()).unwrap();
+
+        match cs.which_is_unsatisfied().unwrap() {
+            None => {}
+            Some(s) => {
+                println!("Unsatisfied @ {}", s);
+                assert!(false);
+            }
+        }
+    }
+
+    // Create the proof.
+    println!("Starting proof generation.");
+
+    let start = Instant::now();
+
     let proof = Groth16::<MNT4_753>::prove(&proving_key, circuit, rng).unwrap();
 
     println!("Proof generation finished. It took {:?}.", start.elapsed());
@@ -791,10 +927,13 @@ fn prove_merger(initial_pks: &[G2MNT6], final_pks: &[G2MNT6], block_number: u32)
     proof_to_file(proof, "merger", None)
 }
 
-fn prove_merger_wrapper(initial_pks: &[G2MNT6], final_pks: &[G2MNT6], block_number: u32) {
-    // Initialize rng.
-    let rng = &mut thread_rng();
-
+fn prove_merger_wrapper<R: CryptoRng + Rng>(
+    rng: &mut R,
+    constraint_check: bool,
+    initial_pks: &[G2MNT6],
+    final_pks: &[G2MNT6],
+    block_number: u32,
+) {
     // Load the proving key from file.
     let mut file = File::open(format!("proving_keys/merger_wrapper.bin")).unwrap();
 
@@ -828,11 +967,7 @@ fn prove_merger_wrapper(initial_pks: &[G2MNT6], final_pks: &[G2MNT6], block_numb
 
     let vk_commitment = prepare_inputs(bytes_to_bits(&vk_commitment(vk_merger_wrapper)));
 
-    // Create the proof.
-    println!("Starting proof generation.");
-
-    let start = Instant::now();
-
+    // Create the circuit.
     let circuit = MergerWrapperCircuit::new(
         vk_merger,
         proof,
@@ -840,6 +975,26 @@ fn prove_merger_wrapper(initial_pks: &[G2MNT6], final_pks: &[G2MNT6], block_numb
         final_state_commitment,
         vk_commitment,
     );
+
+    // Optionally check the constraint system.
+    if constraint_check {
+        let cs = ConstraintSystem::new_ref();
+
+        circuit.clone().generate_constraints(cs.clone()).unwrap();
+
+        match cs.which_is_unsatisfied().unwrap() {
+            None => {}
+            Some(s) => {
+                println!("Unsatisfied @ {}", s);
+                assert!(false);
+            }
+        }
+    }
+
+    // Create the proof.
+    println!("Starting proof generation.");
+
+    let start = Instant::now();
 
     let proof = Groth16::<MNT6_753>::prove(&proving_key, circuit, rng).unwrap();
 

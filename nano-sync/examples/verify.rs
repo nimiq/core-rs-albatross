@@ -9,6 +9,9 @@ use ark_serialize::CanonicalDeserialize;
 use nimiq_nano_sync::primitives::vk_commitment;
 use nimiq_nano_sync::utils::{bytes_to_bits, prepare_inputs};
 
+/// This example verifies a proof for the Merger Wrapper circuit, which implicitly is a proof for
+/// the entire nano sync program. It is very fast, shouldn't take more than a second, even on older
+/// computers.
 fn main() {
     println!("====== Proof verification for Nano Sync initiated ======");
     let start = Instant::now();
@@ -52,5 +55,5 @@ fn main() {
     println!("Proof verification finished. It returned {}.", result);
 
     println!("====== Proof verification for Nano Sync finished ======");
-    println!("Total time elapsed: {:?} seconds", start.elapsed());
+    println!("Total time elapsed: {:?}", start.elapsed());
 }

@@ -30,10 +30,7 @@ fn pedersen_hash_works() {
     let primitive_hash = pedersen_hash(bits.clone(), generators.clone());
 
     // Allocate the random bits in the circuit.
-    let mut bits_var = vec![];
-    for bit in bits {
-        bits_var.push(Boolean::new_witness(cs.clone(), || Ok(bit)).unwrap());
-    }
+    let bits_var = Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(bits)).unwrap();
 
     // Allocate the Pedersen generators in the circuit.
     let generators_var = Vec::<G1Var>::new_witness(cs.clone(), || Ok(generators)).unwrap();
