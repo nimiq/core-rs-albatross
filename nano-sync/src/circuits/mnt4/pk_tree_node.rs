@@ -1,5 +1,3 @@
-
-
 use ark_crypto_primitives::snark::BooleanInputVar;
 use ark_crypto_primitives::SNARKGadget;
 use ark_groth16::constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar};
@@ -10,7 +8,6 @@ use ark_mnt6_753::{Fq, G2Projective, MNT6_753};
 use ark_r1cs_std::prelude::{AllocVar, Boolean, CurveVar, EqGadget};
 use ark_r1cs_std::ToBitsGadget;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
-
 
 use crate::constants::{PK_TREE_DEPTH, VALIDATOR_SLOTS};
 use crate::gadgets::mnt4::{PedersenHashGadget, SerializeGadget};

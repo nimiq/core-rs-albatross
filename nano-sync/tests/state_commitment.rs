@@ -34,10 +34,8 @@ fn state_commitment_works() {
     let pk_tree_root_bits = bytes_to_bits(&pk_tree_root);
 
     // Allocate the public key tree root in the circuit.
-    let mut pk_tree_root_var = vec![];
-    for bit in pk_tree_root_bits {
-        pk_tree_root_var.push(Boolean::new_witness(cs.clone(), || Ok(bit)).unwrap());
-    }
+    let pk_tree_root_var =
+        Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(pk_tree_root_bits)).unwrap();
 
     // Allocate the block number in the circuit.
     let block_number_var = UInt32::new_witness(cs.clone(), || Ok(block_number)).unwrap();

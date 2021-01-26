@@ -34,13 +34,8 @@ fn merkle_tree_construct_works() {
 
     // Allocate the random bits in the circuit.
     let mut leaves_var = vec![];
-    let mut bits_var = vec![];
     for leaf in leaves {
-        for bit in leaf {
-            bits_var.push(Boolean::new_witness(cs.clone(), || Ok(bit)).unwrap());
-        }
-        leaves_var.push(bits_var.clone());
-        bits_var.clear();
+        leaves_var.push(Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(leaf)).unwrap());
     }
 
     // Generate and allocate the Pedersen generators in the circuit.

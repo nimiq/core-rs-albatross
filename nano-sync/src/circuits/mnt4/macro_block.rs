@@ -1,5 +1,3 @@
-
-
 use ark_crypto_primitives::snark::BooleanInputVar;
 use ark_crypto_primitives::SNARKGadget;
 use ark_groth16::constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar};
@@ -11,7 +9,6 @@ use ark_r1cs_std::prelude::{
     AllocVar, Boolean, CurveVar, EqGadget, FieldVar, ToBitsGadget, UInt32,
 };
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
-
 
 use crate::constants::EPOCH_LENGTH;
 use crate::gadgets::mnt4::{

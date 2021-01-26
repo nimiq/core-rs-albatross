@@ -8,8 +8,8 @@ use ark_groth16::{Groth16, Proof, ProvingKey, VerifyingKey};
 use ark_mnt4_753::{Fr as MNT4Fr, G1Projective as G1MNT4, G2Projective as G2MNT4, MNT4_753};
 use ark_mnt6_753::{Fr as MNT6Fr, G1Projective as G1MNT6, G2Projective as G2MNT6, MNT6_753};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_std::UniformRand;
-use rand::{thread_rng, RngCore};
+use ark_std::{UniformRand};
+use rand::{thread_rng, CryptoRng, Rng};
 
 use nimiq_nano_sync::circuits::mnt4::{
     MacroBlockCircuit, MergerCircuit, PKTreeLeafCircuit as LeafMNT4, PKTreeNodeCircuit as NodeMNT4,
@@ -26,47 +26,46 @@ use nimiq_nano_sync::utils::bytes_to_bits;
 /// order is absolutely necessary because each circuit needs a verifying key from the circuit "below"
 /// it. Note that the parameter generation can take longer than one hour, even two on some computers.
 fn main() {
+    let rng = &mut thread_rng();
+
     println!("====== Parameter generation for Nano Sync initiated ======");
     let start = Instant::now();
 
     println!("====== PK Tree 5 Circuit ======");
-    setup_pk_tree_leaf("pk_tree_5");
+    setup_pk_tree_leaf(rng, "pk_tree_5");
 
     println!("====== PK Tree 4 Circuit ======");
-    setup_pk_tree_node_mnt6("pk_tree_5", "pk_tree_4");
+    setup_pk_tree_node_mnt6(rng, "pk_tree_5", "pk_tree_4");
 
     println!("====== PK Tree 3 Circuit ======");
-    setup_pk_tree_node_mnt4("pk_tree_4", "pk_tree_3");
+    setup_pk_tree_node_mnt4(rng, "pk_tree_4", "pk_tree_3");
 
     println!("====== PK Tree 2 Circuit ======");
-    setup_pk_tree_node_mnt6("pk_tree_3", "pk_tree_2");
+    setup_pk_tree_node_mnt6(rng, "pk_tree_3", "pk_tree_2");
 
     println!("====== PK Tree 1 Circuit ======");
-    setup_pk_tree_node_mnt4("pk_tree_2", "pk_tree_1");
+    setup_pk_tree_node_mnt4(rng, "pk_tree_2", "pk_tree_1");
 
     println!("====== PK Tree 0 Circuit ======");
-    setup_pk_tree_node_mnt6("pk_tree_1", "pk_tree_0");
+    setup_pk_tree_node_mnt6(rng, "pk_tree_1", "pk_tree_0");
 
     println!("====== Macro Block Circuit ======");
-    setup_macro_block();
+    setup_macro_block(rng);
 
     println!("====== Macro Block Wrapper Circuit ======");
-    setup_macro_block_wrapper();
+    setup_macro_block_wrapper(rng);
 
     println!("====== Merger Circuit ======");
-    setup_merger();
+    setup_merger(rng);
 
     println!("====== Merger Wrapper Circuit ======");
-    setup_merger_wrapper();
+    setup_merger_wrapper(rng);
 
     println!("====== Parameter generation for Nano Sync finished ======");
     println!("Total time elapsed: {:?} seconds", start.elapsed());
 }
 
-fn setup_pk_tree_leaf(name: &str) {
-    // Initialize rng.
-    let rng = &mut thread_rng();
-
+fn setup_pk_tree_leaf<R: CryptoRng + Rng>(rng: &mut R, name: &str) {
     // Create dummy inputs.
     let position = 0;
 
@@ -108,10 +107,7 @@ fn setup_pk_tree_leaf(name: &str) {
     to_file(pk, vk, name)
 }
 
-fn setup_pk_tree_node_mnt6(vk_file: &str, name: &str) {
-    // Initialize rng.
-    let rng = &mut thread_rng();
-
+fn setup_pk_tree_node_mnt6<R: CryptoRng + Rng>(rng: &mut R, vk_file: &str, name: &str) {
     // Load the verifying key from file.
     let mut file = File::open(format!("verifying_keys/{}.bin", vk_file)).unwrap();
 
@@ -167,10 +163,7 @@ fn setup_pk_tree_node_mnt6(vk_file: &str, name: &str) {
     to_file(pk, vk, name)
 }
 
-fn setup_pk_tree_node_mnt4(vk_file: &str, name: &str) {
-    // Initialize rng.
-    let rng = &mut thread_rng();
-
+fn setup_pk_tree_node_mnt4<R: CryptoRng + Rng>(rng: &mut R, vk_file: &str, name: &str) {
     // Load the verifying key from file.
     let mut file = File::open(format!("verifying_keys/{}.bin", vk_file)).unwrap();
 
@@ -226,10 +219,7 @@ fn setup_pk_tree_node_mnt4(vk_file: &str, name: &str) {
     to_file(pk, vk, name)
 }
 
-fn setup_macro_block() {
-    // Initialize rng.
-    let rng = &mut thread_rng();
-
+fn setup_macro_block<R: CryptoRng + Rng>(rng: &mut R) {
     // Load the verifying key from file.
     let mut file = File::open(format!("verifying_keys/pk_tree_0.bin")).unwrap();
 
@@ -304,10 +294,7 @@ fn setup_macro_block() {
     to_file(pk, vk, "macro_block")
 }
 
-fn setup_macro_block_wrapper() {
-    // Initialize rng.
-    let rng = &mut thread_rng();
-
+fn setup_macro_block_wrapper<R: CryptoRng + Rng>(rng: &mut R) {
     // Load the verifying key from file.
     let mut file = File::open(format!("verifying_keys/macro_block.bin")).unwrap();
 
@@ -347,10 +334,7 @@ fn setup_macro_block_wrapper() {
     to_file(pk, vk, "macro_block_wrapper")
 }
 
-fn setup_merger() {
-    // Initialize rng.
-    let rng = &mut thread_rng();
-
+fn setup_merger<R: CryptoRng + Rng>(rng: &mut R) {
     // Load the verifying key from file.
     let mut file = File::open(format!("verifying_keys/macro_block_wrapper.bin")).unwrap();
 
@@ -417,10 +401,7 @@ fn setup_merger() {
     to_file(pk, vk, "merger")
 }
 
-fn setup_merger_wrapper() {
-    // Initialize rng.
-    let rng = &mut thread_rng();
-
+fn setup_merger_wrapper<R: CryptoRng + Rng>(rng: &mut R) {
     // Load the verifying key from file.
     let mut file = File::open(format!("verifying_keys/merger.bin")).unwrap();
 

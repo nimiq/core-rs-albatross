@@ -1,5 +1,3 @@
-
-
 use ark_crypto_primitives::snark::BooleanInputVar;
 use ark_crypto_primitives::SNARKGadget;
 use ark_groth16::constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar};
@@ -9,7 +7,6 @@ use ark_mnt6_753::constraints::{FqVar, G1Var, PairingVar};
 use ark_mnt6_753::{Fq, MNT6_753};
 use ark_r1cs_std::prelude::{AllocVar, Boolean, EqGadget};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
-
 
 use crate::gadgets::mnt4::VKCommitmentGadget;
 use crate::primitives::pedersen_generators;
