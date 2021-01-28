@@ -907,4 +907,58 @@ impl TransactionBuilder {
             _ => unreachable!(),
         }
     }
+
+
+    /// Creates a transaction that unparks a *parked* validator, i.e. making it *active* again.
+    ///
+    /// # Arguments
+    ///
+    ///  - `staking_contract`:      Address of the staking contract. If `None`, the address of the staking contract for
+    ///                             the network with ID `network_id` is used.
+    ///  - `key_pair`:              The key pair used to sign the transaction. The transaction fee is taken from the
+    ///                             account belonging to this key pair.
+    ///  - `validator_public_key`:  The public key of the validator that is to be reactivated.
+    ///  - `fee`:                   Transaction fee.
+    ///  - `validity_start_height`: Block height from which this transaction is valid.
+    ///  - `network_id`:            ID of network for which the transaction is valid.
+    ///
+    /// # Returns
+    ///
+    /// The finalized transaction (signed using `key_pair`).
+    ///
+    /// # Note
+    ///
+    /// This is a *signalling transaction*.
+    ///
+    pub fn new_unpark_validator(
+        staking_contract: Option<Address>,
+        key_pair: &KeyPair,
+        validator_key_pair: &BlsKeyPair,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Transaction {
+        let mut recipient = Recipient::new_staking_builder(staking_contract);
+        recipient.unpark_validator(&validator_key_pair.public_key);
+
+        let mut builder = Self::new();
+        builder
+            .with_sender(Address::from(key_pair))
+            .with_recipient(recipient.generate().unwrap())
+            .with_value(Coin::default())
+            .with_fee(fee)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(network_id);
+
+        let proof_builder = builder.generate().unwrap();
+        match proof_builder {
+            TransactionProofBuilder::Signalling(mut builder) => {
+                builder.sign_with_validator_key_pair(&validator_key_pair);
+                let mut builder = builder.generate().unwrap().unwrap_basic();
+                builder.sign_with_key_pair(&key_pair);
+                builder.generate().unwrap()
+            }
+            _ => unreachable!(),
+        }
+    }
 }
