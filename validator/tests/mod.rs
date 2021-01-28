@@ -179,7 +179,7 @@ async fn four_validators_can_create_micro_blocks() {
 
     let events = blockchain.notifier.write().as_stream();
     time::timeout(
-        Duration::from_secs(20),
+        Duration::from_secs(60),
         events.take(30).for_each(|_| future::ready(())),
     )
     .await
