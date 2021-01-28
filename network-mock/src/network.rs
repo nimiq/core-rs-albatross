@@ -106,7 +106,6 @@ impl MockNetwork {
             self.is_connected.store(true, Ordering::SeqCst);
 
             // Set is_connected flag for other network
-            let hub = self.hub.lock();
             let is_connected = hub.is_connected.get(&address).unwrap();
             is_connected.store(true, Ordering::SeqCst);
         }
