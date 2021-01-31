@@ -23,12 +23,12 @@ where
     if n > n0 {
         buffer.resize(n, 0);
 
-        log::trace!("MessageReader: read_to_buf: n={}, n0={}", n, n0);
+        //log::trace!("MessageReader: read_to_buf: n={}, n0={}", n, n0);
 
         match AsyncRead::poll_read(reader, cx, &mut buffer[n0..n]) {
             // EOF
             Poll::Ready(Ok(0)) => {
-                log::trace!("MessageReader: read_to_buf: poll_read returned 0");
+                //log::trace!("MessageReader: read_to_buf: poll_read returned 0");
 
                 buffer.resize(n0, 0);
                 Poll::Ready(Ok(false))
@@ -57,8 +57,7 @@ where
 
             // Reader is not ready
             Poll::Pending => {
-                log::trace!("MessageReader: read_to_buf: poll_read pending");
-
+                //log::trace!("MessageReader: read_to_buf: poll_read pending");
                 buffer.resize(n0, 0);
                 Poll::Pending
             }
@@ -132,7 +131,7 @@ where
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let self_projected = self.project();
 
-        log::trace!("MessageReader::poll_next: buffer={:?}", self_projected.buffer);
+        //log::trace!("MessageReader::poll_next: buffer={:?}", self_projected.buffer);
 
         let (new_state, message) = match &self_projected.state {
             ReaderState::Head => {
@@ -208,7 +207,7 @@ where
                 // Reset the buffer
                 self_projected.buffer.clear();
 
-                log::trace!("MessageReader: Received message: {:?}", message);
+                //log::trace!("MessageReader: Received message: {:?}", message);
 
                 (ReaderState::Head, Some(message))
             }
