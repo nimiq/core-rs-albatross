@@ -217,9 +217,8 @@ impl StakingRecipientBuilder {
     ///
     /// let validator_key_pair = KeyPair::generate_default_csprng();
     ///
-    /// let staking_contract = Address::from_any_str("NQ25 B7NR A1HC V4R2 YRKD 20PR RPGS MNV7 D812").unwrap();
     /// let reward_address = Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap();
-    /// let mut recipient_builder = Recipient::new_staking_builder(staking_contract);
+    /// let mut recipient_builder = Recipient::new_staking_builder(None);
     /// recipient_builder.create_validator(&validator_key_pair, reward_address);
     /// let recipient = recipient_builder.generate();
     /// assert!(recipient.is_some());

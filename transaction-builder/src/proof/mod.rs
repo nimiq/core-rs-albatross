@@ -221,7 +221,7 @@ impl TransactionProofBuilder {
     /// # let staking_contract_address = Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap();
     ///
     /// let sender_address = Address::from(&key_pair.public);
-    /// let mut recipient = Recipient::new_staking_builder(staking_contract_address);
+    /// let mut recipient = Recipient::new_staking_builder(Some(staking_contract_address));
     /// recipient.update_validator(&bls_key_pair.public_key, None, Some(sender_address.clone()));
     ///
     /// let tx_builder = TransactionBuilder::with_required(

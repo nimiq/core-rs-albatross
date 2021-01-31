@@ -201,8 +201,6 @@ pub mod tests {
 
     #[tokio::test]
     async fn both_peers_can_talk_with_each_other() {
-        env_logger::init();
-
         let mut hub = MockHub::new();
         let net1 = hub.new_network();
         let net2 = hub.new_network();
