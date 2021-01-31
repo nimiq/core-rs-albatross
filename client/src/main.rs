@@ -125,7 +125,7 @@ async fn main_inner() -> Result<(), Error> {
                 consensus.is_established(),
                 head.block_number(),
                 head.hash(),
-                network_info.num_peers
+                network_info.num_peers()
             );
         }
     }

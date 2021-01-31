@@ -4,7 +4,7 @@ use std::task::{Context, Poll, Waker};
 
 use libp2p::{
     core::either::{EitherError, EitherOutput},
-    gossipsub::{Gossipsub, GossipsubEvent, GossipsubRpc, MessageAuthenticity},
+    gossipsub::{Gossipsub, GossipsubEvent, GossipsubRpc, MessageAuthenticity, error::GossipsubHandlerError},
     kad::{handler::KademliaHandlerIn as KademliaAction, store::MemoryStore, Kademlia, KademliaEvent, QueryId},
     swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters},
     NetworkBehaviour,
@@ -32,13 +32,8 @@ use crate::{
     network::Config,
 };
 
-pub type NimiqNetworkBehaviourAction = NetworkBehaviourAction<
-    EitherOutput<EitherOutput<EitherOutput<DiscoveryAction, MessageAction>, KademliaAction<QueryId>>, GossipsubRpc>,
-    NimiqEvent,
->;
-
 pub type NimiqNetworkBehaviourError =
-    EitherError<EitherError<EitherError<DiscoveryError, MessageError>, std::io::Error>, std::io::Error>;
+    EitherError<EitherError<EitherError<DiscoveryError, MessageError>, std::io::Error>, GossipsubHandlerError>;
 
 #[derive(Debug)]
 pub enum NimiqEvent {
@@ -96,7 +91,7 @@ impl NimiqBehaviour {
 
         let store = MemoryStore::new(peer_id.clone());
         let kademlia = Kademlia::with_config(peer_id, store, config.kademlia);
-        let gossipsub = Gossipsub::new(MessageAuthenticity::Signed(config.keypair), config.gossipsub);
+        let gossipsub = Gossipsub::new(MessageAuthenticity::Signed(config.keypair), config.gossipsub).expect("Wrong configuration");
 
         Self {
             discovery,
@@ -109,7 +104,7 @@ impl NimiqBehaviour {
         }
     }
 
-    fn poll_event(&mut self, cx: &mut Context, _params: &mut impl PollParameters) -> Poll<NimiqNetworkBehaviourAction> {
+    fn poll_event<T>(&mut self, cx: &mut Context, _params: &mut impl PollParameters) -> Poll<NetworkBehaviourAction<T, NimiqEvent>> {
         if let Some(event) = self.events.pop_front() {
             log::trace!("NimiqBehaviour: emitting event: {:?}", event);
             return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));

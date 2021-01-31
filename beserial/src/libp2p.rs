@@ -53,17 +53,18 @@ impl Deserialize for PublicKey {
 
 impl Serialize for PeerId {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        SerializeWithLength::serialize::<u8, W>(self.as_bytes(), writer)
+        SerializeWithLength::serialize::<u8, W>(&self.to_bytes(), writer)
     }
 
     fn serialized_size(&self) -> usize {
-        SerializeWithLength::serialized_size::<u8>(self.as_bytes())
+        SerializeWithLength::serialized_size::<u8>(&self.to_bytes())
     }
 }
 
 impl Deserialize for PeerId {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        PeerId::from_bytes(DeserializeWithLength::deserialize::<u8, R>(reader)?).map_err(|_| SerializingError::InvalidValue)
+        let raw: Vec<u8> = DeserializeWithLength::deserialize::<u8, R>(reader)?;
+        PeerId::from_bytes(&raw).map_err(|_| SerializingError::InvalidValue)
     }
 }
 

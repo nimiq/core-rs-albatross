@@ -86,7 +86,7 @@ impl NetworkBehaviour for MessageBehaviour {
 
         self.events.push_back(NetworkBehaviourAction::NotifyHandler {
             peer_id: peer_id.clone(),
-            handler: NotifyHandler::All,
+            handler: NotifyHandler::Any,
             event: HandlerInEvent::PeerConnected {
                 peer_id: peer_id.clone(),
                 outbound: connected_point.is_dialer(),

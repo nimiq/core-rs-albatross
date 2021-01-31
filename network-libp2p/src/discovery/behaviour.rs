@@ -11,7 +11,7 @@ use futures::{
 use libp2p::{
     core::connection::{ConnectedPoint, ConnectionId},
     identity::Keypair,
-    swarm::{KeepAlive, NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, PollParameters},
+    swarm::{AddressScore, KeepAlive, NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, PollParameters},
     Multiaddr, PeerId,
 };
 use parking_lot::RwLock;
@@ -188,8 +188,9 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                 }));
             }
             HandlerOutEvent::ObservedAddresses { observed_addresses } => {
+                let score = AddressScore::Infinite;
                 for address in observed_addresses {
-                    self.events.push_back(NetworkBehaviourAction::ReportObservedAddr { address });
+                    self.events.push_back(NetworkBehaviourAction::ReportObservedAddr { address, score });
                 }
             }
             HandlerOutEvent::Update => self.events.push_back(NetworkBehaviourAction::GenerateEvent(DiscoveryEvent::Update)),

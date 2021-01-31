@@ -90,7 +90,6 @@ impl ClientInner {
         if let Some(min_peers) = config.network.min_peers {
             network_config.min_peers = min_peers;
         }
-        network_config.gossipsub.mesh_n_low = 2;
 
         log::debug!("listen_addresses = {:?}", config.network.listen_addresses);
 
