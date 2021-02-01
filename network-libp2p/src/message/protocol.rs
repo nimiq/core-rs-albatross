@@ -13,6 +13,10 @@ pub struct MessageProtocol {
     peer: Option<Arc<Peer>>,
 }
 
+impl MessageProtocol {
+    const BUFFER_SIZE: usize = 16;
+}
+
 impl UpgradeInfo for MessageProtocol {
     type Info = &'static [u8];
     type InfoIter = iter::Once<Self::Info>;
@@ -31,7 +35,7 @@ where
     type Future = future::Ready<Result<MessageDispatch<C>, SerializingError>>;
 
     fn upgrade_inbound(self, socket: C, _info: Self::Info) -> Self::Future {
-        future::ok(MessageDispatch::new(socket))
+        future::ok(MessageDispatch::new(socket, Self::BUFFER_SIZE))
     }
 }
 
@@ -44,6 +48,6 @@ where
     type Future = future::Ready<Result<MessageDispatch<C>, SerializingError>>;
 
     fn upgrade_outbound(self, socket: C, _info: Self::Info) -> Self::Future {
-        future::ok(MessageDispatch::new(socket))
+        future::ok(MessageDispatch::new(socket, Self::BUFFER_SIZE))
     }
 }

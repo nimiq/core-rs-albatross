@@ -1,6 +1,6 @@
 use std::{marker::PhantomData, pin::Pin};
 
-use bytes::{Buf, BufMut, BytesMut};
+use bytes::{Buf, BytesMut, buf::BufMutExt};
 use futures::{
     ready,
     task::{Context, Poll},

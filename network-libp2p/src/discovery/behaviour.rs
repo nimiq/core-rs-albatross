@@ -67,7 +67,7 @@ impl DiscoveryConfig {
             protocols_filter: Protocols::all(),
             services_filter: Services::all(),
             house_keeping_interval: Duration::from_secs(60),
-            keep_alive: KeepAlive::Yes,
+            keep_alive: KeepAlive::No,
         }
     }
 }
@@ -139,22 +139,22 @@ impl NetworkBehaviour for DiscoveryBehaviour {
     }
 
     fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
-        self.peer_contact_book
+        let addresses = self.peer_contact_book
             .read()
             .get(peer_id)
             .map(|addresses_opt| addresses_opt.addresses().cloned().collect())
-            .unwrap_or_default()
+            .unwrap_or_default();
+
+        log::debug!("addresses_of_peer({}) = {:#?}", peer_id, addresses);
+
+        addresses
     }
 
     fn inject_connected(&mut self, peer_id: &PeerId) {
-        log::trace!("DiscoveryBehaviour::inject_connected: {}", peer_id);
-
         self.connected_peers.insert(peer_id.clone());
     }
 
     fn inject_disconnected(&mut self, peer_id: &PeerId) {
-        log::trace!("DiscoveryBehaviour::inject_disconnected: {}", peer_id);
-
         self.connected_peers.remove(peer_id);
     }
 
@@ -166,7 +166,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
     }
 
     fn inject_event(&mut self, peer_id: PeerId, _connection: ConnectionId, event: HandlerOutEvent) {
-        log::trace!("DiscoveryBehaviour::inject_event: peer_id={}: {:?}", peer_id, event);
+        log::trace!("inject_event: peer_id={}: {:?}", peer_id, event);
 
         match event {
             HandlerOutEvent::PeerExchangeEstablished { peer_contact } => {

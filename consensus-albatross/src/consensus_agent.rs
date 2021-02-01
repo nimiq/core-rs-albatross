@@ -46,12 +46,15 @@ impl<P: Peer> Debug for ConsensusAgent<P> {
 impl<P: Peer> ConsensusAgent<P> {
     pub fn new(peer: Arc<P>) -> Self {
         // TODO: Timeout
-        let block_hashes_requests = RequestResponse::new(Arc::clone(&peer), Duration::new(10, 0));
-        let epoch_requests = RequestResponse::new(Arc::clone(&peer), Duration::new(10, 0));
-        let history_chunk_requests = RequestResponse::new(Arc::clone(&peer), Duration::new(10, 0));
-        let block_requests = RequestResponse::new(Arc::clone(&peer), Duration::new(10, 0));
-        let missing_block_requests = RequestResponse::new(Arc::clone(&peer), Duration::new(10, 0));
-        let head_requests = RequestResponse::new(Arc::clone(&peer), Duration::new(10, 0));
+        // NOTE: Set this very high for now. When starting a small test-net the first request
+        // can easily timeout.
+        let timeout = Duration::from_secs(60);
+        let block_hashes_requests = RequestResponse::new(Arc::clone(&peer), timeout);
+        let epoch_requests = RequestResponse::new(Arc::clone(&peer), timeout);
+        let history_chunk_requests = RequestResponse::new(Arc::clone(&peer), timeout);
+        let block_requests = RequestResponse::new(Arc::clone(&peer), timeout);
+        let missing_block_requests = RequestResponse::new(Arc::clone(&peer), timeout);
+        let head_requests = RequestResponse::new(Arc::clone(&peer), timeout);
 
         ConsensusAgent {
             peer,

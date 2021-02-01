@@ -3,9 +3,13 @@ RUN apt-get update \
  && apt-get install -y libssl1.1 \
  && rm -rf /var/lib/apt
 
-COPY ./scripts/docker_*.sh /root/
-COPY ./target/debug/nimiq-client /bin/
-WORKDIR /root
+# Run as unprivileged user.
+RUN adduser --disabled-password --home /home/nimiq --shell /bin/bash --uid 1001 nimiq
+USER nimiq
+
+COPY ./scripts/docker_*.sh /home/nimiq/
+COPY ./target/debug/nimiq-client /usr/local/bin/
+WORKDIR /home/nimiq
 
 ENV NIMIQ_NETWORK=dev-albatross \
     NIMIQ_LOG_LEVEL=debug \
@@ -15,7 +19,7 @@ ENV NIMIQ_NETWORK=dev-albatross \
 
 EXPOSE 8443/tcp 8648/tcp 8650/tcp
 
-VOLUME [ "/root/database" ]
+VOLUME [ "/home/nimiq/database" ]
 
 ENTRYPOINT [ "/bin/bash" ]
-CMD [ "/root/docker_run.sh" ]
+CMD [ "/home/nimiq/docker_run.sh" ]

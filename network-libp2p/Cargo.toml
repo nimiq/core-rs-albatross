@@ -18,14 +18,14 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 async-trait = "0.1"
-futures = { version = "0.3", features = ["bilock"] }
+futures = "0.3"
 ip_network = "0.3"
 libp2p = "0.34"
 log = "0.4"
 parking_lot = "0.9"
 rand = "0.7.3"
 tokio = { version = "0.2", features = ["macros", "rt-core"] }
-bytes = "0.6"
+bytes = "0.5"
 pin-project = "1.0"
 bitflags = "1.2"
 thiserror = "1.0"
@@ -33,6 +33,15 @@ hex = "0.4"
 wasm-timer = "0.2"
 serde = { version = "1.0", features = ["derive"], optional = true }
 async-std = "1.7" # Used in some places, but can we not depend on a runtime?
+dashmap = "4.0"
+tokio-util = { version = "0.3", features = ["codec"] }
+derive_more = "0.99"
+crc = "1.8"
+async-stream = "0.3"
+tracing = "0.1"
+tracing-futures = "0.1"
+tracing-log = "0.1"
+tracing-attributes = "0.1"
 
 beserial = { path = "../beserial", version = "0.1", features = ["libp2p"] }
 beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
@@ -44,7 +53,7 @@ nimiq-hash = { path = "../hash", version = "0.1" }
 nimiq-utils = { path = "../utils", version = "0.1", features = ["tagged-signing", "serde-derive", "libp2p", "time"] }
 
 [dev-dependencies]
-env_logger = "0.8"
+tracing-subscriber = "0.2"
 
 [features]
 default = ["peer-contact-book-persistence"]

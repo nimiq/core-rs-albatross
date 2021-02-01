@@ -9,6 +9,7 @@ use futures::{
 };
 use parking_lot::Mutex;
 use tokio::{task::spawn, time::timeout};
+use thiserror::Error;
 
 use crate::message::*;
 use crate::peer::*;
@@ -27,10 +28,13 @@ pub struct RequestResponse<P: Peer, Req: RequestMessage, Res: ResponseMessage> {
     _req_type: PhantomData<Req>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum RequestError {
+    #[error("Timeout error")]
     Timeout,
-    SendError(SendError),
+    #[error("Send error: {0}")]
+    SendError(#[from] SendError),
+    #[error("Receive error")]
     ReceiveError,
 }
 
@@ -71,6 +75,8 @@ impl<P: Peer, Req: RequestMessage, Res: ResponseMessage + 'static> RequestRespon
     }
 
     pub async fn request(&self, mut request: Req) -> Result<Res, RequestError> {
+        log::debug!("Sending request: {:#?}", request);
+
         // Lock state, set identifier and send out request. Also add channel to the state.
         let (request_identifier, receiver) = {
             let mut state = self.state.lock();
@@ -94,16 +100,25 @@ impl<P: Peer, Req: RequestMessage, Res: ResponseMessage + 'static> RequestRespon
         }
 
         // Now we only have to wait for the response.
-        let response = timeout(self.timeout, receiver).await;
+        match timeout(self.timeout, receiver).await {
+            Ok(Ok(response)) => {
+                log::debug!("Received response: {:#?}", response);
 
-        // Lock state and remove channel on timeout.
-        if response.is_err() {
-            let mut state = self.state.lock();
-            state.responses.remove(&request_identifier);
-            return Err(RequestError::Timeout);
+                Ok(response)
+            },
+            Ok(Err(e)) => {
+                log::error!("Receive error: {}", e);
+
+                Err(RequestError::ReceiveError)
+            },
+            Err(_) => {
+                log::error!("Timeout");
+
+                // Lock state and remove channel on timeout.
+                let mut state = self.state.lock();
+                state.responses.remove(&request_identifier);
+                Err(RequestError::Timeout)
+            }
         }
-
-        // Flatten response.
-        response.ok().map(|inner| inner.ok()).flatten().ok_or(RequestError::ReceiveError)
     }
 }

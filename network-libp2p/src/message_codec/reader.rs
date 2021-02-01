@@ -1,6 +1,6 @@
 use std::{marker::PhantomData, pin::Pin};
 
-use bytes::{Buf, BytesMut};
+use bytes::{BytesMut, buf::BufExt};
 use futures::{
     task::{Context, Poll},
     AsyncRead, Stream,
@@ -229,7 +229,7 @@ mod tests {
     use futures::{io::Cursor, StreamExt};
 
     use beserial::{Deserialize, Serialize};
-    use bytes::{BufMut, BytesMut};
+    use bytes::{BytesMut, buf::BufMutExt};
 
     use super::MessageReader;
     use crate::message_codec::header::Header;

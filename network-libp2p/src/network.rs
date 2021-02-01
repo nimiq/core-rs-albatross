@@ -6,7 +6,9 @@ use async_trait::async_trait;
 use futures::{
     channel::{mpsc, oneshot},
     lock::Mutex as AsyncMutex,
-    FutureExt, SinkExt, Stream, StreamExt,
+    future::FutureExt,
+    stream::{Stream, StreamExt, BoxStream},
+    sink::SinkExt,
 };
 use libp2p::{
     core,
@@ -22,6 +24,8 @@ use libp2p::{
 };
 use thiserror::Error;
 use tokio::sync::broadcast;
+use bytes::{Bytes, buf::BufExt};
+use tracing::Instrument;
 
 #[cfg(test)]
 use libp2p::core::transport::MemoryTransport;
@@ -32,6 +36,7 @@ use nimiq_network_interface::{
     network::{Network as NetworkInterface, NetworkEvent, PubsubId, Topic},
     peer::{Peer as PeerInterface},
     peer_map::ObservablePeerMap,
+    message::{Message, MessageType},
 };
 use nimiq_utils::time::OffsetTime;
 
@@ -189,6 +194,10 @@ pub enum NetworkAction {
         source: PeerId,
         output: oneshot::Sender<Result<bool, NetworkError>>,
     },
+    ReceiveFromAll {
+        type_id: MessageType,
+        output: mpsc::Sender<(Bytes, Arc<Peer>)>,
+    },
 }
 
 
@@ -237,7 +246,7 @@ impl PubsubId<PeerId> for GossipsubId<PeerId> {
 pub struct Network {
     local_peer_id: PeerId,
     events_tx: broadcast::Sender<NetworkEvent<Peer>>,
-    action_tx: AsyncMutex<mpsc::Sender<NetworkAction>>,
+    action_tx: mpsc::Sender<NetworkAction>,
     peers: ObservablePeerMap<Peer>,
     connected_rx: AsyncMutex<Option<oneshot::Receiver<()>>>,
 }
@@ -270,14 +279,14 @@ impl Network {
         Self {
             local_peer_id,
             events_tx,
-            action_tx: AsyncMutex::new(action_tx),
+            action_tx,
             peers,
             connected_rx: AsyncMutex::new(Some(connected_rx)),
         }
     }
 
     pub async fn wait_connected(&self) {
-        log::info!("Waiting for peers to connect");
+        tracing::info!("Waiting for peers to connect");
         if let Some(connected_rx) = self.connected_rx.lock().await.take() {
             connected_rx.await.unwrap()
         }
@@ -345,23 +354,30 @@ impl Network {
     ) {
         let mut task_state = TaskState::new(connected_tx);
 
-        loop {
-            futures::select! {
-                event = swarm.next_event().fuse() => {
-                    log::debug!("Swarm task received event: {:?}", event);
-                    Self::handle_event(event, &events_tx, &mut swarm, &mut task_state, min_peers).await;
-                },
-                action_opt = action_rx.next().fuse() => {
-                    if let Some(action) = action_opt {
-                        Self::perform_action(action, &mut swarm, &mut task_state).await.unwrap();
-                    }
-                    else {
-                        // `action_rx.next()` will return `None` if all senders (i.e. the `Network` object) are dropped.
-                        break;
-                    }
-                },
-            };
+        let peer_id = Swarm::local_peer_id(&swarm);
+        let task_span = tracing::debug_span!("swarm task", peer_id=?peer_id);
+
+        async move {
+            loop {
+                futures::select! {
+                    event = swarm.next_event().fuse() => {
+                        tracing::debug!(event=?event, "swarm task received event");
+                        Self::handle_event(event, &events_tx, &mut swarm, &mut task_state, min_peers).await;
+                    },
+                    action_opt = action_rx.next().fuse() => {
+                        if let Some(action) = action_opt {
+                            Self::perform_action(action, &mut swarm, &mut task_state).await.unwrap();
+                        }
+                        else {
+                            // `action_rx.next()` will return `None` if all senders (i.e. the `Network` object) are dropped.
+                            break;
+                        }
+                    },
+                };
+            }
         }
+            .instrument(task_span)
+            .await
     }
 
     async fn handle_event(
@@ -388,16 +404,16 @@ impl Network {
                 }
 
                 if !state.is_connected() {
-                    log::debug!("Connected to {} peers (waiting for {})", num_established, min_peers);
+                    tracing::debug!(num_established, min_peers, "connected to {} peers (waiting for {})", num_established, min_peers);
 
                     if num_established.get() as usize >= min_peers {
                         state.set_connected();
-                    }
 
-                    // Bootstrap Kademlia
-                    log::debug!("Bootstrapping DHT");
-                    if let Err(_) = swarm.kademlia.bootstrap() {
-                        log::error!("Bootstrapping DHT error: No known peers");
+                        // Bootstrap Kademlia
+                        log::debug!("Bootstrapping DHT");
+                        if let Err(_) = swarm.kademlia.bootstrap() {
+                            log::error!("Bootstrapping DHT error: No known peers");
+                        }
                     }
                 }
             }
@@ -416,6 +432,7 @@ impl Network {
             SwarmEvent::Behaviour(event) => {
                 match event {
                     NimiqEvent::Message(event) => {
+                        tracing::trace!(event = ?event, "network event");
                         events_tx.send(event).ok();
                     }
                     NimiqEvent::Dht(event) => {
@@ -431,7 +448,7 @@ impl Network {
                                             });
                                             output.send(result).ok();
                                         } else {
-                                            log::warn!("GetRecord query result for unknown query ID: {:?}", id);
+                                            tracing::warn!(query_id = ?id, "GetRecord query result for unknown query ID");
                                         }
                                     }
                                     QueryResult::PutRecord(result) => {
@@ -439,13 +456,13 @@ impl Network {
                                         if let Some(output) = state.dht_puts.remove(&id) {
                                             output.send(result.map(|_| ()).map_err(Into::into)).ok();
                                         } else {
-                                            log::warn!("PutRecord query result for unknown query ID: {:?}", id);
+                                            tracing::warn!(query_id = ?id, "PutRecord query result for unknown query ID");
                                         }
                                     }
                                     QueryResult::Bootstrap(result) => {
                                         match result {
-                                            Ok(result) => log::debug!("DHT bootstrap successful: {:?}", result),
-                                            Err(e) => log::error!("DHT bootstrap error: {:?}", e),
+                                            Ok(result) => tracing::debug!(result = ?result, "DHT bootstrap successful"),
+                                            Err(e) => tracing::error!("DHT bootstrap error: {:?}", e),
                                         }
                                     }
                                     _ => {}
@@ -457,7 +474,8 @@ impl Network {
                     NimiqEvent::Gossip(event) => {
                         match event {
                             GossipsubEvent::Message { propagation_source, message_id, message } => {
-                                log::debug!("Received message {:?} from peer {:?}: {:?}", message_id, propagation_source, message);
+                                tracing::debug!(id = ?message_id, source = ?propagation_source, message = ?message, "received message");
+
                                 if let Some(topic_info) = state.gossip_topics.get_mut(&message.topic) {
                                     let (output, validate) = topic_info;
                                     if !&*validate {
@@ -469,17 +487,14 @@ impl Network {
                                     }
                                     output.send((message, message_id, propagation_source)).await.ok();
                                 } else {
-                                    log::warn!("Unknown topic hash: {:?}", message.topic);
+                                    tracing::warn!(topic = ?message.topic, "unknown topic hash");
                                 }
                             }
                             GossipsubEvent::Subscribed { peer_id, topic } => {
-                                log::debug!("Peer {:?} subscribed to topic: {:?}", peer_id, topic);
-                                /*if let Some(output) = state.gossip_topics.remove(&topic) {
-                                    output.send(topic).ok();
-                                }*/
+                                tracing::debug!(peer_id = ?peer_id, topic = ?topic, "peer subscribed to topic");
                             }
                             GossipsubEvent::Unsubscribed { peer_id, topic } => {
-                                log::debug!("Peer {:?} unsubscribed to topic: {:?}", peer_id, topic);
+                                tracing::debug!(peer_id = ?peer_id, topic = ?topic, "peer unsubscribed");
                             }
                         }
                     }
@@ -513,7 +528,7 @@ impl Network {
     }
 
     async fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut TaskState) -> Result<(), NetworkError> {
-        log::debug!("Swarm task: performing action: {:?}", action);
+        tracing::debug!(action = ?action, "performing action");
 
         match action {
             NetworkAction::Dial { peer_id, output } => {
@@ -587,6 +602,9 @@ impl Network {
                     MessageAcceptance::Accept,
                 )?)).ok();
             }
+            NetworkAction::ReceiveFromAll { type_id, output } => {
+                swarm.message.receive_from_all(type_id, output);
+            }
         }
 
         Ok(())
@@ -595,7 +613,7 @@ impl Network {
     pub async fn network_info(&self) -> Result<NetworkInfo, NetworkError> {
         let (output_tx, output_rx) = oneshot::channel();
 
-        self.action_tx.lock().await.send(NetworkAction::NetworkInfo { output: output_tx }).await?;
+        self.action_tx.clone().send(NetworkAction::NetworkInfo { output: output_tx }).await?;
         Ok(output_rx.await?)
     }
 }
@@ -623,6 +641,41 @@ impl NetworkInterface for Network {
         self.events_tx.subscribe()
     }
 
+    /// Implements `receive_from_all`, but instead of selecting over all peer message streams, we register a channel in
+    /// the network. The sender is copied to new peers when they're instantiated.
+    fn receive_from_all<'a, T: Message>(&self) -> BoxStream<'a, (T, Arc<Peer>)> {
+        let mut action_tx = self.action_tx.clone();
+
+        
+        // Future to register the channel.
+        let register_stream = async move {
+            let (tx, rx) = mpsc::channel(0);
+
+            action_tx
+                .send(NetworkAction::ReceiveFromAll {
+                    type_id: T::TYPE_ID.into(),
+                    output: tx,
+                })
+                .await.expect("Sending action to network task failed.");
+
+            rx
+        };
+
+        register_stream
+            .flatten_stream()
+            .filter_map(|(data, peer)| async move {
+                // Map the (data, peer) stream to (message, peer) by deserializing the messages.
+                match <T as Deserialize>::deserialize(&mut data.reader()) {
+                    Ok(message) => Some((message, peer)),
+                    Err(e) => {
+                        tracing::error!("Failed to deserialize message: {}", e);
+                        None
+                    },
+                }
+            })
+            .boxed()
+    }
+
     async fn subscribe<T>(&self, topic: &T) -> Result<Pin<Box<dyn Stream<Item = (T::Item, Self::PubsubId)> + Send>>, Self::Error>
     where
         T: Topic + Sync,
@@ -630,8 +683,7 @@ impl NetworkInterface for Network {
         let (tx, rx) = oneshot::channel();
 
         self.action_tx
-            .lock()
-            .await
+            .clone()
             .send(NetworkAction::Subscribe {
                 topic_name: topic.topic(),
                 validate: topic.validate(),
@@ -664,8 +716,7 @@ impl NetworkInterface for Network {
         item.serialize(&mut buf)?;
 
         self.action_tx
-            .lock()
-            .await
+            .clone()
             .send(NetworkAction::Publish {
                 topic_name: topic.topic(),
                 data: buf,
@@ -682,8 +733,7 @@ impl NetworkInterface for Network {
         let (output_tx, output_rx) = oneshot::channel();
 
         self.action_tx
-            .lock()
-            .await
+            .clone()
             .send(NetworkAction::Validate {
                 message_id: id.message_id,
                 source: id.propagation_source,
@@ -701,8 +751,7 @@ impl NetworkInterface for Network {
     {
         let (output_tx, output_rx) = oneshot::channel();
         self.action_tx
-            .lock()
-            .await
+            .clone()
             .send(NetworkAction::DhtGet {
                 key: k.as_ref().to_owned(),
                 output: output_tx,
@@ -727,8 +776,7 @@ impl NetworkInterface for Network {
         v.serialize(&mut buf)?;
 
         self.action_tx
-            .lock()
-            .await
+            .clone()
             .send(NetworkAction::DhtPut {
                 key: k.as_ref().to_owned(),
                 value: buf,
@@ -740,15 +788,14 @@ impl NetworkInterface for Network {
 
     async fn dial_peer(&self, peer_id: PeerId) -> Result<(), NetworkError> {
         let (output_tx, output_rx) = oneshot::channel();
-        self.action_tx.lock().await.send(NetworkAction::Dial { peer_id, output: output_tx }).await?;
+        self.action_tx.clone().send(NetworkAction::Dial { peer_id, output: output_tx }).await?;
         output_rx.await?
     }
 
     async fn dial_address(&self, address: Multiaddr) -> Result<(), NetworkError> {
         let (output_tx, output_rx) = oneshot::channel();
         self.action_tx
-            .lock()
-            .await
+            .clone()
             .send(NetworkAction::DialAddress { address, output: output_tx })
             .await?;
         output_rx.await?
@@ -865,15 +912,16 @@ mod tests {
 
             let clock = Arc::new(OffsetTime::new());
             let net = Network::new(vec![address.clone()], clock, network_config(address.clone())).await;
-            log::info!("Creating node: address={}, peer_id={}", address, net.local_peer_id);
+            tracing::debug!(address = ?address, peer_id = ?net.local_peer_id, "creating node");
 
             if let Some(dial_address) = self.addresses.first() {
-                log::info!("Dialing peer: address={}", dial_address);
+                tracing::debug!(address = ?dial_address, "dialing peer");
                 net.dial_address(dial_address.clone()).await.unwrap();
             }
 
             let mut events = net.subscribe_events();
-            log::debug!("event: {:?}", events.next().await);
+            let event = events.next().await;
+            tracing::trace!(event = ?event);
 
             self.addresses.push(address);
 
@@ -891,30 +939,30 @@ mod tests {
     }
 
     async fn create_connected_networks() -> (Network, Network) {
-        log::info!("Creating connected test networks:");
+        tracing::debug!("creating connected test networks:");
         let addr1 = multiaddr![Memory(thread_rng().gen::<u64>())];
         let addr2 = multiaddr![Memory(thread_rng().gen::<u64>())];
 
         let net1 = Network::new(vec![addr1.clone()], Arc::new(OffsetTime::new()), network_config(addr1.clone())).await;
         let net2 = Network::new(vec![addr2.clone()], Arc::new(OffsetTime::new()), network_config(addr2.clone())).await;
 
-        log::info!("Network 1: address={}, peer_id={}", addr1, net1.local_peer_id);
-        log::info!("Network 2: address={}, peer_id={}", addr2, net2.local_peer_id);
+        tracing::debug!(address = ?addr1, peer_id = ?net1.local_peer_id, "Network 1");
+        tracing::debug!(address = ?addr2, peer_id = ?net2.local_peer_id, "Network 2");
 
-        log::info!("Dialing peer 1 from peer 2...");
+        tracing::debug!("dialing peer 1 from peer 2...");
         net2.dial_address(addr1).await.unwrap();
 
         let mut events1 = net1.subscribe_events();
         let mut events2 = net2.subscribe_events();
 
-        log::info!("Waiting for events");
+        tracing::debug!("waiting for join events");
 
         let event1 = events1.next().await.unwrap().unwrap();
-        log::debug!("event1 = {:?}", event1);
+        tracing::trace!(event1 = ?event1);
         assert_peer_joined(&event1, &net2.local_peer_id);
 
         let event2 = events2.next().await.unwrap().unwrap();
-        log::debug!("event2 = {:?}", event2);
+        tracing::trace!(event2 = ?event2);
         assert_peer_joined(&event2, &net1.local_peer_id);
 
         (net1, net2)
@@ -930,8 +978,6 @@ mod tests {
         let peer1 = net2.get_peer(net1.local_peer_id().clone()).unwrap();
         assert_eq!(peer2.id(), net2.local_peer_id);
         assert_eq!(peer1.id(), net1.local_peer_id);
-
-        log::info!("Test finished");
     }
 
     #[tokio::test]
@@ -945,7 +991,7 @@ mod tests {
 
         peer2.send(&TestMessage { id: 4711 }).await.unwrap();
 
-        log::info!("Send complete");
+        tracing::debug!("send complete");
 
         let msg = msgs.next().await.unwrap();
 
@@ -982,24 +1028,27 @@ mod tests {
 
     #[tokio::test]
     async fn connections_are_properly_closed() {
-        // env_logger::init();
+        //tracing_subscriber::fmt::init();
 
         let (net1, net2) = create_connected_networks().await;
 
+        //let peer1 = net2.get_peer(net1.local_peer_id().clone()).unwrap();
         let peer2 = net1.get_peer(net2.local_peer_id().clone()).unwrap();
 
         let mut events1 = net1.subscribe_events();
         let mut events2 = net2.subscribe_events();
 
+        //peer1.close(CloseReason::Other);
         peer2.close(CloseReason::Other);
+        tracing::debug!("closed peer");
 
         let event1 = events1.next().await.unwrap().unwrap();
         assert_peer_left(&event1, net2.local_peer_id());
-        log::debug!("event1 = {:?}", event1);
-
+        tracing::trace!(event1 = ?event1);
+        
         let event2 = events2.next().await.unwrap().unwrap();
         assert_peer_left(&event2, net1.local_peer_id());
-        log::debug!("event2 = {:?}", event2);
+        tracing::trace!(event2 = ?event2);
 
         assert_eq!(net1.get_peers().len(), 0);
         assert_eq!(net2.get_peers().len(), 0);

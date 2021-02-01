@@ -6,6 +6,7 @@ extern crate beserial_derive;
 extern crate log;
 
 mod behaviour;
+pub mod codecs;
 pub mod discovery;
 mod limit;
 pub mod message;

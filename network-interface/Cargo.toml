@@ -22,6 +22,7 @@ futures = "0.3"
 parking_lot = "0.11"
 tokio = { version = "0.2", features = ["time", "rt-core", "sync", "stream", "macros"] }
 thiserror = "1.0"
+derive_more = "0.99"
 
 # Used during debugging
 pretty-hex = "0.2"

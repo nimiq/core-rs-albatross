@@ -16,6 +16,7 @@ pub mod dispatch;
 pub enum CloseReason {
     Other,
     RemoteClosed,
+    Error,
 }
 
 #[derive(Debug, Error)]
@@ -43,6 +44,7 @@ pub trait Peer: Send + Sync + Hash + Eq {
 
     async fn send_or_close<T: Message, F: FnOnce(&SendError) -> CloseReason + Send>(&self, msg: &T, f: F) -> Result<(), SendError> {
         if let Err(e) = self.send(msg).await {
+            log::error!("Sending failed: {}", e);
             self.close(f(&e));
             Err(e)
         } else {

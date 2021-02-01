@@ -213,13 +213,10 @@ impl ProtocolsHandler for DiscoveryHandler {
     type OutboundOpenInfo = ();
 
     fn listen_protocol(&self) -> SubstreamProtocol<DiscoveryProtocol, ()> {
-        log::trace!("DiscoveryHandler::listen_protocol");
         SubstreamProtocol::new(DiscoveryProtocol, ())
     }
 
     fn inject_fully_negotiated_inbound(&mut self, protocol: MessageReader<NegotiatedSubstream, DiscoveryMessage>, _info: ()) {
-        log::trace!("DiscoveryHandler::inject_fully_negotiated_inbound");
-
         if self.inbound.is_some() {
             panic!("Inbound already connected");
         }
@@ -230,8 +227,6 @@ impl ProtocolsHandler for DiscoveryHandler {
     }
 
     fn inject_fully_negotiated_outbound(&mut self, protocol: MessageWriter<NegotiatedSubstream, DiscoveryMessage>, _info: ()) {
-        log::trace!("DiscoveryHandler::inject_fully_negotiated_outbound");
-
         if self.outbound.is_some() {
             panic!("Outbound already connected");
         }
@@ -246,8 +241,6 @@ impl ProtocolsHandler for DiscoveryHandler {
     }
 
     fn inject_event(&mut self, event: HandlerInEvent) {
-        log::trace!("DiscoveryHandler::inject_event: {:?}", event);
-
         match event {
             HandlerInEvent::ObservedAddress(addresses) => {
                 // We only use this during handshake and are not waiting on it, so we don't need to wake anything.
@@ -259,8 +252,7 @@ impl ProtocolsHandler for DiscoveryHandler {
     }
 
     fn inject_dial_upgrade_error(&mut self, _info: Self::OutboundOpenInfo, error: ProtocolsHandlerUpgrErr<SerializingError>) {
-        log::warn!("DiscoveryHandler::inject_dial_upgrade_error: {:?}", error);
-        unimplemented!()
+        log::error!("inject_dial_upgrade_error: {:?}", error);
     }
 
     fn connection_keep_alive(&self) -> KeepAlive {
@@ -272,7 +264,6 @@ impl ProtocolsHandler for DiscoveryHandler {
             // Send message
             // This should be done first, so we can flush the outbound sink's buffer.
             if let Some(outbound) = self.outbound.as_mut() {
-                log::trace!("DiscoveryHandler: Polling sink");
                 match outbound.poll_ready_unpin(cx) {
                     Poll::Ready(Err(e)) => return Poll::Ready(ProtocolsHandlerEvent::Close(e.into())),
 
@@ -285,7 +276,6 @@ impl ProtocolsHandler for DiscoveryHandler {
             }
 
             // Handle state
-            log::trace!("DiscoveryHandler: state: {:?}", self.state);
             match self.state {
                 HandlerState::Init => {
                     // Request outbound substream
@@ -428,7 +418,7 @@ impl ProtocolsHandler for DiscoveryHandler {
 
                                     // Timer for periodic updates
                                     if let Some(mut update_interval) = update_interval {
-                                        log::trace!("Update interval: {:?}", update_interval);
+                                        log::trace!("update interval: {:?}", update_interval);
 
                                         let min_secs = self.config.min_send_update_interval.as_secs();
                                         if update_interval < min_secs {

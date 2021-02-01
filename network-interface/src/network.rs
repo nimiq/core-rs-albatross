@@ -3,7 +3,7 @@ use std::{pin::Pin, sync::Arc};
 use async_trait::async_trait;
 use futures::{
     future, ready, stream,
-    stream::{FusedStream, SelectAll},
+    stream::{FusedStream, SelectAll, BoxStream},
     task::{Context, Poll},
     Stream, StreamExt, TryFutureExt,
 };
@@ -73,10 +73,11 @@ pub trait Network: Send + Sync + 'static {
     }
 
     /// Should panic if there is already a non-closed sink registered for a message type.
-    fn receive_from_all<T: Message>(&self) -> ReceiveFromAll<T, Self::PeerType> {
-        ReceiveFromAll::new(self)
+    fn receive_from_all<'a, T: Message>(&self) -> BoxStream<'a, (T, Arc<Self::PeerType>)> {
+        ReceiveFromAll::new(self).boxed()
     }
 
+    // TODO: Use `BoxStream`
     async fn subscribe<T>(&self, topic: &T) -> Result<Pin<Box<dyn Stream<Item = (T::Item, Self::PubsubId)> + Send>>, Self::Error>
     where
         T: Topic + Sync;

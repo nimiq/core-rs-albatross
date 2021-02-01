@@ -364,7 +364,8 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                     sender: agent,
                 })
             }
-            Err(_) => {
+            Err(e) => {
+                log::error!("Request block hashes failed: {}", e);
                 agent.peer.close(CloseReason::Other);
                 None
             }

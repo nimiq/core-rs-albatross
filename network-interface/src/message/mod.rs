@@ -1,6 +1,8 @@
 use std::io;
 use std::io::{Cursor, Read, Seek, SeekFrom};
 
+use derive_more::{From, Into, AsRef, AsMut, Display};
+
 use beserial::{uvar, Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use futures::{AsyncRead, AsyncReadExt};
 use nimiq_utils::crc::Crc32Computer;
@@ -9,9 +11,32 @@ use crate::message::crc::ReaderComputeCrc32;
 
 mod crc;
 
+
+#[derive(Copy, Clone, Debug, From, Into, AsRef, AsMut, Display, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct MessageType(u64);
+
+impl MessageType {
+    pub const fn new(x: u64) -> Self {
+        Self(x)
+    }
+}
+
+impl From<uvar> for MessageType {
+    fn from(x: uvar) -> Self {
+        Self(x.into())
+    }
+}
+
+impl From<MessageType> for uvar {
+    fn from(x: MessageType) -> Self {
+        x.0.into()
+    }
+}
+
+
 const MAGIC: u32 = 0x4204_2042;
 
-pub trait Message: Serialize + Deserialize + Send + Sync + std::fmt::Debug + 'static {
+pub trait Message: Serialize + Deserialize + Send + Sync + Unpin + std::fmt::Debug + 'static {
     const TYPE_ID: u64;
 
     // Does CRC stuff and is called by network

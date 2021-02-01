@@ -113,7 +113,7 @@ where
     type Future = future::Ready<Result<Self::Output, Self::Error>>;
 
     fn upgrade_inbound(self, socket: C, info: Self::Info) -> Self::Future {
-        log::debug!("DiscoveryProtocol::upgrade_inbound: {:?}", info);
+        log::trace!("upgrade_inbound: {:?}", info);
         future::ok(MessageReader::new(socket))
     }
 }
@@ -127,7 +127,7 @@ where
     type Future = future::Ready<Result<Self::Output, Self::Error>>;
 
     fn upgrade_outbound(self, socket: C, info: Self::Info) -> Self::Future {
-        log::debug!("DiscoveryProtocol::upgrade_outbound: {:?}", info);
+        log::trace!("upgrade_outbound: {:?}", info);
         future::ok(MessageWriter::new(socket))
     }
 }
