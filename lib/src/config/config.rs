@@ -174,7 +174,10 @@ pub struct FileStorageConfig {
     database_parent: PathBuf,
 
     /// Path to peer key
-    peer_key: PathBuf,
+    peer_key_path: PathBuf,
+
+    /// The key used for the peer key, if the file is not present.
+    peer_key: Option<String>,
 
     /// Path to validator key
     #[cfg(feature = "validator")]
@@ -192,7 +195,8 @@ impl FileStorageConfig {
         let path = path.as_ref();
         Self {
             database_parent: path.to_path_buf(),
-            peer_key: path.join("peer_key.dat"),
+            peer_key_path: path.join("peer_key.dat"),
+            peer_key: None,
             #[cfg(feature = "validator")]
             validator_key_path: Some(path.join("validator_key.dat")),
             #[cfg(feature = "validator")]
@@ -334,7 +338,7 @@ impl StorageConfig {
     }
 
     #[cfg(feature = "validator")]
-    pub(crate) fn validator_key(&self) -> Result<BlsKeyPair, Error> {
+    pub(crate) fn validator_keypair(&self) -> Result<BlsKeyPair, Error> {
         Ok(match self {
             StorageConfig::Volatile => BlsKeyPair::generate_default_csprng(),
             StorageConfig::Filesystem(file_storage) => {
@@ -359,7 +363,6 @@ impl StorageConfig {
                             BlsSecretKey::deserialize_from_vec(&hex::decode(key).unwrap()).unwrap();
                         secret_key.into()
                     } else {
-                        //todo!("Load hex string");
                         BlsKeyPair::generate_default_csprng()
                     }
                 })?
@@ -372,8 +375,17 @@ impl StorageConfig {
         match self {
             StorageConfig::Volatile => Ok(IdentityKeypair::generate_ed25519()),
             StorageConfig::Filesystem(file_storage) => {
-                Ok(FileStore::new(&file_storage.peer_key)
-                    .load_or_store(IdentityKeypair::generate_ed25519)?)
+                Ok(
+                    FileStore::new(&file_storage.peer_key_path).load_or_store(|| {
+                        if let Some(key) = file_storage.peer_key.as_ref() {
+                            // TODO: handle errors
+                            IdentityKeypair::deserialize_from_vec(&hex::decode(key).unwrap())
+                                .unwrap()
+                        } else {
+                            IdentityKeypair::generate_ed25519()
+                        }
+                    })?,
+                )
             }
             _ => Err(self.not_available()),
         }
@@ -688,8 +700,11 @@ impl ClientConfigBuilder {
         if let Some(path) = config_file.database.path.as_ref() {
             file_storage.database_parent = PathBuf::from(path);
         }
-        if let Some(path) = config_file.network.peer_key_file.as_ref() {
-            file_storage.peer_key = PathBuf::from(path);
+        if let Some(key_path) = config_file.network.peer_key_file.as_ref() {
+            file_storage.peer_key_path = PathBuf::from(key_path);
+        }
+        if let Some(key) = config_file.network.peer_key.as_ref() {
+            file_storage.peer_key = Some(key.to_owned());
         }
         #[cfg(feature = "validator")]
         if let Some(validator_config) = config_file.validator.as_ref() {
