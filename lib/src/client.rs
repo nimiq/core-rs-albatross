@@ -73,7 +73,10 @@ impl ClientInner {
         // Load identity keypair from file store
         let identity_keypair = config.storage.identity_keypair()?;
         log::info!("Identity public key: {:?}", identity_keypair.public());
-        log::info!("PeerId: {:}", identity_keypair.public().into_peer_id().to_base58());
+        log::info!(
+            "PeerId: {:}",
+            identity_keypair.public().into_peer_id().to_base58()
+        );
 
         // Generate peer contact from identity keypair and services/protocols
         let mut peer_contact = PeerContact::new(
@@ -112,7 +115,7 @@ impl ClientInner {
 
         // Load validator key (before we give away ownership of the storage config)
         #[cfg(feature = "validator")]
-        let validator_key = config.storage.validator_key()?;
+        let validator_key = config.storage.validator_keypair()?;
 
         // Open database
         let environment = config.storage.database(
