@@ -27,6 +27,7 @@ function optional () {
 echo '[network]'
 required min_peers NIMIQ_MIN_PEERS number
 required peer_key_file NIMIQ_PEER_KEY_FILE string
+optional peer_key NIMIQ_PEER_KEY string
 
 echo "listen_addresses = ["
 addr=($LISTEN_ADDRESSES)

@@ -117,6 +117,7 @@ impl ConfigFile {
 #[serde(deny_unknown_fields)]
 pub struct NetworkSettings {
     pub peer_key_file: Option<String>,
+    pub peer_key: Option<String>,
 
     #[serde(default)]
     pub listen_addresses: Vec<String>,
