@@ -3,7 +3,7 @@ use ark_ff::Zero;
 use ark_mnt4_753::Fr as MNT4Fr;
 use ark_mnt6_753::constraints::{G1Var, G2Var};
 use ark_mnt6_753::{Fr, G1Projective, G2Projective};
-use ark_r1cs_std::prelude::{AllocVar, Boolean, UInt32};
+use ark_r1cs_std::prelude::{AllocVar, Boolean};
 use ark_r1cs_std::R1CSVar;
 use ark_relations::r1cs::ConstraintSystem;
 use ark_std::ops::MulAssign;
@@ -11,7 +11,7 @@ use ark_std::{test_rng, UniformRand};
 use rand::RngCore;
 
 use nimiq_bls::utils::bytes_to_bits;
-use nimiq_nano_sync::constants::MIN_SIGNERS;
+use nimiq_nano_sync::constants::{MIN_SIGNERS, VALIDATOR_SLOTS};
 use nimiq_nano_sync::gadgets::mnt4::MacroBlockGadget;
 use nimiq_nano_sync::primitives::{pedersen_generators, MacroBlock};
 
@@ -24,25 +24,30 @@ fn block_hash_works() {
     let rng = &mut test_rng();
 
     // Create block parameters.
-    let block_number = u32::rand(rng);
-
-    let round_number = u32::rand(rng);
-
     let mut bytes = [0u8; 95];
     rng.fill_bytes(&mut bytes);
     let pk_tree_root = bytes.to_vec();
 
-    let block = MacroBlock::default();
+    let mut header_hash = [0u8; 32];
+    rng.fill_bytes(&mut header_hash);
+
+    let mut bytes = [0u8; VALIDATOR_SLOTS / 8];
+    rng.fill_bytes(&mut bytes);
+    let signer_bitmap = bytes_to_bits(&bytes);
+
+    let block = MacroBlock {
+        block_number: u32::rand(rng),
+        round_number: u32::rand(rng),
+        header_hash,
+        signature: G1Projective::rand(rng),
+        signer_bitmap,
+    };
 
     // Calculate hash using the primitive version.
-    let primitive_hash = block.hash(block_number, round_number, pk_tree_root.clone());
+    let primitive_hash = block.hash(pk_tree_root.clone());
 
     // Allocate parameters in the circuit.
     let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
-
-    let block_number_var = UInt32::new_witness(cs.clone(), || Ok(block_number)).unwrap();
-
-    let round_number_var = UInt32::new_witness(cs.clone(), || Ok(round_number)).unwrap();
 
     let pk_tree_root_var =
         Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(bytes_to_bits(&pk_tree_root)))
@@ -53,12 +58,7 @@ fn block_hash_works() {
 
     // Calculate hash using the gadget version.
     let gadget_hash = block_var
-        .get_hash(
-            &block_number_var,
-            &round_number_var,
-            &pk_tree_root_var,
-            &generators_var,
-        )
+        .get_hash(&pk_tree_root_var, &generators_var)
         .unwrap();
 
     assert_eq!(primitive_hash, gadget_hash.value().unwrap())
@@ -92,19 +92,15 @@ fn block_verify() {
     let mut agg_pk = G2Projective::zero();
 
     // Create macro block with correct signers set.
-    let mut block = MacroBlock::without_signatures(header_hash);
+    let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
     for i in 0..MIN_SIGNERS {
-        block.sign(sk, i, block_number, round_number, pk_tree_root.clone());
+        block.sign(sk, i, pk_tree_root.clone());
         agg_pk += &pk;
     }
 
     // Allocate parameters in the circuit.
     let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
-
-    let block_number_var = UInt32::new_witness(cs.clone(), || Ok(block_number)).unwrap();
-
-    let round_number_var = UInt32::new_witness(cs.clone(), || Ok(round_number)).unwrap();
 
     let pk_tree_root_var =
         Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(bytes_to_bits(&pk_tree_root)))
@@ -117,14 +113,7 @@ fn block_verify() {
 
     // Verify block.
     assert!(block_var
-        .verify(
-            cs,
-            &pk_tree_root_var,
-            &block_number_var,
-            &round_number_var,
-            &agg_pk_var,
-            &generators_var,
-        )
+        .verify(cs, &pk_tree_root_var, &agg_pk_var, &generators_var)
         .unwrap()
         .value()
         .unwrap());
@@ -158,22 +147,18 @@ fn block_verify_wrong_block_number() {
     let mut agg_pk = G2Projective::zero();
 
     // Create macro block with correct signers set.
-    let mut block = MacroBlock::without_signatures(header_hash);
+    let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
     for i in 0..MIN_SIGNERS {
-        block.sign(sk, i, block_number, round_number, pk_tree_root.clone());
+        block.sign(sk, i, pk_tree_root.clone());
         agg_pk += &pk;
     }
 
     // Create wrong block number.
-    let block_number = u32::rand(rng);
+    block.block_number += 1;
 
     // Allocate parameters in the circuit.
     let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
-
-    let block_number_var = UInt32::new_witness(cs.clone(), || Ok(block_number)).unwrap();
-
-    let round_number_var = UInt32::new_witness(cs.clone(), || Ok(round_number)).unwrap();
 
     let pk_tree_root_var =
         Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(bytes_to_bits(&pk_tree_root)))
@@ -186,14 +171,7 @@ fn block_verify_wrong_block_number() {
 
     // Verify block.
     assert!(!block_var
-        .verify(
-            cs,
-            &pk_tree_root_var,
-            &block_number_var,
-            &round_number_var,
-            &agg_pk_var,
-            &generators_var,
-        )
+        .verify(cs, &pk_tree_root_var, &agg_pk_var, &generators_var)
         .unwrap()
         .value()
         .unwrap());
@@ -227,22 +205,18 @@ fn block_verify_wrong_round_number() {
     let mut agg_pk = G2Projective::zero();
 
     // Create macro block with correct signers set.
-    let mut block = MacroBlock::without_signatures(header_hash);
+    let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
     for i in 0..MIN_SIGNERS {
-        block.sign(sk, i, block_number, round_number, pk_tree_root.clone());
+        block.sign(sk, i, pk_tree_root.clone());
         agg_pk += &pk;
     }
 
     // Create wrong round number.
-    let round_number = u32::rand(rng);
+    block.round_number += 1;
 
     // Allocate parameters in the circuit.
     let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
-
-    let block_number_var = UInt32::new_witness(cs.clone(), || Ok(block_number)).unwrap();
-
-    let round_number_var = UInt32::new_witness(cs.clone(), || Ok(round_number)).unwrap();
 
     let pk_tree_root_var =
         Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(bytes_to_bits(&pk_tree_root)))
@@ -255,14 +229,7 @@ fn block_verify_wrong_round_number() {
 
     // Verify block.
     assert!(!block_var
-        .verify(
-            cs,
-            &pk_tree_root_var,
-            &block_number_var,
-            &round_number_var,
-            &agg_pk_var,
-            &generators_var,
-        )
+        .verify(cs, &pk_tree_root_var, &agg_pk_var, &generators_var)
         .unwrap()
         .value()
         .unwrap());
@@ -296,10 +263,10 @@ fn block_verify_wrong_pk_tree_root() {
     let mut agg_pk = G2Projective::zero();
 
     // Create macro block with correct signers set.
-    let mut block = MacroBlock::without_signatures(header_hash);
+    let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
     for i in 0..MIN_SIGNERS {
-        block.sign(sk, i, block_number, round_number, pk_tree_root.clone());
+        block.sign(sk, i, pk_tree_root.clone());
         agg_pk += &pk;
     }
 
@@ -310,10 +277,6 @@ fn block_verify_wrong_pk_tree_root() {
 
     // Allocate parameters in the circuit.
     let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
-
-    let block_number_var = UInt32::new_witness(cs.clone(), || Ok(block_number)).unwrap();
-
-    let round_number_var = UInt32::new_witness(cs.clone(), || Ok(round_number)).unwrap();
 
     let pk_tree_root_var =
         Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(bytes_to_bits(&pk_tree_root)))
@@ -326,14 +289,7 @@ fn block_verify_wrong_pk_tree_root() {
 
     // Verify block.
     assert!(!block_var
-        .verify(
-            cs,
-            &pk_tree_root_var,
-            &block_number_var,
-            &round_number_var,
-            &agg_pk_var,
-            &generators_var,
-        )
+        .verify(cs, &pk_tree_root_var, &agg_pk_var, &generators_var)
         .unwrap()
         .value()
         .unwrap());
@@ -367,10 +323,10 @@ fn block_verify_wrong_agg_pk() {
     let mut agg_pk = G2Projective::zero();
 
     // Create macro block with correct signers set.
-    let mut block = MacroBlock::without_signatures(header_hash);
+    let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
     for i in 0..MIN_SIGNERS {
-        block.sign(sk, i, block_number, round_number, pk_tree_root.clone());
+        block.sign(sk, i, pk_tree_root.clone());
         agg_pk += &pk;
     }
 
@@ -379,10 +335,6 @@ fn block_verify_wrong_agg_pk() {
 
     // Allocate parameters in the circuit.
     let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
-
-    let block_number_var = UInt32::new_witness(cs.clone(), || Ok(block_number)).unwrap();
-
-    let round_number_var = UInt32::new_witness(cs.clone(), || Ok(round_number)).unwrap();
 
     let pk_tree_root_var =
         Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(bytes_to_bits(&pk_tree_root)))
@@ -395,14 +347,7 @@ fn block_verify_wrong_agg_pk() {
 
     // Verify block.
     assert!(!block_var
-        .verify(
-            cs,
-            &pk_tree_root_var,
-            &block_number_var,
-            &round_number_var,
-            &agg_pk_var,
-            &generators_var,
-        )
+        .verify(cs, &pk_tree_root_var, &agg_pk_var, &generators_var)
         .unwrap()
         .value()
         .unwrap());
@@ -436,10 +381,10 @@ fn block_verify_wrong_header_hash() {
     let mut agg_pk = G2Projective::zero();
 
     // Create macro block with correct signers set.
-    let mut block = MacroBlock::without_signatures(header_hash);
+    let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
     for i in 0..MIN_SIGNERS {
-        block.sign(sk, i, block_number, round_number, pk_tree_root.clone());
+        block.sign(sk, i, pk_tree_root.clone());
         agg_pk += &pk;
     }
 
@@ -450,10 +395,6 @@ fn block_verify_wrong_header_hash() {
 
     // Allocate parameters in the circuit.
     let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
-
-    let block_number_var = UInt32::new_witness(cs.clone(), || Ok(block_number)).unwrap();
-
-    let round_number_var = UInt32::new_witness(cs.clone(), || Ok(round_number)).unwrap();
 
     let pk_tree_root_var =
         Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(bytes_to_bits(&pk_tree_root)))
@@ -466,14 +407,7 @@ fn block_verify_wrong_header_hash() {
 
     // Verify block.
     assert!(!block_var
-        .verify(
-            cs,
-            &pk_tree_root_var,
-            &block_number_var,
-            &round_number_var,
-            &agg_pk_var,
-            &generators_var,
-        )
+        .verify(cs, &pk_tree_root_var, &agg_pk_var, &generators_var)
         .unwrap()
         .value()
         .unwrap());
@@ -507,10 +441,10 @@ fn block_verify_wrong_signature() {
     let mut agg_pk = G2Projective::zero();
 
     // Create macro block with correct signers set.
-    let mut block = MacroBlock::without_signatures(header_hash);
+    let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
     for i in 0..MIN_SIGNERS {
-        block.sign(sk, i, block_number, round_number, pk_tree_root.clone());
+        block.sign(sk, i, pk_tree_root.clone());
         agg_pk += &pk;
     }
 
@@ -519,10 +453,6 @@ fn block_verify_wrong_signature() {
 
     // Allocate parameters in the circuit.
     let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
-
-    let block_number_var = UInt32::new_witness(cs.clone(), || Ok(block_number)).unwrap();
-
-    let round_number_var = UInt32::new_witness(cs.clone(), || Ok(round_number)).unwrap();
 
     let pk_tree_root_var =
         Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(bytes_to_bits(&pk_tree_root)))
@@ -535,14 +465,7 @@ fn block_verify_wrong_signature() {
 
     // Verify block.
     assert!(!block_var
-        .verify(
-            cs,
-            &pk_tree_root_var,
-            &block_number_var,
-            &round_number_var,
-            &agg_pk_var,
-            &generators_var,
-        )
+        .verify(cs, &pk_tree_root_var, &agg_pk_var, &generators_var)
         .unwrap()
         .value()
         .unwrap());
@@ -576,19 +499,15 @@ fn block_verify_too_few_signers() {
     let mut agg_pk = G2Projective::zero();
 
     // Create macro block with too few signers.
-    let mut block = MacroBlock::without_signatures(header_hash);
+    let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
     for i in 0..MIN_SIGNERS - 1 {
-        block.sign(sk, i, block_number, round_number, pk_tree_root.clone());
+        block.sign(sk, i, pk_tree_root.clone());
         agg_pk += &pk;
     }
 
     // Allocate parameters in the circuit.
     let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
-
-    let block_number_var = UInt32::new_witness(cs.clone(), || Ok(block_number)).unwrap();
-
-    let round_number_var = UInt32::new_witness(cs.clone(), || Ok(round_number)).unwrap();
 
     let pk_tree_root_var =
         Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(bytes_to_bits(&pk_tree_root)))
@@ -601,14 +520,7 @@ fn block_verify_too_few_signers() {
 
     // Verify block.
     assert!(!block_var
-        .verify(
-            cs,
-            &pk_tree_root_var,
-            &block_number_var,
-            &round_number_var,
-            &agg_pk_var,
-            &generators_var,
-        )
+        .verify(cs, &pk_tree_root_var, &agg_pk_var, &generators_var)
         .unwrap()
         .value()
         .unwrap());

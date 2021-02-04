@@ -33,8 +33,6 @@ pub struct MacroBlockCircuit {
     agg_pk_chunks: Vec<G2Projective>,
     proof: Proof<MNT6_753>,
     initial_pk_tree_root: Vec<bool>,
-    initial_block_number: u32,
-    initial_round_number: u32,
     final_pk_tree_root: Vec<bool>,
     block: MacroBlock,
 
@@ -54,8 +52,6 @@ impl MacroBlockCircuit {
         agg_pk_chunks: Vec<G2Projective>,
         proof: Proof<MNT6_753>,
         initial_pk_tree_root: Vec<bool>,
-        initial_block_number: u32,
-        initial_round_number: u32,
         final_pk_tree_root: Vec<bool>,
         block: MacroBlock,
         initial_state_commitment: Vec<Fq>,
@@ -66,8 +62,6 @@ impl MacroBlockCircuit {
             agg_pk_chunks,
             proof,
             initial_pk_tree_root,
-            initial_block_number,
-            initial_round_number,
             final_pk_tree_root,
             block,
             initial_state_commitment,
@@ -103,12 +97,6 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         let initial_pk_tree_root_var =
             Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(&self.initial_pk_tree_root[..]))?;
 
-        let initial_block_number_var =
-            UInt32::new_witness(cs.clone(), || Ok(&self.initial_block_number))?;
-
-        let initial_round_number_var =
-            UInt32::new_witness(cs.clone(), || Ok(&self.initial_round_number))?;
-
         let final_pk_tree_root_var =
             Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(&self.final_pk_tree_root[..]))?;
 
@@ -139,7 +127,7 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
 
         let reference_commitment = StateCommitmentGadget::evaluate(
             cs.clone(),
-            &initial_block_number_var,
+            &block_var.block_number,
             &initial_pk_tree_root_var,
             &pedersen_generators_var,
         )?;
@@ -152,7 +140,7 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         next_cost_analysis!(cs, cost, || { "Verify final state commitment" });
 
         let final_block_number_var =
-            UInt32::addmany(&[initial_block_number_var.clone(), epoch_length_var])?;
+            UInt32::addmany(&[block_var.block_number.clone(), epoch_length_var])?;
 
         let reference_commitment = StateCommitmentGadget::evaluate(
             cs.clone(),
@@ -230,8 +218,6 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
             .verify(
                 cs.clone(),
                 &final_pk_tree_root_var,
-                &initial_block_number_var,
-                &initial_round_number_var,
                 &agg_pk_var,
                 &pedersen_generators_var,
             )?

@@ -26,6 +26,8 @@ use crate::utils::reverse_inner_byte_order;
 ///     validator list).
 ///  3. There are enough signers.
 pub struct MacroBlockGadget {
+    pub block_number: UInt32<MNT4Fr>,
+    pub round_number: UInt32<MNT4Fr>,
     pub header_hash: Vec<Boolean<MNT4Fr>>,
     pub signature: G1Var,
     pub signer_bitmap: Vec<Boolean<MNT4Fr>>,
@@ -39,10 +41,6 @@ impl MacroBlockGadget {
         cs: ConstraintSystemRef<MNT4Fr>,
         // This is the commitment for the set of public keys that are owned by the next set of validators.
         pk_tree_root: &Vec<Boolean<MNT4Fr>>,
-        // Simply the number of the macro block.
-        block_number: &UInt32<MNT4Fr>,
-        // The round number of the macro block.
-        round_number: &UInt32<MNT4Fr>,
         // This is the aggregated public key.
         agg_pk: &G2Var,
         // These are just the generators for the Pedersen hash gadget.
@@ -52,12 +50,7 @@ impl MacroBlockGadget {
         let enough_signers = self.check_signers(cs.clone())?;
 
         // Get the hash point for the signature.
-        let hash = self.get_hash(
-            block_number,
-            round_number,
-            pk_tree_root,
-            pedersen_generators,
-        )?;
+        let hash = self.get_hash(pk_tree_root, pedersen_generators)?;
 
         // Check the validity of the signature.
         let valid_sig = CheckSigGadget::check_signature(cs, agg_pk, &hash, &self.signature)?;
@@ -75,8 +68,6 @@ impl MacroBlockGadget {
     /// to obtain a single EC point.
     pub fn get_hash(
         &self,
-        block_number: &UInt32<MNT4Fr>,
-        round_number: &UInt32<MNT4Fr>,
         pk_tree_root: &Vec<Boolean<MNT4Fr>>,
         pedersen_generators: &Vec<G1Var>,
     ) -> Result<G1Var, SynthesisError> {
@@ -92,14 +83,14 @@ impl MacroBlockGadget {
         bits.append(&mut step_bits);
 
         // The block number comes in little endian all the way. A reverse will put it into big endian.
-        let mut block_number_bits = block_number.to_bits_le();
+        let mut block_number_bits = self.block_number.clone().to_bits_le();
 
         block_number_bits.reverse();
 
         bits.append(&mut block_number_bits);
 
         // The round number comes in little endian all the way. A reverse will put it into big endian.
-        let mut round_number_bits = round_number.to_bits_le();
+        let mut round_number_bits = self.round_number.clone().to_bits_le();
 
         round_number_bits.reverse();
 
@@ -205,6 +196,10 @@ impl AllocVar<MacroBlock, MNT4Fr> for MacroBlockGadget {
 
         assert_eq!(value.signer_bitmap.len(), VALIDATOR_SLOTS);
 
+        let block_number = UInt32::<MNT4Fr>::new_input(cs.clone(), || Ok(value.block_number))?;
+
+        let round_number = UInt32::<MNT4Fr>::new_input(cs.clone(), || Ok(value.round_number))?;
+
         let header_hash = OutputVar::new_input(cs.clone(), || Ok(&value.header_hash))?;
 
         // While the bytes of the Blake2sOutputGadget start with the most significant first,
@@ -222,6 +217,8 @@ impl AllocVar<MacroBlock, MNT4Fr> for MacroBlockGadget {
         let signature = G1Var::new_input(cs.clone(), || Ok(value.signature))?;
 
         Ok(MacroBlockGadget {
+            block_number,
+            round_number,
             header_hash,
             signature,
             signer_bitmap,
@@ -244,6 +241,10 @@ impl AllocVar<MacroBlock, MNT4Fr> for MacroBlockGadget {
 
         assert_eq!(value.signer_bitmap.len(), VALIDATOR_SLOTS);
 
+        let block_number = UInt32::<MNT4Fr>::new_witness(cs.clone(), || Ok(value.block_number))?;
+
+        let round_number = UInt32::<MNT4Fr>::new_witness(cs.clone(), || Ok(value.round_number))?;
+
         let header_hash = OutputVar::new_witness(cs.clone(), || Ok(&value.header_hash))?;
 
         // While the bytes of the Blake2sOutputGadget start with the most significant first,
@@ -261,6 +262,8 @@ impl AllocVar<MacroBlock, MNT4Fr> for MacroBlockGadget {
         let signature = G1Var::new_witness(cs.clone(), || Ok(value.signature))?;
 
         Ok(MacroBlockGadget {
+            block_number,
+            round_number,
             header_hash,
             signature,
             signer_bitmap,

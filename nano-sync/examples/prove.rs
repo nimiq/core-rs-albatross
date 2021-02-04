@@ -46,16 +46,8 @@ fn main() {
     let start = Instant::now();
 
     println!("====== Generating random inputs ======");
-    let (
-        initial_pks,
-        pk_tree_proofs,
-        initial_pk_tree_root,
-        final_pks,
-        final_pk_tree_root,
-        block_number,
-        round_number,
-        block,
-    ) = generate_inputs(rng);
+    let (initial_pks, pk_tree_proofs, initial_pk_tree_root, final_pks, final_pk_tree_root, block) =
+        generate_inputs(rng);
 
     println!("====== Generating proofs ======");
     // Start generating proofs for PKTree level 5.
@@ -160,9 +152,7 @@ fn main() {
         &initial_pk_tree_root,
         &final_pks,
         &final_pk_tree_root,
-        block_number,
-        round_number,
-        block,
+        block.clone(),
     );
 
     // Start generating proof for Macro Block Wrapper.
@@ -172,7 +162,7 @@ fn main() {
         constraint_check,
         &initial_pks,
         &final_pks,
-        block_number,
+        block.block_number,
     );
 
     // Start generating proof for Merger.
@@ -182,7 +172,7 @@ fn main() {
         constraint_check,
         &initial_pks,
         &final_pks,
-        block_number,
+        block.block_number,
     );
 
     // Start generating proof for Merger Wrapper.
@@ -192,14 +182,14 @@ fn main() {
         constraint_check,
         &initial_pks,
         &final_pks,
-        block_number,
+        block.block_number,
     );
 
     println!("====== Cleaning up ======");
     // Save state commitments to file.
     state_comms_to_file(
-        state_commitment(block_number, initial_pks.to_vec()),
-        state_commitment(block_number + EPOCH_LENGTH, final_pks.to_vec()),
+        state_commitment(block.block_number, initial_pks.to_vec()),
+        state_commitment(block.block_number + EPOCH_LENGTH, final_pks.to_vec()),
     );
 
     // Remove useless proofs.
@@ -246,8 +236,6 @@ fn generate_inputs<R: CryptoRng + Rng>(
     Vec<u8>,
     Vec<G2MNT6>,
     Vec<u8>,
-    u32,
-    u32,
     MacroBlock,
 ) {
     let start = Instant::now();
@@ -325,17 +313,11 @@ fn generate_inputs<R: CryptoRng + Rng>(
     let mut header_hash = [0u8; 32];
     rng.fill_bytes(&mut header_hash);
 
-    let mut block = MacroBlock::without_signatures(header_hash);
+    let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
     for i in 0..VALIDATOR_SLOTS {
         if signer_bitmap[i] {
-            block.sign(
-                initial_sks[i].clone(),
-                i,
-                block_number,
-                round_number,
-                final_pk_tree_root.clone(),
-            );
+            block.sign(initial_sks[i].clone(), i, final_pk_tree_root.clone());
         }
     }
 
@@ -347,8 +329,6 @@ fn generate_inputs<R: CryptoRng + Rng>(
         initial_pk_tree_root,
         final_pks,
         final_pk_tree_root,
-        block_number,
-        round_number,
         block,
     )
 }
@@ -682,8 +662,6 @@ fn prove_macro_block<R: CryptoRng + Rng>(
     initial_pk_tree_root: &Vec<u8>,
     final_pks: &[G2MNT6],
     final_pk_tree_root: &Vec<u8>,
-    block_number: u32,
-    round_number: u32,
     block: MacroBlock,
 ) {
     // Load the proving key from file.
@@ -718,12 +696,12 @@ fn prove_macro_block<R: CryptoRng + Rng>(
 
     // Calculate the inputs.
     let initial_state_commitment = prepare_inputs(bytes_to_bits(&state_commitment(
-        block_number,
+        block.block_number,
         initial_pks.to_vec(),
     )));
 
     let final_state_commitment = prepare_inputs(bytes_to_bits(&state_commitment(
-        block_number + EPOCH_LENGTH,
+        block.block_number + EPOCH_LENGTH,
         final_pks.to_vec(),
     )));
 
@@ -733,8 +711,6 @@ fn prove_macro_block<R: CryptoRng + Rng>(
         agg_pk_chunks,
         proof,
         bytes_to_bits(initial_pk_tree_root),
-        block_number,
-        round_number,
         bytes_to_bits(final_pk_tree_root),
         block,
         initial_state_commitment,
