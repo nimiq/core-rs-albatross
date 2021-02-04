@@ -8,7 +8,7 @@ use ark_groth16::{Groth16, Proof, ProvingKey, VerifyingKey};
 use ark_mnt4_753::{Fr as MNT4Fr, G1Projective as G1MNT4, G2Projective as G2MNT4, MNT4_753};
 use ark_mnt6_753::{Fr as MNT6Fr, G1Projective as G1MNT6, G2Projective as G2MNT6, MNT6_753};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_std::{UniformRand};
+use ark_std::UniformRand;
 use rand::{thread_rng, CryptoRng, Rng};
 
 use nimiq_nano_sync::circuits::mnt4::{
@@ -238,9 +238,9 @@ fn setup_macro_block<R: CryptoRng + Rng>(rng: &mut R) {
     rng.fill_bytes(&mut bytes);
     let initial_pk_tree_root = bytes_to_bits(&bytes);
 
-    let initial_block_number = u32::rand(rng);
+    let block_number = u32::rand(rng);
 
-    let initial_round_number = u32::rand(rng);
+    let round_number = u32::rand(rng);
 
     let mut bytes = [0u8; 95];
     rng.fill_bytes(&mut bytes);
@@ -260,6 +260,8 @@ fn setup_macro_block<R: CryptoRng + Rng>(rng: &mut R) {
     let signer_bitmap = bytes_to_bits(&bytes);
 
     let block = MacroBlock {
+        block_number,
+        round_number,
         header_hash,
         signature,
         signer_bitmap,
@@ -275,8 +277,6 @@ fn setup_macro_block<R: CryptoRng + Rng>(rng: &mut R) {
         agg_pk_chunks,
         proof,
         initial_pk_tree_root,
-        initial_block_number,
-        initial_round_number,
         final_pk_tree_root,
         block,
         initial_state_commitment,

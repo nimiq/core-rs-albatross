@@ -10,6 +10,7 @@ pub use nimiq_bls::utils::*;
 
 /// Takes a vector of booleans and converts it into a vector of field elements, which is the way we
 /// represent inputs to circuits.
+/// It assumes the bits are in little endian.
 pub fn prepare_inputs<F: PrimeField>(mut input: Vec<bool>) -> Vec<F> {
     let capacity = F::size_in_bits() - 1;
 

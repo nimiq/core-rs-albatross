@@ -10,4 +10,5 @@ pub mod constants;
 pub mod cost_analysis;
 pub mod gadgets;
 pub mod primitives;
+pub mod prove;
 pub mod utils;

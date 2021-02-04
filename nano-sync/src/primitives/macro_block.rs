@@ -8,9 +8,12 @@ use crate::primitives::{pedersen_generators, pedersen_hash};
 use crate::utils::bytes_to_bits;
 
 /// A struct representing a macro block in Albatross.
-// TODO: Add a test to this primitive to make sure that it conforms to the macro block specs.
 #[derive(Clone)]
 pub struct MacroBlock {
+    /// The block number for this block.
+    pub block_number: u32,
+    /// The Tendermint round number for this block.
+    pub round_number: u32,
     /// This is simply the Blake2b hash of the entire macro block header.
     pub header_hash: [u8; 32],
     /// This is the aggregated signature of the signers for this block.
@@ -20,9 +23,11 @@ pub struct MacroBlock {
 }
 
 impl MacroBlock {
-    /// This function generates an header that has no signatures or bitmaps.
-    pub fn without_signatures(header_hash: [u8; 32]) -> Self {
+    /// This function generates a macro block that has no signatures or bitmaps.
+    pub fn without_signatures(block_number: u32, round_number: u32, header_hash: [u8; 32]) -> Self {
         MacroBlock {
+            block_number,
+            round_number,
             header_hash,
             signature: G1Projective::zero(),
             signer_bitmap: vec![false; VALIDATOR_SLOTS],
@@ -31,16 +36,9 @@ impl MacroBlock {
 
     /// This function signs a macro block given a validator's key pair and signer id (which is
     /// simply the position in the signer bitmap).
-    pub fn sign(
-        &mut self,
-        sk: Fr,
-        signer_id: usize,
-        block_number: u32,
-        round_number: u32,
-        pk_tree_root: Vec<u8>,
-    ) {
+    pub fn sign(&mut self, sk: Fr, signer_id: usize, pk_tree_root: Vec<u8>) {
         // Generate the hash point for the signature.
-        let mut signature = self.hash(block_number, round_number, pk_tree_root);
+        let mut signature = self.hash(pk_tree_root);
 
         // Generates the signature.
         signature *= sk;
@@ -62,12 +60,7 @@ impl MacroBlock {
     /// is necessary because the Pedersen commitment is not pseudo-random and we need pseudo-randomness
     /// for the BLS signature scheme. Then we use the Pedersen hash algorithm on those 256 bits
     /// to obtain a single EC point.
-    pub fn hash(
-        &self,
-        block_number: u32,
-        round_number: u32,
-        pks_commitment: Vec<u8>,
-    ) -> G1Projective {
+    pub fn hash(&self, pk_tree_root: Vec<u8>) -> G1Projective {
         // Serialize the input into bits.
         // TODO: This first byte is the prefix for the precommit messages, it is the
         //       PREFIX_TENDERMINT_COMMIT constant in the nimiq_block_albatross crate. We can't
@@ -75,13 +68,13 @@ impl MacroBlock {
         //       get moved to the policy crate, we should import them here.
         let mut bytes = vec![0x04];
 
-        bytes.extend_from_slice(&block_number.to_be_bytes());
+        bytes.extend_from_slice(&self.block_number.to_be_bytes());
 
-        bytes.extend_from_slice(&round_number.to_be_bytes());
+        bytes.extend_from_slice(&self.round_number.to_be_bytes());
 
         bytes.extend_from_slice(&self.header_hash);
 
-        bytes.extend(&pks_commitment);
+        bytes.extend(&pk_tree_root);
 
         // Initialize Blake2s parameters.
         let blake2s = Blake2sWithParameterBlock {
@@ -122,6 +115,8 @@ impl MacroBlock {
 impl Default for MacroBlock {
     fn default() -> Self {
         MacroBlock {
+            block_number: 0,
+            round_number: 0,
             header_hash: [0; 32],
             signature: G1Projective::prime_subgroup_generator(),
             signer_bitmap: vec![true; VALIDATOR_SLOTS],
