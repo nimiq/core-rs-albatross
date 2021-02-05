@@ -3,9 +3,9 @@ use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
 
 use libp2p::{
-    core::either::{EitherError, EitherOutput},
-    gossipsub::{Gossipsub, GossipsubEvent, GossipsubRpc, MessageAuthenticity, error::GossipsubHandlerError},
-    kad::{handler::KademliaHandlerIn as KademliaAction, store::MemoryStore, Kademlia, KademliaEvent, QueryId},
+    core::either::EitherError,
+    gossipsub::{Gossipsub, GossipsubEvent, MessageAuthenticity, error::GossipsubHandlerError},
+    kad::{store::MemoryStore, Kademlia, KademliaEvent},
     swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters},
     NetworkBehaviour,
 };
@@ -17,7 +17,7 @@ use nimiq_utils::time::OffsetTime;
 use crate::{
     discovery::{
         behaviour::{DiscoveryBehaviour, DiscoveryEvent},
-        handler::{HandlerError as DiscoveryError, HandlerInEvent as DiscoveryAction},
+        handler::{HandlerError as DiscoveryError},
         peer_contacts::PeerContactBook,
     },
     /*limit::{
@@ -26,7 +26,7 @@ use crate::{
     },*/
     message::{
         behaviour::MessageBehaviour,
-        handler::{HandlerError as MessageError, HandlerInEvent as MessageAction},
+        handler::{HandlerError as MessageError},
         peer::Peer,
     },
     network::Config,

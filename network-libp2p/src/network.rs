@@ -63,11 +63,11 @@ impl Config {
     pub fn new(keypair: Keypair, peer_contact: PeerContact, genesis_hash: Blake2bHash) -> Self {
         // Hardcoding the minimum number of peers in mesh network before adding more
         // TODO: Maybe change this to a mesh limits configuration argument of this function
-        let mut gossipsub_config = GossipsubConfigBuilder::default()
+        let gossipsub_config = GossipsubConfigBuilder::default()
             .mesh_n_low(2)
+            .validate_messages()
             .build()
             .expect("Invalid Gossipsub config");
-        gossipsub_config.validate_messages();
 
         Self {
             keypair,
@@ -438,7 +438,7 @@ impl Network {
                                             &message_id,
                                             &propagation_source,
                                             MessageAcceptance::Accept,
-                                        );
+                                        ).ok();
                                     }
                                     output.send((message, message_id, propagation_source)).await.ok();
                                 } else {
@@ -623,9 +623,9 @@ impl NetworkInterface for Network {
             })
             .await?;
 
-        let rx = output_rx.await?;
+        let _message_id = output_rx.await??;
 
-        rx.map(|(msg_id)| ())
+        Ok(())
     }
 
     async fn validate_message(&self, id: Self::PubsubId) -> Result<bool, Self::Error> {
@@ -715,7 +715,7 @@ mod tests {
 
     use futures::{Stream, StreamExt};
     use libp2p::{
-        gossipsub::{GossipsubConfig, GossipsubConfigBuilder},
+        gossipsub::{GossipsubConfigBuilder},
         identity::Keypair,
         multiaddr::{multiaddr, Multiaddr},
         swarm::KeepAlive,
@@ -761,7 +761,7 @@ mod tests {
         };
         peer_contact.set_current_time();
 
-        let mut gossipsub = GossipsubConfigBuilder::default()
+        let gossipsub = GossipsubConfigBuilder::default()
             .build()
             .expect("Invalid Gossipsub config");
 
