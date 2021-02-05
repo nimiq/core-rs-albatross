@@ -21,6 +21,8 @@ use nimiq_validator::validator::Validator as AbstractValidator;
 use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
 use std::sync::Arc;
 use std::time::Duration;
+use nimiq_primitives::account::ValidatorId;
+use nimiq_hash::{Hash, Blake2bHash};
 
 type Consensus = AbstractConsensus<MockNetwork>;
 type Validator = AbstractValidator<MockNetwork, ValidatorNetworkImpl<MockNetwork>>;
@@ -79,6 +81,7 @@ async fn mock_validators(hub: &mut MockHub, num_validators: usize) -> Vec<Valida
     let mut genesis_builder = GenesisBuilder::default();
     for key in &keys {
         genesis_builder.with_genesis_validator(
+            key.public_key.hash::<Blake2bHash>().as_slice()[0..20].into(),
             key.public_key,
             Address::default(),
             Coin::from_u64_unchecked(10000),
@@ -145,6 +148,7 @@ async fn one_validator_can_create_micro_blocks() {
     let key = KeyPair::generate(&mut seeded_rng(0));
     let genesis = GenesisBuilder::default()
         .with_genesis_validator(
+            ValidatorId::default(),
             key.public_key,
             Address::default(),
             Coin::from_u64_unchecked(10000),

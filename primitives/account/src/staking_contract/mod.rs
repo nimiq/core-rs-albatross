@@ -5,12 +5,14 @@ use std::iter::FromIterator;
 use std::sync::Arc;
 
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, WriteBytesExt};
-use bls::CompressedPublicKey as BlsPublicKey;
 use keys::Address;
 use nimiq_collections::BitSet;
+use nimiq_bls::{CompressedSignature as BlsSignature};
 use primitives::slot::{Slots, SlotsBuilder};
 use primitives::{coin::Coin, policy};
+use primitives::account::ValidatorId;
 use transaction::{SignatureProof, Transaction};
+use transaction::account::staking_contract::IncomingStakingTransactionData;
 use vrf::{AliasMethod, VrfSeed, VrfUseCase};
 
 use crate::AccountError;
@@ -48,17 +50,17 @@ pub struct StakingContract {
     pub balance: Coin,
     // The active validators (i.e. are eligible to receive slots) sorted by public key.
     pub active_validators_sorted: BTreeSet<Arc<Validator>>,
-    // A hashmap of the active validators, indexed by the validator public key.
-    pub active_validators_by_key: HashMap<BlsPublicKey, Arc<Validator>>,
+    // A hashmap of the active validators, indexed by the validator id
+    pub active_validators_by_id: HashMap<ValidatorId, Arc<Validator>>,
     // A hashmap of the inactive stakers (i.e. are NOT eligible to receive slots), indexed by the
     // staker address.
     pub inactive_stake_by_address: HashMap<Address, InactiveStake>,
-    // A tree of the inactive validators , searchable by the validator public key.
-    pub inactive_validators_by_key: BTreeMap<BlsPublicKey, InactiveValidator>,
+    // A tree of the inactive validators , searchable by the validator id.
+    pub inactive_validators_by_id: BTreeMap<ValidatorId, InactiveValidator>,
     // The validators that were parked during the current epoch.
-    pub current_epoch_parking: HashSet<BlsPublicKey>,
+    pub current_epoch_parking: HashSet<ValidatorId>,
     // The validators that were parked during the previous epoch.
-    pub previous_epoch_parking: HashSet<BlsPublicKey>,
+    pub previous_epoch_parking: HashSet<ValidatorId>,
     // The validator slots that lost rewards (i.e. are no longer eligible to receive rewards) during
     // the current batch.
     pub current_lost_rewards: BitSet,
@@ -67,26 +69,26 @@ pub struct StakingContract {
     pub previous_lost_rewards: BitSet,
     // The validator slots, searchable by the validator public key, that are disabled (i.e. are no
     // longer eligible to produce blocks) currently.
-    pub current_disabled_slots: BTreeMap<BlsPublicKey, BTreeSet<u16>>,
+    pub current_disabled_slots: BTreeMap<ValidatorId, BTreeSet<u16>>,
     // The validator slots, searchable by the validator public key, that were disabled (i.e. are no
     // longer eligible to produce blocks) at the end of the previous batch.
-    pub previous_disabled_slots: BTreeMap<BlsPublicKey, BTreeSet<u16>>,
+    pub previous_disabled_slots: BTreeMap<ValidatorId, BTreeSet<u16>>,
 }
 
 impl StakingContract {
-    /// Get a validator information given its public key.
-    pub fn get_validator(&self, validator_key: &BlsPublicKey) -> Option<&Arc<Validator>> {
-        self.active_validators_by_key.get(validator_key).or_else(|| {
-            self.inactive_validators_by_key
-                .get(validator_key)
+    /// Get a validator information given its id.
+    pub fn get_validator(&self, validator_id: &ValidatorId) -> Option<&Arc<Validator>> {
+        self.active_validators_by_id.get(validator_id).or_else(|| {
+            self.inactive_validators_by_id
+                .get(validator_id)
                 .map(|inactive_validator| &inactive_validator.validator)
         })
     }
 
     /// Get the amount staked by a staker, given the public key of the corresponding validator and
     /// the address of the staker. Returns None if the active validator or the staker does not exist.
-    pub fn get_active_stake(&self, validator_key: &BlsPublicKey, staker_address: &Address) -> Option<Coin> {
-        let validator = self.active_validators_by_key.get(validator_key)?;
+    pub fn get_active_stake(&self, validator_id: &ValidatorId, staker_address: &Address) -> Option<Coin> {
+        let validator = self.active_validators_by_id.get(validator_id)?;
 
         validator.active_stake_by_address.read().get(staker_address).cloned()
     }
@@ -94,13 +96,13 @@ impl StakingContract {
     /// Allows to modify both active and inactive validators.
     /// It returns a validator entry, which subsumes active and inactive validators.
     /// It also allows for deferred error handling after re-adding the validator using `restore_validator`.
-    pub fn remove_validator(&mut self, validator_key: &BlsPublicKey) -> Option<ValidatorEntry> {
-        if let Some(validator) = self.active_validators_by_key.remove(&validator_key) {
+    pub fn remove_validator(&mut self, validator_id: &ValidatorId) -> Option<ValidatorEntry> {
+        if let Some(validator) = self.active_validators_by_id.remove(&validator_id) {
             self.active_validators_sorted.remove(&validator);
             Some(ValidatorEntry::new_active_validator(validator))
         } else {
             //  The else case is needed to ensure the validator_key still exists.
-            if let Some(validator) = self.inactive_validators_by_key.remove(&validator_key) {
+            if let Some(validator) = self.inactive_validators_by_id.remove(&validator_id) {
                 Some(ValidatorEntry::new_inactive_validator(validator))
             } else {
                 None
@@ -117,12 +119,12 @@ impl StakingContract {
             ValidatorEntry::Active(validator, error) => {
                 // Update/restore validator.
                 self.active_validators_sorted.insert(Arc::clone(&validator));
-                self.active_validators_by_key.insert(validator.validator_key.clone(), validator);
+                self.active_validators_by_id.insert(validator.id.clone(), validator);
                 error.map(Err).unwrap_or(Ok(()))
             }
             ValidatorEntry::Inactive(validator, error) => {
                 // Update/restore validator.
-                self.inactive_validators_by_key.insert(validator.validator.validator_key.clone(), validator);
+                self.inactive_validators_by_id.insert(validator.validator.id.clone(), validator);
                 error.map(Err).unwrap_or(Ok(()))
             }
         }
@@ -157,7 +159,7 @@ impl StakingContract {
 
             let active_validator = &potential_validators[index];
 
-            slots_builder.push(active_validator.validator_key.clone(), &active_validator.reward_address);
+            slots_builder.push(active_validator.id.clone(), active_validator.validator_key.clone(), &active_validator.reward_address);
         }
 
         slots_builder.build()
@@ -201,6 +203,24 @@ impl StakingContract {
         }
         bitset
     }
+
+    fn verify_signature_incoming(&self, transaction: &Transaction, validator_id: &ValidatorId, signature: &BlsSignature) -> Result<(), AccountError> {
+        let validator = self.get_validator(validator_id).ok_or(AccountError::InvalidForRecipient)?;
+        let key = validator.validator_key.uncompress().map_err(|_| AccountError::InvalidForRecipient)?;
+        let sig = signature.uncompress().map_err(|_| AccountError::InvalidSignature)?;
+
+        // On incoming transactions, we need to reset the signature first.
+        let mut tx_without_sig = transaction.clone();
+        tx_without_sig.data = IncomingStakingTransactionData::set_validator_signature_on_data(&tx_without_sig.data, BlsSignature::default())?;
+        let tx = tx_without_sig.serialize_content();
+
+        if !key.verify(&tx, &sig) {
+            warn!("Invalid signature");
+
+            return Err(AccountError::InvalidSignature);
+        }
+        Ok(())
+    }
 }
 
 impl Serialize for StakingContract {
@@ -215,8 +235,8 @@ impl Serialize for StakingContract {
         }
 
         // Inactive validators next.
-        size += Serialize::serialize(&(self.inactive_validators_by_key.len() as u32), writer)?;
-        for (_, inactive_validator) in self.inactive_validators_by_key.iter() {
+        size += Serialize::serialize(&(self.inactive_validators_by_id.len() as u32), writer)?;
+        for (_, inactive_validator) in self.inactive_validators_by_id.iter() {
             size += Serialize::serialize(inactive_validator, writer)?;
         }
 
@@ -270,7 +290,7 @@ impl Serialize for StakingContract {
         }
 
         size += Serialize::serialized_size(&0u32);
-        for (_, inactive_validator) in self.inactive_validators_by_key.iter() {
+        for (_, inactive_validator) in self.inactive_validators_by_id.iter() {
             size += Serialize::serialized_size(inactive_validator);
         }
 
@@ -308,8 +328,8 @@ impl Deserialize for StakingContract {
         let balance = Deserialize::deserialize(reader)?;
 
         let mut active_validators_sorted = BTreeSet::new();
-        let mut active_validators_by_key = HashMap::new();
-        let mut inactive_validators_by_key = BTreeMap::new();
+        let mut active_validators_by_id = HashMap::new();
+        let mut inactive_validators_by_id = BTreeMap::new();
         let mut inactive_stake_by_address = HashMap::new();
 
         let num_active_validators: u32 = Deserialize::deserialize(reader)?;
@@ -318,18 +338,18 @@ impl Deserialize for StakingContract {
             let active_validator = Arc::new(active_validator);
 
             active_validators_sorted.insert(Arc::clone(&active_validator));
-            active_validators_by_key.insert(active_validator.validator_key.clone(), active_validator);
+            active_validators_by_id.insert(active_validator.id.clone(), active_validator);
         }
 
         let num_inactive_validators: u32 = Deserialize::deserialize(reader)?;
         for _ in 0..num_inactive_validators {
             let inactive_validator: InactiveValidator = Deserialize::deserialize(reader)?;
 
-            inactive_validators_by_key.insert(inactive_validator.validator.validator_key.clone(), inactive_validator);
+            inactive_validators_by_id.insert(inactive_validator.validator.id.clone(), inactive_validator);
         }
 
-        let current_epoch_parking: HashSet<BlsPublicKey> = DeserializeWithLength::deserialize::<u32, _>(reader)?;
-        let previous_epoch_parking: HashSet<BlsPublicKey> = DeserializeWithLength::deserialize::<u32, _>(reader)?;
+        let current_epoch_parking: HashSet<ValidatorId> = DeserializeWithLength::deserialize::<u32, _>(reader)?;
+        let previous_epoch_parking: HashSet<ValidatorId> = DeserializeWithLength::deserialize::<u32, _>(reader)?;
 
         // Lost rewards.
         let current_lost_rewards: BitSet = Deserialize::deserialize(reader)?;
@@ -339,14 +359,14 @@ impl Deserialize for StakingContract {
         let num_current_disabled_slots: u16 = Deserialize::deserialize(reader)?;
         let mut current_disabled_slots = BTreeMap::new();
         for _ in 0..num_current_disabled_slots {
-            let key: BlsPublicKey = Deserialize::deserialize(reader)?;
+            let key: ValidatorId = Deserialize::deserialize(reader)?;
             let value = DeserializeWithLength::deserialize::<u16, _>(reader)?;
             current_disabled_slots.insert(key, value);
         }
         let num_previous_disabled_slots: u16 = Deserialize::deserialize(reader)?;
         let mut previous_disabled_slots = BTreeMap::new();
         for _ in 0..num_previous_disabled_slots {
-            let key: BlsPublicKey = Deserialize::deserialize(reader)?;
+            let key: ValidatorId = Deserialize::deserialize(reader)?;
             let value = DeserializeWithLength::deserialize::<u16, _>(reader)?;
             previous_disabled_slots.insert(key, value);
         }
@@ -361,8 +381,8 @@ impl Deserialize for StakingContract {
         Ok(StakingContract {
             balance,
             active_validators_sorted,
-            active_validators_by_key,
-            inactive_validators_by_key,
+            active_validators_by_id,
+            inactive_validators_by_id,
             current_epoch_parking,
             previous_epoch_parking,
             current_lost_rewards,
@@ -401,8 +421,8 @@ impl Default for StakingContract {
         StakingContract {
             balance: Coin::ZERO,
             active_validators_sorted: BTreeSet::new(),
-            active_validators_by_key: HashMap::new(),
-            inactive_validators_by_key: Default::default(),
+            active_validators_by_id: HashMap::new(),
+            inactive_validators_by_id: Default::default(),
             current_epoch_parking: HashSet::new(),
             previous_epoch_parking: HashSet::new(),
             current_lost_rewards: Default::default(),
@@ -416,17 +436,17 @@ impl Default for StakingContract {
 
 impl Clone for StakingContract {
     fn clone(&self) -> Self {
-        let active_validators_by_key = HashMap::from_iter(
-            self.active_validators_by_key
+        let active_validators_by_id = HashMap::from_iter(
+            self.active_validators_by_id
                 .iter()
                 .map(|(key, value)| (key.clone(), Arc::new(value.as_ref().clone()))),
         );
-        let inactive_validators_by_key = BTreeMap::from_iter(self.inactive_validators_by_key.iter().map(|(key, value)| (key.clone(), value.clone())));
+        let inactive_validators_by_id = BTreeMap::from_iter(self.inactive_validators_by_id.iter().map(|(key, value)| (key.clone(), value.clone())));
         StakingContract {
             balance: self.balance,
-            active_validators_sorted: BTreeSet::from_iter(active_validators_by_key.values().cloned()),
-            active_validators_by_key,
-            inactive_validators_by_key,
+            active_validators_sorted: BTreeSet::from_iter(active_validators_by_id.values().cloned()),
+            active_validators_by_id,
+            inactive_validators_by_id,
             current_epoch_parking: self.current_epoch_parking.clone(),
             previous_epoch_parking: self.previous_epoch_parking.clone(),
             current_lost_rewards: self.current_lost_rewards.clone(),

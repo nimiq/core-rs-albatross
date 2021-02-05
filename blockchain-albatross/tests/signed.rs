@@ -22,6 +22,7 @@ use nimiq_nano_sync::primitives::pk_tree_construct;
 use nimiq_vrf::VrfSeed;
 use primitives::policy;
 use primitives::slot::{ValidatorSlotBand, ValidatorSlots};
+use primitives::account::ValidatorId;
 
 // /// Still in for future reference, in case this key is needed again
 // const SECRET_KEY: &str = "8e44b45f308dae1e2d4390a0f96cea993960d4178550c62aeaba88e9e168d165\
@@ -58,6 +59,7 @@ fn test_view_change_single_signature() {
 
     // verify view change proof
     let validators = ValidatorSlots::new(vec![ValidatorSlotBand::new(
+        ValidatorId::default(),
         LazyPublicKey::from(key_pair.public_key),
         Address::default(),
         policy::SLOTS,

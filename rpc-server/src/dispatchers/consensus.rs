@@ -11,7 +11,7 @@ use nimiq_network_libp2p::Network;
 use nimiq_transaction::Transaction;
 use nimiq_transaction_builder::TransactionBuilder;
 use nimiq_keys::{Address, KeyPair};
-use nimiq_primitives::{networks::NetworkId, coin::Coin};
+use nimiq_primitives::{account::ValidatorId, networks::NetworkId, coin::Coin};
 
 use nimiq_rpc_interface::{
     consensus::ConsensusInterface,
@@ -19,7 +19,6 @@ use nimiq_rpc_interface::{
 };
 
 use crate::{error::Error, wallets::UnlockedWallets};
-use nimiq_bls::CompressedPublicKey;
 
 pub struct ConsensusDispatcher {
     consensus: ConsensusProxy<Network>,
@@ -123,7 +122,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     async fn create_stake_transaction(
         &mut self,
         wallet: Address,
-        validator_key: CompressedPublicKey,
+        validator_id: ValidatorId,
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
@@ -131,7 +130,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         let transaction = TransactionBuilder::new_stake(
             None,
             &self.get_wallet_keypair(&wallet)?,
-            &validator_key.uncompress()?,
+            &validator_id,
             value,
             fee,
             self.validity_start_height(validity_start_height),
@@ -144,7 +143,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     async fn send_stake_transaction(
         &mut self,
         wallet: Address,
-        validator_key: CompressedPublicKey,
+        validator_id: ValidatorId,
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
@@ -152,7 +151,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         let transaction = TransactionBuilder::new_stake(
             None,
             &self.get_wallet_keypair(&wallet)?,
-            &validator_key.uncompress()?,
+            &validator_id,
             value,
             fee,
             self.validity_start_height(validity_start_height),
@@ -165,7 +164,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     async fn create_retire_transaction(
         &mut self,
         wallet: Address,
-        validator_key: CompressedPublicKey,
+        validator_id: ValidatorId,
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
@@ -173,7 +172,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         let transaction = TransactionBuilder::new_retire(
             None,
             &self.get_wallet_keypair(&wallet)?,
-            &validator_key.uncompress()?,
+            &validator_id,
             value,
             fee,
             self.validity_start_height(validity_start_height),
@@ -186,7 +185,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     async fn send_retire_transaction(
         &mut self,
         wallet: Address,
-        validator_key: CompressedPublicKey,
+        validator_id: ValidatorId,
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
@@ -194,7 +193,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         let transaction = TransactionBuilder::new_retire(
             None,
             &self.get_wallet_keypair(&wallet)?,
-            &validator_key.uncompress()?,
+            &validator_id,
             value,
             fee,
             self.validity_start_height(validity_start_height),
@@ -207,7 +206,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     async fn create_reactivate_transaction(
         &mut self,
         wallet: Address,
-        validator_key: CompressedPublicKey,
+        validator_id: ValidatorId,
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
@@ -215,7 +214,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         let transaction = TransactionBuilder::new_reactivate(
             None,
             &self.get_wallet_keypair(&wallet)?,
-            &validator_key.uncompress()?,
+            &validator_id,
             value,
             fee,
             self.validity_start_height(validity_start_height),
@@ -228,7 +227,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     async fn send_reactivate_transaction(
         &mut self,
         wallet: Address,
-        validator_key: CompressedPublicKey,
+        validator_id: ValidatorId,
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
@@ -236,7 +235,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         let transaction = TransactionBuilder::new_reactivate(
             None,
             &self.get_wallet_keypair(&wallet)?,
-            &validator_key.uncompress()?,
+            &validator_id,
             value,
             fee,
             self.validity_start_height(validity_start_height),

@@ -11,8 +11,8 @@ use nimiq_rpc_interface::{
     wallet::WalletInterface,
 };
 use nimiq_keys::Address;
+use nimiq_primitives::account::ValidatorId;
 use nimiq_primitives::coin::Coin;
-use nimiq_bls::CompressedPublicKey;
 
 
 #[derive(Debug, StructOpt)]
@@ -120,8 +120,8 @@ enum TransactionCommand {
         /// The stake will be sent from this wallet.
         wallet: Address,
 
-        /// The public key of the validator to stake for.
-        validator_key: CompressedPublicKey,
+        /// The id of the validator to stake for.
+        validator_id: ValidatorId,
 
         /// The amount of NIM to stake.
         value: Coin,
@@ -142,7 +142,7 @@ enum TransactionCommand {
         /// The stake will be sent from this wallet.
         wallet: Address,
 
-        validator_key: CompressedPublicKey,
+        validator_id: ValidatorId,
 
         value: Coin,
 
@@ -161,7 +161,7 @@ enum TransactionCommand {
         /// The stake will be sent from this wallet.
         wallet: Address,
 
-        validator_key: CompressedPublicKey,
+        validator_id: ValidatorId,
 
         value: Coin,
 
@@ -284,35 +284,35 @@ impl Command {
                         }
                     },
 
-                    TransactionCommand::Stake { wallet, validator_key, value, fee, validity_start_height, dry } => {
+                    TransactionCommand::Stake { wallet, validator_id, value, fee, validity_start_height, dry } => {
                         if dry {
-                            let tx = client.consensus.create_stake_transaction(wallet, validator_key, value, fee, validity_start_height).await?;
+                            let tx = client.consensus.create_stake_transaction(wallet, validator_id, value, fee, validity_start_height).await?;
                             println!("{}", tx);
                         }
                         else {
-                            let txid = client.consensus.send_stake_transaction(wallet, validator_key, value, fee, validity_start_height).await?;
+                            let txid = client.consensus.send_stake_transaction(wallet, validator_id, value, fee, validity_start_height).await?;
                             println!("{}", txid);
                         }
                     },
 
-                    TransactionCommand::Retire { wallet, validator_key, value, fee, validity_start_height, dry } => {
+                    TransactionCommand::Retire { wallet, validator_id, value, fee, validity_start_height, dry } => {
                         if dry {
-                            let tx = client.consensus.create_retire_transaction(wallet, validator_key, value, fee, validity_start_height).await?;
+                            let tx = client.consensus.create_retire_transaction(wallet, validator_id, value, fee, validity_start_height).await?;
                             println!("{}", tx);
                         }
                         else {
-                            let txid = client.consensus.send_retire_transaction(wallet, validator_key, value, fee, validity_start_height).await?;
+                            let txid = client.consensus.send_retire_transaction(wallet, validator_id, value, fee, validity_start_height).await?;
                             println!("{}", txid);
                         }
                     },
 
-                    TransactionCommand::Reactivate { wallet, validator_key, value, fee, validity_start_height, dry } => {
+                    TransactionCommand::Reactivate { wallet, validator_id, value, fee, validity_start_height, dry } => {
                         if dry {
-                            let tx = client.consensus.create_reactivate_transaction(wallet, validator_key, value, fee, validity_start_height).await?;
+                            let tx = client.consensus.create_reactivate_transaction(wallet, validator_id, value, fee, validity_start_height).await?;
                             println!("{}", tx);
                         }
                         else {
-                            let txid = client.consensus.send_reactivate_transaction(wallet, validator_key, value, fee, validity_start_height).await?;
+                            let txid = client.consensus.send_reactivate_transaction(wallet, validator_id, value, fee, validity_start_height).await?;
                             println!("{}", txid);
                         }
                     },

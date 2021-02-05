@@ -1,7 +1,7 @@
 use beserial::{Deserialize, Serialize};
-use bls::CompressedPublicKey as BlsPublicKey;
 use keys::Address;
 use primitives::coin::Coin;
+use primitives::account::ValidatorId;
 
 use crate::staking_contract::InactiveStake;
 use crate::{Account, AccountError, StakingContract};
@@ -32,10 +32,10 @@ pub(super) struct InactiveStakeReceipt {
 impl StakingContract {
     /// Adds funds to stake of `address` for validator `validator_key`.
     /// XXX This is public to fill the genesis staking contract
-    pub fn stake(&mut self, staker_address: Address, value: Coin, validator_key: &BlsPublicKey) -> Result<(), AccountError> {
+    pub fn stake(&mut self, staker_address: Address, value: Coin, validator_id: &ValidatorId) -> Result<(), AccountError> {
         let new_balance = Account::balance_add(self.balance, value)?;
 
-        let mut entry = self.remove_validator(validator_key).ok_or(AccountError::InvalidForRecipient)?;
+        let mut entry = self.remove_validator(validator_id).ok_or(AccountError::InvalidForRecipient)?;
         entry.try_add_stake(staker_address, value);
         self.restore_validator(entry)?;
 
@@ -45,10 +45,10 @@ impl StakingContract {
     }
 
     /// Reverts a stake transaction.
-    pub(super) fn revert_stake(&mut self, staker_address: &Address, value: Coin, validator_key: &BlsPublicKey) -> Result<(), AccountError> {
+    pub(super) fn revert_stake(&mut self, staker_address: &Address, value: Coin, validator_id: &ValidatorId) -> Result<(), AccountError> {
         let new_balance = Account::balance_sub(self.balance, value)?;
 
-        let mut entry = self.remove_validator(validator_key).ok_or(AccountError::InvalidForRecipient)?;
+        let mut entry = self.remove_validator(validator_id).ok_or(AccountError::InvalidForRecipient)?;
         entry.try_sub_stake(staker_address, value, AccountError::InvalidForRecipient);
         self.restore_validator(entry)?;
 
@@ -58,10 +58,10 @@ impl StakingContract {
     }
 
     /// Removes stake from the active stake list.
-    pub(super) fn retire_sender(&mut self, staker_address: &Address, value: Coin, validator_key: &BlsPublicKey) -> Result<(), AccountError> {
+    pub(super) fn retire_sender(&mut self, staker_address: &Address, value: Coin, validator_id: &ValidatorId) -> Result<(), AccountError> {
         let new_balance = Account::balance_sub(self.balance, value)?;
 
-        let mut entry = self.remove_validator(validator_key).ok_or(AccountError::InvalidForSender)?;
+        let mut entry = self.remove_validator(validator_id).ok_or(AccountError::InvalidForSender)?;
         entry.try_sub_stake(staker_address, value, AccountError::InvalidForSender);
         self.restore_validator(entry)?;
 
@@ -71,10 +71,10 @@ impl StakingContract {
     }
 
     /// Reverts the sender side of a retire transaction.
-    pub(super) fn revert_retire_sender(&mut self, staker_address: Address, value: Coin, validator_key: &BlsPublicKey) -> Result<(), AccountError> {
+    pub(super) fn revert_retire_sender(&mut self, staker_address: Address, value: Coin, validator_id: &ValidatorId) -> Result<(), AccountError> {
         let new_balance = Account::balance_add(self.balance, value)?;
 
-        let mut entry = self.remove_validator(validator_key).ok_or(AccountError::InvalidForSender)?;
+        let mut entry = self.remove_validator(validator_id).ok_or(AccountError::InvalidForSender)?;
         entry.try_add_stake(staker_address, value);
         self.restore_validator(entry)?;
 
@@ -169,13 +169,13 @@ impl StakingContract {
     }
 
     /// Reactivates stake (recipient side).
-    pub(super) fn reactivate_recipient(&mut self, staker_address: Address, value: Coin, validator_key: &BlsPublicKey) -> Result<(), AccountError> {
-        self.stake(staker_address, value, validator_key)
+    pub(super) fn reactivate_recipient(&mut self, staker_address: Address, value: Coin, validator_id: &ValidatorId) -> Result<(), AccountError> {
+        self.stake(staker_address, value, validator_id)
     }
 
     /// Removes stake from the active stake list.
-    pub(super) fn revert_reactivate_recipient(&mut self, staker_address: &Address, value: Coin, validator_key: &BlsPublicKey) -> Result<(), AccountError> {
-        self.revert_stake(staker_address, value, validator_key)
+    pub(super) fn revert_reactivate_recipient(&mut self, staker_address: &Address, value: Coin, validator_id: &ValidatorId) -> Result<(), AccountError> {
+        self.revert_stake(staker_address, value, validator_id)
     }
 
     /// Removes stake from the inactive stake list.

@@ -41,6 +41,7 @@ use bls::CompressedPublicKey;
 use keys::Address;
 
 use crate::policy::SLOTS;
+use crate::account::ValidatorId;
 
 /// Enum to index a slot.
 ///
@@ -58,7 +59,7 @@ pub enum SlotIndex {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SlashedSlot {
     pub slot: u16,
-    pub validator_key: LazyPublicKey,
+    pub validator_id: ValidatorId,
     /// The `event_block` identifies the block at which the slashable action occurred.
     pub event_block: u32,
 }
@@ -75,6 +76,10 @@ pub struct Slot {
 }
 
 impl Slot {
+    pub fn validator_id(&self) -> &ValidatorId {
+        self.validator_slot.validator_id()
+    }
+
     pub fn public_key(&self) -> &LazyPublicKey {
         self.validator_slot.public_key()
     }
@@ -177,11 +182,11 @@ pub trait SlotCollection {
 }
 
 /// Builder for slot collection. You can push individual slots into it and it'll compress them
-/// into a [ValidatorSlots] and [StakeSlots] collection.
+/// into a [ValidatorSlots] collection.
 #[derive(Clone, Debug, Default)]
 pub struct SlotsBuilder {
-    /// Maps validator key -> (reward address, number of slots)
-    validators: BTreeMap<LazyPublicKey, (Address, u16)>,
+    /// Maps validator id -> (validator key, reward address, number of slots)
+    validators: BTreeMap<ValidatorId, (LazyPublicKey, Address, u16)>,
 }
 
 impl SlotsBuilder {
@@ -192,17 +197,17 @@ impl SlotsBuilder {
     /// * `public_key` - Public key of validator
     /// * `reward_address` - Address where reward will be sent to
     ///
-    pub fn push<PK: Into<LazyPublicKey>>(&mut self, public_key: PK, reward_address: &Address) {
-        let (_, num_slots) = self.validators.entry(public_key.into()).or_insert_with(|| (reward_address.clone(), 0));
+    pub fn push<PK: Into<LazyPublicKey>>(&mut self, validator_id: ValidatorId, public_key: PK, reward_address: &Address) {
+        let (_, _, num_slots) = self.validators.entry(validator_id).or_insert_with(|| (public_key.into(), reward_address.clone(), 0));
         *num_slots += 1;
     }
 
     pub fn build(self) -> Slots {
         let mut validator_slots = Vec::new();
 
-        for (public_key, (reward_address, num_slots)) in self.validators {
+        for (validator_id, (public_key, reward_address, num_slots)) in self.validators {
             // Add validator slots.
-            validator_slots.push(ValidatorSlotBand::new(public_key, reward_address, num_slots));
+            validator_slots.push(ValidatorSlotBand::new(validator_id, public_key, reward_address, num_slots));
         }
 
         let validator_slots = ValidatorSlots::new(validator_slots);
@@ -214,23 +219,30 @@ impl SlotsBuilder {
 /// A validator that owns some slots
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ValidatorSlotBand {
+    validator_id: ValidatorId,
     public_key: LazyPublicKey,
     reward_address: Address,
     num_slots: u16,
 }
 
 impl ValidatorSlotBand {
-    pub fn new<PK: Into<LazyPublicKey>>(public_key: PK, reward_address: Address, num_slots: u16) -> Self {
+    pub fn new<PK: Into<LazyPublicKey>>(validator_id: ValidatorId, public_key: PK, reward_address: Address, num_slots: u16) -> Self {
         Self {
+            validator_id,
             public_key: public_key.into(),
             reward_address,
             num_slots,
         }
     }
 
+    pub fn validator_id(&self) -> &ValidatorId {
+        &self.validator_id
+    }
+
     pub fn public_key(&self) -> &LazyPublicKey {
         &self.public_key
     }
+
     pub fn reward_address(&self) -> &Address {
         &self.reward_address
     }
@@ -340,6 +352,7 @@ impl Serialize for ValidatorSlots {
 
         // serialize collection
         for validator in self.iter() {
+            size += Serialize::serialize(&validator.validator_id, writer)?;
             size += Serialize::serialize(&validator.public_key, writer)?;
             size += Serialize::serialize(&validator.reward_address, writer)?;
         }
@@ -348,7 +361,7 @@ impl Serialize for ValidatorSlots {
     }
 
     fn serialized_size(&self) -> usize {
-        (CompressedPublicKey::SIZE + Address::SIZE) * self.bands.len() + SlotAllocation::SIZE
+        (ValidatorId::SIZE + CompressedPublicKey::SIZE + Address::SIZE) * self.bands.len() + SlotAllocation::SIZE
     }
 }
 
@@ -360,9 +373,10 @@ impl Deserialize for ValidatorSlots {
 
         let mut validators = Vec::with_capacity(num_validators);
         for num_slots in allocation {
+            let validator_id: ValidatorId = Deserialize::deserialize(reader)?;
             let public_key: CompressedPublicKey = Deserialize::deserialize(reader)?;
             let reward_address: Address = Deserialize::deserialize(reader)?;
-            validators.push(ValidatorSlotBand::new(public_key, reward_address, num_slots));
+            validators.push(ValidatorSlotBand::new(validator_id, public_key, reward_address, num_slots));
         }
 
         // This invariant should always hold if SlotAllocation is implemented correctly

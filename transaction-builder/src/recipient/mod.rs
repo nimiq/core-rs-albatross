@@ -134,12 +134,12 @@ impl Recipient {
     /// use nimiq_keys::Address;
     /// use nimiq_bls::KeyPair;
     /// use nimiq_utils::key_rng::SecureGenerate;
+    /// use nimiq_primitives::account::ValidatorId;
     ///
-    /// let validator_key_pair = KeyPair::generate_default_csprng();
+    /// let validator_id: ValidatorId = [0;20].into();
     ///
-    /// let validator_key = validator_key_pair.public_key;
     /// let mut recipient_builder = Recipient::new_staking_builder(None);
-    /// recipient_builder.stake(&validator_key, None);
+    /// recipient_builder.stake(&validator_id, None);
     /// let recipient = recipient_builder.generate();
     /// assert!(recipient.is_some());
     /// ```

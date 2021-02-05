@@ -571,9 +571,9 @@ pub struct Validator {
 }
 
 impl Validator {
-    pub fn from_validator(public_key: CompressedPublicKey, validator: &nimiq_account::staking_contract::Validator, _retire_time: Option<u32>) -> Self {
+    pub fn from_validator(validator: &nimiq_account::staking_contract::Validator, _retire_time: Option<u32>) -> Self {
         Validator {
-            public_key,
+            public_key: validator.validator_key.clone(),
             balance: validator.balance,
             reward_address: validator.reward_address.clone(),
             stakes: validator
@@ -590,12 +590,12 @@ impl Validator {
         }
     }
 
-    pub fn from_active(public_key: CompressedPublicKey, validator: &nimiq_account::staking_contract::Validator) -> Self {
-        Self::from_validator(public_key, validator, None)
+    pub fn from_active(validator: &nimiq_account::staking_contract::Validator) -> Self {
+        Self::from_validator(validator, None)
     }
 
-    pub fn from_inactive(public_key: CompressedPublicKey, validator: &nimiq_account::staking_contract::InactiveValidator) -> Self {
-        Self::from_validator(public_key, &validator.validator, Some(validator.retire_time))
+    pub fn from_inactive(validator: &nimiq_account::staking_contract::InactiveValidator) -> Self {
+        Self::from_validator(&validator.validator, Some(validator.retire_time))
     }
 }
 

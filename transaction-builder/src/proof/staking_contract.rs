@@ -3,6 +3,7 @@ use bls::KeyPair as BlsKeyPair;
 use keys::KeyPair;
 use transaction::account::staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionProof};
 use transaction::{SignatureProof, Transaction};
+use primitives::account::ValidatorId;
 
 use crate::proof::TransactionProofBuilder;
 
@@ -62,9 +63,10 @@ impl StakingProofBuilder {
 
     /// This methods sets the action to drop a validator and builds the corresponding proof
     /// from a validator's BLS `key_pair`.
-    pub fn drop_validator(&mut self, key_pair: &BlsKeyPair) -> &mut Self {
+    pub fn drop_validator(&mut self, validator_id: &ValidatorId, key_pair: &BlsKeyPair) -> &mut Self {
         let signature = key_pair.sign(&self.transaction.serialize_content().as_slice());
         self.proof = Some(OutgoingStakingTransactionProof::DropValidator {
+            validator_id: validator_id.clone(),
             validator_key: key_pair.public_key.compress(),
             signature: signature.compress(),
         });
