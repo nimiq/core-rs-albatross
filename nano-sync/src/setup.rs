@@ -22,6 +22,10 @@ use crate::utils::bytes_to_bits;
 use crate::{NanoZKP, NanoZKPError};
 
 impl NanoZKP {
+    /// This function generates the parameters (proving and verifying keys) for the entire nano sync
+    /// program. It does this by generating the parameters for each circuit, "from bottom to top". The
+    /// order is absolutely necessary because each circuit needs a verifying key from the circuit "below"
+    /// it. Note that the parameter generation can take longer than one hour, even two on some computers.
     pub fn setup(&self) -> Result<(), NanoZKPError> {
         let rng = &mut thread_rng();
 

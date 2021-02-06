@@ -21,7 +21,7 @@ use crate::primitives::MacroBlock;
 use crate::utils::reverse_inner_byte_order;
 
 /// A gadget that contains utilities to verify the validity of a macro block. Mainly it checks that:
-///  1. The macro block was signed by aggregate public keys.
+///  1. The macro block was signed by the aggregate public key.
 ///  2. The macro block contains the correct block number and public keys commitment (for the next
 ///     validator list).
 ///  3. There are enough signers.

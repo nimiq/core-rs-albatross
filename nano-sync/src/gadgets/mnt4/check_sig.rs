@@ -19,10 +19,10 @@ impl CheckSigGadget {
         hash_point: &G1Var,
         signature: &G1Var,
     ) -> Result<Boolean<MNT4Fr>, SynthesisError> {
-        // Prepare all the public key elliptic curve point.
+        // Prepare the public key elliptic curve point.
         let pub_key_p_var = PairingVar::prepare_g2(public_key)?;
 
-        // Prepare all the hash elliptic curve point.
+        // Prepare the hash elliptic curve point.
         let hash_p_var = PairingVar::prepare_g1(hash_point)?;
 
         // Prepare the aggregated signature elliptic curve point.

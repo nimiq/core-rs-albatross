@@ -20,17 +20,18 @@ use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 /// and a Macro Block Wrapper proof, effectively merging both into a single proof. Evidently, this is
 /// needed for recursive composition of SNARK proofs.
 /// This circuit has the verification key for the Macro Block Wrapper hard-coded as a constant, but the
-/// verification key for the Merger Wrapper is given as a private input.
+/// verification key for the Merger Wrapper is given as a witness (which is then checked against the
+/// verification key commitment provided as an input).
 /// To guarantee that the prover inputs the correct Merger Wrapper verification key, the verifier also
 /// supplies a commitment to the desired verification key as a public input. This circuit then enforces
 /// the equality of the commitment and of the verification key.
 /// Additionally, the prover can set (as a private input) a boolean flag determining if this circuit
-/// is evaluating the genesis block or not. If the flag is set to true, the circuit will enforce that
+/// is evaluating the first epoch or not. If the flag is set to true, the circuit will enforce that
 /// the initial state and the intermediate state are equal but it will not enforce the verification of
 /// the Merger Wrapper proof. If the flag is set to false, the circuit will enforce the verification
 /// of the Merger Wrapper proof, but it will not enforce the equality of the initial and intermediate
 /// states.
-/// The rationale is that, for the genesis block, the merger circuit will not have any previous Merger
+/// The rationale is that, for the first epoch, the merger circuit will not have any previous Merger
 /// Wrapper proof to verify since there are no previous state changes. But in that case, the initial
 /// and intermediate states must be equal by definition.
 #[derive(Clone)]
@@ -169,7 +170,7 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
 
         // Verify the ZK proof for the Merger Wrapper circuit. If the genesis flag is set to false,
         // it enforces the verification. If it is set to true, it doesn't. This is necessary for
-        // the genesis block, for the first merger circuit.
+        // the first epoch, for the first merger circuit.
         next_cost_analysis!(cs, cost, || { "Conditionally verify proof merger wrapper" });
 
         let mut proof_inputs = pack_inputs(initial_state_commitment_bits);

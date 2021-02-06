@@ -12,8 +12,8 @@ use crate::utils::{pack_inputs, unpack_inputs};
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 /// This is the merger wrapper circuit. It takes as inputs an initial state commitment, a final state
-/// commitment and a verifying key and it produces a proof that there exists a valid SNARK proof that
-/// transforms the initial state into the final state.
+/// commitment and a verifying key commitment and it produces a proof that there exists a valid SNARK
+/// proof that transforms the initial state into the final state.
 /// The circuit is basically only a SNARK verifier. Its use is just to change the elliptic curve
 /// that the proof exists in, which is sometimes needed for recursive composition of SNARK proofs.
 /// This circuit only verifies proofs from the Merger circuit because it has the corresponding
