@@ -23,7 +23,7 @@ pub struct MacroBlock {
 }
 
 impl MacroBlock {
-    /// This function generates a macro block that has no signatures or bitmaps.
+    /// This function generates a macro block that has no signature or bitmap.
     pub fn without_signatures(block_number: u32, round_number: u32, header_hash: [u8; 32]) -> Self {
         MacroBlock {
             block_number,
@@ -34,7 +34,7 @@ impl MacroBlock {
         }
     }
 
-    /// This function signs a macro block given a validator's key pair and signer id (which is
+    /// This function signs a macro block given a validator's secret key and signer id (which is
     /// simply the position in the signer bitmap).
     pub fn sign(&mut self, sk: Fr, signer_id: usize, pk_tree_root: Vec<u8>) {
         // Generate the hash point for the signature.
@@ -51,7 +51,7 @@ impl MacroBlock {
     }
 
     /// A function that calculates the hash for the block from:
-    /// step || block number || round number || header_hash || pks_commitment
+    /// step || block number || round number || header_hash || pk_tree_root
     /// where || means concatenation.
     /// This should match exactly the signatures produced by the validators. Step and round number
     /// are fields needed for the Tendermint protocol, there is no reason to explain their meaning

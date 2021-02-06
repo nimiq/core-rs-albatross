@@ -9,7 +9,7 @@ use crate::utils::bytes_to_bits;
 /// MNT6-753 curve. This means we can open this commitment inside of a circuit in the MNT4-753 curve
 /// and we can use it to verify a SNARK proof inside that circuit.
 /// We calculate it by first serializing the verifying key and feeding it to the Pedersen hash
-/// function, then we serialize the output and convert it to bytes. This provides an efficient way
+/// function, then we serialize the output and convert it to bits. This provides an efficient way
 /// of compressing the state and representing it across different curves.
 pub fn vk_commitment(vk: VerifyingKey<MNT6_753>) -> Vec<u8> {
     // Serialize the verifying key into bits.

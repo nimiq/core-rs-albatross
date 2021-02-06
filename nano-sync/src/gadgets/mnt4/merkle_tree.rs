@@ -5,9 +5,8 @@ use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 
 use crate::gadgets::mnt4::{PedersenHashGadget, SerializeGadget};
 
-/// This gadgets contains utilities to create and verify proofs for Merkle trees. It uses Pedersen
-/// hashes to construct the tree instead of cryptographic hash functions in order to be more
-/// efficient.
+/// This gadgets contains utilities to create Merkle trees and verify proofs for them. It uses Pedersen
+/// hashes to construct the tree instead of cryptographic hash functions in order to be more efficient.
 pub struct MerkleTreeGadget;
 
 impl MerkleTreeGadget {

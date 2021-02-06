@@ -11,7 +11,7 @@ use crate::utils::unpack_inputs;
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 /// This is the leaf subcircuit of the PKTreeCircuit. This circuit main function is to process the
-/// validator's public keys and "return" the aggregate public keys for the Macro Block. At a
+/// validator's public keys and "return" the aggregate public key for the Macro Block. At a
 /// high-level, it divides all the computation into 2^n parts, where n is the depth of the tree, so
 /// that each part uses only a manageable amount of memory and can be run on consumer hardware.
 /// It does this by forming a binary tree of recursive SNARKs. Each of the 2^n leaves receives
@@ -22,8 +22,8 @@ use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 /// All of the other upper levels of the recursive SNARK tree just verify SNARK proofs for its child
 /// nodes and recursively aggregate the aggregate public key chunks (no pun intended).
 /// At a lower-level, this circuit does two things:
-///     1. That the public keys given as witness are a leaf, in a specific position, of the Merkle
-///        tree of public keys. The Merkle tree root and the position are given as inputs and the
+///     1. That the public keys given as witness are a leaf of the Merkle tree of public keys, in a
+///        specific position. The Merkle tree root and the position are given as inputs and the
 ///        Merkle proof is given as a witness.
 ///     2. That the public keys given as witness, when aggregated according to the signer's bitmap
 ///        (given as an input), match the aggregated public key commitment (also given as an input).
@@ -123,7 +123,7 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeLeafCircuit {
         // leaves (where n is the PK_TREE_DEPTH constant) and each of the leaves consists of several
         // public keys serialized and concatenated together. Each leaf contains exactly
         // VALIDATOR_SLOTS/2^n public keys, so that the entire Merkle tree contains all of the
-        // public keys list.
+        // public keys.
         next_cost_analysis!(cs, cost, || { "Verify Merkle proof pks" });
 
         let mut bits = vec![];

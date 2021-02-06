@@ -21,6 +21,10 @@ mod setup;
 pub mod utils;
 mod verify;
 
+/// This the main struct for the nano-sync crate. It provides methods to setup (create the
+/// proving and verifying keys), create proofs and verify proofs for the nano sync circuit.
+pub struct NanoZKP;
+
 #[derive(Error, Debug)]
 pub enum NanoZKPError {
     #[error("filesystem error")]
@@ -30,5 +34,3 @@ pub enum NanoZKPError {
     #[error("circuit error")]
     Circuit(#[from] SynthesisError),
 }
-
-pub struct NanoZKP;

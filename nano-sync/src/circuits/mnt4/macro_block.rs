@@ -102,6 +102,9 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
 
         let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(&self.block))?;
 
+        let initial_block_number_var =
+            UInt32::new_witness(cs.clone(), || Ok(&self.block.block_number - EPOCH_LENGTH))?;
+
         // Allocate all the inputs.
         next_cost_analysis!(cs, cost, || { "Alloc inputs" });
 
@@ -120,6 +123,14 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         let final_state_commitment_bits =
             unpack_inputs(final_state_commitment_var)?[..760].to_vec();
 
+        // Check that the initial block and the final block are exactly one epoch length apart.
+        next_cost_analysis!(cs, cost, || { "Check block numbers" });
+
+        let calculated_block_number =
+            UInt32::addmany(&[initial_block_number_var.clone(), epoch_length_var])?;
+
+        calculated_block_number.enforce_equal(&block_var.block_number)?;
+
         // Verifying equality for initial state commitment. It just checks that the initial block
         // number and the initial public key tree root given as witnesses are correct by committing
         // to them and comparing the result with the initial state commitment given as an input.
@@ -127,24 +138,21 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
 
         let reference_commitment = StateCommitmentGadget::evaluate(
             cs.clone(),
-            &block_var.block_number,
+            &initial_block_number_var,
             &initial_pk_tree_root_var,
             &pedersen_generators_var,
         )?;
 
         initial_state_commitment_bits.enforce_equal(&reference_commitment)?;
 
-        // Verifying equality for final state commitment. It just checks that the calculated final
-        // block number and the final public key tree root given as a witness are correct by committing
+        // Verifying equality for final state commitment. It just checks that the final block number
+        // and the final public key tree root given as a witnesses are correct by committing
         // to them and comparing the result with the final state commitment given as an input.
         next_cost_analysis!(cs, cost, || { "Verify final state commitment" });
 
-        let final_block_number_var =
-            UInt32::addmany(&[block_var.block_number.clone(), epoch_length_var])?;
-
         let reference_commitment = StateCommitmentGadget::evaluate(
             cs.clone(),
-            &final_block_number_var,
+            &block_var.block_number,
             &final_pk_tree_root_var,
             &pedersen_generators_var,
         )?;
@@ -152,7 +160,7 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         final_state_commitment_bits.enforce_equal(&reference_commitment)?;
 
         // Calculating the commitments to each of the aggregate public keys chunks. These will be
-        // given as input to the PKTree SNARK circuit.
+        // given as inputs to the PKTree SNARK circuit.
         next_cost_analysis!(cs, cost, || { "Calculate agg pk chunks commitments" });
 
         let mut agg_pk_chunks_commitments = Vec::new();
@@ -207,11 +215,7 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
             agg_pk_var += pk;
         }
 
-        // Verifying that the block is valid. Note that we give it the initial block number and the
-        // final public keys commitment. That's because the "state" is composed of the public keys of
-        // the current validator list and the block number of the next macro block. So, a macro block
-        // actually has the number from the previous state and contains the public keys of the next
-        // state.
+        // Verifying that the block is valid.
         next_cost_analysis!(cs, cost, || "Verify block");
 
         block_var

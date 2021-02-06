@@ -29,12 +29,22 @@ use crate::utils::{byte_to_le_bits, bytes_to_bits, prepare_inputs};
 use crate::{NanoZKP, NanoZKPError};
 
 impl NanoZKP {
+    /// This function generates a proof for a new epoch, it uses the entire nano sync program. Note
+    /// that the proof generation can easily take longer than 12 hours.
     pub fn prove(
         &self,
+        // The public keys of the validators of the initial state. So, the validators that were
+        // selected in the previous election macro block and that are now signing this election
+        // macro block.
         initial_pks: Vec<G2MNT6>,
+        // The public keys of the validators of the final state. To be clear, they are the validators
+        // that are selected in this election macro block.
         final_pks: Vec<G2MNT6>,
+        // The current election macro block.
         block: MacroBlock,
-        previous_proof: Option<Proof<MNT6_753>>,
+        // If this is not the first epoch, you need to provide the SNARK proof for the previous
+        // epoch and the genesis state commitment.
+        genesis_data: Option<(Proof<MNT6_753>, Vec<u8>)>,
     ) -> Result<Proof<MNT6_753>, NanoZKPError> {
         let rng = &mut thread_rng();
 
@@ -173,11 +183,17 @@ impl NanoZKP {
             &initial_pks,
             &final_pks,
             block.block_number,
-            previous_proof,
+            genesis_data.clone(),
         )?;
 
         // Start generating proof for Merger Wrapper.
-        let proof = self.prove_merger_wrapper(rng, &initial_pks, &final_pks, block.block_number)?;
+        let proof = self.prove_merger_wrapper(
+            rng,
+            &initial_pks,
+            &final_pks,
+            block.block_number,
+            genesis_data,
+        )?;
 
         // Delete cached proofs.
         fs::remove_dir_all("proofs/")?;
@@ -486,12 +502,12 @@ impl NanoZKP {
 
         // Calculate the inputs.
         let initial_state_commitment = prepare_inputs(bytes_to_bits(&state_commitment(
-            block.block_number,
+            block.block_number - EPOCH_LENGTH,
             initial_pks.to_vec(),
         )));
 
         let final_state_commitment = prepare_inputs(bytes_to_bits(&state_commitment(
-            block.block_number + EPOCH_LENGTH,
+            block.block_number,
             final_pks.to_vec(),
         )));
 
@@ -538,12 +554,12 @@ impl NanoZKP {
 
         // Calculate the inputs.
         let initial_state_commitment = prepare_inputs(bytes_to_bits(&state_commitment(
-            block_number,
+            block_number - EPOCH_LENGTH,
             initial_pks.to_vec(),
         )));
 
         let final_state_commitment = prepare_inputs(bytes_to_bits(&state_commitment(
-            block_number + EPOCH_LENGTH,
+            block_number,
             final_pks.to_vec(),
         )));
 
@@ -568,7 +584,7 @@ impl NanoZKP {
         initial_pks: &[G2MNT6],
         final_pks: &[G2MNT6],
         block_number: u32,
-        previous_proof: Option<Proof<MNT6_753>>,
+        genesis_data: Option<(Proof<MNT6_753>, Vec<u8>)>,
     ) -> Result<(), NanoZKPError> {
         // Load the proving key from file.
         let mut file = File::open(format!("proving_keys/merger.bin"))?;
@@ -590,25 +606,30 @@ impl NanoZKP {
 
         let vk_merger_wrapper = VerifyingKey::deserialize_unchecked(&mut file)?;
 
-        // If a previous proof was not provided, then we are generating a proof for the genesis block
-        // and we need to create a random one.
-        let proof_merger_wrapper = match previous_proof {
-            None => Proof {
-                a: G1MNT6::rand(rng).into_affine(),
-                b: G2MNT6::rand(rng).into_affine(),
-                c: G1MNT6::rand(rng).into_affine(),
-            },
-            Some(v) => v,
+        // Get the intermediate state commitment.
+        let intermediate_state_commitment =
+            state_commitment(block_number - EPOCH_LENGTH, initial_pks.to_vec());
+
+        // Create the proof for the previous epoch, the initial state commitment and the genesis flag
+        // depending if this is the first epoch or not.
+        let (proof_merger_wrapper, initial_state_comm_bytes, genesis_flag) = match genesis_data {
+            None => (
+                Proof {
+                    a: G1MNT6::rand(rng).into_affine(),
+                    b: G2MNT6::rand(rng).into_affine(),
+                    c: G1MNT6::rand(rng).into_affine(),
+                },
+                intermediate_state_commitment.clone(),
+                true,
+            ),
+            Some((proof, genesis_state)) => (proof, genesis_state, false),
         };
 
         // Calculate the inputs.
-        let initial_state_comm_bits =
-            bytes_to_bits(&state_commitment(block_number, initial_pks.to_vec()));
-
-        let initial_state_commitment = prepare_inputs(initial_state_comm_bits.clone());
+        let initial_state_commitment = prepare_inputs(bytes_to_bits(&initial_state_comm_bytes));
 
         let final_state_commitment = prepare_inputs(bytes_to_bits(&state_commitment(
-            block_number + EPOCH_LENGTH,
+            block_number,
             final_pks.to_vec(),
         )));
 
@@ -621,8 +642,8 @@ impl NanoZKP {
             proof_merger_wrapper,
             proof_macro_block_wrapper,
             vk_merger_wrapper,
-            initial_state_comm_bits,
-            true,
+            bytes_to_bits(&intermediate_state_commitment),
+            genesis_flag,
             initial_state_commitment,
             final_state_commitment,
             vk_commitment,
@@ -641,6 +662,7 @@ impl NanoZKP {
         initial_pks: &[G2MNT6],
         final_pks: &[G2MNT6],
         block_number: u32,
+        genesis_data: Option<(Proof<MNT6_753>, Vec<u8>)>,
     ) -> Result<Proof<MNT6_753>, NanoZKPError> {
         // Load the proving key from file.
         let mut file = File::open(format!("proving_keys/merger_wrapper.bin"))?;
@@ -663,13 +685,15 @@ impl NanoZKP {
         let vk_merger_wrapper = VerifyingKey::deserialize_unchecked(&mut file)?;
 
         // Calculate the inputs.
-        let initial_state_commitment = prepare_inputs(bytes_to_bits(&state_commitment(
-            block_number,
-            initial_pks.to_vec(),
-        )));
+        let initial_state_comm_bytes = match genesis_data {
+            None => state_commitment(block_number - EPOCH_LENGTH, initial_pks.to_vec()),
+            Some((_, x)) => x,
+        };
+
+        let initial_state_commitment = prepare_inputs(bytes_to_bits(&initial_state_comm_bytes));
 
         let final_state_commitment = prepare_inputs(bytes_to_bits(&state_commitment(
-            block_number + EPOCH_LENGTH,
+            block_number,
             final_pks.to_vec(),
         )));
 
