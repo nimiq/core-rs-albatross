@@ -10,7 +10,7 @@ use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisE
 
 use crate::gadgets::mnt4::VKCommitmentGadget;
 use crate::primitives::pedersen_generators;
-use crate::utils::{pack_inputs, unpack_inputs};
+use crate::utils::{prepare_inputs, unpack_inputs};
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 /// This is the merger circuit. It takes as inputs an initial state commitment, a final state commitment
@@ -173,11 +173,13 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
         // the first epoch, for the first merger circuit.
         next_cost_analysis!(cs, cost, || { "Conditionally verify proof merger wrapper" });
 
-        let mut proof_inputs = pack_inputs(initial_state_commitment_bits);
+        let mut proof_inputs = prepare_inputs(initial_state_commitment_bits);
 
-        proof_inputs.append(&mut pack_inputs(intermediate_state_commitment_bits.clone()));
+        proof_inputs.append(&mut prepare_inputs(
+            intermediate_state_commitment_bits.clone(),
+        ));
 
-        proof_inputs.append(&mut pack_inputs(vk_commitment_bits));
+        proof_inputs.append(&mut prepare_inputs(vk_commitment_bits));
 
         let input_var = BooleanInputVar::new(proof_inputs);
 
@@ -191,9 +193,9 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
         // Verify the ZK proof for the Macro Block Wrapper circuit.
         next_cost_analysis!(cs, cost, || { "Verify proof macro block wrapper" });
 
-        let mut proof_inputs = pack_inputs(intermediate_state_commitment_bits);
+        let mut proof_inputs = prepare_inputs(intermediate_state_commitment_bits);
 
-        proof_inputs.append(&mut pack_inputs(final_state_commitment_bits));
+        proof_inputs.append(&mut prepare_inputs(final_state_commitment_bits));
 
         let input_var = BooleanInputVar::new(proof_inputs);
 

@@ -25,7 +25,7 @@ use crate::primitives::{
     merkle_tree_prove, pk_tree_construct, serialize_g1_mnt6, serialize_g2_mnt6, state_commitment,
     vk_commitment, MacroBlock,
 };
-use crate::utils::{byte_to_le_bits, bytes_to_bits, prepare_inputs};
+use crate::utils::{byte_to_le_bits, bytes_to_bits, pack_inputs};
 use crate::{NanoZKP, NanoZKPError};
 
 impl NanoZKP {
@@ -235,15 +235,13 @@ impl NanoZKP {
         let agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(hash));
 
         // Calculate inputs.
-        let pk_tree_root = prepare_inputs(bytes_to_bits(pk_tree_root));
+        let pk_tree_root = pack_inputs(bytes_to_bits(pk_tree_root));
 
-        let agg_pk_commitment = prepare_inputs(agg_pk_comm);
+        let agg_pk_commitment = pack_inputs(agg_pk_comm);
 
-        let signer_bitmap = prepare_inputs(signer_bitmap.clone()).pop().unwrap();
+        let signer_bitmap = pack_inputs(signer_bitmap.clone()).pop().unwrap();
 
-        let path = prepare_inputs(byte_to_le_bits(position as u8))
-            .pop()
-            .unwrap();
+        let path = pack_inputs(byte_to_le_bits(position as u8)).pop().unwrap();
 
         // Create the circuit.
         let circuit = LeafMNT4::new(
@@ -335,17 +333,15 @@ impl NanoZKP {
         let right_agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(hash));
 
         // Calculate inputs.
-        let pk_tree_root = prepare_inputs(bytes_to_bits(pk_tree_root));
+        let pk_tree_root = pack_inputs(bytes_to_bits(pk_tree_root));
 
-        let left_agg_pk_commitment = prepare_inputs(left_agg_pk_comm);
+        let left_agg_pk_commitment = pack_inputs(left_agg_pk_comm);
 
-        let right_agg_pk_commitment = prepare_inputs(right_agg_pk_comm);
+        let right_agg_pk_commitment = pack_inputs(right_agg_pk_comm);
 
-        let signer_bitmap = prepare_inputs(signer_bitmap.clone()).pop().unwrap();
+        let signer_bitmap = pack_inputs(signer_bitmap.clone()).pop().unwrap();
 
-        let path = prepare_inputs(byte_to_le_bits(position as u8))
-            .pop()
-            .unwrap();
+        let path = pack_inputs(byte_to_le_bits(position as u8)).pop().unwrap();
 
         // Create the circuit.
         let circuit = NodeMNT6::new(
@@ -432,15 +428,13 @@ impl NanoZKP {
         let agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(hash));
 
         // Calculate inputs.
-        let pk_tree_root = prepare_inputs(bytes_to_bits(pk_tree_root));
+        let pk_tree_root = pack_inputs(bytes_to_bits(pk_tree_root));
 
-        let agg_pk_commitment = prepare_inputs(agg_pk_comm);
+        let agg_pk_commitment = pack_inputs(agg_pk_comm);
 
-        let signer_bitmap = prepare_inputs(signer_bitmap.clone()).pop().unwrap();
+        let signer_bitmap = pack_inputs(signer_bitmap.clone()).pop().unwrap();
 
-        let path = prepare_inputs(byte_to_le_bits(position as u8))
-            .pop()
-            .unwrap();
+        let path = pack_inputs(byte_to_le_bits(position as u8)).pop().unwrap();
 
         // Create the circuit.
         let circuit = NodeMNT4::new(
@@ -501,12 +495,12 @@ impl NanoZKP {
         }
 
         // Calculate the inputs.
-        let initial_state_commitment = prepare_inputs(bytes_to_bits(&state_commitment(
+        let initial_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
             block.block_number - EPOCH_LENGTH,
             initial_pks.to_vec(),
         )));
 
-        let final_state_commitment = prepare_inputs(bytes_to_bits(&state_commitment(
+        let final_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
             block.block_number,
             final_pks.to_vec(),
         )));
@@ -553,12 +547,12 @@ impl NanoZKP {
         let proof = Proof::deserialize_unchecked(&mut file)?;
 
         // Calculate the inputs.
-        let initial_state_commitment = prepare_inputs(bytes_to_bits(&state_commitment(
+        let initial_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
             block_number - EPOCH_LENGTH,
             initial_pks.to_vec(),
         )));
 
-        let final_state_commitment = prepare_inputs(bytes_to_bits(&state_commitment(
+        let final_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
             block_number,
             final_pks.to_vec(),
         )));
@@ -626,15 +620,14 @@ impl NanoZKP {
         };
 
         // Calculate the inputs.
-        let initial_state_commitment = prepare_inputs(bytes_to_bits(&initial_state_comm_bytes));
+        let initial_state_commitment = pack_inputs(bytes_to_bits(&initial_state_comm_bytes));
 
-        let final_state_commitment = prepare_inputs(bytes_to_bits(&state_commitment(
+        let final_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
             block_number,
             final_pks.to_vec(),
         )));
 
-        let vk_commitment =
-            prepare_inputs(bytes_to_bits(&vk_commitment(vk_merger_wrapper.clone())));
+        let vk_commitment = pack_inputs(bytes_to_bits(&vk_commitment(vk_merger_wrapper.clone())));
 
         // Create the circuit.
         let circuit = MergerCircuit::new(
@@ -690,14 +683,14 @@ impl NanoZKP {
             Some((_, x)) => x,
         };
 
-        let initial_state_commitment = prepare_inputs(bytes_to_bits(&initial_state_comm_bytes));
+        let initial_state_commitment = pack_inputs(bytes_to_bits(&initial_state_comm_bytes));
 
-        let final_state_commitment = prepare_inputs(bytes_to_bits(&state_commitment(
+        let final_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
             block_number,
             final_pks.to_vec(),
         )));
 
-        let vk_commitment = prepare_inputs(bytes_to_bits(&vk_commitment(vk_merger_wrapper)));
+        let vk_commitment = pack_inputs(bytes_to_bits(&vk_commitment(vk_merger_wrapper)));
 
         // Create the circuit.
         let circuit = MergerWrapperCircuit::new(

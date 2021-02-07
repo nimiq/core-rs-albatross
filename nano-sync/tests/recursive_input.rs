@@ -4,7 +4,7 @@ use ark_groth16::constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar}
 use ark_groth16::Groth16;
 use ark_mnt4_753::constraints::PairingVar;
 use ark_mnt4_753::{Fr as MNT4Fr, MNT4_753};
-use ark_mnt6_753::constraints::FqVar;
+use ark_mnt6_753::constraints::FqVar as FqMNT6;
 use ark_mnt6_753::{Fq, Fr as MNT6Fr};
 use ark_r1cs_std::prelude::{AllocVar, Boolean, EqGadget};
 use ark_r1cs_std::R1CSVar;
@@ -16,29 +16,44 @@ use rand::RngCore;
 
 use nimiq_nano_sync::utils::{bytes_to_bits, pack_inputs, prepare_inputs, unpack_inputs};
 
+const NUMBER_OF_BITS: usize = 1024;
+
 #[derive(Clone)]
 pub struct TestCircuit {
-    // Witness (private)
-    hash_priv: Vec<bool>,
-    // Input (public)
-    hash_pub: Vec<Fq>,
+    // Witnesses (private)
+    red_priv: Vec<bool>,
+    blue_priv: Vec<bool>,
+    // Inputs (public)
+    red_pub: Vec<Fq>,
+    blue_pub: Vec<Fq>,
 }
 
 impl ConstraintSynthesizer<MNT4Fr> for TestCircuit {
     /// This function generates the constraints for the circuit.
     fn generate_constraints(self, cs: ConstraintSystemRef<MNT4Fr>) -> Result<(), SynthesisError> {
         // Allocate all the witnesses.
-        let hash_priv_var =
-            Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(&self.hash_priv[..]))?;
+        let red_priv_var =
+            Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(&self.red_priv[..]))?;
+
+        let blue_priv_var =
+            Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(&self.blue_priv[..]))?;
 
         // Allocate all the inputs.
-        let hash_pub_var = Vec::<FqVar>::new_input(cs.clone(), || Ok(&self.hash_pub[..]))?;
+        let red_pub_var = Vec::<FqMNT6>::new_input(cs.clone(), || Ok(&self.red_pub[..]))?;
+
+        let blue_pub_var = Vec::<FqMNT6>::new_input(cs.clone(), || Ok(&self.blue_pub[..]))?;
 
         // Unpack the inputs by converting them from field elements to bits and truncating appropriately.
-        let hash_pub_bits = unpack_inputs(hash_pub_var)?[..1024].to_vec();
+        let red_var_bits = unpack_inputs(red_pub_var)?[..NUMBER_OF_BITS].to_vec();
 
-        // Compare the two.
-        hash_priv_var.enforce_equal(&hash_pub_bits)
+        let blue_var_bits = unpack_inputs(blue_pub_var)?[..NUMBER_OF_BITS].to_vec();
+
+        // Compare the bits.
+        red_priv_var.enforce_equal(&red_var_bits)?;
+
+        blue_priv_var.enforce_equal(&blue_var_bits)?;
+
+        Ok(())
     }
 }
 
@@ -47,18 +62,26 @@ fn input_works() {
     // Create random number generator.
     let rng = &mut test_rng();
 
-    // Create random bits.
-    let mut bytes = [0u8; 128];
+    // Create random bits and inputs for red.
+    let mut bytes = [0u8; NUMBER_OF_BITS / 8];
     rng.fill_bytes(&mut bytes);
 
-    let hash_priv = bytes_to_bits(&bytes);
+    let red_priv = bytes_to_bits(&bytes);
+    let red_pub = pack_inputs(red_priv.clone());
 
-    let hash_pub = prepare_inputs(hash_priv.clone());
+    // Create random bits and inputs for red.
+    let mut bytes = [0u8; NUMBER_OF_BITS / 8];
+    rng.fill_bytes(&mut bytes);
+
+    let blue_priv = bytes_to_bits(&bytes);
+    let blue_pub = pack_inputs(blue_priv.clone());
 
     // Create the circuit.
     let circuit = TestCircuit {
-        hash_priv: hash_priv.clone(),
-        hash_pub,
+        red_priv: red_priv.clone(),
+        blue_priv: blue_priv.clone(),
+        red_pub: red_pub.clone(),
+        blue_pub: blue_pub.clone(),
     };
 
     // Create the proving and verifying keys.
@@ -82,11 +105,15 @@ fn input_works() {
     // Create the proof.
     let proof = Groth16::<MNT4_753>::prove(&pk, circuit, rng).unwrap();
 
+    // Verify the proof.
+    let mut inputs = vec![];
+    inputs.extend(&red_pub);
+    inputs.extend(&blue_pub);
+
+    assert!(Groth16::<MNT4_753>::verify(&vk, &inputs, &proof).unwrap());
+
     // Initialize the constraint system.
     let cs = ConstraintSystem::<MNT6Fr>::new_ref();
-
-    // Allocate the random bits in the circuit.
-    let bits_var = Vec::<Boolean<MNT6Fr>>::new_witness(cs.clone(), || Ok(hash_priv)).unwrap();
 
     // Allocate the verifying key.
     let vk_var = VerifyingKeyVar::new_witness(cs.clone(), || Ok(vk)).unwrap();
@@ -94,11 +121,19 @@ fn input_works() {
     // Allocate the proof.
     let proof_var = ProofVar::new_witness(cs.clone(), || Ok(proof)).unwrap();
 
-    // Verify the ZK proof.
-    let proof_inputs = pack_inputs(bits_var);
+    // Allocate the inputs.
+    let red_priv_var = Vec::<Boolean<MNT6Fr>>::new_input(cs.clone(), || Ok(red_priv)).unwrap();
+
+    let blue_priv_var = Vec::<Boolean<MNT6Fr>>::new_input(cs.clone(), || Ok(blue_priv)).unwrap();
+
+    // Prepare inputs
+    let mut proof_inputs = prepare_inputs(red_priv_var);
+
+    proof_inputs.append(&mut prepare_inputs(blue_priv_var));
 
     let input_var = BooleanInputVar::new(proof_inputs);
 
+    // Verify the ZK proof.
     assert!(
         Groth16VerifierGadget::<MNT4_753, PairingVar>::verify(&vk_var, &input_var, &proof_var)
             .unwrap()
