@@ -52,7 +52,7 @@ impl NanoZKP {
         let mut bytes = Vec::new();
 
         for i in 0..initial_pks.len() {
-            bytes.extend_from_slice(&serialize_g2_mnt6(initial_pks[i].clone()));
+            bytes.extend_from_slice(&serialize_g2_mnt6(initial_pks[i]));
         }
 
         let bits = bytes_to_bits(&bytes);
@@ -465,17 +465,17 @@ impl NanoZKP {
         block: MacroBlock,
     ) -> Result<(), NanoZKPError> {
         // Load the proving key from file.
-        let mut file = File::open(format!("proving_keys/macro_block.bin"))?;
+        let mut file = File::open("proving_keys/macro_block.bin".to_string())?;
 
         let proving_key = ProvingKey::deserialize_unchecked(&mut file)?;
 
         // Load the verifying key from file.
-        let mut file = File::open(format!("verifying_keys/pk_tree_0.bin"))?;
+        let mut file = File::open("verifying_keys/pk_tree_0.bin".to_string())?;
 
         let vk_pk_tree = VerifyingKey::deserialize_unchecked(&mut file)?;
 
         // Load the proof from file.
-        let mut file = File::open(format!("proofs/pk_tree_0_0.bin"))?;
+        let mut file = File::open("proofs/pk_tree_0_0.bin".to_string())?;
 
         let proof = Proof::deserialize_unchecked(&mut file)?;
 
@@ -532,17 +532,17 @@ impl NanoZKP {
         block_number: u32,
     ) -> Result<(), NanoZKPError> {
         // Load the proving key from file.
-        let mut file = File::open(format!("proving_keys/macro_block_wrapper.bin"))?;
+        let mut file = File::open("proving_keys/macro_block_wrapper.bin".to_string())?;
 
         let proving_key = ProvingKey::deserialize_unchecked(&mut file)?;
 
         // Load the verifying key from file.
-        let mut file = File::open(format!("verifying_keys/macro_block.bin"))?;
+        let mut file = File::open("verifying_keys/macro_block.bin".to_string())?;
 
         let vk_macro_block = VerifyingKey::deserialize_unchecked(&mut file)?;
 
         // Load the proof from file.
-        let mut file = File::open(format!("proofs/macro_block.bin"))?;
+        let mut file = File::open("proofs/macro_block.bin".to_string())?;
 
         let proof = Proof::deserialize_unchecked(&mut file)?;
 
@@ -581,22 +581,22 @@ impl NanoZKP {
         genesis_data: Option<(Proof<MNT6_753>, Vec<u8>)>,
     ) -> Result<(), NanoZKPError> {
         // Load the proving key from file.
-        let mut file = File::open(format!("proving_keys/merger.bin"))?;
+        let mut file = File::open("proving_keys/merger.bin".to_string())?;
 
         let proving_key = ProvingKey::deserialize_unchecked(&mut file)?;
 
         // Load the verifying key for Macro Block Wrapper from file.
-        let mut file = File::open(format!("verifying_keys/macro_block_wrapper.bin"))?;
+        let mut file = File::open("verifying_keys/macro_block_wrapper.bin".to_string())?;
 
         let vk_macro_block_wrapper = VerifyingKey::deserialize_unchecked(&mut file)?;
 
         // Load the proof for Macro Block Wrapper from file.
-        let mut file = File::open(format!("proofs/macro_block_wrapper.bin"))?;
+        let mut file = File::open("proofs/macro_block_wrapper.bin".to_string())?;
 
         let proof_macro_block_wrapper = Proof::deserialize_unchecked(&mut file)?;
 
         // Load the verifying key for Merger Wrapper from file.
-        let mut file = File::open(format!("verifying_keys/merger_wrapper.bin"))?;
+        let mut file = File::open("verifying_keys/merger_wrapper.bin".to_string())?;
 
         let vk_merger_wrapper = VerifyingKey::deserialize_unchecked(&mut file)?;
 
@@ -658,22 +658,22 @@ impl NanoZKP {
         genesis_data: Option<(Proof<MNT6_753>, Vec<u8>)>,
     ) -> Result<Proof<MNT6_753>, NanoZKPError> {
         // Load the proving key from file.
-        let mut file = File::open(format!("proving_keys/merger_wrapper.bin"))?;
+        let mut file = File::open("proving_keys/merger_wrapper.bin".to_string())?;
 
         let proving_key = ProvingKey::deserialize_unchecked(&mut file)?;
 
         // Load the verifying key from file.
-        let mut file = File::open(format!("verifying_keys/merger.bin"))?;
+        let mut file = File::open("verifying_keys/merger.bin".to_string())?;
 
         let vk_merger = VerifyingKey::deserialize_unchecked(&mut file)?;
 
         // Load the proof from file.
-        let mut file = File::open(format!("proofs/merger.bin"))?;
+        let mut file = File::open("proofs/merger.bin".to_string())?;
 
         let proof = Proof::deserialize_unchecked(&mut file)?;
 
         // Load the verifying key for Merger Wrapper from file.
-        let mut file = File::open(format!("verifying_keys/merger_wrapper.bin"))?;
+        let mut file = File::open("verifying_keys/merger_wrapper.bin".to_string())?;
 
         let vk_merger_wrapper = VerifyingKey::deserialize_unchecked(&mut file)?;
 

@@ -41,7 +41,7 @@ impl ConstraintSynthesizer<MNT4Fr> for TestCircuit {
         // Allocate all the inputs.
         let red_pub_var = Vec::<FqMNT6>::new_input(cs.clone(), || Ok(&self.red_pub[..]))?;
 
-        let blue_pub_var = Vec::<FqMNT6>::new_input(cs.clone(), || Ok(&self.blue_pub[..]))?;
+        let blue_pub_var = Vec::<FqMNT6>::new_input(cs, || Ok(&self.blue_pub[..]))?;
 
         // Unpack the inputs by converting them from field elements to bits and truncating appropriately.
         let red_var_bits = unpack_inputs(red_pub_var)?[..NUMBER_OF_BITS].to_vec();
@@ -124,7 +124,7 @@ fn input_works() {
     // Allocate the inputs.
     let red_priv_var = Vec::<Boolean<MNT6Fr>>::new_input(cs.clone(), || Ok(red_priv)).unwrap();
 
-    let blue_priv_var = Vec::<Boolean<MNT6Fr>>::new_input(cs.clone(), || Ok(blue_priv)).unwrap();
+    let blue_priv_var = Vec::<Boolean<MNT6Fr>>::new_input(cs, || Ok(blue_priv)).unwrap();
 
     // Prepare inputs
     let mut proof_inputs = prepare_inputs(red_priv_var);

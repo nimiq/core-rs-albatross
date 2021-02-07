@@ -22,14 +22,14 @@ fn serialization_g1_mnt6_works() {
     let g1_point = G1Projective::rand(rng);
 
     // Allocate the random inputs in the circuit.
-    let g1_point_var = G1Var::new_witness(cs.clone(), || Ok(g1_point.clone())).unwrap();
+    let g1_point_var = G1Var::new_witness(cs.clone(), || Ok(g1_point)).unwrap();
 
     // Serialize using the primitive version.
     let primitive_bytes = serialize_g1_mnt6(g1_point);
     let primitive_bits = bytes_to_bits(&primitive_bytes);
 
     // Serialize using the gadget version.
-    let gadget_bits = SerializeGadget::serialize_g1(cs.clone(), &g1_point_var).unwrap();
+    let gadget_bits = SerializeGadget::serialize_g1(cs, &g1_point_var).unwrap();
 
     // Compare the two versions bit by bit.
     assert_eq!(primitive_bits.len(), gadget_bits.len());
@@ -50,14 +50,14 @@ fn serialization_g2_mnt6_works() {
     let g2_point = G2Projective::rand(rng);
 
     // Allocate the random inputs in the circuit.
-    let g2_point_var = G2Var::new_witness(cs.clone(), || Ok(g2_point.clone())).unwrap();
+    let g2_point_var = G2Var::new_witness(cs.clone(), || Ok(g2_point)).unwrap();
 
     // Serialize using the primitive version.
     let primitive_bytes = serialize_g2_mnt6(g2_point);
     let primitive_bits = bytes_to_bits(&primitive_bytes);
 
     // Serialize using the gadget version.
-    let gadget_bits = SerializeGadget::serialize_g2(cs.clone(), &g2_point_var).unwrap();
+    let gadget_bits = SerializeGadget::serialize_g2(cs, &g2_point_var).unwrap();
 
     // Compare the two versions bit by bit.
     assert_eq!(primitive_bits.len(), gadget_bits.len());

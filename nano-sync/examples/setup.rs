@@ -1,20 +1,4 @@
-
-
 use std::time::Instant;
-
-use ark_crypto_primitives::CircuitSpecificSetupSNARK;
-
-
-
-
-
-
-
-
-
-
-
-
 
 use nimiq_nano_sync::NanoZKP;
 

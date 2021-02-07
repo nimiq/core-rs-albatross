@@ -46,7 +46,7 @@ fn state_commitment_works() {
 
     // Evaluate state commitment using the gadget version.
     let gadget_comm = StateCommitmentGadget::evaluate(
-        cs.clone(),
+        cs,
         &block_number_var,
         &pk_tree_root_var,
         &generators_var,

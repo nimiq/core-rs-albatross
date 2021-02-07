@@ -1,17 +1,15 @@
 use std::fs::File;
 use std::time::Instant;
 
-use ark_crypto_primitives::SNARK;
 use ark_ec::ProjectiveCurve;
-use ark_groth16::{Groth16, Proof, VerifyingKey};
-use ark_mnt6_753::{Fr as MNT6Fr, G1Projective as G1MNT6, G2Projective as G2MNT6, MNT6_753};
+use ark_groth16::Proof;
+use ark_mnt6_753::{Fr as MNT6Fr, G2Projective as G2MNT6};
 use ark_serialize::CanonicalDeserialize;
 use ark_std::ops::MulAssign;
 use ark_std::{test_rng, UniformRand};
 
 use nimiq_nano_sync::constants::VALIDATOR_SLOTS;
-use nimiq_nano_sync::primitives::{state_commitment};
-
+use nimiq_nano_sync::primitives::state_commitment;
 use nimiq_nano_sync::NanoZKP;
 
 fn main() {

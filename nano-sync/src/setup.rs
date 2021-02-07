@@ -195,7 +195,7 @@ impl NanoZKP {
 
     fn setup_macro_block<R: CryptoRng + Rng>(&self, rng: &mut R) -> Result<(), NanoZKPError> {
         // Load the verifying key from file.
-        let mut file = File::open(format!("verifying_keys/pk_tree_0.bin"))?;
+        let mut file = File::open("verifying_keys/pk_tree_0.bin".to_string())?;
 
         let vk_pk_tree = VerifyingKey::deserialize_unchecked(&mut file)?;
 
@@ -264,7 +264,7 @@ impl NanoZKP {
         rng: &mut R,
     ) -> Result<(), NanoZKPError> {
         // Load the verifying key from file.
-        let mut file = File::open(format!("verifying_keys/macro_block.bin"))?;
+        let mut file = File::open("verifying_keys/macro_block.bin".to_string())?;
 
         let vk_macro_block = VerifyingKey::deserialize_unchecked(&mut file)?;
 
@@ -295,7 +295,7 @@ impl NanoZKP {
 
     fn setup_merger<R: CryptoRng + Rng>(&self, rng: &mut R) -> Result<(), NanoZKPError> {
         // Load the verifying key from file.
-        let mut file = File::open(format!("verifying_keys/macro_block_wrapper.bin"))?;
+        let mut file = File::open("verifying_keys/macro_block_wrapper.bin".to_string())?;
 
         let vk_macro_block_wrapper = VerifyingKey::deserialize_unchecked(&mut file)?;
 
@@ -353,7 +353,7 @@ impl NanoZKP {
 
     fn setup_merger_wrapper<R: CryptoRng + Rng>(&self, rng: &mut R) -> Result<(), NanoZKPError> {
         // Load the verifying key from file.
-        let mut file = File::open(format!("verifying_keys/merger.bin"))?;
+        let mut file = File::open("verifying_keys/merger.bin".to_string())?;
 
         let vk_merger = VerifyingKey::deserialize_unchecked(&mut file)?;
 

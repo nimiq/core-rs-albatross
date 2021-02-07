@@ -77,7 +77,7 @@ impl ConstraintSynthesizer<MNT6Fr> for MacroBlockWrapperCircuit {
             Vec::<FqVar>::new_input(cs.clone(), || Ok(&self.initial_state_commitment[..]))?;
 
         let final_state_commitment_var =
-            Vec::<FqVar>::new_input(cs.clone(), || Ok(&self.final_state_commitment[..]))?;
+            Vec::<FqVar>::new_input(cs, || Ok(&self.final_state_commitment[..]))?;
 
         // Unpack the inputs by converting them from field elements to bits and truncating appropriately.
         next_cost_analysis!(cs, cost, || { "Unpack inputs" });

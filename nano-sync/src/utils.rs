@@ -172,7 +172,7 @@ pub fn byte_to_le_bits(mut byte: u8) -> Vec<bool> {
 
     for _ in 0..8 {
         bits.push(byte % 2 != 0);
-        byte = byte >> 1;
+        byte >>= 1;
     }
 
     bits

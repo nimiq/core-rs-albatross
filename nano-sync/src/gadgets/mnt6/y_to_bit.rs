@@ -21,7 +21,7 @@ impl YToBitGadget {
         cs: ConstraintSystemRef<MNT6Fr>,
         point: &AffineVar<<Parameters as MNT4Parameters>::G1Parameters, FqVar>,
     ) -> Result<Boolean<MNT6Fr>, SynthesisError> {
-        let y_bit = Self::is_greater_half(cs.clone(), &point.y)?;
+        let y_bit = Self::is_greater_half(cs, &point.y)?;
 
         Ok(y_bit)
     }
@@ -38,7 +38,7 @@ impl YToBitGadget {
 
         let y_c0_bit = Self::is_greater_half(cs.clone(), &point.y.c0)?;
 
-        let y_c1_eq_bit = Self::is_equal_zero(cs.clone(), &point.y.c1)?;
+        let y_c1_eq_bit = Self::is_equal_zero(cs, &point.y.c1)?;
 
         // Calculate the following formula:
         // (y_c1 > half) || (y_c1 == 0 && y_c0 > half)

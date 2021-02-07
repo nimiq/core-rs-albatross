@@ -80,8 +80,7 @@ impl ConstraintSynthesizer<MNT6Fr> for MergerWrapperCircuit {
         let final_state_commitment_var =
             Vec::<FqVar>::new_input(cs.clone(), || Ok(&self.final_state_commitment[..]))?;
 
-        let vk_commitment_var =
-            Vec::<FqVar>::new_input(cs.clone(), || Ok(&self.vk_commitment[..]))?;
+        let vk_commitment_var = Vec::<FqVar>::new_input(cs, || Ok(&self.vk_commitment[..]))?;
 
         // Unpack the inputs by converting them from field elements to bits and truncating appropriately.
         next_cost_analysis!(cs, cost, || { "Unpack inputs" });
