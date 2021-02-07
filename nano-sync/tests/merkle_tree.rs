@@ -48,7 +48,7 @@ fn merkle_tree_construct_works() {
 
     // Construct Merkle tree using the gadget version.
     let gadget_tree =
-        MerkleTreeGadget::construct(cs.clone(), &leaves_var, &pedersen_generators_var).unwrap();
+        MerkleTreeGadget::construct(cs, &leaves_var, &pedersen_generators_var).unwrap();
 
     // Compare the two versions bit by bit.
     assert_eq!(primitive_tree.len(), gadget_tree.len());
@@ -139,7 +139,7 @@ fn merkle_tree_verify_works() {
         leaf.clone(),
         nodes.clone(),
         path.clone(),
-        root.clone(),
+        root,
     ));
 
     // Allocate the leaf in the circuit.
@@ -160,7 +160,7 @@ fn merkle_tree_verify_works() {
 
     // Verify Merkle proof.
     assert!(MerkleTreeGadget::verify(
-        cs.clone(),
+        cs,
         &leaf_var,
         &nodes_var,
         &path_var,
@@ -224,7 +224,7 @@ fn merkle_tree_verify_wrong_root() {
         leaf.clone(),
         nodes.clone(),
         path.clone(),
-        root.clone(),
+        root,
     ));
 
     // Allocate the leaf in the circuit.
@@ -245,7 +245,7 @@ fn merkle_tree_verify_wrong_root() {
 
     // Verify Merkle proof.
     assert!(!MerkleTreeGadget::verify(
-        cs.clone(),
+        cs,
         &leaf_var,
         &nodes_var,
         &path_var,

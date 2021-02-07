@@ -33,7 +33,7 @@ fn pedersen_hash_works() {
     let bits_var = Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(bits)).unwrap();
 
     // Allocate the Pedersen generators in the circuit.
-    let generators_var = Vec::<G1Var>::new_witness(cs.clone(), || Ok(generators)).unwrap();
+    let generators_var = Vec::<G1Var>::new_witness(cs, || Ok(generators)).unwrap();
 
     // Evaluate Pedersen hash using the gadget version.
     let gadget_hash = PedersenHashGadget::evaluate(&bits_var, &generators_var).unwrap();

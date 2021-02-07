@@ -23,7 +23,7 @@ fn y_to_bit_g1_mnt4_works() {
         let g1_point = G1Projective::rand(rng);
 
         // Allocate the random inputs in the circuit and convert it to affine form.
-        let g1_point_var = G1Var::new_witness(cs.clone(), || Ok(g1_point.clone()))
+        let g1_point_var = G1Var::new_witness(cs.clone(), || Ok(g1_point))
             .unwrap()
             .to_affine()
             .unwrap();
@@ -56,7 +56,7 @@ fn y_to_bit_g2_mnt4_works() {
         let g2_point = G2Projective::rand(rng);
 
         // Allocate the random inputs in the circuit and convert it to affine form.
-        let g2_point_var = G2Var::new_witness(cs.clone(), || Ok(g2_point.clone()))
+        let g2_point_var = G2Var::new_witness(cs.clone(), || Ok(g2_point))
             .unwrap()
             .to_affine()
             .unwrap();

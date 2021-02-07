@@ -224,7 +224,7 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
 
         block_var
             .verify(
-                cs.clone(),
+                cs,
                 &final_pk_tree_root_var,
                 &agg_pk_var,
                 &pedersen_generators_var,

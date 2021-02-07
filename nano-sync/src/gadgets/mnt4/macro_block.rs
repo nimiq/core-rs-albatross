@@ -214,7 +214,7 @@ impl AllocVar<MacroBlock, MNT4Fr> for MacroBlockGadget {
         let signer_bitmap =
             Vec::<Boolean<MNT4Fr>>::new_input(cs.clone(), || Ok(&value.signer_bitmap[..]))?;
 
-        let signature = G1Var::new_input(cs.clone(), || Ok(value.signature))?;
+        let signature = G1Var::new_input(cs, || Ok(value.signature))?;
 
         Ok(MacroBlockGadget {
             block_number,
@@ -259,7 +259,7 @@ impl AllocVar<MacroBlock, MNT4Fr> for MacroBlockGadget {
         let signer_bitmap =
             Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(&value.signer_bitmap[..]))?;
 
-        let signature = G1Var::new_witness(cs.clone(), || Ok(value.signature))?;
+        let signature = G1Var::new_witness(cs, || Ok(value.signature))?;
 
         Ok(MacroBlockGadget {
             block_number,

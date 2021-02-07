@@ -53,8 +53,7 @@ fn block_hash_works() {
         Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(bytes_to_bits(&pk_tree_root)))
             .unwrap();
 
-    let generators_var =
-        Vec::<G1Var>::new_witness(cs.clone(), || Ok(pedersen_generators(3))).unwrap();
+    let generators_var = Vec::<G1Var>::new_witness(cs, || Ok(pedersen_generators(3))).unwrap();
 
     // Calculate hash using the gadget version.
     let gadget_hash = block_var

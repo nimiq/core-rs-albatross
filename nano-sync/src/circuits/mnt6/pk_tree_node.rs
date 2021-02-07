@@ -93,7 +93,7 @@ impl ConstraintSynthesizer<MNT6Fr> for PKTreeNodeCircuit {
 
         let signer_bitmap_var = FqVar::new_input(cs.clone(), || Ok(&self.signer_bitmap))?;
 
-        let path_var = FqVar::new_input(cs.clone(), || Ok(&self.path))?;
+        let path_var = FqVar::new_input(cs, || Ok(&self.path))?;
 
         // Unpack the inputs by converting them from field elements to bits and truncating appropriately.
         next_cost_analysis!(cs, cost, || { "Unpack inputs" });

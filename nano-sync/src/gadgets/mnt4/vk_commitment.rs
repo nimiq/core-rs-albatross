@@ -50,7 +50,7 @@ impl VKCommitmentGadget {
         let hash = PedersenHashGadget::evaluate(&bits, pedersen_generators)?;
 
         // Serialize the Pedersen hash.
-        let serialized_bits = SerializeGadget::serialize_g1(cs.clone(), &hash)?;
+        let serialized_bits = SerializeGadget::serialize_g1(cs, &hash)?;
 
         Ok(serialized_bits)
     }

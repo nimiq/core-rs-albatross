@@ -37,7 +37,7 @@ impl<F: PrimeField> YToBitGadget<F> {
 
         // Calculates and allocates the value y_adjusted.
         // This value is necessary so that later we can enforce the correctness of y_bit.
-        let y_adjusted = FpVar::new_witness(cs.clone(), || {
+        let y_adjusted = FpVar::new_witness(cs, || {
             let value = y.value()?;
 
             let adjusted = if value > half_value {
@@ -79,9 +79,7 @@ impl<F: PrimeField> YToBitGadget<F> {
 
         // Calculates and allocates the inverse of y.
         // This value is necessary so that later we can enforce the correctness of y_eq_bit.
-        let y_inv = FpVar::new_witness(cs.clone(), || {
-            Ok(y.value()?.inverse().unwrap_or_else(F::zero))
-        })?;
+        let y_inv = FpVar::new_witness(cs, || Ok(y.value()?.inverse().unwrap_or_else(F::zero)))?;
 
         // Enforces the following relation:
         // y * y_inv == 1 - y_eq_bit

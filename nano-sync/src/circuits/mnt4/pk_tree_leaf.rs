@@ -167,7 +167,7 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeLeafCircuit {
 
         let pedersen_hash = PedersenHashGadget::evaluate(&agg_pk_bits, &pedersen_generators_var)?;
 
-        let pedersen_bits = SerializeGadget::serialize_g1(cs.clone(), &pedersen_hash)?;
+        let pedersen_bits = SerializeGadget::serialize_g1(cs, &pedersen_hash)?;
 
         agg_pk_commitment_bits.enforce_equal(&pedersen_bits)?;
 

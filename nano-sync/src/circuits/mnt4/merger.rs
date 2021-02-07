@@ -150,11 +150,8 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
         // committing to it and then comparing the result with the vk commitment given as a public input.
         next_cost_analysis!(cs, cost, || { "Verify vk commitment" });
 
-        let reference_commitment = VKCommitmentGadget::evaluate(
-            cs.clone(),
-            &vk_merger_wrapper_var,
-            &pedersen_generators_var,
-        )?;
+        let reference_commitment =
+            VKCommitmentGadget::evaluate(cs, &vk_merger_wrapper_var, &pedersen_generators_var)?;
 
         vk_commitment_bits.enforce_equal(&reference_commitment)?;
 

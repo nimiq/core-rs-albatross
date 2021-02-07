@@ -45,7 +45,7 @@ fn vk_commitment_test() {
         Vec::<G1Var>::new_witness(cs.clone(), || Ok(pedersen_generators(14))).unwrap();
 
     // Evaluate vk commitment using the gadget version.
-    let gadget_comm = VKCommitmentGadget::evaluate(cs.clone(), &vk_var, &generators_var).unwrap();
+    let gadget_comm = VKCommitmentGadget::evaluate(cs, &vk_var, &generators_var).unwrap();
 
     // Compare the two versions bit by bit.
     assert_eq!(primitive_comm.len(), gadget_comm.len());

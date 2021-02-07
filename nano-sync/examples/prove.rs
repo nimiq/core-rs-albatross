@@ -1,33 +1,17 @@
-
 use std::fs::{DirBuilder, File};
 use std::path::Path;
 use std::time::Instant;
 
-use ark_crypto_primitives::SNARK;
-use ark_ec::{ProjectiveCurve};
-
-
-
-use ark_mnt6_753::{Fr as MNT6Fr, G1Projective as G1MNT6, G2Projective as G2MNT6, MNT6_753};
-
-use ark_serialize::{CanonicalSerialize};
+use ark_ec::ProjectiveCurve;
+use ark_mnt6_753::{Fr as MNT6Fr, G2Projective as G2MNT6};
+use ark_serialize::CanonicalSerialize;
 use ark_std::ops::MulAssign;
 use ark_std::{test_rng, UniformRand};
 use rand::prelude::SliceRandom;
 use rand::RngCore;
 
-
-
-
-
-use nimiq_nano_sync::constants::{
-    EPOCH_LENGTH, MIN_SIGNERS, PK_TREE_BREADTH, PK_TREE_DEPTH, VALIDATOR_SLOTS,
-};
-use nimiq_nano_sync::primitives::{
-    merkle_tree_prove, pk_tree_construct, serialize_g1_mnt6, serialize_g2_mnt6, state_commitment,
-    vk_commitment, MacroBlock,
-};
-
+use nimiq_nano_sync::constants::{MIN_SIGNERS, VALIDATOR_SLOTS};
+use nimiq_nano_sync::primitives::{pk_tree_construct, MacroBlock};
 use nimiq_nano_sync::NanoZKP;
 
 fn main() {
@@ -80,7 +64,7 @@ fn main() {
 
     for i in 0..VALIDATOR_SLOTS {
         if signer_bitmap[i] {
-            block.sign(initial_sks[i].clone(), i, final_pk_tree_root.clone());
+            block.sign(initial_sks[i], i, final_pk_tree_root.clone());
         }
     }
 
