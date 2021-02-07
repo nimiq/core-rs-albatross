@@ -8,7 +8,7 @@ use ark_mnt6_753::Fr as MNT6Fr;
 use ark_r1cs_std::prelude::{AllocVar, Boolean, EqGadget};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
-use crate::utils::{pack_inputs, unpack_inputs};
+use crate::utils::{prepare_inputs, unpack_inputs};
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 /// This is the macro block wrapper circuit. It takes as inputs an initial state commitment and a
@@ -91,9 +91,9 @@ impl ConstraintSynthesizer<MNT6Fr> for MacroBlockWrapperCircuit {
         // Verify the ZK proof.
         next_cost_analysis!(cs, cost, || { "Verify ZK proof" });
 
-        let mut proof_inputs = pack_inputs(initial_state_commitment_bits);
+        let mut proof_inputs = prepare_inputs(initial_state_commitment_bits);
 
-        proof_inputs.append(&mut pack_inputs(final_state_commitment_bits));
+        proof_inputs.append(&mut prepare_inputs(final_state_commitment_bits));
 
         let input_var = BooleanInputVar::new(proof_inputs);
 

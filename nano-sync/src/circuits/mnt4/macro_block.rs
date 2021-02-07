@@ -15,7 +15,7 @@ use crate::gadgets::mnt4::{
     MacroBlockGadget, PedersenHashGadget, SerializeGadget, StateCommitmentGadget,
 };
 use crate::primitives::{pedersen_generators, MacroBlock};
-use crate::utils::{pack_inputs, unpack_inputs};
+use crate::utils::{prepare_inputs, unpack_inputs};
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 /// This is the macro block circuit. It takes as inputs an initial state commitment and final state commitment
@@ -186,16 +186,20 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         // PKTreeNode circuit in the MNT6 curve takes two chunks as inputs.
         next_cost_analysis!(cs, cost, || { "Verify SNARK proof" });
 
-        let mut proof_inputs = pack_inputs(initial_pk_tree_root_var);
+        let mut proof_inputs = prepare_inputs(initial_pk_tree_root_var);
 
-        proof_inputs.append(&mut pack_inputs(agg_pk_chunks_commitments[0].to_bits_le()?));
+        proof_inputs.append(&mut prepare_inputs(
+            agg_pk_chunks_commitments[0].to_bits_le()?,
+        ));
 
-        proof_inputs.append(&mut pack_inputs(agg_pk_chunks_commitments[1].to_bits_le()?));
+        proof_inputs.append(&mut prepare_inputs(
+            agg_pk_chunks_commitments[1].to_bits_le()?,
+        ));
 
-        proof_inputs.append(&mut pack_inputs(block_var.signer_bitmap.clone()));
+        proof_inputs.append(&mut prepare_inputs(block_var.signer_bitmap.clone()));
 
         // Since we are beginning at the root of the PKTree our path is all zeros.
-        proof_inputs.append(&mut pack_inputs(FqVar::zero().to_bits_le()?));
+        proof_inputs.append(&mut prepare_inputs(FqVar::zero().to_bits_le()?));
 
         let input_var = BooleanInputVar::new(proof_inputs);
 

@@ -6,7 +6,7 @@ use ark_mnt6_753::MNT6_753;
 use ark_serialize::CanonicalDeserialize;
 
 use crate::primitives::vk_commitment;
-use crate::utils::{bytes_to_bits, prepare_inputs};
+use crate::utils::{bytes_to_bits, pack_inputs};
 use crate::{NanoZKP, NanoZKPError};
 
 impl NanoZKP {
@@ -36,15 +36,11 @@ impl NanoZKP {
         // Prepare the inputs.
         let mut inputs = vec![];
 
-        inputs.append(&mut prepare_inputs(bytes_to_bits(
-            &initial_state_commitment,
-        )));
+        inputs.append(&mut pack_inputs(bytes_to_bits(&initial_state_commitment)));
 
-        inputs.append(&mut prepare_inputs(bytes_to_bits(&final_state_commitment)));
+        inputs.append(&mut pack_inputs(bytes_to_bits(&final_state_commitment)));
 
-        inputs.append(&mut prepare_inputs(bytes_to_bits(&vk_commitment(
-            vk.clone(),
-        ))));
+        inputs.append(&mut pack_inputs(bytes_to_bits(&vk_commitment(vk.clone()))));
 
         // Verify proof.
         let result = Groth16::<MNT6_753>::verify(&vk, &inputs, &proof)?;

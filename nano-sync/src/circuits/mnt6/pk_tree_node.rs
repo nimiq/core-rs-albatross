@@ -9,7 +9,7 @@ use ark_r1cs_std::prelude::{AllocVar, Boolean, EqGadget};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
 use crate::constants::{PK_TREE_DEPTH, VALIDATOR_SLOTS};
-use crate::utils::{pack_inputs, unpack_inputs};
+use crate::utils::{prepare_inputs, unpack_inputs};
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 /// This is the node subcircuit of the PKTreeCircuit. See PKTreeLeafCircuit for more details.
@@ -130,13 +130,13 @@ impl ConstraintSynthesizer<MNT6Fr> for PKTreeNodeCircuit {
 
         // Verify the ZK proof for the left child node.
         next_cost_analysis!(cs, cost, || { "Verify left ZK proof" });
-        let mut proof_inputs = pack_inputs(pk_tree_root_bits.clone());
+        let mut proof_inputs = prepare_inputs(pk_tree_root_bits.clone());
 
-        proof_inputs.append(&mut pack_inputs(left_agg_pk_commitment_bits));
+        proof_inputs.append(&mut prepare_inputs(left_agg_pk_commitment_bits));
 
-        proof_inputs.append(&mut pack_inputs(signer_bitmap_bits.clone()));
+        proof_inputs.append(&mut prepare_inputs(signer_bitmap_bits.clone()));
 
-        proof_inputs.append(&mut pack_inputs(left_path));
+        proof_inputs.append(&mut prepare_inputs(left_path));
 
         let input_var = BooleanInputVar::new(proof_inputs);
 
@@ -149,13 +149,13 @@ impl ConstraintSynthesizer<MNT6Fr> for PKTreeNodeCircuit {
 
         // Verify the ZK proof for the right child node.
         next_cost_analysis!(cs, cost, || { "Verify right ZK proof" });
-        let mut proof_inputs = pack_inputs(pk_tree_root_bits);
+        let mut proof_inputs = prepare_inputs(pk_tree_root_bits);
 
-        proof_inputs.append(&mut pack_inputs(right_agg_pk_commitment_bits));
+        proof_inputs.append(&mut prepare_inputs(right_agg_pk_commitment_bits));
 
-        proof_inputs.append(&mut pack_inputs(signer_bitmap_bits));
+        proof_inputs.append(&mut prepare_inputs(signer_bitmap_bits));
 
-        proof_inputs.append(&mut pack_inputs(right_path));
+        proof_inputs.append(&mut prepare_inputs(right_path));
 
         let input_var = BooleanInputVar::new(proof_inputs);
 
