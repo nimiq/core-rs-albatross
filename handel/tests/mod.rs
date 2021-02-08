@@ -3,6 +3,7 @@ extern crate beserial_derive;
 
 use async_trait::async_trait;
 use beserial::{Deserialize, Serialize};
+use identity::Identity;
 use nimiq_bls::PublicKey;
 use nimiq_collections::bitset::BitSet;
 use nimiq_handel::aggregation::Aggregation;
@@ -69,6 +70,14 @@ impl identity::WeightRegistry for Registry {
 impl identity::IdentityRegistry for Registry {
     fn public_key(&self, _id: usize) -> Option<PublicKey> {
         None
+    }
+
+    fn signers_identity(&self, signers: &BitSet) -> Identity {
+        if signers.len() == 1 {
+            Identity::Single(signers.iter().next().unwrap())
+        } else {
+            Identity::None
+        }
     }
 }
 

@@ -206,7 +206,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             }
             BlockType::Micro => {
                 self.micro_state = ProduceMicroBlockState {
-                    view_number: self.consensus.blockchain.view_number(),
+                    view_number: self.consensus.blockchain.head().next_view_number(),
                     view_change_proof: None,
                 };
 
@@ -274,6 +274,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
     }
 
     fn poll_macro(&mut self, cx: &mut Context<'_>) {
+        let id = self.validator_id();
         let macro_producer = self.macro_producer.as_mut().unwrap();
         while let Poll::Ready(Some(event)) = macro_producer.poll_next_unpin(cx) {
             match event {

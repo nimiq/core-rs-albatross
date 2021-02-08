@@ -50,6 +50,15 @@ enum AggregationEvent<N: ValidatorNetwork> {
     ),
 }
 
+impl<N: ValidatorNetwork> std::fmt::Debug for AggregationEvent<N> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AggregationEvent::Start(i, _, _, _) => f.debug_struct("Start").field("id",i).finish(),
+            AggregationEvent::Cancel(r, s) => f.debug_struct("Start").field("id", &(r, s)).finish(),
+        }
+    }
+}
+
 /// Maintains various aggregations for different rounds and steps of Tendermint.
 ///
 /// Note that `TendermintAggregations::broadcast_and_aggregate` needs to have been called at least once before the stream can meaningfully be awaited.
@@ -192,20 +201,14 @@ impl<N: ValidatorNetwork + 'static> Stream for TendermintAggregations<N> {
                         }
                     } else {
                         // No last_key_value means there is no aggregation whatsoever.
-                        // That really should never happen, thus we log an error.
-                        error!("Found no agggregations, but received a LevelUpdateMessage");
+                        // Discard the update as there is no receiver for it and log to debug.
+                        debug!("Found no agggregations, but received a LevelUpdateMessage: {:?}", &self.aggregation_descriptors);
                     }
                 }
                 // Poll::Ready(None) means the stream has terminated, which is likelt the network having droped.
                 // Try and reconnect but also log an error
                 None => {
                     error!("Networks receive from all returned Poll::Ready(None)");
-                    trace!("Trying to reestabllish receive from all");
-                    // self.input = Box::pin(
-                    //     self.network
-                    //         .receive_from_all::<LevelUpdateMessage<TendermintContribution, TendermintIdentifier>>()
-                    //         .map(move |msg| msg.0),
-                    // );
                 }
             }
         }
@@ -333,7 +336,8 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
 
                             // better or not, we need to check if it is actionable for tendermint, and if it is and there is a
                             // current_aggregate sink present, we send it as well.
-                            match current_aggregate.write().await.take() {
+                            let mut lock = current_aggregate.write().await;
+                            match lock.take() {
                                 // if there is a current ongoing aggregation it is retrieved
                                 Some(CurrentAggregation { sender, round, step }) => {
                                     // only reply if it is the correct aggregation
@@ -363,11 +367,19 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
                                             // send the result
                                             if let Err(err) = sender.send(AggregationResult::Aggregation(result)) {
                                                 error!("failed sending message to broadcast_and_aggregate caller: {:?}", err);
+                                                // recoverable?
                                             }
+                                        } else {
+                                            // re-set the current_aggregate
+                                            *lock = Some(CurrentAggregation { sender, round, step });
                                         }
+                                    } else {
+                                        // re-set the current_aggregate
+                                        *lock = Some(CurrentAggregation { sender, round, step });
                                     }
                                 }
                                 None => {
+                                    debug!("there was no receiver");
                                     // do nothing, as there is no caller awaiting a response.
                                 }
                             };
@@ -399,7 +411,7 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
         let step = step.into();
         // make sure that there is no currently ongoing aggregation from a previous call to `broadcast_and_aggregate` which has not yet been awaited.
         // if there is none make sure to set this one with the same lock to prevent a race condition
-        let mut aggregate_receiver = {
+        let (mut aggregate_receiver, _aggregate_sender) = {
             let mut current_aggregate = self.current_aggregate.write().await;
             match current_aggregate.take() {
                 Some(aggr) => {
@@ -411,9 +423,9 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
                     // create channel foor result propagation
                     let (sender, aggregate_receiver) = mpsc::unbounded_channel::<AggregationResult<MultiSignature>>();
                     // set the current aggregate
-                    *current_aggregate = Some(CurrentAggregation { sender, round, step });
+                    *current_aggregate = Some(CurrentAggregation { sender: sender.clone(), round, step });
                     // and return the receiver for it to be used later on.
-                    aggregate_receiver
+                    (aggregate_receiver, sender)
                 }
             }
         };
@@ -448,7 +460,10 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
                 output_sink,
             ))
             .await
-            .map_err(|_| TendermintError::AggregationError)?;
+            .map_err(|err| {
+                debug!("event_sender.send failed: {:?}", err);
+                TendermintError::AggregationError
+            })?;
 
 
         // If a new round event was emitted before it needs to be checked if it is still relevant by
@@ -467,7 +482,10 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
         // wait for the first result
         let mut result = match aggregate_receiver.recv().await {
             Some(event) => event,
-            None => return Err(TendermintError::AggregationError),
+            None => {
+                debug!("The aggregate_receiver could not receive an item");
+                return Err(TendermintError::AggregationError)
+            },
         };
 
         // create timeout according to rules. For every consecutive round the timeout must increase by a constant factor.
@@ -486,14 +504,19 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
             // 1* f+1 for a future round (`TendermintAggregationEvent::NewRound(n)`)
             match &result {
                 // If the event is a NewRound it is propagated as is.
-                AggregationResult::NewRound(_) => {
+                AggregationResult::NewRound(round) => {
                     if step == TendermintStep::PreCommit {
                         // PreCommit Aggreations are never requested again, so the aggregation can be canceled.
                         self.event_sender
-                            .send(AggregationEvent::Cancel(round, step))
+                            .send(AggregationEvent::Cancel(*round, step))
                             .await
-                            .map_err(|_| TendermintError::AggregationError)?;
+                            .map_err(|err| {
+                                debug!("event_sender.send failed: {:?}", err);
+                                TendermintError::AggregationError
+                            })?;
                     }
+
+                    debug!("Aggregations returned a NewRound({})", round);
                     return Ok(result);
                 }
 
@@ -506,16 +529,20 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
                     for (proposal, (_, weight)) in map.iter() {
                         if proposal.is_none() {
                             // Nil vote has f+1
-                            if *weight > policy::SLOTS as usize - policy::TWO_THIRD_SLOTS as usize + 1usize {
-                                if step == TendermintStep::PreCommit {
-                                    // PreCommit Aggreations are never requested again, so the aggregation can be canceled.
-                                    self.event_sender
-                                        .send(AggregationEvent::Cancel(round, step))
-                                        .await
-                                        .map_err(|_| TendermintError::AggregationError)?;
-                                }
-                                return Ok(result);
-                            }
+                            // if *weight > policy::SLOTS as usize - policy::TWO_THIRD_SLOTS as usize + 1usize {
+                            //     if step == TendermintStep::PreCommit {
+                            //         // PreCommit Aggreations are never requested again, so the aggregation can be canceled.
+                            //         self.event_sender
+                            //             .send(AggregationEvent::Cancel(round, step))
+                            //             .await
+                            //             .map_err(|err| {
+                            //                 debug!("event_sender.send failed: {:?}", err);
+                            //                 TendermintError::AggregationError
+                            //             })?;
+                            //     }
+                            //     error!("Tendermint: {}-{:?}: Nil vote > f+1", &round, &step);
+                            //     return Ok(result);
+                            // }
 
                             // if this node has signed a proposal not nil this nil vote counts towards the combined weight
                             if proposal_hash.is_some() {

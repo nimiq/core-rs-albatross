@@ -16,6 +16,7 @@ use crate::config::Config;
 use crate::contribution::AggregatableContribution;
 use crate::level::Level;
 use crate::partitioner::Partitioner;
+use crate::identity::{Identity, IdentityRegistry};
 use crate::protocol::Protocol;
 use crate::store::ContributionStore;
 use crate::todo::TodoList;
@@ -101,7 +102,7 @@ impl<P: Protocol, T: Clone + Debug + Eq + Serialize + Deserialize + Sized + Send
         };
 
         // make sure the contribution of this instance is added to the store
-        this.protocol.store().write().put(own_contribution.clone(), 0);
+        this.protocol.store().write().put(own_contribution.clone(), 0, this.protocol.registry().signers_identity(&own_contribution.contributors()));
 
         // and check if that already completes a level
         // Level 0 always only contains a single signature, the one of this instance. Thus it will always complete that level,
@@ -161,10 +162,14 @@ impl<P: Protocol, T: Clone + Debug + Eq + Serialize + Deserialize + Sized + Send
         let num_contributors = {
             let store = self.protocol.store();
             let store = store.read();
-            store
+            match self.protocol.registry().signers_identity(&store
                 .best(level.id)
                 .unwrap_or_else(|| panic!("Expected a best signature for level {}", level.id))
-                .num_contributors()
+                .contributors()) {
+                    Identity::None => 0,
+                    Identity::Single(_) => 1,
+                    Identity::Multiple(ids) => ids.len(),
+            }
         };
 
         // If the number of contributors on this level is equal to the number of peers on this level it is completed.
@@ -284,7 +289,7 @@ impl<P: Protocol, T: Clone + Debug + Eq + Serialize + Deserialize + Sized + Send
                                     let store = self.protocol.store();
                                     let mut store = store.write();
 
-                                    store.put(todo.contribution.clone(), todo.level);
+                                    store.put(todo.contribution.clone(), todo.level, self.protocol.registry().signers_identity(&todo.contribution.contributors()));
                                 }
                                 // in case the level of this todo has not started, start it now as we have already contributions on it.
                                 self.start_level(todo.level);

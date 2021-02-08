@@ -20,6 +20,7 @@ pub(super) struct CurrentAggregation {
 }
 
 /// Struct to describe the different ongoing aggregations
+#[derive(std::fmt::Debug)]
 pub(super) struct AggregationDescriptor {
     /// Atomic bool keeping track whether the aggregation should continue or not.
     /// once set to false the aggregations next poll call will return Poll::Ready(None)

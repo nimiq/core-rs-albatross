@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use futures::stream;
-use futures::stream::StreamExt;
 use tokio::task;
 
 use nimiq_block_albatross::{TendermintIdentifier, TendermintVote};
@@ -43,7 +41,7 @@ impl<I: IdentityRegistry + Sync + Send + 'static> Verifier for TendermintVerifie
         // Note: Once spawned the tasks cannot be aborted. Thus all contributions will be verified even though it is not strictly necessary.
         // I.e once f contributions are against the proposal this node signed, it is already known that that proposal is not going to pass.
         // Likewise once a proposal has 2f+1 valid contributions it passed and no other contributions are needed.
-        while let Some((hash, multi_sig)) = contribution.contributions.iter().next() {
+        for (hash, multi_sig) in &contribution.contributions {
             // Create  the aggregated public key for this specific proposal hash's contributions.
             let mut aggregated_public_key = AggregatePublicKey::new();
             for signer in multi_sig.signers.iter() {
@@ -74,8 +72,9 @@ impl<I: IdentityRegistry + Sync + Send + 'static> Verifier for TendermintVerifie
         // Take all the join handles and await them.
         // If there is a single join handle which returned a VerifactionResult != VerificationResult::Ok
         // this Verificatioon failed as well with the given VerificationResult.
-        let mut vec_iter = stream::iter(results);
-        while let Ok(result) = vec_iter.next().await.expect("").await {
+        // let vec_iter = stream::iter(results);
+        while let Some(handle) = results.pop() {
+            let result = handle.await.expect("Spawned Verification Task has paniced");
             if !result.is_ok() {
                 return result;
             }

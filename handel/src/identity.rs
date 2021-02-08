@@ -3,8 +3,17 @@ use collections::bitset::BitSet;
 
 use crate::contribution::AggregatableContribution;
 
+#[derive(Clone, std::fmt::Debug)]
+pub enum Identity {
+    Single(usize),
+    Multiple(Vec<usize>),
+    None,
+}
+
 pub trait IdentityRegistry: Send + Sync {
     fn public_key(&self, id: usize) -> Option<PublicKey>;
+
+    fn signers_identity(&self, signers: &BitSet) -> Identity;
 }
 
 pub trait WeightRegistry: Send + Sync {

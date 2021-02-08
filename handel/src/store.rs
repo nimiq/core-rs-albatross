@@ -3,14 +3,14 @@ use std::sync::Arc;
 
 use collections::bitset::BitSet;
 
-use crate::contribution::AggregatableContribution;
+use crate::{contribution::AggregatableContribution, identity::Identity};
 use crate::partitioner::Partitioner;
 
 pub trait ContributionStore: Send + Sync {
     type Contribution: AggregatableContribution;
 
     /// Put `signature` into the store for level `level`.
-    fn put(&mut self, contribution: Self::Contribution, level: usize);
+    fn put(&mut self, contribution: Self::Contribution, level: usize, id: Identity);
 
     /// Return the number of the current best level.
     fn best_level(&self) -> usize;
@@ -54,10 +54,10 @@ pub struct ReplaceStore<P: Partitioner, C: AggregatableContribution> {
 
     /// All individual contributions
     /// level -> peer_id -> Contribution
-    individual_contributions: Vec<BTreeMap<usize, C>>,
+    individual_contributions: Vec<BTreeMap<usize, (C, Identity)>>,
 
     /// The best Contribution at each level
-    best_contribution: BTreeMap<usize, C>,
+    best_contribution: BTreeMap<usize, (C, Identity)>,
 }
 
 impl<P: Partitioner, C: AggregatableContribution> ReplaceStore<P, C> {
@@ -82,13 +82,30 @@ impl<P: Partitioner, C: AggregatableContribution> ReplaceStore<P, C> {
     }
 
     fn check_merge(&self, contribution: &C, level: usize) -> Option<C> {
-        if let Some(best_contribution) = self.best_contribution.get(&level) {
+        if let Some((best_contribution, identity)) = self.best_contribution.get(&level) {
             trace!(
                 "trying to combine contribution {:?} for level {}, current best: {:?}",
                 contribution,
                 level,
                 self.best_contribution,
             );
+
+            let contributors = match identity {
+                Identity::None => panic!("Signature without signatory found in store"),
+                Identity::Single(signer) => {
+                    let mut set = BitSet::new();
+                    set.insert(*signer);
+                    set
+                },
+                Identity::Multiple(signers) => {
+                    let mut set = BitSet::new();
+                    for signer in signers {
+                        set.insert(*signer);
+                    }
+                    set
+                },
+            };
+
             // try to combine
             let mut contribution = contribution.clone();
 
@@ -103,7 +120,7 @@ impl<P: Partitioner, C: AggregatableContribution> ReplaceStore<P, C> {
                 .unwrap_or_else(|| panic!("Individual verified contributions BitSet is missing for level {}", level));
 
             // the bits set here are verified individual signatures that can be added to `contribution`
-            let complements = &(&contribution.contributors() & individual_verified) ^ individual_verified;
+            let complements = &(&contributors & individual_verified) ^ individual_verified;
 
             // check that if we combine we get a better signature
             if complements.len() + contribution.num_contributors() <= best_contribution.num_contributors() {
@@ -120,11 +137,10 @@ impl<P: Partitioner, C: AggregatableContribution> ReplaceStore<P, C> {
                         .unwrap_or_else(|| panic!("Individual contribution missing for level {}", level))
                         .get(&id)
                         .unwrap_or_else(|| panic!("Individual contributioon {} missing for level {}", id, level));
+
                     // merge individual signature into multisig
-                    // assert_eq!(id, individual.signer);
-                    assert!(individual.num_contributors() == 1 && individual.contributors().contains(id));
                     contribution
-                        .combine(individual)
+                        .combine(&individual.0)
                         .unwrap_or_else(|e| panic!("Individual contribution from id={} can't be added to aggregate contributions: {}", id, e));
                 }
 
@@ -139,23 +155,23 @@ impl<P: Partitioner, C: AggregatableContribution> ReplaceStore<P, C> {
 impl<P: Partitioner, C: AggregatableContribution> ContributionStore for ReplaceStore<P, C> {
     type Contribution = C;
 
-    fn put(&mut self, contribution: Self::Contribution, level: usize) {
-        trace!("Putting signature into store (level {}): {:?}", level, contribution,);
+    fn put(&mut self, contribution: Self::Contribution, level: usize, identity: Identity) {
+        trace!("Putting signature into store (level {}): {:?} - #{:?}", level, contribution, identity);
 
-        if contribution.num_contributors() == 1 {
+        if let Identity::Single(id) = identity {
             self.individual_verified
                 .get_mut(level)
                 .unwrap_or_else(|| panic!("Missing Level {}", level))
-                .insert(contribution.contributor());
+                .insert(id);
             self.individual_contributions
                 .get_mut(level)
                 .unwrap_or_else(|| panic!("Missing Level {}", level))
-                .insert(contribution.contributor(), contribution.clone());
+                .insert(id, (contribution.clone(), identity.clone()));
         }
 
         if let Some(best_contribution) = self.check_merge(&contribution, level) {
             trace!("best_contribution = {:?} (level {})", best_contribution, level);
-            self.best_contribution.insert(level, best_contribution);
+            self.best_contribution.insert(level, (best_contribution, identity));
             if level > self.best_level {
                 trace!("best level is now {}", level);
                 self.best_level = level;
@@ -179,18 +195,18 @@ impl<P: Partitioner, C: AggregatableContribution> ContributionStore for ReplaceS
         self.individual_contributions
             .get(level)
             .unwrap_or_else(|| panic!("Invalid level: {}", level))
-            .get(&peer_id)
+            .get(&peer_id).map(|(c, _)| c)
     }
 
     fn best(&self, level: usize) -> Option<&Self::Contribution> {
-        self.best_contribution.get(&level)
+        self.best_contribution.get(&level).map(|(c, _)| c)
     }
 
     fn combined(&self, mut level: usize) -> Option<Self::Contribution> {
         // TODO: Cache this?
 
         let mut signatures = Vec::new();
-        for (_, signature) in self.best_contribution.range(0..=level) {
+        for (_, (signature, _)) in self.best_contribution.range(0..=level) {
             trace!("collect: {:?}", signature);
             signatures.push(signature)
         }
