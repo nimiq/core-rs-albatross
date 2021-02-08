@@ -26,37 +26,33 @@ impl NanoZKP {
     /// program. It does this by generating the parameters for each circuit, "from bottom to top". The
     /// order is absolutely necessary because each circuit needs a verifying key from the circuit "below"
     /// it. Note that the parameter generation can take longer than one hour, even two on some computers.
-    pub fn setup(&self) -> Result<(), NanoZKPError> {
+    pub fn setup() -> Result<(), NanoZKPError> {
         let rng = &mut thread_rng();
 
-        self.setup_pk_tree_leaf(rng, "pk_tree_5")?;
+        NanoZKP::setup_pk_tree_leaf(rng, "pk_tree_5")?;
 
-        self.setup_pk_tree_node_mnt6(rng, "pk_tree_5", "pk_tree_4")?;
+        NanoZKP::setup_pk_tree_node_mnt6(rng, "pk_tree_5", "pk_tree_4")?;
 
-        self.setup_pk_tree_node_mnt4(rng, "pk_tree_4", "pk_tree_3")?;
+        NanoZKP::setup_pk_tree_node_mnt4(rng, "pk_tree_4", "pk_tree_3")?;
 
-        self.setup_pk_tree_node_mnt6(rng, "pk_tree_3", "pk_tree_2")?;
+        NanoZKP::setup_pk_tree_node_mnt6(rng, "pk_tree_3", "pk_tree_2")?;
 
-        self.setup_pk_tree_node_mnt4(rng, "pk_tree_2", "pk_tree_1")?;
+        NanoZKP::setup_pk_tree_node_mnt4(rng, "pk_tree_2", "pk_tree_1")?;
 
-        self.setup_pk_tree_node_mnt6(rng, "pk_tree_1", "pk_tree_0")?;
+        NanoZKP::setup_pk_tree_node_mnt6(rng, "pk_tree_1", "pk_tree_0")?;
 
-        self.setup_macro_block(rng)?;
+        NanoZKP::setup_macro_block(rng)?;
 
-        self.setup_macro_block_wrapper(rng)?;
+        NanoZKP::setup_macro_block_wrapper(rng)?;
 
-        self.setup_merger(rng)?;
+        NanoZKP::setup_merger(rng)?;
 
-        self.setup_merger_wrapper(rng)?;
+        NanoZKP::setup_merger_wrapper(rng)?;
 
         Ok(())
     }
 
-    fn setup_pk_tree_leaf<R: CryptoRng + Rng>(
-        &self,
-        rng: &mut R,
-        name: &str,
-    ) -> Result<(), NanoZKPError> {
+    fn setup_pk_tree_leaf<R: CryptoRng + Rng>(rng: &mut R, name: &str) -> Result<(), NanoZKPError> {
         // Create dummy inputs.
         let position = 0;
 
@@ -86,11 +82,10 @@ impl NanoZKP {
         let (pk, vk) = Groth16::<MNT4_753>::setup(circuit, rng)?;
 
         // Save keys to file.
-        self.keys_to_file(pk, vk, name)
+        NanoZKP::keys_to_file(pk, vk, name)
     }
 
     fn setup_pk_tree_node_mnt6<R: CryptoRng + Rng>(
-        &self,
         rng: &mut R,
         vk_file: &str,
         name: &str,
@@ -138,11 +133,10 @@ impl NanoZKP {
         let (pk, vk) = Groth16::<MNT6_753>::setup(circuit, rng)?;
 
         // Save keys to file.
-        self.keys_to_file(pk, vk, name)
+        NanoZKP::keys_to_file(pk, vk, name)
     }
 
     fn setup_pk_tree_node_mnt4<R: CryptoRng + Rng>(
-        &self,
         rng: &mut R,
         vk_file: &str,
         name: &str,
@@ -190,10 +184,10 @@ impl NanoZKP {
         let (pk, vk) = Groth16::<MNT4_753>::setup(circuit, rng)?;
 
         // Save keys to file.
-        self.keys_to_file(pk, vk, name)
+        NanoZKP::keys_to_file(pk, vk, name)
     }
 
-    fn setup_macro_block<R: CryptoRng + Rng>(&self, rng: &mut R) -> Result<(), NanoZKPError> {
+    fn setup_macro_block<R: CryptoRng + Rng>(rng: &mut R) -> Result<(), NanoZKPError> {
         // Load the verifying key from file.
         let mut file = File::open("verifying_keys/pk_tree_0.bin".to_string())?;
 
@@ -256,13 +250,10 @@ impl NanoZKP {
         let (pk, vk) = Groth16::<MNT4_753>::setup(circuit, rng)?;
 
         // Save keys to file.
-        self.keys_to_file(pk, vk, "macro_block")
+        NanoZKP::keys_to_file(pk, vk, "macro_block")
     }
 
-    fn setup_macro_block_wrapper<R: CryptoRng + Rng>(
-        &self,
-        rng: &mut R,
-    ) -> Result<(), NanoZKPError> {
+    fn setup_macro_block_wrapper<R: CryptoRng + Rng>(rng: &mut R) -> Result<(), NanoZKPError> {
         // Load the verifying key from file.
         let mut file = File::open("verifying_keys/macro_block.bin".to_string())?;
 
@@ -290,10 +281,10 @@ impl NanoZKP {
         let (pk, vk) = Groth16::<MNT6_753>::setup(circuit, rng)?;
 
         // Save keys to file.
-        self.keys_to_file(pk, vk, "macro_block_wrapper")
+        NanoZKP::keys_to_file(pk, vk, "macro_block_wrapper")
     }
 
-    fn setup_merger<R: CryptoRng + Rng>(&self, rng: &mut R) -> Result<(), NanoZKPError> {
+    fn setup_merger<R: CryptoRng + Rng>(rng: &mut R) -> Result<(), NanoZKPError> {
         // Load the verifying key from file.
         let mut file = File::open("verifying_keys/macro_block_wrapper.bin".to_string())?;
 
@@ -348,10 +339,10 @@ impl NanoZKP {
         let (pk, vk) = Groth16::<MNT4_753>::setup(circuit, rng)?;
 
         // Save keys to file.
-        self.keys_to_file(pk, vk, "merger")
+        NanoZKP::keys_to_file(pk, vk, "merger")
     }
 
-    fn setup_merger_wrapper<R: CryptoRng + Rng>(&self, rng: &mut R) -> Result<(), NanoZKPError> {
+    fn setup_merger_wrapper<R: CryptoRng + Rng>(rng: &mut R) -> Result<(), NanoZKPError> {
         // Load the verifying key from file.
         let mut file = File::open("verifying_keys/merger.bin".to_string())?;
 
@@ -382,11 +373,10 @@ impl NanoZKP {
         let (pk, vk) = Groth16::<MNT6_753>::setup(circuit, rng)?;
 
         // Save keys to file.
-        self.keys_to_file(pk, vk, "merger_wrapper")
+        NanoZKP::keys_to_file(pk, vk, "merger_wrapper")
     }
 
     fn keys_to_file<T: PairingEngine>(
-        &self,
         pk: ProvingKey<T>,
         vk: VerifyingKey<T>,
         name: &str,

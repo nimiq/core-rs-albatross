@@ -27,12 +27,12 @@ use crate::primitives::{
 };
 use crate::utils::{byte_to_le_bits, bytes_to_bits, pack_inputs};
 use crate::{NanoZKP, NanoZKPError};
+use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystem};
 
 impl NanoZKP {
     /// This function generates a proof for a new epoch, it uses the entire nano sync program. Note
     /// that the proof generation can easily take longer than 12 hours.
     pub fn prove(
-        &self,
         // The public keys of the validators of the initial state. So, the validators that were
         // selected in the previous election macro block and that are now signing this election
         // macro block.
@@ -46,6 +46,15 @@ impl NanoZKP {
         // epoch and the genesis state commitment.
         genesis_data: Option<(Proof<MNT6_753>, Vec<u8>)>,
     ) -> Result<Proof<MNT6_753>, NanoZKPError> {
+        // This is a flag indicating if we want to check the constraint system before creating the
+        // proofs. It takes longer but is useful for debugging.
+        let constraint_check = true;
+
+        // This is a flag indicating if we want to cache the proofs. If true, we will see which proofs
+        // were already created and start from there. Note that for this to work, you must provide
+        // the exact same inputs.
+        let proof_caching = true;
+
         let rng = &mut thread_rng();
 
         // Serialize the initial public keys into bits and chunk them into the number of leaves.
@@ -85,7 +94,11 @@ impl NanoZKP {
 
         // Start generating proofs for PKTree level 5.
         for i in 0..32 {
-            self.prove_pk_tree_leaf(
+            if proof_caching && Path::new(&format!("pk_tree_5_{}.bin", i)).exists() {
+                continue;
+            }
+
+            NanoZKP::prove_pk_tree_leaf(
                 rng,
                 "pk_tree_5",
                 i,
@@ -93,12 +106,17 @@ impl NanoZKP {
                 &pk_tree_proofs[i],
                 &initial_pk_tree_root,
                 &block.signer_bitmap,
+                constraint_check,
             )?;
         }
 
         // Start generating proofs for PKTree level 4.
         for i in 0..16 {
-            self.prove_pk_tree_node_mnt6(
+            if proof_caching && Path::new(&format!("pk_tree_4_{}.bin", i)).exists() {
+                continue;
+            }
+
+            NanoZKP::prove_pk_tree_node_mnt6(
                 rng,
                 "pk_tree_4",
                 i,
@@ -107,12 +125,17 @@ impl NanoZKP {
                 &initial_pks,
                 &initial_pk_tree_root,
                 &block.signer_bitmap,
+                constraint_check,
             )?;
         }
 
         // Start generating proofs for PKTree level 3.
         for i in 0..8 {
-            self.prove_pk_tree_node_mnt4(
+            if proof_caching && Path::new(&format!("pk_tree_3_{}.bin", i)).exists() {
+                continue;
+            }
+
+            NanoZKP::prove_pk_tree_node_mnt4(
                 rng,
                 "pk_tree_3",
                 i,
@@ -121,12 +144,17 @@ impl NanoZKP {
                 &initial_pks,
                 &initial_pk_tree_root,
                 &block.signer_bitmap,
+                constraint_check,
             )?;
         }
 
         // Start generating proofs for PKTree level 2.
         for i in 0..4 {
-            self.prove_pk_tree_node_mnt6(
+            if proof_caching && Path::new(&format!("pk_tree_2_{}.bin", i)).exists() {
+                continue;
+            }
+
+            NanoZKP::prove_pk_tree_node_mnt6(
                 rng,
                 "pk_tree_2",
                 i,
@@ -135,12 +163,17 @@ impl NanoZKP {
                 &initial_pks,
                 &initial_pk_tree_root,
                 &block.signer_bitmap,
+                constraint_check,
             )?;
         }
 
         // Start generating proofs for PKTree level 1.
         for i in 0..2 {
-            self.prove_pk_tree_node_mnt4(
+            if proof_caching && Path::new(&format!("pk_tree_1_{}.bin", i)).exists() {
+                continue;
+            }
+
+            NanoZKP::prove_pk_tree_node_mnt4(
                 rng,
                 "pk_tree_1",
                 i,
@@ -149,50 +182,69 @@ impl NanoZKP {
                 &initial_pks,
                 &initial_pk_tree_root,
                 &block.signer_bitmap,
+                constraint_check,
             )?;
         }
 
         // Start generating proof for PKTree level 0.
-        self.prove_pk_tree_node_mnt6(
-            rng,
-            "pk_tree_0",
-            0,
-            0,
-            "pk_tree_1",
-            &initial_pks,
-            &initial_pk_tree_root,
-            &block.signer_bitmap,
-        )?;
+        if !(proof_caching && Path::new("pk_tree_0_0.bin").exists()) {
+            NanoZKP::prove_pk_tree_node_mnt6(
+                rng,
+                "pk_tree_0",
+                0,
+                0,
+                "pk_tree_1",
+                &initial_pks,
+                &initial_pk_tree_root,
+                &block.signer_bitmap,
+                constraint_check,
+            )?;
+        }
 
         // Start generating proof for Macro Block.
-        self.prove_macro_block(
-            rng,
-            &initial_pks,
-            &initial_pk_tree_root,
-            &final_pks,
-            &final_pk_tree_root,
-            block.clone(),
-        )?;
+        if !(proof_caching && Path::new("macro_block.bin").exists()) {
+            NanoZKP::prove_macro_block(
+                rng,
+                &initial_pks,
+                &initial_pk_tree_root,
+                &final_pks,
+                &final_pk_tree_root,
+                block.clone(),
+                constraint_check,
+            )?;
+        }
 
         // Start generating proof for Macro Block Wrapper.
-        self.prove_macro_block_wrapper(rng, &initial_pks, &final_pks, block.block_number)?;
+        if !(proof_caching && Path::new("macro_block_wrapper.bin").exists()) {
+            NanoZKP::prove_macro_block_wrapper(
+                rng,
+                &initial_pks,
+                &final_pks,
+                block.block_number,
+                constraint_check,
+            )?;
+        }
 
         // Start generating proof for Merger.
-        self.prove_merger(
-            rng,
-            &initial_pks,
-            &final_pks,
-            block.block_number,
-            genesis_data.clone(),
-        )?;
+        if !(proof_caching && Path::new("merger.bin").exists()) {
+            NanoZKP::prove_merger(
+                rng,
+                &initial_pks,
+                &final_pks,
+                block.block_number,
+                genesis_data.clone(),
+                constraint_check,
+            )?;
+        }
 
         // Start generating proof for Merger Wrapper.
-        let proof = self.prove_merger_wrapper(
+        let proof = NanoZKP::prove_merger_wrapper(
             rng,
             &initial_pks,
             &final_pks,
             block.block_number,
             genesis_data,
+            constraint_check,
         )?;
 
         // Delete cached proofs.
@@ -203,7 +255,6 @@ impl NanoZKP {
     }
 
     fn prove_pk_tree_leaf<R: CryptoRng + Rng>(
-        &self,
         rng: &mut R,
         name: &str,
         position: usize,
@@ -211,6 +262,7 @@ impl NanoZKP {
         pk_tree_nodes: &Vec<G1MNT6>,
         pk_tree_root: &Vec<u8>,
         signer_bitmap: &Vec<bool>,
+        constraint_check: bool,
     ) -> Result<(), NanoZKPError> {
         // Load the proving key from file.
         let mut file = File::open(format!("proving_keys/{}.bin", name))?;
@@ -256,15 +308,29 @@ impl NanoZKP {
             path,
         );
 
+        // Optionally check the constraint system.
+        if constraint_check {
+            let cs = ConstraintSystem::new_ref();
+
+            circuit.clone().generate_constraints(cs.clone()).unwrap();
+
+            match cs.which_is_unsatisfied().unwrap() {
+                None => {}
+                Some(s) => {
+                    println!("Unsatisfied @ {}", s);
+                    assert!(false);
+                }
+            }
+        }
+
         // Create the proof.
         let proof = Groth16::<MNT4_753>::prove(&proving_key, circuit, rng)?;
 
         // Cache proof to file.
-        self.proof_to_file(proof, name, Some(position))
+        NanoZKP::proof_to_file(proof, name, Some(position))
     }
 
     fn prove_pk_tree_node_mnt6<R: CryptoRng + Rng>(
-        &self,
         rng: &mut R,
         name: &str,
         position: usize,
@@ -273,6 +339,7 @@ impl NanoZKP {
         pks: &[G2MNT6],
         pk_tree_root: &Vec<u8>,
         signer_bitmap: &Vec<bool>,
+        constraint_check: bool,
     ) -> Result<(), NanoZKPError> {
         // Load the proving key from file.
         let mut file = File::open(format!("proving_keys/{}.bin", name))?;
@@ -355,15 +422,29 @@ impl NanoZKP {
             path,
         );
 
+        // Optionally check the constraint system.
+        if constraint_check {
+            let cs = ConstraintSystem::new_ref();
+
+            circuit.clone().generate_constraints(cs.clone()).unwrap();
+
+            match cs.which_is_unsatisfied().unwrap() {
+                None => {}
+                Some(s) => {
+                    println!("Unsatisfied @ {}", s);
+                    assert!(false);
+                }
+            }
+        }
+
         // Create the proof.
         let proof = Groth16::<MNT6_753>::prove(&proving_key, circuit, rng)?;
 
         // Cache proof to file.
-        self.proof_to_file(proof, name, Some(position))
+        NanoZKP::proof_to_file(proof, name, Some(position))
     }
 
     fn prove_pk_tree_node_mnt4<R: CryptoRng + Rng>(
-        &self,
         rng: &mut R,
         name: &str,
         position: usize,
@@ -372,6 +453,7 @@ impl NanoZKP {
         pks: &[G2MNT6],
         pk_tree_root: &Vec<u8>,
         signer_bitmap: &Vec<bool>,
+        constraint_check: bool,
     ) -> Result<(), NanoZKPError> {
         // Load the proving key from file.
         let mut file = File::open(format!("proving_keys/{}.bin", name))?;
@@ -448,21 +530,36 @@ impl NanoZKP {
             path,
         );
 
+        // Optionally check the constraint system.
+        if constraint_check {
+            let cs = ConstraintSystem::new_ref();
+
+            circuit.clone().generate_constraints(cs.clone()).unwrap();
+
+            match cs.which_is_unsatisfied().unwrap() {
+                None => {}
+                Some(s) => {
+                    println!("Unsatisfied @ {}", s);
+                    assert!(false);
+                }
+            }
+        }
+
         // Create the proof.
         let proof = Groth16::<MNT4_753>::prove(&proving_key, circuit, rng)?;
 
         // Cache proof to file.
-        self.proof_to_file(proof, name, Some(position))
+        NanoZKP::proof_to_file(proof, name, Some(position))
     }
 
     fn prove_macro_block<R: CryptoRng + Rng>(
-        &self,
         rng: &mut R,
         initial_pks: &[G2MNT6],
         initial_pk_tree_root: &Vec<u8>,
         final_pks: &[G2MNT6],
         final_pk_tree_root: &Vec<u8>,
         block: MacroBlock,
+        constraint_check: bool,
     ) -> Result<(), NanoZKPError> {
         // Load the proving key from file.
         let mut file = File::open("proving_keys/macro_block.bin".to_string())?;
@@ -517,19 +614,34 @@ impl NanoZKP {
             final_state_commitment,
         );
 
+        // Optionally check the constraint system.
+        if constraint_check {
+            let cs = ConstraintSystem::new_ref();
+
+            circuit.clone().generate_constraints(cs.clone()).unwrap();
+
+            match cs.which_is_unsatisfied().unwrap() {
+                None => {}
+                Some(s) => {
+                    println!("Unsatisfied @ {}", s);
+                    assert!(false);
+                }
+            }
+        }
+
         // Create the proof.
         let proof = Groth16::<MNT4_753>::prove(&proving_key, circuit, rng)?;
 
         // Cache proof to file.
-        self.proof_to_file(proof, "macro_block", None)
+        NanoZKP::proof_to_file(proof, "macro_block", None)
     }
 
     fn prove_macro_block_wrapper<R: CryptoRng + Rng>(
-        &self,
         rng: &mut R,
         initial_pks: &[G2MNT6],
         final_pks: &[G2MNT6],
         block_number: u32,
+        constraint_check: bool,
     ) -> Result<(), NanoZKPError> {
         // Load the proving key from file.
         let mut file = File::open("proving_keys/macro_block_wrapper.bin".to_string())?;
@@ -565,20 +677,35 @@ impl NanoZKP {
             final_state_commitment,
         );
 
+        // Optionally check the constraint system.
+        if constraint_check {
+            let cs = ConstraintSystem::new_ref();
+
+            circuit.clone().generate_constraints(cs.clone()).unwrap();
+
+            match cs.which_is_unsatisfied().unwrap() {
+                None => {}
+                Some(s) => {
+                    println!("Unsatisfied @ {}", s);
+                    assert!(false);
+                }
+            }
+        }
+
         // Create the proof.
         let proof = Groth16::<MNT6_753>::prove(&proving_key, circuit, rng)?;
 
         // Cache proof to file.
-        self.proof_to_file(proof, "macro_block_wrapper", None)
+        NanoZKP::proof_to_file(proof, "macro_block_wrapper", None)
     }
 
     fn prove_merger<R: CryptoRng + Rng>(
-        &self,
         rng: &mut R,
         initial_pks: &[G2MNT6],
         final_pks: &[G2MNT6],
         block_number: u32,
         genesis_data: Option<(Proof<MNT6_753>, Vec<u8>)>,
+        constraint_check: bool,
     ) -> Result<(), NanoZKPError> {
         // Load the proving key from file.
         let mut file = File::open("proving_keys/merger.bin".to_string())?;
@@ -642,20 +769,35 @@ impl NanoZKP {
             vk_commitment,
         );
 
+        // Optionally check the constraint system.
+        if constraint_check {
+            let cs = ConstraintSystem::new_ref();
+
+            circuit.clone().generate_constraints(cs.clone()).unwrap();
+
+            match cs.which_is_unsatisfied().unwrap() {
+                None => {}
+                Some(s) => {
+                    println!("Unsatisfied @ {}", s);
+                    assert!(false);
+                }
+            }
+        }
+
         // Create the proof.
         let proof = Groth16::<MNT4_753>::prove(&proving_key, circuit, rng)?;
 
         // Cache proof to file.
-        self.proof_to_file(proof, "merger", None)
+        NanoZKP::proof_to_file(proof, "merger", None)
     }
 
     fn prove_merger_wrapper<R: CryptoRng + Rng>(
-        &self,
         rng: &mut R,
         initial_pks: &[G2MNT6],
         final_pks: &[G2MNT6],
         block_number: u32,
         genesis_data: Option<(Proof<MNT6_753>, Vec<u8>)>,
+        constraint_check: bool,
     ) -> Result<Proof<MNT6_753>, NanoZKPError> {
         // Load the proving key from file.
         let mut file = File::open("proving_keys/merger_wrapper.bin".to_string())?;
@@ -701,18 +843,32 @@ impl NanoZKP {
             vk_commitment,
         );
 
+        // Optionally check the constraint system.
+        if constraint_check {
+            let cs = ConstraintSystem::new_ref();
+
+            circuit.clone().generate_constraints(cs.clone()).unwrap();
+
+            match cs.which_is_unsatisfied().unwrap() {
+                None => {}
+                Some(s) => {
+                    println!("Unsatisfied @ {}", s);
+                    assert!(false);
+                }
+            }
+        }
+
         // Create the proof.
         let proof = Groth16::<MNT6_753>::prove(&proving_key, circuit, rng)?;
 
         // Cache proof to file.
-        self.proof_to_file(proof.clone(), "merger_wrapper", None)?;
+        NanoZKP::proof_to_file(proof.clone(), "merger_wrapper", None)?;
 
         Ok(proof)
     }
 
     // Cache proof to file.
     fn proof_to_file<T: PairingEngine>(
-        &self,
         pk: Proof<T>,
         name: &str,
         number: Option<usize>,
