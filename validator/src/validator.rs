@@ -6,7 +6,7 @@ use futures::task::{Context, Poll};
 use futures::{Future, StreamExt};
 use tokio::sync::{broadcast, mpsc};
 
-use block_albatross::{Block, BlockType, ViewChangeProof};
+use block_albatross::{Block, BlockType, ViewChange, ViewChangeProof};
 use blockchain_albatross::{BlockchainEvent, ForkEvent, PushResult};
 use bls::CompressedPublicKey;
 use consensus_albatross::{sync::block_queue::BlockTopic, Consensus, ConsensusEvent, ConsensusProxy};
@@ -39,6 +39,7 @@ struct BlockchainState {
 struct ProduceMicroBlockState {
     view_number: u32,
     view_change_proof: Option<ViewChangeProof>,
+    view_change: Option<ViewChange>,
 }
 
 pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork + 'static> {
@@ -88,6 +89,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         let micro_state = ProduceMicroBlockState {
             view_number: consensus.blockchain.view_number(),
             view_change_proof: None,
+            view_change: None,
         };
 
         let env = consensus.env.clone();
@@ -208,6 +210,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                 self.micro_state = ProduceMicroBlockState {
                     view_number: self.consensus.blockchain.head().next_view_number(),
                     view_change_proof: None,
+                    view_change: None,
                 };
 
                 let fork_proofs = self
@@ -223,6 +226,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                     fork_proofs,
                     self.micro_state.view_number,
                     self.micro_state.view_change_proof.clone(),
+                    self.micro_state.view_change.clone(),
                     Self::VIEW_CHANGE_DELAY,
                 ));
             }
@@ -345,9 +349,10 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                         });
                     }
                 }
-                ProduceMicroBlockEvent::ViewChange(new_view_number, view_change_proof) => {
-                    self.micro_state.view_number = new_view_number;
+                ProduceMicroBlockEvent::ViewChange(view_change, view_change_proof) => {
+                    self.micro_state.view_number = view_change.new_view_number; // needed?
                     self.micro_state.view_change_proof = Some(view_change_proof);
+                    self.micro_state.view_change = Some(view_change);
                 }
             }
         }

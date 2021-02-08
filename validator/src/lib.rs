@@ -26,7 +26,7 @@ extern crate nimiq_tendermint as tendermint;
 extern crate nimiq_utils as utils;
 extern crate nimiq_vrf as vrf;
 
-mod aggregation;
+pub mod aggregation;
 mod r#macro;
 mod micro;
 mod slash;

@@ -292,7 +292,6 @@ async fn it_can_aggregate() {
         tokio::spawn(async move {
             // have them just run until the aggregation is finished
             while let Some(_contribution) = aggregation.next().await {}
-            println!("{} is done", &id);
         });
     }
 

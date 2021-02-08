@@ -7,7 +7,7 @@ use futures::task::{Context, Poll};
 use futures::{ready, FutureExt, Stream};
 use tokio::time;
 
-use block_albatross::{ForkProof, MicroBlock, SignedViewChange, ViewChange, ViewChangeProof};
+use block_albatross::{ForkProof, MicroBlock, ViewChange, ViewChangeProof};
 use block_production_albatross::BlockProducer;
 use blockchain_albatross::Blockchain;
 use mempool::Mempool;
@@ -19,7 +19,7 @@ use crate::aggregation::view_change::ViewChangeAggregation;
 
 pub(crate) enum ProduceMicroBlockEvent {
     MicroBlock(MicroBlock),
-    ViewChange(u32, ViewChangeProof),
+    ViewChange(ViewChange, ViewChangeProof),
 }
 
 #[derive(Clone)]
@@ -32,6 +32,7 @@ struct NextProduceMicroBlockEvent<TValidatorNetwork> {
     fork_proofs: Vec<ForkProof>,
     view_number: u32,
     view_change_proof: Option<ViewChangeProof>,
+    view_change: Option<ViewChange>,
     view_change_delay: Duration,
     block_number: u32,
     prev_seed: VrfSeed,
@@ -47,6 +48,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         fork_proofs: Vec<ForkProof>,
         view_number: u32,
         view_change_proof: Option<ViewChangeProof>,
+        view_change: Option<ViewChange>,
         view_change_delay: Duration,
     ) -> Self {
         let (block_number, prev_seed) = {
@@ -63,6 +65,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             fork_proofs,
             view_number,
             view_change_proof,
+            view_change,
             view_change_delay,
             block_number,
             prev_seed,
@@ -80,14 +83,14 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
                 "No micro block received within timeout at #{}:{}, starting view change",
                 self.block_number, self.view_number
             );
-            let (new_view_number, view_change_proof) = self.change_view().await;
+            let (view_change, view_change_proof) = self.change_view().await;
             info!(
                 "View change completed for #{}:{}, new view is {}",
-                self.block_number, self.view_number, new_view_number
+                self.block_number, self.view_number, view_change.new_view_number
             );
-            self.view_number = new_view_number;
+            self.view_number = view_change.new_view_number;
             self.view_change_proof = Some(view_change_proof.clone());
-            ProduceMicroBlockEvent::ViewChange(new_view_number, view_change_proof)
+            ProduceMicroBlockEvent::ViewChange(view_change, view_change_proof)
         };
         (event, self)
     }
@@ -111,20 +114,39 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         )
     }
 
-    async fn change_view(&self) -> (u32, ViewChangeProof) {
+    async fn change_view(&mut self) -> (ViewChange, ViewChangeProof) {
         let new_view_number = self.view_number + 1;
         let view_change = ViewChange {
             block_number: self.block_number,
             new_view_number,
             prev_seed: self.prev_seed.clone(),
         };
-        let signed_view_change = SignedViewChange::from_message(view_change, &self.signing_key.secret_key, self.validator_id);
+
+        // Include the previous_view_change_proof only if it has not yet been persisted on chain.
+        let view_change_proof = self.view_change.as_ref()
+            .map_or(None, |vc| if vc.block_number == self.block_number {
+                Some(self.view_change_proof.as_ref().unwrap().sig.clone())
+            } else {
+                None
+            });
 
         // TODO get at init time?
         let active_validators = self.blockchain.current_validators().clone();
-        let view_change_proof = ViewChangeAggregation::start(signed_view_change, self.validator_id, active_validators, Arc::clone(&self.network)).await;
+        let (view_change, view_change_proof) = ViewChangeAggregation::start(
+            view_change.clone(),
+            view_change_proof,
+            self.signing_key.clone(),
+            self.validator_id,
+            active_validators,
+            Arc::clone(&self.network),
+        )
+        .await;
 
-        (new_view_number, view_change_proof)
+        // set the view change and view_change_proof properties so in case another view change happens they are available.
+        self.view_change = Some(view_change.clone());
+        self.view_change_proof = Some(view_change_proof.clone());
+
+        (view_change, view_change_proof)
     }
 }
 
@@ -142,6 +164,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProduceMicroBlock<TValidator
         fork_proofs: Vec<ForkProof>,
         view_number: u32,
         view_change_proof: Option<ViewChangeProof>,
+        view_change: Option<ViewChange>,
         view_change_delay: Duration,
     ) -> Self {
         let next_event = NextProduceMicroBlockEvent::new(
@@ -153,6 +176,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProduceMicroBlock<TValidator
             fork_proofs,
             view_number,
             view_change_proof,
+            view_change,
             view_change_delay,
         )
         .next()

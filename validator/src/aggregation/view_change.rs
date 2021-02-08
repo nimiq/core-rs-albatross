@@ -1,33 +1,116 @@
 use std::fmt;
+use std::pin::Pin;
 use std::sync::Arc;
 
-use futures::stream::StreamExt;
+use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
+use futures::stream::{BoxStream, Stream, StreamExt};
+use futures::task::{Context, Poll};
 use parking_lot::RwLock;
 
-use beserial::WriteBytesExt;
-// these should be moved here once they are no longer used by the messages crate.
-use block_albatross::{MultiSignature, SignedViewChange, ViewChange, ViewChangeProof};
+use beserial::{Deserialize, Serialize};
+use block_albatross::{Message, MultiSignature, SignedViewChange, ViewChange, ViewChangeProof};
+use bls::AggregatePublicKey;
 use collections::BitSet;
 use handel::aggregation::Aggregation;
 use handel::config::Config;
-use handel::contribution::AggregatableContribution;
+use handel::contribution::{AggregatableContribution, ContributionError};
 use handel::evaluator::WeightedVote;
 use handel::identity::WeightRegistry;
 use handel::partitioner::BinomialPartitioner;
 use handel::protocol::Protocol;
 use handel::store::ReplaceStore;
-use handel::update::LevelUpdateMessage;
-use hash::{Blake2sHash, Blake2sHasher, Hasher, SerializeContent};
+use handel::update::{LevelUpdate, LevelUpdateMessage};
+use hash::Blake2sHash;
 use primitives::policy;
-use primitives::slot::{SlotCollection, ValidatorSlots};
+use primitives::slot::{SlotCollection, SlotIndex, ValidatorSlots};
 use nimiq_validator_network::ValidatorNetwork;
 
 use super::network_sink::NetworkSink;
 use super::registry::ValidatorRegistry;
 use super::verifier::MultithreadedVerifier;
 
-/// prefix to sign view change messages
-const PREFIX_VIEW_CHANGE: u8 = 0x01;
+enum ViewChangeResult {
+    FutureViewChange(SignedViewChangeMessage, ViewChange),
+    ViewChange(SignedViewChangeMessage),
+}
+
+/// Switch for incoming ViewChanges.
+/// Keeps track of viewChanges for future Aggreagtions in order to be able to sync the state of this node with others
+/// in case it recognizes it is behind.
+struct InputStreamSwitch {
+    input: BoxStream<'static, LevelUpdateMessage<SignedViewChangeMessage, ViewChange>>,
+    sender: UnboundedSender<ViewChangeResult>,
+    future_view_changes: BitSet,
+    current_view_change: u32,
+    identity_registry: Arc<ValidatorRegistry>,
+}
+
+impl InputStreamSwitch {
+    fn new(
+        input: BoxStream<'static, LevelUpdateMessage<SignedViewChangeMessage, ViewChange>>,
+        current_view_change: u32,
+        identity_registry: Arc<ValidatorRegistry>,
+    ) -> (Self, UnboundedReceiver<ViewChangeResult>) {
+        let (sender, receiver) =  unbounded::<ViewChangeResult>();
+
+        let this = Self {
+            input,
+            sender,
+            future_view_changes: BitSet::new(),
+            current_view_change,
+            identity_registry,
+        };
+
+        (this, receiver)
+    }
+}
+
+impl Stream for InputStreamSwitch {
+    type Item = LevelUpdate<SignedViewChangeMessage>;
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        match self.input.poll_next_unpin(cx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(None) => Poll::Ready(None),
+            Poll::Ready(Some(message)) => {
+                if message.update.aggregate.previous_proof.is_some() {
+                    warn!("received past proof");
+                }
+                if message.tag.new_view_number == self.current_view_change {
+                    Poll::Ready(Some(message.update))
+                } else {
+                    if message.tag.new_view_number > self.current_view_change {
+                        if let Err(err) = self.sender.unbounded_send(ViewChangeResult::FutureViewChange(message.update.aggregate, message.tag)) {
+                            error!("Sending failed: {:?}", err);
+                        }
+                    }
+                    Poll::Pending
+                }
+            }
+        }
+    }
+}
+
+// TODO once actual state sync is implemented this can be removed again as it serves the same purpose.
+/// The ViewChangeMessage containing the current view change and an optional previous proof if applicable.
+/// Contains the actual information of block_height, new_view_number and prev_seed as tag.
+#[derive(Clone, Deserialize, Serialize, std::fmt::Debug)]
+pub struct SignedViewChangeMessage {
+    /// The currently aggregated view change.
+    pub view_change: MultiSignature,
+    /// The view ChangeProof of the previous view change on this height, if there is one.
+    /// The view_change parameters (block_number, new_view_number, prev_seed are implicit).
+    pub previous_proof: Option<MultiSignature>,
+}
+
+impl AggregatableContribution for SignedViewChangeMessage {
+    fn contributors(&self) -> BitSet {
+        self.view_change.contributors()
+    }
+
+    fn combine(&mut self, other_contribution: &Self) -> Result<(), ContributionError> {
+        self.view_change.combine(&other_contribution.view_change)
+    }
+}
 
 struct ViewChangeAggregationProtocol {
     verifier: Arc<<Self as Protocol>::Verifier>,
@@ -43,7 +126,10 @@ impl ViewChangeAggregationProtocol {
     pub fn new(validators: ValidatorSlots, node_id: usize, threshold: usize, message_hash: Blake2sHash) -> Self {
         let partitioner = Arc::new(BinomialPartitioner::new(node_id, validators.len()));
 
-        let store = Arc::new(RwLock::new(ReplaceStore::<BinomialPartitioner, MultiSignature>::new(Arc::clone(&partitioner))));
+        let store = Arc::new(RwLock::new(ReplaceStore::<
+            BinomialPartitioner,
+            SignedViewChangeMessage,
+        >::new(Arc::clone(&partitioner))));
 
         let registry = Arc::new(ValidatorRegistry::new(validators));
 
@@ -66,7 +152,7 @@ impl ViewChangeAggregationProtocol {
 }
 
 impl Protocol for ViewChangeAggregationProtocol {
-    type Contribution = MultiSignature;
+    type Contribution = SignedViewChangeMessage;
     type Registry = ValidatorRegistry;
     type Verifier = MultithreadedVerifier<Self::Registry>;
     type Store = ReplaceStore<Self::Partitioner, Self::Contribution>;
@@ -98,79 +184,143 @@ impl Protocol for ViewChangeAggregationProtocol {
     }
 }
 
-pub struct ViewChangeAggregation<N: ValidatorNetwork> {
-    _phantom: std::marker::PhantomData<N>,
-}
+pub struct ViewChangeAggregation {}
 
-impl<N: ValidatorNetwork + 'static> ViewChangeAggregation<N> {
-    pub async fn start(view_change: SignedViewChange, validator_id: u16, active_validators: ValidatorSlots, network: Arc<N>) -> ViewChangeProof {
-        let mut hasher = Blake2sHasher::new();
-        hasher.write_u8(PREFIX_VIEW_CHANGE).expect("Failed to write prefix to hasher for signature.");
-        view_change
-            .message
-            .serialize_content(&mut hasher)
-            .expect("Failed to write message to hasher for signature.");
-        let message_hash = hasher.finish();
-
+impl ViewChangeAggregation {
+    pub async fn start<N: ValidatorNetwork + 'static>(
+        mut view_change: ViewChange,
+        mut previous_proof: Option<MultiSignature>,
+        signing_key: bls::KeyPair,
+        validator_id: u16,
+        active_validators: ValidatorSlots,
+        network: Arc<N>,
+    ) -> (ViewChange, ViewChangeProof) {
         // TODO expose this somewehere else so we don't need to clone here.
-        let weights = ValidatorRegistry::new(active_validators.clone());
+        let weights = Arc::new(ValidatorRegistry::new(active_validators.clone()));
 
-        let protocol = ViewChangeAggregationProtocol::new(active_validators.clone(), validator_id as usize, policy::TWO_THIRD_SLOTS as usize, message_hash);
+        let slots = &active_validators.get_slots(validator_id);
 
-        let slots = active_validators.get_slots(validator_id);
+        trace!("Previous view_change proof: {:?}", &previous_proof);
 
-        let signature = bls::AggregateSignature::from_signatures(&[view_change.signature.multiply(slots.len() as u16)]);
+        loop {
+            let message_hash = view_change.hash_with_prefix();
+            trace!("message: {:?}, message_hash: {:?}", &view_change, message_hash);
+            let signed_view_change = SignedViewChange::from_message(
+                view_change.clone(),
+                &signing_key.secret_key,
+                validator_id,
+            );
 
-        let mut signers = BitSet::new();
-        for slot in slots {
-            signers.insert(slot as usize);
-        }
+            let signature = bls::AggregateSignature::from_signatures(&[signed_view_change
+                .signature
+                .multiply(slots.len() as u16)]);
 
-        let own_contribution = MultiSignature::new(signature, signers);
+            let mut signers = BitSet::new();
+            for slot in slots {
+                signers.insert(*slot as usize);
+            }
 
-        trace!(
-            "Starting view change {}.{}",
-            &view_change.message.block_number,
-            &view_change.message.new_view_number,
-        );
+            let own_contribution = SignedViewChangeMessage{
+                view_change: MultiSignature::new(signature, signers),
+                previous_proof: previous_proof.clone(),
+            };
 
-        let mut aggregation = Aggregation::new(
-            protocol,
-            view_change.message,
-            Config::default(),
-            own_contribution,
-            Box::pin(
-                network
-                    .receive::<LevelUpdateMessage<MultiSignature, ViewChange>>()
-                    .map(move |msg| msg.0.update),
-            ),
-            Box::new(NetworkSink::<LevelUpdateMessage<MultiSignature, ViewChange>, N>::new(network.clone())),
-        );
+            warn!(
+                "Starting view change {}.{}",
+                &view_change.block_number,
+                &view_change.new_view_number,
+            );
 
-        while let Some(aggregate) = aggregation.next().await {
-            if let Some(aggregate_weight) = weights.signature_weight(&aggregate) {
-                trace!(
-                    "New View Change Aggregate weight: {} / {} Signers: {:?}",
-                    aggregate_weight,
-                    policy::TWO_THIRD_SLOTS,
-                    &aggregate.contributors(),
-                );
+            let protocol = ViewChangeAggregationProtocol::new(
+                active_validators.clone(),
+                validator_id as usize,
+                policy::TWO_THIRD_SLOTS as usize,
+                message_hash,
+            );
 
-                // Check if the combined weight of the aggregation is above the Two_THIRD_SLOTS threshold.
-                if aggregate_weight > policy::TWO_THIRD_SLOTS as usize {
-                    // Make sure remaining messages get send.
-                    tokio::spawn(async move { aggregation.shutdown().await });
+            let (input_switch, receiver) = InputStreamSwitch::new(
+                Box::pin(
+                    network
+                        .receive::<LevelUpdateMessage<SignedViewChangeMessage, ViewChange>>()
+                        .map(move |msg| msg.0),
+                ),
+                view_change.new_view_number,
+                weights.clone(),
+            );
 
-                    // Create ViewChnageProof out of the aggregate
-                    let view_change_proof = ViewChangeProof { sig: aggregate };
-                    trace!("View Change complete: {:?}", &view_change_proof);
+            let aggregation = Aggregation::new(
+                protocol,
+                view_change.clone(),
+                Config::default(),
+                own_contribution,
+                Box::pin(
+                    input_switch
+                ),
+                Box::new(NetworkSink::<
+                    LevelUpdateMessage<SignedViewChangeMessage, ViewChange>,
+                    N,
+                >::new(network.clone())),
+            );
 
-                    // return the ViewChangeProof
-                    return view_change_proof;
+            let mut stream = futures::stream::select(
+                aggregation.map(|x| ViewChangeResult::ViewChange(x)),
+                receiver,
+            );
+            while let Some(msg) = stream.next().await {
+                match msg {
+                    ViewChangeResult::FutureViewChange(vc, tag) => {
+                        debug!("Received future ViewChange: {:?}", &vc);
+                        if let Some(sig) = vc.previous_proof {
+                            // verify the proof
+                            // fist aggregate the public keys
+                            let mut aggregated_public_key = AggregatePublicKey::new();
+                            for signer in sig.signers.iter() {
+                                if let Some(public_key) = active_validators.get_public_key(SlotIndex::Slot(signer as u16)) {
+                                    aggregated_public_key.aggregate(&public_key.uncompress().expect("Could not uncompress lazyPublicKey"));
+                                } else {
+                                    warn!("Signer public key not found");
+                                }
+                            }
+
+                            let past_view_change = ViewChange {
+                                block_number: tag.block_number,
+                                new_view_number: tag.new_view_number - 1,
+                                prev_seed: tag.prev_seed.clone(),
+                            };
+
+                            // verify the ViewChange
+                            if aggregated_public_key.verify_hash(past_view_change.hash_with_prefix(), &sig.signature) {
+                                // set the proof and exit the while loop to create a new Aggregtion for the correct new view
+                                view_change = tag;
+                                previous_proof = Some(sig);
+                                break;
+                            }
+                        }
+                        error!("Did not receive necessary past proof!");
+                    },
+                    ViewChangeResult::ViewChange(vc) => {
+                        if let Some(aggregate_weight) = weights.signature_weight(&vc.view_change) {
+                            trace!(
+                                "New View Change Aggregate weight: {} / {} Signers: {:?}",
+                                aggregate_weight,
+                                policy::TWO_THIRD_SLOTS,
+                                &vc.view_change.contributors(),
+                            );
+
+                            // Check if the combined weight of the aggregation is above the Two_THIRD_SLOTS threshold.
+                            if aggregate_weight > policy::TWO_THIRD_SLOTS as usize {
+                                // Create ViewChangeProof out of the aggregate
+                                let view_change_proof = ViewChangeProof { sig: vc.view_change };
+                                warn!("View Change complete: {:?}", &view_change_proof);
+
+                                // return the ViewChangeProof
+                                return (view_change, view_change_proof);
+                            }
+                        }
+                    },
                 }
             }
         }
-        panic!("ViewChangeAggregation Stream returned Ready(None) without a completed ViewChange");
     }
 }
 

@@ -10,6 +10,18 @@ pub enum Identity {
     None,
 }
 
+impl Identity {
+    pub fn as_bitset(&self) -> BitSet {
+        let mut bitset = BitSet::new();
+        match self {
+            Self::Single(id) => bitset.insert(*id),
+            Self::Multiple(ids) => ids.iter().for_each(|id| bitset.insert(*id)),
+            Self::None => {}
+        }
+        bitset
+    }
+}
+
 pub trait IdentityRegistry: Send + Sync {
     fn public_key(&self, id: usize) -> Option<PublicKey>;
 

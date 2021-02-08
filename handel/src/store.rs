@@ -81,38 +81,25 @@ impl<P: Partitioner, C: AggregatableContribution> ReplaceStore<P, C> {
         }
     }
 
-    fn check_merge(&self, contribution: &C, level: usize) -> Option<C> {
+    fn check_merge(&self, contribution: &C, contributors: BitSet, level: usize) -> Option<C> {
         if let Some((best_contribution, identity)) = self.best_contribution.get(&level) {
             trace!(
                 "trying to combine contribution {:?} for level {}, current best: {:?}",
                 contribution,
                 level,
-                self.best_contribution,
+                best_contribution,
             );
 
-            let contributors = match identity {
-                Identity::None => panic!("Signature without signatory found in store"),
-                Identity::Single(signer) => {
-                    let mut set = BitSet::new();
-                    set.insert(*signer);
-                    set
-                },
-                Identity::Multiple(signers) => {
-                    let mut set = BitSet::new();
-                    for signer in signers {
-                        set.insert(*signer);
-                    }
-                    set
-                },
-            };
+            let  best_contributors = identity.as_bitset();
 
             // try to combine
             let mut contribution = contribution.clone();
 
+            // TODO
             // we can ignore the error, if it's not possible to merge we continue
-            contribution
-                .combine(best_contribution)
-                .unwrap_or_else(|e| trace!("check_merge: combining contributions failed: {}", e));
+            // contribution
+            //     .combine(best_contribution)
+            //     .unwrap_or_else(|e| trace!("check_merge: combining contributions failed: {}", e));
 
             let individual_verified = self
                 .individual_verified
@@ -123,7 +110,7 @@ impl<P: Partitioner, C: AggregatableContribution> ReplaceStore<P, C> {
             let complements = &(&contributors & individual_verified) ^ individual_verified;
 
             // check that if we combine we get a better signature
-            if complements.len() + contribution.num_contributors() <= best_contribution.num_contributors() {
+            if complements.len() + contribution.num_contributors() <= best_contributors.len() {
                 // XXX .weight()?
                 // doesn't get better
                 None
@@ -169,7 +156,7 @@ impl<P: Partitioner, C: AggregatableContribution> ContributionStore for ReplaceS
                 .insert(id, (contribution.clone(), identity.clone()));
         }
 
-        if let Some(best_contribution) = self.check_merge(&contribution, level) {
+        if let Some(best_contribution) = self.check_merge(&contribution, identity.as_bitset(), level) {
             trace!("best_contribution = {:?} (level {})", best_contribution, level);
             self.best_contribution.insert(level, (best_contribution, identity));
             if level > self.best_level {
