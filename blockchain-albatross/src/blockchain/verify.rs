@@ -274,6 +274,7 @@ impl Blockchain {
         trace!("Accounts hash:    {}", accounts_hash);
 
         if block.state_root() != &accounts_hash {
+            error!("State: expected {:?}, found {:?}", block.state_root(), accounts_hash);
             return Err(PushError::InvalidBlock(BlockError::AccountsHashMismatch));
         }
 

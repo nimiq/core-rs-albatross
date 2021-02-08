@@ -154,7 +154,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         // Also the setting up of our own public key record should probably not be done here but in `init` instead.
         tokio::spawn(async move {
             if let Err(err) = nw.set_public_key(&key.public_key.compress(), &key.secret_key).await {
-                error!("could not set up DHT rwcord: {:?}", err);
+                error!("could not set up DHT record: {:?}", err);
             }
             nw.set_validators(validator_keys).await;
         });
@@ -292,6 +292,11 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                         .map_err(|e| error!("Failed to push macro block onto the chain: {:?}", e))
                         .ok();
                     if result == Some(PushResult::Extended) || result == Some(PushResult::Rebranched) {
+                        if block_copy.is_election_block() {
+                            info!("Publishing Election MacroBlock #{}", &block_copy.header.block_number);
+                        } else {
+                            info!("Publishing Checkpoint MacroBlock #{}", &block_copy.header.block_number);
+                        }
                         // todo get rid of spawn
                         let nw = self.network.clone();
                         tokio::spawn(async move {

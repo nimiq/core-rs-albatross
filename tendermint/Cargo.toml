@@ -12,6 +12,7 @@ license = "Apache-2.0"
 futures = "0.3"
 async-stream = "0.3.0"
 async-trait = "0.1"
+log = "0.4"
 
 nimiq-hash = { path = "../hash", version = "0.1" }
 nimiq-primitives = { path = "../primitives", version = "0.1", features = ["policy"] }

@@ -155,6 +155,7 @@ impl<
     /// Lines 57-60 of Tendermint consensus algorithm (Algorithm 1)
     pub(crate) async fn on_timeout_propose(&mut self) -> Result<(), TendermintError> {
         assert_eq!(self.state.step, Step::Propose);
+        log::debug!("Proposal for round {} timed out.", self.state.round);
 
         self.state.step = Step::Prevote;
 

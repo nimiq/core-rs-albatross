@@ -100,7 +100,7 @@ impl<N: ValidatorNetwork> TendermintAggregations<N> {
     ) {
         // TODO: TendermintAggregationEvent
         if !self.aggregation_descriptors.contains_key(&(id.round_number, id.step)) {
-            debug!("starting aggregation for {:?}", &id);
+            trace!("starting aggregation for {:?}", &id);
             // crate the correct protocol instance
             let protocol = TendermintAggregationProtocol::new(
                 self.validator_registry.clone(),
@@ -126,6 +126,8 @@ impl<N: ValidatorNetwork> TendermintAggregations<N> {
                     is_running: stream_closer.clone(),
                 },
             );
+
+            trace!("Aggregation_descriptors: {:?}", &self.aggregation_descriptors);
 
             // copy round_number for use in drain_filter couple of lines down so that id can be moved into closure.
             let round_number = id.round_number;
@@ -159,7 +161,10 @@ impl<N: ValidatorNetwork + 'static> Stream for TendermintAggregations<N> {
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         match self.event_receiver.poll_recv(cx) {
             Poll::Pending => {},
-            Poll::Ready(None) => return Poll::Ready(None),
+            Poll::Ready(None) => {
+                debug!("Event receiver created None value");
+                return Poll::Ready(None);
+            },
             Poll::Ready(Some(AggregationEvent::Start(
                 id,
                 own_contribution,
@@ -179,7 +184,7 @@ impl<N: ValidatorNetwork + 'static> Stream for TendermintAggregations<N> {
                     if let Some(descriptor) = self.aggregation_descriptors.get(&(message.tag.round_number, message.tag.step)) {
                         trace!("New message for ongoing aggregation: {:?}", &message);
                         if descriptor.input.send(message.update).is_err() {
-                             error!("Failed to relay LevelUpdate to aggregation");
+                             debug!("Failed to relay LevelUpdate to aggregation");
                         }
                     } else if let Some(((highest_round, _), _)) = self.aggregation_descriptors.last_key_value() {
                         // messages of future rounds need to be tracked in terrms of contributors only (without verifying them).
@@ -349,6 +354,7 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
                                         if validator_registry.signature_weight(&contribution).expect("Failed to unwrap signature weight")
                                             > policy::TWO_THIRD_SLOTS as usize
                                         {
+                                            trace!("Completed Round for {}-{:?}: {:?}", &r, &s, &contribution);
                                             // Transform to the appropiate result type adding the weight to each proposals Contribution
                                             let result = contribution
                                                 .contributions
@@ -417,6 +423,7 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
                 Some(aggr) => {
                     // re-set the current_agggregate and return error
                     *current_aggregate = Some(aggr);
+                    debug!("An aggregation was started before the previous one was cleared");
                     return Err(TendermintError::AggregationError);
                 }
                 None => {
@@ -556,8 +563,12 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
                                     self.event_sender
                                         .send(AggregationEvent::Cancel(round, step))
                                         .await
-                                        .map_err(|_| TendermintError::AggregationError)?;
+                                        .map_err(|err| {
+                                            debug!("event_sender.send failed: {:?}", err);
+                                            TendermintError::AggregationError
+                                        })?;
                                 }
+                                trace!("{}-{:?}: Individual proposal has > 2f + 1 votes", &round, &step);
                                 return Ok(result);
                             }
                             // if proposal is not the same as the one this node signed, then it contributes to the combined weight
@@ -574,13 +585,18 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
                             self.event_sender
                                 .send(AggregationEvent::Cancel(round, step))
                                 .await
-                                .map_err(|_| TendermintError::AggregationError)?;
+                                .map_err(|err| {
+                                    debug!("event_sender.send failed: {:?}", err);
+                                    TendermintError::AggregationError
+                                })?;
                         }
+                        debug!("Tendermint: {}-{:?}: All other proposals have > f + 1 votes", &round, &step);
                         return Ok(result);
                     }
                 }
             }
 
+            debug!("Tendermint: {}-{:?}: timeout triggered", &round, &step);
             // if the result is not immediately actionable wait for a new (and better) result to check again.
             // Only wait for a set period of time, if it elapses the current (best) result is returned (likely resulting in a subsequent Nil vote/commit).
             match time::timeout_at(deadline, aggregate_receiver.recv()).await {
@@ -592,7 +608,10 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
                         self.event_sender
                             .send(AggregationEvent::Cancel(round, step))
                             .await
-                            .map_err(|_| TendermintError::AggregationError)?;
+                            .map_err(|err| {
+                                debug!("event_sender.send failed: {:?}", err);
+                                TendermintError::AggregationError
+                            })?;
                     }
                     return Ok(result);
                 }

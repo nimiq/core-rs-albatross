@@ -125,6 +125,7 @@ impl<C: AggregatableContribution, E: Evaluator<C>> Stream for TodoList<C, E> {
                         };
                         // score the newly created TodoItem for the aggregate of the LevelUpdate
                         let score = aggregate_todo.evaluate(Arc::clone(&self.evaluator));
+                        trace!("New todo with score: {}", &score);
 
                         // TodoItems with a score of 0 are discarded (meaning not added to the retained set of TodoItems).
                         if score > 0 {

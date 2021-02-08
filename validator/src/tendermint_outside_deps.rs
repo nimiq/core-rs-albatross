@@ -227,6 +227,7 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
             TENDERMINT_TIMEOUT_INIT + round as u64 * TENDERMINT_TIMEOUT_DELTA,
         );
 
+        trace!("Awaiting proposal for {}.{}, expected producer: {}, timeout: {:?}", self.blockchain.block_number() +1, &round, &validator_id, &timeout);
         // This waits for a proposal from the proposer until it timeouts.
         let await_res = tokio::time::timeout(
             timeout,

@@ -172,6 +172,8 @@ impl<P: Protocol, T: Clone + Debug + Eq + Serialize + Deserialize + Sized + Send
             }
         };
 
+        trace!("level {} - #{}/{}", level.id, num_contributors, level.num_peers());
+
         // If the number of contributors on this level is equal to the number of peers on this level it is completed.
         if num_contributors == level.num_peers() {
             trace!("Level {} complete", level.id);

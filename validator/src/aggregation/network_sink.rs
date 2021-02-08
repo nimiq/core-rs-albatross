@@ -21,7 +21,7 @@ impl<N: ValidatorNetwork> SendingFuture<N> {
     pub async fn send<M: Message + Unpin + std::fmt::Debug>(self, msg: (M, usize)) {
         let result = self.network.send_to(&[msg.1], &msg.0).await;
         if let Some(Err(err)) = result.get(0) {
-            error!("Sending msg: {:?} to validator #{} failed: {:?}", &msg.0, &msg.1, err);
+            debug!("Sending msg: {:?} to validator #{} failed: {:?}", &msg.0, &msg.1, err);
         }
     }
 }
