@@ -94,9 +94,11 @@ impl NanoZKP {
 
         // Start generating proofs for PKTree level 5.
         for i in 0..32 {
-            if proof_caching && Path::new(&format!("pk_tree_5_{}.bin", i)).exists() {
+            if proof_caching && Path::new(&format!("proofs/pk_tree_5_{}.bin", i)).exists() {
                 continue;
             }
+
+            println!("generating pk_tree_5_{}", i);
 
             NanoZKP::prove_pk_tree_leaf(
                 rng,
@@ -112,9 +114,11 @@ impl NanoZKP {
 
         // Start generating proofs for PKTree level 4.
         for i in 0..16 {
-            if proof_caching && Path::new(&format!("pk_tree_4_{}.bin", i)).exists() {
+            if proof_caching && Path::new(&format!("proofs/pk_tree_4_{}.bin", i)).exists() {
                 continue;
             }
+
+            println!("generating pk_tree_4_{}", i);
 
             NanoZKP::prove_pk_tree_node_mnt6(
                 rng,
@@ -131,9 +135,11 @@ impl NanoZKP {
 
         // Start generating proofs for PKTree level 3.
         for i in 0..8 {
-            if proof_caching && Path::new(&format!("pk_tree_3_{}.bin", i)).exists() {
+            if proof_caching && Path::new(&format!("proofs/pk_tree_3_{}.bin", i)).exists() {
                 continue;
             }
+
+            println!("generating pk_tree_3_{}", i);
 
             NanoZKP::prove_pk_tree_node_mnt4(
                 rng,
@@ -150,9 +156,11 @@ impl NanoZKP {
 
         // Start generating proofs for PKTree level 2.
         for i in 0..4 {
-            if proof_caching && Path::new(&format!("pk_tree_2_{}.bin", i)).exists() {
+            if proof_caching && Path::new(&format!("proofs/pk_tree_2_{}.bin", i)).exists() {
                 continue;
             }
+
+            println!("generating pk_tree_2_{}", i);
 
             NanoZKP::prove_pk_tree_node_mnt6(
                 rng,
@@ -169,9 +177,11 @@ impl NanoZKP {
 
         // Start generating proofs for PKTree level 1.
         for i in 0..2 {
-            if proof_caching && Path::new(&format!("pk_tree_1_{}.bin", i)).exists() {
+            if proof_caching && Path::new(&format!("proofs/pk_tree_1_{}.bin", i)).exists() {
                 continue;
             }
+
+            println!("generating pk_tree_1_{}", i);
 
             NanoZKP::prove_pk_tree_node_mnt4(
                 rng,
@@ -187,7 +197,9 @@ impl NanoZKP {
         }
 
         // Start generating proof for PKTree level 0.
-        if !(proof_caching && Path::new("pk_tree_0_0.bin").exists()) {
+        if !(proof_caching && Path::new("proofs/pk_tree_0_0.bin").exists()) {
+            println!("generating pk_tree_0_0");
+
             NanoZKP::prove_pk_tree_node_mnt6(
                 rng,
                 "pk_tree_0",
@@ -202,7 +214,9 @@ impl NanoZKP {
         }
 
         // Start generating proof for Macro Block.
-        if !(proof_caching && Path::new("macro_block.bin").exists()) {
+        if !(proof_caching && Path::new("proofs/macro_block.bin").exists()) {
+            println!("generating macro_block");
+
             NanoZKP::prove_macro_block(
                 rng,
                 &initial_pks,
@@ -215,7 +229,9 @@ impl NanoZKP {
         }
 
         // Start generating proof for Macro Block Wrapper.
-        if !(proof_caching && Path::new("macro_block_wrapper.bin").exists()) {
+        if !(proof_caching && Path::new("proofs/macro_block_wrapper.bin").exists()) {
+            println!("generating macro_block_wrapper");
+
             NanoZKP::prove_macro_block_wrapper(
                 rng,
                 &initial_pks,
@@ -226,7 +242,9 @@ impl NanoZKP {
         }
 
         // Start generating proof for Merger.
-        if !(proof_caching && Path::new("merger.bin").exists()) {
+        if !(proof_caching && Path::new("proofs/merger.bin").exists()) {
+            println!("generating merger");
+
             NanoZKP::prove_merger(
                 rng,
                 &initial_pks,
@@ -238,6 +256,8 @@ impl NanoZKP {
         }
 
         // Start generating proof for Merger Wrapper.
+        println!("generating merger wrapper");
+
         let proof = NanoZKP::prove_merger_wrapper(
             rng,
             &initial_pks,
