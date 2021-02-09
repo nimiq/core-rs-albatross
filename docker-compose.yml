@@ -1,0 +1,233 @@
+version: "3.5"
+
+networks:
+  devnet:
+    name: ${NETWORK_NAME:?err}
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 7.0.0.0/24
+
+services:
+  traefik:
+    image: traefik:v2.2
+    command:
+      - --entrypoints.nimiq.address=:8443
+      - --entrypoints.rpc.address=:8648
+      - --entrypoints.ws-rpc.address=:8650
+      - --providers.docker=true
+    ports:
+      - "8443:8443"
+      - "8648:8648"
+      - "8650:8650"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    networks:
+      devnet:
+        ipv4_address: 7.0.0.100
+
+  seed1:
+    image: core:latest
+    labels:
+      - traefik.http.routers.seed1.rule=Host(`seed1.${NETWORK_NAME:?err}`)
+    environment:
+      - LISTEN_ADDRESSES=/ip4/7.0.0.2/tcp/8443/ws
+      - NIMIQ_HOST=seed1.${NETWORK_NAME:?err}
+      - NIMIQ_NETWORK=dev-albatross
+      - NIMIQ_PEER_KEY=fe3b33ed720a5d532e27551c3b9aa83d97a27e82c30d87fe1378936890f81ea6
+      - NIMIQ_PEER_KEY_FILE=/home/nimiq/.nimiq/peer_key.dat
+      - NIMIQ_INSTANT_INBOUND=true
+      - NIMIQ_VALIDATOR=validator
+      - NIMIQ_NO_LMDB_SYNC=true
+      - NIMIQ_MIN_PEERS=1
+      - VALIDATOR_BLOCK_DELAY="0"
+      - VALIDATOR_KEY=f8ac8d3d52f72f86a97e83f6ccab9c8f60c70e92e13ea490ea3433b7611ab0058f0584d3e4a2b9856e482440967af01a6c878cb5ff0ea98acb07eec5fd0f5deb1db5fb2843d7bf34d7b9fddba5234943e6c3e491cbe08d071668affdf5d10000
+      - RPC_ENABLED=true
+      - RPC_USERNAME=rpcclient
+      - RPC_PASSWORD=7F8E0E42-8ACF-47E7-8CC1-0EC66FA3D82D
+      - RUST_BACKTRACE="1"
+      - NIMIQ_LOG_LEVEL=debug
+      - NIMIQ_LOG_TIMESTAMPS=true
+    networks:
+      devnet:
+        ipv4_address: 7.0.0.2
+    volumes:
+      - "seed1:/home/nimiq/.nimiq:rw"
+
+  seed2:
+    image: core:latest
+    labels:
+      - traefik.http.routers.seed2.rule=Host(`seed2.${NETWORK_NAME:?err}`)
+    depends_on:
+      - seed1
+    environment:
+      - LISTEN_ADDRESSES=/ip4/7.0.0.3/tcp/8443/ws
+      - NIMIQ_HOST=seed2.${NETWORK_NAME:?err}
+      - NIMIQ_NETWORK=dev-albatross
+      - NIMIQ_SEED_NODES=/ip4/7.0.0.2/tcp/8443/ws
+      # - NIMIQ_SEED_NODES=ws://seed1.${NETWORK_NAME:?err}:8443/5af4c3f30998573e8d3476cd0e0543bf7adba576ef321342e41c2bccc246c377
+      - NIMIQ_PEER_KEY=3a55f2b5f7c66a4ce624c8189bb7d6217384ae67c4728591d5458beaab1b226a
+      - NIMIQ_PEER_KEY_FILE=/home/nimiq/.nimiq/peer_key.dat
+      - NIMIQ_INSTANT_INBOUND=true
+      - NIMIQ_VALIDATOR=validator
+      - NIMIQ_NO_LMDB_SYNC=true
+      - NIMIQ_MIN_PEERS=1
+      - VALIDATOR_BLOCK_DELAY="0"
+      - VALIDATOR_KEY=bfbf1e23855190f03222bb2b19dc9d25843494d22bf8ccc1f7abfe6b3b185b3bf76537ee70e7ac5c7c6d7a0046e671bf610572e1cf89b407a7cd095ab9f0868da80003121a26d4d3be1e1abd10861f6c8601e94e0e448f4b86b7512764460100
+      - RPC_ENABLED=true
+      - RUST_BACKTRACE="1"
+      - NIMIQ_LOG_LEVEL=debug
+      - NIMIQ_LOG_TIMESTAMPS=true
+    networks:
+      devnet:
+        ipv4_address: 7.0.0.3
+    volumes:
+      - "seed2:/home/nimiq/.nimiq:rw"
+
+  seed3:
+    image: core:latest
+    labels:
+      - traefik.http.routers.seed3.rule=Host(`seed3.${NETWORK_NAME:?err}`)
+    depends_on:
+      - seed2
+    environment:
+      - LISTEN_ADDRESSES=/ip4/7.0.0.4/tcp/8443/ws
+      - NIMIQ_HOST=seed3.${NETWORK_NAME:?err}
+      - NIMIQ_NETWORK=dev-albatross
+      - NIMIQ_SEED_NODES=/ip4/7.0.0.2/tcp/8443/ws
+      # - NIMIQ_SEED_NODES=ws://seed1.${NETWORK_NAME:?err}:8443/5af4c3f30998573e8d3476cd0e0543bf7adba576ef321342e41c2bccc246c377
+      # - NIMIQ_PEER_KEY=3a55f2b5f7c66a4ce624c8189bb7d6217384ae67c4728591d5458beaab1b226a
+      - NIMIQ_PEER_KEY_FILE=/home/nimiq/.nimiq/peer_key.dat
+      - NIMIQ_INSTANT_INBOUND=true
+      - NIMIQ_VALIDATOR=validator
+      - NIMIQ_NO_LMDB_SYNC=true
+      - NIMIQ_MIN_PEERS=1
+      - VALIDATOR_BLOCK_DELAY="0"
+      - VALIDATOR_KEY=0bd98e7967a8260c36844e61fcf9375d4532ed3cea5d619a591a7c3ebc9ad45b5315215d9fd24a38d66045277d707cf0b897ce072487f57d561e5c05927a96b39916480d32464c3cd6d50009ca22cdba41ad795497efb19ab28a4f357d850000
+      - RPC_ENABLED=true
+      - RUST_BACKTRACE="1"
+      - NIMIQ_LOG_LEVEL=debug
+      - NIMIQ_LOG_TIMESTAMPS=true
+    networks:
+      devnet:
+        ipv4_address: 7.0.0.4
+    volumes:
+      - "seed3:/home/nimiq/.nimiq:rw"
+
+
+  seed4:
+    image: core:latest
+    labels:
+      - traefik.http.routers.seed4.rule=Host(`seed4.${NETWORK_NAME:?err}`)
+    depends_on:
+      - seed2
+    environment:
+      - LISTEN_ADDRESSES=/ip4/7.0.0.5/tcp/8443/ws
+      - NIMIQ_HOST=seed4.${NETWORK_NAME:?err}
+      - NIMIQ_NETWORK=dev-albatross
+      - NIMIQ_SEED_NODES=/ip4/7.0.0.2/tcp/8443/ws
+      # - NIMIQ_SEED_NODES=ws://seed1.${NETWORK_NAME:?err}:8443/5af4c3f30998573e8d3476cd0e0543bf7adba576ef321342e41c2bccc246c377
+      # - NIMIQ_PEER_KEY=3a55f2b5f7c66a4ce624c8189bb7d6217384ae67c4728591d5458beaab1b226a
+      - NIMIQ_PEER_KEY_FILE=/home/nimiq/.nimiq/peer_key.dat
+      - NIMIQ_INSTANT_INBOUND=true
+      - NIMIQ_VALIDATOR=validator
+      - NIMIQ_NO_LMDB_SYNC=true
+      - NIMIQ_MIN_PEERS=1
+      - VALIDATOR_BLOCK_DELAY="0"
+      - VALIDATOR_KEY=1dc9c8895e16ce1516dc01bc1ed676e5435c6c263e0c2cf9a6683f44f966b6774e8314fd239eb5f6b9090cdbd9d28deb1bc0abdf83eff648cb3ff7667859641f7f422aac3eb1bf5ccaa4ad0a2e443963b4b7ff1424beb4bdc016ee150bb40100
+      - RPC_ENABLED=true
+      - RUST_BACKTRACE="1"
+      - NIMIQ_LOG_LEVEL=debug
+      - NIMIQ_LOG_TIMESTAMPS=true
+    networks:
+      devnet:
+        ipv4_address: 7.0.0.5
+    volumes:
+      - "seed4:/home/nimiq/.nimiq:rw"
+
+  # validator1:
+  #   image: core
+  #   labels:
+  #     - traefik.http.routers.validator1.rule=Host(`validator1.${NETWORK_NAME:?err}`)
+  #   depends_on:
+  #     - seed2
+  #   environment:
+  #     - NIMIQ_HOST=validator1.${NETWORK_NAME:?err}
+  #     - NIMIQ_NETWORK=dev-albatross
+  #     - NIMIQ_SEED_NODES=ws://seed1.${NETWORK_NAME:?err}:8443/5af4c3f30998573e8d3476cd0e0543bf7adba576ef321342e41c2bccc246c377
+  #     - NIMIQ_VALIDATOR=validator
+  #     - NIMIQ_NO_LMDB_SYNC=true
+  #     - VALIDATOR_BLOCK_DELAY="0"
+  #     - RPC_ENABLED=true
+  #     - RUST_BACKTRACE="1"
+  #     - NIMIQ_LOG_LEVEL=debug
+  #     - NIMIQ_LOG_TIMESTAMPS=true
+  #   networks:
+  #     - devnet
+
+  # validator2:
+  #   image: core
+  #   labels:
+  #     - traefik.http.routers.validator2.rule=Host(`validator2.${NETWORK_NAME:?err}`)
+  #   depends_on:
+  #     - seed2
+  #   environment:
+  #     - NIMIQ_HOST=validator2.${NETWORK_NAME:?err}
+  #     - NIMIQ_NETWORK=dev-albatross
+  #     - NIMIQ_SEED_NODES=ws://seed1.${NETWORK_NAME:?err}:8443/5af4c3f30998573e8d3476cd0e0543bf7adba576ef321342e41c2bccc246c377
+  #     - NIMIQ_VALIDATOR=validator
+  #     - NIMIQ_NO_LMDB_SYNC=true
+  #     - VALIDATOR_BLOCK_DELAY="0"
+  #     - RPC_ENABLED=true
+  #     - RUST_BACKTRACE="1"
+  #     - NIMIQ_LOG_LEVEL=debug
+  #     - NIMIQ_LOG_TIMESTAMPS=true
+  #   networks:
+  #     - devnet
+
+  # validator3:
+  #   image: core
+  #   labels:
+  #     - traefik.http.routers.validator3.rule=Host(`validator3.${NETWORK_NAME:?err}`)
+  #   depends_on:
+  #     - seed2
+  #   environment:
+  #     - NIMIQ_HOST=validator3.${NETWORK_NAME:?err}
+  #     - NIMIQ_NETWORK=dev-albatross
+  #     - NIMIQ_SEED_NODES=ws://seed1.${NETWORK_NAME:?err}:8443/5af4c3f30998573e8d3476cd0e0543bf7adba576ef321342e41c2bccc246c377
+  #     - NIMIQ_VALIDATOR=validator
+  #     - NIMIQ_NO_LMDB_SYNC=true
+  #     - VALIDATOR_BLOCK_DELAY="0"
+  #     - RPC_ENABLED=true
+  #     - RUST_BACKTRACE="1"
+  #     - NIMIQ_LOG_LEVEL=debug
+  #     - NIMIQ_LOG_TIMESTAMPS=true
+  #   networks:
+  #     - devnet
+
+  # staking: # Auto staking script (Py)
+  #   image: autostaker
+  #   restart: always
+  #   depends_on:
+  #     - validator1
+  #   labels:
+  #     - traefik.enable=false
+  #   environment:
+  #     - VALIDATOR_AMOUNT=100000000
+  #     - PRIVATE_KEY=b627f21705a095d095327d37ab1c481b40f6cc0fd9c64d0e154919a66a9bb985
+  #     - LOG_LEVEL=info
+  #     - NETWORK_NAME=${NETWORK_NAME:?err}
+  #     - REWARD_ADDRESS="NQ69 UMYS AUH5 UL42 SYFG 55KD S3XP 2PVF YQ6C"
+  #     - DOCKER_HOST=unix:/var/run/docker.sock
+  #   networks:
+  #     devnet:
+  #       ipv4_address: 7.0.0.250
+  #   volumes:
+  #     - "/var/run/docker.sock:/var/run/docker.sock:ro"
+
+volumes:
+  seed1:
+  seed2:
+  seed3:
+  seed4:

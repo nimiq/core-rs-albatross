@@ -2,28 +2,20 @@
 
 set -e
 
-mkfifo /root/nimiq.log.pipe || true
-cat /root/nimiq.log.pipe &
-mkdir -p /root/.nimiq
+PIPE="/home/nimiq/nimiq.log.pipe"
 
-function hex2bin () {
-    sed 's/\([0-9A-F]\{2\}\)/\\\\\\x\1/gI' | xargs printf
-}
-
-if [[ ! -z "$NIMIQ_PEER_KEY" ]]; then
-    export NIMIQ_PEER_KEY_FILE=/root/.nimiq/peer_key.dat
-    echo "$NIMIQ_PEER_KEY" | hex2bin > $NIMIQ_PEER_KEY_FILE
-fi
-
-if [[ ! -z "$VALIDATOR_KEY" ]]; then
-    export VALIDATOR_KEY_FILE=/root/.nimiq/validator_key.dat
-    echo "$VALIDATOR_KEY" | hex2bin > $VALIDATOR_KEY_FILE
-fi
+mkfifo $PIPE || true
+cat $PIPE &
+mkdir -p /home/nimiq/.nimiq
 
 if [[ -z "$NIMIQ_HOST" ]]; then
     export NIMIQ_HOST=$(hostname -i)
 fi
 
-./docker_config.sh > /root/.nimiq/client.toml
+if [[ ! -e "/home/nimiq/.nimiq/client.toml" || $OVERRIDE_CONFIG_FILE -eq 1 ]]; then
+    ./docker_config.sh > /home/nimiq/.nimiq/client.toml
+fi
 
-/bin/nimiq-client $@
+#cat /home/nimiq/.nimiq/client.toml > $PIPE
+
+/usr/local/bin/nimiq-client $@
