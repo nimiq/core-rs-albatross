@@ -10,6 +10,7 @@ use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, Seri
 use bls::CompressedPublicKey as BlsPublicKey;
 use keys::Address;
 use primitives::coin::Coin;
+use primitives::account::ValidatorId;
 
 use crate::{Account, AccountError};
 
@@ -17,6 +18,8 @@ use crate::{Account, AccountError};
 /// stakers who delegated to this validator.
 #[derive(Debug)]
 pub struct Validator {
+    // The id of the validator, the first 20 bytes of the transaction hash from which it
+    pub id: ValidatorId,
     // The amount of coins held by this validator. It also includes the coins delegated to him by
     // stakers.
     pub balance: Coin,
@@ -32,8 +35,9 @@ pub struct Validator {
 impl Validator {
     /// Creates a new validator given a stake, a validator key and a reward address. It will be
     /// created without any stakers delegated to it.
-    pub fn new(initial_balance: Coin, reward_address: Address, validator_key: BlsPublicKey) -> Self {
+    pub fn new(id: ValidatorId, initial_balance: Coin, reward_address: Address, validator_key: BlsPublicKey) -> Self {
         Validator {
+            id,
             balance: initial_balance,
             reward_address,
             validator_key,
@@ -45,6 +49,7 @@ impl Validator {
     pub fn update_validator(&self, new_reward_address: Option<Address>, new_validator_key: Option<BlsPublicKey>) -> Self {
         let active_stake_by_address = mem::take(self.active_stake_by_address.write().deref_mut());
         Validator {
+            id: self.id.clone(),
             balance: self.balance,
             reward_address: new_reward_address.unwrap_or_else(|| self.reward_address.clone()),
             validator_key: new_validator_key.unwrap_or_else(|| self.validator_key.clone()),
@@ -56,6 +61,7 @@ impl Validator {
     fn with_balance(&self, balance: Coin) -> Self {
         let active_stake_by_address = mem::take(self.active_stake_by_address.write().deref_mut());
         Validator {
+            id: self.id.clone(),
             balance,
             reward_address: self.reward_address.clone(),
             validator_key: self.validator_key.clone(),
@@ -98,6 +104,7 @@ impl Validator {
 impl Serialize for Validator {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size = 0;
+        size += Serialize::serialize(&self.id, writer)?;
         size += Serialize::serialize(&self.balance, writer)?;
         size += Serialize::serialize(&self.reward_address, writer)?;
         size += Serialize::serialize(&self.validator_key, writer)?;
@@ -107,6 +114,7 @@ impl Serialize for Validator {
 
     fn serialized_size(&self) -> usize {
         let mut size = 0;
+        size += Serialize::serialized_size(&self.id);
         size += Serialize::serialized_size(&self.balance);
         size += Serialize::serialized_size(&self.reward_address);
         size += Serialize::serialized_size(&self.validator_key);
@@ -117,11 +125,13 @@ impl Serialize for Validator {
 
 impl Deserialize for Validator {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        let id = Deserialize::deserialize(reader)?;
         let balance = Deserialize::deserialize(reader)?;
         let reward_address = Deserialize::deserialize(reader)?;
         let validator_key = Deserialize::deserialize(reader)?;
         let active_stake_by_address: BTreeMap<Address, Coin> = DeserializeWithLength::deserialize::<u32, _>(reader)?;
         Ok(Validator {
+            id,
             balance,
             reward_address,
             validator_key,
@@ -147,13 +157,14 @@ impl PartialOrd for Validator {
 impl Ord for Validator {
     // Highest to low balances
     fn cmp(&self, other: &Self) -> Ordering {
-        other.balance.cmp(&self.balance).then_with(|| self.validator_key.cmp(&other.validator_key))
+        other.balance.cmp(&self.balance).then_with(|| self.id.cmp(&other.id))
     }
 }
 
 impl Clone for Validator {
     fn clone(&self) -> Self {
         Validator {
+            id: self.id.clone(),
             balance: self.balance,
             reward_address: self.reward_address.clone(),
             validator_key: self.validator_key.clone(),

@@ -214,15 +214,17 @@ impl TransactionProofBuilder {
     /// use nimiq_transaction_builder::{Recipient, TransactionBuilder};
     /// use nimiq_primitives::coin::Coin;
     /// use nimiq_primitives::networks::NetworkId;
+    /// use nimiq_primitives::account::ValidatorId;
     /// # use nimiq_utils::key_rng::SecureGenerate;
     ///
     /// # let key_pair = KeyPair::generate_default_csprng();
     /// # let bls_key_pair = BlsKeyPair::generate_default_csprng();
+    /// # let validator_id: ValidatorId = ValidatorId::default();
     /// # let staking_contract_address = Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap();
     ///
     /// let sender_address = Address::from(&key_pair.public);
     /// let mut recipient = Recipient::new_staking_builder(Some(staking_contract_address));
-    /// recipient.update_validator(&bls_key_pair.public_key, None, Some(sender_address.clone()));
+    /// recipient.update_validator(&validator_id, &bls_key_pair.public_key, None, Some(sender_address.clone()));
     ///
     /// let tx_builder = TransactionBuilder::with_required(
     ///     sender_address,
@@ -267,7 +269,7 @@ impl TransactionProofBuilder {
     /// use nimiq_transaction_builder::{Recipient, TransactionBuilder};
     /// use nimiq_primitives::coin::Coin;
     /// use nimiq_primitives::networks::NetworkId;
-    /// use nimiq_primitives::account::AccountType;
+    /// use nimiq_primitives::account::{AccountType, ValidatorId};
     /// # use nimiq_utils::key_rng::SecureGenerate;
     ///
     /// # let key_pair = KeyPair::generate_default_csprng();
@@ -276,6 +278,7 @@ impl TransactionProofBuilder {
     /// # let staking_contract_address = Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap();
     ///
     /// let recipient = Recipient::new_basic(recipient_address);
+    /// let validator_id: ValidatorId = ValidatorId::default();
     ///
     /// let mut tx_builder = TransactionBuilder::with_required(
     ///     staking_contract_address,
@@ -289,7 +292,7 @@ impl TransactionProofBuilder {
     /// let proof_builder = tx_builder.generate().unwrap();
     /// // Unwrap staking proof builder.
     /// let mut staking_proof_builder = proof_builder.unwrap_staking();
-    /// staking_proof_builder.drop_validator(&bls_key_pair);
+    /// staking_proof_builder.drop_validator(&validator_id, &bls_key_pair);
     ///
     /// let final_transaction = staking_proof_builder.generate();
     /// assert!(final_transaction.is_some());

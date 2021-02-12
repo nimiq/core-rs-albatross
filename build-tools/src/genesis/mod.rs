@@ -17,6 +17,7 @@ use database::WriteTransaction;
 use hash::{Blake2bHash, Blake2sHasher, Hash, Hasher};
 use keys::Address;
 use primitives::coin::Coin;
+use primitives::account::ValidatorId;
 use vrf::VrfSeed;
 
 mod config;
@@ -136,8 +137,9 @@ impl GenesisBuilder {
         self
     }
 
-    pub fn with_genesis_validator(&mut self, validator_key: BlsPublicKey, reward_address: Address, balance: Coin) -> &mut Self {
+    pub fn with_genesis_validator(&mut self, validator_id: ValidatorId, validator_key: BlsPublicKey, reward_address: Address, balance: Coin) -> &mut Self {
         self.validators.push(config::GenesisValidator {
+            validator_id,
             validator_key,
             reward_address,
             balance,
@@ -145,10 +147,10 @@ impl GenesisBuilder {
         self
     }
 
-    pub fn with_genesis_stake(&mut self, staker_address: Address, validator_key: BlsPublicKey, balance: Coin) -> &mut Self {
+    pub fn with_genesis_stake(&mut self, staker_address: Address, validator_id: ValidatorId, balance: Coin) -> &mut Self {
         self.stakes.push(config::GenesisStake {
             staker_address,
-            validator_key,
+            validator_id,
             balance,
         });
         self
@@ -269,11 +271,11 @@ impl GenesisBuilder {
         let mut contract = StakingContract::default();
 
         for validator in self.validators.iter() {
-            contract.create_validator(validator.validator_key.compress(), validator.reward_address.clone(), validator.balance)?;
+            contract.create_validator(validator.validator_id.clone(), validator.validator_key.compress(), validator.reward_address.clone(), validator.balance)?;
         }
 
         for stake in self.stakes.iter() {
-            contract.stake(stake.staker_address.clone(), stake.balance, &stake.validator_key.compress())?;
+            contract.stake(stake.staker_address.clone(), stake.balance, &stake.validator_id)?;
         }
 
         Ok(contract)

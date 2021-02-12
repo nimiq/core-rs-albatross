@@ -8,9 +8,9 @@ extern crate nimiq_genesis as genesis;
 
 use thiserror::Error;
 
-use bls::{PublicKey as BlsPublicKey, KeyPair as BlsKeyPair};
+use bls::{KeyPair as BlsKeyPair};
 use keys::{Address, KeyPair};
-use primitives::account::AccountType;
+use primitives::account::{AccountType, ValidatorId};
 use primitives::coin::Coin;
 use primitives::networks::NetworkId;
 use transaction::Transaction;
@@ -515,14 +515,14 @@ impl TransactionBuilder {
     pub fn new_stake(
         staking_contract: Option<Address>,
         key_pair: &KeyPair,
-        validator_key: &BlsPublicKey,
+        validator_id: &ValidatorId,
         value: Coin,
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Transaction {
         let mut recipient = Recipient::new_staking_builder(staking_contract);
-        recipient.stake(validator_key, None);
+        recipient.stake(validator_id, None);
 
         let mut builder = Self::new();
         builder
@@ -547,14 +547,14 @@ impl TransactionBuilder {
     pub fn new_retire(
         staking_contract: Option<Address>,
         key_pair: &KeyPair,
-        validator_key: &BlsPublicKey,
+        validator_id: &ValidatorId,
         value: Coin,
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Transaction {
         let mut recipient = Recipient::new_staking_builder(staking_contract.clone());
-        recipient.retire_stake(validator_key);
+        recipient.retire_stake(validator_id);
 
         let mut builder = Self::new();
         builder
@@ -580,14 +580,14 @@ impl TransactionBuilder {
     pub fn new_reactivate(
         staking_contract: Option<Address>,
         key_pair: &KeyPair,
-        validator_key: &BlsPublicKey,
+        validator_id: &ValidatorId,
         value: Coin,
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Transaction {
         let mut recipient = Recipient::new_staking_builder(staking_contract.clone());
-        recipient.reactivate_stake(validator_key);
+        recipient.reactivate_stake(validator_id);
 
         let mut builder = Self::new();
         builder
@@ -722,6 +722,7 @@ impl TransactionBuilder {
     pub fn new_update_validator(
         staking_contract: Option<Address>,
         key_pair: &KeyPair,
+        validator_id: &ValidatorId,
         new_reward_address: Option<Address>,
         old_validator_key_pair: &BlsKeyPair,
         new_validator_key_pair: Option<&BlsKeyPair>,
@@ -730,7 +731,7 @@ impl TransactionBuilder {
         network_id: NetworkId,
     ) -> Transaction {
         let mut recipient = Recipient::new_staking_builder(staking_contract);
-        recipient.update_validator(&old_validator_key_pair.public_key, new_validator_key_pair, new_reward_address);
+        recipient.update_validator(validator_id, &old_validator_key_pair.public_key, new_validator_key_pair, new_reward_address);
 
         let mut builder = Self::new();
         builder
@@ -777,13 +778,14 @@ impl TransactionBuilder {
     pub fn new_retire_validator(
         staking_contract: Option<Address>,
         key_pair: &KeyPair,
+        validator_id: &ValidatorId,
         validator_key_pair: &BlsKeyPair,
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Transaction {
         let mut recipient = Recipient::new_staking_builder(staking_contract);
-        recipient.retire_validator(&validator_key_pair.public_key);
+        recipient.retire_validator(&validator_id);
 
         let mut builder = Self::new();
         builder
@@ -830,13 +832,14 @@ impl TransactionBuilder {
     pub fn new_reactivate_validator(
         staking_contract: Option<Address>,
         key_pair: &KeyPair,
+        validator_id: &ValidatorId,
         validator_key_pair: &BlsKeyPair,
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Transaction {
         let mut recipient = Recipient::new_staking_builder(staking_contract);
-        recipient.reactivate_validator(&validator_key_pair.public_key);
+        recipient.reactivate_validator(&validator_id);
 
         let mut builder = Self::new();
         builder
@@ -879,6 +882,7 @@ impl TransactionBuilder {
     ///
     pub fn new_drop_validator(
         staking_contract: Option<Address>,
+        validator_id: &ValidatorId,
         recipient: Address,
         validator_key_pair: &BlsKeyPair,
         value: Coin,
@@ -901,7 +905,7 @@ impl TransactionBuilder {
         let proof_builder = builder.generate().unwrap();
         match proof_builder {
             TransactionProofBuilder::Staking(mut builder) => {
-                builder.drop_validator(&validator_key_pair);
+                builder.drop_validator(&validator_id, &validator_key_pair);
                 builder.generate().unwrap()
             }
             _ => unreachable!(),
@@ -933,13 +937,14 @@ impl TransactionBuilder {
     pub fn new_unpark_validator(
         staking_contract: Option<Address>,
         key_pair: &KeyPair,
+        validator_id: &ValidatorId,
         validator_key_pair: &BlsKeyPair,
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Transaction {
         let mut recipient = Recipient::new_staking_builder(staking_contract);
-        recipient.unpark_validator(&validator_key_pair.public_key);
+        recipient.unpark_validator(&validator_id);
 
         let mut builder = Self::new();
         builder

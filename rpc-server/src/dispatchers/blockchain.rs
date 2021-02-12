@@ -115,15 +115,15 @@ impl BlockchainInterface for BlockchainDispatcher {
         let staking_contract = self.blockchain.get_staking_contract();
 
         let active_validators = staking_contract
-            .active_validators_by_key
+            .active_validators_by_id
             .iter()
-            .map(|(public_key, validator)| Validator::from_active(public_key.clone(), &validator))
+            .map(|(_, validator)| Validator::from_active(&validator))
             .collect();
 
         let inactive_validators = staking_contract
-            .inactive_validators_by_key
+            .inactive_validators_by_id
             .iter()
-            .map(|(public_key, validator)| Validator::from_inactive(public_key.clone(), &validator))
+            .map(|(_, validator)| Validator::from_inactive(&validator))
             .collect();
 
         let inactive_stakes = staking_contract

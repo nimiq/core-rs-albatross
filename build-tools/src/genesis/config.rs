@@ -8,6 +8,7 @@ use beserial::Deserialize as BDeserialize;
 use bls::{PublicKey as BlsPublicKey, SecretKey as BlsSecretKey};
 use keys::Address;
 use primitives::coin::Coin;
+use primitives::account::ValidatorId;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct GenesisConfig {
@@ -35,6 +36,9 @@ pub struct GenesisConfig {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct GenesisValidator {
+    #[serde(deserialize_with = "deserialize_validator_id")]
+    pub validator_id: ValidatorId,
+
     #[serde(deserialize_with = "deserialize_nimiq_address")]
     pub reward_address: Address,
 
@@ -53,8 +57,8 @@ pub struct GenesisStake {
     #[serde(deserialize_with = "deserialize_coin")]
     pub balance: Coin,
 
-    #[serde(deserialize_with = "deserialize_bls_public_key")]
-    pub validator_key: BlsPublicKey,
+    #[serde(deserialize_with = "deserialize_validator_id")]
+    pub validator_id: ValidatorId,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -92,6 +96,15 @@ where
 {
     let value: u64 = Deserialize::deserialize(deserializer)?;
     Coin::try_from(value).map_err(Error::custom)
+}
+
+pub(crate) fn deserialize_validator_id<'de, D>(deserializer: D) -> Result<ValidatorId, D::Error>
+    where
+        D: Deserializer<'de>,
+{
+    let validator_id_hex: String = Deserialize::deserialize(deserializer)?;
+    let validator_id_raw = hex::decode(validator_id_hex).map_err(Error::custom)?;
+    ValidatorId::deserialize_from_vec(&validator_id_raw).map_err(Error::custom)
 }
 
 pub(crate) fn deserialize_bls_public_key<'de, D>(deserializer: D) -> Result<BlsPublicKey, D::Error>

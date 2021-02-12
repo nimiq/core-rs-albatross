@@ -24,6 +24,7 @@ fn it_can_convert_macro_block_into_slots() {
 
     let slot_allocation = vec![
         (
+            [0u8; 20],
             127u16,
             "0001bf7a0533de80527693870f5b92c188c592fb83c4b31df37e036e2f858812e2fb0b74f0810537a\
         1c8bf9141055e31c620f8c1bdebe78c8d427dec5e80b068b56a5c6a404766b31f937e55afc9801d6b163f2662b4\
@@ -34,6 +35,7 @@ fn it_can_convert_macro_block_into_slots() {
         00498569476df4805905bfce4c8da83efdf9315e0fc8aa9e5e5bed39a9811082e0d775f996bb9e56",
         ),
         (
+            [1u8; 20],
             129u16,
             "80011040dc327cfe4bd325a4d16247f272e8946c5322bd908314a7045e5ab38185e33b41cf445575c\
         eee1d01f32a6aee0133bd59ca4aa2fb893f6bb087019d11cd5888471bc265939a785251c962ffa9591e5878bf64\
@@ -44,6 +46,7 @@ fn it_can_convert_macro_block_into_slots() {
         29b97b13d78d2c8c318fa88ec345da01cc4fae9da29a95eca005ae9ea7698cba08fc813d4d71efbe",
         ),
         (
+            [2u8; 20],
             126u16,
             "80017935c655463970607d01d8758904c92ce53abefaa1b83256d8a1ddd7d13cd593528085478aa76\
         e7bd8328d1620b7b1b12ef02cddf7cee4ede9558a6da53d2612d4c0cc66274fd1c5e3faa0d9dc5da00db5eac9a8\
@@ -54,6 +57,7 @@ fn it_can_convert_macro_block_into_slots() {
         5760d8916ef490edbfa32b9bfa6a77d20d4338266a15f2277cce1bde7e265c84d2a727653b31884c",
         ),
         (
+            [3u8; 20],
             130u16,
             "000051d6eacd61eda8723e91968cd5036162b83268f2613129ca4c9cf79c130fff93892399bff6c08\
         a7990b14cc96ad155282f3d6503c25fe439783ff65f579448b2b5b1574bf223004511d43ccb1461ee083783171f\
@@ -66,11 +70,11 @@ fn it_can_convert_macro_block_into_slots() {
     ];
     let validator_slots: ValidatorSlots = slot_allocation
         .into_iter()
-        .map(|(num_slots, data)| {
+        .map(|(validator_id, num_slots, data)| {
             // The 6 unused bytes in the middle come from reducing the public key size to 270 bytes.
             let pubkey = CompressedPublicKey::from_str(&data[..570]).unwrap();
             let address = Address::from_any_str(&data[576..]).unwrap();
-            ValidatorSlotBand::new(pubkey, address, num_slots)
+            ValidatorSlotBand::new(validator_id.into(), pubkey, address, num_slots)
         })
         .collect();
 
