@@ -31,7 +31,7 @@ use crate::message_codec::{MessageReader, MessageWriter};
 
 #[derive(Clone, Debug)]
 pub enum HandlerInEvent {
-    ObservedAddress(Multiaddr),
+    ObservedAddress(Vec<Multiaddr>),
 }
 
 #[derive(Clone, Debug)]
@@ -249,10 +249,12 @@ impl ProtocolsHandler for DiscoveryHandler {
         log::trace!("DiscoveryHandler::inject_event: {:?}", event);
 
         match event {
-            HandlerInEvent::ObservedAddress(address) => {
+            HandlerInEvent::ObservedAddress(addresses) => {
                 // We only use this during handshake and are not waiting on it, so we don't need to wake anything.
-                self.observed_addresses.push(address);
-            }
+                for listen_addr in addresses {
+                    self.observed_addresses.push(listen_addr);
+                }
+            },
         }
     }
 

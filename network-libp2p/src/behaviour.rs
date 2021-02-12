@@ -3,8 +3,9 @@ use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
 
 use libp2p::{
-    core::either::EitherError,
+    core::{either::EitherError, upgrade::ReadOneError},
     gossipsub::{Gossipsub, GossipsubEvent, MessageAuthenticity, error::GossipsubHandlerError},
+    identify::{Identify, IdentifyEvent},
     kad::{store::MemoryStore, Kademlia, KademliaEvent},
     swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters},
     NetworkBehaviour,
@@ -33,13 +34,14 @@ use crate::{
 };
 
 pub type NimiqNetworkBehaviourError =
-    EitherError<EitherError<EitherError<DiscoveryError, MessageError>, std::io::Error>, GossipsubHandlerError>;
+    EitherError<EitherError<EitherError<EitherError<DiscoveryError, MessageError>, std::io::Error>, GossipsubHandlerError>, ReadOneError>;
 
 #[derive(Debug)]
 pub enum NimiqEvent {
     Message(NetworkEvent<Peer>),
     Dht(KademliaEvent),
     Gossip(GossipsubEvent),
+    Identify(IdentifyEvent),
 }
 
 impl From<NetworkEvent<Peer>> for NimiqEvent {
@@ -60,6 +62,12 @@ impl From<GossipsubEvent> for NimiqEvent {
     }
 }
 
+impl From<IdentifyEvent> for NimiqEvent {
+    fn from(event: IdentifyEvent) -> Self {
+        Self::Identify(event)
+    }
+}
+
 #[derive(NetworkBehaviour)]
 #[behaviour(out_event = "NimiqEvent", poll_method = "poll_event")]
 pub struct NimiqBehaviour {
@@ -68,6 +76,7 @@ pub struct NimiqBehaviour {
     //pub limit: LimitBehaviour,
     pub kademlia: Kademlia<MemoryStore>,
     pub gossipsub: Gossipsub,
+    pub identify: Identify,
 
     #[behaviour(ignore)]
     events: VecDeque<NimiqEvent>,
@@ -79,7 +88,7 @@ pub struct NimiqBehaviour {
 impl NimiqBehaviour {
     pub fn new(config: Config, clock: Arc<OffsetTime>) -> Self {
         let public_key = config.keypair.public();
-        let peer_id = public_key.into_peer_id();
+        let peer_id = public_key.clone().into_peer_id();
 
         // TODO: persist to disk
         let peer_contact_book = Arc::new(RwLock::new(PeerContactBook::new(Default::default(), config.peer_contact.sign(&config.keypair))));
@@ -92,6 +101,7 @@ impl NimiqBehaviour {
         let store = MemoryStore::new(peer_id.clone());
         let kademlia = Kademlia::with_config(peer_id, store, config.kademlia);
         let gossipsub = Gossipsub::new(MessageAuthenticity::Signed(config.keypair), config.gossipsub).expect("Wrong configuration");
+        let identify = Identify::new("/albatross/2.0".to_string(), "just_testing".to_string(), public_key);
 
         Self {
             discovery,
@@ -99,6 +109,7 @@ impl NimiqBehaviour {
             //limit,
             kademlia,
             gossipsub,
+            identify,
             events: VecDeque::new(),
             waker: None,
         }
@@ -177,6 +188,13 @@ impl NetworkBehaviourEventProcess<KademliaEvent> for NimiqBehaviour {
 
 impl NetworkBehaviourEventProcess<GossipsubEvent> for NimiqBehaviour {
     fn inject_event(&mut self, event: GossipsubEvent) {
+        log::trace!("NimiqBehaviour::inject_event: {:?}", event);
+        self.emit_event(event);
+    }
+}
+
+impl NetworkBehaviourEventProcess<IdentifyEvent> for NimiqBehaviour {
+    fn inject_event(&mut self, event: IdentifyEvent) {
         log::trace!("NimiqBehaviour::inject_event: {:?}", event);
         self.emit_event(event);
     }
