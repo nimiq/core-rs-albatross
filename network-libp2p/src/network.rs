@@ -13,10 +13,11 @@ use libp2p::{
     core::{connection::ConnectionLimits, muxing::StreamMuxerBox, network::NetworkInfo, transport::Boxed},
     dns,
     gossipsub::{GossipsubConfig, GossipsubConfigBuilder, GossipsubEvent, GossipsubMessage, IdentTopic, MessageAcceptance, MessageId, TopicHash},
+    identify::IdentifyEvent,
     identity::Keypair,
     kad::{GetRecordOk, KademliaConfig, KademliaEvent, QueryId, QueryResult, Quorum, Record},
     noise,
-    swarm::{SwarmBuilder, SwarmEvent},
+    swarm::{NetworkBehaviourAction, NotifyHandler, SwarmBuilder, SwarmEvent},
     tcp, websocket, yamux, Multiaddr, PeerId, Swarm, Transport,
 };
 use thiserror::Error;
@@ -36,7 +37,7 @@ use nimiq_utils::time::OffsetTime;
 
 use crate::{
     behaviour::{NimiqBehaviour, NimiqEvent, NimiqNetworkBehaviourError},
-    discovery::{behaviour::DiscoveryConfig, peer_contacts::PeerContact},
+    discovery::{behaviour::DiscoveryConfig, handler::HandlerInEvent, peer_contacts::PeerContact},
     limit::behaviour::LimitConfig,
     message::behaviour::MessageConfig,
     message::peer::Peer,
@@ -196,6 +197,7 @@ struct TaskState {
     dht_gets: HashMap<QueryId, oneshot::Sender<Result<Option<Vec<u8>>, NetworkError>>>,
     gossip_topics: HashMap<TopicHash, (mpsc::Sender<(GossipsubMessage, MessageId, PeerId)>, bool)>,
     connected_tx: Option<oneshot::Sender<()>>,
+    incoming_listeners: HashMap<Multiaddr, Multiaddr>,
 }
 
 impl TaskState {
@@ -205,6 +207,7 @@ impl TaskState {
             dht_gets: HashMap::new(),
             gossip_topics: HashMap::new(),
             connected_tx: Some(connected_tx),
+            incoming_listeners: HashMap::new(),
         }
     }
 
@@ -370,7 +373,19 @@ impl Network {
     ) {
         match event {
             SwarmEvent::ConnectionEstablished { peer_id, endpoint, num_established } => {
-                swarm.kademlia.add_address(&peer_id, endpoint.get_remote_address().clone());
+                if let Some(listen_addr) = state.incoming_listeners.get(&endpoint.get_remote_address().clone()) {
+                    log::debug!("Adding peer {:?} listen address to the peer contact book: {:?}", peer_id, listen_addr);
+                    swarm.kademlia.add_address(&peer_id, listen_addr.clone());
+
+                    // TODO: Rework peer address book handling
+                    swarm.discovery.events.push_back(NetworkBehaviourAction::NotifyHandler {
+                        peer_id,
+                        handler: NotifyHandler::Any,
+                        event: HandlerInEvent::ObservedAddress(vec![listen_addr.clone()]),
+                    });
+
+                    state.incoming_listeners.remove(&endpoint.get_remote_address().clone());
+                }
 
                 if !state.is_connected() {
                     log::debug!("Connected to {} peers (waiting for {})", num_established, min_peers);
@@ -381,8 +396,20 @@ impl Network {
 
                     // Bootstrap Kademlia
                     log::debug!("Bootstrapping DHT");
-                    swarm.kademlia.bootstrap().unwrap();
+                    if let Err(_) = swarm.kademlia.bootstrap() {
+                        log::error!("Bootstrapping DHT error: No known peers");
+                    }
                 }
+            }
+
+            SwarmEvent::IncomingConnection { local_addr, send_back_addr } => {
+                log::trace!("Incoming connection from address {:?}, listen address: {:?}", send_back_addr, local_addr);
+                state.incoming_listeners.insert(send_back_addr, local_addr);
+            }
+
+            SwarmEvent::IncomingConnectionError { local_addr: _, send_back_addr, error} => {
+                log::warn!("Incoming connection error: {:?}", error);
+                state.incoming_listeners.remove(&send_back_addr);
             }
 
             //SwarmEvent::ConnectionClosed { .. } => {},
@@ -453,6 +480,29 @@ impl Network {
                             }
                             GossipsubEvent::Unsubscribed { peer_id, topic } => {
                                 log::debug!("Peer {:?} unsubscribed to topic: {:?}", peer_id, topic);
+                            }
+                        }
+                    }
+                    NimiqEvent::Identify(event) => {
+                        match event {
+                            IdentifyEvent::Received { peer_id, info, observed_addr } => {
+                                log::debug!("Received identifying info from peer {:?} at address {:?}: {:?}", peer_id, observed_addr, info);
+                                for listen_addr in info.listen_addrs.clone() {
+                                    swarm.kademlia.add_address(&peer_id, listen_addr);
+                                }
+
+                                // TODO: Rework peer address book handling
+                                swarm.discovery.events.push_back(NetworkBehaviourAction::NotifyHandler {
+                                    peer_id,
+                                    handler: NotifyHandler::Any,
+                                    event: HandlerInEvent::ObservedAddress(info.listen_addrs),
+                                });
+                            }
+                            IdentifyEvent::Sent { peer_id } => {
+                                log::debug!("Sent identifiyng info to peer {:?}", peer_id);
+                            }
+                            IdentifyEvent::Error { peer_id, error } => {
+                                log::error!("Error while identifying remote peer {:?}: {:?}", peer_id, error);
                             }
                         }
                     }
@@ -932,7 +982,7 @@ mod tests {
 
     #[tokio::test]
     async fn connections_are_properly_closed() {
-        //env_logger::init();
+        // env_logger::init();
 
         let (net1, net2) = create_connected_networks().await;
 

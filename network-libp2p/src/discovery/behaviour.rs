@@ -11,7 +11,7 @@ use futures::{
 use libp2p::{
     core::connection::{ConnectedPoint, ConnectionId},
     identity::Keypair,
-    swarm::{AddressScore, KeepAlive, NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, PollParameters},
+    swarm::{AddressScore, KeepAlive, NetworkBehaviour, NetworkBehaviourAction, PollParameters},
     Multiaddr, PeerId,
 };
 use parking_lot::RwLock;
@@ -104,7 +104,7 @@ pub struct DiscoveryBehaviour {
     clock: Arc<OffsetTime>,
 
     /// Queue with events to emit.
-    events: VecDeque<NetworkBehaviourAction<HandlerInEvent, DiscoveryEvent>>,
+    pub events: VecDeque<NetworkBehaviourAction<HandlerInEvent, DiscoveryEvent>>,
 
     /// Timer to do house-keeping in the peer address book.
     house_keeping_timer: Interval,
@@ -163,19 +163,6 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         log::trace!("  - peer_id: {:?}", peer_id);
         log::trace!("  - connection_id: {:?}", connection_id);
         log::trace!("  - connected_point: {:?}", connected_point);
-
-        // TODO: In libp2p 0.29 there is a method for this:
-        // connected_point.get_remote_address()
-        let remote_address = match connected_point {
-            ConnectedPoint::Dialer { address } => address,
-            ConnectedPoint::Listener { local_addr, .. } => local_addr,
-        };
-
-        self.events.push_back(NetworkBehaviourAction::NotifyHandler {
-            peer_id: peer_id.clone(),
-            handler: NotifyHandler::One(*connection_id),
-            event: HandlerInEvent::ObservedAddress(remote_address.clone()),
-        });
     }
 
     fn inject_event(&mut self, peer_id: PeerId, _connection: ConnectionId, event: HandlerOutEvent) {
