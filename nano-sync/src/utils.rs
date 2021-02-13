@@ -59,7 +59,7 @@ pub fn prepare_inputs<F: PrimeField>(mut input: Vec<Boolean<F>>) -> Vec<Vec<Bool
 
         let padding = F::size_in_bits() - length;
 
-        let new_input = input.split_off(length);
+        let remaining_input = input.split_off(length);
 
         for _ in 0..padding {
             input.push(Boolean::constant(false));
@@ -67,7 +67,7 @@ pub fn prepare_inputs<F: PrimeField>(mut input: Vec<Boolean<F>>) -> Vec<Vec<Bool
 
         result.push(input);
 
-        input = new_input;
+        input = remaining_input;
     }
 
     result
@@ -84,7 +84,9 @@ pub fn unpack_inputs<F: PrimeField>(
 
     for elem in inputs {
         let mut bits = elem.to_bits_le()?;
+
         bits.pop();
+
         result.append(&mut bits);
     }
 

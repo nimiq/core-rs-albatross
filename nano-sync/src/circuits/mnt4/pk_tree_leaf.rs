@@ -16,9 +16,11 @@ use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 /// that each part uses only a manageable amount of memory and can be run on consumer hardware.
 /// It does this by forming a binary tree of recursive SNARKs. Each of the 2^n leaves receives
 /// Merkle tree commitments to the public keys list and a commitment to the corresponding aggregate
-/// public key chunk (there are 2^n chunks, one for each leaf) in addition to the signer's
-/// bitmaps and the position of the leaf node on the tree. Each of the leaves then checks that its
-/// specific chunk of the public keys matches the corresponding chunk of the aggregated public key.
+/// public key chunk (there are 2^n chunks, one for each leaf) in addition the position of the leaf
+/// node on the tree (in little endian bits) and the part of the signer's bitmap relevant to the
+/// leaf position. Each of the leaves then checks that its specific chunk of the public keys,
+/// aggregated according to its specific chunk of the signer's bitmap, matches the corresponding
+/// chunk of the aggregated public key.
 /// All of the other upper levels of the recursive SNARK tree just verify SNARK proofs for its child
 /// nodes and recursively aggregate the aggregate public key chunks (no pun intended).
 /// At a lower-level, this circuit does two things:
@@ -29,9 +31,6 @@ use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 ///        (given as an input), match the aggregated public key commitment (also given as an input).
 #[derive(Clone)]
 pub struct PKTreeLeafCircuit {
-    // Position of this leaf in the PKTree. Not an input to the SNARK circuit.
-    position: usize,
-
     // Witnesses (private)
     pks: Vec<G2Projective>,
     pk_tree_nodes: Vec<G1Projective>,
@@ -44,13 +43,12 @@ pub struct PKTreeLeafCircuit {
     // last bit is always set to zero.
     pk_tree_root: Vec<Fq>,
     agg_pk_commitment: Vec<Fq>,
-    signer_bitmap: Fq,
+    signer_bitmap_chunk: Fq,
     path: Fq,
 }
 
 impl PKTreeLeafCircuit {
     pub fn new(
-        position: usize,
         pks: Vec<G2Projective>,
         pk_tree_nodes: Vec<G1Projective>,
         pk_tree_root: Vec<Fq>,
@@ -59,12 +57,11 @@ impl PKTreeLeafCircuit {
         path: Fq,
     ) -> Self {
         Self {
-            position,
             pks,
             pk_tree_nodes,
             pk_tree_root,
             agg_pk_commitment,
-            signer_bitmap,
+            signer_bitmap_chunk: signer_bitmap,
             path,
         }
     }
@@ -96,7 +93,8 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeLeafCircuit {
         let agg_pk_commitment_var =
             Vec::<FqVar>::new_input(cs.clone(), || Ok(&self.agg_pk_commitment[..]))?;
 
-        let signer_bitmap_var = FqVar::new_input(cs.clone(), || Ok(&self.signer_bitmap))?;
+        let signer_bitmap_chunk_var =
+            FqVar::new_input(cs.clone(), || Ok(&self.signer_bitmap_chunk))?;
 
         let path_var = FqVar::new_input(cs.clone(), || Ok(&self.path))?;
 
@@ -107,17 +105,11 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeLeafCircuit {
 
         let agg_pk_commitment_bits = unpack_inputs(agg_pk_commitment_var)?[..760].to_vec();
 
-        let signer_bitmap_bits =
-            unpack_inputs(vec![signer_bitmap_var])?[..VALIDATOR_SLOTS].to_vec();
+        let signer_bitmap_chunk_bits = unpack_inputs(vec![signer_bitmap_chunk_var])?
+            [..VALIDATOR_SLOTS / PK_TREE_BREADTH]
+            .to_vec();
 
         let path_bits = unpack_inputs(vec![path_var])?[..PK_TREE_DEPTH].to_vec();
-
-        // Get the part of the signer's bitmap that is relevant for this position.
-        let chunk_start = VALIDATOR_SLOTS / PK_TREE_BREADTH * self.position;
-
-        let chunk_end = VALIDATOR_SLOTS / PK_TREE_BREADTH * (1 + self.position);
-
-        let signer_bitmap_chunk = signer_bitmap_bits[chunk_start..chunk_end].to_vec();
 
         // Verify the Merkle proof for the public keys. To reiterate, this Merkle tree has 2^n
         // leaves (where n is the PK_TREE_DEPTH constant) and each of the leaves consists of several
@@ -147,7 +139,7 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeLeafCircuit {
 
         let mut calculated_agg_pk = G2Var::zero();
 
-        for (pk, included) in pks_var.iter().zip(signer_bitmap_chunk.iter()) {
+        for (pk, included) in pks_var.iter().zip(signer_bitmap_chunk_bits.iter()) {
             // Calculate a new sum that includes the next public key.
             let new_sum = &calculated_agg_pk + pk;
 

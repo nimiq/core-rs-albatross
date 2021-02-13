@@ -6,8 +6,8 @@ use ark_crypto_primitives::SNARK;
 use ark_ec::{PairingEngine, ProjectiveCurve};
 use ark_ff::Zero;
 use ark_groth16::{Groth16, Proof, ProvingKey, VerifyingKey};
-use ark_mnt4_753::MNT4_753;
-use ark_mnt6_753::{G1Projective as G1MNT6, G2Projective as G2MNT6, MNT6_753};
+use ark_mnt4_753::{Fr as MNT4Fr, MNT4_753};
+use ark_mnt6_753::{Fr as MNT6Fr, G1Projective as G1MNT6, G2Projective as G2MNT6, MNT6_753};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::UniformRand;
 use rand::{thread_rng, CryptoRng, Rng};
@@ -27,7 +27,7 @@ use crate::primitives::{
 };
 use crate::utils::{byte_to_le_bits, bytes_to_bits, pack_inputs};
 use crate::{NanoZKP, NanoZKPError};
-use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystem};
+
 
 impl NanoZKP {
     /// This function generates a proof for a new epoch, it uses the entire nano sync program. Note
@@ -45,15 +45,14 @@ impl NanoZKP {
         // If this is not the first epoch, you need to provide the SNARK proof for the previous
         // epoch and the genesis state commitment.
         genesis_data: Option<(Proof<MNT6_753>, Vec<u8>)>,
-    ) -> Result<Proof<MNT6_753>, NanoZKPError> {
-        // This is a flag indicating if we want to check the constraint system before creating the
-        // proofs. It takes longer but is useful for debugging.
-        let constraint_check = true;
-
         // This is a flag indicating if we want to cache the proofs. If true, we will see which proofs
         // were already created and start from there. Note that for this to work, you must provide
         // the exact same inputs.
-        let proof_caching = true;
+        proof_caching: bool,
+    ) -> Result<Proof<MNT6_753>, NanoZKPError> {
+        // This is a flag indicating if we want to run this function in debug mode. It will verify
+        // each proof it creates right after the proof is generated.
+        let debug_mode = true;
 
         let rng = &mut thread_rng();
 
@@ -108,7 +107,7 @@ impl NanoZKP {
                 &pk_tree_proofs[i],
                 &initial_pk_tree_root,
                 &block.signer_bitmap,
-                constraint_check,
+                debug_mode,
             )?;
         }
 
@@ -129,7 +128,7 @@ impl NanoZKP {
                 &initial_pks,
                 &initial_pk_tree_root,
                 &block.signer_bitmap,
-                constraint_check,
+                debug_mode,
             )?;
         }
 
@@ -150,7 +149,7 @@ impl NanoZKP {
                 &initial_pks,
                 &initial_pk_tree_root,
                 &block.signer_bitmap,
-                constraint_check,
+                debug_mode,
             )?;
         }
 
@@ -171,7 +170,7 @@ impl NanoZKP {
                 &initial_pks,
                 &initial_pk_tree_root,
                 &block.signer_bitmap,
-                constraint_check,
+                debug_mode,
             )?;
         }
 
@@ -192,7 +191,7 @@ impl NanoZKP {
                 &initial_pks,
                 &initial_pk_tree_root,
                 &block.signer_bitmap,
-                constraint_check,
+                debug_mode,
             )?;
         }
 
@@ -209,7 +208,7 @@ impl NanoZKP {
                 &initial_pks,
                 &initial_pk_tree_root,
                 &block.signer_bitmap,
-                constraint_check,
+                debug_mode,
             )?;
         }
 
@@ -224,7 +223,7 @@ impl NanoZKP {
                 &final_pks,
                 &final_pk_tree_root,
                 block.clone(),
-                constraint_check,
+                debug_mode,
             )?;
         }
 
@@ -237,7 +236,7 @@ impl NanoZKP {
                 &initial_pks,
                 &final_pks,
                 block.block_number,
-                constraint_check,
+                debug_mode,
             )?;
         }
 
@@ -251,7 +250,7 @@ impl NanoZKP {
                 &final_pks,
                 block.block_number,
                 genesis_data.clone(),
-                constraint_check,
+                debug_mode,
             )?;
         }
 
@@ -264,7 +263,7 @@ impl NanoZKP {
             &final_pks,
             block.block_number,
             genesis_data,
-            constraint_check,
+            debug_mode,
         )?;
 
         // Delete cached proofs.
@@ -282,7 +281,7 @@ impl NanoZKP {
         pk_tree_nodes: &Vec<G1MNT6>,
         pk_tree_root: &Vec<u8>,
         signer_bitmap: &Vec<bool>,
-        constraint_check: bool,
+        debug_mode: bool,
     ) -> Result<(), NanoZKPError> {
         // Load the proving key from file.
         let mut file = File::open(format!("proving_keys/{}.bin", name))?;
@@ -306,45 +305,59 @@ impl NanoZKP {
 
         let agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(hash));
 
+        // Get the relevant chunk of the signer's bitmap.
+        let signer_bitmap_chunk = &signer_bitmap[position * VALIDATOR_SLOTS / PK_TREE_BREADTH
+            ..(position + 1) * VALIDATOR_SLOTS / PK_TREE_BREADTH];
+
         // Calculate inputs.
-        let pk_tree_root = pack_inputs(bytes_to_bits(pk_tree_root));
+        let mut pk_tree_root = pack_inputs(bytes_to_bits(pk_tree_root));
 
-        let agg_pk_commitment = pack_inputs(agg_pk_comm);
+        let mut agg_pk_commitment = pack_inputs(agg_pk_comm);
 
-        let signer_bitmap = pack_inputs(signer_bitmap.clone()).pop().unwrap();
+        let signer_bitmap_chunk: MNT4Fr = pack_inputs(signer_bitmap_chunk.to_vec()).pop().unwrap();
 
-        let path = pack_inputs(byte_to_le_bits(position as u8)).pop().unwrap();
+        let path: MNT4Fr = pack_inputs(byte_to_le_bits(position as u8)).pop().unwrap();
 
         // Create the circuit.
         let circuit = LeafMNT4::new(
-            position,
             pks[position * VALIDATOR_SLOTS / PK_TREE_BREADTH
                 ..(position + 1) * VALIDATOR_SLOTS / PK_TREE_BREADTH]
                 .to_vec(),
             pk_tree_nodes.to_vec(),
-            pk_tree_root,
-            agg_pk_commitment,
-            signer_bitmap,
+            pk_tree_root.clone(),
+            agg_pk_commitment.clone(),
+            signer_bitmap_chunk,
             path,
         );
 
-        // Optionally check the constraint system.
-        if constraint_check {
-            let cs = ConstraintSystem::new_ref();
-
-            circuit.clone().generate_constraints(cs.clone()).unwrap();
-
-            match cs.which_is_unsatisfied().unwrap() {
-                None => {}
-                Some(s) => {
-                    println!("Unsatisfied @ {}", s);
-                    assert!(false);
-                }
-            }
-        }
-
         // Create the proof.
         let proof = Groth16::<MNT4_753>::prove(&proving_key, circuit, rng)?;
+
+        // Optionally verify the proof.
+        if debug_mode {
+            // Load the proving key from file.
+            let mut file = File::open(format!("verifying_keys/{}.bin", name))?;
+
+            let verifying_key = VerifyingKey::deserialize_unchecked(&mut file)?;
+
+            // Prepare the inputs.
+            let mut inputs = vec![];
+
+            inputs.append(&mut pk_tree_root);
+
+            inputs.append(&mut agg_pk_commitment);
+
+            inputs.push(signer_bitmap_chunk);
+
+            inputs.push(path);
+
+            // Verify proof.
+            assert!(Groth16::<MNT4_753>::verify(
+                &verifying_key,
+                &inputs,
+                &proof
+            )?);
+        }
 
         // Cache proof to file.
         NanoZKP::proof_to_file(proof, name, Some(position))
@@ -354,12 +367,12 @@ impl NanoZKP {
         rng: &mut R,
         name: &str,
         position: usize,
-        level: usize,
+        tree_level: usize,
         vk_file: &str,
         pks: &[G2MNT6],
         pk_tree_root: &Vec<u8>,
         signer_bitmap: &Vec<bool>,
-        constraint_check: bool,
+        debug_mode: bool,
     ) -> Result<(), NanoZKPError> {
         // Load the proving key from file.
         let mut file = File::open(format!("proving_keys/{}.bin", name))?;
@@ -388,8 +401,8 @@ impl NanoZKP {
         // Calculate the left aggregate public key commitment.
         let mut agg_pk = G2MNT6::zero();
 
-        for i in left_position * VALIDATOR_SLOTS / 2_usize.pow((level + 1) as u32)
-            ..(left_position + 1) * VALIDATOR_SLOTS / 2_usize.pow((level + 1) as u32)
+        for i in left_position * VALIDATOR_SLOTS / 2_usize.pow((tree_level + 1) as u32)
+            ..(left_position + 1) * VALIDATOR_SLOTS / 2_usize.pow((tree_level + 1) as u32)
         {
             if signer_bitmap[i] {
                 agg_pk += pks[i];
@@ -405,8 +418,8 @@ impl NanoZKP {
         // Calculate the right aggregate public key commitment.
         let mut agg_pk = G2MNT6::zero();
 
-        for i in right_position * VALIDATOR_SLOTS / 2_usize.pow((level + 1) as u32)
-            ..(right_position + 1) * VALIDATOR_SLOTS / 2_usize.pow((level + 1) as u32)
+        for i in right_position * VALIDATOR_SLOTS / 2_usize.pow((tree_level + 1) as u32)
+            ..(right_position + 1) * VALIDATOR_SLOTS / 2_usize.pow((tree_level + 1) as u32)
         {
             if signer_bitmap[i] {
                 agg_pk += pks[i];
@@ -419,46 +432,65 @@ impl NanoZKP {
 
         let right_agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(hash));
 
+        // Get the relevant chunk of the signer's bitmap.
+        let signer_bitmap_chunk = &signer_bitmap[position * VALIDATOR_SLOTS
+            / 2_usize.pow(tree_level as u32)
+            ..(position + 1) * VALIDATOR_SLOTS / 2_usize.pow(tree_level as u32)];
+
         // Calculate inputs.
-        let pk_tree_root = pack_inputs(bytes_to_bits(pk_tree_root));
+        let mut pk_tree_root = pack_inputs(bytes_to_bits(pk_tree_root));
 
-        let left_agg_pk_commitment = pack_inputs(left_agg_pk_comm);
+        let mut left_agg_pk_commitment = pack_inputs(left_agg_pk_comm);
 
-        let right_agg_pk_commitment = pack_inputs(right_agg_pk_comm);
+        let mut right_agg_pk_commitment = pack_inputs(right_agg_pk_comm);
 
-        let signer_bitmap = pack_inputs(signer_bitmap.clone()).pop().unwrap();
+        let signer_bitmap_chunk: MNT6Fr = pack_inputs(signer_bitmap_chunk.to_vec()).pop().unwrap();
 
-        let path = pack_inputs(byte_to_le_bits(position as u8)).pop().unwrap();
+        let path: MNT6Fr = pack_inputs(byte_to_le_bits(position as u8)).pop().unwrap();
 
         // Create the circuit.
         let circuit = NodeMNT6::new(
+            tree_level,
             vk_child,
             left_proof,
             right_proof,
-            pk_tree_root,
-            left_agg_pk_commitment,
-            right_agg_pk_commitment,
-            signer_bitmap,
+            pk_tree_root.clone(),
+            left_agg_pk_commitment.clone(),
+            right_agg_pk_commitment.clone(),
+            signer_bitmap_chunk,
             path,
         );
 
-        // Optionally check the constraint system.
-        if constraint_check {
-            let cs = ConstraintSystem::new_ref();
-
-            circuit.clone().generate_constraints(cs.clone()).unwrap();
-
-            match cs.which_is_unsatisfied().unwrap() {
-                None => {}
-                Some(s) => {
-                    println!("Unsatisfied @ {}", s);
-                    assert!(false);
-                }
-            }
-        }
-
         // Create the proof.
         let proof = Groth16::<MNT6_753>::prove(&proving_key, circuit, rng)?;
+
+        // Optionally verify the proof.
+        if debug_mode {
+            // Load the proving key from file.
+            let mut file = File::open(format!("verifying_keys/{}.bin", name))?;
+
+            let verifying_key = VerifyingKey::deserialize_unchecked(&mut file)?;
+
+            // Prepare the inputs.
+            let mut inputs = vec![];
+
+            inputs.append(&mut pk_tree_root);
+
+            inputs.append(&mut left_agg_pk_commitment);
+
+            inputs.append(&mut right_agg_pk_commitment);
+
+            inputs.push(signer_bitmap_chunk);
+
+            inputs.push(path);
+
+            // Verify proof.
+            assert!(Groth16::<MNT6_753>::verify(
+                &verifying_key,
+                &inputs,
+                &proof
+            )?);
+        }
 
         // Cache proof to file.
         NanoZKP::proof_to_file(proof, name, Some(position))
@@ -468,12 +500,12 @@ impl NanoZKP {
         rng: &mut R,
         name: &str,
         position: usize,
-        level: usize,
+        tree_level: usize,
         vk_file: &str,
         pks: &[G2MNT6],
         pk_tree_root: &Vec<u8>,
         signer_bitmap: &Vec<bool>,
-        constraint_check: bool,
+        debug_mode: bool,
     ) -> Result<(), NanoZKPError> {
         // Load the proving key from file.
         let mut file = File::open(format!("proving_keys/{}.bin", name))?;
@@ -505,8 +537,8 @@ impl NanoZKP {
         for i in position * 4..(position + 1) * 4 {
             let mut agg_pk = G2MNT6::zero();
 
-            for j in i * VALIDATOR_SLOTS / 2_usize.pow((level + 2) as u32)
-                ..(i + 1) * VALIDATOR_SLOTS / 2_usize.pow((level + 2) as u32)
+            for j in i * VALIDATOR_SLOTS / 2_usize.pow((tree_level + 2) as u32)
+                ..(i + 1) * VALIDATOR_SLOTS / 2_usize.pow((tree_level + 2) as u32)
             {
                 if signer_bitmap[j] {
                     agg_pk += pks[j];
@@ -529,44 +561,61 @@ impl NanoZKP {
 
         let agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(hash));
 
+        // Get the relevant chunk of the signer's bitmap.
+        let signer_bitmap_chunk = &signer_bitmap[position * VALIDATOR_SLOTS
+            / 2_usize.pow(tree_level as u32)
+            ..(position + 1) * VALIDATOR_SLOTS / 2_usize.pow(tree_level as u32)];
+
         // Calculate inputs.
-        let pk_tree_root = pack_inputs(bytes_to_bits(pk_tree_root));
+        let mut pk_tree_root = pack_inputs(bytes_to_bits(pk_tree_root));
 
-        let agg_pk_commitment = pack_inputs(agg_pk_comm);
+        let mut agg_pk_commitment = pack_inputs(agg_pk_comm);
 
-        let signer_bitmap = pack_inputs(signer_bitmap.clone()).pop().unwrap();
+        let signer_bitmap_chunk: MNT4Fr = pack_inputs(signer_bitmap_chunk.to_vec()).pop().unwrap();
 
-        let path = pack_inputs(byte_to_le_bits(position as u8)).pop().unwrap();
+        let path: MNT4Fr = pack_inputs(byte_to_le_bits(position as u8)).pop().unwrap();
 
         // Create the circuit.
         let circuit = NodeMNT4::new(
+            tree_level,
             vk_child,
             left_proof,
             right_proof,
             agg_pk_chunks,
-            pk_tree_root,
-            agg_pk_commitment,
-            signer_bitmap,
+            pk_tree_root.clone(),
+            agg_pk_commitment.clone(),
+            signer_bitmap_chunk,
             path,
         );
 
-        // Optionally check the constraint system.
-        if constraint_check {
-            let cs = ConstraintSystem::new_ref();
-
-            circuit.clone().generate_constraints(cs.clone()).unwrap();
-
-            match cs.which_is_unsatisfied().unwrap() {
-                None => {}
-                Some(s) => {
-                    println!("Unsatisfied @ {}", s);
-                    assert!(false);
-                }
-            }
-        }
-
         // Create the proof.
         let proof = Groth16::<MNT4_753>::prove(&proving_key, circuit, rng)?;
+
+        // Optionally verify the proof.
+        if debug_mode {
+            // Load the proving key from file.
+            let mut file = File::open(format!("verifying_keys/{}.bin", name))?;
+
+            let verifying_key = VerifyingKey::deserialize_unchecked(&mut file)?;
+
+            // Prepare the inputs.
+            let mut inputs = vec![];
+
+            inputs.append(&mut pk_tree_root);
+
+            inputs.append(&mut agg_pk_commitment);
+
+            inputs.push(signer_bitmap_chunk);
+
+            inputs.push(path);
+
+            // Verify proof.
+            assert!(Groth16::<MNT4_753>::verify(
+                &verifying_key,
+                &inputs,
+                &proof
+            )?);
+        }
 
         // Cache proof to file.
         NanoZKP::proof_to_file(proof, name, Some(position))
@@ -579,7 +628,7 @@ impl NanoZKP {
         final_pks: &[G2MNT6],
         final_pk_tree_root: &Vec<u8>,
         block: MacroBlock,
-        constraint_check: bool,
+        debug_mode: bool,
     ) -> Result<(), NanoZKPError> {
         // Load the proving key from file.
         let mut file = File::open("proving_keys/macro_block.bin".to_string())?;
@@ -612,12 +661,12 @@ impl NanoZKP {
         }
 
         // Calculate the inputs.
-        let initial_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
+        let mut initial_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
             block.block_number - EPOCH_LENGTH,
             initial_pks.to_vec(),
         )));
 
-        let final_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
+        let mut final_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
             block.block_number,
             final_pks.to_vec(),
         )));
@@ -630,27 +679,34 @@ impl NanoZKP {
             bytes_to_bits(initial_pk_tree_root),
             bytes_to_bits(final_pk_tree_root),
             block,
-            initial_state_commitment,
-            final_state_commitment,
+            initial_state_commitment.clone(),
+            final_state_commitment.clone(),
         );
-
-        // Optionally check the constraint system.
-        if constraint_check {
-            let cs = ConstraintSystem::new_ref();
-
-            circuit.clone().generate_constraints(cs.clone()).unwrap();
-
-            match cs.which_is_unsatisfied().unwrap() {
-                None => {}
-                Some(s) => {
-                    println!("Unsatisfied @ {}", s);
-                    assert!(false);
-                }
-            }
-        }
 
         // Create the proof.
         let proof = Groth16::<MNT4_753>::prove(&proving_key, circuit, rng)?;
+
+        // Optionally verify the proof.
+        if debug_mode {
+            // Load the proving key from file.
+            let mut file = File::open("verifying_keys/macro_block.bin".to_string())?;
+
+            let verifying_key = VerifyingKey::deserialize_unchecked(&mut file)?;
+
+            // Prepare the inputs.
+            let mut inputs = vec![];
+
+            inputs.append(&mut initial_state_commitment);
+
+            inputs.append(&mut final_state_commitment);
+
+            // Verify proof.
+            assert!(Groth16::<MNT4_753>::verify(
+                &verifying_key,
+                &inputs,
+                &proof
+            )?);
+        }
 
         // Cache proof to file.
         NanoZKP::proof_to_file(proof, "macro_block", None)
@@ -661,7 +717,7 @@ impl NanoZKP {
         initial_pks: &[G2MNT6],
         final_pks: &[G2MNT6],
         block_number: u32,
-        constraint_check: bool,
+        debug_mode: bool,
     ) -> Result<(), NanoZKPError> {
         // Load the proving key from file.
         let mut file = File::open("proving_keys/macro_block_wrapper.bin".to_string())?;
@@ -679,12 +735,12 @@ impl NanoZKP {
         let proof = Proof::deserialize_unchecked(&mut file)?;
 
         // Calculate the inputs.
-        let initial_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
+        let mut initial_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
             block_number - EPOCH_LENGTH,
             initial_pks.to_vec(),
         )));
 
-        let final_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
+        let mut final_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
             block_number,
             final_pks.to_vec(),
         )));
@@ -693,27 +749,34 @@ impl NanoZKP {
         let circuit = MacroBlockWrapperCircuit::new(
             vk_macro_block,
             proof,
-            initial_state_commitment,
-            final_state_commitment,
+            initial_state_commitment.clone(),
+            final_state_commitment.clone(),
         );
-
-        // Optionally check the constraint system.
-        if constraint_check {
-            let cs = ConstraintSystem::new_ref();
-
-            circuit.clone().generate_constraints(cs.clone()).unwrap();
-
-            match cs.which_is_unsatisfied().unwrap() {
-                None => {}
-                Some(s) => {
-                    println!("Unsatisfied @ {}", s);
-                    assert!(false);
-                }
-            }
-        }
 
         // Create the proof.
         let proof = Groth16::<MNT6_753>::prove(&proving_key, circuit, rng)?;
+
+        // Optionally verify the proof.
+        if debug_mode {
+            // Load the proving key from file.
+            let mut file = File::open("verifying_keys/macro_block_wrapper.bin".to_string())?;
+
+            let verifying_key = VerifyingKey::deserialize_unchecked(&mut file)?;
+
+            // Prepare the inputs.
+            let mut inputs = vec![];
+
+            inputs.append(&mut initial_state_commitment);
+
+            inputs.append(&mut final_state_commitment);
+
+            // Verify proof.
+            assert!(Groth16::<MNT6_753>::verify(
+                &verifying_key,
+                &inputs,
+                &proof
+            )?);
+        }
 
         // Cache proof to file.
         NanoZKP::proof_to_file(proof, "macro_block_wrapper", None)
@@ -725,7 +788,7 @@ impl NanoZKP {
         final_pks: &[G2MNT6],
         block_number: u32,
         genesis_data: Option<(Proof<MNT6_753>, Vec<u8>)>,
-        constraint_check: bool,
+        debug_mode: bool,
     ) -> Result<(), NanoZKPError> {
         // Load the proving key from file.
         let mut file = File::open("proving_keys/merger.bin".to_string())?;
@@ -767,14 +830,15 @@ impl NanoZKP {
         };
 
         // Calculate the inputs.
-        let initial_state_commitment = pack_inputs(bytes_to_bits(&initial_state_comm_bytes));
+        let mut initial_state_commitment = pack_inputs(bytes_to_bits(&initial_state_comm_bytes));
 
-        let final_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
+        let mut final_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
             block_number,
             final_pks.to_vec(),
         )));
 
-        let vk_commitment = pack_inputs(bytes_to_bits(&vk_commitment(vk_merger_wrapper.clone())));
+        let mut vk_commitment =
+            pack_inputs(bytes_to_bits(&vk_commitment(vk_merger_wrapper.clone())));
 
         // Create the circuit.
         let circuit = MergerCircuit::new(
@@ -784,28 +848,37 @@ impl NanoZKP {
             vk_merger_wrapper,
             bytes_to_bits(&intermediate_state_commitment),
             genesis_flag,
-            initial_state_commitment,
-            final_state_commitment,
-            vk_commitment,
+            initial_state_commitment.clone(),
+            final_state_commitment.clone(),
+            vk_commitment.clone(),
         );
-
-        // Optionally check the constraint system.
-        if constraint_check {
-            let cs = ConstraintSystem::new_ref();
-
-            circuit.clone().generate_constraints(cs.clone()).unwrap();
-
-            match cs.which_is_unsatisfied().unwrap() {
-                None => {}
-                Some(s) => {
-                    println!("Unsatisfied @ {}", s);
-                    assert!(false);
-                }
-            }
-        }
 
         // Create the proof.
         let proof = Groth16::<MNT4_753>::prove(&proving_key, circuit, rng)?;
+
+        // Optionally verify the proof.
+        if debug_mode {
+            // Load the proving key from file.
+            let mut file = File::open("verifying_keys/merger.bin".to_string())?;
+
+            let verifying_key = VerifyingKey::deserialize_unchecked(&mut file)?;
+
+            // Prepare the inputs.
+            let mut inputs = vec![];
+
+            inputs.append(&mut initial_state_commitment);
+
+            inputs.append(&mut final_state_commitment);
+
+            inputs.append(&mut vk_commitment);
+
+            // Verify proof.
+            assert!(Groth16::<MNT4_753>::verify(
+                &verifying_key,
+                &inputs,
+                &proof
+            )?);
+        }
 
         // Cache proof to file.
         NanoZKP::proof_to_file(proof, "merger", None)
@@ -817,7 +890,7 @@ impl NanoZKP {
         final_pks: &[G2MNT6],
         block_number: u32,
         genesis_data: Option<(Proof<MNT6_753>, Vec<u8>)>,
-        constraint_check: bool,
+        debug_mode: bool,
     ) -> Result<Proof<MNT6_753>, NanoZKPError> {
         // Load the proving key from file.
         let mut file = File::open("proving_keys/merger_wrapper.bin".to_string())?;
@@ -845,41 +918,50 @@ impl NanoZKP {
             Some((_, x)) => x,
         };
 
-        let initial_state_commitment = pack_inputs(bytes_to_bits(&initial_state_comm_bytes));
+        let mut initial_state_commitment = pack_inputs(bytes_to_bits(&initial_state_comm_bytes));
 
-        let final_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
+        let mut final_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
             block_number,
             final_pks.to_vec(),
         )));
 
-        let vk_commitment = pack_inputs(bytes_to_bits(&vk_commitment(vk_merger_wrapper)));
+        let mut vk_commitment = pack_inputs(bytes_to_bits(&vk_commitment(vk_merger_wrapper)));
 
         // Create the circuit.
         let circuit = MergerWrapperCircuit::new(
             vk_merger,
             proof,
-            initial_state_commitment,
-            final_state_commitment,
-            vk_commitment,
+            initial_state_commitment.clone(),
+            final_state_commitment.clone(),
+            vk_commitment.clone(),
         );
-
-        // Optionally check the constraint system.
-        if constraint_check {
-            let cs = ConstraintSystem::new_ref();
-
-            circuit.clone().generate_constraints(cs.clone()).unwrap();
-
-            match cs.which_is_unsatisfied().unwrap() {
-                None => {}
-                Some(s) => {
-                    println!("Unsatisfied @ {}", s);
-                    assert!(false);
-                }
-            }
-        }
 
         // Create the proof.
         let proof = Groth16::<MNT6_753>::prove(&proving_key, circuit, rng)?;
+
+        // Optionally verify the proof.
+        if debug_mode {
+            // Load the proving key from file.
+            let mut file = File::open("verifying_keys/merger_wrapper.bin".to_string())?;
+
+            let verifying_key = VerifyingKey::deserialize_unchecked(&mut file)?;
+
+            // Prepare the inputs.
+            let mut inputs = vec![];
+
+            inputs.append(&mut initial_state_commitment);
+
+            inputs.append(&mut final_state_commitment);
+
+            inputs.append(&mut vk_commitment);
+
+            // Verify proof.
+            assert!(Groth16::<MNT6_753>::verify(
+                &verifying_key,
+                &inputs,
+                &proof
+            )?);
+        }
 
         // Cache proof to file.
         NanoZKP::proof_to_file(proof.clone(), "merger_wrapper", None)?;
