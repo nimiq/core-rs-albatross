@@ -71,7 +71,7 @@ fn main() {
     println!("====== Proof generation for Nano Sync initiated ======");
     let start = Instant::now();
 
-    let proof = NanoZKP::prove(initial_pks, final_pks, block, None).unwrap();
+    let proof = NanoZKP::prove(initial_pks, final_pks, block, None, true).unwrap();
 
     if !Path::new("proofs/").is_dir() {
         DirBuilder::new().create("proofs/").unwrap();

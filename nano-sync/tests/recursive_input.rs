@@ -68,7 +68,7 @@ impl ConstraintSynthesizer<MNT6Fr> for OuterCircuit {
     /// This function generates the constraints for the circuit.
     fn generate_constraints(self, cs: ConstraintSystemRef<MNT6Fr>) -> Result<(), SynthesisError> {
         // Allocate the verifying key.
-        let vk_var = VerifyingKeyVar::new_witness(cs.clone(), || Ok(&self.vk)).unwrap();
+        let vk_var = VerifyingKeyVar::new_constant(cs.clone(), &self.vk).unwrap();
 
         // Allocate the proof.
         let proof_var = ProofVar::new_witness(cs.clone(), || Ok(&self.proof)).unwrap();
@@ -98,7 +98,7 @@ impl ConstraintSynthesizer<MNT6Fr> for OuterCircuit {
     }
 }
 
-// This test takes more than one hour to finish, so run it only when necessary.
+// This test takes a long time to finish, so run it only when necessary.
 #[test]
 #[ignore]
 fn recursive_input_works() {
@@ -141,8 +141,8 @@ fn recursive_input_works() {
     assert!(Groth16::<MNT4_753>::verify(&vk, &inputs, &proof).unwrap());
 
     // Create inputs for the outer circuit.
-    let red_pub = pack_inputs(red_priv.clone());
-    let blue_pub = pack_inputs(blue_priv.clone());
+    let red_pub = pack_inputs(red_priv);
+    let blue_pub = pack_inputs(blue_priv);
 
     // Create the outer circuit.
     let circuit = OuterCircuit {

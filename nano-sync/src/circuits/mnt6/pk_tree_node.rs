@@ -13,11 +13,16 @@ use crate::utils::{prepare_inputs, unpack_inputs};
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 /// This is the node subcircuit of the PKTreeCircuit. See PKTreeLeafCircuit for more details.
+/// Its purpose it two-fold:
+///     1) Split the signer bitmap chunk it receives as an input into two halves.
+///     2) Verify the proofs from its two child nodes in the PKTree.
 /// It is different from the other node subcircuit on the MNT4 curve in that it doesn't recalculate
 /// the aggregate public key commitments, it just passes them on to the next level.
 #[derive(Clone)]
 pub struct PKTreeNodeCircuit {
-    // Verifying key of the circuit of the child node. Not an input to the SNARK circuit.
+    // Constants for the circuit. Careful, changing these values result in a different circuit, so
+    // whenever you change these values you need to generate new proving and verifying keys.
+    tree_level: usize,
     vk_child: VerifyingKey<MNT4_753>,
 
     // Witnesses (private)
@@ -33,29 +38,31 @@ pub struct PKTreeNodeCircuit {
     pk_tree_root: Vec<Fq>,
     left_agg_pk_commitment: Vec<Fq>,
     right_agg_pk_commitment: Vec<Fq>,
-    signer_bitmap: Fq,
+    signer_bitmap_chunk: Fq,
     path: Fq,
 }
 
 impl PKTreeNodeCircuit {
     pub fn new(
+        tree_level: usize,
         vk_child: VerifyingKey<MNT4_753>,
         left_proof: Proof<MNT4_753>,
         right_proof: Proof<MNT4_753>,
         pk_tree_root: Vec<Fq>,
         left_agg_pk_commitment: Vec<Fq>,
         right_agg_pk_commitment: Vec<Fq>,
-        signer_bitmap: Fq,
+        signer_bitmap_chunk: Fq,
         path: Fq,
     ) -> Self {
         Self {
+            tree_level,
             vk_child,
             left_proof,
             right_proof,
             pk_tree_root,
             left_agg_pk_commitment,
             right_agg_pk_commitment,
-            signer_bitmap,
+            signer_bitmap_chunk,
             path,
         }
     }
@@ -91,7 +98,8 @@ impl ConstraintSynthesizer<MNT6Fr> for PKTreeNodeCircuit {
         let right_agg_pk_commitment_var =
             Vec::<FqVar>::new_input(cs.clone(), || Ok(&self.right_agg_pk_commitment[..]))?;
 
-        let signer_bitmap_var = FqVar::new_input(cs.clone(), || Ok(&self.signer_bitmap))?;
+        let signer_bitmap_chunk_var =
+            FqVar::new_input(cs.clone(), || Ok(&self.signer_bitmap_chunk))?;
 
         let path_var = FqVar::new_input(cs, || Ok(&self.path))?;
 
@@ -106,8 +114,9 @@ impl ConstraintSynthesizer<MNT6Fr> for PKTreeNodeCircuit {
         let right_agg_pk_commitment_bits =
             unpack_inputs(right_agg_pk_commitment_var)?[..760].to_vec();
 
-        let signer_bitmap_bits =
-            unpack_inputs(vec![signer_bitmap_var])?[..VALIDATOR_SLOTS].to_vec();
+        let signer_bitmap_bits = unpack_inputs(vec![signer_bitmap_chunk_var])?
+            [..VALIDATOR_SLOTS / 2_usize.pow(self.tree_level as u32)]
+            .to_vec();
 
         let mut path_bits = unpack_inputs(vec![path_var])?[..PK_TREE_DEPTH].to_vec();
 
@@ -128,13 +137,17 @@ impl ConstraintSynthesizer<MNT6Fr> for PKTreeNodeCircuit {
         path_bits.insert(0, Boolean::Constant(true));
         let right_path = path_bits;
 
+        // Split the signer's bitmap chunk into two, for the left and right child nodes.
+        let (left_signer_bitmap_bits, right_signer_bitmap_bits) = signer_bitmap_bits
+            .split_at(VALIDATOR_SLOTS / 2_usize.pow((self.tree_level + 1) as u32));
+
         // Verify the ZK proof for the left child node.
         next_cost_analysis!(cs, cost, || { "Verify left ZK proof" });
         let mut proof_inputs = prepare_inputs(pk_tree_root_bits.clone());
 
         proof_inputs.append(&mut prepare_inputs(left_agg_pk_commitment_bits));
 
-        proof_inputs.append(&mut prepare_inputs(signer_bitmap_bits.clone()));
+        proof_inputs.append(&mut prepare_inputs(left_signer_bitmap_bits.to_vec()));
 
         proof_inputs.append(&mut prepare_inputs(left_path));
 
@@ -153,7 +166,7 @@ impl ConstraintSynthesizer<MNT6Fr> for PKTreeNodeCircuit {
 
         proof_inputs.append(&mut prepare_inputs(right_agg_pk_commitment_bits));
 
-        proof_inputs.append(&mut prepare_inputs(signer_bitmap_bits));
+        proof_inputs.append(&mut prepare_inputs(right_signer_bitmap_bits.to_vec()));
 
         proof_inputs.append(&mut prepare_inputs(right_path));
 

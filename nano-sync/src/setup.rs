@@ -31,15 +31,15 @@ impl NanoZKP {
 
         NanoZKP::setup_pk_tree_leaf(rng, "pk_tree_5")?;
 
-        NanoZKP::setup_pk_tree_node_mnt6(rng, "pk_tree_5", "pk_tree_4")?;
+        NanoZKP::setup_pk_tree_node_mnt6(rng, "pk_tree_5", "pk_tree_4", 4)?;
 
-        NanoZKP::setup_pk_tree_node_mnt4(rng, "pk_tree_4", "pk_tree_3")?;
+        NanoZKP::setup_pk_tree_node_mnt4(rng, "pk_tree_4", "pk_tree_3", 3)?;
 
-        NanoZKP::setup_pk_tree_node_mnt6(rng, "pk_tree_3", "pk_tree_2")?;
+        NanoZKP::setup_pk_tree_node_mnt6(rng, "pk_tree_3", "pk_tree_2", 2)?;
 
-        NanoZKP::setup_pk_tree_node_mnt4(rng, "pk_tree_2", "pk_tree_1")?;
+        NanoZKP::setup_pk_tree_node_mnt4(rng, "pk_tree_2", "pk_tree_1", 1)?;
 
-        NanoZKP::setup_pk_tree_node_mnt6(rng, "pk_tree_1", "pk_tree_0")?;
+        NanoZKP::setup_pk_tree_node_mnt6(rng, "pk_tree_1", "pk_tree_0", 0)?;
 
         NanoZKP::setup_macro_block(rng)?;
 
@@ -54,8 +54,6 @@ impl NanoZKP {
 
     fn setup_pk_tree_leaf<R: CryptoRng + Rng>(rng: &mut R, name: &str) -> Result<(), NanoZKPError> {
         // Create dummy inputs.
-        let position = 0;
-
         let pks = vec![G2MNT6::rand(rng); VALIDATOR_SLOTS / PK_TREE_BREADTH];
 
         let pk_tree_nodes = vec![G1MNT6::rand(rng); PK_TREE_DEPTH];
@@ -70,7 +68,6 @@ impl NanoZKP {
 
         // Create parameters for our circuit
         let circuit = LeafMNT4::new(
-            position,
             pks,
             pk_tree_nodes,
             pk_tree_root,
@@ -89,6 +86,7 @@ impl NanoZKP {
         rng: &mut R,
         vk_file: &str,
         name: &str,
+        tree_level: usize,
     ) -> Result<(), NanoZKPError> {
         // Load the verifying key from file.
         let mut file = File::open(format!("verifying_keys/{}.bin", vk_file))?;
@@ -120,6 +118,7 @@ impl NanoZKP {
 
         // Create parameters for our circuit
         let circuit = NodeMNT6::new(
+            tree_level,
             vk_child,
             left_proof,
             right_proof,
@@ -140,6 +139,7 @@ impl NanoZKP {
         rng: &mut R,
         vk_file: &str,
         name: &str,
+        tree_level: usize,
     ) -> Result<(), NanoZKPError> {
         // Load the verifying key from file.
         let mut file = File::open(format!("verifying_keys/{}.bin", vk_file))?;
@@ -171,6 +171,7 @@ impl NanoZKP {
 
         // Create parameters for our circuit
         let circuit = NodeMNT4::new(
+            tree_level,
             vk_child,
             left_proof,
             right_proof,
