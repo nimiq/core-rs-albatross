@@ -8,7 +8,7 @@ use ark_serialize::CanonicalDeserialize;
 use ark_std::ops::MulAssign;
 use ark_std::{test_rng, UniformRand};
 
-use nimiq_nano_sync::constants::VALIDATOR_SLOTS;
+use nimiq_nano_sync::constants::{EPOCH_LENGTH, VALIDATOR_SLOTS};
 use nimiq_nano_sync::primitives::state_commitment;
 use nimiq_nano_sync::NanoZKP;
 
@@ -41,9 +41,10 @@ fn main() {
     }
 
     // Calculate the commitments.
+    #[allow(arithmetic_overflow)]
     let initial_state_commitment = state_commitment(0, initial_pks);
 
-    let final_state_commitment = state_commitment(0, final_pks);
+    let final_state_commitment = state_commitment(EPOCH_LENGTH, final_pks);
 
     // Load the proof from file.
     let mut file = File::open("proofs/proof_epoch_0.bin").unwrap();

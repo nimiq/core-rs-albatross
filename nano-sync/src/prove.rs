@@ -28,7 +28,6 @@ use crate::primitives::{
 use crate::utils::{byte_to_le_bits, bytes_to_bits, pack_inputs};
 use crate::{NanoZKP, NanoZKPError};
 
-
 impl NanoZKP {
     /// This function generates a proof for a new epoch, it uses the entire nano sync program. Note
     /// that the proof generation can easily take longer than 12 hours.
@@ -45,14 +44,14 @@ impl NanoZKP {
         // If this is not the first epoch, you need to provide the SNARK proof for the previous
         // epoch and the genesis state commitment.
         genesis_data: Option<(Proof<MNT6_753>, Vec<u8>)>,
-        // This is a flag indicating if we want to cache the proofs. If true, we will see which proofs
+        // This is a flag indicating if we want to cache the proofs. If true, it will see which proofs
         // were already created and start from there. Note that for this to work, you must provide
         // the exact same inputs.
         proof_caching: bool,
     ) -> Result<Proof<MNT6_753>, NanoZKPError> {
         // This is a flag indicating if we want to run this function in debug mode. It will verify
         // each proof it creates right after the proof is generated.
-        let debug_mode = true;
+        let debug_mode = false;
 
         let rng = &mut thread_rng();
 
