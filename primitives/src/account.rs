@@ -1,9 +1,6 @@
-use std::{
-    convert::{TryFrom, TryInto},
-    fmt::Display,
-};
+use std::convert::{TryFrom, TryInto};
 
-use enum_display_derive::Display;
+use strum_macros::Display;
 use thiserror::Error;
 
 use nimiq_macros::{add_hex_io_fns_typed_arr, create_typed_array};

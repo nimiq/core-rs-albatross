@@ -1,9 +1,11 @@
-use std::fmt::Display;
-use std::net::IpAddr;
-use std::path::{Path, PathBuf};
+use std::{
+    net::IpAddr,
+    path::{Path, PathBuf},
+    string::ToString,
+};
 
 use derive_builder::Builder;
-use enum_display_derive::Display;
+use strum_macros::Display;
 
 #[cfg(feature = "validator")]
 use beserial::Deserialize;
