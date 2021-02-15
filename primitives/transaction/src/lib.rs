@@ -2,6 +2,7 @@
 extern crate beserial_derive;
 #[macro_use]
 extern crate log;
+extern crate strum_macros;
 extern crate nimiq_bls as bls;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
