@@ -10,7 +10,7 @@ use ark_std::{test_rng, UniformRand};
 use rand::prelude::SliceRandom;
 use rand::RngCore;
 
-use nimiq_nano_sync::constants::{MIN_SIGNERS, VALIDATOR_SLOTS};
+use nimiq_nano_sync::constants::{EPOCH_LENGTH, MIN_SIGNERS, VALIDATOR_SLOTS};
 use nimiq_nano_sync::primitives::{pk_tree_construct, MacroBlock};
 use nimiq_nano_sync::NanoZKP;
 
@@ -53,7 +53,7 @@ fn main() {
     signer_bitmap.shuffle(rng);
 
     // Create a macro block
-    let block_number = 0;
+    let block_number = EPOCH_LENGTH;
 
     let round_number = u32::rand(rng);
 

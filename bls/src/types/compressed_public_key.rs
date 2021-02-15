@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, fmt, str::FromStr};
+use std::{cmp::Ordering, fmt, io::Error, str::FromStr};
 
 use ark_ec::AffineCurve;
 use ark_mnt6_753::G2Affine;
@@ -8,8 +8,6 @@ use beserial::Deserialize;
 
 use crate::compression::BeDeserialize;
 use crate::{ParseError, PublicKey};
-
-pub type UncompressError = SerializationError;
 
 /// The serialized compressed form of a public key.
 /// This form consists of the x-coordinate of the point (in the affine form),
@@ -24,7 +22,7 @@ impl CompressedPublicKey {
     pub const SIZE: usize = 285;
 
     /// Transforms the compressed form back into the projective form.
-    pub fn uncompress(&self) -> Result<PublicKey, UncompressError> {
+    pub fn uncompress(&self) -> Result<PublicKey, Error> {
         let affine_point: G2Affine = BeDeserialize::deserialize(&mut &self.public_key[..])?;
         Ok(PublicKey {
             public_key: affine_point.into_projective(),
