@@ -105,6 +105,9 @@ impl ClientInner {
             .await,
         );
 
+        // Start buffering network events as early as possible
+        let nw_events = network.subscribe_events();
+
         // Tell the network to connect to seed nodes
         for seed in &config.network.seeds {
             log::debug!("Dialing seed: {:?}", seed);
@@ -128,7 +131,7 @@ impl ClientInner {
         #[cfg(feature = "wallet")]
         let wallet_store = Arc::new(WalletStore::new(environment.clone()));
 
-        let sync = HistorySync::<Network>::new(Arc::clone(&blockchain), network.subscribe_events());
+        let sync = HistorySync::<Network>::new(Arc::clone(&blockchain), nw_events);
 
         let consensus = Consensus::from_network(
             environment.clone(),
