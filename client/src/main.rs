@@ -85,9 +85,6 @@ async fn main_inner() -> Result<(), Error> {
     // Start consensus.
     let mut consensus = client.consensus().unwrap();
 
-    log::info!("Forcing consensus!");
-    consensus.force_established();
-
     log::info!("Spawning consensus");
     tokio::spawn(async move { consensus.for_each(|_| async {}).await });
     let consensus = client.consensus_proxy();
