@@ -1,29 +1,20 @@
 use futures::task::{Context, Poll};
-use libp2p::{
-    swarm::{KeepAlive, ProtocolsHandler, ProtocolsHandlerEvent, ProtocolsHandlerUpgrErr, SubstreamProtocol},
-    PeerId,
-};
+use libp2p::swarm::{KeepAlive, ProtocolsHandler, ProtocolsHandlerEvent, ProtocolsHandlerUpgrErr, SubstreamProtocol};
 use thiserror::Error;
+
 use super::protocol::LimitProtocol;
 
 #[derive(Clone, Debug)]
-pub enum HandlerInEvent {
-    ClosePeer { peer_id: PeerId },
-}
+pub enum HandlerInEvent {}
 
 #[derive(Clone, Debug)]
-pub enum HandlerOutEvent {
-    ClosePeers { peers: Vec<PeerId> },
-}
+pub enum HandlerOutEvent {}
 
 #[derive(Debug, Error)]
 pub enum HandlerError {}
 
 #[derive(Default)]
-pub struct LimitHandler {
-    /// Peers we have to close.
-    close_peers: Vec<PeerId>,
-}
+pub struct LimitHandler {}
 
 impl ProtocolsHandler for LimitHandler {
     type InEvent = HandlerInEvent;
@@ -49,13 +40,7 @@ impl ProtocolsHandler for LimitHandler {
     }
 
     fn inject_event(&mut self, event: HandlerInEvent) {
-        log::debug!("MessageHandler::inject_event: {:?}", event);
-
-        match event {
-            HandlerInEvent::ClosePeer { peer_id } => {
-                self.close_peers.push(peer_id);
-            }
-        }
+        todo!();
     }
 
     fn inject_dial_upgrade_error(&mut self, _info: Self::OutboundOpenInfo, error: ProtocolsHandlerUpgrErr<std::io::Error>) {
@@ -64,14 +49,10 @@ impl ProtocolsHandler for LimitHandler {
     }
 
     fn connection_keep_alive(&self) -> KeepAlive {
-        KeepAlive::Yes
+        KeepAlive::No
     }
 
     fn poll(&mut self, cx: &mut Context) -> Poll<ProtocolsHandlerEvent<Self::OutboundProtocol, (), HandlerOutEvent, HandlerError>> {
-        if self.close_peers.len() > 0 {
-            return Poll::Ready(ProtocolsHandlerEvent::Custom(HandlerOutEvent::ClosePeers { peers: self.close_peers.clone() } ));
-        }
-
         // We do nothing in the handler
         Poll::Pending
     }

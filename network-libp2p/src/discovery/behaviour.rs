@@ -164,7 +164,12 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         log::trace!("  - connection_id: {:?}", connection_id);
         log::trace!("  - connected_point: {:?}", connected_point);
 
-        let remote_address = connected_point.get_remote_address();
+        // TODO: In libp2p 0.29 there is a method for this:
+        // connected_point.get_remote_address()
+        let remote_address = match connected_point {
+            ConnectedPoint::Dialer { address } => address,
+            ConnectedPoint::Listener { local_addr, .. } => local_addr,
+        };
 
         self.events.push_back(NetworkBehaviourAction::NotifyHandler {
             peer_id: peer_id.clone(),
