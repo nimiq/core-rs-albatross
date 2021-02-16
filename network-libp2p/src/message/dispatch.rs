@@ -285,6 +285,8 @@ where
         if self.message.is_some() {
             // First poll sink until it's ready
             {
+                tracing::trace!("polling sink to be ready");
+
                 let mut dispatch = self.dispatch.lock();
                 let sink = Pin::new(&mut dispatch.framed);
 
@@ -298,9 +300,11 @@ where
             }
 
             // Start sending
-            {
+            {                
                 // This always gives us a message, since the outer if-block checks for it.
                 let message = self.message.take().unwrap();
+
+                tracing::trace!(message = ?message, "start sending");
 
                 let mut dispatch = self.dispatch.lock();
                 let sink = Pin::new(&mut dispatch.framed);
@@ -313,6 +317,8 @@ where
 
         // Flush
         {
+            tracing::trace!("flushing");
+
             let mut dispatch = self.dispatch.lock();
             let sink = Pin::new(&mut dispatch.framed);
             Sink::<&M>::poll_flush(sink, cx)

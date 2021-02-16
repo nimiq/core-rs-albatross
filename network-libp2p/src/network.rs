@@ -847,6 +847,16 @@ mod tests {
         const TYPE_ID: u64 = 42;
     }
 
+    #[derive(Clone, Debug, Deserialize, Serialize)]
+    struct TestMessage2 {
+        #[beserial(len_type(u8))]
+        x: String,
+    }
+
+    impl Message for TestMessage2 {
+        const TYPE_ID: u64 = 43;
+    }
+
     fn network_config(address: Multiaddr) -> Config {
         let keypair = Keypair::generate_ed25519();
 
@@ -996,6 +1006,30 @@ mod tests {
         let msg = msgs.next().await.unwrap();
 
         assert_eq!(msg.id, 4711);
+    }
+
+    #[tokio::test]
+    async fn one_peer_can_send_multiple_messages() {
+        tracing_subscriber::fmt::init();
+
+        let (net1, net2) = create_connected_networks().await;
+
+        let peer2 = net1.get_peer(net2.local_peer_id().clone()).unwrap();
+        let peer1 = net2.get_peer(net1.local_peer_id().clone()).unwrap();
+
+        let mut msgs1 = peer1.receive::<TestMessage>();
+        let mut msgs2 = peer1.receive::<TestMessage2>();
+
+        peer2.send(&TestMessage { id: 4711 }).await.unwrap();
+        peer2.send(&TestMessage2 { x: "foobar".to_string() }).await.unwrap();
+
+        tracing::debug!("send complete");
+
+        let msg = msgs1.next().await.unwrap();
+        assert_eq!(msg.id, 4711);
+
+        let msg = msgs2.next().await.unwrap();
+        assert_eq!(msg.x, "foobar");
     }
 
     #[tokio::test]
