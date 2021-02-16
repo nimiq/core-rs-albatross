@@ -48,8 +48,8 @@ pub enum Error {
     #[error("Transaction rejected: {0:?}")]
     TransactionRejected(nimiq_mempool::ReturnCode),
 
-    #[error("Failed to uncompress BLS public key: {0}")]
-    BlsUncompress(#[from] nimiq_bls::UncompressError)
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
 }
 
 impl From<Error> for nimiq_jsonrpc_core::RpcError {
