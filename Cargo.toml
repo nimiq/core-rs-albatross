@@ -30,6 +30,7 @@ members = [
   "mnemonic",
   "nano-primitives",
   "nano-sync",
+  "nano-blockchain",
   "network-albatross",
   "network-interface",
   "network-libp2p",

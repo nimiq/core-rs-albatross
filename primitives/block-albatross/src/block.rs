@@ -1,4 +1,4 @@
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::fmt;
 
 use bitflags::bitflags;
@@ -7,6 +7,7 @@ use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteByte
 use hash::{Blake2bHash, Blake2sHash, Hash, SerializeContent};
 use hash_derive::SerializeContent;
 use primitives::coin::Coin;
+use primitives::slot::Slots;
 use transaction::Transaction;
 use vrf::VrfSeed;
 
@@ -140,6 +141,14 @@ impl Block {
         match self {
             Block::Macro(ref block) => block.header.hash(),
             Block::Micro(ref block) => block.header.hash(),
+        }
+    }
+
+    /// Returns a copy of the validator slots. Only returns Some if it is an election block.
+    pub fn slots(&self) -> Option<Slots> {
+        match self {
+            Block::Macro(ref block) => block.clone().try_into().ok(),
+            Block::Micro(_) => None,
         }
     }
 

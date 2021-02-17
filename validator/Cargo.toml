@@ -41,7 +41,7 @@ nimiq-keys = { path = "../keys", version = "0.1" }
 nimiq-macros = { path = "../macros", version = "0.1" }
 nimiq-mempool = { path = "../mempool", version = "0.1" }
 nimiq-messages = { path = "../messages", version = "0.1" }
-nimiq-nano-sync = { path = "../nano-sync", version = "0.1" }
+nimiq-nano-sync = { path = "../nano-sync", version = "0.1", default-features = false }
 nimiq-network-albatross = { path = "../network-albatross", version = "0.1" }
 nimiq-network-interface = { path = "../network-interface", version = "0.1" }
 nimiq-network-mock = { path = "../network-mock", version = "0.1" }
