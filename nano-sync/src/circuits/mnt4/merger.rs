@@ -11,7 +11,6 @@ use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisE
 use crate::gadgets::mnt4::VKCommitmentGadget;
 use crate::primitives::pedersen_generators;
 use crate::utils::{prepare_inputs, unpack_inputs};
-use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 /// This is the merger circuit. It takes as inputs an initial state commitment, a final state commitment
 /// and a verifying key and it produces a proof that there exist two valid SNARK proofs that transform
@@ -87,9 +86,6 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
     /// This function generates the constraints for the circuit.
     fn generate_constraints(self, cs: ConstraintSystemRef<MNT4Fr>) -> Result<(), SynthesisError> {
         // Allocate all the constants.
-        #[allow(unused_mut)]
-        let mut cost = start_cost_analysis!(cs, || "Alloc constants");
-
         let pedersen_generators_var =
             Vec::<G1Var>::new_constant(cs.clone(), pedersen_generators(19))?;
 
@@ -99,8 +95,6 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
         )?;
 
         // Allocate all the witnesses.
-        next_cost_analysis!(cs, cost, || { "Alloc witnesses" });
-
         let proof_merger_wrapper_var =
             ProofVar::<MNT6_753, PairingVar>::new_witness(cs.clone(), || {
                 Ok(&self.proof_merger_wrapper)
@@ -124,8 +118,6 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
         let genesis_flag_var = Boolean::new_witness(cs.clone(), || Ok(&self.genesis_flag))?;
 
         // Allocate all the inputs.
-        next_cost_analysis!(cs, cost, || { "Alloc inputs" });
-
         let initial_state_commitment_var =
             Vec::<FqVar>::new_input(cs.clone(), || Ok(&self.initial_state_commitment[..]))?;
 
@@ -136,8 +128,6 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
             Vec::<FqVar>::new_input(cs.clone(), || Ok(&self.vk_commitment[..]))?;
 
         // Unpack the inputs by converting them from field elements to bits and truncating appropriately.
-        next_cost_analysis!(cs, cost, || { "Unpack inputs" });
-
         let initial_state_commitment_bits =
             unpack_inputs(initial_state_commitment_var)?[..760].to_vec();
 
@@ -148,8 +138,6 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
 
         // Verify equality for vk commitment. It just checks that the private input is correct by
         // committing to it and then comparing the result with the vk commitment given as a public input.
-        next_cost_analysis!(cs, cost, || { "Verify vk commitment" });
-
         let reference_commitment =
             VKCommitmentGadget::evaluate(cs, &vk_merger_wrapper_var, &pedersen_generators_var)?;
 
@@ -158,18 +146,12 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
         // Verify equality of initial and intermediate state commitments. If the genesis flag is set to
         // true, it enforces the equality. If it is set to false, it doesn't. This is necessary for
         // the genesis block, for the first merger circuit.
-        next_cost_analysis!(cs, cost, || {
-            "Conditionally verify initial and intermediate state commitments"
-        });
-
         initial_state_commitment_bits
             .conditional_enforce_equal(&intermediate_state_commitment_bits, &genesis_flag_var)?;
 
         // Verify the ZK proof for the Merger Wrapper circuit. If the genesis flag is set to false,
         // it enforces the verification. If it is set to true, it doesn't. This is necessary for
         // the first epoch, for the first merger circuit.
-        next_cost_analysis!(cs, cost, || { "Conditionally verify proof merger wrapper" });
-
         let mut proof_inputs = prepare_inputs(initial_state_commitment_bits);
 
         proof_inputs.append(&mut prepare_inputs(
@@ -188,8 +170,6 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
         .enforce_equal(&genesis_flag_var.not())?;
 
         // Verify the ZK proof for the Macro Block Wrapper circuit.
-        next_cost_analysis!(cs, cost, || { "Verify proof macro block wrapper" });
-
         let mut proof_inputs = prepare_inputs(intermediate_state_commitment_bits);
 
         proof_inputs.append(&mut prepare_inputs(final_state_commitment_bits));
@@ -202,8 +182,6 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
             &proof_macro_block_wrapper_var,
         )?
         .enforce_equal(&Boolean::constant(true))?;
-
-        end_cost_analysis!(cs, cost);
 
         Ok(())
     }

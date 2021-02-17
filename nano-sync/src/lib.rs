@@ -1,5 +1,4 @@
 #![allow(dead_code)]
-
 use std::io;
 
 use ark_mnt6_753::G2Projective;
@@ -9,20 +8,21 @@ use constants::{PK_TREE_BREADTH, VALIDATOR_SLOTS};
 use nimiq_nano_primitives::pk_tree_construct as pk_t_c;
 use thiserror::Error;
 
-// Re-export big-endian serialization of algebra types.
-pub use nimiq_bls::compression;
-// Re-export randomness generation.
-pub use nimiq_bls::rand_gen;
+#[cfg(feature = "prover")]
+pub(crate) mod circuits;
+#[cfg(feature = "prover")]
+pub(crate) mod gadgets;
+#[cfg(feature = "prover")]
+pub(crate) mod prove;
+#[cfg(feature = "prover")]
+pub(crate) mod setup;
 
-pub mod circuits;
+#[cfg(any(feature = "verifier", feature = "prover"))]
+pub(crate) mod verify;
+
 pub mod constants;
-pub mod cost_analysis;
-pub mod gadgets;
 pub mod primitives;
-mod prove;
-mod setup;
 pub mod utils;
-mod verify;
 
 /// This the main struct for the nano-sync crate. It provides methods to setup (create the
 /// proving and verifying keys), create proofs and verify proofs for the nano sync circuit.

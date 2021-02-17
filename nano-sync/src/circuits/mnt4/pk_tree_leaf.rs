@@ -8,7 +8,6 @@ use crate::constants::{PK_TREE_BREADTH, PK_TREE_DEPTH, VALIDATOR_SLOTS};
 use crate::gadgets::mnt4::{MerkleTreeGadget, PedersenHashGadget, SerializeGadget};
 use crate::primitives::pedersen_generators;
 use crate::utils::unpack_inputs;
-use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 /// This is the leaf subcircuit of the PKTreeCircuit. This circuit main function is to process the
 /// validator's public keys and "return" the aggregate public key for the Macro Block. At a
@@ -71,23 +70,16 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeLeafCircuit {
     /// This function generates the constraints for the circuit.
     fn generate_constraints(self, cs: ConstraintSystemRef<MNT4Fr>) -> Result<(), SynthesisError> {
         // Allocate all the constants.
-        #[allow(unused_mut)]
-        let mut cost = start_cost_analysis!(cs, || "Alloc constants");
-
         let pedersen_generators_var =
             Vec::<G1Var>::new_constant(cs.clone(), pedersen_generators(195))?;
 
         // Allocate all the witnesses.
-        next_cost_analysis!(cs, cost, || { "Alloc witnesses" });
-
         let pks_var = Vec::<G2Var>::new_witness(cs.clone(), || Ok(&self.pks[..]))?;
 
         let pk_tree_nodes_var =
             Vec::<G1Var>::new_witness(cs.clone(), || Ok(&self.pk_tree_nodes[..]))?;
 
         // Allocate all the inputs.
-        next_cost_analysis!(cs, cost, || { "Alloc inputs" });
-
         let pk_tree_root_var = Vec::<FqVar>::new_input(cs.clone(), || Ok(&self.pk_tree_root[..]))?;
 
         let agg_pk_commitment_var =
@@ -99,8 +91,6 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeLeafCircuit {
         let path_var = FqVar::new_input(cs.clone(), || Ok(&self.path))?;
 
         // Unpack the inputs by converting them from field elements to bits and truncating appropriately.
-        next_cost_analysis!(cs, cost, || { "Unpack inputs" });
-
         let pk_tree_root_bits = unpack_inputs(pk_tree_root_var)?[..760].to_vec();
 
         let agg_pk_commitment_bits = unpack_inputs(agg_pk_commitment_var)?[..760].to_vec();
@@ -116,8 +106,6 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeLeafCircuit {
         // public keys serialized and concatenated together. Each leaf contains exactly
         // VALIDATOR_SLOTS/2^n public keys, so that the entire Merkle tree contains all of the
         // public keys.
-        next_cost_analysis!(cs, cost, || { "Verify Merkle proof pks" });
-
         let mut bits = vec![];
 
         for i in 0..self.pks.len() {
@@ -135,8 +123,6 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeLeafCircuit {
         .enforce_equal(&Boolean::constant(true))?;
 
         // Calculate the aggregate public key.
-        next_cost_analysis!(cs, cost, || { "Calculate agg key" });
-
         let mut calculated_agg_pk = G2Var::zero();
 
         for (pk, included) in pks_var.iter().zip(signer_bitmap_chunk_bits.iter()) {
@@ -153,8 +139,6 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeLeafCircuit {
 
         // Verifying aggregate public key. It checks that the calculated aggregate public key
         // is correct by comparing it with the aggregate public key commitment given as an input.
-        next_cost_analysis!(cs, cost, || { "Verify agg pk" });
-
         let agg_pk_bits = SerializeGadget::serialize_g2(cs.clone(), &calculated_agg_pk)?;
 
         let pedersen_hash = PedersenHashGadget::evaluate(&agg_pk_bits, &pedersen_generators_var)?;
@@ -162,8 +146,6 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeLeafCircuit {
         let pedersen_bits = SerializeGadget::serialize_g1(cs, &pedersen_hash)?;
 
         agg_pk_commitment_bits.enforce_equal(&pedersen_bits)?;
-
-        end_cost_analysis!(cs, cost);
 
         Ok(())
     }

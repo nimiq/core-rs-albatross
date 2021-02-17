@@ -10,7 +10,6 @@ use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisE
 
 use crate::constants::{PK_TREE_DEPTH, VALIDATOR_SLOTS};
 use crate::utils::{prepare_inputs, unpack_inputs};
-use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 /// This is the node subcircuit of the PKTreeCircuit. See PKTreeLeafCircuit for more details.
 /// Its purpose it two-fold:
@@ -72,15 +71,10 @@ impl ConstraintSynthesizer<MNT6Fr> for PKTreeNodeCircuit {
     /// This function generates the constraints for the circuit.
     fn generate_constraints(self, cs: ConstraintSystemRef<MNT6Fr>) -> Result<(), SynthesisError> {
         // Allocate all the constants.
-        #[allow(unused_mut)]
-        let mut cost = start_cost_analysis!(cs, || "Alloc constants");
-
         let vk_child_var =
             VerifyingKeyVar::<MNT4_753, PairingVar>::new_constant(cs.clone(), &self.vk_child)?;
 
         // Allocate all the witnesses.
-        next_cost_analysis!(cs, cost, || { "Alloc witnesses" });
-
         let left_proof_var =
             ProofVar::<MNT4_753, PairingVar>::new_witness(cs.clone(), || Ok(&self.left_proof))?;
 
@@ -88,8 +82,6 @@ impl ConstraintSynthesizer<MNT6Fr> for PKTreeNodeCircuit {
             ProofVar::<MNT4_753, PairingVar>::new_witness(cs.clone(), || Ok(&self.right_proof))?;
 
         // Allocate all the inputs.
-        next_cost_analysis!(cs, cost, || { "Alloc inputs" });
-
         let pk_tree_root_var = Vec::<FqVar>::new_input(cs.clone(), || Ok(&self.pk_tree_root[..]))?;
 
         let left_agg_pk_commitment_var =
@@ -104,8 +96,6 @@ impl ConstraintSynthesizer<MNT6Fr> for PKTreeNodeCircuit {
         let path_var = FqVar::new_input(cs, || Ok(&self.path))?;
 
         // Unpack the inputs by converting them from field elements to bits and truncating appropriately.
-        next_cost_analysis!(cs, cost, || { "Unpack inputs" });
-
         let pk_tree_root_bits = unpack_inputs(pk_tree_root_var)?[..760].to_vec();
 
         let left_agg_pk_commitment_bits =
@@ -125,7 +115,6 @@ impl ConstraintSynthesizer<MNT6Fr> for PKTreeNodeCircuit {
         //    L = 2 * P
         //    R = 2 * P + 1
         // For efficiency reasons, we actually calculate the path using bit manipulation.
-        next_cost_analysis!(cs, cost, || { "Calculate paths" });
 
         // Calculate P >> 1, which is equivalent to calculating 2 * P (in little-endian).
         path_bits.pop();
@@ -142,7 +131,6 @@ impl ConstraintSynthesizer<MNT6Fr> for PKTreeNodeCircuit {
             .split_at(VALIDATOR_SLOTS / 2_usize.pow((self.tree_level + 1) as u32));
 
         // Verify the ZK proof for the left child node.
-        next_cost_analysis!(cs, cost, || { "Verify left ZK proof" });
         let mut proof_inputs = prepare_inputs(pk_tree_root_bits.clone());
 
         proof_inputs.append(&mut prepare_inputs(left_agg_pk_commitment_bits));
@@ -161,7 +149,6 @@ impl ConstraintSynthesizer<MNT6Fr> for PKTreeNodeCircuit {
         .enforce_equal(&Boolean::constant(true))?;
 
         // Verify the ZK proof for the right child node.
-        next_cost_analysis!(cs, cost, || { "Verify right ZK proof" });
         let mut proof_inputs = prepare_inputs(pk_tree_root_bits);
 
         proof_inputs.append(&mut prepare_inputs(right_agg_pk_commitment_bits));
@@ -178,8 +165,6 @@ impl ConstraintSynthesizer<MNT6Fr> for PKTreeNodeCircuit {
             &right_proof_var,
         )?
         .enforce_equal(&Boolean::constant(true))?;
-
-        end_cost_analysis!(cs, cost);
 
         Ok(())
     }

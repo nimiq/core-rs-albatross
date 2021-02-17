@@ -13,7 +13,6 @@ use crate::constants::{PK_TREE_DEPTH, VALIDATOR_SLOTS};
 use crate::gadgets::mnt4::{PedersenHashGadget, SerializeGadget};
 use crate::primitives::pedersen_generators;
 use crate::utils::{prepare_inputs, unpack_inputs};
-use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 /// This is the node subcircuit of the PKTreeCircuit. See PKTreeLeafCircuit for more details.
 /// /// Its purpose it three-fold:
@@ -74,9 +73,6 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeNodeCircuit {
     /// This function generates the constraints for the circuit.
     fn generate_constraints(self, cs: ConstraintSystemRef<MNT4Fr>) -> Result<(), SynthesisError> {
         // Allocate all the constants.
-        #[allow(unused_mut)]
-        let mut cost = start_cost_analysis!(cs, || "Alloc constants");
-
         let pedersen_generators_var =
             Vec::<G1Var>::new_constant(cs.clone(), pedersen_generators(5))?;
 
@@ -84,8 +80,6 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeNodeCircuit {
             VerifyingKeyVar::<MNT6_753, PairingVar>::new_constant(cs.clone(), &self.vk_child)?;
 
         // Allocate all the witnesses.
-        next_cost_analysis!(cs, cost, || { "Alloc witnesses" });
-
         let left_proof_var =
             ProofVar::<MNT6_753, PairingVar>::new_witness(cs.clone(), || Ok(&self.left_proof))?;
 
@@ -96,8 +90,6 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeNodeCircuit {
             Vec::<G2Var>::new_witness(cs.clone(), || Ok(&self.agg_pk_chunks[..]))?;
 
         // Allocate all the inputs.
-        next_cost_analysis!(cs, cost, || { "Alloc inputs" });
-
         let pk_tree_root_var = Vec::<FqVar>::new_input(cs.clone(), || Ok(&self.pk_tree_root[..]))?;
 
         let agg_pk_commitment_var =
@@ -109,8 +101,6 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeNodeCircuit {
         let path_var = FqVar::new_input(cs.clone(), || Ok(&self.path))?;
 
         // Unpack the inputs by converting them from field elements to bits and truncating appropriately.
-        next_cost_analysis!(cs, cost, || { "Unpack inputs" });
-
         let pk_tree_root_bits = unpack_inputs(pk_tree_root_var)?[..760].to_vec();
 
         let agg_pk_commitment_bits = unpack_inputs(agg_pk_commitment_var)?[..760].to_vec();
@@ -122,8 +112,6 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeNodeCircuit {
         let mut path_bits = unpack_inputs(vec![path_var])?[..PK_TREE_DEPTH].to_vec();
 
         // Calculating the aggregate public key.
-        next_cost_analysis!(cs, cost, || { "Calculate agg pk" });
-
         let mut agg_pk = G2Var::zero();
 
         for pk in &agg_pk_chunks_var {
@@ -133,8 +121,6 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeNodeCircuit {
         // Verifying aggregate public key commitment. It just checks that the calculated aggregate
         // public key is correct by comparing it with the aggregate public key commitment given as
         // an input.
-        next_cost_analysis!(cs, cost, || { "Verify agg pk" });
-
         let agg_pk_bits = SerializeGadget::serialize_g2(cs.clone(), &agg_pk)?;
 
         let pedersen_hash = PedersenHashGadget::evaluate(&agg_pk_bits, &pedersen_generators_var)?;
@@ -145,8 +131,6 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeNodeCircuit {
 
         // Calculating the commitments to each of the aggregate public keys chunks. These
         // will be given as input to the SNARK circuits lower on the tree.
-        next_cost_analysis!(cs, cost, || { "Calculate agg pk chunks commitments" });
-
         let mut agg_pk_chunks_commitments = Vec::new();
 
         for chunk in &agg_pk_chunks_var {
@@ -165,8 +149,6 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeNodeCircuit {
         //    L = 2 * P
         //    R = 2 * P + 1
         // For efficiency reasons, we actually calculate the path using bit manipulation.
-        next_cost_analysis!(cs, cost, || { "Calculate paths" });
-
         // Calculate P >> 1, which is equivalent to calculating 2 * P (in little-endian).
         path_bits.pop();
         path_bits.insert(0, Boolean::Constant(false));
@@ -182,8 +164,6 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeNodeCircuit {
             .split_at(VALIDATOR_SLOTS / 2_usize.pow((self.tree_level + 1) as u32));
 
         // Verify the ZK proof for the left child node.
-        next_cost_analysis!(cs, cost, || { "Verify left ZK proof" });
-
         let mut proof_inputs = prepare_inputs(pk_tree_root_bits.clone());
 
         proof_inputs.append(&mut prepare_inputs(
@@ -208,8 +188,6 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeNodeCircuit {
         .enforce_equal(&Boolean::constant(true))?;
 
         // Verify the ZK proof for the right child node.
-        next_cost_analysis!(cs, cost, || { "Verify right ZK proof" });
-
         let mut proof_inputs = prepare_inputs(pk_tree_root_bits);
 
         proof_inputs.append(&mut prepare_inputs(
@@ -232,8 +210,6 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeNodeCircuit {
             &right_proof_var,
         )?
         .enforce_equal(&Boolean::constant(true))?;
-
-        end_cost_analysis!(cs, cost);
 
         Ok(())
     }

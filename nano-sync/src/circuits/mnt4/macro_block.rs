@@ -16,7 +16,6 @@ use crate::gadgets::mnt4::{
 };
 use crate::primitives::{pedersen_generators, MacroBlock};
 use crate::utils::{prepare_inputs, unpack_inputs};
-use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 /// This is the macro block circuit. It takes as inputs an initial state commitment and final state commitment
 /// and it produces a proof that there exists a valid macro block that transforms the initial state
@@ -74,9 +73,6 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
     /// This function generates the constraints for the circuit.
     fn generate_constraints(self, cs: ConstraintSystemRef<MNT4Fr>) -> Result<(), SynthesisError> {
         // Allocate all the constants.
-        #[allow(unused_mut)]
-        let mut cost = start_cost_analysis!(cs, || "Alloc constants");
-
         let epoch_length_var = UInt32::<MNT4Fr>::new_constant(cs.clone(), EPOCH_LENGTH)?;
 
         let pedersen_generators_var =
@@ -86,8 +82,6 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
             VerifyingKeyVar::<MNT6_753, PairingVar>::new_constant(cs.clone(), &self.vk_pk_tree)?;
 
         // Allocate all the witnesses.
-        next_cost_analysis!(cs, cost, || { "Alloc witnesses" });
-
         let agg_pk_chunks_var =
             Vec::<G2Var>::new_witness(cs.clone(), || Ok(&self.agg_pk_chunks[..]))?;
 
@@ -106,8 +100,6 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
             UInt32::new_witness(cs.clone(), || Ok(&self.block.block_number - EPOCH_LENGTH))?;
 
         // Allocate all the inputs.
-        next_cost_analysis!(cs, cost, || { "Alloc inputs" });
-
         let initial_state_commitment_var =
             Vec::<FqVar>::new_input(cs.clone(), || Ok(&self.initial_state_commitment[..]))?;
 
@@ -115,8 +107,6 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
             Vec::<FqVar>::new_input(cs.clone(), || Ok(&self.final_state_commitment[..]))?;
 
         // Unpack the inputs by converting them from field elements to bits and truncating appropriately.
-        next_cost_analysis!(cs, cost, || { "Unpack inputs" });
-
         let initial_state_commitment_bits =
             unpack_inputs(initial_state_commitment_var)?[..760].to_vec();
 
@@ -124,8 +114,6 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
             unpack_inputs(final_state_commitment_var)?[..760].to_vec();
 
         // Check that the initial block and the final block are exactly one epoch length apart.
-        next_cost_analysis!(cs, cost, || { "Check block numbers" });
-
         let calculated_block_number =
             UInt32::addmany(&[initial_block_number_var.clone(), epoch_length_var])?;
 
@@ -134,8 +122,6 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         // Verifying equality for initial state commitment. It just checks that the initial block
         // number and the initial public key tree root given as witnesses are correct by committing
         // to them and comparing the result with the initial state commitment given as an input.
-        next_cost_analysis!(cs, cost, || { "Verify initial state commitment" });
-
         let reference_commitment = StateCommitmentGadget::evaluate(
             cs.clone(),
             &initial_block_number_var,
@@ -148,8 +134,6 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         // Verifying equality for final state commitment. It just checks that the final block number
         // and the final public key tree root given as a witnesses are correct by committing
         // to them and comparing the result with the final state commitment given as an input.
-        next_cost_analysis!(cs, cost, || { "Verify final state commitment" });
-
         let reference_commitment = StateCommitmentGadget::evaluate(
             cs.clone(),
             &block_var.block_number,
@@ -161,8 +145,6 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
 
         // Calculating the commitments to each of the aggregate public keys chunks. These will be
         // given as inputs to the PKTree SNARK circuit.
-        next_cost_analysis!(cs, cost, || { "Calculate agg pk chunks commitments" });
-
         let mut agg_pk_chunks_commitments = Vec::new();
 
         for chunk in &agg_pk_chunks_var {
@@ -184,8 +166,6 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         // Note that in this particular case, we don't pass the aggregated public key to the SNARK.
         // Instead we pass two chunks of the aggregated public key to it. This is just because the
         // PKTreeNode circuit in the MNT6 curve takes two chunks as inputs.
-        next_cost_analysis!(cs, cost, || { "Verify SNARK proof" });
-
         let mut proof_inputs = prepare_inputs(initial_pk_tree_root_var);
 
         proof_inputs.append(&mut prepare_inputs(
@@ -211,8 +191,6 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         .enforce_equal(&Boolean::constant(true))?;
 
         // Calculating the aggregate public key.
-        next_cost_analysis!(cs, cost, || { "Calculate agg pk" });
-
         let mut agg_pk_var = G2Var::zero();
 
         for pk in &agg_pk_chunks_var {
@@ -220,8 +198,6 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         }
 
         // Verifying that the block is valid.
-        next_cost_analysis!(cs, cost, || "Verify block");
-
         block_var
             .verify(
                 cs,
@@ -230,8 +206,6 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
                 &pedersen_generators_var,
             )?
             .enforce_equal(&Boolean::constant(true))?;
-
-        end_cost_analysis!(cs, cost);
 
         Ok(())
     }
