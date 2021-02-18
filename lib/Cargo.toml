@@ -41,22 +41,22 @@ toml = "0.5"
 url = "1.7"
 thiserror = "1.0"
 
-beserial = { path = "../beserial", version = "0.1" }
-nimiq-blockchain-albatross = { path = "../blockchain-albatross", version = "0.1" }
-nimiq-bls = { path = "../bls", version = "0.1", optional = true }
-nimiq-consensus-albatross = { path = "../consensus-albatross", version = "0.1" }
-nimiq-database = { path = "../database", version = "0.1" }
-nimiq-keys = { path = "../keys", version = "0.1" }
-nimiq-mempool = { path = "../mempool", version = "0.1" }
-nimiq-metrics-server = { path = "../metrics-server", version = "0.1", optional = true }
-nimiq-network-libp2p = { path = "../network-libp2p", version = "0.1" }
-nimiq-network-interface = { path = "../network-interface", version = "0.1" }
-nimiq-peer-address = { path = "../peer-address", version = "0.1" }
-nimiq-primitives = { path = "../primitives", version = "0.1", features = ["networks"] }
-nimiq-rpc-server = { path = "../rpc-server", version = "0.1", optional = true }
-nimiq-utils = { path = "../utils", version = "0.1", features = ["time"] }
-nimiq-validator = { path = "../validator", version = "0.1", optional = true }
-nimiq-validator-network = { path = "../validator-network", version = "0.1", optional = true }
+beserial = { path = "../beserial" }
+nimiq-blockchain-albatross = { path = "../blockchain-albatross" }
+nimiq-bls = { path = "../bls", optional = true }
+nimiq-consensus-albatross = { path = "../consensus-albatross" }
+nimiq-database = { path = "../database" }
+nimiq-keys = { path = "../keys" }
+nimiq-mempool = { path = "../mempool" }
+nimiq-metrics-server = { path = "../metrics-server", optional = true }
+nimiq-network-libp2p = { path = "../network-libp2p" }
+nimiq-network-interface = { path = "../network-interface" }
+nimiq-peer-address = { path = "../peer-address" }
+nimiq-primitives = { path = "../primitives", features = ["networks"] }
+nimiq-rpc-server = { path = "../rpc-server", optional = true }
+nimiq-utils = { path = "../utils", features = ["time"] }
+nimiq-validator = { path = "../validator", optional = true }
+nimiq-validator-network = { path = "../validator-network", optional = true }
 nimiq-jsonrpc-core = { git = "https://github.com/nimiq/jsonrpc.git" }
 nimiq-jsonrpc-server = { git = "https://github.com/nimiq/jsonrpc.git" }
 nimiq-wallet = { path = "../wallet", optional = true }

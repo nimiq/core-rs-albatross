@@ -36,18 +36,18 @@ tokio-tungstenite = "0.8"
 url = "1.7"
 thiserror = "1.0"
 
-beserial = { path = "../beserial", version = "0.1" }
-beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
-nimiq-blockchain-albatross = { path = "../blockchain-albatross", version = "0.1" }
-nimiq-collections = { path = "../collections", version = "0.1" }
-nimiq-genesis = { path = "../genesis", version = "0.1" }
-nimiq-hash = { path = "../hash", version = "0.1" }
-nimiq-keys = { path = "../keys", version = "0.1" }
-nimiq-messages = { path = "../messages", version = "0.1" }
-nimiq-macros = { path = "../macros", version = "0.1" }
-nimiq-network-interface = { path = "../network-interface", version = "0.1" }
-nimiq-peer-address = { path = "../peer-address", version = "0.1" }
-nimiq-utils = { path = "../utils", version = "0.1", features = ["timers", "key-store", "observer", "mutable-once", "time", "unique-ptr", "iterators", "locking", "rate-limit", "unique-id"] }
+beserial = { path = "../beserial" }
+beserial_derive = { path = "../beserial/beserial_derive" }
+nimiq-blockchain-albatross = { path = "../blockchain-albatross" }
+nimiq-collections = { path = "../collections" }
+nimiq-genesis = { path = "../genesis" }
+nimiq-hash = { path = "../hash" }
+nimiq-keys = { path = "../keys" }
+nimiq-messages = { path = "../messages" }
+nimiq-macros = { path = "../macros" }
+nimiq-network-interface = { path = "../network-interface" }
+nimiq-peer-address = { path = "../peer-address" }
+nimiq-utils = { path = "../utils", features = ["timers", "key-store", "observer", "mutable-once", "time", "unique-ptr", "iterators", "locking", "rate-limit", "unique-id"] }
 
 [dependencies.tungstenite]
 version = "0.8"

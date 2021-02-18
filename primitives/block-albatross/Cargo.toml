@@ -20,22 +20,22 @@ log = "0.4"
 num-bigint = "0.2"
 serde = { version = "1.0", features = ["derive"], optional = true }
 
-beserial = { path = "../../beserial", version = "0.1" }
-beserial_derive = { path = "../../beserial/beserial_derive", version = "0.1" }
-nimiq-account = { path = "../account", version = "0.1" }
-nimiq-bls = { path = "../../bls", version = "0.1", features = ["beserial"]}
-nimiq-collections = { path = "../../collections", version = "0.1", features = ["bitset"] }
-nimiq-handel = { path = "../../handel", version = "0.1" }
-nimiq-hash = { path = "../../hash", version = "0.1" }
-nimiq-hash_derive = { path = "../../hash/hash_derive", version = "0.1" }
-nimiq-keys = { path = "../../keys", version = "0.1" }
-nimiq-macros = { path = "../../macros", version = "0.1" }
-nimiq-nano-sync = { path = "../../nano-sync", version = "0.1", default-features = false }
-nimiq-network-interface = { path = "../../network-interface", version = "0.1" }
-nimiq-primitives = { path = "..", version = "0.1", features = ["policy", "networks", "coin"] }
-nimiq-transaction = { path = "../transaction", version = "0.1" }
-nimiq-utils = { path = "../../utils", version = "0.1", features = ["merkle"] }
-nimiq-vrf = { path = "../../vrf", version = "0.1" }
+beserial = { path = "../../beserial" }
+beserial_derive = { path = "../../beserial/beserial_derive" }
+nimiq-account = { path = "../account" }
+nimiq-bls = { path = "../../bls", features = ["beserial"]}
+nimiq-collections = { path = "../../collections", features = ["bitset"] }
+nimiq-handel = { path = "../../handel" }
+nimiq-hash = { path = "../../hash" }
+nimiq-hash_derive = { path = "../../hash/hash_derive" }
+nimiq-keys = { path = "../../keys" }
+nimiq-macros = { path = "../../macros" }
+nimiq-nano-sync = { path = "../../nano-sync", default-features = false }
+nimiq-network-interface = { path = "../../network-interface" }
+nimiq-primitives = { path = "..", features = ["policy", "networks", "coin"] }
+nimiq-transaction = { path = "../transaction" }
+nimiq-utils = { path = "../../utils", features = ["merkle"] }
+nimiq-vrf = { path = "../../vrf" }
 
 [dev-dependencies]
 num-traits = "0.2"

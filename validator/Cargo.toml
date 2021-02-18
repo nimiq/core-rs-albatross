@@ -25,37 +25,37 @@ parking_lot = "0.9"
 rand = "0.7"
 tokio = { version = "0.2", features = ["rt-core", "time"] }
 
-beserial = { path = "../beserial", version = "0.1" }
-beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
-nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }
-nimiq-block-production-albatross = { path = "../block-production-albatross", version = "0.1" }
-nimiq-blockchain-albatross = { path = "../blockchain-albatross", version = "0.1" }
-nimiq-bls = { path = "../bls", version = "0.1" }
-nimiq-collections = { path = "../collections", version = "0.1", features = ["bitset"] }
-nimiq-consensus-albatross = { path = "../consensus-albatross", version = "0.1" }
-nimiq-database = { path = "../database", version = "0.1", features = ["full-nimiq"] }
-nimiq-genesis = { path = "../genesis", version = "0.1" }
-nimiq-handel = { path = "../handel", version = "0.1" }
-nimiq-hash = { path = "../hash", version = "0.1" }
-nimiq-keys = { path = "../keys", version = "0.1" }
-nimiq-macros = { path = "../macros", version = "0.1" }
-nimiq-mempool = { path = "../mempool", version = "0.1" }
-nimiq-messages = { path = "../messages", version = "0.1" }
-nimiq-nano-sync = { path = "../nano-sync", version = "0.1", default-features = false }
-nimiq-network-albatross = { path = "../network-albatross", version = "0.1" }
-nimiq-network-interface = { path = "../network-interface", version = "0.1" }
-nimiq-network-mock = { path = "../network-mock", version = "0.1" }
-nimiq-primitives = { path = "../primitives", version = "0.1" }
-nimiq-tendermint = { path = "../tendermint", version = "0.1" }
-nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "timers", "time", "mutable-once", "throttled-queue", "rate-limit"] }
-nimiq-validator-network = { path = "../validator-network", version = "0.1" }
-nimiq-vrf = { path = "../vrf", version = "0.1" }
+beserial = { path = "../beserial" }
+beserial_derive = { path = "../beserial/beserial_derive" }
+nimiq-block-albatross = { path = "../primitives/block-albatross" }
+nimiq-block-production-albatross = { path = "../block-production-albatross" }
+nimiq-blockchain-albatross = { path = "../blockchain-albatross" }
+nimiq-bls = { path = "../bls" }
+nimiq-collections = { path = "../collections", features = ["bitset"] }
+nimiq-consensus-albatross = { path = "../consensus-albatross" }
+nimiq-database = { path = "../database", features = ["full-nimiq"] }
+nimiq-genesis = { path = "../genesis" }
+nimiq-handel = { path = "../handel" }
+nimiq-hash = { path = "../hash" }
+nimiq-keys = { path = "../keys" }
+nimiq-macros = { path = "../macros" }
+nimiq-mempool = { path = "../mempool" }
+nimiq-messages = { path = "../messages" }
+nimiq-nano-sync = { path = "../nano-sync", default-features = false }
+nimiq-network-albatross = { path = "../network-albatross" }
+nimiq-network-interface = { path = "../network-interface" }
+nimiq-network-mock = { path = "../network-mock" }
+nimiq-primitives = { path = "../primitives" }
+nimiq-tendermint = { path = "../tendermint" }
+nimiq-utils = { path = "../utils", features = ["observer", "timers", "time", "mutable-once", "throttled-queue", "rate-limit"] }
+nimiq-validator-network = { path = "../validator-network" }
+nimiq-vrf = { path = "../vrf" }
 
 [dev-dependencies]
 hex = "0.4"
 simple_logger = "1.9.0"
 
-nimiq-build-tools = { path = "../build-tools", version = "0.1" }
+nimiq-build-tools = { path = "../build-tools" }
 tokio = { version = "0.2", features = ["rt-core", "time", "test-util"] }
 
 [features]

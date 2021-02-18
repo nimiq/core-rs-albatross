@@ -43,14 +43,14 @@ tracing-futures = "0.1"
 tracing-log = "0.1"
 tracing-attributes = "0.1"
 
-beserial = { path = "../beserial", version = "0.1", features = ["libp2p"] }
-beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
-nimiq-network-interface = { path = "../network-interface", version = "0.1" }
-nimiq-keys = { path = "../keys", version = "0.1" }
-nimiq-peer-address = { path = "../peer-address", version = "0.1" }
-nimiq-macros = { path = "../macros", version = "0.1" }
-nimiq-hash = { path = "../hash", version = "0.1" }
-nimiq-utils = { path = "../utils", version = "0.1", features = ["tagged-signing", "serde-derive", "libp2p", "time"] }
+beserial = { path = "../beserial", features = ["libp2p"] }
+beserial_derive = { path = "../beserial/beserial_derive" }
+nimiq-network-interface = { path = "../network-interface" }
+nimiq-keys = { path = "../keys" }
+nimiq-peer-address = { path = "../peer-address" }
+nimiq-macros = { path = "../macros" }
+nimiq-hash = { path = "../hash" }
+nimiq-utils = { path = "../utils", features = ["tagged-signing", "serde-derive", "libp2p", "time"] }
 
 [dev-dependencies]
 tracing-subscriber = "0.2"

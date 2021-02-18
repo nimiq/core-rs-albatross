@@ -83,12 +83,7 @@ countermeasure is for the signer to implicitly append its public key to the mess
 messages. However, this library does not implement the aggregation of signatures for different messages.
 
 ## License
-Licensed under either of:
-
- * Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
- * MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
-
-at your option.
+Licensed under Apache License, Version 2.0, (http://www.apache.org/licenses/LICENSE-2.0).
 
 ### Contribution
 Unless you explicitly state otherwise, any contribution intentionally

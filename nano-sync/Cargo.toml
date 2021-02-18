@@ -23,9 +23,9 @@ ark-crypto-primitives = { git = "https://github.com/arkworks-rs/crypto-primitive
 ark-r1cs-std = { git = "https://github.com/arkworks-rs/r1cs-std" }
 ark-groth16 = { git = "https://github.com/arkworks-rs/groth16" }
 
-nimiq-bls = { path = "../bls", version = "0.1" }
-nimiq-nano-primitives = { path = "../nano-primitives", version = "0.1"}
-nimiq-primitives = { path = "../primitives", version = "0.1", features = ["policy"] }
+nimiq-bls = { path = "../bls" }
+nimiq-nano-primitives = { path = "../nano-primitives"}
+nimiq-primitives = { path = "../primitives", features = ["policy"] }
 
 [features]
 default = ["prover"]

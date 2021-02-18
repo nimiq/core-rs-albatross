@@ -28,5 +28,5 @@ derive_more = "0.99"
 pretty-hex = "0.2"
 log = "0.4"
 
-beserial = { path = "../beserial", version = "0.1" }
-nimiq-utils = { path = "../utils", version = "0.1", features = ["crc"] }
+beserial = { path = "../beserial" }
+nimiq-utils = { path = "../utils", features = ["crc"] }

@@ -9,8 +9,8 @@ repository = "https://github.com/nimiq/core-rs-albatross"
 edition = "2018"
 
 [dependencies]
-nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }
-nimiq-genesis = { path = "../genesis", version = "0.1" }
-nimiq-hash = { path = "../hash", version = "0.1" }
-nimiq-primitives = { path = "../primitives", version = "0.1" }
-nimiq-nano-sync = { path = "../nano-sync", version = "0.1", default-features = false, features = ["verifier"]  }
+nimiq-block-albatross = { path = "../primitives/block-albatross" }
+nimiq-genesis = { path = "../genesis" }
+nimiq-hash = { path = "../hash" }
+nimiq-primitives = { path = "../primitives" }
+nimiq-nano-sync = { path = "../nano-sync", default-features = false, features = ["verifier"]  }

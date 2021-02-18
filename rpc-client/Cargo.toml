@@ -41,7 +41,7 @@ nimiq-transaction = { path = "../primitives/transaction", optional = true }
 nimiq-account = { path = "../primitives/account", optional = true }
 nimiq-bls = { path = "../bls", optional = true }
 nimiq-hash = { path = "../hash", optional = true }
-nimiq-transaction-builder = { path = "../transaction-builder", version = "0.1", features = ["serde-derive"] }
+nimiq-transaction-builder = { path = "../transaction-builder", features = ["serde-derive"] }
 
 [features]
 default = ["app"]

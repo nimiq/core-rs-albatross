@@ -27,27 +27,27 @@ weak-table = "0.2"
 async-trait = "0.1"
 thiserror = "1.0"
 
-beserial = { path = "../beserial", version = "0.1" }
-beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
-nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }
-nimiq-blockchain-albatross = { path = "../blockchain-albatross", version = "0.1", features = ["transaction-store"] }
-nimiq-collections = { path = "../collections", version = "0.1" }
-nimiq-database = { path = "../database", version = "0.1", features = ["full-nimiq"] }
-nimiq-hash = { path = "../hash", version = "0.1" }
-nimiq-macros = { path = "../macros", version = "0.1" }
-nimiq-mempool = { path = "../mempool", version = "0.1" }
-nimiq-messages = { path = "../messages", version = "0.1" }
-nimiq-network-interface = { path = "../network-interface", version = "0.1" }
-nimiq-genesis = { path = "../genesis", version = "0.1" }
-nimiq-primitives = { path = "../primitives", version = "0.1", features = ["policy"] }
-nimiq-transaction = { path = "../primitives/transaction", version = "0.1" }
-nimiq-subscription = { path = "../primitives/subscription", version = "0.1" }
-nimiq-utils = { path = "../utils", version = "0.1", features = ["time", "observer", "timers", "mutable-once", "throttled-queue", "rate-limit", "merkle", "math"] }
+beserial = { path = "../beserial" }
+beserial_derive = { path = "../beserial/beserial_derive" }
+nimiq-block-albatross = { path = "../primitives/block-albatross" }
+nimiq-blockchain-albatross = { path = "../blockchain-albatross" }
+nimiq-collections = { path = "../collections" }
+nimiq-database = { path = "../database", features = ["full-nimiq"] }
+nimiq-hash = { path = "../hash" }
+nimiq-macros = { path = "../macros" }
+nimiq-mempool = { path = "../mempool" }
+nimiq-messages = { path = "../messages" }
+nimiq-network-interface = { path = "../network-interface" }
+nimiq-genesis = { path = "../genesis" }
+nimiq-primitives = { path = "../primitives", features = ["policy"] }
+nimiq-transaction = { path = "../primitives/transaction" }
+nimiq-subscription = { path = "../primitives/subscription" }
+nimiq-utils = { path = "../utils", features = ["time", "observer", "timers", "mutable-once", "throttled-queue", "rate-limit", "merkle", "math"] }
 
 [dev-dependencies]
 hex = "0.4"
 simple_logger = "1.0"
 
-nimiq-bls = { path = "../bls", version = "0.1" }
-nimiq-network-mock = { path = "../network-mock", version = "0.1" }
-nimiq-block-production-albatross = { path = "../block-production-albatross", version = "0.1", features = ["test-utils"] }
+nimiq-bls = { path = "../bls" }
+nimiq-network-mock = { path = "../network-mock" }
+nimiq-block-production-albatross = { path = "../block-production-albatross", features = ["test-utils"] }

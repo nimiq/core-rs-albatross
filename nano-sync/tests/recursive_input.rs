@@ -99,7 +99,7 @@ impl ConstraintSynthesizer<MNT6Fr> for OuterCircuit {
     }
 }
 
-// This test takes a long time to finish, so run it only when necessary.
+// This test takes a very long time to finish, so run it only when necessary.
 #[test]
 #[ignore]
 fn recursive_input_works() {

@@ -25,24 +25,24 @@ hex = "0.4"
 lazy_static = "1.2"
 url = "1.7"
 
-beserial = { path = "../beserial", version = "0.1", features = ["net"] }
-beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
-nimiq-account = { path = "../primitives/account", version = "0.1" }
-nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }
-nimiq-bls = { path = "../bls", version = "0.1" }
-nimiq-hash = { path = "../hash", version = "0.1" }
-nimiq-hash_derive = { path = "../hash/hash_derive", version = "0.1" }
-nimiq-keys = { path = "../keys", version = "0.1" }
-nimiq-macros = { path = "../macros", version = "0.1" }
-nimiq-peer-address = { path = "../peer-address", version = "0.1" }
-nimiq-primitives = { path = "../primitives", version = "0.1", features = ["coin", "networks"] }
-nimiq-transaction = { path = "../primitives/transaction", version = "0.1" }
-nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "crc", "time"] }
+beserial = { path = "../beserial", features = ["net"] }
+beserial_derive = { path = "../beserial/beserial_derive" }
+nimiq-account = { path = "../primitives/account" }
+nimiq-block-albatross = { path = "../primitives/block-albatross" }
+nimiq-bls = { path = "../bls" }
+nimiq-hash = { path = "../hash" }
+nimiq-hash_derive = { path = "../hash/hash_derive" }
+nimiq-keys = { path = "../keys" }
+nimiq-macros = { path = "../macros" }
+nimiq-peer-address = { path = "../peer-address" }
+nimiq-primitives = { path = "../primitives", features = ["coin", "networks"] }
+nimiq-transaction = { path = "../primitives/transaction" }
+nimiq-utils = { path = "../utils", features = ["observer", "crc", "time"] }
 
 [build-dependencies]
 log = "0.4"
 pretty_env_logger = "0.4"
 
-nimiq-build-tools = { path = "../build-tools", version = "0.1" }
-nimiq-hash = { path = "../hash", version = "0.1" }
+nimiq-build-tools = { path = "../build-tools" }
+nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }

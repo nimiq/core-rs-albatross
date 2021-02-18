@@ -27,17 +27,17 @@ strum = "0.20"
 strum_macros = "0.20"
 thiserror = "1.0"
 
-beserial = { path = "../../beserial", version = "0.1" }
-beserial_derive = { path = "../../beserial/beserial_derive", version = "0.1" }
-nimiq-bls = { path = "../../bls", version = "0.1" }
-nimiq-collections = { path = "../../collections", version = "0.1", features = ["bitset"] }
-nimiq-hash = { path = "../../hash", version = "0.1" }
-nimiq-keys = { path = "../../keys", version = "0.1" }
-nimiq-primitives = { path = "..", version = "0.1", features = ["coin", "policy", "validators"] }
-nimiq-transaction = { path = "../transaction", version = "0.1" }
-nimiq-utils = { path = "../../utils", version = "0.1", features = ["hash-rng"] }
-nimiq-vrf = { path = "../../vrf", version = "0.1" }
-nimiq-macros = { path = "../../macros", version = "0.1" }
+beserial = { path = "../../beserial" }
+beserial_derive = { path = "../../beserial/beserial_derive" }
+nimiq-bls = { path = "../../bls" }
+nimiq-collections = { path = "../../collections", features = ["bitset"] }
+nimiq-hash = { path = "../../hash" }
+nimiq-keys = { path = "../../keys" }
+nimiq-primitives = { path = "..", features = ["coin", "policy", "validators"] }
+nimiq-transaction = { path = "../transaction" }
+nimiq-utils = { path = "../../utils", features = ["hash-rng"] }
+nimiq-vrf = { path = "../../vrf" }
+nimiq-macros = { path = "../../macros" }
 
 [dev-dependencies]
 hex = "0.4"

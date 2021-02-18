@@ -26,9 +26,9 @@ native-tls = "0.2"
 tokio = "0.1"
 tokio-tls = "0.2"
 
-beserial = { path = "../beserial", version = "0.1" }
-nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }
-nimiq-blockchain-albatross = { path = "../blockchain-albatross", version = "0.1", features = ["metrics"] }
-nimiq-consensus-albatross = { path = "../consensus-albatross", version = "0.1" }
-nimiq-mempool = { path = "../mempool", version = "0.1" }
-nimiq-network-albatross = { path = "../network-albatross", version = "0.1", features = ["metrics"] }
+beserial = { path = "../beserial" }
+nimiq-block-albatross = { path = "../primitives/block-albatross" }
+nimiq-blockchain-albatross = { path = "../blockchain-albatross", features = ["metrics"] }
+nimiq-consensus-albatross = { path = "../consensus-albatross" }
+nimiq-mempool = { path = "../mempool" }
+nimiq-network-albatross = { path = "../network-albatross", features = ["metrics"] }

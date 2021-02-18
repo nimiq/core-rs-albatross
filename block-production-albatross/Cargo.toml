@@ -19,27 +19,27 @@ maintenance = { status = "experimental" }
 [dependencies]
 log = "0.4"
 
-beserial = { path = "../beserial", version = "0.1" }
-nimiq-account = { path = "../primitives/account", version = "0.1" }
-nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }
-nimiq-blockchain-albatross = { path = "../blockchain-albatross", version = "0.1" }
-nimiq-bls = { path = "../bls", version = "0.1" }
-nimiq-collections = { path = "../collections", version = "0.1" }
-nimiq-database = { path = "../database", version = "0.1" }
-nimiq-genesis = { path = "../genesis", version = "0.1" }
-nimiq-hash = { path = "../hash", version = "0.1" }
-nimiq-keys = { path = "../keys", version = "0.1" }
-nimiq-mempool = { path = "../mempool", version = "0.1" }
-nimiq-nano-sync = { path = "../nano-sync", version = "0.1", default-features = false }
-nimiq-primitives = { path = "../primitives", version = "0.1" }
-nimiq-vrf = { path = "../vrf", version = "0.1" }
+beserial = { path = "../beserial" }
+nimiq-account = { path = "../primitives/account" }
+nimiq-block-albatross = { path = "../primitives/block-albatross" }
+nimiq-blockchain-albatross = { path = "../blockchain-albatross" }
+nimiq-bls = { path = "../bls" }
+nimiq-collections = { path = "../collections" }
+nimiq-database = { path = "../database" }
+nimiq-genesis = { path = "../genesis" }
+nimiq-hash = { path = "../hash" }
+nimiq-keys = { path = "../keys" }
+nimiq-mempool = { path = "../mempool" }
+nimiq-nano-sync = { path = "../nano-sync", default-features = false }
+nimiq-primitives = { path = "../primitives" }
+nimiq-vrf = { path = "../vrf" }
 
 [dev-dependencies]
 hex = "0.4"
 
-nimiq-collections = { path = "../collections", version = "0.1" }
-nimiq-database = { path = "../database", version = "0.1" }
-nimiq-transaction = { path = "../primitives/transaction", version = "0.1" }
+nimiq-collections = { path = "../collections" }
+nimiq-database = { path = "../database" }
+nimiq-transaction = { path = "../primitives/transaction" }
 
 [features]
 default = []

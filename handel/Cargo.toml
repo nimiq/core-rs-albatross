@@ -18,14 +18,14 @@ rand = "0.7"
 stopwatch = "0.0"
 tokio = { version = "0.2", features = ["rt-core", "time"] }
 
-beserial = { path = "../beserial", version = "0.1" }
-beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
-nimiq-bls = { path = "../bls", version = "0.1" }
-nimiq-collections = { path = "../collections", version = "0.1", features = ["bitset"] }
-nimiq-hash = { path = "../hash", version = "0.1" }
-nimiq-macros = { path = "../macros", version = "0.1" }
-nimiq-utils = { path = "../utils", version = "0.1", features = ["math", "mutable-once", "observer", "timers"] }
-nimiq-network-interface = { path = "../network-interface", version = "0.1" }
+beserial = { path = "../beserial" }
+beserial_derive = { path = "../beserial/beserial_derive" }
+nimiq-bls = { path = "../bls" }
+nimiq-collections = { path = "../collections", features = ["bitset"] }
+nimiq-hash = { path = "../hash" }
+nimiq-macros = { path = "../macros" }
+nimiq-utils = { path = "../utils", features = ["math", "mutable-once", "observer", "timers"] }
+nimiq-network-interface = { path = "../network-interface" }
 
 [dev-dependencies]
-nimiq-network-mock = { path = "../network-mock", version = "0.1" }
+nimiq-network-mock = { path = "../network-mock" }

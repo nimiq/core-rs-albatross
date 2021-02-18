@@ -28,14 +28,14 @@ pretty_env_logger ="0.4"
 structopt = { version = "0.3", features = ["paw"] }
 toml = "0.5"
 
-beserial = { path = "../beserial", version = "0.1" }
-nimiq-account = { path = "../primitives/account", version = "0.1" }
-nimiq-accounts = { path = "../accounts", version = "0.1" }
-nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }
-nimiq-bls = { path = "../bls", version = "0.1" }
-nimiq-collections = { path = "../collections", version = "0.1" }
-nimiq-database = { path = "../database", version = "0.1", features = ["account"] }
-nimiq-hash = { path = "../hash", version = "0.1" }
-nimiq-keys = { path = "../keys", version = "0.1" }
-nimiq-primitives = { path = "../primitives", version = "0.1" }
-nimiq-vrf = { path = "../vrf", version = "0.1" }
+beserial = { path = "../beserial" }
+nimiq-account = { path = "../primitives/account" }
+nimiq-accounts = { path = "../accounts" }
+nimiq-block-albatross = { path = "../primitives/block-albatross" }
+nimiq-bls = { path = "../bls" }
+nimiq-collections = { path = "../collections" }
+nimiq-database = { path = "../database", features = ["account"] }
+nimiq-hash = { path = "../hash" }
+nimiq-keys = { path = "../keys" }
+nimiq-primitives = { path = "../primitives" }
+nimiq-vrf = { path = "../vrf" }

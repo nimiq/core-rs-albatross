@@ -24,21 +24,21 @@ hex = "0.4"
 lazy_static = "1.2"
 url = "1.7"
 
-beserial = { path = "../beserial", version = "0.1", features = ["net"] }
-beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
-nimiq-bls = { path = "../bls", version = "0.1" }
-nimiq-hash = { path = "../hash", version = "0.1" }
-nimiq-hash_derive = { path = "../hash/hash_derive", version = "0.1" }
-nimiq-keys = { path = "../keys", version = "0.1" }
-nimiq-macros = { path = "../macros", version = "0.1" }
-nimiq-primitives = { path = "../primitives", version = "0.1", features = ["coin", "networks"] }
-nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "crc", "time"] }
+beserial = { path = "../beserial", features = ["net"] }
+beserial_derive = { path = "../beserial/beserial_derive" }
+nimiq-bls = { path = "../bls" }
+nimiq-hash = { path = "../hash" }
+nimiq-hash_derive = { path = "../hash/hash_derive" }
+nimiq-keys = { path = "../keys" }
+nimiq-macros = { path = "../macros" }
+nimiq-primitives = { path = "../primitives", features = ["coin", "networks"] }
+nimiq-utils = { path = "../utils", features = ["observer", "crc", "time"] }
 
 [build-dependencies]
 human-panic = { version = "1.0" }
 log = "0.4"
 simple_logger = "1.0"
 
-nimiq-build-tools = { path = "../build-tools", version = "0.1" }
-nimiq-hash = { path = "../hash", version = "0.1" }
+nimiq-build-tools = { path = "../build-tools" }
+nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }

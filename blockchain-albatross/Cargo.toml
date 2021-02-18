@@ -23,30 +23,28 @@ rand = "0.7"
 
 merkle-mountain-range = { git = "https://github.com/nimiq/merkle-mountain-range", branch= "main"}
 
-beserial = { path = "../beserial", version = "0.1" }
-beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
-nimiq-account = { path = "../primitives/account", version = "0.1" }
-nimiq-accounts = { path = "../accounts", version = "0.1" }
-nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }
-nimiq-bls = { path = "../bls", version = "0.1", features = ["beserial"] }
-nimiq-collections = { path = "../collections", version = "0.1" }
-nimiq-database = { path = "../database", version = "0.1", features = ["full-nimiq"] }
-nimiq-genesis = { path = "../genesis", version = "0.1" }
-nimiq-hash = { path = "../hash", version = "0.1" }
-nimiq-keys = { path = "../keys", version = "0.1" }
-nimiq-primitives = { path = "../primitives", version = "0.1" }
-nimiq-transaction = { path = "../primitives/transaction", version = "0.1" }
-nimiq-tree-primitives = { path = "../accounts/tree-primitives", version = "0.1" }
-nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "unique-ptr", "iterators", "time", "math"] }
-nimiq-vrf = { path = "../vrf", version = "0.1" }
+beserial = { path = "../beserial" }
+beserial_derive = { path = "../beserial/beserial_derive" }
+nimiq-account = { path = "../primitives/account" }
+nimiq-accounts = { path = "../accounts" }
+nimiq-block-albatross = { path = "../primitives/block-albatross" }
+nimiq-bls = { path = "../bls", features = ["beserial"] }
+nimiq-collections = { path = "../collections" }
+nimiq-database = { path = "../database", features = ["full-nimiq"] }
+nimiq-genesis = { path = "../genesis" }
+nimiq-hash = { path = "../hash" }
+nimiq-keys = { path = "../keys" }
+nimiq-primitives = { path = "../primitives" }
+nimiq-transaction = { path = "../primitives/transaction" }
+nimiq-tree-primitives = { path = "../accounts/tree-primitives" }
+nimiq-utils = { path = "../utils", features = ["observer", "unique-ptr", "iterators", "time", "math"] }
+nimiq-vrf = { path = "../vrf" }
 
 [dev-dependencies]
 atomic = "0.4"
 
-nimiq-block-production-albatross = { path = "../block-production-albatross", version = "0.1", features = ["test-utils"] }
-nimiq-nano-sync = { path= "../nano-sync", version = "0.1", default-features = false }
+nimiq-block-production-albatross = { path = "../block-production-albatross", features = ["test-utils"] }
+nimiq-nano-sync = { path= "../nano-sync", default-features = false }
 
 [features]
-default = ["transaction-store"]
 metrics = []
-transaction-store = []

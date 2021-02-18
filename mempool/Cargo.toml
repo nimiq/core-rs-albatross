@@ -20,21 +20,21 @@ maintenance = { status = "experimental" }
 log = "0.4"
 parking_lot = "0.9"
 
-beserial = { path = "../beserial", version = "0.1" }
-nimiq-account = { path = "../primitives/account", version = "0.1" }
-nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }
-nimiq-blockchain-albatross = { path = "../blockchain-albatross", version = "0.1" }
-nimiq-collections = { path = "../collections", version = "0.1" }
-nimiq-hash = { path = "../hash", version = "0.1" }
-nimiq-keys = { path = "../keys", version = "0.1" }
-nimiq-primitives = { path = "../primitives", version = "0.1", features = ["coin", "networks"] }
-nimiq-transaction = { path = "../primitives/transaction", version = "0.1" }
-nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "timers", "mutable-once"] }
+beserial = { path = "../beserial" }
+nimiq-account = { path = "../primitives/account" }
+nimiq-block-albatross = { path = "../primitives/block-albatross" }
+nimiq-blockchain-albatross = { path = "../blockchain-albatross" }
+nimiq-collections = { path = "../collections" }
+nimiq-hash = { path = "../hash" }
+nimiq-keys = { path = "../keys" }
+nimiq-primitives = { path = "../primitives", features = ["coin", "networks"] }
+nimiq-transaction = { path = "../primitives/transaction" }
+nimiq-utils = { path = "../utils", features = ["observer", "timers", "mutable-once"] }
 
 [dev-dependencies]
 hex = "0.4"
 
-nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }
-nimiq-blockchain-albatross = { path = "../blockchain-albatross", version = "0.1" }
-nimiq-database = { path = "../database", version = "0.1" }
-nimiq-genesis = { path = "../genesis", version = "0.1" }
+nimiq-block-albatross = { path = "../primitives/block-albatross" }
+nimiq-blockchain-albatross = { path = "../blockchain-albatross" }
+nimiq-database = { path = "../database" }
+nimiq-genesis = { path = "../genesis" }

@@ -1,7 +1,3 @@
-cargo-features = [
-  "profile-overrides"
-]
-
 [workspace]
 members = [
   "accounts",
@@ -30,7 +26,7 @@ members = [
   "mnemonic",
   "nano-primitives",
   "nano-sync",
-  "nano-blockchain",
+  #"nano-blockchain",
   "network-albatross",
   "network-interface",
   "network-libp2p",
@@ -54,7 +50,12 @@ members = [
   "wallet",
 ]
 
+# Force nimiq-bls and nimiq-nano-sync to be built with the highest optimization level in the dev and test profiles. This
+# is necessary in order to have decent tests performance.
 [profile.dev.package.nimiq-bls]
+opt-level = 3
+
+[profile.test.package.nimiq-bls]
 opt-level = 3
 
 [profile.dev.package.nimiq-nano-sync]
@@ -65,3 +66,8 @@ opt-level = 3
 
 [profile.test.package.nimiq-nano-sync]
 opt-level = 3
+
+# Optimize the release profile for speed.
+[profile.release]
+lto = "fat"
+codegen-units = 1

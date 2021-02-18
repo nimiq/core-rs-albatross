@@ -25,4 +25,4 @@ quote = "1.0"
 syn = { version = "1.0", features = ["extra-traits"] }
 
 [dev-dependencies]
-beserial = { path = "..", version = "0.1" }
+beserial = { path = ".." }

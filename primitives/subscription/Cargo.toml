@@ -17,15 +17,15 @@ failure = "0.1"
 hex = "0.4"
 log = "0.4"
 
-beserial = { path = "../../beserial", version = "0.1" }
-beserial_derive = { path = "../../beserial/beserial_derive", version = "0.1" }
-nimiq-bls = { path = "../../bls", version = "0.1", features = ["beserial"] }
-nimiq-hash = { path = "../../hash", version = "0.1" }
-nimiq-keys = { path = "../../keys", version = "0.1" }
-nimiq-macros = { path = "../../macros", version = "0.1" }
-nimiq-primitives = { path = "..", version = "0.1", features = ["policy", "networks", "account", "coin"] }
-nimiq-transaction = { path = "../transaction", version = "0.1" }
-nimiq-utils = { path = "../../utils", version = "0.1", features = ["merkle"] }
+beserial = { path = "../../beserial" }
+beserial_derive = { path = "../../beserial/beserial_derive" }
+nimiq-bls = { path = "../../bls", features = ["beserial"] }
+nimiq-hash = { path = "../../hash" }
+nimiq-keys = { path = "../../keys" }
+nimiq-macros = { path = "../../macros" }
+nimiq-primitives = { path = "..", features = ["policy", "networks", "account", "coin"] }
+nimiq-transaction = { path = "../transaction" }
+nimiq-utils = { path = "../../utils", features = ["merkle"] }
 
 [dev-dependencies]
 hex = "0.4"

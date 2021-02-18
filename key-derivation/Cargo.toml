@@ -20,9 +20,9 @@ maintenance = { status = "experimental" }
 byteorder = "1.2"
 regex = "1"
 
-beserial = { path = "../beserial", version = "0.1" }
-nimiq-hash = { path = "../hash", version = "0.1" }
-nimiq-keys = { path = "../keys", version = "0.1" }
+beserial = { path = "../beserial" }
+nimiq-hash = { path = "../hash" }
+nimiq-keys = { path = "../keys" }
 
 [dev-dependencies]
 hex = "0.4"

@@ -21,11 +21,11 @@ bitvec = "0.17"
 hex = "0.4"
 unicode-normalization = "0.1"
 
-beserial = { path = "../beserial", version = "0.1" }
-nimiq-hash = { path = "../hash", version = "0.1" }
-nimiq-key-derivation = { path = "../key-derivation", version = "0.1", optional = true }
-nimiq-macros = { path = "../macros", version = "0.1" }
-nimiq-utils = { path = "../utils", version = "0.1", features = ["crc"] }
+beserial = { path = "../beserial" }
+nimiq-hash = { path = "../hash" }
+nimiq-key-derivation = { path = "../key-derivation", optional = true }
+nimiq-macros = { path = "../macros" }
+nimiq-utils = { path = "../utils", features = ["crc"] }
 
 [features]
 default = ["key-derivation"]
