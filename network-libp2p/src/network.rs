@@ -927,11 +927,12 @@ mod tests {
             if let Some(dial_address) = self.addresses.first() {
                 tracing::debug!(address = ?dial_address, "dialing peer");
                 net.dial_address(dial_address.clone()).await.unwrap();
-            }
 
-            let mut events = net.subscribe_events();
-            let event = events.next().await;
-            tracing::trace!(event = ?event);
+                let mut events = net.subscribe_events();
+                tracing::debug!("waiting for join event");
+                let event = events.next().await;
+                tracing::trace!(event = ?event);
+            }
 
             self.addresses.push(address);
 
@@ -1133,7 +1134,6 @@ mod tests {
 
         for _ in 0..5i32 {
             let net_n = net.spawn().await;
-            net_n.subscribe_events().next().await;
             let stream_n = net_n.subscribe(&TestTopic).await.unwrap();
             consume_stream(stream_n);
         }
