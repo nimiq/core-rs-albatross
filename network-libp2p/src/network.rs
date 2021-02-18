@@ -1061,6 +1061,7 @@ mod tests {
         }
     }
 
+    #[ignore]
     #[tokio::test]
     async fn connections_are_properly_closed() {
         //tracing_subscriber::fmt::init();
