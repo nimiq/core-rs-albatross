@@ -1,7 +1,7 @@
 use accounts::Accounts;
 use block::MacroBlock;
 use hash::Blake2bHash;
-use primitives::slot::{Slots, ValidatorSlots};
+use primitives::slot::{Slots};
 
 use crate::chain_info::ChainInfo;
 use crate::transaction_cache::TransactionCache;
@@ -29,38 +29,4 @@ pub struct BlockchainState {
     pub current_slots: Option<Slots>,
     // The validator slots for the previous epoch.
     pub previous_slots: Option<Slots>,
-}
-
-impl BlockchainState {
-    pub fn accounts(&self) -> &Accounts {
-        &self.accounts
-    }
-
-    pub fn transaction_cache(&self) -> &TransactionCache {
-        &self.transaction_cache
-    }
-
-    pub fn block_number(&self) -> u32 {
-        self.main_chain.head.block_number()
-    }
-
-    pub fn current_slots(&self) -> Option<&Slots> {
-        self.current_slots.as_ref()
-    }
-
-    pub fn last_slots(&self) -> Option<&Slots> {
-        self.previous_slots.as_ref()
-    }
-
-    pub fn current_validators(&self) -> Option<&ValidatorSlots> {
-        Some(&self.current_slots.as_ref()?.validator_slots)
-    }
-
-    pub fn last_validators(&self) -> Option<&ValidatorSlots> {
-        Some(&self.previous_slots.as_ref()?.validator_slots)
-    }
-
-    pub fn main_chain(&self) -> &ChainInfo {
-        &self.main_chain
-    }
 }

@@ -6,7 +6,7 @@ use nimiq_block_albatross::{
     TendermintProof, TendermintProposal, TendermintStep, TendermintVote,
 };
 use nimiq_block_production_albatross::BlockProducer;
-use nimiq_blockchain_albatross::{Blockchain, PushResult};
+use nimiq_blockchain_albatross::{AbstractBlockchain, Blockchain, PushResult};
 use nimiq_bls::{AggregateSignature, KeyPair, SecretKey};
 use nimiq_collections::bitset::BitSet;
 use nimiq_database::volatile::VolatileEnvironment;

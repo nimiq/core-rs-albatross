@@ -19,7 +19,7 @@ use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use account::{Account, AccountTransactionInteraction};
 use beserial::Serialize;
 use block_albatross::Block;
-use blockchain_albatross::{Blockchain, BlockchainEvent};
+use blockchain_albatross::{AbstractBlockchain, Blockchain, BlockchainEvent};
 use hash::{Blake2bHash, Hash};
 use keys::Address;
 use primitives::networks::NetworkId;

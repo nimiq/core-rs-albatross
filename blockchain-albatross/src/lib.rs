@@ -18,9 +18,11 @@ extern crate nimiq_tree_primitives as tree_primitives;
 extern crate nimiq_utils as utils;
 extern crate nimiq_vrf as vrf;
 
-pub use blockchain::*;
+pub use abstract_blockchain::AbstractBlockchain;
+pub use blockchain::Blockchain;
 pub use error::*;
 
+pub mod abstract_blockchain;
 pub mod blockchain;
 pub mod blockchain_state;
 pub mod chain_info;

@@ -17,7 +17,7 @@ use bls::lazy::LazyPublicKey;
 use bls::KeyPair;
 use hash::{Blake2bHash, Hash};
 use keys::Address;
-use nimiq_blockchain_albatross::Blockchain;
+use nimiq_blockchain_albatross::{AbstractBlockchain, Blockchain};
 use nimiq_collections::bitset::BitSet;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
@@ -89,7 +89,7 @@ fn test_replay() {
     // create dummy hash and prepare message
     let block_hash = "foobar".hash::<Blake2bHash>();
 
-    let validators = blockchain.current_validators();
+    let validators = blockchain.current_validators().unwrap().validator_slots;
 
     // Calculate the validator Merkle root (used in the nano sync).
     let validator_merkle_root =

@@ -8,7 +8,7 @@ use primitives::policy;
 
 use crate::chain_info::ChainInfo;
 use crate::history_store::{ExtTxData, ExtendedTransaction, HistoryStore};
-use crate::{Blockchain, BlockchainEvent, PushError, PushResult};
+use crate::{AbstractBlockchain, Blockchain, BlockchainEvent, PushError, PushResult};
 
 /// Implements methods to push macro blocks into the chain when an history node is syncing. This
 /// type of syncing is called history syncing. It works by having the node get all the election
@@ -224,13 +224,9 @@ impl Blockchain {
         // Update the accounts tree, one block at a time.
         for i in 0..block_numbers.len() {
             // Commit block to AccountsTree and create the receipts.
-            let receipts = state.accounts.commit(
-                &mut txn,
-                &block_transactions[i],
-                &block_inherents[i],
-                block_numbers[i],
-                block_timestamps[i],
-            );
+            let receipts = state
+                .accounts
+                .commit(&mut txn, &block_transactions[i], &block_inherents[i], block_numbers[i], block_timestamps[i]);
 
             // Check if the receipts contain an error.
             if let Err(e) = receipts {
@@ -247,11 +243,8 @@ impl Blockchain {
         self.chain_store.clear_receipts(&mut txn);
 
         // Store the new extended transactions into the History tree.
-        self.history_store.add_to_history(
-            &mut txn,
-            policy::epoch_at(block.block_number()),
-            &ext_txs[first_new_ext_tx..],
-        );
+        self.history_store
+            .add_to_history(&mut txn, policy::epoch_at(block.block_number()), &ext_txs[first_new_ext_tx..]);
 
         // Unwrap the block.
         let macro_block = block.unwrap_macro_ref();
@@ -281,13 +274,9 @@ impl Blockchain {
         drop(push_lock);
 
         if is_election_block {
-            self.notifier
-                .read()
-                .notify(BlockchainEvent::EpochFinalized(block_hash));
+            self.notifier.read().notify(BlockchainEvent::EpochFinalized(block_hash));
         } else {
-            self.notifier
-                .read()
-                .notify(BlockchainEvent::Finalized(block_hash));
+            self.notifier.read().notify(BlockchainEvent::Finalized(block_hash));
         }
 
         // Return result.

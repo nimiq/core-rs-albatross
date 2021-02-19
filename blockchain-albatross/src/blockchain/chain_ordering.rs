@@ -6,7 +6,7 @@ use database::Transaction;
 use hash::Blake2bHash;
 
 use crate::chain_info::ChainInfo;
-use crate::Blockchain;
+use crate::{AbstractBlockchain, Blockchain};
 
 /// Enum describing all the possible ways of comparing one chain to the main chain.
 #[derive(Debug, Eq, PartialEq)]

@@ -160,7 +160,7 @@ impl Deserialize for ChainInfo {
                 }
             }
         }
-        // re-create the block out of the BlockComponenets returned by the match
+        // re-create the block out of the BlockComponents returned by the match
         .try_into()
         .map_err(|_| SerializingError::InvalidValue)?;
 

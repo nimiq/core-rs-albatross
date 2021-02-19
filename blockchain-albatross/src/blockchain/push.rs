@@ -5,8 +5,9 @@ use database::{ReadTransaction, WriteTransaction};
 use hash::Blake2bHash;
 use primitives::policy;
 
+use crate::blockchain::ChainOrdering;
 use crate::chain_info::ChainInfo;
-use crate::{Blockchain, BlockchainEvent, ChainOrdering, ForkEvent, PushError, PushResult};
+use crate::{AbstractBlockchain, Blockchain, BlockchainEvent, ForkEvent, PushError, PushResult};
 
 /// Implements methods to push blocks into the chain. This is used when the node has already synced
 /// and is just receiving newly produced blocks. It is also used for the final phase of syncing,

@@ -1,13 +1,13 @@
-use parking_lot::{MappedRwLockReadGuard, MutexGuard, RwLockReadGuard};
+use parking_lot::{MutexGuard, RwLockReadGuard};
 
 use account::{Account, StakingContract};
-use block::{Block, BlockType, MacroBlock};
+use block::{Block};
 use database::{Transaction, WriteTransaction};
 use genesis::NetworkInfo;
 use hash::Blake2bHash;
 use keys::Address;
 use primitives::policy;
-use primitives::slot::ValidatorSlots;
+
 use transaction::{Transaction as BlockchainTransaction, TransactionReceipt};
 use utils::observer::{Listener, ListenerHandle};
 
@@ -19,110 +19,9 @@ use crate::{Blockchain, BlockchainEvent, Direction};
 
 /// Implements several wrapper functions.
 impl Blockchain {
-    /// Returns the head of the main chain.
-    pub fn head(&self) -> MappedRwLockReadGuard<Block> {
-        let guard = self.state.read();
-        RwLockReadGuard::map(guard, |s| &s.main_chain.head)
-    }
-
-    /// Returns the last macro block.
-    pub fn macro_head(&self) -> MappedRwLockReadGuard<MacroBlock> {
-        let guard = self.state.read();
-        RwLockReadGuard::map(guard, |s| s.macro_info.head.unwrap_macro_ref())
-    }
-
-    /// Returns the last election macro block.
-    pub fn election_head(&self) -> MappedRwLockReadGuard<MacroBlock> {
-        let guard = self.state.read();
-        RwLockReadGuard::map(guard, |s| &s.election_head)
-    }
-
-    /// Returns the hash of the head of the main chain.
-    pub fn head_hash(&self) -> Blake2bHash {
-        self.state.read().head_hash.clone()
-    }
-
-    /// Returns the hash of the last macro block.
-    pub fn macro_head_hash(&self) -> Blake2bHash {
-        self.state.read().macro_head_hash.clone()
-    }
-
-    /// Returns the hash of the last election macro block.
-    pub fn election_head_hash(&self) -> Blake2bHash {
-        self.state.read().election_head_hash.clone()
-    }
-
-    /// Returns the block number at the head of the main chain.
-    pub fn block_number(&self) -> u32 {
-        self.state.read_recursive().main_chain.head.block_number()
-    }
-
-    /// Returns the timestamp at the head of the main chain.
-    pub fn timestamp(&self) -> u64 {
-        self.state.read_recursive().main_chain.head.timestamp()
-    }
-
-    /// Returns the view number at the head of the main chain.
-    pub fn view_number(&self) -> u32 {
-        self.state.read_recursive().main_chain.head.view_number()
-    }
-
-    /// Returns the next view number at the head of the main chain.
-    pub fn next_view_number(&self) -> u32 {
-        self.state
-            .read_recursive()
-            .main_chain
-            .head
-            .next_view_number()
-    }
-
-    /// Returns the current set of validators.
-    pub fn current_validators(&self) -> MappedRwLockReadGuard<ValidatorSlots> {
-        let guard = self.state.read();
-        RwLockReadGuard::map(guard, |s| s.current_validators().unwrap())
-    }
-
-    /// Returns the set of validators of the previous epoch.
-    pub fn last_validators(&self) -> MappedRwLockReadGuard<ValidatorSlots> {
-        let guard = self.state.read();
-        RwLockReadGuard::map(guard, |s| s.last_validators().unwrap())
-    }
-
     /// Returns the current state (with a read transaction).
     pub fn state(&self) -> RwLockReadGuard<BlockchainState> {
         self.state.read()
-    }
-
-    /// Checks if the blockchain contains a specific block, by its hash.
-    pub fn contains(&self, hash: &Blake2bHash, include_forks: bool) -> bool {
-        match self.chain_store.get_chain_info(hash, false, None) {
-            Some(chain_info) => include_forks || chain_info.on_main_chain,
-            None => false,
-        }
-    }
-
-    /// Returns the block type of the next block.
-    pub fn get_next_block_type(&self, last_number: Option<u32>) -> BlockType {
-        let last_block_number = match last_number {
-            None => self.head().block_number(),
-            Some(n) => n,
-        };
-
-        if policy::is_macro_block_at(last_block_number + 1) {
-            BlockType::Macro
-        } else {
-            BlockType::Micro
-        }
-    }
-
-    /// Fetches a given block, by its block number.
-    pub fn get_block_at(&self, height: u32, include_body: bool) -> Option<Block> {
-        self.chain_store.get_block_at(height, include_body, None)
-    }
-
-    /// Fetches a given block, by its hash.
-    pub fn get_block(&self, hash: &Blake2bHash, include_body: bool) -> Option<Block> {
-        self.chain_store.get_block(hash, include_body, None)
     }
 
     /// Fetches a given number of blocks, starting at a specific block (by its hash).
@@ -289,7 +188,7 @@ impl Blockchain {
             .validator_registry_address()
             .expect("No ValidatorRegistry");
 
-        let account = self.state.read().accounts().get(validator_registry, None);
+        let account = self.state.read().accounts.get(validator_registry, None);
 
         if let Account::Staking(x) = account {
             x
