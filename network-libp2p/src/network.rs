@@ -390,7 +390,7 @@ impl Network {
         match event {
             SwarmEvent::ConnectionEstablished { peer_id, endpoint, num_established } => {
                 if let Some(listen_addr) = state.incoming_listeners.get(&endpoint.get_remote_address().clone()) {
-                    log::debug!("Adding peer {:?} listen address to the peer contact book: {:?}", peer_id, listen_addr);
+                    tracing::debug!("Adding peer {:?} listen address to the peer contact book: {:?}", peer_id, listen_addr);
                     swarm.kademlia.add_address(&peer_id, listen_addr.clone());
 
                     // TODO: Rework peer address book handling
@@ -410,21 +410,21 @@ impl Network {
                         state.set_connected();
 
                         // Bootstrap Kademlia
-                        log::debug!("Bootstrapping DHT");
+                        tracing::debug!("Bootstrapping DHT");
                         if let Err(_) = swarm.kademlia.bootstrap() {
-                            log::error!("Bootstrapping DHT error: No known peers");
+                            tracing::error!("Bootstrapping DHT error: No known peers");
                         }
                     }
                 }
             }
 
             SwarmEvent::IncomingConnection { local_addr, send_back_addr } => {
-                log::trace!("Incoming connection from address {:?}, listen address: {:?}", send_back_addr, local_addr);
+                tracing::trace!("Incoming connection from address {:?}, listen address: {:?}", send_back_addr, local_addr);
                 state.incoming_listeners.insert(send_back_addr, local_addr);
             }
 
             SwarmEvent::IncomingConnectionError { local_addr: _, send_back_addr, error} => {
-                log::warn!("Incoming connection error: {:?}", error);
+                tracing::warn!("Incoming connection error: {:?}", error);
                 state.incoming_listeners.remove(&send_back_addr);
             }
 
@@ -501,7 +501,7 @@ impl Network {
                     NimiqEvent::Identify(event) => {
                         match event {
                             IdentifyEvent::Received { peer_id, info, observed_addr } => {
-                                log::debug!("Received identifying info from peer {:?} at address {:?}: {:?}", peer_id, observed_addr, info);
+                                tracing::debug!("Received identifying info from peer {:?} at address {:?}: {:?}", peer_id, observed_addr, info);
                                 for listen_addr in info.listen_addrs.clone() {
                                     swarm.kademlia.add_address(&peer_id, listen_addr);
                                 }
@@ -514,10 +514,10 @@ impl Network {
                                 });
                             }
                             IdentifyEvent::Sent { peer_id } => {
-                                log::debug!("Sent identifiyng info to peer {:?}", peer_id);
+                                tracing::debug!("Sent identifiyng info to peer {:?}", peer_id);
                             }
                             IdentifyEvent::Error { peer_id, error } => {
-                                log::error!("Error while identifying remote peer {:?}: {:?}", peer_id, error);
+                                tracing::error!("Error while identifying remote peer {:?}: {:?}", peer_id, error);
                             }
                         }
                     }
@@ -1011,7 +1011,7 @@ mod tests {
 
     #[tokio::test]
     async fn one_peer_can_send_multiple_messages() {
-        tracing_subscriber::fmt::init();
+        //tracing_subscriber::fmt::init();
 
         let (net1, net2) = create_connected_networks().await;
 
@@ -1128,6 +1128,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_gossipsub() {
+        tracing_subscriber::fmt::init();
+
         let mut net = TestNetwork::new();
 
         let net1 = net.spawn().await;
@@ -1148,8 +1150,9 @@ mod tests {
 
         net2.publish(&TestTopic, test_message.clone()).await.unwrap();
 
+        tracing::info!("Waiting for GossipSub message...");
         let (received_message, message_id) = messages.next().await.unwrap();
-        log::info!("Received GossipSub message: {:?}", received_message);
+        tracing::info!("Received GossipSub message: {:?}", received_message);
 
         assert_eq!(received_message, test_message);
 
