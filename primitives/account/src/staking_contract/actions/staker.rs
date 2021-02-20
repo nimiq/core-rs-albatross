@@ -57,6 +57,38 @@ impl StakingContract {
         Ok(())
     }
 
+    pub(super) fn rededicate_stake_sender(&mut self, staker_address: Address, value: Coin, from_validator_id: &ValidatorId) -> Result<(), AccountError> {
+        let mut entry = self.remove_validator(from_validator_id).ok_or(AccountError::InvalidForRecipient)?;
+        entry.try_sub_stake(&staker_address, value, AccountError::InvalidForSender);
+        self.restore_validator(entry)?;
+
+        Ok(())
+    }
+
+    pub(super) fn revert_rededicate_stake_sender(&mut self, staker_address: Address, value: Coin, from_validator_id: &ValidatorId) -> Result<(), AccountError> {
+        let mut entry = self.remove_validator(from_validator_id).ok_or(AccountError::InvalidForRecipient)?;
+        entry.try_add_stake(staker_address, value);
+        self.restore_validator(entry)?;
+
+        Ok(())
+    }
+
+    pub(super) fn rededicate_stake_receiver(&mut self, staker_address: Address, value: Coin, to_validator_id: &ValidatorId) -> Result<(), AccountError> {
+        let mut entry = self.remove_validator(to_validator_id).ok_or(AccountError::InvalidForRecipient)?;
+        entry.try_add_stake(staker_address, value);
+        self.restore_validator(entry)?;
+
+        Ok(())
+    }
+
+    pub(super) fn revert_rededicate_stake_receiver(&mut self, staker_address: Address, value: Coin, to_validator_id: &ValidatorId) -> Result<(), AccountError> {
+        let mut entry = self.remove_validator(to_validator_id).ok_or(AccountError::InvalidForRecipient)?;
+        entry.try_sub_stake(&staker_address, value, AccountError::InvalidForSender);
+        self.restore_validator(entry)?;
+
+        Ok(())
+    }
+
     /// Removes stake from the active stake list.
     pub(super) fn retire_sender(&mut self, staker_address: &Address, value: Coin, validator_id: &ValidatorId) -> Result<(), AccountError> {
         let new_balance = Account::balance_sub(self.balance, value)?;

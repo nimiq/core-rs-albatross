@@ -125,6 +125,10 @@ impl AccountTransactionInteraction for StakingContract {
                     self.reactivate_recipient(staker_address, transaction.value, &validator_id)?;
                     Ok(None)
                 }
+                SelfStakingTransactionData::RededicateStake { from_validator_id: _, to_validator_id } => {
+                    self.rededicate_stake_receiver(staker_address, transaction.value, &to_validator_id)?;
+                    Ok(None)
+                }
             }
         }
     }
@@ -182,6 +186,9 @@ impl AccountTransactionInteraction for StakingContract {
                 }
                 SelfStakingTransactionData::ReactivateStake(validator_key) => {
                     self.revert_reactivate_recipient(&staker_address, transaction.value, &validator_key)?;
+                }
+                SelfStakingTransactionData::RededicateStake { from_validator_id: _, to_validator_id } => {
+                    self.revert_rededicate_stake_receiver(staker_address, transaction.value, &to_validator_id)?;
                 }
             }
         }
@@ -247,6 +254,13 @@ impl AccountTransactionInteraction for StakingContract {
 
                     Account::balance_sufficient(inactive_stake.balance, transaction.total_value()?)
                 }
+                SelfStakingTransactionData::RededicateStake { from_validator_id, to_validator_id: _ } => {
+                    let validator = self.get_validator(&from_validator_id).ok_or(AccountError::InvalidForSender)?;
+                    let stakes = validator.active_stake_by_address.read();
+                    let stake = stakes.get(&staker_address).ok_or(AccountError::InvalidForSender)?;
+
+                    Account::balance_sufficient(*stake, transaction.total_value()?)
+                }
             }
         }
     }
@@ -278,6 +292,10 @@ impl AccountTransactionInteraction for StakingContract {
                 SelfStakingTransactionData::ReactivateStake(_validator_id) => self
                     .reactivate_sender(&staker_address, transaction.total_value()?, None)?
                     .map(|r| r.serialize_to_vec()),
+                SelfStakingTransactionData::RededicateStake { from_validator_id, to_validator_id: _ } => {
+                    self.rededicate_stake_sender(staker_address, transaction.total_value()?, &from_validator_id)?;
+                    None
+                }
             })
         }
     }
@@ -314,6 +332,9 @@ impl AccountTransactionInteraction for StakingContract {
                 SelfStakingTransactionData::ReactivateStake(_validator_id) => {
                     let receipt: Option<InactiveStakeReceipt> = conditional_deserialize(receipt)?;
                     self.revert_reactivate_sender(&staker_address, transaction.total_value()?, receipt)?;
+                }
+                SelfStakingTransactionData::RededicateStake { from_validator_id, to_validator_id: _ } => {
+                    self.revert_rededicate_stake_sender(staker_address, transaction.total_value()?, &from_validator_id)?;
                 }
             }
         }
