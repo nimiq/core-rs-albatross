@@ -9,7 +9,7 @@ use tokio::time;
 
 use block_albatross::{ForkProof, MicroBlock, ViewChange, ViewChangeProof};
 use block_production_albatross::BlockProducer;
-use blockchain_albatross::Blockchain;
+use blockchain_albatross::{AbstractBlockchain, Blockchain};
 use mempool::Mempool;
 use nimiq_validator_network::ValidatorNetwork;
 use utils::time::systemtime_to_timestamp;
@@ -110,7 +110,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         let (slot, _) =
             self.blockchain
                 .get_slot_owner_at(self.block_number, self.view_number, None);
-        &self.signing_key.public_key.compress() == slot.validator_slot.public_key().compressed()
+        &self.signing_key.public_key.compress() == slot.public_key.compressed()
     }
 
     fn produce_micro_block(&self) -> MicroBlock {
@@ -152,7 +152,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         });
 
         // TODO get at init time?
-        let active_validators = self.blockchain.current_validators().clone();
+        let active_validators = self.blockchain.current_validators().unwrap().clone();
         let (view_change, view_change_proof) = ViewChangeAggregation::start(
             view_change.clone(),
             view_change_proof,

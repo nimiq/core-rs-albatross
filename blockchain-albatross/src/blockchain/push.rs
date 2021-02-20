@@ -53,7 +53,7 @@ impl Blockchain {
         let (slot, _) =
             self.get_slot_owner_at(block.block_number(), block.view_number(), Some(&read_txn));
 
-        let intended_slot_owner = slot.public_key().uncompress_unchecked();
+        let intended_slot_owner = slot.public_key.uncompress_unchecked();
 
         // Check the header.
         if let Err(e) =
@@ -242,7 +242,7 @@ impl Blockchain {
                 let old_slots = state.current_slots.take().unwrap();
                 state.previous_slots.replace(old_slots);
 
-                let new_slots = macro_block.get_slots().unwrap();
+                let new_slots = macro_block.get_validators().unwrap();
                 state.current_slots.replace(new_slots);
             }
         }

@@ -1,7 +1,7 @@
 use block::{Block, BlockType, MacroBlock};
 use hash::Blake2bHash;
 use primitives::policy;
-use primitives::slot::Slots;
+use primitives::slots::Validators;
 
 use crate::Blockchain;
 
@@ -52,10 +52,10 @@ pub trait AbstractBlockchain {
     }
 
     /// Returns the current set of validators.
-    fn current_validators(&self) -> Option<Slots>;
+    fn current_validators(&self) -> Option<Validators>;
 
     /// Returns the set of validators of the previous epoch.
-    fn previous_validators(&self) -> Option<Slots>;
+    fn previous_validators(&self) -> Option<Validators>;
 
     /// Checks if the blockchain contains a specific block, by its hash.
     fn contains(&self, hash: &Blake2bHash, include_forks: bool) -> bool;
@@ -112,11 +112,11 @@ impl AbstractBlockchain for Blockchain {
             .next_view_number()
     }
 
-    fn current_validators(&self) -> Option<Slots> {
+    fn current_validators(&self) -> Option<Validators> {
         self.state.read().current_slots.clone()
     }
 
-    fn previous_validators(&self) -> Option<Slots> {
+    fn previous_validators(&self) -> Option<Validators> {
         self.state.read().previous_slots.clone()
     }
 

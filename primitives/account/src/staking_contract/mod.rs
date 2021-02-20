@@ -12,7 +12,7 @@ use keys::Address;
 use nimiq_bls::CompressedSignature as BlsSignature;
 use nimiq_collections::BitSet;
 use primitives::account::ValidatorId;
-use primitives::slot::{Slots, SlotsBuilder};
+use primitives::slots::{Validators, ValidatorsBuilder};
 use primitives::{coin::Coin, policy};
 use transaction::account::staking_contract::IncomingStakingTransactionData;
 use transaction::{SignatureProof, Transaction};
@@ -148,7 +148,7 @@ impl StakingContract {
 
     /// Given a seed, it randomly distributes the validator slots across all validators. It can be
     /// used to select the validators for the next epoch.
-    pub fn select_validators(&self, seed: &VrfSeed) -> Slots {
+    pub fn select_validators(&self, seed: &VrfSeed) -> Validators {
         // TODO: Depending on the circumstances and parameters, it might be more efficient to store
         // active stake in an unsorted Vec.
         // Then, we would not need to create the Vec here. But then, removal of stake is a O(n) operation.
@@ -166,7 +166,7 @@ impl StakingContract {
             weights.push(validator.balance.into());
         }
 
-        let mut slots_builder = SlotsBuilder::default();
+        let mut slots_builder = ValidatorsBuilder::default();
         let lookup = AliasMethod::new(weights);
         let mut rng = seed.rng(VrfUseCase::ValidatorSelection, 0);
 
@@ -178,7 +178,6 @@ impl StakingContract {
             slots_builder.push(
                 active_validator.id.clone(),
                 active_validator.validator_key.clone(),
-                &active_validator.reward_address,
             );
         }
 

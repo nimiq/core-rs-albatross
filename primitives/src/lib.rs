@@ -12,4 +12,4 @@ pub mod networks;
 #[cfg(feature = "policy")]
 pub mod policy;
 #[cfg(feature = "validators")]
-pub mod slot;
+pub mod slots;

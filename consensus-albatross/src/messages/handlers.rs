@@ -1,6 +1,6 @@
 use crate::messages::*;
 use block_albatross::Block;
-use blockchain_albatross::{history_store::CHUNK_SIZE, Blockchain, Direction};
+use blockchain_albatross::{history_store::CHUNK_SIZE, AbstractBlockchain, Blockchain, Direction};
 use network_interface::message::ResponseMessage;
 use nimiq_genesis::NetworkInfo;
 use primitives::policy;
@@ -62,7 +62,7 @@ impl Handle<BlockHashes> for RequestBlockHashes {
         if self.filter == RequestBlockHashesFilter::ElectionAndLatestCheckpoint
             && hashes.len() < self.max_blocks as usize
         {
-            let checkpoint_block = blockchain.macro_head();
+            let checkpoint_block = blockchain.macro_head().unwrap_macro();
             if !checkpoint_block.is_election_block() {
                 hashes.push((BlockHashType::Checkpoint, checkpoint_block.hash()));
             }

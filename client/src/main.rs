@@ -117,7 +117,7 @@ async fn main_inner() -> Result<(), Error> {
 
         if show_statistics {
             let network_info = client.network().network_info().await.unwrap(); // handle error?
-            let head = client.blockchain().head().clone();
+            let head = client.blockchain_head().clone();
 
             log::info!(
                 "Consensus established: {:?} - Head: #{} - {}, Peers: {}",

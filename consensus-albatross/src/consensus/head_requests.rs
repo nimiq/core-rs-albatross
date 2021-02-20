@@ -1,6 +1,6 @@
 use crate::consensus_agent::ConsensusAgent;
 use block_albatross::Block;
-use blockchain_albatross::Blockchain;
+use blockchain_albatross::{AbstractBlockchain, Blockchain};
 use futures::future::BoxFuture;
 use futures::stream::FuturesUnordered;
 use futures::task::{Context, Poll};

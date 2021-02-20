@@ -20,7 +20,7 @@ use nimiq_bls::SecretKey;
 use nimiq_collections::bitset::BitSet;
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::policy;
-use nimiq_primitives::slot::ValidatorSlots;
+use nimiq_primitives::slots::Validators;
 
 use nimiq_handel::aggregation::Aggregation;
 use nimiq_handel::config::Config;
@@ -297,7 +297,7 @@ where
 {
     pub fn new(
         validator_id: u16,
-        active_validators: ValidatorSlots,
+        active_validators: Validators,
         block_height: u32,
         network: Arc<N>,
         secret_key: SecretKey,

@@ -9,15 +9,14 @@ use block_albatross::{
     SignedTendermintProposal, TendermintProof, TendermintProposal,
 };
 use block_production_albatross::BlockProducer;
-use blockchain_albatross::Blockchain;
+use blockchain_albatross::{AbstractBlockchain, Blockchain};
 use bls::{KeyPair, PublicKey};
 use database::WriteTransaction;
 use hash::{Blake2bHash, Hash};
 use network_interface::network::Topic;
-use nimiq_primitives::slot::ValidatorSlots;
+use nimiq_primitives::slots::Validators;
 use nimiq_validator_network::ValidatorNetwork;
 use primitives::policy::{TENDERMINT_TIMEOUT_DELTA, TENDERMINT_TIMEOUT_INIT};
-use primitives::slot::SlotCollection;
 use tendermint::{
     AggregationResult, ProposalResult, Step, TendermintError, TendermintOutsideDeps,
     TendermintState,
@@ -95,7 +94,7 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
         let our_public_key = self.validator_key.public_key.compress();
 
         // Compare the two public keys.
-        slot.public_key().compressed() == &our_public_key
+        slot.public_key.compressed() == &our_public_key
     }
 
     /// Produces a proposal. Evidently, used when we are the proposer.
@@ -168,11 +167,23 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
         }
 
         // Get our validator index.
-        let (validator_index, _) = self
+        // TODO: This code block gets this validators position in the validators struct by searching it
+        //  with its public key. This is an insane way of doing this. Just start saving the validator
+        //  id somewhere here.
+        let mut validator_index_opt = None;
+        for (i, validator) in self
             .blockchain
             .current_validators()
-            .find_idx_and_num_slots_by_public_key(&self.validator_key.public_key.compress())
-            .ok_or(TendermintError::ProposalBroadcastError)?;
+            .unwrap()
+            .iter()
+            .enumerate()
+        {
+            if validator.public_key.compressed() == &self.validator_key.public_key.compress() {
+                validator_index_opt = Some(i as u16);
+                break;
+            }
+        }
+        let validator_index = validator_index_opt.ok_or(TendermintError::ProposalBroadcastError)?;
 
         // Create the Tendermint proposal message.
         let proposal_message = TendermintProposal {
@@ -212,15 +223,17 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
             None,
         );
 
-        // Calculate the validator id from the slot number.
+        // Calculate the validator slot band from the slot number.
+        // TODO: Again, just redo this. We shouldn't be using slot bands. Validator ID is a much better
+        //  field.
         let validator_id = self
             .blockchain
             .current_validators()
-            .get_band_number_by_slot_number(slot_number)
-            .ok_or(TendermintError::CannotReceiveProposal)?;
+            .unwrap()
+            .get_band_from_slot(slot_number);
 
         // Get the validator key.
-        let validator_key = *slot.public_key().uncompress_unchecked();
+        let validator_key = *slot.public_key.uncompress_unchecked();
 
         // Calculate the timeout duration.
         let timeout = Duration::from_millis(
@@ -385,7 +398,7 @@ impl<N: ValidatorNetwork + 'static> TendermintInterface<N> {
         validator_key: KeyPair,
         validator_id: u16,
         network: Arc<N>,
-        active_validators: ValidatorSlots,
+        active_validators: Validators,
         blockchain: Arc<Blockchain>,
         block_producer: BlockProducer,
         block_height: u32,

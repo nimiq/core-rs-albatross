@@ -7,7 +7,7 @@ use futures::{Future, StreamExt};
 use tokio::sync::{broadcast, mpsc};
 
 use block_albatross::{Block, BlockType, ViewChange, ViewChangeProof};
-use blockchain_albatross::{BlockchainEvent, ForkEvent, PushResult};
+use blockchain_albatross::{AbstractBlockchain, BlockchainEvent, ForkEvent, PushResult};
 use bls::CompressedPublicKey;
 use consensus_albatross::{
     sync::block_queue::BlockTopic, Consensus, ConsensusEvent, ConsensusProxy,
@@ -47,6 +47,7 @@ struct ProduceMicroBlockState {
 pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork + 'static> {
     pub consensus: ConsensusProxy<TNetwork>,
     network: Arc<TValidatorNetwork>,
+    // TODO: Also have the validator ID here.
     signing_key: bls::KeyPair,
     wallet_key: Option<keys::KeyPair>,
     database: Database,
@@ -135,18 +136,28 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
     fn init_epoch(&mut self) {
         log::debug!("Initializing epoch");
 
-        self.epoch_state = self
-            .consensus
-            .blockchain
-            .current_validators()
-            .find_idx_and_num_slots_by_public_key(&self.signing_key.public_key.compress())
-            .map(|(validator_id, _)| ActiveEpochState { validator_id });
+        let validators = self.consensus.blockchain.current_validators().unwrap();
+
+        // TODO: This code block gets this validators position in the validators struct by searching it
+        //  with its public key. This is an insane way of doing this. Just start saving the validator
+        //  id in the Validator struct (the one in this crate).
+        self.epoch_state = None;
+        for (i, validator) in validators.iter().enumerate() {
+            if validator.public_key.compressed() == &self.signing_key.public_key.compress() {
+                self.epoch_state = Some(ActiveEpochState {
+                    validator_id: i as u16,
+                });
+                break;
+            }
+        }
+
         let validator_keys: Vec<CompressedPublicKey> = self
             .consensus
             .blockchain
             .current_validators()
+            .unwrap()
             .iter()
-            .map(|slot_band| slot_band.public_key().compressed().clone())
+            .map(|validator| validator.public_key.compressed().clone())
             .collect();
         let key = self.signing_key.clone();
         let nw = self.network.clone();

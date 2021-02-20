@@ -7,7 +7,7 @@ use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteByte
 use hash::{Blake2bHash, Blake2sHash, Hash, SerializeContent};
 use hash_derive::SerializeContent;
 use primitives::coin::Coin;
-use primitives::slot::Slots;
+use primitives::slots::Validators;
 use transaction::Transaction;
 use vrf::VrfSeed;
 
@@ -144,10 +144,10 @@ impl Block {
         }
     }
 
-    /// Returns a copy of the validator slots. Only returns Some if it is an election block.
-    pub fn slots(&self) -> Option<Slots> {
+    /// Returns a copy of the validators. Only returns Some if it is an election block.
+    pub fn validators(&self) -> Option<Validators> {
         match self {
-            Block::Macro(ref block) => block.clone().try_into().ok(),
+            Block::Macro(block) => block.get_validators(),
             Block::Micro(_) => None,
         }
     }

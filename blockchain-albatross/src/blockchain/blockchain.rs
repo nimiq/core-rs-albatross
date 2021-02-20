@@ -12,7 +12,7 @@ use keys::Address;
 use primitives::coin::Coin;
 use primitives::networks::NetworkId;
 use primitives::policy;
-use primitives::slot::Slots;
+use primitives::slots::Validators;
 use utils::observer::Notifier;
 use utils::time::OffsetTime;
 
@@ -193,7 +193,7 @@ impl Blockchain {
         );
 
         // Current slots and validators
-        let current_slots = election_head.get_slots().unwrap();
+        let current_slots = election_head.get_validators().unwrap();
 
         // Get last slots and validators
         let prev_block =
@@ -202,12 +202,12 @@ impl Blockchain {
         let last_slots = match prev_block {
             Some(Block::Macro(prev_election_block)) => {
                 if prev_election_block.is_election_block() {
-                    prev_election_block.get_slots().unwrap()
+                    prev_election_block.get_validators().unwrap()
                 } else {
                     return Err(BlockchainError::InconsistentState);
                 }
             }
-            None => Slots::default(),
+            None => Validators::default(),
             _ => return Err(BlockchainError::InconsistentState),
         };
 
@@ -254,7 +254,7 @@ impl Blockchain {
         let head_hash = genesis_block.hash();
 
         let genesis_macro_block = genesis_block.unwrap_macro_ref().clone();
-        let current_slots = genesis_macro_block.get_slots().expect("Slots missing");
+        let current_slots = genesis_macro_block.get_validators().expect("Slots missing");
         let (genesis_supply, genesis_timestamp) = genesis_parameters(&genesis_macro_block.header);
 
         let main_chain = ChainInfo::initial(genesis_block);
@@ -287,7 +287,7 @@ impl Blockchain {
                 election_head: genesis_macro_block,
                 election_head_hash: head_hash,
                 current_slots: Some(current_slots),
-                previous_slots: Some(Slots::default()),
+                previous_slots: Some(Validators::default()),
             }),
             push_lock: Mutex::new(()),
 

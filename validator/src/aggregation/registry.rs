@@ -4,41 +4,40 @@ use bls::PublicKey;
 use collections::BitSet;
 use handel::identity::{Identity, IdentityRegistry, WeightRegistry};
 use primitives::policy;
-use primitives::slot::{SlotCollection, ValidatorSlots};
+use primitives::slots::Validators;
 
-/// Implementation for handel registry using a `Validators` list.
+/// Implementation for Handel registry using a `Validators` list.
 #[derive(Debug)]
 pub(crate) struct ValidatorRegistry {
-    validators: ValidatorSlots,
+    validators: Validators,
 }
 
 impl ValidatorRegistry {
-    pub fn new(validators: ValidatorSlots) -> Self {
+    pub fn new(validators: Validators) -> Self {
         Self { validators }
     }
 
     pub fn len(&self) -> usize {
-        self.validators.len()
+        self.validators.num_validators()
     }
 
     pub fn get_slots(&self, idx: u16) -> Vec<u16> {
-        self.validators.get_slots(idx)
+        let validator = &self.validators.validators[idx as usize];
+
+        (validator.slot_range.0..validator.slot_range.1).collect()
     }
 }
 
 impl IdentityRegistry for ValidatorRegistry {
-    fn public_key(&self, id: usize) -> Option<PublicKey> {
+    fn public_key(&self, slot_number: usize) -> Option<PublicKey> {
         self.validators
-            // Get the band for the validator with id
-            .get_by_slot_number(id as u16)
-            .and_then(|slot_band| {
-                slot_band
-                    // Get the public key for this band
-                    .public_key()
-                    // and uncompress it
-                    .uncompress()
-                    .map(|c| *c) // necessary?
-            })
+            // Get the validator for with id
+            .get_validator(slot_number as u16)
+            // Get the public key for this validator
+            .public_key
+            // and uncompress it
+            .uncompress()
+            .map(|c| *c) // necessary?
     }
 
     fn signers_identity(&self, slots: &BitSet) -> Identity {
@@ -50,12 +49,7 @@ impl IdentityRegistry for ValidatorRegistry {
             let mut ids: HashSet<u16> = HashSet::new();
             for slot in slots.iter() {
                 // insert each validator_id if there is one.
-                if let Some(id) = self.validators.get_band_number_by_slot_number(slot as u16) {
-                    let _ = ids.insert(id);
-                } else {
-                    // If there is None this bitset is not valid and must be rejected
-                    return Identity::None;
-                }
+                let _ = ids.insert(self.validators.get_band_from_slot(slot as u16));
             }
 
             // if there is exactly no signer it needs to be rejected.
@@ -69,7 +63,7 @@ impl IdentityRegistry for ValidatorRegistry {
                 // this holds for Single and Multiple signatories.
                 let mut validators_slots = BitSet::new();
                 for validator_id in ids.iter() {
-                    for slot in self.validators.get_slots(*validator_id).iter() {
+                    for slot in self.get_slots(*validator_id).iter() {
                         validators_slots.insert(*slot as usize);
                     }
                 }

@@ -9,7 +9,7 @@ use parking_lot::RwLock;
 use rand::{rngs::OsRng, Rng};
 
 use beserial::Serialize;
-use blockchain_albatross::Blockchain;
+use blockchain_albatross::{AbstractBlockchain, Blockchain};
 use genesis::NetworkInfo;
 use macros::upgrade_weak;
 use network_messages::*;

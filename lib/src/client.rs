@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use nimiq_blockchain_albatross::Blockchain;
+use nimiq_block_albatross::Block;
+use nimiq_blockchain_albatross::{AbstractBlockchain, Blockchain};
 use nimiq_consensus_albatross::{
     Consensus as AbstractConsensus, ConsensusProxy as AbstractConsensusProxy,
 };
@@ -262,6 +263,11 @@ impl Client {
     /// Returns a reference to the blockchain
     pub fn blockchain(&self) -> Arc<Blockchain> {
         Arc::clone(&self.inner.consensus.blockchain)
+    }
+
+    /// Returns the blockchain head
+    pub fn blockchain_head(&self) -> Block {
+        Arc::clone(&self.inner.consensus.blockchain).head()
     }
 
     /// Returns a reference to the *Mempool*

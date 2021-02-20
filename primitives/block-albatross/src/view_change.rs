@@ -4,7 +4,7 @@ use bls::AggregatePublicKey;
 use hash::{Hash, SerializeContent};
 use hash_derive::SerializeContent;
 use primitives::policy::TWO_THIRD_SLOTS;
-use primitives::slot::{SlotIndex, ValidatorSlots};
+use primitives::slots::Validators;
 use std::fmt;
 use vrf::VrfSeed;
 
@@ -86,22 +86,23 @@ pub struct ViewChangeProof {
 impl ViewChangeProof {
     /// Verifies the proof. This only checks that the proof is valid for this view change, not that
     /// the view change itself is valid.
-    pub fn verify(&self, view_change: &ViewChange, validators: &ValidatorSlots) -> bool {
+    pub fn verify(&self, view_change: &ViewChange, validators: &Validators) -> bool {
         // Check if there are enough votes.
         if self.sig.signers.len() < TWO_THIRD_SLOTS as usize {
             error!("ViewChangeProof verification failed: Not enough slots signed the view change.");
             return false;
         }
 
-        // Get the public key for each SLOT present in the signature and add them together to get the aggregated public key.
+        // Get the public key for each SLOT present in the signature and add them together to get
+        // the aggregated public key.
         let agg_pk =
             self.sig
                 .signers
                 .iter()
                 .fold(AggregatePublicKey::new(), |mut aggregate, slot| {
                     let pk = validators
-                        .get_public_key(SlotIndex::Slot(slot as u16))
-                        .expect("PublicKey not found for slot")
+                        .get_validator(slot as u16)
+                        .public_key
                         .compressed()
                         .uncompress()
                         .expect("Failed to uncompress CompressedPublicKey");

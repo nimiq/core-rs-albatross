@@ -231,7 +231,7 @@ impl GenesisBuilder {
 
         // Body
         let mut body = MacroBody::new();
-        body.validators = Some(slots.validator_slots);
+        body.validators = Some(slots);
         let body_root = body.hash::<Blake2bHash>();
         debug!("Body root: {}", &body_root);
 

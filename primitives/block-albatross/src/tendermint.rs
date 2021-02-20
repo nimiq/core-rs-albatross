@@ -7,10 +7,10 @@ use beserial::{Deserialize, Serialize};
 use bls::AggregatePublicKey;
 use hash::{Blake2bHash, Hash, SerializeContent};
 use hash_derive::SerializeContent;
-use nano_sync::pk_tree_construct;
+use nano_sync::primitives::pk_tree_construct;
 use network_interface::message::Message as NetworkMessage;
 use primitives::policy::{SLOTS, TWO_THIRD_SLOTS};
-use primitives::slot::{SlotIndex, ValidatorSlots};
+use primitives::slots::Validators;
 use std::io;
 
 /// The proposal message sent by the Tendermint leader.
@@ -54,7 +54,7 @@ impl TendermintProof {
         &self,
         block_hash: Blake2bHash,
         block_number: u32,
-        validators: &ValidatorSlots,
+        validators: &Validators,
     ) -> bool {
         // Check if there are enough votes.
         if self.votes() < TWO_THIRD_SLOTS {
@@ -69,8 +69,8 @@ impl TendermintProof {
         let mut raw_pks = Vec::new();
         for i in 0..SLOTS {
             let pk = validators
-                .get_public_key(SlotIndex::Slot(i))
-                .unwrap()
+                .get_validator(i)
+                .public_key
                 .compressed()
                 .uncompress()
                 .unwrap();

@@ -8,7 +8,7 @@ use futures::task::{Context, Poll};
 use beserial::{Deserialize, Serialize};
 use nimiq_block_albatross::{MacroBlock, MacroHeader, MultiSignature, TendermintStep};
 use nimiq_block_production_albatross::BlockProducer;
-use nimiq_blockchain_albatross::blockchain::Blockchain;
+use nimiq_blockchain_albatross::{AbstractBlockchain, Blockchain};
 use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_tendermint::{
     Checkpoint, Step, TendermintOutsideDeps, TendermintReturn, TendermintState,
@@ -68,7 +68,7 @@ impl ProduceMacroBlock {
         state: Option<PersistedMacroState<TValidatorNetwork>>,
     ) -> Self {
         // get validators for current epoch
-        let active_validators = blockchain.current_validators().clone();
+        let active_validators = blockchain.current_validators().clone().unwrap();
 
         // create the TendermintOutsideDeps instance
         // Replace here with the actual OutSide Deps instead of the Mocked ones.

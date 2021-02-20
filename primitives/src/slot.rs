@@ -55,7 +55,7 @@ pub enum SlotIndex {
 }
 
 /// Identifies a slashed slot by the slot id.
-/// Contains the corresponding public key for reference.
+/// Contains the corresponding validator id for reference.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SlashedSlot {
     pub slot: u16,

@@ -11,18 +11,19 @@ use serde::{de::Deserializer, ser::Serializer, Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
 
 use nimiq_block_albatross::{TendermintProof, ViewChangeProof};
-use nimiq_blockchain_albatross::Blockchain;
+use nimiq_blockchain_albatross::{AbstractBlockchain, Blockchain};
 use nimiq_bls::{CompressedPublicKey, CompressedSignature};
 use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
 use nimiq_primitives::policy;
-use nimiq_primitives::slot::{SlotBand, ValidatorSlots};
+use nimiq_primitives::slots::Validators;
 use nimiq_primitives::{account::AccountType, coin::Coin};
 use nimiq_transaction::account::htlc_contract::AnyHash;
 use nimiq_vrf::VrfSeed;
 
 use crate::error::Error;
+use nimiq_primitives::account::ValidatorId;
 
 #[derive(Clone, Debug)]
 pub enum BlockNumberOrHash {
@@ -150,7 +151,7 @@ pub struct MacroJustification {
 impl MacroJustification {
     fn from_pbft_proof(
         tendermint_proof_opt: Option<TendermintProof>,
-        _validator_slots_opt: Option<&ValidatorSlots>,
+        _validator_slots_opt: Option<&Validators>,
     ) -> Option<Self> {
         if let Some(tendermint_proof) = tendermint_proof_opt {
             let votes = tendermint_proof.votes();
@@ -171,23 +172,25 @@ pub struct Slots {
 
     pub num_slots: u16,
 
-    pub public_key: CompressedPublicKey,
+    pub validator_id: ValidatorId,
 
-    pub reward_address: Address,
+    pub public_key: CompressedPublicKey,
 }
 
 impl Slots {
-    pub fn from_slots(slots: nimiq_primitives::slot::Slots) -> Vec<Slots> {
-        slots
-            .combined()
-            .into_iter()
-            .map(|(slot, first_slot_number)| Slots {
-                first_slot_number,
-                num_slots: slot.validator_slot.num_slots(),
-                public_key: slot.public_key().compressed().clone(),
-                reward_address: slot.reward_address().clone(),
+    pub fn from_slots(validators: Validators) -> Vec<Slots> {
+        let mut slots = vec![];
+
+        for validator in validators.iter() {
+            slots.push(Slots {
+                first_slot_number: validator.slot_range.0,
+                num_slots: validator.num_slots(),
+                validator_id: validator.validator_id.clone(),
+                public_key: validator.public_key.compressed().clone(),
             })
-            .collect()
+        }
+
+        slots
     }
 }
 
@@ -213,21 +216,22 @@ impl From<nimiq_block_albatross::MicroJustification> for MicroJustification {
 pub struct Slot {
     pub slot_number: u16,
 
-    pub public_key: CompressedPublicKey,
+    pub validator_id: ValidatorId,
 
-    pub reward_address: Address,
+    pub public_key: CompressedPublicKey,
 }
 
 impl Slot {
     pub fn from_producer(blockchain: &Blockchain, block_number: u32, view_number: u32) -> Self {
         // TODO: `get_slot_owner_at` should really return an `Option` or `Result`. This will panic, when there is no
         // slot owner.
-        let (slot, slot_number) = blockchain.get_slot_owner_at(block_number, view_number, None);
+        let (validator, slot_number) =
+            blockchain.get_slot_owner_at(block_number, view_number, None);
 
         Slot {
             slot_number,
-            public_key: slot.public_key().compressed().clone(),
-            reward_address: slot.reward_address().clone(),
+            validator_id: validator.validator_id.clone(),
+            public_key: validator.public_key.compressed().clone(),
         }
     }
 }
@@ -332,7 +336,7 @@ impl Block {
                     .and_then(|block| block.body())
                     .and_then(|body| body.unwrap_macro().validators);
 
-                let slots = macro_block.get_slots().map(Slots::from_slots);
+                let slots = macro_block.get_validators().map(Slots::from_slots);
 
                 Block {
                     block_type: BlockType::Macro,

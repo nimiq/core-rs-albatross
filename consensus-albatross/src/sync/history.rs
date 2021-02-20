@@ -10,9 +10,9 @@ use futures::{FutureExt, Stream, StreamExt};
 use tokio::sync::broadcast;
 
 use block_albatross::{Block, MacroBlock};
-use blockchain_albatross::history_store;
 use blockchain_albatross::history_store::ExtendedTransaction;
 use blockchain_albatross::Blockchain;
+use blockchain_albatross::{history_store, AbstractBlockchain};
 use hash::Blake2bHash;
 use network_interface::prelude::{CloseReason, Network, NetworkEvent, Peer};
 use primitives::policy;

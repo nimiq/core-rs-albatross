@@ -19,6 +19,7 @@ use nimiq_primitives::policy;
 use super::request_component::RequestComponent;
 use crate::consensus_agent::ConsensusAgent;
 use crate::sync::request_component::RequestComponentEvent;
+use blockchain_albatross::AbstractBlockchain;
 
 #[derive(Clone, Debug, Default)]
 pub struct BlockTopic;

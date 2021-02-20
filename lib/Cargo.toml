@@ -42,6 +42,7 @@ url = "1.7"
 thiserror = "1.0"
 
 beserial = { path = "../beserial" }
+nimiq-block-albatross = { path = "../primitives/block-albatross" }
 nimiq-blockchain-albatross = { path = "../blockchain-albatross" }
 nimiq-bls = { path = "../bls", optional = true }
 nimiq-consensus-albatross = { path = "../consensus-albatross" }

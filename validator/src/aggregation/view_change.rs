@@ -23,7 +23,7 @@ use handel::update::{LevelUpdate, LevelUpdateMessage};
 use hash::Blake2sHash;
 use nimiq_validator_network::ValidatorNetwork;
 use primitives::policy;
-use primitives::slot::{SlotCollection, SlotIndex, ValidatorSlots};
+use primitives::slots::Validators;
 
 use super::network_sink::NetworkSink;
 use super::registry::ValidatorRegistry;
@@ -130,12 +130,15 @@ struct ViewChangeAggregationProtocol {
 
 impl ViewChangeAggregationProtocol {
     pub fn new(
-        validators: ValidatorSlots,
+        validators: Validators,
         node_id: usize,
         threshold: usize,
         message_hash: Blake2sHash,
     ) -> Self {
-        let partitioner = Arc::new(BinomialPartitioner::new(node_id, validators.len()));
+        let partitioner = Arc::new(BinomialPartitioner::new(
+            node_id,
+            validators.num_validators(),
+        ));
 
         let store = Arc::new(RwLock::new(ReplaceStore::<
             BinomialPartitioner,
@@ -205,14 +208,17 @@ impl ViewChangeAggregation {
         mut view_change: ViewChange,
         mut previous_proof: Option<MultiSignature>,
         signing_key: bls::KeyPair,
+        // TODO: This seems to be a SlotBand. Change this to a proper Validator ID.
         validator_id: u16,
-        active_validators: ValidatorSlots,
+        active_validators: Validators,
         network: Arc<N>,
     ) -> (ViewChange, ViewChangeProof) {
         // TODO expose this somewehere else so we don't need to clone here.
         let weights = Arc::new(ValidatorRegistry::new(active_validators.clone()));
 
-        let slots = &active_validators.get_slots(validator_id);
+        let slot_range = active_validators.validators[validator_id as usize].slot_range;
+
+        let slots: Vec<u16> = (slot_range.0..slot_range.1).collect();
 
         trace!("Previous view_change proof: {:?}", &previous_proof);
 
@@ -234,7 +240,7 @@ impl ViewChangeAggregation {
                 .multiply(slots.len() as u16)]);
 
             let mut signers = BitSet::new();
-            for slot in slots {
+            for slot in &slots {
                 signers.insert(*slot as usize);
             }
 
@@ -290,17 +296,13 @@ impl ViewChangeAggregation {
                             // fist aggregate the public keys
                             let mut aggregated_public_key = AggregatePublicKey::new();
                             for signer in sig.signers.iter() {
-                                if let Some(public_key) =
-                                    active_validators.get_public_key(SlotIndex::Slot(signer as u16))
-                                {
-                                    aggregated_public_key.aggregate(
-                                        &public_key
-                                            .uncompress()
-                                            .expect("Could not uncompress lazyPublicKey"),
-                                    );
-                                } else {
-                                    warn!("Signer public key not found");
-                                }
+                                aggregated_public_key.aggregate(
+                                    &active_validators
+                                        .get_validator(signer as u16)
+                                        .public_key
+                                        .uncompress()
+                                        .expect("Could not uncompress lazyPublicKey"),
+                                );
                             }
 
                             let past_view_change = ViewChange {

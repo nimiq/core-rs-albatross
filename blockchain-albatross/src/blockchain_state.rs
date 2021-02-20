@@ -1,7 +1,7 @@
 use accounts::Accounts;
 use block::MacroBlock;
 use hash::Blake2bHash;
-use primitives::slot::{Slots};
+use primitives::slots::Validators;
 
 use crate::chain_info::ChainInfo;
 use crate::transaction_cache::TransactionCache;
@@ -26,7 +26,7 @@ pub struct BlockchainState {
     // The hash of the last election macro block.
     pub election_head_hash: Blake2bHash,
     // The validator slots for the current epoch.
-    pub current_slots: Option<Slots>,
+    pub current_slots: Option<Validators>,
     // The validator slots for the previous epoch.
-    pub previous_slots: Option<Slots>,
+    pub previous_slots: Option<Validators>,
 }

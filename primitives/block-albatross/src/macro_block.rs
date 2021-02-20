@@ -7,9 +7,9 @@ use thiserror::Error;
 use beserial::{Deserialize, Serialize};
 use collections::bitset::BitSet;
 use hash::{Blake2bHash, Blake2sHash, Hash, SerializeContent};
-use nimiq_nano_sync::pk_tree_construct;
+use nimiq_nano_sync::primitives::pk_tree_construct;
 use primitives::policy;
-use primitives::slot::{SlotIndex, Slots, ValidatorSlots};
+use primitives::slots::Validators;
 use vrf::VrfSeed;
 
 use crate::signed::{Message, PREFIX_TENDERMINT_PROPOSAL};
@@ -62,7 +62,7 @@ pub struct MacroBody {
     /// Contains all the information regarding the current validator set, i.e. their validator
     /// public key, their reward address and their assigned validator slots.
     /// Is only Some when the macro block is an election block.
-    pub validators: Option<ValidatorSlots>,
+    pub validators: Option<Validators>,
     /// A bitset representing which validator slots had their reward slashed at the time when this
     /// block was produced. It is used later on for reward distribution.
     pub lost_reward_set: BitSet,
@@ -91,8 +91,8 @@ impl MacroBlock {
     }
 
     /// Returns a copy of the validator slots. Only returns Some if it is an election block.
-    pub fn get_slots(&self) -> Option<Slots> {
-        self.clone().try_into().ok()
+    pub fn get_validators(&self) -> Option<Validators> {
+        self.body.as_ref()?.validators.clone()
     }
 }
 
@@ -148,31 +148,16 @@ pub enum IntoSlotsError {
     NoElection,
 }
 
-impl TryInto<Slots> for MacroBlock {
-    type Error = IntoSlotsError;
-
-    /// Transforms the validator_slots field of an election Macro block into a Slots struct.
-    fn try_into(self) -> Result<Slots, Self::Error> {
-        let validator_slots = self
-            .body
-            .ok_or(IntoSlotsError::MissingBody)?
-            .validators
-            .ok_or(IntoSlotsError::NoElection)?;
-
-        Ok(Slots::new(validator_slots))
-    }
-}
-
-pub fn create_pk_tree_root(slots: &ValidatorSlots) -> Vec<u8> {
+pub fn create_pk_tree_root(slots: &Validators) -> Vec<u8> {
     // create a
     let public_keys = (0..policy::SLOTS)
         // map every index
         .map(|index| {
             slots
-                // to the public key of validator with index index
-                .get_public_key(SlotIndex::Slot(index as u16))
-                // unwrap must succeed here or there is bigger problems
-                .unwrap()
+                // to the validator with index index
+                .get_validator(index as u16)
+                // then get its public key
+                .public_key
                 // get the compressed version of the public key
                 .compressed()
                 // and uncompress it
