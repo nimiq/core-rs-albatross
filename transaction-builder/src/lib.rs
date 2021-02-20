@@ -543,6 +543,39 @@ impl TransactionBuilder {
         }
     }
 
+    /// Creates a rededicate transaction from the address of a given `key_pair` from `from_validator_id` to `to_validator_id`.
+    pub fn new_rededicate_stake(
+        staking_contract: Option<Address>,
+        key_pair: &KeyPair,
+        from_validator_id: &ValidatorId,
+        to_validator_id: &ValidatorId,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Transaction {
+        let mut recipient = Recipient::new_staking_builder(staking_contract.clone());
+        recipient.rededicate_stake(from_validator_id, to_validator_id);
+
+        let mut builder = Self::new();
+        builder
+            .with_sender(fill_in_staking_contract_address(staking_contract, network_id))
+            .with_recipient(recipient.generate().unwrap())
+            .with_value(value)
+            .with_fee(fee)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(network_id);
+
+        let proof_builder = builder.generate().unwrap();
+        match proof_builder {
+            TransactionProofBuilder::Basic(mut builder) => {
+                builder.sign_with_key_pair(&key_pair);
+                builder.generate().unwrap()
+            }
+            _ => unreachable!(),
+        }
+    }
+
     /// Retires the stake from the address of a given `key_pair` and a specified `validator_key`.
     pub fn new_retire(
         staking_contract: Option<Address>,

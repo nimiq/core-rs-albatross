@@ -188,6 +188,14 @@ impl StakingRecipientBuilder {
         self
     }
 
+    pub fn rededicate_stake(&mut self, from_validator_id: &ValidatorId, to_validator_id: &ValidatorId) -> &mut Self {
+        self.staking_data = Some(StakingTransaction::SelfTransaction(SelfStakingTransactionData::RededicateStake {
+            from_validator_id: from_validator_id.clone(),
+            to_validator_id: to_validator_id.clone(),
+        }));
+        self
+    }
+
     /// This method allows to retire a stake.
     /// This has the effect of removing the stake from the validator with key `validator_key`.
     /// It is a necessary precondition to unstake funds.

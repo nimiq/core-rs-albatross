@@ -434,6 +434,7 @@ impl Deserialize for OutgoingStakingTransactionProof {
 pub enum SelfStakingTransactionType {
     RetireStake = 0,
     ReactivateStake = 1,
+    RededicateStake = 2,
 }
 
 #[derive(Clone, Debug)]
@@ -441,6 +442,10 @@ pub enum SelfStakingTransactionType {
 pub enum SelfStakingTransactionData {
     RetireStake(ValidatorId),
     ReactivateStake(ValidatorId),
+    RededicateStake {
+        from_validator_id: ValidatorId,
+        to_validator_id: ValidatorId,
+    }
 }
 
 impl SelfStakingTransactionData {
@@ -465,6 +470,11 @@ impl Serialize for SelfStakingTransactionData {
                 size += Serialize::serialize(&SelfStakingTransactionType::ReactivateStake, writer)?;
                 size += Serialize::serialize(validator_id, writer)?;
             }
+            SelfStakingTransactionData::RededicateStake { from_validator_id, to_validator_id } => {
+                size += Serialize::serialize(&SelfStakingTransactionType::RededicateStake, writer)?;
+                size += Serialize::serialize(from_validator_id, writer)?;
+                size += Serialize::serialize(to_validator_id, writer)?;
+            }
         }
         Ok(size)
     }
@@ -479,6 +489,11 @@ impl Serialize for SelfStakingTransactionData {
             SelfStakingTransactionData::ReactivateStake(validator_id) => {
                 size += Serialize::serialized_size(&SelfStakingTransactionType::ReactivateStake);
                 size += Serialize::serialized_size(validator_id);
+            }
+            SelfStakingTransactionData::RededicateStake { from_validator_id, to_validator_id } => {
+                size += Serialize::serialized_size(&SelfStakingTransactionType::RededicateStake);
+                size += Serialize::serialized_size(&from_validator_id);
+                size += Serialize::serialized_size(&to_validator_id);
             }
         }
         size
@@ -498,6 +513,12 @@ impl Deserialize for SelfStakingTransactionData {
                 let validator_id: ValidatorId = Deserialize::deserialize(reader)?;
 
                 Ok(SelfStakingTransactionData::ReactivateStake(validator_id))
+            }
+            SelfStakingTransactionType::RededicateStake => {
+                Ok(SelfStakingTransactionData::RededicateStake {
+                    from_validator_id: Deserialize::deserialize(reader)?,
+                    to_validator_id: Deserialize::deserialize(reader)?,
+                })
             }
         }
     }
