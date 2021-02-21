@@ -7,7 +7,7 @@ use nimiq_block_albatross::{
     ViewChange, ViewChangeProof,
 };
 use nimiq_block_production_albatross::BlockProducer;
-use nimiq_blockchain_albatross::{Blockchain, PushError, PushResult};
+use nimiq_blockchain_albatross::{AbstractBlockchain, Blockchain, PushError, PushResult};
 use nimiq_bls::{AggregateSignature, KeyPair, SecretKey};
 use nimiq_collections::BitSet;
 use nimiq_database::volatile::VolatileEnvironment;

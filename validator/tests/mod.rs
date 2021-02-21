@@ -5,7 +5,7 @@ use tokio::sync::broadcast;
 use tokio::time;
 
 use nimiq_block_albatross::{Message, MultiSignature, SignedViewChange, ViewChange};
-use nimiq_blockchain_albatross::{Blockchain, BlockchainEvent};
+use nimiq_blockchain_albatross::{AbstractBlockchain, Blockchain, BlockchainEvent};
 use nimiq_bls::{AggregatePublicKey, AggregateSignature, KeyPair};
 use nimiq_build_tools::genesis::{GenesisBuilder, GenesisInfo};
 use nimiq_collections::BitSet;
@@ -136,7 +136,7 @@ fn validator_for_slot(
     validators
         .iter()
         .find(|validator| {
-            &validator.signing_key().public_key.compress() == slot.public_key().compressed()
+            &validator.signing_key().public_key.compress() == slot.public_key.compressed()
         })
         .unwrap()
 }
@@ -311,9 +311,14 @@ async fn validator_can_catch_up() {
     // Listen for blockchain events from the block producer (after two view changes).
     let mut events = blockchain.notifier.write().as_stream();
 
-    let slots = &blockchain
+    let (start, end) = blockchain
         .current_validators()
-        .get_slots(validator.validator_id());
+        .unwrap()
+        .get_validator(validator.validator_id())
+        .slot_range
+        .clone();
+
+    let slots = (start..end).collect();
 
     // Manually construct a view change for the validator
     let vc = create_view_change_update(
@@ -322,7 +327,7 @@ async fn validator_can_catch_up() {
         blockchain.head().seed().clone(),
         validator.signing_key(),
         validator.validator_id(),
-        slots,
+        &slots,
     );
 
     // let the validators run.

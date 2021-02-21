@@ -6,7 +6,7 @@ use futures::StreamExt;
 use tokio::stream::pending;
 
 use nimiq_block_production_albatross::{test_utils::*, BlockProducer};
-use nimiq_blockchain_albatross::Blockchain;
+use nimiq_blockchain_albatross::{AbstractBlockchain, Blockchain};
 use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_consensus_albatross::consensus::Consensus;
 use nimiq_consensus_albatross::consensus_agent::ConsensusAgent;
@@ -287,9 +287,9 @@ async fn sync_ingredients() {
             consensus1
                 .blockchain
                 .macro_head()
-                .body
-                .as_ref()
+                .body()
                 .unwrap()
+                .unwrap_macro()
                 .history_root
                 .clone(),
             0

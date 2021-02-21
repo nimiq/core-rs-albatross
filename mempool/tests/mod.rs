@@ -41,7 +41,7 @@ fn push_same_tx_twice() {
 
     blockchain
         .state()
-        .accounts()
+        .accounts
         .commit(&mut txn, &[], &[reward], 0, 0)
         .unwrap();
 
@@ -124,7 +124,7 @@ fn push_and_get_valid_tx() {
 
     blockchain
         .state()
-        .accounts()
+        .accounts
         .commit(&mut txn, &[], &[reward], 1, 1)
         .unwrap();
 
@@ -184,7 +184,7 @@ fn push_and_get_two_tx_same_user() {
 
     blockchain
         .state()
-        .accounts()
+        .accounts
         .commit(&mut txn, &[], &[reward], 1, 1)
         .unwrap();
 
@@ -263,7 +263,7 @@ fn reject_free_tx_beyond_limit() {
 
     blockchain
         .state()
-        .accounts()
+        .accounts
         .commit(&mut txn, &[], &[reward], 1, 1)
         .unwrap();
 

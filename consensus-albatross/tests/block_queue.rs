@@ -15,7 +15,7 @@ use beserial::Deserialize;
 use futures::ready;
 use nimiq_block_albatross::Block;
 use nimiq_block_production_albatross::BlockProducer;
-use nimiq_blockchain_albatross::Blockchain;
+use nimiq_blockchain_albatross::{AbstractBlockchain, Blockchain};
 use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_consensus_albatross::consensus_agent::ConsensusAgent;
 use nimiq_consensus_albatross::sync::request_component::RequestComponentEvent;

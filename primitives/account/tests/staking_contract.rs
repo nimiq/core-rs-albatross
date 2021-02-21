@@ -14,7 +14,7 @@ use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::account::ValidatorId;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
-use nimiq_primitives::slot::{SlashedSlot, SlotCollection, SlotIndex};
+use nimiq_primitives::slots::SlashedSlot;
 use nimiq_transaction::account::staking_contract::{
     IncomingStakingTransactionData, OutgoingStakingTransactionProof, SelfStakingTransactionData,
 };
@@ -819,72 +819,32 @@ fn it_can_apply_rededicate_stake_tx() {
 
     let mut contract = make_empty_contract();
     contract
-        .create_validator(
-            validator_id1.clone(),
-            bls_pair1.public_key.compress(),
-            [1; 20].into(),
-            Coin::from_u64_unchecked(0),
-        )
+        .create_validator(validator_id1.clone(), bls_pair1.public_key.compress(), [1;20].into(), Coin::from_u64_unchecked(0))
         .unwrap();
     contract
-        .create_validator(
-            validator_id2.clone(),
-            bls_pair2.public_key.compress(),
-            [2; 20].into(),
-            Coin::from_u64_unchecked(0),
-        )
+        .create_validator(validator_id2.clone(), bls_pair2.public_key.compress(), [2;20].into(), Coin::from_u64_unchecked(0))
         .unwrap();
     contract
-        .stake(
-            Address::from(&ed25519_key_pair()),
-            Coin::from_u64_unchecked(150000000),
-            &validator_id1,
-        )
+        .stake(Address::from(&ed25519_key_pair()), Coin::from_u64_unchecked(150000000), &validator_id1)
         .unwrap();
 
-    let tx_1 = make_self_transaction(
-        SelfStakingTransactionData::RededicateStake {
-            from_validator_id: validator_id1.clone(),
-            to_validator_id: validator_id2.clone(),
-        },
-        50000000,
-    );
+
+    let tx_1 = make_self_transaction(SelfStakingTransactionData::RededicateStake{ from_validator_id: validator_id1.clone(), to_validator_id: validator_id2.clone() }, 50000000);
     assert_eq!(contract.check_outgoing_transaction(&tx_1, 2, 0), Ok(()));
     assert_eq!(contract.commit_outgoing_transaction(&tx_1, 2, 0), Ok(None));
-    assert_eq!(
-        StakingContract::check_incoming_transaction(&tx_1, 2, 0),
-        Ok(())
-    );
+    assert_eq!(StakingContract::check_incoming_transaction(&tx_1, 2, 0), Ok(()));
     assert_eq!(contract.commit_incoming_transaction(&tx_1, 2, 0), Ok(None));
 
     // initial balance - moved stake - fees
-    assert_eq!(
-        contract.get_validator(&validator_id1).unwrap().balance,
-        Coin::from_u64_unchecked(150000000 - 50000000 - 100)
-    );
-    assert_eq!(
-        contract.get_validator(&validator_id2).unwrap().balance,
-        Coin::from_u64_unchecked(50000000)
-    );
+    assert_eq!(contract.get_validator(&validator_id1).unwrap().balance, Coin::from_u64_unchecked(150000000 - 50000000 - 100));
+    assert_eq!(contract.get_validator(&validator_id2).unwrap().balance, Coin::from_u64_unchecked(50000000));
 
     // revert transaction
-    assert_eq!(
-        contract.revert_outgoing_transaction(&tx_1, 2, 0, None),
-        Ok(())
-    );
-    assert_eq!(
-        contract.revert_incoming_transaction(&tx_1, 2, 0, None),
-        Ok(())
-    );
+    assert_eq!(contract.revert_outgoing_transaction(&tx_1, 2, 0, None), Ok(()));
+    assert_eq!(contract.revert_incoming_transaction(&tx_1, 2, 0, None), Ok(()));
 
-    assert_eq!(
-        contract.get_validator(&validator_id1).unwrap().balance,
-        Coin::from_u64_unchecked(150000000)
-    );
-    assert_eq!(
-        contract.get_validator(&validator_id2).unwrap().balance,
-        Coin::from_u64_unchecked(0)
-    );
+    assert_eq!(contract.get_validator(&validator_id1).unwrap().balance, Coin::from_u64_unchecked(150000000));
+    assert_eq!(contract.get_validator(&validator_id2).unwrap().balance, Coin::from_u64_unchecked(0));
 }
 
 #[test]
@@ -1686,13 +1646,9 @@ fn it_can_build_a_validator_set() {
         .unwrap();
 
     let slots = contract.select_validators(&seed.compress().into());
-    assert_eq!(slots.validator_slots.len(), 1);
+    assert_eq!(slots.num_validators(), 1);
     assert_eq!(
-        slots
-            .get(SlotIndex::Slot(0))
-            .unwrap()
-            .public_key()
-            .compressed(),
+        slots.get_validator(0).public_key.compressed(),
         &validator_key1
     );
 
@@ -1713,13 +1669,9 @@ fn it_can_build_a_validator_set() {
         .unwrap();
 
     let slots = contract.select_validators(&seed.compress().into());
-    assert_eq!(slots.validator_slots.len(), 1);
+    assert_eq!(slots.num_validators(), 1);
     assert_eq!(
-        slots
-            .get(SlotIndex::Slot(0))
-            .unwrap()
-            .public_key()
-            .compressed(),
+        slots.get_validator(0).public_key.compressed(),
         &validator_key1
     );
 
@@ -1786,44 +1738,23 @@ fn it_can_build_a_validator_set() {
 
     // Test potential validator selection by stake
     let slots = contract.select_validators(&seed.compress().into());
-    assert_eq!(slots.validator_slots.len(), 3);
+    assert_eq!(slots.num_validators(), 3);
     assert_eq!(
-        slots
-            .get(SlotIndex::Slot(0))
-            .unwrap()
-            .public_key()
-            .compressed(),
+        slots.get_validator(0).public_key.compressed(),
         &validator_key1
     );
     assert_eq!(
-        slots
-            .get(SlotIndex::Slot(200))
-            .unwrap()
-            .public_key()
-            .compressed(),
+        slots.get_validator(200).public_key.compressed(),
         &validator_key2
     );
     assert_eq!(
-        slots
-            .get(SlotIndex::Slot(500))
-            .unwrap()
-            .public_key()
-            .compressed(),
+        slots.get_validator(500).public_key.compressed(),
         &validator_key3
     );
 
-    assert_eq!(
-        slots.get(SlotIndex::Slot(0)).unwrap().validator_id(),
-        &validator_id1
-    );
-    assert_eq!(
-        slots.get(SlotIndex::Slot(200)).unwrap().validator_id(),
-        &validator_id2
-    );
-    assert_eq!(
-        slots.get(SlotIndex::Slot(500)).unwrap().validator_id(),
-        &validator_id3
-    );
+    assert_eq!(slots.get_validator(0).validator_id, validator_id1);
+    assert_eq!(slots.get_validator(200).validator_id, validator_id2);
+    assert_eq!(slots.get_validator(500).validator_id, validator_id3);
 
     // TODO More tests
 }

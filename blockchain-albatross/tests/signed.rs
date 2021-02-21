@@ -25,7 +25,7 @@ use nimiq_nano_sync::pk_tree_construct;
 use nimiq_vrf::VrfSeed;
 use primitives::account::ValidatorId;
 use primitives::policy;
-use primitives::slot::{ValidatorSlotBand, ValidatorSlots};
+use primitives::slots::{Validator, Validators};
 
 // /// Still in for future reference, in case this key is needed again
 // const SECRET_KEY: &str = "8e44b45f308dae1e2d4390a0f96cea993960d4178550c62aeaba88e9e168d165\
@@ -65,11 +65,10 @@ fn test_view_change_single_signature() {
     };
 
     // verify view change proof
-    let validators = ValidatorSlots::new(vec![ValidatorSlotBand::new(
+    let validators = Validators::new(vec![Validator::new(
         ValidatorId::default(),
         LazyPublicKey::from(key_pair.public_key),
-        Address::default(),
-        policy::SLOTS,
+        (0, policy::SLOTS),
     )]);
 
     assert!(view_change_proof.verify(&view_change, &validators));
@@ -89,7 +88,7 @@ fn test_replay() {
     // create dummy hash and prepare message
     let block_hash = "foobar".hash::<Blake2bHash>();
 
-    let validators = blockchain.current_validators().unwrap().validator_slots;
+    let validators = blockchain.current_validators().unwrap();
 
     // Calculate the validator Merkle root (used in the nano sync).
     let validator_merkle_root =

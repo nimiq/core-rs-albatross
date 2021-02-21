@@ -5,7 +5,7 @@ use futures::stream::StreamExt;
 use beserial::Deserialize;
 use nimiq_block_production_albatross::test_utils::produce_macro_blocks;
 use nimiq_block_production_albatross::BlockProducer;
-use nimiq_blockchain_albatross::Blockchain;
+use nimiq_blockchain_albatross::{AbstractBlockchain, Blockchain};
 use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_consensus_albatross::sync::history::HistorySync;
 use nimiq_consensus_albatross::Consensus;

@@ -10,7 +10,8 @@ use nimiq_collections::bitset::BitSet;
 use nimiq_handel::update::LevelUpdate;
 use nimiq_hash::{Blake2bHasher, Hasher};
 use nimiq_keys::Address;
-use nimiq_primitives::slot::{Slots, ValidatorSlotBand, ValidatorSlots};
+use nimiq_primitives::account::ValidatorId;
+use nimiq_primitives::slots::{Validator, Validators, ValidatorsBuilder};
 
 #[test]
 fn it_can_convert_macro_block_into_slots() {
@@ -24,6 +25,7 @@ fn it_can_convert_macro_block_into_slots() {
     .unwrap();
     let signature = Signature::deserialize_from_vec(&signature_bytes).unwrap();
 
+    // TODO: We no longer need the reward address in there, so we can delete it from the strings below.
     let slot_allocation = vec![
         (
             [0u8; 20],
@@ -70,15 +72,21 @@ fn it_can_convert_macro_block_into_slots() {
         5fe88760dedd7fab48fcb197725114208510ecaa31020442803a81db35ac5f67f29d87924a0eaf76",
         ),
     ];
-    let validator_slots: ValidatorSlots = slot_allocation
-        .into_iter()
-        .map(|(validator_id, num_slots, data)| {
-            // The 6 unused bytes in the middle come from reducing the public key size to 270 bytes.
-            let pubkey = CompressedPublicKey::from_str(&data[..570]).unwrap();
-            let address = Address::from_any_str(&data[576..]).unwrap();
-            ValidatorSlotBand::new(validator_id.into(), pubkey, address, num_slots)
-        })
-        .collect();
+
+    let mut builder = ValidatorsBuilder::new();
+
+    for (validator_id, num_slots, data) in slot_allocation {
+        // The 6 unused bytes in the middle come from reducing the public key size to 270 bytes.
+        let pubkey = CompressedPublicKey::from_str(&data[..570]).unwrap();
+
+        let id = ValidatorId::from(validator_id);
+
+        for _ in 0..num_slots {
+            builder.push(id.clone(), pubkey.clone());
+        }
+    }
+
+    let validator_slots = builder.build();
 
     let macro_block = MacroBlock {
         header: MacroHeader {
@@ -102,10 +110,9 @@ fn it_can_convert_macro_block_into_slots() {
         }),
     };
 
-    let slots = Slots::new(validator_slots);
-    let slots_from_macro: Slots = macro_block.try_into().unwrap();
+    let validators_from_macro = macro_block.get_validators().unwrap();
 
-    assert_eq!(slots, slots_from_macro);
+    assert_eq!(validator_slots, validators_from_macro);
 }
 
 fn create_multisig() -> MultiSignature {

@@ -180,6 +180,13 @@ pub struct ValidatorsBuilder {
 }
 
 impl ValidatorsBuilder {
+    /// Create a new empty builder.
+    pub fn new() -> ValidatorsBuilder {
+        ValidatorsBuilder {
+            validators: BTreeMap::new(),
+        }
+    }
+
     /// Push a new validator slot. This will add one slot to the validator, if it already exists
     pub fn push<PK: Into<LazyPublicKey>>(&mut self, validator_id: ValidatorId, public_key: PK) {
         let (_, num_slots) = self
