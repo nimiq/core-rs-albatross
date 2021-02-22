@@ -291,7 +291,7 @@ async fn sync_ingredients() {
                 .unwrap()
                 .unwrap_macro()
                 .history_root
-                .clone(),
+                ,
             0
         ),
         Some(true)

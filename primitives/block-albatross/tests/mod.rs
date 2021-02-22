@@ -1,4 +1,4 @@
-use std::convert::TryInto;
+
 use std::str::FromStr;
 
 use beserial::{Deserialize, Serialize};
@@ -9,9 +9,9 @@ use nimiq_bls::{CompressedPublicKey, KeyPair, Signature};
 use nimiq_collections::bitset::BitSet;
 use nimiq_handel::update::LevelUpdate;
 use nimiq_hash::{Blake2bHasher, Hasher};
-use nimiq_keys::Address;
+
 use nimiq_primitives::account::ValidatorId;
-use nimiq_primitives::slots::{Validator, Validators, ValidatorsBuilder};
+use nimiq_primitives::slots::{ValidatorsBuilder};
 
 #[test]
 fn it_can_convert_macro_block_into_slots() {

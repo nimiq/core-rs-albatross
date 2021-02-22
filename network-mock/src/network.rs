@@ -38,7 +38,7 @@ pub struct MockPubsubId<P> {
 
 impl PubsubId<MockPeerId> for MockPubsubId<MockPeerId> {
     fn propagation_source(&self) -> MockPeerId {
-        self.propagation_source.clone()
+        self.propagation_source
     }
 }
 

@@ -87,7 +87,7 @@ impl From<TransactionFlags> for u8 {
 impl Deserialize for TransactionFlags {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let flag_data: u8 = reader.read_u8()?;
-        Ok(TransactionFlags::from_bits(flag_data).ok_or(SerializingError::InvalidValue)?)
+        TransactionFlags::from_bits(flag_data).ok_or(SerializingError::InvalidValue)
     }
 }
 

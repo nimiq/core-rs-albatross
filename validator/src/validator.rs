@@ -325,7 +325,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                         let nw = self.network.clone();
                         tokio::spawn(async move {
                             trace!("publishing macro block: {:?}", &block_copy);
-                            if let Err(_) = nw.publish(&BlockTopic, Block::Macro(block_copy)).await
+                            if nw.publish(&BlockTopic, Block::Macro(block_copy)).await.is_err()
                             {
                                 error!("Failed to publish Block");
                             }
@@ -376,7 +376,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                         let nw = self.network.clone();
                         tokio::spawn(async move {
                             trace!("publishing micro block: {:?}", &block_copy);
-                            if let Err(_) = nw.publish(&BlockTopic, Block::Micro(block_copy)).await
+                            if nw.publish(&BlockTopic, Block::Micro(block_copy)).await.is_err()
                             {
                                 error!("Failed to publish Block");
                             }

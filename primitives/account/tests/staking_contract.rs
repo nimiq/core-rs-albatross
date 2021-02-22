@@ -168,7 +168,7 @@ fn it_can_verify_validator_and_staking_transaction() {
     let invalid_pok = other_pair.sign(&keypair.public_key);
     let tx = make_incoming_transaction(
         IncomingStakingTransactionData::CreateValidator {
-            validator_key: validator_key.clone(),
+            validator_key,
             proof_of_knowledge: invalid_pok.compress(),
             reward_address: Address::from([3u8; 20]),
         },
@@ -600,7 +600,7 @@ fn it_can_verify_unstaking_and_drop_transactions() {
     let validator_id: ValidatorId = [0u8; 20].into();
 
     test_proof_verification(make_unstake_transaction(&key_pair, 10));
-    test_proof_verification(make_drop_transaction(validator_id.clone(), &bls_pair, 10));
+    test_proof_verification(make_drop_transaction(validator_id, &bls_pair, 10));
 }
 
 #[test]
@@ -1233,7 +1233,7 @@ fn it_can_apply_unpark_transactions() {
     // Unpark with address that is not staked
     let unpark = make_signed_incoming_transaction(
         IncomingStakingTransactionData::UnparkValidator {
-            validator_id: validator_id2.clone(),
+            validator_id: validator_id2,
             signature: Default::default(),
         },
         0,
@@ -1252,7 +1252,7 @@ fn it_can_apply_unpark_transactions() {
     // Unpark with address that is not parked
     let unpark = make_signed_incoming_transaction(
         IncomingStakingTransactionData::UnparkValidator {
-            validator_id: validator_id.clone(),
+            validator_id,
             signature: Default::default(),
         },
         0,
@@ -2247,7 +2247,7 @@ fn it_can_manage_stake() {
     contract
         .create_validator(
             validator_id.clone(),
-            validator_key.clone(),
+            validator_key,
             Address::from([3u8; 20]),
             Coin::from_u64_unchecked(100_000_000),
         )
@@ -2540,7 +2540,7 @@ fn it_can_manage_stake() {
     contract
         .create_validator(
             validator_id2.clone(),
-            validator_key2.clone(),
+            validator_key2,
             Address::from([3u8; 20]),
             Coin::from_u64_unchecked(100_000_000),
         )
@@ -3222,7 +3222,7 @@ fn it_can_manage_stake() {
     contract
         .create_validator(
             validator_id2.clone(),
-            validator_key2.clone(),
+            validator_key2,
             Address::from([3u8; 20]),
             Coin::from_u64_unchecked(100_000_000),
         )
@@ -3716,7 +3716,7 @@ fn make_drop_transaction(
         NetworkId::Dummy,
     );
     let proof = OutgoingStakingTransactionProof::DropValidator {
-        validator_id: validator_id.clone(),
+        validator_id,
         validator_key: key_pair.public_key.compress(),
         signature: key_pair.sign(&tx.serialize_content()).compress(),
     };

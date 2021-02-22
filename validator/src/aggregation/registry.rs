@@ -41,7 +41,7 @@ impl IdentityRegistry for ValidatorRegistry {
     }
 
     fn signers_identity(&self, slots: &BitSet) -> Identity {
-        if slots.len() == 0 {
+        if slots.is_empty() {
             // if there is no signers there is no identity.
             Identity::None
         } else {
@@ -71,12 +71,10 @@ impl IdentityRegistry for ValidatorRegistry {
                 if &validators_slots != slots {
                     // reject any slots which are not exhaustive for their validators.
                     Identity::None
+                } else if ids.len() == 1 {
+                    Identity::Single(*ids.iter().next().unwrap() as usize)
                 } else {
-                    if ids.len() == 1 {
-                        Identity::Single(*ids.iter().next().unwrap() as usize)
-                    } else {
-                        Identity::Multiple(ids.iter().map(|id| *id as usize).collect())
-                    }
+                    Identity::Multiple(ids.iter().map(|id| *id as usize).collect())
                 }
             }
         }

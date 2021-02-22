@@ -450,7 +450,7 @@ impl PeerContactBook {
     ///
     pub fn insert(&mut self, contact: SignedPeerContact) {
         let info = PeerContactInfo::from(contact);
-        let peer_id = info.peer_id.clone();
+        let peer_id = info.peer_id;
 
         log::debug!("Adding peer contact: {:?}", peer_id);
 
@@ -465,7 +465,7 @@ impl PeerContactBook {
     ) {
         let info = PeerContactInfo::from(contact);
         if info.matches(protocols_filter, services_filter) {
-            let peer_id = info.peer_id.clone();
+            let peer_id = info.peer_id;
             self.peer_contacts.insert(peer_id, Arc::new(info));
         }
     }

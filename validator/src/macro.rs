@@ -68,7 +68,7 @@ impl ProduceMacroBlock {
         state: Option<PersistedMacroState<TValidatorNetwork>>,
     ) -> Self {
         // get validators for current epoch
-        let active_validators = blockchain.current_validators().clone().unwrap();
+        let active_validators = blockchain.current_validators().unwrap();
 
         // create the TendermintOutsideDeps instance
         // Replace here with the actual OutSide Deps instead of the Mocked ones.

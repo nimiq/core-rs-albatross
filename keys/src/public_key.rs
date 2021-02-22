@@ -106,7 +106,7 @@ impl Deserialize for PublicKey {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let mut buf = [0u8; PublicKey::SIZE];
         reader.read_exact(&mut buf)?;
-        Ok(PublicKey::from_bytes(&buf).map_err(|_| SerializingError::InvalidValue)?)
+        PublicKey::from_bytes(&buf).map_err(|_| SerializingError::InvalidValue)
     }
 }
 

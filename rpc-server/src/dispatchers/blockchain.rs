@@ -63,7 +63,7 @@ impl BlockchainInterface for BlockchainDispatcher {
                 .blockchain
                 .get_block_at(block_number, true)
                 .ok_or_else(|| Error::BlockNotFound(block_number.into()))?,
-            OrLatest::Latest => self.blockchain.head().clone(),
+            OrLatest::Latest => self.blockchain.head(),
         };
 
         Ok(Block::from_block(

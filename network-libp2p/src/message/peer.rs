@@ -92,7 +92,7 @@ impl PeerInterface for Peer {
     type Error = NetworkError;
 
     fn id(&self) -> Self::Id {
-        self.id.clone()
+        self.id
     }
 
     async fn send<M: Message>(&self, message: &M) -> Result<(), SendError> {

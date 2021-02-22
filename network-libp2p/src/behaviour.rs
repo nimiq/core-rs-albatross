@@ -107,7 +107,7 @@ impl NimiqBehaviour {
 
         //let limit = LimitBehaviour::new(config.limit);
 
-        let store = MemoryStore::new(peer_id.clone());
+        let store = MemoryStore::new(peer_id);
         let kademlia = Kademlia::with_config(peer_id, store, config.kademlia);
         let gossipsub = Gossipsub::new(
             MessageAuthenticity::Signed(config.keypair),

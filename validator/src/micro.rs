@@ -143,7 +143,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         };
 
         // Include the previous_view_change_proof only if it has not yet been persisted on chain.
-        let view_change_proof = self.view_change.as_ref().map_or(None, |vc| {
+        let view_change_proof = self.view_change.as_ref().and_then(|vc| {
             if vc.block_number == self.block_number {
                 Some(self.view_change_proof.as_ref().unwrap().sig.clone())
             } else {
@@ -152,7 +152,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         });
 
         // TODO get at init time?
-        let active_validators = self.blockchain.current_validators().unwrap().clone();
+        let active_validators = self.blockchain.current_validators().unwrap();
         let (view_change, view_change_proof) = ViewChangeAggregation::start(
             view_change.clone(),
             view_change_proof,

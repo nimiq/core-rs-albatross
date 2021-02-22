@@ -4,9 +4,9 @@ use rand::SeedableRng;
 use tokio::sync::broadcast;
 use tokio::time;
 
-use nimiq_block_albatross::{Message, MultiSignature, SignedViewChange, ViewChange};
+use nimiq_block_albatross::{MultiSignature, SignedViewChange, ViewChange};
 use nimiq_blockchain_albatross::{AbstractBlockchain, Blockchain, BlockchainEvent};
-use nimiq_bls::{AggregatePublicKey, AggregateSignature, KeyPair};
+use nimiq_bls::{AggregateSignature, KeyPair};
 use nimiq_build_tools::genesis::{GenesisBuilder, GenesisInfo};
 use nimiq_collections::BitSet;
 use nimiq_consensus_albatross::sync::history::HistorySync;
@@ -257,7 +257,7 @@ fn create_view_change_update(
 
     LevelUpdate::new(
         contribution.clone(),
-        Some(contribution.clone()),
+        Some(contribution),
         1,
         validator_id as usize,
     )
@@ -311,12 +311,9 @@ async fn validator_can_catch_up() {
     // Listen for blockchain events from the block producer (after two view changes).
     let mut events = blockchain.notifier.write().as_stream();
 
-    let (start, end) = blockchain
-        .current_validators()
-        .unwrap()
-        .get_validator(validator.validator_id())
-        .slot_range
-        .clone();
+    let (start, end) = blockchain.current_validators().unwrap().validators
+        [validator.validator_id() as usize]
+        .slot_range;
 
     let slots = (start..end).collect();
 

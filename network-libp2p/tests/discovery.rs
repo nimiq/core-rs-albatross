@@ -83,7 +83,7 @@ impl TestNode {
         let behaviour =
             DiscoveryBehaviour::new(config, keypair, Arc::clone(&peer_contact_book), clock);
 
-        let mut swarm = Swarm::new(transport, behaviour, peer_id.clone());
+        let mut swarm = Swarm::new(transport, behaviour, peer_id);
 
         Swarm::listen_on(&mut swarm, address.clone()).unwrap();
 
@@ -206,7 +206,7 @@ pub async fn test_dialing_peer_from_contacts() {
     let peer_contact_book2 = Arc::clone(&node2.peer_contact_book);
 
     let peer2_contact = peer_contact_book2.read().get_self().signed().clone();
-    let peer2_id = node2.peer_id.clone();
+    let peer2_id = node2.peer_id;
 
     // insert peer address of node 2 into node 1's address book
     peer_contact_book1.write().insert(peer2_contact);

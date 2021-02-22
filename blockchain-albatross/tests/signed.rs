@@ -16,7 +16,7 @@ use block_albatross::{
 use bls::lazy::LazyPublicKey;
 use bls::KeyPair;
 use hash::{Blake2bHash, Hash};
-use keys::Address;
+
 use nimiq_blockchain_albatross::{AbstractBlockchain, Blockchain};
 use nimiq_collections::bitset::BitSet;
 use nimiq_database::volatile::VolatileEnvironment;

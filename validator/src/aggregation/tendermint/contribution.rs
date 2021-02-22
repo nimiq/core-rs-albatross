@@ -74,7 +74,7 @@ impl AggregatableContribution for TendermintContribution {
         self.contributions
             .iter()
             .fold(BitSet::new(), |mut aggregated_set, multi_sig| {
-                aggregated_set = aggregated_set | multi_sig.1.contributors();
+                aggregated_set |= multi_sig.1.contributors();
                 aggregated_set
             })
     }

@@ -17,19 +17,12 @@ extern crate itertools;
 ///! ```
 ///!
 use std::collections::{BTreeMap, HashMap};
-use std::fmt;
-use std::iter::FromIterator;
-use std::slice::Iter;
-use std::vec::IntoIter;
 
-use bitvec::order::Msb0;
-use bitvec::prelude::BitVec;
-use itertools::Itertools;
+use std::slice::Iter;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use nimiq_bls::lazy::LazyPublicKey;
-use nimiq_bls::{CompressedPublicKey, PublicKey};
-use nimiq_keys::Address;
+use nimiq_bls::CompressedPublicKey;
 
 use crate::account::ValidatorId;
 use crate::policy::SLOTS;
@@ -123,7 +116,7 @@ impl Validators {
 
     /// Returns the validator given its ID, if it exists.
     pub fn get_validator_by_id(&self, id: ValidatorId) -> Option<&Validator> {
-        let band = self.validator_map.get(&id)?.clone();
+        let band = *self.validator_map.get(&id)?;
         Some(&self.validators[band as usize])
     }
 

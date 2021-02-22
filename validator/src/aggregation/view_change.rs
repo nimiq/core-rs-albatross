@@ -284,7 +284,7 @@ impl ViewChangeAggregation {
             );
 
             let mut stream = futures::stream::select(
-                aggregation.map(|x| ViewChangeResult::ViewChange(x)),
+                aggregation.map(ViewChangeResult::ViewChange),
                 receiver,
             );
             while let Some(msg) = stream.next().await {

@@ -1,4 +1,4 @@
-use std::convert::{TryFrom, TryInto};
+use std::convert::{TryFrom};
 use std::fmt;
 
 use bitflags::bitflags;
