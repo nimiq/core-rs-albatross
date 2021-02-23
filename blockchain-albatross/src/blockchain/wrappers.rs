@@ -1,15 +1,14 @@
 use parking_lot::{MutexGuard, RwLockReadGuard};
 
-use account::{Account, StakingContract};
-use block::{Block};
-use database::{Transaction, WriteTransaction};
-use genesis::NetworkInfo;
-use hash::Blake2bHash;
-use keys::Address;
-use primitives::policy;
-
-use transaction::{Transaction as BlockchainTransaction, TransactionReceipt};
-use utils::observer::{Listener, ListenerHandle};
+use nimiq_account::{Account, StakingContract};
+use nimiq_block_albatross::Block;
+use nimiq_database::{Transaction, WriteTransaction};
+use nimiq_genesis::NetworkInfo;
+use nimiq_hash::Blake2bHash;
+use nimiq_keys::Address;
+use nimiq_primitives::policy;
+use nimiq_transaction::{Transaction as BlockchainTransaction, TransactionReceipt};
+use nimiq_utils::observer::{Listener, ListenerHandle};
 
 use crate::blockchain_state::BlockchainState;
 #[cfg(feature = "metrics")]

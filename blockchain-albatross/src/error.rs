@@ -1,9 +1,9 @@
 use thiserror::Error;
 
-use account::AccountError;
-use block::{Block, BlockError, ForkProof};
-use hash::Blake2bHash;
-use primitives::networks::NetworkId;
+use nimiq_account::AccountError;
+use nimiq_block_albatross::{Block, BlockError, ForkProof};
+use nimiq_hash::Blake2bHash;
+use nimiq_primitives::networks::NetworkId;
 
 /// An enum used when a fork is detected.
 #[derive(Clone)]

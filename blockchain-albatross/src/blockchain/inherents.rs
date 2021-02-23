@@ -1,15 +1,14 @@
-use account::inherent::AccountInherentInteraction;
-use account::{Inherent, InherentType};
 use beserial::Serialize;
-use block::MacroHeader;
-use block::{ForkProof, ViewChanges};
-use database::Transaction;
-use genesis::NetworkInfo;
-use keys::Address;
-use primitives::coin::Coin;
-use primitives::policy;
-use primitives::slot::{SlashedSlot, SlotBand};
-use vrf::{AliasMethod, VrfUseCase};
+use nimiq_account::inherent::AccountInherentInteraction;
+use nimiq_account::{Inherent, InherentType};
+use nimiq_block_albatross::{ForkProof, MacroHeader, ViewChanges};
+use nimiq_database::Transaction;
+use nimiq_genesis::NetworkInfo;
+use nimiq_keys::Address;
+use nimiq_primitives::coin::Coin;
+use nimiq_primitives::policy;
+use nimiq_primitives::slots::SlashedSlot;
+use nimiq_vrf::{AliasMethod, VrfUseCase};
 
 use crate::blockchain_state::BlockchainState;
 use crate::reward::block_reward_for_batch;
@@ -19,7 +18,12 @@ use crate::Blockchain;
 impl Blockchain {
     /// Given fork proofs and view changes, it returns the respective slash inherents. It expects
     /// verified fork proofs and view changes.
-    pub fn create_slash_inherents(&self, fork_proofs: &[ForkProof], view_changes: &Option<ViewChanges>, txn_option: Option<&Transaction>) -> Vec<Inherent> {
+    pub fn create_slash_inherents(
+        &self,
+        fork_proofs: &[ForkProof],
+        view_changes: &Option<ViewChanges>,
+        txn_option: Option<&Transaction>,
+    ) -> Vec<Inherent> {
         let mut inherents = vec![];
 
         for fork_proof in fork_proofs {
@@ -34,19 +38,27 @@ impl Blockchain {
     }
 
     /// It creates a slash inherent from a fork proof. It expects a *verified* fork proof!
-    pub fn inherent_from_fork_proof(&self, fork_proof: &ForkProof, txn_option: Option<&Transaction>) -> Inherent {
+    pub fn inherent_from_fork_proof(
+        &self,
+        fork_proof: &ForkProof,
+        txn_option: Option<&Transaction>,
+    ) -> Inherent {
         // Get the address of the validator registry/staking contract.
         let validator_registry = NetworkInfo::from_network_id(self.network_id)
             .validator_registry_address()
             .expect("No ValidatorRegistry");
 
         // Get the slot owner and slot number for this block number and view number.
-        let (producer, slot) = self.get_slot_owner_at(fork_proof.header1.block_number, fork_proof.header1.view_number, txn_option);
+        let (producer, slot) = self.get_slot_owner_at(
+            fork_proof.header1.block_number,
+            fork_proof.header1.view_number,
+            txn_option,
+        );
 
         // Create the SlashedSlot struct.
         let slot = SlashedSlot {
             slot,
-            validator_id: producer.validator_id().clone(),
+            validator_id: producer.validator_id.clone(),
             event_block: fork_proof.header1.block_number,
         };
 
@@ -60,7 +72,11 @@ impl Blockchain {
     }
 
     /// It creates a slash inherent(s) from a view change(s). It expects a *verified* view change!
-    pub fn inherents_from_view_changes(&self, view_changes: &ViewChanges, txn_option: Option<&Transaction>) -> Vec<Inherent> {
+    pub fn inherents_from_view_changes(
+        &self,
+        view_changes: &ViewChanges,
+        txn_option: Option<&Transaction>,
+    ) -> Vec<Inherent> {
         // Get the address of the validator registry/staking contract.
         let validator_registry = NetworkInfo::from_network_id(self.network_id)
             .validator_registry_address()
@@ -70,14 +86,15 @@ impl Blockchain {
         (view_changes.first_view_number..view_changes.last_view_number)
             .map(|view_number| {
                 // Get the slot owner and slot number for this block number and view number.
-                let (producer, slot) = self.get_slot_owner_at(view_changes.block_number, view_number, txn_option);
+                let (producer, slot) =
+                    self.get_slot_owner_at(view_changes.block_number, view_number, txn_option);
 
-                debug!("Slash inherent: view change: {}", producer.public_key());
+                debug!("Slash inherent: view change: {}", producer.public_key);
 
                 // Create the SlashedSlot struct.
                 let slot = SlashedSlot {
                     slot,
-                    validator_id: producer.validator_id().clone(),
+                    validator_id: producer.validator_id.clone(),
                     event_block: view_changes.block_number,
                 };
 
@@ -94,7 +111,11 @@ impl Blockchain {
 
     /// Creates the inherents to finalize a batch. The inherents are for reward distribution and
     /// updating the StakingContract.
-    pub fn finalize_previous_batch(&self, state: &BlockchainState, macro_header: &MacroHeader) -> Vec<Inherent> {
+    pub fn finalize_previous_batch(
+        &self,
+        state: &BlockchainState,
+        macro_header: &MacroHeader,
+    ) -> Vec<Inherent> {
         let prev_macro_info = &state.macro_info;
 
         let staking_contract = self.get_staking_contract();
@@ -181,14 +202,22 @@ impl Blockchain {
 
             // Compute reward from slot reward and number of eligible slots. Also update the burned
             // reward from the number of slashed slots.
-            let reward = slot_reward.checked_mul(num_eligible_slots as u64).expect("Overflow in reward");
+            let reward = slot_reward
+                .checked_mul(num_eligible_slots as u64)
+                .expect("Overflow in reward");
 
-            burned_reward += slot_reward.checked_mul(num_slashed_slots as u64).expect("Overflow in reward");
+            burned_reward += slot_reward
+                .checked_mul(num_slashed_slots as u64)
+                .expect("Overflow in reward");
 
             // Create inherent for the reward
             let inherent = Inherent {
                 ty: InherentType::Reward,
-                target: validator_slot.reward_address().clone(),
+                target: staking_contract
+                    .get_validator(&validator_slot.validator_id)
+                    .unwrap()
+                    .reward_address
+                    .clone(),
                 value: reward,
                 data: vec![],
             };
@@ -197,8 +226,14 @@ impl Blockchain {
             // burned.
             let account = state.accounts.get(&inherent.target, None);
 
-            if account.check_inherent(&inherent, macro_header.block_number, macro_header.timestamp).is_err() {
-                debug!("{} can't accept epoch reward {}", inherent.target, inherent.value);
+            if account
+                .check_inherent(&inherent, macro_header.block_number, macro_header.timestamp)
+                .is_err()
+            {
+                debug!(
+                    "{} can't accept epoch reward {}",
+                    inherent.target, inherent.value
+                );
                 burned_reward += reward;
             } else {
                 num_eligible_slots_for_accepted_inherent.push(num_eligible_slots);
@@ -212,7 +247,10 @@ impl Blockchain {
         // Check that number of accepted inherents is equal to length of the map that gives us the
         // corresponding number of slots for that staker (which should be equal to the number of
         // validators that will receive rewards).
-        assert_eq!(inherents.len(), num_eligible_slots_for_accepted_inherent.len());
+        assert_eq!(
+            inherents.len(),
+            num_eligible_slots_for_accepted_inherent.len()
+        );
 
         // Get RNG from last block's seed and build lookup table based on number of eligible slots.
         let mut rng = macro_header.seed.rng(VrfUseCase::RewardDistribution, 0);

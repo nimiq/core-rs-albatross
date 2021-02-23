@@ -1,10 +1,8 @@
-
-
-use collections::BitSet;
-use database::{ReadTransaction, Transaction};
-use primitives::policy;
-use primitives::slots::{Validator, Validators};
-use vrf::{Rng, VrfSeed, VrfUseCase};
+use nimiq_collections::BitSet;
+use nimiq_database::{ReadTransaction, Transaction};
+use nimiq_primitives::policy;
+use nimiq_primitives::slots::{Validator, Validators};
+use nimiq_vrf::{Rng, VrfSeed, VrfUseCase};
 
 use crate::{AbstractBlockchain, Blockchain};
 

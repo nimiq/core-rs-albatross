@@ -1,12 +1,11 @@
-use account::Receipts;
-use block::Block;
-use database::cursor::ReadCursor;
-use database::cursor::WriteCursor;
-use database::{
+use nimiq_account::Receipts;
+use nimiq_block_albatross::Block;
+use nimiq_database::cursor::{ReadCursor, WriteCursor};
+use nimiq_database::{
     Database, DatabaseFlags, Environment, ReadTransaction, Transaction, WriteTransaction,
 };
-use hash::Blake2bHash;
-use primitives::policy;
+use nimiq_hash::Blake2bHash;
+use nimiq_primitives::policy;
 
 use crate::chain_info::ChainInfo;
 use crate::Direction;

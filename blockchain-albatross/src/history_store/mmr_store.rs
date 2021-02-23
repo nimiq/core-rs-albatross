@@ -1,9 +1,12 @@
-use super::HistoryTreeHash;
-use database::cursor::ReadCursor;
-use database::{Database, Transaction, WriteTransaction};
-use mmr::store::Store;
 use std::cmp;
 use std::convert::TryInto;
+
+use merkle_mountain_range::store::Store;
+
+use nimiq_database::cursor::ReadCursor;
+use nimiq_database::{Database, Transaction, WriteTransaction};
+
+use super::HistoryTreeHash;
 
 #[derive(Debug)]
 enum Tx<'a, 'env> {

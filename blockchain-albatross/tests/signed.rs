@@ -1,31 +1,21 @@
 use std::sync::Arc;
 
-extern crate beserial;
-extern crate nimiq_block_albatross as block_albatross;
-extern crate nimiq_bls as bls;
-extern crate nimiq_hash as hash;
-extern crate nimiq_keys as keys;
-extern crate nimiq_primitives as primitives;
-
 use beserial::Deserialize;
-use block_albatross::TendermintVote;
-use block_albatross::{
+use nimiq_block_albatross::{
     MultiSignature, SignedViewChange, TendermintIdentifier, TendermintProof, TendermintStep,
-    ViewChange, ViewChangeProof,
+    TendermintVote, ViewChange, ViewChangeProof,
 };
-use bls::lazy::LazyPublicKey;
-use bls::KeyPair;
-use hash::{Blake2bHash, Hash};
-
 use nimiq_blockchain_albatross::{AbstractBlockchain, Blockchain};
+use nimiq_bls::{lazy::LazyPublicKey, AggregateSignature, KeyPair};
 use nimiq_collections::bitset::BitSet;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
-use nimiq_nano_sync::pk_tree_construct;
+use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_nano_sync::primitives::pk_tree_construct;
+use nimiq_primitives::account::ValidatorId;
+use nimiq_primitives::policy;
+use nimiq_primitives::slots::{Validator, Validators};
 use nimiq_vrf::VrfSeed;
-use primitives::account::ValidatorId;
-use primitives::policy;
-use primitives::slots::{Validator, Validators};
 
 // /// Still in for future reference, in case this key is needed again
 // const SECRET_KEY: &str = "8e44b45f308dae1e2d4390a0f96cea993960d4178550c62aeaba88e9e168d165\
@@ -47,7 +37,7 @@ fn test_view_change_single_signature() {
     };
 
     // sign view change and build view change proof
-    let signature = bls::AggregateSignature::from_signatures(&[SignedViewChange::from_message(
+    let signature = AggregateSignature::from_signatures(&[SignedViewChange::from_message(
         view_change.clone(),
         &key_pair.secret_key,
         0,
@@ -105,7 +95,7 @@ fn test_replay() {
         validator_merkle_root: validator_merkle_root.clone(),
     };
 
-    let signature = bls::AggregateSignature::from_signatures(&[key_pair
+    let signature = AggregateSignature::from_signatures(&[key_pair
         .secret_key
         .sign(&vote)
         .multiply(policy::SLOTS)]);
@@ -135,7 +125,7 @@ fn test_replay() {
         validator_merkle_root,
     };
 
-    let signature = bls::AggregateSignature::from_signatures(&[key_pair
+    let signature = AggregateSignature::from_signatures(&[key_pair
         .secret_key
         .sign(&vote)
         .multiply(policy::SLOTS)]);

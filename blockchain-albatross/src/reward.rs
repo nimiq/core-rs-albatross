@@ -1,8 +1,8 @@
 use std::convert::TryInto;
 
-use block::MacroHeader;
-use primitives::coin::Coin;
-use primitives::policy;
+use nimiq_block_albatross::MacroHeader;
+use nimiq_primitives::coin::Coin;
+use nimiq_primitives::policy;
 
 /// Parses the genesis supply and timestamp from the genesis block. We require both values to
 /// calculate the block rewards.

@@ -1,11 +1,14 @@
-use crate::history_store::{ExtendedTransaction, HistoryTreeHash};
+use std::fmt::{self, Debug, Formatter};
+
+use merkle_mountain_range::mmr::proof::{Proof, RangeProof};
+
 use beserial::{
     Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
     SerializingError, WriteBytesExt,
 };
-use hash::Blake2bHash;
-use mmr::mmr::proof::{Proof, RangeProof};
-use std::fmt::{self, Debug, Formatter};
+use nimiq_hash::Blake2bHash;
+
+use crate::history_store::{ExtendedTransaction, HistoryTreeHash};
 
 /// The chunk size used in our protocol.
 /// TODO: Update number.

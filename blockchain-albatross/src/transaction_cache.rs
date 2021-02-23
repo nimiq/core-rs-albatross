@@ -1,8 +1,8 @@
 use std::collections::{HashSet, VecDeque};
 
-use block::Block;
-use hash::{Blake2bHash, Hash};
-use primitives::policy;
+use nimiq_block_albatross::Block;
+use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_primitives::policy;
 
 #[derive(Debug, Clone)]
 struct BlockDescriptor {

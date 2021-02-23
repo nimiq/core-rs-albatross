@@ -1,8 +1,8 @@
-use account::Inherent;
-use accounts::Accounts;
-use block::{Block, MicroBlock, ViewChanges};
-use database::WriteTransaction;
-use primitives::policy;
+use nimiq_account::Inherent;
+use nimiq_accounts::Accounts;
+use nimiq_block_albatross::{Block, MicroBlock, ViewChanges};
+use nimiq_database::WriteTransaction;
+use nimiq_primitives::policy;
 
 use crate::blockchain_state::BlockchainState;
 use crate::history_store::ExtendedTransaction;

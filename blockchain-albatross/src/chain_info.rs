@@ -2,22 +2,22 @@ use std::convert::TryInto;
 use std::io;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
-use block::{
+use nimiq_block_albatross::{
     Block, BlockBody, BlockComponents, BlockHeader, BlockJustification, BlockType, MacroBody,
     MacroHeader, MicroBody, MicroHeader, MicroJustification, TendermintProof,
 };
-use database::{FromDatabaseValue, IntoDatabaseValue};
-use hash::Blake2bHash;
-use primitives::coin::Coin;
-use primitives::policy;
-use transaction::Transaction;
+use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
+use nimiq_hash::Blake2bHash;
+use nimiq_primitives::coin::Coin;
+use nimiq_primitives::policy;
+
 
 use crate::SlashPushError;
 
 /// Struct that, for each block, keeps information relative to the chain the block is on.
 #[derive(Clone, Debug)]
 pub struct ChainInfo {
-    // This is the block.
+    // This is the block (excluding the body).
     pub head: Block,
     // A boolean stating if this block is in the main chain.
     pub on_main_chain: bool,
@@ -28,18 +28,18 @@ pub struct ChainInfo {
 }
 
 impl ChainInfo {
-    /// Creates the ChainInfo for the genesis block.
-    pub fn initial(block: Block) -> Self {
+    /// Creates a new ChainInfo. Without successor and cumulative transaction fees.
+    pub fn new(head: Block, on_main_chain: bool) -> Self {
         ChainInfo {
-            head: block,
-            on_main_chain: true,
+            head,
+            on_main_chain,
             main_chain_successor: None,
-            cum_tx_fees: Default::default(),
+            cum_tx_fees: Coin::ZERO,
         }
     }
 
     /// Creates a new ChainInfo for a block given its predecessor.
-    pub fn new(block: Block, prev_info: &ChainInfo) -> Result<Self, SlashPushError> {
+    pub fn from_block(block: Block, prev_info: &ChainInfo) -> Result<Self, SlashPushError> {
         assert_eq!(prev_info.head.block_number(), block.block_number() - 1);
 
         // Reset the transaction fee accumulator if this is the first block of a batch. Otherwise,
@@ -56,16 +56,6 @@ impl ChainInfo {
             head: block,
             cum_tx_fees,
         })
-    }
-
-    /// Creates a new dummy ChainInfo for a block ignoring slashes and transaction fees.
-    pub fn dummy(block: Block) -> Self {
-        ChainInfo {
-            head: block,
-            on_main_chain: false,
-            main_chain_successor: None,
-            cum_tx_fees: Default::default(),
-        }
     }
 }
 
@@ -188,91 +178,6 @@ impl IntoDatabaseValue for ChainInfo {
 }
 
 impl FromDatabaseValue for ChainInfo {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
-    where
-        Self: Sized,
-    {
-        let mut cursor = io::Cursor::new(bytes);
-        Ok(Deserialize::deserialize(&mut cursor)?)
-    }
-}
-
-pub enum EpochTransactions<'a> {
-    Borrowed(&'a [Transaction]),
-    Owned(Vec<Transaction>),
-}
-
-impl<'a> EpochTransactions<'a> {
-    pub fn len(&self) -> u32 {
-        match self {
-            EpochTransactions::Borrowed(txs) => txs.len() as u32,
-            EpochTransactions::Owned(txs) => txs.len() as u32,
-        }
-    }
-}
-
-impl<'a> Serialize for EpochTransactions<'a> {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        let mut size = 0;
-        size += Serialize::serialize(&self.len(), writer)?;
-        match self {
-            EpochTransactions::Borrowed(txs) => {
-                for tx in txs.iter() {
-                    size += Serialize::serialize(tx, writer)?;
-                }
-            }
-            EpochTransactions::Owned(txs) => {
-                for tx in txs.iter() {
-                    size += Serialize::serialize(tx, writer)?;
-                }
-            }
-        }
-        Ok(size)
-    }
-
-    fn serialized_size(&self) -> usize {
-        let mut size = 0;
-        size += Serialize::serialized_size(&self.len());
-        match self {
-            EpochTransactions::Borrowed(txs) => {
-                for tx in txs.iter() {
-                    size += Serialize::serialized_size(tx);
-                }
-            }
-            EpochTransactions::Owned(txs) => {
-                for tx in txs.iter() {
-                    size += Serialize::serialized_size(tx);
-                }
-            }
-        }
-        size
-    }
-}
-
-impl<'a> Deserialize for EpochTransactions<'a> {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let len: u32 = Deserialize::deserialize(reader)?;
-        let mut txs = vec![];
-
-        for _ in 0..len {
-            txs.push(Deserialize::deserialize(reader)?);
-        }
-
-        Ok(EpochTransactions::Owned(txs))
-    }
-}
-
-impl<'a> IntoDatabaseValue for EpochTransactions<'a> {
-    fn database_byte_size(&self) -> usize {
-        self.serialized_size()
-    }
-
-    fn copy_into_database(&self, mut bytes: &mut [u8]) {
-        Serialize::serialize(&self, &mut bytes).unwrap();
-    }
-}
-
-impl<'a> FromDatabaseValue for EpochTransactions<'a> {
     fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
     where
         Self: Sized,

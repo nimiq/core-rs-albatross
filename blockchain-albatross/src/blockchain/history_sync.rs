@@ -1,10 +1,10 @@
 use parking_lot::MutexGuard;
 
-use block::{Block, BlockError};
-use database::{ReadTransaction, WriteTransaction};
-use hash::{Blake2bHash, Hash};
-use primitives::coin::Coin;
-use primitives::policy;
+use nimiq_block_albatross::{Block, BlockError};
+use nimiq_database::{ReadTransaction, WriteTransaction};
+use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_primitives::coin::Coin;
+use nimiq_primitives::policy;
 
 use crate::chain_info::ChainInfo;
 use crate::history_store::{ExtTxData, ExtendedTransaction, HistoryStore};

@@ -1,12 +1,10 @@
 use std::cmp;
 use std::cmp::Ordering;
 
-use block::{Block, BlockType};
-use database::Transaction;
-use hash::Blake2bHash;
+use nimiq_block_albatross::{Block, BlockType};
 
 use crate::chain_info::ChainInfo;
-use crate::{AbstractBlockchain, Blockchain};
+use crate::AbstractBlockchain;
 
 /// Enum describing all the possible ways of comparing one chain to the main chain.
 #[derive(Debug, Eq, PartialEq)]
@@ -22,18 +20,17 @@ pub enum ChainOrdering {
 }
 
 /// Implements method to calculate chain ordering.
-impl Blockchain {
+impl ChainOrdering {
     /// Given a block and some chain, it returns the ordering of the new chain relative to the given
     /// chain.
-    pub(crate) fn order_chains(
-        &self,
+    pub fn order_chains<B: AbstractBlockchain>(
+        blockchain: &B,
         block: &Block,
         prev_info: &ChainInfo,
-        txn_option: Option<&Transaction>,
     ) -> ChainOrdering {
         let mut chain_order = ChainOrdering::Unknown;
 
-        if block.parent_hash() == &self.head_hash() {
+        if block.parent_hash() == &blockchain.head_hash() {
             chain_order = ChainOrdering::Extend;
         } else {
             // To compare two blocks, we need to compare the view number at the intersection.
@@ -46,31 +43,29 @@ impl Blockchain {
             // the branch are the same. Then, we need to follow and compare.
             let mut view_numbers = vec![block.view_number()];
 
-            let mut current: (Blake2bHash, ChainInfo) =
-                (block.hash(), ChainInfo::dummy(block.clone()));
+            let mut current = ChainInfo::new(block.clone(), false);
 
-            let mut prev: (Blake2bHash, ChainInfo) = (prev_info.head.hash(), prev_info.clone());
+            let mut prev = prev_info.clone();
 
-            while !prev.1.on_main_chain {
+            while !prev.on_main_chain {
                 // Macro blocks are final
                 assert_eq!(
-                    prev.1.head.ty(),
+                    prev.head.ty(),
                     BlockType::Micro,
                     "Trying to rebranch across macro block"
                 );
 
-                view_numbers.push(prev.1.head.view_number());
+                view_numbers.push(prev.head.view_number());
 
-                let prev_hash = prev.1.head.parent_hash().clone();
+                let prev_hash = prev.head.parent_hash();
 
-                let prev_info = self
-                    .chain_store
-                    .get_chain_info(&prev_hash, false, txn_option)
+                let prev_info = blockchain
+                    .get_chain_info(prev_hash, false)
                     .expect("Corrupted store: Failed to find fork predecessor while rebranching");
 
                 current = prev;
 
-                prev = (prev_hash, prev_info);
+                prev = prev_info;
             }
 
             // Now follow the view numbers back until you find one that differs.
@@ -80,8 +75,8 @@ impl Blockchain {
             // Otherwise take the longest:
             // [0] - [0] - [1] - [0]  *correct chain*
             //    \- [0] - [1]
-            let current_height = current.1.head.block_number();
-            let min_height = cmp::min(self.block_number(), block.block_number());
+            let current_height = current.head.block_number();
+            let min_height = cmp::min(blockchain.block_number(), block.block_number());
 
             // Iterate over common block heights starting from right after the intersection.
             for h in current_height..=min_height {
@@ -89,9 +84,8 @@ impl Blockchain {
                 let branch_view_number = view_numbers.pop().unwrap();
 
                 // And calculate equivalent on main chain.
-                let current_on_main_chain = self
-                    .chain_store
-                    .get_block_at(h, false, txn_option)
+                let current_on_main_chain = blockchain
+                    .get_block_at(h, false)
                     .expect("Corrupted store: Failed to find main chain equivalent of fork");
 
                 // Choose better one as early as possible.
@@ -109,7 +103,9 @@ impl Blockchain {
             }
 
             // If they were all equal, choose the longer one.
-            if chain_order == ChainOrdering::Unknown && self.block_number() < block.block_number() {
+            if chain_order == ChainOrdering::Unknown
+                && blockchain.block_number() < block.block_number()
+            {
                 chain_order = ChainOrdering::Better;
             }
 
@@ -117,8 +113,8 @@ impl Blockchain {
                 "New block is on {:?} chain with fork at #{} (current #{}.{}, new block #{}.{})",
                 chain_order,
                 current_height - 1,
-                self.block_number(),
-                self.view_number(),
+                blockchain.block_number(),
+                blockchain.view_number(),
                 block.block_number(),
                 block.view_number()
             );

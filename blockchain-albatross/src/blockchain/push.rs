@@ -1,13 +1,15 @@
 use parking_lot::RwLockUpgradableReadGuard;
 
-use block::{Block, BlockType, ForkProof};
-use database::{ReadTransaction, WriteTransaction};
-use hash::Blake2bHash;
-use primitives::policy;
+use nimiq_block_albatross::{Block, BlockType, ForkProof};
+use nimiq_database::{ReadTransaction, WriteTransaction};
+use nimiq_hash::Blake2bHash;
+use nimiq_primitives::policy;
 
-use crate::blockchain::ChainOrdering;
 use crate::chain_info::ChainInfo;
-use crate::{AbstractBlockchain, Blockchain, BlockchainEvent, ForkEvent, PushError, PushResult};
+use crate::{
+    AbstractBlockchain, Blockchain, BlockchainEvent, ChainOrdering, ForkEvent, PushError,
+    PushResult,
+};
 
 /// Implements methods to push blocks into the chain. This is used when the node has already synced
 /// and is just receiving newly produced blocks. It is also used for the final phase of syncing,
@@ -37,7 +39,7 @@ impl Blockchain {
             .ok_or_else(|| PushError::Orphan)?;
 
         // Calculate chain ordering.
-        let chain_order = self.order_chains(&block, &prev_info, Some(&read_txn));
+        let chain_order = ChainOrdering::order_chains(self, &block, &prev_info);
 
         // If it is an inferior chain, we ignore it as it cannot become better at any point in time.
         if chain_order == ChainOrdering::Inferior {
@@ -128,7 +130,7 @@ impl Blockchain {
             }
         }
 
-        let chain_info = match ChainInfo::new(block, &prev_info) {
+        let chain_info = match ChainInfo::from_block(block, &prev_info) {
             Ok(info) => info,
             Err(err) => {
                 warn!("Rejecting block - slash commit failed: {:?}", err);

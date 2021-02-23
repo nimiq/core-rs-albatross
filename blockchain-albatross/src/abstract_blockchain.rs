@@ -1,9 +1,9 @@
-use block::{Block, BlockType, MacroBlock};
-use hash::Blake2bHash;
-use primitives::policy;
-use primitives::slots::Validators;
+use nimiq_block_albatross::{Block, BlockType, MacroBlock};
+use nimiq_hash::Blake2bHash;
+use nimiq_primitives::policy;
+use nimiq_primitives::slots::Validators;
 
-use crate::Blockchain;
+use crate::{Blockchain, ChainInfo};
 
 /// Defines several basic methods for blockchains.
 pub trait AbstractBlockchain {
@@ -65,6 +65,9 @@ pub trait AbstractBlockchain {
 
     /// Fetches a given block, by its hash.
     fn get_block(&self, hash: &Blake2bHash, include_body: bool) -> Option<Block>;
+
+    /// Fetches a given chain info, by its hash.
+    fn get_chain_info(&self, hash: &Blake2bHash, include_body: bool) -> Option<ChainInfo>;
 }
 
 impl AbstractBlockchain for Blockchain {
@@ -133,5 +136,9 @@ impl AbstractBlockchain for Blockchain {
 
     fn get_block(&self, hash: &Blake2bHash, include_body: bool) -> Option<Block> {
         self.chain_store.get_block(hash, include_body, None)
+    }
+
+    fn get_chain_info(&self, hash: &Blake2bHash, include_body: bool) -> Option<ChainInfo> {
+        self.chain_store.get_chain_info(hash, include_body, None)
     }
 }

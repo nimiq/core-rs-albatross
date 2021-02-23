@@ -1,7 +1,7 @@
-use accounts::Accounts;
-use block::MacroBlock;
-use hash::Blake2bHash;
-use primitives::slots::Validators;
+use nimiq_accounts::Accounts;
+use nimiq_block_albatross::MacroBlock;
+use nimiq_hash::Blake2bHash;
+use nimiq_primitives::slots::Validators;
 
 use crate::chain_info::ChainInfo;
 use crate::transaction_cache::TransactionCache;

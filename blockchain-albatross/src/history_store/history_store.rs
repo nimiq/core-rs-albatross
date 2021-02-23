@@ -1,14 +1,17 @@
+use std::cmp;
+
+use merkle_mountain_range::error::Error as MMRError;
+use merkle_mountain_range::hash::Hash as MMRHash;
+use merkle_mountain_range::mmr::partial::PartialMerkleMountainRange;
+use merkle_mountain_range::mmr::proof::RangeProof;
+use merkle_mountain_range::mmr::MerkleMountainRange;
+use merkle_mountain_range::store::memory::MemoryStore;
+
+use nimiq_database::{Database, Environment, ReadTransaction, Transaction, WriteTransaction};
+use nimiq_hash::Blake2bHash;
+
 use crate::history_store::mmr_store::MMRStore;
 use crate::history_store::{ExtendedTransaction, HistoryTreeChunk, HistoryTreeHash};
-use database::{Database, Environment, ReadTransaction, Transaction, WriteTransaction};
-use hash::Blake2bHash;
-use mmr::error::Error as MMRError;
-use mmr::hash::Hash as MMRHash;
-use mmr::mmr::partial::PartialMerkleMountainRange;
-use mmr::mmr::proof::RangeProof;
-use mmr::mmr::MerkleMountainRange;
-use mmr::store::memory::MemoryStore;
-use std::cmp;
 
 /// A struct that contains databases to store history trees (which are Merkle Mountain Ranges
 /// constructed from the list of extended transactions in an epoch) and extended transactions (which

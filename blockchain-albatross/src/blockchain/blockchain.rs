@@ -2,19 +2,19 @@ use std::sync::Arc;
 
 use parking_lot::{Mutex, RwLock};
 
-use account::Account;
-use accounts::Accounts;
-use block::Block;
-use database::{Environment, WriteTransaction};
-use genesis::NetworkInfo;
-use hash::Blake2bHash;
-use keys::Address;
-use primitives::coin::Coin;
-use primitives::networks::NetworkId;
-use primitives::policy;
-use primitives::slots::Validators;
-use utils::observer::Notifier;
-use utils::time::OffsetTime;
+use nimiq_account::Account;
+use nimiq_accounts::Accounts;
+use nimiq_block_albatross::Block;
+use nimiq_database::{Environment, WriteTransaction};
+use nimiq_genesis::NetworkInfo;
+use nimiq_hash::Blake2bHash;
+use nimiq_keys::Address;
+use nimiq_primitives::coin::Coin;
+use nimiq_primitives::networks::NetworkId;
+use nimiq_primitives::policy;
+use nimiq_primitives::slots::Validators;
+use nimiq_utils::observer::Notifier;
+use nimiq_utils::time::OffsetTime;
 
 use crate::blockchain_state::BlockchainState;
 use crate::chain_info::ChainInfo;
@@ -257,7 +257,7 @@ impl Blockchain {
         let current_slots = genesis_macro_block.get_validators().expect("Slots missing");
         let (genesis_supply, genesis_timestamp) = genesis_parameters(&genesis_macro_block.header);
 
-        let main_chain = ChainInfo::initial(genesis_block);
+        let main_chain = ChainInfo::new(genesis_block, true);
 
         // Initialize accounts.
         let accounts = Accounts::new(env.clone());

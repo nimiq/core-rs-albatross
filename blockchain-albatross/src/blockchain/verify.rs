@@ -1,16 +1,16 @@
 use std::cmp::Ordering;
 
-use block::{
+use nimiq_block_albatross::{
     Block, BlockBody, BlockError, BlockHeader, BlockJustification, BlockType, ForkProof, MacroBody,
     ViewChange,
 };
-use bls::PublicKey;
-use database::Transaction as DBtx;
-use primitives::policy;
-use transaction::Transaction;
+use nimiq_bls::PublicKey;
+use nimiq_database::Transaction as DBtx;
+use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_primitives::policy;
+use nimiq_transaction::Transaction;
 
 use crate::blockchain_state::BlockchainState;
-use crate::hash::{Blake2bHash, Hash};
 use crate::{AbstractBlockchain, Blockchain, PushError};
 
 /// Implements methods to verify the validity of blocks.

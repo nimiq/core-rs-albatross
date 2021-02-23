@@ -1,11 +1,14 @@
-use crate::history_store::HistoryTreeHash;
-use account::Inherent;
-use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
-use database::{FromDatabaseValue, IntoDatabaseValue};
-use hash::Hash;
-use mmr::hash::Hash as MMRHash;
 use std::io;
-use transaction::Transaction as BlockchainTransaction;
+
+use merkle_mountain_range::hash::Hash as MMRHash;
+
+use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use nimiq_account::Inherent;
+use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
+use nimiq_hash::Hash;
+use nimiq_transaction::Transaction as BlockchainTransaction;
+
+use crate::history_store::HistoryTreeHash;
 
 /// A single struct that stores information that represents any possible transaction (basic
 /// transaction or inherent) on the blockchain.

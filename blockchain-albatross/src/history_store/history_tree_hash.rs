@@ -1,9 +1,11 @@
-use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
-use database::{AsDatabaseBytes, FromDatabaseValue};
-use hash::{Blake2bHash, Hash};
-use mmr::hash::Merge;
 use std::borrow::Cow;
 use std::io;
+
+use merkle_mountain_range::hash::Merge;
+
+use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use nimiq_database::{AsDatabaseBytes, FromDatabaseValue};
+use nimiq_hash::{Blake2bHash, Hash};
 
 /// A wrapper for the Blake2bHash. This is necessary because Rust doesn't let us implement traits
 /// for structs defined in external crates.
