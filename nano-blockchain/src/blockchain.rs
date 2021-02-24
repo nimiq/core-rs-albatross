@@ -22,8 +22,8 @@ pub struct NanoBlockchain {
     pub macro_head: MacroBlock,
     // The last election block.
     pub election_head: MacroBlock,
-    // The validator slots for the current epoch.
-    pub current_slots: Option<Validators>,
+    // The validators for the current epoch.
+    pub current_validators: Option<Validators>,
     // The genesis block.
     pub genesis_block: Block,
     // The chain store is a database containing all of the chain infos in the current batch.
@@ -45,15 +45,9 @@ impl NanoBlockchain {
 
         let chain_info = ChainInfo::new(genesis_block.clone(), true);
 
-        let hash = genesis_block.hash();
-
-        let number = genesis_block.block_number();
-
         let mut chain_store = ChainStore::new();
 
-        chain_store.put_block_hash(number, hash.clone());
-
-        chain_store.put_chain_info(hash.clone(), chain_info);
+        chain_store.put_chain_info(chain_info);
 
         NanoBlockchain {
             network_id,
@@ -61,7 +55,7 @@ impl NanoBlockchain {
             head: genesis_block.clone(),
             macro_head: genesis_block.clone().unwrap_macro(),
             election_head: genesis_block.clone().unwrap_macro(),
-            current_slots: genesis_block.validators(),
+            current_validators: genesis_block.validators(),
             genesis_block,
             chain_store: RwLock::new(chain_store),
         }
