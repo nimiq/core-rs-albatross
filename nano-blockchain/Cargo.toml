@@ -10,7 +10,9 @@ edition = "2018"
 
 [dependencies]
 nimiq-block-albatross = { path = "../primitives/block-albatross" }
+nimiq-blockchain-albatross = { path = "../blockchain-albatross" }
 nimiq-genesis = { path = "../genesis" }
 nimiq-hash = { path = "../hash" }
-nimiq-primitives = { path = "../primitives" }
 nimiq-nano-sync = { path = "../nano-sync", default-features = false, features = ["verifier"]  }
+nimiq-primitives = { path = "../primitives" }
+nimiq-utils = { path = "../utils", features = ["time"] }

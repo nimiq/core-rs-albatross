@@ -1,16 +1,12 @@
-extern crate nimiq_primitives as primitives;
-
-use crate::chain_info::ChainInfo;
-use nimiq_block_albatross::Block;
-use nimiq_hash::Blake2bHash;
 use std::collections::HashMap;
+
+use nimiq_blockchain_albatross::ChainInfo;
+use nimiq_hash::Blake2bHash;
 
 #[derive(Debug)]
 pub struct ChainStore {
     // A store of chain infos indexed by their block hashes.
     chain_db: HashMap<Blake2bHash, ChainInfo>,
-    // A database of blocks indexed by their block hashes.
-    block_db: HashMap<Blake2bHash, Block>,
     // A database of block hashes indexed by their block number.
     height_idx: HashMap<u32, Vec<Blake2bHash>>,
 }
@@ -18,7 +14,6 @@ impl ChainStore {
     pub fn new() -> Self {
         ChainStore {
             chain_db: HashMap::new(),
-            block_db: HashMap::new(),
             height_idx: HashMap::new(),
         }
     }
@@ -27,20 +22,29 @@ impl ChainStore {
         self.chain_db.get(hash)
     }
 
-    pub fn get_block(&self, hash: &Blake2bHash) -> Option<&Block> {
-        self.block_db.get(hash)
-    }
-
     pub fn get_block_hashes(&self, block_number: &u32) -> Option<&Vec<Blake2bHash>> {
         self.height_idx.get(block_number)
     }
 
-    pub fn put_chain_info(&mut self, hash: Blake2bHash, chain_info: ChainInfo) {
-        self.chain_db.insert(hash, chain_info);
+    pub fn get_chain_info_at(&self, block_height: u32) -> Option<ChainInfo> {
+        // Get block hashes at the given height.
+        let block_hashes = self.get_block_hashes(&block_height)?;
+
+        // Iterate until we find the main chain block.
+        for hash in block_hashes {
+            let chain_info = self.get_chain_info(hash)?;
+
+            // If it's on the main chain we can return from loop
+            if chain_info.on_main_chain {
+                return Some(chain_info.clone());
+            }
+        }
+
+        unreachable!()
     }
 
-    pub fn put_block(&mut self, hash: Blake2bHash, block: Block) {
-        self.block_db.insert(hash, block);
+    pub fn put_chain_info(&mut self, hash: Blake2bHash, chain_info: ChainInfo) {
+        self.chain_db.insert(hash, chain_info);
     }
 
     pub fn put_block_hash(&mut self, block_number: u32, hash: Blake2bHash) {

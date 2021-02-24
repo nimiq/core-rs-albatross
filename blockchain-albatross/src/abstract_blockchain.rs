@@ -1,42 +1,65 @@
 use nimiq_block_albatross::{Block, BlockType, MacroBlock};
+use nimiq_collections::BitSet;
 use nimiq_hash::Blake2bHash;
+use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::policy;
-use nimiq_primitives::slots::Validators;
+use nimiq_primitives::slots::{Validator, Validators};
+use nimiq_vrf::{Rng, VrfUseCase};
 
 use crate::{Blockchain, ChainInfo};
 use nimiq_database::Transaction;
 
 /// Defines several basic methods for blockchains.
 pub trait AbstractBlockchain {
+    /// Returns the network id.
+    fn network_id(&self) -> NetworkId;
+
+    /// Returns the current time.
+    fn now(&self) -> u64;
+
     /// Returns the head of the main chain.
     fn head(&self) -> Block;
 
     /// Returns the last macro block.
-    fn macro_head(&self) -> Block;
+    fn macro_head(&self) -> MacroBlock;
 
     /// Returns the last election macro block.
     fn election_head(&self) -> MacroBlock;
 
     /// Returns the hash of the head of the main chain.
-    fn head_hash(&self) -> Blake2bHash;
+    fn head_hash(&self) -> Blake2bHash {
+        self.head().hash()
+    }
 
     /// Returns the hash of the last macro block.
-    fn macro_head_hash(&self) -> Blake2bHash;
+    fn macro_head_hash(&self) -> Blake2bHash {
+        self.macro_head().hash()
+    }
 
     /// Returns the hash of the last election macro block.
-    fn election_head_hash(&self) -> Blake2bHash;
+    fn election_head_hash(&self) -> Blake2bHash {
+        self.election_head().hash()
+    }
 
     /// Returns the block number at the head of the main chain.
-    fn block_number(&self) -> u32;
+    fn block_number(&self) -> u32 {
+        self.head().block_number()
+    }
 
     /// Returns the timestamp at the head of the main chain.
-    fn timestamp(&self) -> u64;
+    fn timestamp(&self) -> u64 {
+        self.head().timestamp()
+    }
 
     /// Returns the view number at the head of the main chain.
-    fn view_number(&self) -> u32;
+    fn view_number(&self) -> u32 {
+        self.head().view_number()
+    }
 
     /// Returns the next view number at the head of the main chain.
-    fn next_view_number(&self) -> u32;
+    fn next_view_number(&self) -> u32 {
+        self.head().next_view_number()
+    }
 
     /// Returns the block type of the next block.
     fn get_next_block_type(&self, last_number: Option<u32>) -> BlockType {
@@ -84,51 +107,98 @@ pub trait AbstractBlockchain {
         include_body: bool,
         txn_option: Option<&Transaction>,
     ) -> Option<ChainInfo>;
+
+    /// Calculates the slot owner (represented as the validator plus the slot number) at a given
+    /// block number and view number.
+    fn get_slot_owner_at(&self, block_number: u32, view_number: u32) -> Option<(Validator, u16)> {
+        // Get the disabled slots for the current batch.
+        let disabled_slots = self
+            .get_block_at(policy::macro_block_before(block_number), true)?
+            .unwrap_macro()
+            .body
+            .unwrap()
+            .disabled_set;
+
+        // Get the slot number for the current block.
+        let slot_number = self.get_slot_owner_number_at(block_number, view_number, disabled_slots);
+
+        // Get the current validators.
+        // Note: We need to handle the case where `block_number()` is at an election block
+        // (so `current_slots()` was already updated by it, pushing this epoch's slots to
+        // `state.previous_slots` and deleting previous epoch's slots).
+        let validators = if policy::epoch_at(self.block_number()) == policy::epoch_at(block_number)
+            && !policy::is_election_block_at(self.block_number())
+        {
+            self.current_validators()?
+        } else if (policy::epoch_at(self.block_number()) == policy::epoch_at(block_number)
+            && policy::is_election_block_at(self.block_number()))
+            || (policy::epoch_at(self.block_number()) == policy::epoch_at(block_number) + 1
+                && !policy::is_election_block_at(self.block_number()))
+        {
+            self.previous_validators()?
+        } else {
+            self.get_block_at(policy::election_block_before(block_number), true)?
+                .validators()?
+        };
+
+        // Finally get the correct validator.
+        let validator = validators.get_validator(slot_number).clone();
+
+        Some((validator, slot_number))
+    }
+
+    /// Calculate the slot owner number at a given block and view number.
+    /// In combination with the active Validators, this can be used to retrieve the validator info.
+    fn get_slot_owner_number_at(
+        &self,
+        block_number: u32,
+        view_number: u32,
+        disabled_slots: BitSet,
+    ) -> u16 {
+        // Get the last block's seed.
+        let seed = self
+            .get_block_at(block_number - 1, false)
+            .expect("Can't find previous block!")
+            .seed()
+            .clone();
+
+        // RNG for slot selection
+        let mut rng = seed.rng(VrfUseCase::SlotSelection, view_number);
+
+        // Check if all slots are disabled. In this case, we will accept any slot, since we want the
+        // chain to progress.
+        let all_disabled = disabled_slots.len() == policy::SLOTS as usize;
+
+        // Sample until we find a slot that is not slashed
+        loop {
+            let slot_number = rng.next_u64_max(policy::SLOTS as u64) as u16;
+
+            if !disabled_slots.contains(slot_number as usize) || all_disabled {
+                return slot_number;
+            }
+        }
+    }
 }
 
 impl AbstractBlockchain for Blockchain {
+    fn network_id(&self) -> NetworkId {
+        self.network_id
+    }
+
+    fn now(&self) -> u64 {
+        self.time.now()
+    }
+
     fn head(&self) -> Block {
         self.state.read().main_chain.head.clone()
     }
 
-    fn macro_head(&self) -> Block {
-        self.state.read().macro_info.head.clone()
+    fn macro_head(&self) -> MacroBlock {
+        self.state.read().macro_info.head.unwrap_macro_ref().clone()
     }
 
     fn election_head(&self) -> MacroBlock {
         self.state.read().election_head.clone()
-    }
-
-    fn head_hash(&self) -> Blake2bHash {
-        self.state.read().head_hash.clone()
-    }
-
-    fn macro_head_hash(&self) -> Blake2bHash {
-        self.state.read().macro_head_hash.clone()
-    }
-
-    fn election_head_hash(&self) -> Blake2bHash {
-        self.state.read().election_head_hash.clone()
-    }
-
-    fn block_number(&self) -> u32 {
-        self.state.read_recursive().main_chain.head.block_number()
-    }
-
-    fn timestamp(&self) -> u64 {
-        self.state.read_recursive().main_chain.head.timestamp()
-    }
-
-    fn view_number(&self) -> u32 {
-        self.state.read_recursive().main_chain.head.view_number()
-    }
-
-    fn next_view_number(&self) -> u32 {
-        self.state
-            .read_recursive()
-            .main_chain
-            .head
-            .next_view_number()
     }
 
     fn current_validators(&self) -> Option<Validators> {
