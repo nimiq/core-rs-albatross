@@ -21,11 +21,12 @@ impl Blockchain {
     /// This only performs checks that can be made BEFORE the state is updated with the block. All
     /// checks that require the updated state (ex: if an account has enough funds) are made on the
     /// verify_block_state method.
-    pub fn verify_block_header(
-        &self,
+    // Note: This is an associated method because we need to use it on the nano-blockchain. There
+    //       might be a better way to do this though.
+    pub fn verify_block_header<B: AbstractBlockchain>(
+        blockchain: &B,
         header: &BlockHeader,
         intended_slot_owner: &PublicKey,
-        txn_opt: Option<&DBtx>,
     ) -> Result<(), PushError> {
         // Check the version
         if header.version() != policy::VERSION {
@@ -34,13 +35,12 @@ impl Blockchain {
         }
 
         // Check if the block's immediate predecessor is part of the chain.
-        let prev_info = self
-            .chain_store
-            .get_chain_info(&header.parent_hash(), false, txn_opt)
+        let prev_info = blockchain
+            .get_chain_info(&header.parent_hash(), false)
             .unwrap();
 
         // Check that the block is a valid successor of its predecessor.
-        if self.get_next_block_type(Some(prev_info.head.block_number())) != header.ty() {
+        if blockchain.get_next_block_type(Some(prev_info.head.block_number())) != header.ty() {
             warn!("Rejecting block - wrong block type ({:?})", header.ty());
             return Err(PushError::InvalidSuccessor);
         }
@@ -64,7 +64,7 @@ impl Blockchain {
         // Check that the current block timestamp less the node's current time is less than or equal
         // to the allowed maximum drift. Basically, we check that the block isn't from the future.
         // Both times are given in Unix time standard in millisecond precision.
-        if header.timestamp().saturating_sub(self.time.now()) > policy::TIMESTAMP_MAX_DRIFT {
+        if header.timestamp().saturating_sub(blockchain.now()) > policy::TIMESTAMP_MAX_DRIFT {
             warn!("Rejecting block - block timestamp exceeds allowed maximum drift");
             return Err(PushError::InvalidBlock(BlockError::FromTheFuture));
         }
@@ -80,7 +80,7 @@ impl Blockchain {
 
         if header.ty() == BlockType::Macro {
             // Check if the parent election hash matches the current election head hash
-            if header.parent_election_hash().unwrap() != &self.state().election_head_hash {
+            if header.parent_election_hash().unwrap() != &blockchain.election_head_hash() {
                 warn!("Rejecting block - wrong parent election hash");
                 return Err(PushError::InvalidSuccessor);
             }
@@ -90,12 +90,13 @@ impl Blockchain {
     }
 
     /// Verifies the justification of a block.
-    pub fn verify_block_justification(
-        &self,
+    // Note: This is an associated method because we need to use it on the nano-blockchain. There
+    //       might be a better way to do this though.
+    pub fn verify_block_justification<B: AbstractBlockchain>(
+        blockchain: &B,
         header: &BlockHeader,
         justification_opt: &Option<BlockJustification>,
         intended_slot_owner: &PublicKey,
-        txn_opt: Option<&DBtx>,
     ) -> Result<(), PushError> {
         // Checks if the justification exists. If yes, unwrap it.
         let justification = justification_opt
@@ -123,9 +124,8 @@ impl Blockchain {
                 }
 
                 // Check if a view change occurred - if so, validate the proof
-                let prev_info = self
-                    .chain_store
-                    .get_chain_info(&header.parent_hash(), false, txn_opt)
+                let prev_info = blockchain
+                    .get_chain_info(&header.parent_hash(), false)
                     .unwrap();
 
                 let view_number = if policy::is_macro_block_at(header.block_number() - 1) {
@@ -165,7 +165,7 @@ impl Blockchain {
                         .view_change_proof
                         .as_ref()
                         .unwrap()
-                        .verify(&view_change, &self.current_validators().unwrap())
+                        .verify(&view_change, &blockchain.current_validators().unwrap())
                     {
                         warn!("Rejecting block - bad view change proof");
                         return Err(PushError::InvalidBlock(BlockError::InvalidViewChangeProof));
@@ -177,7 +177,7 @@ impl Blockchain {
                 if !justification.verify(
                     header.hash(),
                     header.block_number(),
-                    &self.current_validators().unwrap(),
+                    &blockchain.current_validators().unwrap(),
                 ) {
                     warn!("Rejecting block - macro block with bad justification");
                     return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
@@ -196,7 +196,7 @@ impl Blockchain {
         &self,
         header: &BlockHeader,
         body_opt: &Option<BlockBody>,
-        txn_opt: Option<&DBtx>,
+        _txn_opt: Option<&DBtx>,
     ) -> Result<(), PushError> {
         // Checks if the body exists. If yes, unwrap it.
         let body = body_opt
@@ -238,15 +238,13 @@ impl Blockchain {
                     }
 
                     // Get intended slot owner for that block.
-                    let (slot, _) = self.get_slot_owner_at(
-                        proof.header1.block_number,
-                        proof.header1.view_number,
-                        txn_opt,
-                    );
+                    let (validator, _) = self
+                        .get_slot_owner_at(proof.header1.block_number, proof.header1.view_number)
+                        .expect("Couldn't calculate the slot owner!");
 
                     // Verify fork proof.
                     if proof
-                        .verify(&slot.public_key.uncompress_unchecked())
+                        .verify(&validator.public_key.uncompress_unchecked())
                         .is_err()
                     {
                         warn!("Rejecting block - Bad fork proof: invalid owner signature");

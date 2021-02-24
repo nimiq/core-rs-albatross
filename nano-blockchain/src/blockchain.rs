@@ -1,35 +1,37 @@
-extern crate nimiq_primitives as primitives;
+use std::sync::{Arc, RwLock};
 
-use crate::chain_info::ChainInfo;
+use nimiq_block_albatross::{Block, MacroBlock};
+use nimiq_blockchain_albatross::ChainInfo;
+use nimiq_genesis::NetworkInfo;
+use nimiq_primitives::networks::NetworkId;
+use nimiq_primitives::slots::Validators;
+use nimiq_utils::time::OffsetTime;
+
 use crate::chain_store::ChainStore;
-use genesis::NetworkInfo;
-use nimiq_block_albatross::Block;
-use nimiq_hash::Blake2bHash;
-use primitives::networks::NetworkId;
-use primitives::slot::Slots;
-use std::sync::RwLock;
 
 /// The Blockchain struct. It stores all information of the blockchain that is known to the Nano
 /// nodes.
-pub struct Blockchain {
+pub struct NanoBlockchain {
     // The network ID. It determines if this is the mainnet or one of the testnets.
     pub network_id: NetworkId,
-    // The hash of the head of the main chain.
-    pub head_hash: Blake2bHash,
-    // The hash of the last macro block.
-    pub macro_head_hash: Blake2bHash,
+    // The OffsetTime struct. It allows us to query the current time.
+    pub time: Arc<OffsetTime>,
+    // The head of the main chain.
+    pub head: Block,
+    // The last macro block.
+    pub macro_head: MacroBlock,
+    // The last election block.
+    pub election_head: MacroBlock,
     // The validator slots for the current epoch.
-    pub current_slots: Option<Slots>,
+    pub current_slots: Option<Validators>,
     // The genesis block.
     pub genesis_block: Block,
     // The chain store is a database containing all of the chain infos in the current batch.
     pub chain_store: RwLock<ChainStore>,
-    // The accounts tree.
-    //pub accounts: Accounts,
 }
 
 /// Implements methods to start a Blockchain.
-impl Blockchain {
+impl NanoBlockchain {
     /// Creates a new blockchain from a given network ID.
     pub fn new(network_id: NetworkId) -> Self {
         let network_info = NetworkInfo::from_network_id(network_id);
@@ -39,11 +41,9 @@ impl Blockchain {
 
     /// Creates a new blockchain with a given network ID and genesis block.
     pub fn with_genesis(network_id: NetworkId, genesis_block: Block) -> Self {
-        let chain_info = ChainInfo {
-            on_main_chain: true,
-            main_chain_successor: None,
-            predecessor: None,
-        };
+        let time = Arc::new(OffsetTime::new());
+
+        let chain_info = ChainInfo::new(genesis_block.clone(), true);
 
         let hash = genesis_block.hash();
 
@@ -55,13 +55,13 @@ impl Blockchain {
 
         chain_store.put_chain_info(hash.clone(), chain_info);
 
-        chain_store.put_block(hash.clone(), genesis_block.clone());
-
-        Blockchain {
+        NanoBlockchain {
             network_id,
-            head_hash: hash.clone(),
-            macro_head_hash: hash,
-            current_slots: genesis_block.slots(),
+            time,
+            head: genesis_block.clone(),
+            macro_head: genesis_block.clone().unwrap_macro(),
+            election_head: genesis_block.clone().unwrap_macro(),
+            current_slots: genesis_block.validators(),
             genesis_block,
             chain_store: RwLock::new(chain_store),
         }

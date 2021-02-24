@@ -12,7 +12,7 @@ use nimiq_vrf::{AliasMethod, VrfUseCase};
 
 use crate::blockchain_state::BlockchainState;
 use crate::reward::block_reward_for_batch;
-use crate::Blockchain;
+use crate::{AbstractBlockchain, Blockchain};
 
 /// Implements methods that create inherents.
 impl Blockchain {
@@ -41,7 +41,7 @@ impl Blockchain {
     pub fn inherent_from_fork_proof(
         &self,
         fork_proof: &ForkProof,
-        txn_option: Option<&Transaction>,
+        _txn_option: Option<&Transaction>,
     ) -> Inherent {
         // Get the address of the validator registry/staking contract.
         let validator_registry = NetworkInfo::from_network_id(self.network_id)
@@ -49,11 +49,12 @@ impl Blockchain {
             .expect("No ValidatorRegistry");
 
         // Get the slot owner and slot number for this block number and view number.
-        let (producer, slot) = self.get_slot_owner_at(
-            fork_proof.header1.block_number,
-            fork_proof.header1.view_number,
-            txn_option,
-        );
+        let (producer, slot) = self
+            .get_slot_owner_at(
+                fork_proof.header1.block_number,
+                fork_proof.header1.view_number,
+            )
+            .expect("Couldn't calculate slot owner!");
 
         // Create the SlashedSlot struct.
         let slot = SlashedSlot {
@@ -75,7 +76,7 @@ impl Blockchain {
     pub fn inherents_from_view_changes(
         &self,
         view_changes: &ViewChanges,
-        txn_option: Option<&Transaction>,
+        _txn_option: Option<&Transaction>,
     ) -> Vec<Inherent> {
         // Get the address of the validator registry/staking contract.
         let validator_registry = NetworkInfo::from_network_id(self.network_id)
@@ -86,8 +87,9 @@ impl Blockchain {
         (view_changes.first_view_number..view_changes.last_view_number)
             .map(|view_number| {
                 // Get the slot owner and slot number for this block number and view number.
-                let (producer, slot) =
-                    self.get_slot_owner_at(view_changes.block_number, view_number, txn_option);
+                let (producer, slot) = self
+                    .get_slot_owner_at(view_changes.block_number, view_number)
+                    .expect("Couldn't calculate slot owner!");
 
                 debug!("Slash inherent: view change: {}", producer.public_key);
 
