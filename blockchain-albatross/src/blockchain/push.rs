@@ -337,7 +337,7 @@ impl Blockchain {
         // TODO: Get rid of the .clone() here.
         current = (state.head_hash.clone(), state.main_chain.clone());
 
-        // Check if ancestor is in current epoch
+        // Check if ancestor is in current batch.
         if ancestor.1.head.block_number() < state.macro_info.head.block_number() {
             info!("Ancestor is in finalized epoch");
             return Err(PushError::InvalidFork);

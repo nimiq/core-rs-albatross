@@ -28,7 +28,7 @@ impl AbstractBlockchain for NanoBlockchain {
     }
 
     fn current_validators(&self) -> Option<Validators> {
-        self.current_slots.clone()
+        self.current_validators.clone()
     }
 
     fn previous_validators(&self) -> Option<Validators> {

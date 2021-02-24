@@ -7,7 +7,7 @@ use nimiq_hash::Blake2bHash;
 pub struct ChainStore {
     // A store of chain infos indexed by their block hashes.
     chain_db: HashMap<Blake2bHash, ChainInfo>,
-    // A database of block hashes indexed by their block number.
+    // A store of block hashes indexed by their block number.
     height_idx: HashMap<u32, Vec<Blake2bHash>>,
 }
 impl ChainStore {
@@ -43,11 +43,22 @@ impl ChainStore {
         unreachable!()
     }
 
-    pub fn put_chain_info(&mut self, hash: Blake2bHash, chain_info: ChainInfo) {
-        self.chain_db.insert(hash, chain_info);
+    pub fn put_chain_info(&mut self, chain_info: ChainInfo) {
+        let hash = chain_info.head.hash();
+
+        let previous = self.chain_db.insert(hash.clone(), chain_info.clone());
+
+        // If the block was already in the ChainStore then we don't need to modify the height index.
+        if previous.is_none() {
+            self.height_idx
+                .entry(chain_info.head.block_number())
+                .or_default()
+                .push(hash);
+        }
     }
 
-    pub fn put_block_hash(&mut self, block_number: u32, hash: Blake2bHash) {
-        self.height_idx.entry(block_number).or_default().push(hash)
+    pub fn clear(&mut self) {
+        self.chain_db.clear();
+        self.height_idx.clear();
     }
 }
