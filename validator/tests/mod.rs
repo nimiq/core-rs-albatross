@@ -130,9 +130,12 @@ fn validator_for_slot(
     view_number: u32,
 ) -> &Validator {
     let consensus = &validators.first().unwrap().consensus;
+
     let (slot, _) = consensus
         .blockchain
-        .get_slot_owner_at(block_number, view_number, None);
+        .get_slot_owner_at(block_number, view_number)
+        .expect("Couldn't find slot owner!");
+
     validators
         .iter()
         .find(|validator| {

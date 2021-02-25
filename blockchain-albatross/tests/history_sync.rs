@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use beserial::Deserialize;
 use nimiq_block_albatross::{
-    create_pk_tree_root, Block, MacroBlock, MacroBody, MultiSignature, TendermintIdentifier,
-    TendermintProof, TendermintProposal, TendermintStep, TendermintVote,
+    Block, MacroBlock, MacroBody, MultiSignature, TendermintIdentifier, TendermintProof,
+    TendermintProposal, TendermintStep, TendermintVote,
 };
 use nimiq_block_production_albatross::BlockProducer;
 use nimiq_blockchain_albatross::{AbstractBlockchain, Blockchain, PushResult};
@@ -62,7 +62,7 @@ fn produce_macro_blocks(num_macro: usize, producer: &BlockProducer, blockchain: 
                 .body
                 .or(Some(MacroBody::new()))
                 .unwrap(),
-            create_pk_tree_root(&slots.unwrap()),
+            MacroBlock::create_pk_tree_root(&slots.unwrap()),
         );
         assert_eq!(
             blockchain.push(Block::Macro(block)),

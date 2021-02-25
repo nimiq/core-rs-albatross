@@ -107,9 +107,11 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
     }
 
     fn is_our_turn(&self) -> bool {
-        let (slot, _) =
-            self.blockchain
-                .get_slot_owner_at(self.block_number, self.view_number, None);
+        let (slot, _) = self
+            .blockchain
+            .get_slot_owner_at(self.block_number, self.view_number)
+            .expect("Couldn't find slot owner!");
+
         &self.signing_key.public_key.compress() == slot.public_key.compressed()
     }
 

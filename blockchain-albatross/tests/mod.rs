@@ -3,9 +3,9 @@ use std::sync::RwLock;
 
 use beserial::Deserialize;
 use nimiq_block_albatross::{
-    create_pk_tree_root, Block, MacroBlock, MacroBody, MultiSignature, SignedViewChange,
-    TendermintIdentifier, TendermintProof, TendermintProposal, TendermintStep, TendermintVote,
-    ViewChange, ViewChangeProof,
+    Block, MacroBlock, MacroBody, MultiSignature, SignedViewChange, TendermintIdentifier,
+    TendermintProof, TendermintProposal, TendermintStep, TendermintVote, ViewChange,
+    ViewChangeProof,
 };
 use nimiq_block_production_albatross::BlockProducer;
 use nimiq_blockchain_albatross::{
@@ -64,7 +64,7 @@ impl TemporaryBlockProducer {
                 .get_validators_for_epoch(policy::epoch_at(self.blockchain.block_number() + 1));
             assert!(validators.is_some());
 
-            let validator_merkle_root = create_pk_tree_root(&validators.unwrap());
+            let validator_merkle_root = MacroBlock::create_pk_tree_root(&validators.unwrap());
 
             Block::Macro(TemporaryBlockProducer::finalize_macro_block(
                 TendermintProposal {

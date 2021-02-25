@@ -22,13 +22,13 @@ use std::slice::Iter;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use nimiq_bls::lazy::LazyPublicKey;
-use nimiq_bls::CompressedPublicKey;
+use nimiq_bls::{CompressedPublicKey, PublicKey};
 
 use crate::account::ValidatorId;
 use crate::policy::SLOTS;
 use std::cmp::max;
 
-/// A validator that owns some slots
+/// A validator that owns some slots.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Validator {
     pub validator_id: ValidatorId,
@@ -39,6 +39,7 @@ pub struct Validator {
 }
 
 impl Validator {
+    /// Creates a new Validator.
     pub fn new<PK: Into<LazyPublicKey>>(
         validator_id: ValidatorId,
         public_key: PK,
@@ -51,6 +52,7 @@ impl Validator {
         }
     }
 
+    /// Returns the number of slots owned by this validator.
     pub fn num_slots(&self) -> u16 {
         self.slot_range.1 - self.slot_range.0
     }
@@ -66,6 +68,8 @@ pub struct SlashedSlot {
     pub event_block: u32,
 }
 
+/// A collection of Validators. This struct is normally used to hold the validators for a specific
+/// epoch.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Validators {
     // A vector of validators ordered by their slots. In this case, the slot band of a validator
@@ -76,6 +80,7 @@ pub struct Validators {
 }
 
 impl Validators {
+    /// Creates a new Validators struct given a vector of Validator.
     pub fn new(validators: Vec<Validator>) -> Self {
         let mut validator_map = HashMap::new();
 
@@ -89,10 +94,12 @@ impl Validators {
         }
     }
 
+    /// Returns the number of validators contained inside.
     pub fn num_validators(&self) -> usize {
         self.validators.len()
     }
 
+    /// Calculates the slot band of the validator that owns the given slot.
     pub fn get_band_from_slot(&self, slot: u16) -> u16 {
         assert!(slot < SLOTS);
 
@@ -127,6 +134,20 @@ impl Validators {
         Some(&self.validators[band as usize])
     }
 
+    /// Returns the public key associated with each slot, in order.
+    pub fn to_pks(&self) -> Vec<PublicKey> {
+        let mut pks = vec![];
+
+        for validator in self.iter() {
+            let pk = validator.public_key.compressed().uncompress().unwrap();
+
+            pks.append(&mut vec![pk; validator.num_slots() as usize]);
+        }
+
+        pks
+    }
+
+    /// Iterates over the validators.
     pub fn iter(&self) -> Iter<Validator> {
         self.validators.iter()
     }
