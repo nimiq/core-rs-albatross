@@ -36,6 +36,8 @@ impl NanoZKP {
         // selected in the previous election macro block and that are now signing this election
         // macro block.
         initial_pks: Vec<G2MNT6>,
+        // The hash of the block header of the initial state.
+        initial_header_hash: [u8; 32],
         // The public keys of the validators of the final state. To be clear, they are the validators
         // that are selected in this election macro block.
         final_pks: Vec<G2MNT6>,
@@ -219,9 +221,10 @@ impl NanoZKP {
                 rng,
                 &initial_pks,
                 &initial_pk_tree_root,
+                initial_header_hash,
                 &final_pks,
                 &final_pk_tree_root,
-                block.clone(),
+                &block,
                 debug_mode,
             )?;
         }
@@ -233,8 +236,9 @@ impl NanoZKP {
             NanoZKP::prove_macro_block_wrapper(
                 rng,
                 &initial_pks,
+                initial_header_hash,
                 &final_pks,
-                block.block_number,
+                &block,
                 debug_mode,
             )?;
         }
@@ -246,8 +250,9 @@ impl NanoZKP {
             NanoZKP::prove_merger(
                 rng,
                 &initial_pks,
+                initial_header_hash,
                 &final_pks,
-                block.block_number,
+                &block,
                 genesis_data.clone(),
                 debug_mode,
             )?;
@@ -259,8 +264,9 @@ impl NanoZKP {
         let proof = NanoZKP::prove_merger_wrapper(
             rng,
             &initial_pks,
+            initial_header_hash,
             &final_pks,
-            block.block_number,
+            &block,
             genesis_data,
             debug_mode,
         )?;
@@ -624,9 +630,10 @@ impl NanoZKP {
         rng: &mut R,
         initial_pks: &[G2MNT6],
         initial_pk_tree_root: &Vec<u8>,
+        initial_header_hash: [u8; 32],
         final_pks: &[G2MNT6],
         final_pk_tree_root: &Vec<u8>,
-        block: MacroBlock,
+        block: &MacroBlock,
         debug_mode: bool,
     ) -> Result<(), NanoZKPError> {
         // Load the proving key from file.
@@ -662,11 +669,13 @@ impl NanoZKP {
         // Calculate the inputs.
         let mut initial_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
             block.block_number - EPOCH_LENGTH,
+            initial_header_hash,
             initial_pks.to_vec(),
         )));
 
         let mut final_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
             block.block_number,
+            block.header_hash,
             final_pks.to_vec(),
         )));
 
@@ -676,8 +685,9 @@ impl NanoZKP {
             agg_pk_chunks,
             proof,
             bytes_to_bits(initial_pk_tree_root),
+            bytes_to_bits(&initial_header_hash),
             bytes_to_bits(final_pk_tree_root),
-            block,
+            block.clone(),
             initial_state_commitment.clone(),
             final_state_commitment.clone(),
         );
@@ -714,8 +724,9 @@ impl NanoZKP {
     fn prove_macro_block_wrapper<R: CryptoRng + Rng>(
         rng: &mut R,
         initial_pks: &[G2MNT6],
+        initial_header_hash: [u8; 32],
         final_pks: &[G2MNT6],
-        block_number: u32,
+        block: &MacroBlock,
         debug_mode: bool,
     ) -> Result<(), NanoZKPError> {
         // Load the proving key from file.
@@ -735,12 +746,14 @@ impl NanoZKP {
 
         // Calculate the inputs.
         let mut initial_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
-            block_number - EPOCH_LENGTH,
+            block.block_number - EPOCH_LENGTH,
+            initial_header_hash,
             initial_pks.to_vec(),
         )));
 
         let mut final_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
-            block_number,
+            block.block_number,
+            block.header_hash,
             final_pks.to_vec(),
         )));
 
@@ -784,8 +797,9 @@ impl NanoZKP {
     fn prove_merger<R: CryptoRng + Rng>(
         rng: &mut R,
         initial_pks: &[G2MNT6],
+        initial_header_hash: [u8; 32],
         final_pks: &[G2MNT6],
-        block_number: u32,
+        block: &MacroBlock,
         genesis_data: Option<(Proof<MNT6_753>, Vec<u8>)>,
         debug_mode: bool,
     ) -> Result<(), NanoZKPError> {
@@ -810,8 +824,11 @@ impl NanoZKP {
         let vk_merger_wrapper = VerifyingKey::deserialize_unchecked(&mut file)?;
 
         // Get the intermediate state commitment.
-        let intermediate_state_commitment =
-            state_commitment(block_number - EPOCH_LENGTH, initial_pks.to_vec());
+        let intermediate_state_commitment = state_commitment(
+            block.block_number - EPOCH_LENGTH,
+            initial_header_hash,
+            initial_pks.to_vec(),
+        );
 
         // Create the proof for the previous epoch, the initial state commitment and the genesis flag
         // depending if this is the first epoch or not.
@@ -832,7 +849,8 @@ impl NanoZKP {
         let mut initial_state_commitment = pack_inputs(bytes_to_bits(&initial_state_comm_bytes));
 
         let mut final_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
-            block_number,
+            block.block_number,
+            block.header_hash,
             final_pks.to_vec(),
         )));
 
@@ -886,8 +904,9 @@ impl NanoZKP {
     fn prove_merger_wrapper<R: CryptoRng + Rng>(
         rng: &mut R,
         initial_pks: &[G2MNT6],
+        initial_header_hash: [u8; 32],
         final_pks: &[G2MNT6],
-        block_number: u32,
+        block: &MacroBlock,
         genesis_data: Option<(Proof<MNT6_753>, Vec<u8>)>,
         debug_mode: bool,
     ) -> Result<Proof<MNT6_753>, NanoZKPError> {
@@ -913,14 +932,19 @@ impl NanoZKP {
 
         // Calculate the inputs.
         let initial_state_comm_bytes = match genesis_data {
-            None => state_commitment(block_number - EPOCH_LENGTH, initial_pks.to_vec()),
+            None => state_commitment(
+                block.block_number - EPOCH_LENGTH,
+                initial_header_hash,
+                initial_pks.to_vec(),
+            ),
             Some((_, x)) => x,
         };
 
         let mut initial_state_commitment = pack_inputs(bytes_to_bits(&initial_state_comm_bytes));
 
         let mut final_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
-            block_number,
+            block.block_number,
+            block.header_hash,
             final_pks.to_vec(),
         )));
 

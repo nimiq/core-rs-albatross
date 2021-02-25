@@ -33,10 +33,12 @@ pub enum BlockError {
     FromTheFuture,
     #[error("Block size exceeded")]
     SizeExceeded,
+
     #[error("Body hash mismatch")]
     BodyHashMismatch,
     #[error("Accounts hash mismatch")]
     AccountsHashMismatch,
+
     #[error("Missing justification")]
     NoJustification,
     #[error("Missing view change proof")]

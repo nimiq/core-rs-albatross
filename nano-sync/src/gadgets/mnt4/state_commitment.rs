@@ -18,6 +18,7 @@ impl StateCommitmentGadget {
     pub fn evaluate(
         cs: ConstraintSystemRef<MNT4Fr>,
         block_number: &UInt32<MNT4Fr>,
+        header_hash: &Vec<Boolean<MNT4Fr>>,
         pk_tree_root: &Vec<Boolean<MNT4Fr>>,
         pedersen_generators: &Vec<G1Var>,
     ) -> Result<Vec<Boolean<MNT4Fr>>, SynthesisError> {
@@ -31,6 +32,9 @@ impl StateCommitmentGadget {
         block_number_be.reverse();
 
         bits.extend(block_number_be);
+
+        // Append the header hash.
+        bits.extend_from_slice(header_hash);
 
         // Append the public key tree root.
         bits.extend_from_slice(pk_tree_root);
@@ -61,6 +65,7 @@ mod tests {
     use crate::pk_tree_construct;
     use crate::primitives::{pedersen_generators, state_commitment};
     use crate::utils::bytes_to_bits;
+    use rand::RngCore;
 
     #[test]
     fn state_commitment_works() {
@@ -77,19 +82,34 @@ mod tests {
         // Create random block number.
         let block_number = u32::rand(rng);
 
+        // Create random header hash.
+        let mut header_hash = [0u8; 32];
+        rng.fill_bytes(&mut header_hash);
+
         // Evaluate state commitment using the primitive version.
-        let primitive_comm = bytes_to_bits(&state_commitment(block_number, public_keys.clone()));
+        let primitive_comm = bytes_to_bits(&state_commitment(
+            block_number,
+            header_hash,
+            public_keys.clone(),
+        ));
+
+        // Convert the header hash to bits.
+        let header_hash_bits = bytes_to_bits(&header_hash);
 
         // Construct the Merkle tree over the public keys.
         let pk_tree_root = pk_tree_construct(public_keys);
         let pk_tree_root_bits = bytes_to_bits(&pk_tree_root);
 
+        // Allocate the block number in the circuit.
+        let block_number_var = UInt32::new_witness(cs.clone(), || Ok(block_number)).unwrap();
+
+        // Allocate the header hash in the circuit.
+        let header_hash_var =
+            Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(header_hash_bits)).unwrap();
+
         // Allocate the public key tree root in the circuit.
         let pk_tree_root_var =
             Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(pk_tree_root_bits)).unwrap();
-
-        // Allocate the block number in the circuit.
-        let block_number_var = UInt32::new_witness(cs.clone(), || Ok(block_number)).unwrap();
 
         // Allocate the generators.
         let generators_var =
@@ -99,6 +119,7 @@ mod tests {
         let gadget_comm = StateCommitmentGadget::evaluate(
             cs,
             &block_number_var,
+            &header_hash_var,
             &pk_tree_root_var,
             &generators_var,
         )

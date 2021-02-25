@@ -38,9 +38,9 @@ circuit outsources the aggregation of the public keys to a tree of recursive SNA
 which we will explore later.
 
 The macro block circuit takes as public inputs an initial state commitment and a final state commitment. The state commitment
-is a commitment to the block number and to the public keys of the validators that were selected in that block. To compute
-it first we calculate the root of a Merkle tree over the public keys, then we serialize the root and the block number and
-finally create a Pedersen commitment from it.
+is a commitment to the block number, the header hash and to the public keys of the validators that were selected in that block.
+To compute it first we calculate the root of a Merkle tree over the public keys, then we serialize the root, the header hash
+and the block number. To finish, we create a Pedersen commitment from the serialization.
 
 The macro block circuit takes as private inputs:
 

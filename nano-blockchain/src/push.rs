@@ -40,6 +40,8 @@ impl NanoBlockchain {
         // Check the header.
         Blockchain::verify_block_header(self, &block.header(), &intended_slot_owner, None)?;
 
+        // TODO: Check the body for election blocks only.
+
         // Check the justification.
         Blockchain::verify_block_justification(
             self,
