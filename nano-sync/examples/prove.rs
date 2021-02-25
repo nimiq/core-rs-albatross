@@ -30,6 +30,10 @@ fn main() {
         initial_pks.push(pk);
     }
 
+    // Create initial header hash.
+    let mut initial_header_hash = [0u8; 32];
+    rng.fill_bytes(&mut initial_header_hash);
+
     // Create key pairs for all the final validators.
     let mut final_sks = vec![];
     let mut final_pks = vec![];
@@ -71,7 +75,15 @@ fn main() {
     println!("====== Proof generation for Nano Sync initiated ======");
     let start = Instant::now();
 
-    let proof = NanoZKP::prove(initial_pks, final_pks, block, None, true).unwrap();
+    let proof = NanoZKP::prove(
+        initial_pks,
+        initial_header_hash,
+        final_pks,
+        block,
+        None,
+        true,
+    )
+    .unwrap();
 
     if !Path::new("proofs/").is_dir() {
         DirBuilder::new().create("proofs/").unwrap();

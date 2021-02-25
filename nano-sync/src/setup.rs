@@ -207,6 +207,10 @@ impl NanoZKP {
         rng.fill_bytes(&mut bytes);
         let initial_pk_tree_root = bytes_to_bits(&bytes);
 
+        let mut bytes = [0u8; 32];
+        rng.fill_bytes(&mut bytes);
+        let initial_header_hash = bytes_to_bits(&bytes);
+
         let block_number = u32::rand(rng);
 
         let round_number = u32::rand(rng);
@@ -242,6 +246,7 @@ impl NanoZKP {
             agg_pk_chunks,
             proof,
             initial_pk_tree_root,
+            initial_header_hash,
             final_pk_tree_root,
             block,
             initial_state_commitment,

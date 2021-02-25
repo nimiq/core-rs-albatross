@@ -10,10 +10,15 @@ use ark_std::{test_rng, UniformRand};
 
 use nimiq_nano_sync::constants::{EPOCH_LENGTH, VALIDATOR_SLOTS};
 use nimiq_nano_sync::NanoZKP;
+use rand::RngCore;
 
 fn main() {
     println!("====== Generating random inputs ======");
     let rng = &mut test_rng();
+
+    // Create initial header hash.
+    let mut initial_header_hash = [0u8; 32];
+    rng.fill_bytes(&mut initial_header_hash);
 
     // Create key pairs for all the initial validators.
     let mut initial_sks = vec![];
@@ -26,6 +31,10 @@ fn main() {
         initial_sks.push(sk);
         initial_pks.push(pk);
     }
+
+    // Create final header hash.
+    let mut final_header_hash = [0u8; 32];
+    rng.fill_bytes(&mut final_header_hash);
 
     // Create key pairs for all the final validators.
     let mut final_sks = vec![];
@@ -47,7 +56,16 @@ fn main() {
     println!("====== Proof verification for Nano Sync initiated ======");
     let start = Instant::now();
 
-    let result = NanoZKP::verify(initial_pks, 0, final_pks, EPOCH_LENGTH, proof).unwrap();
+    let result = NanoZKP::verify(
+        0,
+        initial_header_hash,
+        initial_pks,
+        EPOCH_LENGTH,
+        final_header_hash,
+        final_pks,
+        proof,
+    )
+    .unwrap();
 
     println!("Proof verification finished. It returned {}.", result);
 

@@ -32,6 +32,7 @@ pub struct MacroBlockCircuit {
     agg_pk_chunks: Vec<G2Projective>,
     proof: Proof<MNT6_753>,
     initial_pk_tree_root: Vec<bool>,
+    initial_header_hash: Vec<bool>,
     final_pk_tree_root: Vec<bool>,
     block: MacroBlock,
 
@@ -51,6 +52,7 @@ impl MacroBlockCircuit {
         agg_pk_chunks: Vec<G2Projective>,
         proof: Proof<MNT6_753>,
         initial_pk_tree_root: Vec<bool>,
+        initial_header_hash: Vec<bool>,
         final_pk_tree_root: Vec<bool>,
         block: MacroBlock,
         initial_state_commitment: Vec<Fq>,
@@ -61,6 +63,7 @@ impl MacroBlockCircuit {
             agg_pk_chunks,
             proof,
             initial_pk_tree_root,
+            initial_header_hash,
             final_pk_tree_root,
             block,
             initial_state_commitment,
@@ -91,6 +94,9 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         let initial_pk_tree_root_var =
             Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(&self.initial_pk_tree_root[..]))?;
 
+        let initial_header_hash_var =
+            Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(&self.initial_header_hash[..]))?;
+
         let final_pk_tree_root_var =
             Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(&self.final_pk_tree_root[..]))?;
 
@@ -120,23 +126,25 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         calculated_block_number.enforce_equal(&block_var.block_number)?;
 
         // Verifying equality for initial state commitment. It just checks that the initial block
-        // number and the initial public key tree root given as witnesses are correct by committing
+        // number, header hash and public key tree root given as witnesses are correct by committing
         // to them and comparing the result with the initial state commitment given as an input.
         let reference_commitment = StateCommitmentGadget::evaluate(
             cs.clone(),
             &initial_block_number_var,
+            &initial_header_hash_var,
             &initial_pk_tree_root_var,
             &pedersen_generators_var,
         )?;
 
         initial_state_commitment_bits.enforce_equal(&reference_commitment)?;
 
-        // Verifying equality for final state commitment. It just checks that the final block number
-        // and the final public key tree root given as a witnesses are correct by committing
+        // Verifying equality for final state commitment. It just checks that the final block number,
+        // header hash and public key tree root given as a witnesses are correct by committing
         // to them and comparing the result with the final state commitment given as an input.
         let reference_commitment = StateCommitmentGadget::evaluate(
             cs.clone(),
             &block_var.block_number,
+            &block_var.header_hash,
             &final_pk_tree_root_var,
             &pedersen_generators_var,
         )?;

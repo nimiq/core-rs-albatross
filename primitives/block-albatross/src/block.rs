@@ -265,6 +265,14 @@ impl Block {
     pub fn is_macro(&self) -> bool {
         matches!(self, Block::Macro(_))
     }
+
+    /// Returns true if the block is an election block, false otherwise.
+    pub fn is_election(&self) -> bool {
+        match self {
+            Block::Macro(block) => block.is_election_block(),
+            Block::Micro(_) => false,
+        }
+    }
 }
 
 impl Serialize for Block {
