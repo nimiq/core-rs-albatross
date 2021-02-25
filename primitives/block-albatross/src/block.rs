@@ -551,6 +551,14 @@ impl BlockBody {
         }
     }
 
+    /// Returns the hash of the body.
+    pub fn hash(&self) -> Blake2bHash {
+        match self {
+            BlockBody::Micro(body) => body.hash(),
+            BlockBody::Macro(body) => body.hash(),
+        }
+    }
+
     /// Unwraps a block body and returns the underlying Micro body.
     pub fn unwrap_micro(self) -> MicroBody {
         if let BlockBody::Micro(body) = self {

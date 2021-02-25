@@ -1,0 +1,185 @@
+use crate::blockchain::NanoBlockchain;
+use nimiq_block_albatross::{Block, BlockError};
+use nimiq_blockchain_albatross::{AbstractBlockchain, ChainInfo, PushError, PushResult};
+use nimiq_nano_sync::{NanoProof, NanoZKP};
+use nimiq_primitives::policy;
+
+/// Implements methods to sync a nano node.
+impl NanoBlockchain {
+    pub fn push_zkp(&mut self, block: Block, proof: NanoProof) -> Result<PushResult, PushError> {
+        // Must be an election block.
+        assert!(block.is_election());
+
+        // Check the version
+        if block.header().version() != policy::VERSION {
+            return Err(PushError::InvalidBlock(BlockError::UnsupportedVersion));
+        }
+
+        // Checks if the body exists.
+        let body = block
+            .body()
+            .ok_or(PushError::InvalidBlock(BlockError::MissingBody))?;
+
+        // Check the body root.
+        if &body.hash() != block.header().body_root() {
+            return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
+        }
+
+        // Prepare the inputs to verify the proof.
+        let initial_block_number = self.genesis_block.block_number();
+
+        let initial_header_hash = <[u8; 32]>::from(self.genesis_block.hash());
+
+        let initial_public_keys = self
+            .genesis_block
+            .validators()
+            .unwrap()
+            .to_pks()
+            .iter()
+            .map(|pk| pk.public_key)
+            .collect();
+
+        let final_block_number = block.block_number();
+
+        let final_header_hash = <[u8; 32]>::from(block.hash());
+
+        let final_public_keys = block
+            .validators()
+            .unwrap()
+            .to_pks()
+            .iter()
+            .map(|pk| pk.public_key)
+            .collect();
+
+        // Verify the zk proof.
+        let verify_result = NanoZKP::verify(
+            initial_block_number,
+            initial_header_hash,
+            initial_public_keys,
+            final_block_number,
+            final_header_hash,
+            final_public_keys,
+            proof,
+        );
+
+        if verify_result.is_err() || !verify_result.unwrap() {
+            return Err(PushError::InvalidZKP);
+        }
+
+        // At this point we know that the block is correct. We just have to push it.
+
+        // Create the chain info for the new block.
+        let chain_info = ChainInfo::new(block.clone(), true);
+
+        // Since it's a macro block, we have to clear the ChainStore.
+        self.chain_store
+            .write()
+            .expect("Couldn't acquire write lock for ChainStore!")
+            .clear();
+
+        // Store the block chain info.
+        self.chain_store
+            .write()
+            .expect("Couldn't acquire write lock for ChainStore!")
+            .put_chain_info(chain_info);
+
+        // Update the blockchain.
+        self.head = block.clone();
+
+        self.macro_head = block.clone().unwrap_macro();
+
+        self.election_head = block.clone().unwrap_macro();
+
+        self.current_validators = block.validators();
+
+        Ok(PushResult::Extended)
+    }
+
+    pub fn push_macro(&mut self, block: Block) -> Result<PushResult, PushError> {
+        // Must be a macro block.
+        assert!(block.is_macro());
+
+        // Check the version
+        if block.header().version() != policy::VERSION {
+            return Err(PushError::InvalidBlock(BlockError::UnsupportedVersion));
+        }
+
+        // If this is an election block, check the body.
+        if block.is_election() {
+            // Checks if the body exists.
+            let body = block
+                .body()
+                .ok_or(PushError::InvalidBlock(BlockError::MissingBody))?;
+
+            // Check the body root.
+            if &body.hash() != block.header().body_root() {
+                return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
+            }
+        }
+
+        // Check if we have this block's parent. The checks change depending if the last macro block
+        // that we pushed was an election block or not.
+        if policy::is_election_block_at(self.block_number()) {
+            // We only need to check that the parent election block of this block is the same as our
+            // head block.
+            if block.header().parent_election_hash().unwrap() != &self.head_hash() {
+                return Err(PushError::Orphan);
+            }
+        } else {
+            // We need to check that this block and our head block have the same parent election
+            // block and are in the correct order.
+            if block.header().parent_election_hash().unwrap()
+                != self.head().parent_election_hash().unwrap()
+                || block.block_number() <= self.head.block_number()
+            {
+                return Err(PushError::Orphan);
+            }
+        }
+
+        // Checks if the justification exists.
+        let justification = block
+            .unwrap_macro_ref()
+            .justification
+            .as_ref()
+            .ok_or(PushError::InvalidBlock(BlockError::NoJustification))?;
+
+        // Check the justification.
+        if !justification.verify(
+            block.hash(),
+            block.block_number(),
+            &self.current_validators().unwrap(),
+        ) {
+            return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
+        }
+
+        // At this point we know that the block is correct. We just have to push it.
+
+        // Create the chain info for the new block.
+        let chain_info = ChainInfo::new(block.clone(), true);
+
+        // Since it's a macro block, we have to clear the ChainStore.
+        self.chain_store
+            .write()
+            .expect("Couldn't acquire write lock for ChainStore!")
+            .clear();
+
+        // Store the block chain info.
+        self.chain_store
+            .write()
+            .expect("Couldn't acquire write lock for ChainStore!")
+            .put_chain_info(chain_info);
+
+        // Update the blockchain.
+        self.head = block.clone();
+
+        self.macro_head = block.clone().unwrap_macro();
+
+        if block.is_election() {
+            self.election_head = block.clone().unwrap_macro();
+
+            self.current_validators = block.validators();
+        }
+
+        Ok(PushResult::Extended)
+    }
+}

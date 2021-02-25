@@ -1,4 +1,4 @@
-use nimiq_block_albatross::{Block, BlockType};
+use nimiq_block_albatross::{Block, BlockError, BlockType};
 use nimiq_blockchain_albatross::{
     AbstractBlockchain, Blockchain, ChainInfo, ChainOrdering, PushError, PushResult,
 };
@@ -17,10 +17,9 @@ impl NanoBlockchain {
         }
 
         // Check if we have this block's parent.
-        // If it's a macro block, we don't care about this since we will clear out the chain store anyway.
         let prev_info = self
             .get_chain_info(&block.parent_hash(), false, None)
-            .ok_or_else(|| PushError::Orphan)?;
+            .ok_or(PushError::Orphan)?;
 
         // Calculate chain ordering.
         let chain_order = ChainOrdering::order_chains(self, &block, &prev_info, None);
@@ -40,7 +39,18 @@ impl NanoBlockchain {
         // Check the header.
         Blockchain::verify_block_header(self, &block.header(), &intended_slot_owner, None)?;
 
-        // TODO: Check the body for election blocks only.
+        // If this is an election block, check the body.
+        if block.is_election() {
+            // Checks if the body exists.
+            let body = block
+                .body()
+                .ok_or(PushError::InvalidBlock(BlockError::MissingBody))?;
+
+            // Check the body root.
+            if &body.hash() != block.header().body_root() {
+                return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
+            }
+        }
 
         // Check the justification.
         Blockchain::verify_block_justification(
