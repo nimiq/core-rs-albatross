@@ -15,5 +15,5 @@ nimiq-database = { path = "../database", features = ["full-nimiq"] }
 nimiq-genesis = { path = "../genesis" }
 nimiq-hash = { path = "../hash" }
 nimiq-nano-sync = { path = "../nano-sync", default-features = false, features = ["verifier"]  }
-nimiq-primitives = { path = "../primitives" }
+nimiq-primitives = { path = "../primitives", features = ["policy"] }
 nimiq-utils = { path = "../utils", features = ["time"] }

@@ -44,6 +44,11 @@ impl Blockchain {
             }
         };
 
+        // Check the version
+        if macro_block.header.version != policy::VERSION {
+            return Err(PushError::InvalidBlock(BlockError::UnsupportedVersion));
+        }
+
         // Check if we already know this block.
         if self
             .chain_store
@@ -115,9 +120,6 @@ impl Blockchain {
             .ok_or(PushError::InvalidBlock(BlockError::NoJustification))?;
 
         // Check the justification.
-        // Note that the hash provided here is the Blake2s hash of the header. It needs to be the
-        // Blake2s function since that's what the validator's signatures on the block use (because
-        // the nano-sync crate only verifies Blake2s, not Blake2b).
         if !justification.verify(
             macro_block.hash(),
             macro_block.header.block_number,
