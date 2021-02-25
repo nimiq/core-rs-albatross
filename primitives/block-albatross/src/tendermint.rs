@@ -65,16 +65,12 @@ impl TendermintProof {
         // 1) add them together to get the aggregated public key (if they are part of the
         //    Multisignature Bitset),
         // 2) get the raw elliptic curve point for each one and push them to a vector.
+        let pks = validators.to_pks();
+
         let mut agg_pk = AggregatePublicKey::new();
         let mut raw_pks = Vec::new();
-        for i in 0..SLOTS {
-            let pk = validators
-                .get_validator(i)
-                .public_key
-                .compressed()
-                .uncompress()
-                .unwrap();
 
+        for (i, pk) in pks.iter().enumerate() {
             if self.sig.signers.contains(i as usize) {
                 agg_pk.aggregate(&pk);
             }

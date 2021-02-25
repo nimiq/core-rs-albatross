@@ -287,9 +287,8 @@ async fn sync_ingredients() {
             consensus1
                 .blockchain
                 .macro_head()
-                .body()
+                .body
                 .unwrap()
-                .unwrap_macro()
                 .history_root,
             0
         ),

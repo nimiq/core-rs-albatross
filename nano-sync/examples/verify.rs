@@ -9,7 +9,6 @@ use ark_std::ops::MulAssign;
 use ark_std::{test_rng, UniformRand};
 
 use nimiq_nano_sync::constants::{EPOCH_LENGTH, VALIDATOR_SLOTS};
-use nimiq_nano_sync::primitives::state_commitment;
 use nimiq_nano_sync::NanoZKP;
 
 fn main() {
@@ -40,12 +39,6 @@ fn main() {
         final_pks.push(pk);
     }
 
-    // Calculate the commitments.
-    #[allow(arithmetic_overflow)]
-    let initial_state_commitment = state_commitment(0, initial_pks);
-
-    let final_state_commitment = state_commitment(EPOCH_LENGTH, final_pks);
-
     // Load the proof from file.
     let mut file = File::open("proofs/proof_epoch_0.bin").unwrap();
 
@@ -54,7 +47,7 @@ fn main() {
     println!("====== Proof verification for Nano Sync initiated ======");
     let start = Instant::now();
 
-    let result = NanoZKP::verify(initial_state_commitment, final_state_commitment, proof).unwrap();
+    let result = NanoZKP::verify(initial_pks, 0, final_pks, EPOCH_LENGTH, proof).unwrap();
 
     println!("Proof verification finished. It returned {}.", result);
 

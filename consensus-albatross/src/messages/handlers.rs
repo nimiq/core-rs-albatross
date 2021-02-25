@@ -62,7 +62,7 @@ impl Handle<BlockHashes> for RequestBlockHashes {
         if self.filter == RequestBlockHashesFilter::ElectionAndLatestCheckpoint
             && hashes.len() < self.max_blocks as usize
         {
-            let checkpoint_block = blockchain.macro_head().unwrap_macro();
+            let checkpoint_block = blockchain.macro_head();
             if !checkpoint_block.is_election_block() {
                 hashes.push((BlockHashType::Checkpoint, checkpoint_block.hash()));
             }

@@ -224,9 +224,10 @@ pub struct Slot {
 impl Slot {
     pub fn from_producer(blockchain: &Blockchain, block_number: u32, view_number: u32) -> Self {
         // TODO: `get_slot_owner_at` should really return an `Option` or `Result`. This will panic, when there is no
-        // slot owner.
-        let (validator, slot_number) =
-            blockchain.get_slot_owner_at(block_number, view_number, None);
+        //        slot owner.
+        let (validator, slot_number) = blockchain
+            .get_slot_owner_at(block_number, view_number)
+            .expect("Couldn't calculate slot owner!");
 
         Slot {
             slot_number,

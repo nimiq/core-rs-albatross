@@ -24,6 +24,7 @@ use tendermint::{
 use utils::time::OffsetTime;
 
 use crate::aggregation::tendermint::HandelTendermintAdapter;
+use std::ops::Deref;
 
 // TODO create stream immediately
 
@@ -86,9 +87,10 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
     /// States if it is our turn to be the Tendermint proposer or not.
     fn is_our_turn(&self, round: u32) -> bool {
         // Get the validator slot for this round.
-        let (slot, _) =
-            self.blockchain
-                .get_slot_owner_at(self.blockchain.block_number() + 1, round, None);
+        let (slot, _) = self
+            .blockchain
+            .get_slot_owner_at(self.blockchain.block_number() + 1, round)
+            .expect("Couldn't find slot owner!");
 
         // Get our public key.
         let our_public_key = self.validator_key.public_key.compress();
@@ -217,11 +219,13 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
         round: u32,
     ) -> Result<ProposalResult<Self::ProposalTy>, TendermintError> {
         // Get the proposer's slot and slot number for this round.
-        let (slot, slot_number) = self.blockchain.get_slot_owner_at(
-            self.blockchain.block_number() + 1,
-            self.blockchain.view_number() + round,
-            None,
-        );
+        let (slot, slot_number) = self
+            .blockchain
+            .get_slot_owner_at(
+                self.blockchain.block_number() + 1,
+                self.blockchain.view_number() + round,
+            )
+            .expect("Couldn't find slot owner!");
 
         // Calculate the validator slot band from the slot number.
         // TODO: Again, just redo this. We shouldn't be using slot bands. Validator ID is a much better
@@ -269,10 +273,12 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
 
         // Check the validity of the block header. If it is invalid, we return a proposal timeout
         // right here. This doesn't check anything that depends on the blockchain state.
-        if self
-            .blockchain
-            .verify_block_header(&BlockHeader::Macro(header.clone()), &validator_key, None)
-            .is_err()
+        if Blockchain::verify_block_header(
+            self.blockchain.deref(),
+            &BlockHeader::Macro(header.clone()),
+            &validator_key,
+        )
+        .is_err()
         {
             debug!("Tendermint - await_proposal: Invalid block header");
             return Ok(ProposalResult::Timeout);

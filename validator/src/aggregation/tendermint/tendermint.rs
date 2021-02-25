@@ -14,7 +14,7 @@ use futures::task::{Context, Poll};
 use futures_locks::RwLock;
 
 use nimiq_block_albatross::{
-    create_pk_tree_root, MultiSignature, TendermintIdentifier, TendermintStep, TendermintVote,
+    MacroBlock, MultiSignature, TendermintIdentifier, TendermintStep, TendermintVote,
 };
 use nimiq_bls::SecretKey;
 use nimiq_collections::bitset::BitSet;
@@ -302,7 +302,7 @@ where
         network: Arc<N>,
         secret_key: SecretKey,
     ) -> Self {
-        let validator_merkle_root = create_pk_tree_root(&active_validators);
+        let validator_merkle_root = MacroBlock::create_pk_tree_root(&active_validators);
 
         // the input stream is all levelUpdateMessages concerning a TendemrintContribution and TendemrintIdentifier.
         // We get rid of the sender, but while processing these messages they need to be dispatched to the appropriate Aggregation.

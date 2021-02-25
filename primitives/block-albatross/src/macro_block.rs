@@ -93,6 +93,15 @@ impl MacroBlock {
     pub fn get_validators(&self) -> Option<Validators> {
         self.body.as_ref()?.validators.clone()
     }
+
+    /// Calculates the PKTree root from the given validators.
+    pub fn create_pk_tree_root(validators: &Validators) -> Vec<u8> {
+        // Get the public keys.
+        let public_keys = validators.to_pks().iter().map(|pk| pk.public_key).collect();
+
+        // Create the tree
+        pk_tree_construct(public_keys)
+    }
 }
 
 impl MacroBody {
@@ -145,30 +154,4 @@ pub enum IntoSlotsError {
     MissingBody,
     #[error("Not an election macro block")]
     NoElection,
-}
-
-pub fn create_pk_tree_root(slots: &Validators) -> Vec<u8> {
-    // create a
-    let public_keys = (0..policy::SLOTS)
-        // map every index
-        .map(|index| {
-            slots
-                // to the validator with index index
-                .get_validator(index as u16)
-                // then get its public key
-                .public_key
-                // get the compressed version of the public key
-                .compressed()
-                // and uncompress it
-                .uncompress()
-                // this as well must succeed for the validator to work at all.
-                .expect("failed to retrieve public_key")
-                // finally get the G2Projective as implicit type.
-                .public_key
-        })
-        // finally collect to get a Vec<G2Projective>
-        .collect();
-
-    // Create the tree
-    pk_tree_construct(public_keys)
 }
