@@ -27,5 +27,4 @@ nimiq-keys = { path = "../../keys" }
 
 [dev-dependencies]
 nimiq-primitives = { path = "../../primitives", features = ["coin"] }
-nimiq-account = { path = "../../primitives/account" }
 nimiq-transaction = { path = "../../primitives/transaction" }
