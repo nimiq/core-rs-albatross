@@ -1,8 +1,9 @@
-use crate::blockchain::NanoBlockchain;
 use nimiq_block_albatross::{Block, BlockError};
 use nimiq_blockchain_albatross::{AbstractBlockchain, ChainInfo, PushError, PushResult};
 use nimiq_nano_sync::{NanoProof, NanoZKP};
 use nimiq_primitives::policy;
+
+use crate::blockchain::NanoBlockchain;
 
 /// Implements methods to sync a nano node.
 impl NanoBlockchain {

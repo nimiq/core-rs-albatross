@@ -8,6 +8,7 @@ pub use blockchain::blockchain::Blockchain;
 pub use chain_info::ChainInfo;
 pub use chain_ordering::ChainOrdering;
 pub use error::*;
+pub use history_store::*;
 
 pub(crate) mod abstract_blockchain;
 pub(crate) mod blockchain;

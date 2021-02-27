@@ -10,6 +10,7 @@ pub struct ChainStore {
     // A store of block hashes indexed by their block number.
     height_idx: HashMap<u32, Vec<Blake2bHash>>,
 }
+
 impl ChainStore {
     pub fn new() -> Self {
         ChainStore {

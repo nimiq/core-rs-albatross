@@ -9,6 +9,9 @@ repository = "https://github.com/nimiq/core-rs-albatross"
 edition = "2018"
 
 [dependencies]
+thiserror = "1.0"
+
+nimiq-account = { path = "../primitives/account" }
 nimiq-block-albatross = { path = "../primitives/block-albatross" }
 nimiq-blockchain-albatross = { path = "../blockchain-albatross" }
 nimiq-database = { path = "../database", features = ["full-nimiq"] }
@@ -16,4 +19,5 @@ nimiq-genesis = { path = "../genesis" }
 nimiq-hash = { path = "../hash" }
 nimiq-nano-sync = { path = "../nano-sync", default-features = false, features = ["verifier"]  }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
+nimiq-tree-primitives = { path = "../accounts/tree-primitives" }
 nimiq-utils = { path = "../utils", features = ["time"] }
