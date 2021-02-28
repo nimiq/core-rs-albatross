@@ -20,4 +20,4 @@ nimiq-hash = { path = "../hash" }
 nimiq-nano-sync = { path = "../nano-sync", default-features = false, features = ["verifier"]  }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
 nimiq-tree-primitives = { path = "../accounts/tree-primitives" }
-nimiq-utils = { path = "../utils", features = ["time"] }
+nimiq-utils = { path = "../utils", features = ["merkle", "time"] }
