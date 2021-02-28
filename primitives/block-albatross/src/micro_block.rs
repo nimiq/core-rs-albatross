@@ -2,7 +2,7 @@ use std::fmt;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_bls::CompressedSignature;
-use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
+use nimiq_hash::{Blake2bHash, Hash, HashOutput, SerializeContent};
 use nimiq_hash_derive::SerializeContent;
 use nimiq_transaction::Transaction;
 use nimiq_vrf::VrfSeed;
@@ -103,7 +103,6 @@ impl MicroBody {
     }
 }
 
-#[allow(clippy::derive_hash_xor_eq)] // TODO: Shouldn't be necessary
 impl Hash for MicroHeader {}
 
 impl fmt::Display for MicroHeader {
@@ -116,5 +115,20 @@ impl fmt::Display for MicroHeader {
     }
 }
 
-#[allow(clippy::derive_hash_xor_eq)] // TODO: Shouldn't be necessary
-impl Hash for MicroBody {}
+impl Hash for MicroBody {
+    fn hash<H: HashOutput>(&self) -> H {
+        // Calculate the hashes for the fork proofs and the transactions.
+        let mut hashes = Vec::new();
+
+        for proof in &self.fork_proofs {
+            hashes.push(proof.hash());
+        }
+
+        for tx in &self.transactions {
+            hashes.push(tx.hash());
+        }
+
+        // Calculate the Merkle tree root from the hashes.
+        utils::merkle::compute_root_from_hashes(&hashes)
+    }
+}
