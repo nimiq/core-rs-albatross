@@ -1,0 +1,100 @@
+name: Build + Test
+
+on:
+  - push
+  - pull_request
+
+jobs:
+
+  rustfmt:
+    runs-on: ubuntu-20.04
+
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: cargo-${{ hashFiles('**/Cargo.toml') }}
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: nightly
+        override: true
+        components: rustfmt
+    - uses: actions-rs/cargo@v1
+      with:
+        command: fmt
+        args: --all -- --check
+
+  check:
+    runs-on: ubuntu-20.04
+
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: cargo-${{ hashFiles('**/Cargo.toml') }}
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: nightly
+        override: true
+    - uses: actions-rs/cargo@v1
+      with:
+        command: check
+        args: --release
+
+  test:
+    runs-on: ubuntu-20.04
+    needs: check
+
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: cargo-${{ hashFiles('**/Cargo.toml') }}
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: nightly
+        override: true
+    - uses: actions-rs/cargo@v1
+      with:
+        command: test
+        args: --release
+
+  clippy:
+    runs-on: ubuntu-20.04
+    needs: check
+
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: cargo-${{ hashFiles('**/Cargo.toml') }}
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: nightly
+        override: true
+        components: clippy
+    - uses: actions-rs/clippy-check@v1
+      with:
+        name: Clippy Report
+        token: ${{ secrets.GITHUB_TOKEN }}
+        args: --release
