@@ -127,10 +127,9 @@ impl SerializeContent for PublicKey {
     }
 }
 
-// This is a different Hash than the std Hash.
-#[allow(clippy::derive_hash_xor_eq)] // TODO: Shouldn't be necessary
 impl Hash for PublicKey {}
 
+#[allow(clippy::derive_hash_xor_eq)]
 impl std::hash::Hash for PublicKey {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         std::hash::Hash::hash(self.as_bytes(), state);

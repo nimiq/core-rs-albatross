@@ -162,6 +162,7 @@ impl ProtocolsHandler for MessageHandler {
     }
 
     fn poll(&mut self, cx: &mut Context) -> Poll<ProtocolsHandlerEvent<MessageProtocol, (), HandlerOutEvent, HandlerError>> {
+        #[allow(clippy::never_loop)]
         loop {
             // Emit event
             if let Some(event) = self.events.pop_front() {
