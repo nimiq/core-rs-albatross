@@ -1,19 +1,18 @@
-use structopt::StructOpt;
-use anyhow::{Error, bail};
+use anyhow::{bail, Error};
 use futures::stream::StreamExt;
+use structopt::StructOpt;
 
 use nimiq_jsonrpc_core::Credentials;
-use nimiq_rpc_client::Client;
-use nimiq_rpc_interface::{
-    types::{BlockNumberOrHash, OrLatest, ValidityStartHeight},
-    blockchain::BlockchainInterface,
-    consensus::ConsensusInterface,
-    wallet::WalletInterface,
-};
 use nimiq_keys::Address;
 use nimiq_primitives::account::ValidatorId;
 use nimiq_primitives::coin::Coin;
-
+use nimiq_rpc_client::Client;
+use nimiq_rpc_interface::{
+    blockchain::BlockchainInterface,
+    consensus::ConsensusInterface,
+    types::{BlockNumberOrHash, OrLatest, ValidityStartHeight},
+    wallet::WalletInterface,
+};
 
 #[derive(Debug, StructOpt)]
 struct Opt {
@@ -200,34 +199,51 @@ enum TransactionCommand {
 impl Command {
     async fn run(self, mut client: Client) -> Result<(), Error> {
         match self {
-            Command::Block { hash_or_number, include_transactions } => {
+            Command::Block {
+                hash_or_number,
+                include_transactions,
+            } => {
                 let block = match hash_or_number {
-                    Some(BlockNumberOrHash::Hash(hash)) => client.blockchain.block_by_hash(hash, include_transactions).await,
-                    Some(BlockNumberOrHash::Number(number)) =>  client.blockchain.block_by_number(OrLatest::Value(number), include_transactions).await,
-                    None => client.blockchain.block_by_number(OrLatest::Latest, include_transactions).await,
+                    Some(BlockNumberOrHash::Hash(hash)) => {
+                        client
+                            .blockchain
+                            .block_by_hash(hash, include_transactions)
+                            .await
+                    }
+                    Some(BlockNumberOrHash::Number(number)) => {
+                        client
+                            .blockchain
+                            .block_by_number(OrLatest::Value(number), include_transactions)
+                            .await
+                    }
+                    None => {
+                        client
+                            .blockchain
+                            .block_by_number(OrLatest::Latest, include_transactions)
+                            .await
+                    }
                 }?;
 
                 println!("{:#?}", block)
-            },
+            }
 
             Command::Stakes {} => {
                 let stakes = client.blockchain.list_stakes().await?;
                 println!("{:#?}", stakes);
-            },
+            }
 
-            Command::Follow { block: show_block} => {
+            Command::Follow { block: show_block } => {
                 let mut stream = client.blockchain.head_subscribe().await?;
 
                 while let Some(block_hash) = stream.next().await {
                     if show_block {
                         let block = client.blockchain.block_by_hash(block_hash, false).await;
                         println!("{:#?}", block);
-                    }
-                    else {
+                    } else {
                         println!("{}", block_hash);
                     }
                 }
-            },
+            }
 
             Command::Account(command) => {
                 match command {
@@ -236,108 +252,232 @@ impl Command {
                         for address in &accounts {
                             if short {
                                 println!("{}", address.to_user_friendly_address());
-                            }
-                            else {
-                                let account = client.blockchain.get_account(address.clone()).await?;
+                            } else {
+                                let account =
+                                    client.blockchain.get_account(address.clone()).await?;
                                 println!("{}: {:#?}", address.to_user_friendly_address(), account);
                             }
                         }
-                    },
+                    }
 
                     AccountCommand::New { password } => {
                         let account = client.wallet.create_account(password).await?;
                         println!("{:#?}", account);
-                    },
+                    }
 
-                    AccountCommand::Import { password, key_data, } => {
+                    AccountCommand::Import { password, key_data } => {
                         let address = client.wallet.import_raw_key(key_data, password).await?;
                         println!("{}", address);
-                    },
+                    }
 
                     AccountCommand::Lock { address } => {
                         client.wallet.lock_account(address).await?;
-                    },
+                    }
 
-                    AccountCommand::Unlock { address, password, .. } => {
+                    AccountCommand::Unlock {
+                        address, password, ..
+                    } => {
                         // TODO: Duration
-                        client.wallet.unlock_account(address, password, None).await?;
-                    },
+                        client
+                            .wallet
+                            .unlock_account(address, password, None)
+                            .await?;
+                    }
 
                     AccountCommand::Get { address } => {
                         let account = client.blockchain.get_account(address).await?;
                         println!("{:#?}", account);
-                    },
-
-                }
-            },
-
-            Command::Transaction(command) => {
-                match command {
-                    TransactionCommand::Basic { wallet, recipient, value, fee, validity_start_height, dry } => {
-                        if dry {
-                            let tx = client.consensus.create_basic_transaction(wallet, recipient, value, fee, validity_start_height).await?;
-                            println!("{}", tx);
-                        }
-                        else {
-                            let txid = client.consensus.send_basic_transaction(wallet, recipient, value, fee, validity_start_height).await?;
-                            println!("{}", txid);
-                        }
-                    },
-
-                    TransactionCommand::Stake { wallet, validator_id, value, fee, validity_start_height, dry } => {
-                        if dry {
-                            let tx = client.consensus.create_stake_transaction(wallet, validator_id, value, fee, validity_start_height).await?;
-                            println!("{}", tx);
-                        }
-                        else {
-                            let txid = client.consensus.send_stake_transaction(wallet, validator_id, value, fee, validity_start_height).await?;
-                            println!("{}", txid);
-                        }
-                    },
-
-                    TransactionCommand::Retire { wallet, validator_id, value, fee, validity_start_height, dry } => {
-                        if dry {
-                            let tx = client.consensus.create_retire_transaction(wallet, validator_id, value, fee, validity_start_height).await?;
-                            println!("{}", tx);
-                        }
-                        else {
-                            let txid = client.consensus.send_retire_transaction(wallet, validator_id, value, fee, validity_start_height).await?;
-                            println!("{}", txid);
-                        }
-                    },
-
-                    TransactionCommand::Reactivate { wallet, validator_id, value, fee, validity_start_height, dry } => {
-                        if dry {
-                            let tx = client.consensus.create_reactivate_transaction(wallet, validator_id, value, fee, validity_start_height).await?;
-                            println!("{}", tx);
-                        }
-                        else {
-                            let txid = client.consensus.send_reactivate_transaction(wallet, validator_id, value, fee, validity_start_height).await?;
-                            println!("{}", txid);
-                        }
-                    },
-
-                    TransactionCommand::Unstake { wallet, recipient, value, fee, validity_start_height, dry } => {
-                        if dry {
-                            let tx = client.consensus.create_unstake_transaction(wallet, recipient, value, fee, validity_start_height).await?;
-                            println!("{}", tx);
-                        }
-                        else {
-                            let txid = client.consensus.send_unstake_transaction(wallet, recipient, value, fee, validity_start_height).await?;
-                            println!("{}", txid);
-                        }
-                    },
+                    }
                 }
             }
+
+            Command::Transaction(command) => match command {
+                TransactionCommand::Basic {
+                    wallet,
+                    recipient,
+                    value,
+                    fee,
+                    validity_start_height,
+                    dry,
+                } => {
+                    if dry {
+                        let tx = client
+                            .consensus
+                            .create_basic_transaction(
+                                wallet,
+                                recipient,
+                                value,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", tx);
+                    } else {
+                        let txid = client
+                            .consensus
+                            .send_basic_transaction(
+                                wallet,
+                                recipient,
+                                value,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", txid);
+                    }
+                }
+
+                TransactionCommand::Stake {
+                    wallet,
+                    validator_id,
+                    value,
+                    fee,
+                    validity_start_height,
+                    dry,
+                } => {
+                    if dry {
+                        let tx = client
+                            .consensus
+                            .create_stake_transaction(
+                                wallet,
+                                validator_id,
+                                value,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", tx);
+                    } else {
+                        let txid = client
+                            .consensus
+                            .send_stake_transaction(
+                                wallet,
+                                validator_id,
+                                value,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", txid);
+                    }
+                }
+
+                TransactionCommand::Retire {
+                    wallet,
+                    validator_id,
+                    value,
+                    fee,
+                    validity_start_height,
+                    dry,
+                } => {
+                    if dry {
+                        let tx = client
+                            .consensus
+                            .create_retire_transaction(
+                                wallet,
+                                validator_id,
+                                value,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", tx);
+                    } else {
+                        let txid = client
+                            .consensus
+                            .send_retire_transaction(
+                                wallet,
+                                validator_id,
+                                value,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", txid);
+                    }
+                }
+
+                TransactionCommand::Reactivate {
+                    wallet,
+                    validator_id,
+                    value,
+                    fee,
+                    validity_start_height,
+                    dry,
+                } => {
+                    if dry {
+                        let tx = client
+                            .consensus
+                            .create_reactivate_transaction(
+                                wallet,
+                                validator_id,
+                                value,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", tx);
+                    } else {
+                        let txid = client
+                            .consensus
+                            .send_reactivate_transaction(
+                                wallet,
+                                validator_id,
+                                value,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", txid);
+                    }
+                }
+
+                TransactionCommand::Unstake {
+                    wallet,
+                    recipient,
+                    value,
+                    fee,
+                    validity_start_height,
+                    dry,
+                } => {
+                    if dry {
+                        let tx = client
+                            .consensus
+                            .create_unstake_transaction(
+                                wallet,
+                                recipient,
+                                value,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", tx);
+                    } else {
+                        let txid = client
+                            .consensus
+                            .send_unstake_transaction(
+                                wallet,
+                                recipient,
+                                value,
+                                fee,
+                                validity_start_height,
+                            )
+                            .await?;
+                        println!("{}", txid);
+                    }
+                }
+            },
         }
 
         Ok(())
     }
 }
 
-
 async fn run_app(opt: Opt) -> Result<(), Error> {
-    let url = opt.url.as_deref().unwrap_or("ws://127.0.0.1:8648/ws")
+    let url = opt
+        .url
+        .as_deref()
+        .unwrap_or("ws://127.0.0.1:8648/ws")
         .parse()?;
 
     let credentials = match (&opt.username, &opt.password) {
@@ -355,7 +495,6 @@ async fn run_app(opt: Opt) -> Result<(), Error> {
 
     Ok(())
 }
-
 
 #[tokio::main]
 async fn main() {

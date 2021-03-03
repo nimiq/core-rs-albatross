@@ -34,7 +34,10 @@ fn it_can_deserialize_a_vesting_contract() {
     let bytes: Vec<u8> = hex::decode(CONTRACT).unwrap();
     let contract: VestingContract = Deserialize::deserialize(&mut &bytes[..]).unwrap();
     assert_eq!(contract.balance, 52500000000000.try_into().unwrap());
-    assert_eq!(contract.owner, "fd34ab7265a0e48c454ccbf4c9c61dfdf68f9a22".parse().unwrap());
+    assert_eq!(
+        contract.owner,
+        "fd34ab7265a0e48c454ccbf4c9c61dfdf68f9a22".parse().unwrap()
+    );
     assert_eq!(contract.start_time, 1);
     assert_eq!(contract.step_amount, 2625000000000.try_into().unwrap());
     assert_eq!(contract.time_step, 259200);
@@ -71,7 +74,10 @@ fn it_can_verify_creation_transaction() {
     );
 
     // Invalid data
-    assert_eq!(AccountType::verify_incoming_transaction(&transaction), Err(TransactionError::InvalidData));
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&transaction),
+        Err(TransactionError::InvalidData)
+    );
     transaction.data = data;
 
     // Invalid recipient
@@ -82,7 +88,10 @@ fn it_can_verify_creation_transaction() {
     transaction.recipient = transaction.contract_creation_address();
 
     // Valid
-    assert_eq!(AccountType::verify_incoming_transaction(&transaction), Ok(()));
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&transaction),
+        Ok(())
+    );
 
     // Invalid transaction flags
     transaction.flags = TransactionFlags::empty();
@@ -102,7 +111,10 @@ fn it_can_verify_creation_transaction() {
     Serialize::serialize(&Coin::try_from(100).unwrap(), &mut data);
     transaction.data = data;
     transaction.recipient = transaction.contract_creation_address();
-    assert_eq!(AccountType::verify_incoming_transaction(&transaction), Ok(()));
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&transaction),
+        Ok(())
+    );
 
     // Valid
     let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE + 32);
@@ -114,7 +126,10 @@ fn it_can_verify_creation_transaction() {
     Serialize::serialize(&Coin::try_from(100).unwrap(), &mut data);
     transaction.data = data;
     transaction.recipient = transaction.contract_creation_address();
-    assert_eq!(AccountType::verify_incoming_transaction(&transaction), Ok(()));
+    assert_eq!(
+        AccountType::verify_incoming_transaction(&transaction),
+        Ok(())
+    );
 }
 
 #[test]
@@ -195,7 +210,9 @@ fn it_can_create_contract_from_transaction() {
     transaction.recipient = transaction.contract_creation_address();
     assert_eq!(
         VestingContract::create(0.try_into().unwrap(), &transaction, 0, 0),
-        Err(AccountError::InvalidTransaction(TransactionError::InvalidData))
+        Err(AccountError::InvalidTransaction(
+            TransactionError::InvalidData
+        ))
     )
 }
 
@@ -220,15 +237,26 @@ fn it_does_not_support_incoming_transactions() {
     );
     tx.recipient_type = AccountType::Vesting;
 
-    assert_eq!(VestingContract::check_incoming_transaction(&tx, 1, 2), Err(AccountError::InvalidForRecipient));
-    assert_eq!(contract.commit_incoming_transaction(&tx, 1, 2), Err(AccountError::InvalidForRecipient));
-    assert_eq!(contract.revert_incoming_transaction(&tx, 2, 1, None), Err(AccountError::InvalidForRecipient));
+    assert_eq!(
+        VestingContract::check_incoming_transaction(&tx, 1, 2),
+        Err(AccountError::InvalidForRecipient)
+    );
+    assert_eq!(
+        contract.commit_incoming_transaction(&tx, 1, 2),
+        Err(AccountError::InvalidForRecipient)
+    );
+    assert_eq!(
+        contract.revert_incoming_transaction(&tx, 2, 1, None),
+        Err(AccountError::InvalidForRecipient)
+    );
 }
 
 #[test]
 fn it_can_verify_outgoing_transactions() {
-    let sender_priv_key: PrivateKey =
-        Deserialize::deserialize_from_vec(&hex::decode("9d5bd02379e7e45cf515c788048f5cf3c454ffabd3e83bd1d7667716c325c3c0").unwrap()).unwrap();
+    let sender_priv_key: PrivateKey = Deserialize::deserialize_from_vec(
+        &hex::decode("9d5bd02379e7e45cf515c788048f5cf3c454ffabd3e83bd1d7667716c325c3c0").unwrap(),
+    )
+    .unwrap();
 
     let key_pair = KeyPair::from(sender_priv_key);
     let mut tx = Transaction::new_basic(
@@ -243,7 +271,9 @@ fn it_can_verify_outgoing_transactions() {
 
     assert!(matches!(
         AccountType::verify_outgoing_transaction(&tx),
-        Err(TransactionError::InvalidSerialization(SerializingError::IoError(_)))
+        Err(TransactionError::InvalidSerialization(
+            SerializingError::IoError(_)
+        ))
     ));
 
     let signature = key_pair.sign(&tx.serialize_content()[..]);
@@ -253,20 +283,27 @@ fn it_can_verify_outgoing_transactions() {
     assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
 
     tx.proof[22] = tx.proof[22] % 250 + 1;
-    assert_eq!(AccountType::verify_outgoing_transaction(&tx), Err(TransactionError::InvalidProof));
+    assert_eq!(
+        AccountType::verify_outgoing_transaction(&tx),
+        Err(TransactionError::InvalidProof)
+    );
 
     tx.proof[22] = tx.proof[22] % 251 + 3;
     // Proof is not a valid point, so Deserialize will result in an error.
     assert_eq!(
         AccountType::verify_outgoing_transaction(&tx),
-        Err(TransactionError::InvalidSerialization(SerializingError::InvalidValue))
+        Err(TransactionError::InvalidSerialization(
+            SerializingError::InvalidValue
+        ))
     );
 }
 
 #[test]
 fn it_can_apply_and_revert_valid_transaction() {
-    let sender_priv_key: PrivateKey =
-        Deserialize::deserialize_from_vec(&hex::decode("9d5bd02379e7e45cf515c788048f5cf3c454ffabd3e83bd1d7667716c325c3c0").unwrap()).unwrap();
+    let sender_priv_key: PrivateKey = Deserialize::deserialize_from_vec(
+        &hex::decode("9d5bd02379e7e45cf515c788048f5cf3c454ffabd3e83bd1d7667716c325c3c0").unwrap(),
+    )
+    .unwrap();
 
     let key_pair = KeyPair::from(sender_priv_key);
     let start_contract = VestingContract {
@@ -295,7 +332,9 @@ fn it_can_apply_and_revert_valid_transaction() {
     let mut contract = start_contract.clone();
     contract.commit_outgoing_transaction(&tx, 1, 200).unwrap();
     assert_eq!(contract.balance, 800.try_into().unwrap());
-    contract.revert_outgoing_transaction(&tx, 1, 1, None).unwrap();
+    contract
+        .revert_outgoing_transaction(&tx, 1, 1, None)
+        .unwrap();
     assert_eq!(contract, start_contract);
 
     let start_contract = VestingContract {
@@ -310,16 +349,22 @@ fn it_can_apply_and_revert_valid_transaction() {
     let mut contract = start_contract.clone();
     contract.commit_outgoing_transaction(&tx, 1, 200).unwrap();
     assert_eq!(contract.balance, 800.try_into().unwrap());
-    contract.revert_outgoing_transaction(&tx, 1, 1, None).unwrap();
+    contract
+        .revert_outgoing_transaction(&tx, 1, 1, None)
+        .unwrap();
     assert_eq!(contract, start_contract);
 }
 
 #[test]
 fn it_refuses_invalid_transaction() {
-    let priv_key: PrivateKey =
-        Deserialize::deserialize_from_vec(&hex::decode("9d5bd02379e7e45cf515c788048f5cf3c454ffabd3e83bd1d7667716c325c3c0").unwrap()).unwrap();
-    let priv_key_alt: PrivateKey =
-        Deserialize::deserialize_from_vec(&hex::decode("bd1cfcd49a81048c8c8d22a25766bd01bfa0f6b2eb0030f65241189393af96a2").unwrap()).unwrap();
+    let priv_key: PrivateKey = Deserialize::deserialize_from_vec(
+        &hex::decode("9d5bd02379e7e45cf515c788048f5cf3c454ffabd3e83bd1d7667716c325c3c0").unwrap(),
+    )
+    .unwrap();
+    let priv_key_alt: PrivateKey = Deserialize::deserialize_from_vec(
+        &hex::decode("bd1cfcd49a81048c8c8d22a25766bd01bfa0f6b2eb0030f65241189393af96a2").unwrap(),
+    )
+    .unwrap();
 
     let key_pair = KeyPair::from(priv_key);
     let key_pair_alt = KeyPair::from(priv_key_alt);
@@ -347,8 +392,14 @@ fn it_refuses_invalid_transaction() {
     let signature = key_pair_alt.sign(&tx.serialize_content()[..]);
     let signature_proof = SignatureProof::from(key_pair_alt.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
-    assert_eq!(start_contract.check_outgoing_transaction(&tx, 1, 200), Err(AccountError::InvalidSignature));
-    assert_eq!(start_contract.commit_outgoing_transaction(&tx, 1, 200), Err(AccountError::InvalidSignature));
+    assert_eq!(
+        start_contract.check_outgoing_transaction(&tx, 1, 200),
+        Err(AccountError::InvalidSignature)
+    );
+    assert_eq!(
+        start_contract.commit_outgoing_transaction(&tx, 1, 200),
+        Err(AccountError::InvalidSignature)
+    );
 
     // Funds still vested
     let signature = key_pair.sign(&tx.serialize_content()[..]);

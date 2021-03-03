@@ -2,10 +2,13 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 
-use crate::{contribution::AggregatableContribution, identity::{Identity, IdentityRegistry}};
 use crate::identity::WeightRegistry;
 use crate::partitioner::Partitioner;
 use crate::store::ContributionStore;
+use crate::{
+    contribution::AggregatableContribution,
+    identity::{Identity, IdentityRegistry},
+};
 
 pub trait Evaluator<C: AggregatableContribution>: Send + Sync {
     fn evaluate(&self, signature: &C, level: usize) -> usize;
@@ -30,7 +33,9 @@ impl<S: ContributionStore, P: Partitioner> SingleVote<S, P> {
     }
 }
 
-impl<C: AggregatableContribution, S: ContributionStore<Contribution = C>, P: Partitioner> Evaluator<C> for SingleVote<S, P> {
+impl<C: AggregatableContribution, S: ContributionStore<Contribution = C>, P: Partitioner>
+    Evaluator<C> for SingleVote<S, P>
+{
     fn evaluate(&self, _contribution: &C, _level: usize) -> usize {
         // This is going to be used here, and we don't want any warnings
         let _ = (&self.signature_store, &self.partitioner);
@@ -53,15 +58,23 @@ impl<C: AggregatableContribution, S: ContributionStore<Contribution = C>, P: Par
 ///
 /// NOTE: This can be used for ViewChanges
 #[derive(Debug)]
-pub struct WeightedVote<S: ContributionStore, I: WeightRegistry + IdentityRegistry, P: Partitioner> {
+pub struct WeightedVote<S: ContributionStore, I: WeightRegistry + IdentityRegistry, P: Partitioner>
+{
     store: Arc<RwLock<S>>,
     pub weights: Arc<I>,
     partitioner: Arc<P>,
     pub threshold: usize,
 }
 
-impl<S: ContributionStore, I: WeightRegistry + IdentityRegistry, P: Partitioner> WeightedVote<S, I, P> {
-    pub fn new(store: Arc<RwLock<S>>, weights: Arc<I>, partitioner: Arc<P>, threshold: usize) -> Self {
+impl<S: ContributionStore, I: WeightRegistry + IdentityRegistry, P: Partitioner>
+    WeightedVote<S, I, P>
+{
+    pub fn new(
+        store: Arc<RwLock<S>>,
+        weights: Arc<I>,
+        partitioner: Arc<P>,
+        threshold: usize,
+    ) -> Self {
         Self {
             store,
             weights,
@@ -71,7 +84,13 @@ impl<S: ContributionStore, I: WeightRegistry + IdentityRegistry, P: Partitioner>
     }
 }
 
-impl<C: AggregatableContribution, S: ContributionStore<Contribution = C>, I: WeightRegistry + IdentityRegistry, P: Partitioner> Evaluator<C> for WeightedVote<S, I, P> {
+impl<
+        C: AggregatableContribution,
+        S: ContributionStore<Contribution = C>,
+        I: WeightRegistry + IdentityRegistry,
+        P: Partitioner,
+    > Evaluator<C> for WeightedVote<S, I, P>
+{
     /// takes an unverified contribution and scroes it in terms of usefulness with
     ///
     /// `0` being not useful at all, can be discarded.
@@ -104,7 +123,10 @@ impl<C: AggregatableContribution, S: ContributionStore<Contribution = C>, I: Wei
         let best_contribution = store.best(level);
 
         if let Some(best_contribution) = best_contribution {
-            let best_contributors_num = match self.weights.signers_identity(&best_contribution.contributors()) {
+            let best_contributors_num = match self
+                .weights
+                .signers_identity(&best_contribution.contributors())
+            {
                 Identity::None => 0,
                 Identity::Single(_) => 1,
                 Identity::Multiple(ids) => ids.len(),
@@ -112,7 +134,11 @@ impl<C: AggregatableContribution, S: ContributionStore<Contribution = C>, I: Wei
 
             trace!("level = {}", level);
             trace!("contribution = {:#?}", contribution);
-            trace!("best_contribution = {:#?} - Ids: {}", best_contribution, best_contributors_num);
+            trace!(
+                "best_contribution = {:#?} - Ids: {}",
+                best_contribution,
+                best_contributors_num
+            );
 
             // check if the best signature for that level is already complete
             if to_receive == best_contributors_num {
@@ -121,7 +147,10 @@ impl<C: AggregatableContribution, S: ContributionStore<Contribution = C>, I: Wei
             }
 
             // check if the best signature is better than the new one
-            if best_contribution.contributors().is_superset(&contribution.contributors()) {
+            if best_contribution
+                .contributors()
+                .is_superset(&contribution.contributors())
+            {
                 trace!("Best signature is better");
                 return 0;
             }
@@ -145,8 +174,12 @@ impl<C: AggregatableContribution, S: ContributionStore<Contribution = C>, I: Wei
 
         // ---------------------------------------------
 
-        let (new_total, added_sigs, combined_sigs) = if let Some(best_signature) = best_contribution {
-            let best_contributors_num = match self.weights.signers_identity(&best_signature.contributors()) {
+        let (new_total, added_sigs, combined_sigs) = if let Some(best_signature) = best_contribution
+        {
+            let best_contributors_num = match self
+                .weights
+                .signers_identity(&best_signature.contributors())
+            {
                 Identity::None => 0,
                 Identity::Single(_) => 1,
                 Identity::Multiple(ids) => ids.len(),
@@ -172,13 +205,19 @@ impl<C: AggregatableContribution, S: ContributionStore<Contribution = C>, I: Wei
             (new_total, new_total, new_total - signers.len())
         };
 
-        trace!("new_total={}, added_sigs={}, combined_sigs={}", new_total, added_sigs, combined_sigs);
+        trace!(
+            "new_total={}, added_sigs={}, combined_sigs={}",
+            new_total,
+            added_sigs,
+            combined_sigs
+        );
 
         // compute score
         // TODO: Remove magic numbers! What do they mean? I don't think this is discussed in the paper.
         if added_sigs == 0 {
             // return signature_weight for an individual signature, otherwise 0
-            if let Identity::Single(_) = self.weights.signers_identity(&contribution.contributors()) {
+            if let Identity::Single(_) = self.weights.signers_identity(&contribution.contributors())
+            {
                 self.weights.signature_weight(contribution).unwrap_or(0)
             } else {
                 0
@@ -196,7 +235,11 @@ impl<C: AggregatableContribution, S: ContributionStore<Contribution = C>, I: Wei
             .signature_weight(signature)
             .unwrap_or_else(|| panic!("Missing weights for signature: {:?}", signature));
 
-        trace!("is_final(): votes={}, final={}", votes, votes >= self.threshold);
+        trace!(
+            "is_final(): votes={}, final={}",
+            votes,
+            votes >= self.threshold
+        );
         votes >= self.threshold
     }
 

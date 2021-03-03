@@ -42,7 +42,9 @@ pub fn bounded_dispatch<M: Message>(
     let (tx, rx) = channel(buffer);
 
     (
-        Box::pin(tx.with(|msg: Vec<u8>| async move { M::deserialize_message(&mut &msg[..]).map_err(DispatchError::SerializingError) })),
+        Box::pin(tx.with(|msg: Vec<u8>| async move {
+            M::deserialize_message(&mut &msg[..]).map_err(DispatchError::SerializingError)
+        })),
         rx.boxed(),
     )
 }
@@ -54,7 +56,9 @@ pub fn unbounded_dispatch<M: Message>() -> (
     let (tx, rx) = unbounded();
 
     (
-        Box::pin(tx.with(|msg: Vec<u8>| async move { M::deserialize_message(&mut &msg[..]).map_err(DispatchError::SerializingError) })),
+        Box::pin(tx.with(|msg: Vec<u8>| async move {
+            M::deserialize_message(&mut &msg[..]).map_err(DispatchError::SerializingError)
+        })),
         rx.boxed(),
     )
 }

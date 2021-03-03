@@ -53,13 +53,26 @@ pub const PREFIX_POKOSK: u8 = 0x05;
 /// prefix to sign a validator info
 pub const PREFIX_VALIDATOR_INFO: u8 = 0x06;
 
-pub trait Message: Clone + Debug + Serialize + Deserialize + SerializeContent + Send + Sync + Sized + PartialEq + 'static {
+pub trait Message:
+    Clone
+    + Debug
+    + Serialize
+    + Deserialize
+    + SerializeContent
+    + Send
+    + Sync
+    + Sized
+    + PartialEq
+    + 'static
+{
     const PREFIX: u8;
 
     fn hash_with_prefix(&self) -> SigHash {
         let mut h = Blake2sHasher::new();
-        h.write_u8(Self::PREFIX).expect("Failed to write prefix to hasher for signature.");
-        self.serialize_content(&mut h).expect("Failed to write message to hasher for signature.");
+        h.write_u8(Self::PREFIX)
+            .expect("Failed to write prefix to hasher for signature.");
+        self.serialize_content(&mut h)
+            .expect("Failed to write message to hasher for signature.");
         h.finish()
     }
 

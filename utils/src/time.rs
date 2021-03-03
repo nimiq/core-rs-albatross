@@ -15,7 +15,9 @@ impl OffsetTime {
     }
 
     pub fn with_offset(offset: i64) -> Self {
-        OffsetTime { offset: Atomic::new(offset) }
+        OffsetTime {
+            offset: Atomic::new(offset),
+        }
     }
 
     pub fn set_offset(&self, new_offset: i64) {
@@ -38,7 +40,10 @@ impl OffsetTime {
 pub fn systemtime_to_timestamp(time: SystemTime) -> u64 {
     match time.duration_since(UNIX_EPOCH) {
         Ok(duration) => duration.as_secs() * 1000 + u64::from(duration.subsec_nanos()) / 1_000_000,
-        Err(e) => panic!("SystemTime before UNIX EPOCH! Difference: {:?}", e.duration()),
+        Err(e) => panic!(
+            "SystemTime before UNIX EPOCH! Difference: {:?}",
+            e.duration()
+        ),
     }
 }
 

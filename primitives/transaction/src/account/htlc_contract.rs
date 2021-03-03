@@ -20,7 +20,10 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
             return Err(TransactionError::SenderEqualsRecipient);
         }
 
-        if !transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {
+        if !transaction
+            .flags
+            .contains(TransactionFlags::CONTRACT_CREATION)
+        {
             warn!("Only contract creation is allowed");
             return Err(TransactionError::InvalidForRecipient);
         }
@@ -87,7 +90,8 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
                 }
             }
             ProofType::EarlyResolve => {
-                let signature_proof_recipient: SignatureProof = Deserialize::deserialize(proof_buf)?;
+                let signature_proof_recipient: SignatureProof =
+                    Deserialize::deserialize(proof_buf)?;
                 let signature_proof_sender: SignatureProof = Deserialize::deserialize(proof_buf)?;
 
                 if !proof_buf.is_empty() {
@@ -95,7 +99,9 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
                     return Err(TransactionError::InvalidProof);
                 }
 
-                if !signature_proof_recipient.verify(tx_buf) || !signature_proof_sender.verify(tx_buf) {
+                if !signature_proof_recipient.verify(tx_buf)
+                    || !signature_proof_sender.verify(tx_buf)
+                {
                     warn!("Invalid signature");
                     return Err(TransactionError::InvalidProof);
                 }
@@ -174,7 +180,6 @@ impl CreationTransactionData {
     }
 }
 
-
 #[cfg(feature = "serde-derive")]
 mod serde_derive {
     use std::borrow::Cow;
@@ -188,8 +193,8 @@ mod serde_derive {
 
     impl Serialize for AnyHash {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-            where
-                S: Serializer,
+        where
+            S: Serializer,
         {
             serializer.serialize_str(&self.to_hex())
         }
@@ -197,8 +202,8 @@ mod serde_derive {
 
     impl<'de> Deserialize<'de> for AnyHash {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-            where
-                D: Deserializer<'de>,
+        where
+            D: Deserializer<'de>,
         {
             let data: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
             data.parse().map_err(Error::custom)

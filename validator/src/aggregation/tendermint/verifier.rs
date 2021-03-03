@@ -19,7 +19,11 @@ pub(crate) struct TendermintVerifier<I: IdentityRegistry> {
 }
 
 impl<I: IdentityRegistry> TendermintVerifier<I> {
-    pub(crate) fn new(identity_registry: Arc<I>, id: TendermintIdentifier, validator_merkle_root: Vec<u8>) -> Self {
+    pub(crate) fn new(
+        identity_registry: Arc<I>,
+        id: TendermintIdentifier,
+        validator_merkle_root: Vec<u8>,
+    ) -> Self {
         Self {
             identity_registry,
             id,

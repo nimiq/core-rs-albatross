@@ -30,11 +30,23 @@ impl Clone for LmdbEnvironment {
 
 impl LmdbEnvironment {
     #[allow(clippy::new_ret_no_self)]
-    pub fn new(path: &str, size: usize, max_dbs: u32, flags: open::Flags) -> Result<Environment, LmdbError> {
-        Ok(Environment::Persistent(LmdbEnvironment::new_lmdb_environment(path, size, max_dbs, flags)?))
+    pub fn new(
+        path: &str,
+        size: usize,
+        max_dbs: u32,
+        flags: open::Flags,
+    ) -> Result<Environment, LmdbError> {
+        Ok(Environment::Persistent(
+            LmdbEnvironment::new_lmdb_environment(path, size, max_dbs, flags)?,
+        ))
     }
 
-    pub(super) fn new_lmdb_environment(path: &str, size: usize, max_dbs: u32, flags: open::Flags) -> Result<Self, LmdbError> {
+    pub(super) fn new_lmdb_environment(
+        path: &str,
+        size: usize,
+        max_dbs: u32,
+        flags: open::Flags,
+    ) -> Result<Self, LmdbError> {
         fs::create_dir_all(path).unwrap();
 
         let mut env = lmdb_zero::EnvBuilder::new()?;
@@ -84,7 +96,12 @@ impl LmdbEnvironment {
         }
 
         LmdbDatabase {
-            db: lmdb_zero::Database::open(Arc::clone(&self.env), Some(&name), &lmdb_zero::DatabaseOptions::new(db_flags)).unwrap(),
+            db: lmdb_zero::Database::open(
+                Arc::clone(&self.env),
+                Some(&name),
+                &lmdb_zero::DatabaseOptions::new(db_flags),
+            )
+            .unwrap(),
         }
     }
 
@@ -161,7 +178,10 @@ impl LmdbEnvironment {
             info!("DB map size: {}", info.mapsize);
             info!("Space used: {}", size_used);
             info!("Space remaining: {}", info.mapsize - size_used);
-            info!("Percent used: {:.2}", (size_used as f64) / (info.mapsize as f64));
+            info!(
+                "Percent used: {:.2}",
+                (size_used as f64) / (info.mapsize as f64)
+            );
             return true;
         }
 
@@ -196,7 +216,10 @@ impl<'env> LmdbReadTransaction<'env> {
         V: FromDatabaseValue,
     {
         let access = self.txn.access();
-        let result: Option<&[u8]> = access.get(&db.db, AsDatabaseBytes::as_database_bytes(key).as_ref()).to_opt().unwrap();
+        let result: Option<&[u8]> = access
+            .get(&db.db, AsDatabaseBytes::as_database_bytes(key).as_ref())
+            .to_opt()
+            .unwrap();
         Some(FromDatabaseValue::copy_from_database(result?).unwrap())
     }
 
@@ -240,7 +263,10 @@ impl<'env> LmdbWriteTransaction<'env> {
         V: FromDatabaseValue,
     {
         let access = self.txn.access();
-        let result: Option<&[u8]> = access.get(&db.db, AsDatabaseBytes::as_database_bytes(key).as_ref()).to_opt().unwrap();
+        let result: Option<&[u8]> = access
+            .get(&db.db, AsDatabaseBytes::as_database_bytes(key).as_ref())
+            .to_opt()
+            .unwrap();
         Some(FromDatabaseValue::copy_from_database(result?).unwrap())
     }
 
@@ -254,7 +280,12 @@ impl<'env> LmdbWriteTransaction<'env> {
         unsafe {
             let mut access = self.txn.access();
             let mut bytes: &mut [u8] = access
-                .put_reserve_unsized(&db.db, key.as_ref(), value_size, lmdb_zero::put::Flags::empty())
+                .put_reserve_unsized(
+                    &db.db,
+                    key.as_ref(),
+                    value_size,
+                    lmdb_zero::put::Flags::empty(),
+                )
                 .unwrap();
             IntoDatabaseValue::copy_into_database(value, &mut bytes);
         }
@@ -268,7 +299,14 @@ impl<'env> LmdbWriteTransaction<'env> {
         let key = AsDatabaseBytes::as_database_bytes(key);
         let value = AsDatabaseBytes::as_database_bytes(value);
         let mut access = self.txn.access();
-        access.put(&db.db, key.as_ref(), value.as_ref(), lmdb_zero::put::Flags::empty()).unwrap();
+        access
+            .put(
+                &db.db,
+                key.as_ref(),
+                value.as_ref(),
+                lmdb_zero::put::Flags::empty(),
+            )
+            .unwrap();
     }
 
     pub(super) fn remove<K>(&mut self, db: &LmdbDatabase, key: &K)
@@ -276,7 +314,10 @@ impl<'env> LmdbWriteTransaction<'env> {
         K: AsDatabaseBytes + ?Sized,
     {
         let mut access = self.txn.access();
-        access.del_key(&db.db, AsDatabaseBytes::as_database_bytes(key).as_ref()).to_opt().unwrap();
+        access
+            .del_key(&db.db, AsDatabaseBytes::as_database_bytes(key).as_ref())
+            .to_opt()
+            .unwrap();
     }
 
     pub(super) fn remove_item<K, V>(&mut self, db: &LmdbDatabase, key: &K, value: &V)
@@ -307,7 +348,10 @@ impl<'env> LmdbWriteTransaction<'env> {
         }
     }
 
-    pub(super) fn write_cursor<'txn, 'db>(&'txn self, db: &'db Database) -> LmdbWriteCursor<'txn, 'db> {
+    pub(super) fn write_cursor<'txn, 'db>(
+        &'txn self,
+        db: &'db Database,
+    ) -> LmdbWriteCursor<'txn, 'db> {
         let cursor = self.txn.cursor(&db.persistent().unwrap().db).unwrap();
         LmdbWriteCursor {
             raw: RawLmdbCursor { cursor },
@@ -380,14 +424,23 @@ impl<'txn, 'db> RawReadCursor for RawLmdbCursor<'txn, 'db> {
         result.is_ok()
     }
 
-    fn seek_key_nearest_value<K, V>(&mut self, access: &lmdb_zero::ConstAccessor, key: &K, value: &V) -> Option<V>
+    fn seek_key_nearest_value<K, V>(
+        &mut self,
+        access: &lmdb_zero::ConstAccessor,
+        key: &K,
+        value: &V,
+    ) -> Option<V>
     where
         K: AsDatabaseBytes + ?Sized,
         V: AsDatabaseBytes + FromDatabaseValue,
     {
         let key = AsDatabaseBytes::as_database_bytes(key);
         let value = AsDatabaseBytes::as_database_bytes(value);
-        let result: Option<&[u8]> = self.cursor.seek_k_nearest_v(&access, key.as_ref(), value.as_ref()).to_opt().unwrap();
+        let result: Option<&[u8]> = self
+            .cursor
+            .seek_k_nearest_v(&access, key.as_ref(), value.as_ref())
+            .to_opt()
+            .unwrap();
         Some(FromDatabaseValue::copy_from_database(result?).unwrap())
     }
 
@@ -498,7 +551,11 @@ impl<'txn, 'db> RawReadCursor for RawLmdbCursor<'txn, 'db> {
         V: FromDatabaseValue,
     {
         let key = AsDatabaseBytes::as_database_bytes(key);
-        let result: Option<(&[u8], &[u8])> = self.cursor.seek_k_both(&access, key.as_ref()).to_opt().unwrap();
+        let result: Option<(&[u8], &[u8])> = self
+            .cursor
+            .seek_k_both(&access, key.as_ref())
+            .to_opt()
+            .unwrap();
         let (key, value) = result?;
         Some((
             FromDatabaseValue::copy_from_database(key).unwrap(),
@@ -512,7 +569,11 @@ impl<'txn, 'db> RawReadCursor for RawLmdbCursor<'txn, 'db> {
         V: FromDatabaseValue,
     {
         let key = AsDatabaseBytes::as_database_bytes(key);
-        let result: Option<(&[u8], &[u8])> = self.cursor.seek_range_k(&access, key.as_ref()).to_opt().unwrap();
+        let result: Option<(&[u8], &[u8])> = self
+            .cursor
+            .seek_range_k(&access, key.as_ref())
+            .to_opt()
+            .unwrap();
         let (key, value) = result?;
         Some((
             FromDatabaseValue::copy_from_database(key).unwrap(),
@@ -542,7 +603,10 @@ impl_read_cursor_from_raw!(LmdbWriteCursor<'txn, 'db>, raw, txn);
 impl<'txn, 'db> WriteCursorTrait for LmdbWriteCursor<'txn, 'db> {
     fn remove(&mut self) {
         let mut access = self.txn.access();
-        self.raw.cursor.del(&mut access, lmdb_zero::del::Flags::empty()).unwrap();
+        self.raw
+            .cursor
+            .del(&mut access, lmdb_zero::del::Flags::empty())
+            .unwrap();
     }
 }
 
@@ -641,7 +705,10 @@ mod tests {
     fn duplicates_test() {
         let env = LmdbEnvironment::new("./test3", 0, 1, open::NOTLS).unwrap();
         {
-            let db = env.open_database_with_flags("test".to_string(), DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_UINT_VALUES);
+            let db = env.open_database_with_flags(
+                "test".to_string(),
+                DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_UINT_VALUES,
+            );
 
             // Write one value.
             let mut txw = WriteTransaction::new(&env);
@@ -704,7 +771,10 @@ mod tests {
     fn cursor_test() {
         let env = LmdbEnvironment::new("./test4", 0, 1, open::NOTLS).unwrap();
         {
-            let db = env.open_database_with_flags("test".to_string(), DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_UINT_VALUES);
+            let db = env.open_database_with_flags(
+                "test".to_string(),
+                DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_UINT_VALUES,
+            );
 
             let test1: String = "test1".to_string();
             let test2: String = "test2".to_string();
@@ -725,9 +795,18 @@ mod tests {
             assert_eq!(cursor.last::<String, u32>(), Some((test2.clone(), 5783)));
             assert_eq!(cursor.prev::<String, u32>(), Some((test1.clone(), 5783)));
             assert_eq!(cursor.first_duplicate::<u32>(), Some(12));
-            assert_eq!(cursor.next_duplicate::<String, u32>(), Some((test1.clone(), 125)));
-            assert_eq!(cursor.prev_duplicate::<String, u32>(), Some((test1.clone(), 12)));
-            assert_eq!(cursor.next_no_duplicate::<String, u32>(), Some((test2.clone(), 5783)));
+            assert_eq!(
+                cursor.next_duplicate::<String, u32>(),
+                Some((test1.clone(), 125))
+            );
+            assert_eq!(
+                cursor.prev_duplicate::<String, u32>(),
+                Some((test1.clone(), 12))
+            );
+            assert_eq!(
+                cursor.next_no_duplicate::<String, u32>(),
+                Some((test2.clone(), 5783))
+            );
             assert!(cursor.seek_key::<str, u32>("test").is_none());
             assert_eq!(cursor.seek_key::<str, u32>("test1"), Some(12));
             assert_eq!(cursor.count_duplicates(), 3);
@@ -735,8 +814,14 @@ mod tests {
             //            assert_eq!(cursor.seek_key_both::<String, u32>(&test1), Some((test1.clone(), 12)));
             assert!(!cursor.seek_key_value::<str, u32>("test1", &15));
             assert!(cursor.seek_key_value::<str, u32>("test1", &125));
-            assert_eq!(cursor.get_current::<String, u32>(), Some((test1.clone(), 125)));
-            assert_eq!(cursor.seek_key_nearest_value::<str, u32>("test1", &126), Some(5783));
+            assert_eq!(
+                cursor.get_current::<String, u32>(),
+                Some((test1.clone(), 125))
+            );
+            assert_eq!(
+                cursor.seek_key_nearest_value::<str, u32>("test1", &126),
+                Some(5783)
+            );
             assert_eq!(cursor.get_current::<String, u32>(), Some((test1, 5783)));
             assert!(cursor.prev_no_duplicate::<String, u32>().is_none());
             assert_eq!(cursor.next::<String, u32>(), Some((test2, 5783)));

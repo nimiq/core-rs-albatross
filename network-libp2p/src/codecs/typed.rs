@@ -1,24 +1,23 @@
 //! This module contains an `Encoder` and `Decoder` for the NIMIQ message type. This message type has a fixed header,
 //! containing a message type and other auxilary information. The body of the message can be arbitrary bytes which are
 //! later serialized/deserialized to the Message trait.
-//! 
+//!
 //! Note that this doesn't actually serialize/deserialize the message content, but only handles reading/writing the
 //! message, extracting the type ID and performing consistency checks.
-//! 
+//!
 
 use std::{
     fmt::Debug,
     io::{self, Cursor},
 };
 
-use tokio_util::codec::{Encoder, Decoder};
-use bytes::{BytesMut, Buf};
+use bytes::{Buf, BytesMut};
 use thiserror::Error;
+use tokio_util::codec::{Decoder, Encoder};
 
-use beserial::{Serialize, Deserialize, SerializingError, uvar};
-use nimiq_network_interface::peer::SendError;
+use beserial::{uvar, Deserialize, Serialize, SerializingError};
 pub use nimiq_network_interface::message::{Message, MessageType};
-
+use nimiq_network_interface::peer::SendError;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -61,7 +60,6 @@ impl From<Error> for SendError {
     }
 }
 
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Header {
     pub magic: u32, // 0x4204_2042
@@ -86,22 +84,18 @@ impl Header {
     fn preliminary_check(&self) -> Result<(), Error> {
         if self.magic != Self::MAGIC {
             Err(Error::InvalidMagic(self.magic))
-        }
-        else if self.length < 13 || self.length > 10_000_000 {
+        } else if self.length < 13 || self.length > 10_000_000 {
             // TODO: I think we should verify that the length is longer than the actual header size (i.e. header.serialized_length())
             Err(Error::InvalidLength(self.length))
-        }
-        else {
+        } else {
             Ok(())
         }
     }
 }
 
-
 /*pub trait Message: Serialize + Deserialize + Send + Sync + Debug + 'static {
     const TYPE_ID: MessageType;
 }*/
-
 
 #[derive(Clone, Debug)]
 enum DecodeState {
@@ -142,7 +136,7 @@ impl Decoder for MessageCodec {
         let _enter = span.enter();
         loop {
             tracing::trace!(state = ?self.state);
-            
+
             match &self.state {
                 DecodeState::Head => {
                     tracing::trace!(src = ?src);
@@ -182,7 +176,9 @@ impl Decoder for MessageCodec {
 
                             // Don't return but continue in loop to parse the body.
                         }
-                        Err(SerializingError::IoError(e)) if matches!(e.kind(), io::ErrorKind::UnexpectedEof) => {
+                        Err(SerializingError::IoError(e))
+                            if matches!(e.kind(), io::ErrorKind::UnexpectedEof) =>
+                        {
                             // We just need to wait for more data
                             tracing::trace!("not enough data");
                             return Ok(None);
@@ -193,7 +189,10 @@ impl Decoder for MessageCodec {
                         }
                     }
                 }
-                DecodeState::Data { header, header_length } => {
+                DecodeState::Data {
+                    header,
+                    header_length,
+                } => {
                     if src.len() >= header.length as usize {
                         // We have read enough bytes to read the full message
                         tracing::trace!("reading message body");
@@ -214,8 +213,7 @@ impl Decoder for MessageCodec {
                         self.state = DecodeState::Head;
 
                         return Ok(Some((message_type, data)));
-                    }
-                    else {
+                    } else {
                         // We still need to read more of the message body
                         return Ok(None);
                     }
@@ -233,7 +231,6 @@ impl Decoder for MessageCodec {
         }
     }
 }
-
 
 /// Encoder for a full message
 impl<M: Message> Encoder<&M> for MessageCodec {

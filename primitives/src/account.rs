@@ -9,7 +9,11 @@ use beserial::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize, Display)]
 #[repr(u8)]
-#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize), serde(try_from = "u8", into = "u8"))]
+#[cfg_attr(
+    feature = "serde-derive",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(try_from = "u8", into = "u8")
+)]
 pub enum AccountType {
     Basic = 0,
     Vesting = 1,
@@ -70,8 +74,8 @@ mod serde_derive {
 
     impl Serialize for ValidatorId {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-            where
-                S: Serializer,
+        where
+            S: Serializer,
         {
             serializer.serialize_str(&self.to_hex())
         }
@@ -79,8 +83,8 @@ mod serde_derive {
 
     impl<'de> Deserialize<'de> for ValidatorId {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-            where
-                D: Deserializer<'de>,
+        where
+            D: Deserializer<'de>,
         {
             let data: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
             data.parse().map_err(Error::custom)

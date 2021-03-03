@@ -13,7 +13,9 @@ use futures::task::{Context, Poll};
 
 use futures_locks::RwLock;
 
-use nimiq_block_albatross::{create_pk_tree_root, MultiSignature, TendermintIdentifier, TendermintStep, TendermintVote};
+use nimiq_block_albatross::{
+    create_pk_tree_root, MultiSignature, TendermintIdentifier, TendermintStep, TendermintVote,
+};
 use nimiq_bls::SecretKey;
 use nimiq_collections::bitset::BitSet;
 use nimiq_hash::Blake2bHash;
@@ -44,16 +46,13 @@ enum AggregationEvent<N: ValidatorNetwork> {
         Vec<u8>,
         Box<NetworkSink<LevelUpdateMessage<TendermintContribution, TendermintIdentifier>, N>>,
     ),
-    Cancel(
-        u32,
-        TendermintStep,
-    ),
+    Cancel(u32, TendermintStep),
 }
 
 impl<N: ValidatorNetwork> std::fmt::Debug for AggregationEvent<N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AggregationEvent::Start(i, _, _, _) => f.debug_struct("Start").field("id",i).finish(),
+            AggregationEvent::Start(i, _, _, _) => f.debug_struct("Start").field("id", i).finish(),
             AggregationEvent::Cancel(r, s) => f.debug_struct("Start").field("id", &(r, s)).finish(),
         }
     }
@@ -64,7 +63,8 @@ impl<N: ValidatorNetwork> std::fmt::Debug for AggregationEvent<N> {
 /// Note that `TendermintAggregations::broadcast_and_aggregate` needs to have been called at least once before the stream can meaningfully be awaited.
 pub struct TendermintAggregations<N: ValidatorNetwork> {
     event_receiver: mpsc::Receiver<AggregationEvent<N>>,
-    combined_aggregation_streams: Pin<Box<SelectAll<BoxStream<'static, ((u32, TendermintStep), TendermintContribution)>>>>,
+    combined_aggregation_streams:
+        Pin<Box<SelectAll<BoxStream<'static, ((u32, TendermintStep), TendermintContribution)>>>>,
     aggregation_descriptors: BTreeMap<(u32, TendermintStep), AggregationDescriptor>,
     input: BoxStream<'static, LevelUpdateMessage<TendermintContribution, TendermintIdentifier>>,
     future_aggregations: BTreeMap<u32, BitSet>,
@@ -96,10 +96,22 @@ impl<N: ValidatorNetwork> TendermintAggregations<N> {
         id: TendermintIdentifier,
         own_contribution: TendermintContribution,
         validator_merkle_root: Vec<u8>,
-        output_sink: Box<(dyn Sink<(LevelUpdateMessage<TendermintContribution, TendermintIdentifier>, usize), Error = E> + Unpin + Send)>,
+        output_sink: Box<
+            (dyn Sink<
+                (
+                    LevelUpdateMessage<TendermintContribution, TendermintIdentifier>,
+                    usize,
+                ),
+                Error = E,
+            > + Unpin
+                 + Send),
+        >,
     ) {
         // TODO: TendermintAggregationEvent
-        if !self.aggregation_descriptors.contains_key(&(id.round_number, id.step)) {
+        if !self
+            .aggregation_descriptors
+            .contains_key(&(id.round_number, id.step))
+        {
             trace!("starting aggregation for {:?}", &id);
             // crate the correct protocol instance
             let protocol = TendermintAggregationProtocol::new(
@@ -110,10 +122,18 @@ impl<N: ValidatorNetwork> TendermintAggregations<N> {
                 validator_merkle_root,
             );
 
-            let (sender, receiver) = mpsc::unbounded_channel::<LevelUpdate<TendermintContribution>>();
+            let (sender, receiver) =
+                mpsc::unbounded_channel::<LevelUpdate<TendermintContribution>>();
 
             // create the aggregation
-            let aggregation = Aggregation::new(protocol, id.clone(), Config::default(), own_contribution, receiver.boxed(), output_sink);
+            let aggregation = Aggregation::new(
+                protocol,
+                id.clone(),
+                Config::default(),
+                own_contribution,
+                receiver.boxed(),
+                output_sink,
+            );
 
             // create the stream closer and wrap in Arc so it can be shared borrow
             let stream_closer = Arc::new(AtomicBool::new(true));
@@ -127,20 +147,28 @@ impl<N: ValidatorNetwork> TendermintAggregations<N> {
                 },
             );
 
-            trace!("Aggregation_descriptors: {:?}", &self.aggregation_descriptors);
+            trace!(
+                "Aggregation_descriptors: {:?}",
+                &self.aggregation_descriptors
+            );
 
             // copy round_number for use in drain_filter couple of lines down so that id can be moved into closure.
             let round_number = id.round_number;
 
             // wrap the aggregation stream
-            let aggregation = Box::pin(aggregation.map(move |x| ((id.round_number, id.step), x)).take_while(move |_x| {
-                future::ready(stream_closer.clone().load(Ordering::Relaxed))
-                // Todo: Check Ordering
-            }));
+            let aggregation = Box::pin(
+                aggregation
+                    .map(move |x| ((id.round_number, id.step), x))
+                    .take_while(move |_x| {
+                        future::ready(stream_closer.clone().load(Ordering::Relaxed))
+                        // Todo: Check Ordering
+                    }),
+            );
 
             // Since this instance of Aggregation now becomes the current aggregation all bitsets containing contributors
             // for future aggregations which are older or same age than this one can be discarded.
-            self.future_aggregations.drain_filter(|round, _bitset| round <= &round_number);
+            self.future_aggregations
+                .drain_filter(|round, _bitset| round <= &round_number);
 
             // Push the aggregation to the select_all streams.
             self.combined_aggregation_streams.push(aggregation);
@@ -160,33 +188,42 @@ impl<N: ValidatorNetwork + 'static> Stream for TendermintAggregations<N> {
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         match self.event_receiver.poll_recv(cx) {
-            Poll::Pending => {},
+            Poll::Pending => {}
             Poll::Ready(None) => {
                 debug!("Event receiver created None value");
                 return Poll::Ready(None);
-            },
+            }
             Poll::Ready(Some(AggregationEvent::Start(
                 id,
                 own_contribution,
                 validator_merkle_root,
                 output_sink,
-            ))) => self.broadcast_and_aggregate(id, own_contribution, validator_merkle_root, output_sink),
-            Poll::Ready(Some(AggregationEvent::Cancel(
-                round,
-                step,
-            ))) => self.cancel_aggregation(round, step),
+            ))) => self.broadcast_and_aggregate(
+                id,
+                own_contribution,
+                validator_merkle_root,
+                output_sink,
+            ),
+            Poll::Ready(Some(AggregationEvent::Cancel(round, step))) => {
+                self.cancel_aggregation(round, step)
+            }
         }
 
         // empty out the input stream dispatching messages tothe appropriate aggregations
         while let Poll::Ready(message) = self.input.poll_next_unpin(cx) {
             match message {
                 Some(message) => {
-                    if let Some(descriptor) = self.aggregation_descriptors.get(&(message.tag.round_number, message.tag.step)) {
+                    if let Some(descriptor) = self
+                        .aggregation_descriptors
+                        .get(&(message.tag.round_number, message.tag.step))
+                    {
                         trace!("New message for ongoing aggregation: {:?}", &message);
                         if descriptor.input.send(message.update).is_err() {
-                             debug!("Failed to relay LevelUpdate to aggregation");
+                            debug!("Failed to relay LevelUpdate to aggregation");
                         }
-                    } else if let Some(((highest_round, _), _)) = self.aggregation_descriptors.last_key_value() {
+                    } else if let Some(((highest_round, _), _)) =
+                        self.aggregation_descriptors.last_key_value()
+                    {
                         // messages of future rounds need to be tracked in terrms of contributors only (without verifying them).
                         // Also note that PreVote and PreCommit are tracked in the same bitset as the protocol requires.
                         if highest_round < &message.tag.round_number {
@@ -194,20 +231,33 @@ impl<N: ValidatorNetwork + 'static> Stream for TendermintAggregations<N> {
                             let future_contributors = self
                                 .future_aggregations
                                 .entry(message.tag.round_number)
-                                .and_modify(|bitset| *bitset |= message.update.aggregate.contributors())
+                                .and_modify(|bitset| {
+                                    *bitset |= message.update.aggregate.contributors()
+                                })
                                 .or_insert(message.update.aggregate.contributors())
                                 .clone();
                             // now check if that suffices for a f+1 contributor weight
-                            if let Some(weight) = self.validator_registry.signers_weight(&future_contributors) {
-                                if weight > policy::SLOTS as usize - policy::TWO_THIRD_SLOTS as usize {
-                                    return Poll::Ready(Some(TendermintAggregationEvent::NewRound(message.tag.round_number)));
+                            if let Some(weight) =
+                                self.validator_registry.signers_weight(&future_contributors)
+                            {
+                                if weight
+                                    > policy::SLOTS as usize - policy::TWO_THIRD_SLOTS as usize
+                                {
+                                    return Poll::Ready(Some(
+                                        TendermintAggregationEvent::NewRound(
+                                            message.tag.round_number,
+                                        ),
+                                    ));
                                 }
                             }
                         }
                     } else {
                         // No last_key_value means there is no aggregation whatsoever.
                         // Discard the update as there is no receiver for it and log to debug.
-                        debug!("Found no agggregations, but received a LevelUpdateMessage: {:?}", &self.aggregation_descriptors);
+                        debug!(
+                            "Found no agggregations, but received a LevelUpdateMessage: {:?}",
+                            &self.aggregation_descriptors
+                        );
                     }
                 }
                 // Poll::Ready(None) means the stream has terminated, which is likelt the network having droped.
@@ -220,7 +270,9 @@ impl<N: ValidatorNetwork + 'static> Stream for TendermintAggregations<N> {
         // after that return whatever combined_aggregation_streams returns
         match self.combined_aggregation_streams.poll_next_unpin(cx) {
             Poll::Pending | Poll::Ready(None) => Poll::Pending,
-            Poll::Ready(Some(((round, step), aggregation))) => Poll::Ready(Some(TendermintAggregationEvent::Aggregation(round, step, aggregation))),
+            Poll::Ready(Some(((round, step), aggregation))) => Poll::Ready(Some(
+                TendermintAggregationEvent::Aggregation(round, step, aggregation),
+            )),
         }
     }
 }
@@ -240,8 +292,16 @@ pub struct HandelTendermintAdapter<N: ValidatorNetwork> {
 }
 
 impl<N: ValidatorNetwork + 'static> HandelTendermintAdapter<N>
-where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 'static {
-    pub fn new(validator_id: u16, active_validators: ValidatorSlots, block_height: u32, network: Arc<N>, secret_key: SecretKey) -> Self {
+where
+    <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 'static,
+{
+    pub fn new(
+        validator_id: u16,
+        active_validators: ValidatorSlots,
+        block_height: u32,
+        network: Arc<N>,
+        secret_key: SecretKey,
+    ) -> Self {
         let validator_merkle_root = create_pk_tree_root(&active_validators);
 
         // the input stream is all levelUpdateMessages concerning a TendemrintContribution and TendemrintIdentifier.
@@ -256,7 +316,12 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
 
         let (event_sender, event_receiver) = mpsc::channel::<AggregationEvent<N>>(1);
 
-        let mut aggregations = TendermintAggregations::new(validator_id, validator_registry.clone(), input, event_receiver);
+        let mut aggregations = TendermintAggregations::new(
+            validator_id,
+            validator_registry.clone(),
+            input,
+            event_receiver,
+        );
         let current_bests = RwLock::new(BTreeMap::new());
         let current_aggregate = RwLock::new(None);
         let pending_new_round = RwLock::new(None);
@@ -286,12 +351,21 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
                             // such that it can be send to the next current_aggregate sink if it by then is still relevant.
                             match current_aggregate.write().await.take() {
                                 // if there is a current ongoing aggregation it is retrieved
-                                Some(CurrentAggregation { sender, round, step: _step }) => {
+                                Some(CurrentAggregation {
+                                    sender,
+                                    round,
+                                    step: _step,
+                                }) => {
                                     // check that the next_round is actually higher than the round which is awaiting a result.
                                     if round < next_round {
                                         // Send the me NewRound event through the channel to the currently awaited aggregation for it to resolve.
-                                        if let Err(_err) = sender.send(AggregationResult::NewRound(next_round)) {
-                                            error!("Sending of AggregationEvent::NewRound({}) failed", round);
+                                        if let Err(_err) =
+                                            sender.send(AggregationResult::NewRound(next_round))
+                                        {
+                                            error!(
+                                                "Sending of AggregationEvent::NewRound({}) failed",
+                                                round
+                                            );
                                         }
                                     } else {
                                         // Otheriwse this event is meaningless and is droped, which in reality should never occur.
@@ -330,8 +404,12 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
                                 .entry((r, s))
                                 .and_modify(|contribution| {
                                     // this test is not strictly necessary as the handel streams will only return a value if it is better  than the previous one.
-                                    if validator_registry.signature_weight(contribution).expect("Failed to unwrap signature weight")
-                                        < validator_registry.signature_weight(&c).expect("Failed to unwrap signature weight")
+                                    if validator_registry
+                                        .signature_weight(contribution)
+                                        .expect("Failed to unwrap signature weight")
+                                        < validator_registry
+                                            .signature_weight(&c)
+                                            .expect("Failed to unwrap signature weight")
                                     {
                                         *contribution = c.clone();
                                     }
@@ -344,17 +422,28 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
                             let mut lock = current_aggregate.write().await;
                             match lock.take() {
                                 // if there is a current ongoing aggregation it is retrieved
-                                Some(CurrentAggregation { sender, round, step }) => {
+                                Some(CurrentAggregation {
+                                    sender,
+                                    round,
+                                    step,
+                                }) => {
                                     // only reply if it is the correct aggregation
                                     if round == r && step == s {
                                         // see if this is actionable
                                         // Actionable here means everything with voter_weight > 2f+1 is potentially actionable.
                                         // On the receiving end of this channel is a timeout, which will wait (if necessary) for better results
                                         // but will, if nothing better is made available also return this aggregate.
-                                        if validator_registry.signature_weight(&contribution).expect("Failed to unwrap signature weight")
+                                        if validator_registry
+                                            .signature_weight(&contribution)
+                                            .expect("Failed to unwrap signature weight")
                                             > policy::TWO_THIRD_SLOTS as usize
                                         {
-                                            trace!("Completed Round for {}-{:?}: {:?}", &r, &s, &contribution);
+                                            trace!(
+                                                "Completed Round for {}-{:?}: {:?}",
+                                                &r,
+                                                &s,
+                                                &contribution
+                                            );
                                             // Transform to the appropiate result type adding the weight to each proposals Contribution
                                             let result = contribution
                                                 .contributions
@@ -371,17 +460,27 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
                                                 .collect();
 
                                             // send the result
-                                            if let Err(err) = sender.send(AggregationResult::Aggregation(result)) {
+                                            if let Err(err) =
+                                                sender.send(AggregationResult::Aggregation(result))
+                                            {
                                                 error!("failed sending message to broadcast_and_aggregate caller: {:?}", err);
                                                 // recoverable?
                                             }
                                         } else {
                                             // re-set the current_aggregate
-                                            *lock = Some(CurrentAggregation { sender, round, step });
+                                            *lock = Some(CurrentAggregation {
+                                                sender,
+                                                round,
+                                                step,
+                                            });
                                         }
                                     } else {
                                         // re-set the current_aggregate
-                                        *lock = Some(CurrentAggregation { sender, round, step });
+                                        *lock = Some(CurrentAggregation {
+                                            sender,
+                                            round,
+                                            step,
+                                        });
                                     }
                                 }
                                 None => {
@@ -428,9 +527,14 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
                 }
                 None => {
                     // create channel foor result propagation
-                    let (sender, aggregate_receiver) = mpsc::unbounded_channel::<AggregationResult<MultiSignature>>();
+                    let (sender, aggregate_receiver) =
+                        mpsc::unbounded_channel::<AggregationResult<MultiSignature>>();
                     // set the current aggregate
-                    *current_aggregate = Some(CurrentAggregation { sender: sender.clone(), round, step });
+                    *current_aggregate = Some(CurrentAggregation {
+                        sender: sender.clone(),
+                        round,
+                        step,
+                    });
                     // and return the receiver for it to be used later on.
                     (aggregate_receiver, sender)
                 }
@@ -452,11 +556,16 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
         };
 
         // Create the signed contribution of this validator
-        let own_contribution = TendermintContribution::from_vote(vote, &self.secret_key, self.validator_registry.get_slots(self.validator_id));
+        let own_contribution = TendermintContribution::from_vote(
+            vote,
+            &self.secret_key,
+            self.validator_registry.get_slots(self.validator_id),
+        );
 
-        let output_sink = Box::new(NetworkSink::<LevelUpdateMessage<TendermintContribution, TendermintIdentifier>, N>::new(
-            self.network.clone(),
-        ));
+        let output_sink = Box::new(NetworkSink::<
+            LevelUpdateMessage<TendermintContribution, TendermintIdentifier>,
+            N,
+        >::new(self.network.clone()));
 
         // Relay the AggregationEvent to TendermintAggregations
         self.event_sender
@@ -471,7 +580,6 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
                 debug!("event_sender.send failed: {:?}", err);
                 TendermintError::AggregationError
             })?;
-
 
         // If a new round event was emitted before it needs to be checked if it is still relevant by
         // checking if it concerned a round higher than the one which is currently starting.
@@ -491,8 +599,8 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
             Some(event) => event,
             None => {
                 debug!("The aggregate_receiver could not receive an item");
-                return Err(TendermintError::AggregationError)
-            },
+                return Err(TendermintError::AggregationError);
+            }
         };
 
         // create timeout according to rules. For every consecutive round the timeout must increase by a constant factor.
@@ -568,7 +676,11 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
                                             TendermintError::AggregationError
                                         })?;
                                 }
-                                trace!("{}-{:?}: Individual proposal has > 2f + 1 votes", &round, &step);
+                                trace!(
+                                    "{}-{:?}: Individual proposal has > 2f + 1 votes",
+                                    &round,
+                                    &step
+                                );
                                 return Ok(result);
                             }
                             // if proposal is not the same as the one this node signed, then it contributes to the combined weight
@@ -590,7 +702,10 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
                                     TendermintError::AggregationError
                                 })?;
                         }
-                        debug!("Tendermint: {}-{:?}: All other proposals have > f + 1 votes", &round, &step);
+                        debug!(
+                            "Tendermint: {}-{:?}: All other proposals have > f + 1 votes",
+                            &round, &step
+                        );
                         return Ok(result);
                     }
                 }
@@ -619,7 +734,11 @@ where <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 
         }
     }
 
-    pub async fn get_aggregate(&self, round: u32, step: impl Into<TendermintStep>) -> Result<AggregationResult<MultiSignature>, TendermintError> {
+    pub async fn get_aggregate(
+        &self,
+        round: u32,
+        step: impl Into<TendermintStep>,
+    ) -> Result<AggregationResult<MultiSignature>, TendermintError> {
         if let Some(current_best) = self.current_bests.read().await.get(&(round, step.into())) {
             Ok(AggregationResult::Aggregation(
                 current_best

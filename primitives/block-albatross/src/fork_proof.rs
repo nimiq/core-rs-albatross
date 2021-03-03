@@ -37,16 +37,26 @@ impl ForkProof {
         }
 
         // Check that the headers have equal block numbers and view numbers.
-        if self.header1.block_number != self.header2.block_number || self.header1.view_number != self.header2.view_number {
+        if self.header1.block_number != self.header2.block_number
+            || self.header1.view_number != self.header2.view_number
+        {
             return Err(ForkProofError::SlotMismatch);
         }
 
         // Check that the justifications are valid.
-        let justification1 = self.justification1.uncompress().map_err(|_| ForkProofError::InvalidJustification)?;
+        let justification1 = self
+            .justification1
+            .uncompress()
+            .map_err(|_| ForkProofError::InvalidJustification)?;
 
-        let justification2 = self.justification2.uncompress().map_err(|_| ForkProofError::InvalidJustification)?;
+        let justification2 = self
+            .justification2
+            .uncompress()
+            .map_err(|_| ForkProofError::InvalidJustification)?;
 
-        if !public_key.verify(&self.header1, &justification1) || !public_key.verify(&self.header2, &justification2) {
+        if !public_key.verify(&self.header1, &justification1)
+            || !public_key.verify(&self.header2, &justification2)
+        {
             return Err(ForkProofError::InvalidJustification);
         }
 
@@ -78,11 +88,15 @@ impl PartialEq for ForkProof {
     fn eq(&self, other: &ForkProof) -> bool {
         // Equality is invariant to ordering.
         if self.header1 == other.header1 {
-            return self.header2 == other.header2 && self.justification1 == other.justification1 && self.justification2 == other.justification2;
+            return self.header2 == other.header2
+                && self.justification1 == other.justification1
+                && self.justification2 == other.justification2;
         }
 
         if self.header1 == other.header2 {
-            return self.header2 == other.header1 && self.justification1 == other.justification2 && self.justification2 == other.justification1;
+            return self.header2 == other.header1
+                && self.justification1 == other.justification2
+                && self.justification2 == other.justification1;
         }
 
         false

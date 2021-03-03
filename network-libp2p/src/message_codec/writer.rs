@@ -1,6 +1,6 @@
 use std::{marker::PhantomData, pin::Pin};
 
-use bytes::{Buf, BytesMut, buf::BufMutExt};
+use bytes::{buf::BufMutExt, Buf, BytesMut};
 use futures::{
     ready,
     task::{Context, Poll},
@@ -12,7 +12,11 @@ use beserial::{Serialize, SerializingError};
 
 use super::header::Header;
 
-fn write_from_buf<'w, W>(inner: &mut W, buffer: &mut BytesMut, cx: &mut Context) -> Poll<Result<(), SerializingError>>
+fn write_from_buf<'w, W>(
+    inner: &mut W,
+    buffer: &mut BytesMut,
+    cx: &mut Context,
+) -> Poll<Result<(), SerializingError>>
 where
     W: AsyncWrite + Unpin,
 {
@@ -20,7 +24,9 @@ where
         match Pin::new(inner).poll_write(cx, buffer.bytes()) {
             Poll::Ready(Ok(0)) => {
                 log::warn!("MessageWriter: write_from_buf: Unexpected EOF.");
-                Poll::Ready(Err(SerializingError::from(std::io::Error::from(std::io::ErrorKind::UnexpectedEof))))
+                Poll::Ready(Err(SerializingError::from(std::io::Error::from(
+                    std::io::ErrorKind::UnexpectedEof,
+                ))))
             }
 
             Poll::Ready(Ok(n)) => {
@@ -89,7 +95,9 @@ where
 
         if !self_projected.buffer.is_empty() {
             log::warn!("MessageWriter: Trying to send while buffer is not empty.");
-            return Err(SerializingError::from(std::io::Error::from(std::io::ErrorKind::WouldBlock)));
+            return Err(SerializingError::from(std::io::Error::from(
+                std::io::ErrorKind::WouldBlock,
+            )));
         }
 
         //log::trace!("MessageWriter: Sending {:?}", item);
@@ -125,7 +133,9 @@ where
             Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
             Poll::Ready(Ok(())) => {
                 // Finished writing the message. Flush the underlying `AsyncWrite`.
-                Poll::Ready(ready!(Pin::new(self_projected.inner).poll_flush(cx)).map_err(|e| e.into()))
+                Poll::Ready(
+                    ready!(Pin::new(self_projected.inner).poll_flush(cx)).map_err(|e| e.into()),
+                )
             }
         }
     }
@@ -141,7 +151,9 @@ where
             Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
             Poll::Ready(Ok(())) => {
                 // Finished writing the message. Close the underlying `AsyncWrite`.
-                Poll::Ready(ready!(Pin::new(self_projected.inner).poll_close(cx)).map_err(|e| e.into()))
+                Poll::Ready(
+                    ready!(Pin::new(self_projected.inner).poll_close(cx)).map_err(|e| e.into()),
+                )
             }
         }
     }

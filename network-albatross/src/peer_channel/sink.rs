@@ -20,7 +20,11 @@ pub struct PeerSink {
 }
 
 impl PeerSink {
-    pub fn new(channel: UnboundedSender<WebSocketMessage>, unique_id: UniqueId, closed_flag: ClosedFlag) -> Self {
+    pub fn new(
+        channel: UnboundedSender<WebSocketMessage>,
+        unique_id: UniqueId,
+        closed_flag: ClosedFlag,
+    ) -> Self {
         PeerSink {
             sink: channel,
             unique_id,
@@ -38,7 +42,8 @@ impl PeerSink {
         let mut serialized_msg = Vec::with_capacity(msg.serialized_message_size());
         msg.serialize_message(&mut serialized_msg).unwrap();
 
-        self.sink.unbounded_send(WebSocketMessage::RawMessage(serialized_msg))
+        self.sink
+            .unbounded_send(WebSocketMessage::RawMessage(serialized_msg))
     }
 
     /// Closes the connection.

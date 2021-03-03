@@ -59,7 +59,8 @@ impl<'l, E: Clone + Send + 'static> Notifier<'l, E> {
         // TODO how to deregister?
         let (tx, rx) = mpsc::unbounded_channel();
         self.register(move |event: &E| {
-            tx.send(event.clone()).unwrap_or_else(|e| panic!("Failed to send event to channel: {}", e));
+            tx.send(event.clone())
+                .unwrap_or_else(|e| panic!("Failed to send event to channel: {}", e));
         });
         rx
     }

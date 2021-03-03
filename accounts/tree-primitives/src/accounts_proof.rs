@@ -17,7 +17,10 @@ pub struct AccountsProof<A: AccountsTreeLeave> {
 
 impl<A: AccountsTreeLeave> AccountsProof<A> {
     pub fn new(nodes: Vec<AccountsTreeNode<A>>) -> AccountsProof<A> {
-        AccountsProof { nodes, verified: false }
+        AccountsProof {
+            nodes,
+            verified: false,
+        }
     }
 
     pub fn verify(&mut self) -> bool {
@@ -29,7 +32,9 @@ impl<A: AccountsTreeLeave> AccountsProof<A> {
                     if node.prefix().is_prefix_of(child.prefix()) {
                         let hash = child.hash::<Blake2bHash>();
                         // If the child is not valid, return false.
-                        if node.get_child_hash(child.prefix()).unwrap() != &hash || &node.get_child_prefix(child.prefix()).unwrap() != child.prefix() {
+                        if node.get_child_hash(child.prefix()).unwrap() != &hash
+                            || &node.get_child_prefix(child.prefix()).unwrap() != child.prefix()
+                        {
                             return false;
                         }
                     } else {
@@ -41,13 +46,17 @@ impl<A: AccountsTreeLeave> AccountsProof<A> {
             children.push(node.clone());
         }
         let root_nibbles: AddressNibbles = "".parse().unwrap();
-        let valid = children.len() == 1 && children[0].prefix() == &root_nibbles && children[0].is_branch();
+        let valid =
+            children.len() == 1 && children[0].prefix() == &root_nibbles && children[0].is_branch();
         self.verified = valid;
         valid
     }
 
     pub fn get_account(&self, address: &Address) -> Option<A> {
-        assert!(self.verified, "AccountsProof must be verified before retrieving accounts. Call verify() first.");
+        assert!(
+            self.verified,
+            "AccountsProof must be verified before retrieving accounts. Call verify() first."
+        );
 
         for node in &self.nodes {
             if let AccountsTreeNode::TerminalNode { prefix, account } = node {
@@ -206,7 +215,15 @@ mod tests {
         );
 
         // The first proof proves the 4 terminal nodes (T1, T2, T3 and T4)
-        let mut proof1 = AccountsProof::new(vec![t1.clone(), t3.clone(), t4.clone(), b2.clone(), t2, b1.clone(), r1.clone()]);
+        let mut proof1 = AccountsProof::new(vec![
+            t1.clone(),
+            t3.clone(),
+            t4.clone(),
+            b2.clone(),
+            t2,
+            b1.clone(),
+            r1.clone(),
+        ]);
         assert!(proof1.verify());
         assert_eq!(account1, proof1.get_account(&address1).unwrap());
         assert_eq!(account2, proof1.get_account(&address2).unwrap());

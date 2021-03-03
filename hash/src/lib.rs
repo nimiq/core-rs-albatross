@@ -80,7 +80,17 @@ pub trait Hash: SerializeContent {
     }
 }
 
-pub trait HashOutput: PartialEq + Eq + Clone + Serialize + Deserialize + Sized + SerializeContent + Debug + std::hash::Hash {
+pub trait HashOutput:
+    PartialEq
+    + Eq
+    + Clone
+    + Serialize
+    + Deserialize
+    + Sized
+    + SerializeContent
+    + Debug
+    + std::hash::Hash
+{
     type Builder: Hasher<Output = Self>;
 
     fn as_bytes(&self) -> &[u8];
@@ -226,7 +236,10 @@ impl Argon2dHasher {
         config.mem_cost = kib;
         config.hash_length = 32;
         config.variant = argon2::Variant::Argon2d;
-        Argon2dHasher { buf: Vec::new(), config }
+        Argon2dHasher {
+            buf: Vec::new(),
+            config,
+        }
     }
 
     fn hash_bytes(&self, bytes: &[u8], salt: &[u8]) -> Argon2dHash {

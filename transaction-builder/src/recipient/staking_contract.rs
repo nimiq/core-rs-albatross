@@ -1,8 +1,10 @@
 use beserial::{Serialize, SerializingError, WriteBytesExt};
 use bls::{CompressedSignature, KeyPair, PublicKey};
 use keys::Address;
-use transaction::account::staking_contract::{IncomingStakingTransactionData, SelfStakingTransactionData};
 use primitives::account::ValidatorId;
+use transaction::account::staking_contract::{
+    IncomingStakingTransactionData, SelfStakingTransactionData,
+};
 use utils::key_rng::SecureGenerate;
 
 use crate::recipient::Recipient;
@@ -99,11 +101,13 @@ impl StakingRecipientBuilder {
     /// This method allows to create a new validator entry using a BLS key pair `key_pair`.
     /// All rewards for this validator will be paid out to its `reward_address`.
     pub fn create_validator(&mut self, key_pair: &KeyPair, reward_address: Address) -> &mut Self {
-        self.staking_data = Some(StakingTransaction::IncomingTransaction(IncomingStakingTransactionData::CreateValidator {
-            validator_key: key_pair.public_key.compress(),
-            proof_of_knowledge: StakingRecipientBuilder::generate_proof_of_knowledge(&key_pair),
-            reward_address,
-        }));
+        self.staking_data = Some(StakingTransaction::IncomingTransaction(
+            IncomingStakingTransactionData::CreateValidator {
+                validator_key: key_pair.public_key.compress(),
+                proof_of_knowledge: StakingRecipientBuilder::generate_proof_of_knowledge(&key_pair),
+                reward_address,
+            },
+        ));
         self
     }
 
@@ -126,16 +130,19 @@ impl StakingRecipientBuilder {
         validator_id: &ValidatorId,
         old_validator_key: &PublicKey,
         new_key_pair: Option<&KeyPair>,
-        new_reward_address: Option<Address>
+        new_reward_address: Option<Address>,
     ) -> &mut Self {
-        self.staking_data = Some(StakingTransaction::IncomingTransaction(IncomingStakingTransactionData::UpdateValidator {
-            validator_id: validator_id.clone(),
-            old_validator_key: old_validator_key.compress(),
-            new_validator_key: new_key_pair.map(|key| key.public_key.compress()),
-            new_proof_of_knowledge: new_key_pair.map(|key| StakingRecipientBuilder::generate_proof_of_knowledge(&key)),
-            new_reward_address,
-            signature: Default::default(),
-        }));
+        self.staking_data = Some(StakingTransaction::IncomingTransaction(
+            IncomingStakingTransactionData::UpdateValidator {
+                validator_id: validator_id.clone(),
+                old_validator_key: old_validator_key.compress(),
+                new_validator_key: new_key_pair.map(|key| key.public_key.compress()),
+                new_proof_of_knowledge: new_key_pair
+                    .map(|key| StakingRecipientBuilder::generate_proof_of_knowledge(&key)),
+                new_reward_address,
+                signature: Default::default(),
+            },
+        ));
         self
     }
 
@@ -144,10 +151,12 @@ impl StakingRecipientBuilder {
     ///
     /// Retiring a validator is also necessary to drop it and retrieve back its initial stake.
     pub fn retire_validator(&mut self, validator_id: &ValidatorId) -> &mut Self {
-        self.staking_data = Some(StakingTransaction::IncomingTransaction(IncomingStakingTransactionData::RetireValidator {
-            validator_id: validator_id.clone(),
-            signature: Default::default(),
-        }));
+        self.staking_data = Some(StakingTransaction::IncomingTransaction(
+            IncomingStakingTransactionData::RetireValidator {
+                validator_id: validator_id.clone(),
+                signature: Default::default(),
+            },
+        ));
         self
     }
 
@@ -155,10 +164,12 @@ impl StakingRecipientBuilder {
     /// This reverts the retirement of a validator and will result in the validator being
     /// considered for the validator selection again.
     pub fn reactivate_validator(&mut self, validator_id: &ValidatorId) -> &mut Self {
-        self.staking_data = Some(StakingTransaction::IncomingTransaction(IncomingStakingTransactionData::ReactivateValidator {
-            validator_id: validator_id.clone(),
-            signature: Default::default(),
-        }));
+        self.staking_data = Some(StakingTransaction::IncomingTransaction(
+            IncomingStakingTransactionData::ReactivateValidator {
+                validator_id: validator_id.clone(),
+                signature: Default::default(),
+            },
+        ));
         self
     }
 
@@ -170,29 +181,43 @@ impl StakingRecipientBuilder {
     /// automatically retired after two macro blocks.
     /// This signalling transaction will prevent the automatic retirement.
     pub fn unpark_validator(&mut self, validator_id: &ValidatorId) -> &mut Self {
-        self.staking_data = Some(StakingTransaction::IncomingTransaction(IncomingStakingTransactionData::UnparkValidator {
-            validator_id: validator_id.clone(),
-            signature: Default::default(),
-        }));
+        self.staking_data = Some(StakingTransaction::IncomingTransaction(
+            IncomingStakingTransactionData::UnparkValidator {
+                validator_id: validator_id.clone(),
+                signature: Default::default(),
+            },
+        ));
         self
     }
 
     /// This method allows to delegate stake to a validator with public key `validator_key`.
     /// Optionally, the stake can be delegated in the name of an address different than
     /// the sender of the transaction by using the `staker_address`.
-    pub fn stake(&mut self, validator_id: &ValidatorId, staker_address: Option<Address>) -> &mut Self {
-        self.staking_data = Some(StakingTransaction::IncomingTransaction(IncomingStakingTransactionData::Stake {
-            validator_id: validator_id.clone(),
-            staker_address,
-        }));
+    pub fn stake(
+        &mut self,
+        validator_id: &ValidatorId,
+        staker_address: Option<Address>,
+    ) -> &mut Self {
+        self.staking_data = Some(StakingTransaction::IncomingTransaction(
+            IncomingStakingTransactionData::Stake {
+                validator_id: validator_id.clone(),
+                staker_address,
+            },
+        ));
         self
     }
 
-    pub fn rededicate_stake(&mut self, from_validator_id: &ValidatorId, to_validator_id: &ValidatorId) -> &mut Self {
-        self.staking_data = Some(StakingTransaction::SelfTransaction(SelfStakingTransactionData::RededicateStake {
-            from_validator_id: from_validator_id.clone(),
-            to_validator_id: to_validator_id.clone(),
-        }));
+    pub fn rededicate_stake(
+        &mut self,
+        from_validator_id: &ValidatorId,
+        to_validator_id: &ValidatorId,
+    ) -> &mut Self {
+        self.staking_data = Some(StakingTransaction::SelfTransaction(
+            SelfStakingTransactionData::RededicateStake {
+                from_validator_id: from_validator_id.clone(),
+                to_validator_id: to_validator_id.clone(),
+            },
+        ));
         self
     }
 
@@ -200,17 +225,17 @@ impl StakingRecipientBuilder {
     /// This has the effect of removing the stake from the validator with key `validator_key`.
     /// It is a necessary precondition to unstake funds.
     pub fn retire_stake(&mut self, validator_id: &ValidatorId) -> &mut Self {
-        self.staking_data = Some(StakingTransaction::SelfTransaction(SelfStakingTransactionData::RetireStake(
-            validator_id.clone(),
-        )));
+        self.staking_data = Some(StakingTransaction::SelfTransaction(
+            SelfStakingTransactionData::RetireStake(validator_id.clone()),
+        ));
         self
     }
 
     /// This method allows to reassign inactive stake to a validator with key `validator_key`.
     pub fn reactivate_stake(&mut self, validator_id: &ValidatorId) -> &mut Self {
-        self.staking_data = Some(StakingTransaction::SelfTransaction(SelfStakingTransactionData::ReactivateStake(
-            validator_id.clone(),
-        )));
+        self.staking_data = Some(StakingTransaction::SelfTransaction(
+            SelfStakingTransactionData::ReactivateStake(validator_id.clone()),
+        ));
         self
     }
 

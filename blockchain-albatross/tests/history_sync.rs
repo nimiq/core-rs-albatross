@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use beserial::Deserialize;
 use nimiq_block_albatross::{
-    create_pk_tree_root, Block, MacroBlock, MacroBody, MultiSignature, TendermintIdentifier, TendermintProof, TendermintProposal, TendermintStep,
-    TendermintVote,
+    create_pk_tree_root, Block, MacroBlock, MacroBody, MultiSignature, TendermintIdentifier,
+    TendermintProof, TendermintProposal, TendermintStep, TendermintVote,
 };
 use nimiq_block_production_albatross::BlockProducer;
 use nimiq_blockchain_albatross::{Blockchain, PushResult};
@@ -23,8 +23,17 @@ fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<Blockchain>) {
     let init_height = blockchain.block_number();
     let macro_block_number = policy::macro_block_after(init_height + 1);
     for i in (init_height + 1)..macro_block_number {
-        let last_micro_block = producer.next_micro_block(blockchain.time.now() + i as u64 * 1000, 0, None, vec![], vec![0x42]);
-        assert_eq!(blockchain.push(Block::Micro(last_micro_block)), Ok(PushResult::Extended));
+        let last_micro_block = producer.next_micro_block(
+            blockchain.time.now() + i as u64 * 1000,
+            0,
+            None,
+            vec![],
+            vec![0x42],
+        );
+        assert_eq!(
+            blockchain.push(Block::Micro(last_micro_block)),
+            Ok(PushResult::Extended)
+        );
     }
     assert_eq!(blockchain.block_number(), macro_block_number - 1);
 }
@@ -33,26 +42,42 @@ fn produce_macro_blocks(num_macro: usize, producer: &BlockProducer, blockchain: 
     for _ in 0..num_macro {
         fill_micro_blocks(producer, blockchain);
 
-        let slots = blockchain.get_validators_for_epoch(policy::epoch_at(blockchain.block_number() + 1));
+        let slots =
+            blockchain.get_validators_for_epoch(policy::epoch_at(blockchain.block_number() + 1));
         assert!(slots.is_some());
 
         let next_block_height = blockchain.block_number() + 1;
-        let macro_block_proposal = producer.next_macro_block_proposal(blockchain.time.now() + next_block_height as u64 * 1000, 0u32, vec![]);
+        let macro_block_proposal = producer.next_macro_block_proposal(
+            blockchain.time.now() + next_block_height as u64 * 1000,
+            0u32,
+            vec![],
+        );
 
         let block = sign_macro_block(
             TendermintProposal {
                 value: macro_block_proposal.header,
                 valid_round: None,
             },
-            macro_block_proposal.body.or(Some(MacroBody::new())).unwrap(),
+            macro_block_proposal
+                .body
+                .or(Some(MacroBody::new()))
+                .unwrap(),
             create_pk_tree_root(&slots.unwrap()),
         );
-        assert_eq!(blockchain.push(Block::Macro(block)), Ok(PushResult::Extended));
+        assert_eq!(
+            blockchain.push(Block::Macro(block)),
+            Ok(PushResult::Extended)
+        );
     }
 }
 
-fn sign_macro_block(proposal: TendermintProposal, extrinsics: MacroBody, validator_merkle_root: Vec<u8>) -> MacroBlock {
-    let keypair = KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
+fn sign_macro_block(
+    proposal: TendermintProposal,
+    extrinsics: MacroBody,
+    validator_merkle_root: Vec<u8>,
+) -> MacroBlock {
+    let keypair =
+        KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
 
     // Create a TendemrintVote instance out of known properties.
     // round_number is for now fixed at 0 for tests, but it could be anything,
@@ -71,7 +96,10 @@ fn sign_macro_block(proposal: TendermintProposal, extrinsics: MacroBody, validat
     let message_hash = vote.hash::<Blake2sHash>();
 
     // sign the hash
-    let signature = AggregateSignature::from_signatures(&[keypair.secret_key.sign_hash(message_hash).multiply(policy::SLOTS)]);
+    let signature = AggregateSignature::from_signatures(&[keypair
+        .secret_key
+        .sign_hash(message_hash)
+        .multiply(policy::SLOTS)]);
 
     // create and populate signers BitSet.
     let mut signers = BitSet::new();
@@ -103,7 +131,8 @@ fn it_can_history_sync() {
     let blockchain = Arc::new(Blockchain::new(env, NetworkId::UnitAlbatross).unwrap());
 
     // Produce the blocks.
-    let keypair = KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
+    let keypair =
+        KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
     let producer = BlockProducer::new_without_mempool(Arc::clone(&blockchain), keypair);
     produce_macro_blocks(num_macro_blocks, &producer, &blockchain);
 
@@ -128,9 +157,15 @@ fn it_can_history_sync() {
     let blockchain2 = Arc::new(Blockchain::new(env2, NetworkId::UnitAlbatross).unwrap());
 
     // Push blocks using history sync.
-    assert_eq!(blockchain2.push_history_sync(election_block, &election_txs), Ok(PushResult::Extended));
+    assert_eq!(
+        blockchain2.push_history_sync(election_block, &election_txs),
+        Ok(PushResult::Extended)
+    );
 
-    assert_eq!(blockchain2.push_history_sync(checkpoint_block, &checkpoint_txs), Ok(PushResult::Extended));
+    assert_eq!(
+        blockchain2.push_history_sync(checkpoint_block, &checkpoint_txs),
+        Ok(PushResult::Extended)
+    );
 }
 
 // TODO: Test using blocks with transactions.

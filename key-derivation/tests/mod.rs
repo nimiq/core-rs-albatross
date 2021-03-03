@@ -121,7 +121,12 @@ fn it_correctly_derives_keys() {
         for (j, vector) in vectors.iter().enumerate() {
             let key = ExtendedPrivateKey::from_seed(seed.clone());
             let key = key.derive_path(vector.path);
-            assert!(key.is_some(), "Could not derive path for seed {} in test case {}", i, j);
+            assert!(
+                key.is_some(),
+                "Could not derive path for seed {} in test case {}",
+                i,
+                j
+            );
             let key = key.unwrap();
 
             assert_eq!(

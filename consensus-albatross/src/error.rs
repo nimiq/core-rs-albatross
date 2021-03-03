@@ -16,8 +16,5 @@ pub enum SyncError {
     NoValidSyncTarget,
 }
 
-
 #[derive(Debug, Error)]
-pub enum BlockQueueError {
-
-}
+pub enum BlockQueueError {}

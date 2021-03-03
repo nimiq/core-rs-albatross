@@ -1,4 +1,7 @@
-use crate::signed::{Message, SignedMessage, PREFIX_TENDERMINT_COMMIT, PREFIX_TENDERMINT_PREPARE, PREFIX_TENDERMINT_PROPOSAL};
+use crate::signed::{
+    Message, SignedMessage, PREFIX_TENDERMINT_COMMIT, PREFIX_TENDERMINT_PREPARE,
+    PREFIX_TENDERMINT_PROPOSAL,
+};
 use crate::{MacroHeader, MultiSignature};
 use beserial::{Deserialize, Serialize};
 use bls::AggregatePublicKey;
@@ -47,7 +50,12 @@ impl TendermintProof {
 
     /// Verifies the proof. This only checks that the proof is valid for this block, not that the
     /// block itself is valid.
-    pub fn verify(&self, block_hash: Blake2bHash, block_number: u32, validators: &ValidatorSlots) -> bool {
+    pub fn verify(
+        &self,
+        block_hash: Blake2bHash,
+        block_number: u32,
+        validators: &ValidatorSlots,
+    ) -> bool {
         // Check if there are enough votes.
         if self.votes() < TWO_THIRD_SLOTS {
             return false;
@@ -60,7 +68,12 @@ impl TendermintProof {
         let mut agg_pk = AggregatePublicKey::new();
         let mut raw_pks = Vec::new();
         for i in 0..SLOTS {
-            let pk = validators.get_public_key(SlotIndex::Slot(i)).unwrap().compressed().uncompress().unwrap();
+            let pk = validators
+                .get_public_key(SlotIndex::Slot(i))
+                .unwrap()
+                .compressed()
+                .uncompress()
+                .unwrap();
 
             if self.sig.signers.contains(i as usize) {
                 agg_pk.aggregate(&pk);

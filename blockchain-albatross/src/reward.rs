@@ -28,7 +28,12 @@ pub fn genesis_parameters(genesis_block: &MacroHeader) -> (Coin, u64) {
 /// Compute the block reward for a batch from the current macro block, the previous macro block,
 /// and the genesis parameters.
 /// This does not include the reward from transaction fees.
-pub fn block_reward_for_batch(current_block: &MacroHeader, previous_macro: &MacroHeader, genesis_supply: Coin, genesis_timestamp: u64) -> Coin {
+pub fn block_reward_for_batch(
+    current_block: &MacroHeader,
+    previous_macro: &MacroHeader,
+    genesis_supply: Coin,
+    genesis_timestamp: u64,
+) -> Coin {
     let current_timestamp = current_block.timestamp;
 
     let previous_timestamp = previous_macro.timestamp;
@@ -40,7 +45,8 @@ pub fn block_reward_for_batch(current_block: &MacroHeader, previous_macro: &Macr
 
     let prev_supply = policy::supply_at(genesis_supply_u64, genesis_timestamp, previous_timestamp);
 
-    let current_supply = policy::supply_at(genesis_supply_u64, genesis_timestamp, current_timestamp);
+    let current_supply =
+        policy::supply_at(genesis_supply_u64, genesis_timestamp, current_timestamp);
 
     Coin::from_u64_unchecked(current_supply - prev_supply)
 }
@@ -48,7 +54,11 @@ pub fn block_reward_for_batch(current_block: &MacroHeader, previous_macro: &Macr
 /// Compute the block reward for a batch from the current macro block, the previous macro block,
 /// and the genesis block.
 /// This does not include the reward from transaction fees.
-pub fn block_reward_for_batch_with_genesis(current_block: &MacroHeader, previous_macro: &MacroHeader, genesis_block: &MacroHeader) -> Coin {
+pub fn block_reward_for_batch_with_genesis(
+    current_block: &MacroHeader,
+    previous_macro: &MacroHeader,
+    genesis_block: &MacroHeader,
+) -> Coin {
     let (supply, timestamp) = genesis_parameters(genesis_block);
 
     block_reward_for_batch(current_block, previous_macro, supply, timestamp)

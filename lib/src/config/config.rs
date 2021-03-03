@@ -33,7 +33,6 @@ use crate::{
     error::Error,
 };
 
-
 /// The consensus type
 ///
 /// # Notes
@@ -166,7 +165,6 @@ pub struct FileStorageConfig {
     /// The key used for the validator, if the file is not present.
     #[cfg(feature = "validator")]
     validator_key: Option<String>,
-
 }
 
 impl FileStorageConfig {
@@ -339,10 +337,10 @@ impl StorageConfig {
                 FileStore::new(key_path).load_or_store(|| {
                     if let Some(key) = file_storage.validator_key.as_ref() {
                         // TODO: handle errors
-                        let secret_key = BlsSecretKey::deserialize_from_vec(&hex::decode(key).unwrap()).unwrap();
+                        let secret_key =
+                            BlsSecretKey::deserialize_from_vec(&hex::decode(key).unwrap()).unwrap();
                         secret_key.into()
-                    }
-                    else {
+                    } else {
                         //BlsKeyPair::generate_default_csprng()
                         todo!("Load hex string");
                     }

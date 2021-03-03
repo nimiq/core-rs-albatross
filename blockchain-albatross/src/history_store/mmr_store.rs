@@ -34,7 +34,11 @@ pub struct MMRStore<'a, 'env> {
 
 impl<'a, 'env> MMRStore<'a, 'env> {
     /// Create a read-only store.
-    pub fn with_read_transaction(hist_tree_db: &'a Database, tx: &'a Transaction<'env>, epoch_number: u32) -> Self {
+    pub fn with_read_transaction(
+        hist_tree_db: &'a Database,
+        tx: &'a Transaction<'env>,
+        epoch_number: u32,
+    ) -> Self {
         let size = Self::get_size(hist_tree_db, tx, epoch_number);
         MMRStore {
             hist_tree_db,
@@ -45,7 +49,11 @@ impl<'a, 'env> MMRStore<'a, 'env> {
     }
 
     /// Create a writable store.
-    pub fn with_write_transaction(hist_tree_db: &'a Database, tx: &'a mut WriteTransaction<'env>, epoch_number: u32) -> Self {
+    pub fn with_write_transaction(
+        hist_tree_db: &'a Database,
+        tx: &'a mut WriteTransaction<'env>,
+        epoch_number: u32,
+    ) -> Self {
         let size = Self::get_size(hist_tree_db, tx, epoch_number);
         MMRStore {
             hist_tree_db,

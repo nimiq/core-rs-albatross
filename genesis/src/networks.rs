@@ -56,7 +56,8 @@ impl NetworkInfo {
 
     #[inline]
     pub fn genesis_block<B: Deserialize>(&self) -> B {
-        let block: B = Deserialize::deserialize_from_vec(&self.genesis.block.to_vec()).expect("Failed to deserialize genesis block.");
+        let block: B = Deserialize::deserialize_from_vec(&self.genesis.block.to_vec())
+            .expect("Failed to deserialize genesis block.");
         block
     }
 
@@ -67,7 +68,9 @@ impl NetworkInfo {
 
     #[inline]
     pub fn genesis_accounts(&self) -> Vec<(Address, Account)> {
-        let accounts: AccountsList = Deserialize::deserialize_from_vec(&self.genesis.accounts.to_vec()).expect("Failed to deserialize genesis accounts.");
+        let accounts: AccountsList =
+            Deserialize::deserialize_from_vec(&self.genesis.accounts.to_vec())
+                .expect("Failed to deserialize genesis accounts.");
         accounts.0
     }
 
@@ -83,7 +86,9 @@ impl NetworkInfo {
     }
 
     pub fn from_network_id(network_id: NetworkId) -> &'static Self {
-        NETWORK_MAP.get(&network_id).unwrap_or_else(|| panic!("No such network ID: {}", network_id))
+        NETWORK_MAP
+            .get(&network_id)
+            .unwrap_or_else(|| panic!("No such network ID: {}", network_id))
     }
 }
 
@@ -105,7 +110,10 @@ lazy_static! {
                     "5af4c3f30998573e8d3476cd0e0543bf7adba576ef321342e41c2bccc246c377",
                 )],
                 seed_lists: vec![],
-                genesis: include!(concat!(env!("OUT_DIR"), "/genesis/dev-albatross/genesis.rs")),
+                genesis: include!(concat!(
+                    env!("OUT_DIR"),
+                    "/genesis/dev-albatross/genesis.rs"
+                )),
             },
         );
 
@@ -116,7 +124,10 @@ lazy_static! {
                 name: "unit-albatross",
                 seed_peers: vec![],
                 seed_lists: vec![],
-                genesis: include!(concat!(env!("OUT_DIR"), "/genesis/unit-albatross/genesis.rs")),
+                genesis: include!(concat!(
+                    env!("OUT_DIR"),
+                    "/genesis/unit-albatross/genesis.rs"
+                )),
             },
         );
 

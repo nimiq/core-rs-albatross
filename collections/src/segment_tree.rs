@@ -92,7 +92,10 @@ where
         }
         // Leaf node reached, check if value is correct
         if key == node.key {
-            Some(Range { weight: node.weight, offset })
+            Some(Range {
+                weight: node.weight,
+                offset,
+            })
         } else {
             None
         }

@@ -1,5 +1,9 @@
 use parking_lot::RwLock;
-use std::{collections::hash_map::{HashMap, Entry}, iter::FromIterator, sync::Arc};
+use std::{
+    collections::hash_map::{Entry, HashMap},
+    iter::FromIterator,
+    sync::Arc,
+};
 use tokio::sync::broadcast;
 
 use crate::{network::NetworkEvent, peer::Peer};
@@ -135,11 +139,20 @@ where
     }
 
     pub fn get_peer(&self, peer_id: &P::Id) -> Option<Arc<P>> {
-        self.inner.read().peers.get(peer_id).map(|peer| Arc::clone(peer))
+        self.inner
+            .read()
+            .peers
+            .get(peer_id)
+            .map(|peer| Arc::clone(peer))
     }
 
     pub fn get_peers(&self) -> Vec<Arc<P>> {
-        self.inner.read().peers.values().map(|peer| Arc::clone(peer)).collect()
+        self.inner
+            .read()
+            .peers
+            .values()
+            .map(|peer| Arc::clone(peer))
+            .collect()
     }
 
     pub fn subscribe(&self) -> (Vec<Arc<P>>, broadcast::Receiver<NetworkEvent<P>>) {
@@ -199,7 +212,10 @@ mod tests {
         }
         fn close(&self, _ty: CloseReason) {}
 
-        async fn request<R: RequestResponse>(&self, _request: &R::Request) -> Result<R::Response, Self::Error> {
+        async fn request<R: RequestResponse>(
+            &self,
+            _request: &R::Request,
+        ) -> Result<R::Response, Self::Error> {
             unreachable!();
         }
 

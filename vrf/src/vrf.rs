@@ -27,14 +27,21 @@ pub enum VrfUseCase {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
-#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize), serde(transparent))]
+#[cfg_attr(
+    feature = "serde-derive",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(transparent)
+)]
 pub struct VrfSeed {
     signature: CompressedSignature,
 }
 
 impl VrfSeed {
     pub fn verify(&self, prev_seed: &VrfSeed, public_key: &PublicKey) -> Result<(), VrfError> {
-        let signature = self.signature.uncompress().map_err(|_| VrfError::InvalidSignature)?;
+        let signature = self
+            .signature
+            .uncompress()
+            .map_err(|_| VrfError::InvalidSignature)?;
 
         // Hash use-case prefix and signature
         let mut hasher = Blake2sHasher::new();

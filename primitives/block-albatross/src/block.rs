@@ -157,8 +157,12 @@ impl Block {
     pub fn justification(&self) -> Option<BlockJustification> {
         // TODO Can we eliminate the clone()s here?
         Some(match self {
-            Block::Macro(ref block) => BlockJustification::Macro(block.justification.as_ref()?.clone()),
-            Block::Micro(ref block) => BlockJustification::Micro(block.justification.as_ref()?.clone()),
+            Block::Macro(ref block) => {
+                BlockJustification::Macro(block.justification.as_ref()?.clone())
+            }
+            Block::Micro(ref block) => {
+                BlockJustification::Micro(block.justification.as_ref()?.clone())
+            }
         })
     }
 
@@ -289,7 +293,13 @@ impl Deserialize for Block {
 
 impl fmt::Display for Block {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "[#{}, view {}, type {:?}]", self.block_number(), self.view_number(), self.ty())
+        write!(
+            f,
+            "[#{}, view {}, type {:?}]",
+            self.block_number(),
+            self.view_number(),
+            self.ty()
+        )
     }
 }
 
@@ -606,9 +616,17 @@ impl BlockComponents {
             None
         };
 
-        let body = if flags.contains(BlockComponentFlags::BODY) { block.body() } else { None };
+        let body = if flags.contains(BlockComponentFlags::BODY) {
+            block.body()
+        } else {
+            None
+        };
 
-        BlockComponents { header, justification, body }
+        BlockComponents {
+            header,
+            justification,
+            body,
+        }
     }
 }
 
@@ -617,10 +635,19 @@ impl TryFrom<BlockComponents> for Block {
 
     fn try_from(value: BlockComponents) -> Result<Self, Self::Error> {
         match (value.header, value.justification) {
-            (Some(BlockHeader::Micro(micro_header)), Some(BlockJustification::Micro(micro_justification))) => {
+            (
+                Some(BlockHeader::Micro(micro_header)),
+                Some(BlockJustification::Micro(micro_justification)),
+            ) => {
                 let body = value
                     .body
-                    .map(|body| if let BlockBody::Micro(micro_body) = body { Ok(micro_body) } else { Err(()) })
+                    .map(|body| {
+                        if let BlockBody::Micro(micro_body) = body {
+                            Ok(micro_body)
+                        } else {
+                            Err(())
+                        }
+                    })
                     .transpose()?;
 
                 Ok(Block::Micro(MicroBlock {
@@ -642,7 +669,13 @@ impl TryFrom<BlockComponents> for Block {
 
                 let body = value
                     .body
-                    .map(|body| if let BlockBody::Macro(macro_body) = body { Ok(macro_body) } else { Err(()) })
+                    .map(|body| {
+                        if let BlockBody::Macro(macro_body) = body {
+                            Ok(macro_body)
+                        } else {
+                            Err(())
+                        }
+                    })
                     .transpose()?;
 
                 Ok(Block::Macro(MacroBlock {

@@ -78,7 +78,10 @@ impl<'a> Callback for &'a ReverseProxyCallback {
                     body: None,
                 })?; // Take first value from list.
                 let str_value = str_value.trim();
-                trace!("Remote peer address (according to headers): {:?}", str_value);
+                trace!(
+                    "Remote peer address (according to headers): {:?}",
+                    str_value
+                );
                 let net_address = NetAddress::from_str(str_value).map_err(|_| ErrorResponse {
                     error_code: StatusCode::INTERNAL_SERVER_ERROR,
                     headers: None,

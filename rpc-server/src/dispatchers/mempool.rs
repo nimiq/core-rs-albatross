@@ -5,15 +5,9 @@ use parking_lot::RwLock;
 
 use nimiq_hash::Blake2bHash;
 use nimiq_mempool::Mempool;
-use nimiq_rpc_interface::{
-    mempool::MempoolInterface,
-};
+use nimiq_rpc_interface::mempool::MempoolInterface;
 
-use crate::{
-    wallets::UnlockedWallets,
-    error::Error,
-};
-
+use crate::{error::Error, wallets::UnlockedWallets};
 
 #[allow(dead_code)]
 pub struct MempoolDispatcher {
@@ -34,11 +28,9 @@ impl MempoolDispatcher {
             unlocked_wallets: None,
         }
     }
-
-
 }
 
-#[nimiq_jsonrpc_derive::service(rename_all="camelCase")]
+#[nimiq_jsonrpc_derive::service(rename_all = "camelCase")]
 #[async_trait]
 impl MempoolInterface for MempoolDispatcher {
     type Error = Error;

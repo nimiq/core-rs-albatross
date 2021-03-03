@@ -102,7 +102,9 @@ impl CommitmentPair {
         }
     }
 
-    fn generate_internal<R: Rng + CryptoRng>(rng: &mut R) -> Result<CommitmentPair, InvalidScalarError> {
+    fn generate_internal<R: Rng + CryptoRng>(
+        rng: &mut R,
+    ) -> Result<CommitmentPair, InvalidScalarError> {
         // Create random 32 bytes.
         let mut randomness: [u8; RandomSecret::SIZE] = [0u8; RandomSecret::SIZE];
         rng.fill(&mut randomness);
@@ -199,7 +201,10 @@ impl KeyPair {
         // Hash public keys.
         let public_keys_hash = hash_public_keys(public_keys);
         // And delinearize them.
-        let delinearized_pk_sum: EdwardsPoint = public_keys.iter().map(|public_key| public_key.delinearize(&public_keys_hash)).sum();
+        let delinearized_pk_sum: EdwardsPoint = public_keys
+            .iter()
+            .map(|public_key| public_key.delinearize(&public_keys_hash))
+            .sum();
         let delinearized_private_key: Scalar = self.delinearize_private_key(&public_keys_hash);
 
         // Aggregate commitments.
@@ -215,7 +220,11 @@ impl KeyPair {
         let partial_signature: Scalar = s * delinearized_private_key + secret.0;
         let mut public_key_bytes: [u8; PublicKey::SIZE] = [0u8; PublicKey::SIZE];
         public_key_bytes.copy_from_slice(delinearized_pk_sum.compress().as_bytes());
-        (PartialSignature(partial_signature), PublicKey::from(public_key_bytes), aggregated_commitment)
+        (
+            PartialSignature(partial_signature),
+            PublicKey::from(public_key_bytes),
+            aggregated_commitment,
+        )
     }
 
     fn delinearize_private_key(&self, public_keys_hash: &[u8; 64]) -> Scalar {

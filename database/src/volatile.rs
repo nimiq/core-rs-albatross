@@ -56,24 +56,49 @@ impl VolatileEnvironment {
         let path = temp_dir
             .path()
             .to_str()
-            .ok_or_else(|| VolatileDatabaseError::IoError(io::Error::new(io::ErrorKind::InvalidInput, "Path cannot be converted into a string.")))?
+            .ok_or_else(|| {
+                VolatileDatabaseError::IoError(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "Path cannot be converted into a string.",
+                ))
+            })?
             .to_string();
         Ok(Environment::Volatile(VolatileEnvironment {
             temp_dir: Arc::new(temp_dir),
-            env: LmdbEnvironment::new_lmdb_environment(&path, 0, max_dbs, open::NOSYNC | open::WRITEMAP).map_err(VolatileDatabaseError::LmdbError)?,
+            env: LmdbEnvironment::new_lmdb_environment(
+                &path,
+                0,
+                max_dbs,
+                open::NOSYNC | open::WRITEMAP,
+            )
+            .map_err(VolatileDatabaseError::LmdbError)?,
         }))
     }
 
-    pub fn new_with_lmdb_flags(max_dbs: u32, flags: open::Flags) -> Result<Environment, VolatileDatabaseError> {
+    pub fn new_with_lmdb_flags(
+        max_dbs: u32,
+        flags: open::Flags,
+    ) -> Result<Environment, VolatileDatabaseError> {
         let temp_dir = TempDir::new("volatile-core").map_err(VolatileDatabaseError::IoError)?;
         let path = temp_dir
             .path()
             .to_str()
-            .ok_or_else(|| VolatileDatabaseError::IoError(io::Error::new(io::ErrorKind::InvalidInput, "Path cannot be converted into a string.")))?
+            .ok_or_else(|| {
+                VolatileDatabaseError::IoError(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "Path cannot be converted into a string.",
+                ))
+            })?
             .to_string();
         Ok(Environment::Volatile(VolatileEnvironment {
             temp_dir: Arc::new(temp_dir),
-            env: LmdbEnvironment::new_lmdb_environment(&path, 0, max_dbs, flags | open::NOSYNC | open::WRITEMAP).map_err(VolatileDatabaseError::LmdbError)?,
+            env: LmdbEnvironment::new_lmdb_environment(
+                &path,
+                0,
+                max_dbs,
+                flags | open::NOSYNC | open::WRITEMAP,
+            )
+            .map_err(VolatileDatabaseError::LmdbError)?,
         }))
     }
 
@@ -172,7 +197,10 @@ impl<'env> VolatileWriteTransaction<'env> {
         VolatileCursor(self.0.cursor(db))
     }
 
-    pub(super) fn write_cursor<'txn, 'db>(&'txn self, db: &'db Database) -> VolatileWriteCursor<'txn, 'db> {
+    pub(super) fn write_cursor<'txn, 'db>(
+        &'txn self,
+        db: &'db Database,
+    ) -> VolatileWriteCursor<'txn, 'db> {
         VolatileWriteCursor(self.0.write_cursor(db))
     }
 }
@@ -546,7 +574,10 @@ mod tests {
     fn duplicates_test() {
         let env = VolatileEnvironment::new_with_lmdb_flags(1, open::NOTLS).unwrap();
         {
-            let db = env.open_database_with_flags("test".to_string(), DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_UINT_VALUES);
+            let db = env.open_database_with_flags(
+                "test".to_string(),
+                DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_UINT_VALUES,
+            );
 
             // Write one value.
             let mut txw = WriteTransaction::new(&env);
@@ -609,7 +640,10 @@ mod tests {
     fn cursor_test() {
         let env = VolatileEnvironment::new_with_lmdb_flags(1, open::NOTLS).unwrap();
         {
-            let db = env.open_database_with_flags("test".to_string(), DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_UINT_VALUES);
+            let db = env.open_database_with_flags(
+                "test".to_string(),
+                DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_UINT_VALUES,
+            );
 
             let test1: String = "test1".to_string();
             let test2: String = "test2".to_string();
@@ -630,9 +664,18 @@ mod tests {
             assert_eq!(cursor.last::<String, u32>(), Some((test2.clone(), 5783)));
             assert_eq!(cursor.prev::<String, u32>(), Some((test1.clone(), 5783)));
             assert_eq!(cursor.first_duplicate::<u32>(), Some(12));
-            assert_eq!(cursor.next_duplicate::<String, u32>(), Some((test1.clone(), 125)));
-            assert_eq!(cursor.prev_duplicate::<String, u32>(), Some((test1.clone(), 12)));
-            assert_eq!(cursor.next_no_duplicate::<String, u32>(), Some((test2.clone(), 5783)));
+            assert_eq!(
+                cursor.next_duplicate::<String, u32>(),
+                Some((test1.clone(), 125))
+            );
+            assert_eq!(
+                cursor.prev_duplicate::<String, u32>(),
+                Some((test1.clone(), 12))
+            );
+            assert_eq!(
+                cursor.next_no_duplicate::<String, u32>(),
+                Some((test2.clone(), 5783))
+            );
             assert!(cursor.seek_key::<str, u32>("test").is_none());
             assert_eq!(cursor.seek_key::<str, u32>("test1"), Some(12));
             assert_eq!(cursor.count_duplicates(), 3);
@@ -640,8 +683,14 @@ mod tests {
             //            assert_eq!(cursor.seek_key_both::<String, u32>(&test1), Some((test1.clone(), 12)));
             assert!(!cursor.seek_key_value::<str, u32>("test1", &15));
             assert!(cursor.seek_key_value::<str, u32>("test1", &125));
-            assert_eq!(cursor.get_current::<String, u32>(), Some((test1.clone(), 125)));
-            assert_eq!(cursor.seek_key_nearest_value::<str, u32>("test1", &126), Some(5783));
+            assert_eq!(
+                cursor.get_current::<String, u32>(),
+                Some((test1.clone(), 125))
+            );
+            assert_eq!(
+                cursor.seek_key_nearest_value::<str, u32>("test1", &126),
+                Some(5783)
+            );
             assert_eq!(cursor.get_current::<String, u32>(), Some((test1, 5783)));
             assert!(cursor.prev_no_duplicate::<String, u32>().is_none());
             assert_eq!(cursor.next::<String, u32>(), Some((test2, 5783)));

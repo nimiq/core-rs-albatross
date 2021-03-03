@@ -1,24 +1,29 @@
-use std::{collections::{VecDeque, HashMap}, sync::Arc};
+use std::{
+    collections::{HashMap, VecDeque},
+    sync::Arc,
+};
 
+use bytes::Bytes;
 use futures::{
-    channel::{oneshot, mpsc},
-    task::{Context, Poll, Waker},
+    channel::{mpsc, oneshot},
     future::FutureExt,
+    task::{Context, Poll, Waker},
 };
 use libp2p::{
-    swarm::{KeepAlive, NegotiatedSubstream, ProtocolsHandler, ProtocolsHandlerEvent, ProtocolsHandlerUpgrErr, SubstreamProtocol},
+    swarm::{
+        KeepAlive, NegotiatedSubstream, ProtocolsHandler, ProtocolsHandlerEvent,
+        ProtocolsHandlerUpgrErr, SubstreamProtocol,
+    },
     PeerId,
 };
 use thiserror::Error;
-use bytes::Bytes;
 
 use beserial::SerializingError;
-use nimiq_network_interface::{
-    peer::CloseReason,
-    message::MessageType,
-};
+use nimiq_network_interface::{message::MessageType, peer::CloseReason};
 
-use super::{behaviour::MessageConfig, dispatch::MessageDispatch, peer::Peer, protocol::MessageProtocol};
+use super::{
+    behaviour::MessageConfig, dispatch::MessageDispatch, peer::Peer, protocol::MessageProtocol,
+};
 
 #[derive(Clone, Debug)]
 pub enum HandlerInEvent {
@@ -31,8 +36,13 @@ pub enum HandlerInEvent {
 
 #[derive(Clone, Debug)]
 pub enum HandlerOutEvent {
-    PeerJoined { peer: Arc<Peer> },
-    PeerClosed { peer: Arc<Peer>, reason: CloseReason },
+    PeerJoined {
+        peer: Arc<Peer>,
+    },
+    PeerClosed {
+        peer: Arc<Peer>,
+        reason: CloseReason,
+    },
 }
 
 #[derive(Debug, Error)]
@@ -106,7 +116,11 @@ impl ProtocolsHandler for MessageHandler {
         SubstreamProtocol::new(MessageProtocol::default(), ())
     }
 
-    fn inject_fully_negotiated_inbound(&mut self, socket: MessageDispatch<NegotiatedSubstream>, _info: ()) {
+    fn inject_fully_negotiated_inbound(
+        &mut self,
+        socket: MessageDispatch<NegotiatedSubstream>,
+        _info: (),
+    ) {
         log::trace!("inject_fully_negotiated_inbound");
 
         if self.peer.is_none() && self.socket.is_none() {
@@ -117,7 +131,11 @@ impl ProtocolsHandler for MessageHandler {
         }
     }
 
-    fn inject_fully_negotiated_outbound(&mut self, socket: MessageDispatch<NegotiatedSubstream>, _info: ()) {
+    fn inject_fully_negotiated_outbound(
+        &mut self,
+        socket: MessageDispatch<NegotiatedSubstream>,
+        _info: (),
+    ) {
         log::trace!("inject_fully_negotiated_outbound");
 
         if self.peer.is_none() && self.socket.is_none() {
@@ -132,7 +150,11 @@ impl ProtocolsHandler for MessageHandler {
         log::trace!("inject_event: {:?}", event);
 
         match event {
-            HandlerInEvent::PeerConnected { peer_id, outbound, receive_from_all } => {
+            HandlerInEvent::PeerConnected {
+                peer_id,
+                outbound,
+                receive_from_all,
+            } => {
                 // Both peer_id and receive_from_all should not have been set yet.
                 assert!(self.peer_id.is_none());
                 assert!(self.receive_from_all.is_none());
@@ -144,16 +166,21 @@ impl ProtocolsHandler for MessageHandler {
                     // Next open the outbound, but only if our connection is outbound
                     log::debug!("Requesting outbound substream to: {:?}", self.peer_id);
 
-                    self.events.push_back(ProtocolsHandlerEvent::OutboundSubstreamRequest {
-                        protocol: SubstreamProtocol::new(MessageProtocol::default(), ()),
-                    });
+                    self.events
+                        .push_back(ProtocolsHandlerEvent::OutboundSubstreamRequest {
+                            protocol: SubstreamProtocol::new(MessageProtocol::default(), ()),
+                        });
                     self.wake();
                 }
-            } 
+            }
         }
     }
 
-    fn inject_dial_upgrade_error(&mut self, _info: Self::OutboundOpenInfo, error: ProtocolsHandlerUpgrErr<SerializingError>) {
+    fn inject_dial_upgrade_error(
+        &mut self,
+        _info: Self::OutboundOpenInfo,
+        error: ProtocolsHandlerUpgrErr<SerializingError>,
+    ) {
         log::error!("Dial upgrade error: {}", error);
     }
 
@@ -161,7 +188,10 @@ impl ProtocolsHandler for MessageHandler {
         KeepAlive::Yes
     }
 
-    fn poll(&mut self, cx: &mut Context) -> Poll<ProtocolsHandlerEvent<MessageProtocol, (), HandlerOutEvent, HandlerError>> {
+    fn poll(
+        &mut self,
+        cx: &mut Context,
+    ) -> Poll<ProtocolsHandlerEvent<MessageProtocol, (), HandlerOutEvent, HandlerError>> {
         #[allow(clippy::never_loop)]
         loop {
             // Emit event
@@ -197,12 +227,16 @@ impl ProtocolsHandler for MessageHandler {
                             self.closing = None;
                             self.peer = None;
 
-                            return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::ConnectionClosed { reason }));
-                        },
+                            return Poll::Ready(ProtocolsHandlerEvent::Close(
+                                HandlerError::ConnectionClosed { reason },
+                            ));
+                        }
                         Poll::Ready(Err(e)) => {
                             // Error while closing. Log the error and emit the close event.
                             log::error!("Error while closing socket: {}", e);
-                            return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::ConnectionClosed { reason }))
+                            return Poll::Ready(ProtocolsHandlerEvent::Close(
+                                HandlerError::ConnectionClosed { reason },
+                            ));
                         }
                         Poll::Pending => {
                             log::trace!("Socket closing pending");
@@ -217,19 +251,23 @@ impl ProtocolsHandler for MessageHandler {
                         // Socker error
                         log::error!("{}", e);
 
-                        return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::ConnectionClosed {
-                            reason: CloseReason::Error,
-                        }));
-                    },
+                        return Poll::Ready(ProtocolsHandlerEvent::Close(
+                            HandlerError::ConnectionClosed {
+                                reason: CloseReason::Error,
+                            },
+                        ));
+                    }
 
                     Poll::Ready(Ok(())) => {
                         // The message stream ended.
                         log::warn!("Remote closed connection");
 
-                        return Poll::Ready(ProtocolsHandlerEvent::Close(HandlerError::ConnectionClosed {
-                            reason: CloseReason::RemoteClosed,
-                        }));
-                    },
+                        return Poll::Ready(ProtocolsHandlerEvent::Close(
+                            HandlerError::ConnectionClosed {
+                                reason: CloseReason::RemoteClosed,
+                            },
+                        ));
+                    }
 
                     Poll::Pending => {}
                 }
@@ -252,10 +290,7 @@ impl ProtocolsHandler for MessageHandler {
             let (close_tx, close_rx) = oneshot::channel();
 
             // Register the global mesasge receivers with this message dispatch.
-            let receive_from_all = self
-                .receive_from_all
-                .take()
-                .expect("global receivers");
+            let receive_from_all = self.receive_from_all.take().expect("global receivers");
             socket.receive_multiple_raw(receive_from_all);
 
             let peer = Arc::new(Peer::new(peer_id, socket, close_tx));
@@ -266,7 +301,9 @@ impl ProtocolsHandler for MessageHandler {
             self.peer = Some(Arc::clone(&peer));
 
             // Send peer to behaviour
-            return Poll::Ready(ProtocolsHandlerEvent::Custom(HandlerOutEvent::PeerJoined { peer }));
+            return Poll::Ready(ProtocolsHandlerEvent::Custom(HandlerOutEvent::PeerJoined {
+                peer,
+            }));
         }
 
         // Remember the waker

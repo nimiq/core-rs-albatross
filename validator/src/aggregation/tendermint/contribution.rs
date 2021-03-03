@@ -15,10 +15,16 @@ pub struct TendermintContribution {
 }
 
 impl TendermintContribution {
-    pub(crate) fn from_vote(vote: TendermintVote, secret_key: &SecretKey, validator_slots: Vec<u16>) -> Self {
+    pub(crate) fn from_vote(
+        vote: TendermintVote,
+        secret_key: &SecretKey,
+        validator_slots: Vec<u16>,
+    ) -> Self {
         assert!(!validator_slots.is_empty());
         // sign the hash
-        let signature = AggregateSignature::from_signatures(&[secret_key.sign(&vote).multiply(validator_slots.len() as u16)]);
+        let signature = AggregateSignature::from_signatures(&[secret_key
+            .sign(&vote)
+            .multiply(validator_slots.len() as u16)]);
 
         // get the slots of the validator ad insert them into the bitset
         let mut signers = BitSet::new();

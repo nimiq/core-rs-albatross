@@ -17,7 +17,9 @@ impl UnlockedWallets {
 
     pub fn get(&self, address: &Address) -> Option<&WalletAccount> {
         log::info!("Accessing {:?}", address);
-        self.unlocked_wallets.get(address).map(|unlocked| Unlocked::unlocked_data(unlocked))
+        self.unlocked_wallets
+            .get(address)
+            .map(|unlocked| Unlocked::unlocked_data(unlocked))
     }
 
     pub fn remove(&mut self, address: &Address) -> Option<Unlocked<WalletAccount>> {

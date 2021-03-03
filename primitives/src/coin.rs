@@ -13,7 +13,11 @@ use thiserror::Error;
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Default)]
-#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize), serde(transparent))]
+#[cfg_attr(
+    feature = "serde-derive",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(transparent)
+)]
 pub struct Coin(u64);
 
 impl Coin {
@@ -159,7 +163,12 @@ impl fmt::Display for Coin {
         if frac_part == 0 {
             write!(f, "{}", self.0 / Coin::LUNAS_PER_COIN)
         } else {
-            write!(f, "{}.{:05}", self.0 / Coin::LUNAS_PER_COIN, self.0 % Coin::LUNAS_PER_COIN)
+            write!(
+                f,
+                "{}.{:05}",
+                self.0 / Coin::LUNAS_PER_COIN,
+                self.0 % Coin::LUNAS_PER_COIN
+            )
         }
     }
 }
@@ -220,7 +229,12 @@ impl FromStr for Coin {
 
         let captures = COIN_PARSE_REGEX.captures(s).ok_or_else(e)?;
 
-        let int_part = captures.name("int_part").ok_or_else(e)?.as_str().parse::<u64>().map_err(|_| e())?;
+        let int_part = captures
+            .name("int_part")
+            .ok_or_else(e)?
+            .as_str()
+            .parse::<u64>()
+            .map_err(|_| e())?;
 
         let frac_part = if let Some(frac_part_capture) = captures.name("frac_part") {
             let frac_part_str = frac_part_capture.as_str();

@@ -61,7 +61,9 @@ impl<T> MultiLock<T> {
 impl<T> Clone for MultiLock<T> {
     #[inline]
     fn clone(&self) -> Self {
-        MultiLock { inner: self.inner.clone() }
+        MultiLock {
+            inner: self.inner.clone(),
+        }
     }
 }
 
@@ -77,13 +79,20 @@ impl<T> Future for MultiLockAcquire<T> {
     type Error = ();
 
     fn poll(&mut self) -> Poll<MultiLockAcquired<T>, ()> {
-        match self.inner.as_ref().expect("cannot poll after Ready").poll_lock() {
+        match self
+            .inner
+            .as_ref()
+            .expect("cannot poll after Ready")
+            .poll_lock()
+        {
             Async::Ready(r) => {
                 mem::forget(r);
             }
             Async::NotReady => return Ok(Async::NotReady),
         }
-        Ok(Async::Ready(MultiLockAcquired { inner: self.inner.take() }))
+        Ok(Async::Ready(MultiLockAcquired {
+            inner: self.inner.take(),
+        }))
     }
 }
 

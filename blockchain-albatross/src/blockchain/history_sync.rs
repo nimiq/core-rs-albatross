@@ -25,7 +25,11 @@ impl Blockchain {
     /// Pushes a macro block (election or checkpoint) into the chain during history sync. You should
     /// NOT provide micro blocks as input. You can push election blocks after checkpoint blocks and
     /// vice-versa.
-    pub fn push_history_sync(&self, block: Block, ext_txs: &[ExtendedTransaction]) -> Result<PushResult, PushError> {
+    pub fn push_history_sync(
+        &self,
+        block: Block,
+        ext_txs: &[ExtendedTransaction],
+    ) -> Result<PushResult, PushError> {
         // Only one push operation at a time.
         let push_lock = self.push_lock.lock();
 
@@ -41,14 +45,24 @@ impl Blockchain {
         };
 
         // Check if we already know this block.
-        if self.chain_store.get_chain_info(&macro_block.hash(), false, Some(&read_txn)).is_some() {
+        if self
+            .chain_store
+            .get_chain_info(&macro_block.hash(), false, Some(&read_txn))
+            .is_some()
+        {
             return Ok(PushResult::Known);
         }
 
         // Get the chain info at the head of the current chain.
-        let head = self.chain_store.get_head(Some(&read_txn)).ok_or(PushError::Orphan)?;
+        let head = self
+            .chain_store
+            .get_head(Some(&read_txn))
+            .ok_or(PushError::Orphan)?;
 
-        let prev_info = self.chain_store.get_chain_info(&head, false, Some(&read_txn)).ok_or(PushError::Orphan)?;
+        let prev_info = self
+            .chain_store
+            .get_chain_info(&head, false, Some(&read_txn))
+            .ok_or(PushError::Orphan)?;
 
         // Check that the head is a macro block. This has to be the case since we never push micro
         // blocks while we are syncing.
@@ -65,7 +79,8 @@ impl Blockchain {
         } else {
             // We need to check that this block and our head block have the same parent election
             // block and are in the correct order.
-            if &macro_block.header.parent_election_hash != prev_info.head.parent_election_hash().unwrap()
+            if &macro_block.header.parent_election_hash
+                != prev_info.head.parent_election_hash().unwrap()
                 || macro_block.header.block_number <= prev_info.head.block_number()
             {
                 return Err(PushError::Orphan);
@@ -73,7 +88,10 @@ impl Blockchain {
         }
 
         // Checks if the body exists.
-        let body = macro_block.body.as_ref().ok_or(PushError::InvalidBlock(BlockError::MissingBody))?;
+        let body = macro_block
+            .body
+            .as_ref()
+            .ok_or(PushError::InvalidBlock(BlockError::MissingBody))?;
 
         // Check the body root.
         if body.hash::<Blake2bHash>() != macro_block.header.body_root {
@@ -82,7 +100,8 @@ impl Blockchain {
         }
 
         // Check the history root.
-        let history_root = HistoryStore::root_from_ext_txs(ext_txs).ok_or(PushError::InvalidBlock(BlockError::InvalidHistoryRoot))?;
+        let history_root = HistoryStore::root_from_ext_txs(ext_txs)
+            .ok_or(PushError::InvalidBlock(BlockError::InvalidHistoryRoot))?;
 
         if body.history_root != history_root {
             warn!("Rejecting block - wrong history root");
@@ -90,13 +109,20 @@ impl Blockchain {
         }
 
         // Checks if the justification exists.
-        let justification = macro_block.justification.as_ref().ok_or(PushError::InvalidBlock(BlockError::NoJustification))?;
+        let justification = macro_block
+            .justification
+            .as_ref()
+            .ok_or(PushError::InvalidBlock(BlockError::NoJustification))?;
 
         // Check the justification.
         // Note that the hash provided here is the Blake2s hash of the header. It needs to be the
         // Blake2s function since that's what the validator's signatures on the block use (because
         // the nano-sync crate only verifies Blake2s, not Blake2b).
-        if !justification.verify(macro_block.hash(), macro_block.header.block_number, &self.current_validators()) {
+        if !justification.verify(
+            macro_block.hash(),
+            macro_block.header.block_number,
+            &self.current_validators(),
+        ) {
             warn!("Rejecting block - macro block with bad justification");
             return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
         }
@@ -143,12 +169,14 @@ impl Blockchain {
             cum_tx_fees,
         };
 
-        self.chain_store.put_chain_info(&mut txn, &block_hash, &chain_info, true);
+        self.chain_store
+            .put_chain_info(&mut txn, &block_hash, &chain_info, true);
 
         // Update the chain info for the previous block and store it.
         prev_info.main_chain_successor = Some(chain_info.head.hash());
 
-        self.chain_store.put_chain_info(&mut txn, &prev_info.head.hash(), &prev_info, false);
+        self.chain_store
+            .put_chain_info(&mut txn, &prev_info.head.hash(), &prev_info, false);
 
         // Set the head of the chain store to the current block.
         self.chain_store.set_head(&mut txn, &block_hash);
@@ -196,9 +224,13 @@ impl Blockchain {
         // Update the accounts tree, one block at a time.
         for i in 0..block_numbers.len() {
             // Commit block to AccountsTree and create the receipts.
-            let receipts = state
-                .accounts
-                .commit(&mut txn, &block_transactions[i], &block_inherents[i], block_numbers[i], block_timestamps[i]);
+            let receipts = state.accounts.commit(
+                &mut txn,
+                &block_transactions[i],
+                &block_inherents[i],
+                block_numbers[i],
+                block_timestamps[i],
+            );
 
             // Check if the receipts contain an error.
             if let Err(e) = receipts {
@@ -215,8 +247,11 @@ impl Blockchain {
         self.chain_store.clear_receipts(&mut txn);
 
         // Store the new extended transactions into the History tree.
-        self.history_store
-            .add_to_history(&mut txn, policy::epoch_at(block.block_number()), &ext_txs[first_new_ext_tx..]);
+        self.history_store.add_to_history(
+            &mut txn,
+            policy::epoch_at(block.block_number()),
+            &ext_txs[first_new_ext_tx..],
+        );
 
         // Unwrap the block.
         let macro_block = block.unwrap_macro_ref();
@@ -246,9 +281,13 @@ impl Blockchain {
         drop(push_lock);
 
         if is_election_block {
-            self.notifier.read().notify(BlockchainEvent::EpochFinalized(block_hash));
+            self.notifier
+                .read()
+                .notify(BlockchainEvent::EpochFinalized(block_hash));
         } else {
-            self.notifier.read().notify(BlockchainEvent::Finalized(block_hash));
+            self.notifier
+                .read()
+                .notify(BlockchainEvent::Finalized(block_hash));
         }
 
         // Return result.

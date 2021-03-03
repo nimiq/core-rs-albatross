@@ -82,7 +82,10 @@ impl<H: HashOutput> IncrementalMerkleProofBuilder<H> {
             let hash;
             // If the current position is uneven, we can hash two elements together.
             if current_pos % 2 == 1 {
-                hash = H::Builder::default().chain(&level[current_pos - 1]).chain(&level[current_pos]).finish();
+                hash = H::Builder::default()
+                    .chain(&level[current_pos - 1])
+                    .chain(&level[current_pos])
+                    .finish();
             } else {
                 // Otherwise, we only have one element.
                 hash = level[current_pos].clone();
@@ -139,7 +142,9 @@ impl<H: HashOutput> IncrementalMerkleProofBuilder<H> {
             // We only need to add it to the proof, if our current index is
             // at an even position (left side of two hashes).
             if current_pos % 2 == 0 {
-                proof.nodes.push(self.tree[current_level][current_pos + 1].clone());
+                proof
+                    .nodes
+                    .push(self.tree[current_level][current_pos + 1].clone());
             }
 
             // Progress one level up.
@@ -207,7 +212,10 @@ where
         chunk_values: &[T],
         previous_result: Option<&IncrementalMerkleProofResult<H>>,
     ) -> Result<IncrementalMerkleProofResult<H>, IncrementalMerkleProofError> {
-        let hashes: Vec<H> = chunk_values.iter().map(|v| H::Builder::default().chain(v).finish()).collect();
+        let hashes: Vec<H> = chunk_values
+            .iter()
+            .map(|v| H::Builder::default().chain(v).finish())
+            .collect();
         self.compute_root(&hashes, previous_result)
     }
 
@@ -218,7 +226,9 @@ where
     ) -> Result<IncrementalMerkleProofResult<H>, IncrementalMerkleProofError> {
         let index_offset = previous_result.map(|r| r.next_index).unwrap_or(0);
         let empty_vec = Vec::new();
-        let helper_nodes = previous_result.map(|r| &r.helper_nodes).unwrap_or(&empty_vec);
+        let helper_nodes = previous_result
+            .map(|r| &r.helper_nodes)
+            .unwrap_or(&empty_vec);
 
         // The index of the helper node we use next.
         let mut helper_index = 0;
@@ -262,7 +272,9 @@ where
                 //    we haven't reached the end yet. Then, we need to take a proof node.
                 let left_hash = if current_position < level_leftmost {
                     helper_index += 1;
-                    helper_nodes.get(helper_index - 1).ok_or(IncrementalMerkleProofError::InvalidPreviousProof)?
+                    helper_nodes
+                        .get(helper_index - 1)
+                        .ok_or(IncrementalMerkleProofError::InvalidPreviousProof)?
                 } else {
                     current_level
                         .get(current_position - level_leftmost)
@@ -288,24 +300,33 @@ where
                     proof_index += 1;
                     // Remember we used a proof node.
                     current_proof_nodes.insert(current_position + 1 - level_offset);
-                    self.nodes.get(proof_index - 1).ok_or(IncrementalMerkleProofError::InvalidProof)?
+                    self.nodes
+                        .get(proof_index - 1)
+                        .ok_or(IncrementalMerkleProofError::InvalidProof)?
                 } else {
                     current_level
                         .get(current_position + 1 - level_leftmost)
                         .ok_or(IncrementalMerkleProofError::InvalidChunkSize)?
                 };
 
-                let next_hash = H::Builder::default().chain(left_hash).chain(right_hash).finish();
+                let next_hash = H::Builder::default()
+                    .chain(left_hash)
+                    .chain(right_hash)
+                    .finish();
 
                 // If the left hash doesn't depend on any proof node, but the right hash does,
                 // we need to append the left hash to the helper nodes.
-                if !current_proof_nodes.contains(current_position - level_offset) && current_proof_nodes.contains(current_position + 1 - level_offset) {
+                if !current_proof_nodes.contains(current_position - level_offset)
+                    && current_proof_nodes.contains(current_position + 1 - level_offset)
+                {
                     helper_output.push(left_hash.clone());
                 }
 
                 // TODO: Check index offsets.
                 // Propagate dependence on proof nodes to the next layer.
-                if current_proof_nodes.contains(current_position - level_offset) || current_proof_nodes.contains(current_position + 1 - level_offset) {
+                if current_proof_nodes.contains(current_position - level_offset)
+                    || current_proof_nodes.contains(current_position + 1 - level_offset)
+                {
                     // We get the offset by dividing by 2.
                     // However, if we are currently in the right side of a branch on the next level,
                     // we want the offset to reflect that.
@@ -337,7 +358,9 @@ where
             return Err(IncrementalMerkleProofError::InvalidProof);
         }
 
-        let root = current_level_owned.pop().ok_or(IncrementalMerkleProofError::InvalidProof)?;
+        let root = current_level_owned
+            .pop()
+            .ok_or(IncrementalMerkleProofError::InvalidProof)?;
         // Check that there was only the root left.
         if !current_level_owned.is_empty() {
             return Err(IncrementalMerkleProofError::InvalidProof);

@@ -38,7 +38,9 @@ impl ExtendedPrivateKey {
         }
 
         // Overflow check.
-        path.split('/').skip(1).all(|segment| segment.trim_end_matches('\'').parse::<u32>().is_ok())
+        path.split('/')
+            .skip(1)
+            .all(|segment| segment.trim_end_matches('\'').parse::<u32>().is_ok())
     }
 
     /// Returns the derived extended private key at a given index.
@@ -65,7 +67,9 @@ impl ExtendedPrivateKey {
 
         let mut derived_key: Cow<ExtendedPrivateKey> = Cow::Borrowed(self);
         for segment in path.split('/').skip(1) {
-            derived_key = Cow::Owned(derived_key.derive(segment.trim_end_matches('\'').parse::<u32>().unwrap())?);
+            derived_key = Cow::Owned(
+                derived_key.derive(segment.trim_end_matches('\'').parse::<u32>().unwrap())?,
+            );
         }
 
         Some(derived_key.into_owned())

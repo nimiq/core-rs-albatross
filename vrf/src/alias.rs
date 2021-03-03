@@ -11,7 +11,16 @@ use crate::rng::Rng;
 
 pub struct AliasMethod<P>
 where
-    P: Copy + Debug + Unsigned + Add<P> + Sub<P> + Mul<P> + FromPrimitive + ToPrimitive + PartialOrd<P> + Ord,
+    P: Copy
+        + Debug
+        + Unsigned
+        + Add<P>
+        + Sub<P>
+        + Mul<P>
+        + FromPrimitive
+        + ToPrimitive
+        + PartialOrd<P>
+        + Ord,
 {
     /// The total probability - since we work with integers, this is not 1.0, but corresponds to
     /// a the probability 1.0
@@ -29,7 +38,16 @@ where
 
 impl<P> AliasMethod<P>
 where
-    P: Copy + Debug + Unsigned + Add<P> + Sub<P> + Mul<P> + FromPrimitive + ToPrimitive + PartialOrd<P> + Ord,
+    P: Copy
+        + Debug
+        + Unsigned
+        + Add<P>
+        + Sub<P>
+        + Mul<P>
+        + FromPrimitive
+        + ToPrimitive
+        + PartialOrd<P>
+        + Ord,
 {
     pub fn new<V: AsRef<[P]>>(p: V) -> Self {
         // The algorithm was roughly taken from

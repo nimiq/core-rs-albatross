@@ -3,7 +3,7 @@ use std::{pin::Pin, sync::Arc};
 use async_trait::async_trait;
 use futures::{
     future, ready, stream,
-    stream::{FusedStream, SelectAll, BoxStream},
+    stream::{BoxStream, FusedStream, SelectAll},
     task::{Context, Poll},
     Stream, StreamExt, TryFutureExt,
 };
@@ -33,7 +33,9 @@ impl<P: Peer> std::fmt::Debug for NetworkEvent<P> {
             NetworkEvent::PeerLeft(peer) => ("PeerLeft", peer),
         };
 
-        f.debug_struct(event_name).field("peer_id", &peer.id()).finish()
+        f.debug_struct(event_name)
+            .field("peer_id", &peer.id())
+            .finish()
     }
 }
 
@@ -57,7 +59,12 @@ pub trait Network: Send + Sync + 'static {
     type Error: std::error::Error;
     type PubsubId: PubsubId<<Self::PeerType as Peer>::Id>;
 
-    fn get_peer_updates(&self) -> (Vec<Arc<Self::PeerType>>, broadcast::Receiver<NetworkEvent<Self::PeerType>>);
+    fn get_peer_updates(
+        &self,
+    ) -> (
+        Vec<Arc<Self::PeerType>>,
+        broadcast::Receiver<NetworkEvent<Self::PeerType>>,
+    );
 
     fn get_peers(&self) -> Vec<Arc<Self::PeerType>>;
     fn get_peer(&self, peer_id: <Self::PeerType as Peer>::Id) -> Option<Arc<Self::PeerType>>;
@@ -67,7 +74,8 @@ pub trait Network: Send + Sync + 'static {
     async fn broadcast<T: Message>(&self, msg: &T) {
         future::join_all(self.get_peers().iter().map(|peer| {
             // TODO: Close reason
-            peer.send_or_close(msg, |_| CloseReason::Other).unwrap_or_else(|_| ())
+            peer.send_or_close(msg, |_| CloseReason::Other)
+                .unwrap_or_else(|_| ())
         }))
         .await;
     }
@@ -78,7 +86,10 @@ pub trait Network: Send + Sync + 'static {
     }
 
     // TODO: Use `BoxStream`
-    async fn subscribe<T>(&self, topic: &T) -> Result<Pin<Box<dyn Stream<Item = (T::Item, Self::PubsubId)> + Send>>, Self::Error>
+    async fn subscribe<T>(
+        &self,
+        topic: &T,
+    ) -> Result<Pin<Box<dyn Stream<Item = (T::Item, Self::PubsubId)> + Send>>, Self::Error>
     where
         T: Topic + Sync;
 
@@ -110,7 +121,8 @@ pub trait Network: Send + Sync + 'static {
 /// A wrapper around `SelectAll` that automatically subscribes to new peers.
 pub struct ReceiveFromAll<T: Message, P> {
     inner: SelectAll<Pin<Box<dyn Stream<Item = (T, Arc<P>)> + Send>>>,
-    event_stream: Pin<Box<dyn FusedStream<Item = Result<NetworkEvent<P>, broadcast::RecvError>> + Send>>,
+    event_stream:
+        Pin<Box<dyn FusedStream<Item = Result<NetworkEvent<P>, broadcast::RecvError>> + Send>>,
 }
 
 impl<T: Message, P: Peer + 'static> ReceiveFromAll<T, P> {
@@ -121,7 +133,9 @@ impl<T: Message, P: Peer + 'static> ReceiveFromAll<T, P> {
         ReceiveFromAll {
             inner: stream::select_all(peers.into_iter().map(|peer| {
                 let peer_inner = Arc::clone(&peer);
-                peer.receive::<T>().map(move |item| (item, Arc::clone(&peer_inner))).boxed()
+                peer.receive::<T>()
+                    .map(move |item| (item, Arc::clone(&peer_inner)))
+                    .boxed()
             })),
             event_stream: Box::pin(updates.into_stream().fuse()),
         }
@@ -139,7 +153,11 @@ impl<T: Message, P: Peer + 'static> Stream for ReceiveFromAll<T, P> {
                     log::trace!("peers joined {:?}", peer.id());
                     // We have a new peer to receive from.
                     let peer_inner = Arc::clone(&peer);
-                    self.inner.push(peer.receive::<T>().map(move |item| (item, Arc::clone(&peer_inner))).boxed())
+                    self.inner.push(
+                        peer.receive::<T>()
+                            .map(move |item| (item, Arc::clone(&peer_inner)))
+                            .boxed(),
+                    )
                 }
                 #[allow(unreachable_patterns)]
                 Poll::Ready(Some(Ok(_))) => {} // Ignore others.

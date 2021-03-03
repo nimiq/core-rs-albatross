@@ -41,11 +41,27 @@ impl Inherent {
 }
 
 pub trait AccountInherentInteraction: Sized {
-    fn check_inherent(&self, inherent: &Inherent, block_height: u32, time: u64) -> Result<(), AccountError>;
+    fn check_inherent(
+        &self,
+        inherent: &Inherent,
+        block_height: u32,
+        time: u64,
+    ) -> Result<(), AccountError>;
 
-    fn commit_inherent(&mut self, inherent: &Inherent, block_height: u32, time: u64) -> Result<Option<Vec<u8>>, AccountError>;
+    fn commit_inherent(
+        &mut self,
+        inherent: &Inherent,
+        block_height: u32,
+        time: u64,
+    ) -> Result<Option<Vec<u8>>, AccountError>;
 
-    fn revert_inherent(&mut self, inherent: &Inherent, block_height: u32, time: u64, receipt: Option<&Vec<u8>>) -> Result<(), AccountError>;
+    fn revert_inherent(
+        &mut self,
+        inherent: &Inherent,
+        block_height: u32,
+        time: u64,
+        receipt: Option<&Vec<u8>>,
+    ) -> Result<(), AccountError>;
 }
 
 impl Serialize for Inherent {
@@ -84,6 +100,11 @@ impl Deserialize for Inherent {
         for _i in 0..length {
             data.push(Deserialize::deserialize(reader)?);
         }
-        Ok(Inherent { ty, target, value, data })
+        Ok(Inherent {
+            ty,
+            target,
+            value,
+            data,
+        })
     }
 }

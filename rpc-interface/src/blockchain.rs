@@ -1,15 +1,16 @@
 use async_trait::async_trait;
 
+use futures::stream::BoxStream;
+use nimiq_account::Account;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
-use nimiq_account::Account;
-use futures::stream::BoxStream;
 
-use crate::{
-    types::{Block, OrLatest, SlashedSlots, Slot, Stakes},
-};
+use crate::types::{Block, OrLatest, SlashedSlots, Slot, Stakes};
 
-#[cfg_attr(feature = "proxy", nimiq_jsonrpc_derive::proxy(name = "BlockchainProxy", rename_all = "camelCase"))]
+#[cfg_attr(
+    feature = "proxy",
+    nimiq_jsonrpc_derive::proxy(name = "BlockchainProxy", rename_all = "camelCase")
+)]
 #[async_trait]
 pub trait BlockchainInterface {
     type Error;
@@ -20,11 +21,23 @@ pub trait BlockchainInterface {
 
     async fn batch_number(&mut self) -> Result<u32, Self::Error>;
 
-    async fn block_by_hash(&mut self, hash: Blake2bHash, include_transactions: bool) -> Result<Block, Self::Error>;
+    async fn block_by_hash(
+        &mut self,
+        hash: Blake2bHash,
+        include_transactions: bool,
+    ) -> Result<Block, Self::Error>;
 
-    async fn block_by_number(&mut self, block_number: OrLatest<u32>, include_transactions: bool) -> Result<Block, Self::Error>;
+    async fn block_by_number(
+        &mut self,
+        block_number: OrLatest<u32>,
+        include_transactions: bool,
+    ) -> Result<Block, Self::Error>;
 
-    async fn get_slot_at(&mut self, block_number: u32, view_number: Option<u32>) -> Result<Slot, Self::Error>;
+    async fn get_slot_at(
+        &mut self,
+        block_number: u32,
+        view_number: Option<u32>,
+    ) -> Result<Slot, Self::Error>;
 
     // TODO: Previously called `slot_state`. Where is this used?
     async fn slashed_slots(&mut self) -> Result<SlashedSlots, Self::Error>;

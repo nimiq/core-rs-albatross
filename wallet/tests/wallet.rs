@@ -29,7 +29,8 @@ lazy_static! {
 fn test_create_transaction() {
     let wallet = WALLET.clone();
     let transaction = wallet.create_transaction(
-        Address::from_user_friendly_address("NQ16 C3HR 85U8 P7MK F52R E9RG SA3Y Q69C X563").unwrap(),
+        Address::from_user_friendly_address("NQ16 C3HR 85U8 P7MK F52R E9RG SA3Y Q69C X563")
+            .unwrap(),
         Coin::from_u64_unchecked(42),
         Coin::ZERO,
         0,

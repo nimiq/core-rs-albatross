@@ -1,15 +1,15 @@
 use std::char;
 use std::convert::From;
+use std::fmt::{self, Debug, Display, Formatter};
 use std::io;
 use std::iter::Iterator;
 use std::str::FromStr;
-use std::fmt::{Display, Debug, Formatter, self};
 
-use thiserror::Error;
 use hex::FromHex;
+use thiserror::Error;
 
 use hash::{hash_typed_array, Blake2bHash, Blake2bHasher, Hasher};
-use macros::{create_typed_array};
+use macros::create_typed_array;
 
 use crate::key_pair::KeyPair;
 use crate::PublicKey;
@@ -62,7 +62,9 @@ impl Address {
         spec.symbols.push_str(Address::NIMIQ_ALPHABET);
         let encoding = spec.encoding().unwrap();
 
-        let b_vec = encoding.decode(friendly_addr_wospace[4..].as_bytes()).unwrap();
+        let b_vec = encoding
+            .decode(friendly_addr_wospace[4..].as_bytes())
+            .unwrap();
         let mut b = [0; 20];
         b.copy_from_slice(&b_vec[..b_vec.len()]);
         Ok(Address(b))
@@ -74,12 +76,23 @@ impl Address {
         let encoding = spec.encoding().unwrap();
 
         let base32 = encoding.encode(&self.0);
-        let check_string = "00".to_string() + &(98 - Address::iban_check(&(base32.clone() + Address::CCODE + "00"))).to_string();
-        let check = check_string.chars().skip(check_string.len() - 2).take(2).collect::<String>();
+        let check_string = "00".to_string()
+            + &(98 - Address::iban_check(&(base32.clone() + Address::CCODE + "00"))).to_string();
+        let check = check_string
+            .chars()
+            .skip(check_string.len() - 2)
+            .take(2)
+            .collect::<String>();
         let friendly_addr = Address::CCODE.to_string() + &check + &base32;
         let mut friendly_spaces = String::with_capacity(36 + 8);
         for i in 0..9 {
-            friendly_spaces.push_str(&friendly_addr.chars().skip(4 * i).take(4).collect::<String>());
+            friendly_spaces.push_str(
+                &friendly_addr
+                    .chars()
+                    .skip(4 * i)
+                    .take(4)
+                    .collect::<String>(),
+            );
             if i != 8 {
                 friendly_spaces.push(' ');
             }
@@ -130,8 +143,7 @@ impl Address {
         let vec = Vec::from_hex(s).map_err(|_| AddressParseError::InvalidHash)?;
         if vec.len() == Self::SIZE {
             Ok(Self::from(&vec[..]))
-        }
-        else {
+        } else {
             Err(AddressParseError::WrongLength)
         }
     }
@@ -173,9 +185,7 @@ impl Display for Address {
 
 impl Debug for Address {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("Address")
-            .field(&self.to_hex())
-            .finish()
+        f.debug_tuple("Address").field(&self.to_hex()).finish()
     }
 }
 

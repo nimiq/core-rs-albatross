@@ -66,7 +66,10 @@ impl Peer for MockPeer {
         let mut data = vec![];
         msg.serialize_message(&mut data).unwrap();
 
-        sender.send(data).await.map_err(|_| SendError::AlreadyClosed)?;
+        sender
+            .send(data)
+            .await
+            .map_err(|_| SendError::AlreadyClosed)?;
 
         Ok(())
     }
@@ -74,7 +77,12 @@ impl Peer for MockPeer {
     fn receive<T: Message>(&self) -> Pin<Box<dyn Stream<Item = T> + Send>> {
         let mut hub = self.hub.lock();
 
-        log::debug!("Peer {} listening on msg_type={} from peer {}", self.network_address, T::TYPE_ID, self.peer_id);
+        log::debug!(
+            "Peer {} listening on msg_type={} from peer {}",
+            self.network_address,
+            T::TYPE_ID,
+            self.peer_id
+        );
 
         let (tx, rx) = mpsc::channel(16);
 
@@ -107,10 +115,14 @@ impl Peer for MockPeer {
         let mut hub = self.hub.lock();
 
         // Drops senders and thus the receiver stream will end
-        hub.network_senders.retain(|k, _sender| k.network_recipient != self.network_address);
+        hub.network_senders
+            .retain(|k, _sender| k.network_recipient != self.network_address);
     }
 
-    async fn request<R: RequestResponse>(&self, _request: &<R as RequestResponse>::Request) -> Result<R::Response, Self::Error> {
+    async fn request<R: RequestResponse>(
+        &self,
+        _request: &<R as RequestResponse>::Request,
+    ) -> Result<R::Response, Self::Error> {
         unimplemented!("In the mean-time you can use `nimiq_network_interface::request_response`");
     }
 

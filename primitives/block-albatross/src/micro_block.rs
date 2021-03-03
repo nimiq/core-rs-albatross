@@ -108,7 +108,11 @@ impl Hash for MicroHeader {}
 
 impl fmt::Display for MicroHeader {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "[#{} view {}, type Micro]", self.block_number, self.view_number)
+        write!(
+            f,
+            "[#{} view {}, type Micro]",
+            self.block_number, self.view_number
+        )
     }
 }
 

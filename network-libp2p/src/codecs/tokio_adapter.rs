@@ -3,16 +3,16 @@
 use std::{
     io::Error,
     pin::Pin,
-    task::{Poll, Context},
+    task::{Context, Poll},
 };
 
 use futures::io::{AsyncRead, AsyncWrite};
-use tokio::io::{AsyncRead as TokioAsyncRead, AsyncWrite as TokioAsyncWrite};
 use pin_project::pin_project;
+use tokio::io::{AsyncRead as TokioAsyncRead, AsyncWrite as TokioAsyncWrite};
 
 /// An adapter that takes something that is `AsyncRead`/`AsyncWrite` and implements the Tokio
 /// counterparts for it.
-/// 
+///
 #[pin_project]
 #[derive(Debug)]
 pub struct TokioAdapter<T> {
@@ -31,13 +31,21 @@ impl<T> TokioAdapter<T> {
 }
 
 impl<T: AsyncRead> AsyncRead for TokioAdapter<T> {
-    fn poll_read(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<Result<usize, Error>> {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut [u8],
+    ) -> Poll<Result<usize, Error>> {
         AsyncRead::poll_read(self.project().inner, cx, buf)
     }
 }
 
 impl<T: AsyncWrite> AsyncWrite for TokioAdapter<T> {
-    fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize, Error>> {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<Result<usize, Error>> {
         AsyncWrite::poll_write(self.project().inner, cx, buf)
     }
 
@@ -51,7 +59,7 @@ impl<T: AsyncWrite> AsyncWrite for TokioAdapter<T> {
 }
 
 impl<T: AsyncRead> TokioAsyncRead for TokioAdapter<T> {
-    /*    
+    /*
 
     Note: I accidentally implemented this adapter for Tokio 1.1. Since we will eventually upgrade
           to this, I'll leave this here :)
@@ -70,13 +78,21 @@ impl<T: AsyncRead> TokioAsyncRead for TokioAdapter<T> {
     }
     */
 
-    fn poll_read(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<Result<usize, Error>> {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut [u8],
+    ) -> Poll<Result<usize, Error>> {
         AsyncRead::poll_read(self, cx, buf)
     }
 }
 
 impl<T: AsyncWrite> TokioAsyncWrite for TokioAdapter<T> {
-    fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize, Error>> {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<Result<usize, Error>> {
         AsyncWrite::poll_write(self, cx, buf)
     }
 

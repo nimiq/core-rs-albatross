@@ -27,7 +27,13 @@ pub struct Peer {
 }
 
 impl Peer {
-    pub fn new(channel: Arc<PeerChannel>, version: u32, head_hash: Blake2bHash, time_offset: i64, user_agent: Option<String>) -> Self {
+    pub fn new(
+        channel: Arc<PeerChannel>,
+        version: u32,
+        head_hash: Blake2bHash,
+        time_offset: i64,
+        user_agent: Option<String>,
+    ) -> Self {
         Peer {
             channel,
             version,
@@ -73,11 +79,17 @@ impl PeerInterface for Peer {
     type Error = NetworkError;
 
     fn id(&self) -> Self::Id {
-        self.channel.address_info.peer_address().expect("PeerAddress not set")
+        self.channel
+            .address_info
+            .peer_address()
+            .expect("PeerAddress not set")
     }
 
     async fn send<T: Message>(&self, msg: &T) -> Result<(), SendError> {
-        self.channel.peer_sink.send(msg).map_err(|_| SendError::AlreadyClosed)
+        self.channel
+            .peer_sink
+            .send(msg)
+            .map_err(|_| SendError::AlreadyClosed)
     }
 
     fn receive<T: Message + 'static>(&self) -> Pin<Box<dyn Stream<Item = T> + Send>> {
@@ -88,7 +100,10 @@ impl PeerInterface for Peer {
         self.channel.close(CloseType::Unknown);
     }
 
-    async fn request<R: RequestResponse>(&self, _request: &<R as RequestResponse>::Request) -> Result<R::Response, Self::Error> {
+    async fn request<R: RequestResponse>(
+        &self,
+        _request: &<R as RequestResponse>::Request,
+    ) -> Result<R::Response, Self::Error> {
         unimplemented!()
     }
 

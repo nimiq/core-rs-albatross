@@ -113,7 +113,10 @@ impl Into<CloseCode> for CloseType {
 impl From<CloseCode> for CloseType {
     fn from(code: CloseCode) -> Self {
         match code {
-            CloseCode::Library(code) => Deserialize::deserialize_from_vec(&(code - 4000).to_be_bytes().to_vec()).unwrap_or(CloseType::Unknown),
+            CloseCode::Library(code) => {
+                Deserialize::deserialize_from_vec(&(code - 4000).to_be_bytes().to_vec())
+                    .unwrap_or(CloseType::Unknown)
+            }
             _ => CloseType::Unknown,
         }
     }

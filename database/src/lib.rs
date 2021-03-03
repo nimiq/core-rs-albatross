@@ -41,15 +41,21 @@ pub enum Environment {
 impl Environment {
     pub fn open_database(&self, name: String) -> Database {
         match *self {
-            Environment::Volatile(ref env) => Database::Volatile(env.open_database(name, Default::default())),
-            Environment::Persistent(ref env) => Database::Persistent(env.open_database(name, Default::default())),
+            Environment::Volatile(ref env) => {
+                Database::Volatile(env.open_database(name, Default::default()))
+            }
+            Environment::Persistent(ref env) => {
+                Database::Persistent(env.open_database(name, Default::default()))
+            }
         }
     }
 
     pub fn open_database_with_flags(&self, name: String, flags: DatabaseFlags) -> Database {
         match *self {
             Environment::Volatile(ref env) => Database::Volatile(env.open_database(name, flags)),
-            Environment::Persistent(ref env) => Database::Persistent(env.open_database(name, flags)),
+            Environment::Persistent(ref env) => {
+                Database::Persistent(env.open_database(name, flags))
+            }
         }
     }
 
@@ -123,8 +129,12 @@ pub struct ReadTransaction<'env>(Transaction<'env>);
 impl<'env> ReadTransaction<'env> {
     pub fn new(env: &'env Environment) -> Self {
         match *env {
-            Environment::Volatile(ref env) => ReadTransaction(Transaction::VolatileRead(volatile::VolatileReadTransaction::new(env))),
-            Environment::Persistent(ref env) => ReadTransaction(Transaction::PersistentRead(lmdb::LmdbReadTransaction::new(env))),
+            Environment::Volatile(ref env) => ReadTransaction(Transaction::VolatileRead(
+                volatile::VolatileReadTransaction::new(env),
+            )),
+            Environment::Persistent(ref env) => ReadTransaction(Transaction::PersistentRead(
+                lmdb::LmdbReadTransaction::new(env),
+            )),
         }
     }
 
@@ -157,8 +167,12 @@ pub struct WriteTransaction<'env>(Transaction<'env>);
 impl<'env> WriteTransaction<'env> {
     pub fn new(env: &'env Environment) -> Self {
         match *env {
-            Environment::Volatile(ref env) => WriteTransaction(Transaction::VolatileWrite(volatile::VolatileWriteTransaction::new(env))),
-            Environment::Persistent(ref env) => WriteTransaction(Transaction::PersistentWrite(lmdb::LmdbWriteTransaction::new(env))),
+            Environment::Volatile(ref env) => WriteTransaction(Transaction::VolatileWrite(
+                volatile::VolatileWriteTransaction::new(env),
+            )),
+            Environment::Persistent(ref env) => WriteTransaction(Transaction::PersistentWrite(
+                lmdb::LmdbWriteTransaction::new(env),
+            )),
         }
     }
 
@@ -179,8 +193,12 @@ impl<'env> WriteTransaction<'env> {
         V: IntoDatabaseValue + ?Sized,
     {
         match self.0 {
-            Transaction::VolatileWrite(ref mut txn) => txn.put_reserve(db.volatile().unwrap(), key, value),
-            Transaction::PersistentWrite(ref mut txn) => txn.put_reserve(db.persistent().unwrap(), key, value),
+            Transaction::VolatileWrite(ref mut txn) => {
+                txn.put_reserve(db.volatile().unwrap(), key, value)
+            }
+            Transaction::PersistentWrite(ref mut txn) => {
+                txn.put_reserve(db.persistent().unwrap(), key, value)
+            }
             _ => {
                 unreachable!();
             }
@@ -198,7 +216,9 @@ impl<'env> WriteTransaction<'env> {
     {
         match self.0 {
             Transaction::VolatileWrite(ref mut txn) => txn.put(db.volatile().unwrap(), key, value),
-            Transaction::PersistentWrite(ref mut txn) => txn.put(db.persistent().unwrap(), key, value),
+            Transaction::PersistentWrite(ref mut txn) => {
+                txn.put(db.persistent().unwrap(), key, value)
+            }
             _ => {
                 unreachable!();
             }
@@ -224,8 +244,12 @@ impl<'env> WriteTransaction<'env> {
         V: AsDatabaseBytes + ?Sized,
     {
         match self.0 {
-            Transaction::VolatileWrite(ref mut txn) => txn.remove_item(db.volatile().unwrap(), key, value),
-            Transaction::PersistentWrite(ref mut txn) => txn.remove_item(db.persistent().unwrap(), key, value),
+            Transaction::VolatileWrite(ref mut txn) => {
+                txn.remove_item(db.volatile().unwrap(), key, value)
+            }
+            Transaction::PersistentWrite(ref mut txn) => {
+                txn.remove_item(db.persistent().unwrap(), key, value)
+            }
             _ => {
                 unreachable!();
             }
@@ -250,8 +274,12 @@ impl<'env> WriteTransaction<'env> {
 
     pub fn write_cursor<'txn, 'db>(&'txn self, db: &'db Database) -> WriteCursor<'txn, 'db> {
         match self.0 {
-            Transaction::VolatileWrite(ref txn) => WriteCursor::VolatileCursor(txn.write_cursor(db)),
-            Transaction::PersistentWrite(ref txn) => WriteCursor::PersistentCursor(txn.write_cursor(db)),
+            Transaction::VolatileWrite(ref txn) => {
+                WriteCursor::VolatileCursor(txn.write_cursor(db))
+            }
+            Transaction::PersistentWrite(ref txn) => {
+                WriteCursor::PersistentCursor(txn.write_cursor(db))
+            }
             _ => unreachable!(),
         }
     }

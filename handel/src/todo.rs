@@ -30,7 +30,8 @@ impl<C: AggregatableContribution> TodoItem<C> {
 
 impl<C: AggregatableContribution> PartialEq for TodoItem<C> {
     fn eq(&self, other: &TodoItem<C>) -> bool {
-        self.level == other.level && self.contribution.contributors() == other.contribution.contributors()
+        self.level == other.level
+            && self.contribution.contributors() == other.contribution.contributors()
     }
 }
 
@@ -117,7 +118,10 @@ impl<C: AggregatableContribution, E: Evaluator<C>> Stream for TodoList<C, E> {
 
                 // A new LevelUpdate is available.
                 Some(msg) => {
-                    if self.evaluator.level_contains_id(msg.level as usize, msg.origin as usize) {
+                    if self
+                        .evaluator
+                        .level_contains_id(msg.level as usize, msg.origin as usize)
+                    {
                         // Every LevelUpdates contains an aggregate which can be turned into a TodoItem
                         let aggregate_todo = TodoItem {
                             contribution: msg.aggregate,
@@ -170,7 +174,10 @@ impl<C: AggregatableContribution, E: Evaluator<C>> Stream for TodoList<C, E> {
                             }
                         }
                     } else {
-                        debug!("Sender of update :{} is not on level {}", msg.origin, msg.level);
+                        debug!(
+                            "Sender of update :{} is not on level {}",
+                            msg.origin, msg.level
+                        );
                     }
                 }
             }

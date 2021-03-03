@@ -9,7 +9,8 @@ pub struct Tendermint<
     ProposalTy: ProposalTrait,
     ProofTy: ProofTrait,
     ResultTy: ResultTrait,
-    DepsTy: TendermintOutsideDeps<ProposalTy = ProposalTy, ResultTy = ResultTy, ProofTy = ProofTy> + 'static,
+    DepsTy: TendermintOutsideDeps<ProposalTy = ProposalTy, ResultTy = ResultTy, ProofTy = ProofTy>
+        + 'static,
 > {
     pub deps: DepsTy,
     pub state: TendermintState<ProposalTy, ProofTy>,
@@ -19,7 +20,8 @@ impl<
         ProposalTy: ProposalTrait,
         ProofTy: ProofTrait,
         ResultTy: ResultTrait,
-        DepsTy: TendermintOutsideDeps<ProposalTy = ProposalTy, ResultTy = ResultTy, ProofTy = ProofTy> + 'static,
+        DepsTy: TendermintOutsideDeps<ProposalTy = ProposalTy, ResultTy = ResultTy, ProofTy = ProofTy>
+            + 'static,
     > Tendermint<ProposalTy, ProofTy, ResultTy, DepsTy>
 {
     /// Creates a new Tendermint state machine with an "empty" state.

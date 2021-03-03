@@ -4,15 +4,18 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::iter::FromIterator;
 use std::sync::Arc;
 
-use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, WriteBytesExt};
+use beserial::{
+    Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
+    SerializingError, WriteBytesExt,
+};
 use keys::Address;
+use nimiq_bls::CompressedSignature as BlsSignature;
 use nimiq_collections::BitSet;
-use nimiq_bls::{CompressedSignature as BlsSignature};
+use primitives::account::ValidatorId;
 use primitives::slot::{Slots, SlotsBuilder};
 use primitives::{coin::Coin, policy};
-use primitives::account::ValidatorId;
-use transaction::{SignatureProof, Transaction};
 use transaction::account::staking_contract::IncomingStakingTransactionData;
+use transaction::{SignatureProof, Transaction};
 use vrf::{AliasMethod, VrfSeed, VrfUseCase};
 
 use crate::AccountError;
@@ -87,10 +90,18 @@ impl StakingContract {
 
     /// Get the amount staked by a staker, given the public key of the corresponding validator and
     /// the address of the staker. Returns None if the active validator or the staker does not exist.
-    pub fn get_active_stake(&self, validator_id: &ValidatorId, staker_address: &Address) -> Option<Coin> {
+    pub fn get_active_stake(
+        &self,
+        validator_id: &ValidatorId,
+        staker_address: &Address,
+    ) -> Option<Coin> {
         let validator = self.active_validators_by_id.get(validator_id)?;
 
-        validator.active_stake_by_address.read().get(staker_address).cloned()
+        validator
+            .active_stake_by_address
+            .read()
+            .get(staker_address)
+            .cloned()
     }
 
     /// Allows to modify both active and inactive validators.
@@ -114,17 +125,22 @@ impl StakingContract {
     /// If modifying the validator failed, it is restored and the error is returned.
     /// This makes it possible to remove the validator using `remove_validator`,
     /// try modifying it and restoring it before the error is returned.
-    pub fn restore_validator(&mut self, validator_entry: ValidatorEntry) -> Result<(), AccountError> {
+    pub fn restore_validator(
+        &mut self,
+        validator_entry: ValidatorEntry,
+    ) -> Result<(), AccountError> {
         match validator_entry {
             ValidatorEntry::Active(validator, error) => {
                 // Update/restore validator.
                 self.active_validators_sorted.insert(Arc::clone(&validator));
-                self.active_validators_by_id.insert(validator.id.clone(), validator);
+                self.active_validators_by_id
+                    .insert(validator.id.clone(), validator);
                 error.map(Err).unwrap_or(Ok(()))
             }
             ValidatorEntry::Inactive(validator, error) => {
                 // Update/restore validator.
-                self.inactive_validators_by_id.insert(validator.validator.id.clone(), validator);
+                self.inactive_validators_by_id
+                    .insert(validator.validator.id.clone(), validator);
                 error.map(Err).unwrap_or(Ok(()))
             }
         }
@@ -159,7 +175,11 @@ impl StakingContract {
 
             let active_validator = &potential_validators[index];
 
-            slots_builder.push(active_validator.id.clone(), active_validator.validator_key.clone(), &active_validator.reward_address);
+            slots_builder.push(
+                active_validator.id.clone(),
+                active_validator.validator_key.clone(),
+                &active_validator.reward_address,
+            );
         }
 
         slots_builder.build()
@@ -167,7 +187,8 @@ impl StakingContract {
 
     /// Get the signature from a transaction.
     fn get_self_signer(transaction: &Transaction) -> Result<Address, AccountError> {
-        let signature_proof: SignatureProof = Deserialize::deserialize(&mut &transaction.proof[..])?;
+        let signature_proof: SignatureProof =
+            Deserialize::deserialize(&mut &transaction.proof[..])?;
 
         Ok(signature_proof.compute_signer())
     }
@@ -204,14 +225,29 @@ impl StakingContract {
         bitset
     }
 
-    fn verify_signature_incoming(&self, transaction: &Transaction, validator_id: &ValidatorId, signature: &BlsSignature) -> Result<(), AccountError> {
-        let validator = self.get_validator(validator_id).ok_or(AccountError::InvalidForRecipient)?;
-        let key = validator.validator_key.uncompress().map_err(|_| AccountError::InvalidForRecipient)?;
-        let sig = signature.uncompress().map_err(|_| AccountError::InvalidSignature)?;
+    fn verify_signature_incoming(
+        &self,
+        transaction: &Transaction,
+        validator_id: &ValidatorId,
+        signature: &BlsSignature,
+    ) -> Result<(), AccountError> {
+        let validator = self
+            .get_validator(validator_id)
+            .ok_or(AccountError::InvalidForRecipient)?;
+        let key = validator
+            .validator_key
+            .uncompress()
+            .map_err(|_| AccountError::InvalidForRecipient)?;
+        let sig = signature
+            .uncompress()
+            .map_err(|_| AccountError::InvalidSignature)?;
 
         // On incoming transactions, we need to reset the signature first.
         let mut tx_without_sig = transaction.clone();
-        tx_without_sig.data = IncomingStakingTransactionData::set_validator_signature_on_data(&tx_without_sig.data, BlsSignature::default())?;
+        tx_without_sig.data = IncomingStakingTransactionData::set_validator_signature_on_data(
+            &tx_without_sig.data,
+            BlsSignature::default(),
+        )?;
         let tx = tx_without_sig.serialize_content();
 
         if !key.verify(&tx, &sig) {
@@ -345,11 +381,14 @@ impl Deserialize for StakingContract {
         for _ in 0..num_inactive_validators {
             let inactive_validator: InactiveValidator = Deserialize::deserialize(reader)?;
 
-            inactive_validators_by_id.insert(inactive_validator.validator.id.clone(), inactive_validator);
+            inactive_validators_by_id
+                .insert(inactive_validator.validator.id.clone(), inactive_validator);
         }
 
-        let current_epoch_parking: HashSet<ValidatorId> = DeserializeWithLength::deserialize::<u32, _>(reader)?;
-        let previous_epoch_parking: HashSet<ValidatorId> = DeserializeWithLength::deserialize::<u32, _>(reader)?;
+        let current_epoch_parking: HashSet<ValidatorId> =
+            DeserializeWithLength::deserialize::<u32, _>(reader)?;
+        let previous_epoch_parking: HashSet<ValidatorId> =
+            DeserializeWithLength::deserialize::<u32, _>(reader)?;
 
         // Lost rewards.
         let current_lost_rewards: BitSet = Deserialize::deserialize(reader)?;
@@ -441,10 +480,16 @@ impl Clone for StakingContract {
                 .iter()
                 .map(|(key, value)| (key.clone(), Arc::new(value.as_ref().clone()))),
         );
-        let inactive_validators_by_id = BTreeMap::from_iter(self.inactive_validators_by_id.iter().map(|(key, value)| (key.clone(), value.clone())));
+        let inactive_validators_by_id = BTreeMap::from_iter(
+            self.inactive_validators_by_id
+                .iter()
+                .map(|(key, value)| (key.clone(), value.clone())),
+        );
         StakingContract {
             balance: self.balance,
-            active_validators_sorted: BTreeSet::from_iter(active_validators_by_id.values().cloned()),
+            active_validators_sorted: BTreeSet::from_iter(
+                active_validators_by_id.values().cloned(),
+            ),
             active_validators_by_id,
             inactive_validators_by_id,
             current_epoch_parking: self.current_epoch_parking.clone(),

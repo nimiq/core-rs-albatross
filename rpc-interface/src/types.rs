@@ -2,32 +2,27 @@
 ///!
 ///! [1] https://github.com/nimiq/core-js/wiki/JSON-RPC-API#common-data-types
 use std::{
-    fmt::{Display, Formatter, self},
-    str::FromStr,
     borrow::Cow,
+    fmt::{self, Display, Formatter},
+    str::FromStr,
 };
 
-use serde::{
-    de::Deserializer,
-    ser::Serializer,
-    Serialize, Deserialize,
-};
-use serde_with::{SerializeDisplay, DeserializeFromStr};
+use serde::{de::Deserializer, ser::Serializer, Deserialize, Serialize};
+use serde_with::{DeserializeFromStr, SerializeDisplay};
 
+use nimiq_block_albatross::{TendermintProof, ViewChangeProof};
 use nimiq_blockchain_albatross::Blockchain;
+use nimiq_bls::{CompressedPublicKey, CompressedSignature};
+use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
 use nimiq_primitives::policy;
+use nimiq_primitives::slot::{SlotBand, ValidatorSlots};
 use nimiq_primitives::{account::AccountType, coin::Coin};
 use nimiq_transaction::account::htlc_contract::AnyHash;
-use nimiq_block_albatross::{TendermintProof, ViewChangeProof};
-use nimiq_bls::{CompressedPublicKey, CompressedSignature};
-use nimiq_collections::BitSet;
-use nimiq_primitives::slot::{SlotBand, ValidatorSlots};
 use nimiq_vrf::VrfSeed;
 
 use crate::error::Error;
-
 
 #[derive(Clone, Debug)]
 pub enum BlockNumberOrHash {
@@ -62,9 +57,10 @@ impl FromStr for BlockNumberOrHash {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if let Ok(n) = s.parse::<u32>() {
             Ok(BlockNumberOrHash::Number(n))
-        }
-        else {
-            Ok(BlockNumberOrHash::Hash(s.parse().map_err(|_| Error::InvalidBlockNumberOrHash(s.to_owned()))?))
+        } else {
+            Ok(BlockNumberOrHash::Hash(s.parse().map_err(|_| {
+                Error::InvalidBlockNumberOrHash(s.to_owned())
+            })?))
         }
     }
 }
@@ -152,10 +148,16 @@ pub struct MacroJustification {
 }
 
 impl MacroJustification {
-    fn from_pbft_proof(tendermint_proof_opt: Option<TendermintProof>, _validator_slots_opt: Option<&ValidatorSlots>) -> Option<Self> {
+    fn from_pbft_proof(
+        tendermint_proof_opt: Option<TendermintProof>,
+        _validator_slots_opt: Option<&ValidatorSlots>,
+    ) -> Option<Self> {
         if let Some(tendermint_proof) = tendermint_proof_opt {
             let votes = tendermint_proof.votes();
-            Some(Self { votes, tendermint_proof })
+            Some(Self {
+                votes,
+                tendermint_proof,
+            })
         } else {
             None
         }
@@ -311,7 +313,11 @@ impl Transaction {
 }
 
 impl Block {
-    pub fn from_block(blockchain: &Blockchain, block: nimiq_block_albatross::Block, include_transactions: bool) -> Self {
+    pub fn from_block(
+        blockchain: &Blockchain,
+        block: nimiq_block_albatross::Block,
+        include_transactions: bool,
+    ) -> Self {
         let block_hash = block.hash();
         let block_number = block.block_number();
         let batch = policy::batch_at(block_number);
@@ -345,7 +351,10 @@ impl Block {
                         parent_election_hash: macro_block.header.parent_election_hash,
                         slots,
                         lost_reward_set: macro_block.body.map(|body| body.lost_reward_set),
-                        justification: MacroJustification::from_pbft_proof(macro_block.justification, validator_slots_opt.as_ref()),
+                        justification: MacroJustification::from_pbft_proof(
+                            macro_block.justification,
+                            validator_slots_opt.as_ref(),
+                        ),
                     },
                 }
             }
@@ -360,7 +369,16 @@ impl Block {
                                 body.transactions
                                     .into_iter()
                                     .enumerate()
-                                    .map(|(index, tx)| Transaction::from_blockchain(tx, index, &block_hash, block_number, timestamp, head_height))
+                                    .map(|(index, tx)| {
+                                        Transaction::from_blockchain(
+                                            tx,
+                                            index,
+                                            &block_hash,
+                                            block_number,
+                                            timestamp,
+                                            head_height,
+                                        )
+                                    })
                                     .collect(),
                             )
                         } else {
@@ -495,9 +513,9 @@ where
 }
 
 impl<'de, T> Deserialize<'de> for OrLatest<T>
-    where
-        T: FromStr,
-        <T as FromStr>::Err: std::error::Error,
+where
+    T: FromStr,
+    <T as FromStr>::Err: std::error::Error,
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -506,9 +524,10 @@ impl<'de, T> Deserialize<'de> for OrLatest<T>
         let s: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
         if s == "latest" {
             Ok(OrLatest::Latest)
-        }
-        else {
-            Ok(OrLatest::Value(s.parse().map_err(serde::de::Error::custom)?))
+        } else {
+            Ok(OrLatest::Value(
+                s.parse().map_err(serde::de::Error::custom)?,
+            ))
         }
     }
 }
@@ -571,7 +590,10 @@ pub struct Validator {
 }
 
 impl Validator {
-    pub fn from_validator(validator: &nimiq_account::staking_contract::Validator, _retire_time: Option<u32>) -> Self {
+    pub fn from_validator(
+        validator: &nimiq_account::staking_contract::Validator,
+        _retire_time: Option<u32>,
+    ) -> Self {
         Validator {
             public_key: validator.validator_key.clone(),
             balance: validator.balance,
@@ -636,8 +658,7 @@ impl FromStr for ValidityStartHeight {
         let s = s.trim();
         if s.starts_with('+') {
             Ok(Self::Relative(s[1..].parse()?))
-        }
-        else {
+        } else {
             Ok(Self::Absolute(s.parse()?))
         }
     }

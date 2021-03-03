@@ -111,7 +111,12 @@ pub struct DiscoveryBehaviour {
 }
 
 impl DiscoveryBehaviour {
-    pub fn new(config: DiscoveryConfig, keypair: Keypair, peer_contact_book: Arc<RwLock<PeerContactBook>>, clock: Arc<OffsetTime>) -> Self {
+    pub fn new(
+        config: DiscoveryConfig,
+        keypair: Keypair,
+        peer_contact_book: Arc<RwLock<PeerContactBook>>,
+        clock: Arc<OffsetTime>,
+    ) -> Self {
         let house_keeping_timer = Interval::new(config.house_keeping_interval);
 
         Self {
@@ -135,11 +140,16 @@ impl NetworkBehaviour for DiscoveryBehaviour {
     type OutEvent = DiscoveryEvent;
 
     fn new_handler(&mut self) -> Self::ProtocolsHandler {
-        DiscoveryHandler::new(self.config.clone(), self.keypair.clone(), Arc::clone(&self.peer_contact_book))
+        DiscoveryHandler::new(
+            self.config.clone(),
+            self.keypair.clone(),
+            Arc::clone(&self.peer_contact_book),
+        )
     }
 
     fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
-        let addresses = self.peer_contact_book
+        let addresses = self
+            .peer_contact_book
             .read()
             .get(peer_id)
             .map(|addresses_opt| addresses_opt.addresses().cloned().collect())
@@ -158,7 +168,12 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         self.connected_peers.remove(peer_id);
     }
 
-    fn inject_connection_established(&mut self, peer_id: &PeerId, connection_id: &ConnectionId, connected_point: &ConnectedPoint) {
+    fn inject_connection_established(
+        &mut self,
+        peer_id: &PeerId,
+        connection_id: &ConnectionId,
+        connected_point: &ConnectedPoint,
+    ) {
         log::trace!("DiscoveryBehaviour::inject_connection_established:");
         log::trace!("  - peer_id: {:?}", peer_id);
         log::trace!("  - connection_id: {:?}", connection_id);
@@ -170,21 +185,30 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
         match event {
             HandlerOutEvent::PeerExchangeEstablished { peer_contact } => {
-                self.events.push_back(NetworkBehaviourAction::GenerateEvent(DiscoveryEvent::Established {
-                    peer_id: peer_contact.public_key().clone().into_peer_id(),
-                }));
+                self.events.push_back(NetworkBehaviourAction::GenerateEvent(
+                    DiscoveryEvent::Established {
+                        peer_id: peer_contact.public_key().clone().into_peer_id(),
+                    },
+                ));
             }
             HandlerOutEvent::ObservedAddresses { observed_addresses } => {
                 let score = AddressScore::Infinite;
                 for address in observed_addresses {
-                    self.events.push_back(NetworkBehaviourAction::ReportObservedAddr { address, score });
+                    self.events
+                        .push_back(NetworkBehaviourAction::ReportObservedAddr { address, score });
                 }
             }
-            HandlerOutEvent::Update => self.events.push_back(NetworkBehaviourAction::GenerateEvent(DiscoveryEvent::Update)),
+            HandlerOutEvent::Update => self.events.push_back(
+                NetworkBehaviourAction::GenerateEvent(DiscoveryEvent::Update),
+            ),
         }
     }
 
-    fn poll(&mut self, cx: &mut Context, _params: &mut impl PollParameters) -> Poll<NetworkBehaviourAction<HandlerInEvent, DiscoveryEvent>> {
+    fn poll(
+        &mut self,
+        cx: &mut Context,
+        _params: &mut impl PollParameters,
+    ) -> Poll<NetworkBehaviourAction<HandlerInEvent, DiscoveryEvent>> {
         // Emit events
         if let Some(event) = self.events.pop_front() {
             return Poll::Ready(event);

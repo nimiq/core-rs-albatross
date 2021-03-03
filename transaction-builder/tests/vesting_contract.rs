@@ -38,7 +38,9 @@ fn it_can_create_creation_transaction() {
         .with_value(100.try_into().unwrap())
         .with_validity_start_height(0)
         .with_network_id(NetworkId::Dummy);
-    let proof_builder = builder.generate().expect("Builder should be able to create transaction");
+    let proof_builder = builder
+        .generate()
+        .expect("Builder should be able to create transaction");
     let proof_builder = proof_builder.unwrap_basic();
     assert_eq!(proof_builder.transaction, transaction);
 
@@ -66,7 +68,9 @@ fn it_can_create_creation_transaction() {
         .with_value(100.try_into().unwrap())
         .with_validity_start_height(0)
         .with_network_id(NetworkId::Dummy);
-    let proof_builder = builder.generate().expect("Builder should be able to create transaction");
+    let proof_builder = builder
+        .generate()
+        .expect("Builder should be able to create transaction");
     let proof_builder = proof_builder.unwrap_basic();
     assert_eq!(proof_builder.transaction, transaction);
 
@@ -95,15 +99,19 @@ fn it_can_create_creation_transaction() {
         .with_value(100.try_into().unwrap())
         .with_validity_start_height(0)
         .with_network_id(NetworkId::Dummy);
-    let proof_builder = builder.generate().expect("Builder should be able to create transaction");
+    let proof_builder = builder
+        .generate()
+        .expect("Builder should be able to create transaction");
     let proof_builder = proof_builder.unwrap_basic();
     assert_eq!(proof_builder.transaction, transaction);
 }
 
 #[test]
 fn it_can_create_outgoing_transactions() {
-    let sender_priv_key: PrivateKey =
-        Deserialize::deserialize_from_vec(&hex::decode("9d5bd02379e7e45cf515c788048f5cf3c454ffabd3e83bd1d7667716c325c3c0").unwrap()).unwrap();
+    let sender_priv_key: PrivateKey = Deserialize::deserialize_from_vec(
+        &hex::decode("9d5bd02379e7e45cf515c788048f5cf3c454ffabd3e83bd1d7667716c325c3c0").unwrap(),
+    )
+    .unwrap();
 
     let key_pair = KeyPair::from(sender_priv_key);
     let mut tx = Transaction::new_basic(
@@ -129,7 +137,9 @@ fn it_can_create_outgoing_transactions() {
         .with_fee(1000.try_into().unwrap())
         .with_validity_start_height(1)
         .with_network_id(NetworkId::Dummy);
-    let proof_builder = builder.generate().expect("Builder should be able to create transaction");
+    let proof_builder = builder
+        .generate()
+        .expect("Builder should be able to create transaction");
     let mut proof_builder = proof_builder.unwrap_basic();
     proof_builder.sign_with_key_pair(&key_pair);
     assert_eq!(proof_builder.generate().unwrap(), tx);

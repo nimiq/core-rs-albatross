@@ -1,27 +1,26 @@
 extern crate nimiq_bls as bls;
+extern crate nimiq_genesis as genesis;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
 extern crate nimiq_primitives as primitives;
 extern crate nimiq_transaction as transaction;
 extern crate nimiq_utils as utils;
-extern crate nimiq_genesis as genesis;
 
 use thiserror::Error;
 
-use bls::{KeyPair as BlsKeyPair};
+use bls::KeyPair as BlsKeyPair;
+use genesis::NetworkInfo;
 use keys::{Address, KeyPair};
 use primitives::account::{AccountType, ValidatorId};
 use primitives::coin::Coin;
 use primitives::networks::NetworkId;
 use transaction::Transaction;
-use genesis::NetworkInfo;
 
 pub use crate::proof::TransactionProofBuilder;
 pub use crate::recipient::Recipient;
 
 pub mod proof;
 pub mod recipient;
-
 
 fn fill_in_staking_contract_address(address: Option<Address>, network_id: NetworkId) -> Address {
     address.unwrap_or_else(|| {
@@ -31,7 +30,6 @@ fn fill_in_staking_contract_address(address: Option<Address>, network_id: Networ
             .clone()
     })
 }
-
 
 /// Building a transaction can fail if mandatory fields are not set.
 /// In these cases, a `TransactionBuilderError` is returned.
@@ -165,7 +163,13 @@ impl TransactionBuilder {
     /// let transaction = proof_builder.preliminary_transaction();
     /// assert_eq!(transaction.sender, sender);
     /// ```
-    pub fn with_required(sender: Address, recipient: Recipient, value: Coin, validity_start_height: u32, network_id: NetworkId) -> Self {
+    pub fn with_required(
+        sender: Address,
+        recipient: Recipient,
+        value: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Self {
         let mut builder = Self::default();
         builder
             .with_sender(sender)
@@ -433,8 +437,12 @@ impl TransactionBuilder {
         }
 
         let value = self.value.ok_or(TransactionBuilderError::NoValue)?;
-        let validity_start_height = self.validity_start_height.ok_or(TransactionBuilderError::NoValidityStartHeight)?;
-        let network_id = self.network_id.ok_or(TransactionBuilderError::NoNetworkId)?;
+        let validity_start_height = self
+            .validity_start_height
+            .ok_or(TransactionBuilderError::NoValidityStartHeight)?;
+        let network_id = self
+            .network_id
+            .ok_or(TransactionBuilderError::NoNetworkId)?;
 
         if recipient.is_signalling() != value.is_zero() {
             return Err(TransactionBuilderError::InvalidValue);
@@ -485,7 +493,14 @@ impl TransactionBuilder {
 // Convenience functionality.
 impl TransactionBuilder {
     /// Creates a simple transaction from the address of a given `key_pair` to a basic `recipient`.
-    pub fn new_simple(key_pair: &KeyPair, recipient: Address, value: Coin, fee: Coin, validity_start_height: u32, network_id: NetworkId) -> Transaction {
+    pub fn new_simple(
+        key_pair: &KeyPair,
+        recipient: Address,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Transaction {
         let sender = Address::from(key_pair);
         let mut builder = Self::new();
         builder
@@ -559,7 +574,10 @@ impl TransactionBuilder {
 
         let mut builder = Self::new();
         builder
-            .with_sender(fill_in_staking_contract_address(staking_contract, network_id))
+            .with_sender(fill_in_staking_contract_address(
+                staking_contract,
+                network_id,
+            ))
             .with_recipient(recipient.generate().unwrap())
             .with_value(value)
             .with_fee(fee)
@@ -591,7 +609,10 @@ impl TransactionBuilder {
 
         let mut builder = Self::new();
         builder
-            .with_sender(fill_in_staking_contract_address(staking_contract, network_id))
+            .with_sender(fill_in_staking_contract_address(
+                staking_contract,
+                network_id,
+            ))
             .with_sender_type(AccountType::Staking)
             .with_recipient(recipient.generate().unwrap())
             .with_value(value)
@@ -624,7 +645,10 @@ impl TransactionBuilder {
 
         let mut builder = Self::new();
         builder
-            .with_sender(fill_in_staking_contract_address(staking_contract, network_id))
+            .with_sender(fill_in_staking_contract_address(
+                staking_contract,
+                network_id,
+            ))
             .with_sender_type(AccountType::Staking)
             .with_recipient(recipient.generate().unwrap())
             .with_value(value)
@@ -659,7 +683,10 @@ impl TransactionBuilder {
 
         let mut builder = Self::new();
         builder
-            .with_sender(fill_in_staking_contract_address(staking_contract, network_id))
+            .with_sender(fill_in_staking_contract_address(
+                staking_contract,
+                network_id,
+            ))
             .with_sender_type(AccountType::Staking)
             .with_recipient(recipient)
             .with_value(value)
@@ -764,7 +791,12 @@ impl TransactionBuilder {
         network_id: NetworkId,
     ) -> Transaction {
         let mut recipient = Recipient::new_staking_builder(staking_contract);
-        recipient.update_validator(validator_id, &old_validator_key_pair.public_key, new_validator_key_pair, new_reward_address);
+        recipient.update_validator(
+            validator_id,
+            &old_validator_key_pair.public_key,
+            new_validator_key_pair,
+            new_reward_address,
+        );
 
         let mut builder = Self::new();
         builder
@@ -927,7 +959,10 @@ impl TransactionBuilder {
 
         let mut builder = Self::new();
         builder
-            .with_sender(fill_in_staking_contract_address(staking_contract, network_id))
+            .with_sender(fill_in_staking_contract_address(
+                staking_contract,
+                network_id,
+            ))
             .with_sender_type(AccountType::Staking)
             .with_recipient(recipient)
             .with_value(value)
@@ -944,7 +979,6 @@ impl TransactionBuilder {
             _ => unreachable!(),
         }
     }
-
 
     /// Creates a transaction that unparks a *parked* validator, i.e. making it *active* again.
     ///

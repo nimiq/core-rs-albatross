@@ -110,7 +110,10 @@ fn pretty_logging(dispatch: Dispatch, colors_level: ColoredLevelConfig) -> Dispa
     })
 }
 
-fn pretty_logging_with_timestamps(dispatch: Dispatch, colors_level: ColoredLevelConfig) -> Dispatch {
+fn pretty_logging_with_timestamps(
+    dispatch: Dispatch,
+    colors_level: ColoredLevelConfig,
+) -> Dispatch {
     dispatch.format(move |out, message, record| {
         let target_text = record.target().split("::").last().unwrap();
         let max_width = max_module_width(target_text);
@@ -181,7 +184,10 @@ pub fn log_error_cause_chain<E: std::error::Error>(e: &E) {
     }
 }
 
-pub fn initialize_logging(command_line_opt: Option<&CommandLine>, settings_opt: Option<&LogSettings>) -> Result<(), Error> {
+pub fn initialize_logging(
+    command_line_opt: Option<&CommandLine>,
+    settings_opt: Option<&LogSettings>,
+) -> Result<(), Error> {
     // Get config from config file
     let mut settings = settings_opt.cloned().unwrap_or_default();
 

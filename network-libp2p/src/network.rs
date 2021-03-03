@@ -3,18 +3,25 @@
 use std::{collections::HashMap, pin::Pin, sync::Arc};
 
 use async_trait::async_trait;
+use bytes::{buf::BufExt, Bytes};
 use futures::{
     channel::{mpsc, oneshot},
-    lock::Mutex as AsyncMutex,
     future::FutureExt,
-    stream::{Stream, StreamExt, BoxStream},
+    lock::Mutex as AsyncMutex,
     sink::SinkExt,
+    stream::{BoxStream, Stream, StreamExt},
 };
 use libp2p::{
     core,
-    core::{connection::ConnectionLimits, muxing::StreamMuxerBox, network::NetworkInfo, transport::Boxed},
+    core::{
+        connection::ConnectionLimits, muxing::StreamMuxerBox, network::NetworkInfo,
+        transport::Boxed,
+    },
     dns,
-    gossipsub::{GossipsubConfig, GossipsubConfigBuilder, GossipsubEvent, GossipsubMessage, IdentTopic, MessageAcceptance, MessageId, TopicHash},
+    gossipsub::{
+        GossipsubConfig, GossipsubConfigBuilder, GossipsubEvent, GossipsubMessage, IdentTopic,
+        MessageAcceptance, MessageId, TopicHash,
+    },
     identify::IdentifyEvent,
     identity::Keypair,
     kad::{GetRecordOk, KademliaConfig, KademliaEvent, QueryId, QueryResult, Quorum, Record},
@@ -24,7 +31,6 @@ use libp2p::{
 };
 use thiserror::Error;
 use tokio::sync::broadcast;
-use bytes::{Bytes, buf::BufExt};
 use tracing::Instrument;
 
 #[cfg(test)]
@@ -33,10 +39,10 @@ use libp2p::core::transport::MemoryTransport;
 use beserial::{Deserialize, Serialize};
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{
-    network::{Network as NetworkInterface, NetworkEvent, PubsubId, Topic},
-    peer::{Peer as PeerInterface},
-    peer_map::ObservablePeerMap,
     message::{Message, MessageType},
+    network::{Network as NetworkInterface, NetworkEvent, PubsubId, Topic},
+    peer::Peer as PeerInterface,
+    peer_map::ObservablePeerMap,
 };
 use nimiq_utils::time::OffsetTime;
 
@@ -121,9 +127,7 @@ pub enum NetworkError {
     GossipsubSubscription(libp2p::gossipsub::error::SubscriptionError),
 
     #[error("Already subscribed to topic: {topic_name}")]
-    AlreadySubscribed {
-        topic_name: String,
-    }
+    AlreadySubscribed { topic_name: String },
 }
 
 impl From<libp2p::kad::store::Error> for NetworkError {
@@ -179,7 +183,9 @@ pub enum NetworkAction {
     Subscribe {
         topic_name: String,
         validate: bool,
-        output: oneshot::Sender<Result<mpsc::Receiver<(GossipsubMessage, MessageId, PeerId)>, NetworkError>>,
+        output: oneshot::Sender<
+            Result<mpsc::Receiver<(GossipsubMessage, MessageId, PeerId)>, NetworkError>,
+        >,
     },
     Publish {
         topic_name: String,
@@ -199,7 +205,6 @@ pub enum NetworkAction {
         output: mpsc::Sender<(Bytes, Arc<Peer>)>,
     },
 }
-
 
 struct TaskState {
     dht_puts: HashMap<QueryId, oneshot::Sender<Result<(), NetworkError>>>,
@@ -261,7 +266,11 @@ impl Network {
     ///             offset by exchanging their wall-time with other peers.
     ///  - `config`: The network configuration, containing key pair, and other behaviour-specific configuration.
     ///
-    pub async fn new(listen_addresses: Vec<Multiaddr>, clock: Arc<OffsetTime>, config: Config) -> Self {
+    pub async fn new(
+        listen_addresses: Vec<Multiaddr>,
+        clock: Arc<OffsetTime>,
+        config: Config,
+    ) -> Self {
         let min_peers = config.min_peers;
 
         let swarm = Self::new_swarm(listen_addresses, clock, config);
@@ -274,7 +283,13 @@ impl Network {
 
         let (connected_tx, connected_rx) = oneshot::channel();
 
-        async_std::task::spawn(Self::swarm_task(swarm, events_tx.clone(), action_rx, connected_tx, min_peers));
+        async_std::task::spawn(Self::swarm_task(
+            swarm,
+            events_tx.clone(),
+            action_rx,
+            connected_tx,
+            min_peers,
+        ));
 
         Self {
             local_peer_id,
@@ -295,7 +310,8 @@ impl Network {
     fn new_transport(keypair: &Keypair) -> std::io::Result<Boxed<(PeerId, StreamMuxerBox)>> {
         let transport = {
             // Websocket over TCP/DNS
-            let transport = websocket::WsConfig::new(dns::DnsConfig::new(tcp::TcpConfig::new().nodelay(true))?);
+            let transport =
+                websocket::WsConfig::new(dns::DnsConfig::new(tcp::TcpConfig::new().nodelay(true))?);
 
             // Memory transport for testing
             // TODO: Use websocket over the memory transport
@@ -305,7 +321,9 @@ impl Network {
             transport
         };
 
-        let noise_keys = noise::Keypair::<noise::X25519Spec>::new().into_authentic(keypair).unwrap();
+        let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
+            .into_authentic(keypair)
+            .unwrap();
 
         Ok(transport
             .upgrade(core::upgrade::Version::V1)
@@ -315,7 +333,11 @@ impl Network {
             .boxed())
     }
 
-    fn new_swarm(listen_addresses: Vec<Multiaddr>, clock: Arc<OffsetTime>, config: Config) -> Swarm<NimiqBehaviour> {
+    fn new_swarm(
+        listen_addresses: Vec<Multiaddr>,
+        clock: Arc<OffsetTime>,
+        config: Config,
+    ) -> Swarm<NimiqBehaviour> {
         let local_peer_id = PeerId::from(config.keypair.public());
 
         let transport = Self::new_transport(&config.keypair).unwrap();
@@ -335,7 +357,8 @@ impl Network {
             .build();
 
         for listen_addr in listen_addresses {
-            Swarm::listen_on(&mut swarm, listen_addr).expect("Failed to listen on provided address");
+            Swarm::listen_on(&mut swarm, listen_addr)
+                .expect("Failed to listen on provided address");
         }
 
         swarm
@@ -350,7 +373,7 @@ impl Network {
         events_tx: broadcast::Sender<NetworkEvent<Peer>>,
         mut action_rx: mpsc::Receiver<NetworkAction>,
         connected_tx: oneshot::Sender<()>,
-        min_peers: usize
+        min_peers: usize,
     ) {
         let mut task_state = TaskState::new(connected_tx);
 
@@ -388,23 +411,45 @@ impl Network {
         min_peers: usize,
     ) {
         match event {
-            SwarmEvent::ConnectionEstablished { peer_id, endpoint, num_established } => {
-                if let Some(listen_addr) = state.incoming_listeners.get(&endpoint.get_remote_address().clone()) {
-                    tracing::debug!("Adding peer {:?} listen address to the peer contact book: {:?}", peer_id, listen_addr);
+            SwarmEvent::ConnectionEstablished {
+                peer_id,
+                endpoint,
+                num_established,
+            } => {
+                if let Some(listen_addr) = state
+                    .incoming_listeners
+                    .get(&endpoint.get_remote_address().clone())
+                {
+                    tracing::debug!(
+                        "Adding peer {:?} listen address to the peer contact book: {:?}",
+                        peer_id,
+                        listen_addr
+                    );
                     swarm.kademlia.add_address(&peer_id, listen_addr.clone());
 
                     // TODO: Rework peer address book handling
-                    swarm.discovery.events.push_back(NetworkBehaviourAction::NotifyHandler {
-                        peer_id,
-                        handler: NotifyHandler::Any,
-                        event: HandlerInEvent::ObservedAddress(vec![listen_addr.clone()]),
-                    });
+                    swarm
+                        .discovery
+                        .events
+                        .push_back(NetworkBehaviourAction::NotifyHandler {
+                            peer_id,
+                            handler: NotifyHandler::Any,
+                            event: HandlerInEvent::ObservedAddress(vec![listen_addr.clone()]),
+                        });
 
-                    state.incoming_listeners.remove(&endpoint.get_remote_address().clone());
+                    state
+                        .incoming_listeners
+                        .remove(&endpoint.get_remote_address().clone());
                 }
 
                 if !state.is_connected() {
-                    tracing::debug!(num_established, min_peers, "connected to {} peers (waiting for {})", num_established, min_peers);
+                    tracing::debug!(
+                        num_established,
+                        min_peers,
+                        "connected to {} peers (waiting for {})",
+                        num_established,
+                        min_peers
+                    );
 
                     if num_established.get() as usize >= min_peers {
                         state.set_connected();
@@ -418,12 +463,23 @@ impl Network {
                 }
             }
 
-            SwarmEvent::IncomingConnection { local_addr, send_back_addr } => {
-                tracing::trace!("Incoming connection from address {:?}, listen address: {:?}", send_back_addr, local_addr);
+            SwarmEvent::IncomingConnection {
+                local_addr,
+                send_back_addr,
+            } => {
+                tracing::trace!(
+                    "Incoming connection from address {:?}, listen address: {:?}",
+                    send_back_addr,
+                    local_addr
+                );
                 state.incoming_listeners.insert(send_back_addr, local_addr);
             }
 
-            SwarmEvent::IncomingConnectionError { local_addr: _, send_back_addr, error} => {
+            SwarmEvent::IncomingConnectionError {
+                local_addr: _,
+                send_back_addr,
+                error,
+            } => {
                 tracing::warn!("Incoming connection error: {:?}", error);
                 state.incoming_listeners.remove(&send_back_addr);
             }
@@ -441,11 +497,14 @@ impl Network {
                                 match result {
                                     QueryResult::GetRecord(result) => {
                                         if let Some(output) = state.dht_gets.remove(&id) {
-                                            let result = result.map_err(Into::into).and_then(|GetRecordOk { mut records }| {
-                                                // TODO: What do we do, if we get multiple records?
-                                                let data_opt = records.pop().map(|r| r.record.value);
-                                                Ok(data_opt)
-                                            });
+                                            let result = result.map_err(Into::into).and_then(
+                                                |GetRecordOk { mut records }| {
+                                                    // TODO: What do we do, if we get multiple records?
+                                                    let data_opt =
+                                                        records.pop().map(|r| r.record.value);
+                                                    Ok(data_opt)
+                                                },
+                                            );
                                             output.send(result).ok();
                                         } else {
                                             tracing::warn!(query_id = ?id, "GetRecord query result for unknown query ID");
@@ -454,70 +513,90 @@ impl Network {
                                     QueryResult::PutRecord(result) => {
                                         // dht_put resolved
                                         if let Some(output) = state.dht_puts.remove(&id) {
-                                            output.send(result.map(|_| ()).map_err(Into::into)).ok();
+                                            output
+                                                .send(result.map(|_| ()).map_err(Into::into))
+                                                .ok();
                                         } else {
                                             tracing::warn!(query_id = ?id, "PutRecord query result for unknown query ID");
                                         }
                                     }
-                                    QueryResult::Bootstrap(result) => {
-                                        match result {
-                                            Ok(result) => tracing::debug!(result = ?result, "DHT bootstrap successful"),
-                                            Err(e) => tracing::error!("DHT bootstrap error: {:?}", e),
+                                    QueryResult::Bootstrap(result) => match result {
+                                        Ok(result) => {
+                                            tracing::debug!(result = ?result, "DHT bootstrap successful")
                                         }
-                                    }
+                                        Err(e) => tracing::error!("DHT bootstrap error: {:?}", e),
+                                    },
                                     _ => {}
                                 }
                             }
                             _ => {}
                         }
                     }
-                    NimiqEvent::Gossip(event) => {
-                        match event {
-                            GossipsubEvent::Message { propagation_source, message_id, message } => {
-                                tracing::debug!(id = ?message_id, source = ?propagation_source, message = ?message, "received message");
+                    NimiqEvent::Gossip(event) => match event {
+                        GossipsubEvent::Message {
+                            propagation_source,
+                            message_id,
+                            message,
+                        } => {
+                            tracing::debug!(id = ?message_id, source = ?propagation_source, message = ?message, "received message");
 
-                                if let Some(topic_info) = state.gossip_topics.get_mut(&message.topic) {
-                                    let (output, validate) = topic_info;
-                                    if !&*validate {
-                                        swarm.gossipsub.report_message_validation_result(
+                            if let Some(topic_info) = state.gossip_topics.get_mut(&message.topic) {
+                                let (output, validate) = topic_info;
+                                if !&*validate {
+                                    swarm
+                                        .gossipsub
+                                        .report_message_validation_result(
                                             &message_id,
                                             &propagation_source,
                                             MessageAcceptance::Accept,
-                                        ).ok();
-                                    }
-                                    output.send((message, message_id, propagation_source)).await.ok();
-                                } else {
-                                    tracing::warn!(topic = ?message.topic, "unknown topic hash");
+                                        )
+                                        .ok();
                                 }
-                            }
-                            GossipsubEvent::Subscribed { peer_id, topic } => {
-                                tracing::debug!(peer_id = ?peer_id, topic = ?topic, "peer subscribed to topic");
-                            }
-                            GossipsubEvent::Unsubscribed { peer_id, topic } => {
-                                tracing::debug!(peer_id = ?peer_id, topic = ?topic, "peer unsubscribed");
+                                output
+                                    .send((message, message_id, propagation_source))
+                                    .await
+                                    .ok();
+                            } else {
+                                tracing::warn!(topic = ?message.topic, "unknown topic hash");
                             }
                         }
-                    }
+                        GossipsubEvent::Subscribed { peer_id, topic } => {
+                            tracing::debug!(peer_id = ?peer_id, topic = ?topic, "peer subscribed to topic");
+                        }
+                        GossipsubEvent::Unsubscribed { peer_id, topic } => {
+                            tracing::debug!(peer_id = ?peer_id, topic = ?topic, "peer unsubscribed");
+                        }
+                    },
                     NimiqEvent::Identify(event) => {
                         match event {
-                            IdentifyEvent::Received { peer_id, info, observed_addr } => {
+                            IdentifyEvent::Received {
+                                peer_id,
+                                info,
+                                observed_addr,
+                            } => {
                                 tracing::debug!("Received identifying info from peer {:?} at address {:?}: {:?}", peer_id, observed_addr, info);
                                 for listen_addr in info.listen_addrs.clone() {
                                     swarm.kademlia.add_address(&peer_id, listen_addr);
                                 }
 
                                 // TODO: Rework peer address book handling
-                                swarm.discovery.events.push_back(NetworkBehaviourAction::NotifyHandler {
-                                    peer_id,
-                                    handler: NotifyHandler::Any,
-                                    event: HandlerInEvent::ObservedAddress(info.listen_addrs),
-                                });
+                                swarm.discovery.events.push_back(
+                                    NetworkBehaviourAction::NotifyHandler {
+                                        peer_id,
+                                        handler: NotifyHandler::Any,
+                                        event: HandlerInEvent::ObservedAddress(info.listen_addrs),
+                                    },
+                                );
                             }
                             IdentifyEvent::Sent { peer_id } => {
                                 tracing::debug!("Sent identifiyng info to peer {:?}", peer_id);
                             }
                             IdentifyEvent::Error { peer_id, error } => {
-                                tracing::error!("Error while identifying remote peer {:?}: {:?}", peer_id, error);
+                                tracing::error!(
+                                    "Error while identifying remote peer {:?}: {:?}",
+                                    peer_id,
+                                    error
+                                );
                             }
                         }
                     }
@@ -527,16 +606,24 @@ impl Network {
         }
     }
 
-    async fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut TaskState) -> Result<(), NetworkError> {
+    async fn perform_action(
+        action: NetworkAction,
+        swarm: &mut NimiqSwarm,
+        state: &mut TaskState,
+    ) -> Result<(), NetworkError> {
         tracing::debug!(action = ?action, "performing action");
 
         match action {
             NetworkAction::Dial { peer_id, output } => {
-                output.send(Swarm::dial(swarm, &peer_id).map_err(Into::into)).ok();
+                output
+                    .send(Swarm::dial(swarm, &peer_id).map_err(Into::into))
+                    .ok();
             }
             NetworkAction::DialAddress { address, output } => {
                 output
-                    .send(Swarm::dial_addr(swarm, address).map_err(|l| NetworkError::Dial(libp2p::swarm::DialError::ConnectionLimit(l))))
+                    .send(Swarm::dial_addr(swarm, address).map_err(|l| {
+                        NetworkError::Dial(libp2p::swarm::DialError::ConnectionLimit(l))
+                    }))
                     .ok();
             }
             NetworkAction::DhtGet { key, output } => {
@@ -563,7 +650,11 @@ impl Network {
                     }
                 }
             }
-            NetworkAction::Subscribe { topic_name, validate, output } => {
+            NetworkAction::Subscribe {
+                topic_name,
+                validate,
+                output,
+            } => {
                 let topic = IdentTopic::new(topic_name.clone());
 
                 match swarm.gossipsub.subscribe(&topic) {
@@ -578,7 +669,9 @@ impl Network {
 
                     // Apparently we're already subscribed.
                     Ok(false) => {
-                        output.send(Err(NetworkError::AlreadySubscribed { topic_name })).ok();
+                        output
+                            .send(Err(NetworkError::AlreadySubscribed { topic_name }))
+                            .ok();
                     }
 
                     // Failed. Send back error.
@@ -587,20 +680,32 @@ impl Network {
                     }
                 }
             }
-            NetworkAction::Publish { topic_name, data, output } => {
+            NetworkAction::Publish {
+                topic_name,
+                data,
+                output,
+            } => {
                 // TODO: Check if we're subscribed to the topic, otherwise we can't publish
                 let topic = IdentTopic::new(topic_name);
-                output.send(swarm.gossipsub.publish(topic, data).map_err(Into::into)).ok();
+                output
+                    .send(swarm.gossipsub.publish(topic, data).map_err(Into::into))
+                    .ok();
             }
             NetworkAction::NetworkInfo { output } => {
                 output.send(Swarm::network_info(swarm)).ok();
             }
-            NetworkAction::Validate { message_id, source, output } => {
-                output.send(Ok(swarm.gossipsub.report_message_validation_result(
-                    &message_id,
-                    &source,
-                    MessageAcceptance::Accept,
-                )?)).ok();
+            NetworkAction::Validate {
+                message_id,
+                source,
+                output,
+            } => {
+                output
+                    .send(Ok(swarm.gossipsub.report_message_validation_result(
+                        &message_id,
+                        &source,
+                        MessageAcceptance::Accept,
+                    )?))
+                    .ok();
             }
             NetworkAction::ReceiveFromAll { type_id, output } => {
                 swarm.message.receive_from_all(type_id, output);
@@ -613,7 +718,10 @@ impl Network {
     pub async fn network_info(&self) -> Result<NetworkInfo, NetworkError> {
         let (output_tx, output_rx) = oneshot::channel();
 
-        self.action_tx.clone().send(NetworkAction::NetworkInfo { output: output_tx }).await?;
+        self.action_tx
+            .clone()
+            .send(NetworkAction::NetworkInfo { output: output_tx })
+            .await?;
         Ok(output_rx.await?)
     }
 }
@@ -625,7 +733,12 @@ impl NetworkInterface for Network {
     type Error = NetworkError;
     type PubsubId = GossipsubId<PeerId>;
 
-    fn get_peer_updates(&self) -> (Vec<Arc<Self::PeerType>>, broadcast::Receiver<NetworkEvent<Self::PeerType>>) {
+    fn get_peer_updates(
+        &self,
+    ) -> (
+        Vec<Arc<Self::PeerType>>,
+        broadcast::Receiver<NetworkEvent<Self::PeerType>>,
+    ) {
         self.peers.subscribe()
     }
 
@@ -646,7 +759,6 @@ impl NetworkInterface for Network {
     fn receive_from_all<'a, T: Message>(&self) -> BoxStream<'a, (T, Arc<Peer>)> {
         let mut action_tx = self.action_tx.clone();
 
-        
         // Future to register the channel.
         let register_stream = async move {
             let (tx, rx) = mpsc::channel(0);
@@ -656,7 +768,8 @@ impl NetworkInterface for Network {
                     type_id: T::TYPE_ID.into(),
                     output: tx,
                 })
-                .await.expect("Sending action to network task failed.");
+                .await
+                .expect("Sending action to network task failed.");
 
             rx
         };
@@ -670,13 +783,16 @@ impl NetworkInterface for Network {
                     Err(e) => {
                         tracing::error!("Failed to deserialize message: {}", e);
                         None
-                    },
+                    }
                 }
             })
             .boxed()
     }
 
-    async fn subscribe<T>(&self, topic: &T) -> Result<Pin<Box<dyn Stream<Item = (T::Item, Self::PubsubId)> + Send>>, Self::Error>
+    async fn subscribe<T>(
+        &self,
+        topic: &T,
+    ) -> Result<Pin<Box<dyn Stream<Item = (T::Item, Self::PubsubId)> + Send>>, Self::Error>
     where
         T: Topic + Sync,
     {
@@ -696,7 +812,8 @@ impl NetworkInterface for Network {
 
         Ok(rx
             .map(|(msg, msg_id, source)| {
-                let item: <T as Topic>::Item = Deserialize::deserialize_from_vec(&msg.data).unwrap();
+                let item: <T as Topic>::Item =
+                    Deserialize::deserialize_from_vec(&msg.data).unwrap();
                 let id = GossipsubId {
                     message_id: msg_id,
                     propagation_source: source,
@@ -788,7 +905,13 @@ impl NetworkInterface for Network {
 
     async fn dial_peer(&self, peer_id: PeerId) -> Result<(), NetworkError> {
         let (output_tx, output_rx) = oneshot::channel();
-        self.action_tx.clone().send(NetworkAction::Dial { peer_id, output: output_tx }).await?;
+        self.action_tx
+            .clone()
+            .send(NetworkAction::Dial {
+                peer_id,
+                output: output_tx,
+            })
+            .await?;
         output_rx.await?
     }
 
@@ -796,7 +919,10 @@ impl NetworkInterface for Network {
         let (output_tx, output_rx) = oneshot::channel();
         self.action_tx
             .clone()
-            .send(NetworkAction::DialAddress { address, output: output_tx })
+            .send(NetworkAction::DialAddress {
+                address,
+                output: output_tx,
+            })
             .await?;
         output_rx.await?
     }
@@ -812,7 +938,7 @@ mod tests {
 
     use futures::{Stream, StreamExt};
     use libp2p::{
-        gossipsub::{GossipsubConfigBuilder},
+        gossipsub::GossipsubConfigBuilder,
         identity::Keypair,
         multiaddr::{multiaddr, Multiaddr},
         swarm::KeepAlive,
@@ -921,7 +1047,12 @@ mod tests {
             self.next_address += 1;
 
             let clock = Arc::new(OffsetTime::new());
-            let net = Network::new(vec![address.clone()], clock, network_config(address.clone())).await;
+            let net = Network::new(
+                vec![address.clone()],
+                clock,
+                network_config(address.clone()),
+            )
+            .await;
             tracing::debug!(address = ?address, peer_id = ?net.local_peer_id, "creating node");
 
             if let Some(dial_address) = self.addresses.first() {
@@ -954,8 +1085,18 @@ mod tests {
         let addr1 = multiaddr![Memory(thread_rng().gen::<u64>())];
         let addr2 = multiaddr![Memory(thread_rng().gen::<u64>())];
 
-        let net1 = Network::new(vec![addr1.clone()], Arc::new(OffsetTime::new()), network_config(addr1.clone())).await;
-        let net2 = Network::new(vec![addr2.clone()], Arc::new(OffsetTime::new()), network_config(addr2.clone())).await;
+        let net1 = Network::new(
+            vec![addr1.clone()],
+            Arc::new(OffsetTime::new()),
+            network_config(addr1.clone()),
+        )
+        .await;
+        let net2 = Network::new(
+            vec![addr2.clone()],
+            Arc::new(OffsetTime::new()),
+            network_config(addr2.clone()),
+        )
+        .await;
 
         tracing::debug!(address = ?addr1, peer_id = ?net1.local_peer_id, "Network 1");
         tracing::debug!(address = ?addr2, peer_id = ?net2.local_peer_id, "Network 2");
@@ -1022,7 +1163,12 @@ mod tests {
         let mut msgs2 = peer1.receive::<TestMessage2>();
 
         peer2.send(&TestMessage { id: 4711 }).await.unwrap();
-        peer2.send(&TestMessage2 { x: "foobar".to_string() }).await.unwrap();
+        peer2
+            .send(&TestMessage2 {
+                x: "foobar".to_string(),
+            })
+            .await
+            .unwrap();
 
         tracing::debug!("send complete");
 
@@ -1081,7 +1227,7 @@ mod tests {
         let event1 = events1.next().await.unwrap().unwrap();
         assert_peer_left(&event1, net2.local_peer_id());
         tracing::trace!(event1 = ?event1);
-        
+
         let event2 = events2.next().await.unwrap().unwrap();
         assert_peer_left(&event2, net1.local_peer_id());
         tracing::trace!(event2 = ?event2);
@@ -1122,7 +1268,9 @@ mod tests {
         }
     }
 
-    fn consume_stream<T: std::fmt::Debug>(mut stream: impl Stream<Item = T> + Unpin + Send + 'static) {
+    fn consume_stream<T: std::fmt::Debug>(
+        mut stream: impl Stream<Item = T> + Unpin + Send + 'static,
+    ) {
         tokio::spawn(async move { while stream.next().await.is_some() {} });
     }
 
@@ -1148,7 +1296,9 @@ mod tests {
 
         tokio::time::delay_for(Duration::from_secs(10)).await;
 
-        net2.publish(&TestTopic, test_message.clone()).await.unwrap();
+        net2.publish(&TestTopic, test_message.clone())
+            .await
+            .unwrap();
 
         tracing::info!("Waiting for GossipSub message...");
         let (received_message, message_id) = messages.next().await.unwrap();

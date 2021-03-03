@@ -6,11 +6,14 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 
-use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, WriteBytesExt};
+use beserial::{
+    Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
+    SerializingError, WriteBytesExt,
+};
 use bls::CompressedPublicKey as BlsPublicKey;
 use keys::Address;
-use primitives::coin::Coin;
 use primitives::account::ValidatorId;
+use primitives::coin::Coin;
 
 use crate::{Account, AccountError};
 
@@ -35,7 +38,12 @@ pub struct Validator {
 impl Validator {
     /// Creates a new validator given a stake, a validator key and a reward address. It will be
     /// created without any stakers delegated to it.
-    pub fn new(id: ValidatorId, initial_balance: Coin, reward_address: Address, validator_key: BlsPublicKey) -> Self {
+    pub fn new(
+        id: ValidatorId,
+        initial_balance: Coin,
+        reward_address: Address,
+        validator_key: BlsPublicKey,
+    ) -> Self {
         Validator {
             id,
             balance: initial_balance,
@@ -46,7 +54,11 @@ impl Validator {
     }
 
     /// Allows updating the reward address and/or the validator key of a specific validator.
-    pub fn update_validator(&self, new_reward_address: Option<Address>, new_validator_key: Option<BlsPublicKey>) -> Self {
+    pub fn update_validator(
+        &self,
+        new_reward_address: Option<Address>,
+        new_validator_key: Option<BlsPublicKey>,
+    ) -> Self {
         let active_stake_by_address = mem::take(self.active_stake_by_address.write().deref_mut());
         Validator {
             id: self.id.clone(),
@@ -75,12 +87,21 @@ impl Validator {
         let validator = self.with_balance(new_balance);
 
         // We do not need to check for overflows here, because self.balance is always larger.
-        *validator.active_stake_by_address.write().entry(staker_address).or_insert(Coin::ZERO) += stake;
+        *validator
+            .active_stake_by_address
+            .write()
+            .entry(staker_address)
+            .or_insert(Coin::ZERO) += stake;
         Ok(validator)
     }
 
     /// Removes a delegated stake from a given validator.
-    pub fn sub_stake(&self, staker_address: &Address, value: Coin, not_present_error: AccountError) -> Result<Self, AccountError> {
+    pub fn sub_stake(
+        &self,
+        staker_address: &Address,
+        value: Coin,
+        not_present_error: AccountError,
+    ) -> Result<Self, AccountError> {
         // First update stake entry.
         let mut active_stake_by_address = self.active_stake_by_address.write();
 
@@ -108,7 +129,10 @@ impl Serialize for Validator {
         size += Serialize::serialize(&self.balance, writer)?;
         size += Serialize::serialize(&self.reward_address, writer)?;
         size += Serialize::serialize(&self.validator_key, writer)?;
-        size += SerializeWithLength::serialize::<u32, _>(self.active_stake_by_address.read().deref(), writer)?;
+        size += SerializeWithLength::serialize::<u32, _>(
+            self.active_stake_by_address.read().deref(),
+            writer,
+        )?;
         Ok(size)
     }
 
@@ -118,7 +142,9 @@ impl Serialize for Validator {
         size += Serialize::serialized_size(&self.balance);
         size += Serialize::serialized_size(&self.reward_address);
         size += Serialize::serialized_size(&self.validator_key);
-        size += SerializeWithLength::serialized_size::<u32>(self.active_stake_by_address.read().deref());
+        size += SerializeWithLength::serialized_size::<u32>(
+            self.active_stake_by_address.read().deref(),
+        );
         size
     }
 }
@@ -129,7 +155,8 @@ impl Deserialize for Validator {
         let balance = Deserialize::deserialize(reader)?;
         let reward_address = Deserialize::deserialize(reader)?;
         let validator_key = Deserialize::deserialize(reader)?;
-        let active_stake_by_address: BTreeMap<Address, Coin> = DeserializeWithLength::deserialize::<u32, _>(reader)?;
+        let active_stake_by_address: BTreeMap<Address, Coin> =
+            DeserializeWithLength::deserialize::<u32, _>(reader)?;
         Ok(Validator {
             id,
             balance,
@@ -157,7 +184,10 @@ impl PartialOrd for Validator {
 impl Ord for Validator {
     // Highest to low balances
     fn cmp(&self, other: &Self) -> Ordering {
-        other.balance.cmp(&self.balance).then_with(|| self.id.cmp(&other.id))
+        other
+            .balance
+            .cmp(&self.balance)
+            .then_with(|| self.id.cmp(&other.id))
     }
 }
 
@@ -235,8 +265,15 @@ impl ValidatorEntry {
         }
     }
 
-    pub fn update_validator(&mut self, new_reward_address: Option<Address>, new_validator_key: Option<BlsPublicKey>) {
-        self.replace(Ok(Arc::new(self.as_validator().update_validator(new_reward_address, new_validator_key))))
+    pub fn update_validator(
+        &mut self,
+        new_reward_address: Option<Address>,
+        new_validator_key: Option<BlsPublicKey>,
+    ) {
+        self.replace(Ok(Arc::new(
+            self.as_validator()
+                .update_validator(new_reward_address, new_validator_key),
+        )))
     }
 
     /// This function will only change the validator entry if add_stake is successful.
@@ -246,8 +283,15 @@ impl ValidatorEntry {
     }
 
     /// This function will only change the validator entry if sub_stake is successful.
-    pub fn try_sub_stake(&mut self, staker_address: &Address, value: Coin, not_present_error: AccountError) {
-        let new_validator = self.as_validator().sub_stake(staker_address, value, not_present_error);
+    pub fn try_sub_stake(
+        &mut self,
+        staker_address: &Address,
+        value: Coin,
+        not_present_error: AccountError,
+    ) {
+        let new_validator = self
+            .as_validator()
+            .sub_stake(staker_address, value, not_present_error);
         self.replace(new_validator.map(Arc::new));
     }
 }

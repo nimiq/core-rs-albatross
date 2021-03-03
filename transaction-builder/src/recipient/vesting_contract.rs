@@ -111,7 +111,13 @@ impl VestingRecipientBuilder {
 
     /// This convenience function allows to quickly create a release schedule of `num_steps`
     /// payouts starting at `start_time + time_step`.
-    pub fn with_steps(&mut self, total_amount: Coin, start_time: u64, time_step: u64, num_steps: u32) -> &mut Self {
+    pub fn with_steps(
+        &mut self,
+        total_amount: Coin,
+        start_time: u64,
+        time_step: u64,
+        num_steps: u32,
+    ) -> &mut Self {
         let step_amount = total_amount.div(u64::from(num_steps));
         self.with_total_amount(total_amount)
             .with_start_time(start_time)
@@ -161,10 +167,18 @@ impl VestingRecipientBuilder {
         Ok(Recipient::VestingCreation {
             data: VestingCreationData {
                 owner: self.owner.ok_or(VestingRecipientBuilderError::NoOwner)?,
-                start_time: self.start_time.ok_or(VestingRecipientBuilderError::NoStartBlock)?,
-                time_step: self.time_step.ok_or(VestingRecipientBuilderError::NoStepDistance)?,
-                step_amount: self.step_amount.ok_or(VestingRecipientBuilderError::NoStepAmount)?,
-                total_amount: self.total_amount.ok_or(VestingRecipientBuilderError::NoTotalAmount)?,
+                start_time: self
+                    .start_time
+                    .ok_or(VestingRecipientBuilderError::NoStartBlock)?,
+                time_step: self
+                    .time_step
+                    .ok_or(VestingRecipientBuilderError::NoStepDistance)?,
+                step_amount: self
+                    .step_amount
+                    .ok_or(VestingRecipientBuilderError::NoStepAmount)?,
+                total_amount: self
+                    .total_amount
+                    .ok_or(VestingRecipientBuilderError::NoTotalAmount)?,
             },
         })
     }

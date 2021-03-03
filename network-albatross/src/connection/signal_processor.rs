@@ -79,7 +79,10 @@ impl SignalProcessor {
 
         // Discard signals that have reached their TTL.
         if msg.ttl == 0 {
-            debug!("Discarding signal from {:?} to {:?} - TTL reached", &msg.sender_id, &msg.recipient_id);
+            debug!(
+                "Discarding signal from {:?} to {:?} - TTL reached",
+                &msg.sender_id, &msg.recipient_id
+            );
             // Send signal containing TTL_EXCEEDED flag back in reverse direction.
             if msg.flags.is_empty() {
                 channel.send_or_close(Message::Signal(Box::new(SignalMessage {
@@ -100,7 +103,10 @@ impl SignalProcessor {
         let peer_address_book_state = self.addresses.state();
         let signal_channel = peer_address_book_state.get_channel_by_peer_id(&msg.recipient_id);
         if signal_channel.is_none() {
-            debug!("Failed to forward signal from {:?} to {:?} - no route found", msg.sender_id, msg.recipient_id);
+            debug!(
+                "Failed to forward signal from {:?} to {:?} - no route found",
+                msg.sender_id, msg.recipient_id
+            );
             // If we don't know a route to the intended recipient, return signal to sender with unroutable flag set and payload removed.
             // Only do this if the signal is not already a unroutable response.
             if msg.flags.is_empty() {
@@ -120,7 +126,8 @@ impl SignalProcessor {
 
         // Discard signal if our shortest route to the target is via the sending peer.
         // XXX Why does this happen?
-        let signal_channel = signal_channel.expect("This should always work because we dealed with the None case above");
+        let signal_channel = signal_channel
+            .expect("This should always work because we dealed with the None case above");
         if signal_channel.address_info.peer_address() == channel.address_info.peer_address() {
             debug!(
                 "Discarding signal from {:?} to {:?} - shortest route via sending peer",
@@ -155,11 +162,16 @@ impl SignalProcessor {
             signature: msg.signature,
         })));
 
-        debug!("Forwarded signal to {:?} from {:?}", &msg.recipient_id, &msg.sender_id);
+        debug!(
+            "Forwarded signal to {:?} from {:?}",
+            &msg.recipient_id, &msg.sender_id
+        );
 
         // We store forwarded messages if there are no special flags set.
         if msg.flags.is_empty() {
-            self.forwards.lock().add(msg.sender_id, msg.recipient_id, msg.nonce);
+            self.forwards
+                .lock()
+                .add(msg.sender_id, msg.recipient_id, msg.nonce);
         }
     }
 }
@@ -202,14 +214,22 @@ impl SignalStore {
         self.store.insert(signal, Instant::now());
     }
 
-    pub fn signal_forwarded(&mut self, sender_id: PeerId, recipient_id: PeerId, nonce: u32) -> bool {
+    pub fn signal_forwarded(
+        &mut self,
+        sender_id: PeerId,
+        recipient_id: PeerId,
+        nonce: u32,
+    ) -> bool {
         let signal = ForwardedSignal::new(sender_id, recipient_id, nonce);
         if let Some(last_seen) = self.store.get(&signal) {
             let valid = last_seen.elapsed() < ForwardedSignal::SIGNAL_MAX_AGE;
             if !valid {
                 // Because of the ordering, we know that everything after that is invalid too.
                 for _ in 0..self.queue.len() {
-                    let signal_to_remove = self.queue.pop_back().expect("The check above guarantees this is Some()");
+                    let signal_to_remove = self
+                        .queue
+                        .pop_back()
+                        .expect("The check above guarantees this is Some()");
                     self.store.remove(&signal_to_remove);
                     if signal == signal_to_remove {
                         break;

@@ -8,7 +8,10 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV
 macro_rules! impl_serialize_ipaddr {
     ($name: ident, $bytes: expr) => {
         impl Serialize for $name {
-            fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+            fn serialize<W: WriteBytesExt>(
+                &self,
+                writer: &mut W,
+            ) -> Result<usize, SerializingError> {
                 Ok(writer.write(&self.octets())?)
             }
 
@@ -30,7 +33,10 @@ macro_rules! impl_serialize_ipaddr {
 macro_rules! impl_serialize_sockaddr {
     ($name: ident, $constructor: expr) => {
         impl Serialize for $name {
-            fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+            fn serialize<W: WriteBytesExt>(
+                &self,
+                writer: &mut W,
+            ) -> Result<usize, SerializingError> {
                 let mut size = 0;
                 size += Serialize::serialize(self.ip(), writer)?;
                 size += Serialize::serialize(&self.port(), writer)?;

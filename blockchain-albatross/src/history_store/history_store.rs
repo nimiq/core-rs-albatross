@@ -33,12 +33,21 @@ impl HistoryStore {
     pub fn new(env: Environment) -> Self {
         let hist_tree_db = env.open_database(Self::HIST_TREE_DB_NAME.to_string());
         let ext_tx_db = env.open_database(Self::EXT_TX_DB_NAME.to_string());
-        HistoryStore { env, hist_tree_db, ext_tx_db }
+        HistoryStore {
+            env,
+            hist_tree_db,
+            ext_tx_db,
+        }
     }
 
     /// Add a list of extended transactions to an existing history tree. It returns the root of the
     /// resulting tree.
-    pub fn add_to_history(&self, txn: &mut WriteTransaction, epoch_number: u32, ext_txs: &[ExtendedTransaction]) -> Option<Blake2bHash> {
+    pub fn add_to_history(
+        &self,
+        txn: &mut WriteTransaction,
+        epoch_number: u32,
+        ext_txs: &[ExtendedTransaction],
+    ) -> Option<Blake2bHash> {
         // Add the extended transactions into the respective database.
         // We need to do this separately due to the borrowing rules of Rust.
         for tx in ext_txs {
@@ -47,7 +56,11 @@ impl HistoryStore {
         }
 
         // Get the history tree.
-        let mut tree = MerkleMountainRange::new(MMRStore::with_write_transaction(&self.hist_tree_db, txn, epoch_number));
+        let mut tree = MerkleMountainRange::new(MMRStore::with_write_transaction(
+            &self.hist_tree_db,
+            txn,
+            epoch_number,
+        ));
 
         // Append the extended transactions to the history tree.
         for tx in ext_txs {
@@ -60,9 +73,18 @@ impl HistoryStore {
 
     /// Removes a number of extended transactions from an existing history tree. It returns the root
     /// of the resulting tree.
-    pub fn remove_partial_history(&self, txn: &mut WriteTransaction, epoch_number: u32, num_ext_txs: usize) -> Option<Blake2bHash> {
+    pub fn remove_partial_history(
+        &self,
+        txn: &mut WriteTransaction,
+        epoch_number: u32,
+        num_ext_txs: usize,
+    ) -> Option<Blake2bHash> {
         // Get the history tree and put all leaves into the tree.
-        let mut tree = MerkleMountainRange::new(MMRStore::with_write_transaction(&self.hist_tree_db, txn, epoch_number));
+        let mut tree = MerkleMountainRange::new(MMRStore::with_write_transaction(
+            &self.hist_tree_db,
+            txn,
+            epoch_number,
+        ));
 
         // Get the history root. We need to get it here because of Rust's borrowing rules.
         let root = tree.get_root().ok()?.to_blake2b();
@@ -90,7 +112,11 @@ impl HistoryStore {
     /// Returns None if there's no history tree corresponding to the given epoch number.
     pub fn remove_history(&self, txn: &mut WriteTransaction, epoch_number: u32) -> Option<()> {
         // Get the history tree.
-        let mut tree = MerkleMountainRange::new(MMRStore::with_write_transaction(&self.hist_tree_db, txn, epoch_number));
+        let mut tree = MerkleMountainRange::new(MMRStore::with_write_transaction(
+            &self.hist_tree_db,
+            txn,
+            epoch_number,
+        ));
 
         // Remove all leaves from the history tree and remember the respective hashes.
         let mut hashes = Vec::with_capacity(tree.num_leaves());
@@ -110,7 +136,11 @@ impl HistoryStore {
     }
 
     /// Gets the history tree root for a given epoch.
-    pub fn get_history_tree_root(&self, epoch_number: u32, txn_option: Option<&Transaction>) -> Option<Blake2bHash> {
+    pub fn get_history_tree_root(
+        &self,
+        epoch_number: u32,
+        txn_option: Option<&Transaction>,
+    ) -> Option<Blake2bHash> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -121,7 +151,11 @@ impl HistoryStore {
         };
 
         // Get the history root.
-        let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(&self.hist_tree_db, txn, epoch_number));
+        let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
+            &self.hist_tree_db,
+            txn,
+            epoch_number,
+        ));
 
         // Return the history root.
         Some(tree.get_root().ok()?.to_blake2b())
@@ -143,7 +177,11 @@ impl HistoryStore {
     }
 
     /// Returns the number of extended transactions for a given epoch.
-    pub fn get_num_extended_transactions(&self, epoch_number: u32, txn_option: Option<&Transaction>) -> usize {
+    pub fn get_num_extended_transactions(
+        &self,
+        epoch_number: u32,
+        txn_option: Option<&Transaction>,
+    ) -> usize {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -154,7 +192,11 @@ impl HistoryStore {
         };
 
         // Get history tree for given epoch.
-        let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(&self.hist_tree_db, txn, epoch_number));
+        let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
+            &self.hist_tree_db,
+            txn,
+            epoch_number,
+        ));
 
         tree.num_leaves()
     }
@@ -162,7 +204,13 @@ impl HistoryStore {
     /// Returns the `chunk_index`th chunk of size `chunk_size` for a given epoch.
     /// The return value consists of a vector of all the extended transactions in that chunk
     /// and a proof for these in the MMR.
-    pub fn get_chunk(&self, epoch_number: u32, chunk_size: usize, chunk_index: usize, txn_option: Option<&Transaction>) -> Option<HistoryTreeChunk> {
+    pub fn get_chunk(
+        &self,
+        epoch_number: u32,
+        chunk_size: usize,
+        chunk_index: usize,
+        txn_option: Option<&Transaction>,
+    ) -> Option<HistoryTreeChunk> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -173,7 +221,11 @@ impl HistoryStore {
         };
 
         // Get history tree for given epoch.
-        let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(&self.hist_tree_db, txn, epoch_number));
+        let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
+            &self.hist_tree_db,
+            txn,
+            epoch_number,
+        ));
 
         let start = cmp::min(chunk_size * chunk_index, tree.num_leaves());
         let end = cmp::min(start + chunk_size, tree.num_leaves());
@@ -187,16 +239,30 @@ impl HistoryStore {
 
         for i in start..end {
             let leaf_hash = tree.get_leaf(i).unwrap();
-            ext_txs.push(self.get_extended_tx(&leaf_hash.to_blake2b(), Some(txn)).unwrap());
+            ext_txs.push(
+                self.get_extended_tx(&leaf_hash.to_blake2b(), Some(txn))
+                    .unwrap(),
+            );
         }
 
-        Some(HistoryTreeChunk { proof, history: ext_txs })
+        Some(HistoryTreeChunk {
+            proof,
+            history: ext_txs,
+        })
     }
 
     /// Returns a partial MMR to put proofs in.
-    pub fn create_partial_tree<'a>(&'a self, epoch_number: u32, txn: &'a mut WriteTransaction<'a>) -> PartialMerkleMountainRange<HistoryTreeHash, MMRStore> {
+    pub fn create_partial_tree<'a>(
+        &'a self,
+        epoch_number: u32,
+        txn: &'a mut WriteTransaction<'a>,
+    ) -> PartialMerkleMountainRange<HistoryTreeHash, MMRStore> {
         // Get history tree for given epoch.
-        PartialMerkleMountainRange::new(MMRStore::with_write_transaction(&self.hist_tree_db, txn, epoch_number))
+        PartialMerkleMountainRange::new(MMRStore::with_write_transaction(
+            &self.hist_tree_db,
+            txn,
+            epoch_number,
+        ))
     }
 
     /// Creates a new history tree from chunks and returns the root hash.
@@ -207,10 +273,16 @@ impl HistoryStore {
         txn: &mut WriteTransaction,
     ) -> Result<Blake2bHash, MMRError> {
         // Get partial history tree for given epoch.
-        let mut tree = PartialMerkleMountainRange::new(MMRStore::with_write_transaction(&self.hist_tree_db, txn, epoch_number));
+        let mut tree = PartialMerkleMountainRange::new(MMRStore::with_write_transaction(
+            &self.hist_tree_db,
+            txn,
+            epoch_number,
+        ));
 
         // Push all proofs into the history tree and remember all leaves.
-        let mut all_leaves = Vec::with_capacity(chunks.len() * chunks.first().map(|(leaves, _)| leaves.len()).unwrap_or(0));
+        let mut all_leaves = Vec::with_capacity(
+            chunks.len() * chunks.first().map(|(leaves, _)| leaves.len()).unwrap_or(0),
+        );
         for (mut leaves, proof) in chunks {
             tree.push_proof(proof, &leaves)?;
             all_leaves.append(&mut leaves);
@@ -232,7 +304,11 @@ impl HistoryStore {
     }
 
     /// Gets all extended transactions for a given epoch.
-    pub fn get_epoch_transactions(&self, epoch_number: u32, txn_option: Option<&Transaction>) -> Option<Vec<ExtendedTransaction>> {
+    pub fn get_epoch_transactions(
+        &self,
+        epoch_number: u32,
+        txn_option: Option<&Transaction>,
+    ) -> Option<Vec<ExtendedTransaction>> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -243,14 +319,21 @@ impl HistoryStore {
         };
 
         // Get history tree for given epoch.
-        let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(&self.hist_tree_db, txn, epoch_number));
+        let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
+            &self.hist_tree_db,
+            txn,
+            epoch_number,
+        ));
 
         // Get each extended transaction from the tree.
         let mut ext_txs = vec![];
 
         for i in 0..tree.num_leaves() {
             let leaf_hash = tree.get_leaf(i).unwrap();
-            ext_txs.push(self.get_extended_tx(&leaf_hash.to_blake2b(), Some(txn)).unwrap());
+            ext_txs.push(
+                self.get_extended_tx(&leaf_hash.to_blake2b(), Some(txn))
+                    .unwrap(),
+            );
         }
 
         Some(ext_txs)
@@ -258,7 +341,11 @@ impl HistoryStore {
 
     /// Gets an extended transaction by its hash. Note that this hash is the leaf hash (see MMRHash)
     /// of the transaction, not a simple Blake2b hash of the transaction.
-    pub fn get_extended_tx(&self, hash: &Blake2bHash, txn_option: Option<&Transaction>) -> Option<ExtendedTransaction> {
+    pub fn get_extended_tx(
+        &self,
+        hash: &Blake2bHash,
+        txn_option: Option<&Transaction>,
+    ) -> Option<ExtendedTransaction> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -270,7 +357,12 @@ impl HistoryStore {
         txn.get(&self.ext_tx_db, hash)
     }
 
-    fn put_extended_tx(&self, txn: &mut WriteTransaction, hash: &Blake2bHash, ext_tx: &ExtendedTransaction) {
+    fn put_extended_tx(
+        &self,
+        txn: &mut WriteTransaction,
+        hash: &Blake2bHash,
+        ext_tx: &ExtendedTransaction,
+    ) {
         txn.put_reserve(&self.ext_tx_db, hash, ext_tx);
     }
 

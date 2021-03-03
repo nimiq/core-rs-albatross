@@ -30,7 +30,11 @@ mod tests {
 
         MessageWriter::new(&mut buf).send(&message).await.unwrap();
 
-        let received = MessageReader::new(Cursor::new(buf)).next().await.unwrap().unwrap();
+        let received = MessageReader::new(Cursor::new(buf))
+            .next()
+            .await
+            .unwrap()
+            .unwrap();
 
         assert_eq!(message, received);
     }

@@ -1,7 +1,8 @@
 use std::io::Write;
 
 use nimiq_hash::{
-    argon2kdf, Argon2dHash, Argon2dHasher, Blake2bHash, Blake2bHasher, Blake2sHash, Blake2sHasher, Hasher, Sha256Hash, Sha256Hasher, Sha512Hash, Sha512Hasher,
+    argon2kdf, Argon2dHash, Argon2dHasher, Blake2bHash, Blake2bHasher, Blake2sHash, Blake2sHasher,
+    Hasher, Sha256Hash, Sha256Hasher, Sha512Hash, Sha512Hasher,
 };
 
 mod hmac;
@@ -18,7 +19,10 @@ fn it_can_compute_sha256() {
     let mut h = Sha256Hasher::default();
     h.write(b"te").unwrap();
     h.write(b"st").unwrap();
-    assert_eq!(h.finish(), Sha256Hash::from("9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"));
+    assert_eq!(
+        h.finish(),
+        Sha256Hash::from("9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08")
+    );
 }
 
 #[test]

@@ -24,17 +24,30 @@ pub trait TendermintOutsideDeps {
     fn get_value(&mut self, round: u32) -> Result<Self::ProposalTy, TendermintError>;
 
     /// Takes a proposal and a proof (2f+1 precommits) and returns a completed block.
-    fn assemble_block(&self, round: u32, proposal: Self::ProposalTy, proof: Self::ProofTy) -> Result<Self::ResultTy, TendermintError>;
+    fn assemble_block(
+        &self,
+        round: u32,
+        proposal: Self::ProposalTy,
+        proof: Self::ProofTy,
+    ) -> Result<Self::ResultTy, TendermintError>;
 
     /// Broadcasts a proposal message (which includes the proposal and the proposer's valid round).
     /// This is a Future and it is allowed to fail.
-    async fn broadcast_proposal(&mut self, round: u32, proposal: Self::ProposalTy, valid_round: Option<u32>) -> Result<(), TendermintError>;
+    async fn broadcast_proposal(
+        &mut self,
+        round: u32,
+        proposal: Self::ProposalTy,
+        valid_round: Option<u32>,
+    ) -> Result<(), TendermintError>;
 
     /// Waits for a proposal message (which includes the proposal and the proposer's valid round).
     /// The received proposal (if any) is guaranteed to be valid. This function also has to take
     /// care of waiting before timing out.
     /// This is a Future and it is allowed to fail.
-    async fn await_proposal(&mut self, round: u32) -> Result<ProposalResult<Self::ProposalTy>, TendermintError>;
+    async fn await_proposal(
+        &mut self,
+        round: u32,
+    ) -> Result<ProposalResult<Self::ProposalTy>, TendermintError>;
 
     /// Broadcasts a vote (either prevote or precommit) for a given round and proposal. It then
     /// returns an aggregation of the 2f+1 votes received from other nodes for this round (and
@@ -52,5 +65,9 @@ pub trait TendermintOutsideDeps {
     /// or not have 2f+1 votes, this function only returns all the votes that we have so far.
     /// It will fail if no aggregation was started for the given round and step.
     /// This is a Future and it is allowed to fail.
-    async fn get_aggregation(&mut self, round: u32, step: Step) -> Result<AggregationResult<Self::ProofTy>, TendermintError>;
+    async fn get_aggregation(
+        &mut self,
+        round: u32,
+        step: Step,
+    ) -> Result<AggregationResult<Self::ProofTy>, TendermintError>;
 }

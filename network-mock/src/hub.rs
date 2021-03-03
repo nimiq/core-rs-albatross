@@ -1,4 +1,8 @@
-use std::{collections::HashMap, hash::Hash, sync::{atomic::AtomicBool, Arc}};
+use std::{
+    collections::HashMap,
+    hash::Hash,
+    sync::{atomic::AtomicBool, Arc},
+};
 
 use futures::channel::mpsc;
 use parking_lot::Mutex;
@@ -36,7 +40,9 @@ pub(crate) struct MockHubInner {
 
 impl MockHubInner {
     pub fn get_topic(&mut self, topic: String) -> &broadcast::Sender<(Arc<Vec<u8>>, MockPeerId)> {
-        self.gossipsub_topics.entry(topic).or_insert_with(|| broadcast::channel(16).0)
+        self.gossipsub_topics
+            .entry(topic)
+            .or_insert_with(|| broadcast::channel(16).0)
     }
 }
 

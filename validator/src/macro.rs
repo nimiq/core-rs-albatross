@@ -10,9 +10,10 @@ use nimiq_block_albatross::{MacroBlock, MacroHeader, MultiSignature, TendermintS
 use nimiq_block_production_albatross::BlockProducer;
 use nimiq_blockchain_albatross::blockchain::Blockchain;
 use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
-use nimiq_tendermint::{Checkpoint, Step, TendermintOutsideDeps, TendermintReturn, TendermintState};
+use nimiq_tendermint::{
+    Checkpoint, Step, TendermintOutsideDeps, TendermintReturn, TendermintState,
+};
 use nimiq_validator_network::ValidatorNetwork;
-
 
 use crate::tendermint_outside_deps::TendermintInterface;
 
@@ -21,13 +22,17 @@ pub(crate) struct PersistedMacroState<TValidatorNetwork: ValidatorNetwork + 'sta
     pub height: u32,
     pub round: u32,
     pub step: TendermintStep,
-    pub locked_value: Option<<TendermintInterface<TValidatorNetwork> as TendermintOutsideDeps>::ProposalTy>,
+    pub locked_value:
+        Option<<TendermintInterface<TValidatorNetwork> as TendermintOutsideDeps>::ProposalTy>,
     pub locked_round: Option<u32>,
-    pub valid_value: Option<<TendermintInterface<TValidatorNetwork> as TendermintOutsideDeps>::ProposalTy>,
+    pub valid_value:
+        Option<<TendermintInterface<TValidatorNetwork> as TendermintOutsideDeps>::ProposalTy>,
     pub valid_round: Option<u32>,
 }
 
-impl<TValidatorNetwork: ValidatorNetwork> IntoDatabaseValue for PersistedMacroState<TValidatorNetwork> {
+impl<TValidatorNetwork: ValidatorNetwork> IntoDatabaseValue
+    for PersistedMacroState<TValidatorNetwork>
+{
     fn database_byte_size(&self) -> usize {
         self.serialized_size()
     }
@@ -37,7 +42,9 @@ impl<TValidatorNetwork: ValidatorNetwork> IntoDatabaseValue for PersistedMacroSt
     }
 }
 
-impl<TValidatorNetwork: ValidatorNetwork> FromDatabaseValue for PersistedMacroState<TValidatorNetwork> {
+impl<TValidatorNetwork: ValidatorNetwork> FromDatabaseValue
+    for PersistedMacroState<TValidatorNetwork>
+{
     fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
     where
         Self: Sized,

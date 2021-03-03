@@ -21,7 +21,10 @@ impl<N: ValidatorNetwork> SendingFuture<N> {
     pub async fn send<M: Message + Unpin + std::fmt::Debug>(self, msg: (M, usize)) {
         let result = self.network.send_to(&[msg.1], &msg.0).await;
         if let Some(Err(err)) = result.get(0) {
-            debug!("Sending msg: {:?} to validator #{} failed: {:?}", &msg.0, &msg.1, err);
+            debug!(
+                "Sending msg: {:?} to validator #{} failed: {:?}",
+                &msg.0, &msg.1, err
+            );
         }
     }
 }
@@ -46,7 +49,9 @@ impl<M: Message + Unpin, N: ValidatorNetwork> NetworkSink<M, N> {
     }
 }
 
-impl<M: Message + Unpin + std::fmt::Debug, N: ValidatorNetwork + 'static> Sink<(M, usize)> for NetworkSink<M, N> {
+impl<M: Message + Unpin + std::fmt::Debug, N: ValidatorNetwork + 'static> Sink<(M, usize)>
+    for NetworkSink<M, N>
+{
     type Error = ();
 
     fn poll_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -84,7 +89,11 @@ impl<M: Message + Unpin + std::fmt::Debug, N: ValidatorNetwork + 'static> Sink<(
         } else {
             // Otherwise, create the future and store it.
             // Note: This future does not get polled. Only once poll_* is called it will actually be polled.
-            let fut = (SendingFuture { network: self.network.clone() }).send(item).boxed();
+            let fut = (SendingFuture {
+                network: self.network.clone(),
+            })
+            .send(item)
+            .boxed();
             self.current_future = Some(fut);
             Ok(())
         }

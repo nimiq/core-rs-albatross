@@ -4,7 +4,7 @@ use std::task::{Context, Poll, Waker};
 
 use libp2p::{
     core::{either::EitherError, upgrade::ReadOneError},
-    gossipsub::{Gossipsub, GossipsubEvent, MessageAuthenticity, error::GossipsubHandlerError},
+    gossipsub::{error::GossipsubHandlerError, Gossipsub, GossipsubEvent, MessageAuthenticity},
     identify::{Identify, IdentifyEvent},
     kad::{store::MemoryStore, Kademlia, KademliaEvent},
     swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters},
@@ -18,23 +18,24 @@ use nimiq_utils::time::OffsetTime;
 use crate::{
     discovery::{
         behaviour::{DiscoveryBehaviour, DiscoveryEvent},
-        handler::{HandlerError as DiscoveryError},
+        handler::HandlerError as DiscoveryError,
         peer_contacts::PeerContactBook,
     },
     /*limit::{
         behaviour::{LimitBehaviour, LimitEvent},
         handler::{HandlerError as LimitError, HandlerInEvent as LimitAction},
     },*/
-    message::{
-        behaviour::MessageBehaviour,
-        handler::{HandlerError as MessageError},
-        peer::Peer,
-    },
+    message::{behaviour::MessageBehaviour, handler::HandlerError as MessageError, peer::Peer},
     network::Config,
 };
 
-pub type NimiqNetworkBehaviourError =
-    EitherError<EitherError<EitherError<EitherError<DiscoveryError, MessageError>, std::io::Error>, GossipsubHandlerError>, ReadOneError>;
+pub type NimiqNetworkBehaviourError = EitherError<
+    EitherError<
+        EitherError<EitherError<DiscoveryError, MessageError>, std::io::Error>,
+        GossipsubHandlerError,
+    >,
+    ReadOneError,
+>;
 
 #[derive(Debug)]
 pub enum NimiqEvent {
@@ -91,8 +92,16 @@ impl NimiqBehaviour {
         let peer_id = public_key.clone().into_peer_id();
 
         // TODO: persist to disk
-        let peer_contact_book = Arc::new(RwLock::new(PeerContactBook::new(Default::default(), config.peer_contact.sign(&config.keypair))));
-        let discovery = DiscoveryBehaviour::new(config.discovery, config.keypair.clone(), peer_contact_book, clock);
+        let peer_contact_book = Arc::new(RwLock::new(PeerContactBook::new(
+            Default::default(),
+            config.peer_contact.sign(&config.keypair),
+        )));
+        let discovery = DiscoveryBehaviour::new(
+            config.discovery,
+            config.keypair.clone(),
+            peer_contact_book,
+            clock,
+        );
 
         let message = MessageBehaviour::new(config.message);
 
@@ -100,8 +109,16 @@ impl NimiqBehaviour {
 
         let store = MemoryStore::new(peer_id.clone());
         let kademlia = Kademlia::with_config(peer_id, store, config.kademlia);
-        let gossipsub = Gossipsub::new(MessageAuthenticity::Signed(config.keypair), config.gossipsub).expect("Wrong configuration");
-        let identify = Identify::new("/albatross/2.0".to_string(), "albatross_node".to_string(), public_key);
+        let gossipsub = Gossipsub::new(
+            MessageAuthenticity::Signed(config.keypair),
+            config.gossipsub,
+        )
+        .expect("Wrong configuration");
+        let identify = Identify::new(
+            "/albatross/2.0".to_string(),
+            "albatross_node".to_string(),
+            public_key,
+        );
 
         Self {
             discovery,
@@ -115,7 +132,11 @@ impl NimiqBehaviour {
         }
     }
 
-    fn poll_event<T>(&mut self, cx: &mut Context, _params: &mut impl PollParameters) -> Poll<NetworkBehaviourAction<T, NimiqEvent>> {
+    fn poll_event<T>(
+        &mut self,
+        cx: &mut Context,
+        _params: &mut impl PollParameters,
+    ) -> Poll<NetworkBehaviourAction<T, NimiqEvent>> {
         if let Some(event) = self.events.pop_front() {
             log::trace!("NimiqBehaviour: emitting event: {:?}", event);
             return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));

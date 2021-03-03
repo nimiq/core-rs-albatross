@@ -7,8 +7,8 @@ use serde::{Deserialize, Deserializer};
 use beserial::Deserialize as BDeserialize;
 use bls::{PublicKey as BlsPublicKey, SecretKey as BlsSecretKey};
 use keys::Address;
-use primitives::coin::Coin;
 use primitives::account::ValidatorId;
+use primitives::coin::Coin;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct GenesisConfig {
@@ -84,7 +84,10 @@ where
 {
     let opt: Option<String> = Deserialize::deserialize(deserializer)?;
     if let Some(s) = opt {
-        Ok(Some(Address::from_user_friendly_address(&s).map_err(|e| Error::custom(format!("{:?}", e)))?))
+        Ok(Some(
+            Address::from_user_friendly_address(&s)
+                .map_err(|e| Error::custom(format!("{:?}", e)))?,
+        ))
     } else {
         Ok(None)
     }
@@ -99,8 +102,8 @@ where
 }
 
 pub(crate) fn deserialize_validator_id<'de, D>(deserializer: D) -> Result<ValidatorId, D::Error>
-    where
-        D: Deserializer<'de>,
+where
+    D: Deserializer<'de>,
 {
     let validator_id_hex: String = Deserialize::deserialize(deserializer)?;
     let validator_id_raw = hex::decode(validator_id_hex).map_err(Error::custom)?;
@@ -116,14 +119,18 @@ where
     BlsPublicKey::deserialize_from_vec(&pkey_raw).map_err(Error::custom)
 }
 
-pub(crate) fn deserialize_bls_secret_key_opt<'de, D>(deserializer: D) -> Result<Option<BlsSecretKey>, D::Error>
+pub(crate) fn deserialize_bls_secret_key_opt<'de, D>(
+    deserializer: D,
+) -> Result<Option<BlsSecretKey>, D::Error>
 where
     D: Deserializer<'de>,
 {
     let opt: Option<String> = Deserialize::deserialize(deserializer)?;
     if let Some(skey_hex) = opt {
         let skey_raw = hex::decode(skey_hex).map_err(Error::custom)?;
-        Ok(Some(BlsSecretKey::deserialize_from_vec(&skey_raw).map_err(Error::custom)?))
+        Ok(Some(
+            BlsSecretKey::deserialize_from_vec(&skey_raw).map_err(Error::custom)?,
+        ))
     } else {
         Ok(None)
     }

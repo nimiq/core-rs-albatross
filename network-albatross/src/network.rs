@@ -99,7 +99,12 @@ impl Network {
 
     pub const SIGNALING_ENABLED: bool = true;
 
-    pub fn new(blockchain: Arc<Blockchain>, network_config: NetworkConfig, time: Arc<OffsetTime>, network_id: NetworkId) -> Result<Arc<Self>, Error> {
+    pub fn new(
+        blockchain: Arc<Blockchain>,
+        network_config: NetworkConfig,
+        time: Arc<OffsetTime>,
+        network_id: NetworkId,
+    ) -> Result<Arc<Self>, Error> {
         if !network_config.is_initialized() {
             return Err(Error::UninitializedPeerKey);
         }
@@ -115,7 +120,11 @@ impl Network {
             backoff: Atomic::new(Self::CONNECT_BACKOFF_INITIAL),
             addresses: addresses.clone(),
             connections: connections.clone(),
-            scorer: Arc::new(RwLock::new(PeerScorer::new(net_config, addresses, connections))),
+            scorer: Arc::new(RwLock::new(PeerScorer::new(
+                net_config,
+                addresses,
+                connections,
+            ))),
             timers: Timers::new(),
             notifier: RwLock::new(Notifier::new()),
             self_weak: MutableOnce::new(Weak::new()),
@@ -123,17 +132,20 @@ impl Network {
         unsafe { this.self_weak.replace(Arc::downgrade(&this)) };
 
         let weak = Arc::downgrade(&this);
-        this.connections.notifier.write().register(move |event: ConnectionPoolEvent| {
-            let this = upgrade_weak!(weak);
-            match event {
-                ConnectionPoolEvent::PeerJoined(peer) => this.on_peer_joined(peer),
-                ConnectionPoolEvent::PeerLeft(peer) => this.on_peer_left(peer),
-                ConnectionPoolEvent::PeersChanged => this.on_peers_changed(this.clone()),
-                ConnectionPoolEvent::RecyclingRequest => this.on_recycling_request(),
-                ConnectionPoolEvent::ConnectError(_, _) => this.on_connect_error(this.clone()),
-                _ => {}
-            }
-        });
+        this.connections
+            .notifier
+            .write()
+            .register(move |event: ConnectionPoolEvent| {
+                let this = upgrade_weak!(weak);
+                match event {
+                    ConnectionPoolEvent::PeerJoined(peer) => this.on_peer_joined(peer),
+                    ConnectionPoolEvent::PeerLeft(peer) => this.on_peer_left(peer),
+                    ConnectionPoolEvent::PeersChanged => this.on_peers_changed(this.clone()),
+                    ConnectionPoolEvent::RecyclingRequest => this.on_recycling_request(),
+                    ConnectionPoolEvent::ConnectError(_, _) => this.on_connect_error(this.clone()),
+                    _ => {}
+                }
+            });
 
         if this.network_config.instant_inbound {
             this.connections.set_allow_inbound_connections(true);
@@ -178,12 +190,16 @@ impl Network {
 
     fn on_peer_joined(&self, peer: Peer) {
         self.update_time_offset();
-        self.notifier.read().notify(NetworkEvent::PeerJoined(Arc::new(peer)));
+        self.notifier
+            .read()
+            .notify(NetworkEvent::PeerJoined(Arc::new(peer)));
     }
 
     fn on_peer_left(&self, peer: Peer) {
         self.update_time_offset();
-        self.notifier.read().notify(NetworkEvent::PeerLeft(Arc::new(peer)));
+        self.notifier
+            .read()
+            .notify(NetworkEvent::PeerLeft(Arc::new(peer)));
     }
 
     fn on_peers_changed(&self, this: Arc<Network>) {
@@ -198,16 +214,21 @@ impl Network {
     }
 
     fn on_recycling_request(&self) {
-        self.scorer
-            .write()
-            .recycle_connections(1, CloseType::PeerConnectionRecycledInboundExchange, "Peer connection recycled inbound exchange");
+        self.scorer.write().recycle_connections(
+            1,
+            CloseType::PeerConnectionRecycledInboundExchange,
+            "Peer connection recycled inbound exchange",
+        );
 
         // set ability to exchange for new inbound connections
-        self.connections
-            .set_allow_inbound_exchange(match self.scorer.write().lowest_connection_score() {
-                Some(lowest_connection_score) => lowest_connection_score < Self::SCORE_INBOUND_EXCHANGE,
+        self.connections.set_allow_inbound_exchange(
+            match self.scorer.write().lowest_connection_score() {
+                Some(lowest_connection_score) => {
+                    lowest_connection_score < Self::SCORE_INBOUND_EXCHANGE
+                }
                 None => false,
-            });
+            },
+        );
     }
 
     fn on_connect_error(&self, this: Arc<Network>) {
@@ -236,7 +257,8 @@ impl Network {
             trace!("Connect to {:?}", peer_addr_opt);
 
             // We can't connect if we don't know any more addresses or only want connections to good peers.
-            let only_good_peers = self.scorer.read().needs_good_peers() && !self.scorer.read().needs_more_peers();
+            let only_good_peers =
+                self.scorer.read().needs_good_peers() && !self.scorer.read().needs_more_peers();
             let mut no_matching_peer_available = peer_addr_opt.is_none();
             if !no_matching_peer_available && only_good_peers {
                 if let Some(peer_addr) = &peer_addr_opt {
@@ -278,12 +300,14 @@ impl Network {
                 trace!("Connect outbound: {}", peer_address);
                 if !self.connections.connect_outbound(Arc::clone(&peer_address)) {
                     trace!("Connect outbound failed");
-                    self.addresses.close(None, peer_address, CloseType::ConnectionFailed);
+                    self.addresses
+                        .close(None, peer_address, CloseType::ConnectionFailed);
                 }
                 trace!("should be connected now");
             }
         }
-        self.backoff.store(Self::CONNECT_BACKOFF_INITIAL, Ordering::Relaxed);
+        self.backoff
+            .store(Self::CONNECT_BACKOFF_INITIAL, Ordering::Relaxed);
     }
 
     fn update_time_offset(&self) {
@@ -317,14 +341,18 @@ impl Network {
         let peer_count = connections.peer_count();
         if peer_count > Self::PEER_COUNT_RECYCLING_ACTIVE {
             // recycle 1% at PEER_COUNT_RECYCLING_ACTIVE, 20% at PEER_COUNT_MAX
-            let percentage_to_recycle = (peer_count as f64 - Self::PEER_COUNT_RECYCLING_ACTIVE as f64)
+            let percentage_to_recycle = (peer_count as f64
+                - Self::PEER_COUNT_RECYCLING_ACTIVE as f64)
                 * (Self::RECYCLING_PERCENTAGE_MAX - Self::RECYCLING_PERCENTAGE_MIN)
                 / (ConnectionPool::PEER_COUNT_MAX - Self::PEER_COUNT_RECYCLING_ACTIVE) as f64
                 + Self::RECYCLING_PERCENTAGE_MIN as f64;
-            let connections_to_recycle = f64::ceil(peer_count as f64 * percentage_to_recycle) as u32;
-            scorer
-                .write()
-                .recycle_connections(connections_to_recycle, CloseType::PeerConnectionRecycled, "Peer connection recycled");
+            let connections_to_recycle =
+                f64::ceil(peer_count as f64 * percentage_to_recycle) as u32;
+            scorer.write().recycle_connections(
+                connections_to_recycle,
+                CloseType::PeerConnectionRecycled,
+                "Peer connection recycled",
+            );
         }
 
         // Set ability to exchange for new inbound connections.
@@ -338,17 +366,23 @@ impl Network {
     }
 
     fn refresh_addresses(connections: Arc<ConnectionPool>, scorer: Arc<RwLock<PeerScorer>>) {
-        let connection_scores = RwLockReadGuard::map(scorer.read(), |scorer| scorer.connection_scores());
+        let connection_scores =
+            RwLockReadGuard::map(scorer.read(), |scorer| scorer.connection_scores());
         let mut randrng = OsRng;
         if !connection_scores.is_empty() {
             let state = connections.state();
-            let cutoff = cmp::min((state.peer_count_ws + state.peer_count_wss) * 2, Self::ADDRESS_REQUEST_CUTOFF);
+            let cutoff = cmp::min(
+                (state.peer_count_ws + state.peer_count_wss) * 2,
+                Self::ADDRESS_REQUEST_CUTOFF,
+            );
             let len = cmp::min(connection_scores.len(), cutoff);
 
             for _ in 0..cmp::min(Self::ADDRESS_REQUEST_PEERS, connection_scores.len()) {
                 let index = randrng.gen_range(0, len);
                 let (id, _): &(ConnectionId, f64) = connection_scores.get(index).unwrap(); // Cannot fail, since len is at most the real length.
-                let peer_connection = state.get_connection(*id).expect("ConnectionInfo for scored connection is missing");
+                let peer_connection = state
+                    .get_connection(*id)
+                    .expect("ConnectionInfo for scored connection is missing");
 
                 trace!(
                     "Requesting addresses from {} (score idx {})",
@@ -383,9 +417,9 @@ impl Network {
                 if let Some(peer_connection) = peer_connection {
                     trace!(
                         "Requesting addresses from {} (score idx {})",
-                        peer_connection
-                            .peer_address()
-                            .expect("ConnectionInfo for scored connection is missing its PeerAddress"),
+                        peer_connection.peer_address().expect(
+                            "ConnectionInfo for scored connection is missing its PeerAddress"
+                        ),
                         index
                     );
 
@@ -405,7 +439,8 @@ impl Network {
     }
 
     pub fn set_allow_inbound_connections(&self, allow_inbound_connections: bool) {
-        self.connections.set_allow_inbound_connections(allow_inbound_connections);
+        self.connections
+            .set_allow_inbound_connections(allow_inbound_connections);
     }
 
     pub fn scorer(&self) -> RwLockReadGuard<PeerScorer> {
@@ -420,7 +455,12 @@ impl NetworkInterface for Network {
     type Error = NetworkError;
     type PubsubId = AlbatrossPubsubId<Arc<PeerAddress>>;
 
-    fn get_peer_updates(&self) -> (Vec<Arc<Self::PeerType>>, broadcast::Receiver<NetworkEventI<Self::PeerType>>) {
+    fn get_peer_updates(
+        &self,
+    ) -> (
+        Vec<Arc<Self::PeerType>>,
+        broadcast::Receiver<NetworkEventI<Self::PeerType>>,
+    ) {
         unimplemented!();
     }
 
@@ -433,7 +473,10 @@ impl NetworkInterface for Network {
             .collect::<Vec<_>>()
     }
 
-    fn get_peer(&self, peer_id: <Self::PeerType as PeerInterface>::Id) -> Option<Arc<Self::PeerType>> {
+    fn get_peer(
+        &self,
+        peer_id: <Self::PeerType as PeerInterface>::Id,
+    ) -> Option<Arc<Self::PeerType>> {
         self.connections
             .state()
             .get_connection_by_peer_address(&peer_id)
@@ -445,7 +488,10 @@ impl NetworkInterface for Network {
         unimplemented!()
     }
 
-    async fn subscribe<T>(&self, _topic: &T) -> Result<Pin<Box<dyn Stream<Item = (T::Item, Self::PubsubId)> + Send>>, Self::Error>
+    async fn subscribe<T>(
+        &self,
+        _topic: &T,
+    ) -> Result<Pin<Box<dyn Stream<Item = (T::Item, Self::PubsubId)> + Send>>, Self::Error>
     where
         T: Topic + Sync,
     {
@@ -479,7 +525,10 @@ impl NetworkInterface for Network {
         unimplemented!()
     }
 
-    async fn dial_peer(&self, _peer_id: <Self::PeerType as PeerInterface>::Id) -> Result<(), Self::Error> {
+    async fn dial_peer(
+        &self,
+        _peer_id: <Self::PeerType as PeerInterface>::Id,
+    ) -> Result<(), Self::Error> {
         unimplemented!()
     }
 

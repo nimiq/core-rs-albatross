@@ -1,6 +1,8 @@
 use crate::outside_deps::TendermintOutsideDeps;
 use crate::tendermint::Tendermint;
-use crate::utils::{aggregation_to_vote, has_2f1_votes, Checkpoint, ProposalResult, Step, VoteDecision, VoteResult};
+use crate::utils::{
+    aggregation_to_vote, has_2f1_votes, Checkpoint, ProposalResult, Step, VoteDecision, VoteResult,
+};
 use crate::TendermintError;
 use crate::{ProofTrait, ProposalTrait, ResultTrait};
 
@@ -10,7 +12,8 @@ impl<
         ProposalTy: ProposalTrait,
         ProofTy: ProofTrait,
         ResultTy: ResultTrait,
-        DepsTy: TendermintOutsideDeps<ProposalTy = ProposalTy, ResultTy = ResultTy, ProofTy = ProofTy> + 'static,
+        DepsTy: TendermintOutsideDeps<ProposalTy = ProposalTy, ResultTy = ResultTy, ProofTy = ProofTy>
+            + 'static,
     > Tendermint<ProposalTy, ProofTy, ResultTy, DepsTy>
 {
     /// Wait for a proposal for a given round from that round's proposer. The proposal that we
@@ -31,7 +34,13 @@ impl<
                 // smaller than the current round, and we have 2f+1 prevotes for this proposal from
                 // that valid round, save the proposal (including valid round) and set
                 // the state to OnPastProposal.
-                } else if valid_round.unwrap() < round && has_2f1_votes(proposal.hash(), self.deps.get_aggregation(valid_round.unwrap(), Step::Prevote).await?)
+                } else if valid_round.unwrap() < round
+                    && has_2f1_votes(
+                        proposal.hash(),
+                        self.deps
+                            .get_aggregation(valid_round.unwrap(), Step::Prevote)
+                            .await?,
+                    )
                 {
                     self.state.current_proposal = Some(proposal);
                     self.state.current_proposal_vr = valid_round;
@@ -53,7 +62,11 @@ impl<
 
     /// Broadcast our prevote for a given proposal for a given round and wait for 2f+1 prevotes from
     /// other nodes.
-    pub(crate) async fn broadcast_and_aggregate_prevote(&mut self, round: u32, decision: VoteDecision) -> Result<(), TendermintError> {
+    pub(crate) async fn broadcast_and_aggregate_prevote(
+        &mut self,
+        round: u32,
+        decision: VoteDecision,
+    ) -> Result<(), TendermintError> {
         // The TendermintOutsideDeps function to broadcast and aggregate votes only accepts the
         // proposal hash as input (it has no concept of voting Block or Nil, it just aggregates
         // signed messages from other nodes), so first we transform our voting decision into a
@@ -68,7 +81,10 @@ impl<
 
         // ... and we broadcast it. The function will wait for 2f+1 prevotes, aggregate them and
         // return.
-        let prevote_agg = self.deps.broadcast_and_aggregate(round, Step::Prevote, proposal_hash).await?;
+        let prevote_agg = self
+            .deps
+            .broadcast_and_aggregate(round, Step::Prevote, proposal_hash)
+            .await?;
 
         // We also get the current proposal and hash it. We need it for the next step.
         let current_proposal_hash = self.state.current_proposal.clone().map(|p| p.hash());
@@ -109,7 +125,11 @@ impl<
 
     /// Broadcast our prevote for a given proposal for a given round and wait for 2f+1 prevotes from
     /// other nodes.
-    pub(crate) async fn broadcast_and_aggregate_precommit(&mut self, round: u32, decision: VoteDecision) -> Result<(), TendermintError> {
+    pub(crate) async fn broadcast_and_aggregate_precommit(
+        &mut self,
+        round: u32,
+        decision: VoteDecision,
+    ) -> Result<(), TendermintError> {
         // The TendermintOutsideDeps function to broadcast and aggregate votes only accepts the
         // proposal hash as input (it has no concept of voting Block or Nil, it just aggregates
         // signed messages from other nodes), so first we transform our voting decision into a
@@ -124,7 +144,10 @@ impl<
 
         // ... and we broadcast it. The function will wait for 2f+1 precommits, aggregate them and
         // return.
-        let precom_agg = self.deps.broadcast_and_aggregate(round, Step::Precommit, proposal_hash).await?;
+        let precom_agg = self
+            .deps
+            .broadcast_and_aggregate(round, Step::Precommit, proposal_hash)
+            .await?;
 
         // We also get the current proposal and hash it. We need it for the next step.
         let current_proposal_hash = self.state.current_proposal.clone().map(|p| p.hash());

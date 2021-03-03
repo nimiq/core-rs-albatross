@@ -132,43 +132,46 @@ impl NetworkAgent {
         msg_notifier
             .version
             .write()
-            .register(weak_passthru_listener(Arc::downgrade(agent), |agent, msg: VersionMessage| {
-                agent.write().on_version(msg)
-            }));
+            .register(weak_passthru_listener(
+                Arc::downgrade(agent),
+                |agent, msg: VersionMessage| agent.write().on_version(msg),
+            ));
 
         msg_notifier
             .ver_ack
             .write()
-            .register(weak_passthru_listener(Arc::downgrade(agent), |agent, msg: VerAckMessage| {
-                agent.write().on_ver_ack(msg)
-            }));
+            .register(weak_passthru_listener(
+                Arc::downgrade(agent),
+                |agent, msg: VerAckMessage| agent.write().on_ver_ack(msg),
+            ));
 
-        msg_notifier
-            .addr
-            .write()
-            .register(weak_passthru_listener(Arc::downgrade(agent), |agent, msg: AddrMessage| {
-                agent.write().on_addr(msg)
-            }));
+        msg_notifier.addr.write().register(weak_passthru_listener(
+            Arc::downgrade(agent),
+            |agent, msg: AddrMessage| agent.write().on_addr(msg),
+        ));
 
         msg_notifier
             .get_addr
             .write()
-            .register(weak_passthru_listener(Arc::downgrade(agent), |agent, msg: GetAddrMessage| {
-                agent.write().on_get_addr(msg)
-            }));
+            .register(weak_passthru_listener(
+                Arc::downgrade(agent),
+                |agent, msg: GetAddrMessage| agent.write().on_get_addr(msg),
+            ));
 
-        msg_notifier
-            .ping
-            .write()
-            .register(weak_passthru_listener(Arc::downgrade(agent), |agent, nonce: u32| agent.write().on_ping(nonce)));
+        msg_notifier.ping.write().register(weak_passthru_listener(
+            Arc::downgrade(agent),
+            |agent, nonce: u32| agent.write().on_ping(nonce),
+        ));
 
-        msg_notifier
-            .pong
-            .write()
-            .register(weak_passthru_listener(Arc::downgrade(agent), |agent, nonce: u32| agent.write().on_pong(nonce)));
+        msg_notifier.pong.write().register(weak_passthru_listener(
+            Arc::downgrade(agent),
+            |agent, nonce: u32| agent.write().on_pong(nonce),
+        ));
 
         let mut close_notifier = channel.close_notifier.write();
-        close_notifier.register(weak_listener(Arc::downgrade(agent), |agent, _| agent.write().on_close()));
+        close_notifier.register(weak_listener(Arc::downgrade(agent), |agent, _| {
+            agent.write().on_close()
+        }));
     }
 
     pub fn handshake(&mut self) {
@@ -272,7 +275,10 @@ impl NetworkAgent {
 
         // Ignore duplicate version messages.
         if self.version_received {
-            debug!("Ignoring duplicate version message from {}", self.channel.address_info.peer_address().unwrap());
+            debug!(
+                "Ignoring duplicate version message from {}",
+                self.channel.address_info.peer_address().unwrap()
+            );
             return;
         }
 
@@ -284,7 +290,11 @@ impl NetworkAgent {
             self.channel.send_or_close(RejectMessage::new(
                 MessageType::Version,
                 RejectMessageCode::Obsolete,
-                format!("incompatible version (ours={}, theirs={})", version::CODE, msg.version),
+                format!(
+                    "incompatible version (ours={}, theirs={})",
+                    version::CODE,
+                    msg.version
+                ),
                 None,
             ));
             self.channel.close(CloseType::IncompatibleVersion);
@@ -300,7 +310,8 @@ impl NetworkAgent {
 
         // Check that the given peerAddress is correctly signed.
         if !msg.peer_address.verify_signature() {
-            self.channel.close(CloseType::InvalidPeerAddressInVersionMessage);
+            self.channel
+                .close(CloseType::InvalidPeerAddressInVersionMessage);
             return;
         }
 
@@ -312,7 +323,8 @@ impl NetworkAgent {
         let mut peer_address = msg.peer_address.clone();
         if let Some(channel_peer_address) = self.channel.address_info.peer_address() {
             if &peer_address != channel_peer_address.as_ref() {
-                self.channel.close(CloseType::UnexpectedPeerAddressInVersionMessage);
+                self.channel
+                    .close(CloseType::UnexpectedPeerAddressInVersionMessage);
                 return;
             }
             self.peer_address_verified = true;
@@ -331,7 +343,9 @@ impl NetworkAgent {
 
         let peer_address = Arc::new(peer_address);
         // Set/update the channel's peer address.
-        self.channel.address_info.set_peer_address(peer_address.clone());
+        self.channel
+            .address_info
+            .set_peer_address(peer_address.clone());
 
         // Create peer object. Since the initial version message received from the
         // peer contains their local timestamp, we can use it to calculate their
@@ -349,7 +363,10 @@ impl NetworkAgent {
 
         // Tell listeners that we received this peer's version information.
         // Listeners registered to this event might close the connection to this peer.
-        self.notifier.notify(NetworkAgentEvent::Version(UniquePtr::new(self.peer.as_ref().unwrap())));
+        self.notifier
+            .notify(NetworkAgentEvent::Version(UniquePtr::new(
+                self.peer.as_ref().unwrap(),
+            )));
 
         // Abort handshake if the connection was closed.
         if self.channel.closed() {
@@ -373,7 +390,10 @@ impl NetworkAgent {
     fn on_ver_ack(&mut self, msg: VerAckMessage) {
         trace!(
             "[VERACK] from {}",
-            self.channel.address_info.peer_address().map_or("<unknown>".to_string(), |p| p.to_string())
+            self.channel
+                .address_info
+                .peer_address()
+                .map_or("<unknown>".to_string(), |p| p.to_string())
         );
 
         // Make sure this is a valid message in our current state.
@@ -385,7 +405,10 @@ impl NetworkAgent {
         if self.verack_received {
             debug!(
                 "Ignoring duplicate VerAck message from {}",
-                self.channel.address_info.peer_address().map_or("<unknown>".to_string(), |p| p.to_string())
+                self.channel
+                    .address_info
+                    .peer_address()
+                    .map_or("<unknown>".to_string(), |p| p.to_string())
             );
             return;
         }
@@ -394,8 +417,11 @@ impl NetworkAgent {
         self.timers.clear_delay(&NetworkAgentTimer::VerAck);
 
         // Verify public key.
-        if &PeerId::from(&msg.public_key) != self.channel.address_info.peer_address().unwrap().peer_id() {
-            self.channel.close(CloseType::InvalidPublicKeyInVerackMessage);
+        if &PeerId::from(&msg.public_key)
+            != self.channel.address_info.peer_address().unwrap().peer_id()
+        {
+            self.channel
+                .close(CloseType::InvalidPublicKeyInVerackMessage);
             return;
         }
 
@@ -403,7 +429,8 @@ impl NetworkAgent {
         let mut data = self.network_config.peer_id().serialize_to_vec();
         self.challenge_nonce.serialize(&mut data).unwrap();
         if !msg.public_key.verify(&msg.signature, &data[..]) {
-            self.channel.close(CloseType::InvalidSignatureInVerackMessage);
+            self.channel
+                .close(CloseType::InvalidSignatureInVerackMessage);
             return;
         }
 
@@ -440,13 +467,18 @@ impl NetworkAgent {
             move || {
                 let arc = upgrade_weak!(weak);
                 let agent = arc.read();
-                agent.channel.send_or_close(AddrMessage::new(vec![agent.network_config.peer_address()]));
+                agent
+                    .channel
+                    .send_or_close(AddrMessage::new(vec![agent.network_config.peer_address()]));
             },
             Self::ANNOUNCE_ADDR_INTERVAL,
         );
 
         // Tell listeners that the handshake with this peer succeeded.
-        self.notifier.notify(NetworkAgentEvent::Handshake(UniquePtr::new(self.peer.as_ref().unwrap())));
+        self.notifier
+            .notify(NetworkAgentEvent::Handshake(UniquePtr::new(
+                self.peer.as_ref().unwrap(),
+            )));
 
         // Request new network addresses from the peer.
         self.request_addresses(None);
@@ -495,12 +527,21 @@ impl NetworkAgent {
             return;
         }
 
-        trace!("[ADDR] {} addresses from {}", msg.addresses.len(), peer_address);
+        trace!(
+            "[ADDR] {} addresses from {}",
+            msg.addresses.len(),
+            peer_address
+        );
 
         // XXX Discard any addresses beyond the ones we requested
         // and check the addresses the peer sent to us.
         // TODO reject addr messages not matching our request.
-        let mut addresses: Vec<PeerAddress> = msg.addresses.iter().take(address_request.max_results as usize).cloned().collect();
+        let mut addresses: Vec<PeerAddress> = msg
+            .addresses
+            .iter()
+            .take(address_request.max_results as usize)
+            .cloned()
+            .collect();
 
         for address in addresses.iter() {
             if !address.verify_signature() {
@@ -508,7 +549,9 @@ impl NetworkAgent {
                 return;
             }
 
-            if (address.protocol() == Protocol::Ws || address.protocol() == Protocol::Wss) && !address.is_globally_reachable(true) {
+            if (address.protocol() == Protocol::Ws || address.protocol() == Protocol::Wss)
+                && !address.is_globally_reachable(true)
+            {
                 self.channel.close(CloseType::AddrNotGloballyReachable);
                 return;
             }
@@ -519,7 +562,9 @@ impl NetworkAgent {
 
         // Update peer with new address.
         if is_own_address {
-            self.channel.address_info.set_peer_address(Arc::new(msg.addresses[0].clone()));
+            self.channel
+                .address_info
+                .set_peer_address(Arc::new(msg.addresses[0].clone()));
         }
 
         // Put the new addresses in the address pool.
@@ -541,9 +586,17 @@ impl NetworkAgent {
         }
 
         // Find addresses that match the given protocolMask & serviceMask.
-        let num_results = cmp::min(msg.max_results.unwrap_or(Self::MAX_ADDR_PER_REQUEST), Self::MAX_ADDR_PER_REQUEST);
-        let addresses = self.addresses.query(msg.protocol_mask, msg.service_mask, num_results);
-        let addresses = addresses.iter().map(|peer_address| peer_address.as_ref().clone()).collect();
+        let num_results = cmp::min(
+            msg.max_results.unwrap_or(Self::MAX_ADDR_PER_REQUEST),
+            Self::MAX_ADDR_PER_REQUEST,
+        );
+        let addresses = self
+            .addresses
+            .query(msg.protocol_mask, msg.service_mask, num_results);
+        let addresses = addresses
+            .iter()
+            .map(|peer_address| peer_address.as_ref().clone())
+            .collect();
         self.channel.send_or_close(AddrMessage::new(addresses));
     }
 
@@ -564,7 +617,13 @@ impl NetworkAgent {
 
         // Expect the peer to answer with a pong message if we haven't heard anything from it
         // within the last CONNECTIVITY_CHECK_INTERVAL. Drop the peer otherwise.
-        if self.channel.last_message_received.load(Ordering::Relaxed).elapsed() > Self::CONNECTIVITY_CHECK_INTERVAL {
+        if self
+            .channel
+            .last_message_received
+            .load(Ordering::Relaxed)
+            .elapsed()
+            > Self::CONNECTIVITY_CHECK_INTERVAL
+        {
             let weak = self.self_weak.clone();
             self.timers.set_delay(
                 NetworkAgentTimer::Ping(nonce),

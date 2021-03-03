@@ -45,13 +45,9 @@ fn state_commitment_works() {
         Vec::<G1Var>::new_witness(cs.clone(), || Ok(pedersen_generators(3))).unwrap();
 
     // Evaluate state commitment using the gadget version.
-    let gadget_comm = StateCommitmentGadget::evaluate(
-        cs,
-        &block_number_var,
-        &pk_tree_root_var,
-        &generators_var,
-    )
-    .unwrap();
+    let gadget_comm =
+        StateCommitmentGadget::evaluate(cs, &block_number_var, &pk_tree_root_var, &generators_var)
+            .unwrap();
 
     // Compare the two versions bit by bit.
     assert_eq!(primitive_comm.len(), gadget_comm.len());

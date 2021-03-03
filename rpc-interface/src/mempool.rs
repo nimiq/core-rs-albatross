@@ -2,15 +2,18 @@ use async_trait::async_trait;
 
 use nimiq_hash::Blake2bHash;
 
-
-#[cfg_attr(feature = "proxy", nimiq_jsonrpc_derive::proxy(name = "MempoolProxy", rename_all="camelCase"))]
+#[cfg_attr(
+    feature = "proxy",
+    nimiq_jsonrpc_derive::proxy(name = "MempoolProxy", rename_all = "camelCase")
+)]
 #[async_trait]
 pub trait MempoolInterface {
     type Error;
 
     async fn get_transaction(&mut self, txid: Blake2bHash) -> Result<Option<()>, Self::Error>;
 
-    async fn mempool_content(&mut self, include_transactions: bool) -> Result<Vec<()>, Self::Error>;
+    async fn mempool_content(&mut self, include_transactions: bool)
+        -> Result<Vec<()>, Self::Error>;
 
     async fn mempool(&mut self) -> Result<(), Self::Error>;
 

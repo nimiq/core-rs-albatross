@@ -150,14 +150,27 @@ fn it_correctly_computes_mnemonics() {
         }
     ];
 
-    for (i, vector) in TEST_CASES.iter().filter(|case| case.entropy_len() == 32).enumerate() {
+    for (i, vector) in TEST_CASES
+        .iter()
+        .filter(|case| case.entropy_len() == 32)
+        .enumerate()
+    {
         // We only support 32 byte entropy.
         let entropy = vector.get_entropy();
         let mnemonic = vector.get_mnemonic();
 
-        assert_eq!(entropy.to_mnemonic(WORDLIST_EN), mnemonic, "Invalid entropy.to_mnemonic in test case {}", i);
+        assert_eq!(
+            entropy.to_mnemonic(WORDLIST_EN),
+            mnemonic,
+            "Invalid entropy.to_mnemonic in test case {}",
+            i
+        );
         let computed_entropy = mnemonic.to_entropy(WORDLIST_EN);
-        assert!(computed_entropy.is_some(), "mnemonic.to_entropy yields None in test case {}", i);
+        assert!(
+            computed_entropy.is_some(),
+            "mnemonic.to_entropy yields None in test case {}",
+            i
+        );
         assert_eq!(
             mnemonic.to_entropy(WORDLIST_EN).unwrap(),
             entropy,
@@ -184,7 +197,10 @@ fn it_correctly_computes_mnemonic_type() {
     assert_eq!(bip39.get_type(WORDLIST_EN), MnemonicType::BIP39);
     assert_eq!(legacy.get_type(WORDLIST_EN), MnemonicType::LEGACY);
     assert_eq!(both.get_type(WORDLIST_EN), MnemonicType::UNKNOWN);
-    assert_eq!(invalid_checksum.get_type(WORDLIST_EN), MnemonicType::INVALID);
+    assert_eq!(
+        invalid_checksum.get_type(WORDLIST_EN),
+        MnemonicType::INVALID
+    );
     assert_eq!(invalid_words.get_type(WORDLIST_EN), MnemonicType::INVALID);
 }
 

@@ -6,17 +6,14 @@ use parking_lot::RwLock;
 use beserial::{Deserialize, Serialize};
 use nimiq_consensus_albatross::ConsensusProxy;
 use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_keys::{Address, KeyPair};
 use nimiq_mempool::ReturnCode;
 use nimiq_network_libp2p::Network;
+use nimiq_primitives::{account::ValidatorId, coin::Coin, networks::NetworkId};
 use nimiq_transaction::Transaction;
 use nimiq_transaction_builder::TransactionBuilder;
-use nimiq_keys::{Address, KeyPair};
-use nimiq_primitives::{account::ValidatorId, networks::NetworkId, coin::Coin};
 
-use nimiq_rpc_interface::{
-    consensus::ConsensusInterface,
-    types::ValidityStartHeight,
-};
+use nimiq_rpc_interface::{consensus::ConsensusInterface, types::ValidityStartHeight};
 
 use crate::{error::Error, wallets::UnlockedWallets};
 
@@ -47,13 +44,15 @@ impl ConsensusDispatcher {
     }
 
     fn get_wallet_keypair(&self, address: &Address) -> Result<KeyPair, Error> {
-        Ok(self.unlocked_wallets
+        Ok(self
+            .unlocked_wallets
             .as_ref()
             .ok_or_else(|| Error::UnlockedWalletNotFound(address.clone()))?
             .read()
             .get(address)
             .ok_or_else(|| Error::UnlockedWalletNotFound(address.clone()))?
-            .key_pair.clone()) // TODO: Avoid cloning
+            .key_pair
+            .clone()) // TODO: Avoid cloning
     }
 
     fn network_id(&self) -> NetworkId {
@@ -69,7 +68,7 @@ fn transaction_to_hex_string(transaction: &Transaction) -> String {
     hex::encode(&transaction.serialize_to_vec())
 }
 
-#[nimiq_jsonrpc_derive::service(rename_all="camelCase")]
+#[nimiq_jsonrpc_derive::service(rename_all = "camelCase")]
 #[async_trait]
 impl ConsensusInterface for ConsensusDispatcher {
     type Error = Error;

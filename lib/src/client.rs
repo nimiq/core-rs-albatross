@@ -56,7 +56,9 @@ pub(crate) struct ClientInner {
 }
 
 impl ClientInner {
-    async fn from_config(config: ClientConfig) -> Result<(Self, Consensus, Option<Validator>), Error> {
+    async fn from_config(
+        config: ClientConfig,
+    ) -> Result<(Self, Consensus, Option<Validator>), Error> {
         // Get network info (i.e. which specific blokchain we're on)
         if !config.network_id.is_albatross() {
             return Err(Error::config_error(&format!(
@@ -93,18 +95,19 @@ impl ClientInner {
 
         log::debug!("listen_addresses = {:?}", config.network.listen_addresses);
 
-        let network = Arc::new(Network::new(
-            config.network.listen_addresses,
-            Arc::clone(&time),
-            network_config,
-        ).await);
+        let network = Arc::new(
+            Network::new(
+                config.network.listen_addresses,
+                Arc::clone(&time),
+                network_config,
+            )
+            .await,
+        );
 
         // Tell the network to connect to seed nodes
         for seed in &config.network.seeds {
             log::debug!("Dialing seed: {:?}", seed);
-            network
-                .dial_address(seed.address.clone())
-                .await?;
+            network.dial_address(seed.address.clone()).await?;
         }
         network.wait_connected().await;
 
@@ -147,26 +150,49 @@ impl ClientInner {
                 #[cfg(feature = "wallet")]
                 let validator_wallet_key = {
                     if let Some(wallet_account) = &config.wallet_account {
-                        let address = wallet_account.parse()
-                            .map_err(|_| Error::config_error(format!("Failed to parse validator wallet address: {}", wallet_account)))?;
-                        let locked = wallet_store.get(&address, None)
-                            .ok_or_else(|| Error::config_error(format!("Could not find wallet account: {}", wallet_account)))?;
-                        let unlocked = locked.unlock(config.wallet_password.clone().unwrap_or_default().as_bytes())
-                            .map_err(|_| Error::config_error(format!("Failed to unlock validator wallet account: {}", wallet_account)))?;
+                        let address = wallet_account.parse().map_err(|_| {
+                            Error::config_error(format!(
+                                "Failed to parse validator wallet address: {}",
+                                wallet_account
+                            ))
+                        })?;
+                        let locked = wallet_store.get(&address, None).ok_or_else(|| {
+                            Error::config_error(format!(
+                                "Could not find wallet account: {}",
+                                wallet_account
+                            ))
+                        })?;
+                        let unlocked = locked
+                            .unlock(
+                                config
+                                    .wallet_password
+                                    .clone()
+                                    .unwrap_or_default()
+                                    .as_bytes(),
+                            )
+                            .map_err(|_| {
+                                Error::config_error(format!(
+                                    "Failed to unlock validator wallet account: {}",
+                                    wallet_account
+                                ))
+                            })?;
                         Some(unlocked.key_pair.clone())
-                    }
-                    else {
+                    } else {
                         None
                     }
                 };
 
                 let validator_network = Arc::new(ValidatorNetworkImpl::new(Arc::clone(&network)));
 
-                let validator = Validator::new(&consensus, validator_network, validator_key, validator_wallet_key);
+                let validator = Validator::new(
+                    &consensus,
+                    validator_network,
+                    validator_key,
+                    validator_wallet_key,
+                );
 
                 Some(validator)
-            }
-            else {
+            } else {
                 None
             }
         };
@@ -259,4 +285,3 @@ impl Client {
         self.inner.environment.clone()
     }
 }
-

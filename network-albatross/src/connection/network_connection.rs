@@ -66,7 +66,10 @@ pub struct NetworkConnection {
 }
 
 impl NetworkConnection {
-    pub fn new_connection_setup(stream: SharedNimiqMessageStream, address_info: AddressInfo) -> (Self, ProcessConnectionFuture) {
+    pub fn new_connection_setup(
+        stream: SharedNimiqMessageStream,
+        address_info: AddressInfo,
+    ) -> (Self, ProcessConnectionFuture) {
         let id = UniqueId::new();
         let closed_flag = ClosedFlag::new();
         let (tx, rx) = unbounded(); // TODO: use bounded channel?
@@ -140,14 +143,23 @@ pub struct ProcessConnectionFuture {
 }
 
 impl ProcessConnectionFuture {
-    pub fn new(peer_stream: PeerStream, forward_future: Forward<UnboundedReceiver<Message>, SharedNimiqMessageStream>, _id: UniqueId) -> Self {
+    pub fn new(
+        peer_stream: PeerStream,
+        forward_future: Forward<UnboundedReceiver<Message>, SharedNimiqMessageStream>,
+        _id: UniqueId,
+    ) -> Self {
         // `select` required Item/Error to be the same, that's why we need to map them both to ().
         // TODO We're discarding any errors here, especially those coming from the forward future.
         // Results by the peer_stream have been processes already.
-        let connection = forward_future.map(|_| ()).map_err(|_| ()).select(peer_stream.process_stream().map_err(|_| ()));
+        let connection = forward_future
+            .map(|_| ())
+            .map_err(|_| ())
+            .select(peer_stream.process_stream().map_err(|_| ()));
         let connection = connection.map(|_| ()).map_err(|_| ());
 
-        Self { inner: Box::new(connection) }
+        Self {
+            inner: Box::new(connection),
+        }
     }
 }
 
@@ -171,12 +183,17 @@ struct AddressInfoInternal {
 
 impl Clone for AddressInfo {
     fn clone(&self) -> Self {
-        AddressInfo { inner: self.inner.clone() }
+        AddressInfo {
+            inner: self.inner.clone(),
+        }
     }
 }
 
 impl AddressInfo {
-    pub fn new(net_address: Option<Arc<NetAddress>>, peer_address: Option<Arc<PeerAddress>>) -> Self {
+    pub fn new(
+        net_address: Option<Arc<NetAddress>>,
+        peer_address: Option<Arc<PeerAddress>>,
+    ) -> Self {
         AddressInfo {
             inner: Arc::new(AddressInfoInternal {
                 peer_address: RwLock::new(peer_address),

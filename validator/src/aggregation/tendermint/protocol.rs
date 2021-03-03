@@ -24,16 +24,32 @@ pub(crate) struct TendermintAggregationProtocol {
 }
 
 impl TendermintAggregationProtocol {
-    pub(super) fn new(validators: Arc<ValidatorRegistry>, node_id: usize, threshold: usize, id: TendermintIdentifier, validator_merkle_root: Vec<u8>) -> Self {
+    pub(super) fn new(
+        validators: Arc<ValidatorRegistry>,
+        node_id: usize,
+        threshold: usize,
+        id: TendermintIdentifier,
+        validator_merkle_root: Vec<u8>,
+    ) -> Self {
         let partitioner = Arc::new(BinomialPartitioner::new(node_id, validators.len()));
 
-        let store = Arc::new(RwLock::new(ReplaceStore::<BinomialPartitioner, <Self as Protocol>::Contribution>::new(
+        let store = Arc::new(RwLock::new(ReplaceStore::<
+            BinomialPartitioner,
+            <Self as Protocol>::Contribution,
+        >::new(Arc::clone(&partitioner))));
+
+        let evaluator = Arc::new(WeightedVote::new(
+            Arc::clone(&store),
+            validators.clone(),
             Arc::clone(&partitioner),
-        )));
+            threshold,
+        ));
 
-        let evaluator = Arc::new(WeightedVote::new(Arc::clone(&store), validators.clone(), Arc::clone(&partitioner), threshold));
-
-        let verifier = Arc::new(TendermintVerifier::new(validators.clone(), id, validator_merkle_root));
+        let verifier = Arc::new(TendermintVerifier::new(
+            validators.clone(),
+            id,
+            validator_merkle_root,
+        ));
 
         Self {
             verifier,

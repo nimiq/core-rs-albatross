@@ -21,12 +21,19 @@ impl<A: AccountsTreeLeave> AccountsTree<A> {
 
     pub fn new(env: Environment) -> Self {
         let db = env.open_database(Self::DB_NAME.to_string());
-        let tree = AccountsTree { db, _account: PhantomData };
+        let tree = AccountsTree {
+            db,
+            _account: PhantomData,
+        };
 
         let mut txn = WriteTransaction::new(&env);
         if tree.get_root(&txn).is_none() {
             let root = AddressNibbles::empty();
-            txn.put_reserve(&tree.db, &root, &AccountsTreeNode::<A>::new_branch(root.clone(), NO_CHILDREN));
+            txn.put_reserve(
+                &tree.db,
+                &root,
+                &AccountsTreeNode::<A>::new_branch(root.clone(), NO_CHILDREN),
+            );
         }
         txn.commit();
         tree
@@ -62,11 +69,12 @@ impl<A: AccountsTreeLeave> AccountsTree<A> {
             txn.put_reserve(&self.db, new_child.prefix(), &new_child);
 
             // Insert the new parent node.
-            let new_parent = AccountsTreeNode::<A>::new_branch(node_prefix.common_prefix(&prefix), NO_CHILDREN)
-                .with_child(&node_prefix, Blake2bHash::default())
-                .unwrap()
-                .with_child(new_child.prefix(), Blake2bHash::default())
-                .unwrap();
+            let new_parent =
+                AccountsTreeNode::<A>::new_branch(node_prefix.common_prefix(&prefix), NO_CHILDREN)
+                    .with_child(&node_prefix, Blake2bHash::default())
+                    .unwrap()
+                    .with_child(new_child.prefix(), Blake2bHash::default())
+                    .unwrap();
             txn.put_reserve(&self.db, new_parent.prefix(), &new_parent);
 
             return self.update_keys_batch(txn, new_parent.prefix().clone(), root_path);
@@ -104,13 +112,20 @@ impl<A: AccountsTreeLeave> AccountsTree<A> {
         // If no matching child exists, add a new child account node to the current node.
         let child = AccountsTreeNode::<A>::new_terminal(prefix, account);
         txn.put_reserve(&self.db, child.prefix(), &child);
-        let node = node.with_child(child.prefix(), Blake2bHash::default()).unwrap();
+        let node = node
+            .with_child(child.prefix(), Blake2bHash::default())
+            .unwrap();
         txn.put_reserve(&self.db, node.prefix(), &node);
 
         self.update_keys_batch(txn, node_prefix, root_path)
     }
 
-    fn prune_batch(&self, txn: &mut WriteTransaction, prefix: AddressNibbles, mut root_path: Vec<AccountsTreeNode<A>>) {
+    fn prune_batch(
+        &self,
+        txn: &mut WriteTransaction,
+        prefix: AddressNibbles,
+        mut root_path: Vec<AccountsTreeNode<A>>,
+    ) {
         // Walk along the rootPath towards the root node starting with the
         // immediate predecessor of the node specified by 'prefix'.
         let mut tmp_prefix = prefix;
@@ -138,13 +153,20 @@ impl<A: AccountsTreeLeave> AccountsTree<A> {
         }
     }
 
-    fn update_keys_batch(&self, txn: &mut WriteTransaction, prefix: AddressNibbles, mut root_path: Vec<AccountsTreeNode<A>>) {
+    fn update_keys_batch(
+        &self,
+        txn: &mut WriteTransaction,
+        prefix: AddressNibbles,
+        mut root_path: Vec<AccountsTreeNode<A>>,
+    ) {
         // Walk along the rootPath towards the root node starting with the
         // immediate predecessor of the node specified by 'prefix'.
         let mut tmp_prefix = &prefix;
         let mut node;
         while let Some(path_node) = root_path.pop() {
-            node = path_node.with_child(tmp_prefix, Blake2bHash::default()).unwrap();
+            node = path_node
+                .with_child(tmp_prefix, Blake2bHash::default())
+                .unwrap();
             txn.put_reserve(&self.db, node.prefix(), &node);
             tmp_prefix = node.prefix();
         }
@@ -184,7 +206,13 @@ impl<A: AccountsTreeLeave> AccountsTree<A> {
         AccountsProof::new(nodes)
     }
 
-    fn get_accounts_proof_rec(&self, txn: &Transaction, node: &AccountsTreeNode<A>, prefixes: &[AddressNibbles], nodes: &mut Vec<AccountsTreeNode<A>>) -> bool {
+    fn get_accounts_proof_rec(
+        &self,
+        txn: &Transaction,
+        node: &AccountsTreeNode<A>,
+        prefixes: &[AddressNibbles],
+        nodes: &mut Vec<AccountsTreeNode<A>>,
+    ) -> bool {
         // For each prefix, descend the tree individually.
         let mut include_node = false;
         let mut i = 0;
@@ -220,7 +248,8 @@ impl<A: AccountsTreeLeave> AccountsTree<A> {
                     // we continue from there in the next iteration.
                     i = j;
                 }
-                include_node = self.get_accounts_proof_rec(txn, &child_node, &sub_prefixes, nodes) || include_node;
+                include_node = self.get_accounts_proof_rec(txn, &child_node, &sub_prefixes, nodes)
+                    || include_node;
             } else {
                 // No child node exists with the requested prefix. Include the current node to prove the absence of the requested account.
                 include_node = true;
@@ -238,24 +267,40 @@ impl<A: AccountsTreeLeave> AccountsTree<A> {
     }
 
     pub fn get(&self, txn: &Transaction, address: &Address) -> Option<A> {
-        if let AccountsTreeNode::TerminalNode { account, .. } = txn.get(&self.db, &AddressNibbles::from(address))? {
+        if let AccountsTreeNode::TerminalNode { account, .. } =
+            txn.get(&self.db, &AddressNibbles::from(address))?
+        {
             return Some(account);
         }
         None
     }
 
-    pub(crate) fn get_chunk(&self, txn: &Transaction, start: &str, size: usize) -> Option<AccountsTreeChunk<A>> {
-        let mut chunk = self.get_terminal_nodes(txn, &AddressNibbles::from_str(start).ok()?, size)?;
+    pub(crate) fn get_chunk(
+        &self,
+        txn: &Transaction,
+        start: &str,
+        size: usize,
+    ) -> Option<AccountsTreeChunk<A>> {
+        let mut chunk =
+            self.get_terminal_nodes(txn, &AddressNibbles::from_str(start).ok()?, size)?;
         let last_node = chunk.pop();
         let proof = if let Some(node) = last_node {
             self.get_accounts_proof(txn, &[node.prefix().to_address()?])
         } else {
-            self.get_accounts_proof(txn, &[Address::from_str("ffffffffffffffffffffffffffffffffffffffff").ok()?])
+            self.get_accounts_proof(
+                txn,
+                &[Address::from_str("ffffffffffffffffffffffffffffffffffffffff").ok()?],
+            )
         };
         Some(AccountsTreeChunk::new(chunk, proof))
     }
 
-    pub(crate) fn get_terminal_nodes(&self, txn: &Transaction, start: &AddressNibbles, size: usize) -> Option<Vec<AccountsTreeNode<A>>> {
+    pub(crate) fn get_terminal_nodes(
+        &self,
+        txn: &Transaction,
+        start: &AddressNibbles,
+        size: usize,
+    ) -> Option<Vec<AccountsTreeNode<A>>> {
         let mut vec = Vec::new();
         let mut stack = Vec::new();
         stack.push(self.get_root(txn)?);
@@ -303,15 +348,18 @@ mod tests {
 
     #[test]
     fn it_can_create_valid_chunk() {
-        let address1 = Address::from(&hex::decode("0000000000000000000000000000000000000000").unwrap()[..]);
+        let address1 =
+            Address::from(&hex::decode("0000000000000000000000000000000000000000").unwrap()[..]);
         let account1 = Account::Basic(account::BasicAccount {
             balance: Coin::try_from(5).unwrap(),
         });
-        let address2 = Address::from(&hex::decode("1000000000000000000000000000000000000000").unwrap()[..]);
+        let address2 =
+            Address::from(&hex::decode("1000000000000000000000000000000000000000").unwrap()[..]);
         let account2 = Account::Basic(account::BasicAccount {
             balance: Coin::try_from(55).unwrap(),
         });
-        let address3 = Address::from(&hex::decode("1200000000000000000000000000000000000000").unwrap()[..]);
+        let address3 =
+            Address::from(&hex::decode("1200000000000000000000000000000000000000").unwrap()[..]);
         let account3 = Account::Basic(account::BasicAccount {
             balance: Coin::try_from(55555555).unwrap(),
         });

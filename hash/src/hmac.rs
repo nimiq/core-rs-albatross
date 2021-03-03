@@ -30,6 +30,12 @@ pub fn compute_hmac_sha512(key: &[u8], data: &[u8]) -> Sha512Hash {
         outer_key.push(0x5c ^ byte);
     }
 
-    let inner_hash = Sha512Hasher::default().chain(&inner_key).chain(&data).finish();
-    Sha512Hasher::default().chain(&outer_key).chain(&inner_hash).finish()
+    let inner_hash = Sha512Hasher::default()
+        .chain(&inner_key)
+        .chain(&data)
+        .finish();
+    Sha512Hasher::default()
+        .chain(&outer_key)
+        .chain(&inner_hash)
+        .finish()
 }

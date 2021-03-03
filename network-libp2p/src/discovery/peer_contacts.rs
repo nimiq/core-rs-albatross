@@ -160,7 +160,10 @@ impl Protocols {
     }
 
     pub fn from_multiaddr(multiaddr: &Multiaddr) -> Self {
-        let protocol = multiaddr.iter().last().unwrap_or_else(|| panic!("Empty multiaddr: {}", multiaddr));
+        let protocol = multiaddr
+            .iter()
+            .last()
+            .unwrap_or_else(|| panic!("Empty multiaddr: {}", multiaddr));
 
         match protocol {
             Protocol::Ws(_) => Self::WS,
@@ -180,13 +183,19 @@ impl Protocols {
 ///  - A timestamp when this contact information was generated.
 ///
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(feature = "peer-contact-book-persistence", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "peer-contact-book-persistence",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct PeerContact {
     #[beserial(len_type(u8))]
     pub addresses: Vec<Multiaddr>,
 
     /// Public key of this peer.
-    #[cfg_attr(feature = "peer-contact-book-persistence", serde(with = "self::serde_public_key"))]
+    #[cfg_attr(
+        feature = "peer-contact-book-persistence",
+        serde(with = "self::serde_public_key")
+    )]
     pub public_key: PublicKey,
 
     /// Services supported by this peer.
@@ -197,7 +206,12 @@ pub struct PeerContact {
 }
 
 impl PeerContact {
-    pub fn new<I: IntoIterator<Item = Multiaddr>>(addresses: I, public_key: PublicKey, services: Services, timestamp: Option<u64>) -> Self {
+    pub fn new<I: IntoIterator<Item = Multiaddr>>(
+        addresses: I,
+        public_key: PublicKey,
+        services: Services,
+        timestamp: Option<u64>,
+    ) -> Self {
         let mut addresses = addresses.into_iter().collect::<Vec<Multiaddr>>();
 
         addresses.sort();
@@ -233,12 +247,20 @@ impl PeerContact {
 
         let signature = keypair.tagged_sign(&self);
 
-        SignedPeerContact { inner: self, signature }
+        SignedPeerContact {
+            inner: self,
+            signature,
+        }
     }
 
     /// This sets the timestamp in the peer contact to the current system time.
     pub fn set_current_time(&mut self) {
-        self.timestamp = Some(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs());
+        self.timestamp = Some(
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        );
     }
 }
 
@@ -248,7 +270,10 @@ impl TaggedSignable for PeerContact {
 
 /// A signed peer contact.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(feature = "peer-contact-book-persistence", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "peer-contact-book-persistence",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct SignedPeerContact {
     /// The wrapped peer contact.
     #[cfg_attr(feature = "peer-contact-book-persistence", serde(flatten))]
@@ -261,7 +286,8 @@ pub struct SignedPeerContact {
 impl SignedPeerContact {
     /// Verifies that the signature is valid for this peer contact.
     pub fn verify(&self) -> bool {
-        self.signature.tagged_verify(&self.inner, &self.inner.public_key)
+        self.signature
+            .tagged_verify(&self.inner, &self.inner.public_key)
     }
 
     pub fn public_key(&self) -> &PublicKey {
@@ -271,7 +297,10 @@ impl SignedPeerContact {
 
 /// Meta information attached to peer contact info objects. This are meant to be mutable and change over time.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "peer-contact-book-persistence", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "peer-contact-book-persistence",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 struct PeerContactMeta {
     score: f32,
 
@@ -428,7 +457,12 @@ impl PeerContactBook {
         self.peer_contacts.insert(peer_id, Arc::new(info));
     }
 
-    pub fn insert_filtered(&mut self, contact: SignedPeerContact, protocols_filter: Protocols, services_filter: Services) {
+    pub fn insert_filtered(
+        &mut self,
+        contact: SignedPeerContact,
+        protocols_filter: Protocols,
+        services_filter: Services,
+    ) {
         let info = PeerContactInfo::from(contact);
         if info.matches(protocols_filter, services_filter) {
             let peer_id = info.peer_id.clone();
@@ -442,7 +476,12 @@ impl PeerContactBook {
         }
     }
 
-    pub fn insert_all_filtered<I: IntoIterator<Item = SignedPeerContact>>(&mut self, contacts: I, protocols_filter: Protocols, services_filter: Services) {
+    pub fn insert_all_filtered<I: IntoIterator<Item = SignedPeerContact>>(
+        &mut self,
+        contacts: I,
+        protocols_filter: Protocols,
+        services_filter: Services,
+    ) {
         for contact in contacts {
             self.insert_filtered(contact, protocols_filter, services_filter)
         }
@@ -452,7 +491,11 @@ impl PeerContactBook {
         self.peer_contacts.get(peer_id).map(|c| Arc::clone(c))
     }
 
-    pub fn query<'a>(&'a self, protocols: Protocols, services: Services) -> impl Iterator<Item = Arc<PeerContactInfo>> + 'a {
+    pub fn query<'a>(
+        &'a self,
+        protocols: Protocols,
+        services: Services,
+    ) -> impl Iterator<Item = Arc<PeerContactInfo>> + 'a {
         // TODO: This is a naive implementation
         // TODO: Sort by score?
         self.peer_contacts.iter().filter_map(move |(_, contact)| {
@@ -465,7 +508,10 @@ impl PeerContactBook {
     }
 
     pub fn self_add_addresses<I: IntoIterator<Item = Multiaddr>>(&mut self, addresses: I) {
-        log::info!("Addresses observed for us: {:#?}", addresses.into_iter().collect::<Vec<Multiaddr>>());
+        log::info!(
+            "Addresses observed for us: {:#?}",
+            addresses.into_iter().collect::<Vec<Multiaddr>>()
+        );
         // TODO: We could add these observed addresses to our advertised addresses (with restrictions).
     }
 
@@ -514,19 +560,37 @@ mod tests {
 
     #[test]
     fn protocols_from_multiaddr() {
-        assert_eq!(Protocols::from_multiaddr(&"/ip4/1.2.3.4/tcp/80/ws".parse().unwrap()), Protocols::WS);
-        assert_eq!(Protocols::from_multiaddr(&"/ip4/1.2.3.4/tcp/443/wss".parse().unwrap()), Protocols::WSS);
+        assert_eq!(
+            Protocols::from_multiaddr(&"/ip4/1.2.3.4/tcp/80/ws".parse().unwrap()),
+            Protocols::WS
+        );
+        assert_eq!(
+            Protocols::from_multiaddr(&"/ip4/1.2.3.4/tcp/443/wss".parse().unwrap()),
+            Protocols::WSS
+        );
     }
 
     #[test]
     fn protocols_from_multiaddrs() {
         assert_eq!(
-            Protocols::from_multiaddrs(vec!["/ip4/1.2.3.4/tcp/80/ws".parse().unwrap(), "/dns/test.local/tcp/443/ws".parse().unwrap()].iter()),
+            Protocols::from_multiaddrs(
+                vec![
+                    "/ip4/1.2.3.4/tcp/80/ws".parse().unwrap(),
+                    "/dns/test.local/tcp/443/ws".parse().unwrap()
+                ]
+                .iter()
+            ),
             Protocols::WS
         );
 
         assert_eq!(
-            Protocols::from_multiaddrs(vec!["/ip4/1.2.3.4/tcp/443/ws".parse().unwrap(), "/ip4/1.2.3.4/tcp/443/wss".parse().unwrap()].iter()),
+            Protocols::from_multiaddrs(
+                vec![
+                    "/ip4/1.2.3.4/tcp/443/ws".parse().unwrap(),
+                    "/ip4/1.2.3.4/tcp/443/wss".parse().unwrap()
+                ]
+                .iter()
+            ),
             Protocols::WS | Protocols::WSS
         );
     }

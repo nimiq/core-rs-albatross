@@ -91,16 +91,35 @@ fn run_app() -> Result<(), Error> {
         stdin().read_line(&mut line)?;
         Transaction::deserialize_from_vec(&hex::decode(&line)?)?
     } else {
-        let from_address = Address::from_user_friendly_address(matches.value_of("from_address").ok_or(AppError::SenderAddress)?)?;
-        let to_address = Address::from_user_friendly_address(matches.value_of("to_address").ok_or(AppError::RecipientAddress)?)?;
+        let from_address = Address::from_user_friendly_address(
+            matches
+                .value_of("from_address")
+                .ok_or(AppError::SenderAddress)?,
+        )?;
+        let to_address = Address::from_user_friendly_address(
+            matches
+                .value_of("to_address")
+                .ok_or(AppError::RecipientAddress)?,
+        )?;
         let value = Coin::from_str(matches.value_of("value").ok_or(AppError::Value)?)?;
         let fee = Coin::from_str(matches.value_of("fee").ok_or(AppError::Fee)?)?;
-        let validity_start_height = u32::from_str(matches.value_of("validity_start_height").ok_or(AppError::ValidityStartHeight)?)?;
+        let validity_start_height = u32::from_str(
+            matches
+                .value_of("validity_start_height")
+                .ok_or(AppError::ValidityStartHeight)?,
+        )?;
         let network_id = match matches.value_of("network") {
             Some(s) => NetworkId::from_str(s)?,
             None => NetworkId::Main,
         };
-        Transaction::new_basic(from_address, to_address, value, fee, validity_start_height, network_id)
+        Transaction::new_basic(
+            from_address,
+            to_address,
+            value,
+            fee,
+            validity_start_height,
+            network_id,
+        )
     };
 
     // sign transaction

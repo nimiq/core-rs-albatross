@@ -4,7 +4,6 @@ use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::Blake2bHash;
 
-
 impl Serialize for Blake2bHash {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where

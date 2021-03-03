@@ -27,7 +27,10 @@ impl ForkProofPool {
     /// Applies a block to the pool, removing processed fork proofs.
     pub fn apply_block(&mut self, block: &Block) {
         match block {
-            Block::Micro(MicroBlock { body: Some(extrinsics), .. }) => {
+            Block::Micro(MicroBlock {
+                body: Some(extrinsics),
+                ..
+            }) => {
                 for fork_proof in extrinsics.fork_proofs.iter() {
                     self.fork_proofs.remove(fork_proof);
                 }
@@ -38,7 +41,8 @@ impl ForkProofPool {
             }) => {
                 // After a macro block, remove all fork proofs that would not be valid anymore
                 // from now on.
-                self.fork_proofs.retain(|proof| proof.is_valid_at(*block_number + 1));
+                self.fork_proofs
+                    .retain(|proof| proof.is_valid_at(*block_number + 1));
             }
             _ => {}
         }
@@ -46,7 +50,11 @@ impl ForkProofPool {
 
     /// Reverts a block, re-adding fork proofs.
     pub fn revert_block(&mut self, block: &Block) {
-        if let Block::Micro(MicroBlock { body: Some(extrinsics), .. }) = block {
+        if let Block::Micro(MicroBlock {
+            body: Some(extrinsics),
+            ..
+        }) = block
+        {
             for fork_proof in extrinsics.fork_proofs.iter() {
                 self.fork_proofs.insert(fork_proof.clone());
             }

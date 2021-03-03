@@ -11,7 +11,8 @@ pub struct KeyPair {
 
 impl KeyPair {
     pub fn sign(&self, data: &[u8]) -> Signature {
-        let ext_signature = ed25519_dalek::ExpandedSecretKey::from(&self.private.0).sign(data, &self.public.0);
+        let ext_signature =
+            ed25519_dalek::ExpandedSecretKey::from(&self.private.0).sign(data, &self.public.0);
         Signature(ext_signature)
     }
 }

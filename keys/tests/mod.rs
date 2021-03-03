@@ -94,18 +94,35 @@ fn verify_rfc8032_test_vectors() {
 #[test]
 fn it_computes_friendly_addresses() {
     let mut addr = Address::from([0u8; Address::SIZE]);
-    assert_eq!(addr.to_user_friendly_address(), "NQ07 0000 0000 0000 0000 0000 0000 0000 0000");
+    assert_eq!(
+        addr.to_user_friendly_address(),
+        "NQ07 0000 0000 0000 0000 0000 0000 0000 0000"
+    );
 
     let mut addr_bytes: [u8; Address::SIZE] = [0; Address::SIZE];
-    addr_bytes.clone_from_slice(&::hex::decode("e9910f2452419823dc2e5534633210074ae9527f").unwrap()[0..]);
+    addr_bytes
+        .clone_from_slice(&::hex::decode("e9910f2452419823dc2e5534633210074ae9527f").unwrap()[0..]);
     addr = Address::from(addr_bytes);
-    assert_eq!(addr.to_user_friendly_address(), "NQ97 V68G X92J 86C2 7P1E ALS6 6CGG 0V5E JLKY");
+    assert_eq!(
+        addr.to_user_friendly_address(),
+        "NQ97 V68G X92J 86C2 7P1E ALS6 6CGG 0V5E JLKY"
+    );
 
-    addr_bytes.clone_from_slice(&::hex::decode("2987c28c1ff373ba1e18a9a2efe6dc101ee25ed9").unwrap()[0..]);
+    addr_bytes
+        .clone_from_slice(&::hex::decode("2987c28c1ff373ba1e18a9a2efe6dc101ee25ed9").unwrap()[0..]);
     addr = Address::from(addr_bytes);
-    assert_eq!(addr.to_user_friendly_address(), "NQ05 563U 530Y XDRT L7GQ M6HE YRNU 20FE 4PNR");
+    assert_eq!(
+        addr.to_user_friendly_address(),
+        "NQ05 563U 530Y XDRT L7GQ M6HE YRNU 20FE 4PNR"
+    );
 
-    let addr2 = Address::from_user_friendly_address(&"NQ05 563U 530Y XDRT L7GQ M6HE YRNU 20FE 4PNR".to_string()).unwrap();
+    let addr2 = Address::from_user_friendly_address(
+        &"NQ05 563U 530Y XDRT L7GQ M6HE YRNU 20FE 4PNR".to_string(),
+    )
+    .unwrap();
     assert_eq!(addr.as_bytes(), addr2.as_bytes());
-    assert_eq!(addr.to_user_friendly_address(), addr2.to_user_friendly_address());
+    assert_eq!(
+        addr.to_user_friendly_address(),
+        addr2.to_user_friendly_address()
+    );
 }

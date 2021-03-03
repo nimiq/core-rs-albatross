@@ -227,7 +227,13 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
             TENDERMINT_TIMEOUT_INIT + round as u64 * TENDERMINT_TIMEOUT_DELTA,
         );
 
-        trace!("Awaiting proposal for {}.{}, expected producer: {}, timeout: {:?}", self.blockchain.block_number() +1, &round, &validator_id, &timeout);
+        trace!(
+            "Awaiting proposal for {}.{}, expected producer: {}, timeout: {:?}",
+            self.blockchain.block_number() + 1,
+            &round,
+            &validator_id,
+            &timeout
+        );
         // This waits for a proposal from the proposer until it timeouts.
         let await_res = tokio::time::timeout(
             timeout,
@@ -288,10 +294,16 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
         // Check the validity of the block against our state. If it is invalid, we return a proposal
         // timeout right here. This also returns the block body that matches the block header
         // (assuming that the block is valid).
-        let body = match self.blockchain.verify_block_state(&state, &block, Some(&mut txn)) {
+        let body = match self
+            .blockchain
+            .verify_block_state(&state, &block, Some(&mut txn))
+        {
             Ok(v) => v,
             Err(err) => {
-                debug!("Tendermint - await_proposal: Invalid block state: {:?}", err);
+                debug!(
+                    "Tendermint - await_proposal: Invalid block state: {:?}",
+                    err
+                );
                 return Ok(ProposalResult::Timeout);
             }
         };
@@ -359,7 +371,10 @@ impl<N: ValidatorNetwork + 'static> TendermintInterface<N> {
                     debug!("Tendermint - await_proposal: Invalid signature");
                 }
             } else {
-                debug!("Tendermint - await_proposal: Invalid validator id. Expected {}, found {}", validator_id, msg.signer_idx);
+                debug!(
+                    "Tendermint - await_proposal: Invalid validator id. Expected {}, found {}",
+                    validator_id, msg.signer_idx
+                );
             }
         }
 

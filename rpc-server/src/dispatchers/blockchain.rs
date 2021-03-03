@@ -3,18 +3,17 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use futures::stream::{BoxStream, StreamExt};
 
+use nimiq_account::Account;
 use nimiq_blockchain_albatross::{Blockchain, BlockchainEvent};
 use nimiq_hash::Blake2bHash;
+use nimiq_keys::Address;
 use nimiq_primitives::policy;
 use nimiq_rpc_interface::{
-    types::{Block, OrLatest, SlashedSlots, Slot, Stake, Stakes, Validator},
     blockchain::BlockchainInterface,
+    types::{Block, OrLatest, SlashedSlots, Slot, Stake, Stakes, Validator},
 };
-use nimiq_keys::Address;
-use nimiq_account::Account;
 
 use crate::error::Error;
-
 
 pub struct BlockchainDispatcher {
     blockchain: Arc<Blockchain>,
@@ -26,7 +25,7 @@ impl BlockchainDispatcher {
     }
 }
 
-#[nimiq_jsonrpc_derive::service(rename_all="camelCase")]
+#[nimiq_jsonrpc_derive::service(rename_all = "camelCase")]
 #[async_trait]
 impl BlockchainInterface for BlockchainDispatcher {
     type Error = Error;
@@ -43,14 +42,22 @@ impl BlockchainInterface for BlockchainDispatcher {
         Ok(policy::batch_at(self.blockchain.block_number()))
     }
 
-    async fn block_by_hash(&mut self, hash: Blake2bHash, include_transactions: bool) -> Result<Block, Error> {
+    async fn block_by_hash(
+        &mut self,
+        hash: Blake2bHash,
+        include_transactions: bool,
+    ) -> Result<Block, Error> {
         self.blockchain
             .get_block(&hash, true)
             .map(|block| Block::from_block(&self.blockchain, block, include_transactions))
             .ok_or_else(|| Error::BlockNotFound(hash.into()))
     }
 
-    async fn block_by_number(&mut self, block_number: OrLatest<u32>, include_transactions: bool) -> Result<Block, Error> {
+    async fn block_by_number(
+        &mut self,
+        block_number: OrLatest<u32>,
+        include_transactions: bool,
+    ) -> Result<Block, Error> {
         let block = match block_number {
             OrLatest::Value(block_number) => self
                 .blockchain
@@ -59,10 +66,18 @@ impl BlockchainInterface for BlockchainDispatcher {
             OrLatest::Latest => self.blockchain.head().clone(),
         };
 
-        Ok(Block::from_block(&self.blockchain, block, include_transactions))
+        Ok(Block::from_block(
+            &self.blockchain,
+            block,
+            include_transactions,
+        ))
     }
 
-    async fn get_slot_at(&mut self, block_number: u32, view_number_opt: Option<u32>) -> Result<Slot, Error> {
+    async fn get_slot_at(
+        &mut self,
+        block_number: u32,
+        view_number_opt: Option<u32>,
+    ) -> Result<Slot, Error> {
         // Check if it's not a macro block
         //
         // TODO: Macro blocks have a slot too. It's just only for the proposal.
@@ -80,7 +95,11 @@ impl BlockchainInterface for BlockchainDispatcher {
                 .view_number()
         };
 
-        Ok(Slot::from_producer(&self.blockchain, block_number, view_number))
+        Ok(Slot::from_producer(
+            &self.blockchain,
+            block_number,
+            view_number,
+        ))
     }
 
     async fn slashed_slots(&mut self) -> Result<SlashedSlots, Error> {
@@ -88,9 +107,11 @@ impl BlockchainInterface for BlockchainDispatcher {
         let block_number = self.blockchain.block_number();
         let staking_contract = self.blockchain.get_staking_contract();
 
-        let current_slashed_set = staking_contract.current_lost_rewards() & staking_contract.current_disabled_slots();
+        let current_slashed_set =
+            staking_contract.current_lost_rewards() & staking_contract.current_disabled_slots();
 
-        let previous_slashed_set = staking_contract.previous_lost_rewards() & staking_contract.previous_disabled_slots();
+        let previous_slashed_set =
+            staking_contract.previous_lost_rewards() & staking_contract.previous_disabled_slots();
 
         Ok(SlashedSlots {
             block_number,
@@ -145,18 +166,20 @@ impl BlockchainInterface for BlockchainDispatcher {
 
     #[stream]
     async fn head_subscribe(&mut self) -> Result<BoxStream<'static, Blake2bHash>, Error> {
-        Ok(self.blockchain
+        Ok(self
+            .blockchain
             .notifier
             .write()
             .as_stream()
-            .map(|event| {
-                match event {
-                    BlockchainEvent::Extended(hash) => hash,
-                    BlockchainEvent::Finalized(hash) => hash,
-                    BlockchainEvent::EpochFinalized(hash) => hash,
-                    BlockchainEvent::Rebranched(_, new_branch) => new_branch.into_iter().last().unwrap().0,
+            .map(|event| match event {
+                BlockchainEvent::Extended(hash) => hash,
+                BlockchainEvent::Finalized(hash) => hash,
+                BlockchainEvent::EpochFinalized(hash) => hash,
+                BlockchainEvent::Rebranched(_, new_branch) => {
+                    new_branch.into_iter().last().unwrap().0
                 }
-            }).boxed())
+            })
+            .boxed())
     }
 
     async fn get_account(&mut self, account: Address) -> Result<Account, Error> {

@@ -2,13 +2,13 @@
 extern crate beserial_derive;
 #[macro_use]
 extern crate log;
-extern crate strum_macros;
 extern crate nimiq_bls as bls;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
 extern crate nimiq_macros as macros;
 extern crate nimiq_primitives as primitives;
 extern crate nimiq_utils as utils;
+extern crate strum_macros;
 
 use std::cmp::{Ord, Ordering};
 use std::io;
@@ -17,7 +17,10 @@ use std::sync::Arc;
 use bitflags::bitflags;
 use thiserror::Error;
 
-use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, WriteBytesExt};
+use beserial::{
+    Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
+    SerializingError, WriteBytesExt,
+};
 use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
 use nimiq_keys::Address;
 use nimiq_keys::{PublicKey, Signature};
@@ -139,7 +142,14 @@ impl Transaction {
     /// The size in bytes of the smallest possible transaction (basic single-sig).
     pub const MIN_SIZE: usize = 138;
 
-    pub fn new_basic(sender: Address, recipient: Address, value: Coin, fee: Coin, validity_start_height: u32, network_id: NetworkId) -> Self {
+    pub fn new_basic(
+        sender: Address,
+        recipient: Address,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Self {
         Self {
             data: Vec::new(),
             sender,
@@ -239,9 +249,15 @@ impl Transaction {
     }
 
     pub fn format(&self) -> TransactionFormat {
-        if self.sender_type == AccountType::Basic && self.recipient_type == AccountType::Basic && self.data.is_empty() && self.flags.is_empty() {
+        if self.sender_type == AccountType::Basic
+            && self.recipient_type == AccountType::Basic
+            && self.data.is_empty()
+            && self.flags.is_empty()
+        {
             if let Ok(signature_proof) = SignatureProof::deserialize_from_vec(&self.proof) {
-                if self.sender == Address::from(&signature_proof.public_key) && signature_proof.merkle_path.is_empty() {
+                if self.sender == Address::from(&signature_proof.public_key)
+                    && signature_proof.merkle_path.is_empty()
+                {
                     return TransactionFormat::Basic;
                 }
             }
@@ -251,7 +267,11 @@ impl Transaction {
 
     pub fn cmp_mempool_order(&self, other: &Transaction) -> Ordering {
         Ordering::Equal
-            .then_with(|| self.fee_per_byte().partial_cmp(&other.fee_per_byte()).unwrap_or(Ordering::Equal))
+            .then_with(|| {
+                self.fee_per_byte()
+                    .partial_cmp(&other.fee_per_byte())
+                    .unwrap_or(Ordering::Equal)
+            })
             .then_with(|| self.fee.cmp(&other.fee))
             .then_with(|| self.value.cmp(&other.value))
             .then_with(|| self.recipient.cmp(&other.recipient))
@@ -335,7 +355,8 @@ impl Transaction {
 
     pub fn is_valid_at(&self, block_height: u32) -> bool {
         let window = policy::TRANSACTION_VALIDITY_WINDOW;
-        block_height >= self.validity_start_height && block_height < self.validity_start_height + window
+        block_height >= self.validity_start_height
+            && block_height < self.validity_start_height + window
     }
 
     pub fn contract_creation_address(&self) -> Address {
@@ -364,7 +385,9 @@ impl Transaction {
     }
 
     pub fn total_value(&self) -> Result<Coin, TransactionError> {
-        self.value.checked_add(self.fee).ok_or(TransactionError::Overflow)
+        self.value
+            .checked_add(self.fee)
+            .ok_or(TransactionError::Overflow)
     }
 }
 
@@ -453,7 +476,11 @@ impl Deserialize for Transaction {
                     validity_start_height: Deserialize::deserialize(reader)?,
                     network_id: Deserialize::deserialize(reader)?,
                     flags: TransactionFlags::empty(),
-                    proof: SignatureProof::from(sender_public_key, Deserialize::deserialize(reader)?).serialize_to_vec(),
+                    proof: SignatureProof::from(
+                        sender_public_key,
+                        Deserialize::deserialize(reader)?,
+                    )
+                    .serialize_to_vec(),
                     valid: false,
                 })
             }

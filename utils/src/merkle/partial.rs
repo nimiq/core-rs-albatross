@@ -14,7 +14,10 @@ use crate::math::CeilingDiv;
 pub struct PartialMerkleProofBuilder {}
 
 impl PartialMerkleProofBuilder {
-    pub fn new<H: HashOutput>(hashes: &[H], chunk_size: usize) -> Result<Vec<PartialMerkleProof<H>>, PartialMerkleProofError> {
+    pub fn new<H: HashOutput>(
+        hashes: &[H],
+        chunk_size: usize,
+    ) -> Result<Vec<PartialMerkleProof<H>>, PartialMerkleProofError> {
         if chunk_size == 0 {
             return Err(PartialMerkleProofError::InvalidChunkSize);
         }
@@ -24,12 +27,23 @@ impl PartialMerkleProofBuilder {
         Ok(proofs)
     }
 
-    pub fn from_values<H: HashOutput, T: SerializeContent>(values: &[T], chunk_size: usize) -> Result<Vec<PartialMerkleProof<H>>, PartialMerkleProofError> {
-        let hashes: Vec<H> = values.iter().map(|v| H::Builder::default().chain(v).finish()).collect();
+    pub fn from_values<H: HashOutput, T: SerializeContent>(
+        values: &[T],
+        chunk_size: usize,
+    ) -> Result<Vec<PartialMerkleProof<H>>, PartialMerkleProofError> {
+        let hashes: Vec<H> = values
+            .iter()
+            .map(|v| H::Builder::default().chain(v).finish())
+            .collect();
         PartialMerkleProofBuilder::new::<H>(&hashes, chunk_size)
     }
 
-    fn compute<H: HashOutput>(hashes: &[H], chunk_size: usize, current_range: Range<usize>, proofs: &mut Vec<PartialMerkleProof<H>>) -> H {
+    fn compute<H: HashOutput>(
+        hashes: &[H],
+        chunk_size: usize,
+        current_range: Range<usize>,
+        proofs: &mut Vec<PartialMerkleProof<H>>,
+    ) -> H {
         let mut hasher = H::Builder::default();
 
         match current_range.end - current_range.start {
@@ -43,8 +57,18 @@ impl PartialMerkleProofBuilder {
             }
             len => {
                 let mid = current_range.start + len.ceiling_div(2);
-                let left_hash = PartialMerkleProofBuilder::compute::<H>(&hashes, chunk_size, current_range.start..mid, proofs);
-                let right_hash = PartialMerkleProofBuilder::compute::<H>(&hashes, chunk_size, mid..current_range.end, proofs);
+                let left_hash = PartialMerkleProofBuilder::compute::<H>(
+                    &hashes,
+                    chunk_size,
+                    current_range.start..mid,
+                    proofs,
+                );
+                let right_hash = PartialMerkleProofBuilder::compute::<H>(
+                    &hashes,
+                    chunk_size,
+                    mid..current_range.end,
+                    proofs,
+                );
                 hasher.hash(&left_hash);
                 hasher.hash(&right_hash);
 
@@ -116,7 +140,10 @@ where
         chunk_values: &[T],
         previous_result: Option<&PartialMerkleProofResult<H>>,
     ) -> Result<PartialMerkleProofResult<H>, PartialMerkleProofError> {
-        let hashes: Vec<H> = chunk_values.iter().map(|v| H::Builder::default().chain(v).finish()).collect();
+        let hashes: Vec<H> = chunk_values
+            .iter()
+            .map(|v| H::Builder::default().chain(v).finish())
+            .collect();
         self.compute_root(&hashes, previous_result)
     }
 
@@ -128,7 +155,9 @@ where
         let index_offset = previous_result.map(|r| r.next_index).unwrap_or(0);
         let last_index = chunk_hashes.len() + index_offset;
         let empty_vec = Vec::new();
-        let helper_nodes = previous_result.map(|r| &r.helper_nodes).unwrap_or(&empty_vec);
+        let helper_nodes = previous_result
+            .map(|r| &r.helper_nodes)
+            .unwrap_or(&empty_vec);
         let mut helper_index = helper_nodes.len();
         let mut proof_index = 0;
 
@@ -173,11 +202,16 @@ where
         // Catch cases that require proof/helper nodes.
         if current_range.end <= index_offset {
             *helper_index -= 1;
-            let hash = helper_nodes.get(*helper_index).ok_or(PartialMerkleProofError::InvalidPreviousProof)?;
+            let hash = helper_nodes
+                .get(*helper_index)
+                .ok_or(PartialMerkleProofError::InvalidPreviousProof)?;
             return Ok((false, hash.clone()));
         }
         if current_range.start >= index_offset + hashes.len() {
-            let hash = self.nodes.get(*proof_index).ok_or(PartialMerkleProofError::InvalidProof)?;
+            let hash = self
+                .nodes
+                .get(*proof_index)
+                .ok_or(PartialMerkleProofError::InvalidProof)?;
             *proof_index += 1;
             return Ok((true, hash.clone()));
         }

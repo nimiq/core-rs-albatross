@@ -9,7 +9,9 @@ use tokio::sync::{broadcast, mpsc};
 use block_albatross::{Block, BlockType, ViewChange, ViewChangeProof};
 use blockchain_albatross::{BlockchainEvent, ForkEvent, PushResult};
 use bls::CompressedPublicKey;
-use consensus_albatross::{sync::block_queue::BlockTopic, Consensus, ConsensusEvent, ConsensusProxy};
+use consensus_albatross::{
+    sync::block_queue::BlockTopic, Consensus, ConsensusEvent, ConsensusProxy,
+};
 use database::{Database, Environment, ReadTransaction, WriteTransaction};
 use hash::Blake2bHash;
 use network_interface::network::Network;
@@ -153,7 +155,10 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         // However we have an entire batch to execute the task so it should not be extremely bad.
         // Also the setting up of our own public key record should probably not be done here but in `init` instead.
         tokio::spawn(async move {
-            if let Err(err) = nw.set_public_key(&key.public_key.compress(), &key.secret_key).await {
+            if let Err(err) = nw
+                .set_public_key(&key.public_key.compress(), &key.secret_key)
+                .await
+            {
                 error!("could not set up DHT record: {:?}", err);
             }
             nw.set_validators(validator_keys).await;
@@ -286,22 +291,32 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                 TendermintReturn::Result(block) => {
                     // If the event is a result meaning the next macro block was produced we push it onto our local chain
                     let block_copy = block.clone();
-                    let result = self.consensus
+                    let result = self
+                        .consensus
                         .blockchain
                         .push(Block::Macro(block))
                         .map_err(|e| error!("Failed to push macro block onto the chain: {:?}", e))
                         .ok();
-                    if result == Some(PushResult::Extended) || result == Some(PushResult::Rebranched) {
+                    if result == Some(PushResult::Extended)
+                        || result == Some(PushResult::Rebranched)
+                    {
                         if block_copy.is_election_block() {
-                            info!("Publishing Election MacroBlock #{}", &block_copy.header.block_number);
+                            info!(
+                                "Publishing Election MacroBlock #{}",
+                                &block_copy.header.block_number
+                            );
                         } else {
-                            info!("Publishing Checkpoint MacroBlock #{}", &block_copy.header.block_number);
+                            info!(
+                                "Publishing Checkpoint MacroBlock #{}",
+                                &block_copy.header.block_number
+                            );
                         }
                         // todo get rid of spawn
                         let nw = self.network.clone();
                         tokio::spawn(async move {
                             trace!("publishing macro block: {:?}", &block_copy);
-                            if let Err(_) = nw.publish(&BlockTopic, Block::Macro(block_copy)).await {
+                            if let Err(_) = nw.publish(&BlockTopic, Block::Macro(block_copy)).await
+                            {
                                 error!("Failed to publish Block");
                             }
                         });
@@ -338,17 +353,21 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             match event {
                 ProduceMicroBlockEvent::MicroBlock(block) => {
                     let block_copy = block.clone();
-                    let result = self.consensus
+                    let result = self
+                        .consensus
                         .blockchain
                         .push(Block::Micro(block))
                         .map_err(|e| error!("Failed to push our block onto the chain: {:?}", e))
                         .ok();
-                    if result == Some(PushResult::Extended) || result == Some(PushResult::Rebranched) {
+                    if result == Some(PushResult::Extended)
+                        || result == Some(PushResult::Rebranched)
+                    {
                         // todo get rid of spawn
                         let nw = self.network.clone();
                         tokio::spawn(async move {
                             trace!("publishing micro block: {:?}", &block_copy);
-                            if let Err(_) = nw.publish(&BlockTopic, Block::Micro(block_copy)).await {
+                            if let Err(_) = nw.publish(&BlockTopic, Block::Micro(block_copy)).await
+                            {
                                 error!("Failed to publish Block");
                             }
                         });

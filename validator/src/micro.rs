@@ -72,12 +72,23 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         }
     }
 
-    async fn next(mut self) -> (ProduceMicroBlockEvent, NextProduceMicroBlockEvent<TValidatorNetwork>) {
+    async fn next(
+        mut self,
+    ) -> (
+        ProduceMicroBlockEvent,
+        NextProduceMicroBlockEvent<TValidatorNetwork>,
+    ) {
         let event = if self.is_our_turn() {
-            info!("Our turn at #{}:{}, producing micro block", self.block_number, self.view_number);
+            info!(
+                "Our turn at #{}:{}, producing micro block",
+                self.block_number, self.view_number
+            );
             ProduceMicroBlockEvent::MicroBlock(self.produce_micro_block())
         } else {
-            debug!("Not our turn at #{}:{}, waiting for micro block", self.block_number, self.view_number);
+            debug!(
+                "Not our turn at #{}:{}, waiting for micro block",
+                self.block_number, self.view_number
+            );
             time::delay_for(self.view_change_delay).await;
             info!(
                 "No micro block received within timeout at #{}:{}, starting view change",
@@ -96,15 +107,24 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
     }
 
     fn is_our_turn(&self) -> bool {
-        let (slot, _) = self.blockchain.get_slot_owner_at(self.block_number, self.view_number, None);
+        let (slot, _) =
+            self.blockchain
+                .get_slot_owner_at(self.block_number, self.view_number, None);
         &self.signing_key.public_key.compress() == slot.validator_slot.public_key().compressed()
     }
 
     fn produce_micro_block(&self) -> MicroBlock {
-        let producer = BlockProducer::new(Arc::clone(&self.blockchain), Arc::clone(&self.mempool), self.signing_key.clone());
+        let producer = BlockProducer::new(
+            Arc::clone(&self.blockchain),
+            Arc::clone(&self.mempool),
+            self.signing_key.clone(),
+        );
 
         let _lock = self.blockchain.lock();
-        let timestamp = u64::max(self.blockchain.head().header().timestamp(), systemtime_to_timestamp(SystemTime::now()));
+        let timestamp = u64::max(
+            self.blockchain.head().header().timestamp(),
+            systemtime_to_timestamp(SystemTime::now()),
+        );
         producer.next_micro_block(
             timestamp,
             self.view_number,
@@ -123,12 +143,13 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         };
 
         // Include the previous_view_change_proof only if it has not yet been persisted on chain.
-        let view_change_proof = self.view_change.as_ref()
-            .map_or(None, |vc| if vc.block_number == self.block_number {
+        let view_change_proof = self.view_change.as_ref().map_or(None, |vc| {
+            if vc.block_number == self.block_number {
                 Some(self.view_change_proof.as_ref().unwrap().sig.clone())
             } else {
                 None
-            });
+            }
+        });
 
         // TODO get at init time?
         let active_validators = self.blockchain.current_validators().clone();
@@ -151,7 +172,15 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
 }
 
 pub(crate) struct ProduceMicroBlock<TValidatorNetwork> {
-    next_event: Option<BoxFuture<'static, (ProduceMicroBlockEvent, NextProduceMicroBlockEvent<TValidatorNetwork>)>>,
+    next_event: Option<
+        BoxFuture<
+            'static,
+            (
+                ProduceMicroBlockEvent,
+                NextProduceMicroBlockEvent<TValidatorNetwork>,
+            ),
+        >,
+    >,
 }
 
 impl<TValidatorNetwork: ValidatorNetwork + 'static> ProduceMicroBlock<TValidatorNetwork> {
@@ -181,11 +210,15 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProduceMicroBlock<TValidator
         )
         .next()
         .boxed();
-        Self { next_event: Some(next_event) }
+        Self {
+            next_event: Some(next_event),
+        }
     }
 }
 
-impl<TValidatorNetwork: ValidatorNetwork + 'static> Stream for ProduceMicroBlock<TValidatorNetwork> {
+impl<TValidatorNetwork: ValidatorNetwork + 'static> Stream
+    for ProduceMicroBlock<TValidatorNetwork>
+{
     type Item = ProduceMicroBlockEvent;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {

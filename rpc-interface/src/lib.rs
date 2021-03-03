@@ -1,7 +1,7 @@
 pub mod blockchain;
 pub mod consensus;
-pub mod mempool;
-pub mod wallet;
-pub mod types;
 pub mod error;
+pub mod mempool;
 mod serde_helpers;
+pub mod types;
+pub mod wallet;

@@ -22,7 +22,12 @@ pub struct ExtendedTransaction {
 impl ExtendedTransaction {
     /// Convert a set of inherents and basic transactions (together with a block number and a block
     /// timestamp) into a vector of extended transactions.
-    pub fn from(block_number: u32, block_time: u64, transactions: Vec<BlockchainTransaction>, inherents: Vec<Inherent>) -> Vec<ExtendedTransaction> {
+    pub fn from(
+        block_number: u32,
+        block_time: u64,
+        transactions: Vec<BlockchainTransaction>,
+        inherents: Vec<Inherent>,
+    ) -> Vec<ExtendedTransaction> {
         let mut ext_txs = vec![];
 
         for transaction in transactions {

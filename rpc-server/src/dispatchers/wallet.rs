@@ -5,15 +5,11 @@ use parking_lot::RwLock;
 
 use beserial::Deserialize;
 use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey, Signature};
+use nimiq_rpc_interface::wallet::{ReturnAccount, ReturnSignature, WalletInterface};
 use nimiq_utils::otp::Locked;
 use nimiq_wallet::{WalletAccount, WalletStore};
-use nimiq_rpc_interface::wallet::{WalletInterface, ReturnAccount, ReturnSignature};
 
-use crate::{
-    wallets::UnlockedWallets,
-    error::Error,
-};
-
+use crate::{error::Error, wallets::UnlockedWallets};
 
 fn message_from_maybe_hex(s: String, is_hex: bool) -> Result<Vec<u8>, Error> {
     if is_hex {
@@ -22,7 +18,6 @@ fn message_from_maybe_hex(s: String, is_hex: bool) -> Result<Vec<u8>, Error> {
         Ok(s.into_bytes())
     }
 }
-
 
 pub struct WalletDispatcher {
     wallet_store: Arc<WalletStore>,
@@ -38,12 +33,16 @@ impl WalletDispatcher {
     }
 }
 
-#[nimiq_jsonrpc_derive::service(rename_all="camelCase")]
+#[nimiq_jsonrpc_derive::service(rename_all = "camelCase")]
 #[async_trait]
 impl WalletInterface for WalletDispatcher {
     type Error = Error;
-    
-    async fn import_raw_key(&mut self, key_data: String, passphrase: Option<String>) -> Result<Address, Error> {
+
+    async fn import_raw_key(
+        &mut self,
+        key_data: String,
+        passphrase: Option<String>,
+    ) -> Result<Address, Error> {
         let passphrase = passphrase.unwrap_or_default();
 
         let private_key: PrivateKey = Deserialize::deserialize_from_vec(&hex::decode(&key_data)?)?;
@@ -91,18 +90,34 @@ impl WalletInterface for WalletDispatcher {
     ///
     ///  - The duration parameter is ignored.
     ///
-    async fn unlock_account(&mut self, address: Address, passphrase: Option<String>, _duration: Option<u64>) -> Result<(), Error> {
+    async fn unlock_account(
+        &mut self,
+        address: Address,
+        passphrase: Option<String>,
+        _duration: Option<u64>,
+    ) -> Result<(), Error> {
         let passphrase = passphrase.unwrap_or_default();
-        let account = self.wallet_store.get(&address, None).ok_or(Error::AccountNotFound(address))?;
+        let account = self
+            .wallet_store
+            .get(&address, None)
+            .ok_or(Error::AccountNotFound(address))?;
 
-        let unlocked_account = account.unlock(passphrase.as_bytes()).map_err(|_locked| Error::WrongPassphrase)?;
+        let unlocked_account = account
+            .unlock(passphrase.as_bytes())
+            .map_err(|_locked| Error::WrongPassphrase)?;
 
         self.unlocked_wallets.write().insert(unlocked_account);
 
         Ok(())
     }
 
-    async fn sign(&mut self, message: String, address: Address, passphrase: Option<String>, is_hex: bool) -> Result<ReturnSignature, Error> {
+    async fn sign(
+        &mut self,
+        message: String,
+        address: Address,
+        passphrase: Option<String>,
+        is_hex: bool,
+    ) -> Result<ReturnSignature, Error> {
         let message = message_from_maybe_hex(message, is_hex)?;
 
         let passphrase = passphrase.unwrap_or_default();
@@ -115,7 +130,8 @@ impl WalletInterface for WalletDispatcher {
         } else {
             wallet_account = self
                 .wallet_store
-                .get(&address, None).ok_or(Error::AccountNotFound(address))?
+                .get(&address, None)
+                .ok_or(Error::AccountNotFound(address))?
                 .unlock(passphrase.as_bytes())
                 .map_err(|_locked| Error::WrongPassphrase)?
                 .key_pair
@@ -126,11 +142,24 @@ impl WalletInterface for WalletDispatcher {
 
         let (public_key, signature) = wallet.sign_message(&message);
 
-        Ok(ReturnSignature { public_key, signature })
+        Ok(ReturnSignature {
+            public_key,
+            signature,
+        })
     }
 
-    async fn verify_signature(&mut self, message: String, public_key: PublicKey, signature: Signature, is_hex: bool) -> Result<bool, Error> {
+    async fn verify_signature(
+        &mut self,
+        message: String,
+        public_key: PublicKey,
+        signature: Signature,
+        is_hex: bool,
+    ) -> Result<bool, Error> {
         let message = message_from_maybe_hex(message, is_hex)?;
-        Ok(WalletAccount::verify_message(&public_key, &message, &signature))
+        Ok(WalletAccount::verify_message(
+            &public_key,
+            &message,
+            &signature,
+        ))
     }
 }

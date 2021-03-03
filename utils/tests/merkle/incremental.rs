@@ -40,7 +40,11 @@ fn it_correctly_computes_a_simple_proof() {
 
     // Chunk number 1
     let proof_result = chunks[0].compute_root_from_values(&values[..1], None);
-    assert!(proof_result.is_ok(), "Proof errored: {:?}", proof_result.err().unwrap());
+    assert!(
+        proof_result.is_ok(),
+        "Proof errored: {:?}",
+        proof_result.err().unwrap()
+    );
     let proof_result = proof_result.unwrap();
 
     assert_eq!(proof_result.root(), &root);
@@ -49,7 +53,11 @@ fn it_correctly_computes_a_simple_proof() {
 
     // Chunk number 2
     let proof_result = chunks[1].compute_root_from_values(&values[1..2], Some(&proof_result));
-    assert!(proof_result.is_ok(), "Proof errored: {:?}", proof_result.err().unwrap());
+    assert!(
+        proof_result.is_ok(),
+        "Proof errored: {:?}",
+        proof_result.err().unwrap()
+    );
     let proof_result = proof_result.unwrap();
 
     assert_eq!(proof_result.root(), &root);
@@ -58,7 +66,11 @@ fn it_correctly_computes_a_simple_proof() {
 
     // Chunk number 3
     let proof_result = chunks[2].compute_root_from_values(&values[2..3], Some(&proof_result));
-    assert!(proof_result.is_ok(), "Proof errored: {:?}", proof_result.err().unwrap());
+    assert!(
+        proof_result.is_ok(),
+        "Proof errored: {:?}",
+        proof_result.err().unwrap()
+    );
     let proof_result = proof_result.unwrap();
 
     assert_eq!(proof_result.root(), &root);
@@ -67,7 +79,11 @@ fn it_correctly_computes_a_simple_proof() {
 
     // Chunk number 4
     let proof_result = chunks[3].compute_root_from_values(&values[3..4], Some(&proof_result));
-    assert!(proof_result.is_ok(), "Proof errored: {:?}", proof_result.err().unwrap());
+    assert!(
+        proof_result.is_ok(),
+        "Proof errored: {:?}",
+        proof_result.err().unwrap()
+    );
     let proof_result = proof_result.unwrap();
 
     assert_eq!(proof_result.root(), &root);
@@ -85,7 +101,11 @@ fn it_correctly_computes_a_simple_proof() {
 
     // Chunk number 1
     let proof_result = chunks[0].compute_root_from_values(&values[..2], None);
-    assert!(proof_result.is_ok(), "Proof errored: {:?}", proof_result.err().unwrap());
+    assert!(
+        proof_result.is_ok(),
+        "Proof errored: {:?}",
+        proof_result.err().unwrap()
+    );
     let proof_result = proof_result.unwrap();
 
     assert_eq!(proof_result.root(), &root);
@@ -94,7 +114,11 @@ fn it_correctly_computes_a_simple_proof() {
 
     // Chunk number 2
     let proof_result = chunks[1].compute_root_from_values(&values[2..], Some(&proof_result));
-    assert!(proof_result.is_ok(), "Proof errored: {:?}", proof_result.err().unwrap());
+    assert!(
+        proof_result.is_ok(),
+        "Proof errored: {:?}",
+        proof_result.err().unwrap()
+    );
     let proof_result = proof_result.unwrap();
 
     assert_eq!(proof_result.root(), &root);
@@ -112,7 +136,11 @@ fn it_correctly_computes_a_simple_proof() {
 
     // Chunk number 1
     let proof_result = chunks[0].compute_root_from_values(&values[..3], None);
-    assert!(proof_result.is_ok(), "Proof errored: {:?}", proof_result.err().unwrap());
+    assert!(
+        proof_result.is_ok(),
+        "Proof errored: {:?}",
+        proof_result.err().unwrap()
+    );
     let proof_result = proof_result.unwrap();
 
     assert_eq!(proof_result.root(), &root);
@@ -121,7 +149,11 @@ fn it_correctly_computes_a_simple_proof() {
 
     // Chunk number 2
     let proof_result = chunks[1].compute_root_from_values(&values[3..], Some(&proof_result));
-    assert!(proof_result.is_ok(), "Proof errored: {:?}", proof_result.err().unwrap());
+    assert!(
+        proof_result.is_ok(),
+        "Proof errored: {:?}",
+        proof_result.err().unwrap()
+    );
     let proof_result = proof_result.unwrap();
 
     assert_eq!(proof_result.root(), &root);
@@ -138,7 +170,11 @@ fn it_correctly_computes_a_simple_proof() {
 
     // Chunk number 1
     let proof_result = chunks[0].compute_root_from_values(&values, None);
-    assert!(proof_result.is_ok(), "Proof errored: {:?}", proof_result.err().unwrap());
+    assert!(
+        proof_result.is_ok(),
+        "Proof errored: {:?}",
+        proof_result.err().unwrap()
+    );
     let proof_result = proof_result.unwrap();
 
     assert_eq!(proof_result.root(), &root);
@@ -172,7 +208,11 @@ fn it_correctly_computes_more_complex_proofs() {
 
     // Chunk number 1
     let proof_result = chunks[0].compute_root_from_values(&values[..1], None);
-    assert!(proof_result.is_ok(), "Proof errored: {:?}", proof_result.err().unwrap());
+    assert!(
+        proof_result.is_ok(),
+        "Proof errored: {:?}",
+        proof_result.err().unwrap()
+    );
     let proof_result = proof_result.unwrap();
 
     assert_eq!(proof_result.root(), &root);
@@ -181,7 +221,11 @@ fn it_correctly_computes_more_complex_proofs() {
 
     // Chunk number 2
     let proof_result = chunks[1].compute_root_from_values(&values[1..2], Some(&proof_result));
-    assert!(proof_result.is_ok(), "Proof errored: {:?}", proof_result.err().unwrap());
+    assert!(
+        proof_result.is_ok(),
+        "Proof errored: {:?}",
+        proof_result.err().unwrap()
+    );
     let proof_result = proof_result.unwrap();
 
     assert_eq!(proof_result.root(), &root);
@@ -190,7 +234,11 @@ fn it_correctly_computes_more_complex_proofs() {
 
     // Chunk number 3
     let proof_result = chunks[2].compute_root_from_values(&values[2..3], Some(&proof_result));
-    assert!(proof_result.is_ok(), "Proof errored: {:?}", proof_result.err().unwrap());
+    assert!(
+        proof_result.is_ok(),
+        "Proof errored: {:?}",
+        proof_result.err().unwrap()
+    );
     let proof_result = proof_result.unwrap();
 
     assert_eq!(proof_result.root(), &root);
@@ -208,7 +256,11 @@ fn it_correctly_computes_more_complex_proofs() {
 
     // Chunk number 1
     let proof_result = chunks[0].compute_root_from_values(&values[..2], None);
-    assert!(proof_result.is_ok(), "Proof errored: {:?}", proof_result.err().unwrap());
+    assert!(
+        proof_result.is_ok(),
+        "Proof errored: {:?}",
+        proof_result.err().unwrap()
+    );
     let proof_result = proof_result.unwrap();
 
     assert_eq!(proof_result.root(), &root);
@@ -217,7 +269,11 @@ fn it_correctly_computes_more_complex_proofs() {
 
     // Chunk number 2
     let proof_result = chunks[1].compute_root_from_values(&values[2..], Some(&proof_result));
-    assert!(proof_result.is_ok(), "Proof errored: {:?}", proof_result.err().unwrap());
+    assert!(
+        proof_result.is_ok(),
+        "Proof errored: {:?}",
+        proof_result.err().unwrap()
+    );
     let proof_result = proof_result.unwrap();
 
     assert_eq!(proof_result.root(), &root);
@@ -266,7 +322,8 @@ fn it_correctly_computes_more_complex_proofs() {
             for (chunk_i, chunk) in chunks.iter().enumerate() {
                 let start_i = chunk_i * chunk_size;
                 let end_i = cmp::min((chunk_i + 1) * chunk_size, end);
-                let proof_result = chunk.compute_root_from_values(&values[start_i..end_i], prev_proof.as_ref());
+                let proof_result =
+                    chunk.compute_root_from_values(&values[start_i..end_i], prev_proof.as_ref());
                 assert!(
                     proof_result.is_ok(),
                     "Proof #{} errored for size {} and chunk_size {}: {:?}",
@@ -343,7 +400,11 @@ fn it_discards_invalid_proofs() {
 
     // Case 1: Invalid input values lead to wrong hash.
     let proof_result = chunks[0].compute_root_from_values(&values[2..], None);
-    assert!(proof_result.is_ok(), "Proof errored: {:?}", proof_result.err().unwrap());
+    assert!(
+        proof_result.is_ok(),
+        "Proof errored: {:?}",
+        proof_result.err().unwrap()
+    );
     let proof_result = proof_result.unwrap();
 
     assert_ne!(proof_result.root(), &root);
@@ -359,7 +420,11 @@ fn it_discards_invalid_proofs() {
     // First create a proof result for a different chunk size.
     let other_chunks = incremental(&values, 1);
     let proof_result = other_chunks[0].compute_root_from_values(&values[..1], None);
-    assert!(proof_result.is_ok(), "Proof errored: {:?}", proof_result.err().unwrap());
+    assert!(
+        proof_result.is_ok(),
+        "Proof errored: {:?}",
+        proof_result.err().unwrap()
+    );
     let proof_result = proof_result.unwrap();
 
     let proof_result = chunks[1].compute_root_from_values(&values[2..], Some(&proof_result));

@@ -17,7 +17,10 @@ impl AccountTransactionVerification for StakingContractVerifier {
     fn verify_incoming_transaction(transaction: &Transaction) -> Result<(), TransactionError> {
         assert_eq!(transaction.recipient_type, AccountType::Staking);
 
-        if transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {
+        if transaction
+            .flags
+            .contains(TransactionFlags::CONTRACT_CREATION)
+        {
             warn!("Contract creation not allowed");
             return Err(TransactionError::InvalidForRecipient);
         }
@@ -82,7 +85,8 @@ impl AccountTransactionVerification for StakingContractVerifier {
         // with a special proof field structure.
         if transaction.sender == transaction.recipient {
             // Verify signature.
-            let signature_proof: SignatureProof = Deserialize::deserialize(&mut &transaction.proof[..])?;
+            let signature_proof: SignatureProof =
+                Deserialize::deserialize(&mut &transaction.proof[..])?;
             if !signature_proof.verify(transaction.serialize_content().as_slice()) {
                 warn!("Invalid signature");
                 return Err(TransactionError::InvalidProof);

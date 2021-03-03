@@ -42,7 +42,11 @@ pub trait Peer: Send + Sync + Hash + Eq {
 
     async fn send<T: Message>(&self, msg: &T) -> Result<(), SendError>;
 
-    async fn send_or_close<T: Message, F: FnOnce(&SendError) -> CloseReason + Send>(&self, msg: &T, f: F) -> Result<(), SendError> {
+    async fn send_or_close<T: Message, F: FnOnce(&SendError) -> CloseReason + Send>(
+        &self,
+        msg: &T,
+        f: F,
+    ) -> Result<(), SendError> {
         if let Err(e) = self.send(msg).await {
             log::error!("Sending failed: {}", e);
             self.close(f(&e));
@@ -57,7 +61,10 @@ pub trait Peer: Send + Sync + Hash + Eq {
 
     fn close(&self, ty: CloseReason);
 
-    async fn request<R: RequestResponse>(&self, request: &R::Request) -> Result<R::Response, Self::Error>;
+    async fn request<R: RequestResponse>(
+        &self,
+        request: &R::Request,
+    ) -> Result<R::Response, Self::Error>;
 
     fn requests<R: RequestResponse>(&self) -> Box<dyn Stream<Item = R::Request>>;
 }

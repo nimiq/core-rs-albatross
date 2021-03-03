@@ -13,21 +13,21 @@ use nimiq_consensus_albatross::sync::history::HistorySync;
 use nimiq_consensus_albatross::{Consensus as AbstractConsensus, ConsensusEvent};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_handel::update::{LevelUpdate, LevelUpdateMessage};
+use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{Address, SecureGenerate};
 use nimiq_mempool::{Mempool, MempoolConfig};
 use nimiq_network_interface::network::Network;
 use nimiq_network_mock::{MockHub, MockNetwork};
+use nimiq_primitives::account::ValidatorId;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_utils::time::OffsetTime;
+use nimiq_validator::aggregation::view_change::SignedViewChangeMessage;
 use nimiq_validator::validator::Validator as AbstractValidator;
 use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
-use nimiq_validator::aggregation::view_change::SignedViewChangeMessage;
 use nimiq_vrf::VrfSeed;
 use std::sync::Arc;
 use std::time::Duration;
-use nimiq_primitives::account::ValidatorId;
-use nimiq_hash::{Hash, Blake2bHash};
 
 type Consensus = AbstractConsensus<MockNetwork>;
 type Validator = AbstractValidator<MockNetwork, ValidatorNetworkImpl<MockNetwork>>;
@@ -65,12 +65,7 @@ async fn mock_validator(
     let consensus = mock_consensus(hub, peer_id, genesis_info).await;
     let validator_network = Arc::new(ValidatorNetworkImpl::new(consensus.network.clone()));
     (
-        Validator::new(
-            &consensus,
-            validator_network,
-            signing_key,
-            None,
-        ),
+        Validator::new(&consensus, validator_network, signing_key, None),
         consensus,
     )
 }
@@ -224,7 +219,14 @@ async fn four_validators_can_view_change() {
     assert_eq!(blockchain.view_number(), 1);
 }
 
-fn create_view_change_update(block_number: u32, new_view_number: u32, prev_seed: VrfSeed, key_pair: KeyPair, validator_id: u16, slots: &Vec<u16>) -> LevelUpdateMessage<SignedViewChangeMessage, ViewChange> {
+fn create_view_change_update(
+    block_number: u32,
+    new_view_number: u32,
+    prev_seed: VrfSeed,
+    key_pair: KeyPair,
+    validator_id: u16,
+    slots: &Vec<u16>,
+) -> LevelUpdateMessage<SignedViewChangeMessage, ViewChange> {
     // create view change according to parameters
     let view_change = ViewChange {
         block_number,
@@ -233,11 +235,8 @@ fn create_view_change_update(block_number: u32, new_view_number: u32, prev_seed:
     };
 
     // get a single signature for this view_change
-    let signed_view_change = SignedViewChange::from_message(
-        view_change.clone(),
-        &key_pair.secret_key,
-        validator_id,
-    );
+    let signed_view_change =
+        SignedViewChange::from_message(view_change.clone(), &key_pair.secret_key, validator_id);
 
     // multiply with number of slots to get a signature representing all the slots of this public_key
     let signature = AggregateSignature::from_signatures(&[signed_view_change
@@ -251,7 +250,7 @@ fn create_view_change_update(block_number: u32, new_view_number: u32, prev_seed:
     }
 
     // the contribution is composed of the signers bitset with the signature already multiplied by the number of slots.
-    let contribution = SignedViewChangeMessage{
+    let contribution = SignedViewChangeMessage {
         view_change: MultiSignature::new(signature, signers),
         previous_proof: None,
     };
@@ -261,7 +260,8 @@ fn create_view_change_update(block_number: u32, new_view_number: u32, prev_seed:
         Some(contribution.clone()),
         1,
         validator_id as usize,
-    ).with_tag(view_change)
+    )
+    .with_tag(view_change)
 }
 
 #[tokio::test]
@@ -276,7 +276,10 @@ async fn validator_can_catch_up() {
     let mut validators = mock_validators(&mut hub, 9).await;
     // Maintain a collection of the correspponding networks.
 
-    let networks: Vec<Arc<MockNetwork>> = validators.iter().map(|v| v.consensus.network.clone()).collect();
+    let networks: Vec<Arc<MockNetwork>> = validators
+        .iter()
+        .map(|v| v.consensus.network.clone())
+        .collect();
 
     // Disconnect the block producers for the next 3 views. remember the one which is supposed to actually create the block (3rd view)
     let (validator, nw) = {
@@ -304,7 +307,7 @@ async fn validator_can_catch_up() {
     };
     // assert_eq!(validators.len(), 7);
 
-    let blockchain =  validator.consensus.blockchain.clone();
+    let blockchain = validator.consensus.blockchain.clone();
     // Listen for blockchain events from the block producer (after two view changes).
     let mut events = blockchain.notifier.write().as_stream();
 
@@ -324,8 +327,6 @@ async fn validator_can_catch_up() {
 
     // let the validators run.
     tokio::spawn(future::join_all(validators));
-
-
 
     // while waiting for them to run into the view_change_timeout (10s)
     time::delay_for(Duration::from_secs(11)).await;

@@ -113,7 +113,10 @@ pub struct HtlcProofBuilder {
 impl HtlcProofBuilder {
     /// Creates a new `HtlcProofBuilder` from a `transaction`.
     pub fn new(transaction: Transaction) -> Self {
-        HtlcProofBuilder { transaction, proof: None }
+        HtlcProofBuilder {
+            transaction,
+            proof: None,
+        }
     }
 
     /// This helper method can be used to generate the `SignatureProof` as required by all
@@ -210,7 +213,9 @@ impl HtlcProofBuilder {
     ///
     /// [`signature_with_key_pair`]: struct.HtlcProofBuilder.html#method.signature_with_key_pair
     pub fn timeout_resolve(&mut self, sender_signature: SignatureProof) -> &mut Self {
-        self.proof = Some(HtlcProof::TimeoutResolve { signature: sender_signature });
+        self.proof = Some(HtlcProof::TimeoutResolve {
+            signature: sender_signature,
+        });
         self
     }
 
@@ -260,7 +265,11 @@ impl HtlcProofBuilder {
     /// ```
     ///
     /// [`signature_with_key_pair`]: struct.HtlcProofBuilder.html#method.signature_with_key_pair
-    pub fn early_resolve(&mut self, sender_signature: SignatureProof, recipient_signature: SignatureProof) -> &mut Self {
+    pub fn early_resolve(
+        &mut self,
+        sender_signature: SignatureProof,
+        recipient_signature: SignatureProof,
+    ) -> &mut Self {
         self.proof = Some(HtlcProof::EarlyResolve {
             sender_signature,
             recipient_signature,
@@ -357,10 +366,22 @@ impl HtlcProofBuilder {
     /// ```
     ///
     /// [`signature_with_key_pair`]: struct.HtlcProofBuilder.html#method.signature_with_key_pair
-    pub fn regular_transfer_sha256(&mut self, pre_image: Sha256Hash, hash_count: u8, hash_root: Sha256Hash, recipient_signature: SignatureProof) -> &mut Self {
+    pub fn regular_transfer_sha256(
+        &mut self,
+        pre_image: Sha256Hash,
+        hash_count: u8,
+        hash_root: Sha256Hash,
+        recipient_signature: SignatureProof,
+    ) -> &mut Self {
         let pre_image: [u8; 32] = pre_image.into();
         let hash_root: [u8; 32] = hash_root.into();
-        self.regular_transfer(HashAlgorithm::Sha256, pre_image.into(), hash_count, hash_root.into(), recipient_signature)
+        self.regular_transfer(
+            HashAlgorithm::Sha256,
+            pre_image.into(),
+            hash_count,
+            hash_root.into(),
+            recipient_signature,
+        )
     }
 
     /// This method creates a proof for the `RegularTransfer` case using Blake2b hashes.
@@ -432,7 +453,13 @@ impl HtlcProofBuilder {
     ) -> &mut Self {
         let pre_image: [u8; 32] = pre_image.into();
         let hash_root: [u8; 32] = hash_root.into();
-        self.regular_transfer(HashAlgorithm::Blake2b, pre_image.into(), hash_count, hash_root.into(), recipient_signature)
+        self.regular_transfer(
+            HashAlgorithm::Blake2b,
+            pre_image.into(),
+            hash_count,
+            hash_root.into(),
+            recipient_signature,
+        )
     }
 
     /// This method generates the final transaction if the signature has been set correctly.

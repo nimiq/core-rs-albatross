@@ -39,7 +39,11 @@ fn push_same_tx_twice() {
 
     let mut txn = WriteTransaction::new(&env);
 
-    blockchain.state().accounts().commit(&mut txn, &[], &[reward], 0, 0).unwrap();
+    blockchain
+        .state()
+        .accounts()
+        .commit(&mut txn, &[], &[reward], 0, 0)
+        .unwrap();
 
     txn.commit();
 
@@ -53,7 +57,8 @@ fn push_same_tx_twice() {
         NetworkId::UnitAlbatross,
     );
 
-    let signature_proof = SignatureProof::from(keypair_a.public, keypair_a.sign(&tx.serialize_content()));
+    let signature_proof =
+        SignatureProof::from(keypair_a.public, keypair_a.sign(&tx.serialize_content()));
 
     tx.proof = signature_proof.serialize_to_vec();
 
@@ -117,7 +122,11 @@ fn push_and_get_valid_tx() {
 
     let mut txn = WriteTransaction::new(&env);
 
-    blockchain.state().accounts().commit(&mut txn, &[], &[reward], 1, 1).unwrap();
+    blockchain
+        .state()
+        .accounts()
+        .commit(&mut txn, &[], &[reward], 1, 1)
+        .unwrap();
 
     txn.commit();
 
@@ -131,7 +140,8 @@ fn push_and_get_valid_tx() {
         NetworkId::UnitAlbatross,
     );
 
-    let signature_proof = SignatureProof::from(keypair_a.public, keypair_a.sign(&tx.serialize_content()));
+    let signature_proof =
+        SignatureProof::from(keypair_a.public, keypair_a.sign(&tx.serialize_content()));
 
     tx.proof = signature_proof.serialize_to_vec();
 
@@ -172,7 +182,11 @@ fn push_and_get_two_tx_same_user() {
 
     let mut txn = WriteTransaction::new(&env);
 
-    blockchain.state().accounts().commit(&mut txn, &[], &[reward], 1, 1).unwrap();
+    blockchain
+        .state()
+        .accounts()
+        .commit(&mut txn, &[], &[reward], 1, 1)
+        .unwrap();
 
     txn.commit();
 
@@ -186,7 +200,8 @@ fn push_and_get_two_tx_same_user() {
         NetworkId::UnitAlbatross,
     );
 
-    let signature_proof1 = SignatureProof::from(keypair_a.public, keypair_a.sign(&tx1.serialize_content()));
+    let signature_proof1 =
+        SignatureProof::from(keypair_a.public, keypair_a.sign(&tx1.serialize_content()));
 
     tx1.proof = signature_proof1.serialize_to_vec();
 
@@ -206,7 +221,8 @@ fn push_and_get_two_tx_same_user() {
         NetworkId::UnitAlbatross,
     );
 
-    let signature_proof2 = SignatureProof::from(keypair_a.public, keypair_a.sign(&tx2.serialize_content()));
+    let signature_proof2 =
+        SignatureProof::from(keypair_a.public, keypair_a.sign(&tx2.serialize_content()));
 
     tx2.proof = signature_proof2.serialize_to_vec();
 
@@ -245,7 +261,11 @@ fn reject_free_tx_beyond_limit() {
 
     let mut txn = WriteTransaction::new(&env);
 
-    blockchain.state().accounts().commit(&mut txn, &[], &[reward], 1, 1).unwrap();
+    blockchain
+        .state()
+        .accounts()
+        .commit(&mut txn, &[], &[reward], 1, 1)
+        .unwrap();
 
     txn.commit();
 
@@ -259,7 +279,8 @@ fn reject_free_tx_beyond_limit() {
             NetworkId::UnitAlbatross,
         );
 
-        let signature_proof1 = SignatureProof::from(keypair_a.public, keypair_a.sign(&tx1.serialize_content()));
+        let signature_proof1 =
+            SignatureProof::from(keypair_a.public, keypair_a.sign(&tx1.serialize_content()));
 
         tx1.proof = signature_proof1.serialize_to_vec();
 

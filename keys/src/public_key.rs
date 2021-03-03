@@ -153,7 +153,6 @@ mod serde_derive {
             S: Serializer,
         {
             serializer.serialize_str(&self.to_hex())
-
         }
     }
 

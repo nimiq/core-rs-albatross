@@ -83,15 +83,28 @@ impl TendermintOutsideDeps for TestValidator {
         Ok(self.proposal_rounds[round as usize].1)
     }
 
-    fn assemble_block(&self, _round: u32, proposal: Self::ProposalTy, _proof: Self::ProofTy) -> Result<Self::ResultTy, TendermintError> {
+    fn assemble_block(
+        &self,
+        _round: u32,
+        proposal: Self::ProposalTy,
+        _proof: Self::ProofTy,
+    ) -> Result<Self::ResultTy, TendermintError> {
         Ok(proposal)
     }
 
-    async fn broadcast_proposal(&mut self, _round: u32, _proposal: Self::ProposalTy, _valid_round: Option<u32>) -> Result<(), TendermintError> {
+    async fn broadcast_proposal(
+        &mut self,
+        _round: u32,
+        _proposal: Self::ProposalTy,
+        _valid_round: Option<u32>,
+    ) -> Result<(), TendermintError> {
         Ok(())
     }
 
-    async fn await_proposal(&mut self, round: u32) -> Result<ProposalResult<Self::ProposalTy>, TendermintError> {
+    async fn await_proposal(
+        &mut self,
+        round: u32,
+    ) -> Result<ProposalResult<Self::ProposalTy>, TendermintError> {
         if self.proposal_rounds[round as usize].0 {
             // If the timeout flag is set, return timeout.
             Ok(ProposalResult::Timeout)
@@ -124,9 +137,18 @@ impl TendermintOutsideDeps for TestValidator {
                 } else {
                     // Otherwise, save the votes for 'A', 'B' and Nil in a BTreeMap and return it.
                     let mut agg = BTreeMap::new();
-                    agg.insert(Some(a_hash), ((), self.agg_prevote_rounds[round as usize].1 as usize));
-                    agg.insert(Some(b_hash), ((), self.agg_prevote_rounds[round as usize].2 as usize));
-                    agg.insert(None, ((), self.agg_prevote_rounds[round as usize].3 as usize));
+                    agg.insert(
+                        Some(a_hash),
+                        ((), self.agg_prevote_rounds[round as usize].1 as usize),
+                    );
+                    agg.insert(
+                        Some(b_hash),
+                        ((), self.agg_prevote_rounds[round as usize].2 as usize),
+                    );
+                    agg.insert(
+                        None,
+                        ((), self.agg_prevote_rounds[round as usize].3 as usize),
+                    );
                     Ok(AggregationResult::Aggregation(agg))
                 }
             }
@@ -137,9 +159,18 @@ impl TendermintOutsideDeps for TestValidator {
                 } else {
                     // Otherwise, save the votes for 'A', 'B' and Nil in a BTreeMap and return it.
                     let mut agg = BTreeMap::new();
-                    agg.insert(Some(a_hash), ((), self.agg_precommit_rounds[round as usize].1 as usize));
-                    agg.insert(Some(b_hash), ((), self.agg_precommit_rounds[round as usize].2 as usize));
-                    agg.insert(None, ((), self.agg_precommit_rounds[round as usize].3 as usize));
+                    agg.insert(
+                        Some(a_hash),
+                        ((), self.agg_precommit_rounds[round as usize].1 as usize),
+                    );
+                    agg.insert(
+                        Some(b_hash),
+                        ((), self.agg_precommit_rounds[round as usize].2 as usize),
+                    );
+                    agg.insert(
+                        None,
+                        ((), self.agg_precommit_rounds[round as usize].3 as usize),
+                    );
                     Ok(AggregationResult::Aggregation(agg))
                 }
             }
@@ -148,7 +179,11 @@ impl TendermintOutsideDeps for TestValidator {
     }
 
     // Same as ´broadcast_and_aggregate´ but here we only check for prevotes.
-    async fn get_aggregation(&mut self, round: u32, _step: Step) -> Result<AggregationResult<Self::ProofTy>, TendermintError> {
+    async fn get_aggregation(
+        &mut self,
+        round: u32,
+        _step: Step,
+    ) -> Result<AggregationResult<Self::ProofTy>, TendermintError> {
         // Calculate the hashes for the proposals 'A' and 'B'.
         let a_hash = TestProposal('A', 0).hash();
         let b_hash = TestProposal('B', 0).hash();
@@ -159,8 +194,14 @@ impl TendermintOutsideDeps for TestValidator {
         } else {
             // Otherwise, save the votes for 'A', 'B' and Nil in a BTreeMap and return it.
             let mut agg = BTreeMap::new();
-            agg.insert(Some(a_hash), ((), self.get_agg_rounds[round as usize].1 as usize));
-            agg.insert(Some(b_hash), ((), self.get_agg_rounds[round as usize].2 as usize));
+            agg.insert(
+                Some(a_hash),
+                ((), self.get_agg_rounds[round as usize].1 as usize),
+            );
+            agg.insert(
+                Some(b_hash),
+                ((), self.get_agg_rounds[round as usize].2 as usize),
+            );
             agg.insert(None, ((), self.get_agg_rounds[round as usize].3 as usize));
             Ok(AggregationResult::Aggregation(agg))
         }
@@ -173,7 +214,12 @@ impl TendermintOutsideDeps for TestValidator {
 // compared.
 async fn tendermint_loop(
     deps: TestValidator,
-    state_opt: Option<TendermintState<<TestValidator as TendermintOutsideDeps>::ProposalTy, <TestValidator as TendermintOutsideDeps>::ProofTy>>,
+    state_opt: Option<
+        TendermintState<
+            <TestValidator as TendermintOutsideDeps>::ProposalTy,
+            <TestValidator as TendermintOutsideDeps>::ProofTy,
+        >,
+    >,
     reference_proposal: TestProposal,
 ) {
     // Get the stream.
@@ -233,7 +279,10 @@ async fn everything_works() {
 async fn no_proposal() {
     let validator = TestValidator {
         proposer_round: 99,
-        proposal_rounds: vec![(true, TestProposal('A', 0), None), (false, TestProposal('A', 1), None)],
+        proposal_rounds: vec![
+            (true, TestProposal('A', 0), None),
+            (false, TestProposal('A', 1), None),
+        ],
         agg_prevote_rounds: vec![(false, 0, 0, SLOTS), (false, SLOTS, 0, 0)],
         agg_precommit_rounds: vec![(false, 0, 0, SLOTS), (false, SLOTS, 0, 0)],
         get_agg_rounds: vec![],
@@ -250,7 +299,10 @@ async fn no_proposal() {
 async fn all_timeouts() {
     let validator = TestValidator {
         proposer_round: 99,
-        proposal_rounds: vec![(true, TestProposal('A', 0), None), (false, TestProposal('A', 1), None)],
+        proposal_rounds: vec![
+            (true, TestProposal('A', 0), None),
+            (false, TestProposal('A', 1), None),
+        ],
         agg_prevote_rounds: vec![(false, 0, 0, 0), (false, SLOTS, 0, 0)],
         agg_precommit_rounds: vec![(false, 0, 0, 0), (false, SLOTS, 0, 0)],
         get_agg_rounds: vec![],
@@ -264,7 +316,10 @@ async fn all_timeouts() {
 async fn not_enough_prevotes() {
     let validator = TestValidator {
         proposer_round: 99,
-        proposal_rounds: vec![(false, TestProposal('A', 0), None), (false, TestProposal('A', 1), None)],
+        proposal_rounds: vec![
+            (false, TestProposal('A', 0), None),
+            (false, TestProposal('A', 1), None),
+        ],
         agg_prevote_rounds: vec![(false, TWO_THIRD_SLOTS - 1, 0, 0), (false, SLOTS, 0, 0)],
         agg_precommit_rounds: vec![(false, 0, 0, SLOTS), (false, SLOTS, 0, 0)],
         get_agg_rounds: vec![],
@@ -278,7 +333,10 @@ async fn not_enough_prevotes() {
 async fn not_enough_precommits() {
     let validator = TestValidator {
         proposer_round: 99,
-        proposal_rounds: vec![(false, TestProposal('A', 0), None), (false, TestProposal('A', 1), None)],
+        proposal_rounds: vec![
+            (false, TestProposal('A', 0), None),
+            (false, TestProposal('A', 1), None),
+        ],
         agg_prevote_rounds: vec![(false, SLOTS, 0, 0), (false, SLOTS, 0, 0)],
         agg_precommit_rounds: vec![(false, TWO_THIRD_SLOTS - 1, 0, 0), (false, SLOTS, 0, 0)],
         get_agg_rounds: vec![],
@@ -313,7 +371,10 @@ async fn locks_and_rebroadcasts() {
 async fn locks_and_unlocks() {
     let validator = TestValidator {
         proposer_round: 99,
-        proposal_rounds: vec![(false, TestProposal('A', 0), None), (false, TestProposal('B', 1), None)],
+        proposal_rounds: vec![
+            (false, TestProposal('A', 0), None),
+            (false, TestProposal('B', 1), None),
+        ],
         agg_prevote_rounds: vec![(false, SLOTS, 0, 0), (false, 0, SLOTS, 0)],
         agg_precommit_rounds: vec![(false, 0, 0, 0), (false, 0, SLOTS, 0)],
         get_agg_rounds: vec![],

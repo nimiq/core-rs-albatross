@@ -2,12 +2,15 @@ use async_trait::async_trait;
 
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
-use nimiq_primitives::coin::Coin;
 use nimiq_primitives::account::ValidatorId;
+use nimiq_primitives::coin::Coin;
 
 use crate::types::ValidityStartHeight;
 
-#[cfg_attr(feature = "proxy", nimiq_jsonrpc_derive::proxy(name = "ConsensusProxy", rename_all = "camelCase"))]
+#[cfg_attr(
+    feature = "proxy",
+    nimiq_jsonrpc_derive::proxy(name = "ConsensusProxy", rename_all = "camelCase")
+)]
 #[async_trait]
 pub trait ConsensusInterface {
     type Error;
@@ -92,7 +95,7 @@ pub trait ConsensusInterface {
         recipient: Address,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight
+        validity_start_height: ValidityStartHeight,
     ) -> Result<String, Self::Error>;
 
     async fn send_unstake_transaction(
@@ -101,6 +104,6 @@ pub trait ConsensusInterface {
         recipient: Address,
         value: Coin,
         fee: Coin,
-        validity_start_height: ValidityStartHeight
+        validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Self::Error>;
 }

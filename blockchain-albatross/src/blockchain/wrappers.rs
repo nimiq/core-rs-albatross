@@ -69,7 +69,11 @@ impl Blockchain {
 
     /// Returns the next view number at the head of the main chain.
     pub fn next_view_number(&self) -> u32 {
-        self.state.read_recursive().main_chain.head.next_view_number()
+        self.state
+            .read_recursive()
+            .main_chain
+            .head
+            .next_view_number()
     }
 
     /// Returns the current set of validators.
@@ -122,8 +126,15 @@ impl Blockchain {
     }
 
     /// Fetches a given number of blocks, starting at a specific block (by its hash).
-    pub fn get_blocks(&self, start_block_hash: &Blake2bHash, count: u32, include_body: bool, direction: Direction) -> Vec<Block> {
-        self.chain_store.get_blocks(start_block_hash, count, include_body, direction, None)
+    pub fn get_blocks(
+        &self,
+        start_block_hash: &Blake2bHash,
+        count: u32,
+        include_body: bool,
+        direction: Direction,
+    ) -> Vec<Block> {
+        self.chain_store
+            .get_blocks(start_block_hash, count, include_body, direction, None)
     }
 
     /// Fetches a given number of macro blocks, starting at a specific block (by its hash).
@@ -137,17 +148,30 @@ impl Blockchain {
         direction: Direction,
         election_blocks_only: bool,
     ) -> Option<Vec<Block>> {
-        self.chain_store
-            .get_macro_blocks(start_block_hash, count, include_body, direction, election_blocks_only, None)
+        self.chain_store.get_macro_blocks(
+            start_block_hash,
+            count,
+            include_body,
+            direction,
+            election_blocks_only,
+            None,
+        )
     }
 
     /// Returns a list of all transactions for either an epoch or a batch.
-    fn get_transactions(&self, batch_or_epoch_index: u32, for_batch: bool, txn_option: Option<&Transaction>) -> Option<Vec<BlockchainTransaction>> {
+    fn get_transactions(
+        &self,
+        batch_or_epoch_index: u32,
+        for_batch: bool,
+        txn_option: Option<&Transaction>,
+    ) -> Option<Vec<BlockchainTransaction>> {
         if !for_batch {
             // It might be that we synced this epoch via macro block sync and don't actually have
             // the micro blocks.
             // Therefore, we check this first.
-            let ext_txs = self.history_store.get_epoch_transactions(batch_or_epoch_index, txn_option)?;
+            let ext_txs = self
+                .history_store
+                .get_epoch_transactions(batch_or_epoch_index, txn_option)?;
 
             let mut txs = vec![];
 
@@ -167,14 +191,17 @@ impl Blockchain {
         } else {
             policy::first_block_of(batch_or_epoch_index)
         };
-        let first_block = self.chain_store.get_block_at(first_block, true, txn_option).or_else(|| {
-            debug!(
-                "get_block_at didn't return first block of {}: block_height={}",
-                if for_batch { "batch" } else { "epoch" },
-                first_block,
-            );
-            None
-        })?;
+        let first_block = self
+            .chain_store
+            .get_block_at(first_block, true, txn_option)
+            .or_else(|| {
+                debug!(
+                    "get_block_at didn't return first block of {}: block_height={}",
+                    if for_batch { "batch" } else { "epoch" },
+                    first_block,
+                );
+                None
+            })?;
 
         let first_hash = first_block.hash();
         let mut txs = first_block.unwrap_micro().body.unwrap().transactions;
@@ -182,7 +209,11 @@ impl Blockchain {
         // Excludes current block and macro block.
         let blocks = self.chain_store.get_blocks(
             &first_hash,
-            if for_batch { policy::BATCH_LENGTH } else { policy::EPOCH_LENGTH } - 2,
+            if for_batch {
+                policy::BATCH_LENGTH
+            } else {
+                policy::EPOCH_LENGTH
+            } - 2,
             true,
             Direction::Forward,
             txn_option,
@@ -202,30 +233,54 @@ impl Blockchain {
     }
 
     /// Returns a list of all transactions for a given batch.
-    pub fn get_batch_transactions(&self, batch: u32, txn_option: Option<&Transaction>) -> Option<Vec<BlockchainTransaction>> {
+    pub fn get_batch_transactions(
+        &self,
+        batch: u32,
+        txn_option: Option<&Transaction>,
+    ) -> Option<Vec<BlockchainTransaction>> {
         self.get_transactions(batch, true, txn_option)
     }
 
     /// Returns a list of all transactions for a given epoch.
-    pub fn get_epoch_transactions(&self, epoch: u32, txn_option: Option<&Transaction>) -> Option<Vec<BlockchainTransaction>> {
+    pub fn get_epoch_transactions(
+        &self,
+        epoch: u32,
+        txn_option: Option<&Transaction>,
+    ) -> Option<Vec<BlockchainTransaction>> {
         self.get_transactions(epoch, false, txn_option)
     }
 
     /// Returns the history root for a given epoch.
-    pub fn get_history_root(&self, epoch: u32, txn_option: Option<&Transaction>) -> Option<Blake2bHash> {
+    pub fn get_history_root(
+        &self,
+        epoch: u32,
+        txn_option: Option<&Transaction>,
+    ) -> Option<Blake2bHash> {
         self.history_store.get_history_tree_root(epoch, txn_option)
     }
 
     /// Returns the number of extended transactions for a given epoch.
-    pub fn get_num_extended_transactions(&self, epoch_number: u32, txn_option: Option<&Transaction>) -> usize {
-        self.history_store.get_num_extended_transactions(epoch_number, txn_option)
+    pub fn get_num_extended_transactions(
+        &self,
+        epoch_number: u32,
+        txn_option: Option<&Transaction>,
+    ) -> usize {
+        self.history_store
+            .get_num_extended_transactions(epoch_number, txn_option)
     }
 
     /// Returns the `chunk_index`th chunk of size `chunk_size` for a given epoch.
     /// The return value consists of a vector of all the extended transactions in that chunk
     /// and a proof for these in the MMR.
-    pub fn get_chunk(&self, epoch_number: u32, chunk_size: usize, chunk_index: usize, txn_option: Option<&Transaction>) -> Option<HistoryTreeChunk> {
-        self.history_store.get_chunk(epoch_number, chunk_size, chunk_index, txn_option)
+    pub fn get_chunk(
+        &self,
+        epoch_number: u32,
+        chunk_size: usize,
+        chunk_index: usize,
+        txn_option: Option<&Transaction>,
+    ) -> Option<HistoryTreeChunk> {
+        self.history_store
+            .get_chunk(epoch_number, chunk_size, chunk_index, txn_option)
     }
 
     /// Returns the current staking contract.
@@ -247,7 +302,10 @@ impl Blockchain {
         WriteTransaction::new(&self.env)
     }
 
-    pub fn register_listener<T: Listener<BlockchainEvent> + 'static>(&self, listener: T) -> ListenerHandle {
+    pub fn register_listener<T: Listener<BlockchainEvent> + 'static>(
+        &self,
+        listener: T,
+    ) -> ListenerHandle {
         self.notifier.write().register(listener)
     }
 
@@ -274,7 +332,12 @@ impl Blockchain {
 
     // TODO: Implement this method. It is used in the rpc-server.
     #[allow(unused_variables)]
-    pub fn get_transaction_receipts_by_address(&self, address: &Address, sender_limit: usize, recipient_limit: usize) -> Vec<TransactionReceipt> {
+    pub fn get_transaction_receipts_by_address(
+        &self,
+        address: &Address,
+        sender_limit: usize,
+        recipient_limit: usize,
+    ) -> Vec<TransactionReceipt> {
         unimplemented!()
     }
 }

@@ -1,19 +1,13 @@
 pub use url::Url;
 
-use nimiq_jsonrpc_client::{
-    websocket::WebsocketClient,
-    ArcClient,
-};
 pub use nimiq_jsonrpc_client::websocket::Error;
+use nimiq_jsonrpc_client::{websocket::WebsocketClient, ArcClient};
 pub use nimiq_jsonrpc_core::Credentials;
 
 pub use nimiq_rpc_interface::{
-    blockchain::BlockchainProxy,
-    consensus::ConsensusProxy,
-    mempool::MempoolProxy,
+    blockchain::BlockchainProxy, consensus::ConsensusProxy, mempool::MempoolProxy,
     wallet::WalletProxy,
 };
-
 
 pub struct Client {
     pub blockchain: BlockchainProxy<ArcClient<WebsocketClient>>,

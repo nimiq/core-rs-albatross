@@ -95,7 +95,9 @@ impl MessageMetrics {
     ];
 
     pub fn new() -> Self {
-        let mut metrics = MessageMetrics { messages: HashMap::new() };
+        let mut metrics = MessageMetrics {
+            messages: HashMap::new(),
+        };
 
         // We prefill our datastructure here.
         for &ty in Self::MESSAGE_TYPES.iter() {
@@ -106,13 +108,21 @@ impl MessageMetrics {
     }
 
     pub fn from_map(map: HashMap<MessageType, (usize, usize)>) -> Self {
-        let mut metrics = MessageMetrics { messages: HashMap::new() };
+        let mut metrics = MessageMetrics {
+            messages: HashMap::new(),
+        };
 
         // We prefill our datastructure here.
         for (&k, &v) in map.iter() {
             let occurrences = AtomicUsize::new(v.0);
             let processing_time = AtomicUsize::new(v.1);
-            metrics.messages.insert(k, MessageStatistics { occurrences, processing_time });
+            metrics.messages.insert(
+                k,
+                MessageStatistics {
+                    occurrences,
+                    processing_time,
+                },
+            );
         }
 
         metrics

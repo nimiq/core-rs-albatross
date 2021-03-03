@@ -11,7 +11,13 @@ use crate::{Blockchain, PushError};
 /// Implements methods to handle the accounts.
 impl Blockchain {
     /// Updates the accounts given a block.
-    pub fn commit_accounts(&self, state: &BlockchainState, block: &Block, first_view_number: u32, txn: &mut WriteTransaction) -> Result<(), PushError> {
+    pub fn commit_accounts(
+        &self,
+        state: &BlockchainState,
+        block: &Block,
+        first_view_number: u32,
+        txn: &mut WriteTransaction,
+    ) -> Result<(), PushError> {
         // Get the accounts from the state.
         let accounts = &state.accounts;
 
@@ -32,7 +38,13 @@ impl Blockchain {
                 }
 
                 // Commit block to AccountsTree and create the receipts.
-                let receipts = accounts.commit(txn, &[], &inherents, macro_block.header.block_number, macro_block.header.timestamp);
+                let receipts = accounts.commit(
+                    txn,
+                    &[],
+                    &inherents,
+                    macro_block.header.block_number,
+                    macro_block.header.timestamp,
+                );
 
                 // Check if the receipts contain an error.
                 if let Err(e) = receipts {
@@ -44,20 +56,33 @@ impl Blockchain {
                 self.chain_store.clear_receipts(txn);
 
                 // Store the transactions and the inherents into the History tree.
-                let ext_txs = ExtendedTransaction::from(macro_block.header.block_number, macro_block.header.timestamp, vec![], inherents);
+                let ext_txs = ExtendedTransaction::from(
+                    macro_block.header.block_number,
+                    macro_block.header.timestamp,
+                    vec![],
+                    inherents,
+                );
 
-                self.history_store
-                    .add_to_history(txn, policy::epoch_at(macro_block.header.block_number), &ext_txs);
+                self.history_store.add_to_history(
+                    txn,
+                    policy::epoch_at(macro_block.header.block_number),
+                    &ext_txs,
+                );
             }
             Block::Micro(ref micro_block) => {
                 // Get the body of the block.
                 let body = micro_block.body.as_ref().unwrap();
 
                 // Get the view changes.
-                let view_changes = ViewChanges::new(micro_block.header.block_number, first_view_number, micro_block.header.view_number);
+                let view_changes = ViewChanges::new(
+                    micro_block.header.block_number,
+                    first_view_number,
+                    micro_block.header.view_number,
+                );
 
                 // Create the inherents from any forks and view changes.
-                let inherents = self.create_slash_inherents(&body.fork_proofs, &view_changes, Some(txn));
+                let inherents =
+                    self.create_slash_inherents(&body.fork_proofs, &view_changes, Some(txn));
 
                 // Commit block to AccountsTree and create the receipts.
                 let receipts = accounts.commit(
@@ -75,7 +100,8 @@ impl Blockchain {
 
                 // Store receipts.
                 let receipts = receipts.unwrap();
-                self.chain_store.put_receipts(txn, micro_block.header.block_number, &receipts);
+                self.chain_store
+                    .put_receipts(txn, micro_block.header.block_number, &receipts);
 
                 // Store the transactions and the inherents into the History tree.
                 let ext_txs = ExtendedTransaction::from(
@@ -85,8 +111,11 @@ impl Blockchain {
                     inherents,
                 );
 
-                self.history_store
-                    .add_to_history(txn, policy::epoch_at(micro_block.header.block_number), &ext_txs);
+                self.history_store.add_to_history(
+                    txn,
+                    policy::epoch_at(micro_block.header.block_number),
+                    &ext_txs,
+                );
             }
         }
 
@@ -112,7 +141,11 @@ impl Blockchain {
         let body = micro_block.body.as_ref().unwrap();
 
         // Get the view changes.
-        let view_changes = ViewChanges::new(micro_block.header.block_number, prev_view_number, micro_block.header.view_number);
+        let view_changes = ViewChanges::new(
+            micro_block.header.block_number,
+            prev_view_number,
+            micro_block.header.view_number,
+        );
 
         // Create the inherents from any forks and view changes.
         let inherents = self.create_slash_inherents(&body.fork_proofs, &view_changes, Some(txn));
@@ -139,8 +172,11 @@ impl Blockchain {
         // number of transactions that you want to remove.
         let num_txs = body.transactions.len() + inherents.len();
 
-        self.history_store
-            .remove_partial_history(txn, policy::epoch_at(micro_block.header.block_number), num_txs);
+        self.history_store.remove_partial_history(
+            txn,
+            policy::epoch_at(micro_block.header.block_number),
+            num_txs,
+        );
 
         Ok(())
     }

@@ -31,8 +31,6 @@ use std::{fmt::Formatter, time::Duration};
 
 use parking_lot::RwLock;
 
-
-
 /// Dump Aggregate adding numbers.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Contribution {
@@ -109,7 +107,9 @@ impl Protocol {
     pub fn new(node_id: usize, num_ids: usize, threshold: usize) -> Self {
         let partitioner = Arc::new(BinomialPartitioner::new(node_id, num_ids));
         let registry = Arc::new(Registry {});
-        let store = Arc::new(RwLock::new(ReplaceStore::<BinomialPartitioner, Contribution>::new(partitioner.clone())));
+        let store = Arc::new(RwLock::new(
+            ReplaceStore::<BinomialPartitioner, Contribution>::new(partitioner.clone()),
+        ));
 
         let evaluator = Arc::new(evaluator::WeightedVote::new(
             store.clone(),
@@ -231,7 +231,12 @@ impl<M: Message + Unpin + std::fmt::Debug, N: Network> Sink<(M, usize)> for Netw
         } else {
             // Otherwise, create the future and store it.
             // Note: This future does not get polled. Only once poll_* is called it will actually be polled.
-            let fut = Box::pin(SendingFuture { network: self.network.clone() }.send(item.0)); //.boxed();
+            let fut = Box::pin(
+                SendingFuture {
+                    network: self.network.clone(),
+                }
+                .send(item.0),
+            ); //.boxed();
             self.current_future = Some(fut);
             Ok(())
         }
@@ -281,7 +286,10 @@ async fn it_can_aggregate() {
             1_u8, // serves as the tag or identifier for this aggregation
             config.clone(),
             contribution,
-            Box::pin(net.receive_from_all::<LevelUpdateMessage<Contribution, u8>>().map(move |msg| msg.0.update)),
+            Box::pin(
+                net.receive_from_all::<LevelUpdateMessage<Contribution, u8>>()
+                    .map(move |msg| msg.0.update),
+            ),
             Box::new(NetworkSink {
                 network: net.clone(),
                 current_future: None,
@@ -315,7 +323,10 @@ async fn it_can_aggregate() {
         1_u8, // serves as the tag or identifier for this aggregation
         config.clone(),
         contribution,
-        Box::pin(net.receive_from_all::<LevelUpdateMessage<Contribution, u8>>().map(move |msg| msg.0.update)),
+        Box::pin(
+            net.receive_from_all::<LevelUpdateMessage<Contribution, u8>>()
+                .map(move |msg| msg.0.update),
+        ),
         Box::new(NetworkSink {
             network: net.clone(),
             current_future: None,
@@ -335,7 +346,11 @@ async fn it_can_aggregate() {
     let last_aggregate = last_aggregate.unwrap();
 
     // All nodes need to contribute
-    assert_eq!(last_aggregate.num_contributors(), contributor_num + 1, "Not all contributions are present",);
+    assert_eq!(
+        last_aggregate.num_contributors(),
+        contributor_num + 1,
+        "Not all contributions are present",
+    );
 
     // the final value needs to be the sum of all contributions: 8 + 7 + 6 + 5 + 4 + 3 + 2 + 1 = 36
     assert_eq!(last_aggregate.value, 36, "Wrong aggregation result",);

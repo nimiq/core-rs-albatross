@@ -30,10 +30,19 @@ pub mod vesting_contract;
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub enum Recipient {
-    Basic { address: Address },
-    HtlcCreation { data: HtlcCreationData },
-    VestingCreation { data: VestingCreationData },
-    Staking { address: Option<Address>, data: StakingTransaction },
+    Basic {
+        address: Address,
+    },
+    HtlcCreation {
+        data: HtlcCreationData,
+    },
+    VestingCreation {
+        data: VestingCreationData,
+    },
+    Staking {
+        address: Option<Address>,
+        data: StakingTransaction,
+    },
 }
 
 impl Recipient {
@@ -218,11 +227,11 @@ impl Recipient {
             Recipient::Staking { address, data } => {
                 if data.is_self_transaction() {
                     if let Some(address) = address {
-                        return address == sender && sender_type == Some(AccountType::Staking)
+                        return address == sender && sender_type == Some(AccountType::Staking);
                     }
                 }
             }
-            _ => {},
+            _ => {}
         }
 
         true

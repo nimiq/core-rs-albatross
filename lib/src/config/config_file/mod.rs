@@ -4,9 +4,9 @@ use std::path::Path;
 use std::str::FromStr;
 
 use log::LevelFilter;
+use nimiq_network_libp2p::Multiaddr;
 use serde_derive::Deserialize;
 use thiserror::Error;
-use nimiq_network_libp2p::Multiaddr;
 
 use nimiq_mempool::{
     filter::{MempoolFilter, Rules as MempoolRules},
@@ -89,7 +89,11 @@ impl ConfigFile {
         if !path_example.exists() {
             log::info!("Creating example config at: {}", path_example.display());
             if let Err(e) = std::fs::write(&path_example, Self::EXAMPLE_CONFIG) {
-                log::warn!("Failed to create example config file: {}: {}", e, path_example.display());
+                log::warn!(
+                    "Failed to create example config file: {}: {}",
+                    e,
+                    path_example.display()
+                );
             }
         }
 
@@ -424,7 +428,9 @@ pub struct MempoolFilterSettings {
 impl From<MempoolSettings> for MempoolConfig {
     fn from(mempool: MempoolSettings) -> Self {
         Self {
-            filter_limit: mempool.blacklist_limit.unwrap_or(MempoolFilter::DEFAULT_BLACKLIST_SIZE),
+            filter_limit: mempool
+                .blacklist_limit
+                .unwrap_or(MempoolFilter::DEFAULT_BLACKLIST_SIZE),
             filter_rules: mempool.filter.map(MempoolRules::from).unwrap_or_default(),
         }
     }

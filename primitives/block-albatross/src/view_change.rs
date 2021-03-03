@@ -11,7 +11,9 @@ use vrf::VrfSeed;
 /// The struct representing a view change. View changes happen when a given micro block is not
 /// produced in time by its intended producer. It allows the next slot owner to take over and
 /// produce the block. A proof is necessary but it exists as the ViewChangeProof struct.
-#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize, SerializeContent)]
+#[derive(
+    Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize, SerializeContent,
+)]
 pub struct ViewChange {
     /// The number of the block for which the view change is constructed (i.e. the block number
     /// the validator is at + 1, since it's for the next block).
@@ -47,7 +49,11 @@ pub struct ViewChanges {
 }
 
 impl ViewChanges {
-    pub fn new(block_number: u32, first_view_number: u32, last_view_number: u32) -> Option<ViewChanges> {
+    pub fn new(
+        block_number: u32,
+        first_view_number: u32,
+        last_view_number: u32,
+    ) -> Option<ViewChanges> {
         if first_view_number < last_view_number {
             Some(ViewChanges {
                 block_number,
@@ -62,7 +68,11 @@ impl ViewChanges {
 
 impl fmt::Display for ViewChange {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "#{}.{} ({})", self.block_number, self.new_view_number, self.prev_seed)
+        write!(
+            f,
+            "#{}.{} ({})",
+            self.block_number, self.new_view_number, self.prev_seed
+        )
     }
 }
 
@@ -84,16 +94,20 @@ impl ViewChangeProof {
         }
 
         // Get the public key for each SLOT present in the signature and add them together to get the aggregated public key.
-        let agg_pk = self.sig.signers.iter().fold(AggregatePublicKey::new(), |mut aggregate, slot| {
-            let pk = validators
-                .get_public_key(SlotIndex::Slot(slot as u16))
-                .expect("PublicKey not found for slot")
-                .compressed()
-                .uncompress()
-                .expect("Failed to uncompress CompressedPublicKey");
-            aggregate.aggregate(&pk);
-            aggregate
-        });
+        let agg_pk =
+            self.sig
+                .signers
+                .iter()
+                .fold(AggregatePublicKey::new(), |mut aggregate, slot| {
+                    let pk = validators
+                        .get_public_key(SlotIndex::Slot(slot as u16))
+                        .expect("PublicKey not found for slot")
+                        .compressed()
+                        .uncompress()
+                        .expect("Failed to uncompress CompressedPublicKey");
+                    aggregate.aggregate(&pk);
+                    aggregate
+                });
 
         // Verify the aggregated signature against our aggregated public key.
         agg_pk.verify_hash(view_change.hash_with_prefix(), &self.sig.signature)

@@ -19,7 +19,21 @@ pub struct MockAddress(u64);
 
 /// The peer ID of a MockNetwork or a peer thereof. Peer IDs are always equal to their respective address, thus these
 /// can be converted between each other.
-#[derive(Copy, Clone, Debug, Deserialize, Serialize, Hash, PartialEq, Eq, PartialOrd, Ord, Display, From, Into)]
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    Deserialize,
+    Serialize,
+    Hash,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Display,
+    From,
+    Into,
+)]
 pub struct MockPeerId(u64);
 
 impl From<MockAddress> for MockPeerId {
@@ -37,7 +51,9 @@ impl From<MockPeerId> for MockAddress {
 pub async fn create_mock_validator_network(n: usize, dial: bool) -> Vec<MockNetwork> {
     let mut hub = MockHub::default();
 
-    let networks = (0..n).map(|_| hub.new_network()).collect::<Vec<MockNetwork>>();
+    let networks = (0..n)
+        .map(|_| hub.new_network())
+        .collect::<Vec<MockNetwork>>();
 
     if n > 0 && dial {
         // Peers i>0 dial peer 0
@@ -63,7 +79,10 @@ pub mod tests {
 
     use super::{MockHub, MockPeer, MockPeerId};
 
-    pub async fn assert_peer_joined(events: &mut broadcast::Receiver<NetworkEvent<MockPeer>>, peer_id: MockPeerId) {
+    pub async fn assert_peer_joined(
+        events: &mut broadcast::Receiver<NetworkEvent<MockPeer>>,
+        peer_id: MockPeerId,
+    ) {
         let event = events.recv().await.unwrap();
         log::debug!("Peer list event: {:?}", event);
         match event {
@@ -72,7 +91,10 @@ pub mod tests {
         }
     }
 
-    pub async fn assert_peer_left(events: &mut broadcast::Receiver<NetworkEvent<MockPeer>>, peer_id: MockPeerId) {
+    pub async fn assert_peer_left(
+        events: &mut broadcast::Receiver<NetworkEvent<MockPeer>>,
+        peer_id: MockPeerId,
+    ) {
         let event = events.recv().await.unwrap();
         log::debug!("Peer list event: {:?}", event);
         match event {
@@ -110,7 +132,11 @@ pub mod tests {
         assert_peer_joined(&mut events, net4.peer_id()).await;
 
         // test get_peers
-        let mut peer_ids = net1.get_peers().into_iter().map(|peer| peer.id()).collect::<Vec<MockPeerId>>();
+        let mut peer_ids = net1
+            .get_peers()
+            .into_iter()
+            .map(|peer| peer.id())
+            .collect::<Vec<MockPeerId>>();
         peer_ids.sort();
         let mut expected_peer_ids = vec![net2.peer_id(), net3.peer_id(), net4.peer_id()];
         expected_peer_ids.sort();
@@ -155,7 +181,9 @@ pub mod tests {
         }
     }
 
-    fn consume_stream<T: std::fmt::Debug>(mut stream: impl Stream<Item = T> + Unpin + Send + 'static) {
+    fn consume_stream<T: std::fmt::Debug>(
+        mut stream: impl Stream<Item = T> + Unpin + Send + 'static,
+    ) {
         tokio::spawn(async move { while stream.next().await.is_some() {} });
     }
 
@@ -182,7 +210,9 @@ pub mod tests {
         // same as above
         //tokio::time::delay_for(Duration::from_secs(10)).await;
 
-        net2.publish(&TestTopic, test_message.clone()).await.unwrap();
+        net2.publish(&TestTopic, test_message.clone())
+            .await
+            .unwrap();
 
         let (received_message, _peer) = messages.next().await.unwrap();
         log::info!("Received GossipSub message: {:?}", received_message);

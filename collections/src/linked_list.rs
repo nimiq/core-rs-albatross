@@ -87,7 +87,10 @@ pub struct IterMut<'a, T: 'a> {
 
 impl<'a, T: 'a + fmt::Debug> fmt::Debug for IterMut<'a, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_tuple("IterMut").field(&self.list).field(&self.len).finish()
+        f.debug_tuple("IterMut")
+            .field(&self.list)
+            .field(&self.len)
+            .finish()
     }
 }
 
@@ -1276,7 +1279,10 @@ mod tests {
         }
         check_links(&m);
         assert_eq!(m.len(), 3 + len * 2);
-        assert_eq!(m.into_iter().collect::<Vec<_>>(), [-2, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1]);
+        assert_eq!(
+            m.into_iter().collect::<Vec<_>>(),
+            [-2, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1]
+        );
     }
 
     #[test]

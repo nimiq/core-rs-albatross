@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
 use account::inherent::{AccountInherentInteraction, Inherent};
-use account::{Account, AccountError, AccountTransactionInteraction, AccountType, PrunedAccount, Receipt, Receipts};
+use account::{
+    Account, AccountError, AccountTransactionInteraction, AccountType, PrunedAccount, Receipt,
+    Receipts,
+};
 use database as db;
 use database::{Environment, ReadTransaction, WriteTransaction};
 use hash::Blake2bHash;
@@ -41,14 +44,25 @@ impl Accounts {
         .unwrap_or(Account::INITIAL)
     }
 
-    pub fn get_chunk(&self, prefix: &str, size: usize, txn_option: Option<&db::Transaction>) -> Option<AccountsTreeChunk<Account>> {
+    pub fn get_chunk(
+        &self,
+        prefix: &str,
+        size: usize,
+        txn_option: Option<&db::Transaction>,
+    ) -> Option<AccountsTreeChunk<Account>> {
         match txn_option {
             Some(txn) => self.tree.get_chunk(txn, prefix, size),
-            None => self.tree.get_chunk(&ReadTransaction::new(&self.env), prefix, size),
+            None => self
+                .tree
+                .get_chunk(&ReadTransaction::new(&self.env), prefix, size),
         }
     }
 
-    pub fn get_accounts_proof(&self, txn: &db::Transaction, addresses: &[Address]) -> AccountsProof<Account> {
+    pub fn get_accounts_proof(
+        &self,
+        txn: &db::Transaction,
+        addresses: &[Address],
+    ) -> AccountsProof<Account> {
         self.tree.get_accounts_proof(txn, addresses)
     }
 
@@ -59,7 +73,13 @@ impl Accounts {
         }
     }
 
-    pub fn hash_with(&self, transactions: &[Transaction], inherents: &[Inherent], block_height: u32, timestamp: u64) -> Result<Blake2bHash, AccountError> {
+    pub fn hash_with(
+        &self,
+        transactions: &[Transaction],
+        inherents: &[Inherent],
+        block_height: u32,
+        timestamp: u64,
+    ) -> Result<Blake2bHash, AccountError> {
         let mut txn = WriteTransaction::new(&self.env);
         self.commit(&mut txn, transactions, inherents, block_height, timestamp)?;
         let hash = self.hash(Some(&txn));
@@ -68,9 +88,16 @@ impl Accounts {
     }
 
     /// Returns receipts in processing order, *not* block order!
-    pub fn collect_receipts(&self, transactions: &[Transaction], inherents: &[Inherent], block_height: u32, timestamp: u64) -> Result<Receipts, AccountError> {
+    pub fn collect_receipts(
+        &self,
+        transactions: &[Transaction],
+        inherents: &[Inherent],
+        block_height: u32,
+        timestamp: u64,
+    ) -> Result<Receipts, AccountError> {
         let mut txn = WriteTransaction::new(&self.env);
-        let receipts = self.commit_nonfinal(&mut txn, transactions, inherents, block_height, timestamp)?;
+        let receipts =
+            self.commit_nonfinal(&mut txn, transactions, inherents, block_height, timestamp)?;
         txn.abort();
         Ok(receipts)
     }
@@ -83,7 +110,8 @@ impl Accounts {
         block_height: u32,
         timestamp: u64,
     ) -> Result<Receipts, AccountError> {
-        let receipts = self.commit_nonfinal(txn, transactions, inherents, block_height, timestamp)?;
+        let receipts =
+            self.commit_nonfinal(txn, transactions, inherents, block_height, timestamp)?;
         self.tree.finalize_batch(txn);
         Ok(receipts)
     }
@@ -97,7 +125,14 @@ impl Accounts {
         timestamp: u64,
         receipts: &Receipts,
     ) -> Result<(), AccountError> {
-        self.revert_nonfinal(txn, transactions, inherents, block_height, timestamp, receipts)?;
+        self.revert_nonfinal(
+            txn,
+            transactions,
+            inherents,
+            block_height,
+            timestamp,
+            receipts,
+        )?;
         self.tree.finalize_batch(txn);
         Ok(())
     }
@@ -125,7 +160,9 @@ impl Accounts {
             block_height,
             timestamp,
             HashMap::new(),
-            |account, transaction, block_height, _| account.commit_outgoing_transaction(transaction, block_height, timestamp),
+            |account, transaction, block_height, _| {
+                account.commit_outgoing_transaction(transaction, block_height, timestamp)
+            },
         )?);
 
         receipts.append(&mut self.process_recipients(
@@ -134,7 +171,9 @@ impl Accounts {
             block_height,
             timestamp,
             HashMap::new(),
-            |account, transaction, block_height, _| account.commit_incoming_transaction(transaction, block_height, timestamp),
+            |account, transaction, block_height, _| {
+                account.commit_incoming_transaction(transaction, block_height, timestamp)
+            },
         )?);
 
         self.create_contracts(txn, transactions, block_height, timestamp)?;
@@ -162,13 +201,23 @@ impl Accounts {
         timestamp: u64,
         receipts: &Receipts,
     ) -> Result<(), AccountError> {
-        let (sender_receipts, recipient_receipts, pre_tx_inherent_receipts, post_tx_inherent_receipts, pruned_accounts) = Self::prepare_receipts(receipts);
+        let (
+            sender_receipts,
+            recipient_receipts,
+            pre_tx_inherent_receipts,
+            post_tx_inherent_receipts,
+            pruned_accounts,
+        ) = Self::prepare_receipts(receipts);
 
         self.process_inherents(
             txn,
             inherents.iter().filter(|i| !i.is_pre_transactions()),
             post_tx_inherent_receipts,
-            |account, inherent, receipt| account.revert_inherent(inherent, block_height, timestamp, receipt).map(|_| None),
+            |account, inherent, receipt| {
+                account
+                    .revert_inherent(inherent, block_height, timestamp, receipt)
+                    .map(|_| None)
+            },
         )?;
 
         self.restore_accounts(txn, pruned_accounts)?;
@@ -181,7 +230,11 @@ impl Accounts {
             block_height,
             timestamp,
             recipient_receipts,
-            |account, transaction, block_height, receipt| account.revert_incoming_transaction(transaction, block_height, timestamp, receipt).map(|_| None),
+            |account, transaction, block_height, receipt| {
+                account
+                    .revert_incoming_transaction(transaction, block_height, timestamp, receipt)
+                    .map(|_| None)
+            },
         )?;
 
         self.process_senders(
@@ -190,14 +243,22 @@ impl Accounts {
             block_height,
             timestamp,
             sender_receipts,
-            |account, transaction, block_height, receipt| account.revert_outgoing_transaction(transaction, block_height, timestamp, receipt).map(|_| None),
+            |account, transaction, block_height, receipt| {
+                account
+                    .revert_outgoing_transaction(transaction, block_height, timestamp, receipt)
+                    .map(|_| None)
+            },
         )?;
 
         self.process_inherents(
             txn,
             inherents.iter().filter(|i| i.is_pre_transactions()),
             pre_tx_inherent_receipts,
-            |account, inherent, receipt| account.revert_inherent(inherent, block_height, timestamp, receipt).map(|_| None),
+            |account, inherent, receipt| {
+                account
+                    .revert_inherent(inherent, block_height, timestamp, receipt)
+                    .map(|_| None)
+            },
         )?;
 
         Ok(())
@@ -213,7 +274,12 @@ impl Accounts {
         account_op: F,
     ) -> Result<Vec<Receipt>, AccountError>
     where
-        F: Fn(&mut Account, &Transaction, u32, Option<&Vec<u8>>) -> Result<Option<Vec<u8>>, AccountError>,
+        F: Fn(
+            &mut Account,
+            &Transaction,
+            u32,
+            Option<&Vec<u8>>,
+        ) -> Result<Option<Vec<u8>>, AccountError>,
     {
         let mut new_receipts = Vec::new();
         for (index, transaction) in transactions.iter().enumerate() {
@@ -247,12 +313,20 @@ impl Accounts {
         account_op: F,
     ) -> Result<Vec<Receipt>, AccountError>
     where
-        F: Fn(&mut Account, &Transaction, u32, Option<&Vec<u8>>) -> Result<Option<Vec<u8>>, AccountError>,
+        F: Fn(
+            &mut Account,
+            &Transaction,
+            u32,
+            Option<&Vec<u8>>,
+        ) -> Result<Option<Vec<u8>>, AccountError>,
     {
         let mut new_receipts = Vec::new();
         for (index, transaction) in transactions.iter().enumerate() {
             // FIXME This doesn't check that account_type == transaction.recipient_type when reverting
-            let recipient_type = if transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {
+            let recipient_type = if transaction
+                .flags
+                .contains(TransactionFlags::CONTRACT_CREATION)
+            {
                 None
             } else {
                 Some(transaction.recipient_type)
@@ -290,7 +364,12 @@ impl Accounts {
         account_op: &F,
     ) -> Result<Option<Vec<u8>>, AccountError>
     where
-        F: Fn(&mut Account, &Transaction, u32, Option<&Vec<u8>>) -> Result<Option<Vec<u8>>, AccountError>,
+        F: Fn(
+            &mut Account,
+            &Transaction,
+            u32,
+            Option<&Vec<u8>>,
+        ) -> Result<Option<Vec<u8>>, AccountError>,
     {
         // TODO Eliminate copy
         let mut account = self.get(address, Some(txn));
@@ -314,35 +393,76 @@ impl Accounts {
         Ok(receipt)
     }
 
-    fn create_contracts(&self, txn: &mut WriteTransaction, transactions: &[Transaction], block_height: u32, timestamp: u64) -> Result<(), AccountError> {
+    fn create_contracts(
+        &self,
+        txn: &mut WriteTransaction,
+        transactions: &[Transaction],
+        block_height: u32,
+        timestamp: u64,
+    ) -> Result<(), AccountError> {
         for transaction in transactions {
-            if transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {
+            if transaction
+                .flags
+                .contains(TransactionFlags::CONTRACT_CREATION)
+            {
                 self.create_contract(txn, transaction, block_height, timestamp)?;
             }
         }
         Ok(())
     }
 
-    fn create_contract(&self, txn: &mut WriteTransaction, transaction: &Transaction, block_height: u32, timestamp: u64) -> Result<(), AccountError> {
-        assert!(transaction.flags.contains(TransactionFlags::CONTRACT_CREATION));
+    fn create_contract(
+        &self,
+        txn: &mut WriteTransaction,
+        transaction: &Transaction,
+        block_height: u32,
+        timestamp: u64,
+    ) -> Result<(), AccountError> {
+        assert!(transaction
+            .flags
+            .contains(TransactionFlags::CONTRACT_CREATION));
 
         let recipient_account = self.get(&transaction.recipient, Some(txn));
-        let new_recipient_account = Account::new_contract(transaction.recipient_type, recipient_account.balance(), transaction, block_height, timestamp)?;
-        self.tree.put_batch(txn, &transaction.recipient, new_recipient_account);
+        let new_recipient_account = Account::new_contract(
+            transaction.recipient_type,
+            recipient_account.balance(),
+            transaction,
+            block_height,
+            timestamp,
+        )?;
+        self.tree
+            .put_batch(txn, &transaction.recipient, new_recipient_account);
         Ok(())
     }
 
-    fn revert_contracts(&self, txn: &mut WriteTransaction, transactions: &[Transaction], block_height: u32, timestamp: u64) -> Result<(), AccountError> {
+    fn revert_contracts(
+        &self,
+        txn: &mut WriteTransaction,
+        transactions: &[Transaction],
+        block_height: u32,
+        timestamp: u64,
+    ) -> Result<(), AccountError> {
         for transaction in transactions {
-            if transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {
+            if transaction
+                .flags
+                .contains(TransactionFlags::CONTRACT_CREATION)
+            {
                 self.revert_contract(txn, transaction, block_height, timestamp)?;
             }
         }
         Ok(())
     }
 
-    fn revert_contract(&self, txn: &mut WriteTransaction, transaction: &Transaction, _block_height: u32, _timestamp: u64) -> Result<(), AccountError> {
-        assert!(transaction.flags.contains(TransactionFlags::CONTRACT_CREATION));
+    fn revert_contract(
+        &self,
+        txn: &mut WriteTransaction,
+        transaction: &Transaction,
+        _block_height: u32,
+        _timestamp: u64,
+    ) -> Result<(), AccountError> {
+        assert!(transaction
+            .flags
+            .contains(TransactionFlags::CONTRACT_CREATION));
 
         let recipient_account = self.get(&transaction.recipient, Some(txn));
         if recipient_account.account_type() != transaction.recipient_type {
@@ -353,11 +473,16 @@ impl Accounts {
         }
 
         let new_recipient_account = Account::new_basic(recipient_account.balance());
-        self.tree.put_batch(txn, &transaction.recipient, new_recipient_account);
+        self.tree
+            .put_batch(txn, &transaction.recipient, new_recipient_account);
         Ok(())
     }
 
-    fn prune_accounts(&self, txn: &mut WriteTransaction, transactions: &[Transaction]) -> Result<Vec<Receipt>, AccountError> {
+    fn prune_accounts(
+        &self,
+        txn: &mut WriteTransaction,
+        transactions: &[Transaction],
+    ) -> Result<Vec<Receipt>, AccountError> {
         let mut receipts = Vec::new();
         for transaction in transactions {
             let sender_account = self.get(&transaction.sender, Some(txn));
@@ -369,15 +494,21 @@ impl Accounts {
                 }));
 
                 // Prune account.
-                self.tree.put_batch(txn, &transaction.sender, Account::INITIAL);
+                self.tree
+                    .put_batch(txn, &transaction.sender, Account::INITIAL);
             }
         }
         Ok(receipts)
     }
 
-    fn restore_accounts(&self, txn: &mut WriteTransaction, pruned_accounts: Vec<&PrunedAccount>) -> Result<(), AccountError> {
+    fn restore_accounts(
+        &self,
+        txn: &mut WriteTransaction,
+        pruned_accounts: Vec<&PrunedAccount>,
+    ) -> Result<(), AccountError> {
         for pruned_account in pruned_accounts {
-            self.tree.put_batch(txn, &pruned_account.address, pruned_account.account.clone());
+            self.tree
+                .put_batch(txn, &pruned_account.address, pruned_account.account.clone());
         }
         Ok(())
     }
@@ -395,7 +526,9 @@ impl Accounts {
     {
         let mut new_receipts = Vec::new();
         for (index, inherent) in inherents.enumerate() {
-            if let Some(data) = self.process_inherent(txn, inherent, receipts.remove(&(index as u16)), &account_op)? {
+            if let Some(data) =
+                self.process_inherent(txn, inherent, receipts.remove(&(index as u16)), &account_op)?
+            {
                 new_receipts.push(Receipt::Inherent {
                     pre_transactions: inherent.is_pre_transactions(),
                     index: index as u16,
@@ -428,7 +561,15 @@ impl Accounts {
         Ok(receipt)
     }
 
-    fn prepare_receipts(receipts: &Receipts) -> (ReceiptsMap, ReceiptsMap, ReceiptsMap, ReceiptsMap, Vec<&PrunedAccount>) {
+    fn prepare_receipts(
+        receipts: &Receipts,
+    ) -> (
+        ReceiptsMap,
+        ReceiptsMap,
+        ReceiptsMap,
+        ReceiptsMap,
+        Vec<&PrunedAccount>,
+    ) {
         let mut sender_receipts = HashMap::new();
         let mut recipient_receipts = HashMap::new();
         let mut pre_tx_inherent_receipts = HashMap::new();
@@ -436,14 +577,22 @@ impl Accounts {
         let mut pruned_accounts = Vec::new();
         for receipt in &receipts.receipts {
             match receipt {
-                Receipt::Transaction { index, sender, data } => {
+                Receipt::Transaction {
+                    index,
+                    sender,
+                    data,
+                } => {
                     if *sender {
                         sender_receipts.insert(*index, data);
                     } else {
                         recipient_receipts.insert(*index, data);
                     }
                 }
-                Receipt::Inherent { index, data, pre_transactions } => {
+                Receipt::Inherent {
+                    index,
+                    data,
+                    pre_transactions,
+                } => {
                     if *pre_transactions {
                         pre_tx_inherent_receipts.insert(*index, data);
                     } else {

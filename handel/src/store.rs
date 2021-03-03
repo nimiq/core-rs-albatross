@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use collections::bitset::BitSet;
 
-use crate::{contribution::AggregatableContribution, identity::Identity};
 use crate::partitioner::Partitioner;
+use crate::{contribution::AggregatableContribution, identity::Identity};
 
 pub trait ContributionStore: Send + Sync {
     type Contribution: AggregatableContribution;
@@ -90,7 +90,7 @@ impl<P: Partitioner, C: AggregatableContribution> ReplaceStore<P, C> {
                 best_contribution,
             );
 
-            let  best_contributors = identity.as_bitset();
+            let best_contributors = identity.as_bitset();
 
             // try to combine
             let mut contribution = contribution.clone();
@@ -101,10 +101,12 @@ impl<P: Partitioner, C: AggregatableContribution> ReplaceStore<P, C> {
             //     .combine(best_contribution)
             //     .unwrap_or_else(|e| trace!("check_merge: combining contributions failed: {}", e));
 
-            let individual_verified = self
-                .individual_verified
-                .get(level)
-                .unwrap_or_else(|| panic!("Individual verified contributions BitSet is missing for level {}", level));
+            let individual_verified = self.individual_verified.get(level).unwrap_or_else(|| {
+                panic!(
+                    "Individual verified contributions BitSet is missing for level {}",
+                    level
+                )
+            });
 
             // the bits set here are verified individual signatures that can be added to `contribution`
             let complements = &(&contributors & individual_verified) ^ individual_verified;
@@ -121,9 +123,16 @@ impl<P: Partitioner, C: AggregatableContribution> ReplaceStore<P, C> {
                     let individual = self
                         .individual_contributions
                         .get(level)
-                        .unwrap_or_else(|| panic!("Individual contribution missing for level {}", level))
+                        .unwrap_or_else(|| {
+                            panic!("Individual contribution missing for level {}", level)
+                        })
                         .get(&id)
-                        .unwrap_or_else(|| panic!("Individual contributioon {} missing for level {}", id, level));
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "Individual contributioon {} missing for level {}",
+                                id, level
+                            )
+                        });
 
                     // merge individual signature into multisig
                     contribution
@@ -143,7 +152,12 @@ impl<P: Partitioner, C: AggregatableContribution> ContributionStore for ReplaceS
     type Contribution = C;
 
     fn put(&mut self, contribution: Self::Contribution, level: usize, identity: Identity) {
-        trace!("Putting signature into store (level {}): {:?} - #{:?}", level, contribution, identity);
+        trace!(
+            "Putting signature into store (level {}): {:?} - #{:?}",
+            level,
+            contribution,
+            identity
+        );
 
         if let Identity::Single(id) = identity {
             self.individual_verified
@@ -156,9 +170,16 @@ impl<P: Partitioner, C: AggregatableContribution> ContributionStore for ReplaceS
                 .insert(id, (contribution.clone(), identity.clone()));
         }
 
-        if let Some(best_contribution) = self.check_merge(&contribution, identity.as_bitset(), level) {
-            trace!("best_contribution = {:?} (level {})", best_contribution, level);
-            self.best_contribution.insert(level, (best_contribution, identity));
+        if let Some(best_contribution) =
+            self.check_merge(&contribution, identity.as_bitset(), level)
+        {
+            trace!(
+                "best_contribution = {:?} (level {})",
+                best_contribution,
+                level
+            );
+            self.best_contribution
+                .insert(level, (best_contribution, identity));
             if level > self.best_level {
                 trace!("best level is now {}", level);
                 self.best_level = level;
@@ -175,14 +196,17 @@ impl<P: Partitioner, C: AggregatableContribution> ContributionStore for ReplaceS
     }
 
     fn individual_verified(&self, level: usize) -> &BitSet {
-        self.individual_verified.get(level).unwrap_or_else(|| panic!("Invalid level: {}", level))
+        self.individual_verified
+            .get(level)
+            .unwrap_or_else(|| panic!("Invalid level: {}", level))
     }
 
     fn individual_signature(&self, level: usize, peer_id: usize) -> Option<&Self::Contribution> {
         self.individual_contributions
             .get(level)
             .unwrap_or_else(|| panic!("Invalid level: {}", level))
-            .get(&peer_id).map(|(c, _)| c)
+            .get(&peer_id)
+            .map(|(c, _)| c)
     }
 
     fn best(&self, level: usize) -> Option<&Self::Contribution> {

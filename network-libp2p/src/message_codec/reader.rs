@@ -1,6 +1,6 @@
 use std::{marker::PhantomData, pin::Pin};
 
-use bytes::{BytesMut, buf::BufExt};
+use bytes::{buf::BufExt, BytesMut};
 use futures::{
     task::{Context, Poll},
     AsyncRead, Stream,
@@ -13,7 +13,12 @@ use super::header::Header;
 
 /// Try to read, such that at most `n` bytes are in the buffer. This will return `Poll::Pending` until the buffer
 /// has `n` bytes in it. This returns `Poll::Ready(Ok(false))` in case of EOF.
-fn read_to_buf<R>(reader: Pin<&mut R>, buffer: &mut BytesMut, n: usize, cx: &mut Context<'_>) -> Poll<Result<bool, std::io::Error>>
+fn read_to_buf<R>(
+    reader: Pin<&mut R>,
+    buffer: &mut BytesMut,
+    n: usize,
+    cx: &mut Context<'_>,
+) -> Poll<Result<bool, std::io::Error>>
 where
     R: AsyncRead,
 {
@@ -36,7 +41,11 @@ where
 
             // Data was read
             Poll::Ready(Ok(n_read)) => {
-                log::trace!("MessageReader: read_to_buf: Received {} bytes, buffer={:?}", n_read, buffer);
+                log::trace!(
+                    "MessageReader: read_to_buf: Received {} bytes, buffer={:?}",
+                    n_read,
+                    buffer
+                );
 
                 // New length of buffer
                 let n_new = n0 + n_read;
@@ -118,7 +127,9 @@ impl<R, M> MessageReader<R, M> {
 }
 
 fn unexpected_eof<T>() -> Poll<Option<Result<T, SerializingError>>> {
-    Poll::Ready(Some(Err(SerializingError::from(std::io::Error::from(std::io::ErrorKind::UnexpectedEof)))))
+    Poll::Ready(Some(Err(SerializingError::from(std::io::Error::from(
+        std::io::ErrorKind::UnexpectedEof,
+    )))))
 }
 
 impl<R, M> Stream for MessageReader<R, M>
@@ -136,7 +147,12 @@ where
         let (new_state, message) = match &self_projected.state {
             ReaderState::Head => {
                 // Read header. This returns `Poll::Pending` until all header bytes have been read.
-                match read_to_buf(self_projected.inner, self_projected.buffer, Header::SIZE, cx) {
+                match read_to_buf(
+                    self_projected.inner,
+                    self_projected.buffer,
+                    Header::SIZE,
+                    cx,
+                ) {
                     // Wait for more data.
                     Poll::Pending => return Poll::Pending,
 
@@ -196,7 +212,8 @@ where
                 }
 
                 // Decode the message, the read position of the buffer is already at the start of the message.
-                let message: M = match Deserialize::deserialize(&mut self_projected.buffer.reader()) {
+                let message: M = match Deserialize::deserialize(&mut self_projected.buffer.reader())
+                {
                     Ok(message) => message,
                     Err(e) => return Poll::Ready(Some(Err(e))),
                 };
@@ -229,7 +246,7 @@ mod tests {
     use futures::{io::Cursor, StreamExt};
 
     use beserial::{Deserialize, Serialize};
-    use bytes::{BytesMut, buf::BufMutExt};
+    use bytes::{buf::BufMutExt, BytesMut};
 
     use super::MessageReader;
     use crate::message_codec::header::Header;

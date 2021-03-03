@@ -1,8 +1,8 @@
 use std::{
     hash::{Hash, Hasher},
     pin::Pin,
-    task::{Context, Poll},
     sync::Arc,
+    task::{Context, Poll},
 };
 
 use async_trait::async_trait;
@@ -14,13 +14,12 @@ use libp2p::{swarm::NegotiatedSubstream, PeerId};
 use parking_lot::Mutex;
 
 use nimiq_network_interface::message::Message;
-use nimiq_network_interface::peer::{CloseReason, Peer as PeerInterface, RequestResponse, SendError};
+use nimiq_network_interface::peer::{
+    CloseReason, Peer as PeerInterface, RequestResponse, SendError,
+};
 
 use super::dispatch::{MessageDispatch, SendMessage};
-use crate::{
-    network::NetworkError,
-    codecs::typed::Error,
-};
+use crate::{codecs::typed::Error, network::NetworkError};
 
 pub struct Peer {
     pub id: PeerId,
@@ -32,7 +31,11 @@ pub struct Peer {
 }
 
 impl Peer {
-    pub fn new(id: PeerId, dispatch: MessageDispatch<NegotiatedSubstream>, close_tx: oneshot::Sender<CloseReason>) -> Self {
+    pub fn new(
+        id: PeerId,
+        dispatch: MessageDispatch<NegotiatedSubstream>,
+        close_tx: oneshot::Sender<CloseReason>,
+    ) -> Self {
         Self {
             id,
             dispatch: Arc::new(Mutex::new(dispatch)),
@@ -100,10 +103,7 @@ impl PeerInterface for Peer {
 
     // TODO: Make this a stream of Result<M, Error>
     fn receive<M: Message>(&self) -> Pin<Box<dyn Stream<Item = M> + Send>> {
-        self.dispatch
-            .lock()
-            .receive()
-            .boxed()
+        self.dispatch.lock().receive().boxed()
     }
 
     fn close(&self, reason: CloseReason) {
@@ -122,7 +122,10 @@ impl PeerInterface for Peer {
         }
     }
 
-    async fn request<R: RequestResponse>(&self, _request: &<R as RequestResponse>::Request) -> Result<R::Response, Self::Error> {
+    async fn request<R: RequestResponse>(
+        &self,
+        _request: &<R as RequestResponse>::Request,
+    ) -> Result<R::Response, Self::Error> {
         unimplemented!()
     }
 

@@ -6,7 +6,12 @@ use crate::{
 };
 
 #[allow(unused_variables)]
-pub fn initialize_metrics_server(client: &Client, config: MetricsServerConfig, pkcs12_key_file: &str, pkcs12_passphrase: &str) -> Result<MetricsServer, Error> {
+pub fn initialize_metrics_server(
+    client: &Client,
+    config: MetricsServerConfig,
+    pkcs12_key_file: &str,
+    pkcs12_passphrase: &str,
+) -> Result<MetricsServer, Error> {
     let ip = config.bind_to.unwrap_or_else(default_bind);
     log::info!("Initializing metrics server: {}:{}", ip, config.port);
 

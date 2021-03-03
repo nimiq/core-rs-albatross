@@ -8,8 +8,8 @@ use futures::{
     future, StreamExt,
 };
 use parking_lot::Mutex;
-use tokio::{task::spawn, time::timeout};
 use thiserror::Error;
+use tokio::{task::spawn, time::timeout};
 
 use crate::message::*;
 use crate::peer::*;
@@ -93,7 +93,11 @@ impl<P: Peer, Req: RequestMessage, Res: ResponseMessage + 'static> RequestRespon
 
         // TODO: CloseType
         // If sending fails, remove channel and return error.
-        if let Err(e) = self.peer.send_or_close(&request, |_| CloseReason::Other).await {
+        if let Err(e) = self
+            .peer
+            .send_or_close(&request, |_| CloseReason::Other)
+            .await
+        {
             let mut state = self.state.lock();
             state.responses.remove(&request_identifier);
             return Err(RequestError::SendError(e));
@@ -105,12 +109,12 @@ impl<P: Peer, Req: RequestMessage, Res: ResponseMessage + 'static> RequestRespon
                 log::debug!("Received response: {:#?}", response);
 
                 Ok(response)
-            },
+            }
             Ok(Err(e)) => {
                 log::error!("Receive error: {}", e);
 
                 Err(RequestError::ReceiveError)
-            },
+            }
             Err(_) => {
                 log::error!("Timeout");
 

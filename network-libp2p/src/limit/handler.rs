@@ -1,5 +1,7 @@
 use futures::task::{Context, Poll};
-use libp2p::swarm::{KeepAlive, ProtocolsHandler, ProtocolsHandlerEvent, ProtocolsHandlerUpgrErr, SubstreamProtocol};
+use libp2p::swarm::{
+    KeepAlive, ProtocolsHandler, ProtocolsHandlerEvent, ProtocolsHandlerUpgrErr, SubstreamProtocol,
+};
 use thiserror::Error;
 
 use super::protocol::LimitProtocol;
@@ -43,7 +45,11 @@ impl ProtocolsHandler for LimitHandler {
         todo!();
     }
 
-    fn inject_dial_upgrade_error(&mut self, _info: Self::OutboundOpenInfo, error: ProtocolsHandlerUpgrErr<std::io::Error>) {
+    fn inject_dial_upgrade_error(
+        &mut self,
+        _info: Self::OutboundOpenInfo,
+        error: ProtocolsHandlerUpgrErr<std::io::Error>,
+    ) {
         log::warn!("DiscoveryHandler::inject_dial_upgrade_error: {:?}", error);
         unimplemented!();
     }
@@ -52,7 +58,11 @@ impl ProtocolsHandler for LimitHandler {
         KeepAlive::No
     }
 
-    fn poll(&mut self, cx: &mut Context) -> Poll<ProtocolsHandlerEvent<Self::OutboundProtocol, (), HandlerOutEvent, HandlerError>> {
+    fn poll(
+        &mut self,
+        cx: &mut Context,
+    ) -> Poll<ProtocolsHandlerEvent<Self::OutboundProtocol, (), HandlerOutEvent, HandlerError>>
+    {
         // We do nothing in the handler
         Poll::Pending
     }

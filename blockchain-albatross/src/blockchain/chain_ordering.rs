@@ -25,7 +25,12 @@ pub enum ChainOrdering {
 impl Blockchain {
     /// Given a block and some chain, it returns the ordering of the new chain relative to the given
     /// chain.
-    pub(crate) fn order_chains(&self, block: &Block, prev_info: &ChainInfo, txn_option: Option<&Transaction>) -> ChainOrdering {
+    pub(crate) fn order_chains(
+        &self,
+        block: &Block,
+        prev_info: &ChainInfo,
+        txn_option: Option<&Transaction>,
+    ) -> ChainOrdering {
         let mut chain_order = ChainOrdering::Unknown;
 
         if block.parent_hash() == &self.head_hash() {
@@ -41,13 +46,18 @@ impl Blockchain {
             // the branch are the same. Then, we need to follow and compare.
             let mut view_numbers = vec![block.view_number()];
 
-            let mut current: (Blake2bHash, ChainInfo) = (block.hash(), ChainInfo::dummy(block.clone()));
+            let mut current: (Blake2bHash, ChainInfo) =
+                (block.hash(), ChainInfo::dummy(block.clone()));
 
             let mut prev: (Blake2bHash, ChainInfo) = (prev_info.head.hash(), prev_info.clone());
 
             while !prev.1.on_main_chain {
                 // Macro blocks are final
-                assert_eq!(prev.1.head.ty(), BlockType::Micro, "Trying to rebranch across macro block");
+                assert_eq!(
+                    prev.1.head.ty(),
+                    BlockType::Micro,
+                    "Trying to rebranch across macro block"
+                );
 
                 view_numbers.push(prev.1.head.view_number());
 
