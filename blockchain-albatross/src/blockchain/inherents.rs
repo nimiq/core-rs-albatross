@@ -112,10 +112,13 @@ impl Blockchain {
             &state.current_slots.as_ref().expect("Slots for last batch are missing").validator_slots
         };
 
-        // Calculate the slashed set. As conjunction of the two sets.
+        // Calculate the slots that will receive rewards.
+        // Rewards are for the previous batch (to give validators time to report misbehaviour)
+        // lost_rewards_set (clears on batch end) makes rewards being lost for at least one batch
+        // disabled_set (clears on epoch end) makes rewards being lost further if validator doesn't unpark
         let lost_rewards_set = staking_contract.previous_lost_rewards();
         let disabled_set = staking_contract.previous_disabled_slots();
-        let slashed_set = lost_rewards_set & disabled_set;
+        let slashed_set = lost_rewards_set | disabled_set;
 
         // Total reward for the previous batch
         let block_reward = block_reward_for_batch(
@@ -166,6 +169,7 @@ impl Blockchain {
                 assert!(next_slashed_slot >= first_slot_number);
                 if next_slashed_slot < last_slot_number {
                     assert!(num_eligible_slots > 0);
+                    slashed_set_iter.next();
                     num_eligible_slots -= 1;
                     num_slashed_slots += 1;
                 } else {
@@ -218,14 +222,16 @@ impl Blockchain {
         inherents[index].value += remainder;
 
         // Create the inherent for the burned reward.
-        let inherent = Inherent {
-            ty: InherentType::Reward,
-            target: Address::burn_address(),
-            value: burned_reward,
-            data: vec![],
-        };
+        if burned_reward > Coin::ZERO {
+            let inherent = Inherent {
+                ty: InherentType::Reward,
+                target: Address::burn_address(),
+                value: burned_reward,
+                data: vec![],
+            };
 
-        inherents.push(inherent);
+            inherents.push(inherent);
+        }
 
         // Push FinalizeBatch inherent to update StakingContract.
         let validator_registry = NetworkInfo::from_network_id(self.network_id)
