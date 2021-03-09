@@ -436,29 +436,6 @@ pub struct RpcServerConfig {
     pub credentials: Option<Credentials>,
 }
 
-#[cfg(feature = "ws-rpc-server")]
-#[derive(Debug, Clone, Builder)]
-#[builder(setter(into))]
-pub struct WsRpcServerConfig {
-    /// Bind the Websocket RPC server to the specified IP address.
-    ///
-    /// Default: `127.0.0.1`
-    ///
-    #[builder(setter(strip_option))]
-    pub bind_to: Option<IpAddr>,
-
-    /// Bind the server to the specified port.
-    ///
-    /// Default: `8648`
-    ///
-    #[builder(default = "consts::WS_RPC_DEFAULT_PORT")]
-    pub port: u16,
-
-    /// If specified, require HTTP basic auth with these credentials
-    #[builder(setter(strip_option))]
-    pub credentials: Option<Credentials>,
-}
-
 #[cfg(feature = "metrics-server")]
 #[derive(Debug, Clone, Builder)]
 #[builder(setter(into))]

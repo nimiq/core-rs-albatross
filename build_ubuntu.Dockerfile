@@ -42,7 +42,7 @@ WORKDIR /home/nimiq
 RUN mkdir -p /home/nimiq/.nimiq
 VOLUME /home/nimiq/.nimiq
 
-EXPOSE 8443/tcp 8648/tcp 8650/tcp
+EXPOSE 8443/tcp 8648/tcp
 
 #ENTRYPOINT ["/usr/local/bin/nimiq-client"]
 ENTRYPOINT [ "/bin/bash" ]

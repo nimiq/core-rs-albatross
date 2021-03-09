@@ -17,7 +17,7 @@ ENV NIMIQ_NETWORK=dev-albatross \
     VALIDATOR_BLOCK_DELAY=250 \
     RPC_ENABLED=false
 
-EXPOSE 8443/tcp 8648/tcp 8650/tcp
+EXPOSE 8443/tcp 8648/tcp
 
 VOLUME [ "/home/nimiq/database" ]
 

@@ -37,7 +37,7 @@ pub type Validator = AbstractValidator<Network, ValidatorNetworkImpl<Network>>;
 ///
 /// # TODO
 ///
-/// * Move RPC server, Ws-RPC server and Metrics server out of here
+/// * Move RPC server and Metrics server out of here
 /// * Move Validator out of here?
 ///
 pub(crate) struct ClientInner {

@@ -15,12 +15,10 @@ services:
     command:
       - --entrypoints.nimiq.address=:8443
       - --entrypoints.rpc.address=:8648
-      - --entrypoints.ws-rpc.address=:8650
       - --providers.docker=true
     ports:
       - "8443:8443"
       - "8648:8648"
-      - "8650:8650"
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
     networks:
@@ -41,12 +39,6 @@ services:
       - traefik.http.routers.seed1-rpc.entrypoints=rpc
       - traefik.http.routers.seed1-rpc.service=seed1-rpc
       - traefik.http.services.seed1-rpc.loadbalancer.server.port=8648
-
-      # Accept outside WS-RPC connections
-      # - traefik.http.routers.seed1-ws-rpc.rule=Host(`seed1.${NETWORK_NAME:?err}`)
-      # - traefik.http.routers.seed1-ws-rpc.entrypoints=ws-rpc
-      # - traefik.http.routers.seed1-ws-rpc.service=seed1-ws-rpc
-      # - traefik.http.services.seed1-ws-rpc.loadbalancer.server.port=8650
     environment:
       - LISTEN_ADDRESSES=/ip4/7.0.0.2/tcp/8443/ws
       - NIMIQ_HOST=seed1.${NETWORK_NAME:?err}
