@@ -14,7 +14,7 @@ use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_mempool::{Mempool, MempoolConfig};
-use nimiq_nano_sync::primitives::pk_tree_construct;
+use nimiq_nano_sync::pk_tree_construct;
 use nimiq_primitives::policy;
 use nimiq_primitives::policy::{SLOTS, TWO_THIRD_SLOTS};
 use nimiq_vrf::VrfSeed;

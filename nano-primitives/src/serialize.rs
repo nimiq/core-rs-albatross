@@ -2,7 +2,7 @@ use ark_ec::ProjectiveCurve;
 use ark_mnt4_753::{G1Projective as MNT4G1Projective, G2Projective as MNT4G2Projective};
 use ark_mnt6_753::{G1Projective as MNT6G1Projective, G2Projective as MNT6G2Projective};
 
-use crate::compression::BeSerialize;
+use nimiq_bls::compression::BeSerialize;
 
 /// Serializes a G1 point in the MNT4-753 curve.
 pub fn serialize_g1_mnt4(point: MNT4G1Projective) -> [u8; 95] {

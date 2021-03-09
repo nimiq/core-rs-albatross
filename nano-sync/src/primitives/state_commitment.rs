@@ -1,7 +1,9 @@
 use ark_mnt6_753::G2Projective;
 
-use crate::primitives::{pedersen_generators, pedersen_hash, pk_tree_construct, serialize_g1_mnt6};
-use crate::utils::bytes_to_bits;
+use nimiq_nano_primitives::{bytes_to_bits, serialize_g1_mnt6};
+
+use crate::pk_tree_construct;
+use crate::primitives::{pedersen_generators, pedersen_hash};
 
 /// This gadget is meant to calculate the "state commitment" off-circuit, which is simply a commitment,
 /// for a given block, of the block number concatenated with the root of a Merkle tree over the public

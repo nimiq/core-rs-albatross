@@ -287,7 +287,7 @@ pub mod test_utils {
     use blockchain::PushResult;
     use bls::AggregateSignature;
     use collections::BitSet;
-    use nimiq_nano_sync::primitives::pk_tree_construct;
+    use nimiq_nano_sync::pk_tree_construct;
     use primitives::policy::{SLOTS, TWO_THIRD_SLOTS};
 
     use super::*;

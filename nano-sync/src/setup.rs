@@ -18,7 +18,7 @@ use crate::circuits::mnt6::{
 };
 use crate::constants::{PK_TREE_BREADTH, PK_TREE_DEPTH, VALIDATOR_SLOTS};
 use crate::primitives::MacroBlock;
-use crate::utils::bytes_to_bits;
+use nimiq_nano_primitives::bytes_to_bits;
 use crate::{NanoZKP, NanoZKPError};
 
 impl NanoZKP {

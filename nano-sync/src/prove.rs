@@ -13,7 +13,12 @@ use ark_std::UniformRand;
 use rand::{thread_rng, CryptoRng, Rng};
 
 use nimiq_bls::pedersen::{pedersen_generators, pedersen_hash};
+use nimiq_nano_primitives::{
+    byte_to_le_bits, bytes_to_bits, pack_inputs,
+    merkle_tree_prove, serialize_g1_mnt6, serialize_g2_mnt6,
+};
 
+use crate::pk_tree_construct;
 use crate::circuits::mnt4::{
     MacroBlockCircuit, MergerCircuit, PKTreeLeafCircuit as LeafMNT4, PKTreeNodeCircuit as NodeMNT4,
 };
@@ -22,10 +27,8 @@ use crate::circuits::mnt6::{
 };
 use crate::constants::{EPOCH_LENGTH, PK_TREE_BREADTH, PK_TREE_DEPTH, VALIDATOR_SLOTS};
 use crate::primitives::{
-    merkle_tree_prove, pk_tree_construct, serialize_g1_mnt6, serialize_g2_mnt6, state_commitment,
-    vk_commitment, MacroBlock,
+    state_commitment, vk_commitment, MacroBlock,
 };
-use crate::utils::{byte_to_le_bits, bytes_to_bits, pack_inputs};
 use crate::{NanoZKP, NanoZKPError};
 
 impl NanoZKP {

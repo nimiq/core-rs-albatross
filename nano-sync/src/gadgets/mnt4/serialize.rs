@@ -4,7 +4,7 @@ use ark_r1cs_std::prelude::{Boolean, ToBitsGadget};
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 
 use crate::gadgets::mnt4::YToBitGadget;
-use crate::utils::pad_point_bits;
+use nimiq_nano_primitives::utils::pad_point_bits;
 
 /// A gadget that takes as input a G1 or G2 point and serializes it into a vector of Booleans.
 pub struct SerializeGadget;

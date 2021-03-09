@@ -21,7 +21,7 @@ use nimiq_blockchain_albatross::Blockchain;
 use nimiq_collections::bitset::BitSet;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
-use nimiq_nano_sync::primitives::pk_tree_construct;
+use nimiq_nano_sync::pk_tree_construct;
 use nimiq_vrf::VrfSeed;
 use primitives::account::ValidatorId;
 use primitives::policy;

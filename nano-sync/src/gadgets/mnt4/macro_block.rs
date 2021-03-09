@@ -18,7 +18,7 @@ use ark_relations::r1cs::{ConstraintSystemRef, Namespace, SynthesisError};
 use crate::constants::{MIN_SIGNERS, VALIDATOR_SLOTS};
 use crate::gadgets::mnt4::{CheckSigGadget, PedersenHashGadget};
 use crate::primitives::MacroBlock;
-use crate::utils::reverse_inner_byte_order;
+use nimiq_nano_primitives::utils::reverse_inner_byte_order;
 
 /// A gadget that contains utilities to verify the validity of a macro block. Mainly it checks that:
 ///  1. The macro block was signed by the aggregate public key.

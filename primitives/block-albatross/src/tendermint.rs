@@ -7,7 +7,7 @@ use beserial::{Deserialize, Serialize};
 use bls::AggregatePublicKey;
 use hash::{Blake2bHash, Hash, SerializeContent};
 use hash_derive::SerializeContent;
-use nano_sync::primitives::pk_tree_construct;
+use nano_sync::pk_tree_construct;
 use network_interface::message::Message as NetworkMessage;
 use primitives::policy::{SLOTS, TWO_THIRD_SLOTS};
 use primitives::slot::{SlotIndex, ValidatorSlots};

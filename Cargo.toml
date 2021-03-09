@@ -28,6 +28,7 @@ members = [
   "messages",
   "metrics-server",
   "mnemonic",
+  "nano-primitives",
   "nano-sync",
   "network-albatross",
   "network-interface",

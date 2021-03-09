@@ -1,21 +1,14 @@
 [package]
-name = "nimiq-nano-sync"
+name = "nimiq-nano-primitives"
 version = "0.1.0"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
-description = "Recursive SNARKs for Nimiq's Nano Nodes"
+description = "Shared Primitives of Recursive SNARKs for Nimiq's Nano Nodes"
 license = "MIT/Apache-2.0"
 homepage = "https://nimiq.com"
 repository = "https://github.com/nimiq/core-rs-albatross"
 edition = "2018"
 
 [dependencies]
-blake2-rfc = "0.2"
-byteorder = "1.3.4"
-colored = { version = "1.9", optional = true }
-hex = "0.4"
-rand = "0.7"
-thiserror = "1.0.23"
-
 ark-std = { git = "https://github.com/arkworks-rs/utils" }
 ark-ff = { git = "https://github.com/arkworks-rs/algebra" }
 ark-serialize = { git = "https://github.com/arkworks-rs/algebra" }
@@ -28,10 +21,3 @@ ark-r1cs-std = { git = "https://github.com/arkworks-rs/r1cs-std" }
 ark-groth16 = { git = "https://github.com/arkworks-rs/groth16", features = ["r1cs"] }
 
 nimiq-bls = { path = "../bls", version = "0.1" }
-nimiq-nano-primitives = { path = "../nano-primitives", version = "0.1"}
-nimiq-primitives = { path = "../primitives", version = "0.1", features = ["policy"] }
-
-[features]
-default = []
-cost-analysis = ["colored"]
-print-trace = ["ark-groth16/print-trace"]

@@ -283,7 +283,6 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
     }
 
     fn poll_macro(&mut self, cx: &mut Context<'_>) {
-        let id = self.validator_id();
         let macro_producer = self.macro_producer.as_mut().unwrap();
         while let Poll::Ready(Some(event)) = macro_producer.poll_next_unpin(cx) {
             match event {

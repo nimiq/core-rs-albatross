@@ -7,7 +7,7 @@ use thiserror::Error;
 use beserial::{Deserialize, Serialize};
 use collections::bitset::BitSet;
 use hash::{Blake2bHash, Blake2sHash, Hash, SerializeContent};
-use nimiq_nano_sync::primitives::pk_tree_construct;
+use nimiq_nano_sync::pk_tree_construct;
 use primitives::policy;
 use primitives::slot::{SlotIndex, Slots, ValidatorSlots};
 use vrf::VrfSeed;

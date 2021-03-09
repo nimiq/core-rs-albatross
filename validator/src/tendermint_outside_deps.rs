@@ -278,8 +278,6 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
             justification: None,
         });
 
-        let view_number = self.blockchain.head().next_view_number();
-
         // Update our blockchain state using the received proposal. If we can't update the state, we
         // return a proposal timeout right here.
         if self

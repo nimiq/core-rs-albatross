@@ -9,7 +9,7 @@ use ark_r1cs_std::prelude::{AllocVar, Boolean, EqGadget};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
 use crate::constants::{PK_TREE_DEPTH, VALIDATOR_SLOTS};
-use crate::utils::{prepare_inputs, unpack_inputs};
+use nimiq_nano_primitives::utils::{prepare_inputs, unpack_inputs};
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 /// This is the node subcircuit of the PKTreeCircuit. See PKTreeLeafCircuit for more details.

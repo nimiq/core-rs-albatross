@@ -2,8 +2,9 @@ use ark_ec::AffineCurve;
 use ark_groth16::VerifyingKey;
 use ark_mnt6_753::MNT6_753;
 
-use crate::primitives::{pedersen_generators, pedersen_hash, serialize_g1_mnt6, serialize_g2_mnt6};
-use crate::utils::bytes_to_bits;
+use nimiq_nano_primitives::{bytes_to_bits, serialize_g1_mnt6, serialize_g2_mnt6};
+
+use crate::primitives::{pedersen_generators, pedersen_hash};
 
 /// This function is meant to calculate a commitment off-circuit for a verifying key of a SNARK in the
 /// MNT6-753 curve. This means we can open this commitment inside of a circuit in the MNT4-753 curve
