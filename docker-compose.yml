@@ -30,7 +30,23 @@ services:
   seed1:
     image: core:latest
     labels:
+      # Accept outside Nimiq protocol connections
       - traefik.http.routers.seed1.rule=Host(`seed1.${NETWORK_NAME:?err}`)
+      - traefik.http.routers.seed1.entrypoints=nimiq
+      - traefik.http.routers.seed1.service=seed1
+      - traefik.http.services.seed1.loadbalancer.server.port=8443
+
+      # Accept outside RPC connections
+      - traefik.http.routers.seed1-rpc.rule=Host(`seed1.${NETWORK_NAME:?err}`)
+      - traefik.http.routers.seed1-rpc.entrypoints=rpc
+      - traefik.http.routers.seed1-rpc.service=seed1-rpc
+      - traefik.http.services.seed1-rpc.loadbalancer.server.port=8648
+
+      # Accept outside WS-RPC connections
+      # - traefik.http.routers.seed1-ws-rpc.rule=Host(`seed1.${NETWORK_NAME:?err}`)
+      # - traefik.http.routers.seed1-ws-rpc.entrypoints=ws-rpc
+      # - traefik.http.routers.seed1-ws-rpc.service=seed1-ws-rpc
+      # - traefik.http.services.seed1-ws-rpc.loadbalancer.server.port=8650
     environment:
       - LISTEN_ADDRESSES=/ip4/7.0.0.2/tcp/8443/ws
       - NIMIQ_HOST=seed1.${NETWORK_NAME:?err}
@@ -58,6 +74,7 @@ services:
   seed2:
     image: core:latest
     labels:
+      # Accept outside Nimiq protocol connections
       - traefik.http.routers.seed2.rule=Host(`seed2.${NETWORK_NAME:?err}`)
     depends_on:
       - seed1
@@ -88,6 +105,7 @@ services:
   seed3:
     image: core:latest
     labels:
+      # Accept outside Nimiq protocol connections
       - traefik.http.routers.seed3.rule=Host(`seed3.${NETWORK_NAME:?err}`)
     depends_on:
       - seed2
@@ -119,6 +137,7 @@ services:
   seed4:
     image: core:latest
     labels:
+      # Accept outside Nimiq protocol connections
       - traefik.http.routers.seed4.rule=Host(`seed4.${NETWORK_NAME:?err}`)
     depends_on:
       - seed2
