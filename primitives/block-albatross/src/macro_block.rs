@@ -1,19 +1,18 @@
-
 use std::fmt;
 use std::io;
 
 use thiserror::Error;
 
 use beserial::{Deserialize, Serialize};
-use collections::bitset::BitSet;
-use hash::{Blake2bHash, Blake2sHash, Hash, SerializeContent};
-use nimiq_nano_sync::primitives::pk_tree_construct;
-use primitives::policy;
-use primitives::slots::Validators;
-use vrf::VrfSeed;
+use nimiq_collections::bitset::BitSet;
+use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, SerializeContent};
+use nimiq_primitives::policy;
+use nimiq_primitives::slots::Validators;
+use nimiq_vrf::VrfSeed;
 
 use crate::signed::{Message, PREFIX_TENDERMINT_PROPOSAL};
 use crate::tendermint::TendermintProof;
+use nimiq_nano_sync::pk_tree_construct;
 
 /// The struct representing a Macro block (can be either checkpoint or election).
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]

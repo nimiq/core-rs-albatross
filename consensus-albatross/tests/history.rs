@@ -290,8 +290,7 @@ async fn sync_ingredients() {
                 .body()
                 .unwrap()
                 .unwrap_macro()
-                .history_root
-                ,
+                .history_root,
             0
         ),
         Some(true)

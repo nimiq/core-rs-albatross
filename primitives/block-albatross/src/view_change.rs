@@ -1,12 +1,12 @@
 use crate::{Message, MultiSignature, SignedMessage, PREFIX_VIEW_CHANGE};
 use beserial::{Deserialize, Serialize};
-use bls::AggregatePublicKey;
-use hash::{Hash, SerializeContent};
-use hash_derive::SerializeContent;
-use primitives::policy::TWO_THIRD_SLOTS;
-use primitives::slots::Validators;
+use nimiq_bls::AggregatePublicKey;
+use nimiq_hash::{Hash, SerializeContent};
+use nimiq_hash_derive::SerializeContent;
+use nimiq_primitives::policy::TWO_THIRD_SLOTS;
+use nimiq_primitives::slots::Validators;
+use nimiq_vrf::VrfSeed;
 use std::fmt;
-use vrf::VrfSeed;
 
 /// The struct representing a view change. View changes happen when a given micro block is not
 /// produced in time by its intended producer. It allows the next slot owner to take over and

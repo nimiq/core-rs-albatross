@@ -272,7 +272,7 @@ impl Blockchain {
             state.election_head = macro_block.clone();
             state.election_head_hash = block_hash.clone();
             state.previous_slots = state.current_slots.take();
-            state.current_slots = macro_block.get_slots();
+            state.current_slots = macro_block.get_validators();
         }
 
         // Give up database transactions and push lock before creating notifications.

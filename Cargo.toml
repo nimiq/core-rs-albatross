@@ -50,15 +50,12 @@ members = [
   "wallet",
 ]
 
-# Force nimiq-bls and nimiq-nano-sync to be built with the highest optimization level in the dev and test profiles. This
+# Force nimiq-bls to be built with the highest optimization level in the dev and test profiles. This
 # is necessary in order to have decent tests performance.
 [profile.dev.package.nimiq-bls]
 opt-level = 3
 
 [profile.test.package.nimiq-bls]
-opt-level = 3
-
-[profile.dev.package.nimiq-nano-sync]
 opt-level = 3
 
 [profile.dev.package.nimiq-nano-primitives]

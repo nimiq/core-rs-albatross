@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use beserial::{Deserialize, Serialize};
 use futures::{future::join_all, lock::Mutex, Stream, StreamExt};
 
-use nimiq_bls::{CompressedPublicKey, PublicKey, Signature, SecretKey};
+use nimiq_bls::{CompressedPublicKey, PublicKey, SecretKey, Signature};
 use nimiq_network_interface::{message::Message, network::Network, network::Topic, peer::Peer};
 use nimiq_utils::tagged_signing::TaggedSignable;
 
@@ -43,9 +43,7 @@ where
     TPeerId: Serialize + Deserialize,
 {
     pub fn new(peer_id: TPeerId) -> Self {
-        Self {
-            peer_id,
-        }
+        Self { peer_id }
     }
 
     pub fn sign(self, secret_key: &SecretKey) -> SignedValidatorRecord<TPeerId> {
@@ -109,8 +107,14 @@ where
     }
 
     /// Looks up the peer ID for a validator public key in the DHT.
-    async fn resolve_peer_id(network: &N, public_key: &CompressedPublicKey) -> Result<Option<PeerId<N>>, NetworkError<N::Error>> {
-        if let Some(record) = network.dht_get::<_, SignedValidatorRecord<PeerId<N>>>(&public_key).await? {
+    async fn resolve_peer_id(
+        network: &N,
+        public_key: &CompressedPublicKey,
+    ) -> Result<Option<PeerId<N>>, NetworkError<N::Error>> {
+        if let Some(record) = network
+            .dht_get::<_, SignedValidatorRecord<PeerId<N>>>(&public_key)
+            .await?
+        {
             if record.verify(&public_key.uncompress().unwrap()) {
                 Ok(Some(record.record.peer_id))
             } else {
@@ -122,12 +126,16 @@ where
     }
 
     /// Look up the peer ID for a validator ID.
-    async fn get_validator_peer_id(&self, validator_id: usize) -> Result<PeerId<N>, NetworkError<N::Error>> {
+    async fn get_validator_peer_id(
+        &self,
+        validator_id: usize,
+    ) -> Result<PeerId<N>, NetworkError<N::Error>> {
         let mut state = self.state.lock().await;
 
         let public_key = state
             .validator_keys
-            .get(validator_id).ok_or(NetworkError::UnknownValidator(validator_id))?
+            .get(validator_id)
+            .ok_or(NetworkError::UnknownValidator(validator_id))?
             .clone();
 
         let entry = state.validator_peer_id_cache.entry(public_key.clone());
@@ -138,7 +146,10 @@ where
                 if let Some(peer_id) = Self::resolve_peer_id(&self.network, &public_key).await? {
                     Ok(vacant.insert(peer_id).clone())
                 } else {
-                    log::error!("Could not find peer ID for validator in DHT: public_key = {:?}", public_key);
+                    log::error!(
+                        "Could not find peer ID for validator in DHT: public_key = {:?}",
+                        public_key
+                    );
                     Err(NetworkError::UnknownValidator(validator_id))
                 }
             }
@@ -161,12 +172,13 @@ where
     type PeerType = <N as Network>::PeerType;
     type PubsubId = <N as Network>::PubsubId;
 
-
-
     /// Tells the validator network the validator keys for the current set of active validators. The keys must be
     /// ordered, such that the k-th entry is the validator with ID k.
     async fn set_validators(&self, validator_keys: Vec<CompressedPublicKey>) {
-        log::trace!("setting Validators for ValidatorNetwork: {:?}", &validator_keys);
+        log::trace!(
+            "setting Validators for ValidatorNetwork: {:?}",
+            &validator_keys
+        );
         // Create new peer ID cache, but keep validators that are still active.
         let mut state = self.state.lock().await;
 
@@ -181,26 +193,44 @@ where
         state.validator_peer_id_cache = keep_cached;
     }
 
-    async fn get_validator_peer(&self, validator_id: usize) -> Result<Option<Arc<<N as Network>::PeerType>>, Self::Error> {
+    async fn get_validator_peer(
+        &self,
+        validator_id: usize,
+    ) -> Result<Option<Arc<<N as Network>::PeerType>>, Self::Error> {
         let peer_id = self.get_validator_peer_id(validator_id).await?;
         Ok(self.network.get_peer(peer_id))
     }
 
-    async fn send_to<M: Message>(&self, validator_ids: &[usize], msg: &M) -> Vec<Result<(), Self::Error>> {
-        let futures = validator_ids.iter().copied().map(|validator_id| async move {
-            self.get_validator_peer(validator_id)
-                .await?.ok_or(NetworkError::UnknownValidator(validator_id))?
-                .send(msg)
-                .await
-                .map_err(NetworkError::Send)?;
-            Ok(())
-        });
+    async fn send_to<M: Message>(
+        &self,
+        validator_ids: &[usize],
+        msg: &M,
+    ) -> Vec<Result<(), Self::Error>> {
+        let futures = validator_ids
+            .iter()
+            .copied()
+            .map(|validator_id| async move {
+                self.get_validator_peer(validator_id)
+                    .await?
+                    .ok_or(NetworkError::UnknownValidator(validator_id))?
+                    .send(msg)
+                    .await
+                    .map_err(NetworkError::Send)?;
+                Ok(())
+            });
 
-        join_all(futures).await.into_iter().collect::<Vec<Result<(), Self::Error>>>()
+        join_all(futures)
+            .await
+            .into_iter()
+            .collect::<Vec<Result<(), Self::Error>>>()
     }
 
     fn receive<M: Message>(&self) -> MessageStream<M, PeerId<N>> {
-        Box::pin(self.network.receive_from_all().map(|(message, peer)| (message, peer.id())))
+        Box::pin(
+            self.network
+                .receive_from_all()
+                .map(|(message, peer)| (message, peer.id())),
+        )
     }
 
     async fn publish<TTopic>(&self, topic: &TTopic, item: TTopic::Item) -> Result<(), Self::Error>
@@ -211,7 +241,10 @@ where
         Ok(())
     }
 
-    async fn subscribe<TTopic>(&self, topic: &TTopic) -> Result<Pin<Box<dyn Stream<Item = (TTopic::Item, Self::PubsubId)> + Send>>, Self::Error>
+    async fn subscribe<TTopic>(
+        &self,
+        topic: &TTopic,
+    ) -> Result<Pin<Box<dyn Stream<Item = (TTopic::Item, Self::PubsubId)> + Send>>, Self::Error>
     where
         TTopic: Topic + Sync,
     {
@@ -222,10 +255,16 @@ where
         unimplemented!()
     }
 
-    async fn set_public_key(&self, public_key: &CompressedPublicKey, secret_key: &SecretKey) -> Result<(), Self::Error> {
+    async fn set_public_key(
+        &self,
+        public_key: &CompressedPublicKey,
+        secret_key: &SecretKey,
+    ) -> Result<(), Self::Error> {
         let peer_id = self.network.get_local_peer_id();
         let record = ValidatorRecord::new(peer_id);
-        self.network.dht_put(public_key, &record.sign(secret_key)).await?;
+        self.network
+            .dht_put(public_key, &record.sign(secret_key))
+            .await?;
 
         Ok(())
     }

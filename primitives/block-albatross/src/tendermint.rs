@@ -4,13 +4,13 @@ use crate::signed::{
 };
 use crate::{MacroHeader, MultiSignature};
 use beserial::{Deserialize, Serialize};
-use bls::AggregatePublicKey;
-use hash::{Blake2bHash, Hash, SerializeContent};
-use hash_derive::SerializeContent;
-use nano_sync::primitives::pk_tree_construct;
-use network_interface::message::Message as NetworkMessage;
-use primitives::policy::{SLOTS, TWO_THIRD_SLOTS};
-use primitives::slots::Validators;
+use nimiq_bls::AggregatePublicKey;
+use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
+use nimiq_hash_derive::SerializeContent;
+use nimiq_nano_sync::pk_tree_construct;
+use nimiq_network_interface::message::Message as NetworkMessage;
+use nimiq_primitives::policy::{SLOTS, TWO_THIRD_SLOTS};
+use nimiq_primitives::slots::Validators;
 use std::io;
 
 /// The proposal message sent by the Tendermint leader.

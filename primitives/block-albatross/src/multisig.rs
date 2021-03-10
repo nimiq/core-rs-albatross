@@ -1,7 +1,8 @@
 use beserial::{BigEndian, Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 
-use collections::bitset::BitSet;
-use handel::contribution::{AggregatableContribution, ContributionError};
+use nimiq_bls::{AggregateSignature, Signature};
+use nimiq_collections::bitset::BitSet;
+use nimiq_handel::contribution::{AggregatableContribution, ContributionError};
 
 /*
 This does not really belong here, but as there would otherwise be a cyclic dependency it needs to be here for now.
@@ -10,7 +11,7 @@ TODO: Move this out of primitives and into validator/aggregation once the messag
 
 #[derive(Clone, Debug)]
 pub struct IndividualSignature {
-    pub signature: bls::Signature,
+    pub signature: Signature,
     pub signer: usize,
 }
 
@@ -36,12 +37,12 @@ impl Deserialize for IndividualSignature {
 }
 
 impl IndividualSignature {
-    pub fn new(signature: bls::Signature, signer: usize) -> Self {
+    pub fn new(signature: Signature, signer: usize) -> Self {
         Self { signature, signer }
     }
 
     pub fn as_multisig(&self) -> MultiSignature {
-        let mut aggregate = bls::AggregateSignature::new();
+        let mut aggregate = AggregateSignature::new();
         let mut signers = BitSet::new();
 
         aggregate.aggregate(&self.signature);
@@ -54,12 +55,12 @@ impl IndividualSignature {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub struct MultiSignature {
-    pub signature: bls::AggregateSignature,
+    pub signature: AggregateSignature,
     pub signers: BitSet,
 }
 
 impl MultiSignature {
-    pub fn new(signature: bls::AggregateSignature, signers: BitSet) -> Self {
+    pub fn new(signature: AggregateSignature, signers: BitSet) -> Self {
         Self { signature, signers }
     }
 }

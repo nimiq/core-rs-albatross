@@ -2,9 +2,9 @@ use std::cmp::Ordering;
 use std::io;
 
 use beserial::{Deserialize, Serialize};
-use hash::{Blake2bHash, Hash, HashOutput, SerializeContent};
 use nimiq_bls::{CompressedSignature, PublicKey};
-use primitives::policy;
+use nimiq_hash::{Blake2bHash, Hash, HashOutput, SerializeContent};
+use nimiq_primitives::policy;
 
 use crate::MicroHeader;
 

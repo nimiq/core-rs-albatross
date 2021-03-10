@@ -11,7 +11,7 @@ use nimiq_collections::bitset::BitSet;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_nano_sync::primitives::pk_tree_construct;
+use nimiq_nano_sync::pk_tree_construct;
 use nimiq_primitives::account::ValidatorId;
 use nimiq_primitives::policy;
 use nimiq_primitives::slots::{Validator, Validators};

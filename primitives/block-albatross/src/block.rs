@@ -1,15 +1,15 @@
-use std::convert::{TryFrom};
+use std::convert::TryFrom;
 use std::fmt;
 
 use bitflags::bitflags;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
-use hash::{Blake2bHash, Blake2sHash, Hash, SerializeContent};
-use hash_derive::SerializeContent;
-use primitives::coin::Coin;
-use primitives::slots::Validators;
-use transaction::Transaction;
-use vrf::VrfSeed;
+use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, SerializeContent};
+use nimiq_hash_derive::SerializeContent;
+use nimiq_primitives::coin::Coin;
+use nimiq_primitives::slots::Validators;
+use nimiq_transaction::Transaction;
+use nimiq_vrf::VrfSeed;
 
 use crate::macro_block::{MacroBlock, MacroHeader};
 use crate::micro_block::{MicroBlock, MicroHeader};

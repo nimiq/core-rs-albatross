@@ -1,7 +1,6 @@
 use beserial::{Deserialize, Serialize, WriteBytesExt};
-use bls::SigHash;
-use bls::{PublicKey, SecretKey, Signature};
-use hash::{Blake2sHasher, Hasher, SerializeContent};
+use nimiq_bls::{PublicKey, SecretKey, SigHash, Signature};
+use nimiq_hash::{Blake2sHasher, Hasher, SerializeContent};
 use std::fmt::Debug;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

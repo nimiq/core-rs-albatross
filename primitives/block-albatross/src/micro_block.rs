@@ -1,11 +1,11 @@
 use std::fmt;
 
 use beserial::{Deserialize, Serialize};
-use bls::CompressedSignature;
-use hash::{Blake2bHash, Hash, SerializeContent};
-use hash_derive::SerializeContent;
-use transaction::Transaction;
-use vrf::VrfSeed;
+use nimiq_bls::CompressedSignature;
+use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
+use nimiq_hash_derive::SerializeContent;
+use nimiq_transaction::Transaction;
+use nimiq_vrf::VrfSeed;
 
 use crate::fork_proof::ForkProof;
 use crate::ViewChangeProof;

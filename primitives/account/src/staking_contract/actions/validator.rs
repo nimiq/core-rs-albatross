@@ -1,13 +1,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
-use parking_lot::RwLock;
 use beserial::{Deserialize, Serialize};
+use parking_lot::RwLock;
 
 use bls::CompressedPublicKey as BlsPublicKey;
 use keys::Address;
-use primitives::coin::Coin;
 use primitives::account::ValidatorId;
+use primitives::coin::Coin;
 
 use crate::staking_contract::actions::staker::InactiveStakeReceipt;
 use crate::staking_contract::{InactiveValidator, Validator};
@@ -80,23 +80,42 @@ impl StakingContract {
     /// Creates a new validator entry.
     /// The initial stake can only be retrieved by dropping the validator again.
     /// XXX This is public to fill the genesis staking contract
-    pub fn create_validator(&mut self, validator_id: ValidatorId, validator_key: BlsPublicKey, reward_address: Address, initial_stake: Coin) -> Result<(), AccountError> {
-        if self.active_validators_by_id.contains_key(&validator_id) || self.inactive_validators_by_id.contains_key(&validator_id) {
+    pub fn create_validator(
+        &mut self,
+        validator_id: ValidatorId,
+        validator_key: BlsPublicKey,
+        reward_address: Address,
+        initial_stake: Coin,
+    ) -> Result<(), AccountError> {
+        if self.active_validators_by_id.contains_key(&validator_id)
+            || self.inactive_validators_by_id.contains_key(&validator_id)
+        {
             return Err(AccountError::InvalidForRecipient);
         }
 
         self.balance = Account::balance_add(self.balance, initial_stake)?;
 
         // All checks passed, not allowed to fail from here on!
-        let validator = Arc::new(Validator::new(validator_id.clone(), initial_stake, reward_address, validator_key));
+        let validator = Arc::new(Validator::new(
+            validator_id.clone(),
+            initial_stake,
+            reward_address,
+            validator_key,
+        ));
 
         self.active_validators_sorted.insert(Arc::clone(&validator));
-        self.active_validators_by_id.insert(validator_id, Arc::clone(&validator));
+        self.active_validators_by_id
+            .insert(validator_id, Arc::clone(&validator));
         Ok(())
     }
 
     /// Reverts creating a new validator entry.
-    pub(super) fn revert_create_validator(&mut self, validator_id: ValidatorId, _validator_key: BlsPublicKey, initial_stake: Coin) -> Result<(), AccountError> {
+    pub(super) fn revert_create_validator(
+        &mut self,
+        validator_id: ValidatorId,
+        _validator_key: BlsPublicKey,
+        initial_stake: Coin,
+    ) -> Result<(), AccountError> {
         if let Some(validator) = self.active_validators_by_id.remove(&validator_id) {
             self.balance = Account::balance_sub(self.balance, initial_stake)?;
 
@@ -116,7 +135,9 @@ impl StakingContract {
         new_validator_key: Option<BlsPublicKey>,
         new_reward_address: Option<Address>,
     ) -> Result<UpdateValidatorReceipt, AccountError> {
-        let mut entry = self.remove_validator(validator_id).ok_or(AccountError::InvalidForRecipient)?;
+        let mut entry = self
+            .remove_validator(validator_id)
+            .ok_or(AccountError::InvalidForRecipient)?;
 
         let old_reward_address = entry.as_validator().reward_address.clone();
         entry.update_validator(new_reward_address, new_validator_key);
@@ -145,7 +166,11 @@ impl StakingContract {
     /// Drops a validator entry.
     /// This can be used to drop inactive validators.
     /// The validator must have been inactive for at least one macro block.
-    pub(super) fn drop_validator(&mut self, validator_id: &ValidatorId, _initial_stake: Coin) -> Result<DropValidatorReceipt, AccountError> {
+    pub(super) fn drop_validator(
+        &mut self,
+        validator_id: &ValidatorId,
+        _initial_stake: Coin,
+    ) -> Result<DropValidatorReceipt, AccountError> {
         // Initial stake vs. stakes has been checked in check_outgoing_transaction.
 
         // All checks passed, not allowed to fail from here on!
@@ -159,7 +184,8 @@ impl StakingContract {
 
         let mut retirement_by_address = BTreeMap::new();
         for (staker_address, &stake) in validator.active_stake_by_address.read().iter() {
-            let receipt = self.retire_recipient(staker_address, stake, Some(inactive_validator.retire_time))?;
+            let receipt =
+                self.retire_recipient(staker_address, stake, Some(inactive_validator.retire_time))?;
             retirement_by_address.insert(
                 staker_address.clone(),
                 RetirementReceipt {
@@ -204,7 +230,11 @@ impl StakingContract {
         // First, revert retiring the stakers.
         let mut active_stake_by_address = BTreeMap::new();
         for (staker_address, receipt) in receipt.retirement_by_address {
-            self.revert_retire_recipient(&staker_address, receipt.stake, receipt.inactive_stake_receipt)?;
+            self.revert_retire_recipient(
+                &staker_address,
+                receipt.stake,
+                receipt.inactive_stake_receipt,
+            )?;
             active_stake_by_address.insert(staker_address, receipt.stake);
             total_value += receipt.stake;
         }
@@ -232,9 +262,16 @@ impl StakingContract {
     }
 
     /// Inactivates a validator entry.
-    pub(super) fn retire_validator(&mut self, validator_id: ValidatorId, block_height: u32) -> Result<(), AccountError> {
+    pub(super) fn retire_validator(
+        &mut self,
+        validator_id: ValidatorId,
+        block_height: u32,
+    ) -> Result<(), AccountError> {
         // Move validator from active map/set to inactive map.
-        let validator = self.active_validators_by_id.remove(&validator_id).ok_or(AccountError::InvalidForRecipient)?;
+        let validator = self
+            .active_validators_by_id
+            .remove(&validator_id)
+            .ok_or(AccountError::InvalidForRecipient)?;
 
         // All checks passed, not allowed to fail from here on!
         self.active_validators_sorted.remove(&validator);
@@ -249,12 +286,18 @@ impl StakingContract {
     }
 
     /// Revert inactivating a validator entry.
-    pub(super) fn revert_retire_validator(&mut self, validator_id: ValidatorId) -> Result<(), AccountError> {
+    pub(super) fn revert_retire_validator(
+        &mut self,
+        validator_id: ValidatorId,
+    ) -> Result<(), AccountError> {
         self.reactivate_validator(validator_id).map(|_| ())
     }
 
     /// Reactivate a validator entry.
-    pub(super) fn reactivate_validator(&mut self, validator_id: ValidatorId) -> Result<InactiveValidatorReceipt, AccountError> {
+    pub(super) fn reactivate_validator(
+        &mut self,
+        validator_id: ValidatorId,
+    ) -> Result<InactiveValidatorReceipt, AccountError> {
         // Move validator from inactive map to active map/set.
         let inactive_validator = self
             .inactive_validators_by_id
@@ -262,27 +305,40 @@ impl StakingContract {
             .ok_or(AccountError::InvalidForRecipient)?;
 
         // All checks passed, not allowed to fail from here on!
-        self.active_validators_sorted.insert(Arc::clone(&inactive_validator.validator));
-        self.active_validators_by_id.insert(validator_id, inactive_validator.validator);
+        self.active_validators_sorted
+            .insert(Arc::clone(&inactive_validator.validator));
+        self.active_validators_by_id
+            .insert(validator_id, inactive_validator.validator);
         Ok(InactiveValidatorReceipt {
             retire_time: inactive_validator.retire_time,
         })
     }
 
     /// Inactivates a validator entry.
-    pub(super) fn revert_reactivate_validator(&mut self, validator_id: ValidatorId, receipt: InactiveValidatorReceipt) -> Result<(), AccountError> {
+    pub(super) fn revert_reactivate_validator(
+        &mut self,
+        validator_id: ValidatorId,
+        receipt: InactiveValidatorReceipt,
+    ) -> Result<(), AccountError> {
         self.retire_validator(validator_id, receipt.retire_time)
     }
 
     /// Removes a validator from the parking lists and the disabled slots.
-    pub(super) fn unpark_validator(&mut self, validator_id: &ValidatorId) -> Result<UnparkReceipt, AccountError> {
+    pub(super) fn unpark_validator(
+        &mut self,
+        validator_id: &ValidatorId,
+    ) -> Result<UnparkReceipt, AccountError> {
         let current_epoch = self.current_epoch_parking.remove(validator_id);
         let previous_epoch = self.previous_epoch_parking.remove(validator_id);
 
         let current_disabled_slots = self.current_disabled_slots.remove(validator_id);
         let previous_disabled_slots = self.previous_disabled_slots.remove(validator_id);
 
-        if !current_epoch && !previous_epoch && current_disabled_slots.is_none() && previous_disabled_slots.is_none() {
+        if !current_epoch
+            && !previous_epoch
+            && current_disabled_slots.is_none()
+            && previous_disabled_slots.is_none()
+        {
             return Err(AccountError::InvalidForRecipient);
         }
 
@@ -295,7 +351,11 @@ impl StakingContract {
     }
 
     /// Reverts an unparking transaction.
-    pub(super) fn revert_unpark_validator(&mut self, validator_id: &ValidatorId, receipt: UnparkReceipt) -> Result<(), AccountError> {
+    pub(super) fn revert_unpark_validator(
+        &mut self,
+        validator_id: &ValidatorId,
+        receipt: UnparkReceipt,
+    ) -> Result<(), AccountError> {
         if receipt.current_epoch {
             self.current_epoch_parking.insert(validator_id.clone());
         }
@@ -305,11 +365,13 @@ impl StakingContract {
         }
 
         if let Some(slots) = receipt.current_disabled_slots {
-            self.current_disabled_slots.insert(validator_id.clone(), slots);
+            self.current_disabled_slots
+                .insert(validator_id.clone(), slots);
         }
 
         if let Some(slots) = receipt.previous_disabled_slots {
-            self.previous_disabled_slots.insert(validator_id.clone(), slots);
+            self.previous_disabled_slots
+                .insert(validator_id.clone(), slots);
         }
 
         Ok(())
