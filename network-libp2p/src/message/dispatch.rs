@@ -246,7 +246,13 @@ where
         &mut self,
         receive_from_all: impl IntoIterator<Item = (MessageType, mpsc::Sender<(Bytes, Arc<Peer>)>)>,
     ) {
+        // todo remove stale sender
         self.channels.extend(receive_from_all);
+    }
+
+    /// remove a receiver for the peer
+    pub fn remove_receiver_raw(&mut self, type_id: MessageType) {
+        self.channels.remove(&type_id);
     }
 }
 

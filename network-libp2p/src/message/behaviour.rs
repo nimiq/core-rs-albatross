@@ -6,7 +6,7 @@ use std::{
 use bytes::Bytes;
 use futures::{
     channel::mpsc,
-    task::{Context, Poll, Waker},
+    task::{noop_waker_ref, Context, Poll, Waker},
 };
 use libp2p::core::connection::ConnectionId;
 use libp2p::core::Multiaddr;
@@ -78,18 +78,28 @@ impl MessageBehaviour {
     /// Panics if a receiver was already registered for this message type.
     ///
     pub fn receive_from_all(&mut self, type_id: MessageType, tx: mpsc::Sender<(Bytes, Arc<Peer>)>) {
-        if self.message_receivers.get(&type_id).is_some() {
-            panic!(
-                "A receiver for message type {} is already registered",
-                type_id
-            );
+        if let Some(sender) = self.message_receivers.get_mut(&type_id) {
+            let mut cx = Context::from_waker(noop_waker_ref());
+            if let Poll::Ready(Ok(_)) = sender.poll_ready(&mut cx) {
+                panic!(
+                    "A receiver for message type {} is already registered",
+                    type_id
+                );
+            } else {
+                log::error!(
+                    "Removing stale sender from global message_receivers: TYPE_ID: {}",
+                    &type_id
+                );
+                self.message_receivers.remove(&type_id);
+            }
         }
 
         // add the receiver to the pre existing peers
         for peer in self.peers.get_peers() {
-            peer.dispatch
-                .lock()
-                .receive_multiple_raw(vec![(type_id, tx.clone())]);
+            let mut dispatch = peer.dispatch.lock();
+
+            dispatch.remove_receiver_raw(type_id);
+            dispatch.receive_multiple_raw(vec![(type_id, tx.clone())]);
         }
 
         // add the receiver to the globally defined map
