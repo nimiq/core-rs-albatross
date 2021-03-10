@@ -49,7 +49,7 @@ jobs:
     - uses: actions-rs/cargo@v1
       with:
         command: check
-        args: --release
+        args: --release --all-features
 
   test:
     runs-on: ubuntu-20.04
@@ -72,7 +72,7 @@ jobs:
     - uses: actions-rs/cargo@v1
       with:
         command: test
-        args: --release
+        args: --release --all-features
 
   clippy:
     runs-on: ubuntu-20.04
@@ -97,4 +97,4 @@ jobs:
       with:
         name: Clippy Report
         token: ${{ secrets.GITHUB_TOKEN }}
-        args: --release
+        args: --release --all-features
