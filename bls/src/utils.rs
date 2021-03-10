@@ -27,3 +27,32 @@ pub fn big_int_from_bytes_be<R: std::io::Read>(reader: &mut R) -> BigInteger768 
 
     BigInteger768::new(res)
 }
+
+/// Transforms a vector of little endian bits into a u8.
+pub fn byte_from_le_bits(bits: &[bool]) -> u8 {
+    assert!(bits.len() <= 8);
+
+    let mut byte = 0;
+    let mut base = 1;
+
+    for i in 0..bits.len() {
+        if bits[i] {
+            byte += base;
+        }
+        base *= 2;
+    }
+
+    byte
+}
+
+/// Transforms a u8 into a vector of little endian bits.
+pub fn byte_to_le_bits(mut byte: u8) -> Vec<bool> {
+    let mut bits = vec![];
+
+    for _ in 0..8 {
+        bits.push(byte % 2 != 0);
+        byte >>= 1;
+    }
+
+    bits
+}

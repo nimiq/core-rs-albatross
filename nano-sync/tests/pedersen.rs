@@ -6,7 +6,7 @@ use ark_relations::r1cs::ConstraintSystem;
 use ark_std::test_rng;
 use rand::RngCore;
 
-use nimiq_nano_primitives::utils::bytes_to_bits;
+use nimiq_bls::utils::bytes_to_bits;
 use nimiq_nano_sync::gadgets::mnt4::PedersenHashGadget;
 use nimiq_nano_sync::primitives::{pedersen_generators, pedersen_hash};
 

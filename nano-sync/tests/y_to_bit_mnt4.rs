@@ -6,7 +6,8 @@ use ark_r1cs_std::R1CSVar;
 use ark_relations::r1cs::ConstraintSystem;
 use ark_std::{test_rng, UniformRand};
 
-use nimiq_nano_primitives::{bytes_to_bits, serialize_g1_mnt4, serialize_g2_mnt4};
+use nimiq_bls::utils::bytes_to_bits;
+use nimiq_nano_primitives::{serialize_g1_mnt4, serialize_g2_mnt4};
 use nimiq_nano_sync::gadgets::mnt6::YToBitGadget;
 
 #[test]

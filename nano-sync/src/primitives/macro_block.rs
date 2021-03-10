@@ -3,7 +3,7 @@ use ark_ec::ProjectiveCurve;
 use ark_ff::Zero;
 use ark_mnt6_753::{Fr, G1Projective};
 
-use nimiq_nano_primitives::bytes_to_bits;
+use nimiq_bls::utils::bytes_to_bits;
 
 use crate::constants::VALIDATOR_SLOTS;
 use crate::primitives::{pedersen_generators, pedersen_hash};

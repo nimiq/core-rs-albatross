@@ -9,15 +9,8 @@ repository = "https://github.com/nimiq/core-rs-albatross"
 edition = "2018"
 
 [dependencies]
-ark-std = { git = "https://github.com/arkworks-rs/utils" }
-ark-ff = { git = "https://github.com/arkworks-rs/algebra" }
-ark-serialize = { git = "https://github.com/arkworks-rs/algebra" }
 ark-ec = { git = "https://github.com/arkworks-rs/algebra" }
-ark-relations = { git = "https://github.com/arkworks-rs/snark" }
-ark-mnt4-753 = { git = "https://github.com/arkworks-rs/curves", features = ["r1cs"] }
-ark-mnt6-753 = { git = "https://github.com/arkworks-rs/curves", features = ["r1cs"] }
-ark-crypto-primitives = { git = "https://github.com/arkworks-rs/crypto-primitives", branch = "main", features = ["r1cs"] }
-ark-r1cs-std = { git = "https://github.com/arkworks-rs/r1cs-std" }
-ark-groth16 = { git = "https://github.com/arkworks-rs/groth16", features = ["r1cs"] }
+ark-mnt4-753 = { git = "https://github.com/arkworks-rs/curves" }
+ark-mnt6-753 = { git = "https://github.com/arkworks-rs/curves" }
 
 nimiq-bls = { path = "../bls", version = "0.1" }

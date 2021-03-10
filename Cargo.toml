@@ -59,5 +59,8 @@ opt-level = 3
 [profile.dev.package.nimiq-nano-sync]
 opt-level = 3
 
+[profile.dev.package.nimiq-nano-primitives]
+opt-level = 3
+
 [profile.test.package.nimiq-nano-sync]
 opt-level = 3

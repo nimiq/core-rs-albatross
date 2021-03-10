@@ -11,8 +11,8 @@ use rand::prelude::SliceRandom;
 use rand::RngCore;
 
 use nimiq_nano_sync::constants::{EPOCH_LENGTH, MIN_SIGNERS, VALIDATOR_SLOTS};
-use nimiq_nano_sync::{pk_tree_construct, primitives::MacroBlock};
 use nimiq_nano_sync::NanoZKP;
+use nimiq_nano_sync::{pk_tree_construct, primitives::MacroBlock};
 
 fn main() {
     println!("====== Generating random inputs ======");

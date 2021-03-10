@@ -7,7 +7,7 @@ use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisE
 use crate::constants::{PK_TREE_BREADTH, PK_TREE_DEPTH, VALIDATOR_SLOTS};
 use crate::gadgets::mnt4::{MerkleTreeGadget, PedersenHashGadget, SerializeGadget};
 use crate::primitives::pedersen_generators;
-use nimiq_nano_primitives::utils::unpack_inputs;
+use crate::utils::unpack_inputs;
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 /// This is the leaf subcircuit of the PKTreeCircuit. This circuit main function is to process the

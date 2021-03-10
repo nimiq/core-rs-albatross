@@ -10,7 +10,7 @@ use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisE
 
 use crate::gadgets::mnt4::VKCommitmentGadget;
 use crate::primitives::pedersen_generators;
-use nimiq_nano_primitives::utils::{prepare_inputs, unpack_inputs};
+use crate::utils::{prepare_inputs, unpack_inputs};
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 /// This is the merger circuit. It takes as inputs an initial state commitment, a final state commitment

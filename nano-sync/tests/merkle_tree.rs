@@ -6,9 +6,9 @@ use ark_relations::r1cs::ConstraintSystem;
 use ark_std::test_rng;
 use rand::RngCore;
 
+use nimiq_bls::utils::{byte_from_le_bits, bytes_to_bits};
 use nimiq_nano_primitives::{
-    byte_from_le_bits, bytes_to_bits, merkle_tree_construct, merkle_tree_prove,
-    merkle_tree_verify, serialize_g1_mnt6
+    merkle_tree_construct, merkle_tree_prove, merkle_tree_verify, serialize_g1_mnt6,
 };
 use nimiq_nano_sync::gadgets::mnt4::MerkleTreeGadget;
 use nimiq_nano_sync::primitives::{pedersen_generators, pedersen_hash};

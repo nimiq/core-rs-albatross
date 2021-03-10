@@ -1,12 +1,12 @@
 use std::cmp;
 
 use ark_mnt6_753::G1Projective;
-
-use nimiq_bls::{pedersen::{pedersen_generators, pedersen_hash}, utils::bytes_to_bits};
-use crate::{
-    serialize::serialize_g1_mnt6,
-    utils::byte_from_le_bits,
+use nimiq_bls::{
+    pedersen::{pedersen_generators, pedersen_hash},
+    utils::*,
 };
+
+use crate::serialize::serialize_g1_mnt6;
 
 /// Creates a Merkle tree from the given inputs, as a vector of vectors of booleans, and outputs
 /// the root. Each vector of booleans is meant to be one leaf. Each leaf can be of a different

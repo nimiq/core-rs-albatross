@@ -6,8 +6,8 @@ use ark_mnt6_753::G2Projective;
 use ark_relations::r1cs::SynthesisError;
 use ark_serialize::SerializationError;
 use constants::{PK_TREE_BREADTH, VALIDATOR_SLOTS};
-use thiserror::Error;
 use nimiq_nano_primitives::pk_tree_construct as pk_t_c;
+use thiserror::Error;
 
 // Re-export big-endian serialization of algebra types.
 pub use nimiq_bls::compression;
@@ -21,6 +21,7 @@ pub mod gadgets;
 pub mod primitives;
 mod prove;
 mod setup;
+pub mod utils;
 mod verify;
 
 /// This the main struct for the nano-sync crate. It provides methods to setup (create the

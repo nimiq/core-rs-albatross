@@ -1,6 +1,7 @@
 use ark_mnt6_753::G2Projective;
 
-use nimiq_nano_primitives::{bytes_to_bits, serialize_g1_mnt6};
+use nimiq_bls::utils::bytes_to_bits;
+use nimiq_nano_primitives::serialize_g1_mnt6;
 
 use crate::pk_tree_construct;
 use crate::primitives::{pedersen_generators, pedersen_hash};

@@ -11,7 +11,8 @@ use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisE
 use ark_std::test_rng;
 use rand::RngCore;
 
-use nimiq_nano_primitives::{bytes_to_bits, pack_inputs, prepare_inputs, unpack_inputs};
+use nimiq_bls::utils::bytes_to_bits;
+use nimiq_nano_sync::utils::{pack_inputs, prepare_inputs, unpack_inputs};
 
 const NUMBER_OF_BITS: usize = 1024;
 
