@@ -209,7 +209,7 @@ impl<N: ValidatorNetwork + 'static> Stream for TendermintAggregations<N> {
             }
         }
 
-        // empty out the input stream dispatching messages tothe appropriate aggregations
+        // empty out the input stream dispatching messages to the appropriate aggregations
         while let Poll::Ready(message) = self.input.poll_next_unpin(cx) {
             match message {
                 Some(message) => {

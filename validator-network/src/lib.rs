@@ -25,9 +25,9 @@ pub type MessageStream<TMessage, TPeerId> =
 /// Peers are denoted by a usize identifier which deterministically identifies them.
 #[async_trait]
 pub trait ValidatorNetwork: Send + Sync {
-    type Error: std::error::Error;
+    type Error: std::error::Error + Send + 'static;
     type PeerType: Peer;
-    type PubsubId: PubsubId<<Self::PeerType as Peer>::Id>;
+    type PubsubId: PubsubId<<Self::PeerType as Peer>::Id> + Send;
 
     /// Tells the validator network the validator keys for the current set of active validators. The keys must be
     /// ordered, such that the k-th entry is the validator with ID k.

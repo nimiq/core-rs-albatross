@@ -6,7 +6,7 @@ use futures::stream::{BoxStream, Stream, StreamExt};
 use futures::task::{Context, Poll};
 
 use beserial::{Deserialize, Serialize};
-use nimiq_block_albatross::{MacroBlock, MacroHeader, MultiSignature, TendermintStep};
+use nimiq_block_albatross::{MacroBlock, MacroHeader, MultiSignature, SignedTendermintProposal, TendermintStep};
 use nimiq_block_production_albatross::BlockProducer;
 use nimiq_blockchain_albatross::{AbstractBlockchain, Blockchain};
 use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
@@ -66,6 +66,7 @@ impl ProduceMacroBlock {
         signing_key: bls::KeyPair, // probably SecretKey is enough (it is for the handel part of it).
         validator_id: u16,
         state: Option<PersistedMacroState<TValidatorNetwork>>,
+        proposal_stream: BoxStream<'static, (SignedTendermintProposal, <TValidatorNetwork as ValidatorNetwork>::PubsubId)>,
     ) -> Self {
         // get validators for current epoch
         let active_validators = blockchain.current_validators().unwrap();
@@ -80,6 +81,7 @@ impl ProduceMacroBlock {
             blockchain.clone(),
             block_producer,
             blockchain.head().block_number() + 1,
+            proposal_stream,
         );
 
         let state_opt = state.map(|s| TendermintState {

@@ -26,21 +26,6 @@ use utils::time::OffsetTime;
 use crate::aggregation::tendermint::HandelTendermintAdapter;
 use std::ops::Deref;
 
-// TODO create stream immediately
-
-struct ProposalTopic;
-impl Topic for ProposalTopic {
-    type Item = SignedTendermintProposal;
-
-    fn topic(&self) -> String {
-        "tendermint-proposal".to_owned()
-    }
-
-    fn validate(&self) -> bool {
-        false
-    }
-}
-
 /// The struct that interfaces with the Tendermint crate. It only has to implement the
 /// TendermintOutsideDeps trait in order to do this.
 pub struct TendermintInterface<N: ValidatorNetwork> {
@@ -64,7 +49,7 @@ pub struct TendermintInterface<N: ValidatorNetwork> {
     pub cache_body: Option<MacroBody>,
 
     proposal_stream:
-        Option<BoxStream<'static, (SignedTendermintProposal, <N as ValidatorNetwork>::PubsubId)>>,
+        BoxStream<'static, (SignedTendermintProposal, <N as ValidatorNetwork>::PubsubId)>,
 }
 
 #[async_trait]
@@ -157,17 +142,6 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
         proposal: Self::ProposalTy,
         valid_round: Option<u32>,
     ) -> Result<(), TendermintError> {
-        // Get the subscription stream from the network and store it if necessary
-        // This needs to be done here, as publishing on a topic is only allowed when also subscribed to it.
-        if self.proposal_stream.is_none() {
-            let stream_result = self.network.subscribe(&ProposalTopic).await;
-            if let Err(err) = stream_result {
-                panic!("Could not open proposal stream: {:?}", err);
-            } else {
-                self.proposal_stream = stream_result.ok();
-            }
-        }
-
         // Get our validator index.
         // TODO: This code block gets this validators position in the validators struct by searching it
         //  with its public key. This is an insane way of doing this. Just start saving the validator
@@ -369,17 +343,7 @@ impl<N: ValidatorNetwork + 'static> TendermintInterface<N> {
         validator_id: u16,
         validator_key: &PublicKey,
     ) -> TendermintProposal {
-        // Get the subscription stream from the network and store it if necessary
-        if self.proposal_stream.is_none() {
-            let stream_result = self.network.subscribe(&ProposalTopic).await;
-            if let Err(err) = stream_result {
-                panic!("Could not open proposal stream: {:?}", err);
-            } else {
-                self.proposal_stream = stream_result.ok();
-            }
-        }
-
-        while let Some((msg, _)) = self.proposal_stream.as_mut().unwrap().next().await {
+        while let Some((msg, _)) = self.proposal_stream.as_mut().next().await {
             // Check if the proposal comes from the correct validator and the signature of the
             // proposal is valid. If not, keep awaiting.
             trace!("Received Proposal from {}", &msg.signer_idx);
@@ -410,6 +374,7 @@ impl<N: ValidatorNetwork + 'static> TendermintInterface<N> {
         blockchain: Arc<Blockchain>,
         block_producer: BlockProducer,
         block_height: u32,
+        proposal_stream: BoxStream<'static, (SignedTendermintProposal, <N as ValidatorNetwork>::PubsubId)>
     ) -> Self {
         // Create the aggregation object.
         let aggregation_adapter = HandelTendermintAdapter::new(
@@ -429,7 +394,7 @@ impl<N: ValidatorNetwork + 'static> TendermintInterface<N> {
             block_producer,
             blockchain,
             offset_time: OffsetTime::default(),
-            proposal_stream: None,
+            proposal_stream,
         }
     }
 }

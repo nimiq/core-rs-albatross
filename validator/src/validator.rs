@@ -2,11 +2,10 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
-use futures::task::{Context, Poll};
-use futures::{Future, StreamExt};
-use tokio::sync::{broadcast, mpsc};
+use futures::{Future, StreamExt, stream::BoxStream, task::{Context, Poll, noop_waker_ref}};
+use tokio::{sync::{broadcast, mpsc}, task::JoinHandle};
 
-use block_albatross::{Block, BlockType, ViewChange, ViewChangeProof};
+use block_albatross::{Block, BlockType, SignedTendermintProposal, ViewChange, ViewChangeProof};
 use blockchain_albatross::{AbstractBlockchain, BlockchainEvent, ForkEvent, PushResult};
 use bls::CompressedPublicKey;
 use consensus_albatross::{
@@ -14,7 +13,7 @@ use consensus_albatross::{
 };
 use database::{Database, Environment, ReadTransaction, WriteTransaction};
 use hash::Blake2bHash;
-use network_interface::network::Network;
+use network_interface::network::{Network, Topic};
 use nimiq_block_production_albatross::BlockProducer;
 use nimiq_tendermint::TendermintReturn;
 use nimiq_validator_network::ValidatorNetwork;
@@ -22,6 +21,19 @@ use nimiq_validator_network::ValidatorNetwork;
 use crate::micro::{ProduceMicroBlock, ProduceMicroBlockEvent};
 use crate::r#macro::{PersistedMacroState, ProduceMacroBlock};
 use crate::slash::ForkProofPool;
+
+pub struct ProposalTopic;
+impl Topic for ProposalTopic {
+    type Item = SignedTendermintProposal;
+
+    fn topic(&self) -> String {
+        "tendermint-proposal".to_owned()
+    }
+
+    fn validate(&self) -> bool {
+        false
+    }
+}
 
 enum ValidatorStakingState {
     Active,
@@ -52,6 +64,8 @@ pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork + 's
     wallet_key: Option<keys::KeyPair>,
     database: Database,
     env: Environment,
+
+    proposal_task: Option<JoinHandle<Result< BoxStream<'static, (<ProposalTopic as Topic>::Item, TValidatorNetwork::PubsubId)>, TValidatorNetwork::Error>>>,
 
     consensus_event_rx: broadcast::Receiver<ConsensusEvent<TNetwork>>,
     blockchain_event_rx: mpsc::UnboundedReceiver<BlockchainEvent>,
@@ -103,6 +117,13 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             read_transaction.get(&database, Self::MACRO_STATE_KEY)
         };
 
+        // Spawn into task so the lifetime does not expire.
+        // Also start executing immediately as we will need to wait for this on the first macro block.
+        let nw = network.clone();
+        let proposal_task = Some(tokio::spawn(async move {
+            nw.subscribe(&ProposalTopic).await
+        }));
+
         let mut this = Self {
             consensus: consensus.proxy(),
             network,
@@ -110,6 +131,8 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             wallet_key,
             database,
             env,
+
+            proposal_task,
 
             consensus_event_rx,
             blockchain_event_rx,
@@ -184,7 +207,6 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
 
         if !self.is_active() {
             log::debug!("Validator not active");
-
             return;
         }
 
@@ -196,6 +218,49 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                     self.consensus.mempool.clone(),
                     self.signing_key.clone(),
                 );
+
+                let (mut sender, receiver) = mpsc::channel::<(<ProposalTopic as Topic>::Item, TValidatorNetwork::PubsubId)>(2);
+
+                if let Some(task) = self.proposal_task.take() {
+                    self.proposal_task = Some(tokio::spawn(async move {
+                        if let Ok(stream) = task.await {
+                            if let Ok(mut stream) = stream {
+                                while let Some(item) = stream.next().await {
+                                    let mut cx = Context::from_waker(noop_waker_ref());
+                                    match sender.poll_ready(&mut cx) {
+                                        Poll::Pending => {
+                                            // Todo: buffer proposal if necessary.
+                                            log::debug!("Proposal recipient not able to receive new Messages. Waiting to try with the next proposal!");
+                                        },
+                                        Poll::Ready(Ok(_)) => {
+                                            if let Err(_err) = sender.send(item).await {
+                                                log::debug!("failed to send message through sender, even though poll_ready returned Ok");
+                                            }
+                                        },
+                                        Poll::Ready(Err(_err)) => {
+                                            // recipient is no longer present, leave the loop and return the subscription stream.
+                                            log::trace!("Sonder for proposals no longer has a recipient, Block was produced!");
+                                            break;
+                                        }
+                                    }
+                                }
+                                let mut cx = Context::from_waker(noop_waker_ref());
+                                while let Poll::Ready(Some(_)) = stream.poll_next_unpin(&mut cx) {
+                                    // noop. Empty out the stream before returning it, dropping all accumulated messages.
+                                }
+                                Ok(stream)
+                            } else {
+                                // Todo: Recover from this?
+                                panic!("subscription stream returned err");
+                            }
+                        } else {
+                            // Todo: Recover from this?
+                            panic!("failed to join subscription task");
+                        }
+                    }));
+                } else {
+                    panic!("There is no proposal task. Validator dysfunctional");
+                }
 
                 // Take the current state and see if it is applicable to the current height.
                 // We do not need to keep it as it is persisted.
@@ -220,6 +285,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                     self.signing_key.clone(),
                     self.validator_id(),
                     state,
+                    receiver.boxed(),
                 ));
             }
             BlockType::Micro => {
