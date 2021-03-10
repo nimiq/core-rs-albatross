@@ -16,26 +16,30 @@ use nimiq_network_interface::network::NetworkEvent;
 use nimiq_utils::time::OffsetTime;
 
 use crate::{
+    connection_pool::{
+        behaviour::{ConnectionPoolBehaviour, ConnectionPoolEvent},
+        handler::HandlerError as PeersError,
+    },
     discovery::{
         behaviour::{DiscoveryBehaviour, DiscoveryEvent},
         handler::HandlerError as DiscoveryError,
         peer_contacts::PeerContactBook,
     },
-    /*limit::{
-        behaviour::{LimitBehaviour, LimitEvent},
-        handler::{HandlerError as LimitError, HandlerInEvent as LimitAction},
-    },*/
     message::{behaviour::MessageBehaviour, handler::HandlerError as MessageError, peer::Peer},
     network::Config,
 };
 
 pub type NimiqNetworkBehaviourError = EitherError<
     EitherError<
-        EitherError<EitherError<DiscoveryError, MessageError>, std::io::Error>,
+        EitherError<
+            EitherError<EitherError<DiscoveryError, PeersError>, MessageError>,
+            std::io::Error,
+        >,
         GossipsubHandlerError,
     >,
     ReadOneError,
 >;
+// EitherError<EitherError<EitherError<EitherError<EitherError<DiscoveryError, MessageError>, std::io::Error>, GossipsubHandlerError>, ReadOneError>, PeersError>;
 
 #[derive(Debug)]
 pub enum NimiqEvent {
@@ -43,6 +47,8 @@ pub enum NimiqEvent {
     Dht(KademliaEvent),
     Gossip(GossipsubEvent),
     Identify(IdentifyEvent),
+    Discovery(DiscoveryEvent),
+    Peers(ConnectionPoolEvent),
 }
 
 impl From<NetworkEvent<Peer>> for NimiqEvent {
@@ -54,6 +60,12 @@ impl From<NetworkEvent<Peer>> for NimiqEvent {
 impl From<KademliaEvent> for NimiqEvent {
     fn from(event: KademliaEvent) -> Self {
         Self::Dht(event)
+    }
+}
+
+impl From<ConnectionPoolEvent> for NimiqEvent {
+    fn from(event: ConnectionPoolEvent) -> Self {
+        Self::Peers(event)
     }
 }
 
@@ -69,10 +81,17 @@ impl From<IdentifyEvent> for NimiqEvent {
     }
 }
 
+impl From<DiscoveryEvent> for NimiqEvent {
+    fn from(event: DiscoveryEvent) -> Self {
+        Self::Discovery(event)
+    }
+}
+
 #[derive(NetworkBehaviour)]
 #[behaviour(out_event = "NimiqEvent", poll_method = "poll_event")]
 pub struct NimiqBehaviour {
     pub discovery: DiscoveryBehaviour,
+    pub peers: ConnectionPoolBehaviour,
     pub message: MessageBehaviour,
     //pub limit: LimitBehaviour,
     pub kademlia: Kademlia<MemoryStore>,
@@ -99,9 +118,10 @@ impl NimiqBehaviour {
         let discovery = DiscoveryBehaviour::new(
             config.discovery,
             config.keypair.clone(),
-            peer_contact_book,
+            peer_contact_book.clone(),
             clock,
         );
+        let peers = ConnectionPoolBehaviour::new(peer_contact_book);
 
         let message = MessageBehaviour::new(config.message);
 
@@ -123,6 +143,7 @@ impl NimiqBehaviour {
         Self {
             discovery,
             message,
+            peers,
             //limit,
             kademlia,
             gossipsub,
@@ -216,6 +237,13 @@ impl NetworkBehaviourEventProcess<GossipsubEvent> for NimiqBehaviour {
 
 impl NetworkBehaviourEventProcess<IdentifyEvent> for NimiqBehaviour {
     fn inject_event(&mut self, event: IdentifyEvent) {
+        log::trace!("NimiqBehaviour::inject_event: {:?}", event);
+        self.emit_event(event);
+    }
+}
+
+impl NetworkBehaviourEventProcess<ConnectionPoolEvent> for NimiqBehaviour {
+    fn inject_event(&mut self, event: ConnectionPoolEvent) {
         log::trace!("NimiqBehaviour::inject_event: {:?}", event);
         self.emit_event(event);
     }

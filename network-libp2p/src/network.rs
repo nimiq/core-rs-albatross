@@ -26,7 +26,7 @@ use libp2p::{
     identity::Keypair,
     kad::{GetRecordOk, KademliaConfig, KademliaEvent, QueryId, QueryResult, Quorum, Record},
     noise,
-    swarm::{NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, SwarmBuilder, SwarmEvent},
+    swarm::{NetworkBehaviourAction, NotifyHandler, SwarmBuilder, SwarmEvent},
     tcp, websocket, yamux, Multiaddr, PeerId, Swarm, Transport,
 };
 use thiserror::Error;
@@ -590,6 +590,8 @@ impl Network {
                             }
                         }
                     }
+                    NimiqEvent::Discovery(_e) => {}
+                    NimiqEvent::Peers(_e) => {}
                 }
             }
             _ => {}
@@ -1052,12 +1054,9 @@ mod tests {
             self.next_address += 1;
 
             let clock = Arc::new(OffsetTime::new());
-            let net = Network::new(
-                vec![address.clone()],
-                clock,
-                network_config(address.clone()),
-            )
-            .await;
+            let net = Network::new(clock, network_config(address.clone())).await;
+            net.listen_on_addresses(vec![address.clone()]).await;
+
             tracing::debug!(address = ?address, peer_id = ?net.local_peer_id, "creating node");
 
             if let Some(dial_address) = self.addresses.first() {
@@ -1090,18 +1089,11 @@ mod tests {
         let addr1 = multiaddr![Memory(thread_rng().gen::<u64>())];
         let addr2 = multiaddr![Memory(thread_rng().gen::<u64>())];
 
-        let net1 = Network::new(
-            vec![addr1.clone()],
-            Arc::new(OffsetTime::new()),
-            network_config(addr1.clone()),
-        )
-        .await;
-        let net2 = Network::new(
-            vec![addr2.clone()],
-            Arc::new(OffsetTime::new()),
-            network_config(addr2.clone()),
-        )
-        .await;
+        let net1 = Network::new(Arc::new(OffsetTime::new()), network_config(addr1.clone())).await;
+        net1.listen_on_addresses(vec![addr1.clone()]).await;
+
+        let net2 = Network::new(Arc::new(OffsetTime::new()), network_config(addr2.clone())).await;
+        net2.listen_on_addresses(vec![addr2.clone()]).await;
 
         tracing::debug!(address = ?addr1, peer_id = ?net1.local_peer_id, "Network 1");
         tracing::debug!(address = ?addr2, peer_id = ?net2.local_peer_id, "Network 2");

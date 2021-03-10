@@ -119,7 +119,7 @@ pub struct DiscoveryHandler {
     peer_contact_book: Arc<RwLock<PeerContactBook>>,
 
     /// The peer contact of the peer we're connected to.
-    peer_contact: Option<SignedPeerContact>,
+    _peer_contact: Option<SignedPeerContact>,
 
     /// The addresses which we observed for the other peer.
     observed_addresses: Vec<Multiaddr>,
@@ -165,7 +165,7 @@ impl DiscoveryHandler {
             config,
             keypair,
             peer_contact_book,
-            peer_contact: None,
+            _peer_contact: None,
             observed_addresses: vec![],
             challenge_nonce: ChallengeNonce::generate(),
             state: HandlerState::Init,
@@ -371,8 +371,6 @@ impl ProtocolsHandler for DiscoveryHandler {
                                     protocols,
                                     user_agent: _,
                                 } => {
-                                    let mut peer_contact_book = self.peer_contact_book.write();
-
                                     // Check if the received genesis hash matches.
                                     if genesis_hash != self.config.genesis_hash {
                                         return Poll::Ready(ProtocolsHandlerEvent::Close(
@@ -382,6 +380,8 @@ impl ProtocolsHandler for DiscoveryHandler {
                                             },
                                         ));
                                     }
+
+                                    let mut peer_contact_book = self.peer_contact_book.write();
 
                                     // Update our own peer contact given the observed addresses we received
                                     peer_contact_book
@@ -485,10 +485,11 @@ impl ProtocolsHandler for DiscoveryHandler {
 
                                     // Insert the initial set of peer contacts into the peer contact book.
                                     // TODO: This doesn't actually filter and just assumes the peer already filtered.
+                                    log::trace!("inserting peers: {:?}", &peer_contacts);
                                     peer_contact_book.insert_all(peer_contacts);
 
                                     // Store peer contact in handler
-                                    self.peer_contact = Some(peer_contact.clone());
+                                    self._peer_contact = Some(peer_contact.clone());
 
                                     // Timer for periodic updates
                                     if let Some(mut update_interval) = update_interval {

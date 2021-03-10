@@ -11,6 +11,7 @@ use libp2p::{
     Multiaddr, PeerId,
 };
 use parking_lot::RwLock;
+use rand::{seq::IteratorRandom, thread_rng};
 
 use beserial::{Deserialize, Serialize};
 
@@ -505,6 +506,26 @@ impl PeerContactBook {
                 None
             }
         })
+    }
+
+    pub fn get_next_connections(
+        &self,
+        count: usize,
+        connected_peers: &HashSet<PeerId>,
+    ) -> Vec<Arc<PeerContactInfo>> {
+        let mut rng = thread_rng();
+        let mut connected_peers = connected_peers.clone();
+        connected_peers.insert(self.self_peer_contact.peer_id().clone());
+        self.peer_contacts
+            .iter()
+            .filter_map(|peer_contact| {
+                if !connected_peers.contains(peer_contact.0) {
+                    Some(peer_contact.1.clone())
+                } else {
+                    None
+                }
+            })
+            .choose_multiple(&mut rng, count)
     }
 
     pub fn self_add_addresses<I: IntoIterator<Item = Multiaddr>>(&mut self, addresses: I) {

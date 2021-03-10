@@ -67,7 +67,7 @@ impl DiscoveryConfig {
             protocols_filter: Protocols::all(),
             services_filter: Services::all(),
             house_keeping_interval: Duration::from_secs(60),
-            keep_alive: KeepAlive::No,
+            keep_alive: KeepAlive::Yes,
         }
     }
 }
@@ -144,7 +144,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         DiscoveryHandler::new(
             self.config.clone(),
             self.keypair.clone(),
-            Arc::clone(&self.peer_contact_book),
+            self.peer_contact_book(),
         )
     }
 
