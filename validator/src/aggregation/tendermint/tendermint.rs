@@ -6,10 +6,12 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::time;
 
-use futures::future;
-use futures::sink::Sink;
-use futures::stream::{BoxStream, SelectAll, Stream, StreamExt};
-use futures::task::{Context, Poll};
+use futures::{
+    future,
+    sink::Sink,
+    stream::{BoxStream, SelectAll, Stream, StreamExt},
+    task::{Context, Poll},
+};
 
 use futures_locks::RwLock;
 
@@ -309,7 +311,15 @@ where
         let input = Box::pin(
             network
                 .receive::<LevelUpdateMessage<TendermintContribution, TendermintIdentifier>>()
-                .map(move |msg| msg.0),
+                .filter_map(move |msg| {
+                    future::ready(
+                        if msg.0.tag.block_number == block_height {
+                            Some(msg.0)
+                        } else {
+                            None
+                        }
+                    )
+                })
         );
 
         let validator_registry = Arc::new(ValidatorRegistry::new(active_validators));
@@ -395,7 +405,7 @@ where
                             };
                         }
                         TendermintAggregationEvent::Aggregation(r, s, c) => {
-                            debug!("New Aggregate for {}-{:?}: {:?}", &r, &s, &c);
+                            trace!("New Aggregate for {}-{:?}: {:?}", &r, &s, &c);
                             // There is a new aggregate, check if it is a better aggregate for (round, step) than we curretly have
                             // if so, store it.
                             let contribution = current_bests
@@ -642,56 +652,29 @@ where
 
                     // iterate all proposals present in this contribution
                     for (proposal, (_, weight)) in map.iter() {
-                        if proposal.is_none() {
-                            // Nil vote has f+1
-                            // if *weight > policy::SLOTS as usize - policy::TWO_THIRD_SLOTS as usize + 1usize {
-                            //     if step == TendermintStep::PreCommit {
-                            //         // PreCommit Aggreations are never requested again, so the aggregation can be canceled.
-                            //         self.event_sender
-                            //             .send(AggregationEvent::Cancel(round, step))
-                            //             .await
-                            //             .map_err(|err| {
-                            //                 debug!("event_sender.send failed: {:?}", err);
-                            //                 TendermintError::AggregationError
-                            //             })?;
-                            //     }
-                            //     error!("Tendermint: {}-{:?}: Nil vote > f+1", &round, &step);
-                            //     return Ok(result);
-                            // }
+                        if *weight > policy::TWO_THIRD_SLOTS as usize {
+                            if step == TendermintStep::PreCommit {
+                                // PreCommit Aggreations are never requested again, so the aggregation can be canceled.
+                                self.event_sender
+                                    .send(AggregationEvent::Cancel(round, step))
+                                    .await
+                                    .map_err(|err| {
+                                        debug!("event_sender.send failed: {:?}", err);
+                                        TendermintError::AggregationError
+                                    })?;
+                            }
+                            trace!("Tendermint: {}-{:?}: A proposal has > 2f+1", &round, &step);
+                            return Ok(result);
+                        }
 
-                            // if this node has signed a proposal not nil this nil vote counts towards the combined weight
-                            if proposal_hash.is_some() {
-                                combined_weight += weight;
-                            }
-                        } else {
-                            // any individual proposal got 2f+1 vote weight
-                            if *weight > policy::TWO_THIRD_SLOTS as usize {
-                                if step == TendermintStep::PreCommit {
-                                    // PreCommit Aggreations are never requested again, so the aggregation can be canceled.
-                                    self.event_sender
-                                        .send(AggregationEvent::Cancel(round, step))
-                                        .await
-                                        .map_err(|err| {
-                                            debug!("event_sender.send failed: {:?}", err);
-                                            TendermintError::AggregationError
-                                        })?;
-                                }
-                                trace!(
-                                    "{}-{:?}: Individual proposal has > 2f + 1 votes",
-                                    &round,
-                                    &step
-                                );
-                                return Ok(result);
-                            }
-                            // if proposal is not the same as the one this node signed, then it contributes to the combined weight
-                            if proposal != &proposal_hash {
-                                combined_weight += weight;
-                            }
+                        // if this node has signed a different proposal this vote counts towards the combined weight
+                        if proposal != &proposal_hash {
+                            combined_weight += weight;
                         }
                     }
 
-                    // combined weight of all proposals exclluding the one this node signed reached 2f+1
-                    if combined_weight > policy::SLOTS as usize {
+                    // combined weight of all proposals excluding the one this node signed reached 2f+1
+                    if combined_weight > policy::TWO_THIRD_SLOTS as usize {
                         if step == TendermintStep::PreCommit {
                             // PreCommit Aggreations are never requested again, so the aggregation can be canceled.
                             self.event_sender
@@ -702,10 +685,7 @@ where
                                     TendermintError::AggregationError
                                 })?;
                         }
-                        debug!(
-                            "Tendermint: {}-{:?}: All other proposals have > f + 1 votes",
-                            &round, &step
-                        );
+                        debug!("Tendermint: {}-{:?}: All other proposals have > 2f + 1 votes", &round, &step);
                         return Ok(result);
                     }
                 }
