@@ -113,16 +113,22 @@ async fn main_inner() -> Result<(), Error> {
         interval.tick().await;
 
         if show_statistics {
-            let network_info = client.network().network_info().await.unwrap(); // handle error?
-            let head = client.blockchain_head().clone();
+            match client.network().network_info().await {
+                Ok(network_info) => {
+                    let head = client.blockchain_head().clone();
 
-            log::info!(
-                "Consensus established: {:?} - Head: #{} - {}, Peers: {}",
-                consensus.is_established(),
-                head.block_number(),
-                head.hash(),
-                network_info.num_peers()
-            );
+                    log::info!(
+                        "Consensus established: {:?} - Head: #{} - {}, Peers: {}",
+                        consensus.is_established(),
+                        head.block_number(),
+                        head.hash(),
+                        network_info.num_peers()
+                    );
+                }
+                Err(err) => {
+                    log::error!("Error retrieving NEtworkInfo: {:?}", err);
+                }
+            };
         }
     }
 }
