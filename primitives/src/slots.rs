@@ -139,7 +139,7 @@ impl Validators {
         let mut pks = vec![];
 
         for validator in self.iter() {
-            let pk = validator.public_key.compressed().uncompress().unwrap();
+            let pk = validator.public_key.uncompress().unwrap().clone();
 
             pks.append(&mut vec![pk; validator.num_slots() as usize]);
         }

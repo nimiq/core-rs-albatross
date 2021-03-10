@@ -103,7 +103,6 @@ impl ViewChangeProof {
                     let pk = validators
                         .get_validator(slot as u16)
                         .public_key
-                        .compressed()
                         .uncompress()
                         .expect("Failed to uncompress CompressedPublicKey");
                     aggregate.aggregate(&pk);
