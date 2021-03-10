@@ -1,4 +1,3 @@
-
 use std::str::FromStr;
 
 use beserial::{Deserialize, Serialize};
@@ -11,7 +10,7 @@ use nimiq_handel::update::LevelUpdate;
 use nimiq_hash::{Blake2bHasher, Hasher};
 
 use nimiq_primitives::account::ValidatorId;
-use nimiq_primitives::slots::{ValidatorsBuilder};
+use nimiq_primitives::slots::ValidatorsBuilder;
 
 #[test]
 fn it_can_convert_macro_block_into_slots() {

@@ -161,7 +161,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
     }
 
     fn inject_connected(&mut self, peer_id: &PeerId) {
-        self.connected_peers.insert(peer_id.clone());
+        self.connected_peers.insert(*peer_id);
     }
 
     fn inject_disconnected(&mut self, peer_id: &PeerId) {

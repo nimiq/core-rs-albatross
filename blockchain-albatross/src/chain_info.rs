@@ -11,7 +11,6 @@ use nimiq_hash::Blake2bHash;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
 
-
 use crate::SlashPushError;
 
 /// Struct that, for each block, keeps information relative to the chain the block is on.

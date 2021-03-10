@@ -113,11 +113,9 @@ impl StakingContract {
             Some(ValidatorEntry::new_active_validator(validator))
         } else {
             //  The else case is needed to ensure the validator_key still exists.
-            if let Some(validator) = self.inactive_validators_by_id.remove(&validator_id) {
-                Some(ValidatorEntry::new_inactive_validator(validator))
-            } else {
-                None
-            }
+            self.inactive_validators_by_id
+                .remove(&validator_id)
+                .map(ValidatorEntry::new_inactive_validator)
         }
     }
 
@@ -420,6 +418,7 @@ impl Deserialize for StakingContract {
             balance,
             active_validators_sorted,
             active_validators_by_id,
+            inactive_stake_by_address,
             inactive_validators_by_id,
             current_epoch_parking,
             previous_epoch_parking,
@@ -427,7 +426,6 @@ impl Deserialize for StakingContract {
             previous_lost_rewards,
             current_disabled_slots,
             previous_disabled_slots,
-            inactive_stake_by_address,
         })
     }
 }

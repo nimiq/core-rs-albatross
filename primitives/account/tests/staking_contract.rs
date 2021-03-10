@@ -819,32 +819,72 @@ fn it_can_apply_rededicate_stake_tx() {
 
     let mut contract = make_empty_contract();
     contract
-        .create_validator(validator_id1.clone(), bls_pair1.public_key.compress(), [1;20].into(), Coin::from_u64_unchecked(0))
+        .create_validator(
+            validator_id1.clone(),
+            bls_pair1.public_key.compress(),
+            [1; 20].into(),
+            Coin::from_u64_unchecked(0),
+        )
         .unwrap();
     contract
-        .create_validator(validator_id2.clone(), bls_pair2.public_key.compress(), [2;20].into(), Coin::from_u64_unchecked(0))
+        .create_validator(
+            validator_id2.clone(),
+            bls_pair2.public_key.compress(),
+            [2; 20].into(),
+            Coin::from_u64_unchecked(0),
+        )
         .unwrap();
     contract
-        .stake(Address::from(&ed25519_key_pair()), Coin::from_u64_unchecked(150000000), &validator_id1)
+        .stake(
+            Address::from(&ed25519_key_pair()),
+            Coin::from_u64_unchecked(150000000),
+            &validator_id1,
+        )
         .unwrap();
 
-
-    let tx_1 = make_self_transaction(SelfStakingTransactionData::RededicateStake{ from_validator_id: validator_id1.clone(), to_validator_id: validator_id2.clone() }, 50000000);
+    let tx_1 = make_self_transaction(
+        SelfStakingTransactionData::RededicateStake {
+            from_validator_id: validator_id1.clone(),
+            to_validator_id: validator_id2.clone(),
+        },
+        50000000,
+    );
     assert_eq!(contract.check_outgoing_transaction(&tx_1, 2, 0), Ok(()));
     assert_eq!(contract.commit_outgoing_transaction(&tx_1, 2, 0), Ok(None));
-    assert_eq!(StakingContract::check_incoming_transaction(&tx_1, 2, 0), Ok(()));
+    assert_eq!(
+        StakingContract::check_incoming_transaction(&tx_1, 2, 0),
+        Ok(())
+    );
     assert_eq!(contract.commit_incoming_transaction(&tx_1, 2, 0), Ok(None));
 
     // initial balance - moved stake - fees
-    assert_eq!(contract.get_validator(&validator_id1).unwrap().balance, Coin::from_u64_unchecked(150000000 - 50000000 - 100));
-    assert_eq!(contract.get_validator(&validator_id2).unwrap().balance, Coin::from_u64_unchecked(50000000));
+    assert_eq!(
+        contract.get_validator(&validator_id1).unwrap().balance,
+        Coin::from_u64_unchecked(150000000 - 50000000 - 100)
+    );
+    assert_eq!(
+        contract.get_validator(&validator_id2).unwrap().balance,
+        Coin::from_u64_unchecked(50000000)
+    );
 
     // revert transaction
-    assert_eq!(contract.revert_outgoing_transaction(&tx_1, 2, 0, None), Ok(()));
-    assert_eq!(contract.revert_incoming_transaction(&tx_1, 2, 0, None), Ok(()));
+    assert_eq!(
+        contract.revert_outgoing_transaction(&tx_1, 2, 0, None),
+        Ok(())
+    );
+    assert_eq!(
+        contract.revert_incoming_transaction(&tx_1, 2, 0, None),
+        Ok(())
+    );
 
-    assert_eq!(contract.get_validator(&validator_id1).unwrap().balance, Coin::from_u64_unchecked(150000000));
-    assert_eq!(contract.get_validator(&validator_id2).unwrap().balance, Coin::from_u64_unchecked(0));
+    assert_eq!(
+        contract.get_validator(&validator_id1).unwrap().balance,
+        Coin::from_u64_unchecked(150000000)
+    );
+    assert_eq!(
+        contract.get_validator(&validator_id2).unwrap().balance,
+        Coin::from_u64_unchecked(0)
+    );
 }
 
 #[test]

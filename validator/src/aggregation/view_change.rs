@@ -283,10 +283,8 @@ impl ViewChangeAggregation {
                 >::new(network.clone())),
             );
 
-            let mut stream = futures::stream::select(
-                aggregation.map(ViewChangeResult::ViewChange),
-                receiver,
-            );
+            let mut stream =
+                futures::stream::select(aggregation.map(ViewChangeResult::ViewChange), receiver);
             while let Some(msg) = stream.next().await {
                 match msg {
                     ViewChangeResult::FutureViewChange(vc, tag) => {

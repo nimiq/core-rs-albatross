@@ -48,10 +48,7 @@ impl Commitment {
 
     pub fn from_bytes(bytes: [u8; Commitment::SIZE]) -> Option<Self> {
         let compressed = CompressedEdwardsY(bytes);
-        match compressed.decompress() {
-            None => None,
-            Some(e) => Some(Commitment(e)),
-        }
+        compressed.decompress().map(Commitment)
     }
 }
 

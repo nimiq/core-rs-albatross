@@ -99,7 +99,11 @@ impl Validators {
         let mut pivot = self.num_validators() / 2;
         let mut last_pivot = 0usize;
         loop {
-            let pivot_diff = if pivot < last_pivot { last_pivot - pivot } else { pivot - last_pivot };
+            let pivot_diff = if pivot < last_pivot {
+                last_pivot - pivot
+            } else {
+                pivot - last_pivot
+            };
             last_pivot = pivot;
             let (start, end) = self.validators[pivot].slot_range;
             if slot < start {

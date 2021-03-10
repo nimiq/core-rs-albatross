@@ -36,8 +36,8 @@ impl PeerStream {
     ) -> Self {
         PeerStream {
             stream,
-            notifier,
             closed_flag,
+            notifier,
         }
     }
 

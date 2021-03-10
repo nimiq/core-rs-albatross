@@ -459,12 +459,8 @@ impl<
         // Poll the next_aggregate future. If it is still Poll::Pending return Poll::Pending as well. (hidden within ready!)
         let (aggregate, next_aggregation) = ready!(next_aggregation.poll_unpin(cx));
 
-        self.next_aggregation = match next_aggregation {
-            // If there is Some(next_agregation) set its next() future as the next output of this stream
-            Some(next_aggregation) => Some(next_aggregation.next().boxed()),
-            // If there is None set it as well so next time the sream is polled it will correctly signal that there are no more items coming.
-            None => None,
-        };
+        self.next_aggregation =
+            next_aggregation.map(|next_aggregation| next_aggregation.next().boxed());
         // At this point a new aggregate was returned so the Stream returns it as well.
         Poll::Ready(Some(aggregate))
     }

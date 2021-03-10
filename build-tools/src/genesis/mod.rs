@@ -147,9 +147,9 @@ impl GenesisBuilder {
     ) -> &mut Self {
         self.validators.push(config::GenesisValidator {
             validator_id,
-            validator_key,
             reward_address,
             balance,
+            validator_key,
         });
         self
     }
@@ -162,8 +162,8 @@ impl GenesisBuilder {
     ) -> &mut Self {
         self.stakes.push(config::GenesisStake {
             staker_address,
-            validator_id,
             balance,
+            validator_id,
         });
         self
     }

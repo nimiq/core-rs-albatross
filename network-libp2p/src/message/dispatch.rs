@@ -115,7 +115,7 @@ where
                             log::trace!("dispatching message to receiver: {:?}", data);
 
                             // Not sure why this still can fail, but if it does, we consider the receiver to be gone.
-                            if let Err(_) = tx.start_send((data, Arc::clone(peer))) {
+                            if tx.start_send((data, Arc::clone(peer))).is_err() {
                                 receiver_is_gone = true
                             }
                         }
@@ -186,7 +186,7 @@ where
             tracing::trace!("flushing");
             match Sink::<&CompilerShutUp>::poll_flush(sink, cx) {
                 Poll::Ready(Ok(())) => {}
-                Poll::Ready(Err(e)) => return Poll::Ready(Err(e.into())),
+                Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
                 Poll::Pending => return Poll::Pending,
             }
         }
@@ -194,7 +194,7 @@ where
         {
             let sink: Pin<&mut Framed<TokioAdapter<C>, MessageCodec>> = Pin::new(&mut self.framed);
             tracing::trace!("closing");
-            Sink::<&CompilerShutUp>::poll_close(sink, cx).map_err(|e| e.into())
+            Sink::<&CompilerShutUp>::poll_close(sink, cx).map_err(|e| e)
         }
     }
 

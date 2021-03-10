@@ -68,11 +68,7 @@ impl ConnectionInfo {
         self.state
     }
     pub fn peer_address(&self) -> Option<Arc<PeerAddress>> {
-        if let Some(ref peer_address) = self.peer_address {
-            Some(peer_address.clone())
-        } else {
-            None
-        }
+        self.peer_address.as_ref().cloned()
     }
     pub fn network_connection(&self) -> Option<&NetworkConnection> {
         self.network_connection.as_ref()

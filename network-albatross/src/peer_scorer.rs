@@ -69,10 +69,9 @@ impl PeerScorer {
         }
         candidates.sort_by(|a, b| a.1.cmp(&b.1));
         let rand_ind = OsRng.gen_range(0, usize::min(Self::PICK_SELECTION_SIZE, candidates.len()));
-        match candidates.get(rand_ind) {
-            Some((peer_address, _)) => Some(Arc::clone(peer_address)),
-            None => None,
-        }
+        candidates
+            .get(rand_ind)
+            .map(|(peer_address, _)| Arc::clone(peer_address))
     }
 
     fn find_candidates(
@@ -366,10 +365,7 @@ impl PeerScorer {
             }
         }
 
-        match self.connection_scores.last() {
-            None => None,
-            Some(tuple) => Some(tuple.1),
-        }
+        self.connection_scores.last().map(|tuple| tuple.1)
     }
 
     pub fn connection_scores(&self) -> &Vec<(ConnectionId, Score)> {

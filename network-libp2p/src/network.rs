@@ -244,7 +244,7 @@ pub struct GossipsubId<P> {
 
 impl PubsubId<PeerId> for GossipsubId<PeerId> {
     fn propagation_source(&self) -> PeerId {
-        self.propagation_source.clone()
+        self.propagation_source
     }
 }
 
@@ -276,7 +276,7 @@ impl Network {
         let swarm = Self::new_swarm(listen_addresses, clock, config);
         let peers = swarm.message.peers.clone();
 
-        let local_peer_id = Swarm::local_peer_id(&swarm).clone();
+        let local_peer_id = *Swarm::local_peer_id(&swarm);
 
         let (events_tx, _) = broadcast::channel(64);
         let (action_tx, action_rx) = mpsc::channel(64);
@@ -456,7 +456,7 @@ impl Network {
 
                         // Bootstrap Kademlia
                         tracing::debug!("Bootstrapping DHT");
-                        if let Err(_) = swarm.kademlia.bootstrap() {
+                        if swarm.kademlia.bootstrap().is_err() {
                             tracing::error!("Bootstrapping DHT error: No known peers");
                         }
                     }
@@ -636,7 +636,7 @@ impl Network {
                 let record = Record {
                     key: key.into(),
                     value,
-                    publisher: Some(local_peer_id.clone()),
+                    publisher: Some(*local_peer_id),
                     expires: None, // TODO: Records should expire at some point in time
                 };
 
@@ -928,7 +928,7 @@ impl NetworkInterface for Network {
     }
 
     fn get_local_peer_id(&self) -> <Self::PeerType as PeerInterface>::Id {
-        self.local_peer_id.clone()
+        self.local_peer_id
     }
 }
 
@@ -1126,8 +1126,8 @@ mod tests {
         assert_eq!(net1.get_peers().len(), 1);
         assert_eq!(net2.get_peers().len(), 1);
 
-        let peer2 = net1.get_peer(net2.local_peer_id().clone()).unwrap();
-        let peer1 = net2.get_peer(net1.local_peer_id().clone()).unwrap();
+        let peer2 = net1.get_peer(*net2.local_peer_id()).unwrap();
+        let peer1 = net2.get_peer(*net1.local_peer_id()).unwrap();
         assert_eq!(peer2.id(), net2.local_peer_id);
         assert_eq!(peer1.id(), net1.local_peer_id);
     }
@@ -1136,8 +1136,8 @@ mod tests {
     async fn one_peer_can_talk_to_another() {
         let (net1, net2) = create_connected_networks().await;
 
-        let peer2 = net1.get_peer(net2.local_peer_id().clone()).unwrap();
-        let peer1 = net2.get_peer(net1.local_peer_id().clone()).unwrap();
+        let peer2 = net1.get_peer(*net2.local_peer_id()).unwrap();
+        let peer1 = net2.get_peer(*net1.local_peer_id()).unwrap();
 
         let mut msgs = peer1.receive::<TestMessage>();
 
@@ -1156,8 +1156,8 @@ mod tests {
 
         let (net1, net2) = create_connected_networks().await;
 
-        let peer2 = net1.get_peer(net2.local_peer_id().clone()).unwrap();
-        let peer1 = net2.get_peer(net1.local_peer_id().clone()).unwrap();
+        let peer2 = net1.get_peer(*net2.local_peer_id()).unwrap();
+        let peer1 = net2.get_peer(*net1.local_peer_id()).unwrap();
 
         let mut msgs1 = peer1.receive::<TestMessage>();
         let mut msgs2 = peer1.receive::<TestMessage2>();
@@ -1183,8 +1183,8 @@ mod tests {
     async fn both_peers_can_talk_with_each_other() {
         let (net1, net2) = create_connected_networks().await;
 
-        let peer2 = net1.get_peer(net2.local_peer_id().clone()).unwrap();
-        let peer1 = net2.get_peer(net1.local_peer_id().clone()).unwrap();
+        let peer2 = net1.get_peer(*net2.local_peer_id()).unwrap();
+        let peer1 = net2.get_peer(*net1.local_peer_id()).unwrap();
 
         let mut in1 = peer1.receive::<TestMessage>();
         let mut in2 = peer2.receive::<TestMessage>();
@@ -1215,7 +1215,7 @@ mod tests {
         let (net1, net2) = create_connected_networks().await;
 
         //let peer1 = net2.get_peer(net1.local_peer_id().clone()).unwrap();
-        let peer2 = net1.get_peer(net2.local_peer_id().clone()).unwrap();
+        let peer2 = net1.get_peer(*net2.local_peer_id()).unwrap();
 
         let mut events1 = net1.subscribe_events();
         let mut events2 = net2.subscribe_events();
