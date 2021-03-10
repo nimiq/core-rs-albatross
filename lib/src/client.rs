@@ -97,24 +97,10 @@ impl ClientInner {
 
         log::debug!("listen_addresses = {:?}", config.network.listen_addresses);
 
-        let network = Arc::new(
-            Network::new(
-                config.network.listen_addresses,
-                Arc::clone(&time),
-                network_config,
-            )
-            .await,
-        );
+        let network = Arc::new(Network::new(Arc::clone(&time), network_config).await);
 
         // Start buffering network events as early as possible
         let nw_events = network.subscribe_events();
-
-        // Tell the network to connect to seed nodes
-        for seed in &config.network.seeds {
-            log::debug!("Dialing seed: {:?}", seed);
-            network.dial_address(seed.address.clone()).await?;
-        }
-        network.wait_connected().await;
 
         // Load validator key (before we give away ownership of the storage config)
         #[cfg(feature = "validator")]
@@ -142,6 +128,16 @@ impl ClientInner {
             sync.boxed(),
         )
         .await;
+
+        // Tell the network to connect to seed nodes
+        for seed in &config.network.seeds {
+            log::debug!("Dialing seed: {:?}", seed);
+            network.dial_address(seed.address.clone()).await?;
+        }
+        // tell the network to listen on the given addresses
+        network
+            .listen_on_addresses(config.network.listen_addresses)
+            .await;
 
         #[cfg(feature = "validator")]
         let validator = {

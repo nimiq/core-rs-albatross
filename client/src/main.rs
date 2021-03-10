@@ -83,7 +83,7 @@ async fn main_inner() -> Result<(), Error> {
     */
 
     // Start consensus.
-    let mut consensus = client.consensus().unwrap();
+    let consensus = client.consensus().unwrap();
 
     log::info!("Spawning consensus");
     tokio::spawn(async move { consensus.for_each(|_| async {}).await });

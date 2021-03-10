@@ -26,7 +26,7 @@ use libp2p::{
     identity::Keypair,
     kad::{GetRecordOk, KademliaConfig, KademliaEvent, QueryId, QueryResult, Quorum, Record},
     noise,
-    swarm::{NetworkBehaviourAction, NotifyHandler, SwarmBuilder, SwarmEvent},
+    swarm::{NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, SwarmBuilder, SwarmEvent},
     tcp, websocket, yamux, Multiaddr, PeerId, Swarm, Transport,
 };
 use thiserror::Error;
@@ -204,6 +204,9 @@ pub enum NetworkAction {
         type_id: MessageType,
         output: mpsc::Sender<(Bytes, Arc<Peer>)>,
     },
+    ListenOnAddresses {
+        listen_addresses: Vec<Multiaddr>,
+    },
 }
 
 struct TaskState {
@@ -266,14 +269,10 @@ impl Network {
     ///             offset by exchanging their wall-time with other peers.
     ///  - `config`: The network configuration, containing key pair, and other behaviour-specific configuration.
     ///
-    pub async fn new(
-        listen_addresses: Vec<Multiaddr>,
-        clock: Arc<OffsetTime>,
-        config: Config,
-    ) -> Self {
+    pub async fn new(clock: Arc<OffsetTime>, config: Config) -> Self {
         let min_peers = config.min_peers;
 
-        let swarm = Self::new_swarm(listen_addresses, clock, config);
+        let swarm = Self::new_swarm(clock, config);
         let peers = swarm.message.peers.clone();
 
         let local_peer_id = *Swarm::local_peer_id(&swarm);
@@ -333,11 +332,7 @@ impl Network {
             .boxed())
     }
 
-    fn new_swarm(
-        listen_addresses: Vec<Multiaddr>,
-        clock: Arc<OffsetTime>,
-        config: Config,
-    ) -> Swarm<NimiqBehaviour> {
+    fn new_swarm(clock: Arc<OffsetTime>, config: Config) -> Swarm<NimiqBehaviour> {
         let local_peer_id = PeerId::from(config.keypair.public());
 
         let transport = Self::new_transport(&config.keypair).unwrap();
@@ -352,14 +347,9 @@ impl Network {
             .with_max_established_per_peer(Some(MAX_CONNECTIONS_PER_PEER));
 
         // TODO add proper config
-        let mut swarm = SwarmBuilder::new(transport, behaviour, local_peer_id)
+        let swarm = SwarmBuilder::new(transport, behaviour, local_peer_id)
             .connection_limits(limits)
             .build();
-
-        for listen_addr in listen_addresses {
-            Swarm::listen_on(&mut swarm, listen_addr)
-                .expect("Failed to listen on provided address");
-        }
 
         swarm
     }
@@ -710,6 +700,12 @@ impl Network {
             NetworkAction::ReceiveFromAll { type_id, output } => {
                 swarm.message.receive_from_all(type_id, output);
             }
+            NetworkAction::ListenOnAddresses { listen_addresses } => {
+                for listen_address in listen_addresses {
+                    Swarm::listen_on(swarm, listen_address)
+                        .expect("Failed to listen on provided address");
+                }
+            }
         }
 
         Ok(())
@@ -723,6 +719,15 @@ impl Network {
             .send(NetworkAction::NetworkInfo { output: output_tx })
             .await?;
         Ok(output_rx.await?)
+    }
+
+    pub async fn listen_on_addresses(&self, listen_addresses: Vec<Multiaddr>) {
+        self.action_tx
+            .clone()
+            .send(NetworkAction::ListenOnAddresses { listen_addresses })
+            .await
+            .map_err(|e| log::error!("Failed to send NetworkAction::ListenOnAddress: {:?}", e))
+            .ok();
     }
 }
 
