@@ -48,7 +48,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         include_transactions: bool,
     ) -> Result<Block, Error> {
         self.blockchain
-            .get_block(&hash, true)
+            .get_block(&hash, true, None)
             .map(|block| Block::from_block(&self.blockchain, block, include_transactions))
             .ok_or_else(|| Error::BlockNotFound(hash.into()))
     }
@@ -61,7 +61,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         let block = match block_number {
             OrLatest::Value(block_number) => self
                 .blockchain
-                .get_block_at(block_number, true)
+                .get_block_at(block_number, true, None)
                 .ok_or_else(|| Error::BlockNotFound(block_number.into()))?,
             OrLatest::Latest => self.blockchain.head(),
         };

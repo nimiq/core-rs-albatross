@@ -2,6 +2,7 @@ use std::cmp;
 use std::cmp::Ordering;
 
 use nimiq_block_albatross::{Block, BlockType};
+use nimiq_database::Transaction;
 
 use crate::chain_info::ChainInfo;
 use crate::AbstractBlockchain;
@@ -27,6 +28,7 @@ impl ChainOrdering {
         blockchain: &B,
         block: &Block,
         prev_info: &ChainInfo,
+        txn_option: Option<&Transaction>,
     ) -> ChainOrdering {
         let mut chain_order = ChainOrdering::Unknown;
 
@@ -60,7 +62,7 @@ impl ChainOrdering {
                 let prev_hash = prev.head.parent_hash();
 
                 let prev_info = blockchain
-                    .get_chain_info(prev_hash, false)
+                    .get_chain_info(prev_hash, false, txn_option)
                     .expect("Corrupted store: Failed to find fork predecessor while rebranching");
 
                 current = prev;
@@ -85,7 +87,7 @@ impl ChainOrdering {
 
                 // And calculate equivalent on main chain.
                 let current_on_main_chain = blockchain
-                    .get_block_at(h, false)
+                    .get_block_at(h, false, txn_option)
                     .expect("Corrupted store: Failed to find main chain equivalent of fork");
 
                 // Choose better one as early as possible.

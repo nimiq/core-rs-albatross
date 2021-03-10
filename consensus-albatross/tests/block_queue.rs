@@ -198,8 +198,8 @@ async fn send_two_micro_blocks_out_of_order() {
     // now both blocks should've been pushed to the blockchain
     assert_eq!(blockchain1.block_number(), 2);
     assert!(block_queue.buffered_blocks().next().is_none());
-    assert_eq!(blockchain1.get_block_at(1, true).unwrap(), block1);
-    assert_eq!(blockchain1.get_block_at(2, true).unwrap(), block2);
+    assert_eq!(blockchain1.get_block_at(1, true, None).unwrap(), block1);
+    assert_eq!(blockchain1.get_block_at(2, true, None).unwrap(), block2);
 }
 
 #[tokio::test]
@@ -271,6 +271,6 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
     // now both blocks should've been pushed to the blockchain
     assert_eq!(blockchain1.block_number(), 2);
     assert!(block_queue.buffered_blocks().next().is_none());
-    assert_eq!(blockchain1.get_block_at(1, true).unwrap(), block1);
-    assert_eq!(blockchain1.get_block_at(2, true).unwrap(), block2);
+    assert_eq!(blockchain1.get_block_at(1, true, None).unwrap(), block1);
+    assert_eq!(blockchain1.get_block_at(2, true, None).unwrap(), block2);
 }

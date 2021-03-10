@@ -4,6 +4,7 @@ use nimiq_primitives::policy;
 use nimiq_primitives::slots::Validators;
 
 use crate::{Blockchain, ChainInfo};
+use nimiq_database::Transaction;
 
 /// Defines several basic methods for blockchains.
 pub trait AbstractBlockchain {
@@ -61,13 +62,28 @@ pub trait AbstractBlockchain {
     fn contains(&self, hash: &Blake2bHash, include_forks: bool) -> bool;
 
     /// Fetches a given block, by its block number.
-    fn get_block_at(&self, height: u32, include_body: bool) -> Option<Block>;
+    fn get_block_at(
+        &self,
+        height: u32,
+        include_body: bool,
+        txn_option: Option<&Transaction>,
+    ) -> Option<Block>;
 
     /// Fetches a given block, by its hash.
-    fn get_block(&self, hash: &Blake2bHash, include_body: bool) -> Option<Block>;
+    fn get_block(
+        &self,
+        hash: &Blake2bHash,
+        include_body: bool,
+        txn_option: Option<&Transaction>,
+    ) -> Option<Block>;
 
     /// Fetches a given chain info, by its hash.
-    fn get_chain_info(&self, hash: &Blake2bHash, include_body: bool) -> Option<ChainInfo>;
+    fn get_chain_info(
+        &self,
+        hash: &Blake2bHash,
+        include_body: bool,
+        txn_option: Option<&Transaction>,
+    ) -> Option<ChainInfo>;
 }
 
 impl AbstractBlockchain for Blockchain {
@@ -130,15 +146,32 @@ impl AbstractBlockchain for Blockchain {
         }
     }
 
-    fn get_block_at(&self, height: u32, include_body: bool) -> Option<Block> {
-        self.chain_store.get_block_at(height, include_body, None)
+    fn get_block_at(
+        &self,
+        height: u32,
+        include_body: bool,
+        txn_option: Option<&Transaction>,
+    ) -> Option<Block> {
+        self.chain_store
+            .get_block_at(height, include_body, txn_option)
     }
 
-    fn get_block(&self, hash: &Blake2bHash, include_body: bool) -> Option<Block> {
-        self.chain_store.get_block(hash, include_body, None)
+    fn get_block(
+        &self,
+        hash: &Blake2bHash,
+        include_body: bool,
+        txn_option: Option<&Transaction>,
+    ) -> Option<Block> {
+        self.chain_store.get_block(hash, include_body, txn_option)
     }
 
-    fn get_chain_info(&self, hash: &Blake2bHash, include_body: bool) -> Option<ChainInfo> {
-        self.chain_store.get_chain_info(hash, include_body, None)
+    fn get_chain_info(
+        &self,
+        hash: &Blake2bHash,
+        include_body: bool,
+        txn_option: Option<&Transaction>,
+    ) -> Option<ChainInfo> {
+        self.chain_store
+            .get_chain_info(hash, include_body, txn_option)
     }
 }

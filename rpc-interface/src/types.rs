@@ -332,7 +332,7 @@ impl Block {
         match block {
             nimiq_block_albatross::Block::Macro(macro_block) => {
                 let validator_slots_opt = blockchain
-                    .get_block(&macro_block.header.parent_election_hash, true)
+                    .get_block(&macro_block.header.parent_election_hash, true, None)
                     .and_then(|block| block.body())
                     .and_then(|body| body.unwrap_macro().validators);
 

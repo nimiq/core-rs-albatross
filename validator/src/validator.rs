@@ -269,7 +269,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         let block = self
             .consensus
             .blockchain
-            .get_block(hash, true)
+            .get_block(hash, true, None)
             .expect("Head block not found");
         self.blockchain_state.fork_proofs.apply_block(&block);
     }
@@ -325,7 +325,10 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                         let nw = self.network.clone();
                         tokio::spawn(async move {
                             trace!("publishing macro block: {:?}", &block_copy);
-                            if nw.publish(&BlockTopic, Block::Macro(block_copy)).await.is_err()
+                            if nw
+                                .publish(&BlockTopic, Block::Macro(block_copy))
+                                .await
+                                .is_err()
                             {
                                 error!("Failed to publish Block");
                             }
@@ -376,7 +379,10 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                         let nw = self.network.clone();
                         tokio::spawn(async move {
                             trace!("publishing micro block: {:?}", &block_copy);
-                            if nw.publish(&BlockTopic, Block::Micro(block_copy)).await.is_err()
+                            if nw
+                                .publish(&BlockTopic, Block::Micro(block_copy))
+                                .await
+                                .is_err()
                             {
                                 error!("Failed to publish Block");
                             }

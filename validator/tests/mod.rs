@@ -350,7 +350,7 @@ async fn validator_can_catch_up() {
     // Wait for the new block producer to create a blockchainEvent (which is always an extended event for block 1) and keep the hash
     if let Some(BlockchainEvent::Extended(hash)) = events.next().await {
         // retrieve the block for height 1
-        if let Some(block) = blockchain.get_block_at(1, false) {
+        if let Some(block) = blockchain.get_block_at(1, false, None) {
             // the hash needs to be the one the extended event returned.
             // (the chain itself i.e blockchain.header_hash() might have already progressed further)
             assert_eq!(block.header().hash(), hash);

@@ -77,7 +77,7 @@ impl Handle<BlockHashes> for RequestBlockHashes {
 
 impl Handle<BatchSetInfo> for RequestBatchSet {
     fn handle(&self, blockchain: &Arc<Blockchain>) -> Option<BatchSetInfo> {
-        if let Some(Block::Macro(block)) = blockchain.get_block(&self.hash, true) {
+        if let Some(Block::Macro(block)) = blockchain.get_block(&self.hash, true, None) {
             let epoch = policy::epoch_at(block.header.block_number);
             let history_len = blockchain.get_num_extended_transactions(epoch, None);
             let response = BatchSetInfo {
@@ -111,7 +111,7 @@ impl Handle<HistoryChunk> for RequestHistoryChunk {
 
 impl Handle<ResponseBlock> for RequestBlock {
     fn handle(&self, blockchain: &Arc<Blockchain>) -> Option<ResponseBlock> {
-        let block = blockchain.get_block(&self.hash, true);
+        let block = blockchain.get_block(&self.hash, true, None);
         let response = ResponseBlock {
             block,
             request_identifier: self.get_request_identifier(),
@@ -127,7 +127,7 @@ impl Handle<ResponseBlocks> for RequestMissingBlocks {
         // 2. Return all blocks in between most recent locator on our main chain and target block hash
         // 3. This should also work across 1 or 2 batches with an upper bound
         // For now, we just ignore the case if we receive a block announcement which is more than 1-2 batches away from our current block.
-        let target_block = blockchain.get_block(&self.target_hash, false)?;
+        let target_block = blockchain.get_block(&self.target_hash, false, None)?;
 
         // A peer has requested blocks. Check all requested block locator hashes
         // in the given order and pick the first hash that is found on our main

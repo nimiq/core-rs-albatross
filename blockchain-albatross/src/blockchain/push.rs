@@ -39,7 +39,7 @@ impl Blockchain {
             .ok_or_else(|| PushError::Orphan)?;
 
         // Calculate chain ordering.
-        let chain_order = ChainOrdering::order_chains(self, &block, &prev_info);
+        let chain_order = ChainOrdering::order_chains(self, &block, &prev_info, Some(&read_txn));
 
         // If it is an inferior chain, we ignore it as it cannot become better at any point in time.
         if chain_order == ChainOrdering::Inferior {
