@@ -84,6 +84,15 @@ impl MessageBehaviour {
                 type_id
             );
         }
+
+        // add the receiver to the pre existing peers
+        for peer in self.peers.get_peers() {
+            peer.dispatch
+                .lock()
+                .receive_multiple_raw(vec![(type_id, tx.clone())]);
+        }
+
+        // add the receiver to the globally defined map
         self.message_receivers.insert(type_id, tx);
     }
 }

@@ -170,8 +170,9 @@ impl ProtocolsHandler for MessageHandler {
                         .push_back(ProtocolsHandlerEvent::OutboundSubstreamRequest {
                             protocol: SubstreamProtocol::new(MessageProtocol::default(), ()),
                         });
-                    self.wake();
                 }
+
+                self.wake();
             }
         }
     }

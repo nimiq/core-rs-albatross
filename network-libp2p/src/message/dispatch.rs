@@ -125,6 +125,7 @@ where
                         // Send error, i.e. the receiver is closed. Remove it, but usually we expect receivers to stay around.
                         log::warn!("Receiver is gone: type_id={}", type_id);
                         self.channels.remove(&type_id);
+                        return Poll::Pending;
                     }
                 } else {
                     // Drop message
@@ -132,6 +133,7 @@ where
                         "No receiver for message type. Dropping message: type_id={}",
                         type_id
                     );
+                    return Poll::Pending;
                 }
             }
 
