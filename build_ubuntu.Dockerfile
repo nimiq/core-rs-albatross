@@ -6,10 +6,6 @@
 ARG RUST_IMAGE=rustlang/rust:nightly-slim
 FROM $RUST_IMAGE AS builder
 
-# Downgrade to prevent bug with latest rustc
-# Remove after a new version of rust:nightly-slim image has been released
-RUN rustup toolchain install nightly-2021-02-06-x86_64-unknown-linux-gnu --force && rustup default nightly-2021-02-06-x86_64-unknown-linux-gnu
-
 # Fetch dependencies.
 RUN apt-get update && apt-get install -y libssl-dev pkg-config
 
