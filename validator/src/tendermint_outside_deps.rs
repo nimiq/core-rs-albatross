@@ -374,7 +374,10 @@ impl<N: ValidatorNetwork + 'static> TendermintInterface<N> {
         blockchain: Arc<Blockchain>,
         block_producer: BlockProducer,
         block_height: u32,
-        proposal_stream: BoxStream<'static, (SignedTendermintProposal, <N as ValidatorNetwork>::PubsubId)>
+        proposal_stream: BoxStream<
+            'static,
+            (SignedTendermintProposal, <N as ValidatorNetwork>::PubsubId),
+        >,
     ) -> Self {
         // Create the aggregation object.
         let aggregation_adapter = HandelTendermintAdapter::new(

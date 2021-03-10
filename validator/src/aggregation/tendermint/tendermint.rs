@@ -312,14 +312,12 @@ where
             network
                 .receive::<LevelUpdateMessage<TendermintContribution, TendermintIdentifier>>()
                 .filter_map(move |msg| {
-                    future::ready(
-                        if msg.0.tag.block_number == block_height {
-                            Some(msg.0)
-                        } else {
-                            None
-                        }
-                    )
-                })
+                    future::ready(if msg.0.tag.block_number == block_height {
+                        Some(msg.0)
+                    } else {
+                        None
+                    })
+                }),
         );
 
         let validator_registry = Arc::new(ValidatorRegistry::new(active_validators));
@@ -685,7 +683,10 @@ where
                                     TendermintError::AggregationError
                                 })?;
                         }
-                        debug!("Tendermint: {}-{:?}: All other proposals have > 2f + 1 votes", &round, &step);
+                        debug!(
+                            "Tendermint: {}-{:?}: All other proposals have > 2f + 1 votes",
+                            &round, &step
+                        );
                         return Ok(result);
                     }
                 }

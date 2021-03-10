@@ -2,8 +2,15 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
-use futures::{Future, StreamExt, stream::BoxStream, task::{Context, Poll, noop_waker_ref}};
-use tokio::{sync::{broadcast, mpsc}, task::JoinHandle};
+use futures::{
+    stream::BoxStream,
+    task::{noop_waker_ref, Context, Poll},
+    Future, StreamExt,
+};
+use tokio::{
+    sync::{broadcast, mpsc},
+    task::JoinHandle,
+};
 
 use block_albatross::{Block, BlockType, SignedTendermintProposal, ViewChange, ViewChangeProof};
 use blockchain_albatross::{AbstractBlockchain, BlockchainEvent, ForkEvent, PushResult};
@@ -65,7 +72,14 @@ pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork + 's
     database: Database,
     env: Environment,
 
-    proposal_task: Option<JoinHandle<Result< BoxStream<'static, (<ProposalTopic as Topic>::Item, TValidatorNetwork::PubsubId)>, TValidatorNetwork::Error>>>,
+    proposal_task: Option<
+        JoinHandle<
+            Result<
+                BoxStream<'static, (<ProposalTopic as Topic>::Item, TValidatorNetwork::PubsubId)>,
+                TValidatorNetwork::Error,
+            >,
+        >,
+    >,
 
     consensus_event_rx: broadcast::Receiver<ConsensusEvent<TNetwork>>,
     blockchain_event_rx: mpsc::UnboundedReceiver<BlockchainEvent>,
@@ -120,9 +134,9 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         // Spawn into task so the lifetime does not expire.
         // Also start executing immediately as we will need to wait for this on the first macro block.
         let nw = network.clone();
-        let proposal_task = Some(tokio::spawn(async move {
-            nw.subscribe(&ProposalTopic).await
-        }));
+        let proposal_task = Some(tokio::spawn(
+            async move { nw.subscribe(&ProposalTopic).await },
+        ));
 
         let mut this = Self {
             consensus: consensus.proxy(),
@@ -219,7 +233,10 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                     self.signing_key.clone(),
                 );
 
-                let (mut sender, receiver) = mpsc::channel::<(<ProposalTopic as Topic>::Item, TValidatorNetwork::PubsubId)>(2);
+                let (mut sender, receiver) = mpsc::channel::<(
+                    <ProposalTopic as Topic>::Item,
+                    TValidatorNetwork::PubsubId,
+                )>(2);
 
                 if let Some(task) = self.proposal_task.take() {
                     self.proposal_task = Some(tokio::spawn(async move {
@@ -231,12 +248,12 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                                         Poll::Pending => {
                                             // Todo: buffer proposal if necessary.
                                             log::debug!("Proposal recipient not able to receive new Messages. Waiting to try with the next proposal!");
-                                        },
+                                        }
                                         Poll::Ready(Ok(_)) => {
                                             if let Err(_err) = sender.send(item).await {
                                                 log::debug!("failed to send message through sender, even though poll_ready returned Ok");
                                             }
-                                        },
+                                        }
                                         Poll::Ready(Err(_err)) => {
                                             // recipient is no longer present, leave the loop and return the subscription stream.
                                             log::trace!("Sonder for proposals no longer has a recipient, Block was produced!");
