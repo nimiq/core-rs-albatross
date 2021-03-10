@@ -77,12 +77,13 @@ impl ClientInner {
         log::info!("Identity public key: {:?}", identity_keypair.public());
 
         // Generate peer contact from identity keypair and services/protocols
-        let peer_contact = PeerContact::new(
+        let mut peer_contact = PeerContact::new(
             config.network.listen_addresses.clone(),
             identity_keypair.public(),
             Services::all(), // TODO
-            None, // No need to set the timestamp as this will be set before signing anyway.
+            None,
         );
+        peer_contact.set_current_time();
 
         // Setup libp2p network
         let mut network_config = NetworkConfig::new(

@@ -118,6 +118,7 @@ impl DiscoveryBehaviour {
         clock: Arc<OffsetTime>,
     ) -> Self {
         let house_keeping_timer = Interval::new(config.house_keeping_interval);
+        peer_contact_book.write().self_update(&keypair);
 
         Self {
             config,
