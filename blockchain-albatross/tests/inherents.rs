@@ -35,7 +35,8 @@ fn it_can_create_batch_finalization_inherents() {
         seed: VrfSeed::default(),
         extra_data: vec![],
         state_root: hash.clone(),
-        body_root: hash,
+        body_root: hash.clone(),
+        history_root: hash,
     };
 
     // Simple case. Expect 1x FinalizeBatch, 1x Reward to validator

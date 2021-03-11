@@ -204,6 +204,7 @@ impl BlockProducer {
             extra_data,
             state_root: Blake2bHash::default(),
             body_root: Blake2bHash::default(),
+            history_root: Blake2bHash::default(),
         };
 
         // Get the state.
@@ -233,7 +234,7 @@ impl BlockProducer {
         // Store the extended transactions into the history tree and calculate the history root.
         let mut txn = self.blockchain.write_transaction();
 
-        let history_root = self
+        header.history_root = self
             .blockchain
             .history_store
             .add_to_history(&mut txn, policy::epoch_at(block_number), &ext_txs)
@@ -263,7 +264,6 @@ impl BlockProducer {
             validators,
             lost_reward_set,
             disabled_set,
-            history_root,
         };
 
         // Add the root of the body to the header.

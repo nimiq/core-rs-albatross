@@ -278,6 +278,7 @@ impl GenesisBuilder {
             extra_data: vec![],
             state_root,
             body_root,
+            history_root: Blake2bHash::default(),
         };
 
         // genesis hash

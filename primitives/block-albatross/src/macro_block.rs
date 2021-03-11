@@ -53,6 +53,8 @@ pub struct MacroHeader {
     pub state_root: Blake2bHash,
     /// The root of the Merkle tree of the body. It just acts as a commitment to the body.
     pub body_root: Blake2bHash,
+    /// A merkle root over all of the transactions that happened in the current epoch.
+    pub history_root: Blake2bHash,
 }
 
 /// The struct representing the body of a Macro block (can be either checkpoint or election).
@@ -69,8 +71,6 @@ pub struct MacroBody {
     /// proposing macro blocks at the time when this block was produced. It is used later on for
     /// reward distribution.
     pub disabled_set: BitSet,
-    /// A merkle root over all of the transactions that happened in the current epoch.
-    pub history_root: Blake2bHash,
 }
 
 impl MacroBlock {
@@ -111,7 +111,6 @@ impl MacroBody {
             validators: None,
             lost_reward_set: BitSet::new(),
             disabled_set: BitSet::new(),
-            history_root: Blake2bHash::default(),
         }
     }
 }

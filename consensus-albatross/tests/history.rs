@@ -265,9 +265,7 @@ async fn sync_ingredients() {
             consensus1
                 .blockchain
                 .election_head()
-                .body
-                .as_ref()
-                .unwrap()
+                .header
                 .history_root
                 .clone(),
             0
@@ -283,15 +281,7 @@ async fn sync_ingredients() {
         .expect("Should yield history chunk");
     assert_eq!(chunk.history.len(), 2);
     assert_eq!(
-        chunk.verify(
-            consensus1
-                .blockchain
-                .macro_head()
-                .body
-                .unwrap()
-                .history_root,
-            0
-        ),
+        chunk.verify(consensus1.blockchain.macro_head().header.history_root, 0),
         Some(true)
     );
 }

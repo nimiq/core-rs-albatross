@@ -99,13 +99,13 @@ fn it_can_convert_macro_block_into_slots() {
             extra_data: vec![],
             state_root: hash.clone(),
             body_root: hash,
+            history_root: [0u8; 32].into(),
         },
         justification: None,
         body: Some(MacroBody {
             validators: Some(validator_slots.clone()),
             lost_reward_set: BitSet::new(),
             disabled_set: BitSet::new(),
-            history_root: [0u8; 32].into(),
         }),
     };
 

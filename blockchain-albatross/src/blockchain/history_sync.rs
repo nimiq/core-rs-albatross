@@ -92,6 +92,15 @@ impl Blockchain {
             }
         }
 
+        // Check the history root.
+        let history_root = HistoryStore::root_from_ext_txs(ext_txs)
+            .ok_or(PushError::InvalidBlock(BlockError::InvalidHistoryRoot))?;
+
+        if block.history_root().unwrap() != &history_root {
+            warn!("Rejecting block - wrong history root");
+            return Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot));
+        }
+
         // Checks if the body exists.
         let body = macro_block
             .body
@@ -102,15 +111,6 @@ impl Blockchain {
         if body.hash::<Blake2bHash>() != macro_block.header.body_root {
             warn!("Rejecting block - Header body hash doesn't match real body hash");
             return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
-        }
-
-        // Check the history root.
-        let history_root = HistoryStore::root_from_ext_txs(ext_txs)
-            .ok_or(PushError::InvalidBlock(BlockError::InvalidHistoryRoot))?;
-
-        if body.history_root != history_root {
-            warn!("Rejecting block - wrong history root");
-            return Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot));
         }
 
         // Checks if the justification exists.
