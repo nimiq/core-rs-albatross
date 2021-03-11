@@ -1,5 +1,6 @@
 use thiserror::Error;
 
+use nimiq_hash::Blake2bHash;
 use nimiq_jsonrpc_core::RpcError;
 use nimiq_keys::Address;
 use nimiq_rpc_interface::types::BlockNumberOrHash;
@@ -47,6 +48,9 @@ pub enum Error {
 
     #[error("Transaction rejected: {0:?}")]
     TransactionRejected(nimiq_mempool::ReturnCode),
+
+    #[error("Transaction not found: {0}")]
+    TransactionNotFound(Blake2bHash),
 
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
