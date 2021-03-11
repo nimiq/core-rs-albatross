@@ -143,8 +143,18 @@ impl Handle<ResponseBlocks> for RequestMissingBlocks {
             }
         }
 
+        // if no start_block can be found, assume the last macro block before target_block
+        let start_block = if let None = start_block {
+            blockchain.get_block_at(
+                policy::macro_block_before(target_block.block_number()),
+                false,
+                None,
+            )?
+        } else {
+            start_block.unwrap()
+        };
+
         // Check that the distance is sensible.
-        let start_block = start_block?;
         let num_blocks = target_block.block_number() - start_block.block_number();
         if num_blocks > policy::BATCH_LENGTH * 2 {
             debug!("Received missing block request across more than 2 batches.");
