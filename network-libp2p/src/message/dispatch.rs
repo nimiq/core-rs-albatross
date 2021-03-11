@@ -105,7 +105,10 @@ where
                         Poll::Pending => return Poll::Pending,
 
                         // Send error - the receiver must have been closed.
-                        Poll::Ready(Err(_)) => receiver_is_gone = true,
+                        Poll::Ready(Err(_)) => {
+                            self.buffer.take(); // Drop message
+                            receiver_is_gone = true;
+                        },
 
                         // We have space, so send the message to the channel.
                         Poll::Ready(Ok(())) => {
@@ -123,16 +126,18 @@ where
 
                     if receiver_is_gone {
                         // Send error, i.e. the receiver is closed. Remove it, but usually we expect receivers to stay around.
-                        log::warn!("Receiver is gone: type_id={}", type_id);
+                        log::warn!("Receiver is gone. Dropping message: type_id={}, peer={}", type_id, peer.id);
                         self.channels.remove(&type_id);
                         return Poll::Pending;
                     }
                 } else {
                     // Drop message
                     log::warn!(
-                        "No receiver for message type. Dropping message: type_id={}",
-                        type_id
+                        "No receiver for message type. Dropping message: type_id={}, peer={}",
+                        type_id,
+                        peer.id
                     );
+                    self.buffer.take();
                     return Poll::Pending;
                 }
             }
