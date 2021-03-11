@@ -29,7 +29,7 @@ impl NanoBlockchain {
     ) -> Result<(), NanoError> {
         // Get the block.
         let block = self
-            .get_block(&block_hash, false)
+            .get_block(&block_hash, false, None)
             .ok_or(NanoError::MissingBlock)?;
 
         // Check the root of the accounts proof against the state root.
@@ -52,7 +52,7 @@ impl NanoBlockchain {
     ) -> Result<(), NanoError> {
         // Get the block.
         let block = self
-            .get_block(&block_hash, false)
+            .get_block(&block_hash, false, None)
             .ok_or(NanoError::MissingBlock)?;
 
         Ok(())

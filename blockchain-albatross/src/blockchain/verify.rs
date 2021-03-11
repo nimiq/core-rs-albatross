@@ -350,6 +350,7 @@ impl Blockchain {
 
         // For macro blocks we have additional checks. We simply construct what the body should be
         // from our own state and then compare it with the body hash in the header.
+        // Also, we check the history root in the header.
         if let Block::Macro(macro_block) = block {
             // Get the history root.
             let real_history_root = match self
@@ -361,6 +362,12 @@ impl Blockchain {
                     return Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot));
                 }
             };
+
+            // Compare it with the one in the header.
+            if &real_history_root != block.history_root().unwrap() {
+                warn!("Rejecting block - History root doesn't match real history root");
+                return Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot));
+            }
 
             // Get the lost rewards and disabled sets.
             let staking_contract = self.get_staking_contract();
@@ -380,11 +387,6 @@ impl Blockchain {
             if let Some(body) = &macro_block.body {
                 // If we were given a body, then check each value against the corresponding value in
                 // the body.
-                if real_history_root != body.history_root {
-                    warn!("Rejecting block - History root doesn't match real history root");
-                    return Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot));
-                }
-
                 if real_lost_rewards != body.lost_reward_set {
                     warn!("Rejecting block - Lost rewards set doesn't match real lost rewards set");
                     return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
@@ -406,7 +408,6 @@ impl Blockchain {
                     validators: real_validators,
                     lost_reward_set: real_lost_rewards,
                     disabled_set: real_disabled_slots,
-                    history_root: real_history_root,
                 };
 
                 if real_body.hash::<Blake2bHash>() != macro_block.header.body_root {

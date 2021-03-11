@@ -123,6 +123,14 @@ impl Block {
         }
     }
 
+    /// Returns the history root of the block.
+    pub fn history_root(&self) -> Option<&Blake2bHash> {
+        match self {
+            Block::Macro(ref block) => Some(&block.header.history_root),
+            Block::Micro(_) => None,
+        }
+    }
+
     /// Returns the next view number, assuming that there was no view change. This will return 0, if
     /// the next block is the first of the batch (i.e. the current one is a macro block), or the
     /// view number of the current block.

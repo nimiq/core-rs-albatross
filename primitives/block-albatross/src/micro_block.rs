@@ -5,6 +5,7 @@ use nimiq_bls::CompressedSignature;
 use nimiq_hash::{Blake2bHash, Hash, HashOutput, SerializeContent};
 use nimiq_hash_derive::SerializeContent;
 use nimiq_transaction::Transaction;
+use nimiq_utils::merkle;
 use nimiq_vrf::VrfSeed;
 
 use crate::fork_proof::ForkProof;
@@ -129,6 +130,6 @@ impl Hash for MicroBody {
         }
 
         // Calculate the Merkle tree root from the hashes.
-        utils::merkle::compute_root_from_hashes(&hashes)
+        merkle::compute_root_from_hashes(&hashes)
     }
 }

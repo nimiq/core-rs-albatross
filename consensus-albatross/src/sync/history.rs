@@ -162,16 +162,7 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
         // Verify chunk.
         let chunk = history_chunk.chunk.expect("History chunk missing");
         if !chunk
-            .verify(
-                epoch
-                    .block
-                    .body
-                    .as_ref()
-                    .expect("Missing body")
-                    .history_root
-                    .clone(),
-                epoch.history.len(),
-            )
+            .verify(epoch.block.header.history_root.clone(), epoch.history.len())
             .unwrap_or(false)
         {
             return Err(SyncClusterResult::Error);
