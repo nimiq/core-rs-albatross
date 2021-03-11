@@ -53,14 +53,18 @@ impl Blockchain {
 
         // Get the intended slot owner.
         let (validator, _) = self
-            .get_slot_owner_at(block.block_number(), block.view_number())
+            .get_slot_owner_at(block.block_number(), block.view_number(), Some(&read_txn))
             .expect("Couldn't calculate slot owner!");
 
         let intended_slot_owner = validator.public_key.uncompress_unchecked();
 
         // Check the header.
-        if let Err(e) = Blockchain::verify_block_header(self, &block.header(), &intended_slot_owner)
-        {
+        if let Err(e) = Blockchain::verify_block_header(
+            self,
+            &block.header(),
+            &intended_slot_owner,
+            Some(&read_txn),
+        ) {
             warn!("Rejecting block - Bad header");
             return Err(e);
         }
@@ -71,6 +75,7 @@ impl Blockchain {
             &block.header(),
             &block.justification(),
             &intended_slot_owner,
+            Some(&read_txn),
         ) {
             warn!("Rejecting block - Bad justification");
             return Err(e);

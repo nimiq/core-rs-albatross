@@ -12,18 +12,18 @@ impl NanoBlockchain {
     /// Pushes a block into the chain.
     pub fn push(&mut self, block: Block) -> Result<PushResult, PushError> {
         // Check if we already know this block.
-        if self.get_chain_info(&block.hash(), false).is_some() {
+        if self.get_chain_info(&block.hash(), false, None).is_some() {
             return Ok(PushResult::Known);
         }
 
         // Check if we have this block's parent.
         // If it's a macro block, we don't care about this since we will clear out the chain store anyway.
         let prev_info = self
-            .get_chain_info(&block.parent_hash(), false)
+            .get_chain_info(&block.parent_hash(), false, None)
             .ok_or_else(|| PushError::Orphan)?;
 
         // Calculate chain ordering.
-        let chain_order = ChainOrdering::order_chains(self, &block, &prev_info);
+        let chain_order = ChainOrdering::order_chains(self, &block, &prev_info, None);
 
         // If it is an inferior chain, we ignore it as it cannot become better at any point in time.
         if chain_order == ChainOrdering::Inferior {
@@ -32,13 +32,13 @@ impl NanoBlockchain {
 
         // Get the intended slot owner.
         let (validator, _) = self
-            .get_slot_owner_at(block.block_number(), block.view_number())
+            .get_slot_owner_at(block.block_number(), block.view_number(), None)
             .expect("Failed to find slot owner!");
 
         let intended_slot_owner = validator.public_key.uncompress_unchecked();
 
         // Check the header.
-        Blockchain::verify_block_header(self, &block.header(), &intended_slot_owner)?;
+        Blockchain::verify_block_header(self, &block.header(), &intended_slot_owner, None)?;
 
         // Check the justification.
         Blockchain::verify_block_justification(
@@ -46,6 +46,7 @@ impl NanoBlockchain {
             &block.header(),
             &block.justification(),
             &intended_slot_owner,
+            None,
         )?;
 
         // Create the chaininfo for the new block.
@@ -151,7 +152,7 @@ impl NanoBlockchain {
 
             // Get previous chain info.
             let prev_info = self
-                .get_chain_info(current.head.parent_hash(), false)
+                .get_chain_info(current.head.parent_hash(), false, None)
                 .expect("Corrupted store: Failed to find fork predecessor while rebranching");
 
             // Update the chain info.
@@ -171,13 +172,13 @@ impl NanoBlockchain {
 
         // Go back from the head of the forked chain until the ancestor, updating it along the way.
         current = self
-            .get_chain_info(&self.head_hash(), false)
+            .get_chain_info(&self.head_hash(), false, None)
             .expect("Couldn't find the head chain info!");
 
         while current != ancestor {
             // Get previous chain info.
             let prev_info = self
-                .get_chain_info(current.head.parent_hash(), false)
+                .get_chain_info(current.head.parent_hash(), false, None)
                 .expect("Corrupted store: Failed to find fork predecessor while rebranching");
 
             // Update the chain info.

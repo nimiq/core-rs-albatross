@@ -1,5 +1,6 @@
 use nimiq_block_albatross::{Block, MacroBlock};
 use nimiq_blockchain_albatross::{AbstractBlockchain, ChainInfo};
+use nimiq_database::Transaction;
 use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::slots::Validators;
@@ -42,7 +43,12 @@ impl AbstractBlockchain for NanoBlockchain {
         }
     }
 
-    fn get_block_at(&self, height: u32, _include_body: bool) -> Option<Block> {
+    fn get_block_at(
+        &self,
+        height: u32,
+        _include_body: bool,
+        _txn_option: Option<&Transaction>,
+    ) -> Option<Block> {
         self.chain_store
             .read()
             .unwrap()
@@ -50,7 +56,12 @@ impl AbstractBlockchain for NanoBlockchain {
             .map(|chain_info| chain_info.head)
     }
 
-    fn get_block(&self, hash: &Blake2bHash, _include_body: bool) -> Option<Block> {
+    fn get_block(
+        &self,
+        hash: &Blake2bHash,
+        _include_body: bool,
+        _txn_option: Option<&Transaction>,
+    ) -> Option<Block> {
         self.chain_store
             .read()
             .unwrap()
@@ -58,7 +69,12 @@ impl AbstractBlockchain for NanoBlockchain {
             .map(|chain_info| chain_info.head.clone())
     }
 
-    fn get_chain_info(&self, hash: &Blake2bHash, _include_body: bool) -> Option<ChainInfo> {
+    fn get_chain_info(
+        &self,
+        hash: &Blake2bHash,
+        _include_body: bool,
+        _txn_option: Option<&Transaction>,
+    ) -> Option<ChainInfo> {
         self.chain_store
             .read()
             .unwrap()

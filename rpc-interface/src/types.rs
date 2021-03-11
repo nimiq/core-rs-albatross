@@ -226,7 +226,7 @@ impl Slot {
         // TODO: `get_slot_owner_at` should really return an `Option` or `Result`. This will panic, when there is no
         //        slot owner.
         let (validator, slot_number) = blockchain
-            .get_slot_owner_at(block_number, view_number)
+            .get_slot_owner_at(block_number, view_number, None)
             .expect("Couldn't calculate slot owner!");
 
         Slot {

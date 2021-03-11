@@ -27,6 +27,7 @@ impl Blockchain {
         blockchain: &B,
         header: &BlockHeader,
         intended_slot_owner: &PublicKey,
+        txn_opt: Option<&DBtx>,
     ) -> Result<(), PushError> {
         // Check the version
         if header.version() != policy::VERSION {
@@ -36,7 +37,7 @@ impl Blockchain {
 
         // Check if the block's immediate predecessor is part of the chain.
         let prev_info = blockchain
-            .get_chain_info(&header.parent_hash(), false)
+            .get_chain_info(&header.parent_hash(), false, txn_opt)
             .unwrap();
 
         // Check that the block is a valid successor of its predecessor.
@@ -97,6 +98,7 @@ impl Blockchain {
         header: &BlockHeader,
         justification_opt: &Option<BlockJustification>,
         intended_slot_owner: &PublicKey,
+        txn_opt: Option<&DBtx>,
     ) -> Result<(), PushError> {
         // Checks if the justification exists. If yes, unwrap it.
         let justification = justification_opt
@@ -125,7 +127,7 @@ impl Blockchain {
 
                 // Check if a view change occurred - if so, validate the proof
                 let prev_info = blockchain
-                    .get_chain_info(&header.parent_hash(), false)
+                    .get_chain_info(&header.parent_hash(), false, txn_opt)
                     .unwrap();
 
                 let view_number = if policy::is_macro_block_at(header.block_number() - 1) {
@@ -196,7 +198,7 @@ impl Blockchain {
         &self,
         header: &BlockHeader,
         body_opt: &Option<BlockBody>,
-        _txn_opt: Option<&DBtx>,
+        txn_opt: Option<&DBtx>,
     ) -> Result<(), PushError> {
         // Checks if the body exists. If yes, unwrap it.
         let body = body_opt
@@ -239,7 +241,11 @@ impl Blockchain {
 
                     // Get intended slot owner for that block.
                     let (validator, _) = self
-                        .get_slot_owner_at(proof.header1.block_number, proof.header1.view_number)
+                        .get_slot_owner_at(
+                            proof.header1.block_number,
+                            proof.header1.view_number,
+                            txn_opt,
+                        )
                         .expect("Couldn't calculate the slot owner!");
 
                     // Verify fork proof.
