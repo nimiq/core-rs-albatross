@@ -1,5 +1,6 @@
 use nimiq_block_albatross::{Block, BlockType, MacroBlock};
 use nimiq_collections::BitSet;
+use nimiq_database::Transaction;
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::policy;
@@ -7,7 +8,6 @@ use nimiq_primitives::slots::{Validator, Validators};
 use nimiq_vrf::{Rng, VrfUseCase};
 
 use crate::{Blockchain, ChainInfo};
-use nimiq_database::Transaction;
 
 /// Defines several basic methods for blockchains.
 pub trait AbstractBlockchain {
@@ -110,17 +110,23 @@ pub trait AbstractBlockchain {
 
     /// Calculates the slot owner (represented as the validator plus the slot number) at a given
     /// block number and view number.
-    fn get_slot_owner_at(&self, block_number: u32, view_number: u32) -> Option<(Validator, u16)> {
+    fn get_slot_owner_at(
+        &self,
+        block_number: u32,
+        view_number: u32,
+        txn_option: Option<&Transaction>,
+    ) -> Option<(Validator, u16)> {
         // Get the disabled slots for the current batch.
         let disabled_slots = self
-            .get_block_at(policy::macro_block_before(block_number), true)?
+            .get_block_at(policy::macro_block_before(block_number), true, txn_option)?
             .unwrap_macro()
             .body
             .unwrap()
             .disabled_set;
 
         // Get the slot number for the current block.
-        let slot_number = self.get_slot_owner_number_at(block_number, view_number, disabled_slots);
+        let slot_number =
+            self.get_slot_owner_number_at(block_number, view_number, disabled_slots, txn_option);
 
         // Get the current validators.
         // Note: We need to handle the case where `block_number()` is at an election block
@@ -137,8 +143,12 @@ pub trait AbstractBlockchain {
         {
             self.previous_validators()?
         } else {
-            self.get_block_at(policy::election_block_before(block_number), true)?
-                .validators()?
+            self.get_block_at(
+                policy::election_block_before(block_number),
+                true,
+                txn_option,
+            )?
+            .validators()?
         };
 
         // Finally get the correct validator.
@@ -154,10 +164,11 @@ pub trait AbstractBlockchain {
         block_number: u32,
         view_number: u32,
         disabled_slots: BitSet,
+        txn_option: Option<&Transaction>,
     ) -> u16 {
         // Get the last block's seed.
         let seed = self
-            .get_block_at(block_number - 1, false)
+            .get_block_at(block_number - 1, false, txn_option)
             .expect("Can't find previous block!")
             .seed()
             .clone();

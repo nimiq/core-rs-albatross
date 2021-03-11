@@ -89,7 +89,7 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
         // Get the validator slot for this round.
         let (slot, _) = self
             .blockchain
-            .get_slot_owner_at(self.blockchain.block_number() + 1, round)
+            .get_slot_owner_at(self.blockchain.block_number() + 1, round, None)
             .expect("Couldn't find slot owner!");
 
         // Get our public key.
@@ -224,6 +224,7 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
             .get_slot_owner_at(
                 self.blockchain.block_number() + 1,
                 self.blockchain.view_number() + round,
+                None,
             )
             .expect("Couldn't find slot owner!");
 
@@ -277,6 +278,7 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
             self.blockchain.deref(),
             &BlockHeader::Macro(header.clone()),
             &validator_key,
+            None,
         )
         .is_err()
         {

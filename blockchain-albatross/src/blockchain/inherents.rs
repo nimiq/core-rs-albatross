@@ -41,7 +41,7 @@ impl Blockchain {
     pub fn inherent_from_fork_proof(
         &self,
         fork_proof: &ForkProof,
-        _txn_option: Option<&Transaction>,
+        txn_option: Option<&Transaction>,
     ) -> Inherent {
         // Get the address of the validator registry/staking contract.
         let validator_registry = NetworkInfo::from_network_id(self.network_id)
@@ -53,6 +53,7 @@ impl Blockchain {
             .get_slot_owner_at(
                 fork_proof.header1.block_number,
                 fork_proof.header1.view_number,
+                txn_option,
             )
             .expect("Couldn't calculate slot owner!");
 
@@ -76,7 +77,7 @@ impl Blockchain {
     pub fn inherents_from_view_changes(
         &self,
         view_changes: &ViewChanges,
-        _txn_option: Option<&Transaction>,
+        txn_option: Option<&Transaction>,
     ) -> Vec<Inherent> {
         // Get the address of the validator registry/staking contract.
         let validator_registry = NetworkInfo::from_network_id(self.network_id)
@@ -88,7 +89,7 @@ impl Blockchain {
             .map(|view_number| {
                 // Get the slot owner and slot number for this block number and view number.
                 let (producer, slot) = self
-                    .get_slot_owner_at(view_changes.block_number, view_number)
+                    .get_slot_owner_at(view_changes.block_number, view_number, txn_option)
                     .expect("Couldn't calculate slot owner!");
 
                 debug!("Slash inherent: view change: {}", producer.public_key);

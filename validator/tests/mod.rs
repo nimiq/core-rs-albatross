@@ -133,7 +133,7 @@ fn validator_for_slot(
 
     let (slot, _) = consensus
         .blockchain
-        .get_slot_owner_at(block_number, view_number)
+        .get_slot_owner_at(block_number, view_number, None)
         .expect("Couldn't find slot owner!");
 
     validators
