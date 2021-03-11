@@ -408,7 +408,7 @@ impl HistoryStore {
 
     /// Gets an extended transaction by its hash. Note that this hash is the leaf hash (see MMRHash)
     /// of the transaction, not a simple Blake2b hash of the transaction.
-    fn get_extended_tx(
+    pub fn get_extended_tx(
         &self,
         hash: &Blake2bHash,
         txn_option: Option<&Transaction>,
@@ -426,7 +426,7 @@ impl HistoryStore {
     }
 
     /// Gets a leaf hash from the hash of its transaction (only basic, no inherents!).
-    fn get_leaf_hash(
+    pub fn get_leaf_hash(
         &self,
         hash: &Blake2bHash,
         txn_option: Option<&Transaction>,
