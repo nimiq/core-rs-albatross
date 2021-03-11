@@ -52,8 +52,8 @@ services:
       - VALIDATOR_BLOCK_DELAY="0"
       - VALIDATOR_KEY=f8ac8d3d52f72f86a97e83f6ccab9c8f60c70e92e13ea490ea3433b7611ab0058f0584d3e4a2b9856e482440967af01a6c878cb5ff0ea98acb07eec5fd0f5deb1db5fb2843d7bf34d7b9fddba5234943e6c3e491cbe08d071668affdf5d10000
       - RPC_ENABLED=true
-      - RPC_USERNAME=rpcclient
-      - RPC_PASSWORD=7F8E0E42-8ACF-47E7-8CC1-0EC66FA3D82D
+      # - RPC_USERNAME=rpcclient
+      # - RPC_PASSWORD=7F8E0E42-8ACF-47E7-8CC1-0EC66FA3D82D
       - RUST_BACKTRACE="1"
       - NIMIQ_LOG_LEVEL=error
       - NIMIQ_LOG_TIMESTAMPS=true
@@ -132,7 +132,7 @@ services:
       # Accept outside Nimiq protocol connections
       - traefik.http.routers.seed4.rule=Host(`seed4.${NETWORK_NAME:?err}`)
     depends_on:
-      - seed2
+      - seed3
     environment:
       - LISTEN_ADDRESSES=/ip4/7.0.0.5/tcp/8443/ws
       - NIMIQ_HOST=seed4.${NETWORK_NAME:?err}

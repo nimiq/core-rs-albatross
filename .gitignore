@@ -4,6 +4,7 @@
 /.idea
 *.iml
 .DS_Store
+*.code-workspace
 /client/db
 /client/peer_key.dat
 Cargo.lock

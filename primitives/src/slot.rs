@@ -292,7 +292,7 @@ impl ValidatorSlots {
         &self,
         public_key: &CompressedPublicKey,
     ) -> Option<(u16, u16)> {
-        log::debug!("secret_key = {:?}", public_key);
+        log::info!("public_key = {:?}", public_key);
 
         self.bands
             .iter()
