@@ -57,6 +57,7 @@ pub fn initialize_rpc_server(
     dispatcher.add(ConsensusDispatcher::new(
         client.consensus_proxy(),
         Some(unlocked_wallets),
+        // client.validator(),
     ));
     dispatcher.add(wallet_dispatcher);
     dispatcher.add(MempoolDispatcher::new(client.mempool()));
