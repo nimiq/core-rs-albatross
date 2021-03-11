@@ -53,6 +53,26 @@ pub trait ConsensusInterface {
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Self::Error>;
 
+    async fn create_rededicate_transaction(
+        &mut self,
+        wallet: Address,
+        from_validator_id: ValidatorId,
+        to_validator_id: ValidatorId,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<String, Self::Error>;
+
+    async fn send_rededicate_transaction(
+        &mut self,
+        wallet: Address,
+        from_validator_id: ValidatorId,
+        to_validator_id: ValidatorId,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<Blake2bHash, Self::Error>;
+
     async fn create_retire_transaction(
         &mut self,
         wallet: Address,
