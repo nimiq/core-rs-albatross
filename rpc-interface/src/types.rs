@@ -576,6 +576,8 @@ pub struct Stake {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Validator {
+    pub id: ValidatorId,
+
     pub public_key: CompressedPublicKey,
 
     pub balance: Coin,
@@ -594,6 +596,7 @@ impl Validator {
         _retire_time: Option<u32>,
     ) -> Self {
         Validator {
+            id: validator.id.clone(),
             public_key: validator.validator_key.clone(),
             balance: validator.balance,
             reward_address: validator.reward_address.clone(),
