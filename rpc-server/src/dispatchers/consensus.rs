@@ -107,16 +107,11 @@ impl ConsensusInterface for ConsensusDispatcher {
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Error> {
-        let transaction = TransactionBuilder::new_simple(
-            &self.get_wallet_keypair(&wallet)?,
-            recipient,
-            value,
-            fee,
-            self.validity_start_height(validity_start_height),
-            self.network_id(),
-        );
-
-        self.push_transaction(transaction).await
+        let raw_tx = self
+            .create_basic_transaction(wallet, recipient, value, fee, validity_start_height)
+            .await
+            .unwrap();
+        self.send_raw_transaction(raw_tx).await
     }
 
     async fn create_stake_transaction(
@@ -148,17 +143,11 @@ impl ConsensusInterface for ConsensusDispatcher {
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Error> {
-        let transaction = TransactionBuilder::new_stake(
-            None,
-            &self.get_wallet_keypair(&wallet)?,
-            &validator_id,
-            value,
-            fee,
-            self.validity_start_height(validity_start_height),
-            self.network_id(),
-        );
-
-        self.push_transaction(transaction).await
+        let raw_tx = self
+            .create_stake_transaction(wallet, validator_id, value, fee, validity_start_height)
+            .await
+            .unwrap();
+        self.send_raw_transaction(raw_tx).await
     }
 
     async fn create_retire_transaction(
@@ -190,17 +179,11 @@ impl ConsensusInterface for ConsensusDispatcher {
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Error> {
-        let transaction = TransactionBuilder::new_retire(
-            None,
-            &self.get_wallet_keypair(&wallet)?,
-            &validator_id,
-            value,
-            fee,
-            self.validity_start_height(validity_start_height),
-            self.network_id(),
-        );
-
-        self.push_transaction(transaction).await
+        let raw_tx = self
+            .create_retire_transaction(wallet, validator_id, value, fee, validity_start_height)
+            .await
+            .unwrap();
+        self.send_raw_transaction(raw_tx).await
     }
 
     async fn create_reactivate_transaction(
@@ -232,17 +215,11 @@ impl ConsensusInterface for ConsensusDispatcher {
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Error> {
-        let transaction = TransactionBuilder::new_reactivate(
-            None,
-            &self.get_wallet_keypair(&wallet)?,
-            &validator_id,
-            value,
-            fee,
-            self.validity_start_height(validity_start_height),
-            self.network_id(),
-        );
-
-        self.push_transaction(transaction).await
+        let raw_tx = self
+            .create_reactivate_transaction(wallet, validator_id, value, fee, validity_start_height)
+            .await
+            .unwrap();
+        self.send_raw_transaction(raw_tx).await
     }
 
     async fn create_unstake_transaction(
@@ -274,16 +251,10 @@ impl ConsensusInterface for ConsensusDispatcher {
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Error> {
-        let transaction = TransactionBuilder::new_unstake(
-            None,
-            &self.get_wallet_keypair(&wallet)?,
-            recipient,
-            value,
-            fee,
-            self.validity_start_height(validity_start_height),
-            self.network_id(),
-        );
-
-        self.push_transaction(transaction).await
+        let raw_tx = self
+            .create_unstake_transaction(wallet, recipient, value, fee, validity_start_height)
+            .await
+            .unwrap();
+        self.send_raw_transaction(raw_tx).await
     }
 }
