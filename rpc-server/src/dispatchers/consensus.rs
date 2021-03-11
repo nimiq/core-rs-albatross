@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use parking_lot::RwLock;
 
 use beserial::{Deserialize, Serialize};
+use nimiq_bls::{KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
 use nimiq_consensus_albatross::ConsensusProxy;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{Address, KeyPair};
@@ -12,7 +13,6 @@ use nimiq_network_libp2p::Network;
 use nimiq_primitives::{account::ValidatorId, coin::Coin, networks::NetworkId};
 use nimiq_transaction::Transaction;
 use nimiq_transaction_builder::TransactionBuilder;
-use nimiq_bls::{KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
 
 use nimiq_rpc_interface::{consensus::ConsensusInterface, types::ValidityStartHeight};
 
@@ -324,7 +324,9 @@ impl ConsensusInterface for ConsensusDispatcher {
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Error> {
-        let secret_key = BlsSecretKey::deserialize_from_vec(&hex::decode(validator_secret_key).unwrap()).unwrap();
+        let secret_key =
+            BlsSecretKey::deserialize_from_vec(&hex::decode(validator_secret_key).unwrap())
+                .unwrap();
         let validator_keypair = BlsKeyPair::from(secret_key);
 
         let transaction = TransactionBuilder::new_create_validator(
@@ -351,7 +353,14 @@ impl ConsensusInterface for ConsensusDispatcher {
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Error> {
         let raw_tx = self
-            .create_new_validator_transaction(wallet, reward_address, validator_secret_key, value, fee, validity_start_height)
+            .create_new_validator_transaction(
+                wallet,
+                reward_address,
+                validator_secret_key,
+                value,
+                fee,
+                validity_start_height,
+            )
             .await
             .unwrap();
         self.send_raw_transaction(raw_tx).await
@@ -367,14 +376,17 @@ impl ConsensusInterface for ConsensusDispatcher {
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Error> {
-        let old_secret_key = BlsSecretKey::deserialize_from_vec(&hex::decode(old_validator_secret_key).unwrap()).unwrap();
+        let old_secret_key =
+            BlsSecretKey::deserialize_from_vec(&hex::decode(old_validator_secret_key).unwrap())
+                .unwrap();
         let old_validator_keypair = BlsKeyPair::from(old_secret_key);
 
         let new_validator_keypair = match new_validator_secret_key {
             Some(key) => {
-                let new_secret_key = BlsSecretKey::deserialize_from_vec(&hex::decode(key).unwrap()).unwrap();
+                let new_secret_key =
+                    BlsSecretKey::deserialize_from_vec(&hex::decode(key).unwrap()).unwrap();
                 Some(BlsKeyPair::from(new_secret_key))
-            },
+            }
             _ => None,
         };
 
@@ -404,7 +416,15 @@ impl ConsensusInterface for ConsensusDispatcher {
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Error> {
         let raw_tx = self
-            .create_update_validator_transaction(wallet, validator_id, new_reward_address, old_validator_secret_key, new_validator_secret_key, fee, validity_start_height)
+            .create_update_validator_transaction(
+                wallet,
+                validator_id,
+                new_reward_address,
+                old_validator_secret_key,
+                new_validator_secret_key,
+                fee,
+                validity_start_height,
+            )
             .await
             .unwrap();
         self.send_raw_transaction(raw_tx).await
@@ -418,7 +438,9 @@ impl ConsensusInterface for ConsensusDispatcher {
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Error> {
-        let secret_key = BlsSecretKey::deserialize_from_vec(&hex::decode(validator_secret_key).unwrap()).unwrap();
+        let secret_key =
+            BlsSecretKey::deserialize_from_vec(&hex::decode(validator_secret_key).unwrap())
+                .unwrap();
         let validator_keypair = BlsKeyPair::from(secret_key);
 
         let transaction = TransactionBuilder::new_retire_validator(
@@ -443,7 +465,13 @@ impl ConsensusInterface for ConsensusDispatcher {
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Error> {
         let raw_tx = self
-            .create_retire_validator_transaction(wallet, validator_id, validator_secret_key, fee, validity_start_height)
+            .create_retire_validator_transaction(
+                wallet,
+                validator_id,
+                validator_secret_key,
+                fee,
+                validity_start_height,
+            )
             .await
             .unwrap();
         self.send_raw_transaction(raw_tx).await
@@ -457,7 +485,9 @@ impl ConsensusInterface for ConsensusDispatcher {
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Error> {
-        let secret_key = BlsSecretKey::deserialize_from_vec(&hex::decode(validator_secret_key).unwrap()).unwrap();
+        let secret_key =
+            BlsSecretKey::deserialize_from_vec(&hex::decode(validator_secret_key).unwrap())
+                .unwrap();
         let validator_keypair = BlsKeyPair::from(secret_key);
 
         let transaction = TransactionBuilder::new_reactivate_validator(
@@ -482,7 +512,13 @@ impl ConsensusInterface for ConsensusDispatcher {
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Error> {
         let raw_tx = self
-            .create_reactivate_validator_transaction(wallet, validator_id, validator_secret_key, fee, validity_start_height)
+            .create_reactivate_validator_transaction(
+                wallet,
+                validator_id,
+                validator_secret_key,
+                fee,
+                validity_start_height,
+            )
             .await
             .unwrap();
         self.send_raw_transaction(raw_tx).await
@@ -497,7 +533,9 @@ impl ConsensusInterface for ConsensusDispatcher {
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Error> {
-        let secret_key = BlsSecretKey::deserialize_from_vec(&hex::decode(validator_secret_key).unwrap()).unwrap();
+        let secret_key =
+            BlsSecretKey::deserialize_from_vec(&hex::decode(validator_secret_key).unwrap())
+                .unwrap();
         let validator_keypair = BlsKeyPair::from(secret_key);
 
         let transaction = TransactionBuilder::new_drop_validator(
@@ -524,7 +562,14 @@ impl ConsensusInterface for ConsensusDispatcher {
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Error> {
         let raw_tx = self
-            .create_drop_validator_transaction(validator_id, recipient, validator_secret_key, value, fee, validity_start_height)
+            .create_drop_validator_transaction(
+                validator_id,
+                recipient,
+                validator_secret_key,
+                value,
+                fee,
+                validity_start_height,
+            )
             .await
             .unwrap();
         self.send_raw_transaction(raw_tx).await
@@ -538,7 +583,9 @@ impl ConsensusInterface for ConsensusDispatcher {
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Error> {
-        let secret_key = BlsSecretKey::deserialize_from_vec(&hex::decode(validator_secret_key).unwrap()).unwrap();
+        let secret_key =
+            BlsSecretKey::deserialize_from_vec(&hex::decode(validator_secret_key).unwrap())
+                .unwrap();
         let validator_keypair = BlsKeyPair::from(secret_key);
 
         let transaction = TransactionBuilder::new_unpark_validator(
@@ -563,7 +610,13 @@ impl ConsensusInterface for ConsensusDispatcher {
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Error> {
         let raw_tx = self
-            .create_unpark_validator_transaction(wallet, validator_id, validator_secret_key, fee, validity_start_height)
+            .create_unpark_validator_transaction(
+                wallet,
+                validator_id,
+                validator_secret_key,
+                fee,
+                validity_start_height,
+            )
             .await
             .unwrap();
         self.send_raw_transaction(raw_tx).await
