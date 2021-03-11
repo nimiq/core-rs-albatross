@@ -4,13 +4,15 @@ use async_trait::async_trait;
 use futures::stream::{BoxStream, StreamExt};
 
 use nimiq_account::Account;
-use nimiq_blockchain_albatross::{AbstractBlockchain, Blockchain, BlockchainEvent};
+use nimiq_blockchain_albatross::{
+    history_store::ExtendedTransaction, AbstractBlockchain, Blockchain, BlockchainEvent,
+};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::policy;
 use nimiq_rpc_interface::{
     blockchain::BlockchainInterface,
-    types::{Block, OrLatest, SlashedSlots, Slot, Stake, Stakes, Validator},
+    types::{Block, OrLatest, SlashedSlots, Slot, Stake, Stakes, Transaction, Validator},
 };
 
 use crate::error::Error;
@@ -124,8 +126,33 @@ impl BlockchainInterface for BlockchainDispatcher {
         Err(Error::NotImplemented)
     }
 
-    async fn get_transaction_by_hash(&mut self, _hash: Blake2bHash) -> Result<(), Error> {
-        Err(Error::NotImplemented)
+    async fn get_transaction_by_hash(&mut self, hash: Blake2bHash) -> Result<Transaction, Error> {
+        // TODO: Check mempool for the transaction, too
+
+        let extended_tx = self
+            .blockchain
+            .history_store
+            .get_extended_tx(&hash, None)
+            .ok_or_else(|| Error::TransactionNotFound(hash))?;
+
+        let block_number = extended_tx.block_number;
+        // let timestamp = extended_tx.block_time;
+        let transaction = &ExtendedTransaction::to(vec![extended_tx]).0[0];
+
+        let block = self
+            .blockchain
+            .get_block_at(block_number, false, None)
+            .ok_or_else(|| Error::BlockNotFound(block_number.into()))?;
+
+        Ok(Transaction::from_blockchain(
+            transaction.clone(),
+            // TODO: Get transaction index from block
+            0,
+            &block.hash(),
+            block.block_number(),
+            block.timestamp(),
+            self.blockchain.block_number(),
+        ))
     }
 
     async fn get_transaction_receipt(&mut self, _hash: Blake2bHash) -> Result<(), Error> {

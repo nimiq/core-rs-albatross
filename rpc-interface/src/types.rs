@@ -287,6 +287,9 @@ pub struct Transaction {
     pub flags: u8,
 
     pub validity_start_height: u32,
+
+    #[serde(with = "crate::serde_helpers::hex")]
+    pub proof: Vec<u8>,
 }
 
 impl Transaction {
@@ -312,6 +315,7 @@ impl Transaction {
             flags: transaction.flags.bits() as u8,
             data: transaction.data,
             validity_start_height: transaction.validity_start_height,
+            proof: transaction.proof,
         }
     }
 }

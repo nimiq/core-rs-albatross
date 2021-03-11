@@ -5,7 +5,7 @@ use nimiq_account::Account;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 
-use crate::types::{Block, OrLatest, SlashedSlots, Slot, Stakes};
+use crate::types::{Block, OrLatest, SlashedSlots, Slot, Stakes, Transaction};
 
 #[cfg_attr(
     feature = "proxy",
@@ -44,7 +44,10 @@ pub trait BlockchainInterface {
 
     async fn get_raw_transaction_info(&mut self, raw_tx: String) -> Result<(), Self::Error>;
 
-    async fn get_transaction_by_hash(&mut self, hash: Blake2bHash) -> Result<(), Self::Error>;
+    async fn get_transaction_by_hash(
+        &mut self,
+        hash: Blake2bHash,
+    ) -> Result<Transaction, Self::Error>;
 
     async fn get_transaction_receipt(&mut self, hash: Blake2bHash) -> Result<(), Self::Error>;
 
