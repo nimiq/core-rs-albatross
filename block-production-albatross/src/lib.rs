@@ -123,6 +123,19 @@ impl BlockProducer {
             .hash_with(&transactions, &inherents, block_number, timestamp)
             .expect("Failed to compute accounts hash during block production");
 
+        // Calculate the extended transactions from the transactions and the inherents.
+        let ext_txs =
+            ExtendedTransaction::from(block_number, timestamp, transactions.clone(), inherents);
+
+        // Store the extended transactions into the history tree and calculate the history root.
+        let mut txn = self.blockchain.write_transaction();
+
+        let history_root = self
+            .blockchain
+            .history_store
+            .add_to_history(&mut txn, policy::epoch_at(block_number), &ext_txs)
+            .expect("Failed to compute history root during block production.");
+
         // Create the micro block body.
         let body = MicroBody {
             fork_proofs,
@@ -140,6 +153,7 @@ impl BlockProducer {
             extra_data,
             state_root,
             body_root: body.hash(),
+            history_root,
         };
 
         // Signs the block header using the validator key.

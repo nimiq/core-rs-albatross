@@ -124,10 +124,10 @@ impl Block {
     }
 
     /// Returns the history root of the block.
-    pub fn history_root(&self) -> Option<&Blake2bHash> {
+    pub fn history_root(&self) -> &Blake2bHash {
         match self {
-            Block::Macro(ref block) => Some(&block.header.history_root),
-            Block::Micro(_) => None,
+            Block::Macro(ref block) => &block.header.history_root,
+            Block::Micro(ref block) => &block.header.history_root,
         }
     }
 

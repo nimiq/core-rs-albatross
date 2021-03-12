@@ -348,27 +348,20 @@ impl Blockchain {
             return Err(PushError::InvalidBlock(BlockError::AccountsHashMismatch));
         }
 
+        // Verify the history root.
+        let real_history_root = self
+            .history_store
+            .get_history_tree_root(policy::epoch_at(block.block_number()), txn_opt)
+            .ok_or(PushError::InvalidBlock(BlockError::InvalidHistoryRoot))?;
+
+        if &real_history_root != block.history_root() {
+            warn!("Rejecting block - History root doesn't match real history root");
+            return Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot));
+        }
+
         // For macro blocks we have additional checks. We simply construct what the body should be
         // from our own state and then compare it with the body hash in the header.
-        // Also, we check the history root in the header.
         if let Block::Macro(macro_block) = block {
-            // Get the history root.
-            let real_history_root = match self
-                .history_store
-                .get_history_tree_root(policy::epoch_at(macro_block.header.block_number), txn_opt)
-            {
-                Some(hash) => hash,
-                None => {
-                    return Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot));
-                }
-            };
-
-            // Compare it with the one in the header.
-            if &real_history_root != block.history_root().unwrap() {
-                warn!("Rejecting block - History root doesn't match real history root");
-                return Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot));
-            }
-
             // Get the lost rewards and disabled sets.
             let staking_contract = self.get_staking_contract();
 

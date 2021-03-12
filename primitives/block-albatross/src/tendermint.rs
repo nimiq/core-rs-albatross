@@ -9,7 +9,7 @@ use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
 use nimiq_hash_derive::SerializeContent;
 use nimiq_nano_sync::pk_tree_construct;
 use nimiq_network_interface::message::Message as NetworkMessage;
-use nimiq_primitives::policy::{SLOTS, TWO_THIRD_SLOTS};
+use nimiq_primitives::policy::TWO_THIRD_SLOTS;
 use nimiq_primitives::slots::Validators;
 use std::io;
 

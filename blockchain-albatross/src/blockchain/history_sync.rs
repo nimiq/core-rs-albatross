@@ -96,7 +96,7 @@ impl Blockchain {
         let history_root = HistoryStore::root_from_ext_txs(ext_txs)
             .ok_or(PushError::InvalidBlock(BlockError::InvalidHistoryRoot))?;
 
-        if block.history_root().unwrap() != &history_root {
+        if block.history_root() != &history_root {
             warn!("Rejecting block - wrong history root");
             return Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot));
         }

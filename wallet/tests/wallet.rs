@@ -48,7 +48,7 @@ fn test_serialize_deserialize() {
             assert_eq!(wallet, deserialized);
         }
         Err(e) => {
-            assert!(false, format!("Error: {}", e));
+            assert!(false, "Error: {}", e);
         }
     }
 }
