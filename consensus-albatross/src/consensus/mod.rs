@@ -108,6 +108,8 @@ pub struct Consensus<N: Network> {
     established_flag: Arc<AtomicBool>,
     head_requests: Option<HeadRequests<N::PeerType>>,
     head_requests_time: Option<Instant>,
+
+    min_peers: usize,
 }
 
 impl<N: Network> Consensus<N> {
@@ -124,6 +126,17 @@ impl<N: Network> Consensus<N> {
         mempool: Arc<Mempool>,
         network: Arc<N>,
         sync_protocol: BoxStream<'static, Arc<ConsensusAgent<N::PeerType>>>,
+    ) -> Self {
+        Self::with_min_peers(env, blockchain, mempool, network, sync_protocol, Self::MIN_PEERS_ESTABLISHED).await
+    }
+
+    pub async fn with_min_peers(
+        env: Environment,
+        blockchain: Arc<Blockchain>,
+        mempool: Arc<Mempool>,
+        network: Arc<N>,
+        sync_protocol: BoxStream<'static, Arc<ConsensusAgent<N::PeerType>>>,
+        min_peers: usize,
     ) -> Self {
         let block_stream = network
             .subscribe::<BlockTopic>(&BlockTopic::default())
@@ -147,6 +160,7 @@ impl<N: Network> Consensus<N> {
             block_stream,
             tx_stream,
             sync_protocol,
+            min_peers,
         )
     }
 
@@ -158,6 +172,7 @@ impl<N: Network> Consensus<N> {
         block_stream: BoxStream<'static, Block>,
         tx_stream: BoxStream<'static, Transaction>,
         sync_protocol: BoxStream<'static, Arc<ConsensusAgent<N::PeerType>>>,
+        min_peers: usize,
     ) -> Self {
         let (tx, _rx) = broadcast(256);
 
@@ -186,6 +201,8 @@ impl<N: Network> Consensus<N> {
             established_flag: Arc::new(AtomicBool::new(false)),
             head_requests: None,
             head_requests_time: None,
+
+            min_peers,
         }
     }
 
@@ -223,7 +240,7 @@ impl<N: Network> Consensus<N> {
 
     /// Calculates and sets established state, returns a ConsensusEvent if the state changed.
     /// Once consensus is established, we can only loose it if we loose all our peers.
-    /// To reach consensus established state, we need at least `MIN_PEERS_ESTABLISHED` peers and
+    /// To reach consensus established state, we need at least `minPeers` peers and
     /// one of the following conditions must be true:
     /// - we accepted at least `MIN_BLOCKS_ESTABLISHED` block announcements
     /// - we know at least 2/3 of the head blocks of our peers
@@ -250,7 +267,7 @@ impl<N: Network> Consensus<N> {
             // Then, we check that we either:
             // - accepted a minimum number of block announcements, or
             // - know the head state of a majority of our peers
-            if self.num_agents() >= Self::MIN_PEERS_ESTABLISHED {
+            if self.num_agents() >= self.min_peers {
                 trace!("Trying to establish consensus, number of synced peers satisfied.");
                 if self.block_queue.accepted_block_announcements() >= Self::MIN_BLOCKS_ESTABLISHED {
                     trace!("Consensus established, number of accepted announcements satisfied.");

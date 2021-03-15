@@ -33,7 +33,7 @@ use thiserror::Error;
 use tokio::sync::broadcast;
 use tracing::Instrument;
 
-#[cfg(test)]
+#[cfg(feature = "memory-transport")]
 use libp2p::core::transport::MemoryTransport;
 
 use beserial::{Deserialize, Serialize};
@@ -314,7 +314,7 @@ impl Network {
 
             // Memory transport for testing
             // TODO: Use websocket over the memory transport
-            #[cfg(test)]
+            #[cfg(feature = "memory-transport")]
             let transport = transport.or_transport(MemoryTransport::default());
 
             transport

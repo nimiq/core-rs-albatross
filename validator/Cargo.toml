@@ -42,9 +42,7 @@ nimiq-macros = { path = "../macros" }
 nimiq-mempool = { path = "../mempool" }
 nimiq-messages = { path = "../messages" }
 nimiq-nano-sync = { path = "../nano-sync", default-features = false }
-nimiq-network-albatross = { path = "../network-albatross" }
 nimiq-network-interface = { path = "../network-interface" }
-nimiq-network-mock = { path = "../network-mock" }
 nimiq-primitives = { path = "../primitives" }
 nimiq-tendermint = { path = "../tendermint" }
 nimiq-utils = { path = "../utils", features = ["observer", "timers", "time", "mutable-once", "throttled-queue", "rate-limit"] }
@@ -54,9 +52,11 @@ nimiq-vrf = { path = "../vrf" }
 [dev-dependencies]
 hex = "0.4"
 simple_logger = "1.9.0"
+tokio = { version = "0.2", features = ["rt-core", "time", "test-util"] }
 
 nimiq-build-tools = { path = "../build-tools" }
-tokio = { version = "0.2", features = ["rt-core", "time", "test-util"] }
+nimiq-network-mock = { path = "../network-mock" }
+nimiq-network-libp2p = { path = "../network-libp2p", features = ["memory-transport"] }
 
 [features]
 metrics = []

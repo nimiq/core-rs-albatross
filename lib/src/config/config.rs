@@ -352,6 +352,7 @@ impl StorageConfig {
 
     pub(crate) fn identity_keypair(&self) -> Result<IdentityKeypair, Error> {
         match self {
+            StorageConfig::Volatile => Ok(IdentityKeypair::generate_ed25519()),
             StorageConfig::Filesystem(file_storage) => {
                 Ok(FileStore::new(&file_storage.peer_key)
                     .load_or_store(IdentityKeypair::generate_ed25519)?)
