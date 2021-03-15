@@ -1,7 +1,11 @@
-use std::sync::{Arc, Weak};
-
-use futures::{FutureExt, Stream, StreamExt};
+use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Weak};
+use std::time::{Duration, Instant};
+
+use futures::stream::BoxStream;
+use futures::task::{Context, Poll};
+use futures::{FutureExt, Stream, StreamExt};
 use tokio::sync::broadcast::{
     channel as broadcast, Receiver as BroadcastReceiver, Sender as BroadcastSender,
 };
@@ -11,17 +15,13 @@ use blockchain_albatross::Blockchain;
 use database::Environment;
 use mempool::{Mempool, ReturnCode};
 use network_interface::network::Network;
+use nimiq_network_interface::network::Topic;
 use transaction::Transaction;
 
 use crate::consensus::head_requests::{HeadRequests, HeadRequestsResult};
 use crate::consensus_agent::ConsensusAgent;
 use crate::sync::block_queue::{BlockQueue, BlockQueueConfig, BlockQueueEvent, BlockTopic};
 use crate::sync::request_component::BlockRequestComponent;
-use futures::stream::BoxStream;
-use futures::task::{Context, Poll};
-use nimiq_network_interface::network::Topic;
-use std::pin::Pin;
-use std::time::{Duration, Instant};
 
 mod head_requests;
 mod request_response;
@@ -127,7 +127,15 @@ impl<N: Network> Consensus<N> {
         network: Arc<N>,
         sync_protocol: BoxStream<'static, Arc<ConsensusAgent<N::PeerType>>>,
     ) -> Self {
-        Self::with_min_peers(env, blockchain, mempool, network, sync_protocol, Self::MIN_PEERS_ESTABLISHED).await
+        Self::with_min_peers(
+            env,
+            blockchain,
+            mempool,
+            network,
+            sync_protocol,
+            Self::MIN_PEERS_ESTABLISHED,
+        )
+        .await
     }
 
     pub async fn with_min_peers(

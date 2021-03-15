@@ -2,21 +2,17 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures::{future, StreamExt};
-use log::LevelFilter::{Debug, Info, Trace};
+use log::LevelFilter::{Debug, Info};
 use rand::prelude::StdRng;
 use rand::SeedableRng;
-use tokio::sync::broadcast;
 use tokio::time;
 
-use nimiq_block_albatross::{Message, MultiSignature, SignedViewChange, ViewChange};
-use nimiq_blockchain_albatross::{AbstractBlockchain, Blockchain, BlockchainEvent};
-use nimiq_bls::{AggregatePublicKey, AggregateSignature, KeyPair};
+use nimiq_blockchain_albatross::{AbstractBlockchain, Blockchain};
+use nimiq_bls::KeyPair;
 use nimiq_build_tools::genesis::{GenesisBuilder, GenesisInfo};
-use nimiq_collections::BitSet;
 use nimiq_consensus_albatross::sync::history::HistorySync;
-use nimiq_consensus_albatross::{Consensus as AbstractConsensus, ConsensusEvent};
+use nimiq_consensus_albatross::Consensus as AbstractConsensus;
 use nimiq_database::volatile::VolatileEnvironment;
-use nimiq_handel::update::{LevelUpdate, LevelUpdateMessage};
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{Address, SecureGenerate};
 use nimiq_mempool::{Mempool, MempoolConfig};
@@ -24,14 +20,11 @@ use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_libp2p::discovery::peer_contacts::{PeerContact, Services};
 use nimiq_network_libp2p::libp2p::core::multiaddr::multiaddr;
 use nimiq_network_libp2p::{Config, Keypair, Network};
-use nimiq_primitives::account::ValidatorId;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_utils::time::OffsetTime;
-use nimiq_validator::aggregation::view_change::SignedViewChangeMessage;
 use nimiq_validator::validator::Validator as AbstractValidator;
 use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
-use nimiq_vrf::VrfSeed;
 
 type Consensus = AbstractConsensus<Network>;
 type Validator = AbstractValidator<Network, ValidatorNetworkImpl<Network>>;
@@ -64,7 +57,7 @@ async fn consensus(peer_id: u64, genesis_info: GenesisInfo) -> Consensus {
         None,
     );
     peer_contact.set_current_time();
-    let mut config = Config::new(peer_key, peer_contact, genesis_info.hash.clone());
+    let config = Config::new(peer_key, peer_contact, genesis_info.hash.clone());
     let network = Arc::new(Network::new(clock, config).await);
     network.listen_on_addresses(vec![peer_address]).await;
 
@@ -146,7 +139,8 @@ async fn four_validators_can_create_an_epoch() {
         .with_module_level("nimiq_tendermint", Debug)
         .with_module_level("nimiq_blockchain_albatross", Debug)
         .with_module_level("nimiq_block_albatross", Debug)
-        .init();
+        .init()
+        .ok();
 
     let validators = validators(4).await;
 
