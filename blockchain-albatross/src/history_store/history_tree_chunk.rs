@@ -14,8 +14,6 @@ use crate::history_store::{ExtendedTransaction, HistoryTreeHash};
 /// TODO: Update number.
 pub const CHUNK_SIZE: usize = 1000;
 
-/// A wrapper for the Blake2bHash. This is necessary because Rust doesn't let us implement traits
-/// for structs defined in external crates.
 pub struct HistoryTreeChunk {
     pub(crate) proof: RangeProof<HistoryTreeHash>,
     pub history: Vec<ExtendedTransaction>,
