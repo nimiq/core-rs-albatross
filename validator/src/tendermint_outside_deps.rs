@@ -13,7 +13,6 @@ use blockchain_albatross::{AbstractBlockchain, Blockchain};
 use bls::{KeyPair, PublicKey};
 use database::WriteTransaction;
 use hash::{Blake2bHash, Hash};
-use network_interface::network::Topic;
 use nimiq_primitives::slots::Validators;
 use nimiq_validator_network::ValidatorNetwork;
 use primitives::policy::{TENDERMINT_TIMEOUT_DELTA, TENDERMINT_TIMEOUT_INIT};
@@ -24,6 +23,7 @@ use tendermint::{
 use utils::time::OffsetTime;
 
 use crate::aggregation::tendermint::HandelTendermintAdapter;
+use crate::validator::ProposalTopic;
 use std::ops::Deref;
 
 /// The struct that interfaces with the Tendermint crate. It only has to implement the
