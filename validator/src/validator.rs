@@ -3,14 +3,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures::{
-    stream::BoxStream,
-    task::{noop_waker_ref, Context, Poll},
-    Future, StreamExt,
+    future,
+    task::{Context, Poll, Waker},
+    Future, Stream, StreamExt,
 };
-use tokio::{
-    sync::{broadcast, mpsc},
-    task::JoinHandle,
-};
+use linked_hash_map::LinkedHashMap;
+use parking_lot::RwLock;
+use tokio::sync::{broadcast, mpsc};
 
 use block_albatross::{Block, BlockType, SignedTendermintProposal, ViewChange, ViewChangeProof};
 use blockchain_albatross::{AbstractBlockchain, BlockchainEvent, ForkEvent, PushResult};
@@ -20,7 +19,10 @@ use consensus_albatross::{
 };
 use database::{Database, Environment, ReadTransaction, WriteTransaction};
 use hash::Blake2bHash;
-use network_interface::network::{Network, Topic};
+use network_interface::{
+    network::{Network, PubsubId, Topic},
+    peer::Peer,
+};
 use nimiq_block_production_albatross::BlockProducer;
 use nimiq_tendermint::TendermintReturn;
 use nimiq_validator_network::ValidatorNetwork;
@@ -30,6 +32,7 @@ use crate::r#macro::{PersistedMacroState, ProduceMacroBlock};
 use crate::slash::ForkProofPool;
 
 pub struct ProposalTopic;
+
 impl Topic for ProposalTopic {
     type Item = SignedTendermintProposal;
 
@@ -72,14 +75,7 @@ pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork + 's
     database: Database,
     env: Environment,
 
-    proposal_task: Option<
-        JoinHandle<
-            Result<
-                BoxStream<'static, (<ProposalTopic as Topic>::Item, TValidatorNetwork::PubsubId)>,
-                TValidatorNetwork::Error,
-            >,
-        >,
-    >,
+    proposal_receiver: ProposalReceiver<TValidatorNetwork>,
 
     consensus_event_rx: broadcast::Receiver<ConsensusEvent<TNetwork>>,
     blockchain_event_rx: mpsc::UnboundedReceiver<BlockchainEvent>,
@@ -131,12 +127,8 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             read_transaction.get(&database, Self::MACRO_STATE_KEY)
         };
 
-        // Spawn into task so the lifetime does not expire.
-        // Also start executing immediately as we will need to wait for this on the first macro block.
-        let nw = network.clone();
-        let proposal_task = Some(tokio::spawn(
-            async move { nw.subscribe(&ProposalTopic).await },
-        ));
+        let network1 = Arc::clone(&network);
+        let (proposal_sender, proposal_receiver) = ProposalBuffer::new();
 
         let mut this = Self {
             consensus: consensus.proxy(),
@@ -146,7 +138,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             database,
             env,
 
-            proposal_task,
+            proposal_receiver,
 
             consensus_event_rx,
             blockchain_event_rx,
@@ -162,6 +154,16 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             micro_state,
         };
         this.init();
+
+        tokio::spawn(async move {
+            network1
+                .subscribe(&ProposalTopic)
+                .await
+                .expect("Failed to subscribe to proposal topic")
+                .for_each(|proposal| async { proposal_sender.send(proposal) })
+                .await
+        });
+
         this
     }
 
@@ -188,28 +190,24 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             }
         }
 
-        let validator_keys: Vec<CompressedPublicKey> = self
-            .consensus
-            .blockchain
-            .current_validators()
-            .unwrap()
+        let validator_keys: Vec<CompressedPublicKey> = validators
             .iter()
             .map(|validator| validator.public_key.compressed().clone())
             .collect();
         let key = self.signing_key.clone();
-        let nw = self.network.clone();
+        let network = Arc::clone(&self.network);
 
         // TODO might better be done without the task.
         // However we have an entire batch to execute the task so it should not be extremely bad.
         // Also the setting up of our own public key record should probably not be done here but in `init` instead.
         tokio::spawn(async move {
-            if let Err(err) = nw
+            if let Err(err) = network
                 .set_public_key(&key.public_key.compress(), &key.secret_key)
                 .await
             {
                 error!("could not set up DHT record: {:?}", err);
             }
-            nw.set_validators(validator_keys).await;
+            network.set_validators(validator_keys).await;
         });
     }
 
@@ -233,52 +231,6 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                     self.signing_key.clone(),
                 );
 
-                let (mut sender, receiver) = mpsc::channel::<(
-                    <ProposalTopic as Topic>::Item,
-                    TValidatorNetwork::PubsubId,
-                )>(2);
-
-                if let Some(task) = self.proposal_task.take() {
-                    self.proposal_task = Some(tokio::spawn(async move {
-                        if let Ok(stream) = task.await {
-                            if let Ok(mut stream) = stream {
-                                while let Some(item) = stream.next().await {
-                                    let mut cx = Context::from_waker(noop_waker_ref());
-                                    match sender.poll_ready(&mut cx) {
-                                        Poll::Pending => {
-                                            // Todo: buffer proposal if necessary.
-                                            log::debug!("Proposal recipient not able to receive new Messages. Waiting to try with the next proposal!");
-                                        }
-                                        Poll::Ready(Ok(_)) => {
-                                            if let Err(_err) = sender.send(item).await {
-                                                log::debug!("failed to send message through sender, even though poll_ready returned Ok");
-                                            }
-                                        }
-                                        Poll::Ready(Err(_err)) => {
-                                            // recipient is no longer present, leave the loop and return the subscription stream.
-                                            log::trace!("Sonder for proposals no longer has a recipient, Block was produced!");
-                                            break;
-                                        }
-                                    }
-                                }
-                                let mut cx = Context::from_waker(noop_waker_ref());
-                                while let Poll::Ready(Some(_)) = stream.poll_next_unpin(&mut cx) {
-                                    // noop. Empty out the stream before returning it, dropping all accumulated messages.
-                                }
-                                Ok(stream)
-                            } else {
-                                // Todo: Recover from this?
-                                panic!("subscription stream returned err");
-                            }
-                        } else {
-                            // Todo: Recover from this?
-                            panic!("failed to join subscription task");
-                        }
-                    }));
-                } else {
-                    panic!("There is no proposal task. Validator dysfunctional");
-                }
-
                 // Take the current state and see if it is applicable to the current height.
                 // We do not need to keep it as it is persisted.
                 // This will always result in None in case the validator works as intended.
@@ -295,6 +247,8 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                     })
                     .flatten();
 
+                let proposal_stream = self.proposal_receiver.clone().boxed();
+
                 self.macro_producer = Some(ProduceMacroBlock::new(
                     self.consensus.blockchain.clone(),
                     self.network.clone(),
@@ -302,7 +256,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                     self.signing_key.clone(),
                     self.validator_id(),
                     state,
-                    receiver.boxed(),
+                    proposal_stream,
                 ));
             }
             BlockType::Micro => {
@@ -404,17 +358,16 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                                 &block_copy.header.block_number
                             );
                         }
+
                         // todo get rid of spawn
-                        let nw = self.network.clone();
+                        let network = Arc::clone(&self.network);
                         tokio::spawn(async move {
                             trace!("publishing macro block: {:?}", &block_copy);
-                            if nw
+                            network
                                 .publish(&BlockTopic, Block::Macro(block_copy))
                                 .await
-                                .is_err()
-                            {
-                                error!("Failed to publish Block");
-                            }
+                                .map_err(|e| error!("Failed to publish block: {:?}", e))
+                                .ok();
                         });
                     }
                 }
@@ -436,6 +389,8 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                         Self::MACRO_STATE_KEY,
                         &beserial::Serialize::serialize_to_vec(&persistable_state),
                     );
+
+                    write_transaction.commit();
 
                     self.macro_state = Some(persistable_state);
                 }
@@ -537,5 +492,67 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Future
         }
 
         Poll::Pending
+    }
+}
+
+struct ProposalBuffer<TValidatorNetwork: ValidatorNetwork + 'static> {
+    buffer: LinkedHashMap<
+        <TValidatorNetwork::PeerType as Peer>::Id,
+        (<ProposalTopic as Topic>::Item, TValidatorNetwork::PubsubId),
+    >,
+    waker: Option<Waker>,
+}
+impl<TValidatorNetwork: ValidatorNetwork + 'static> ProposalBuffer<TValidatorNetwork> {
+    pub fn new() -> (
+        ProposalSender<TValidatorNetwork>,
+        ProposalReceiver<TValidatorNetwork>,
+    ) {
+        let buffer = Self {
+            buffer: LinkedHashMap::new(),
+            waker: None,
+        };
+        let shared = Arc::new(RwLock::new(buffer));
+        let sender = ProposalSender {
+            shared: Arc::clone(&shared),
+        };
+        let receiver = ProposalReceiver { shared };
+        (sender, receiver)
+    }
+}
+
+struct ProposalSender<TValidatorNetwork: ValidatorNetwork + 'static> {
+    shared: Arc<RwLock<ProposalBuffer<TValidatorNetwork>>>,
+}
+impl<TValidatorNetwork: ValidatorNetwork + 'static> ProposalSender<TValidatorNetwork> {
+    pub fn send(&self, proposal: (<ProposalTopic as Topic>::Item, TValidatorNetwork::PubsubId)) {
+        let source = proposal.1.propagation_source();
+        let mut shared = self.shared.write();
+        shared.buffer.insert(source, proposal);
+        shared.waker.take().map(|waker| waker.wake());
+    }
+}
+
+struct ProposalReceiver<TValidatorNetwork: ValidatorNetwork + 'static> {
+    shared: Arc<RwLock<ProposalBuffer<TValidatorNetwork>>>,
+}
+impl<TValidatorNetwork: ValidatorNetwork + 'static> Stream for ProposalReceiver<TValidatorNetwork> {
+    type Item = (<ProposalTopic as Topic>::Item, TValidatorNetwork::PubsubId);
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let mut shared = self.shared.write();
+        if shared.buffer.is_empty() {
+            shared.waker.replace(cx.waker().clone());
+            Poll::Pending
+        } else {
+            let value = shared.buffer.pop_front().map(|entry| entry.1);
+            Poll::Ready(value)
+        }
+    }
+}
+impl<TValidatorNetwork: ValidatorNetwork + 'static> Clone for ProposalReceiver<TValidatorNetwork> {
+    fn clone(&self) -> Self {
+        Self {
+            shared: Arc::clone(&self.shared),
+        }
     }
 }

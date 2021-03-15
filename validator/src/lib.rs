@@ -19,7 +19,6 @@ extern crate nimiq_keys as keys;
 extern crate nimiq_macros as macros;
 extern crate nimiq_mempool as mempool;
 extern crate nimiq_messages as messages;
-extern crate nimiq_network_albatross as network;
 extern crate nimiq_network_interface as network_interface;
 extern crate nimiq_primitives as primitives;
 extern crate nimiq_tendermint as tendermint;

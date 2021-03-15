@@ -48,7 +48,7 @@ impl<P> Clone for NetworkEvent<P> {
     }
 }
 
-pub trait PubsubId<PeerId>: Send {
+pub trait PubsubId<PeerId>: Send + Sync {
     fn propagation_source(&self) -> PeerId;
 }
 
