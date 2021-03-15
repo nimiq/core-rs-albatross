@@ -22,8 +22,8 @@ impl<N: ValidatorNetwork> SendingFuture<N> {
         let result = self.network.send_to(&[msg.1], &msg.0).await;
         if let Some(Err(err)) = result.get(0) {
             debug!(
-                "Sending msg: {:?} to validator #{} failed: {:?}",
-                &msg.0, &msg.1, err
+                "Sending msg to validator #{} failed: {:?} ({:?})",
+                &msg.1, err, &msg.0
             );
         }
     }

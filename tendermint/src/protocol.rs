@@ -39,6 +39,8 @@ impl<
         let valid_round = self.state.valid_round;
 
         if self.deps.is_our_turn(round) {
+            debug!("Our turn at round {}, broadcasting proposal", round);
+
             let proposal = if self.state.valid_value.is_some() {
                 self.state.valid_value.clone().unwrap()
             } else {
@@ -57,6 +59,7 @@ impl<
             self.broadcast_and_aggregate_prevote(round, VoteDecision::Block)
                 .await?;
         } else {
+            debug!("Not our turn at round {}, waiting for proposal", round);
             self.await_proposal(round).await?;
         }
 

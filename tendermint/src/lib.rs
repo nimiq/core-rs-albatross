@@ -1,5 +1,8 @@
 #![feature(trait_alias)]
 
+#[macro_use]
+extern crate log;
+
 use nimiq_hash::Hash;
 use std::fmt::Debug;
 

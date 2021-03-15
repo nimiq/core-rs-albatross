@@ -529,7 +529,7 @@ impl PeerContactBook {
     }
 
     pub fn self_add_addresses<I: IntoIterator<Item = Multiaddr>>(&mut self, addresses: I) {
-        log::info!(
+        log::debug!(
             "Addresses observed for us: {:#?}",
             addresses.into_iter().collect::<Vec<Multiaddr>>()
         );

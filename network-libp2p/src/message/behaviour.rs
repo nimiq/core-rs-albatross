@@ -86,7 +86,7 @@ impl MessageBehaviour {
                     type_id
                 );
             } else {
-                log::error!(
+                log::debug!(
                     "Removing stale sender from global message_receivers: TYPE_ID: {}",
                     &type_id
                 );

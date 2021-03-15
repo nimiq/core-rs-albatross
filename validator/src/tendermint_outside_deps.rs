@@ -1,3 +1,4 @@
+use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -24,7 +25,6 @@ use utils::time::OffsetTime;
 
 use crate::aggregation::tendermint::HandelTendermintAdapter;
 use crate::validator::ProposalTopic;
-use std::ops::Deref;
 
 /// The struct that interfaces with the Tendermint crate. It only has to implement the
 /// TendermintOutsideDeps trait in order to do this.
@@ -219,7 +219,7 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
             TENDERMINT_TIMEOUT_INIT + round as u64 * TENDERMINT_TIMEOUT_DELTA,
         );
 
-        trace!(
+        debug!(
             "Awaiting proposal for {}.{}, expected producer: {}, timeout: {:?}",
             self.blockchain.block_number() + 1,
             &round,
@@ -346,7 +346,7 @@ impl<N: ValidatorNetwork + 'static> TendermintInterface<N> {
         while let Some((msg, _)) = self.proposal_stream.as_mut().next().await {
             // Check if the proposal comes from the correct validator and the signature of the
             // proposal is valid. If not, keep awaiting.
-            trace!("Received Proposal from {}", &msg.signer_idx);
+            debug!("Received Proposal from {}", &msg.signer_idx);
             if validator_id == msg.signer_idx {
                 if msg.verify(&validator_key) {
                     return msg.message;

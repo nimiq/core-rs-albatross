@@ -80,14 +80,14 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
     ) {
         let event = if self.is_our_turn() {
             info!(
-                "Our turn at #{}:{}, producing micro block",
-                self.block_number, self.view_number
+                "[{}] Our turn at #{}:{}, producing micro block",
+                self.validator_id, self.block_number, self.view_number
             );
             ProduceMicroBlockEvent::MicroBlock(self.produce_micro_block())
         } else {
             debug!(
-                "Not our turn at #{}:{}, waiting for micro block",
-                self.block_number, self.view_number
+                "[{}] Not our turn at #{}:{}, waiting for micro block",
+                self.validator_id, self.block_number, self.view_number
             );
             time::delay_for(self.view_change_delay).await;
             info!(
