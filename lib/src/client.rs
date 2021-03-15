@@ -129,15 +129,16 @@ impl ClientInner {
         )
         .await;
 
+        // Tell the network to listen on the given addresses
+        network
+            .listen_on_addresses(config.network.listen_addresses)
+            .await;
+
         // Tell the network to connect to seed nodes
         for seed in &config.network.seeds {
             log::debug!("Dialing seed: {:?}", seed);
             network.dial_address(seed.address.clone()).await?;
         }
-        // tell the network to listen on the given addresses
-        network
-            .listen_on_addresses(config.network.listen_addresses)
-            .await;
 
         #[cfg(feature = "validator")]
         let validator = {
