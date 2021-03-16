@@ -29,7 +29,6 @@ use libp2p::{
     swarm::{NetworkBehaviourAction, NotifyHandler, SwarmBuilder, SwarmEvent},
     tcp, websocket, yamux, Multiaddr, PeerId, Swarm, Transport,
 };
-use thiserror::Error;
 use tokio::sync::broadcast;
 use tracing::Instrument;
 
@@ -52,117 +51,19 @@ use crate::{
     limit::behaviour::LimitConfig,
     message::behaviour::MessageConfig,
     message::peer::Peer,
+    NetworkError, Config
 };
+
 
 /// Maximum simultaneous libp2p connections per peer
 const MAX_CONNECTIONS_PER_PEER: u32 = 1;
 
-pub struct Config {
-    pub keypair: Keypair,
-
-    pub peer_contact: PeerContact,
-
-    pub min_peers: usize,
-
-    pub discovery: DiscoveryConfig,
-    pub message: MessageConfig,
-    pub limit: LimitConfig,
-    pub kademlia: KademliaConfig,
-    pub gossipsub: GossipsubConfig,
-}
-
-impl Config {
-    pub fn new(keypair: Keypair, peer_contact: PeerContact, genesis_hash: Blake2bHash) -> Self {
-        // Hardcoding the minimum number of peers in mesh network before adding more
-        // TODO: Maybe change this to a mesh limits configuration argument of this function
-        let gossipsub_config = GossipsubConfigBuilder::default()
-            .mesh_n_low(3)
-            .validate_messages()
-            .build()
-            .expect("Invalid Gossipsub config");
-
-        Self {
-            keypair,
-            peer_contact,
-            discovery: DiscoveryConfig::new(genesis_hash),
-            message: MessageConfig::default(),
-            limit: LimitConfig::default(),
-            kademlia: KademliaConfig::default(),
-            gossipsub: gossipsub_config,
-            min_peers: 5,
-        }
-    }
-}
-
-#[derive(Debug, Error)]
-pub enum NetworkError {
-    #[error("Dial error: {0}")]
-    Dial(#[from] libp2p::swarm::DialError),
-
-    #[error("Failed to send action to swarm task: {0}")]
-    Send(#[from] futures::channel::mpsc::SendError),
-
-    #[error("Network action was cancelled: {0}")]
-    Canceled(#[from] futures::channel::oneshot::Canceled),
-
-    #[error("Serialization error: {0}")]
-    Serialization(#[from] beserial::SerializingError),
-
-    #[error("Network behaviour error: {0}")]
-    Behaviour(#[from] NimiqNetworkBehaviourError),
-
-    #[error("DHT store error: {0:?}")]
-    DhtStore(libp2p::kad::store::Error),
-
-    #[error("DHT GetRecord error: {0:?}")]
-    DhtGetRecord(libp2p::kad::GetRecordError),
-
-    #[error("DHT PutRecord error: {0:?}")]
-    DhtPutRecord(libp2p::kad::PutRecordError),
-
-    #[error("Gossipsub Publish error: {0:?}")]
-    GossipsubPublish(libp2p::gossipsub::error::PublishError),
-
-    #[error("Gossipsub Subscription error: {0:?}")]
-    GossipsubSubscription(libp2p::gossipsub::error::SubscriptionError),
-
-    #[error("Already subscribed to topic: {topic_name}")]
-    AlreadySubscribed { topic_name: String },
-}
-
-impl From<libp2p::kad::store::Error> for NetworkError {
-    fn from(e: libp2p::kad::store::Error) -> Self {
-        Self::DhtStore(e)
-    }
-}
-
-impl From<libp2p::kad::GetRecordError> for NetworkError {
-    fn from(e: libp2p::kad::GetRecordError) -> Self {
-        Self::DhtGetRecord(e)
-    }
-}
-
-impl From<libp2p::kad::PutRecordError> for NetworkError {
-    fn from(e: libp2p::kad::PutRecordError) -> Self {
-        Self::DhtPutRecord(e)
-    }
-}
-
-impl From<libp2p::gossipsub::error::PublishError> for NetworkError {
-    fn from(e: libp2p::gossipsub::error::PublishError) -> Self {
-        Self::GossipsubPublish(e)
-    }
-}
-
-impl From<libp2p::gossipsub::error::SubscriptionError> for NetworkError {
-    fn from(e: libp2p::gossipsub::error::SubscriptionError) -> Self {
-        Self::GossipsubSubscription(e)
-    }
-}
 
 type NimiqSwarm = Swarm<NimiqBehaviour>;
+
+
 #[derive(Debug)]
-pub enum NetworkAction {
+pub(crate) enum NetworkAction {
     Dial {
         peer_id: PeerId,
         output: oneshot::Sender<Result<(), NetworkError>>,
@@ -213,28 +114,18 @@ struct TaskState {
     dht_puts: HashMap<QueryId, oneshot::Sender<Result<(), NetworkError>>>,
     dht_gets: HashMap<QueryId, oneshot::Sender<Result<Option<Vec<u8>>, NetworkError>>>,
     gossip_topics: HashMap<TopicHash, (mpsc::Sender<(GossipsubMessage, MessageId, PeerId)>, bool)>,
-    connected_tx: Option<oneshot::Sender<()>>,
     incoming_listeners: HashMap<Multiaddr, Multiaddr>,
+    is_connected: bool,
 }
 
-impl TaskState {
-    pub fn new(connected_tx: oneshot::Sender<()>) -> Self {
+impl Default for TaskState {
+    fn default() -> Self {
         Self {
             dht_puts: HashMap::new(),
             dht_gets: HashMap::new(),
             gossip_topics: HashMap::new(),
-            connected_tx: Some(connected_tx),
             incoming_listeners: HashMap::new(),
-        }
-    }
-
-    fn is_connected(&self) -> bool {
-        self.connected_tx.is_none()
-    }
-
-    fn set_connected(&mut self) {
-        if let Some(connected_tx) = self.connected_tx.take() {
-            connected_tx.send(()).ok();
+            is_connected: false,
         }
     }
 }
@@ -256,7 +147,6 @@ pub struct Network {
     events_tx: broadcast::Sender<NetworkEvent<Peer>>,
     action_tx: mpsc::Sender<NetworkAction>,
     peers: ObservablePeerMap<Peer>,
-    connected_rx: AsyncMutex<Option<oneshot::Receiver<()>>>,
 }
 
 impl Network {
@@ -280,13 +170,10 @@ impl Network {
         let (events_tx, _) = broadcast::channel(64);
         let (action_tx, action_rx) = mpsc::channel(64);
 
-        let (connected_tx, connected_rx) = oneshot::channel();
-
         async_std::task::spawn(Self::swarm_task(
             swarm,
             events_tx.clone(),
             action_rx,
-            connected_tx,
             min_peers,
         ));
 
@@ -295,14 +182,6 @@ impl Network {
             events_tx,
             action_tx,
             peers,
-            connected_rx: AsyncMutex::new(Some(connected_rx)),
-        }
-    }
-
-    pub async fn wait_connected(&self) {
-        tracing::info!("Waiting for peers to connect");
-        if let Some(connected_rx) = self.connected_rx.lock().await.take() {
-            connected_rx.await.unwrap()
         }
     }
 
@@ -362,10 +241,9 @@ impl Network {
         mut swarm: NimiqSwarm,
         events_tx: broadcast::Sender<NetworkEvent<Peer>>,
         mut action_rx: mpsc::Receiver<NetworkAction>,
-        connected_tx: oneshot::Sender<()>,
         min_peers: usize,
     ) {
-        let mut task_state = TaskState::new(connected_tx);
+        let mut task_state = TaskState::default();
 
         let peer_id = Swarm::local_peer_id(&swarm);
         let task_span = tracing::debug_span!("swarm task", peer_id=?peer_id);
@@ -432,7 +310,7 @@ impl Network {
                         .remove(&endpoint.get_remote_address().clone());
                 }
 
-                if !state.is_connected() {
+                if !state.is_connected {
                     tracing::debug!(
                         num_established,
                         min_peers,
@@ -441,9 +319,9 @@ impl Network {
                         min_peers
                     );
 
-                    if num_established.get() as usize >= min_peers {
-                        state.set_connected();
+                    state.is_connected = true;
 
+                    if num_established.get() as usize >= min_peers {
                         // Bootstrap Kademlia
                         tracing::debug!("Bootstrapping DHT");
                         if swarm.kademlia.bootstrap().is_err() {

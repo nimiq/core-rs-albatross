@@ -5,7 +5,7 @@ use nimiq_account::Account;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 
-use crate::types::{Block, OrLatest, SlashedSlots, Slot, Stakes, Transaction};
+use crate::types::{Block, SlashedSlots, Slot, Stakes, Transaction};
 
 #[cfg_attr(
     feature = "proxy",
@@ -15,21 +15,26 @@ use crate::types::{Block, OrLatest, SlashedSlots, Slot, Stakes, Transaction};
 pub trait BlockchainInterface {
     type Error;
 
-    async fn block_number(&mut self) -> Result<u32, Self::Error>;
+    async fn get_block_number(&mut self) -> Result<u32, Self::Error>;
 
-    async fn epoch_number(&mut self) -> Result<u32, Self::Error>;
+    async fn get_epoch_number(&mut self) -> Result<u32, Self::Error>;
 
-    async fn batch_number(&mut self) -> Result<u32, Self::Error>;
+    async fn get_batch_number(&mut self) -> Result<u32, Self::Error>;
 
-    async fn block_by_hash(
+    async fn get_block_by_hash(
         &mut self,
         hash: Blake2bHash,
         include_transactions: bool,
     ) -> Result<Block, Self::Error>;
 
-    async fn block_by_number(
+    async fn get_block_by_number(
         &mut self,
-        block_number: OrLatest<u32>,
+        block_number: u32,
+        include_transactions: bool,
+    ) -> Result<Block, Self::Error>;
+
+    async fn get_latest_block(
+        &mut self,
         include_transactions: bool,
     ) -> Result<Block, Self::Error>;
 
@@ -40,7 +45,7 @@ pub trait BlockchainInterface {
     ) -> Result<Slot, Self::Error>;
 
     // TODO: Previously called `slot_state`. Where is this used?
-    async fn slashed_slots(&mut self) -> Result<SlashedSlots, Self::Error>;
+    async fn get_slashed_slots(&mut self) -> Result<SlashedSlots, Self::Error>;
 
     async fn get_raw_transaction_info(&mut self, raw_tx: String) -> Result<(), Self::Error>;
 
@@ -56,5 +61,5 @@ pub trait BlockchainInterface {
     #[stream]
     async fn head_subscribe(&mut self) -> Result<BoxStream<'static, Blake2bHash>, Self::Error>;
 
-    async fn get_account(&mut self, account: Address) -> Result<Account, Self::Error>;
+    async fn get_account(&mut self, address: Address) -> Result<Account, Self::Error>;
 }

@@ -10,7 +10,7 @@ use nimiq_keys::Address;
 use nimiq_primitives::policy;
 use nimiq_rpc_interface::{
     blockchain::BlockchainInterface,
-    types::{Block, OrLatest, SlashedSlots, Slot, Stake, Stakes, Transaction, Validator},
+    types::{Block, SlashedSlots, Slot, Stake, Stakes, Transaction, Validator},
 };
 
 use crate::error::Error;
@@ -30,19 +30,19 @@ impl BlockchainDispatcher {
 impl BlockchainInterface for BlockchainDispatcher {
     type Error = Error;
 
-    async fn block_number(&mut self) -> Result<u32, Error> {
+    async fn get_block_number(&mut self) -> Result<u32, Error> {
         Ok(self.blockchain.block_number())
     }
 
-    async fn epoch_number(&mut self) -> Result<u32, Error> {
+    async fn get_epoch_number(&mut self) -> Result<u32, Error> {
         Ok(policy::epoch_at(self.blockchain.block_number()))
     }
 
-    async fn batch_number(&mut self) -> Result<u32, Error> {
+    async fn get_batch_number(&mut self) -> Result<u32, Error> {
         Ok(policy::batch_at(self.blockchain.block_number()))
     }
 
-    async fn block_by_hash(
+    async fn get_block_by_hash(
         &mut self,
         hash: Blake2bHash,
         include_transactions: bool,
@@ -53,18 +53,28 @@ impl BlockchainInterface for BlockchainDispatcher {
             .ok_or_else(|| Error::BlockNotFound(hash.into()))
     }
 
-    async fn block_by_number(
+    async fn get_block_by_number(
         &mut self,
-        block_number: OrLatest<u32>,
+        block_number: u32,
         include_transactions: bool,
     ) -> Result<Block, Error> {
-        let block = match block_number {
-            OrLatest::Value(block_number) => self
-                .blockchain
-                .get_block_at(block_number, true, None)
-                .ok_or_else(|| Error::BlockNotFound(block_number.into()))?,
-            OrLatest::Latest => self.blockchain.head(),
-        };
+        let block = self
+            .blockchain
+            .get_block_at(block_number, true, None)
+            .ok_or_else(|| Error::BlockNotFound(block_number.into()))?;
+
+        Ok(Block::from_block(
+            &self.blockchain,
+            block,
+            include_transactions,
+        ))
+    }
+
+    async fn get_latest_block(
+        &mut self,
+        include_transactions: bool,
+    ) -> Result<Block, Error> {
+        let block = self.blockchain.head();
 
         Ok(Block::from_block(
             &self.blockchain,
@@ -102,7 +112,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         ))
     }
 
-    async fn slashed_slots(&mut self) -> Result<SlashedSlots, Error> {
+    async fn get_slashed_slots(&mut self) -> Result<SlashedSlots, Error> {
         // FIXME: Race condition
         let block_number = self.blockchain.block_number();
         let staking_contract = self.blockchain.get_staking_contract();
@@ -197,7 +207,13 @@ impl BlockchainInterface for BlockchainDispatcher {
             .boxed())
     }
 
-    async fn get_account(&mut self, account: Address) -> Result<Account, Error> {
-        Ok(self.blockchain.get_account(&account))
+    async fn get_account(&mut self, address: Address) -> Result<Account, Error> {
+        let account = self.blockchain.get_account(&address);
+        if matches!(account, Account::Staking(_)) {
+            Err(Error::GetAccountUnsupportedStakingContract)
+        }
+        else {
+            Ok(account)
+        }
     }
 }

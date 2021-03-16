@@ -490,59 +490,6 @@ pub enum AccountAdditionalFields {
     },
 }
 
-#[derive(Clone, Debug)]
-pub enum OrLatest<T> {
-    Value(T),
-    Latest,
-}
-
-impl<T> Serialize for OrLatest<T>
-where
-    T: Serialize,
-{
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        match self {
-            OrLatest::Value(x) => x.serialize(serializer),
-            OrLatest::Latest => serializer.serialize_str("latest"),
-        }
-    }
-}
-
-impl<'de, T> Deserialize<'de> for OrLatest<T>
-where
-    T: FromStr,
-    <T as FromStr>::Err: std::error::Error,
-{
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
-        if s == "latest" {
-            Ok(OrLatest::Latest)
-        } else {
-            Ok(OrLatest::Value(
-                s.parse().map_err(serde::de::Error::custom)?,
-            ))
-        }
-    }
-}
-
-impl<T> Display for OrLatest<T>
-where
-    T: Display,
-{
-    fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
-        match self {
-            OrLatest::Value(x) => x.fmt(f),
-            OrLatest::Latest => write!(f, "latest"),
-        }
-    }
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SlashedSlots {
@@ -664,4 +611,10 @@ impl FromStr for ValidityStartHeight {
             Ok(Self::Absolute(s.parse()?))
         }
     }
+}
+
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Peer {
+    // TODO
 }

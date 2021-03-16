@@ -26,7 +26,7 @@ use crate::{
         peer_contacts::PeerContactBook,
     },
     message::{behaviour::MessageBehaviour, handler::HandlerError as MessageError, peer::Peer},
-    network::Config,
+    Config,
 };
 
 pub type NimiqNetworkBehaviourError = EitherError<
