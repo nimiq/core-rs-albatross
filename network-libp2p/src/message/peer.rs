@@ -19,7 +19,7 @@ use nimiq_network_interface::peer::{
 };
 
 use super::dispatch::{MessageDispatch, SendMessage};
-use crate::{codecs::typed::Error, network::NetworkError};
+use crate::{codecs::typed::Error, NetworkError};
 
 pub struct Peer {
     pub id: PeerId,

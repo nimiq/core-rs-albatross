@@ -54,11 +54,13 @@ pub enum Error {
 
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
+
+    #[error("getAccount doesn't support returning the staking contract. Use listStakes instead.")]
+    GetAccountUnsupportedStakingContract,
 }
 
 impl From<Error> for nimiq_jsonrpc_core::RpcError {
     fn from(e: Error) -> Self {
-        // TODO
         RpcError::internal_error(Some(e.to_string()))
     }
 }

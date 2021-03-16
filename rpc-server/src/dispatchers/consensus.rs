@@ -75,6 +75,10 @@ fn transaction_to_hex_string(transaction: &Transaction) -> String {
 impl ConsensusInterface for ConsensusDispatcher {
     type Error = Error;
 
+    async fn is_established(&mut self) -> Result<bool, Self::Error> {
+        Ok(self.consensus.is_established())
+    }
+
     async fn send_raw_transaction(&mut self, raw_tx: String) -> Result<Blake2bHash, Error> {
         let tx = Deserialize::deserialize_from_vec(&hex::decode(&raw_tx)?)?;
         self.push_transaction(tx).await
