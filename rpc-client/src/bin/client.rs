@@ -10,7 +10,7 @@ use nimiq_rpc_client::Client;
 use nimiq_rpc_interface::{
     blockchain::BlockchainInterface,
     consensus::ConsensusInterface,
-    types::{BlockNumberOrHash, OrLatest, ValidityStartHeight},
+    types::{BlockNumberOrHash, ValidityStartHeight},
     wallet::WalletInterface,
 };
 
@@ -207,19 +207,19 @@ impl Command {
                     Some(BlockNumberOrHash::Hash(hash)) => {
                         client
                             .blockchain
-                            .block_by_hash(hash, include_transactions)
+                            .get_block_by_hash(hash, include_transactions)
                             .await
                     }
                     Some(BlockNumberOrHash::Number(number)) => {
                         client
                             .blockchain
-                            .block_by_number(OrLatest::Value(number), include_transactions)
+                            .get_block_by_number(number, include_transactions)
                             .await
                     }
                     None => {
                         client
                             .blockchain
-                            .block_by_number(OrLatest::Latest, include_transactions)
+                            .get_latest_block(include_transactions)
                             .await
                     }
                 }?;
@@ -237,7 +237,7 @@ impl Command {
 
                 while let Some(block_hash) = stream.next().await {
                     if show_block {
-                        let block = client.blockchain.block_by_hash(block_hash, false).await;
+                        let block = client.blockchain.get_block_by_hash(block_hash, false).await;
                         println!("{:#?}", block);
                     } else {
                         println!("{}", block_hash);
