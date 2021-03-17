@@ -65,6 +65,8 @@ pub enum PushError {
     InvalidBlock(#[from] BlockError),
     #[error("Invalid successor")]
     InvalidSuccessor,
+    #[error("Invalid predecessor")]
+    InvalidPredecessor,
     #[error("Duplicate transaction")]
     DuplicateTransaction,
     #[error("Account error: {0}")]

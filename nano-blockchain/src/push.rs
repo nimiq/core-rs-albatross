@@ -1,7 +1,9 @@
-use nimiq_block_albatross::{Block, BlockError, BlockType};
+use nimiq_block_albatross::{Block, BlockError, BlockType, MacroHeader};
 use nimiq_blockchain_albatross::{
     AbstractBlockchain, Blockchain, ChainInfo, ChainOrdering, PushError, PushResult,
 };
+use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_primitives::policy;
 
 use crate::blockchain::NanoBlockchain;
 
@@ -97,31 +99,25 @@ impl NanoBlockchain {
         chain_info.on_main_chain = true;
         prev_info.main_chain_successor = Some(chain_info.head.hash());
 
+        // Get write transaction for ChainStore.
+        let mut chain_store_w = self
+            .chain_store
+            .write()
+            .expect("Couldn't acquire write lock to ChainStore!");
+
         // If it's a macro block then we need to clear the ChainStore (since we only want to keep
         // the current batch in memory). Otherwise, we need to update the previous ChainInfo.
         if chain_info.head.is_macro() {
-            self.chain_store
-                .write()
-                .expect("Couldn't acquire write lock for ChainStore!")
-                .clear();
+            chain_store_w.clear();
         } else {
-            self.chain_store
-                .write()
-                .expect("Couldn't acquire write lock for ChainStore!")
-                .put_chain_info(prev_info);
+            chain_store_w.put_chain_info(prev_info);
         }
-
-        // Store the current chain info.
-        self.chain_store
-            .write()
-            .expect("Couldn't acquire write lock for ChainStore!")
-            .put_chain_info(chain_info.clone());
 
         // Update the head of the blockchain.
         self.head = chain_info.head.clone();
 
         // If the block is a macro block then we also need to update the macro head.
-        if let Block::Macro(macro_block) = chain_info.head {
+        if let Block::Macro(ref macro_block) = chain_info.head {
             self.macro_head = macro_block.clone();
 
             // If the block is also an election block, then we have more fields to update.
@@ -129,8 +125,14 @@ impl NanoBlockchain {
                 self.election_head = macro_block.clone();
 
                 self.current_validators = macro_block.get_validators();
+
+                // Store the election block header.
+                chain_store_w.put_election(macro_block.header.clone());
             }
         }
+
+        // Store the current chain info.
+        chain_store_w.put_chain_info(chain_info);
 
         Ok(PushResult::Extended)
     }
@@ -148,6 +150,12 @@ impl NanoBlockchain {
         chain_info.on_main_chain = true;
         prev_info.main_chain_successor = Some(chain_info.head.hash());
 
+        // Get write transaction for ChainStore.
+        let mut chain_store_w = self
+            .chain_store
+            .write()
+            .expect("Couldn't acquire write lock to ChainStore!");
+
         // Find the common ancestor between our current main chain and the fork chain.
         // Walk up the fork chain until we find a block that is part of the main chain.
         // Update the fork chain along the way.
@@ -156,11 +164,7 @@ impl NanoBlockchain {
         while !current.on_main_chain {
             // A fork can't contain a macro block. We already received that macro block, thus it must be on our
             // main chain.
-            assert_eq!(
-                current.head.ty(),
-                BlockType::Micro,
-                "Fork contains macro block"
-            );
+            assert_eq!(current.head.ty(), BlockType::Micro);
 
             // Get previous chain info.
             let prev_info = self
@@ -171,10 +175,7 @@ impl NanoBlockchain {
             current.on_main_chain = true;
 
             // Store the chain info.
-            self.chain_store
-                .write()
-                .expect("Couldn't acquire write lock to ChainStore!")
-                .put_chain_info(current);
+            chain_store_w.put_chain_info(current);
 
             current = prev_info;
         }
@@ -197,10 +198,7 @@ impl NanoBlockchain {
             current.on_main_chain = false;
 
             // Store the chain info.
-            self.chain_store
-                .write()
-                .expect("Couldn't acquire write lock to ChainStore!")
-                .put_chain_info(current);
+            chain_store_w.put_chain_info(current);
 
             current = prev_info;
         }
@@ -209,5 +207,46 @@ impl NanoBlockchain {
         self.head = chain_info.head;
 
         Ok(PushResult::Rebranched)
+    }
+
+    /// Pushes an election block backwards into the chain. This pushes the election block immediately
+    /// before the oldest election block that we have. It is useful in case we need to receive a proof
+    /// for a transaction in a past epoch, in that case the simplest course of action is to "walk"
+    /// backwards from our current election block until we get to the desired epoch.
+    pub fn push_election_backwards(
+        &mut self,
+        header: MacroHeader,
+    ) -> Result<PushResult, PushError> {
+        // Get epoch number.
+        let epoch = policy::epoch_at(header.block_number);
+
+        // Get read transaction for ChainStore.
+        let chain_store_r = self
+            .chain_store
+            .read()
+            .expect("Couldn't acquire read lock to ChainStore!");
+
+        // Check if we already know this block.
+        if chain_store_r.get_election(epoch).is_some() {
+            return Ok(PushResult::Known);
+        }
+
+        // Check if we have this block's successor.
+        let prev_block = chain_store_r
+            .get_election(epoch + policy::EPOCH_LENGTH)
+            .ok_or(PushError::InvalidSuccessor)?;
+
+        // Verify that the block is indeed the predecessor.
+        if header.hash::<Blake2bHash>() != prev_block.parent_election_hash {
+            return Err(PushError::InvalidPredecessor);
+        }
+
+        // Store the election block header.
+        self.chain_store
+            .write()
+            .expect("Couldn't acquire write lock for ChainStore!")
+            .put_election(header);
+
+        Ok(PushResult::Extended)
     }
 }

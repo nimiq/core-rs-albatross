@@ -69,20 +69,24 @@ impl NanoBlockchain {
 
         // At this point we know that the block is correct. We just have to push it.
 
+        // Get write transaction for ChainStore.
+        let mut chain_store_w = self
+            .chain_store
+            .write()
+            .expect("Couldn't acquire write lock to ChainStore!");
+
         // Create the chain info for the new block.
         let chain_info = ChainInfo::new(block.clone(), true);
 
-        // Since it's a macro block, we have to clear the ChainStore.
-        self.chain_store
-            .write()
-            .expect("Couldn't acquire write lock for ChainStore!")
-            .clear();
+        // Since it's a macro block, we have to clear the ChainStore. If we are syncing for the first
+        // time, this should be empty. But we clear it in case it's not our first time.
+        chain_store_w.clear();
 
         // Store the block chain info.
-        self.chain_store
-            .write()
-            .expect("Couldn't acquire write lock for ChainStore!")
-            .put_chain_info(chain_info);
+        chain_store_w.put_chain_info(chain_info);
+
+        // Store the election block header.
+        chain_store_w.put_election(block.unwrap_macro_ref().header.clone());
 
         // Update the blockchain.
         self.head = block.clone();
@@ -155,30 +159,34 @@ impl NanoBlockchain {
 
         // At this point we know that the block is correct. We just have to push it.
 
+        // Get write transaction for ChainStore.
+        let mut chain_store_w = self
+            .chain_store
+            .write()
+            .expect("Couldn't acquire write lock to ChainStore!");
+
         // Create the chain info for the new block.
         let chain_info = ChainInfo::new(block.clone(), true);
 
         // Since it's a macro block, we have to clear the ChainStore.
-        self.chain_store
-            .write()
-            .expect("Couldn't acquire write lock for ChainStore!")
-            .clear();
+        chain_store_w.clear();
 
         // Store the block chain info.
-        self.chain_store
-            .write()
-            .expect("Couldn't acquire write lock for ChainStore!")
-            .put_chain_info(chain_info);
+        chain_store_w.put_chain_info(chain_info);
 
         // Update the blockchain.
         self.head = block.clone();
 
         self.macro_head = block.clone().unwrap_macro();
 
+        // If it's an election block, you have more steps.
         if block.is_election() {
-            self.election_head = block.clone().unwrap_macro();
+            self.election_head = block.unwrap_macro_ref().clone();
 
             self.current_validators = block.validators();
+
+            // Store the election block header.
+            chain_store_w.put_election(block.unwrap_macro().header.clone());
         }
 
         Ok(PushResult::Extended)
