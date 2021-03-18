@@ -7,6 +7,10 @@ use crate::blockchain::NanoBlockchain;
 
 /// Implements methods to sync a nano node.
 impl NanoBlockchain {
+    /// Syncs using a zero-knowledge proof. It receives an election block and a proof that there is
+    /// a valid chain between the genesis block and that block.
+    /// This brings the node from the genesis block all the way to the most recent election block.
+    /// It is the default way to sync for a nano node.
     pub fn push_zkp(&mut self, block: Block, proof: NanoProof) -> Result<PushResult, PushError> {
         // Must be an election block.
         assert!(block.is_election());
@@ -79,7 +83,7 @@ impl NanoBlockchain {
         let chain_info = ChainInfo::new(block.clone(), true);
 
         // Since it's a macro block, we have to clear the ChainStore. If we are syncing for the first
-        // time, this should be empty. But we clear it in case it's not our first time.
+        // time, this should be empty. But we clear it just in case it's not our first time.
         chain_store_w.clear();
 
         // Store the block chain info.
@@ -100,6 +104,10 @@ impl NanoBlockchain {
         Ok(PushResult::Extended)
     }
 
+    /// Pushes a macro block into the blockchain. This is used when we have already synced to the
+    /// most recent election block and now need to push a checkpoint block.
+    /// But this function is general enough to allow pushing any macro block (checkpoint or election)
+    /// at any state of the node (synced, partially synced, not synced).
     pub fn push_macro(&mut self, block: Block) -> Result<PushResult, PushError> {
         // Must be a macro block.
         assert!(block.is_macro());
@@ -148,7 +156,7 @@ impl NanoBlockchain {
             .as_ref()
             .ok_or(PushError::InvalidBlock(BlockError::NoJustification))?;
 
-        // Check the justification.
+        // Verify the justification.
         if !justification.verify(
             block.hash(),
             block.block_number(),

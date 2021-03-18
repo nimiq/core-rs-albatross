@@ -6,8 +6,12 @@ use nimiq_tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use crate::blockchain::NanoBlockchain;
 use crate::error::NanoError;
 
-/// Implements methods to request data from the block, like accounts and transactions.
+/// Implements methods to verify data from the blocks, like accounts and transactions. Nano nodes
+/// can request proofs of inclusion for given accounts or transactions and they can use these methods
+/// to verify those proofs.
 impl NanoBlockchain {
+    /// Verify a Merkle proof for an account. It checks if the account is part of the Accounts Tree
+    /// at the block with the given hash. It returns Ok if the proof is valid.
     pub fn check_account(
         &self,
         block_hash: Blake2bHash,
@@ -31,6 +35,8 @@ impl NanoBlockchain {
         Ok(())
     }
 
+    /// Verify a Merkle proof for a transaction. It checks if the transaction is part of the History
+    /// Tree at the block with the given hash. It returns Ok if the proof is valid.
     pub fn check_tx(
         &mut self,
         block_hash: Blake2bHash,
