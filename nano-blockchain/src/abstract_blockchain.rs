@@ -7,6 +7,7 @@ use nimiq_primitives::slots::Validators;
 
 use crate::blockchain::NanoBlockchain;
 
+/// Implements several basic methods for blockchains.
 impl AbstractBlockchain for NanoBlockchain {
     fn network_id(&self) -> NetworkId {
         self.network_id
