@@ -178,7 +178,7 @@ impl Blockchain {
         txn_option: Option<&Transaction>,
     ) -> Option<HistoryTreeChunk> {
         self.history_store
-            .get_chunk(epoch_number, chunk_size, chunk_index, txn_option)
+            .prove_chunk(epoch_number, chunk_size, chunk_index, txn_option)
     }
 
     /// Returns the current staking contract.

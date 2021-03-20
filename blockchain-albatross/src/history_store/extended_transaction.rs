@@ -67,6 +67,32 @@ impl ExtendedTransaction {
 
         (transactions, inherents)
     }
+
+    /// Checks if the extended transaction is an inherent.
+    pub fn is_inherent(&self) -> bool {
+        match self.data {
+            ExtTxData::Basic(_) => false,
+            ExtTxData::Inherent(_) => true,
+        }
+    }
+
+    /// Unwraps the extended transaction and returns a reference to the underlying basic transaction.
+    pub fn unwrap_basic(&self) -> &BlockchainTransaction {
+        if let ExtTxData::Basic(ref tx) = self.data {
+            tx
+        } else {
+            unreachable!()
+        }
+    }
+
+    /// Unwraps the extended transaction and returns a reference to the underlying inherent.
+    pub fn unwrap_inherent(&self) -> &Inherent {
+        if let ExtTxData::Inherent(ref tx) = self.data {
+            tx
+        } else {
+            unreachable!()
+        }
+    }
 }
 
 impl MMRHash<HistoryTreeHash> for ExtendedTransaction {
