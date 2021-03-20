@@ -55,7 +55,7 @@ impl ChainStore {
             }
         }
 
-        unreachable!()
+        None
     }
 
     /// Adds a chain info to the ChainStore.
@@ -111,5 +111,120 @@ impl ChainStore {
     pub fn clear(&mut self) {
         self.chain_db.clear();
         self.height_idx.clear();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rand::prelude::*;
+
+    use nimiq_block_albatross::{MicroBlock, MicroBody, MicroHeader, MicroJustification};
+
+    use super::*;
+
+    #[test]
+    fn put_and_get_works() {
+        // Create blocks.
+        let mut data = [0u8; 32];
+        rand::thread_rng().fill_bytes(&mut data);
+        let hash_1 = Blake2bHash::from(data);
+
+        let block_1 = Block::Micro(MicroBlock {
+            header: MicroHeader {
+                version: random(),
+                block_number: 0,
+                view_number: random(),
+                timestamp: random(),
+                parent_hash: hash_1.clone(),
+                seed: Default::default(),
+                extra_data: vec![],
+                state_root: hash_1.clone(),
+                body_root: hash_1.clone(),
+                history_root: hash_1.clone(),
+            },
+            justification: Some(MicroJustification {
+                signature: Default::default(),
+                view_change_proof: None,
+            }),
+            body: Some(MicroBody {
+                fork_proofs: vec![],
+                transactions: vec![],
+            }),
+        });
+
+        let mut data = [0u8; 32];
+        rand::thread_rng().fill_bytes(&mut data);
+        let hash_2 = Blake2bHash::from(data);
+
+        let block_2 = Block::Micro(MicroBlock {
+            header: MicroHeader {
+                version: random(),
+                block_number: 0,
+                view_number: random(),
+                timestamp: random(),
+                parent_hash: hash_2.clone(),
+                seed: Default::default(),
+                extra_data: vec![],
+                state_root: hash_2.clone(),
+                body_root: hash_2.clone(),
+                history_root: hash_2.clone(),
+            },
+            justification: Some(MicroJustification {
+                signature: Default::default(),
+                view_change_proof: None,
+            }),
+            body: Some(MicroBody {
+                fork_proofs: vec![],
+                transactions: vec![],
+            }),
+        });
+
+        // Create chain store.
+        let mut store = ChainStore::new();
+
+        // First case.
+        store.put_chain_info(ChainInfo::new(block_1.clone(), true));
+        store.put_chain_info(ChainInfo::new(block_2.clone(), false));
+
+        match store.get_chain_info_at(0) {
+            None => {
+                panic!()
+            }
+            Some(info) => {
+                assert!(info.on_main_chain);
+                assert!(info.head.body().is_none());
+                assert!(info.head.justification().is_none());
+                assert_eq!(info.head.hash(), block_1.hash());
+            }
+        }
+
+        store.clear();
+
+        // Second case.
+        store.put_chain_info(ChainInfo::new(block_1.clone(), true));
+        store.put_chain_info(ChainInfo::new(block_2.clone(), true));
+
+        match store.get_chain_info_at(0) {
+            None => {
+                panic!()
+            }
+            Some(info) => {
+                assert!(info.on_main_chain);
+                assert!(info.head.body().is_none());
+                assert!(info.head.justification().is_none());
+                assert_eq!(info.head.hash(), block_1.hash());
+            }
+        }
+
+        // Third case.
+        store.put_chain_info(ChainInfo::new(block_1.clone(), false));
+        store.put_chain_info(ChainInfo::new(block_2.clone(), false));
+
+        match store.get_chain_info_at(0) {
+            None => {}
+            Some(_) => {
+                panic!()
+            }
+        }
     }
 }

@@ -44,7 +44,7 @@ fn test_view_change_single_signature() {
     )
     .signature
     .multiply(policy::SLOTS)]);
-    // ViewChangeProof is just a MultiSiganture, but for ease of getting there an individual Signature is created first.
+    // ViewChangeProof is just a MultiSignature, but for ease of getting there an individual Signature is created first.
     let mut signers = BitSet::new();
     for i in 0..policy::SLOTS {
         signers.insert(i as usize);
