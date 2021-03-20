@@ -10,9 +10,7 @@ use futures::{FutureExt, Stream, StreamExt};
 use tokio::sync::broadcast;
 
 use block_albatross::{Block, MacroBlock};
-use blockchain_albatross::history_store::ExtendedTransaction;
-use blockchain_albatross::Blockchain;
-use blockchain_albatross::{history_store, AbstractBlockchain};
+use blockchain_albatross::{AbstractBlockchain, Blockchain, ExtendedTransaction, CHUNK_SIZE};
 use hash::Blake2bHash;
 use network_interface::prelude::{CloseReason, Network, NetworkEvent, Peer};
 use primitives::policy;
@@ -119,24 +117,19 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
             let num_known = self
                 .blockchain
                 .get_num_extended_transactions(epoch_number, None);
-            let num_full_chunks = num_known / history_store::CHUNK_SIZE;
+            let num_full_chunks = num_known / CHUNK_SIZE;
             start_index = num_full_chunks;
             // TODO: Can probably be done more efficiently.
             let known_chunk = self
                 .blockchain
-                .get_chunk(
-                    epoch_number,
-                    num_full_chunks * history_store::CHUNK_SIZE,
-                    0,
-                    None,
-                )
+                .get_chunk(epoch_number, num_full_chunks * CHUNK_SIZE, 0, None)
                 .expect("History chunk missing");
             pending_batch_set.history = known_chunk.history;
         }
 
         // Queue history chunks for the given epoch for download.
         let history_chunk_ids = (start_index
-            ..((epoch.history_len as usize).ceiling_div(history_store::CHUNK_SIZE)))
+            ..((epoch.history_len as usize).ceiling_div(CHUNK_SIZE)))
             .map(|i| (epoch_number, i))
             .collect();
         debug!("Requesting history for ids: {:?}", history_chunk_ids);

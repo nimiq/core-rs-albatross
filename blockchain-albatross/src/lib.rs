@@ -19,6 +19,6 @@ pub mod chain_metrics;
 pub(crate) mod chain_ordering;
 pub(crate) mod chain_store;
 pub(crate) mod error;
-pub mod history_store;
+pub(crate) mod history_store;
 pub mod reward;
 pub mod transaction_cache;

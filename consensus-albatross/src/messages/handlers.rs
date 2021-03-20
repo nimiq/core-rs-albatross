@@ -1,6 +1,6 @@
 use crate::messages::*;
 use block_albatross::Block;
-use blockchain_albatross::{history_store::CHUNK_SIZE, AbstractBlockchain, Blockchain, Direction};
+use blockchain_albatross::{AbstractBlockchain, Blockchain, Direction, CHUNK_SIZE};
 use network_interface::message::ResponseMessage;
 use nimiq_genesis::NetworkInfo;
 use primitives::policy;

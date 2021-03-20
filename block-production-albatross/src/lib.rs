@@ -1,29 +1,15 @@
-extern crate nimiq_block_albatross as block;
-extern crate nimiq_blockchain_albatross as blockchain;
-extern crate nimiq_bls as bls;
-extern crate nimiq_collections as collections;
-extern crate nimiq_database as database;
-extern crate nimiq_genesis as genesis;
-extern crate nimiq_hash as hash;
-extern crate nimiq_keys as keys;
-extern crate nimiq_mempool as mempool;
-extern crate nimiq_primitives as primitives;
-
 use std::sync::Arc;
 
-use block::MicroJustification;
-use block::{ForkProof, MacroBlock};
-use block::{
-    MacroBody, MacroHeader, MicroBlock, MicroBody, MicroHeader, ViewChangeProof, ViewChanges,
-};
-use blockchain::history_store::ExtendedTransaction;
-use blockchain::{AbstractBlockchain, Blockchain};
-use bls::KeyPair;
-
-use hash::{Blake2bHash, Hash};
-use mempool::Mempool;
 use nimiq_account::Inherent;
-use primitives::policy;
+use nimiq_block_albatross::{
+    ForkProof, MacroBlock, MacroBody, MacroHeader, MicroBlock, MicroBody, MicroHeader,
+    MicroJustification, ViewChangeProof, ViewChanges,
+};
+use nimiq_blockchain_albatross::{AbstractBlockchain, Blockchain, ExtendedTransaction};
+use nimiq_bls::KeyPair;
+use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_mempool::Mempool;
+use nimiq_primitives::policy;
 
 /// Struct that contains all necessary information to actually produce blocks. It has the current
 /// blockchain store and state, the current mempool for this validator and the validator key for
@@ -293,152 +279,4 @@ impl BlockProducer {
 }
 
 #[cfg(any(test, feature = "test-utils"))]
-pub mod test_utils {
-    use block::{
-        Block, MacroBlock, MultiSignature, TendermintIdentifier, TendermintProof, TendermintStep,
-        TendermintVote,
-    };
-    use blockchain::PushResult;
-    use bls::AggregateSignature;
-    use collections::BitSet;
-    use nimiq_nano_sync::pk_tree_construct;
-    use primitives::policy::{SLOTS, TWO_THIRD_SLOTS};
-
-    use super::*;
-
-    // Fill epoch with micro blocks
-    pub fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<Blockchain>) {
-        let init_height = blockchain.block_number();
-        let macro_block_number = policy::macro_block_after(init_height + 1);
-        for i in (init_height + 1)..macro_block_number {
-            let last_micro_block = producer.next_micro_block(
-                blockchain.time.now() + i as u64 * 1000,
-                0,
-                None,
-                vec![],
-                vec![0x42],
-            );
-            assert_eq!(
-                blockchain.push(Block::Micro(last_micro_block)),
-                Ok(PushResult::Extended)
-            );
-        }
-        assert_eq!(blockchain.block_number(), macro_block_number - 1);
-    }
-
-    pub fn sign_macro_block(
-        keypair: &KeyPair,
-        header: MacroHeader,
-        body: Option<MacroBody>,
-    ) -> MacroBlock {
-        // Calculate block hash.
-        let block_hash = header.hash::<Blake2bHash>();
-
-        // Calculate the validator Merkle root (used in the nano sync).
-        let validator_merkle_root =
-            pk_tree_construct(vec![keypair.public_key.public_key; SLOTS as usize]);
-
-        // Create the precommit tendermint vote.
-        let precommit = TendermintVote {
-            proposal_hash: Some(block_hash),
-            id: TendermintIdentifier {
-                block_number: header.block_number,
-                round_number: 0,
-                step: TendermintStep::PreCommit,
-            },
-            validator_merkle_root,
-        };
-
-        // Create signed precommit.
-        let signed_precommit = keypair.secret_key.sign(&precommit);
-
-        // Create signers Bitset.
-        let mut signers = BitSet::new();
-        for i in 0..TWO_THIRD_SLOTS {
-            signers.insert(i as usize);
-        }
-
-        // Create multisignature.
-        let multisig = MultiSignature {
-            signature: AggregateSignature::from_signatures(&*vec![
-                signed_precommit;
-                TWO_THIRD_SLOTS as usize
-            ]),
-            signers,
-        };
-
-        // Create Tendermint proof.
-        let tendermint_proof = TendermintProof {
-            round: 0,
-            sig: multisig,
-        };
-
-        // Create and return the macro block.
-        MacroBlock {
-            header,
-            body,
-            justification: Some(tendermint_proof),
-        }
-    }
-
-    // /// Currently unused
-    // pub fn sign_view_change(
-    //     keypair: &KeyPair,
-    //     prev_seed: VrfSeed,
-    //     block_number: u32,
-    //     new_view_number: u32,
-    // ) -> ViewChangeProof {
-    //     // Create the view change.
-    //     let view_change = ViewChange {
-    //         block_number,
-    //         new_view_number,
-    //         prev_seed,
-    //     };
-
-    //     // Sign the view change.
-    //     let signed_view_change =
-    //         SignedViewChange::from_message(view_change.clone(), &keypair.secret_key, 0).signature;
-
-    //     // Create signers Bitset.
-    //     let mut signers = BitSet::new();
-    //     for i in 0..TWO_THIRD_SLOTS {
-    //         signers.insert(i as usize);
-    //     }
-
-    //     // Create ViewChangeProof and return  it.
-    //     ViewChangeProof::new(
-    //         AggregateSignature::from_signatures(&*vec![
-    //             signed_view_change;
-    //             TWO_THIRD_SLOTS as usize
-    //         ]),
-    //         signers,
-    //     )
-    // }
-
-    pub fn produce_macro_blocks(
-        num_macro: usize,
-        producer: &BlockProducer,
-        blockchain: &Arc<Blockchain>,
-    ) {
-        for _ in 0..num_macro {
-            fill_micro_blocks(producer, blockchain);
-
-            let _next_block_height = blockchain.block_number() + 1;
-            let macro_block = producer.next_macro_block_proposal(
-                blockchain.time.now() + blockchain.block_number() as u64 * 1000,
-                0u32,
-                vec![],
-            );
-
-            let block = sign_macro_block(
-                &producer.validator_key,
-                macro_block.header,
-                macro_block.body,
-            );
-            assert_eq!(
-                blockchain.push(Block::Macro(block)),
-                Ok(PushResult::Extended)
-            );
-        }
-    }
-}
+pub mod test_utils;

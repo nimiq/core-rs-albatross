@@ -18,6 +18,7 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 log = "0.4"
+hex = "0.4"
 
 beserial = { path = "../beserial" }
 nimiq-account = { path = "../primitives/account" }
@@ -35,10 +36,6 @@ nimiq-primitives = { path = "../primitives" }
 nimiq-vrf = { path = "../vrf" }
 
 [dev-dependencies]
-hex = "0.4"
-
-nimiq-collections = { path = "../collections" }
-nimiq-database = { path = "../database" }
 nimiq-transaction = { path = "../primitives/transaction" }
 
 [features]
