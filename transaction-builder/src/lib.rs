@@ -536,7 +536,9 @@ impl TransactionBuilder {
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Transaction {
-        let mut recipient = Recipient::new_staking_builder(staking_contract);
+        let staking_contract_address =
+            fill_in_staking_contract_address(staking_contract, network_id);
+        let mut recipient = Recipient::new_staking_builder(Some(staking_contract_address));
         recipient.stake(validator_id, None);
 
         let mut builder = Self::new();
@@ -569,15 +571,14 @@ impl TransactionBuilder {
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Transaction {
-        let mut recipient = Recipient::new_staking_builder(staking_contract.clone());
+        let staking_contract_address =
+            fill_in_staking_contract_address(staking_contract, network_id);
+        let mut recipient = Recipient::new_staking_builder(Some(staking_contract_address.clone()));
         recipient.rededicate_stake(from_validator_id, to_validator_id);
 
         let mut builder = Self::new();
         builder
-            .with_sender(fill_in_staking_contract_address(
-                staking_contract,
-                network_id,
-            ))
+            .with_sender(staking_contract_address)
             .with_sender_type(AccountType::Staking)
             .with_recipient(recipient.generate().unwrap())
             .with_value(value)
@@ -605,15 +606,14 @@ impl TransactionBuilder {
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Transaction {
-        let mut recipient = Recipient::new_staking_builder(staking_contract.clone());
+        let staking_contract_address =
+            fill_in_staking_contract_address(staking_contract, network_id);
+        let mut recipient = Recipient::new_staking_builder(Some(staking_contract_address.clone()));
         recipient.retire_stake(validator_id);
 
         let mut builder = Self::new();
         builder
-            .with_sender(fill_in_staking_contract_address(
-                staking_contract,
-                network_id,
-            ))
+            .with_sender(staking_contract_address)
             .with_sender_type(AccountType::Staking)
             .with_recipient(recipient.generate().unwrap())
             .with_value(value)
@@ -641,15 +641,14 @@ impl TransactionBuilder {
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Transaction {
-        let mut recipient = Recipient::new_staking_builder(staking_contract.clone());
+        let staking_contract_address =
+            fill_in_staking_contract_address(staking_contract, network_id);
+        let mut recipient = Recipient::new_staking_builder(Some(staking_contract_address.clone()));
         recipient.reactivate_stake(validator_id);
 
         let mut builder = Self::new();
         builder
-            .with_sender(fill_in_staking_contract_address(
-                staking_contract,
-                network_id,
-            ))
+            .with_sender(staking_contract_address)
             .with_sender_type(AccountType::Staking)
             .with_recipient(recipient.generate().unwrap())
             .with_value(value)
@@ -680,14 +679,13 @@ impl TransactionBuilder {
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Transaction {
+        let staking_contract_address =
+            fill_in_staking_contract_address(staking_contract, network_id);
         let recipient = Recipient::new_basic(recipient);
 
         let mut builder = Self::new();
         builder
-            .with_sender(fill_in_staking_contract_address(
-                staking_contract,
-                network_id,
-            ))
+            .with_sender(staking_contract_address)
             .with_sender_type(AccountType::Staking)
             .with_recipient(recipient)
             .with_value(value)
@@ -735,7 +733,9 @@ impl TransactionBuilder {
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Transaction {
-        let mut recipient = Recipient::new_staking_builder(staking_contract);
+        let staking_contract_address =
+            fill_in_staking_contract_address(staking_contract, network_id);
+        let mut recipient = Recipient::new_staking_builder(Some(staking_contract_address));
         recipient.create_validator(validator_key_pair, reward_address);
 
         let mut builder = Self::new();
@@ -791,7 +791,9 @@ impl TransactionBuilder {
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Transaction {
-        let mut recipient = Recipient::new_staking_builder(staking_contract);
+        let staking_contract_address =
+            fill_in_staking_contract_address(staking_contract, network_id);
+        let mut recipient = Recipient::new_staking_builder(Some(staking_contract_address));
         recipient.update_validator(
             validator_id,
             &old_validator_key_pair.public_key,
@@ -850,7 +852,9 @@ impl TransactionBuilder {
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Transaction {
-        let mut recipient = Recipient::new_staking_builder(staking_contract);
+        let staking_contract_address =
+            fill_in_staking_contract_address(staking_contract, network_id);
+        let mut recipient = Recipient::new_staking_builder(Some(staking_contract_address));
         recipient.retire_validator(&validator_id);
 
         let mut builder = Self::new();
@@ -904,7 +908,9 @@ impl TransactionBuilder {
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Transaction {
-        let mut recipient = Recipient::new_staking_builder(staking_contract);
+        let staking_contract_address =
+            fill_in_staking_contract_address(staking_contract, network_id);
+        let mut recipient = Recipient::new_staking_builder(Some(staking_contract_address));
         recipient.reactivate_validator(&validator_id);
 
         let mut builder = Self::new();
@@ -956,14 +962,13 @@ impl TransactionBuilder {
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Transaction {
+        let staking_contract_address =
+            fill_in_staking_contract_address(staking_contract, network_id);
         let recipient = Recipient::new_basic(recipient);
 
         let mut builder = Self::new();
         builder
-            .with_sender(fill_in_staking_contract_address(
-                staking_contract,
-                network_id,
-            ))
+            .with_sender(staking_contract_address)
             .with_sender_type(AccountType::Staking)
             .with_recipient(recipient)
             .with_value(value)
@@ -1011,7 +1016,9 @@ impl TransactionBuilder {
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Transaction {
-        let mut recipient = Recipient::new_staking_builder(staking_contract);
+        let staking_contract_address =
+            fill_in_staking_contract_address(staking_contract, network_id);
+        let mut recipient = Recipient::new_staking_builder(Some(staking_contract_address));
         recipient.unpark_validator(&validator_id);
 
         let mut builder = Self::new();
