@@ -578,6 +578,7 @@ impl TransactionBuilder {
                 staking_contract,
                 network_id,
             ))
+            .with_sender_type(AccountType::Staking)
             .with_recipient(recipient.generate().unwrap())
             .with_value(value)
             .with_fee(fee)
@@ -586,7 +587,7 @@ impl TransactionBuilder {
 
         let proof_builder = builder.generate().unwrap();
         match proof_builder {
-            TransactionProofBuilder::Basic(mut builder) => {
+            TransactionProofBuilder::StakingSelf(mut builder) => {
                 builder.sign_with_key_pair(&key_pair);
                 builder.generate().unwrap()
             }

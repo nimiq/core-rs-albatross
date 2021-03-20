@@ -151,6 +151,52 @@ impl ConsensusInterface for ConsensusDispatcher {
         self.send_raw_transaction(raw_tx).await
     }
 
+    async fn create_rededicate_transaction(
+        &mut self,
+        wallet: Address,
+        from_validator_id: ValidatorId,
+        to_validator_id: ValidatorId,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<String, Error> {
+        let transaction = TransactionBuilder::new_rededicate_stake(
+            None,
+            &self.get_wallet_keypair(&wallet)?,
+            &from_validator_id,
+            &to_validator_id,
+            value,
+            fee,
+            self.validity_start_height(validity_start_height),
+            self.network_id(),
+        );
+
+        Ok(transaction_to_hex_string(&transaction))
+    }
+
+    async fn send_rededicate_transaction(
+        &mut self,
+        wallet: Address,
+        from_validator_id: ValidatorId,
+        to_validator_id: ValidatorId,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<Blake2bHash, Error> {
+        let raw_tx = self
+            .create_rededicate_transaction(
+                wallet,
+                from_validator_id,
+                to_validator_id,
+                value,
+                fee,
+                validity_start_height,
+            )
+            .await
+            .unwrap();
+        self.send_raw_transaction(raw_tx).await
+    }
+
     async fn create_retire_transaction(
         &mut self,
         wallet: Address,
