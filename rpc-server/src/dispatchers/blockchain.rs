@@ -127,17 +127,11 @@ impl BlockchainInterface for BlockchainDispatcher {
     async fn get_transaction_by_hash(&mut self, hash: Blake2bHash) -> Result<Transaction, Error> {
         // TODO: Check mempool for the transaction, too
 
-        let leaf_hash = self
-            .blockchain
-            .history_store
-            .get_leaf_hash(&hash, None)
-            .ok_or_else(|| Error::TransactionNotFound(hash))?;
-
         let extended_tx = self
             .blockchain
             .history_store
-            .get_extended_tx(&leaf_hash, None)
-            .unwrap(); // Because we found the leaf_hash above, this cannot be None
+            .get_extended_transaction_by_transaction_hash(&hash, None)
+            .ok_or(Error::TransactionNotFound(hash))?;
 
         let block_number = extended_tx.block_number;
         // let timestamp = extended_tx.block_time;
@@ -145,9 +139,9 @@ impl BlockchainInterface for BlockchainDispatcher {
         let block = self
             .blockchain
             .get_block_at(block_number, false, None)
-            .ok_or_else(|| Error::BlockNotFound(block_number.into()))?;
+            .ok_or(Error::BlockNotFound(block_number.into()))?;
 
-        let transaction = extended_tx.unwrap_basic(); // Because we found the leaf_hash above, this cannot be None
+        let transaction = extended_tx.unwrap_basic(); // Because we found the extended_tx above, this cannot be None
 
         Ok(Transaction::from_blockchain(
             transaction.clone(),

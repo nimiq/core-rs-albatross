@@ -9,7 +9,6 @@ use merkle_mountain_range::store::memory::MemoryStore;
 
 use nimiq_database::{Database, Environment, ReadTransaction, Transaction, WriteTransaction};
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_transaction::Transaction as BlockchainTransaction;
 
 use crate::history_store::mmr_store::MMRStore;
 use crate::history_store::{
@@ -189,11 +188,11 @@ impl HistoryStore {
     }
 
     /// Gets a basic transaction (no inherents!) given its hash.
-    pub fn get_transaction(
+    pub fn get_extended_transaction_by_transaction_hash(
         &self,
-        hash: Blake2bHash,
+        hash: &Blake2bHash,
         txn_option: Option<&Transaction>,
-    ) -> Option<BlockchainTransaction> {
+    ) -> Option<ExtendedTransaction> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -204,12 +203,10 @@ impl HistoryStore {
         };
 
         // Get leaf hash.
-        let leaf_hash = self.get_leaf_hash(&hash, Some(txn))?;
+        let leaf_hash = self.get_leaf_hash(hash, Some(txn))?;
 
         // Get extended transaction.
-        let ext_tx = self.get_extended_tx(&leaf_hash, Some(txn))?;
-
-        Some(ext_tx.unwrap_basic().clone())
+        self.get_extended_tx(&leaf_hash, Some(txn))
     }
 
     /// Gets all extended transactions for a given epoch.
@@ -408,7 +405,7 @@ impl HistoryStore {
 
     /// Gets an extended transaction by its hash. Note that this hash is the leaf hash (see MMRHash)
     /// of the transaction, not a simple Blake2b hash of the transaction.
-    pub fn get_extended_tx(
+    fn get_extended_tx(
         &self,
         hash: &Blake2bHash,
         txn_option: Option<&Transaction>,
@@ -426,7 +423,7 @@ impl HistoryStore {
     }
 
     /// Gets a leaf hash from the hash of its transaction (only basic, no inherents!).
-    pub fn get_leaf_hash(
+    fn get_leaf_hash(
         &self,
         hash: &Blake2bHash,
         txn_option: Option<&Transaction>,
