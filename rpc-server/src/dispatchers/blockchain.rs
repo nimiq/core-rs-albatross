@@ -130,7 +130,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         let extended_tx = self
             .blockchain
             .history_store
-            .get_extended_transaction_by_transaction_hash(&hash, None)
+            .get_ext_tx_by_hash(&hash, None)
             .ok_or(Error::TransactionNotFound(hash))?;
 
         let block_number = extended_tx.block_number;
