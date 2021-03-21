@@ -30,24 +30,31 @@ pub struct HistoryStore {
     ext_tx_db: Database,
     // A database of all leaf hashes (only basic transactions, not inherents) indexed by the hash of
     // the transaction. This way we can start with a transaction hash and find it in the MMR.
-    tx_hash_db: Database,
+    leaf_hash_db: Database,
+    // A database of all leaf indexes (only basic transactions, not inherents) indexed by the hash of
+    // the transaction. This way we can start with a transaction hash and find it in the MMR.
+    leaf_idx_db: Database,
 }
 
 impl HistoryStore {
     const HIST_TREE_DB_NAME: &'static str = "HistoryTrees";
     const EXT_TX_DB_NAME: &'static str = "ExtendedTransactions";
-    const TX_HASH_DB_NAME: &'static str = "TransactionHashes";
+    const LEAF_HASH_DB_NAME: &'static str = "LeafHashes";
+    const LEAF_IDX_DB_NAME: &'static str = "LeafIndexes";
 
     /// Creates a new HistoryStore.
     pub fn new(env: Environment) -> Self {
         let hist_tree_db = env.open_database(Self::HIST_TREE_DB_NAME.to_string());
         let ext_tx_db = env.open_database(Self::EXT_TX_DB_NAME.to_string());
-        let tx_hash_db = env.open_database(Self::TX_HASH_DB_NAME.to_string());
+        let leaf_hash_db = env.open_database(Self::LEAF_HASH_DB_NAME.to_string());
+        let leaf_idx_db = env.open_database(Self::LEAF_IDX_DB_NAME.to_string());
+
         HistoryStore {
             env,
             hist_tree_db,
             ext_tx_db,
-            tx_hash_db,
+            leaf_hash_db,
+            leaf_idx_db,
         }
     }
 
@@ -59,13 +66,6 @@ impl HistoryStore {
         epoch_number: u32,
         ext_txs: &[ExtendedTransaction],
     ) -> Option<Blake2bHash> {
-        // Add the extended transactions into the respective database.
-        // We need to do this separately due to the borrowing rules of Rust.
-        for tx in ext_txs {
-            // The prefix is one because it is a leaf.
-            self.put_extended_tx(txn, &tx.hash(1).to_blake2b(), tx);
-        }
-
         // Get the history tree.
         let mut tree = MerkleMountainRange::new(MMRStore::with_write_transaction(
             &self.hist_tree_db,
@@ -73,13 +73,25 @@ impl HistoryStore {
             epoch_number,
         ));
 
-        // Append the extended transactions to the history tree.
+        // Append the extended transactions to the history tree and keep the respective leaf indexes.
+        let mut leaf_idx = vec![];
+
         for tx in ext_txs {
-            tree.push(tx).ok()?;
+            let i = tree.push(tx).ok()?;
+            leaf_idx.push(i as u32);
+        }
+
+        let root = tree.get_root().ok()?.to_blake2b();
+
+        // Add the extended transactions into the respective database.
+        // We need to do this separately due to the borrowing rules of Rust.
+        for (tx, i) in ext_txs.iter().zip(leaf_idx.iter()) {
+            // The prefix is one because it is a leaf.
+            self.put_extended_tx(txn, &tx.hash(1).to_blake2b(), *i, tx);
         }
 
         // Return the history root.
-        Some(tree.get_root().ok()?.to_blake2b())
+        Some(root)
     }
 
     /// Removes a number of extended transactions from an existing history tree. It returns the root
@@ -187,8 +199,8 @@ impl HistoryStore {
         Some(tree.get_root().ok()?.to_blake2b())
     }
 
-    /// Gets a basic transaction (no inherents!) given its hash.
-    pub fn get_extended_transaction_by_transaction_hash(
+    /// Gets an extended transaction (no inherents!) given its hash.
+    pub fn get_ext_tx_by_hash(
         &self,
         hash: &Blake2bHash,
         txn_option: Option<&Transaction>,
@@ -270,9 +282,28 @@ impl HistoryStore {
         tree.num_leaves()
     }
 
+    /// Returns a proof for transactions with the given hashes. The proof also includes the extended
+    /// transactions.
+    pub fn prove(
+        &self,
+        epoch_number: u32,
+        hashes: Vec<&Blake2bHash>,
+        txn_option: Option<&Transaction>,
+    ) -> Option<HistoryTreeProof> {
+        // Get the leaf indexes.
+        let mut positions = vec![];
+
+        for hash in hashes {
+            let index = self.get_leaf_index(hash, txn_option)?;
+            positions.push(index as usize)
+        }
+
+        self.prove_with_position(epoch_number, positions, txn_option)
+    }
+
     /// Returns a proof for all the extended transactions at the given positions (leaf indexes). The
     /// proof also includes the extended transactions.
-    pub fn prove(
+    pub fn prove_with_position(
         &self,
         epoch_number: u32,
         positions: Vec<usize>,
@@ -392,12 +423,13 @@ impl HistoryStore {
         if !tree.is_finished() {
             return Err(MMRError::IncompleteProof);
         }
+
         let root = tree.get_root()?.to_blake2b();
 
         // Then add all transactions to the database as the tree is finished.
-        for leaf in all_leaves {
+        for (i, leaf) in all_leaves.iter().enumerate() {
             // The prefix is one because it is a leaf.
-            self.put_extended_tx(txn, &leaf.hash(1).to_blake2b(), &leaf);
+            self.put_extended_tx(txn, &leaf.hash(1).to_blake2b(), i as u32, &leaf);
         }
 
         Ok(root)
@@ -407,7 +439,7 @@ impl HistoryStore {
     /// of the transaction, not a simple Blake2b hash of the transaction.
     fn get_extended_tx(
         &self,
-        hash: &Blake2bHash,
+        leaf_hash: &Blake2bHash,
         txn_option: Option<&Transaction>,
     ) -> Option<ExtendedTransaction> {
         let read_txn: ReadTransaction;
@@ -419,13 +451,51 @@ impl HistoryStore {
             }
         };
 
-        txn.get(&self.ext_tx_db, hash)
+        txn.get(&self.ext_tx_db, leaf_hash)
+    }
+
+    /// Inserts a extended transaction into the extended transaction database. If it's a basic
+    /// transaction, we also update the leaf hash and leaf indexes databases.
+    fn put_extended_tx(
+        &self,
+        txn: &mut WriteTransaction,
+        leaf_hash: &Blake2bHash,
+        leaf_index: u32,
+        ext_tx: &ExtendedTransaction,
+    ) {
+        txn.put_reserve(&self.ext_tx_db, leaf_hash, ext_tx);
+
+        if !ext_tx.is_inherent() {
+            let tx_hash: Blake2bHash = ext_tx.unwrap_basic().hash();
+            txn.put(&self.leaf_hash_db, &tx_hash, leaf_hash);
+            txn.put(&self.leaf_idx_db, &tx_hash, &leaf_index);
+        }
+    }
+
+    /// Removes a extended transaction from the extended transaction database. If it's a basic
+    /// transaction, we also update the leaf hash and leaf indexes databases.
+    fn remove_extended_tx(&self, txn: &mut WriteTransaction, leaf_hash: &Blake2bHash) {
+        // Get the transaction first.
+        let tx_opt: Option<ExtendedTransaction> = txn.get(&self.ext_tx_db, leaf_hash);
+
+        let ext_tx = match tx_opt {
+            Some(v) => v,
+            None => return,
+        };
+
+        if !ext_tx.is_inherent() {
+            let tx_hash: Blake2bHash = ext_tx.unwrap_basic().hash();
+            txn.remove(&self.leaf_hash_db, &tx_hash);
+            txn.remove(&self.leaf_idx_db, &tx_hash);
+        }
+
+        txn.remove(&self.ext_tx_db, leaf_hash);
     }
 
     /// Gets a leaf hash from the hash of its transaction (only basic, no inherents!).
     fn get_leaf_hash(
         &self,
-        hash: &Blake2bHash,
+        tx_hash: &Blake2bHash,
         txn_option: Option<&Transaction>,
     ) -> Option<Blake2bHash> {
         let read_txn: ReadTransaction;
@@ -437,41 +507,24 @@ impl HistoryStore {
             }
         };
 
-        txn.get(&self.tx_hash_db, hash)
+        txn.get(&self.leaf_hash_db, tx_hash)
     }
 
-    /// Inserts a extended transaction into the extended transaction database. If it's a basic
-    /// transaction, we also update the transaction hash database.
-    fn put_extended_tx(
+    /// Gets a leaf index from the hash of its transaction (only basic, no inherents!).
+    fn get_leaf_index(
         &self,
-        txn: &mut WriteTransaction,
-        hash: &Blake2bHash,
-        ext_tx: &ExtendedTransaction,
-    ) {
-        txn.put_reserve(&self.ext_tx_db, hash, ext_tx);
-
-        if !ext_tx.is_inherent() {
-            let tx_hash: Blake2bHash = ext_tx.unwrap_basic().hash();
-            txn.put(&self.tx_hash_db, &tx_hash, hash)
-        }
-    }
-
-    /// Removes a extended transaction from the extended transaction database. If it's a basic
-    /// transaction, we also update the transaction hash database.
-    fn remove_extended_tx(&self, txn: &mut WriteTransaction, hash: &Blake2bHash) {
-        // Get the transaction first.
-        let tx_opt: Option<ExtendedTransaction> = txn.get(&self.ext_tx_db, hash);
-
-        let ext_tx = match tx_opt {
-            Some(v) => v,
-            None => return,
+        tx_hash: &Blake2bHash,
+        txn_option: Option<&Transaction>,
+    ) -> Option<u32> {
+        let read_txn: ReadTransaction;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = ReadTransaction::new(&self.env);
+                &read_txn
+            }
         };
 
-        if !ext_tx.is_inherent() {
-            let tx_hash: Blake2bHash = ext_tx.unwrap_basic().hash();
-            txn.remove(&self.tx_hash_db, &tx_hash)
-        }
-
-        txn.remove(&self.ext_tx_db, hash);
+        txn.get(&self.leaf_idx_db, tx_hash)
     }
 }
