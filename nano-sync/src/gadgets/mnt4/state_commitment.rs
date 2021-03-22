@@ -60,11 +60,10 @@ mod tests {
     use ark_std::{test_rng, UniformRand};
     use rand::RngCore;
 
+    use nimiq_bls::pedersen::pedersen_generators;
     use nimiq_bls::utils::bytes_to_bits;
-
-    use crate::constants::VALIDATOR_SLOTS;
-    use crate::pk_tree_construct;
-    use crate::primitives::{pedersen_generators, state_commitment};
+    use nimiq_nano_primitives::{pk_tree_construct, state_commitment};
+    use nimiq_primitives::policy::SLOTS;
 
     use super::*;
 
@@ -78,7 +77,7 @@ mod tests {
 
         // Create random keys.
         let g2_point = G2Projective::rand(rng);
-        let public_keys = vec![g2_point; VALIDATOR_SLOTS];
+        let public_keys = vec![g2_point; SLOTS as usize];
 
         // Create random block number.
         let block_number = u32::rand(rng);

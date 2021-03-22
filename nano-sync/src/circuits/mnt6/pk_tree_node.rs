@@ -8,7 +8,9 @@ use ark_mnt6_753::Fr as MNT6Fr;
 use ark_r1cs_std::prelude::{AllocVar, Boolean, EqGadget};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
-use crate::constants::{PK_TREE_DEPTH, VALIDATOR_SLOTS};
+use nimiq_nano_primitives::PK_TREE_DEPTH;
+use nimiq_primitives::policy::SLOTS;
+
 use crate::utils::{prepare_inputs, unpack_inputs};
 
 /// This is the node subcircuit of the PKTreeCircuit. See PKTreeLeafCircuit for more details.
@@ -105,7 +107,7 @@ impl ConstraintSynthesizer<MNT6Fr> for PKTreeNodeCircuit {
             unpack_inputs(right_agg_pk_commitment_var)?[..760].to_vec();
 
         let signer_bitmap_bits = unpack_inputs(vec![signer_bitmap_chunk_var])?
-            [..VALIDATOR_SLOTS / 2_usize.pow(self.tree_level as u32)]
+            [..SLOTS as usize / 2_usize.pow(self.tree_level as u32)]
             .to_vec();
 
         let mut path_bits = unpack_inputs(vec![path_var])?[..PK_TREE_DEPTH].to_vec();
@@ -127,8 +129,8 @@ impl ConstraintSynthesizer<MNT6Fr> for PKTreeNodeCircuit {
         let right_path = path_bits;
 
         // Split the signer's bitmap chunk into two, for the left and right child nodes.
-        let (left_signer_bitmap_bits, right_signer_bitmap_bits) = signer_bitmap_bits
-            .split_at(VALIDATOR_SLOTS / 2_usize.pow((self.tree_level + 1) as u32));
+        let (left_signer_bitmap_bits, right_signer_bitmap_bits) =
+            signer_bitmap_bits.split_at(SLOTS as usize / 2_usize.pow((self.tree_level + 1) as u32));
 
         // Verify the ZK proof for the left child node.
         let mut proof_inputs = prepare_inputs(pk_tree_root_bits.clone());

@@ -12,7 +12,7 @@ use nimiq_collections::BitSet;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_nano_sync::pk_tree_construct;
+use nimiq_nano_primitives::pk_tree_construct;
 use nimiq_primitives::policy;
 
 use crate::BlockProducer;

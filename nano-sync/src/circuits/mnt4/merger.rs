@@ -8,8 +8,9 @@ use ark_mnt6_753::{Fq, MNT6_753};
 use ark_r1cs_std::prelude::{AllocVar, Boolean, EqGadget};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
+use nimiq_bls::pedersen::pedersen_generators;
+
 use crate::gadgets::mnt4::VKCommitmentGadget;
-use crate::primitives::pedersen_generators;
 use crate::utils::{prepare_inputs, unpack_inputs};
 
 /// This is the merger circuit. It takes as inputs an initial state commitment, a final state commitment

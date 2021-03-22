@@ -4,9 +4,11 @@ use ark_mnt6_753::{Fq, G1Projective, G2Projective};
 use ark_r1cs_std::prelude::{AllocVar, Boolean, CondSelectGadget, CurveVar, EqGadget};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
-use crate::constants::{PK_TREE_BREADTH, PK_TREE_DEPTH, VALIDATOR_SLOTS};
+use nimiq_bls::pedersen::pedersen_generators;
+use nimiq_nano_primitives::{PK_TREE_BREADTH, PK_TREE_DEPTH};
+use nimiq_primitives::policy::SLOTS;
+
 use crate::gadgets::mnt4::{MerkleTreeGadget, PedersenHashGadget, SerializeGadget};
-use crate::primitives::pedersen_generators;
 use crate::utils::unpack_inputs;
 
 /// This is the leaf subcircuit of the PKTreeCircuit. This circuit main function is to process the
@@ -96,7 +98,7 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeLeafCircuit {
         let agg_pk_commitment_bits = unpack_inputs(agg_pk_commitment_var)?[..760].to_vec();
 
         let signer_bitmap_chunk_bits = unpack_inputs(vec![signer_bitmap_chunk_var])?
-            [..VALIDATOR_SLOTS / PK_TREE_BREADTH]
+            [..SLOTS as usize / PK_TREE_BREADTH]
             .to_vec();
 
         let path_bits = unpack_inputs(vec![path_var])?[..PK_TREE_DEPTH].to_vec();

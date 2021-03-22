@@ -15,6 +15,10 @@ use rand::{thread_rng, CryptoRng, Rng};
 use nimiq_bls::pedersen::{pedersen_generators, pedersen_hash};
 use nimiq_bls::utils::{byte_to_le_bits, bytes_to_bits};
 use nimiq_nano_primitives::{merkle_tree_prove, serialize_g1_mnt6, serialize_g2_mnt6};
+use nimiq_nano_primitives::{
+    pk_tree_construct, state_commitment, vk_commitment, MacroBlock, PK_TREE_BREADTH, PK_TREE_DEPTH,
+};
+use nimiq_primitives::policy::{EPOCH_LENGTH, SLOTS};
 
 use crate::circuits::mnt4::{
     MacroBlockCircuit, MergerCircuit, PKTreeLeafCircuit as LeafMNT4, PKTreeNodeCircuit as NodeMNT4,
@@ -22,9 +26,6 @@ use crate::circuits::mnt4::{
 use crate::circuits::mnt6::{
     MacroBlockWrapperCircuit, MergerWrapperCircuit, PKTreeNodeCircuit as NodeMNT6,
 };
-use crate::constants::{EPOCH_LENGTH, PK_TREE_BREADTH, PK_TREE_DEPTH, VALIDATOR_SLOTS};
-use crate::pk_tree_construct;
-use crate::primitives::{state_commitment, vk_commitment, MacroBlock};
 use crate::utils::pack_inputs;
 use crate::{NanoZKP, NanoZKPError};
 
@@ -51,11 +52,10 @@ impl NanoZKP {
         // were already created and start from there. Note that for this to work, you must provide
         // the exact same inputs.
         proof_caching: bool,
-    ) -> Result<Proof<MNT6_753>, NanoZKPError> {
         // This is a flag indicating if we want to run this function in debug mode. It will verify
         // each proof it creates right after the proof is generated.
-        let debug_mode = false;
-
+        debug_mode: bool,
+    ) -> Result<Proof<MNT6_753>, NanoZKPError> {
         let rng = &mut thread_rng();
 
         // Serialize the initial public keys into bits and chunk them into the number of leaves.
@@ -297,8 +297,8 @@ impl NanoZKP {
         // Calculate the aggregate public key commitment.
         let mut agg_pk = G2MNT6::zero();
 
-        for i in position * VALIDATOR_SLOTS / PK_TREE_BREADTH
-            ..(position + 1) * VALIDATOR_SLOTS / PK_TREE_BREADTH
+        for i in position * SLOTS as usize / PK_TREE_BREADTH
+            ..(position + 1) * SLOTS as usize / PK_TREE_BREADTH
         {
             if signer_bitmap[i] {
                 agg_pk += pks[i];
@@ -312,8 +312,8 @@ impl NanoZKP {
         let agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(hash));
 
         // Get the relevant chunk of the signer's bitmap.
-        let signer_bitmap_chunk = &signer_bitmap[position * VALIDATOR_SLOTS / PK_TREE_BREADTH
-            ..(position + 1) * VALIDATOR_SLOTS / PK_TREE_BREADTH];
+        let signer_bitmap_chunk = &signer_bitmap[position * SLOTS as usize / PK_TREE_BREADTH
+            ..(position + 1) * SLOTS as usize / PK_TREE_BREADTH];
 
         // Calculate inputs.
         let mut pk_tree_root = pack_inputs(bytes_to_bits(pk_tree_root));
@@ -326,8 +326,8 @@ impl NanoZKP {
 
         // Create the circuit.
         let circuit = LeafMNT4::new(
-            pks[position * VALIDATOR_SLOTS / PK_TREE_BREADTH
-                ..(position + 1) * VALIDATOR_SLOTS / PK_TREE_BREADTH]
+            pks[position * SLOTS as usize / PK_TREE_BREADTH
+                ..(position + 1) * SLOTS as usize / PK_TREE_BREADTH]
                 .to_vec(),
             pk_tree_nodes.to_vec(),
             pk_tree_root.clone(),
@@ -407,8 +407,8 @@ impl NanoZKP {
         // Calculate the left aggregate public key commitment.
         let mut agg_pk = G2MNT6::zero();
 
-        for i in left_position * VALIDATOR_SLOTS / 2_usize.pow((tree_level + 1) as u32)
-            ..(left_position + 1) * VALIDATOR_SLOTS / 2_usize.pow((tree_level + 1) as u32)
+        for i in left_position * SLOTS as usize / 2_usize.pow((tree_level + 1) as u32)
+            ..(left_position + 1) * SLOTS as usize / 2_usize.pow((tree_level + 1) as u32)
         {
             if signer_bitmap[i] {
                 agg_pk += pks[i];
@@ -424,8 +424,8 @@ impl NanoZKP {
         // Calculate the right aggregate public key commitment.
         let mut agg_pk = G2MNT6::zero();
 
-        for i in right_position * VALIDATOR_SLOTS / 2_usize.pow((tree_level + 1) as u32)
-            ..(right_position + 1) * VALIDATOR_SLOTS / 2_usize.pow((tree_level + 1) as u32)
+        for i in right_position * SLOTS as usize / 2_usize.pow((tree_level + 1) as u32)
+            ..(right_position + 1) * SLOTS as usize / 2_usize.pow((tree_level + 1) as u32)
         {
             if signer_bitmap[i] {
                 agg_pk += pks[i];
@@ -439,9 +439,9 @@ impl NanoZKP {
         let right_agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(hash));
 
         // Get the relevant chunk of the signer's bitmap.
-        let signer_bitmap_chunk = &signer_bitmap[position * VALIDATOR_SLOTS
+        let signer_bitmap_chunk = &signer_bitmap[position * SLOTS as usize
             / 2_usize.pow(tree_level as u32)
-            ..(position + 1) * VALIDATOR_SLOTS / 2_usize.pow(tree_level as u32)];
+            ..(position + 1) * SLOTS as usize / 2_usize.pow(tree_level as u32)];
 
         // Calculate inputs.
         let mut pk_tree_root = pack_inputs(bytes_to_bits(pk_tree_root));
@@ -543,8 +543,8 @@ impl NanoZKP {
         for i in position * 4..(position + 1) * 4 {
             let mut agg_pk = G2MNT6::zero();
 
-            for j in i * VALIDATOR_SLOTS / 2_usize.pow((tree_level + 2) as u32)
-                ..(i + 1) * VALIDATOR_SLOTS / 2_usize.pow((tree_level + 2) as u32)
+            for j in i * SLOTS as usize / 2_usize.pow((tree_level + 2) as u32)
+                ..(i + 1) * SLOTS as usize / 2_usize.pow((tree_level + 2) as u32)
             {
                 if signer_bitmap[j] {
                     agg_pk += pks[j];
@@ -568,9 +568,9 @@ impl NanoZKP {
         let agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(hash));
 
         // Get the relevant chunk of the signer's bitmap.
-        let signer_bitmap_chunk = &signer_bitmap[position * VALIDATOR_SLOTS
+        let signer_bitmap_chunk = &signer_bitmap[position * SLOTS as usize
             / 2_usize.pow(tree_level as u32)
-            ..(position + 1) * VALIDATOR_SLOTS / 2_usize.pow(tree_level as u32)];
+            ..(position + 1) * SLOTS as usize / 2_usize.pow(tree_level as u32)];
 
         // Calculate inputs.
         let mut pk_tree_root = pack_inputs(bytes_to_bits(pk_tree_root));
@@ -658,7 +658,7 @@ impl NanoZKP {
         for i in 0..2 {
             let mut agg_pk = G2MNT6::zero();
 
-            for j in i * VALIDATOR_SLOTS / 2..(i + 1) * VALIDATOR_SLOTS / 2 {
+            for j in i * SLOTS as usize / 2..(i + 1) * SLOTS as usize / 2 {
                 if block.signer_bitmap[j] {
                     agg_pk += initial_pks[j];
                 }

@@ -42,7 +42,6 @@ nimiq-keys = { path = "../keys" }
 nimiq-macros = { path = "../macros" }
 nimiq-mempool = { path = "../mempool" }
 nimiq-messages = { path = "../messages" }
-nimiq-nano-sync = { path = "../nano-sync" }
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-primitives = { path = "../primitives" }
 nimiq-tendermint = { path = "../tendermint" }

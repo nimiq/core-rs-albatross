@@ -31,7 +31,7 @@ nimiq-genesis = { path = "../genesis" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-mempool = { path = "../mempool" }
-nimiq-nano-sync = { path = "../nano-sync" }
+nimiq-nano-primitives = { path = "../nano-primitives" }
 nimiq-primitives = { path = "../primitives" }
 nimiq-vrf = { path = "../vrf" }
 

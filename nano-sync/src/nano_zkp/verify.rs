@@ -6,8 +6,8 @@ use ark_mnt6_753::{G2Projective as G2MNT6, MNT6_753};
 use ark_serialize::CanonicalDeserialize;
 
 use nimiq_bls::utils::bytes_to_bits;
+use nimiq_nano_primitives::{state_commitment, vk_commitment};
 
-use crate::primitives::{state_commitment, vk_commitment};
 use crate::utils::pack_inputs;
 use crate::{NanoZKP, NanoZKPError};
 
