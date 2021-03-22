@@ -30,7 +30,7 @@ nimiq-hash = { path = "../../hash" }
 nimiq-hash_derive = { path = "../../hash/hash_derive" }
 nimiq-keys = { path = "../../keys" }
 nimiq-macros = { path = "../../macros" }
-nimiq-nano-sync = { path = "../../nano-sync", default-features = false }
+nimiq-nano-sync = { path = "../../nano-sync" }
 nimiq-network-interface = { path = "../../network-interface" }
 nimiq-primitives = { path = "..", features = ["policy", "networks", "coin"] }
 nimiq-transaction = { path = "../transaction" }

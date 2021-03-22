@@ -60,10 +60,11 @@ mod tests {
     use ark_std::{test_rng, UniformRand};
     use rand::RngCore;
 
+    use nimiq_bls::utils::bytes_to_bits;
+
     use crate::constants::VALIDATOR_SLOTS;
     use crate::pk_tree_construct;
     use crate::primitives::{pedersen_generators, state_commitment};
-    use crate::utils::bytes_to_bits;
 
     use super::*;
 

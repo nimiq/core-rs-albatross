@@ -5,8 +5,10 @@ use ark_groth16::{Groth16, Proof, VerifyingKey};
 use ark_mnt6_753::{G2Projective as G2MNT6, MNT6_753};
 use ark_serialize::CanonicalDeserialize;
 
+use nimiq_bls::utils::bytes_to_bits;
+
 use crate::primitives::{state_commitment, vk_commitment};
-use crate::utils::{bytes_to_bits, pack_inputs};
+use crate::utils::pack_inputs;
 use crate::{NanoZKP, NanoZKPError};
 
 impl NanoZKP {

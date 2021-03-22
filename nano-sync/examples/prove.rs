@@ -1,4 +1,5 @@
 use std::fs::{DirBuilder, File};
+use std::io;
 use std::path::Path;
 use std::time::Instant;
 
@@ -8,24 +9,34 @@ use ark_serialize::CanonicalSerialize;
 use nimiq_nano_sync::utils::create_test_blocks;
 use nimiq_nano_sync::NanoZKP;
 
-const NUMBER_EPOCHS: usize = 2;
-const SEED: u64 = 12370426996209291122;
-
 /// Generates a proof for a chain of election blocks. The random parameters generation uses always
 /// the same seed, so it will always generate the same data (validators, signatures, etc).
 /// This function will simply output a proof for the final epoch and store it in file.
+/// Run this example with `cargo run --all-features --release --example prove`.
 fn main() {
+    // Ask user for the number of epochs.
+    println!("Enter the number of epochs to prove:");
+
+    let mut data = String::new();
+
+    io::stdin()
+        .read_line(&mut data)
+        .expect("Couldn't read user input.");
+
+    let number_epochs: u64 = data.trim().parse().expect("Couldn't read user input.");
+
     println!("====== Proof generation for Nano Sync initiated ======");
+
     let start = Instant::now();
 
     let mut genesis_state_commitment = vec![];
     let mut genesis_data = None;
     let mut proof = Proof::default();
 
-    for i in 0..NUMBER_EPOCHS {
+    for i in 0..number_epochs {
         // Get random parameters.
         let (initial_pks, initial_header_hash, final_pks, block, genesis_state_commitment_opt) =
-            create_test_blocks(SEED, i as u64);
+            create_test_blocks(i as u64);
 
         // Create genesis data.
         if i == 0 {

@@ -44,7 +44,7 @@ nimiq-vrf = { path = "../vrf" }
 atomic = "0.4"
 
 nimiq-block-production-albatross = { path = "../block-production-albatross", features = ["test-utils"] }
-nimiq-nano-sync = { path= "../nano-sync", default-features = false }
+nimiq-nano-sync = { path= "../nano-sync" }
 
 [features]
 metrics = []
