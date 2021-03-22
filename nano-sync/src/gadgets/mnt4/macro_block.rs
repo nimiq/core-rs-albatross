@@ -285,9 +285,10 @@ mod tests {
     use ark_std::{test_rng, UniformRand};
     use rand::RngCore;
 
+    use nimiq_bls::utils::bytes_to_bits;
+
     use crate::constants::{MIN_SIGNERS, VALIDATOR_SLOTS};
     use crate::primitives::{pedersen_generators, MacroBlock};
-    use crate::utils::bytes_to_bits;
 
     use super::*;
 

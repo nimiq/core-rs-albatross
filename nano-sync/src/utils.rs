@@ -12,9 +12,6 @@ use rand::prelude::SliceRandom;
 use rand::rngs::SmallRng;
 use rand::{RngCore, SeedableRng};
 
-pub use nimiq_bls::utils::*;
-
-// Re-export bls utility functions.
 use crate::constants::{EPOCH_LENGTH, MIN_SIGNERS, VALIDATOR_SLOTS};
 use crate::pk_tree_construct;
 use crate::primitives::{state_commitment, MacroBlock};
@@ -163,11 +160,9 @@ pub fn reverse_inner_byte_order<F: Field>(data: &[Boolean<F>]) -> Vec<Boolean<F>
 }
 
 /// Create a macro block, validator keys and other information needed to produce a nano-sync SNARK
-/// proof. It is used in the examples. It takes as input a random seed and an index. The index
-/// represents the epoch that we are in.
+/// proof. It is used in the examples. It takes as input an index that represents the epoch that we are in.
 /// Note that the RNG and seed aren't secure enough, so this function should only be used for test purposes.
 pub fn create_test_blocks(
-    seed: u64,
     index: u64,
 ) -> (
     Vec<G2MNT6>,
@@ -176,6 +171,10 @@ pub fn create_test_blocks(
     MacroBlock,
     Option<Vec<u8>>,
 ) {
+    // The random seed. It was generated using random.org.
+    let seed = 12370426996209291122;
+
+    // Create RNG.
     let mut rng = SmallRng::seed_from_u64(seed + index);
 
     // Create key pairs for the initial validators.

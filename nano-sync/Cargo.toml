@@ -10,9 +10,9 @@ edition = "2018"
 
 [dependencies]
 thiserror = "1.0.23"
-rand = { version = "0.7", features = ["small_rng"], optional = true }
+rand = { version = "0.7", features = ["small_rng"] }
 
-ark-std = { git = "https://github.com/arkworks-rs/utils", optional = true }
+ark-std = { git = "https://github.com/arkworks-rs/utils"}
 ark-ff = { git = "https://github.com/arkworks-rs/algebra" }
 ark-serialize = { git = "https://github.com/arkworks-rs/algebra" }
 ark-ec = { git = "https://github.com/arkworks-rs/algebra" }
@@ -28,6 +28,4 @@ nimiq-nano-primitives = { path = "../nano-primitives"}
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
 
 [features]
-default = ["prover"]
-verifier = []
-prover = ["ark-std", "rand", "ark-crypto-primitives/r1cs", "ark-mnt4-753/r1cs", "ark-mnt6-753/r1cs", "ark-groth16/r1cs"]
+prover = ["ark-crypto-primitives/r1cs", "ark-mnt4-753/r1cs", "ark-mnt6-753/r1cs", "ark-groth16/r1cs"]

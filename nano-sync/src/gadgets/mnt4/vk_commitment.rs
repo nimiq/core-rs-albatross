@@ -70,8 +70,9 @@ mod tests {
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::{test_rng, UniformRand};
 
+    use nimiq_bls::utils::bytes_to_bits;
+
     use crate::primitives::{pedersen_generators, vk_commitment};
-    use crate::utils::bytes_to_bits;
 
     use super::*;
 

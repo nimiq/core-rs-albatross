@@ -21,12 +21,10 @@ pub(crate) mod prove;
 #[cfg(feature = "prover")]
 pub(crate) mod setup;
 
-#[cfg(any(feature = "verifier", feature = "prover"))]
-pub(crate) mod verify;
-
 pub mod constants;
 pub mod primitives;
 pub mod utils;
+pub(crate) mod verify;
 
 /// This the main struct for the nano-sync crate. It provides methods to setup (create the
 /// proving and verifying keys), create proofs and verify proofs for the nano sync circuit.
