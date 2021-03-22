@@ -10,11 +10,13 @@ use ark_r1cs_std::prelude::{
 };
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
-use crate::constants::EPOCH_LENGTH;
+use nimiq_bls::pedersen::pedersen_generators;
+use nimiq_nano_primitives::MacroBlock;
+use nimiq_primitives::policy::EPOCH_LENGTH;
+
 use crate::gadgets::mnt4::{
     MacroBlockGadget, PedersenHashGadget, SerializeGadget, StateCommitmentGadget,
 };
-use crate::primitives::{pedersen_generators, MacroBlock};
 use crate::utils::{prepare_inputs, unpack_inputs};
 
 /// This is the macro block circuit. It takes as inputs an initial state commitment and final state commitment

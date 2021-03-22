@@ -1,6 +1,7 @@
 use std::cmp;
 
 use ark_mnt6_753::G1Projective;
+
 use nimiq_bls::{
     pedersen::{pedersen_generators, pedersen_hash},
     utils::*,

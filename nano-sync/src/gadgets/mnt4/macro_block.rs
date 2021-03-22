@@ -15,9 +15,10 @@ use ark_r1cs_std::prelude::{
 };
 use ark_relations::r1cs::{ConstraintSystemRef, Namespace, SynthesisError};
 
-use crate::constants::{MIN_SIGNERS, VALIDATOR_SLOTS};
+use nimiq_nano_primitives::MacroBlock;
+use nimiq_primitives::policy::{SLOTS, TWO_THIRD_SLOTS};
+
 use crate::gadgets::mnt4::{CheckSigGadget, PedersenHashGadget};
-use crate::primitives::MacroBlock;
 use crate::utils::reverse_inner_byte_order;
 
 /// A gadget that contains utilities to verify the validity of a macro block. Mainly it checks that:
@@ -146,7 +147,7 @@ impl MacroBlockGadget {
         cs: ConstraintSystemRef<MNT4Fr>,
     ) -> Result<Boolean<MNT4Fr>, SynthesisError> {
         // Get the minimum number of signers.
-        let min_signers = FqVar::new_constant(cs, &Fq::from(MIN_SIGNERS as u64))?;
+        let min_signers = FqVar::new_constant(cs, &Fq::from(TWO_THIRD_SLOTS as u64))?;
 
         // Initialize the running sum.
         let mut num_signers = FqVar::zero();
@@ -194,7 +195,7 @@ impl AllocVar<MacroBlock, MNT4Fr> for MacroBlockGadget {
             Err(_) => empty_block,
         };
 
-        assert_eq!(value.signer_bitmap.len(), VALIDATOR_SLOTS);
+        assert_eq!(value.signer_bitmap.len(), SLOTS as usize);
 
         let block_number = UInt32::<MNT4Fr>::new_input(cs.clone(), || Ok(value.block_number))?;
 
@@ -239,7 +240,7 @@ impl AllocVar<MacroBlock, MNT4Fr> for MacroBlockGadget {
             Err(_) => empty_block,
         };
 
-        assert_eq!(value.signer_bitmap.len(), VALIDATOR_SLOTS);
+        assert_eq!(value.signer_bitmap.len(), SLOTS as usize);
 
         let block_number = UInt32::<MNT4Fr>::new_witness(cs.clone(), || Ok(value.block_number))?;
 
@@ -285,10 +286,10 @@ mod tests {
     use ark_std::{test_rng, UniformRand};
     use rand::RngCore;
 
+    use nimiq_bls::pedersen::pedersen_generators;
     use nimiq_bls::utils::bytes_to_bits;
-
-    use crate::constants::{MIN_SIGNERS, VALIDATOR_SLOTS};
-    use crate::primitives::{pedersen_generators, MacroBlock};
+    use nimiq_nano_primitives::MacroBlock;
+    use nimiq_primitives::policy::{SLOTS, TWO_THIRD_SLOTS};
 
     use super::*;
 
@@ -308,7 +309,7 @@ mod tests {
         let mut header_hash = [0u8; 32];
         rng.fill_bytes(&mut header_hash);
 
-        let mut bytes = [0u8; VALIDATOR_SLOTS / 8];
+        let mut bytes = [0u8; SLOTS as usize / 8];
         rng.fill_bytes(&mut bytes);
         let signer_bitmap = bytes_to_bits(&bytes);
 
@@ -370,7 +371,7 @@ mod tests {
         // Create macro block with correct signers set.
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
-        for i in 0..MIN_SIGNERS {
+        for i in 0..TWO_THIRD_SLOTS as usize {
             block.sign(sk, i, pk_tree_root.clone());
             agg_pk += &pk;
         }
@@ -425,7 +426,7 @@ mod tests {
         // Create macro block with correct signers set.
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
-        for i in 0..MIN_SIGNERS {
+        for i in 0..TWO_THIRD_SLOTS as usize {
             block.sign(sk, i, pk_tree_root.clone());
             agg_pk += &pk;
         }
@@ -483,7 +484,7 @@ mod tests {
         // Create macro block with correct signers set.
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
-        for i in 0..MIN_SIGNERS {
+        for i in 0..TWO_THIRD_SLOTS as usize {
             block.sign(sk, i, pk_tree_root.clone());
             agg_pk += &pk;
         }
@@ -541,7 +542,7 @@ mod tests {
         // Create macro block with correct signers set.
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
-        for i in 0..MIN_SIGNERS {
+        for i in 0..TWO_THIRD_SLOTS as usize {
             block.sign(sk, i, pk_tree_root.clone());
             agg_pk += &pk;
         }
@@ -601,7 +602,7 @@ mod tests {
         // Create macro block with correct signers set.
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
-        for i in 0..MIN_SIGNERS {
+        for i in 0..TWO_THIRD_SLOTS as usize {
             block.sign(sk, i, pk_tree_root.clone());
             agg_pk += &pk;
         }
@@ -659,7 +660,7 @@ mod tests {
         // Create macro block with correct signers set.
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
-        for i in 0..MIN_SIGNERS {
+        for i in 0..TWO_THIRD_SLOTS as usize {
             block.sign(sk, i, pk_tree_root.clone());
             agg_pk += &pk;
         }
@@ -719,7 +720,7 @@ mod tests {
         // Create macro block with correct signers set.
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
-        for i in 0..MIN_SIGNERS {
+        for i in 0..TWO_THIRD_SLOTS as usize {
             block.sign(sk, i, pk_tree_root.clone());
             agg_pk += &pk;
         }
@@ -777,7 +778,7 @@ mod tests {
         // Create macro block with too few signers.
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
-        for i in 0..MIN_SIGNERS - 1 {
+        for i in 0..TWO_THIRD_SLOTS as usize - 1 {
             block.sign(sk, i, pk_tree_root.clone());
             agg_pk += &pk;
         }

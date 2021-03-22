@@ -45,6 +45,8 @@ fn main() {
             genesis_data = Some((proof, genesis_state_commitment.clone()))
         };
 
+        println!("Proving epoch {}", i + 1);
+
         // Generate proof.
         proof = NanoZKP::prove(
             initial_pks,
@@ -52,6 +54,7 @@ fn main() {
             final_pks.clone(),
             block,
             genesis_data.clone(),
+            true,
             true,
         )
         .unwrap();

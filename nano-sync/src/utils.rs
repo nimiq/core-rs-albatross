@@ -12,9 +12,8 @@ use rand::prelude::SliceRandom;
 use rand::rngs::SmallRng;
 use rand::{RngCore, SeedableRng};
 
-use crate::constants::{EPOCH_LENGTH, MIN_SIGNERS, VALIDATOR_SLOTS};
-use crate::pk_tree_construct;
-use crate::primitives::{state_commitment, MacroBlock};
+use nimiq_nano_primitives::{pk_tree_construct, state_commitment, MacroBlock};
+use nimiq_primitives::policy::{EPOCH_LENGTH, SLOTS, TWO_THIRD_SLOTS};
 
 /// Takes a vector of booleans and converts it into a vector of field elements, which is the way we
 /// represent inputs to circuits (natively).
@@ -181,7 +180,7 @@ pub fn create_test_blocks(
     let mut initial_sks = vec![];
     let mut initial_pks = vec![];
 
-    for _ in 0..VALIDATOR_SLOTS {
+    for _ in 0..SLOTS {
         let sk = MNT6Fr::rand(&mut rng);
         let mut pk = G2MNT6::prime_subgroup_generator();
         pk.mul_assign(sk);
@@ -194,9 +193,9 @@ pub fn create_test_blocks(
     rng.fill_bytes(&mut initial_header_hash);
 
     // Create a random signer bitmap.
-    let mut signer_bitmap = vec![true; MIN_SIGNERS];
+    let mut signer_bitmap = vec![true; TWO_THIRD_SLOTS as usize];
 
-    signer_bitmap.append(&mut vec![false; VALIDATOR_SLOTS - MIN_SIGNERS]);
+    signer_bitmap.append(&mut vec![false; (SLOTS - TWO_THIRD_SLOTS) as usize]);
 
     signer_bitmap.shuffle(&mut rng);
 
@@ -207,7 +206,7 @@ pub fn create_test_blocks(
     let mut final_sks = vec![];
     let mut final_pks = vec![];
 
-    for _ in 0..VALIDATOR_SLOTS {
+    for _ in 0..SLOTS {
         let sk = MNT6Fr::rand(&mut rng);
         let mut pk = G2MNT6::prime_subgroup_generator();
         pk.mul_assign(sk);
@@ -228,7 +227,7 @@ pub fn create_test_blocks(
     let mut block =
         MacroBlock::without_signatures(EPOCH_LENGTH * (index as u32 + 1), 0, final_header_hash);
 
-    for i in 0..VALIDATOR_SLOTS {
+    for i in 0..SLOTS as usize {
         if signer_bitmap[i] {
             block.sign(initial_sks[i], i, final_pk_tree_root.clone());
         }

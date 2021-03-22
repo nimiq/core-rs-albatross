@@ -5,9 +5,9 @@ use std::time::Instant;
 use ark_groth16::Proof;
 use ark_serialize::CanonicalDeserialize;
 
-use nimiq_nano_sync::constants::EPOCH_LENGTH;
 use nimiq_nano_sync::utils::create_test_blocks;
 use nimiq_nano_sync::NanoZKP;
+use nimiq_primitives::policy::EPOCH_LENGTH;
 
 /// Verifies a proof for a chain of election blocks. The random parameters generation uses always
 /// the same seed, so it will always generate the same data (validators, signatures, etc).

@@ -1,12 +1,11 @@
 use ark_crypto_primitives::prf::Blake2sWithParameterBlock;
 use ark_ec::ProjectiveCurve;
-use ark_ff::Zero;
 use ark_mnt6_753::{Fr, G1Projective};
+use num_traits::identities::Zero;
 
+use nimiq_bls::pedersen::{pedersen_generators, pedersen_hash};
 use nimiq_bls::utils::bytes_to_bits;
-
-use crate::constants::VALIDATOR_SLOTS;
-use crate::primitives::{pedersen_generators, pedersen_hash};
+use nimiq_primitives::policy::SLOTS;
 
 /// A struct representing a macro block in Albatross.
 #[derive(Clone)]
@@ -31,7 +30,7 @@ impl MacroBlock {
             round_number,
             header_hash,
             signature: G1Projective::zero(),
-            signer_bitmap: vec![false; VALIDATOR_SLOTS],
+            signer_bitmap: vec![false; SLOTS as usize],
         }
     }
 
@@ -120,7 +119,7 @@ impl Default for MacroBlock {
             round_number: 0,
             header_hash: [0; 32],
             signature: G1Projective::prime_subgroup_generator(),
-            signer_bitmap: vec![true; VALIDATOR_SLOTS],
+            signer_bitmap: vec![true; SLOTS as usize],
         }
     }
 }
