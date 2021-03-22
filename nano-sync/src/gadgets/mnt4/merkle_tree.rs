@@ -132,8 +132,6 @@ impl MerkleTreeGadget {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use ark_mnt4_753::Fr as MNT4Fr;
     use ark_mnt6_753::constraints::G1Var;
     use ark_r1cs_std::prelude::{AllocVar, Boolean};
@@ -142,11 +140,14 @@ mod tests {
     use ark_std::test_rng;
     use rand::RngCore;
 
-    use crate::primitives::{pedersen_generators, pedersen_hash};
-    use crate::utils::{byte_from_le_bits, bytes_to_bits};
     use nimiq_nano_primitives::{
         merkle_tree_construct, merkle_tree_prove, merkle_tree_verify, serialize_g1_mnt6,
     };
+
+    use crate::primitives::{pedersen_generators, pedersen_hash};
+    use crate::utils::{byte_from_le_bits, bytes_to_bits};
+
+    use super::*;
 
     #[test]
     fn merkle_tree_construct_works() {

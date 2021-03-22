@@ -2,98 +2,60 @@ use std::fs::{DirBuilder, File};
 use std::path::Path;
 use std::time::Instant;
 
-use ark_ec::ProjectiveCurve;
-use ark_mnt6_753::{Fr as MNT6Fr, G2Projective as G2MNT6};
+use ark_groth16::Proof;
 use ark_serialize::CanonicalSerialize;
-use ark_std::ops::MulAssign;
-use ark_std::{test_rng, UniformRand};
-use rand::prelude::SliceRandom;
-use rand::RngCore;
 
-use nimiq_nano_sync::constants::{EPOCH_LENGTH, MIN_SIGNERS, VALIDATOR_SLOTS};
+use nimiq_nano_sync::utils::create_test_blocks;
 use nimiq_nano_sync::NanoZKP;
-use nimiq_nano_sync::{pk_tree_construct, primitives::MacroBlock};
 
+const NUMBER_EPOCHS: usize = 2;
+const SEED: u64 = 12370426996209291122;
+
+/// Generates a proof for a chain of election blocks. The random parameters generation uses always
+/// the same seed, so it will always generate the same data (validators, signatures, etc).
+/// This function will simply output a proof for the final epoch and store it in file.
 fn main() {
-    println!("====== Generating random inputs ======");
-    let rng = &mut test_rng();
-
-    // Create key pairs for all the initial validators.
-    let mut initial_sks = vec![];
-    let mut initial_pks = vec![];
-
-    for _ in 0..VALIDATOR_SLOTS {
-        let sk = MNT6Fr::rand(rng);
-        let mut pk = G2MNT6::prime_subgroup_generator();
-        pk.mul_assign(sk);
-        initial_sks.push(sk);
-        initial_pks.push(pk);
-    }
-
-    // Create initial header hash.
-    let mut initial_header_hash = [0u8; 32];
-    rng.fill_bytes(&mut initial_header_hash);
-
-    // Create key pairs for all the final validators.
-    let mut final_sks = vec![];
-    let mut final_pks = vec![];
-
-    for _ in 0..VALIDATOR_SLOTS {
-        let sk = MNT6Fr::rand(rng);
-        let mut pk = G2MNT6::prime_subgroup_generator();
-        pk.mul_assign(sk);
-        final_sks.push(sk);
-        final_pks.push(pk);
-    }
-
-    // Calculate final public key tree root.
-    let final_pk_tree_root = pk_tree_construct(final_pks.clone());
-
-    // Create a random signer bitmap.
-    let mut signer_bitmap = vec![true; MIN_SIGNERS];
-
-    signer_bitmap.append(&mut vec![false; VALIDATOR_SLOTS - MIN_SIGNERS]);
-
-    signer_bitmap.shuffle(rng);
-
-    // Create a macro block
-    let block_number = EPOCH_LENGTH;
-
-    let round_number = u32::rand(rng);
-
-    let mut header_hash = [0u8; 32];
-    rng.fill_bytes(&mut header_hash);
-
-    let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
-
-    for i in 0..VALIDATOR_SLOTS {
-        if signer_bitmap[i] {
-            block.sign(initial_sks[i], i, final_pk_tree_root.clone());
-        }
-    }
-
     println!("====== Proof generation for Nano Sync initiated ======");
     let start = Instant::now();
 
-    let proof = NanoZKP::prove(
-        initial_pks,
-        initial_header_hash,
-        final_pks,
-        block,
-        None,
-        true,
-    )
-    .unwrap();
+    let mut genesis_state_commitment = vec![];
+    let mut genesis_data = None;
+    let mut proof = Proof::default();
 
-    if !Path::new("proofs/").is_dir() {
-        DirBuilder::new().create("proofs/").unwrap();
+    for i in 0..NUMBER_EPOCHS {
+        // Get random parameters.
+        let (initial_pks, initial_header_hash, final_pks, block, genesis_state_commitment_opt) =
+            create_test_blocks(SEED, i as u64);
+
+        // Create genesis data.
+        if i == 0 {
+            genesis_state_commitment = genesis_state_commitment_opt.unwrap();
+        } else {
+            genesis_data = Some((proof, genesis_state_commitment.clone()))
+        };
+
+        // Generate proof.
+        proof = NanoZKP::prove(
+            initial_pks,
+            initial_header_hash,
+            final_pks.clone(),
+            block,
+            genesis_data.clone(),
+            true,
+        )
+        .unwrap();
+
+        // Save proof to file.
+        if !Path::new("proofs/").is_dir() {
+            DirBuilder::new().create("proofs/").unwrap();
+        }
+
+        let mut file = File::create(format!("proofs/proof_epoch_{}.bin", i + 1)).unwrap();
+
+        proof.serialize_unchecked(&mut file).unwrap();
+
+        file.sync_all().unwrap();
     }
-
-    let mut file = File::create("proofs/proof_epoch_0.bin").unwrap();
-
-    proof.serialize_unchecked(&mut file).unwrap();
-
-    file.sync_all().unwrap();
 
     println!("====== Proof generation for Nano Sync finished ======");
     println!("Total time elapsed: {:?}", start.elapsed());

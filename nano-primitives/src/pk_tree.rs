@@ -12,7 +12,7 @@ pub fn pk_tree_construct(
     pk_tree_breadth: usize,
 ) -> Vec<u8> {
     // FIXME This computation is too slow ATM. Disable it for the time being.
-    return Default::default();
+    //return Default::default();
 
     // Checking that the number of public keys is equal to the number of validator slots.
     assert_eq!(public_keys.len(), num_keys);

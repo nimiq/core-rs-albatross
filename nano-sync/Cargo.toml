@@ -10,7 +10,7 @@ edition = "2018"
 
 [dependencies]
 thiserror = "1.0.23"
-rand = { version = "0.7", optional = true }
+rand = { version = "0.7", features = ["small_rng"], optional = true }
 
 ark-std = { git = "https://github.com/arkworks-rs/utils", optional = true }
 ark-ff = { git = "https://github.com/arkworks-rs/algebra" }

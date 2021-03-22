@@ -57,8 +57,6 @@ impl PedersenHashGadget {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use ark_mnt4_753::Fr as MNT4Fr;
     use ark_mnt6_753::constraints::G1Var;
     use ark_r1cs_std::prelude::{AllocVar, Boolean};
@@ -69,6 +67,8 @@ mod tests {
 
     use crate::primitives::{pedersen_generators, pedersen_hash};
     use crate::utils::bytes_to_bits;
+
+    use super::*;
 
     #[test]
     fn pedersen_hash_works() {

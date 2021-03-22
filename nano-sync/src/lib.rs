@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+
 use std::io;
 
 use ark_groth16::Proof;
@@ -6,9 +7,10 @@ use ark_mnt6_753::G2Projective;
 use ark_mnt6_753::MNT6_753;
 use ark_relations::r1cs::SynthesisError;
 use ark_serialize::SerializationError;
+use thiserror::Error;
+
 use constants::{PK_TREE_BREADTH, VALIDATOR_SLOTS};
 use nimiq_nano_primitives::pk_tree_construct as pk_t_c;
-use thiserror::Error;
 
 #[cfg(feature = "prover")]
 pub(crate) mod circuits;

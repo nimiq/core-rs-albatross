@@ -8,8 +8,9 @@ use ark_mnt4_753::{Fr as MNT4Fr, G1Projective as G1MNT4, G2Projective as G2MNT4,
 use ark_mnt6_753::{Fr as MNT6Fr, G1Projective as G1MNT6, G2Projective as G2MNT6, MNT6_753};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::UniformRand;
-use nimiq_bls::utils::bytes_to_bits;
 use rand::{thread_rng, CryptoRng, Rng};
+
+use nimiq_bls::utils::bytes_to_bits;
 
 use crate::circuits::mnt4::{
     MacroBlockCircuit, MergerCircuit, PKTreeLeafCircuit as LeafMNT4, PKTreeNodeCircuit as NodeMNT4,

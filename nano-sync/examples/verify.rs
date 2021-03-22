@@ -1,66 +1,43 @@
 use std::fs::File;
 use std::time::Instant;
 
-use ark_ec::ProjectiveCurve;
 use ark_groth16::Proof;
-use ark_mnt6_753::{Fr as MNT6Fr, G2Projective as G2MNT6};
 use ark_serialize::CanonicalDeserialize;
-use ark_std::ops::MulAssign;
-use ark_std::{test_rng, UniformRand};
 
-use nimiq_nano_sync::constants::{EPOCH_LENGTH, VALIDATOR_SLOTS};
+use nimiq_nano_sync::constants::EPOCH_LENGTH;
+use nimiq_nano_sync::utils::create_test_blocks;
 use nimiq_nano_sync::NanoZKP;
-use rand::RngCore;
 
+const NUMBER_EPOCHS: usize = 2;
+const SEED: u64 = 12370426996209291122;
+
+/// Verifies a proof for a chain of election blocks. The random parameters generation uses always
+/// the same seed, so it will always generate the same data (validators, signatures, etc).
+/// This function will simply print the verification result.
 fn main() {
     println!("====== Generating random inputs ======");
-    let rng = &mut test_rng();
 
-    // Create initial header hash.
-    let mut initial_header_hash = [0u8; 32];
-    rng.fill_bytes(&mut initial_header_hash);
+    // Get initial random parameters.
+    let (initial_pks, initial_header_hash, _, _, _) = create_test_blocks(SEED, 0);
 
-    // Create key pairs for all the initial validators.
-    let mut initial_sks = vec![];
-    let mut initial_pks = vec![];
-
-    for _ in 0..VALIDATOR_SLOTS {
-        let sk = MNT6Fr::rand(rng);
-        let mut pk = G2MNT6::prime_subgroup_generator();
-        pk.mul_assign(sk);
-        initial_sks.push(sk);
-        initial_pks.push(pk);
-    }
-
-    // Create final header hash.
-    let mut final_header_hash = [0u8; 32];
-    rng.fill_bytes(&mut final_header_hash);
-
-    // Create key pairs for all the final validators.
-    let mut final_sks = vec![];
-    let mut final_pks = vec![];
-
-    for _ in 0..VALIDATOR_SLOTS {
-        let sk = MNT6Fr::rand(rng);
-        let mut pk = G2MNT6::prime_subgroup_generator();
-        pk.mul_assign(sk);
-        final_sks.push(sk);
-        final_pks.push(pk);
-    }
+    // Get final random parameters.
+    let (final_pks, final_header_hash, _, _, _) = create_test_blocks(SEED, NUMBER_EPOCHS as u64);
 
     // Load the proof from file.
-    let mut file = File::open("proofs/proof_epoch_0.bin").unwrap();
+    let mut file = File::open(format!("proofs/proof_epoch_{}.bin", NUMBER_EPOCHS)).unwrap();
 
     let proof = Proof::deserialize_unchecked(&mut file).unwrap();
 
     println!("====== Proof verification for Nano Sync initiated ======");
+
     let start = Instant::now();
 
+    // Verify proof.
     let result = NanoZKP::verify(
         0,
         initial_header_hash,
         initial_pks,
-        EPOCH_LENGTH,
+        EPOCH_LENGTH * NUMBER_EPOCHS as u32,
         final_header_hash,
         final_pks,
         proof,

@@ -1,12 +1,23 @@
 use std::cmp::min;
 
+use ark_ec::ProjectiveCurve;
 use ark_ff::{Field, PrimeField};
+use ark_mnt6_753::{Fr as MNT6Fr, G2Projective as G2MNT6};
 use ark_r1cs_std::fields::fp::FpVar;
 use ark_r1cs_std::prelude::{Boolean, ToBitsGadget};
 use ark_relations::r1cs::SynthesisError;
+use ark_std::ops::MulAssign;
+use ark_std::UniformRand;
+use rand::prelude::SliceRandom;
+use rand::rngs::SmallRng;
+use rand::{RngCore, SeedableRng};
+
+pub use nimiq_bls::utils::*;
 
 // Re-export bls utility functions.
-pub use nimiq_bls::utils::*;
+use crate::constants::{EPOCH_LENGTH, MIN_SIGNERS, VALIDATOR_SLOTS};
+use crate::pk_tree_construct;
+use crate::primitives::{state_commitment, MacroBlock};
 
 /// Takes a vector of booleans and converts it into a vector of field elements, which is the way we
 /// represent inputs to circuits (natively).
@@ -149,4 +160,98 @@ pub fn reverse_inner_byte_order<F: Field>(data: &[Boolean<F>]) -> Vec<Boolean<F>
         // Reverse each 8 bit chunk.
         .flat_map(|chunk| chunk.iter().rev().cloned())
         .collect::<Vec<Boolean<F>>>()
+}
+
+/// Create a macro block, validator keys and other information needed to produce a nano-sync SNARK
+/// proof. It is used in the examples. It takes as input a random seed and an index. The index
+/// represents the epoch that we are in.
+/// Note that the RNG and seed aren't secure enough, so this function should only be used for test purposes.
+pub fn create_test_blocks(
+    seed: u64,
+    index: u64,
+) -> (
+    Vec<G2MNT6>,
+    [u8; 32],
+    Vec<G2MNT6>,
+    MacroBlock,
+    Option<Vec<u8>>,
+) {
+    let mut rng = SmallRng::seed_from_u64(seed + index);
+
+    // Create key pairs for the initial validators.
+    let mut initial_sks = vec![];
+    let mut initial_pks = vec![];
+
+    for _ in 0..VALIDATOR_SLOTS {
+        let sk = MNT6Fr::rand(&mut rng);
+        let mut pk = G2MNT6::prime_subgroup_generator();
+        pk.mul_assign(sk);
+        initial_sks.push(sk);
+        initial_pks.push(pk);
+    }
+
+    // Create the initial header hash.
+    let mut initial_header_hash = [0u8; 32];
+    rng.fill_bytes(&mut initial_header_hash);
+
+    // Create a random signer bitmap.
+    let mut signer_bitmap = vec![true; MIN_SIGNERS];
+
+    signer_bitmap.append(&mut vec![false; VALIDATOR_SLOTS - MIN_SIGNERS]);
+
+    signer_bitmap.shuffle(&mut rng);
+
+    // Restart the RNG with the next index.
+    let mut rng = SmallRng::seed_from_u64(seed + index + 1);
+
+    // Create key pairs for the final validators.
+    let mut final_sks = vec![];
+    let mut final_pks = vec![];
+
+    for _ in 0..VALIDATOR_SLOTS {
+        let sk = MNT6Fr::rand(&mut rng);
+        let mut pk = G2MNT6::prime_subgroup_generator();
+        pk.mul_assign(sk);
+        final_sks.push(sk);
+        final_pks.push(pk);
+    }
+
+    // Create the final header hash.
+    let mut final_header_hash = [0u8; 32];
+    rng.fill_bytes(&mut final_header_hash);
+
+    // There is no more randomness being generated from this point on.
+
+    // Calculate final public key tree root.
+    let final_pk_tree_root = pk_tree_construct(final_pks.clone());
+
+    // Create the macro block.
+    let mut block =
+        MacroBlock::without_signatures(EPOCH_LENGTH * (index as u32 + 1), 0, final_header_hash);
+
+    for i in 0..VALIDATOR_SLOTS {
+        if signer_bitmap[i] {
+            block.sign(initial_sks[i], i, final_pk_tree_root.clone());
+        }
+    }
+
+    // If this is the first index (genesis), also return the genesis state commitment.
+    let genesis_state_commitment = if index == 0 {
+        Some(state_commitment(
+            0,
+            initial_header_hash,
+            initial_pks.clone(),
+        ))
+    } else {
+        None
+    };
+
+    // Return the data.
+    (
+        initial_pks,
+        initial_header_hash,
+        final_pks,
+        block,
+        genesis_state_commitment,
+    )
 }
