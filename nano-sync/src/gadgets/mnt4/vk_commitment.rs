@@ -58,8 +58,6 @@ impl VKCommitmentGadget {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use ark_ec::ProjectiveCurve;
     use ark_groth16::constraints::VerifyingKeyVar;
     use ark_groth16::VerifyingKey;
@@ -74,6 +72,8 @@ mod tests {
 
     use crate::primitives::{pedersen_generators, vk_commitment};
     use crate::utils::bytes_to_bits;
+
+    use super::*;
 
     #[test]
     fn vk_commitment_test() {

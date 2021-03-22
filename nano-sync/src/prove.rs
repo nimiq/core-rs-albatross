@@ -36,7 +36,8 @@ impl NanoZKP {
         // selected in the previous election macro block and that are now signing this election
         // macro block.
         initial_pks: Vec<G2MNT6>,
-        // The hash of the block header of the initial state.
+        // The hash of the block header of the initial state. So, the hash of the block when the
+        // initial validators were selected.
         initial_header_hash: [u8; 32],
         // The public keys of the validators of the final state. To be clear, they are the validators
         // that are selected in this election macro block.

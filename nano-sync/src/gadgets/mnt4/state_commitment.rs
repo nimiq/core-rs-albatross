@@ -51,8 +51,6 @@ impl StateCommitmentGadget {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use ark_mnt4_753::Fr as MNT4Fr;
     use ark_mnt6_753::constraints::G1Var;
     use ark_mnt6_753::G2Projective;
@@ -60,12 +58,14 @@ mod tests {
     use ark_r1cs_std::R1CSVar;
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::{test_rng, UniformRand};
+    use rand::RngCore;
 
     use crate::constants::VALIDATOR_SLOTS;
     use crate::pk_tree_construct;
     use crate::primitives::{pedersen_generators, state_commitment};
     use crate::utils::bytes_to_bits;
-    use rand::RngCore;
+
+    use super::*;
 
     #[test]
     fn state_commitment_works() {

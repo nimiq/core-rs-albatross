@@ -57,8 +57,6 @@ impl SerializeGadget {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use ark_mnt4_753::constraints::{G1Var, G2Var};
     use ark_mnt4_753::{G1Projective, G2Projective};
     use ark_mnt6_753::Fr as MNT6Fr;
@@ -67,8 +65,11 @@ mod tests {
     use ark_relations::r1cs::ConstraintSystem;
     use ark_std::{test_rng, UniformRand};
 
-    use crate::utils::bytes_to_bits;
     use nimiq_nano_primitives::{serialize_g1_mnt4, serialize_g2_mnt4};
+
+    use crate::utils::bytes_to_bits;
+
+    use super::*;
 
     #[test]
     fn serialization_g1_mnt4_works() {

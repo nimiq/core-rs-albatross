@@ -273,8 +273,6 @@ impl AllocVar<MacroBlock, MNT4Fr> for MacroBlockGadget {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use ark_ec::ProjectiveCurve;
     use ark_ff::Zero;
     use ark_mnt4_753::Fr as MNT4Fr;
@@ -290,6 +288,8 @@ mod tests {
     use crate::constants::{MIN_SIGNERS, VALIDATOR_SLOTS};
     use crate::primitives::{pedersen_generators, MacroBlock};
     use crate::utils::bytes_to_bits;
+
+    use super::*;
 
     #[test]
     fn block_hash_works() {
