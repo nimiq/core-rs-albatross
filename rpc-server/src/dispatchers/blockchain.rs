@@ -133,23 +133,12 @@ impl BlockchainInterface for BlockchainDispatcher {
             .get_ext_tx_by_hash(&hash, None)
             .ok_or(Error::TransactionNotFound(hash))?;
 
-        let block_number = extended_tx.block_number;
-        // let timestamp = extended_tx.block_time;
-
-        let block = self
-            .blockchain
-            .get_block_at(block_number, false, None)
-            .ok_or(Error::BlockNotFound(block_number.into()))?;
-
         let transaction = extended_tx.unwrap_basic(); // Because we found the extended_tx above, this cannot be None
 
         Ok(Transaction::from_blockchain(
             transaction.clone(),
-            // TODO: Get transaction index from block
-            0,
-            &block.hash(),
-            block.block_number(),
-            block.timestamp(),
+            extended_tx.block_number,
+            extended_tx.block_time,
             self.blockchain.block_number(),
         ))
     }
