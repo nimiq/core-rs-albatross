@@ -264,15 +264,11 @@ impl From<nimiq_block_albatross::ForkProof> for ForkProof {
 pub struct Transaction {
     pub hash: Blake2bHash,
 
-    pub block_hash: Blake2bHash,
-
     pub block_number: u32,
 
     pub timestamp: u64,
 
     pub confirmations: u32,
-
-    pub transaction_index: usize,
 
     pub from: Address,
 
@@ -296,19 +292,15 @@ pub struct Transaction {
 impl Transaction {
     pub fn from_blockchain(
         transaction: nimiq_transaction::Transaction,
-        transaction_index: usize,
-        block_hash: &Blake2bHash,
         block_number: u32,
         timestamp: u64,
         head_height: u32,
     ) -> Self {
         Transaction {
             hash: transaction.hash(),
-            block_hash: block_hash.clone(),
             block_number,
             timestamp,
             confirmations: head_height.saturating_sub(block_number),
-            transaction_index,
             from: transaction.sender,
             to: transaction.recipient,
             value: transaction.value,
@@ -381,8 +373,6 @@ impl Block {
                                     .map(|(index, tx)| {
                                         Transaction::from_blockchain(
                                             tx,
-                                            index,
-                                            &block_hash,
                                             block_number,
                                             timestamp,
                                             head_height,
