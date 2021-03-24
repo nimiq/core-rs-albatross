@@ -49,7 +49,6 @@ pub fn initialize_rpc_server(
     }
     */
 
-    //dispatcher.add(NetworkDispatcher::new(client.consensus()));
     let wallet_dispatcher = WalletDispatcher::new(wallet_store);
     let unlocked_wallets = Arc::clone(&wallet_dispatcher.unlocked_wallets);
 
@@ -60,6 +59,7 @@ pub fn initialize_rpc_server(
     ));
     dispatcher.add(wallet_dispatcher);
     dispatcher.add(MempoolDispatcher::new(client.mempool()));
+    dispatcher.add(NetworkDispatcher::new(client.network()));
 
     Ok(Server::new(
         Config {
