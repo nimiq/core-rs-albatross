@@ -60,7 +60,7 @@ impl Blockchain {
         // Create the SlashedSlot struct.
         let slot = SlashedSlot {
             slot,
-            validator_id: producer.validator_id.clone(),
+            validator_id: producer.validator_id,
             event_block: fork_proof.header1.block_number,
         };
 
@@ -97,7 +97,7 @@ impl Blockchain {
                 // Create the SlashedSlot struct.
                 let slot = SlashedSlot {
                     slot,
-                    validator_id: producer.validator_id.clone(),
+                    validator_id: producer.validator_id,
                     event_block: view_changes.block_number,
                 };
 

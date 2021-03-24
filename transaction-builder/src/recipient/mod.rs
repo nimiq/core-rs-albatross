@@ -223,15 +223,12 @@ impl Recipient {
     /// [`retire stake`]: recipient/staking_contract/struct.StakingRecipientBuilder.html#method.retire_stake
     /// [`re-activate stake`]: recipient/staking_contract/struct.StakingRecipientBuilder.html#method.reactivate_stake
     pub fn is_valid_sender(&self, sender: &Address, sender_type: Option<AccountType>) -> bool {
-        match self {
-            Recipient::Staking { address, data } => {
-                if data.is_self_transaction() {
-                    if let Some(address) = address {
-                        return address == sender && sender_type == Some(AccountType::Staking);
-                    }
+        if let Recipient::Staking { address, data } = self {
+            if data.is_self_transaction() {
+                if let Some(address) = address {
+                    return address == sender && sender_type == Some(AccountType::Staking);
                 }
             }
-            _ => {}
         }
 
         true

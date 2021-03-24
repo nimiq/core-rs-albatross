@@ -105,7 +105,7 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(&self.block))?;
 
         let initial_block_number_var =
-            UInt32::new_witness(cs.clone(), || Ok(&self.block.block_number - EPOCH_LENGTH))?;
+            UInt32::new_witness(cs.clone(), || Ok(self.block.block_number - EPOCH_LENGTH))?;
 
         // Allocate all the inputs.
         let initial_state_commitment_var =

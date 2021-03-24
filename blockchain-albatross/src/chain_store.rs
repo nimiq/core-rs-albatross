@@ -487,7 +487,7 @@ impl ChainStore {
         let mut cursor = txn.write_cursor(&self.receipt_db);
         let mut pos: Option<(u32, Receipts)> = cursor.first();
 
-        while let Some(_) = pos {
+        while pos.is_some() {
             cursor.remove();
             pos = cursor.next();
         }

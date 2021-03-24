@@ -35,8 +35,8 @@ pub fn byte_from_le_bits(bits: &[bool]) -> u8 {
     let mut byte = 0;
     let mut base = 1;
 
-    for i in 0..bits.len() {
-        if bits[i] {
+    for bit in bits {
+        if *bit {
             byte += base;
         }
         base *= 2;

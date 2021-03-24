@@ -41,7 +41,7 @@ impl<F: PrimeField> YToBitGadget<F> {
             let value = y.value()?;
 
             let adjusted = if value > half_value {
-                value - &half_value
+                value - half_value
             } else {
                 value
             };

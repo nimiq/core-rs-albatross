@@ -302,8 +302,7 @@ impl<A: AccountsTreeLeave> AccountsTree<A> {
         size: usize,
     ) -> Option<Vec<AccountsTreeNode<A>>> {
         let mut vec = Vec::new();
-        let mut stack = Vec::new();
-        stack.push(self.get_root(txn)?);
+        let mut stack = vec![self.get_root(txn)?];
         while let Some(item) = stack.pop() {
             match item {
                 AccountsTreeNode::BranchNode { children, prefix } => {

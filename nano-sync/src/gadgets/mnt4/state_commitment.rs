@@ -18,9 +18,9 @@ impl StateCommitmentGadget {
     pub fn evaluate(
         cs: ConstraintSystemRef<MNT4Fr>,
         block_number: &UInt32<MNT4Fr>,
-        header_hash: &Vec<Boolean<MNT4Fr>>,
-        pk_tree_root: &Vec<Boolean<MNT4Fr>>,
-        pedersen_generators: &Vec<G1Var>,
+        header_hash: &[Boolean<MNT4Fr>],
+        pk_tree_root: &[Boolean<MNT4Fr>],
+        pedersen_generators: &[G1Var],
     ) -> Result<Vec<Boolean<MNT4Fr>>, SynthesisError> {
         // Initialize Boolean vector.
         let mut bits = vec![];

@@ -57,7 +57,7 @@ impl ConnectionPoolBehaviour {
             &self.connected_peers.len(),
             &self.connected_peers
         );
-        if self.pending_connections.len() == 0 {
+        if self.pending_connections.is_empty() {
             self.pending_connections = self
                 .peer_contact_book
                 .read()
@@ -129,7 +129,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
     }
 
     fn poll(&mut self, cx: &mut Context<'_>, _params: &mut impl PollParameters) -> Poll<NetworkBehaviourAction<<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent, Self::OutEvent>>{
-        if self.pending_connections.len() == 0 {
+        if self.pending_connections.is_empty() {
             if let Some(mut timer) = self.next_check_timeout.take() {
                 if let Poll::Ready(Some(_)) = timer.poll_next_unpin(cx) {
                     self.maintain_peers();

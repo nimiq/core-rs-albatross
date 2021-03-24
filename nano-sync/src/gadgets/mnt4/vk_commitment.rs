@@ -20,7 +20,7 @@ impl VKCommitmentGadget {
     pub fn evaluate(
         cs: ConstraintSystemRef<MNT4Fr>,
         vk: &VerifyingKeyVar<MNT6_753, PairingVar>,
-        pedersen_generators: &Vec<G1Var>,
+        pedersen_generators: &[G1Var],
     ) -> Result<Vec<Boolean<MNT4Fr>>, SynthesisError> {
         // Initialize Boolean vector.
         let mut bits = vec![];

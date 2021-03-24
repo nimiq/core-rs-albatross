@@ -33,10 +33,10 @@ pub fn merkle_tree_construct(inputs: Vec<Vec<bool>>) -> Vec<u8> {
 
     let mut generators_needed = 4; // At least this much is required for the non-leaf nodes.
 
-    for i in 0..inputs.len() {
+    for input in &inputs {
         generators_needed = cmp::max(
             generators_needed,
-            (inputs[i].len() + capacity - 1) / capacity + 1,
+            (input.len() + capacity - 1) / capacity + 1,
         );
     }
 
@@ -189,10 +189,10 @@ pub fn merkle_tree_prove(inputs: Vec<Vec<bool>>, path: Vec<bool>) -> Vec<G1Proje
 
     let mut generators_needed = 4; // At least this much is required for the non-leaf nodes.
 
-    for i in 0..inputs.len() {
+    for input in &inputs {
         generators_needed = cmp::max(
             generators_needed,
-            (inputs[i].len() + capacity - 1) / capacity + 1,
+            (input.len() + capacity - 1) / capacity + 1,
         );
     }
 

@@ -92,8 +92,7 @@ impl DeserializeWithLength for BitVec<Msb0, u8> {
         }
 
         // Read bytes into Vec
-        let mut data = Vec::with_capacity(n_bytes);
-        data.resize(n_bytes, 0);
+        let mut data = vec![0; n_bytes];
         reader.read_exact(data.as_mut_slice())?;
 
         let mut bitvec: BitVec<Msb0, u8> = BitVec::from_vec(data);

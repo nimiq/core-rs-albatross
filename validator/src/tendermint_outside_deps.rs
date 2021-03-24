@@ -289,7 +289,7 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
         // (assuming that the block is valid).
         let body = match self
             .blockchain
-            .verify_block_state(&state, &block, Some(&mut txn))
+            .verify_block_state(&state, &block, Some(&txn))
         {
             Ok(v) => v,
             Err(err) => {

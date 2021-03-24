@@ -116,11 +116,8 @@ pub fn pad_point_bits<F: PrimeField>(
 
     let padding = 8 - (point_len % 8);
 
-    let mut serialization = vec![];
-
     // The serialization begins with the y_bit, followed by the infinity flag.
-    serialization.push(y_bit);
-    serialization.push(infinity_bit);
+    let mut serialization = vec![y_bit, infinity_bit];
 
     for i in 0..bits.len() / point_len {
         // If we are in the first round, skip two bits of padding.
