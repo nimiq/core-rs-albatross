@@ -136,7 +136,7 @@ where
                     }
                 } else {
                     // Drop message
-                    log::warn!(
+                    log::trace!(
                         "No receiver for message type. Dropping message: type_id={}, peer={}",
                         type_id,
                         peer.id
