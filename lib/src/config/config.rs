@@ -209,7 +209,7 @@ pub struct DatabaseConfig {
     size: usize,
 
     /// Max number of DBs. Recommended: 10
-    #[builder(default = "10")]
+    #[builder(default = "11")]
     max_dbs: u32,
 
     /// Additional LMDB flags
@@ -221,7 +221,7 @@ impl Default for DatabaseConfig {
     fn default() -> Self {
         Self {
             size: 50 * 1024 * 1024,
-            max_dbs: 10,
+            max_dbs: 11,
             flags: LmdbFlags::NOMETASYNC,
         }
     }
