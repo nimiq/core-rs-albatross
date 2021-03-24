@@ -101,12 +101,9 @@ impl<TPeer: Peer> Stream for BlockRequestComponent<TPeer> {
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         // 1. Poll network events to remove peers.
         while let Poll::Ready(Some(result)) = self.network_event_rx.poll_next_unpin(cx) {
-            match result {
-                Ok(NetworkEvent::PeerLeft(peer)) => {
-                    // Remove peers that left.
-                    self.agents.remove(&peer);
-                }
-                _ => {} // Ignore other events.
+            if let Ok(NetworkEvent::PeerLeft(peer)) = result {
+                // Remove peers that left.
+                self.agents.remove(&peer);
             }
         }
 

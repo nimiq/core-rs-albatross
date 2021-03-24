@@ -80,7 +80,7 @@ pub mod hex {
         ser::{Serialize, Serializer},
     };
 
-    pub fn serialize<S>(x: &Vec<u8>, serializer: S) -> Result<S::Ok, S::Error>
+    pub fn serialize<S>(x: &[u8], serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {

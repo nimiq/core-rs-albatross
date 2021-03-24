@@ -41,11 +41,11 @@ impl MacroBlockGadget {
         &self,
         cs: ConstraintSystemRef<MNT4Fr>,
         // This is the commitment for the set of public keys that are owned by the next set of validators.
-        pk_tree_root: &Vec<Boolean<MNT4Fr>>,
+        pk_tree_root: &[Boolean<MNT4Fr>],
         // This is the aggregated public key.
         agg_pk: &G2Var,
         // These are just the generators for the Pedersen hash gadget.
-        pedersen_generators: &Vec<G1Var>,
+        pedersen_generators: &[G1Var],
     ) -> Result<Boolean<MNT4Fr>, SynthesisError> {
         // Verify that there are enough signers.
         let enough_signers = self.check_signers(cs.clone())?;
@@ -69,8 +69,8 @@ impl MacroBlockGadget {
     /// to obtain a single EC point.
     pub fn get_hash(
         &self,
-        pk_tree_root: &Vec<Boolean<MNT4Fr>>,
-        pedersen_generators: &Vec<G1Var>,
+        pk_tree_root: &[Boolean<MNT4Fr>],
+        pedersen_generators: &[G1Var],
     ) -> Result<G1Var, SynthesisError> {
         // Initialize Boolean vector.
         let mut bits = vec![];
@@ -128,8 +128,8 @@ impl MacroBlockGadget {
         // Convert to bits.
         let mut hash_bits = Vec::new();
 
-        for i in 0..first_hash.len() {
-            hash_bits.extend(first_hash[i].to_bits_le());
+        for fh in &first_hash {
+            hash_bits.extend(fh.to_bits_le());
         }
 
         // Reverse inner byte order.

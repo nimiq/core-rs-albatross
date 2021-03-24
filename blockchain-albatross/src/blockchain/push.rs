@@ -36,7 +36,7 @@ impl Blockchain {
         let prev_info = self
             .chain_store
             .get_chain_info(&block.parent_hash(), false, Some(&read_txn))
-            .ok_or_else(|| PushError::Orphan)?;
+            .ok_or(PushError::Orphan)?;
 
         // Calculate chain ordering.
         let chain_order = ChainOrdering::order_chains(self, &block, &prev_info, Some(&read_txn));

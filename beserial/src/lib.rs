@@ -315,7 +315,7 @@ impl<T: Deserialize> Deserialize for Box<T> {
 
 impl<T: Serialize> Serialize for Box<T> {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        Ok(T::serialize(self.deref(), writer)?)
+        T::serialize(self.deref(), writer)
     }
 
     fn serialized_size(&self) -> usize {
@@ -333,7 +333,7 @@ impl<T: Deserialize> Deserialize for Arc<T> {
 
 impl<T: Serialize> Serialize for Arc<T> {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        Ok(T::serialize(self.deref(), writer)?)
+        T::serialize(self.deref(), writer)
     }
 
     fn serialized_size(&self) -> usize {

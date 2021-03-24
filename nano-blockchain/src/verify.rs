@@ -23,7 +23,7 @@ impl NanoBlockchain {
             .ok_or(NanoError::MissingBlock)?;
 
         // Check the root of the accounts proof against the state root.
-        if !(&account_proof.root() == block.state_root()) {
+        if &account_proof.root() != block.state_root() {
             return Err(NanoError::WrongProof);
         }
 
