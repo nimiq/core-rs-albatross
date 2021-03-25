@@ -149,12 +149,6 @@ async fn four_validators_can_create_an_epoch() {
     tokio::spawn(future::join_all(validators));
 
     let events = blockchain.notifier.write().as_stream();
-    time::timeout(
-        Duration::from_secs(120),
-        events.take(130).for_each(|_| future::ready(())),
-    )
-    .await
-    .unwrap();
 
     assert!(blockchain.block_number() >= 130);
     assert_eq!(blockchain.view_number(), 0);

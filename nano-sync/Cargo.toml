@@ -12,16 +12,16 @@ edition = "2018"
 thiserror = "1.0.23"
 rand = { version = "0.7", features = ["small_rng"] }
 
-ark-std = { git = "https://github.com/arkworks-rs/utils"}
-ark-ff = { git = "https://github.com/arkworks-rs/algebra" }
-ark-serialize = { git = "https://github.com/arkworks-rs/algebra" }
-ark-ec = { git = "https://github.com/arkworks-rs/algebra" }
-ark-relations = { git = "https://github.com/arkworks-rs/snark" }
-ark-mnt4-753 = { git = "https://github.com/arkworks-rs/curves" }
-ark-mnt6-753 = { git = "https://github.com/arkworks-rs/curves" }
-ark-crypto-primitives = { git = "https://github.com/arkworks-rs/crypto-primitives", branch = "main" }
-ark-r1cs-std = { git = "https://github.com/arkworks-rs/r1cs-std" }
-ark-groth16 = { git = "https://github.com/arkworks-rs/groth16" }
+ark-std = "^0.2"
+ark-ff = "^0.2"
+ark-serialize = "^0.2"
+ark-ec = "^0.2"
+ark-relations = "^0.2"
+ark-mnt4-753 = "^0.2"
+ark-mnt6-753 = "^0.2"
+ark-crypto-primitives = "^0.2"
+ark-r1cs-std = "^0.2"
+ark-groth16 = "^0.2"
 
 nimiq-bls = { path = "../bls" }
 nimiq-nano-primitives = { path = "../nano-primitives"}
