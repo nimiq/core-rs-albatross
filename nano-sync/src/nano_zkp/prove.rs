@@ -62,7 +62,7 @@ impl NanoZKP {
         let mut bytes = Vec::new();
 
         for i in 0..initial_pks.len() {
-            bytes.extend_from_slice(&serialize_g2_mnt6(initial_pks[i]));
+            bytes.extend_from_slice(&serialize_g2_mnt6(&initial_pks[i]));
         }
 
         let bits = bytes_to_bits(&bytes);
@@ -305,11 +305,11 @@ impl NanoZKP {
             }
         }
 
-        let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk));
+        let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(&agg_pk));
 
         let hash = pedersen_hash(agg_pk_bits, pedersen_generators(5));
 
-        let agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(hash));
+        let agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(&hash));
 
         // Get the relevant chunk of the signer's bitmap.
         let signer_bitmap_chunk = &signer_bitmap[position * SLOTS as usize / PK_TREE_BREADTH
@@ -415,11 +415,11 @@ impl NanoZKP {
             }
         }
 
-        let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk));
+        let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(&agg_pk));
 
         let hash = pedersen_hash(agg_pk_bits, pedersen_generators(5));
 
-        let left_agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(hash));
+        let left_agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(&hash));
 
         // Calculate the right aggregate public key commitment.
         let mut agg_pk = G2MNT6::zero();
@@ -432,11 +432,11 @@ impl NanoZKP {
             }
         }
 
-        let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk));
+        let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(&agg_pk));
 
         let hash = pedersen_hash(agg_pk_bits, pedersen_generators(5));
 
-        let right_agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(hash));
+        let right_agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(&hash));
 
         // Get the relevant chunk of the signer's bitmap.
         let signer_bitmap_chunk = &signer_bitmap[position * SLOTS as usize
@@ -561,11 +561,11 @@ impl NanoZKP {
             agg_pk += chunk;
         }
 
-        let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk));
+        let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(&agg_pk));
 
         let hash = pedersen_hash(agg_pk_bits, pedersen_generators(5));
 
-        let agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(hash));
+        let agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(&hash));
 
         // Get the relevant chunk of the signer's bitmap.
         let signer_bitmap_chunk = &signer_bitmap[position * SLOTS as usize

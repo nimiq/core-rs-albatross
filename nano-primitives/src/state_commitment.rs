@@ -1,9 +1,9 @@
 use ark_mnt6_753::G2Projective;
 
+use nimiq_bls::pedersen::{pedersen_generators, pedersen_hash};
 use nimiq_bls::utils::bytes_to_bits;
 
 use crate::{pk_tree_construct, serialize_g1_mnt6};
-use nimiq_bls::pedersen::{pedersen_generators, pedersen_hash};
 
 /// This gadget is meant to calculate the "state commitment" off-circuit, which is simply a commitment,
 /// for a given block, of the block number concatenated with the header hash concatenated with the
@@ -43,7 +43,7 @@ pub fn state_commitment(
     let hash = pedersen_hash(bits, generators);
 
     // Serialize the Pedersen hash.
-    let bytes = serialize_g1_mnt6(hash);
+    let bytes = serialize_g1_mnt6(&hash);
 
     Vec::from(bytes.as_ref())
 }

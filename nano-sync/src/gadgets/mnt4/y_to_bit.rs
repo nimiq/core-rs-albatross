@@ -92,7 +92,7 @@ mod tests {
                 .unwrap();
 
             // Serialize using the primitive version and get the first bit (which is the y flag).
-            let bytes = serialize_g1_mnt6(g1_point);
+            let bytes = serialize_g1_mnt6(&g1_point);
             let bits = bytes_to_bits(&bytes);
             let primitive_y_bit = bits[0];
 
@@ -125,7 +125,7 @@ mod tests {
                 .unwrap();
 
             // Serialize using the primitive version and get the first bit (which is the y flag).
-            let bytes = serialize_g2_mnt6(g2_point);
+            let bytes = serialize_g2_mnt6(&g2_point);
             let bits = bytes_to_bits(&bytes);
             let primitive_y_bit = bits[0];
 

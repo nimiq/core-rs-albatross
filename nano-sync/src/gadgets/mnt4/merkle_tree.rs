@@ -254,13 +254,13 @@ mod tests {
 
             if path[i] {
                 bits.extend_from_slice(
-                    bytes_to_bits(serialize_g1_mnt6(other_node).as_ref()).as_ref(),
+                    bytes_to_bits(serialize_g1_mnt6(&other_node).as_ref()).as_ref(),
                 );
-                bits.extend_from_slice(bytes_to_bits(serialize_g1_mnt6(node).as_ref()).as_ref());
+                bits.extend_from_slice(bytes_to_bits(serialize_g1_mnt6(&node).as_ref()).as_ref());
             } else {
-                bits.extend_from_slice(bytes_to_bits(serialize_g1_mnt6(node).as_ref()).as_ref());
+                bits.extend_from_slice(bytes_to_bits(serialize_g1_mnt6(&node).as_ref()).as_ref());
                 bits.extend_from_slice(
-                    bytes_to_bits(serialize_g1_mnt6(other_node).as_ref()).as_ref(),
+                    bytes_to_bits(serialize_g1_mnt6(&other_node).as_ref()).as_ref(),
                 );
             }
 
@@ -270,7 +270,7 @@ mod tests {
         }
 
         // Create root.
-        let root = serialize_g1_mnt6(node).to_vec();
+        let root = serialize_g1_mnt6(&node).to_vec();
         let root_bits = bytes_to_bits(&root);
 
         // Verify Merkle proof using the primitive version.
@@ -341,13 +341,13 @@ mod tests {
 
             if path[i] {
                 bits.extend_from_slice(
-                    bytes_to_bits(serialize_g1_mnt6(other_node).as_ref()).as_ref(),
+                    bytes_to_bits(serialize_g1_mnt6(&other_node).as_ref()).as_ref(),
                 );
-                bits.extend_from_slice(bytes_to_bits(serialize_g1_mnt6(node).as_ref()).as_ref());
+                bits.extend_from_slice(bytes_to_bits(serialize_g1_mnt6(&node).as_ref()).as_ref());
             } else {
-                bits.extend_from_slice(bytes_to_bits(serialize_g1_mnt6(node).as_ref()).as_ref());
+                bits.extend_from_slice(bytes_to_bits(serialize_g1_mnt6(&node).as_ref()).as_ref());
                 bits.extend_from_slice(
-                    bytes_to_bits(serialize_g1_mnt6(other_node).as_ref()).as_ref(),
+                    bytes_to_bits(serialize_g1_mnt6(&other_node).as_ref()).as_ref(),
                 );
             }
 
