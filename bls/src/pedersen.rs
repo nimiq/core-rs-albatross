@@ -107,8 +107,7 @@ pub fn pedersen_generators(number: usize) -> Vec<G1Projective> {
 /// s = b_0 * 2^0 + b_1 * 2^1 + ... + b_750 * 2^750 + b_751 * 2^751
 /// We then calculate the commitment like so:
 /// H = G_0 + s_1 * G_1 + ... + s_n * G_n
-/// where G_0 is a sum generator that is used to avoid that the sum starts at zero (which is
-/// problematic because the ZK circuits used in nano-sync can't handle addition with zero).
+/// where G_0 is a generator that is used as a blinding factor.
 pub fn pedersen_hash(input: Vec<bool>, generators: Vec<G1Projective>) -> G1Projective {
     // Check that the input can be stored using the available generators.
     assert!((generators.len() - 1) * POINT_CAPACITY >= input.len());
