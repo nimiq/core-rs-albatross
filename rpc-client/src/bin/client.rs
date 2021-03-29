@@ -341,6 +341,7 @@ impl Command {
                             .create_stake_transaction(
                                 wallet,
                                 validator_id,
+                                None,
                                 value,
                                 fee,
                                 validity_start_height,
@@ -353,6 +354,7 @@ impl Command {
                             .send_stake_transaction(
                                 wallet,
                                 validator_id,
+                                None,
                                 value,
                                 fee,
                                 validity_start_height,
