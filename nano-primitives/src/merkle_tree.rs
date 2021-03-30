@@ -60,8 +60,12 @@ pub fn merkle_tree_construct(inputs: Vec<Vec<bool>>) -> Vec<u8> {
         // Chunk the bits into the number of parent nodes.
         let mut chunks = Vec::new();
 
-        for i in 0..nodes.len() / 2 {
-            chunks.push(bits[2 * i..2 * i + 1].to_vec());
+        let num_chunks = nodes.len() / 2;
+
+        for i in 0..num_chunks {
+            chunks.push(
+                bits[i * bits.len() / num_chunks..(i + 1) * bits.len() / num_chunks].to_vec(),
+            );
         }
 
         // Calculate the parent nodes.

@@ -20,7 +20,3 @@ ark-groth16 = "^0.2"
 
 nimiq-bls = { path = "../bls", version = "0.1" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
-
-[dev-dependencies]
-rand = "0.8"
-ark-std = "^0.2"
