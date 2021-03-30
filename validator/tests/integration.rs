@@ -1,11 +1,9 @@
 use std::sync::Arc;
-use std::time::Duration;
 
 use futures::{future, StreamExt};
 use log::LevelFilter::{Debug, Info};
 use rand::prelude::StdRng;
 use rand::SeedableRng;
-use tokio::time;
 
 use nimiq_blockchain_albatross::{AbstractBlockchain, Blockchain};
 use nimiq_bls::KeyPair;
@@ -149,6 +147,8 @@ async fn four_validators_can_create_an_epoch() {
     tokio::spawn(future::join_all(validators));
 
     let events = blockchain.notifier.write().as_stream();
+
+    events.take(130).for_each(|_| future::ready(())).await;
 
     assert!(blockchain.block_number() >= 130);
     assert_eq!(blockchain.view_number(), 0);
