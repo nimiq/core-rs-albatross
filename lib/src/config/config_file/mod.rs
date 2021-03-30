@@ -100,7 +100,7 @@ impl ConfigFile {
         let path = paths::home().join("client.toml");
         if !path.exists() {
             let msg = format!(
-                "Config file not found. Please create one. An example config file can be found at: {}",
+                "Config file not found at {}. An example config file can be found at lib/src/config/config_file/client.example.toml",
                 path.display()
             );
             log::warn!("{}", msg);
