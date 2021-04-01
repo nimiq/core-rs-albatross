@@ -370,7 +370,7 @@ impl Block {
                                 body.transactions
                                     .into_iter()
                                     .enumerate()
-                                    .map(|(index, tx)| {
+                                    .map(|(_index, tx)| {
                                         Transaction::from_blockchain(
                                             tx,
                                             block_number,

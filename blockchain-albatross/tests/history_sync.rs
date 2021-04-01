@@ -141,16 +141,14 @@ fn it_can_history_sync() {
 
     let election_txs = blockchain
         .history_store
-        .get_epoch_transactions(policy::epoch_at(election_block.block_number()), None)
-        .unwrap();
+        .get_epoch_transactions(policy::epoch_at(election_block.block_number()), None);
 
     // Get the latest checkpoint block and corresponding history tree transactions.
     let checkpoint_block = blockchain.state().macro_info.head.clone();
 
     let checkpoint_txs = blockchain
         .history_store
-        .get_epoch_transactions(policy::epoch_at(checkpoint_block.block_number()), None)
-        .unwrap();
+        .get_epoch_transactions(policy::epoch_at(checkpoint_block.block_number()), None);
 
     // Create a second blockchain to push these blocks.
     let env2 = VolatileEnvironment::new(10).unwrap();

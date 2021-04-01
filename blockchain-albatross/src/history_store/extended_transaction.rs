@@ -5,7 +5,7 @@ use merkle_mountain_range::hash::Hash as MMRHash;
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use nimiq_account::Inherent;
 use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
-use nimiq_hash::Hash;
+use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_transaction::Transaction as BlockchainTransaction;
 
 use crate::history_store::HistoryTreeHash;
@@ -91,6 +91,14 @@ impl ExtendedTransaction {
             tx
         } else {
             unreachable!()
+        }
+    }
+
+    /// Returns the hash of the underlying transaction.
+    pub fn tx_hash(&self) -> Blake2bHash {
+        match &self.data {
+            ExtTxData::Basic(tx) => tx.hash(),
+            ExtTxData::Inherent(tx) => tx.hash(),
         }
     }
 }

@@ -127,11 +127,21 @@ impl BlockchainInterface for BlockchainDispatcher {
     async fn get_transaction_by_hash(&mut self, hash: Blake2bHash) -> Result<Transaction, Error> {
         // TODO: Check mempool for the transaction, too
 
-        let extended_tx = self
+        // Get all the extended transactions that correspond to this hash.
+        let mut extended_tx_vec = self
             .blockchain
             .history_store
-            .get_ext_tx_by_hash(&hash, None)
-            .ok_or(Error::TransactionNotFound(hash))?;
+            .get_ext_tx_by_hash(&hash, None);
+
+        // If we got more than 2 extended transactions, then we panic. This shouldn't happen.
+        assert!(extended_tx_vec.len() < 2);
+
+        // Unpack the transaction or raise an error.
+        let extended_tx = if extended_tx_vec.is_empty() {
+            return Err(Error::TransactionNotFound(hash));
+        } else {
+            extended_tx_vec.pop().unwrap()
+        };
 
         let transaction = extended_tx.unwrap_basic(); // Because we found the extended_tx above, this cannot be None
 

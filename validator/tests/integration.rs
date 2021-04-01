@@ -32,7 +32,7 @@ fn seeded_rng(seed: u64) -> StdRng {
 }
 
 async fn consensus(peer_id: u64, genesis_info: GenesisInfo) -> Consensus {
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(12).unwrap();
     let clock = Arc::new(OffsetTime::new());
     let blockchain = Arc::new(
         Blockchain::with_genesis(
