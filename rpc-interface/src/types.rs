@@ -329,6 +329,8 @@ pub struct Inherent {
 
     #[serde(with = "crate::serde_helpers::hex")]
     pub data: Vec<u8>,
+
+    pub hash: Blake2bHash,
 }
 
 impl Inherent {
@@ -337,6 +339,8 @@ impl Inherent {
         block_number: u32,
         timestamp: u64,
     ) -> Self {
+        let hash = inherent.hash();
+
         Inherent {
             ty: inherent.ty as u8,
             block_number,
@@ -344,6 +348,7 @@ impl Inherent {
             target: inherent.target,
             value: inherent.value,
             data: inherent.data,
+            hash,
         }
     }
 }
