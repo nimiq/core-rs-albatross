@@ -54,6 +54,12 @@ pub trait BlockchainInterface {
         block_number: u32,
     ) -> Result<Vec<ExtendedTransaction>, Self::Error>;
 
+    async fn get_transactions_by_batch_number(
+        &mut self,
+        batch_number: u32,
+        epoch_number: u32,
+    ) -> Result<Vec<ExtendedTransaction>, Self::Error>;
+
     async fn get_transactions_by_epoch_number(
         &mut self,
         epoch_number: u32,

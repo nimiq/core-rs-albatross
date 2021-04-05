@@ -255,6 +255,47 @@ impl HistoryStore {
         ext_txs
     }
 
+    /// Gets all extended transactions for a given batch.
+    pub fn get_batch_transactions(
+        &self,
+        batch_number: u32,
+        epoch_number: u32,
+        txn_option: Option<&Transaction>,
+    ) -> Vec<ExtendedTransaction> {
+        let read_txn: ReadTransaction;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = ReadTransaction::new(&self.env);
+                &read_txn
+            }
+        };
+
+        // Get history tree for given epoch.
+        let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
+            &self.hist_tree_db,
+            txn,
+            epoch_number,
+        ));
+
+        // Get each extended transaction from the tree.
+        let mut ext_txs = vec![];
+
+        for i in 0..tree.num_leaves() {
+            let leaf_hash = tree.get_leaf(i).unwrap();
+            let ext_tx = self
+                .get_extended_tx(&leaf_hash.to_blake2b(), Some(txn))
+                .unwrap();
+
+            // Only include extended transactions that match the provided batch number.
+            if batch_number == nimiq_primitives::policy::batch_at(ext_tx.block_number) {
+                ext_txs.push(ext_tx);
+            }
+        }
+
+        ext_txs
+    }
+
     /// Gets all extended transactions for a given epoch.
     pub fn get_epoch_transactions(
         &self,

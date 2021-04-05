@@ -193,6 +193,40 @@ impl BlockchainInterface for BlockchainDispatcher {
             .collect::<Vec<ExtendedTransaction>>())
     }
 
+    async fn get_transactions_by_batch_number(
+        &mut self,
+        batch_number: u32,
+        epoch_number: u32,
+    ) -> Result<Vec<ExtendedTransaction>, Self::Error> {
+        // Get all the extended transactions that correspond to this batch.
+        let extended_tx_vec =
+            self.blockchain
+                .history_store
+                .get_batch_transactions(batch_number, epoch_number, None);
+
+        Ok(extended_tx_vec
+            .into_iter()
+            .enumerate()
+            .map(|(_, extended_tx)| {
+                if extended_tx.is_inherent() {
+                    ExtendedTransaction::Inherent(Inherent::from_inherent(
+                        extended_tx.unwrap_inherent().clone(),
+                        extended_tx.block_number,
+                        extended_tx.block_time,
+                    ))
+                } else {
+                    let transaction = extended_tx.unwrap_basic();
+                    ExtendedTransaction::Transaction(Transaction::from_blockchain(
+                        transaction.clone(),
+                        extended_tx.block_number,
+                        extended_tx.block_time,
+                        self.blockchain.block_number(),
+                    ))
+                }
+            })
+            .collect::<Vec<ExtendedTransaction>>())
+    }
+
     async fn get_transactions_by_epoch_number(
         &mut self,
         epoch_number: u32,
