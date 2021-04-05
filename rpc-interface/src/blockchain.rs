@@ -54,6 +54,11 @@ pub trait BlockchainInterface {
         block_number: u32,
     ) -> Result<Vec<ExtendedTransaction>, Self::Error>;
 
+    async fn get_transactions_by_epoch_number(
+        &mut self,
+        epoch_number: u32,
+    ) -> Result<Vec<ExtendedTransaction>, Self::Error>;
+
     async fn get_transaction_receipt(&mut self, hash: Blake2bHash) -> Result<(), Self::Error>;
 
     async fn list_stakes(&mut self) -> Result<Stakes, Self::Error>;
