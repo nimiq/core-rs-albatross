@@ -10,6 +10,7 @@ use std::{
 use serde::{de::Deserializer, ser::Serializer, Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
 
+use nimiq_account::InherentType;
 use nimiq_block_albatross::{TendermintProof, ViewChangeProof};
 use nimiq_blockchain_albatross::{AbstractBlockchain, Blockchain};
 use nimiq_bls::{CompressedPublicKey, CompressedSignature};
@@ -311,6 +312,46 @@ impl Transaction {
             proof: transaction.proof,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Inherent {
+    pub ty: u8,
+
+    pub block_number: u32,
+
+    pub timestamp: u64,
+
+    pub target: Address,
+
+    pub value: Coin,
+
+    #[serde(with = "crate::serde_helpers::hex")]
+    pub data: Vec<u8>,
+}
+
+impl Inherent {
+    pub fn from_inherent(
+        inherent: nimiq_account::Inherent,
+        block_number: u32,
+        timestamp: u64,
+    ) -> Self {
+        Inherent {
+            ty: inherent.ty as u8,
+            block_number,
+            timestamp,
+            target: inherent.target,
+            value: inherent.value,
+            data: inherent.data,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ExtendedTransaction {
+    Transaction(Transaction),
+    Inherent(Inherent),
 }
 
 impl Block {

@@ -10,7 +10,10 @@ use nimiq_keys::Address;
 use nimiq_primitives::policy;
 use nimiq_rpc_interface::{
     blockchain::BlockchainInterface,
-    types::{Block, OrLatest, SlashedSlots, Slot, Stake, Stakes, Transaction, Validator},
+    types::{
+        Block, ExtendedTransaction, Inherent, OrLatest, SlashedSlots, Slot, Stake, Stakes,
+        Transaction, Validator,
+    },
 };
 
 use crate::error::Error;
@@ -133,7 +136,7 @@ impl BlockchainInterface for BlockchainDispatcher {
             .history_store
             .get_ext_tx_by_hash(&hash, None);
 
-        // If we got more than 2 extended transactions, then we panic. This shouldn't happen.
+        // If we get more than 1 extended transaction, we panic. This shouldn't happen.
         assert!(extended_tx_vec.len() < 2);
 
         // Unpack the transaction or raise an error.
@@ -155,6 +158,39 @@ impl BlockchainInterface for BlockchainDispatcher {
 
     async fn get_transaction_receipt(&mut self, _hash: Blake2bHash) -> Result<(), Error> {
         Err(Error::NotImplemented)
+    }
+
+    async fn get_transactions_by_block_number(
+        &mut self,
+        block_number: u32,
+    ) -> Result<Vec<ExtendedTransaction>, Error> {
+        // Get all the extended transactions that correspond to this block.
+        let extended_tx_vec = self
+            .blockchain
+            .history_store
+            .get_block_transactions(block_number, None);
+
+        Ok(extended_tx_vec
+            .into_iter()
+            .enumerate()
+            .map(|(_, extended_tx)| {
+                    if extended_tx.is_inherent() {
+                        ExtendedTransaction::Inherent(Inherent::from_inherent(
+                            extended_tx.unwrap_inherent().clone(),
+                            extended_tx.block_number,
+                            extended_tx.block_time,
+                        ))
+                    } else {
+                        let transaction = extended_tx.unwrap_basic();
+                        ExtendedTransaction::Transaction(Transaction::from_blockchain(
+                            transaction.clone(),
+                            extended_tx.block_number,
+                            extended_tx.block_time,
+                            self.blockchain.block_number(),
+                        ))
+                    }
+                })
+            .collect::<Vec<ExtendedTransaction>>())
     }
 
     async fn list_stakes(&mut self) -> Result<Stakes, Error> {
