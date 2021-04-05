@@ -231,7 +231,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         &mut self,
         epoch_number: u32,
     ) -> Result<Vec<ExtendedTransaction>, Error> {
-        // Get all the extended transactions that correspond to this block.
+        // Get all the extended transactions that correspond to this epoch.
         let extended_tx_vec = self
             .blockchain
             .history_store
