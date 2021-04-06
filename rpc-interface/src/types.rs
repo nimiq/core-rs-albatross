@@ -313,6 +313,52 @@ impl Transaction {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Inherent {
+    pub ty: u8,
+
+    pub block_number: u32,
+
+    pub timestamp: u64,
+
+    pub target: Address,
+
+    pub value: Coin,
+
+    #[serde(with = "crate::serde_helpers::hex")]
+    pub data: Vec<u8>,
+
+    pub hash: Blake2bHash,
+}
+
+impl Inherent {
+    pub fn from_transaction(
+        inherent: nimiq_account::Inherent,
+        block_number: u32,
+        timestamp: u64,
+    ) -> Self {
+        let hash = inherent.hash();
+
+        Inherent {
+            ty: inherent.ty as u8,
+            block_number,
+            timestamp,
+            target: inherent.target,
+            value: inherent.value,
+            data: inherent.data,
+            hash,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExtendedTransactions {
+    pub transactions: Vec<Transaction>,
+
+    pub inherents: Vec<Inherent>,
+}
+
 impl Block {
     pub fn from_block(
         blockchain: &Blockchain,
