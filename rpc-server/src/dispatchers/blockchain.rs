@@ -196,6 +196,25 @@ impl BlockchainInterface for BlockchainDispatcher {
         })
     }
 
+    async fn get_batch_inherents(&mut self, batch_number: u32) -> Result<Vec<Inherent>, Error> {
+        let extended_tx_vec = self
+            .blockchain
+            .history_store
+            .get_block_transactions(policy::macro_block_of(batch_number), None);
+
+        Ok(extended_tx_vec
+            .into_iter()
+            .map(|inherent| {
+                Inherent::from_transaction(
+                    // Because we get the ext_txs of a macro block, all of them must be inherents
+                    inherent.unwrap_inherent().clone(),
+                    inherent.block_number,
+                    inherent.block_time,
+                )
+            })
+            .collect())
+    }
+
     async fn list_stakes(&mut self) -> Result<Stakes, Error> {
         let staking_contract = self.blockchain.get_staking_contract();
 
