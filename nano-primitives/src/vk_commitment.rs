@@ -2,10 +2,10 @@ use ark_ec::AffineCurve;
 use ark_groth16::VerifyingKey;
 use ark_mnt6_753::MNT6_753;
 
-use crate::{serialize_g1_mnt6, serialize_g2_mnt6};
+use nimiq_bls::pedersen::{pedersen_generators, pedersen_hash};
 use nimiq_bls::utils::bytes_to_bits;
 
-use nimiq_bls::pedersen::{pedersen_generators, pedersen_hash};
+use crate::{serialize_g1_mnt6, serialize_g2_mnt6};
 
 /// This function is meant to calculate a commitment off-circuit for a verifying key of a SNARK in the
 /// MNT6-753 curve. This means we can open this commitment inside of a circuit in the MNT4-753 curve
@@ -17,16 +17,16 @@ pub fn vk_commitment(vk: VerifyingKey<MNT6_753>) -> Vec<u8> {
     // Serialize the verifying key into bits.
     let mut bytes: Vec<u8> = vec![];
 
-    bytes.extend_from_slice(serialize_g1_mnt6(vk.alpha_g1.into_projective()).as_ref());
+    bytes.extend_from_slice(serialize_g1_mnt6(&vk.alpha_g1.into_projective()).as_ref());
 
-    bytes.extend_from_slice(serialize_g2_mnt6(vk.beta_g2.into_projective()).as_ref());
+    bytes.extend_from_slice(serialize_g2_mnt6(&vk.beta_g2.into_projective()).as_ref());
 
-    bytes.extend_from_slice(serialize_g2_mnt6(vk.gamma_g2.into_projective()).as_ref());
+    bytes.extend_from_slice(serialize_g2_mnt6(&vk.gamma_g2.into_projective()).as_ref());
 
-    bytes.extend_from_slice(serialize_g2_mnt6(vk.delta_g2.into_projective()).as_ref());
+    bytes.extend_from_slice(serialize_g2_mnt6(&vk.delta_g2.into_projective()).as_ref());
 
     for i in 0..vk.gamma_abc_g1.len() {
-        bytes.extend_from_slice(serialize_g1_mnt6(vk.gamma_abc_g1[i].into_projective()).as_ref());
+        bytes.extend_from_slice(serialize_g1_mnt6(&vk.gamma_abc_g1[i].into_projective()).as_ref());
     }
 
     let bits = bytes_to_bits(&bytes);
@@ -43,7 +43,7 @@ pub fn vk_commitment(vk: VerifyingKey<MNT6_753>) -> Vec<u8> {
     let hash = pedersen_hash(bits, generators);
 
     // Serialize the Pedersen commitment.
-    let bytes = serialize_g1_mnt6(hash);
+    let bytes = serialize_g1_mnt6(&hash);
 
     Vec::from(bytes.as_ref())
 }

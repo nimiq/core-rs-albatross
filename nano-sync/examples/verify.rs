@@ -12,7 +12,7 @@ use nimiq_primitives::policy::EPOCH_LENGTH;
 /// Verifies a proof for a chain of election blocks. The random parameters generation uses always
 /// the same seed, so it will always generate the same data (validators, signatures, etc).
 /// This function will simply print the verification result.
-/// Run this example with `cargo run --all-features --release --example verify`.
+/// Run this example with `cargo run --release --example verify`.
 fn main() {
     // Ask user for the number of epochs.
     println!("Enter the number of epochs to verify:");

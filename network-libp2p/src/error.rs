@@ -2,7 +2,6 @@ use thiserror::Error;
 
 use crate::behaviour::NimiqNetworkBehaviourError;
 
-
 #[derive(Debug, Error)]
 pub enum NetworkError {
     #[error("Dial error: {0}")]

@@ -4,13 +4,11 @@ use crate::error::Error;
 
 use nimiq_rpc_interface::validator::ValidatorInterface;
 
-pub struct ValidatorDispatcher {
-}
+pub struct ValidatorDispatcher {}
 
 impl ValidatorDispatcher {
     pub fn new() -> Self {
-        Self {
-        }
+        Self {}
     }
 }
 

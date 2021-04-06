@@ -10,7 +10,10 @@ use nimiq_keys::Address;
 use nimiq_primitives::policy;
 use nimiq_rpc_interface::{
     blockchain::BlockchainInterface,
-    types::{Block, SlashedSlots, Slot, Stake, Stakes, Transaction, Validator},
+    types::{
+        Block, ExtendedTransactions, Inherent, SlashedSlots, Slot, Stake, Stakes, Transaction,
+        Validator,
+    },
 };
 
 use crate::error::Error;
@@ -70,10 +73,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         ))
     }
 
-    async fn get_latest_block(
-        &mut self,
-        include_transactions: bool,
-    ) -> Result<Block, Error> {
+    async fn get_latest_block(&mut self, include_transactions: bool) -> Result<Block, Error> {
         let block = self.blockchain.head();
 
         Ok(Block::from_block(
@@ -137,11 +137,21 @@ impl BlockchainInterface for BlockchainDispatcher {
     async fn get_transaction_by_hash(&mut self, hash: Blake2bHash) -> Result<Transaction, Error> {
         // TODO: Check mempool for the transaction, too
 
-        let extended_tx = self
+        // Get all the extended transactions that correspond to this hash.
+        let mut extended_tx_vec = self
             .blockchain
             .history_store
-            .get_ext_tx_by_hash(&hash, None)
-            .ok_or(Error::TransactionNotFound(hash))?;
+            .get_ext_tx_by_hash(&hash, None);
+
+        // If we get more than 1 extended transaction, we panic. This shouldn't happen.
+        assert!(extended_tx_vec.len() < 2);
+
+        // Unpack the transaction or raise an error.
+        let extended_tx = if extended_tx_vec.is_empty() {
+            return Err(Error::TransactionNotFound(hash));
+        } else {
+            extended_tx_vec.pop().unwrap()
+        };
 
         let transaction = extended_tx.unwrap_basic(); // Because we found the extended_tx above, this cannot be None
 
@@ -155,6 +165,96 @@ impl BlockchainInterface for BlockchainDispatcher {
 
     async fn get_transaction_receipt(&mut self, _hash: Blake2bHash) -> Result<(), Error> {
         Err(Error::NotImplemented)
+    }
+
+    async fn get_transactions_by_block_number(
+        &mut self,
+        block_number: u32,
+    ) -> Result<ExtendedTransactions, Error> {
+        // Get all the extended transactions that correspond to this block.
+        let extended_tx_vec = self
+            .blockchain
+            .history_store
+            .get_block_transactions(block_number, None);
+
+        let mut transactions = vec![];
+        let mut inherents = vec![];
+
+        for ext_tx in extended_tx_vec {
+            if ext_tx.is_inherent() {
+                inherents.push(Inherent::from_transaction(
+                    ext_tx.unwrap_inherent().clone(),
+                    ext_tx.block_number,
+                    ext_tx.block_time,
+                ));
+            } else {
+                transactions.push(Transaction::from_blockchain(
+                    ext_tx.unwrap_basic().clone(),
+                    ext_tx.block_number,
+                    ext_tx.block_time,
+                    self.blockchain.block_number(),
+                ));
+            }
+        }
+
+        Ok(ExtendedTransactions {
+            transactions,
+            inherents,
+        })
+    }
+
+    async fn get_batch_inherents(&mut self, batch_number: u32) -> Result<Vec<Inherent>, Error> {
+        let macro_block_number = policy::macro_block_of(batch_number);
+
+        // Check the batch's macro block to see if the batch includes slashes
+        let macro_block = self
+            .blockchain
+            .get_block_at(macro_block_number, true, None) // The lost_reward_set is in the MacroBody
+            .ok_or_else(|| Error::BlockNotFound(macro_block_number.into()))?;
+
+        let mut extended_tx_vec = vec![];
+
+        let macro_body = macro_block.unwrap_macro().body.unwrap();
+
+        if !macro_body.lost_reward_set.is_empty() {
+            // Search all micro blocks of the batch to find the slash inherents
+            let first_micro_block = policy::first_block_of_batch(batch_number);
+            let last_micro_block = macro_block_number - 1;
+
+            for i in first_micro_block..last_micro_block {
+                let micro_ext_tx_vec = self
+                    .blockchain
+                    .history_store
+                    .get_block_transactions(i, None);
+
+                for ext_tx in micro_ext_tx_vec {
+                    if ext_tx.is_inherent() {
+                        extended_tx_vec.push(ext_tx);
+                    }
+                }
+            }
+        }
+
+        // Append inherents of the macro block (we do this after the micro blocks so the inherents are in order)
+        extended_tx_vec.append(
+            &mut self
+                .blockchain
+                .history_store
+                .get_block_transactions(macro_block_number, None),
+        );
+
+        Ok(extended_tx_vec
+            .into_iter()
+            .map(|ext_tx| {
+                Inherent::from_transaction(
+                    // The extended txs are guaranteed to be inherents because we filter
+                    // for those above and fetch the other txs from a macro block
+                    ext_tx.unwrap_inherent().clone(),
+                    ext_tx.block_number,
+                    ext_tx.block_time,
+                )
+            })
+            .collect())
     }
 
     async fn list_stakes(&mut self) -> Result<Stakes, Error> {
@@ -211,8 +311,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         let account = self.blockchain.get_account(&address);
         if matches!(account, Account::Staking(_)) {
             Err(Error::GetAccountUnsupportedStakingContract)
-        }
-        else {
+        } else {
             Ok(account)
         }
     }

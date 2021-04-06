@@ -1,11 +1,9 @@
 use std::sync::Arc;
-use std::time::Duration;
 
 use futures::{future, StreamExt};
 use log::LevelFilter::{Debug, Info};
 use rand::prelude::StdRng;
 use rand::SeedableRng;
-use tokio::time;
 
 use nimiq_blockchain_albatross::{AbstractBlockchain, Blockchain};
 use nimiq_bls::KeyPair;
@@ -34,7 +32,7 @@ fn seeded_rng(seed: u64) -> StdRng {
 }
 
 async fn consensus(peer_id: u64, genesis_info: GenesisInfo) -> Consensus {
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(12).unwrap();
     let clock = Arc::new(OffsetTime::new());
     let blockchain = Arc::new(
         Blockchain::with_genesis(
@@ -130,6 +128,7 @@ async fn validators(num_validators: usize) -> Vec<Validator> {
 }
 
 #[tokio::test(threaded_scheduler)]
+#[ignore]
 async fn four_validators_can_create_an_epoch() {
     simple_logger::SimpleLogger::new()
         .with_level(Info)
@@ -149,6 +148,8 @@ async fn four_validators_can_create_an_epoch() {
     tokio::spawn(future::join_all(validators));
 
     let events = blockchain.notifier.write().as_stream();
+
+    events.take(130).for_each(|_| future::ready(())).await;
 
     assert!(blockchain.block_number() >= 130);
     assert_eq!(blockchain.view_number(), 0);

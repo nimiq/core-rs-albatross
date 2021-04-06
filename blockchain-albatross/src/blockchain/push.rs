@@ -5,7 +5,9 @@ use nimiq_database::{ReadTransaction, WriteTransaction};
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::policy;
 
+use crate::blockchain_state::BlockchainState;
 use crate::chain_info::ChainInfo;
+use crate::transaction_cache::TransactionCache;
 use crate::{
     AbstractBlockchain, Blockchain, BlockchainEvent, ChainOrdering, ForkEvent, PushError,
     PushResult,
@@ -36,7 +38,7 @@ impl Blockchain {
         let prev_info = self
             .chain_store
             .get_chain_info(&block.parent_hash(), false, Some(&read_txn))
-            .ok_or_else(|| PushError::Orphan)?;
+            .ok_or(PushError::Orphan)?;
 
         // Calculate chain ordering.
         let chain_order = ChainOrdering::order_chains(self, &block, &prev_info, Some(&read_txn));
@@ -187,31 +189,14 @@ impl Blockchain {
 
         let state = self.state.read();
 
-        // Check transactions against TransactionCache to prevent replay.
-        // This is technically unnecessary for macro blocks, but it doesn't hurt either.
-        if state.transaction_cache.contains_any(&chain_info.head) {
-            warn!("Rejecting block - transaction already included");
-            txn.abort();
-            return Err(PushError::DuplicateTransaction);
-        }
-
-        // Commit block to AccountsTree.
-        if let Err(e) = self.commit_accounts(
+        if let Err(e) = self.check_and_commit(
             &state,
+            &state.transaction_cache,
             &chain_info.head,
             prev_info.head.next_view_number(),
             &mut txn,
         ) {
-            warn!("Rejecting block - commit failed: {:?}", e);
             txn.abort();
-            #[cfg(feature = "metrics")]
-            self.metrics.note_invalid_block();
-            return Err(e);
-        }
-
-        // Verify the state against the block.
-        if let Err(e) = self.verify_block_state(&state, &chain_info.head, Some(&txn)) {
-            warn!("Rejecting block - Bad state");
             return Err(e);
         }
 
@@ -419,18 +404,13 @@ impl Blockchain {
             match fork_block.1.head {
                 Block::Macro(_) => unreachable!(),
                 Block::Micro(ref micro_block) => {
-                    let result = if !cache_txn.contains_any(&fork_block.1.head) {
-                        self.commit_accounts(
-                            &state,
-                            &fork_block.1.head,
-                            prev_view_number,
-                            &mut write_txn,
-                        )
-                    } else {
-                        Err(PushError::DuplicateTransaction)
-                    };
-
-                    if let Err(e) = result {
+                    if let Err(e) = self.check_and_commit(
+                        &state,
+                        &cache_txn,
+                        &fork_block.1.head,
+                        prev_view_number,
+                        &mut write_txn,
+                    ) {
                         warn!("Failed to apply fork block while rebranching - {:?}", e);
                         write_txn.abort();
 
@@ -531,5 +511,37 @@ impl Blockchain {
         self.notifier.read().notify(event);
 
         Ok(PushResult::Rebranched)
+    }
+
+    fn check_and_commit(
+        &self,
+        state: &BlockchainState,
+        transaction_cache: &TransactionCache,
+        block: &Block,
+        first_view_number: u32,
+        txn: &mut WriteTransaction,
+    ) -> Result<(), PushError> {
+        // Check transactions against TransactionCache to prevent replay.
+        // This is technically unnecessary for macro blocks, but it doesn't hurt either.
+        if transaction_cache.contains_any(&block) {
+            warn!("Rejecting block - transaction already included");
+            return Err(PushError::DuplicateTransaction);
+        }
+
+        // Commit block to AccountsTree.
+        if let Err(e) = self.commit_accounts(&state, &block, first_view_number, txn) {
+            warn!("Rejecting block - commit failed: {:?}", e);
+            #[cfg(feature = "metrics")]
+            self.metrics.note_invalid_block();
+            return Err(e);
+        }
+
+        // Verify the state against the block.
+        if let Err(e) = self.verify_block_state(&state, &block, Some(&txn)) {
+            warn!("Rejecting block - Bad state");
+            return Err(e);
+        }
+
+        Ok(())
     }
 }

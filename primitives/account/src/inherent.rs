@@ -3,6 +3,8 @@ use primitives::coin::Coin;
 
 use crate::AccountError;
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use nimiq_hash::{Hash, SerializeContent};
+use std::io;
 
 #[derive(Clone, Debug, Eq, PartialEq, Copy, Serialize, Deserialize)]
 #[repr(u8)]
@@ -62,6 +64,25 @@ pub trait AccountInherentInteraction: Sized {
         time: u64,
         receipt: Option<&Vec<u8>>,
     ) -> Result<(), AccountError>;
+}
+
+impl Hash for Inherent {}
+
+impl SerializeContent for Inherent {
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
+        let mut size = 0;
+        size += Serialize::serialize(&self.ty, writer)?;
+        size += Serialize::serialize(&self.target, writer)?;
+        size += Serialize::serialize(&self.value, writer)?;
+        // Serialize the length of the data.
+        let length = self.data.len() as u32;
+        size += Serialize::serialize(&length, writer)?;
+        // Serialize each element of the vec.
+        for i in 0..self.data.len() {
+            size += Serialize::serialize(&self.data[i], writer)?;
+        }
+        Ok(size)
+    }
 }
 
 impl Serialize for Inherent {

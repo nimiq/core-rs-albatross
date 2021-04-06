@@ -51,16 +51,13 @@ use crate::{
     limit::behaviour::LimitConfig,
     message::behaviour::MessageConfig,
     message::peer::Peer,
-    NetworkError, Config
+    Config, NetworkError,
 };
-
 
 /// Maximum simultaneous libp2p connections per peer
 const MAX_CONNECTIONS_PER_PEER: u32 = 1;
 
-
 type NimiqSwarm = Swarm<NimiqBehaviour>;
-
 
 #[derive(Debug)]
 pub(crate) enum NetworkAction {

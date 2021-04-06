@@ -85,7 +85,7 @@ mod tests {
         let g1_point_var = G1Var::new_witness(cs.clone(), || Ok(g1_point)).unwrap();
 
         // Serialize using the primitive version.
-        let primitive_bytes = serialize_g1_mnt6(g1_point);
+        let primitive_bytes = serialize_g1_mnt6(&g1_point);
         let primitive_bits = bytes_to_bits(&primitive_bytes);
 
         // Serialize using the gadget version.
@@ -113,7 +113,7 @@ mod tests {
         let g2_point_var = G2Var::new_witness(cs.clone(), || Ok(g2_point)).unwrap();
 
         // Serialize using the primitive version.
-        let primitive_bytes = serialize_g2_mnt6(g2_point);
+        let primitive_bytes = serialize_g2_mnt6(&g2_point);
         let primitive_bits = bytes_to_bits(&primitive_bytes);
 
         // Serialize using the gadget version.

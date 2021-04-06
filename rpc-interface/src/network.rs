@@ -2,7 +2,6 @@ use async_trait::async_trait;
 
 use crate::types::Peer;
 
-
 #[cfg_attr(
     feature = "proxy",
     nimiq_jsonrpc_derive::proxy(name = "NetworkProxy", rename_all = "camelCase")

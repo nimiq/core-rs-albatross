@@ -123,6 +123,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         &mut self,
         wallet: Address,
         validator_id: ValidatorId,
+        staker_address: Option<Address>,
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
@@ -131,6 +132,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             None,
             &self.get_wallet_keypair(&wallet)?,
             &validator_id,
+            staker_address,
             value,
             fee,
             self.validity_start_height(validity_start_height),
@@ -144,12 +146,20 @@ impl ConsensusInterface for ConsensusDispatcher {
         &mut self,
         wallet: Address,
         validator_id: ValidatorId,
+        staker_address: Option<Address>,
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Error> {
         let raw_tx = self
-            .create_stake_transaction(wallet, validator_id, value, fee, validity_start_height)
+            .create_stake_transaction(
+                wallet,
+                validator_id,
+                staker_address,
+                value,
+                fee,
+                validity_start_height,
+            )
             .await
             .unwrap();
         self.send_raw_transaction(raw_tx).await

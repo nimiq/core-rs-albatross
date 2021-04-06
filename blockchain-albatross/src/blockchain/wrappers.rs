@@ -63,13 +63,15 @@ impl Blockchain {
         for_batch: bool,
         txn_option: Option<&Transaction>,
     ) -> Option<Vec<BlockchainTransaction>> {
+        // TODO: This function should use only the HistoryStore! Fetching using the micro blocks
+        //  should be deprecated.
         if !for_batch {
             // It might be that we synced this epoch via macro block sync and don't actually have
             // the micro blocks.
             // Therefore, we check this first.
             let ext_txs = self
                 .history_store
-                .get_epoch_transactions(batch_or_epoch_index, txn_option)?;
+                .get_epoch_transactions(batch_or_epoch_index, txn_option);
 
             let mut txs = vec![];
 

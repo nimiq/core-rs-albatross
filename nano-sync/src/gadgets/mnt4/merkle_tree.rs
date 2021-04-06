@@ -22,8 +22,8 @@ impl MerkleTreeGadget {
     ///                 0  1  2  3
     pub fn construct(
         cs: ConstraintSystemRef<MNT4Fr>,
-        inputs: &Vec<Vec<Boolean<MNT4Fr>>>,
-        pedersen_generators: &Vec<G1Var>,
+        inputs: &[Vec<Boolean<MNT4Fr>>],
+        pedersen_generators: &[G1Var],
     ) -> Result<Vec<Boolean<MNT4Fr>>, SynthesisError> {
         // Checking that the inputs vector is not empty.
         assert!(!inputs.is_empty());
@@ -34,8 +34,7 @@ impl MerkleTreeGadget {
         // Calculate the Pedersen hashes for the leaves.
         let mut nodes = Vec::new();
 
-        for i in 0..inputs.len() {
-            let input = &inputs[i];
+        for input in inputs {
             let pedersen_hash = PedersenHashGadget::evaluate(input, pedersen_generators)?;
             nodes.push(pedersen_hash);
         }
@@ -86,11 +85,11 @@ impl MerkleTreeGadget {
     /// one.
     pub fn verify(
         cs: ConstraintSystemRef<MNT4Fr>,
-        input: &Vec<Boolean<MNT4Fr>>,
-        nodes: &Vec<G1Var>,
-        path: &Vec<Boolean<MNT4Fr>>,
-        root: &Vec<Boolean<MNT4Fr>>,
-        pedersen_generators: &Vec<G1Var>,
+        input: &[Boolean<MNT4Fr>],
+        nodes: &[G1Var],
+        path: &[Boolean<MNT4Fr>],
+        root: &[Boolean<MNT4Fr>],
+        pedersen_generators: &[G1Var],
     ) -> Result<Boolean<MNT4Fr>, SynthesisError> {
         // Checking that the inputs vector is not empty.
         assert!(!input.is_empty());
@@ -254,13 +253,13 @@ mod tests {
 
             if path[i] {
                 bits.extend_from_slice(
-                    bytes_to_bits(serialize_g1_mnt6(other_node).as_ref()).as_ref(),
+                    bytes_to_bits(serialize_g1_mnt6(&other_node).as_ref()).as_ref(),
                 );
-                bits.extend_from_slice(bytes_to_bits(serialize_g1_mnt6(node).as_ref()).as_ref());
+                bits.extend_from_slice(bytes_to_bits(serialize_g1_mnt6(&node).as_ref()).as_ref());
             } else {
-                bits.extend_from_slice(bytes_to_bits(serialize_g1_mnt6(node).as_ref()).as_ref());
+                bits.extend_from_slice(bytes_to_bits(serialize_g1_mnt6(&node).as_ref()).as_ref());
                 bits.extend_from_slice(
-                    bytes_to_bits(serialize_g1_mnt6(other_node).as_ref()).as_ref(),
+                    bytes_to_bits(serialize_g1_mnt6(&other_node).as_ref()).as_ref(),
                 );
             }
 
@@ -270,7 +269,7 @@ mod tests {
         }
 
         // Create root.
-        let root = serialize_g1_mnt6(node).to_vec();
+        let root = serialize_g1_mnt6(&node).to_vec();
         let root_bits = bytes_to_bits(&root);
 
         // Verify Merkle proof using the primitive version.
@@ -341,13 +340,13 @@ mod tests {
 
             if path[i] {
                 bits.extend_from_slice(
-                    bytes_to_bits(serialize_g1_mnt6(other_node).as_ref()).as_ref(),
+                    bytes_to_bits(serialize_g1_mnt6(&other_node).as_ref()).as_ref(),
                 );
-                bits.extend_from_slice(bytes_to_bits(serialize_g1_mnt6(node).as_ref()).as_ref());
+                bits.extend_from_slice(bytes_to_bits(serialize_g1_mnt6(&node).as_ref()).as_ref());
             } else {
-                bits.extend_from_slice(bytes_to_bits(serialize_g1_mnt6(node).as_ref()).as_ref());
+                bits.extend_from_slice(bytes_to_bits(serialize_g1_mnt6(&node).as_ref()).as_ref());
                 bits.extend_from_slice(
-                    bytes_to_bits(serialize_g1_mnt6(other_node).as_ref()).as_ref(),
+                    bytes_to_bits(serialize_g1_mnt6(&other_node).as_ref()).as_ref(),
                 );
             }
 

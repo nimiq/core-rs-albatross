@@ -106,9 +106,7 @@ impl MacroBlock {
         let generators = pedersen_generators(generators_needed);
 
         // Calculate the Pedersen hash.
-        let second_hash = pedersen_hash(bits, generators);
-
-        second_hash
+        pedersen_hash(bits, generators)
     }
 }
 

@@ -19,8 +19,8 @@ impl PedersenHashGadget {
     /// where G_0 is a sum generator that is used to guarantee that the exponent of the resulting
     /// EC point is not known (necessary for BLS signatures).
     pub fn evaluate(
-        input: &Vec<Boolean<MNT4Fr>>,
-        generators: &Vec<G1Var>,
+        input: &[Boolean<MNT4Fr>],
+        generators: &[G1Var],
     ) -> Result<G1Var, SynthesisError> {
         let capacity = 752;
 

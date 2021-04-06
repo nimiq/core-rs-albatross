@@ -531,6 +531,7 @@ impl TransactionBuilder {
         staking_contract: Option<Address>,
         key_pair: &KeyPair,
         validator_id: &ValidatorId,
+        staker_address: Option<Address>,
         value: Coin,
         fee: Coin,
         validity_start_height: u32,
@@ -539,7 +540,7 @@ impl TransactionBuilder {
         let staking_contract_address =
             fill_in_staking_contract_address(staking_contract, network_id);
         let mut recipient = Recipient::new_staking_builder(Some(staking_contract_address));
-        recipient.stake(validator_id, None);
+        recipient.stake(validator_id, staker_address);
 
         let mut builder = Self::new();
         builder

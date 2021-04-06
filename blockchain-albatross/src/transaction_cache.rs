@@ -17,7 +17,7 @@ impl<'a> From<&'a Block> for BlockDescriptor {
 
         let hashes = transactions
             .map(|txs| txs.iter().map(Hash::hash).collect())
-            .unwrap_or_else(|| vec![]);
+            .unwrap_or_else(Vec::new);
 
         BlockDescriptor {
             hash: block.hash(),

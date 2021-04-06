@@ -62,7 +62,7 @@ impl NanoZKP {
         let mut bytes = Vec::new();
 
         for i in 0..initial_pks.len() {
-            bytes.extend_from_slice(&serialize_g2_mnt6(initial_pks[i]));
+            bytes.extend_from_slice(&serialize_g2_mnt6(&initial_pks[i]));
         }
 
         let bits = bytes_to_bits(&bytes);
@@ -284,9 +284,9 @@ impl NanoZKP {
         name: &str,
         position: usize,
         pks: &[G2MNT6],
-        pk_tree_nodes: &Vec<G1MNT6>,
-        pk_tree_root: &Vec<u8>,
-        signer_bitmap: &Vec<bool>,
+        pk_tree_nodes: &[G1MNT6],
+        pk_tree_root: &[u8],
+        signer_bitmap: &[bool],
         debug_mode: bool,
     ) -> Result<(), NanoZKPError> {
         // Load the proving key from file.
@@ -305,11 +305,11 @@ impl NanoZKP {
             }
         }
 
-        let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk));
+        let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(&agg_pk));
 
         let hash = pedersen_hash(agg_pk_bits, pedersen_generators(5));
 
-        let agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(hash));
+        let agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(&hash));
 
         // Get the relevant chunk of the signer's bitmap.
         let signer_bitmap_chunk = &signer_bitmap[position * SLOTS as usize / PK_TREE_BREADTH
@@ -376,8 +376,8 @@ impl NanoZKP {
         tree_level: usize,
         vk_file: &str,
         pks: &[G2MNT6],
-        pk_tree_root: &Vec<u8>,
-        signer_bitmap: &Vec<bool>,
+        pk_tree_root: &[u8],
+        signer_bitmap: &[bool],
         debug_mode: bool,
     ) -> Result<(), NanoZKPError> {
         // Load the proving key from file.
@@ -415,11 +415,11 @@ impl NanoZKP {
             }
         }
 
-        let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk));
+        let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(&agg_pk));
 
         let hash = pedersen_hash(agg_pk_bits, pedersen_generators(5));
 
-        let left_agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(hash));
+        let left_agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(&hash));
 
         // Calculate the right aggregate public key commitment.
         let mut agg_pk = G2MNT6::zero();
@@ -432,11 +432,11 @@ impl NanoZKP {
             }
         }
 
-        let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk));
+        let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(&agg_pk));
 
         let hash = pedersen_hash(agg_pk_bits, pedersen_generators(5));
 
-        let right_agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(hash));
+        let right_agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(&hash));
 
         // Get the relevant chunk of the signer's bitmap.
         let signer_bitmap_chunk = &signer_bitmap[position * SLOTS as usize
@@ -509,8 +509,8 @@ impl NanoZKP {
         tree_level: usize,
         vk_file: &str,
         pks: &[G2MNT6],
-        pk_tree_root: &Vec<u8>,
-        signer_bitmap: &Vec<bool>,
+        pk_tree_root: &[u8],
+        signer_bitmap: &[bool],
         debug_mode: bool,
     ) -> Result<(), NanoZKPError> {
         // Load the proving key from file.
@@ -561,11 +561,11 @@ impl NanoZKP {
             agg_pk += chunk;
         }
 
-        let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk));
+        let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(&agg_pk));
 
         let hash = pedersen_hash(agg_pk_bits, pedersen_generators(5));
 
-        let agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(hash));
+        let agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(&hash));
 
         // Get the relevant chunk of the signer's bitmap.
         let signer_bitmap_chunk = &signer_bitmap[position * SLOTS as usize
@@ -630,10 +630,10 @@ impl NanoZKP {
     fn prove_macro_block<R: CryptoRng + Rng>(
         rng: &mut R,
         initial_pks: &[G2MNT6],
-        initial_pk_tree_root: &Vec<u8>,
+        initial_pk_tree_root: &[u8],
         initial_header_hash: [u8; 32],
         final_pks: &[G2MNT6],
-        final_pk_tree_root: &Vec<u8>,
+        final_pk_tree_root: &[u8],
         block: &MacroBlock,
         debug_mode: bool,
     ) -> Result<(), NanoZKPError> {

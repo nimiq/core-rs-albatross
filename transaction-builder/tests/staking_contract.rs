@@ -36,6 +36,7 @@ fn it_can_verify_staker_transactions() {
         Some(Address::from([1u8; 20])),
         &key_pair,
         &validator_id,
+        None,
         150_000_000.try_into().unwrap(),
         100.try_into().unwrap(),
         1,

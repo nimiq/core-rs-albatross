@@ -7,7 +7,7 @@ use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 
 fn write_genesis_rs(
-    directory: &PathBuf,
+    directory: &Path,
     name: &str,
     genesis_hash: &Blake2bHash,
     staking_contract: Option<Address>,
@@ -33,8 +33,8 @@ fn write_genesis_rs(
 
 fn generate_albatross(
     name: &str,
-    out_dir: &PathBuf,
-    src_dir: &PathBuf,
+    out_dir: &Path,
+    src_dir: &Path,
     config_override: Option<PathBuf>,
 ) {
     log::info!("Generating Albatross genesis config: {}", name);

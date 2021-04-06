@@ -194,7 +194,7 @@ impl NanoBlockchain {
             self.current_validators = block.validators();
 
             // Store the election block header.
-            chain_store_w.put_election(block.unwrap_macro().header.clone());
+            chain_store_w.put_election(block.unwrap_macro().header);
         }
 
         Ok(PushResult::Extended)

@@ -1,7 +1,5 @@
 use libp2p::{
-    gossipsub::{
-        GossipsubConfig, GossipsubConfigBuilder,
-    },
+    gossipsub::{GossipsubConfig, GossipsubConfigBuilder},
     identity::Keypair,
     kad::KademliaConfig,
 };
@@ -13,7 +11,6 @@ use crate::{
     limit::behaviour::LimitConfig,
     message::behaviour::MessageConfig,
 };
-
 
 pub struct Config {
     pub keypair: Keypair,

@@ -8,16 +8,13 @@ use nimiq_rpc_interface::{network::NetworkInterface, types::Peer};
 
 use crate::error::Error;
 
-
 pub struct NetworkDispatcher {
     network: Arc<Network>,
 }
 
 impl NetworkDispatcher {
     pub fn new(network: Arc<Network>) -> Self {
-        NetworkDispatcher {
-            network,
-        }
+        NetworkDispatcher { network }
     }
 }
 

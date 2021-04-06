@@ -311,8 +311,7 @@ impl Network {
     }
 
     fn update_time_offset(&self) {
-        let mut offsets = Vec::new();
-        offsets.push(0i64);
+        let mut offsets = vec![0i64];
         let pool_state = self.connections.state();
         for connection_info in pool_state.connection_iter() {
             if connection_info.state() == ConnectionState::Established {

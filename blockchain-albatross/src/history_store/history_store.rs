@@ -7,13 +7,16 @@ use merkle_mountain_range::mmr::proof::RangeProof;
 use merkle_mountain_range::mmr::MerkleMountainRange;
 use merkle_mountain_range::store::memory::MemoryStore;
 
-use nimiq_database::{Database, Environment, ReadTransaction, Transaction, WriteTransaction};
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_database::{
+    Database, DatabaseFlags, Environment, ReadTransaction, Transaction, WriteTransaction,
+};
+use nimiq_hash::Blake2bHash;
 
 use crate::history_store::mmr_store::MMRStore;
 use crate::history_store::{
     ExtendedTransaction, HistoryTreeChunk, HistoryTreeHash, HistoryTreeProof,
 };
+use nimiq_database::cursor::ReadCursor;
 
 /// A struct that contains databases to store history trees (which are Merkle Mountain Ranges
 /// constructed from the list of extended transactions in an epoch) and extended transactions (which
@@ -28,26 +31,39 @@ pub struct HistoryStore {
     // A database of all extended transactions indexed by their hash (= leaf hash in the history
     // tree).
     ext_tx_db: Database,
-    // A database of all leaf hashes (only basic transactions, not inherents) indexed by the hash of
-    // the transaction. This way we can start with a transaction hash and find it in the MMR.
+    // A database of all leaf hashes indexed by the hash of the transaction. This way we can start
+    // with a transaction hash and find it in the MMR.
     leaf_hash_db: Database,
-    // A database of all leaf indexes (only basic transactions, not inherents) indexed by the hash of
-    // the transaction. This way we can start with a transaction hash and find it in the MMR.
+    // A database of all leaf indexes indexed by the hash of the transaction. This way we can start
+    // with a transaction hash and find it in the MMR.
     leaf_idx_db: Database,
+    // A database of all leaf hashes indexed by the block number where the transaction appears.
+    block_db: Database,
 }
 
 impl HistoryStore {
     const HIST_TREE_DB_NAME: &'static str = "HistoryTrees";
     const EXT_TX_DB_NAME: &'static str = "ExtendedTransactions";
-    const LEAF_HASH_DB_NAME: &'static str = "LeafHashes";
-    const LEAF_IDX_DB_NAME: &'static str = "LeafIndexes";
+    const LEAF_HASH_DB_NAME: &'static str = "LeafHashesByHash";
+    const LEAF_IDX_DB_NAME: &'static str = "LeafIndexesByHash";
+    const BLOCK_DB_NAME: &'static str = "LeafHashesByBlock";
 
     /// Creates a new HistoryStore.
     pub fn new(env: Environment) -> Self {
         let hist_tree_db = env.open_database(Self::HIST_TREE_DB_NAME.to_string());
         let ext_tx_db = env.open_database(Self::EXT_TX_DB_NAME.to_string());
-        let leaf_hash_db = env.open_database(Self::LEAF_HASH_DB_NAME.to_string());
-        let leaf_idx_db = env.open_database(Self::LEAF_IDX_DB_NAME.to_string());
+        let leaf_hash_db = env.open_database_with_flags(
+            Self::LEAF_HASH_DB_NAME.to_string(),
+            DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_FIXED_SIZE_VALUES,
+        );
+        let leaf_idx_db = env.open_database_with_flags(
+            Self::LEAF_IDX_DB_NAME.to_string(),
+            DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_FIXED_SIZE_VALUES,
+        );
+        let block_db = env.open_database_with_flags(
+            Self::BLOCK_DB_NAME.to_string(),
+            DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_FIXED_SIZE_VALUES,
+        );
 
         HistoryStore {
             env,
@@ -55,6 +71,7 @@ impl HistoryStore {
             ext_tx_db,
             leaf_hash_db,
             leaf_idx_db,
+            block_db,
         }
     }
 
@@ -112,19 +129,21 @@ impl HistoryStore {
         // Get the history root. We need to get it here because of Rust's borrowing rules.
         let root = tree.get_root().ok()?.to_blake2b();
 
-        // Remove all leaves from the history tree and remember the respective hashes.
+        // Remove all leaves from the history tree and remember the respective hashes and indexes.
         let mut hashes = Vec::with_capacity(num_ext_txs);
+
         let num_leaves = tree.num_leaves();
+
         for i in 0..cmp::min(num_ext_txs, num_leaves) {
             let leaf_hash = tree.get_leaf(num_leaves - i - 1).unwrap();
             tree.remove_back().ok()?;
-            hashes.push(leaf_hash);
+            hashes.push((num_leaves - i - 1, leaf_hash));
         }
 
         // Remove each of the extended transactions in the history tree from the extended
         // transaction database.
-        for hash in hashes {
-            self.remove_extended_tx(txn, &hash.to_blake2b());
+        for (index, hash) in hashes {
+            self.remove_extended_tx(txn, &hash.to_blake2b(), index as u32);
         }
 
         // Return the history root.
@@ -143,16 +162,17 @@ impl HistoryStore {
 
         // Remove all leaves from the history tree and remember the respective hashes.
         let mut hashes = Vec::with_capacity(tree.num_leaves());
+
         for i in (0..tree.num_leaves()).rev() {
             let leaf_hash = tree.get_leaf(i).unwrap();
             tree.remove_back().ok()?;
-            hashes.push(leaf_hash);
+            hashes.push((i, leaf_hash));
         }
 
         // Remove each of the extended transactions in the history tree from the extended
         // transaction database.
-        for hash in hashes {
-            self.remove_extended_tx(txn, &hash.to_blake2b());
+        for (index, hash) in hashes {
+            self.remove_extended_tx(txn, &hash.to_blake2b(), index as u32);
         }
 
         Some(())
@@ -199,12 +219,12 @@ impl HistoryStore {
         Some(tree.get_root().ok()?.to_blake2b())
     }
 
-    /// Gets an extended transaction (no inherents!) given its hash.
+    /// Gets an extended transaction given its hash.
     pub fn get_ext_tx_by_hash(
         &self,
         hash: &Blake2bHash,
         txn_option: Option<&Transaction>,
-    ) -> Option<ExtendedTransaction> {
+    ) -> Vec<ExtendedTransaction> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -215,10 +235,35 @@ impl HistoryStore {
         };
 
         // Get leaf hash.
-        let leaf_hash = self.get_leaf_hash(hash, Some(txn))?;
+        let leaf_hashes = self.get_leaf_hash(hash, Some(txn));
 
-        // Get extended transaction.
-        self.get_extended_tx(&leaf_hash, Some(txn))
+        // Get extended transactions.
+        let mut ext_txs = vec![];
+
+        for hash in leaf_hashes {
+            ext_txs.push(self.get_extended_tx(&hash, Some(txn)).unwrap());
+        }
+
+        ext_txs
+    }
+
+    /// Gets all extended transactions for a given block number.
+    pub fn get_block_transactions(
+        &self,
+        block_number: u32,
+        txn_option: Option<&Transaction>,
+    ) -> Vec<ExtendedTransaction> {
+        // Get the leaf hashes at this height.
+        let leaf_hashes = self.get_leaf_hash_by_block(block_number, txn_option);
+
+        // Get each extended transaction.
+        let mut ext_txs = vec![];
+
+        for hash in leaf_hashes {
+            ext_txs.push(self.get_extended_tx(&hash, txn_option).unwrap());
+        }
+
+        ext_txs
     }
 
     /// Gets all extended transactions for a given epoch.
@@ -226,7 +271,7 @@ impl HistoryStore {
         &self,
         epoch_number: u32,
         txn_option: Option<&Transaction>,
-    ) -> Option<Vec<ExtendedTransaction>> {
+    ) -> Vec<ExtendedTransaction> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -254,7 +299,7 @@ impl HistoryStore {
             );
         }
 
-        Some(ext_txs)
+        ext_txs
     }
 
     /// Returns the number of extended transactions for a given epoch.
@@ -294,8 +339,13 @@ impl HistoryStore {
         let mut positions = vec![];
 
         for hash in hashes {
-            let index = self.get_leaf_index(hash, txn_option)?;
-            positions.push(index as usize)
+            let mut indices = self
+                .get_leaf_index(hash, txn_option)
+                .iter()
+                .map(|i| *i as usize)
+                .collect();
+
+            positions.append(&mut indices)
         }
 
         self.prove_with_position(epoch_number, positions, txn_option)
@@ -454,8 +504,7 @@ impl HistoryStore {
         txn.get(&self.ext_tx_db, leaf_hash)
     }
 
-    /// Inserts a extended transaction into the extended transaction database. If it's a basic
-    /// transaction, we also update the leaf hash and leaf indexes databases.
+    /// Inserts a extended transaction into the extended transaction database.
     fn put_extended_tx(
         &self,
         txn: &mut WriteTransaction,
@@ -465,16 +514,22 @@ impl HistoryStore {
     ) {
         txn.put_reserve(&self.ext_tx_db, leaf_hash, ext_tx);
 
-        if !ext_tx.is_inherent() {
-            let tx_hash: Blake2bHash = ext_tx.unwrap_basic().hash();
-            txn.put(&self.leaf_hash_db, &tx_hash, leaf_hash);
-            txn.put(&self.leaf_idx_db, &tx_hash, &leaf_index);
-        }
+        let tx_hash = ext_tx.tx_hash();
+
+        let block_number = ext_tx.block_number;
+
+        txn.put(&self.leaf_hash_db, &tx_hash, leaf_hash);
+        txn.put(&self.leaf_idx_db, &tx_hash, &leaf_index);
+        txn.put(&self.block_db, &block_number, leaf_hash);
     }
 
-    /// Removes a extended transaction from the extended transaction database. If it's a basic
-    /// transaction, we also update the leaf hash and leaf indexes databases.
-    fn remove_extended_tx(&self, txn: &mut WriteTransaction, leaf_hash: &Blake2bHash) {
+    /// Removes a extended transaction from the extended transaction database.
+    fn remove_extended_tx(
+        &self,
+        txn: &mut WriteTransaction,
+        leaf_hash: &Blake2bHash,
+        leaf_index: u32,
+    ) {
         // Get the transaction first.
         let tx_opt: Option<ExtendedTransaction> = txn.get(&self.ext_tx_db, leaf_hash);
 
@@ -483,21 +538,23 @@ impl HistoryStore {
             None => return,
         };
 
-        if !ext_tx.is_inherent() {
-            let tx_hash: Blake2bHash = ext_tx.unwrap_basic().hash();
-            txn.remove(&self.leaf_hash_db, &tx_hash);
-            txn.remove(&self.leaf_idx_db, &tx_hash);
-        }
+        let tx_hash = ext_tx.tx_hash();
+
+        let block_number = ext_tx.block_number;
+
+        txn.remove_item(&self.leaf_hash_db, &tx_hash, leaf_hash);
+        txn.remove_item(&self.leaf_idx_db, &tx_hash, &leaf_index);
+        txn.remove_item(&self.block_db, &block_number, leaf_hash);
 
         txn.remove(&self.ext_tx_db, leaf_hash);
     }
 
-    /// Gets a leaf hash from the hash of its transaction (only basic, no inherents!).
+    /// Returns a vector containing all leaf hashes corresponding to the given transaction hash.
     fn get_leaf_hash(
         &self,
         tx_hash: &Blake2bHash,
         txn_option: Option<&Transaction>,
-    ) -> Option<Blake2bHash> {
+    ) -> Vec<Blake2bHash> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -507,15 +564,30 @@ impl HistoryStore {
             }
         };
 
-        txn.get(&self.leaf_hash_db, tx_hash)
+        let mut leaf_hashes = vec![];
+
+        // Seek to the first leaf hash at the given transaction hash.
+        let mut cursor = txn.cursor(&self.leaf_hash_db);
+        let leaf_hash = match cursor.seek_key::<Blake2bHash, Blake2bHash>(tx_hash) {
+            None => return leaf_hashes,
+            Some(v) => v,
+        };
+
+        leaf_hashes.push(leaf_hash);
+
+        loop {
+            // Get next leaf hash.
+            match cursor.next_duplicate::<Blake2bHash, Blake2bHash>() {
+                Some((_, leaf_hash)) => leaf_hashes.push(leaf_hash),
+                None => break,
+            };
+        }
+
+        leaf_hashes
     }
 
-    /// Gets a leaf index from the hash of its transaction (only basic, no inherents!).
-    fn get_leaf_index(
-        &self,
-        tx_hash: &Blake2bHash,
-        txn_option: Option<&Transaction>,
-    ) -> Option<u32> {
+    /// Returns a vector containing all leaf indexes corresponding to the given transaction hash.
+    fn get_leaf_index(&self, tx_hash: &Blake2bHash, txn_option: Option<&Transaction>) -> Vec<u32> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -525,6 +597,62 @@ impl HistoryStore {
             }
         };
 
-        txn.get(&self.leaf_idx_db, tx_hash)
+        let mut leaf_indices = vec![];
+
+        // Seek to the first leaf index at the given transaction hash.
+        let mut cursor = txn.cursor(&self.leaf_idx_db);
+        let leaf_index = match cursor.seek_key::<Blake2bHash, u32>(tx_hash) {
+            None => return leaf_indices,
+            Some(v) => v,
+        };
+
+        leaf_indices.push(leaf_index);
+
+        loop {
+            // Get next leaf index.
+            match cursor.next_duplicate::<Blake2bHash, u32>() {
+                Some((_, leaf_index)) => leaf_indices.push(leaf_index),
+                None => break,
+            };
+        }
+
+        leaf_indices
+    }
+
+    /// Returns a vector containing all leaf hashes corresponding to the given block number.
+    fn get_leaf_hash_by_block(
+        &self,
+        block_number: u32,
+        txn_option: Option<&Transaction>,
+    ) -> Vec<Blake2bHash> {
+        let read_txn: ReadTransaction;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = ReadTransaction::new(&self.env);
+                &read_txn
+            }
+        };
+
+        let mut leaf_hashes = vec![];
+
+        // Seek to the first leaf hash at the given block number.
+        let mut cursor = txn.cursor(&self.block_db);
+        let leaf_hash = match cursor.seek_key::<u32, Blake2bHash>(&block_number) {
+            None => return leaf_hashes,
+            Some(v) => v,
+        };
+
+        leaf_hashes.push(leaf_hash);
+
+        loop {
+            // Get next leaf hash.
+            match cursor.next_duplicate::<u32, Blake2bHash>() {
+                Some((_, leaf_hash)) => leaf_hashes.push(leaf_hash),
+                None => break,
+            };
+        }
+
+        leaf_hashes
     }
 }
