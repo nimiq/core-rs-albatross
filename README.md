@@ -86,7 +86,7 @@ nimiq-client
 
 ### Configuration
 
-By default the client will look for a configuration file in `$HOME/.nimiq/client.config`. You need to create this file yourself:
+By default the client will look for a configuration file in `$HOME/.nimiq/client.toml`. You need to create this file yourself:
 
 ```bash
 nimiq-client                                                   # Run the client. This will create the example config file.
@@ -100,7 +100,7 @@ You can also specify your own configuration file:
 nimiq-client -c path/to/client.toml
 ```
 
-Take a look at [`client/client.example.toml`](client/client.example.toml) for all the configuration options.
+Take a look at the [`client.example.toml`](lib/src/config/config_file/client.example.toml) for all the configuration options.
 
 
 ## Contributing
