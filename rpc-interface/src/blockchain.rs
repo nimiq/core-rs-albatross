@@ -6,7 +6,7 @@ use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 
 use crate::types::{
-    Block, ExtendedTransactions, OrLatest, SlashedSlots, Slot, Stakes, Transaction,
+    Block, ExtendedTransactions, Inherent, OrLatest, SlashedSlots, Slot, Stakes, Transaction,
 };
 
 #[cfg_attr(
@@ -55,6 +55,11 @@ pub trait BlockchainInterface {
         &mut self,
         block_number: u32,
     ) -> Result<ExtendedTransactions, Self::Error>;
+
+    async fn get_batch_inherents(
+        &mut self,
+        batch_number: u32,
+    ) -> Result<Vec<Inherent>, Self::Error>;
 
     async fn get_transaction_receipt(&mut self, hash: Blake2bHash) -> Result<(), Self::Error>;
 
