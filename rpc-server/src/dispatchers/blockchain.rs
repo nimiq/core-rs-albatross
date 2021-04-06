@@ -179,14 +179,14 @@ impl BlockchainInterface for BlockchainDispatcher {
                     ext_tx.unwrap_inherent().clone(),
                     ext_tx.block_number,
                     ext_tx.block_time,
-                ))
+                ));
             } else {
                 transactions.push(Transaction::from_blockchain(
                     ext_tx.unwrap_basic().clone(),
                     ext_tx.block_number,
                     ext_tx.block_time,
                     self.blockchain.block_number(),
-                ))
+                ));
             }
         }
 
@@ -197,19 +197,54 @@ impl BlockchainInterface for BlockchainDispatcher {
     }
 
     async fn get_batch_inherents(&mut self, batch_number: u32) -> Result<Vec<Inherent>, Error> {
-        let extended_tx_vec = self
+        let macro_block_number = policy::macro_block_of(batch_number);
+
+        // Check the batch's macro block to see if the batch includes slashes
+        let macro_block = self
             .blockchain
-            .history_store
-            .get_block_transactions(policy::macro_block_of(batch_number), None);
+            .get_block_at(macro_block_number, true, None) // The lost_reward_set is in the MacroBody
+            .ok_or_else(|| Error::BlockNotFound(macro_block_number.into()))?;
+
+        let mut extended_tx_vec = vec![];
+
+        let macro_body = macro_block.unwrap_macro().body.unwrap();
+
+        if !macro_body.lost_reward_set.is_empty() {
+            // Search all micro blocks of the batch to find the slash inherents
+            let first_micro_block = policy::first_block_of_batch(batch_number);
+            let last_micro_block = macro_block_number - 1;
+
+            for i in first_micro_block..last_micro_block {
+                let micro_ext_tx_vec = self
+                    .blockchain
+                    .history_store
+                    .get_block_transactions(i, None);
+
+                for ext_tx in micro_ext_tx_vec {
+                    if ext_tx.is_inherent() {
+                        extended_tx_vec.push(ext_tx);
+                    }
+                }
+            }
+        }
+
+        // Append inherents of the macro block (we do this after the micro blocks so the inherents are in order)
+        extended_tx_vec.append(
+            &mut self
+                .blockchain
+                .history_store
+                .get_block_transactions(macro_block_number, None),
+        );
 
         Ok(extended_tx_vec
             .into_iter()
-            .map(|inherent| {
+            .map(|ext_tx| {
                 Inherent::from_transaction(
-                    // Because we get the ext_txs of a macro block, all of them must be inherents
-                    inherent.unwrap_inherent().clone(),
-                    inherent.block_number,
-                    inherent.block_time,
+                    // The extended txs are guaranteed to be inherents because we filter
+                    // for those above and fetch the other txs from a macro block
+                    ext_tx.unwrap_inherent().clone(),
+                    ext_tx.block_number,
+                    ext_tx.block_time,
                 )
             })
             .collect())
