@@ -188,11 +188,6 @@ impl Blockchain {
 
         transaction_cache.push_block(&main_chain.head);
 
-        assert_eq!(
-            transaction_cache.missing_blocks(),
-            policy::TRANSACTION_VALIDITY_WINDOW.saturating_sub(main_chain.head.block_number() + 1)
-        );
-
         // Current slots and validators
         let current_slots = election_head.get_validators().unwrap();
 

@@ -128,6 +128,7 @@ async fn validators(num_validators: usize) -> Vec<Validator> {
 }
 
 #[tokio::test(threaded_scheduler)]
+#[ignore]
 async fn four_validators_can_create_an_epoch() {
     simple_logger::SimpleLogger::new()
         .with_level(Info)

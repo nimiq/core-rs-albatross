@@ -7,7 +7,9 @@ use merkle_mountain_range::mmr::proof::RangeProof;
 use merkle_mountain_range::mmr::MerkleMountainRange;
 use merkle_mountain_range::store::memory::MemoryStore;
 
-use nimiq_database::{Database, Environment, ReadTransaction, Transaction, WriteTransaction};
+use nimiq_database::{
+    Database, DatabaseFlags, Environment, ReadTransaction, Transaction, WriteTransaction,
+};
 use nimiq_hash::Blake2bHash;
 
 use crate::history_store::mmr_store::MMRStore;
@@ -50,9 +52,18 @@ impl HistoryStore {
     pub fn new(env: Environment) -> Self {
         let hist_tree_db = env.open_database(Self::HIST_TREE_DB_NAME.to_string());
         let ext_tx_db = env.open_database(Self::EXT_TX_DB_NAME.to_string());
-        let leaf_hash_db = env.open_database(Self::LEAF_HASH_DB_NAME.to_string());
-        let leaf_idx_db = env.open_database(Self::LEAF_IDX_DB_NAME.to_string());
-        let block_db = env.open_database(Self::BLOCK_DB_NAME.to_string());
+        let leaf_hash_db = env.open_database_with_flags(
+            Self::LEAF_HASH_DB_NAME.to_string(),
+            DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_FIXED_SIZE_VALUES,
+        );
+        let leaf_idx_db = env.open_database_with_flags(
+            Self::LEAF_IDX_DB_NAME.to_string(),
+            DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_FIXED_SIZE_VALUES,
+        );
+        let block_db = env.open_database_with_flags(
+            Self::BLOCK_DB_NAME.to_string(),
+            DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_FIXED_SIZE_VALUES,
+        );
 
         HistoryStore {
             env,
