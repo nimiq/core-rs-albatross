@@ -10,7 +10,10 @@ use nimiq_keys::Address;
 use nimiq_primitives::policy;
 use nimiq_rpc_interface::{
     blockchain::BlockchainInterface,
-    types::{Block, OrLatest, SlashedSlots, Slot, Stake, Stakes, Transaction, Validator},
+    types::{
+        Block, ExtendedTransactions, Inherent, OrLatest, SlashedSlots, Slot, Stake, Stakes,
+        Transaction, Validator,
+    },
 };
 
 use crate::error::Error;
@@ -133,7 +136,7 @@ impl BlockchainInterface for BlockchainDispatcher {
             .history_store
             .get_ext_tx_by_hash(&hash, None);
 
-        // If we got more than 2 extended transactions, then we panic. This shouldn't happen.
+        // If we get more than 1 extended transaction, we panic. This shouldn't happen.
         assert!(extended_tx_vec.len() < 2);
 
         // Unpack the transaction or raise an error.
@@ -155,6 +158,42 @@ impl BlockchainInterface for BlockchainDispatcher {
 
     async fn get_transaction_receipt(&mut self, _hash: Blake2bHash) -> Result<(), Error> {
         Err(Error::NotImplemented)
+    }
+
+    async fn get_transactions_by_block_number(
+        &mut self,
+        block_number: u32,
+    ) -> Result<ExtendedTransactions, Error> {
+        // Get all the extended transactions that correspond to this block.
+        let extended_tx_vec = self
+            .blockchain
+            .history_store
+            .get_block_transactions(block_number, None);
+
+        let mut transactions = vec![];
+        let mut inherents = vec![];
+
+        for ext_tx in extended_tx_vec {
+            if ext_tx.is_inherent() {
+                inherents.push(Inherent::from_transaction(
+                    ext_tx.unwrap_inherent().clone(),
+                    ext_tx.block_number,
+                    ext_tx.block_time,
+                ))
+            } else {
+                transactions.push(Transaction::from_blockchain(
+                    ext_tx.unwrap_basic().clone(),
+                    ext_tx.block_number,
+                    ext_tx.block_time,
+                    self.blockchain.block_number(),
+                ))
+            }
+        }
+
+        Ok(ExtendedTransactions {
+            transactions,
+            inherents,
+        })
     }
 
     async fn list_stakes(&mut self) -> Result<Stakes, Error> {
