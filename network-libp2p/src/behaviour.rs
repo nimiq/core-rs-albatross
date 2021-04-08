@@ -133,7 +133,7 @@ impl NimiqBehaviour {
             MessageAuthenticity::Signed(config.keypair),
             config.gossipsub,
         )
-        .expect("Wrong configuration");
+        .expect("Correct configuration");
         let identify = Identify::new(
             "/albatross/2.0".to_string(),
             "albatross_node".to_string(),
