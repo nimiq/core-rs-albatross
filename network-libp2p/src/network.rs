@@ -309,8 +309,9 @@ impl Network {
     fn new_transport(keypair: &Keypair) -> std::io::Result<Boxed<(PeerId, StreamMuxerBox)>> {
         let transport = {
             // Websocket over TCP/DNS
-            let transport =
-                websocket::WsConfig::new(dns::TokioDnsConfig::system(tcp::TcpConfig::new().nodelay(true))?);
+            let transport = websocket::WsConfig::new(dns::TokioDnsConfig::system(
+                tcp::TcpConfig::new().nodelay(true),
+            )?);
 
             // Memory transport for testing
             // TODO: Use websocket over the memory transport
