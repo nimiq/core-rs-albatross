@@ -116,13 +116,15 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
         if policy::epoch_at(current_block_number) == epoch_number {
             let num_known = self
                 .blockchain
+                .history_store
                 .get_num_extended_transactions(epoch_number, None);
             let num_full_chunks = num_known / CHUNK_SIZE;
             start_index = num_full_chunks;
             // TODO: Can probably be done more efficiently.
             let known_chunk = self
                 .blockchain
-                .get_chunk(epoch_number, num_full_chunks * CHUNK_SIZE, 0, None)
+                .history_store
+                .prove_chunk(epoch_number, num_full_chunks * CHUNK_SIZE, 0, None)
                 .expect("History chunk missing");
             pending_batch_set.history = known_chunk.history;
         }

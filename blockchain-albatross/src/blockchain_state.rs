@@ -4,15 +4,12 @@ use nimiq_hash::Blake2bHash;
 use nimiq_primitives::slots::Validators;
 
 use crate::chain_info::ChainInfo;
-use crate::transaction_cache::TransactionCache;
 
 /// A struct that keeps the current state of the blockchain. It summarizes the information known to
 /// a validator at the head of the blockchain.
 pub struct BlockchainState {
     // The accounts tree.
     pub accounts: Accounts,
-    // The cache of transactions.
-    pub transaction_cache: TransactionCache,
     // The chain info for the head of the main chain.
     pub main_chain: ChainInfo,
     // The hash of the head of the main chain.
