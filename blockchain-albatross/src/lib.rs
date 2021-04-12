@@ -21,4 +21,3 @@ pub(crate) mod chain_store;
 pub(crate) mod error;
 pub(crate) mod history_store;
 pub mod reward;
-pub mod transaction_cache;

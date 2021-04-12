@@ -23,7 +23,6 @@ use crate::chain_metrics::BlockchainMetrics;
 use crate::chain_store::ChainStore;
 use crate::history_store::HistoryStore;
 use crate::reward::genesis_parameters;
-use crate::transaction_cache::TransactionCache;
 use crate::{BlockchainError, BlockchainEvent, ForkEvent};
 
 /// The Blockchain struct. It stores all information of the blockchain. It is the main data
@@ -172,22 +171,6 @@ impl Blockchain {
 
         let election_head_hash = election_head.hash();
 
-        // Initialize TransactionCache.
-        let mut transaction_cache = TransactionCache::new();
-
-        let blocks = chain_store.get_blocks_backward(
-            &head_hash,
-            transaction_cache.missing_blocks() - 1,
-            true,
-            None,
-        );
-
-        for block in blocks.iter().rev() {
-            transaction_cache.push_block(block);
-        }
-
-        transaction_cache.push_block(&main_chain.head);
-
         // Current slots and validators
         let current_slots = election_head.get_validators().unwrap();
 
@@ -211,7 +194,6 @@ impl Blockchain {
             history_store,
             state: RwLock::new(BlockchainState {
                 accounts,
-                transaction_cache,
                 main_chain,
                 head_hash,
                 macro_info: macro_chain_info,
@@ -268,7 +250,6 @@ impl Blockchain {
             history_store,
             state: RwLock::new(BlockchainState {
                 accounts,
-                transaction_cache: TransactionCache::new(),
                 macro_info: main_chain.clone(),
                 main_chain,
                 head_hash: head_hash.clone(),
