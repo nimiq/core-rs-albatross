@@ -234,7 +234,7 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
         .await;
 
         // Unwrap our await result. If we timed out, we return a proposal timeout right here.
-        let proposal = match await_res {
+        let (proposal, id) = match await_res {
             Ok(v) => v,
             Err(err) => {
                 debug!("Tendermint - await_proposal: Timed out: {:?}", err);
@@ -260,52 +260,58 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
             return Ok(ProposalResult::Timeout);
         }
 
-        // Get a write transaction to the database.
-        let mut txn = WriteTransaction::new(&self.blockchain.env);
-
-        // Get the blockchain state.
-        let state = self.blockchain.state();
-
-        // Create a block with just our header.
-        let block = Block::Macro(MacroBlock {
-            header: header.clone(),
-            body: None,
-            justification: None,
-        });
-
-        // Update our blockchain state using the received proposal. If we can't update the state, we
-        // return a proposal timeout right here.
-        if self
-            .blockchain
-            .commit_accounts(&state, &block, 0, &mut txn) // view_number?
-            .is_err()
+        // The block is necessary to drop the lock before awaiting the validate_message(id) call later on.
         {
-            debug!("Tendermint - await_proposal: Can't update state");
-            return Ok(ProposalResult::Timeout);
-        }
+            // Get a write transaction to the database.
+            let mut txn = WriteTransaction::new(&self.blockchain.env);
 
-        // Check the validity of the block against our state. If it is invalid, we return a proposal
-        // timeout right here. This also returns the block body that matches the block header
-        // (assuming that the block is valid).
-        let body = match self
-            .blockchain
-            .verify_block_state(&state, &block, Some(&txn))
-        {
-            Ok(v) => v,
-            Err(err) => {
-                debug!(
-                    "Tendermint - await_proposal: Invalid block state: {:?}",
-                    err
-                );
+            // Get the blockchain state.
+            let state = self.blockchain.state();
+
+            // Create a block with just our header.
+            let block = Block::Macro(MacroBlock {
+                header: header.clone(),
+                body: None,
+                justification: None,
+            });
+
+            // Update our blockchain state using the received proposal. If we can't update the state, we
+            // return a proposal timeout right here.
+            if self
+                .blockchain
+                .commit_accounts(&state, &block, 0, &mut txn) // view_number?
+                .is_err()
+            {
+                debug!("Tendermint - await_proposal: Can't update state");
                 return Ok(ProposalResult::Timeout);
             }
-        };
 
-        // Cache the body that we calculated.
-        self.cache_body = body;
+            // Check the validity of the block against our state. If it is invalid, we return a proposal
+            // timeout right here. This also returns the block body that matches the block header
+            // (assuming that the block is valid).
+            let body = match self
+                .blockchain
+                .verify_block_state(&state, &block, Some(&txn))
+            {
+                Ok(v) => v,
+                Err(err) => {
+                    debug!(
+                        "Tendermint - await_proposal: Invalid block state: {:?}",
+                        err
+                    );
+                    return Ok(ProposalResult::Timeout);
+                }
+            };
 
-        // Abort the transaction so that we don't commit the changes we made to the blockchain state.
-        txn.abort();
+            // Cache the body that we calculated.
+            self.cache_body = body;
+
+            // Abort the transaction so that we don't commit the changes we made to the blockchain state.
+            txn.abort();
+        }
+
+        // The message was validated sucessfully so the network may now relay it to other peers.
+        self.network.validate_message(id).await.unwrap();
 
         // Return the proposal.
         Ok(ProposalResult::Proposal(header, valid_round))
@@ -342,14 +348,14 @@ impl<N: ValidatorNetwork + 'static> TendermintInterface<N> {
         &mut self,
         validator_id: u16,
         validator_key: &PublicKey,
-    ) -> TendermintProposal {
-        while let Some((msg, _)) = self.proposal_stream.as_mut().next().await {
+    ) -> (TendermintProposal, N::PubsubId) {
+        while let Some((msg, id)) = self.proposal_stream.as_mut().next().await {
             // Check if the proposal comes from the correct validator and the signature of the
             // proposal is valid. If not, keep awaiting.
             debug!("Received Proposal from {}", &msg.signer_idx);
             if validator_id == msg.signer_idx {
                 if msg.verify(&validator_key) {
-                    return msg.message;
+                    return (msg.message, id);
                 } else {
                     debug!("Tendermint - await_proposal: Invalid signature");
                 }
