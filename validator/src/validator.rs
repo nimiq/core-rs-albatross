@@ -40,7 +40,7 @@ impl Topic for ProposalTopic {
     }
 
     fn validate(&self) -> bool {
-        false
+        true
     }
 }
 

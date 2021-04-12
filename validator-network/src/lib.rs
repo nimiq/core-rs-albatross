@@ -70,4 +70,7 @@ pub trait ValidatorNetwork: Send + Sync {
         public_key: &CompressedPublicKey,
         secret_key: &SecretKey,
     ) -> Result<(), Self::Error>;
+
+    /// Signals that a Gossipsup'd message with `id` was verified sucessfully and can be relayed
+    async fn validate_message(&self, id: Self::PubsubId) -> Result<bool, Self::Error>;
 }

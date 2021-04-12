@@ -268,4 +268,8 @@ where
 
         Ok(())
     }
+
+    async fn validate_message(&self, id: Self::PubsubId) -> Result<bool, Self::Error> {
+        self.network.validate_message(id).await.map_err(|err| NetworkError::Network(err))
+    }
 }
