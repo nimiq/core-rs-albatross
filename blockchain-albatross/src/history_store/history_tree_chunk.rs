@@ -8,7 +8,8 @@ use beserial::{
 };
 use nimiq_hash::Blake2bHash;
 
-use crate::history_store::{ExtendedTransaction, HistoryTreeHash};
+use crate::history_store::history_tree_hash::HistoryTreeHash;
+use crate::history_store::ExtendedTransaction;
 
 /// The chunk size used in our protocol.
 /// TODO: Update number.

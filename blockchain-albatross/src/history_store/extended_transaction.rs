@@ -8,7 +8,7 @@ use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_transaction::Transaction as BlockchainTransaction;
 
-use crate::history_store::HistoryTreeHash;
+use crate::history_store::history_tree_hash::HistoryTreeHash;
 
 /// A single struct that stores information that represents any possible transaction (basic
 /// transaction or inherent) on the blockchain.
