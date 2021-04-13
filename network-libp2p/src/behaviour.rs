@@ -4,13 +4,17 @@ use std::task::{Context, Poll, Waker};
 
 use libp2p::{
     core::{either::EitherError, upgrade::ReadOneError},
-    gossipsub::{error::GossipsubHandlerError, Gossipsub, GossipsubEvent, MessageAuthenticity},
+    gossipsub::{
+        error::GossipsubHandlerError, Gossipsub, GossipsubEvent, MessageAuthenticity,
+        PeerScoreParams, PeerScoreThresholds,
+    },
     identify::{Identify, IdentifyEvent},
     kad::{store::MemoryStore, Kademlia, KademliaEvent},
     swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters},
     NetworkBehaviour,
 };
 use parking_lot::RwLock;
+use tokio::time::Interval;
 
 use nimiq_network_interface::network::NetworkEvent;
 use nimiq_utils::time::OffsetTime;
@@ -98,6 +102,12 @@ pub struct NimiqBehaviour {
     pub identify: Identify,
 
     #[behaviour(ignore)]
+    peer_contact_book: Arc<RwLock<PeerContactBook>>,
+
+    #[behaviour(ignore)]
+    update_scores: Interval,
+
+    #[behaviour(ignore)]
     events: VecDeque<NimiqEvent>,
 
     #[behaviour(ignore)]
@@ -120,13 +130,13 @@ impl NimiqBehaviour {
             peer_contact_book.clone(),
             clock,
         );
-        let peers = ConnectionPoolBehaviour::new(peer_contact_book);
+        let peers = ConnectionPoolBehaviour::new(peer_contact_book.clone());
 
         let message = MessageBehaviour::new(config.message);
 
         let store = MemoryStore::new(peer_id);
         let kademlia = Kademlia::with_config(peer_id, store, config.kademlia);
-        let gossipsub = Gossipsub::new(
+        let mut gossipsub = Gossipsub::new(
             MessageAuthenticity::Signed(config.keypair),
             config.gossipsub,
         )
@@ -137,6 +147,14 @@ impl NimiqBehaviour {
             public_key,
         );
 
+        let params = PeerScoreParams::default();
+        let thresholds = PeerScoreThresholds::default();
+        let update_scores = tokio::time::interval(params.decay_interval);
+
+        gossipsub
+            .with_peer_score(params.clone(), thresholds)
+            .expect("Valid score params and thresholds");
+
         Self {
             discovery,
             message,
@@ -144,6 +162,8 @@ impl NimiqBehaviour {
             kademlia,
             gossipsub,
             identify,
+            peer_contact_book,
+            update_scores,
             events: VecDeque::new(),
             waker: None,
         }
@@ -154,6 +174,11 @@ impl NimiqBehaviour {
         cx: &mut Context,
         _params: &mut impl PollParameters,
     ) -> Poll<NetworkBehaviourAction<T, NimiqEvent>> {
+        while self.update_scores.poll_tick(cx).is_ready() {
+            log::trace!("Update peer scores");
+            self.peer_contact_book.read().update_scores(&self.gossipsub);
+        }
+
         if let Some(event) = self.events.pop_front() {
             log::trace!("NimiqBehaviour: emitting event: {:?}", event);
             return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));

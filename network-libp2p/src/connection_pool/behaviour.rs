@@ -106,11 +106,27 @@ impl ConnectionPoolBehaviour {
             &self.connected_peers.len(),
             &self.connected_peers
         );
-        if self.pending_connections.is_empty() {
+        if self.pending_connections.is_empty() && self.connected_peers.len() < 4 {
             self.pending_connections = self
                 .peer_contact_book
                 .read()
                 .get_next_connections(4 - self.connected_peers.len(), &self.connected_peers);
+        }
+
+        // Disconnect peers that have negative scores
+        for peer_id in &self.connected_peers {
+            let peer_score = self
+                .peer_contact_book
+                .read()
+                .get(peer_id)
+                .map(|e| e.get_score());
+            if let Some(score) = peer_score {
+                if score < 0.0 {
+                    &self.events.push_back(NetworkBehaviourAction::GenerateEvent(
+                        ConnectionPoolEvent::Disconnect { peer_id: *peer_id },
+                    ));
+                }
+            }
         }
     }
 }

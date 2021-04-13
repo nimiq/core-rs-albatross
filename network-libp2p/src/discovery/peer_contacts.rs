@@ -7,6 +7,7 @@ use std::{
 use bitflags::bitflags;
 use libp2p::{
     core::multiaddr::Protocol,
+    gossipsub::Gossipsub,
     identity::{Keypair, PublicKey},
     Multiaddr, PeerId,
 };
@@ -296,14 +297,14 @@ impl SignedPeerContact {
     }
 }
 
-/// Meta information attached to peer contact info objects. This are meant to be mutable and change over time.
+/// Meta information attached to peer contact info objects. This is meant to be mutable and change over time.
 #[derive(Clone, Debug)]
 #[cfg_attr(
     feature = "peer-contact-book-persistence",
     derive(serde::Serialize, serde::Deserialize)
 )]
 struct PeerContactMeta {
-    score: f32,
+    score: f64,
 
     /// The peers that sent us this contact. Used for scoring.
     ///
@@ -423,6 +424,14 @@ impl PeerContactInfo {
     pub fn matches(&self, protocols: Protocols, services: Services) -> bool {
         self.protocols.intersects(protocols) && self.services().intersects(services)
     }
+
+    pub fn get_score(&self) -> f64 {
+        self.meta.read().score
+    }
+
+    pub fn set_score(&self, score: f64) {
+        self.meta.write().score = score;
+    }
 }
 
 #[derive(Debug)]
@@ -526,6 +535,18 @@ impl PeerContactBook {
                 }
             })
             .choose_multiple(&mut rng, count)
+    }
+
+    pub fn update_scores(&self, gossipsub: &Gossipsub) {
+        let contacts = self.peer_contacts.iter();
+
+        for contact in contacts {
+            if let Some(score) = gossipsub.peer_score(contact.0) {
+                contact.1.set_score(score);
+            } else {
+                log::debug!("No score for peer {}", contact.0);
+            }
+        }
     }
 
     pub fn self_add_addresses<I: IntoIterator<Item = Multiaddr>>(&mut self, addresses: I) {
