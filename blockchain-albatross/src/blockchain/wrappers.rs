@@ -7,7 +7,6 @@ use nimiq_genesis::NetworkInfo;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::policy;
-use nimiq_transaction::TransactionReceipt;
 use nimiq_utils::observer::{Listener, ListenerHandle};
 
 use crate::blockchain_state::BlockchainState;
@@ -122,16 +121,5 @@ impl Blockchain {
     #[cfg(feature = "metrics")]
     pub fn metrics(&self) -> &BlockchainMetrics {
         &self.metrics
-    }
-
-    // TODO: Implement this method. It is used in the rpc-server.
-    #[allow(unused_variables)]
-    pub fn get_transaction_receipts_by_address(
-        &self,
-        address: &Address,
-        sender_limit: usize,
-        recipient_limit: usize,
-    ) -> Vec<TransactionReceipt> {
-        unimplemented!()
     }
 }
