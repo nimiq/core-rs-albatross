@@ -16,7 +16,9 @@ use crate::history_store::history_tree_hash::HistoryTreeHash;
 use crate::history_store::leaf_data::LeafData;
 use crate::history_store::mmr_store::MMRStore;
 use crate::history_store::{ExtendedTransaction, HistoryTreeChunk, HistoryTreeProof};
+use crate::ExtTxData;
 use nimiq_database::cursor::ReadCursor;
+use nimiq_keys::Address;
 
 /// A struct that contains databases to store history trees (which are Merkle Mountain Ranges
 /// constructed from the list of extended transactions in an epoch) and extended transactions (which
@@ -36,24 +38,31 @@ pub struct HistoryStore {
     tx_hash_db: Database,
     // A database of all leaf hashes indexed by the block number where the transaction appears.
     block_db: Database,
+    // A database of all transaction (not inherents) hashes indexed by their sender address.
+    address_db: Database,
 }
 
 impl HistoryStore {
     const HIST_TREE_DB_NAME: &'static str = "HistoryTrees";
     const EXT_TX_DB_NAME: &'static str = "ExtendedTransactions";
-    const LEAF_HASH_DB_NAME: &'static str = "LeafHashesByHash";
+    const TX_HASH_DB_NAME: &'static str = "LeafHashesByTxHash";
     const BLOCK_DB_NAME: &'static str = "LeafHashesByBlock";
+    const ADDRESS_DB_NAME: &'static str = "TxHashesByAddress";
 
     /// Creates a new HistoryStore.
     pub fn new(env: Environment) -> Self {
         let hist_tree_db = env.open_database(Self::HIST_TREE_DB_NAME.to_string());
         let ext_tx_db = env.open_database(Self::EXT_TX_DB_NAME.to_string());
-        let leaf_hash_db = env.open_database_with_flags(
-            Self::LEAF_HASH_DB_NAME.to_string(),
+        let tx_hash_db = env.open_database_with_flags(
+            Self::TX_HASH_DB_NAME.to_string(),
             DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_FIXED_SIZE_VALUES,
         );
         let block_db = env.open_database_with_flags(
             Self::BLOCK_DB_NAME.to_string(),
+            DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_FIXED_SIZE_VALUES,
+        );
+        let address_db = env.open_database_with_flags(
+            Self::ADDRESS_DB_NAME.to_string(),
             DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_FIXED_SIZE_VALUES,
         );
 
@@ -61,8 +70,9 @@ impl HistoryStore {
             env,
             hist_tree_db,
             ext_tx_db,
-            tx_hash_db: leaf_hash_db,
+            tx_hash_db,
             block_db,
+            address_db,
         }
     }
 
@@ -495,7 +505,7 @@ impl HistoryStore {
         txn.get(&self.ext_tx_db, leaf_hash)
     }
 
-    /// Inserts a extended transaction into the extended transaction database.
+    /// Inserts a extended transaction into the History Store's transaction databases.
     fn put_extended_tx(
         &self,
         txn: &mut WriteTransaction,
@@ -507,8 +517,6 @@ impl HistoryStore {
 
         let tx_hash = ext_tx.tx_hash();
 
-        let block_number = ext_tx.block_number;
-
         txn.put(
             &self.tx_hash_db,
             &tx_hash,
@@ -518,10 +526,18 @@ impl HistoryStore {
             },
         );
 
-        txn.put(&self.block_db, &block_number, leaf_hash);
+        txn.put(&self.block_db, &ext_tx.block_number, leaf_hash);
+
+        match &ext_tx.data {
+            ExtTxData::Basic(tx) => {
+                txn.put(&self.address_db, &tx.sender, &tx_hash);
+                txn.put(&self.address_db, &tx.recipient, &tx_hash);
+            }
+            ExtTxData::Inherent(_) => {}
+        }
     }
 
-    /// Removes a extended transaction from the extended transaction database.
+    /// Removes a extended transaction from the History Store's transaction databases.
     fn remove_extended_tx(
         &self,
         txn: &mut WriteTransaction,
@@ -538,7 +554,7 @@ impl HistoryStore {
 
         let tx_hash = ext_tx.tx_hash();
 
-        let block_number = ext_tx.block_number;
+        txn.remove(&self.ext_tx_db, leaf_hash);
 
         txn.remove_item(
             &self.tx_hash_db,
@@ -549,9 +565,15 @@ impl HistoryStore {
             },
         );
 
-        txn.remove_item(&self.block_db, &block_number, leaf_hash);
+        txn.remove_item(&self.block_db, &ext_tx.block_number, leaf_hash);
 
-        txn.remove(&self.ext_tx_db, leaf_hash);
+        match &ext_tx.data {
+            ExtTxData::Basic(tx) => {
+                txn.remove_item(&self.address_db, &tx.sender, &tx_hash);
+                txn.remove_item(&self.address_db, &tx.recipient, &tx_hash);
+            }
+            ExtTxData::Inherent(_) => {}
+        }
     }
 
     /// Returns a vector containing all leaf hashes and indexes corresponding to the given
@@ -627,5 +649,43 @@ impl HistoryStore {
         }
 
         leaf_hashes
+    }
+
+    /// Returns a vector containing all transaction (no inherents) hashes corresponding to the given
+    /// address.
+    pub fn get_tx_hashes_by_address(
+        &self,
+        address: &Address,
+        txn_option: Option<&Transaction>,
+    ) -> Vec<Blake2bHash> {
+        let read_txn: ReadTransaction;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = ReadTransaction::new(&self.env);
+                &read_txn
+            }
+        };
+
+        let mut tx_hashes = vec![];
+
+        // Seek to the first transaction hash at the given address.
+        let mut cursor = txn.cursor(&self.address_db);
+        let tx_hash = match cursor.seek_key::<Address, Blake2bHash>(address) {
+            None => return tx_hashes,
+            Some(v) => v,
+        };
+
+        tx_hashes.push(tx_hash);
+
+        loop {
+            // Get next transaction hash.
+            match cursor.next_duplicate::<Address, Blake2bHash>() {
+                Some((_, tx_hash)) => tx_hashes.push(tx_hash),
+                None => break,
+            };
+        }
+
+        tx_hashes
     }
 }
