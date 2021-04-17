@@ -250,6 +250,36 @@ impl BlockchainInterface for BlockchainDispatcher {
             .collect())
     }
 
+    async fn get_transaction_hashes_by_address(
+        &mut self,
+        address: Address,
+        max: Option<u16>,
+    ) -> Result<Vec<Blake2bHash>, Error> {
+        Ok(self.blockchain.history_store.get_tx_hashes_by_address(
+            &address,
+            max.unwrap_or(500),
+            None,
+        ))
+    }
+
+    async fn get_transactions_by_address(
+        &mut self,
+        address: Address,
+        max: Option<u16>,
+    ) -> Result<Vec<Transaction>, Error> {
+        let tx_hashes = self.get_transaction_hashes_by_address(address, max).await?;
+
+        let mut txs = vec![];
+
+        // TODO: Use a single database transaction for all queries
+
+        for tx_hash in tx_hashes {
+            txs.push(self.get_transaction_by_hash(tx_hash).await?);
+        }
+
+        Ok(txs)
+    }
+
     async fn list_stakes(&mut self) -> Result<Stakes, Error> {
         let staking_contract = self.blockchain.get_staking_contract();
 
