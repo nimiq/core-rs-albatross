@@ -8,5 +8,5 @@ mod history_store;
 mod history_tree_chunk;
 mod history_tree_hash;
 mod history_tree_proof;
-mod leaf_data;
 mod mmr_store;
+mod ordered_hash;
