@@ -13,8 +13,8 @@ use nimiq_database::{
 use nimiq_hash::Blake2bHash;
 
 use crate::history_store::history_tree_hash::HistoryTreeHash;
-use crate::history_store::leaf_data::LeafData;
 use crate::history_store::mmr_store::MMRStore;
+use crate::history_store::ordered_hash::OrderedHash;
 use crate::history_store::{ExtendedTransaction, HistoryTreeChunk, HistoryTreeProof};
 use crate::ExtTxData;
 use nimiq_database::cursor::ReadCursor;
@@ -520,9 +520,9 @@ impl HistoryStore {
         txn.put(
             &self.tx_hash_db,
             &tx_hash,
-            &LeafData {
-                hash: leaf_hash.clone(),
+            &OrderedHash {
                 index: leaf_index,
+                hash: leaf_hash.clone(),
             },
         );
 
@@ -530,8 +530,27 @@ impl HistoryStore {
 
         match &ext_tx.data {
             ExtTxData::Basic(tx) => {
-                txn.put(&self.address_db, &tx.sender, &tx_hash);
-                txn.put(&self.address_db, &tx.recipient, &tx_hash);
+                let num_txs_sender = self.get_num_txs_by_address(&tx.sender, Some(txn));
+
+                txn.put(
+                    &self.address_db,
+                    &tx.sender,
+                    &OrderedHash {
+                        index: num_txs_sender,
+                        hash: tx_hash.clone(),
+                    },
+                );
+
+                let num_txs_recipient = self.get_num_txs_by_address(&tx.recipient, Some(txn));
+
+                txn.put(
+                    &self.address_db,
+                    &tx.recipient,
+                    &OrderedHash {
+                        index: num_txs_recipient,
+                        hash: tx_hash,
+                    },
+                );
             }
             ExtTxData::Inherent(_) => {}
         }
@@ -559,9 +578,9 @@ impl HistoryStore {
         txn.remove_item(
             &self.tx_hash_db,
             &tx_hash,
-            &LeafData {
-                hash: leaf_hash.clone(),
+            &OrderedHash {
                 index: leaf_index,
+                hash: leaf_hash.clone(),
             },
         );
 
@@ -569,8 +588,62 @@ impl HistoryStore {
 
         match &ext_tx.data {
             ExtTxData::Basic(tx) => {
-                txn.remove_item(&self.address_db, &tx.sender, &tx_hash);
-                txn.remove_item(&self.address_db, &tx.recipient, &tx_hash);
+                let mut cursor = txn.cursor(&self.address_db);
+
+                // Seek to the last transaction hash at the sender's address and
+                // go back until you find the correct one.
+                let mut sender_value = None;
+
+                if cursor
+                    .seek_key::<Address, OrderedHash>(&tx.sender)
+                    .is_some()
+                {
+                    let mut duplicate = cursor.last_duplicate::<OrderedHash>();
+
+                    while let Some(v) = duplicate {
+                        if &v.hash == &tx_hash {
+                            sender_value = Some(v);
+                            break;
+                        }
+
+                        duplicate = cursor
+                            .prev_duplicate::<Address, OrderedHash>()
+                            .map(|(_, v)| v);
+                    }
+                }
+
+                // Seek to the last transaction hash at the recipient's address and
+                // go back until you find the correct one.
+                let mut recipient_value = None;
+
+                if cursor
+                    .seek_key::<Address, OrderedHash>(&tx.recipient)
+                    .is_some()
+                {
+                    let mut duplicate = cursor.last_duplicate::<OrderedHash>();
+
+                    while let Some(v) = duplicate {
+                        if &v.hash == &tx_hash {
+                            recipient_value = Some(v);
+                            break;
+                        }
+
+                        duplicate = cursor
+                            .prev_duplicate::<Address, OrderedHash>()
+                            .map(|(_, v)| v);
+                    }
+                }
+
+                // Now remove both values. This weird construction is because of Rust's borrowing rules.
+                drop(cursor);
+
+                if let Some(v) = sender_value {
+                    txn.remove_item(&self.address_db, &tx.sender, &v);
+                }
+
+                if let Some(v) = recipient_value {
+                    txn.remove_item(&self.address_db, &tx.recipient, &v);
+                }
             }
             ExtTxData::Inherent(_) => {}
         }
@@ -582,7 +655,7 @@ impl HistoryStore {
         &self,
         tx_hash: &Blake2bHash,
         txn_option: Option<&Transaction>,
-    ) -> Vec<LeafData> {
+    ) -> Vec<OrderedHash> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -596,16 +669,14 @@ impl HistoryStore {
 
         // Seek to the first leaf hash at the given transaction hash.
         let mut cursor = txn.cursor(&self.tx_hash_db);
-        let leaf_hash = match cursor.seek_key::<Blake2bHash, LeafData>(tx_hash) {
+        match cursor.seek_key::<Blake2bHash, OrderedHash>(tx_hash) {
+            Some(leaf_hash) => leaf_hashes.push(leaf_hash),
             None => return leaf_hashes,
-            Some(v) => v,
         };
-
-        leaf_hashes.push(leaf_hash);
 
         loop {
             // Get next leaf hash.
-            match cursor.next_duplicate::<Blake2bHash, LeafData>() {
+            match cursor.next_duplicate::<Blake2bHash, OrderedHash>() {
                 Some((_, leaf_hash)) => leaf_hashes.push(leaf_hash),
                 None => break,
             };
@@ -633,12 +704,10 @@ impl HistoryStore {
 
         // Seek to the first leaf hash at the given block number.
         let mut cursor = txn.cursor(&self.block_db);
-        let leaf_hash = match cursor.seek_key::<u32, Blake2bHash>(&block_number) {
+        match cursor.seek_key::<u32, Blake2bHash>(&block_number) {
+            Some(leaf_hash) => leaf_hashes.push(leaf_hash),
             None => return leaf_hashes,
-            Some(v) => v,
         };
-
-        leaf_hashes.push(leaf_hash);
 
         loop {
             // Get next leaf hash.
@@ -652,12 +721,18 @@ impl HistoryStore {
     }
 
     /// Returns a vector containing all transaction (no inherents) hashes corresponding to the given
-    /// address.
+    /// address. It fetches the transactions from most recent to least recent up to the maximum
+    /// number given.
     pub fn get_tx_hashes_by_address(
         &self,
         address: &Address,
+        max: u16,
         txn_option: Option<&Transaction>,
     ) -> Vec<Blake2bHash> {
+        if max == 0 {
+            return vec![];
+        }
+
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -671,21 +746,55 @@ impl HistoryStore {
 
         // Seek to the first transaction hash at the given address.
         let mut cursor = txn.cursor(&self.address_db);
-        let tx_hash = match cursor.seek_key::<Address, Blake2bHash>(address) {
+
+        cursor.seek_key::<Address, OrderedHash>(address);
+
+        // Then go to the last transaction hash at the given address.
+        match cursor.last_duplicate::<OrderedHash>() {
+            Some(v) => tx_hashes.push(v.hash),
             None => return tx_hashes,
-            Some(v) => v,
         };
 
-        tx_hashes.push(tx_hash);
-
-        loop {
-            // Get next transaction hash.
-            match cursor.next_duplicate::<Address, Blake2bHash>() {
-                Some((_, tx_hash)) => tx_hashes.push(tx_hash),
+        while tx_hashes.len() < max as usize {
+            // Get previous transaction hash.
+            match cursor.prev_duplicate::<Address, OrderedHash>() {
+                Some((_, v)) => tx_hashes.push(v.hash),
                 None => break,
             };
         }
 
         tx_hashes
+    }
+
+    /// Returns the number of transactions (no inherents) associated to the given address.
+    pub fn get_num_txs_by_address(
+        &self,
+        address: &Address,
+        txn_option: Option<&Transaction>,
+    ) -> u32 {
+        let read_txn: ReadTransaction;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = ReadTransaction::new(&self.env);
+                &read_txn
+            }
+        };
+
+        // Seek the first key with the given address.
+        let mut cursor = txn.cursor(&self.address_db);
+
+        if cursor.seek_key::<Address, OrderedHash>(address).is_none() {
+            return 0;
+        }
+
+        // Seek to the last transaction hash at the given address and get its index.
+        let num = match cursor.last_duplicate::<OrderedHash>() {
+            None => 0,
+            Some(v) => v.index,
+        };
+
+        // The index is zero-based, so we need to increment it.
+        num + 1
     }
 }
