@@ -97,7 +97,9 @@ impl Blockchain {
 
         // If we have transactions with this same hash then we must be sure that they are outside
         // the validity window.
-        let max_block_number = self.block_number() - policy::TRANSACTION_VALIDITY_WINDOW;
+        let max_block_number = self
+            .block_number()
+            .saturating_sub(policy::TRANSACTION_VALIDITY_WINDOW);
 
         for ext_tx in ext_hash_vec {
             // If the transaction is inside the validity window, return true.
