@@ -328,6 +328,52 @@ impl HistoryStore {
         tree.num_leaves()
     }
 
+    /// Returns a vector containing all transaction (no inherents) hashes corresponding to the given
+    /// address. It fetches the transactions from most recent to least recent up to the maximum
+    /// number given.
+    pub fn get_tx_hashes_by_address(
+        &self,
+        address: &Address,
+        max: u16,
+        txn_option: Option<&Transaction>,
+    ) -> Vec<Blake2bHash> {
+        if max == 0 {
+            return vec![];
+        }
+
+        let read_txn: ReadTransaction;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = ReadTransaction::new(&self.env);
+                &read_txn
+            }
+        };
+
+        let mut tx_hashes = vec![];
+
+        // Seek to the first transaction hash at the given address.
+        let mut cursor = txn.cursor(&self.address_db);
+
+        cursor.seek_key::<Address, OrderedHash>(address);
+
+        // Then go to the last transaction hash at the given address.
+        match cursor.last_duplicate::<OrderedHash>() {
+            Some(v) => tx_hashes.push(v.hash),
+            None => return tx_hashes,
+        };
+
+        while tx_hashes.len() < max as usize {
+            // Get previous transaction hash.
+            match cursor.prev_duplicate::<Address, OrderedHash>() {
+                Some((_, v)) => tx_hashes.push(v.hash),
+                None => break,
+            };
+        }
+
+        tx_hashes
+    }
+
     /// Returns a proof for transactions with the given hashes. The proof also includes the extended
     /// transactions.
     pub fn prove(
@@ -530,24 +576,25 @@ impl HistoryStore {
 
         match &ext_tx.data {
             ExtTxData::Basic(tx) => {
-                let num_txs_sender = self.get_num_txs_by_address(&tx.sender, Some(txn));
+                let index_tx_sender = self.get_last_tx_index_for_address(&tx.sender, Some(txn)) + 1;
 
                 txn.put(
                     &self.address_db,
                     &tx.sender,
                     &OrderedHash {
-                        index: num_txs_sender,
+                        index: index_tx_sender,
                         hash: tx_hash.clone(),
                     },
                 );
 
-                let num_txs_recipient = self.get_num_txs_by_address(&tx.recipient, Some(txn));
+                let index_tx_recipient =
+                    self.get_last_tx_index_for_address(&tx.recipient, Some(txn)) + 1;
 
                 txn.put(
                     &self.address_db,
                     &tx.recipient,
                     &OrderedHash {
-                        index: num_txs_recipient,
+                        index: index_tx_recipient,
                         hash: tx_hash,
                     },
                 );
@@ -720,54 +767,8 @@ impl HistoryStore {
         leaf_hashes
     }
 
-    /// Returns a vector containing all transaction (no inherents) hashes corresponding to the given
-    /// address. It fetches the transactions from most recent to least recent up to the maximum
-    /// number given.
-    pub fn get_tx_hashes_by_address(
-        &self,
-        address: &Address,
-        max: u16,
-        txn_option: Option<&Transaction>,
-    ) -> Vec<Blake2bHash> {
-        if max == 0 {
-            return vec![];
-        }
-
-        let read_txn: ReadTransaction;
-        let txn = match txn_option {
-            Some(txn) => txn,
-            None => {
-                read_txn = ReadTransaction::new(&self.env);
-                &read_txn
-            }
-        };
-
-        let mut tx_hashes = vec![];
-
-        // Seek to the first transaction hash at the given address.
-        let mut cursor = txn.cursor(&self.address_db);
-
-        cursor.seek_key::<Address, OrderedHash>(address);
-
-        // Then go to the last transaction hash at the given address.
-        match cursor.last_duplicate::<OrderedHash>() {
-            Some(v) => tx_hashes.push(v.hash),
-            None => return tx_hashes,
-        };
-
-        while tx_hashes.len() < max as usize {
-            // Get previous transaction hash.
-            match cursor.prev_duplicate::<Address, OrderedHash>() {
-                Some((_, v)) => tx_hashes.push(v.hash),
-                None => break,
-            };
-        }
-
-        tx_hashes
-    }
-
-    /// Returns the number of transactions (no inherents) associated to the given address.
-    pub fn get_num_txs_by_address(
+    /// Returns the index of the last transaction (no inherent) associated to the given address.
+    fn get_last_tx_index_for_address(
         &self,
         address: &Address,
         txn_option: Option<&Transaction>,
@@ -789,12 +790,9 @@ impl HistoryStore {
         }
 
         // Seek to the last transaction hash at the given address and get its index.
-        let num = match cursor.last_duplicate::<OrderedHash>() {
+        match cursor.last_duplicate::<OrderedHash>() {
             None => 0,
             Some(v) => v.index,
-        };
-
-        // The index is zero-based, so we need to increment it.
-        num + 1
+        }
     }
 }
