@@ -12,11 +12,13 @@ use nimiq_database::{
 };
 use nimiq_hash::Blake2bHash;
 
+use crate::history_store::history_tree_hash::HistoryTreeHash;
 use crate::history_store::mmr_store::MMRStore;
-use crate::history_store::{
-    ExtendedTransaction, HistoryTreeChunk, HistoryTreeHash, HistoryTreeProof,
-};
+use crate::history_store::ordered_hash::OrderedHash;
+use crate::history_store::{ExtendedTransaction, HistoryTreeChunk, HistoryTreeProof};
+use crate::ExtTxData;
 use nimiq_database::cursor::ReadCursor;
+use nimiq_keys::Address;
 
 /// A struct that contains databases to store history trees (which are Merkle Mountain Ranges
 /// constructed from the list of extended transactions in an epoch) and extended transactions (which
@@ -31,37 +33,36 @@ pub struct HistoryStore {
     // A database of all extended transactions indexed by their hash (= leaf hash in the history
     // tree).
     ext_tx_db: Database,
-    // A database of all leaf hashes indexed by the hash of the transaction. This way we can start
-    // with a transaction hash and find it in the MMR.
-    leaf_hash_db: Database,
-    // A database of all leaf indexes indexed by the hash of the transaction. This way we can start
-    // with a transaction hash and find it in the MMR.
-    leaf_idx_db: Database,
+    // A database of all leaf hashes and indexes indexed by the hash of the transaction. This way we
+    // can start with a transaction hash and find it in the MMR.
+    tx_hash_db: Database,
     // A database of all leaf hashes indexed by the block number where the transaction appears.
     block_db: Database,
+    // A database of all transaction (not inherents) hashes indexed by their sender address.
+    address_db: Database,
 }
 
 impl HistoryStore {
     const HIST_TREE_DB_NAME: &'static str = "HistoryTrees";
     const EXT_TX_DB_NAME: &'static str = "ExtendedTransactions";
-    const LEAF_HASH_DB_NAME: &'static str = "LeafHashesByHash";
-    const LEAF_IDX_DB_NAME: &'static str = "LeafIndexesByHash";
+    const TX_HASH_DB_NAME: &'static str = "LeafHashesByTxHash";
     const BLOCK_DB_NAME: &'static str = "LeafHashesByBlock";
+    const ADDRESS_DB_NAME: &'static str = "TxHashesByAddress";
 
     /// Creates a new HistoryStore.
     pub fn new(env: Environment) -> Self {
         let hist_tree_db = env.open_database(Self::HIST_TREE_DB_NAME.to_string());
         let ext_tx_db = env.open_database(Self::EXT_TX_DB_NAME.to_string());
-        let leaf_hash_db = env.open_database_with_flags(
-            Self::LEAF_HASH_DB_NAME.to_string(),
-            DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_FIXED_SIZE_VALUES,
-        );
-        let leaf_idx_db = env.open_database_with_flags(
-            Self::LEAF_IDX_DB_NAME.to_string(),
+        let tx_hash_db = env.open_database_with_flags(
+            Self::TX_HASH_DB_NAME.to_string(),
             DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_FIXED_SIZE_VALUES,
         );
         let block_db = env.open_database_with_flags(
             Self::BLOCK_DB_NAME.to_string(),
+            DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_FIXED_SIZE_VALUES,
+        );
+        let address_db = env.open_database_with_flags(
+            Self::ADDRESS_DB_NAME.to_string(),
             DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_FIXED_SIZE_VALUES,
         );
 
@@ -69,9 +70,9 @@ impl HistoryStore {
             env,
             hist_tree_db,
             ext_tx_db,
-            leaf_hash_db,
-            leaf_idx_db,
+            tx_hash_db,
             block_db,
+            address_db,
         }
     }
 
@@ -234,14 +235,14 @@ impl HistoryStore {
             }
         };
 
-        // Get leaf hash.
-        let leaf_hashes = self.get_leaf_hash(hash, Some(txn));
+        // Get leaf hash(es).
+        let leaves = self.get_leaves_by_tx_hash(hash, Some(txn));
 
         // Get extended transactions.
         let mut ext_txs = vec![];
 
-        for hash in leaf_hashes {
-            ext_txs.push(self.get_extended_tx(&hash, Some(txn)).unwrap());
+        for leaf in leaves {
+            ext_txs.push(self.get_extended_tx(&leaf.hash, Some(txn)).unwrap());
         }
 
         ext_txs
@@ -254,7 +255,7 @@ impl HistoryStore {
         txn_option: Option<&Transaction>,
     ) -> Vec<ExtendedTransaction> {
         // Get the leaf hashes at this height.
-        let leaf_hashes = self.get_leaf_hash_by_block(block_number, txn_option);
+        let leaf_hashes = self.get_leaves_by_block(block_number, txn_option);
 
         // Get each extended transaction.
         let mut ext_txs = vec![];
@@ -327,6 +328,52 @@ impl HistoryStore {
         tree.num_leaves()
     }
 
+    /// Returns a vector containing all transaction (no inherents) hashes corresponding to the given
+    /// address. It fetches the transactions from most recent to least recent up to the maximum
+    /// number given.
+    pub fn get_tx_hashes_by_address(
+        &self,
+        address: &Address,
+        max: u16,
+        txn_option: Option<&Transaction>,
+    ) -> Vec<Blake2bHash> {
+        if max == 0 {
+            return vec![];
+        }
+
+        let read_txn: ReadTransaction;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = ReadTransaction::new(&self.env);
+                &read_txn
+            }
+        };
+
+        let mut tx_hashes = vec![];
+
+        // Seek to the first transaction hash at the given address.
+        let mut cursor = txn.cursor(&self.address_db);
+
+        cursor.seek_key::<Address, OrderedHash>(address);
+
+        // Then go to the last transaction hash at the given address.
+        match cursor.last_duplicate::<OrderedHash>() {
+            Some(v) => tx_hashes.push(v.hash),
+            None => return tx_hashes,
+        };
+
+        while tx_hashes.len() < max as usize {
+            // Get previous transaction hash.
+            match cursor.prev_duplicate::<Address, OrderedHash>() {
+                Some((_, v)) => tx_hashes.push(v.hash),
+                None => break,
+            };
+        }
+
+        tx_hashes
+    }
+
     /// Returns a proof for transactions with the given hashes. The proof also includes the extended
     /// transactions.
     pub fn prove(
@@ -340,9 +387,9 @@ impl HistoryStore {
 
         for hash in hashes {
             let mut indices = self
-                .get_leaf_index(hash, txn_option)
+                .get_leaves_by_tx_hash(hash, txn_option)
                 .iter()
-                .map(|i| *i as usize)
+                .map(|i| i.index as usize)
                 .collect();
 
             positions.append(&mut indices)
@@ -504,7 +551,7 @@ impl HistoryStore {
         txn.get(&self.ext_tx_db, leaf_hash)
     }
 
-    /// Inserts a extended transaction into the extended transaction database.
+    /// Inserts a extended transaction into the History Store's transaction databases.
     fn put_extended_tx(
         &self,
         txn: &mut WriteTransaction,
@@ -516,14 +563,47 @@ impl HistoryStore {
 
         let tx_hash = ext_tx.tx_hash();
 
-        let block_number = ext_tx.block_number;
+        txn.put(
+            &self.tx_hash_db,
+            &tx_hash,
+            &OrderedHash {
+                index: leaf_index,
+                hash: leaf_hash.clone(),
+            },
+        );
 
-        txn.put(&self.leaf_hash_db, &tx_hash, leaf_hash);
-        txn.put(&self.leaf_idx_db, &tx_hash, &leaf_index);
-        txn.put(&self.block_db, &block_number, leaf_hash);
+        txn.put(&self.block_db, &ext_tx.block_number, leaf_hash);
+
+        match &ext_tx.data {
+            ExtTxData::Basic(tx) => {
+                let index_tx_sender = self.get_last_tx_index_for_address(&tx.sender, Some(txn)) + 1;
+
+                txn.put(
+                    &self.address_db,
+                    &tx.sender,
+                    &OrderedHash {
+                        index: index_tx_sender,
+                        hash: tx_hash.clone(),
+                    },
+                );
+
+                let index_tx_recipient =
+                    self.get_last_tx_index_for_address(&tx.recipient, Some(txn)) + 1;
+
+                txn.put(
+                    &self.address_db,
+                    &tx.recipient,
+                    &OrderedHash {
+                        index: index_tx_recipient,
+                        hash: tx_hash,
+                    },
+                );
+            }
+            ExtTxData::Inherent(_) => {}
+        }
     }
 
-    /// Removes a extended transaction from the extended transaction database.
+    /// Removes a extended transaction from the History Store's transaction databases.
     fn remove_extended_tx(
         &self,
         txn: &mut WriteTransaction,
@@ -540,21 +620,89 @@ impl HistoryStore {
 
         let tx_hash = ext_tx.tx_hash();
 
-        let block_number = ext_tx.block_number;
-
-        txn.remove_item(&self.leaf_hash_db, &tx_hash, leaf_hash);
-        txn.remove_item(&self.leaf_idx_db, &tx_hash, &leaf_index);
-        txn.remove_item(&self.block_db, &block_number, leaf_hash);
-
         txn.remove(&self.ext_tx_db, leaf_hash);
+
+        txn.remove_item(
+            &self.tx_hash_db,
+            &tx_hash,
+            &OrderedHash {
+                index: leaf_index,
+                hash: leaf_hash.clone(),
+            },
+        );
+
+        txn.remove_item(&self.block_db, &ext_tx.block_number, leaf_hash);
+
+        match &ext_tx.data {
+            ExtTxData::Basic(tx) => {
+                let mut cursor = txn.cursor(&self.address_db);
+
+                // Seek to the last transaction hash at the sender's address and
+                // go back until you find the correct one.
+                let mut sender_value = None;
+
+                if cursor
+                    .seek_key::<Address, OrderedHash>(&tx.sender)
+                    .is_some()
+                {
+                    let mut duplicate = cursor.last_duplicate::<OrderedHash>();
+
+                    while let Some(v) = duplicate {
+                        if v.hash == tx_hash {
+                            sender_value = Some(v);
+                            break;
+                        }
+
+                        duplicate = cursor
+                            .prev_duplicate::<Address, OrderedHash>()
+                            .map(|(_, v)| v);
+                    }
+                }
+
+                // Seek to the last transaction hash at the recipient's address and
+                // go back until you find the correct one.
+                let mut recipient_value = None;
+
+                if cursor
+                    .seek_key::<Address, OrderedHash>(&tx.recipient)
+                    .is_some()
+                {
+                    let mut duplicate = cursor.last_duplicate::<OrderedHash>();
+
+                    while let Some(v) = duplicate {
+                        if v.hash == tx_hash {
+                            recipient_value = Some(v);
+                            break;
+                        }
+
+                        duplicate = cursor
+                            .prev_duplicate::<Address, OrderedHash>()
+                            .map(|(_, v)| v);
+                    }
+                }
+
+                // Now remove both values. This weird construction is because of Rust's borrowing rules.
+                drop(cursor);
+
+                if let Some(v) = sender_value {
+                    txn.remove_item(&self.address_db, &tx.sender, &v);
+                }
+
+                if let Some(v) = recipient_value {
+                    txn.remove_item(&self.address_db, &tx.recipient, &v);
+                }
+            }
+            ExtTxData::Inherent(_) => {}
+        }
     }
 
-    /// Returns a vector containing all leaf hashes corresponding to the given transaction hash.
-    fn get_leaf_hash(
+    /// Returns a vector containing all leaf hashes and indexes corresponding to the given
+    /// transaction hash.
+    fn get_leaves_by_tx_hash(
         &self,
         tx_hash: &Blake2bHash,
         txn_option: Option<&Transaction>,
-    ) -> Vec<Blake2bHash> {
+    ) -> Vec<OrderedHash> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -567,60 +715,22 @@ impl HistoryStore {
         let mut leaf_hashes = vec![];
 
         // Seek to the first leaf hash at the given transaction hash.
-        let mut cursor = txn.cursor(&self.leaf_hash_db);
-        let leaf_hash = match cursor.seek_key::<Blake2bHash, Blake2bHash>(tx_hash) {
+        let mut cursor = txn.cursor(&self.tx_hash_db);
+        match cursor.seek_key::<Blake2bHash, OrderedHash>(tx_hash) {
+            Some(leaf_hash) => leaf_hashes.push(leaf_hash),
             None => return leaf_hashes,
-            Some(v) => v,
         };
 
-        leaf_hashes.push(leaf_hash);
-
-        loop {
-            // Get next leaf hash.
-            match cursor.next_duplicate::<Blake2bHash, Blake2bHash>() {
-                Some((_, leaf_hash)) => leaf_hashes.push(leaf_hash),
-                None => break,
-            };
+        // Iterate over leaf hashes for this transaction hash.
+        while let Some((_, leaf_hash)) = cursor.next_duplicate::<Blake2bHash, OrderedHash>() {
+            leaf_hashes.push(leaf_hash);
         }
 
         leaf_hashes
     }
 
-    /// Returns a vector containing all leaf indexes corresponding to the given transaction hash.
-    fn get_leaf_index(&self, tx_hash: &Blake2bHash, txn_option: Option<&Transaction>) -> Vec<u32> {
-        let read_txn: ReadTransaction;
-        let txn = match txn_option {
-            Some(txn) => txn,
-            None => {
-                read_txn = ReadTransaction::new(&self.env);
-                &read_txn
-            }
-        };
-
-        let mut leaf_indices = vec![];
-
-        // Seek to the first leaf index at the given transaction hash.
-        let mut cursor = txn.cursor(&self.leaf_idx_db);
-        let leaf_index = match cursor.seek_key::<Blake2bHash, u32>(tx_hash) {
-            None => return leaf_indices,
-            Some(v) => v,
-        };
-
-        leaf_indices.push(leaf_index);
-
-        loop {
-            // Get next leaf index.
-            match cursor.next_duplicate::<Blake2bHash, u32>() {
-                Some((_, leaf_index)) => leaf_indices.push(leaf_index),
-                None => break,
-            };
-        }
-
-        leaf_indices
-    }
-
     /// Returns a vector containing all leaf hashes corresponding to the given block number.
-    fn get_leaf_hash_by_block(
+    fn get_leaves_by_block(
         &self,
         block_number: u32,
         txn_option: Option<&Transaction>,
@@ -638,21 +748,45 @@ impl HistoryStore {
 
         // Seek to the first leaf hash at the given block number.
         let mut cursor = txn.cursor(&self.block_db);
-        let leaf_hash = match cursor.seek_key::<u32, Blake2bHash>(&block_number) {
+        match cursor.seek_key::<u32, Blake2bHash>(&block_number) {
+            Some(leaf_hash) => leaf_hashes.push(leaf_hash),
             None => return leaf_hashes,
-            Some(v) => v,
         };
 
-        leaf_hashes.push(leaf_hash);
-
-        loop {
-            // Get next leaf hash.
-            match cursor.next_duplicate::<u32, Blake2bHash>() {
-                Some((_, leaf_hash)) => leaf_hashes.push(leaf_hash),
-                None => break,
-            };
+        // Iterate over leaf hashes for this block number.
+        while let Some((_, leaf_hash)) = cursor.next_duplicate::<u32, Blake2bHash>() {
+            leaf_hashes.push(leaf_hash);
         }
 
         leaf_hashes
+    }
+
+    /// Returns the index of the last transaction (no inherent) associated to the given address.
+    fn get_last_tx_index_for_address(
+        &self,
+        address: &Address,
+        txn_option: Option<&Transaction>,
+    ) -> u32 {
+        let read_txn: ReadTransaction;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = ReadTransaction::new(&self.env);
+                &read_txn
+            }
+        };
+
+        // Seek the first key with the given address.
+        let mut cursor = txn.cursor(&self.address_db);
+
+        if cursor.seek_key::<Address, OrderedHash>(address).is_none() {
+            return 0;
+        }
+
+        // Seek to the last transaction hash at the given address and get its index.
+        match cursor.last_duplicate::<OrderedHash>() {
+            None => 0,
+            Some(v) => v.index,
+        }
     }
 }

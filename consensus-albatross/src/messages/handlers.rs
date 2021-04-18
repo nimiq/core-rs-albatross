@@ -79,7 +79,9 @@ impl Handle<BatchSetInfo> for RequestBatchSet {
     fn handle(&self, blockchain: &Arc<Blockchain>) -> Option<BatchSetInfo> {
         if let Some(Block::Macro(block)) = blockchain.get_block(&self.hash, true, None) {
             let epoch = policy::epoch_at(block.header.block_number);
-            let history_len = blockchain.get_num_extended_transactions(epoch, None);
+            let history_len = blockchain
+                .history_store
+                .get_num_extended_transactions(epoch, None);
             let response = BatchSetInfo {
                 block,
                 history_len: history_len as u32,
@@ -95,7 +97,7 @@ impl Handle<BatchSetInfo> for RequestBatchSet {
 
 impl Handle<HistoryChunk> for RequestHistoryChunk {
     fn handle(&self, blockchain: &Arc<Blockchain>) -> Option<HistoryChunk> {
-        let chunk = blockchain.get_chunk(
+        let chunk = blockchain.history_store.prove_chunk(
             self.epoch_number,
             CHUNK_SIZE,
             self.chunk_index as usize,

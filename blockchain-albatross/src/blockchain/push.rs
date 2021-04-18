@@ -2,12 +2,11 @@ use parking_lot::RwLockUpgradableReadGuard;
 
 use nimiq_block_albatross::{Block, BlockType, ForkProof};
 use nimiq_database::{ReadTransaction, WriteTransaction};
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::policy;
 
 use crate::blockchain_state::BlockchainState;
 use crate::chain_info::ChainInfo;
-use crate::transaction_cache::TransactionCache;
 use crate::{
     AbstractBlockchain, Blockchain, BlockchainEvent, ChainOrdering, ForkEvent, PushError,
     PushResult,
@@ -191,7 +190,6 @@ impl Blockchain {
 
         if let Err(e) = self.check_and_commit(
             &state,
-            &state.transaction_cache,
             &chain_info.head,
             prev_info.head.next_view_number(),
             &mut txn,
@@ -219,7 +217,6 @@ impl Blockchain {
 
         // Acquire write lock & commit changes.
         let mut state = self.state.write();
-        state.transaction_cache.push_block(&chain_info.head);
 
         let mut is_macro = false;
         if let Block::Macro(ref macro_block) = chain_info.head {
@@ -320,10 +317,9 @@ impl Blockchain {
         let mut ancestor = current;
 
         let mut write_txn = WriteTransaction::new(&self.env);
-        let mut cache_txn;
 
         let state = self.state.upgradable_read();
-        cache_txn = state.transaction_cache.clone();
+
         // TODO: Get rid of the .clone() here.
         current = (state.head_hash.clone(), state.main_chain.clone());
 
@@ -355,8 +351,6 @@ impl Blockchain {
                         prev_info.head.view_number(),
                     )?;
 
-                    cache_txn.revert_block(&current.1.head);
-
                     assert_eq!(
                         prev_info.head.state_root(),
                         &state.accounts.hash(Some(&write_txn)),
@@ -370,32 +364,7 @@ impl Blockchain {
             }
         }
 
-        // Fetch missing blocks for TransactionCache.
-        assert!(cache_txn.is_empty() || cache_txn.head_hash() == ancestor.0);
-
-        let start_hash = if cache_txn.is_empty() {
-            ancestor.1.main_chain_successor.unwrap()
-        } else {
-            cache_txn.tail_hash()
-        };
-
-        let blocks = self.chain_store.get_blocks_backward(
-            &start_hash,
-            cache_txn.missing_blocks(),
-            true,
-            Some(&read_txn),
-        );
-
-        for block in blocks.iter() {
-            cache_txn.prepend_block(block)
-        }
-
-        assert_eq!(
-            cache_txn.missing_blocks(),
-            policy::TRANSACTION_VALIDITY_WINDOW.saturating_sub(ancestor.1.head.block_number() + 1)
-        );
-
-        // Check each fork block against TransactionCache & commit to AccountsTree and SlashRegistry.
+        // Push each fork block.
         let mut prev_view_number = ancestor.1.head.next_view_number();
 
         let mut fork_iter = fork_chain.iter().rev();
@@ -406,7 +375,6 @@ impl Blockchain {
                 Block::Micro(ref micro_block) => {
                     if let Err(e) = self.check_and_commit(
                         &state,
-                        &cache_txn,
                         &fork_block.1.head,
                         prev_view_number,
                         &mut write_txn,
@@ -429,8 +397,6 @@ impl Blockchain {
 
                         return Err(PushError::InvalidFork);
                     }
-
-                    cache_txn.push_block(&fork_block.1.head);
 
                     prev_view_number = fork_block.1.head.next_view_number();
                 }
@@ -483,8 +449,6 @@ impl Blockchain {
         // Commit transaction & update head.
         self.chain_store.set_head(&mut write_txn, &fork_chain[0].0);
 
-        state.transaction_cache = cache_txn;
-
         state.main_chain = fork_chain[0].1.clone();
 
         state.head_hash = fork_chain[0].0.clone();
@@ -516,16 +480,22 @@ impl Blockchain {
     fn check_and_commit(
         &self,
         state: &BlockchainState,
-        transaction_cache: &TransactionCache,
         block: &Block,
         first_view_number: u32,
         txn: &mut WriteTransaction,
     ) -> Result<(), PushError> {
-        // Check transactions against TransactionCache to prevent replay.
-        // This is technically unnecessary for macro blocks, but it doesn't hurt either.
-        if transaction_cache.contains_any(&block) {
-            warn!("Rejecting block - transaction already included");
-            return Err(PushError::DuplicateTransaction);
+        // Check transactions against replay attacks. This is only necessary for micro blocks.
+        if block.is_micro() {
+            let transactions = block.transactions();
+
+            if transactions.is_some() {
+                for transaction in transactions.unwrap().iter() {
+                    if self.contains_tx_in_validity_window(&transaction.hash()) {
+                        warn!("Rejecting block - transaction already included");
+                        return Err(PushError::DuplicateTransaction);
+                    }
+                }
+            }
         }
 
         // Commit block to AccountsTree.

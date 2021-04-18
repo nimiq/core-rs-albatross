@@ -65,6 +65,18 @@ pub trait BlockchainInterface {
 
     async fn get_transaction_receipt(&mut self, hash: Blake2bHash) -> Result<(), Self::Error>;
 
+    async fn get_transaction_hashes_by_address(
+        &mut self,
+        address: Address,
+        max: Option<u16>,
+    ) -> Result<Vec<Blake2bHash>, Self::Error>;
+
+    async fn get_transactions_by_address(
+        &mut self,
+        address: Address,
+        max: Option<u16>,
+    ) -> Result<Vec<Transaction>, Self::Error>;
+
     async fn list_stakes(&mut self) -> Result<Stakes, Self::Error>;
 
     #[stream]
