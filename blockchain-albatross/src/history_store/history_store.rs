@@ -648,7 +648,7 @@ impl HistoryStore {
                     let mut duplicate = cursor.last_duplicate::<OrderedHash>();
 
                     while let Some(v) = duplicate {
-                        if &v.hash == &tx_hash {
+                        if v.hash == tx_hash {
                             sender_value = Some(v);
                             break;
                         }
@@ -670,7 +670,7 @@ impl HistoryStore {
                     let mut duplicate = cursor.last_duplicate::<OrderedHash>();
 
                     while let Some(v) = duplicate {
-                        if &v.hash == &tx_hash {
+                        if v.hash == tx_hash {
                             recipient_value = Some(v);
                             break;
                         }
@@ -721,12 +721,9 @@ impl HistoryStore {
             None => return leaf_hashes,
         };
 
-        loop {
-            // Get next leaf hash.
-            match cursor.next_duplicate::<Blake2bHash, OrderedHash>() {
-                Some((_, leaf_hash)) => leaf_hashes.push(leaf_hash),
-                None => break,
-            };
+        // Iterate over leaf hashes for this transaction hash.
+        while let Some((_, leaf_hash)) = cursor.next_duplicate::<Blake2bHash, OrderedHash>() {
+            leaf_hashes.push(leaf_hash);
         }
 
         leaf_hashes
@@ -756,12 +753,9 @@ impl HistoryStore {
             None => return leaf_hashes,
         };
 
-        loop {
-            // Get next leaf hash.
-            match cursor.next_duplicate::<u32, Blake2bHash>() {
-                Some((_, leaf_hash)) => leaf_hashes.push(leaf_hash),
-                None => break,
-            };
+        // Iterate over leaf hashes for this block number.
+        while let Some((_, leaf_hash)) = cursor.next_duplicate::<u32, Blake2bHash>() {
+            leaf_hashes.push(leaf_hash);
         }
 
         leaf_hashes
