@@ -369,6 +369,9 @@ impl Blockchain {
 
             let real_disabled_slots = staking_contract.previous_disabled_slots();
 
+            let inherents = self.create_macro_block_inherents(&state, &macro_block.header);
+            let real_transactions = self.create_txs_from_inherents(&inherents);
+
             // Get the validators.
             let real_validators = if macro_block.is_election_block() {
                 Some(self.next_validators(&macro_block.header.seed))
@@ -394,6 +397,11 @@ impl Blockchain {
                     warn!("Rejecting block - Validators don't match real validators");
                     return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
                 }
+
+                if real_transactions != body.transactions {
+                    warn!("Rejecting block - Validators don't match real validators");
+                    return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
+                }
             } else {
                 // If we were not given a body, then we construct a body from our values and check
                 // its hash against the block header.
@@ -401,6 +409,7 @@ impl Blockchain {
                     validators: real_validators,
                     lost_reward_set: real_lost_rewards,
                     disabled_set: real_disabled_slots,
+                    transactions: real_transactions,
                 };
 
                 if real_body.hash::<Blake2bHash>() != macro_block.header.body_root {

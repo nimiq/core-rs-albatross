@@ -9,6 +9,7 @@ use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, SerializeContent};
 use nimiq_nano_primitives::pk_tree_construct;
 use nimiq_primitives::policy;
 use nimiq_primitives::slots::Validators;
+use nimiq_transaction::Transaction;
 use nimiq_vrf::VrfSeed;
 
 use crate::signed::{Message, PREFIX_TENDERMINT_PROPOSAL};
@@ -71,6 +72,9 @@ pub struct MacroBody {
     /// proposing macro blocks at the time when this block was produced. It is used later on for
     /// reward distribution.
     pub disabled_set: BitSet,
+    /// Only contains reward transactions.
+    #[beserial(len_type(u16))]
+    pub transactions: Vec<Transaction>,
 }
 
 impl MacroBlock {
@@ -111,6 +115,7 @@ impl MacroBody {
             validators: None,
             lost_reward_set: BitSet::new(),
             disabled_set: BitSet::new(),
+            transactions: vec![],
         }
     }
 }
