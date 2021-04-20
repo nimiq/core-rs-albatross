@@ -53,6 +53,7 @@ impl TransactionProofBuilder {
                     TransactionProofBuilder::Staking(StakingProofBuilder::new(transaction))
                 }
             }
+            AccountType::Reward => unimplemented!(),
         }
     }
 

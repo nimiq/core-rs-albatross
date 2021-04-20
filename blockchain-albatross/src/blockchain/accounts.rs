@@ -1,4 +1,3 @@
-use nimiq_account::Inherent;
 use nimiq_accounts::Accounts;
 use nimiq_block_albatross::{Block, MicroBlock, ViewChanges};
 use nimiq_database::WriteTransaction;
@@ -25,17 +24,7 @@ impl Blockchain {
         match block {
             Block::Macro(ref macro_block) => {
                 // Initialize a vector to store the inherents
-                let mut inherents: Vec<Inherent> = vec![];
-
-                // Every macro block is the end of a batch, so we need to finalize the batch.
-                inherents.append(&mut self.finalize_previous_batch(state, &macro_block.header));
-
-                // If this block is an election block, we also need to finalize the epoch.
-                if macro_block.is_election_block() {
-                    // On election the previous epoch needs to be finalized.
-                    // We can rely on `state` here, since we cannot revert macro blocks.
-                    inherents.push(self.finalize_previous_epoch());
-                }
+                let inherents = self.create_macro_block_inherents(state, &macro_block.header);
 
                 // Commit block to AccountsTree and create the receipts.
                 let receipts = accounts.commit(

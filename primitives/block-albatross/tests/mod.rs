@@ -106,6 +106,7 @@ fn it_can_convert_macro_block_into_slots() {
             validators: Some(validator_slots.clone()),
             lost_reward_set: BitSet::new(),
             disabled_set: BitSet::new(),
+            transactions: vec![],
         }),
     };
 

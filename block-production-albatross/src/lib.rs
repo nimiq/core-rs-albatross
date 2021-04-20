@@ -210,17 +210,11 @@ impl BlockProducer {
         // Get the state.
         let state = self.blockchain.state();
 
-        // Initialize the inherents vector.
-        let mut inherents: Vec<Inherent> = vec![];
+        let inherents: Vec<Inherent> = self
+            .blockchain
+            .create_macro_block_inherents(&state, &header);
 
-        // All macro blocks are the end of a batch, so finalize the batch.
-        inherents.append(&mut self.blockchain.finalize_previous_batch(&state, &header));
-
-        // If this is an election macro block, then it also is the end of an epoch. So finalize the
-        // epoch.
-        if policy::is_election_block_at(block_number) {
-            inherents.push(self.blockchain.finalize_previous_epoch());
-        }
+        let transactions = self.blockchain.create_txs_from_inherents(&inherents);
 
         // Update the state and add the state root to the header.
         header.state_root = state
@@ -264,6 +258,7 @@ impl BlockProducer {
             validators,
             lost_reward_set,
             disabled_set,
+            transactions,
         };
 
         // Add the root of the body to the header.
