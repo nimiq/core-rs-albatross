@@ -21,7 +21,7 @@ use blockchain_albatross::Blockchain;
 use genesis::NetworkId;
 use macros::upgrade_weak;
 use network_interface::{
-    network::{PubsubId, Topic},
+    network::{MsgAcceptance, PubsubId, Topic},
     prelude::{Network as NetworkInterface, NetworkEvent as NetworkEventI, Peer as PeerInterface},
 };
 use utils::mutable_once::MutableOnce;
@@ -43,11 +43,11 @@ use crate::peer_scorer::PeerScorer;
 use crate::Peer;
 
 #[derive(Debug)]
-pub struct AlbatrossPubsubId<P> {
+pub struct AlbatrossId<P> {
     propagation_source: P,
 }
 
-impl PubsubId<Arc<PeerAddress>> for AlbatrossPubsubId<Arc<PeerAddress>> {
+impl PubsubId<Arc<PeerAddress>> for AlbatrossId<Arc<PeerAddress>> {
     fn propagation_source(&self) -> Arc<PeerAddress> {
         self.propagation_source.clone()
     }
@@ -452,7 +452,7 @@ impl NetworkInterface for Network {
     type PeerType = PeerChannel;
     type AddressType = String;
     type Error = NetworkError;
-    type PubsubId = AlbatrossPubsubId<Arc<PeerAddress>>;
+    type PubsubId = AlbatrossId<Arc<PeerAddress>>;
 
     fn get_peer_updates(
         &self,
@@ -504,7 +504,11 @@ impl NetworkInterface for Network {
         unimplemented!()
     }
 
-    async fn validate_message(&self, _id: Self::PubsubId) -> Result<bool, Self::Error> {
+    async fn validate_message(
+        &self,
+        _id: Self::PubsubId,
+        _acceptance: MsgAcceptance,
+    ) -> Result<bool, Self::Error> {
         unimplemented!()
     }
 

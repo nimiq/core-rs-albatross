@@ -48,6 +48,15 @@ impl<P> Clone for NetworkEvent<P> {
     }
 }
 
+// It seems we can't use type aliases on enums yet:
+// https://rust-lang.github.io/rfcs/2338-type-alias-enum-variants.html
+#[derive(Clone, Debug)]
+pub enum MsgAcceptance {
+    Accept,
+    Reject,
+    Ignore,
+}
+
 pub trait PubsubId<PeerId>: Send + Sync {
     fn propagation_source(&self) -> PeerId;
 }
@@ -97,7 +106,11 @@ pub trait Network: Send + Sync + 'static {
     where
         T: Topic + Sync;
 
-    async fn validate_message(&self, id: Self::PubsubId) -> Result<bool, Self::Error>;
+    async fn validate_message(
+        &self,
+        id: Self::PubsubId,
+        acceptance: MsgAcceptance,
+    ) -> Result<bool, Self::Error>;
 
     async fn dht_get<K, V>(&self, k: &K) -> Result<Option<V>, Self::Error>
     where
