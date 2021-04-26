@@ -14,6 +14,7 @@ use blockchain_albatross::{AbstractBlockchain, Blockchain};
 use bls::{KeyPair, PublicKey};
 use database::WriteTransaction;
 use hash::{Blake2bHash, Hash};
+use nimiq_network_interface::network::MsgAcceptance;
 use nimiq_primitives::slots::Validators;
 use nimiq_validator_network::ValidatorNetwork;
 use primitives::policy::{TENDERMINT_TIMEOUT_DELTA, TENDERMINT_TIMEOUT_INIT};
@@ -257,8 +258,17 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
         .is_err()
         {
             debug!("Tendermint - await_proposal: Invalid block header");
+
+            // Reject the message so the network won't relay it to other peers.
+            self.network
+                .validate_message(id, MsgAcceptance::Reject)
+                .await
+                .unwrap();
+
             return Ok(ProposalResult::Timeout);
         }
+
+        let mut acceptance = MsgAcceptance::Accept;
 
         // The block is necessary to drop the lock before awaiting the validate_message(id) call later on.
         {
@@ -276,42 +286,51 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
             });
 
             // Update our blockchain state using the received proposal. If we can't update the state, we
-            // return a proposal timeout right here.
+            // return a proposal timeout.
             if self
                 .blockchain
                 .commit_accounts(&state, &block, 0, &mut txn) // view_number?
                 .is_err()
             {
                 debug!("Tendermint - await_proposal: Can't update state");
-                return Ok(ProposalResult::Timeout);
-            }
+                acceptance = MsgAcceptance::Reject;
+            } else {
+                // Check the validity of the block against our state. If it is invalid, we return a proposal
+                // timeout. This also returns the block body that matches the block header
+                // (assuming that the block is valid).
+                let block_state = self
+                    .blockchain
+                    .verify_block_state(&state, &block, Some(&txn));
 
-            // Check the validity of the block against our state. If it is invalid, we return a proposal
-            // timeout right here. This also returns the block body that matches the block header
-            // (assuming that the block is valid).
-            let body = match self
-                .blockchain
-                .verify_block_state(&state, &block, Some(&txn))
-            {
-                Ok(v) => v,
-                Err(err) => {
+                if let Ok(body) = block_state {
+                    // Cache the body that we calculated.
+                    self.cache_body = body;
+                } else if let Err(err) = block_state {
                     debug!(
                         "Tendermint - await_proposal: Invalid block state: {:?}",
                         err
                     );
-                    return Ok(ProposalResult::Timeout);
+                    acceptance = MsgAcceptance::Reject;
                 }
-            };
-
-            // Cache the body that we calculated.
-            self.cache_body = body;
+            }
 
             // Abort the transaction so that we don't commit the changes we made to the blockchain state.
             txn.abort();
         }
 
-        // The message was validated sucessfully so the network may now relay it to other peers.
-        self.network.validate_message(id).await.unwrap();
+        // If the message was validated sucessfully, the network may now relay it to other peers.
+        // Otherwise, reject or ignore the message.
+        self.network
+            .validate_message(id, acceptance.clone())
+            .await
+            .unwrap();
+
+        match acceptance {
+            MsgAcceptance::Reject => {
+                return Ok(ProposalResult::Timeout);
+            }
+            _ => (),
+        }
 
         // Return the proposal.
         Ok(ProposalResult::Proposal(header, valid_round))
