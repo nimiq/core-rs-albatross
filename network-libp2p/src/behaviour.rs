@@ -18,7 +18,7 @@ use nimiq_utils::time::OffsetTime;
 use crate::{
     connection_pool::{
         behaviour::{ConnectionPoolBehaviour, ConnectionPoolEvent},
-        handler::HandlerError as PeersError,
+        handler::HandlerError as ConnectionPoolError,
     },
     discovery::{
         behaviour::{DiscoveryBehaviour, DiscoveryEvent},
@@ -32,14 +32,13 @@ use crate::{
 pub type NimiqNetworkBehaviourError = EitherError<
     EitherError<
         EitherError<
-            EitherError<EitherError<DiscoveryError, PeersError>, MessageError>,
+            EitherError<EitherError<DiscoveryError, ConnectionPoolError>, MessageError>,
             std::io::Error,
         >,
         GossipsubHandlerError,
     >,
     ReadOneError,
 >;
-// EitherError<EitherError<EitherError<EitherError<EitherError<DiscoveryError, MessageError>, std::io::Error>, GossipsubHandlerError>, ReadOneError>, PeersError>;
 
 #[derive(Debug)]
 pub enum NimiqEvent {
@@ -125,8 +124,6 @@ impl NimiqBehaviour {
 
         let message = MessageBehaviour::new(config.message);
 
-        //let limit = LimitBehaviour::new(config.limit);
-
         let store = MemoryStore::new(peer_id);
         let kademlia = Kademlia::with_config(peer_id, store, config.kademlia);
         let gossipsub = Gossipsub::new(
@@ -144,7 +141,6 @@ impl NimiqBehaviour {
             discovery,
             message,
             peers,
-            //limit,
             kademlia,
             gossipsub,
             identify,
@@ -195,31 +191,9 @@ impl NetworkBehaviourEventProcess<DiscoveryEvent> for NimiqBehaviour {
 impl NetworkBehaviourEventProcess<NetworkEvent<Peer>> for NimiqBehaviour {
     fn inject_event(&mut self, event: NetworkEvent<Peer>) {
         log::trace!("NimiqBehaviour::inject_event: {:?}", event);
-
-        /*match event {
-            NetworkEvent::PeerJoined(peer) => {
-                /*self.limit.peers
-                    .insert(peer.id.clone(), Arc::clone(&peer))
-                    .map(|p| panic!("Duplicate peer {}", p.id));*/
-
-                self.events.push_back(NetworkEvent::PeerJoined(peer));
-            },
-            NetworkEvent::PeerLeft(peer) => {
-                self.events.push_back(NetworkEvent::PeerLeft(peer));
-            },
-        }
-
-        self.wake();*/
-
         self.emit_event(event);
     }
 }
-
-/*impl NetworkBehaviourEventProcess<LimitEvent> for NimiqBehaviour {
-    fn inject_event(&mut self, event: LimitEvent) {
-        log::trace!("NimiqBehaviour::inject_event: {:?}", event);
-    }
-}*/
 
 impl NetworkBehaviourEventProcess<KademliaEvent> for NimiqBehaviour {
     fn inject_event(&mut self, event: KademliaEvent) {

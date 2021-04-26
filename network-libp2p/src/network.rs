@@ -48,8 +48,8 @@ use nimiq_utils::time::OffsetTime;
 
 use crate::{
     behaviour::{NimiqBehaviour, NimiqEvent, NimiqNetworkBehaviourError},
+    connection_pool::behaviour::ConnectionPoolEvent,
     discovery::{behaviour::DiscoveryConfig, handler::HandlerInEvent, peer_contacts::PeerContact},
-    limit::behaviour::LimitConfig,
     message::behaviour::MessageConfig,
     message::peer::Peer,
 };
@@ -66,7 +66,6 @@ pub struct Config {
 
     pub discovery: DiscoveryConfig,
     pub message: MessageConfig,
-    pub limit: LimitConfig,
     pub kademlia: KademliaConfig,
     pub gossipsub: GossipsubConfig,
 }
@@ -86,7 +85,6 @@ impl Config {
             peer_contact,
             discovery: DiscoveryConfig::new(genesis_hash),
             message: MessageConfig::default(),
-            limit: LimitConfig::default(),
             kademlia: KademliaConfig::default(),
             gossipsub: gossipsub_config,
             min_peers: 5,
@@ -591,7 +589,15 @@ impl Network {
                         }
                     }
                     NimiqEvent::Discovery(_e) => {}
-                    NimiqEvent::Peers(_e) => {}
+                    NimiqEvent::Peers(event) => {
+                        match event {
+                            ConnectionPoolEvent::Disconnect { peer_id } => {
+                                // Workaround to trigger a peer disconnection
+                                Swarm::ban_peer_id(swarm, peer_id);
+                                Swarm::unban_peer_id(swarm, peer_id);
+                            }
+                        }
+                    }
                 }
             }
             _ => {}
@@ -1021,7 +1027,6 @@ mod tests {
                 keep_alive: KeepAlive::No,
             },
             message: Default::default(),
-            limit: Default::default(),
             kademlia: Default::default(),
             gossipsub,
         }

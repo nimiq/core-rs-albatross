@@ -1,32 +1,47 @@
+use std::{
+    collections::{HashMap, VecDeque},
+    fmt::Debug,
+    task::{Context, Poll},
+    time::{Duration, SystemTime},
+};
+
+use ip_network::IpNetwork;
 use libp2p::swarm::{
     protocols_handler::{InboundUpgradeSend, OutboundUpgradeSend},
     KeepAlive, ProtocolsHandler, ProtocolsHandlerEvent, ProtocolsHandlerUpgrErr, SubstreamProtocol,
-};
-use std::{
-    fmt::Debug,
-    task::{Context, Poll},
 };
 use thiserror::Error;
 
 use super::protocol::ConnectionPoolProtocol;
 
 #[derive(Clone, Debug)]
-pub enum HandlerInEvent {}
+pub enum HandlerInEvent {
+    Ban { ip: IpNetwork },
+}
 
 #[derive(Clone, Debug)]
-pub enum HandlerOutEvent {}
+pub enum HandlerOutEvent {
+    Banned { ip: IpNetwork },
+    Unbanned { ip: IpNetwork },
+}
 
 #[derive(Debug, Error)]
 pub enum HandlerError {
-    #[error("PeersBehaviour error")]
-    PeersError,
+    #[error("ConnectionPoolBehaviour error")]
+    ConnectionPoolError,
 }
 
-pub struct ConnectionPoolHandler {}
+pub struct ConnectionPoolHandler {
+    banned: HashMap<IpNetwork, SystemTime>,
+    ip_ban: VecDeque<IpNetwork>,
+}
 
 impl ConnectionPoolHandler {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            banned: HashMap::new(),
+            ip_ban: VecDeque::new(),
+        }
     }
 }
 
@@ -57,7 +72,15 @@ impl ProtocolsHandler for ConnectionPoolHandler {
     ) {
     }
 
-    fn inject_event(&mut self, _event: Self::InEvent) {}
+    fn inject_event(&mut self, event: Self::InEvent) {
+        match event {
+            HandlerInEvent::Ban { ip } => {
+                self.banned
+                    .insert(ip, SystemTime::now() + Duration::from_secs(60 * 10)); // Ban time: 10 minutes
+                self.ip_ban.push_back(ip);
+            }
+        }
+    }
 
     fn inject_dial_upgrade_error(
         &mut self,
@@ -81,6 +104,21 @@ impl ProtocolsHandler for ConnectionPoolHandler {
             Self::Error,
         >,
     > {
+        for (ip, time) in self.banned.clone() {
+            if time < SystemTime::now() {
+                self.banned.remove(&ip);
+                return Poll::Ready(ProtocolsHandlerEvent::Custom(HandlerOutEvent::Unbanned {
+                    ip,
+                }));
+            }
+        }
+
+        if let Some(ip) = self.ip_ban.pop_front() {
+            return Poll::Ready(ProtocolsHandlerEvent::Custom(HandlerOutEvent::Banned {
+                ip,
+            }));
+        }
+
         Poll::Pending
     }
 }
