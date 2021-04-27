@@ -680,6 +680,46 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
                         break;
                     }
                 }
+
+                // TODO: What if there are no clusters left for this peer?
+                let removed_clusters: Vec<_> = self.epoch_sync_clusters.drain_filter(|cluster| cluster.len() == 0).collect();
+
+                for cluster in removed_clusters.iter() {
+                    // Decrement the cluster count for all peers in the evicted cluster.
+                    for peer in cluster.peers() {
+                        if let Some(agent) = Weak::upgrade(peer) {
+                            let cluster_count = {
+                                let pair = self
+                                    .agents
+                                    .get_mut(&agent.peer)
+                                    .expect("Agent should be present");
+                                pair.1 -= 1;
+                                pair.1
+                            };
+
+                            // If the peer isn't in any more clusters, request more epoch_ids from it.
+                            // Only do so if the cluster was synced.
+                            if cluster_count == 0 {
+                                // Always remove agent from agents map. It will be re-added if it returns more
+                                // epoch_ids and dropped otherwise.
+                                self.agents.remove(&agent.peer);
+
+                                if result == SyncClusterResult::NoMoreEpochs
+                                    && cluster.adopted_batch_set
+                                {
+                                    let future =
+                                        Self::request_epoch_ids(Arc::clone(&self.blockchain), agent)
+                                            .boxed();
+                                    self.epoch_ids_stream.push(future);
+                                } else {
+                                    // FIXME: Disconnect peer
+                                    // agent.peer.close()
+                                }
+                            }
+                        }
+                    }
+                }
+
                 self.epoch_sync_clusters.sort();
             } else {
                 // Evict current best cluster and move to next one.
