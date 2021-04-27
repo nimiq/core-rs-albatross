@@ -322,13 +322,12 @@ impl<N: Network> Consensus<N> {
 }
 
 impl<N: Network> Stream for Consensus<N> {
-    type Item = ConsensusEvent<N>;
+    type Item = ();
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         macro_rules! return_event {
             ($event:expr) => {
                 self.events.send($event.clone()).ok(); // Ignore result.
-                return Poll::Ready(Some($event));
             };
         }
 
