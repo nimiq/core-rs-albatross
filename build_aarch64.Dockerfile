@@ -1,6 +1,6 @@
 # syntax = docker/dockerfile:1.2
 
-# Builds a light Alpine image from sources.
+# Builds a light Buster image from sources.
 # Requires Docker buildkit.
 
 ARG RUST_IMAGE=arm64v8/rust:slim-buster
