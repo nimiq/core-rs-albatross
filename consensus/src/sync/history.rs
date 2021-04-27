@@ -160,6 +160,7 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
             .verify(epoch.block.header.history_root.clone(), epoch.history.len())
             .unwrap_or(false)
         {
+            log::debug!("History Chunk failed to verify");
             return Err(SyncClusterResult::Error);
         }
         // Add the received history chunk to the pending epoch.
@@ -221,7 +222,8 @@ impl<TPeer: Peer + 'static> Stream for SyncCluster<TPeer> {
                             return Poll::Ready(Some(Err(e)));
                         }
                     }
-                    Err(_e) => {
+                    Err(e) => {
+                        log::debug!("Polling the batch set queue encountered error result: {:?}", e);
                         return Poll::Ready(Some(Err(SyncClusterResult::Error)));
                     } // TODO Error
                 }
@@ -245,7 +247,8 @@ impl<TPeer: Peer + 'static> Stream for SyncCluster<TPeer> {
                         return Poll::Ready(Some(Ok(epoch)));
                     }
                 }
-                Err(_e) => {
+                Err(e) => {
+                    log::debug!("Polling the history queue resulted in an error for epoch #{}, history_chunk: #{}", e.0, e.1);
                     return Poll::Ready(Some(Err(SyncClusterResult::Error)));
                 } // TODO Error
             }
@@ -321,11 +324,14 @@ enum SyncClusterResult {
     Outdated,
 }
 
-impl<T, E> From<Result<T, E>> for SyncClusterResult {
+impl<T, E: std::fmt::Debug> From<Result<T, E>> for SyncClusterResult {
     fn from(res: Result<T, E>) -> Self {
         match res {
             Ok(_) => SyncClusterResult::EpochSuccessful,
-            Err(_) => SyncClusterResult::Error,
+            Err(err) => {
+                log::debug!("SyncClusterResult From<Result<T, E>> encountered error: {:?}", err);
+                SyncClusterResult::Error
+            },
         }
     }
 }
@@ -630,7 +636,10 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
                     self.blockchain
                         .push_history_sync(Block::Macro(epoch.block), &epoch.history),
                 ),
-                Some(Err(_)) => SyncClusterResult::Error,
+                Some(Err(e)) => {
+                    log::debug!("Polling the best SyncCluster returned an error: {:?}", e);
+                    SyncClusterResult::Error
+                },
                 None => SyncClusterResult::NoMoreEpochs,
             };
 
