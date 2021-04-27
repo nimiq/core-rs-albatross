@@ -618,8 +618,9 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
                     // FIXME We want to distinguish between "locator hash not found" (i.e. peer is
                     //  on a different chain) and "no more hashes past locator" (we are in sync with
                     //  the peer).
-                    if epoch_ids.ids.is_empty() {
+                    if epoch_ids.ids.is_empty() && epoch_ids.checkpoint_id.is_none() {
                         // We are synced with this peer.
+                        debug!("Peer has finished syncing: {:?}", epoch_ids.sender.peer.id());
                         return Poll::Ready(Some(epoch_ids.sender));
                     }
                     self.cluster_epoch_ids(epoch_ids);
