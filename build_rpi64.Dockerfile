@@ -53,7 +53,7 @@ CMD [ "/home/nimiq/docker_run.sh" ]
 # https://github.com/opencontainers/image-spec/blob/master/annotations.md
 LABEL \
   org.opencontainers.image.title="Nimiq core-rs-albatross" \
-  org.opencontainers.image.description="Rust implementation of the Nimiq Blockchain Core Albatross Branch (Buildkit Ubuntu image)" \
+  org.opencontainers.image.description="Rust implementation of the Nimiq Blockchain Core Albatross Branch (Buildkit Buster ARM64/AArch64 image)" \
   org.opencontainers.image.url="https://github.com/nimiq/core-rs-albatross" \
   org.opencontainers.image.vendor="Nimiq Foundation" \
   org.opencontainers.image.licenses="Apache-2.0"
