@@ -206,9 +206,17 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
     }
 
     fn remove_front(&mut self, at: usize) {
-        let mut new_cluster = self.split_off(at);
+        let mut new_cluster = if self.ids.len() < at {
+            self.split_off(self.len())
+        } else {
+            self.split_off(at)
+        };
         new_cluster.adopted_batch_set = self.adopted_batch_set;
         *self = new_cluster;
+    }
+
+    fn len(&self) -> usize {
+        self.ids.len()
     }
 }
 
