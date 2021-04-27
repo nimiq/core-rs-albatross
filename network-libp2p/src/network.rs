@@ -239,13 +239,13 @@ impl Network {
         let mut task_state = TaskState::default();
 
         let peer_id = Swarm::local_peer_id(&swarm);
-        let task_span = tracing::debug_span!("swarm task", peer_id=?peer_id);
+        let task_span = tracing::trace_span!("swarm task", peer_id=?peer_id);
 
         async move {
             loop {
                 futures::select! {
                     event = swarm.next_event().fuse() => {
-                        tracing::debug!(event=?event, "swarm task received event");
+                        tracing::trace!(event=?event, "swarm task received event");
                         Self::handle_event(event, &events_tx, &mut swarm, &mut task_state, min_peers).await;
                     },
                     action_opt = action_rx.next().fuse() => {
@@ -399,7 +399,7 @@ impl Network {
                             message_id,
                             message,
                         } => {
-                            tracing::debug!(id = ?message_id, source = ?propagation_source, message = ?message, "received message");
+                            tracing::trace!(id = ?message_id, source = ?propagation_source, message = ?message, "received message");
 
                             if let Some(topic_info) = state.gossip_topics.get_mut(&message.topic) {
                                 let (output, validate) = topic_info;
