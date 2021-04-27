@@ -120,13 +120,15 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
                 .get_num_extended_transactions(epoch_number, None);
             let num_full_chunks = num_known / CHUNK_SIZE;
             start_index = num_full_chunks;
-            // TODO: Can probably be done more efficiently.
-            let known_chunk = self
-                .blockchain
+            if num_full_chunks > 0 {
+                // TODO: Can probably be done more efficiently.
+                let known_chunk = self
+                    .blockchain
                 .history_store
                 .prove_chunk(epoch_number, num_full_chunks * CHUNK_SIZE, 0, None)
-                .expect("History chunk missing");
-            pending_batch_set.history = known_chunk.history;
+                    .expect("History chunk missing");
+                pending_batch_set.history = known_chunk.history;
+            }
         }
 
         // Queue history chunks for the given epoch for download.
