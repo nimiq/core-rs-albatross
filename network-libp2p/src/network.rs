@@ -310,7 +310,7 @@ impl Network {
         let transport = {
             // Websocket over TCP/DNS
             let transport =
-                websocket::WsConfig::new(dns::TokioDnsConfig::system(tcp::TcpConfig::new().nodelay(true))?);
+                websocket::WsConfig::new(dns::DnsConfig::new(tcp::TcpConfig::new().nodelay(true))?);
 
             // Memory transport for testing
             // TODO: Use websocket over the memory transport
@@ -488,7 +488,7 @@ impl Network {
                                     QueryResult::GetRecord(result) => {
                                         if let Some(output) = state.dht_gets.remove(&id) {
                                             let result = result.map_err(Into::into).and_then(
-                                                |GetRecordOk { mut records, .. }| {
+                                                |GetRecordOk { mut records }| {
                                                     // TODO: What do we do, if we get multiple records?
                                                     let data_opt =
                                                         records.pop().map(|r| r.record.value);
@@ -613,7 +613,9 @@ impl Network {
             }
             NetworkAction::DialAddress { address, output } => {
                 output
-                    .send(Swarm::dial_addr(swarm, address).map_err(Into::into))
+                    .send(Swarm::dial_addr(swarm, address).map_err(|l| {
+                        NetworkError::Dial(libp2p::swarm::DialError::ConnectionLimit(l))
+                    }))
                     .ok();
             }
             NetworkAction::DhtGet { key, output } => {
