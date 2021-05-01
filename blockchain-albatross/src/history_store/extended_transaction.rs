@@ -3,7 +3,7 @@ use std::io;
 use merkle_mountain_range::hash::Hash as MMRHash;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
-use nimiq_account::Inherent;
+use nimiq_account::{Inherent, InherentType};
 use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_transaction::Transaction as BlockchainTransaction;
@@ -25,6 +25,7 @@ pub struct ExtendedTransaction {
 impl ExtendedTransaction {
     /// Convert a set of inherents and basic transactions (together with a block number and a block
     /// timestamp) into a vector of extended transactions.
+    /// We only want to store slash inherents, so we ignore the other inherent types.
     pub fn from(
         block_number: u32,
         block_time: u64,
@@ -42,11 +43,13 @@ impl ExtendedTransaction {
         }
 
         for inherent in inherents {
-            ext_txs.push(ExtendedTransaction {
-                block_number,
-                block_time,
-                data: ExtTxData::Inherent(inherent),
-            })
+            if inherent.ty == InherentType::Slash {
+                ext_txs.push(ExtendedTransaction {
+                    block_number,
+                    block_time,
+                    data: ExtTxData::Inherent(inherent),
+                })
+            }
         }
 
         ext_txs
