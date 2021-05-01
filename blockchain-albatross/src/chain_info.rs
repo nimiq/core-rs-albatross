@@ -128,9 +128,8 @@ impl Deserialize for ChainInfo {
                 // Group the deserialized parts in a BlockComponents instance.
                 BlockComponents {
                     header: Some(BlockHeader::Macro(header)),
-                    justification: justification
-                        .map(|justification| BlockJustification::Macro(justification)),
-                    body: body.map(|body| BlockBody::Macro(body)),
+                    justification: justification.map(BlockJustification::Macro),
+                    body: body.map(BlockBody::Macro),
                 }
             }
             BlockType::Micro => {
@@ -143,9 +142,8 @@ impl Deserialize for ChainInfo {
                 // Group the deserialized parts in a BlockComponents instance.
                 BlockComponents {
                     header: Some(BlockHeader::Micro(header)),
-                    justification: justification
-                        .map(|justification| BlockJustification::Micro(justification)),
-                    body: body.map(|body| BlockBody::Micro(body)),
+                    justification: justification.map(BlockJustification::Micro),
+                    body: body.map(BlockBody::Micro),
                 }
             }
         }

@@ -60,7 +60,7 @@ fn produce_macro_blocks(num_macro: usize, producer: &BlockProducer, blockchain: 
             },
             macro_block_proposal
                 .body
-                .or(Some(MacroBody::new()))
+                .or_else(|| Some(MacroBody::new()))
                 .unwrap(),
             MacroBlock::create_pk_tree_root(&slots.unwrap()),
         );

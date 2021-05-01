@@ -127,7 +127,7 @@ impl Blockchain {
                     let proof = ForkProof {
                         header1: micro_header1.clone(),
                         header2: micro_header2,
-                        justification1: justification1.clone(),
+                        justification1: *justification1,
                         justification2,
                     };
 
@@ -488,8 +488,8 @@ impl Blockchain {
         if block.is_micro() {
             let transactions = block.transactions();
 
-            if transactions.is_some() {
-                for transaction in transactions.unwrap().iter() {
+            if let Some(tx_vec) = transactions {
+                for transaction in tx_vec {
                     if self.contains_tx_in_validity_window(&transaction.hash()) {
                         warn!("Rejecting block - transaction already included");
                         return Err(PushError::DuplicateTransaction);

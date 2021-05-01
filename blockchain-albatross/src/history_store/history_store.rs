@@ -99,13 +99,13 @@ impl HistoryStore {
             leaf_idx.push(i as u32);
         }
 
-        let root = tree.get_root().ok()?.to_blake2b();
+        let root = tree.get_root().ok()?.unwrap();
 
         // Add the extended transactions into the respective database.
         // We need to do this separately due to the borrowing rules of Rust.
         for (tx, i) in ext_txs.iter().zip(leaf_idx.iter()) {
             // The prefix is one because it is a leaf.
-            self.put_extended_tx(txn, &tx.hash(1).to_blake2b(), *i, tx);
+            self.put_extended_tx(txn, &tx.hash(1).unwrap(), *i, tx);
         }
 
         // Return the history root.
@@ -128,7 +128,7 @@ impl HistoryStore {
         ));
 
         // Get the history root. We need to get it here because of Rust's borrowing rules.
-        let root = tree.get_root().ok()?.to_blake2b();
+        let root = tree.get_root().ok()?.unwrap();
 
         // Remove all leaves from the history tree and remember the respective hashes and indexes.
         let mut hashes = Vec::with_capacity(num_ext_txs);
@@ -144,7 +144,7 @@ impl HistoryStore {
         // Remove each of the extended transactions in the history tree from the extended
         // transaction database.
         for (index, hash) in hashes {
-            self.remove_extended_tx(txn, &hash.to_blake2b(), index as u32);
+            self.remove_extended_tx(txn, &hash.unwrap(), index as u32);
         }
 
         // Return the history root.
@@ -173,7 +173,7 @@ impl HistoryStore {
         // Remove each of the extended transactions in the history tree from the extended
         // transaction database.
         for (index, hash) in hashes {
-            self.remove_extended_tx(txn, &hash.to_blake2b(), index as u32);
+            self.remove_extended_tx(txn, &hash.unwrap(), index as u32);
         }
 
         Some(())
@@ -202,7 +202,7 @@ impl HistoryStore {
         ));
 
         // Return the history root.
-        Some(tree.get_root().ok()?.to_blake2b())
+        Some(tree.get_root().ok()?.unwrap())
     }
 
     /// Calculates the history tree root from a vector of extended transactions. It doesn't use the
@@ -217,7 +217,7 @@ impl HistoryStore {
         }
 
         // Return the history root.
-        Some(tree.get_root().ok()?.to_blake2b())
+        Some(tree.get_root().ok()?.unwrap())
     }
 
     /// Gets an extended transaction given its hash.
@@ -249,6 +249,7 @@ impl HistoryStore {
     }
 
     /// Gets all extended transactions for a given block number.
+    /// This method doesn't return the transactions in the same order that they appear in the block.
     pub fn get_block_transactions(
         &self,
         block_number: u32,
@@ -295,7 +296,7 @@ impl HistoryStore {
         for i in 0..tree.num_leaves() {
             let leaf_hash = tree.get_leaf(i).unwrap();
             ext_txs.push(
-                self.get_extended_tx(&leaf_hash.to_blake2b(), Some(txn))
+                self.get_extended_tx(&leaf_hash.unwrap(), Some(txn))
                     .unwrap(),
             );
         }
@@ -400,7 +401,7 @@ impl HistoryStore {
 
     /// Returns a proof for all the extended transactions at the given positions (leaf indexes). The
     /// proof also includes the extended transactions.
-    pub fn prove_with_position(
+    fn prove_with_position(
         &self,
         epoch_number: u32,
         positions: Vec<usize>,
@@ -431,7 +432,7 @@ impl HistoryStore {
         for i in &positions {
             let leaf_hash = tree.get_leaf(*i).unwrap();
             ext_txs.push(
-                self.get_extended_tx(&leaf_hash.to_blake2b(), Some(txn))
+                self.get_extended_tx(&leaf_hash.unwrap(), Some(txn))
                     .unwrap(),
             );
         }
@@ -482,7 +483,7 @@ impl HistoryStore {
         for i in start..end {
             let leaf_hash = tree.get_leaf(i).unwrap();
             ext_txs.push(
-                self.get_extended_tx(&leaf_hash.to_blake2b(), Some(txn))
+                self.get_extended_tx(&leaf_hash.unwrap(), Some(txn))
                     .unwrap(),
             );
         }
@@ -521,12 +522,12 @@ impl HistoryStore {
             return Err(MMRError::IncompleteProof);
         }
 
-        let root = tree.get_root()?.to_blake2b();
+        let root = tree.get_root()?.unwrap();
 
         // Then add all transactions to the database as the tree is finished.
         for (i, leaf) in all_leaves.iter().enumerate() {
             // The prefix is one because it is a leaf.
-            self.put_extended_tx(txn, &leaf.hash(1).to_blake2b(), i as u32, &leaf);
+            self.put_extended_tx(txn, &leaf.hash(1).unwrap(), i as u32, &leaf);
         }
 
         Ok(root)
@@ -787,6 +788,350 @@ impl HistoryStore {
         match cursor.last_duplicate::<OrderedHash>() {
             None => 0,
             Some(v) => v.index,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ExtTxData;
+    use nimiq_account::{Inherent, InherentType};
+    use nimiq_database::volatile::VolatileEnvironment;
+    use nimiq_primitives::coin::Coin;
+    use nimiq_primitives::networks::NetworkId;
+    use nimiq_transaction::Transaction as BlockchainTransaction;
+
+    #[test]
+    fn get_root_from_ext_txs_works() {
+        // Initialize History Store.
+        let env = VolatileEnvironment::new(10).unwrap();
+        let history_store = HistoryStore::new(env.clone());
+
+        // Create extended transactions.
+        let ext_0 = create_transaction(0, 0);
+        let ext_1 = create_transaction(0, 1);
+        let ext_2 = create_inherent(0, 2);
+        let ext_3 = create_transaction(1, 3);
+        let ext_4 = create_inherent(1, 4);
+
+        let ext_txs = vec![ext_0, ext_1, ext_2, ext_3, ext_4];
+
+        // Add extended transactions to History Store.
+        let mut txn = WriteTransaction::new(&env);
+        history_store.add_to_history(&mut txn, 0, &ext_txs);
+
+        // Verify method works.
+        let real_root = history_store.get_history_tree_root(0, Some(&txn));
+        let calc_root = HistoryStore::get_root_from_ext_txs(&ext_txs);
+
+        assert_eq!(real_root, calc_root);
+    }
+
+    #[test]
+    fn get_ext_tx_by_hash_works() {
+        // Initialize History Store.
+        let env = VolatileEnvironment::new(10).unwrap();
+        let history_store = HistoryStore::new(env.clone());
+
+        // Create extended transactions.
+        let ext_0 = create_transaction(0, 0);
+        let ext_1 = create_transaction(0, 1);
+        let ext_2 = create_inherent(0, 2);
+        let ext_3 = create_transaction(1, 3);
+        let ext_4 = create_inherent(1, 4);
+
+        let ext_txs = vec![ext_0, ext_1, ext_2, ext_3, ext_4];
+
+        // Add extended transactions to History Store.
+        let mut txn = WriteTransaction::new(&env);
+        history_store.add_to_history(&mut txn, 0, &ext_txs);
+
+        // Verify method works.
+        assert_eq!(
+            history_store.get_ext_tx_by_hash(&ext_txs[0].tx_hash(), Some(&txn))[0]
+                .unwrap_basic()
+                .value,
+            Coin::from_u64_unchecked(0),
+        );
+
+        assert_eq!(
+            history_store.get_ext_tx_by_hash(&ext_txs[2].tx_hash(), Some(&txn))[0]
+                .unwrap_inherent()
+                .value,
+            Coin::from_u64_unchecked(2),
+        );
+
+        assert_eq!(
+            history_store.get_ext_tx_by_hash(&ext_txs[3].tx_hash(), Some(&txn))[0]
+                .unwrap_basic()
+                .value,
+            Coin::from_u64_unchecked(3),
+        );
+    }
+
+    #[test]
+    fn get_block_transactions_works() {
+        // Initialize History Store.
+        let env = VolatileEnvironment::new(10).unwrap();
+        let history_store = HistoryStore::new(env.clone());
+
+        // Create extended transactions.
+        let ext_0 = create_transaction(0, 0);
+        let ext_1 = create_transaction(0, 1);
+        let ext_2 = create_inherent(0, 2);
+        let ext_3 = create_transaction(1, 3);
+        let ext_4 = create_inherent(1, 4);
+
+        // Add extended transactions to History Store.
+        let mut txn = WriteTransaction::new(&env);
+        history_store.add_to_history(&mut txn, 0, &vec![ext_0, ext_1, ext_2, ext_3, ext_4]);
+
+        // Verify method works. Note that the block transactions don't get returned in the same
+        // order they were inserted.
+        let query_0 = history_store.get_block_transactions(0, Some(&txn));
+
+        assert!(!query_0[0].is_inherent());
+        assert_eq!(query_0[0].block_number, 0);
+        assert_eq!(query_0[0].unwrap_basic().value, Coin::from_u64_unchecked(1));
+
+        assert!(query_0[1].is_inherent());
+        assert_eq!(query_0[1].block_number, 0);
+        assert_eq!(
+            query_0[1].unwrap_inherent().value,
+            Coin::from_u64_unchecked(2)
+        );
+
+        assert!(!query_0[2].is_inherent());
+        assert_eq!(query_0[2].block_number, 0);
+        assert_eq!(query_0[2].unwrap_basic().value, Coin::from_u64_unchecked(0));
+
+        let query_1 = history_store.get_block_transactions(1, Some(&txn));
+
+        assert!(!query_1[0].is_inherent());
+        assert_eq!(query_1[0].block_number, 1);
+        assert_eq!(query_1[0].unwrap_basic().value, Coin::from_u64_unchecked(3));
+
+        assert!(query_1[1].is_inherent());
+        assert_eq!(query_1[1].block_number, 1);
+        assert_eq!(
+            query_1[1].unwrap_inherent().value,
+            Coin::from_u64_unchecked(4)
+        );
+
+        // Remove extended transactions to History Store.
+        history_store.remove_partial_history(&mut txn, 0, 3);
+
+        // Verify method works. Note that the block transactions don't get returned in the same
+        // order they were inserted.
+        let query_0 = history_store.get_block_transactions(0, Some(&txn));
+
+        assert!(!query_0[0].is_inherent());
+        assert_eq!(query_0[0].block_number, 0);
+        assert_eq!(query_0[0].unwrap_basic().value, Coin::from_u64_unchecked(1));
+
+        assert!(!query_0[1].is_inherent());
+        assert_eq!(query_0[1].block_number, 0);
+        assert_eq!(query_0[1].unwrap_basic().value, Coin::from_u64_unchecked(0));
+    }
+
+    #[test]
+    fn get_epoch_transactions_works() {
+        // Initialize History Store.
+        let env = VolatileEnvironment::new(10).unwrap();
+        let history_store = HistoryStore::new(env.clone());
+
+        // Create extended transactions.
+        let ext_0 = create_transaction(0, 0);
+        let ext_1 = create_transaction(0, 1);
+        let ext_2 = create_inherent(0, 2);
+        let ext_3 = create_transaction(1, 3);
+        let ext_4 = create_inherent(1, 4);
+
+        // Add extended transactions to History Store.
+        let mut txn = WriteTransaction::new(&env);
+        history_store.add_to_history(&mut txn, 0, &vec![ext_0, ext_1, ext_2, ext_3, ext_4]);
+
+        // Verify method works.
+        let query = history_store.get_epoch_transactions(0, Some(&txn));
+
+        assert!(!query[0].is_inherent());
+        assert_eq!(query[0].block_number, 0);
+        assert_eq!(query[0].unwrap_basic().value, Coin::from_u64_unchecked(0));
+
+        assert!(!query[1].is_inherent());
+        assert_eq!(query[1].block_number, 0);
+        assert_eq!(query[1].unwrap_basic().value, Coin::from_u64_unchecked(1));
+
+        assert!(query[2].is_inherent());
+        assert_eq!(query[2].block_number, 0);
+        assert_eq!(
+            query[2].unwrap_inherent().value,
+            Coin::from_u64_unchecked(2)
+        );
+
+        assert!(!query[3].is_inherent());
+        assert_eq!(query[3].block_number, 1);
+        assert_eq!(query[3].unwrap_basic().value, Coin::from_u64_unchecked(3));
+
+        assert!(query[4].is_inherent());
+        assert_eq!(query[4].block_number, 1);
+        assert_eq!(
+            query[4].unwrap_inherent().value,
+            Coin::from_u64_unchecked(4)
+        );
+
+        // Remove extended transactions to History Store.
+        history_store.remove_partial_history(&mut txn, 0, 3);
+
+        // Verify method works.
+        let query = history_store.get_epoch_transactions(0, Some(&txn));
+
+        assert!(!query[0].is_inherent());
+        assert_eq!(query[0].block_number, 0);
+        assert_eq!(query[0].unwrap_basic().value, Coin::from_u64_unchecked(0));
+
+        assert!(!query[1].is_inherent());
+        assert_eq!(query[1].block_number, 0);
+        assert_eq!(query[1].unwrap_basic().value, Coin::from_u64_unchecked(1));
+    }
+
+    #[test]
+    fn get_num_extended_transactions_works() {
+        // Initialize History Store.
+        let env = VolatileEnvironment::new(10).unwrap();
+        let history_store = HistoryStore::new(env.clone());
+
+        // Create extended transactions.
+        let ext_0 = create_transaction(0, 0);
+        let ext_1 = create_transaction(0, 1);
+        let ext_2 = create_inherent(0, 2);
+        let ext_3 = create_transaction(1, 3);
+        let ext_4 = create_inherent(1, 4);
+
+        // Add extended transactions to History Store.
+        let mut txn = WriteTransaction::new(&env);
+        history_store.add_to_history(&mut txn, 0, &vec![ext_0, ext_1, ext_2, ext_3, ext_4]);
+
+        // Verify method works.
+        assert_eq!(
+            history_store.get_num_extended_transactions(0, Some(&txn)),
+            5
+        );
+
+        // Remove extended transactions to History Store.
+        history_store.remove_partial_history(&mut txn, 0, 3);
+
+        // Verify method works.
+        assert_eq!(
+            history_store.get_num_extended_transactions(0, Some(&txn)),
+            2
+        );
+    }
+
+    #[test]
+    fn get_tx_hashes_by_address_works() {
+        // Initialize History Store.
+        let env = VolatileEnvironment::new(10).unwrap();
+        let history_store = HistoryStore::new(env.clone());
+
+        // Create extended transactions.
+        let ext_0 = create_transaction(0, 0);
+        let ext_1 = create_transaction(0, 1);
+        let ext_2 = create_inherent(0, 2);
+        let ext_3 = create_transaction(1, 3);
+        let ext_4 = create_inherent(1, 4);
+
+        let ext_txs = vec![ext_0.clone(), ext_1.clone(), ext_2, ext_3.clone(), ext_4];
+
+        // Add extended transactions to History Store.
+        let mut txn = WriteTransaction::new(&env);
+        history_store.add_to_history(&mut txn, 0, &ext_txs);
+
+        // Verify method works.
+        let query_sender = history_store.get_tx_hashes_by_address(
+            &Address::from_user_friendly_address("NQ09 VF5Y 1PKV MRM4 5LE1 55KV P6R2 GXYJ XYQF")
+                .unwrap(),
+            99,
+            Some(&txn),
+        );
+
+        assert_eq!(query_sender.len(), 3);
+        assert_eq!(query_sender[0], ext_3.tx_hash());
+        assert_eq!(query_sender[1], ext_1.tx_hash());
+        assert_eq!(query_sender[2], ext_0.tx_hash());
+
+        let query_recipient =
+            history_store.get_tx_hashes_by_address(&Address::burn_address(), 2, Some(&txn));
+
+        assert_eq!(query_recipient.len(), 2);
+        assert_eq!(query_recipient[0], ext_3.tx_hash());
+        assert_eq!(query_recipient[1], ext_1.tx_hash());
+    }
+
+    #[test]
+    fn prove_works() {
+        // Initialize History Store.
+        let env = VolatileEnvironment::new(10).unwrap();
+        let history_store = HistoryStore::new(env.clone());
+
+        // Create extended transactions.
+        let ext_0 = create_transaction(0, 0);
+        let ext_1 = create_transaction(0, 1);
+        let ext_2 = create_inherent(0, 2);
+        let ext_3 = create_transaction(1, 3);
+        let ext_4 = create_inherent(1, 4);
+
+        let ext_txs = vec![ext_0, ext_1.clone(), ext_2, ext_3, ext_4.clone()];
+
+        // Add extended transactions to History Store.
+        let mut txn = WriteTransaction::new(&env);
+        history_store.add_to_history(&mut txn, 0, &ext_txs);
+
+        // Verify method works.
+        let root = history_store.get_history_tree_root(0, Some(&txn)).unwrap();
+
+        let proof = history_store
+            .prove(0, vec![&ext_1.tx_hash(), &ext_4.tx_hash()], Some(&txn))
+            .unwrap();
+
+        assert_eq!(proof.positions.len(), 2);
+        assert_eq!(proof.positions[0], 1);
+        assert_eq!(proof.positions[1], 4);
+
+        assert_eq!(proof.history.len(), 2);
+        assert_eq!(proof.history[0].tx_hash(), ext_1.tx_hash());
+        assert_eq!(proof.history[1].tx_hash(), ext_4.tx_hash());
+
+        assert!(proof.verify(root).unwrap());
+    }
+
+    fn create_inherent(block: u32, value: u64) -> ExtendedTransaction {
+        ExtendedTransaction {
+            block_number: block,
+            block_time: 0,
+            data: ExtTxData::Inherent(Inherent {
+                ty: InherentType::Reward,
+                target: Default::default(),
+                value: Coin::from_u64_unchecked(value),
+                data: vec![],
+            }),
+        }
+    }
+
+    fn create_transaction(block: u32, value: u64) -> ExtendedTransaction {
+        ExtendedTransaction {
+            block_number: block,
+            block_time: 0,
+            data: ExtTxData::Basic(BlockchainTransaction::new_basic(
+                Address::from_user_friendly_address("NQ09 VF5Y 1PKV MRM4 5LE1 55KV P6R2 GXYJ XYQF")
+                    .unwrap(),
+                Address::burn_address(),
+                Coin::from_u64_unchecked(value),
+                Coin::from_u64_unchecked(0),
+                0,
+                NetworkId::Dummy,
+            )),
         }
     }
 }
