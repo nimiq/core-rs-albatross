@@ -65,7 +65,7 @@ fn it_can_create_batch_finalization_inherents() {
                 assert_eq!(inherent.target, validator_registry_addr.clone());
                 got_finalize_batch = true;
             }
-            _ => assert!(false),
+            _ => panic!(),
         }
     }
     assert!(got_reward && got_finalize_batch);
@@ -124,7 +124,7 @@ fn it_can_create_batch_finalization_inherents() {
                 assert_eq!(inherent.value, Coin::ZERO);
                 got_finalize_batch = true;
             }
-            _ => assert!(false),
+            _ => panic!(),
         }
     }
     assert!(got_reward && got_slash && got_finalize_batch);

@@ -13,7 +13,7 @@ use nimiq_hash::{Blake2bHash, Hash};
 pub struct HistoryTreeHash(pub Blake2bHash);
 
 impl HistoryTreeHash {
-    pub fn to_blake2b(self) -> Blake2bHash {
+    pub fn unwrap(self) -> Blake2bHash {
         self.0
     }
 }

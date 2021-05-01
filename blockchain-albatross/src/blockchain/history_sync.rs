@@ -208,16 +208,16 @@ impl Blockchain {
         let mut block_inherents = vec![];
         let mut prev = 0;
 
-        for i in first_new_ext_tx..ext_txs.len() {
-            if ext_txs[i].block_number > prev {
-                block_numbers.push(ext_txs[i].block_number);
-                block_timestamps.push(ext_txs[i].block_time);
+        for ext_tx in ext_txs.iter().skip(first_new_ext_tx) {
+            if ext_tx.block_number > prev {
+                block_numbers.push(ext_tx.block_number);
+                block_timestamps.push(ext_tx.block_time);
                 block_transactions.push(vec![]);
                 block_inherents.push(vec![]);
-                prev = ext_txs[i].block_number;
+                prev = ext_tx.block_number;
             }
 
-            match &ext_txs[i].data {
+            match &ext_tx.data {
                 ExtTxData::Basic(tx) => block_transactions.last_mut().unwrap().push(tx.clone()),
                 ExtTxData::Inherent(tx) => block_inherents.last_mut().unwrap().push(tx.clone()),
             }
