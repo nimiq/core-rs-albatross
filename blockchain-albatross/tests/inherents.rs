@@ -19,9 +19,9 @@ fn it_can_create_batch_finalization_inherents() {
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(Blockchain::new(env, NetworkId::UnitAlbatross).unwrap());
 
-    let validator_registry_addr = NetworkInfo::from_network_id(blockchain.network_id)
-        .validator_registry_address()
-        .expect("No ValidatorRegistry")
+    let validator_registry_addr = blockchain
+        .staking_contract_address()
+        .expect("NetworkInfo doesn't have a staking contract address set!")
         .clone();
 
     let hash = Blake2bHasher::default().digest(&[]);

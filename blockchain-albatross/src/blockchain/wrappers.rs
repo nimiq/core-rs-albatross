@@ -56,9 +56,9 @@ impl Blockchain {
 
     /// Returns the current staking contract.
     pub fn get_staking_contract(&self) -> StakingContract {
-        let validator_registry = NetworkInfo::from_network_id(self.network_id)
-            .validator_registry_address()
-            .expect("No ValidatorRegistry");
+        let validator_registry = self
+            .staking_contract_address()
+            .expect("NetworkInfo doesn't have a staking contract address set!");
 
         let account = self.state.read().accounts.get(validator_registry, None);
 
@@ -112,8 +112,8 @@ impl Blockchain {
         false
     }
 
-    pub fn validator_registry_address(&self) -> Option<&Address> {
-        NetworkInfo::from_network_id(self.network_id).validator_registry_address()
+    pub fn staking_contract_address(&self) -> Option<&Address> {
+        NetworkInfo::from_network_id(self.network_id).staking_contract_address()
     }
 
     pub fn lock(&self) -> MutexGuard<()> {
