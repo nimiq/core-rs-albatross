@@ -3,7 +3,6 @@ use nimiq_account::inherent::AccountInherentInteraction;
 use nimiq_account::{Inherent, InherentType};
 use nimiq_block_albatross::{ForkProof, MacroHeader, ViewChanges};
 use nimiq_database as db;
-use nimiq_genesis::NetworkInfo;
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
@@ -64,9 +63,9 @@ impl Blockchain {
         txn_option: Option<&db::Transaction>,
     ) -> Inherent {
         // Get the address of the validator registry/staking contract.
-        let validator_registry = NetworkInfo::from_network_id(self.network_id)
-            .validator_registry_address()
-            .expect("No ValidatorRegistry");
+        let validator_registry = self
+            .staking_contract_address()
+            .expect("NetworkInfo doesn't have a staking contract address set!");
 
         // Get the slot owner and slot number for this block number and view number.
         let (producer, slot) = self
@@ -100,9 +99,9 @@ impl Blockchain {
         txn_option: Option<&db::Transaction>,
     ) -> Vec<Inherent> {
         // Get the address of the validator registry/staking contract.
-        let validator_registry = NetworkInfo::from_network_id(self.network_id)
-            .validator_registry_address()
-            .expect("No ValidatorRegistry");
+        let validator_registry = self
+            .staking_contract_address()
+            .expect("NetworkInfo doesn't have a staking contract address set!");
 
         // Iterate over all the view changes.
         (view_changes.first_view_number..view_changes.last_view_number)
@@ -301,13 +300,13 @@ impl Blockchain {
         }
 
         // Push FinalizeBatch inherent to update StakingContract.
-        let validator_registry = NetworkInfo::from_network_id(self.network_id)
-            .validator_registry_address()
-            .expect("No ValidatorRegistry");
+        let staking_contract_address = self
+            .staking_contract_address()
+            .expect("NetworkInfo doesn't have a staking contract address set!");
 
         inherents.push(Inherent {
             ty: InherentType::FinalizeBatch,
-            target: validator_registry.clone(),
+            target: staking_contract_address.clone(),
             value: Coin::ZERO,
             data: Vec::new(),
         });
@@ -318,9 +317,9 @@ impl Blockchain {
     /// Creates the inherent to finalize an epoch. The inherent is for updating the StakingContract.
     pub fn finalize_previous_epoch(&self) -> Inherent {
         // Get the address of the validator registry/staking contract.
-        let validator_registry = NetworkInfo::from_network_id(self.network_id)
-            .validator_registry_address()
-            .expect("No ValidatorRegistry");
+        let validator_registry = self
+            .staking_contract_address()
+            .expect("NetworkInfo doesn't have a staking contract address set!");
 
         // Create the FinalizeEpoch inherent.
         Inherent {
