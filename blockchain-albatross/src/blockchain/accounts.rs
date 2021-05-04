@@ -44,11 +44,14 @@ impl Blockchain {
                 // as rebranching across this block is not possible.
                 self.chain_store.clear_receipts(txn);
 
-                // Store the transactions and the inherents into the History tree.
+                // Store the transactions and the inherents into the History tree. Remember that
+                // first we need to convert the reward inherents into transactions.
+                let reward_txs = self.create_txs_from_inherents(&inherents);
+
                 let ext_txs = ExtendedTransaction::from(
                     macro_block.header.block_number,
                     macro_block.header.timestamp,
-                    vec![],
+                    reward_txs,
                     inherents,
                 );
 

@@ -4,7 +4,6 @@ use nimiq_block_albatross::MacroHeader;
 use nimiq_blockchain_albatross::Blockchain;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_database::WriteTransaction;
-use nimiq_genesis::NetworkInfo;
 use nimiq_hash::{Blake2bHasher, Hasher};
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
