@@ -249,6 +249,7 @@ impl AccountTransactionInteraction for Account {
                 time,
             )?)),
             AccountType::Staking => Err(AccountError::InvalidForRecipient),
+            AccountType::Reward => Err(AccountError::InvalidForRecipient),
         }
     }
 
@@ -447,6 +448,7 @@ impl Deserialize for Account {
                 let account: StakingContract = Deserialize::deserialize(reader)?;
                 Ok(Account::Staking(account))
             }
+            AccountType::Reward => unimplemented!(),
         }
     }
 }

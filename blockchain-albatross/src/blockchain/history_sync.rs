@@ -9,6 +9,8 @@ use nimiq_primitives::policy;
 use crate::chain_info::ChainInfo;
 use crate::history_store::{ExtTxData, ExtendedTransaction, HistoryStore};
 use crate::{AbstractBlockchain, Blockchain, BlockchainEvent, PushError, PushResult};
+use nimiq_account::{Inherent, InherentType};
+use nimiq_primitives::account::AccountType;
 
 /// Implements methods to push macro blocks into the chain when an history node is syncing. This
 /// type of syncing is called history syncing. It works by having the node get all the election
@@ -208,18 +210,67 @@ impl Blockchain {
         let mut block_inherents = vec![];
         let mut prev = 0;
 
-        for i in first_new_ext_tx..ext_txs.len() {
-            if ext_txs[i].block_number > prev {
-                block_numbers.push(ext_txs[i].block_number);
-                block_timestamps.push(ext_txs[i].block_time);
+        for ext_tx in ext_txs.iter().skip(first_new_ext_tx) {
+            if ext_tx.block_number > prev {
+                block_numbers.push(ext_tx.block_number);
+                block_timestamps.push(ext_tx.block_time);
                 block_transactions.push(vec![]);
                 block_inherents.push(vec![]);
-                prev = ext_txs[i].block_number;
+                prev = ext_tx.block_number;
             }
 
-            match &ext_txs[i].data {
-                ExtTxData::Basic(tx) => block_transactions.last_mut().unwrap().push(tx.clone()),
+            match &ext_tx.data {
+                ExtTxData::Basic(tx) => {
+                    // If the transaction is a reward transaction, then we convert it to an inherent.
+                    // This is because we ignore reward transactions when syncing, we prefer to update
+                    // the state using the inherents.
+                    if tx.sender_type == AccountType::Reward {
+                        let reward = Inherent {
+                            ty: InherentType::Reward,
+                            target: tx.recipient.clone(),
+                            value: tx.value.clone(),
+                            data: vec![],
+                        };
+
+                        block_inherents.last_mut().unwrap().push(reward.clone())
+                    } else {
+                        block_transactions.last_mut().unwrap().push(tx.clone())
+                    };
+                }
                 ExtTxData::Inherent(tx) => block_inherents.last_mut().unwrap().push(tx.clone()),
+            }
+        }
+
+        // We go over the blocks one more time and add the FinalizeBatch and FinalizeEpoch inherents
+        // to the macro blocks. This is necessary because the History Store doesn't store those inherents
+        // so we need to add them again in order to correctly sync.
+        for i in 0..block_numbers.len() {
+            let block_number = block_numbers[i];
+
+            if policy::is_macro_block_at(block_number) {
+                let staking_contract_address = self
+                    .staking_contract_address()
+                    .expect("NetworkInfo doesn't have a staking contract address set!");
+
+                let finalize_batch = Inherent {
+                    ty: InherentType::FinalizeBatch,
+                    target: staking_contract_address.clone(),
+                    value: Coin::ZERO,
+                    data: vec![],
+                };
+
+                block_inherents.get_mut(i).unwrap().push(finalize_batch);
+
+                if policy::is_election_block_at(block_number) {
+                    let finalize_epoch = Inherent {
+                        ty: InherentType::FinalizeEpoch,
+                        target: staking_contract_address.clone(),
+                        value: Coin::ZERO,
+                        data: vec![],
+                    };
+
+                    block_inherents.get_mut(i).unwrap().push(finalize_epoch);
+                }
             }
         }
 

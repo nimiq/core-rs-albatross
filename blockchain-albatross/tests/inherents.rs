@@ -4,7 +4,6 @@ use nimiq_block_albatross::MacroHeader;
 use nimiq_blockchain_albatross::Blockchain;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_database::WriteTransaction;
-use nimiq_genesis::NetworkInfo;
 use nimiq_hash::{Blake2bHasher, Hasher};
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
@@ -19,9 +18,9 @@ fn it_can_create_batch_finalization_inherents() {
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(Blockchain::new(env, NetworkId::UnitAlbatross).unwrap());
 
-    let validator_registry_addr = NetworkInfo::from_network_id(blockchain.network_id)
-        .validator_registry_address()
-        .expect("No ValidatorRegistry")
+    let validator_registry_addr = blockchain
+        .staking_contract_address()
+        .expect("NetworkInfo doesn't have a staking contract address set!")
         .clone();
 
     let hash = Blake2bHasher::default().digest(&[]);
@@ -65,7 +64,7 @@ fn it_can_create_batch_finalization_inherents() {
                 assert_eq!(inherent.target, validator_registry_addr.clone());
                 got_finalize_batch = true;
             }
-            _ => assert!(false),
+            _ => panic!(),
         }
     }
     assert!(got_reward && got_finalize_batch);
@@ -124,7 +123,7 @@ fn it_can_create_batch_finalization_inherents() {
                 assert_eq!(inherent.value, Coin::ZERO);
                 got_finalize_batch = true;
             }
-            _ => assert!(false),
+            _ => panic!(),
         }
     }
     assert!(got_reward && got_slash && got_finalize_batch);

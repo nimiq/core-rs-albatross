@@ -239,7 +239,7 @@ async fn sync_ingredients() {
         .request_epoch(consensus1.blockchain.election_head_hash())
         .await
         .expect("Should yield epoch");
-    assert_eq!(epoch.history_len, 7);
+    assert_eq!(epoch.history_len, 3);
     assert_eq!(
         epoch.block.hash(),
         consensus1.blockchain.election_head_hash()
@@ -249,7 +249,7 @@ async fn sync_ingredients() {
         .request_epoch(consensus1.blockchain.macro_head_hash())
         .await
         .expect("Should yield epoch");
-    assert_eq!(epoch.history_len, 2);
+    assert_eq!(epoch.history_len, 1);
     assert_eq!(epoch.block.hash(), consensus1.blockchain.macro_head_hash());
 
     // Request history chunk.
@@ -259,7 +259,7 @@ async fn sync_ingredients() {
         .expect("Should yield history chunk")
         .chunk
         .expect("Should yield history chunk");
-    assert_eq!(chunk.history.len(), 7);
+    assert_eq!(chunk.history.len(), 3);
     assert_eq!(
         chunk.verify(
             consensus1
@@ -279,7 +279,7 @@ async fn sync_ingredients() {
         .expect("Should yield history chunk")
         .chunk
         .expect("Should yield history chunk");
-    assert_eq!(chunk.history.len(), 2);
+    assert_eq!(chunk.history.len(), 1);
     assert_eq!(
         chunk.verify(consensus1.blockchain.macro_head().header.history_root, 0),
         Some(true)

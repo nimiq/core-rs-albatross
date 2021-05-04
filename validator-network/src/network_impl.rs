@@ -10,7 +10,8 @@ use beserial::{Deserialize, Serialize};
 use futures::{future::join_all, lock::Mutex, Stream, StreamExt};
 
 use nimiq_bls::{CompressedPublicKey, PublicKey, SecretKey, Signature};
-use nimiq_network_interface::{message::Message, network::Network, network::Topic, peer::Peer};
+use nimiq_network_interface::network::{MsgAcceptance, Network, Topic};
+use nimiq_network_interface::{message::Message, peer::Peer};
 use nimiq_utils::tagged_signing::TaggedSignable;
 
 use super::{MessageStream, NetworkError, ValidatorNetwork};
@@ -267,5 +268,16 @@ where
             .await?;
 
         Ok(())
+    }
+
+    async fn validate_message(
+        &self,
+        id: Self::PubsubId,
+        acceptance: MsgAcceptance,
+    ) -> Result<bool, Self::Error> {
+        self.network
+            .validate_message(id, acceptance)
+            .await
+            .map_err(|err| NetworkError::Network(err))
     }
 }

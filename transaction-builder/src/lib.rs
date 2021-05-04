@@ -25,8 +25,8 @@ pub mod recipient;
 fn fill_in_staking_contract_address(address: Option<Address>, network_id: NetworkId) -> Address {
     address.unwrap_or_else(|| {
         NetworkInfo::from_network_id(network_id)
-            .staking_contract()
-            .expect("NetworkInfo doesn't have a staking contract address set")
+            .staking_contract_address()
+            .expect("NetworkInfo doesn't have a staking contract address set!")
             .clone()
     })
 }

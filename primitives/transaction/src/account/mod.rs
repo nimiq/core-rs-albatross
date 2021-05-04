@@ -32,6 +32,7 @@ impl AccountTransactionVerification for AccountType {
             AccountType::Staking => {
                 StakingContractVerifier::verify_incoming_transaction(transaction)
             }
+            AccountType::Reward => Err(TransactionError::InvalidForRecipient),
         }
     }
 
@@ -47,6 +48,7 @@ impl AccountTransactionVerification for AccountType {
             AccountType::Staking => {
                 StakingContractVerifier::verify_outgoing_transaction(transaction)
             }
+            AccountType::Reward => Err(TransactionError::InvalidForSender),
         }
     }
 }

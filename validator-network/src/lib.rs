@@ -12,7 +12,7 @@ use futures::Stream;
 use nimiq_bls::{CompressedPublicKey, SecretKey};
 use nimiq_network_interface::{
     message::Message,
-    network::{PubsubId, Topic},
+    network::{MsgAcceptance, PubsubId, Topic},
     peer::Peer,
 };
 
@@ -70,4 +70,11 @@ pub trait ValidatorNetwork: Send + Sync {
         public_key: &CompressedPublicKey,
         secret_key: &SecretKey,
     ) -> Result<(), Self::Error>;
+
+    /// Signals that a Gossipsup'd message with `id` was verified sucessfully and can be relayed
+    async fn validate_message(
+        &self,
+        id: Self::PubsubId,
+        acceptance: MsgAcceptance,
+    ) -> Result<bool, Self::Error>;
 }

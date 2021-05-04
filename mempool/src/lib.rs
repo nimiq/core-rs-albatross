@@ -373,7 +373,7 @@ impl Mempool {
             // Check validity of transactions concerning the staking contract.
             // We only do it for the staking contract, since this is the only place
             // where the transaction validity depends on the recipient's state.
-            if let Some(validator_registry_address) = self.blockchain.validator_registry_address() {
+            if let Some(validator_registry_address) = self.blockchain.staking_contract_address() {
                 // First apply the sender side to the staking contract if necessary.
                 // This could for example drop a validator and make subsequent update transactions invalid.
                 let mut outgoing_receipt = None;

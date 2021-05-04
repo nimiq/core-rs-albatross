@@ -39,7 +39,7 @@ use beserial::{Deserialize, Serialize};
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{
     message::{Message, MessageType},
-    network::{Network as NetworkInterface, NetworkEvent, PubsubId, Topic},
+    network::{MsgAcceptance, Network as NetworkInterface, NetworkEvent, PubsubId, Topic},
     peer::Peer as PeerInterface,
     peer_map::ObservablePeerMap,
 };
@@ -47,8 +47,8 @@ use nimiq_utils::time::OffsetTime;
 
 use crate::{
     behaviour::{NimiqBehaviour, NimiqEvent, NimiqNetworkBehaviourError},
+    connection_pool::behaviour::ConnectionPoolEvent,
     discovery::{behaviour::DiscoveryConfig, handler::HandlerInEvent, peer_contacts::PeerContact},
-    limit::behaviour::LimitConfig,
     message::behaviour::MessageConfig,
     message::peer::Peer,
     Config, NetworkError,
@@ -96,6 +96,7 @@ pub(crate) enum NetworkAction {
     Validate {
         message_id: MessageId,
         source: PeerId,
+        acceptance: MessageAcceptance,
         output: oneshot::Sender<Result<bool, NetworkError>>,
     },
     ReceiveFromAll {
@@ -185,9 +186,8 @@ impl Network {
     fn new_transport(keypair: &Keypair) -> std::io::Result<Boxed<(PeerId, StreamMuxerBox)>> {
         let transport = {
             // Websocket over TCP/DNS
-            let transport = websocket::WsConfig::new(dns::TokioDnsConfig::system(
-                tcp::TcpConfig::new().nodelay(true),
-            )?);
+            let transport =
+                websocket::WsConfig::new(dns::DnsConfig::new(tcp::TcpConfig::new().nodelay(true))?);
 
             // Memory transport for testing
             // TODO: Use websocket over the memory transport
@@ -364,7 +364,7 @@ impl Network {
                                     QueryResult::GetRecord(result) => {
                                         if let Some(output) = state.dht_gets.remove(&id) {
                                             let result = result.map_err(Into::into).and_then(
-                                                |GetRecordOk { mut records, .. }| {
+                                                |GetRecordOk { mut records }| {
                                                     // TODO: What do we do, if we get multiple records?
                                                     let data_opt =
                                                         records.pop().map(|r| r.record.value);
@@ -467,7 +467,15 @@ impl Network {
                         }
                     }
                     NimiqEvent::Discovery(_e) => {}
-                    NimiqEvent::Peers(_e) => {}
+                    NimiqEvent::Peers(event) => {
+                        match event {
+                            ConnectionPoolEvent::Disconnect { peer_id } => {
+                                // Workaround to trigger a peer disconnection
+                                Swarm::ban_peer_id(swarm, peer_id);
+                                Swarm::unban_peer_id(swarm, peer_id);
+                            }
+                        }
+                    }
                 }
             }
             _ => {}
@@ -489,7 +497,9 @@ impl Network {
             }
             NetworkAction::DialAddress { address, output } => {
                 output
-                    .send(Swarm::dial_addr(swarm, address).map_err(Into::into))
+                    .send(Swarm::dial_addr(swarm, address).map_err(|l| {
+                        NetworkError::Dial(libp2p::swarm::DialError::ConnectionLimit(l))
+                    }))
                     .ok();
             }
             NetworkAction::DhtGet { key, output } => {
@@ -563,13 +573,14 @@ impl Network {
             NetworkAction::Validate {
                 message_id,
                 source,
+                acceptance,
                 output,
             } => {
                 output
                     .send(Ok(swarm.gossipsub.report_message_validation_result(
                         &message_id,
                         &source,
-                        MessageAcceptance::Accept,
+                        acceptance,
                     )?))
                     .ok();
             }
@@ -727,14 +738,25 @@ impl NetworkInterface for Network {
         Ok(())
     }
 
-    async fn validate_message(&self, id: Self::PubsubId) -> Result<bool, Self::Error> {
+    async fn validate_message(
+        &self,
+        id: Self::PubsubId,
+        acceptance: MsgAcceptance,
+    ) -> Result<bool, Self::Error> {
         let (output_tx, output_rx) = oneshot::channel();
+
+        let msg_acceptance = match acceptance {
+            MsgAcceptance::Accept => MessageAcceptance::Accept,
+            MsgAcceptance::Reject => MessageAcceptance::Reject,
+            MsgAcceptance::Ignore => MessageAcceptance::Ignore,
+        };
 
         self.action_tx
             .clone()
             .send(NetworkAction::Validate {
                 message_id: id.message_id,
                 source: id.propagation_source,
+                acceptance: msg_acceptance,
                 output: output_tx,
             })
             .await?;
@@ -843,7 +865,7 @@ mod tests {
         },
         message::peer::Peer,
     };
-    use nimiq_network_interface::network::{NetworkEvent, Topic};
+    use nimiq_network_interface::network::{MsgAcceptance, NetworkEvent, Topic};
 
     #[derive(Clone, Debug, Deserialize, Serialize)]
     struct TestMessage {
@@ -895,7 +917,6 @@ mod tests {
                 keep_alive: KeepAlive::No,
             },
             message: Default::default(),
-            limit: Default::default(),
             kademlia: Default::default(),
             gossipsub,
         }
@@ -1177,6 +1198,11 @@ mod tests {
 
         assert_eq!(received_message, test_message);
 
-        assert!(net1.validate_message(message_id).await.unwrap());
+        // Make sure messages are validated before they are pruned from the memcache
+        std::thread::sleep(Duration::from_millis(4500));
+        assert!(net1
+            .validate_message(message_id, MsgAcceptance::Accept)
+            .await
+            .unwrap());
     }
 }

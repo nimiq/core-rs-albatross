@@ -363,7 +363,7 @@ impl Default for DatabaseSettings {
         DatabaseSettings {
             path: None,
             size: Some(1024 * 1024 * 50),
-            max_dbs: Some(10),
+            max_dbs: Some(12),
             no_lmdb_sync: None,
         }
     }
