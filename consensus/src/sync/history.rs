@@ -442,7 +442,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         let current_offset =
             policy::epoch_at(self.blockchain.election_head().header.block_number) as usize;
         // If `epoch_ids` includes known blocks, truncate (or discard on fork prior to our accepted state).
-        if epoch_ids.offset <= current_offset {
+        if !epoch_ids.ids.is_empty() && epoch_ids.offset <= current_offset {
             // Check most recent id against our state.
             if current_id == epoch_ids.ids[current_offset - epoch_ids.offset] {
                 // Remove known blocks.
