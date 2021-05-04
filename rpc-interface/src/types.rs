@@ -355,13 +355,6 @@ impl Inherent {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ExtendedTransactions {
-    pub transactions: Vec<Transaction>,
-
-    pub inherents: Vec<Inherent>,
-}
-
 impl Block {
     pub fn from_block(
         blockchain: &Blockchain,
