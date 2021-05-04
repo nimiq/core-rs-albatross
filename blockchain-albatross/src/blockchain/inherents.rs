@@ -337,7 +337,7 @@ impl Blockchain {
                 let tx = Transaction::new_reward(
                     inherent.target.clone(),
                     inherent.value,
-                    self.block_number(),
+                    self.block_number() + 1,
                     self.network_id,
                 );
                 transactions.push(tx);
