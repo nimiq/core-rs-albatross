@@ -10,9 +10,7 @@ use nimiq_keys::Address;
 use nimiq_primitives::policy;
 use nimiq_rpc_interface::{
     blockchain::BlockchainInterface,
-    types::{
-        Block, Inherent, OrLatest, SlashedSlots, Slot, Stake, Stakes, Transaction, Validator,
-    },
+    types::{Block, Inherent, OrLatest, SlashedSlots, Slot, Stake, Stakes, Transaction, Validator},
 };
 
 use crate::error::Error;
@@ -159,7 +157,10 @@ impl BlockchainInterface for BlockchainDispatcher {
         Err(Error::NotImplemented)
     }
 
-    async fn get_transactions_by_block_number(&mut self, block_number: u32) -> Result<Vec<Transaction>, Error> {
+    async fn get_transactions_by_block_number(
+        &mut self,
+        block_number: u32,
+    ) -> Result<Vec<Transaction>, Error> {
         // Get all the extended transactions that correspond to this block.
         let extended_tx_vec = self
             .blockchain
