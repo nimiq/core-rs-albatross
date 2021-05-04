@@ -114,6 +114,9 @@ pub enum BlockAdditionalFields {
         slots: Option<Vec<Slots>>,
 
         #[serde(skip_serializing_if = "Option::is_none")]
+        transactions: Option<Vec<Transaction>>,
+
+        #[serde(skip_serializing_if = "Option::is_none")]
         lost_reward_set: Option<BitSet>,
 
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -374,12 +377,38 @@ impl Block {
 
         match block {
             nimiq_block_albatross::Block::Macro(macro_block) => {
+                let slots = macro_block.get_validators().map(Slots::from_slots);
+
+                let (lost_reward_set, transactions) = if let Some(body) = macro_block.body {
+                    (
+                        Some(body.lost_reward_set),
+                        if include_transactions {
+                            let head_height = blockchain.block_number();
+                            Some(
+                                body.transactions
+                                    .into_iter()
+                                    .map(|tx| {
+                                        Transaction::from_blockchain(
+                                            tx,
+                                            block_number,
+                                            timestamp,
+                                            head_height,
+                                        )
+                                    })
+                                    .collect(),
+                            )
+                        } else {
+                            None
+                        },
+                    )
+                } else {
+                    (None, None)
+                };
+
                 let validator_slots_opt = blockchain
                     .get_block(&macro_block.header.parent_election_hash, true, None)
                     .and_then(|block| block.body())
                     .and_then(|body| body.unwrap_macro().validators);
-
-                let slots = macro_block.get_validators().map(Slots::from_slots);
 
                 Block {
                     block_type: BlockType::Macro,
@@ -397,7 +426,8 @@ impl Block {
                         is_election_block: policy::is_election_block_at(block_number),
                         parent_election_hash: macro_block.header.parent_election_hash,
                         slots,
-                        lost_reward_set: macro_block.body.map(|body| body.lost_reward_set),
+                        transactions,
+                        lost_reward_set,
                         justification: MacroJustification::from_pbft_proof(
                             macro_block.justification,
                             validator_slots_opt.as_ref(),
@@ -415,8 +445,7 @@ impl Block {
                             Some(
                                 body.transactions
                                     .into_iter()
-                                    .enumerate()
-                                    .map(|(_index, tx)| {
+                                    .map(|tx| {
                                         Transaction::from_blockchain(
                                             tx,
                                             block_number,
