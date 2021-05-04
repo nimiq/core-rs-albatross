@@ -10,10 +10,7 @@ use nimiq_keys::Address;
 use nimiq_primitives::policy;
 use nimiq_rpc_interface::{
     blockchain::BlockchainInterface,
-    types::{
-        Block, ExtendedTransactions, Inherent, SlashedSlots, Slot, Stake, Stakes, Transaction,
-        Validator,
-    },
+    types::{Block, Inherent, SlashedSlots, Slot, Stake, Stakes, Transaction, Validator},
 };
 
 use crate::error::Error;
@@ -170,7 +167,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     async fn get_transactions_by_block_number(
         &mut self,
         block_number: u32,
-    ) -> Result<ExtendedTransactions, Error> {
+    ) -> Result<Vec<Transaction>, Error> {
         // Get all the extended transactions that correspond to this block.
         let extended_tx_vec = self
             .blockchain
@@ -178,16 +175,9 @@ impl BlockchainInterface for BlockchainDispatcher {
             .get_block_transactions(block_number, None);
 
         let mut transactions = vec![];
-        let mut inherents = vec![];
 
         for ext_tx in extended_tx_vec {
-            if ext_tx.is_inherent() {
-                inherents.push(Inherent::from_transaction(
-                    ext_tx.unwrap_inherent().clone(),
-                    ext_tx.block_number,
-                    ext_tx.block_time,
-                ));
-            } else {
+            if !ext_tx.is_inherent() {
                 transactions.push(Transaction::from_blockchain(
                     ext_tx.unwrap_basic().clone(),
                     ext_tx.block_number,
@@ -197,10 +187,7 @@ impl BlockchainInterface for BlockchainDispatcher {
             }
         }
 
-        Ok(ExtendedTransactions {
-            transactions,
-            inherents,
-        })
+        Ok(transactions)
     }
 
     async fn get_batch_inherents(&mut self, batch_number: u32) -> Result<Vec<Inherent>, Error> {

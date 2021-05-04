@@ -5,9 +5,7 @@ use nimiq_account::Account;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 
-use crate::types::{
-    Block, ExtendedTransactions, Inherent, SlashedSlots, Slot, Stakes, Transaction,
-};
+use crate::types::{Block, Inherent, SlashedSlots, Slot, Stakes, Transaction};
 
 #[cfg_attr(
     feature = "proxy",
@@ -56,7 +54,7 @@ pub trait BlockchainInterface {
     async fn get_transactions_by_block_number(
         &mut self,
         block_number: u32,
-    ) -> Result<ExtendedTransactions, Self::Error>;
+    ) -> Result<Vec<Transaction>, Self::Error>;
 
     async fn get_batch_inherents(
         &mut self,
