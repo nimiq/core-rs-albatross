@@ -302,7 +302,7 @@ impl Transaction {
             hash: transaction.hash(),
             block_number,
             timestamp,
-            confirmations: head_height.saturating_sub(block_number),
+            confirmations: head_height.saturating_sub(block_number) + 1,
             from: transaction.sender,
             to: transaction.recipient,
             value: transaction.value,
