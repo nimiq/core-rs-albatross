@@ -13,7 +13,7 @@ use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_primitives::policy;
-use nimiq_primitives::policy::BATCHES_PER_EPOCH;
+use nimiq_primitives::policy::{BATCHES_PER_EPOCH, BATCH_LENGTH, EPOCH_LENGTH};
 
 /// Secret key of validator. Tests run with `genesis/src/genesis/unit-albatross.toml`
 const SECRET_KEY: &str = "196ffdb1a8acc7cbd76a251aeac0600a1d68b3aba1eba823b5e4dc5dbdcdc730afa752c05ab4f6ef8518384ad514f403c5a088a22b17bf1bc14f8ff8decc2a512c0a200f68d7bdf5a319b30356fe8d1d75ef510aed7a8660968c216c328a0000";
@@ -122,9 +122,9 @@ fn sign_macro_block(
 
 #[test]
 fn it_can_history_sync() {
-    // The minimum number of macro blocks necessary so that we have one election block and one
-    // checkpoint block to push.
-    let num_macro_blocks = (BATCHES_PER_EPOCH + 1) as usize;
+    // The minimum number of macro blocks necessary so that we have two election blocks and a few
+    // checkpoint blocks to push.
+    let num_macro_blocks = (2 * BATCHES_PER_EPOCH + 1) as usize;
 
     // Create a blockchain to produce the macro blocks.
     let env = VolatileEnvironment::new(10).unwrap();
@@ -136,19 +136,68 @@ fn it_can_history_sync() {
     let producer = BlockProducer::new_without_mempool(Arc::clone(&blockchain), keypair);
     produce_macro_blocks(num_macro_blocks, &producer, &blockchain);
 
-    // Get the latest election block and corresponding history tree transactions.
-    let election_block = Block::Macro(blockchain.state().election_head.clone());
+    // Get the election blocks and corresponding history tree transactions.
+    let election_block_1 = blockchain
+        .chain_store
+        .get_block_at(EPOCH_LENGTH, true, None)
+        .unwrap();
 
-    let election_txs = blockchain
-        .history_store
-        .get_epoch_transactions(policy::epoch_at(election_block.block_number()), None);
+    let election_txs_1 = blockchain.history_store.get_epoch_transactions(1, None);
 
-    // Get the latest checkpoint block and corresponding history tree transactions.
-    let checkpoint_block = blockchain.state().macro_info.head.clone();
+    let election_block_2 = blockchain
+        .chain_store
+        .get_block_at(2 * EPOCH_LENGTH, true, None)
+        .unwrap();
 
-    let checkpoint_txs = blockchain
-        .history_store
-        .get_epoch_transactions(policy::epoch_at(checkpoint_block.block_number()), None);
+    let election_txs_2 = blockchain.history_store.get_epoch_transactions(2, None);
+
+    let election_txs_3 = blockchain.history_store.get_epoch_transactions(3, None);
+
+    // Get the checkpoint blocks and corresponding history tree transactions.
+    let checkpoint_block_2_1 = blockchain
+        .chain_store
+        .get_block_at(EPOCH_LENGTH + BATCH_LENGTH, true, None)
+        .unwrap();
+
+    let mut checkpoint_txs_2_1 = vec![];
+
+    for ext_tx in &election_txs_2 {
+        if ext_tx.block_number > EPOCH_LENGTH + BATCH_LENGTH {
+            break;
+        }
+
+        checkpoint_txs_2_1.push(ext_tx.clone());
+    }
+
+    let checkpoint_block_2_3 = blockchain
+        .chain_store
+        .get_block_at(EPOCH_LENGTH + 3 * BATCH_LENGTH, true, None)
+        .unwrap();
+
+    let mut checkpoint_txs_2_3 = vec![];
+
+    for ext_tx in &election_txs_2 {
+        if ext_tx.block_number > EPOCH_LENGTH + 3 * BATCH_LENGTH {
+            break;
+        }
+
+        checkpoint_txs_2_3.push(ext_tx.clone());
+    }
+
+    let checkpoint_block_3_1 = blockchain
+        .chain_store
+        .get_block_at(2 * EPOCH_LENGTH + BATCH_LENGTH, true, None)
+        .unwrap();
+
+    let mut checkpoint_txs_3_1 = vec![];
+
+    for ext_tx in &election_txs_3 {
+        if ext_tx.block_number > 2 * EPOCH_LENGTH + BATCH_LENGTH {
+            break;
+        }
+
+        checkpoint_txs_3_1.push(ext_tx.clone());
+    }
 
     // Create a second blockchain to push these blocks.
     let env2 = VolatileEnvironment::new(10).unwrap();
@@ -156,12 +205,27 @@ fn it_can_history_sync() {
 
     // Push blocks using history sync.
     assert_eq!(
-        blockchain2.push_history_sync(election_block, &election_txs),
+        blockchain2.push_history_sync(election_block_1, &election_txs_1),
         Ok(PushResult::Extended)
     );
 
     assert_eq!(
-        blockchain2.push_history_sync(checkpoint_block, &checkpoint_txs),
+        blockchain2.push_history_sync(checkpoint_block_2_1, &checkpoint_txs_2_1),
+        Ok(PushResult::Extended)
+    );
+
+    assert_eq!(
+        blockchain2.push_history_sync(checkpoint_block_2_3, &checkpoint_txs_2_3),
+        Ok(PushResult::Extended)
+    );
+
+    assert_eq!(
+        blockchain2.push_history_sync(election_block_2, &election_txs_2),
+        Ok(PushResult::Extended)
+    );
+
+    assert_eq!(
+        blockchain2.push_history_sync(checkpoint_block_3_1, &checkpoint_txs_3_1),
         Ok(PushResult::Extended)
     );
 }
