@@ -261,8 +261,8 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
         }
 
         match ip {
-            IpNetwork::V4(..) => self.limits.ipv4_count -= 1,
-            IpNetwork::V6(..) => self.limits.ipv6_count -= 1,
+            IpNetwork::V4(..) => self.limits.ipv4_count = self.limits.ipv4_count.saturating_sub(1),
+            IpNetwork::V6(..) => self.limits.ipv6_count = self.limits.ipv6_count.saturating_sub(1),
         };
     }
 
