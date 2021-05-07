@@ -5,10 +5,6 @@ use nimiq_block_production_albatross::test_utils::TemporaryBlockProducer;
 use nimiq_blockchain_albatross::{ForkEvent, PushError, PushResult};
 use nimiq_primitives::policy;
 
-mod history_sync;
-mod inherents;
-mod signed;
-
 #[test]
 fn it_can_rebranch_view_changes() {
     // Build forks using two producers.
