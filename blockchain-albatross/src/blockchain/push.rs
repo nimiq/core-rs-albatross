@@ -320,7 +320,6 @@ impl Blockchain {
 
         let state = self.state.upgradable_read();
 
-        // TODO: Get rid of the .clone() here.
         current = (state.head_hash.clone(), state.main_chain.clone());
 
         // Check if ancestor is in current batch.

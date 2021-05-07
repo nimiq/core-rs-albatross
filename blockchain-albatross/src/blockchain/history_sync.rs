@@ -24,30 +24,33 @@ use nimiq_primitives::account::AccountType;
 /// necessary to verify that the given block is a successor of our current chain so far and that the
 /// corresponding history tree is actually part of the block.
 impl Blockchain {
-    /// Pushes a macro block (election or checkpoint) into the chain during history sync. You should
-    /// NOT provide micro blocks as input. You can push election blocks after checkpoint blocks and
-    /// vice-versa.
+    /// Pushes a macro block (election or checkpoint) into the chain using the history sync method.
+    /// You can push election blocks after checkpoint blocks and vice-versa. You can also push macro
+    /// blocks even after you pushed micro blocks.
+    /// You just cannot push micro blocks with this method.
     pub fn push_history_sync(
         &self,
         block: Block,
         ext_txs: &[ExtendedTransaction],
     ) -> Result<PushResult, PushError> {
+        // Check that it is a macro block. We can't push micro blocks with this function.
+        assert!(
+            block.is_macro(),
+            "You can't push micro blocks with history sync!"
+        );
+
         // Only one push operation at a time.
         let push_lock = self.push_lock.lock();
 
-        // TODO: We might want to pass this as argument to this method
+        // Create a new database read transaction.
         let read_txn = ReadTransaction::new(&self.env);
 
-        // Check that it is a macro block. We can't push micro blocks with this function.
-        let macro_block = match block {
-            Block::Macro(ref b) => b,
-            Block::Micro(_) => {
-                return Err(PushError::InvalidSuccessor);
-            }
-        };
+        // Unwrap the block.
+        let macro_block = block.unwrap_macro_ref();
 
         // Check the version
         if macro_block.header.version != policy::VERSION {
+            warn!("Rejecting block - block with wrong version");
             return Err(PushError::InvalidBlock(BlockError::UnsupportedVersion));
         }
 
@@ -57,39 +60,34 @@ impl Blockchain {
             .get_chain_info(&macro_block.hash(), false, Some(&read_txn))
             .is_some()
         {
+            warn!("Rejecting block - block already known");
             return Ok(PushResult::Known);
         }
 
-        // Get the chain info at the head of the current chain.
-        let head = self
-            .chain_store
-            .get_head(Some(&read_txn))
-            .ok_or(PushError::Orphan)?;
+        // Get the chain info of the current macro head.
+        let prev_macro_hash = self.macro_head_hash();
 
-        let prev_info = self
-            .chain_store
-            .get_chain_info(&head, false, Some(&read_txn))
-            .ok_or(PushError::Orphan)?;
-
-        // Check that the head is a macro block. This has to be the case since we never push micro
-        // blocks while we are syncing.
-        assert!(prev_info.head.is_macro());
+        let prev_macro_info = self
+            .get_chain_info(&prev_macro_hash, false, Some(&read_txn))
+            .expect("Couldn't fetch chain info for the macro head of the chain!");
 
         // Check if we have this block's parent. The checks change depending if the last macro block
         // that we pushed was an election block or not.
-        if policy::is_election_block_at(prev_info.head.block_number()) {
+        if policy::is_election_block_at(prev_macro_info.head.block_number()) {
             // We only need to check that the parent election block of this block is the same as our
             // head block.
-            if macro_block.header.parent_election_hash != prev_info.head.hash() {
+            if macro_block.header.parent_election_hash != prev_macro_info.head.hash() {
+                warn!("Rejecting block - macro block without correct parent");
                 return Err(PushError::Orphan);
             }
         } else {
             // We need to check that this block and our head block have the same parent election
             // block and are in the correct order.
             if &macro_block.header.parent_election_hash
-                != prev_info.head.parent_election_hash().unwrap()
-                || macro_block.header.block_number <= prev_info.head.block_number()
+                != prev_macro_info.head.parent_election_hash().unwrap()
+                || macro_block.header.block_number <= prev_macro_info.head.block_number()
             {
+                warn!("Rejecting block - macro block without correct parent");
                 return Err(PushError::Orphan);
             }
         }
@@ -134,7 +132,7 @@ impl Blockchain {
         info!("Syncing at macro block #{}", block.block_number());
 
         // Extend the chain with this block.
-        self.extend_history_sync(block, ext_txs, prev_info, push_lock)
+        self.extend_history_sync(block, ext_txs, prev_macro_info, push_lock)
     }
 
     /// Extends the current chain with a macro block (election or checkpoint) during history sync.
@@ -142,11 +140,20 @@ impl Blockchain {
         &self,
         block: Block,
         ext_txs: &[ExtendedTransaction],
-        mut prev_info: ChainInfo,
+        mut prev_macro_info: ChainInfo,
         push_lock: MutexGuard<()>,
     ) -> Result<PushResult, PushError> {
         // Create a new database write transaction.
         let mut txn = WriteTransaction::new(&self.env);
+
+        // If there are micro blocks already in the blockchain, then we need to revert the
+        // blockchain to the last macro block.
+        let num_blocks = self
+            .block_number()
+            .checked_sub(prev_macro_info.head.block_number())
+            .expect("Head of the chain can't be before the macro head!");
+
+        self.revert_blocks(num_blocks, &mut txn)?;
 
         // Get the block hash.
         let block_hash = block.hash();
@@ -178,11 +185,15 @@ impl Blockchain {
         self.chain_store
             .put_chain_info(&mut txn, &block_hash, &chain_info, true);
 
-        // Update the chain info for the previous block and store it.
-        prev_info.main_chain_successor = Some(chain_info.head.hash());
+        // Update the chain info for the previous macro block and store it.
+        prev_macro_info.main_chain_successor = Some(chain_info.head.hash());
 
-        self.chain_store
-            .put_chain_info(&mut txn, &prev_info.head.hash(), &prev_info, false);
+        self.chain_store.put_chain_info(
+            &mut txn,
+            &prev_macro_info.head.hash(),
+            &prev_macro_info,
+            false,
+        );
 
         // Set the head of the chain store to the current block.
         self.chain_store.set_head(&mut txn, &block_hash);
@@ -195,7 +206,7 @@ impl Blockchain {
         let mut first_new_ext_tx = 0;
 
         for ext_tx in ext_txs {
-            if ext_tx.block_number <= prev_info.head.block_number() {
+            if ext_tx.block_number <= prev_macro_info.head.block_number() {
                 first_new_ext_tx += 1;
             } else {
                 break;
@@ -323,6 +334,7 @@ impl Blockchain {
         state.head_hash = block_hash.clone();
         state.macro_info = chain_info;
         state.macro_head_hash = block_hash.clone();
+
         if is_election_block {
             state.election_head = macro_block.clone();
             state.election_head_hash = block_hash.clone();
@@ -347,5 +359,47 @@ impl Blockchain {
 
         // Return result.
         Ok(PushResult::Extended)
+    }
+
+    /// Reverts a given number of micro blocks from the blockchain.
+    fn revert_blocks(
+        &self,
+        num_blocks: u32,
+        write_txn: &mut WriteTransaction,
+    ) -> Result<(), PushError> {
+        // Gets an upgradeable read transaction to the blockchain state.
+        let state = self.state.upgradable_read();
+
+        // Get the chain info for the head of the chain.
+        let mut current_info = self
+            .get_chain_info(&self.head_hash(), true, Some(&write_txn))
+            .expect("Couldn't fetch chain info for the head of the chain!");
+
+        // Revert each block individually.
+        for _ in 0..num_blocks {
+            match current_info.head {
+                Block::Micro(ref micro_block) => {
+                    // Get the chain info for the parent of the current head of the chain.
+                    let prev_info = self
+                        .get_chain_info(&micro_block.header.parent_hash, true, Some(&write_txn))
+                        .expect("Failed to find main chain predecessor while reverting blocks!");
+
+                    // Revert the accounts tree. This also reverts the history store.
+                    self.revert_accounts(
+                        &state.accounts,
+                        write_txn,
+                        &micro_block,
+                        prev_info.head.view_number(),
+                    )?;
+
+                    current_info = prev_info;
+                }
+                Block::Macro(_) => {
+                    unreachable!();
+                }
+            }
+        }
+
+        Ok(())
     }
 }
