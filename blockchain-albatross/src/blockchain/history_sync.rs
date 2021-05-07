@@ -131,6 +131,8 @@ impl Blockchain {
             return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
         }
 
+        info!("Syncing at macro block #{}", block.block_number());
+
         // Extend the chain with this block.
         self.extend_history_sync(block, ext_txs, prev_info, push_lock)
     }
