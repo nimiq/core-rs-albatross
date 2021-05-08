@@ -241,7 +241,7 @@ impl Blockchain {
                         let reward = Inherent {
                             ty: InherentType::Reward,
                             target: tx.recipient.clone(),
-                            value: tx.value.clone(),
+                            value: tx.value,
                             data: vec![],
                         };
 
@@ -257,10 +257,8 @@ impl Blockchain {
         // We go over the blocks one more time and add the FinalizeBatch and FinalizeEpoch inherents
         // to the macro blocks. This is necessary because the History Store doesn't store those inherents
         // so we need to add them again in order to correctly sync.
-        for i in 0..block_numbers.len() {
-            let block_number = block_numbers[i];
-
-            if policy::is_macro_block_at(block_number) {
+        for (i, block_number) in block_numbers.iter().enumerate() {
+            if policy::is_macro_block_at(*block_number) {
                 let staking_contract_address = self
                     .staking_contract_address()
                     .expect("NetworkInfo doesn't have a staking contract address set!");
@@ -274,7 +272,7 @@ impl Blockchain {
 
                 block_inherents.get_mut(i).unwrap().push(finalize_batch);
 
-                if policy::is_election_block_at(block_number) {
+                if policy::is_election_block_at(*block_number) {
                     let finalize_epoch = Inherent {
                         ty: InherentType::FinalizeEpoch,
                         target: staking_contract_address.clone(),
