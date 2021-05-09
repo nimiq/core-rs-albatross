@@ -1,16 +1,15 @@
 use std::fmt::Debug;
 use std::pin::Pin;
 
-use beserial::{Deserialize, Serialize};
-
 use futures::channel::mpsc::{unbounded, UnboundedSender};
 use futures::future::BoxFuture;
 use futures::stream::BoxStream;
 use futures::task::{Context, Poll};
 use futures::{ready, select, FutureExt, Sink, Stream, StreamExt};
-
 use tokio::task::JoinHandle;
 use tokio::time::{interval_at, Instant, Interval};
+
+use beserial::{Deserialize, Serialize};
 
 use crate::config::Config;
 use crate::contribution::AggregatableContribution;

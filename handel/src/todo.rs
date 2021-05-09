@@ -3,10 +3,11 @@ use core::task::{Context, Poll};
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use futures::stream::{BoxStream, Stream, StreamExt};
+
 use crate::contribution::AggregatableContribution;
 use crate::evaluator::Evaluator;
 use crate::update::LevelUpdate;
-use futures::stream::{BoxStream, Stream, StreamExt};
 
 /// A TodoItem represents a contribution which has not yet been aggregated into the store.
 #[derive(Clone, Debug)]
@@ -36,6 +37,7 @@ impl<C: AggregatableContribution> PartialEq for TodoItem<C> {
 }
 
 impl<C: AggregatableContribution> Eq for TodoItem<C> {}
+
 impl<C: AggregatableContribution> std::hash::Hash for TodoItem<C> {
     // TODO
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
