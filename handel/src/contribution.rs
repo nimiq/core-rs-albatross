@@ -1,9 +1,10 @@
-use collections::bitset::BitSet;
-use failure::Fail;
+use thiserror::Error;
 
-#[derive(Clone, Debug, Fail)]
+use collections::bitset::BitSet;
+
+#[derive(Clone, Debug, Error)]
 pub enum ContributionError {
-    #[fail(display = "Contributions are overlapping: {:?}", _0)]
+    #[error("Contributions are overlapping: {0:?}")]
     Overlapping(BitSet),
 }
 

@@ -1,9 +1,8 @@
-#![recursion_limit = "256"] // unfortunately necessary for the rather big select! macro in aggregation.rs > Aggregation::next
+#![recursion_limit = "256"]
+// unfortunately necessary for the rather big select! macro in aggregation.rs > Aggregation::next
 extern crate beserial;
 #[macro_use]
 extern crate beserial_derive;
-#[macro_use]
-extern crate failure;
 /// Handel implementation for Nimiq's Rust Albatross client.
 ///
 /// Handel[1] is byzantine fault-tolerant signature aggregation protocol. Albatross uses Handel to

@@ -1,16 +1,19 @@
 use std::ops::RangeInclusive;
-// use nimiq_collections::bitset::BitSet;
+
+use thiserror::Error;
 
 use utils::math::log2;
 
 use crate::contribution::AggregatableContribution;
 
+// use nimiq_collections::bitset::BitSet;
+
 /// Errors that can happen during partitioning
-#[derive(Clone, Debug, Fail, PartialEq)]
+#[derive(Clone, Debug, Error, PartialEq)]
 pub enum PartitioningError {
-    #[fail(display = "Invalid level: {}", level)]
+    #[error("Invalid level: {level}")]
     InvalidLevel { level: usize },
-    #[fail(display = "Empty level: {}", level)]
+    #[error("Empty level: {level}")]
     EmptyLevel { level: usize },
 }
 
