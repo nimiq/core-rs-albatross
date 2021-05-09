@@ -19,7 +19,6 @@ maintenance = { status = "experimental" }
 [dependencies]
 async-trait = "0.1"
 atomic = "0.4"
-failure = "0.1"
 futures = "0.1"
 futures-03 = { package = "futures", version = "0.3" }
 hex = "0.4"

@@ -893,16 +893,22 @@ pub const MAX_DISTANCE: u8 = 4;
 pub const MAX_FAILED_ATTEMPTS_WS: u32 = 3;
 pub const MAX_FAILED_ATTEMPTS_RTC: u32 = 2;
 
-const MAX_TIMESTAMP_DRIFT: Duration = Duration::from_secs(60 * 10); // 10 minutes
-const HOUSEKEEPING_INTERVAL: Duration = Duration::from_secs(60); // 1 minute
-const DEFAULT_BAN_TIME: Duration = Duration::from_secs(60 * 10); // 10 minutes
-pub const INITIAL_FAILED_BACKOFF: Duration = Duration::from_secs(30); // 30 seconds
+const MAX_TIMESTAMP_DRIFT: Duration = Duration::from_secs(60 * 10);
+// 10 minutes
+const HOUSEKEEPING_INTERVAL: Duration = Duration::from_secs(60);
+// 1 minute
+const DEFAULT_BAN_TIME: Duration = Duration::from_secs(60 * 10);
+// 10 minutes
+pub const INITIAL_FAILED_BACKOFF: Duration = Duration::from_secs(30);
+// 30 seconds
 pub const MAX_FAILED_BACKOFF: Duration = Duration::from_secs(60 * 10); // 10 minutes
 
-const MAX_SIZE_WS: usize = 10000; // TODO different for browser
+const MAX_SIZE_WS: usize = 10000;
+// TODO different for browser
 const MAX_SIZE_WSS: usize = 10000;
 const MAX_SIZE_RTC: usize = 10000;
-const MAX_SIZE: usize = 20500; // Includes dumb peers
+const MAX_SIZE: usize = 20500;
+// Includes dumb peers
 const MAX_SIZE_PER_IP: usize = 250;
 
 const SEEDING_TIMEOUT: Duration = Duration::from_secs(3); // 3 seconds

@@ -28,20 +28,26 @@ pub struct PeerScorer {
 }
 
 impl PeerScorer {
-    const PEER_COUNT_MIN_FULL_WS_OUTBOUND: usize = 1; // FIXME: this is fixed to the "node.js" value since we don't support browsers in the Rust impl yet
+    const PEER_COUNT_MIN_FULL_WS_OUTBOUND: usize = 1;
+    // FIXME: this is fixed to the "node.js" value since we don't support browsers in the Rust impl yet
     const PEER_COUNT_MIN_OUTBOUND: usize = 6; // FIXME: this is fixed to the "node.js" value since we don't support browsers in the Rust impl yet
 
     const PICK_SELECTION_SIZE: usize = 100;
 
-    const MIN_AGE_FULL: Duration = Duration::from_secs(5 * 60); // 5 minutes
+    const MIN_AGE_FULL: Duration = Duration::from_secs(5 * 60);
+    // 5 minutes
     const BEST_AGE_FULL: Duration = Duration::from_secs(24 * 60 * 60); // 24 hours
 
-    const MIN_AGE_LIGHT: Duration = Duration::from_secs(2 * 60); // 2 minutes
-    const BEST_AGE_LIGHT: Duration = Duration::from_secs(15 * 60); // 15 minutes
+    const MIN_AGE_LIGHT: Duration = Duration::from_secs(2 * 60);
+    // 2 minutes
+    const BEST_AGE_LIGHT: Duration = Duration::from_secs(15 * 60);
+    // 15 minutes
     const MAX_AGE_LIGHT: Duration = Duration::from_secs(6 * 60 * 60); // 6 hours
 
-    const MIN_AGE_NANO: Duration = Duration::from_secs(60); // 1 minute
-    const BEST_AGE_NANO: Duration = Duration::from_secs(5 * 60); // 5 minutes
+    const MIN_AGE_NANO: Duration = Duration::from_secs(60);
+    // 1 minute
+    const BEST_AGE_NANO: Duration = Duration::from_secs(5 * 60);
+    // 5 minutes
     const MAX_AGE_NANO: Duration = Duration::from_secs(30 * 60); // 30 minutes
 
     const BEST_PROTOCOL_WS_DISTRIBUTION: f64 = 0.15; // 15%
