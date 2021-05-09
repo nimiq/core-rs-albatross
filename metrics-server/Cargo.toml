@@ -18,11 +18,11 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 base64 = "0.10"
-failure = "0.1"
 futures = "0.1"
 hyper = "0.12"
 log = "0.4"
 native-tls = "0.2"
+thiserror = "1.0"
 tokio = "0.1"
 tokio-tls = "0.2"
 
