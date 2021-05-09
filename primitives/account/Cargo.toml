@@ -23,7 +23,6 @@ log = "0.4"
 parking_lot = "0.9"
 rand = "0.7"
 serde = { version = "1.0", optional = true }
-strum = "0.20"
 strum_macros = "0.20"
 thiserror = "1.0"
 

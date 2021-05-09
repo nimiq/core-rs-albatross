@@ -16,7 +16,6 @@ bitflags = "1.0"
 hex = "0.4"
 log = "0.4"
 serde = { version = "1.0", optional = true }
-strum = "0.20"
 strum_macros = "0.20"
 thiserror = "1.0"
 

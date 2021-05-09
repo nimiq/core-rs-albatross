@@ -35,7 +35,6 @@ rand = "0.7"
 serde = "1.0"
 serde_derive = "1.0"
 structopt = { version = "0.3", features = ["paw"] }
-strum = "0.20"
 strum_macros = "0.20"
 toml = "0.5"
 url = "1.7"
@@ -65,7 +64,7 @@ nimiq-genesis = { path = "../genesis" }
 
 [features]
 default = []
-validator = ["nimiq-validator", "nimiq-validator-network", "nimiq-bls", "nimiq-rpc-server/validator"]
+validator = ["nimiq-validator", "nimiq-validator-network", "nimiq-bls", "nimiq-rpc-server"]
 deadlock = ["parking_lot"]
 panic = ["log-panics"]
 logging = ["fern", "colored"]

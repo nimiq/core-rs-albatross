@@ -23,7 +23,6 @@ parking_lot = "0.9"
 pin-project = "0.4.8"
 rand = "0.7"
 tokio = { version = "0.2", features = ["full"] }
-weak-table = "0.2"
 async-trait = "0.1"
 thiserror = "1.0"
 

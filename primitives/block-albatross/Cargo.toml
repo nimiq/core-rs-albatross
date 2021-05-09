@@ -22,7 +22,6 @@ serde = { version = "1.0", features = ["derive"], optional = true }
 
 beserial = { path = "../../beserial" }
 beserial_derive = { path = "../../beserial/beserial_derive" }
-nimiq-account = { path = "../account" }
 nimiq-bls = { path = "../../bls", features = ["beserial"]}
 nimiq-collections = { path = "../../collections", features = ["bitset"] }
 nimiq-handel = { path = "../../handel" }
