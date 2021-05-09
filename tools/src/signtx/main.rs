@@ -6,9 +6,9 @@ use std::io::stdin;
 use std::process::exit;
 use std::str::FromStr;
 
+use anyhow::Error;
 use clap::{crate_authors, crate_description, crate_version, App, Arg};
-use failure::Error;
-use failure::Fail;
+use thiserror::Error;
 
 use beserial::{Deserialize, Serialize};
 use keys::{Address, KeyPair, PrivateKey};
@@ -145,18 +145,18 @@ fn main() {
     });
 }
 
-#[derive(Debug, Fail)]
+#[derive(Debug, Error)]
 enum AppError {
-    #[fail(display = "Secret key is missing")]
+    #[error("Secret key is missing")]
     SecretKey,
-    #[fail(display = "Sender address is missing")]
+    #[error("Sender address is missing")]
     SenderAddress,
-    #[fail(display = "Recipient address is missing")]
+    #[error("Recipient address is missing")]
     RecipientAddress,
-    #[fail(display = "Transaction value is missing")]
+    #[error("Transaction value is missing")]
     Value,
-    #[fail(display = "Transaction fee is missing")]
+    #[error("Transaction fee is missing")]
     Fee,
-    #[fail(display = "Validity start height is missing")]
+    #[error("Validity start height is missing")]
     ValidityStartHeight,
 }

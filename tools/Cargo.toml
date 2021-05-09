@@ -23,11 +23,12 @@ name = "nimiq-signtx"
 path = "src/signtx/main.rs"
 
 [dependencies]
+anyhow = "1.0"
 clap = "2.33"
-failure = "0.1"
 hex = "0.4"
 log = "0.4"
 rand = "0.7"
+thiserror = "1.0"
 
 beserial = { path = "../beserial" }
 nimiq-bls = { path = "../bls" }
