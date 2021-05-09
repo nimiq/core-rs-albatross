@@ -4,7 +4,7 @@ use std::io::Error as IoError;
 use std::path::Path;
 
 use chrono::{DateTime, Utc};
-use failure::Fail;
+use thiserror::Error;
 use toml::de::Error as TomlError;
 
 use account::{Account, AccountError, AccountsList, BasicAccount, StakingContract};
@@ -25,54 +25,24 @@ mod config;
 const DEFAULT_SIGNING_KEY: [u8; 96] = [0u8; 96];
 const DEFAULT_STAKING_CONTRACT_ADDRESS: &str = "NQ38 STAK 1NG0 0000 0000 C0NT RACT 0000 0000";
 
-#[derive(Debug, Fail)]
+#[derive(Debug, Error)]
 pub enum GenesisBuilderError {
-    #[fail(display = "No signing key to generate genesis seed.")]
+    #[error("No signing key to generate genesis seed.")]
     NoSigningKey,
-    #[fail(display = "No staking contract address.")]
+    #[error("No staking contract address.")]
     NoStakingContractAddress,
-    #[fail(display = "Invalid timestamp: {}", _0)]
+    #[error("Invalid timestamp: {0}")]
     InvalidTimestamp(DateTime<Utc>),
-    #[fail(display = "Serialization failed")]
-    SerializingError(#[cause] SerializingError),
-    #[fail(display = "I/O error")]
-    IoError(#[cause] IoError),
-    #[fail(display = "Failed to parse TOML file")]
-    TomlError(#[cause] TomlError),
-    #[fail(display = "Failed to stake")]
-    StakingError(#[cause] AccountError),
-    #[fail(display = "Database error")]
-    DatabaseError(#[cause] VolatileDatabaseError),
-}
-
-impl From<SerializingError> for GenesisBuilderError {
-    fn from(e: SerializingError) -> Self {
-        GenesisBuilderError::SerializingError(e)
-    }
-}
-
-impl From<IoError> for GenesisBuilderError {
-    fn from(e: IoError) -> Self {
-        GenesisBuilderError::IoError(e)
-    }
-}
-
-impl From<TomlError> for GenesisBuilderError {
-    fn from(e: TomlError) -> Self {
-        GenesisBuilderError::TomlError(e)
-    }
-}
-
-impl From<AccountError> for GenesisBuilderError {
-    fn from(e: AccountError) -> Self {
-        GenesisBuilderError::StakingError(e)
-    }
-}
-
-impl From<VolatileDatabaseError> for GenesisBuilderError {
-    fn from(e: VolatileDatabaseError) -> Self {
-        GenesisBuilderError::DatabaseError(e)
-    }
+    #[error("Serialization failed")]
+    SerializingError(#[from] SerializingError),
+    #[error("I/O error")]
+    IoError(#[from] IoError),
+    #[error("Failed to parse TOML file")]
+    TomlError(#[from] TomlError),
+    #[error("Failed to stake")]
+    StakingError(#[from] AccountError),
+    #[error("Database error")]
+    DatabaseError(#[from] VolatileDatabaseError),
 }
 
 #[derive(Clone)]

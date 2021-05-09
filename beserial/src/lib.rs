@@ -40,7 +40,6 @@ pub trait Serialize {
 }
 
 // Error and result
-
 #[derive(Error, Debug)]
 pub enum SerializingError {
     #[error("IoError: {0}")]

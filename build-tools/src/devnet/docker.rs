@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use failure::Error;
+use anyhow::Error;
 
 pub struct Docker {
     directory: PathBuf,
@@ -36,7 +36,7 @@ impl Docker {
 }
 
 mod docker_cmd {
-    use failure::Error;
+    use anyhow::Error;
 
     #[shellfn::shell]
     pub fn build<P: ToString>(env_dir: P) -> Result<(), Error> {
