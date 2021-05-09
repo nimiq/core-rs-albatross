@@ -346,6 +346,8 @@ impl Serialize for PeerAddressType {
     }
 }
 
-pub const MAX_AGE_WEBSOCKET: Duration = Duration::from_secs(60 * 30); // 30 minutes
-pub const MAX_AGE_WEBRTC: Duration = Duration::from_secs(60 * 15); // 15 minutes
+pub const MAX_AGE_WEBSOCKET: Duration = Duration::from_secs(60 * 30);
+// 30 minutes
+pub const MAX_AGE_WEBRTC: Duration = Duration::from_secs(60 * 15);
+// 15 minutes
 pub const MAX_AGE_DUMB: Duration = Duration::from_secs(60); // 1 minute

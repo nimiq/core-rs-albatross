@@ -1,4 +1,4 @@
-use failure::Fail;
+use thiserror::Error;
 
 use genesis::NetworkId;
 use peer_address::address::peer_uri::PeerUriError;
@@ -6,54 +6,24 @@ use utils::file_store::Error as KeyStoreError;
 
 use crate::websocket::error::ServerStartError;
 
-#[derive(Fail, Debug)]
+#[derive(Error, Debug)]
 pub enum Error {
-    #[fail(display = "PeerKey has not been initialized")]
+    #[error("PeerKey has not been initialized")]
     UninitializedPeerKey,
-    #[fail(display = "{}", _0)]
-    KeyStoreError(#[cause] KeyStoreError),
-    #[fail(display = "{}", _0)]
-    ServerStartError(#[cause] ServerStartError),
-    #[fail(display = "Could not load network info for id {:?}", _0)]
+    #[error("{0}")]
+    KeyStoreError(#[from] KeyStoreError),
+    #[error("{0}")]
+    ServerStartError(#[from] ServerStartError),
+    #[error("Could not load network info for id {0:?}")]
     InvalidNetworkInfo(NetworkId),
-    #[fail(display = "Could not add seed node {}", _0)]
-    InvalidSeed(#[cause] SeedError),
+    #[error("Could not add seed node {0}")]
+    InvalidSeed(#[from] SeedError),
 }
 
-impl From<KeyStoreError> for Error {
-    fn from(e: KeyStoreError) -> Self {
-        Error::KeyStoreError(e)
-    }
-}
-
-impl From<ServerStartError> for Error {
-    fn from(e: ServerStartError) -> Self {
-        Error::ServerStartError(e)
-    }
-}
-
-impl From<SeedError> for Error {
-    fn from(e: SeedError) -> Self {
-        Error::InvalidSeed(e)
-    }
-}
-
-#[derive(Debug, Fail)]
+#[derive(Debug, Error)]
 pub enum SeedError {
-    #[fail(display = "Invalid peer URI: {}", _0)]
-    Peer(#[cause] PeerUriError),
-    #[fail(display = "Invalid seed list URL: {}", _0)]
-    Url(#[cause] url::ParseError),
-}
-
-impl From<PeerUriError> for SeedError {
-    fn from(e: PeerUriError) -> SeedError {
-        SeedError::Peer(e)
-    }
-}
-
-impl From<url::ParseError> for SeedError {
-    fn from(e: url::ParseError) -> SeedError {
-        SeedError::Url(e)
-    }
+    #[error("Invalid peer URI: {0}")]
+    Peer(#[from] PeerUriError),
+    #[error("Invalid seed list URL: {0}")]
+    Url(#[from] url::ParseError),
 }

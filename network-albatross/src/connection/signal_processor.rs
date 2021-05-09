@@ -242,6 +242,7 @@ impl SignalStore {
         }
     }
 }
+
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub struct ForwardedSignal {
     sender_id: PeerId,

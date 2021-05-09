@@ -2,11 +2,11 @@ use std::io::{BufRead, Error as IoError};
 use std::str::FromStr;
 use std::sync::Arc;
 
-use failure::Fail;
 use futures::{future::*, Future, Stream};
 use hex::FromHex;
 use parking_lot::Mutex;
 use reqwest::r#async::{Chunk, Client, Response};
+use thiserror::Error;
 use url::Url;
 
 use genesis::{NetworkId, NetworkInfo};
@@ -22,42 +22,24 @@ pub enum PeerAddressSeederEvent {
     End,
 }
 
-#[derive(Fail, Debug)]
+#[derive(Error, Debug)]
 pub enum PeerAddressSeederError {
-    #[fail(display = "The seed list file didn't contain any parseable seed peer address")]
+    #[error("The seed list file didn't contain any parseable seed peer address")]
     EmptySeedAddresses,
-    #[fail(
-        display = "The fetching of the seed list file failed with error '{}'",
-        _0
-    )]
-    FetchError(#[cause] reqwest::Error),
-    #[fail(
-        display = "Failed while reading a line from the seed list with io::error '{}'",
-        _0
-    )]
+    #[error("The fetching of the seed list file failed with error '{0}'")]
+    FetchError(#[from] reqwest::Error),
+    #[error("Failed while reading a line from the seed list with io::error '{0}'")]
     IoError(IoError),
-    #[fail(display = "Seed node address parsing failed with error '{}'", _0)]
-    PeerUriParsingError(#[cause] PeerUriError),
-    #[fail(display = "The seed list file didn't contain any parseable signature")]
+    #[error("Seed node address parsing failed with error '{0}'")]
+    PeerUriParsingError(#[from] PeerUriError),
+    #[error("The seed list file didn't contain any parseable signature")]
     SignatureMissing,
-    #[fail(display = "The signature in the file was in a line other than the last one")]
+    #[error("The signature in the file was in a line other than the last one")]
     SignatureNotInLastLine,
-    #[fail(display = "The signature verification for the seed list file failed")]
+    #[error("The signature verification for the seed list file failed")]
     SignatureVerificationFailed,
-    #[fail(display = "The remote server responded with status code '{}'", _0)]
+    #[error("The remote server responded with status code '{0}'")]
     UnexpectedHttpStatus(reqwest::StatusCode),
-}
-
-impl From<reqwest::Error> for PeerAddressSeederError {
-    fn from(error: reqwest::Error) -> Self {
-        PeerAddressSeederError::FetchError(error)
-    }
-}
-
-impl From<PeerUriError> for PeerAddressSeederError {
-    fn from(error: PeerUriError) -> Self {
-        PeerAddressSeederError::PeerUriParsingError(error)
-    }
 }
 
 pub struct PeerAddressSeeder {
@@ -125,7 +107,7 @@ impl PeerAddressSeeder {
                             Ok(seed_address) => match seed_address.as_seed_peer_address() {
                                 Ok(peer_address) => seed_addresses.push(peer_address),
                                 Err(e) => {
-                                    return err(PeerAddressSeederError::PeerUriParsingError(e))
+                                    return err(PeerAddressSeederError::PeerUriParsingError(e));
                                 }
                             },
                             _ => signature = Signature::from_hex(line).ok(),

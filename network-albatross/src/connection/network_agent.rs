@@ -76,12 +76,18 @@ pub enum NetworkAgentEvent {
 
 impl NetworkAgent {
     const VERSION_ATTEMPTS_MAX: usize = 10;
-    const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(4); // 4 seconds
-    pub const PING_TIMEOUT: Duration = Duration::from_secs(10); // 10 seconds
-    const CONNECTIVITY_CHECK_INTERVAL: Duration = Duration::from_secs(60); // 1 minute
-    const ANNOUNCE_ADDR_INTERVAL: Duration = Duration::from_secs(60 * 10); // 10 minutes
-    const VERSION_RETRY_DELAY: Duration = Duration::from_millis(500); // 500 ms
-    const GETADDR_RATE_LIMIT: usize = 3; // per minute
+    const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(4);
+    // 4 seconds
+    pub const PING_TIMEOUT: Duration = Duration::from_secs(10);
+    // 10 seconds
+    const CONNECTIVITY_CHECK_INTERVAL: Duration = Duration::from_secs(60);
+    // 1 minute
+    const ANNOUNCE_ADDR_INTERVAL: Duration = Duration::from_secs(60 * 10);
+    // 10 minutes
+    const VERSION_RETRY_DELAY: Duration = Duration::from_millis(500);
+    // 500 ms
+    const GETADDR_RATE_LIMIT: usize = 3;
+    // per minute
     const MAX_ADDR_PER_MESSAGE: u16 = 1000;
     const MAX_ADDR_PER_REQUEST: u16 = 500;
     const NUM_ADDR_PER_REQUEST: u16 = 200;

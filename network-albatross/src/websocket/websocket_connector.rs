@@ -133,7 +133,8 @@ pub struct WebSocketConnector {
 }
 
 impl WebSocketConnector {
-    const CONNECTIONS_MAX: usize = 4050; // A little more than Network.PEER_COUNT_MAX to allow for inbound exchange
+    const CONNECTIONS_MAX: usize = 4050;
+    // A little more than Network.PEER_COUNT_MAX to allow for inbound exchange
     const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
     const WAIT_TIME_ON_ERROR: Duration = Duration::from_millis(100);
 
@@ -171,7 +172,7 @@ impl WebSocketConnector {
                     return Err(ServerStartError::UnsupportedProtocol(format!(
                         "{:?}",
                         config
-                    )))
+                    )));
                 }
             };
 

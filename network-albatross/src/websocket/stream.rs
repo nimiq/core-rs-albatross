@@ -47,7 +47,8 @@ impl WebSocketState {
     }
 }
 
-const MAX_CHUNK_SIZE: usize = 1024 * 16; // 16 kb
+const MAX_CHUNK_SIZE: usize = 1024 * 16;
+// 16 kb
 const MAX_MESSAGE_SIZE: usize = 1024 * 1024 * 10; // 10 mb
 
 /// This struct encapsulates the underlying WebSocket layer
@@ -179,7 +180,7 @@ impl Sink for NimiqMessageStream {
                         return Ok(AsyncSink::NotReady(Message::Resume(
                             serialized_msg[start..].to_vec(),
                             Some(tag),
-                        )))
+                        )));
                     }
                 },
                 Err(error) => return Err(Error::WebSocketError(error)),

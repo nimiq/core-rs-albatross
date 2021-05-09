@@ -454,7 +454,8 @@ impl ConnectionPool {
     const IPV4_SUBNET_MASK: u8 = 24;
     const IPV6_SUBNET_MASK: u8 = 96;
 
-    const DEFAULT_BAN_TIME: Duration = Duration::from_secs(60 * 10); // seconds
+    const DEFAULT_BAN_TIME: Duration = Duration::from_secs(60 * 10);
+    // seconds
     const UNBAN_IPS_INTERVAL: Duration = Duration::from_secs(60); // seconds
 
     /// Constructor.
