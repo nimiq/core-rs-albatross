@@ -4,7 +4,7 @@
 #[macro_use]
 extern crate beserial_derive;
 extern crate nimiq_account as account;
-extern crate nimiq_block_albatross as block_albatross;
+extern crate nimiq_block as block;
 extern crate nimiq_bls as bls;
 extern crate nimiq_handel as handel;
 extern crate nimiq_hash as hash;
@@ -31,7 +31,7 @@ use beserial::{
     uvar, Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
     SerializingError, WriteBytesExt,
 };
-use block_albatross::{
+use block::{
     Block as BlockAlbatross, BlockHeader as BlockHeaderAlbatross, ForkProof, MultiSignature,
     ViewChange, ViewChangeProof,
 };

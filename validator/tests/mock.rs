@@ -4,13 +4,13 @@ use rand::SeedableRng;
 use tokio::sync::broadcast;
 use tokio::time;
 
-use nimiq_block_albatross::{MultiSignature, SignedViewChange, ViewChange};
-use nimiq_blockchain_albatross::{AbstractBlockchain, Blockchain, BlockchainEvent};
+use nimiq_block::{MultiSignature, SignedViewChange, ViewChange};
+use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent};
 use nimiq_bls::{AggregateSignature, KeyPair};
 use nimiq_build_tools::genesis::{GenesisBuilder, GenesisInfo};
 use nimiq_collections::BitSet;
-use nimiq_consensus_albatross::sync::history::HistorySync;
-use nimiq_consensus_albatross::{Consensus as AbstractConsensus, ConsensusEvent};
+use nimiq_consensus::sync::history::HistorySync;
+use nimiq_consensus::{Consensus as AbstractConsensus, ConsensusEvent};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_handel::update::{LevelUpdate, LevelUpdateMessage};
 use nimiq_hash::{Blake2bHash, Hash};

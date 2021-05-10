@@ -5,7 +5,7 @@ use parking_lot::RwLock;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_bls::{KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
-use nimiq_consensus_albatross::ConsensusProxy;
+use nimiq_consensus::ConsensusProxy;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{Address, KeyPair};
 use nimiq_mempool::ReturnCode;
@@ -17,7 +17,7 @@ use nimiq_transaction_builder::TransactionBuilder;
 use nimiq_rpc_interface::{consensus::ConsensusInterface, types::ValidityStartHeight};
 
 use crate::{error::Error, wallets::UnlockedWallets};
-use nimiq_blockchain_albatross::AbstractBlockchain;
+use nimiq_blockchain::AbstractBlockchain;
 
 pub struct ConsensusDispatcher {
     consensus: ConsensusProxy<Network>,

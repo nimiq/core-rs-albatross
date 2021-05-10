@@ -7,9 +7,9 @@ use futures::task::{Context, Poll};
 use futures::{ready, FutureExt, Stream};
 use tokio::time;
 
-use block_albatross::{ForkProof, MicroBlock, ViewChange, ViewChangeProof};
-use block_production_albatross::BlockProducer;
-use blockchain_albatross::{AbstractBlockchain, Blockchain};
+use block::{ForkProof, MicroBlock, ViewChange, ViewChangeProof};
+use block_production::BlockProducer;
+use blockchain::{AbstractBlockchain, Blockchain};
 use mempool::Mempool;
 use nimiq_validator_network::ValidatorNetwork;
 use utils::time::systemtime_to_timestamp;

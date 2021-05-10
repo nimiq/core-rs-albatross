@@ -1,10 +1,8 @@
 use std::sync::Arc;
 
-use nimiq_block_albatross::Block;
-use nimiq_blockchain_albatross::{AbstractBlockchain, Blockchain};
-use nimiq_consensus_albatross::{
-    Consensus as AbstractConsensus, ConsensusProxy as AbstractConsensusProxy,
-};
+use nimiq_block::Block;
+use nimiq_blockchain::{AbstractBlockchain, Blockchain};
+use nimiq_consensus::{Consensus as AbstractConsensus, ConsensusProxy as AbstractConsensusProxy};
 use nimiq_database::Environment;
 use nimiq_genesis::NetworkInfo;
 use nimiq_mempool::Mempool;
@@ -24,7 +22,7 @@ use nimiq_wallet::WalletStore;
 
 use crate::config::config::ClientConfig;
 use crate::error::Error;
-use nimiq_consensus_albatross::sync::history::HistorySync;
+use nimiq_consensus::sync::history::HistorySync;
 use nimiq_network_libp2p::libp2p::futures::StreamExt;
 
 /// Alias for the Consensus and Validator specialized over libp2p network

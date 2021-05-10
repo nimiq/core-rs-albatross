@@ -1,5 +1,5 @@
-use nimiq_block_albatross::{Block, MacroBlock};
-use nimiq_blockchain_albatross::{AbstractBlockchain, ChainInfo};
+use nimiq_block::{Block, MacroBlock};
+use nimiq_blockchain::{AbstractBlockchain, ChainInfo};
 use nimiq_database::Transaction;
 use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;

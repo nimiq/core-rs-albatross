@@ -10,7 +10,7 @@ use toml::de::Error as TomlError;
 use account::{Account, AccountError, AccountsList, BasicAccount, StakingContract};
 use accounts::Accounts;
 use beserial::{Deserialize, Serialize, SerializingError};
-use block_albatross::{Block, MacroBlock, MacroBody, MacroHeader};
+use block::{Block, MacroBlock, MacroBody, MacroHeader};
 use bls::{PublicKey as BlsPublicKey, SecretKey as BlsSecretKey};
 use database::volatile::{VolatileDatabaseError, VolatileEnvironment};
 use database::WriteTransaction;

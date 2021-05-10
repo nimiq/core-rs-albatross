@@ -5,11 +5,11 @@ use log::LevelFilter::{Debug, Info};
 use rand::prelude::StdRng;
 use rand::SeedableRng;
 
-use nimiq_blockchain_albatross::{AbstractBlockchain, Blockchain};
+use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_bls::KeyPair;
 use nimiq_build_tools::genesis::{GenesisBuilder, GenesisInfo};
-use nimiq_consensus_albatross::sync::history::HistorySync;
-use nimiq_consensus_albatross::Consensus as AbstractConsensus;
+use nimiq_consensus::sync::history::HistorySync;
+use nimiq_consensus::Consensus as AbstractConsensus;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{Address, SecureGenerate};
@@ -136,8 +136,8 @@ async fn four_validators_can_create_an_epoch() {
         .with_module_level("nimiq_network_libp2p", Info)
         .with_module_level("nimiq_handel", Info)
         .with_module_level("nimiq_tendermint", Debug)
-        .with_module_level("nimiq_blockchain_albatross", Debug)
-        .with_module_level("nimiq_block_albatross", Debug)
+        .with_module_level("nimiq_blockchain", Debug)
+        .with_module_level("nimiq_block", Debug)
         .init()
         .ok();
 

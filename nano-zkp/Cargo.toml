@@ -1,0 +1,31 @@
+[package]
+name = "nimiq-nano-zkp"
+version = "0.1.0"
+authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
+description = "Recursive SNARKs for Nimiq's Nano Nodes"
+license = "Apache-2.0"
+homepage = "https://nimiq.com"
+repository = "https://github.com/nimiq/core-rs-albatross"
+edition = "2018"
+
+[dependencies]
+thiserror = "1.0.23"
+rand = { version = "0.7", features = ["small_rng"] }
+
+ark-std = "^0.2"
+ark-ff = "^0.2"
+ark-serialize = "^0.2"
+ark-ec = "^0.2"
+ark-relations = "^0.2"
+ark-mnt4-753 = "^0.2"
+ark-mnt6-753 = "^0.2"
+ark-crypto-primitives = "^0.2"
+ark-r1cs-std = "^0.2"
+ark-groth16 = "^0.2"
+
+nimiq-bls = { path = "../bls" }
+nimiq-nano-primitives = { path = "../nano-primitives"}
+nimiq-primitives = { path = "../primitives", features = ["policy"] }
+
+[features]
+prover = ["ark-crypto-primitives/r1cs", "ark-mnt4-753/r1cs", "ark-mnt6-753/r1cs", "ark-groth16/r1cs"]
