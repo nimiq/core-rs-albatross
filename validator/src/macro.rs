@@ -6,11 +6,11 @@ use futures::stream::{BoxStream, Stream, StreamExt};
 use futures::task::{Context, Poll};
 
 use beserial::{Deserialize, Serialize};
-use nimiq_block_albatross::{
+use nimiq_block::{
     MacroBlock, MacroHeader, MultiSignature, SignedTendermintProposal, TendermintStep,
 };
-use nimiq_block_production_albatross::BlockProducer;
-use nimiq_blockchain_albatross::{AbstractBlockchain, Blockchain};
+use nimiq_block_production::BlockProducer;
+use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_tendermint::{
     Checkpoint, Step, TendermintOutsideDeps, TendermintReturn, TendermintState,

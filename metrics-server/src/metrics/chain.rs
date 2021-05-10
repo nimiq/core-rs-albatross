@@ -1,7 +1,7 @@
 use std::io;
 use std::sync::Arc;
 
-use blockchain_albatross::{AbstractBlockchain, Blockchain};
+use blockchain::{AbstractBlockchain, Blockchain};
 
 use crate::server;
 use crate::server::{Metrics, SerializationType};

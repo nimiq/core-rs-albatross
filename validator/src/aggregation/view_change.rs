@@ -8,7 +8,7 @@ use futures::task::{Context, Poll};
 use parking_lot::RwLock;
 
 use beserial::{Deserialize, Serialize};
-use block_albatross::{Message, MultiSignature, SignedViewChange, ViewChange, ViewChangeProof};
+use block::{Message, MultiSignature, SignedViewChange, ViewChange, ViewChangeProof};
 use bls::AggregatePublicKey;
 use collections::BitSet;
 use handel::aggregation::Aggregation;

@@ -27,8 +27,8 @@ futures = "0.3"
 beserial = { path = "../beserial" }
 nimiq-hash = { path = "../hash", features = ["serde-derive"] }
 nimiq-account = { path = "../primitives/account", features = ["serde-derive"] }
-nimiq-block-albatross = { path = "../primitives/block-albatross", features = ["serde-derive"] }
-nimiq-blockchain-albatross = { path = "../blockchain-albatross" }
+nimiq-block = { path = "../primitives/block", features = ["serde-derive"] }
+nimiq-blockchain = { path = "../blockchain" }
 nimiq-primitives = { path = "../primitives", features = ["coin", "account", "serde-derive"] }
 nimiq-bls = { path = "../bls", features = ["serde-derive"] }
 nimiq-keys = { path = "../keys", features = ["serde-derive"] }

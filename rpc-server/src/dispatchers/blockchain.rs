@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use futures::stream::{BoxStream, StreamExt};
 
 use nimiq_account::Account;
-use nimiq_blockchain_albatross::{AbstractBlockchain, Blockchain, BlockchainEvent};
+use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::policy;

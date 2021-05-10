@@ -5,12 +5,12 @@
 extern crate log;
 #[macro_use]
 extern crate beserial_derive;
-extern crate nimiq_block_albatross as block_albatross;
-extern crate nimiq_block_production_albatross as block_production_albatross;
-extern crate nimiq_blockchain_albatross as blockchain_albatross;
+extern crate nimiq_block as block;
+extern crate nimiq_block_production as block_production;
+extern crate nimiq_blockchain as blockchain;
 extern crate nimiq_bls as bls;
 extern crate nimiq_collections as collections;
-extern crate nimiq_consensus_albatross as consensus_albatross;
+extern crate nimiq_consensus as consensus;
 extern crate nimiq_database as database;
 extern crate nimiq_genesis as genesis;
 extern crate nimiq_handel as handel;

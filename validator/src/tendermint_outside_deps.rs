@@ -5,12 +5,12 @@ use std::time::Duration;
 use async_trait::async_trait;
 use futures::{stream::BoxStream, StreamExt};
 
-use block_albatross::{
+use block::{
     Block, BlockHeader, MacroBlock, MacroBody, MacroHeader, MultiSignature,
     SignedTendermintProposal, TendermintProof, TendermintProposal,
 };
-use block_production_albatross::BlockProducer;
-use blockchain_albatross::{AbstractBlockchain, Blockchain};
+use block_production::BlockProducer;
+use blockchain::{AbstractBlockchain, Blockchain};
 use bls::{KeyPair, PublicKey};
 use database::WriteTransaction;
 use hash::{Blake2bHash, Hash};

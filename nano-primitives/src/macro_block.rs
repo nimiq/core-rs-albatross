@@ -63,8 +63,8 @@ impl MacroBlock {
     pub fn hash(&self, pk_tree_root: Vec<u8>) -> G1Projective {
         // Serialize the input into bits.
         // TODO: This first byte is the prefix for the precommit messages, it is the
-        //       PREFIX_TENDERMINT_COMMIT constant in the nimiq_block_albatross crate. We can't
-        //       import nimiq_block_albatross because of cyclic dependencies. When those constants
+        //       PREFIX_TENDERMINT_COMMIT constant in the nimiq_block crate. We can't
+        //       import nimiq_block because of cyclic dependencies. When those constants
         //       get moved to the policy crate, we should import them here.
         let mut bytes = vec![0x04];
 

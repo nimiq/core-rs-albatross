@@ -22,8 +22,8 @@ parking_lot = "0.9"
 
 beserial = { path = "../beserial" }
 nimiq-account = { path = "../primitives/account" }
-nimiq-block-albatross = { path = "../primitives/block-albatross" }
-nimiq-blockchain-albatross = { path = "../blockchain-albatross" }
+nimiq-block = { path = "../primitives/block" }
+nimiq-blockchain = { path = "../blockchain" }
 nimiq-collections = { path = "../collections" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
@@ -34,7 +34,7 @@ nimiq-utils = { path = "../utils", features = ["observer", "timers", "mutable-on
 [dev-dependencies]
 hex = "0.4"
 
-nimiq-block-albatross = { path = "../primitives/block-albatross" }
-nimiq-blockchain-albatross = { path = "../blockchain-albatross" }
+nimiq-block = { path = "../primitives/block" }
+nimiq-blockchain = { path = "../blockchain" }
 nimiq-database = { path = "../database" }
 nimiq-genesis = { path = "../genesis" }

@@ -9,7 +9,7 @@ This is a Rust crate for making Boneh-Lynn-Shacham signatures. It has functional
 
 It only supports the MNT6-753 elliptic curve. This curve was chosen to allow the creation of SNARKs proving statements
 about these BLS signatures. These SNARKs can be created using the libraries in [arkworks](https://github.com/arkworks-rs) and
-are a fundamental part of Nimiq's Nano nodes (implemented in the nano-sync crate).
+are a fundamental part of Nimiq's Nano nodes (implemented in the nano-zkp crate).
 
 ## Usage
 Bring the `nimiq-bls` crate into your project just as you normally would.

@@ -1,7 +1,7 @@
 use parking_lot::RwLock;
 use std::sync::Arc;
 
-use nimiq_block_albatross::TendermintIdentifier;
+use nimiq_block::TendermintIdentifier;
 use nimiq_handel::evaluator::WeightedVote;
 use nimiq_handel::partitioner::BinomialPartitioner;
 use nimiq_handel::protocol::Protocol;
