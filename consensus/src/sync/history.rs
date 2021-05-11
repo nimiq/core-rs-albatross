@@ -95,10 +95,11 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
     }
 
     fn on_epoch_received(&mut self, epoch: BatchSetInfo) -> Result<(), SyncClusterResult> {
+        // this might be a checkpoint
         // TODO Verify macro blocks and their ordering
         // Currently we only do a very basic check here
         let current_block_number = self.blockchain.block_number();
-        if epoch.block.header.block_number < current_block_number {
+        if epoch.block.header.block_number <= current_block_number {
             debug!("Received outdated epoch at block {}", current_block_number);
             return Err(SyncClusterResult::Outdated);
         }
@@ -380,17 +381,24 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         blockchain: Arc<Blockchain>,
         agent: Arc<ConsensusAgent<TNetwork::PeerType>>,
     ) -> Option<EpochIds<TNetwork::PeerType>> {
-        let (locator, epoch_number) = {
+        let (locators, epoch_number) = {
             let election_head = blockchain.election_head();
+            let macro_head = blockchain.macro_head();
+
+            let mut locators = vec![election_head.hash()];
+            if macro_head.hash() != election_head.hash() {
+                locators.push(macro_head.hash());
+            }
+
             (
-                election_head.hash(),
+                locators,
                 policy::epoch_at(election_head.header.block_number),
             )
         };
 
         let result = agent
             .request_block_hashes(
-                vec![locator],
+                locators,
                 1000, // TODO: Use other value
                 RequestBlockHashesFilter::ElectionAndLatestCheckpoint,
             )
