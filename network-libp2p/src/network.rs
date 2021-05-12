@@ -7,7 +7,6 @@ use bytes::{buf::BufExt, Bytes};
 use futures::{
     channel::{mpsc, oneshot},
     future::FutureExt,
-    lock::Mutex as AsyncMutex,
     sink::SinkExt,
     stream::{BoxStream, Stream, StreamExt},
 };
@@ -19,12 +18,11 @@ use libp2p::{
     },
     dns,
     gossipsub::{
-        GossipsubConfig, GossipsubConfigBuilder, GossipsubEvent, GossipsubMessage, IdentTopic,
-        MessageAcceptance, MessageId, TopicHash,
+        GossipsubEvent, GossipsubMessage, IdentTopic, MessageAcceptance, MessageId, TopicHash,
     },
     identify::IdentifyEvent,
     identity::Keypair,
-    kad::{GetRecordOk, KademliaConfig, KademliaEvent, QueryId, QueryResult, Quorum, Record},
+    kad::{GetRecordOk, KademliaEvent, QueryId, QueryResult, Quorum, Record},
     noise,
     swarm::{NetworkBehaviourAction, NotifyHandler, SwarmBuilder, SwarmEvent},
     tcp, websocket, yamux, Multiaddr, PeerId, Swarm, Transport,
@@ -36,7 +34,6 @@ use tracing::Instrument;
 use libp2p::core::transport::MemoryTransport;
 
 use beserial::{Deserialize, Serialize};
-use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{
     message::{Message, MessageType},
     network::{MsgAcceptance, Network as NetworkInterface, NetworkEvent, PubsubId, Topic},
@@ -48,8 +45,7 @@ use nimiq_utils::time::OffsetTime;
 use crate::{
     behaviour::{NimiqBehaviour, NimiqEvent, NimiqNetworkBehaviourError},
     connection_pool::behaviour::ConnectionPoolEvent,
-    discovery::{behaviour::DiscoveryConfig, handler::HandlerInEvent, peer_contacts::PeerContact},
-    message::behaviour::MessageConfig,
+    discovery::handler::HandlerInEvent,
     message::peer::Peer,
     Config, NetworkError,
 };

@@ -1,7 +1,18 @@
 #[macro_use]
 extern crate beserial_derive;
 
+use std::marker::PhantomData;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::{fmt::Formatter, time::Duration};
+
 use async_trait::async_trait;
+use futures::future::BoxFuture;
+use futures::sink::Sink;
+use futures::stream::StreamExt;
+use futures::task::{Context, Poll};
+use parking_lot::RwLock;
+
 use beserial::{Deserialize, Serialize};
 use identity::Identity;
 use nimiq_bls::PublicKey;
@@ -19,17 +30,6 @@ use nimiq_handel::verifier;
 use nimiq_network_interface::message::Message;
 use nimiq_network_interface::network::Network;
 use nimiq_network_mock::{MockHub, MockNetwork};
-
-use futures::future::BoxFuture;
-use futures::sink::Sink;
-use futures::stream::StreamExt;
-use futures::task::{Context, Poll};
-use std::marker::PhantomData;
-use std::pin::Pin;
-use std::sync::Arc;
-use std::{fmt::Formatter, time::Duration};
-
-use parking_lot::RwLock;
 
 /// Dump Aggregate adding numbers.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -60,11 +60,13 @@ impl AggregatableContribution for Contribution {
 
 // A dumb Registry
 pub struct Registry {}
+
 impl identity::WeightRegistry for Registry {
     fn weight(&self, _id: usize) -> Option<usize> {
         Some(1)
     }
 }
+
 impl identity::IdentityRegistry for Registry {
     fn public_key(&self, _id: usize) -> Option<PublicKey> {
         None
@@ -103,6 +105,7 @@ pub struct Protocol {
     registry: Arc<Registry>,
     node_id: usize,
 }
+
 impl Protocol {
     pub fn new(node_id: usize, num_ids: usize, threshold: usize) -> Self {
         let partitioner = Arc::new(BinomialPartitioner::new(node_id, num_ids));

@@ -14,7 +14,6 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 async-trait = "0.1"
-failure = "0.1"
 futures = "0.3"
 futures-cpupool = "0.1"
 futures-locks = "0.6"
@@ -28,12 +27,12 @@ tokio = { version = "0.2", features = ["rt-core", "time"] }
 
 beserial = { path = "../beserial" }
 beserial_derive = { path = "../beserial/beserial_derive" }
-nimiq-block-albatross = { path = "../primitives/block-albatross" }
-nimiq-block-production-albatross = { path = "../block-production-albatross" }
-nimiq-blockchain-albatross = { path = "../blockchain-albatross" }
+nimiq-block = { path = "../primitives/block" }
+nimiq-block-production = { path = "../block-production" }
+nimiq-blockchain = { path = "../blockchain" }
 nimiq-bls = { path = "../bls" }
 nimiq-collections = { path = "../collections", features = ["bitset"] }
-nimiq-consensus-albatross = { path = "../consensus-albatross" }
+nimiq-consensus = { path = "../consensus" }
 nimiq-database = { path = "../database", features = ["full-nimiq"] }
 nimiq-genesis = { path = "../genesis" }
 nimiq-handel = { path = "../handel" }

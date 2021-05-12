@@ -1,0 +1,43 @@
+[package]
+name = "nimiq-block-production"
+version = "0.1.0"
+authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
+license = "Apache-2.0"
+edition = "2018"
+description = "Block Production logic for Nimiq's Albatross implementation"
+homepage = "https://nimiq.com"
+repository = "https://github.com/nimiq/core-rs-albatross"
+categories = ["cryptography::cryptocurrencies"]
+keywords = ["nimiq", "cryptocurrency", "blockchain"]
+
+[badges]
+travis-ci = { repository = "nimiq/core-rs", branch = "master" }
+is-it-maintained-issue-resolution = { repository = "nimiq/core-rs" }
+is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
+maintenance = { status = "experimental" }
+
+[dependencies]
+log = "0.4"
+hex = "0.4"
+
+beserial = { path = "../beserial" }
+nimiq-account = { path = "../primitives/account" }
+nimiq-block = { path = "../primitives/block" }
+nimiq-blockchain = { path = "../blockchain" }
+nimiq-bls = { path = "../bls" }
+nimiq-collections = { path = "../collections" }
+nimiq-database = { path = "../database" }
+nimiq-genesis = { path = "../genesis" }
+nimiq-hash = { path = "../hash" }
+nimiq-keys = { path = "../keys" }
+nimiq-mempool = { path = "../mempool" }
+nimiq-nano-primitives = { path = "../nano-primitives" }
+nimiq-primitives = { path = "../primitives" }
+nimiq-vrf = { path = "../vrf" }
+
+[dev-dependencies]
+nimiq-transaction = { path = "../primitives/transaction" }
+
+[features]
+default = []
+test-utils = []

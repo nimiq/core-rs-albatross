@@ -3,7 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use tokio::task;
 
-use nimiq_block_albatross::{TendermintIdentifier, TendermintVote};
+use nimiq_block::{TendermintIdentifier, TendermintVote};
 use nimiq_bls::AggregatePublicKey;
 use nimiq_handel::identity::IdentityRegistry;
 use nimiq_handel::verifier::{VerificationResult, Verifier};

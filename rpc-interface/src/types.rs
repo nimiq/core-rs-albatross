@@ -2,16 +2,15 @@
 ///!
 ///! [1] https://github.com/nimiq/core-js/wiki/JSON-RPC-API#common-data-types
 use std::{
-    borrow::Cow,
     fmt::{self, Display, Formatter},
     str::FromStr,
 };
 
-use serde::{de::Deserializer, ser::Serializer, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
 
-use nimiq_block_albatross::{TendermintProof, ViewChangeProof};
-use nimiq_blockchain_albatross::{AbstractBlockchain, Blockchain};
+use nimiq_block::{TendermintProof, ViewChangeProof};
+use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_bls::{CompressedPublicKey, CompressedSignature};
 use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, Hash};
@@ -205,8 +204,8 @@ pub struct MicroJustification {
     view_change_proof: Option<ViewChangeProof>,
 }
 
-impl From<nimiq_block_albatross::MicroJustification> for MicroJustification {
-    fn from(justification: nimiq_block_albatross::MicroJustification) -> Self {
+impl From<nimiq_block::MicroJustification> for MicroJustification {
+    fn from(justification: nimiq_block::MicroJustification) -> Self {
         Self {
             signature: justification.signature,
             view_change_proof: justification.view_change_proof,
@@ -249,8 +248,8 @@ pub struct ForkProof {
     pub hashes: [Blake2bHash; 2],
 }
 
-impl From<nimiq_block_albatross::ForkProof> for ForkProof {
-    fn from(fork_proof: nimiq_block_albatross::ForkProof) -> Self {
+impl From<nimiq_block::ForkProof> for ForkProof {
+    fn from(fork_proof: nimiq_block::ForkProof) -> Self {
         let hashes = [fork_proof.header1.hash(), fork_proof.header2.hash()];
 
         Self {
@@ -303,7 +302,7 @@ impl Transaction {
             hash: transaction.hash(),
             block_number,
             timestamp,
-            confirmations: head_height.saturating_sub(block_number),
+            confirmations: head_height.saturating_sub(block_number) + 1,
             from: transaction.sender,
             to: transaction.recipient,
             value: transaction.value,
@@ -358,7 +357,7 @@ impl Inherent {
 impl Block {
     pub fn from_block(
         blockchain: &Blockchain,
-        block: nimiq_block_albatross::Block,
+        block: nimiq_block::Block,
         include_transactions: bool,
     ) -> Self {
         let block_hash = block.hash();
@@ -369,7 +368,7 @@ impl Block {
         let timestamp = block.timestamp();
 
         match block {
-            nimiq_block_albatross::Block::Macro(macro_block) => {
+            nimiq_block::Block::Macro(macro_block) => {
                 let slots = macro_block.get_validators().map(Slots::from_slots);
 
                 let (lost_reward_set, transactions) = if let Some(body) = macro_block.body {
@@ -429,7 +428,7 @@ impl Block {
                 }
             }
 
-            nimiq_block_albatross::Block::Micro(micro_block) => {
+            nimiq_block::Block::Micro(micro_block) => {
                 let (fork_proofs, transactions) = if let Some(body) = micro_block.body {
                     (
                         Some(body.fork_proofs.into_iter().map(Into::into).collect()),

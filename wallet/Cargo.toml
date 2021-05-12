@@ -13,7 +13,6 @@ travis-ci = { repository = "nimiq/core-rs", branch = "master" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-failure = "0.1"
 hex = "0.4"
 
 beserial = { path = "../beserial" }

@@ -1,7 +1,7 @@
 extern crate beserial_derive;
 extern crate bitflags;
 extern crate nimiq_account as account;
-extern crate nimiq_block_albatross as block_albatross;
+extern crate nimiq_block as block;
 extern crate nimiq_bls as bls;
 extern crate nimiq_hash as hash;
 extern crate nimiq_hash_derive as hash_derive;

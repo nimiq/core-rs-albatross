@@ -22,7 +22,7 @@ pub enum Error {
     FileStore(#[from] nimiq_utils::file_store::Error),
 
     #[error("Consensus error: {0}")]
-    Consensus(#[from] nimiq_consensus_albatross::Error),
+    Consensus(#[from] nimiq_consensus::Error),
 
     #[error("Config file parsing error: {0}")]
     Toml(#[from] toml::de::Error),

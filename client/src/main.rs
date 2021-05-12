@@ -126,7 +126,7 @@ async fn main_inner() -> Result<(), Error> {
                     );
                 }
                 Err(err) => {
-                    log::error!("Error retrieving NEtworkInfo: {:?}", err);
+                    log::error!("Error retrieving NetworkInfo: {:?}", err);
                 }
             };
         }

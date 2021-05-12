@@ -35,17 +35,16 @@ rand = "0.7"
 serde = "1.0"
 serde_derive = "1.0"
 structopt = { version = "0.3", features = ["paw"] }
-strum = "0.20"
 strum_macros = "0.20"
 toml = "0.5"
 url = "1.7"
 thiserror = "1.0"
 
 beserial = { path = "../beserial" }
-nimiq-block-albatross = { path = "../primitives/block-albatross" }
-nimiq-blockchain-albatross = { path = "../blockchain-albatross" }
+nimiq-block = { path = "../primitives/block" }
+nimiq-blockchain = { path = "../blockchain" }
 nimiq-bls = { path = "../bls", optional = true }
-nimiq-consensus-albatross = { path = "../consensus-albatross" }
+nimiq-consensus = { path = "../consensus" }
 nimiq-database = { path = "../database" }
 nimiq-keys = { path = "../keys" }
 nimiq-mempool = { path = "../mempool" }
@@ -65,7 +64,7 @@ nimiq-genesis = { path = "../genesis" }
 
 [features]
 default = []
-validator = ["nimiq-validator", "nimiq-validator-network", "nimiq-bls", "nimiq-rpc-server/validator"]
+validator = ["nimiq-validator", "nimiq-validator-network", "nimiq-bls", "nimiq-rpc-server"]
 deadlock = ["parking_lot"]
 panic = ["log-panics"]
 logging = ["fern", "colored"]

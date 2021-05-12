@@ -1,8 +1,8 @@
 use std::fmt;
 use std::str::FromStr;
 
-use failure::Fail;
-use hex::{FromHex, FromHexError};
+use hex::FromHex;
+use thiserror::Error;
 use url::Url;
 
 use keys::PublicKey;
@@ -11,56 +11,38 @@ use crate::address::{NetAddress, PeerAddress, PeerAddressType, PeerId};
 use crate::protocol::Protocol;
 use crate::services::ServiceFlags;
 
-#[derive(Debug, Fail)]
+#[derive(Debug, Error)]
 pub enum PeerUriError {
-    #[fail(display = "Invalid URI: {}", _0)]
-    InvalidUri(#[cause] url::ParseError),
-    #[fail(display = "Protocol unknown")]
+    #[error("Invalid URI: {0}")]
+    InvalidUri(#[from] url::ParseError),
+    #[error("Protocol unknown")]
     UnknownProtocol,
-    #[fail(display = "Peer ID is missing")]
+    #[error("Peer ID is missing")]
     MissingPeerId,
-    #[fail(display = "Hostname is missing")]
+    #[error("Hostname is missing")]
     MissingHostname,
-    #[fail(display = "Unexpected username in URI")]
+    #[error("Unexpected username in URI")]
     UnexpectedUsername,
-    #[fail(display = "Unexpected password in URI")]
+    #[error("Unexpected password in URI")]
     UnexpectedPassword,
-    #[fail(display = "Unexpected query in URI")]
+    #[error("Unexpected query in URI")]
     UnexpectedQuery,
-    #[fail(display = "Unexpected fragment in URI")]
+    #[error("Unexpected fragment in URI")]
     UnexpectedFragment,
-    #[fail(display = "Unexpected port number")]
+    #[error("Unexpected port number")]
     UnexpectedPort,
-    #[fail(display = "Unexpected path segment")]
+    #[error("Unexpected path segment")]
     UnexpectedPath,
-    #[fail(display = "Too many path segments")]
+    #[error("Too many path segments")]
     TooManyPathSegments,
-    #[fail(display = "Invalid peer ID")]
+    #[error("Invalid peer ID")]
     InvalidPeerId,
-    #[fail(display = "Invalid public key {}", _0)]
-    InvalidPublicKey(#[cause] keys::ParseError),
-    #[fail(display = "Seed node is missing the public key")]
+    #[error("Invalid public key {0}")]
+    InvalidPublicKey(#[from] keys::ParseError),
+    #[error("Seed node is missing the public key")]
     SeedNodeMissingPublicKey,
-    #[fail(display = "The only allowed protocols for seed nodes are Wss and Ws")]
+    #[error("The only allowed protocols for seed nodes are Wss and Ws")]
     SeedNodeWithInvalidProtocol,
-}
-
-impl From<url::ParseError> for PeerUriError {
-    fn from(e: url::ParseError) -> PeerUriError {
-        PeerUriError::InvalidUri(e)
-    }
-}
-
-impl From<FromHexError> for PeerUriError {
-    fn from(_: FromHexError) -> Self {
-        PeerUriError::InvalidPeerId
-    }
-}
-
-impl From<keys::ParseError> for PeerUriError {
-    fn from(e: keys::ParseError) -> Self {
-        PeerUriError::InvalidPublicKey(e)
-    }
 }
 
 impl FromStr for Protocol {

@@ -2,7 +2,7 @@ use failure::_core::pin::Pin;
 use futures::task::{Context, Poll};
 use futures::Future;
 
-use block_albatross::{MacroBlock, SignedViewChange, ViewChangeProof};
+use block::{MacroBlock, SignedViewChange, ViewChangeProof};
 use network::Network;
 use network_interface::network::Network as NetworkInterface;
 use nimiq_network_mock::MockNetwork;
@@ -28,7 +28,11 @@ impl Future for Tendermint {
 
 pub struct ViewChangeHandel;
 impl ViewChangeHandel {
-    pub fn new(_signed_view_change: SignedViewChange, _validator_id: u16, _active_validators: ValidatorSlots) -> Self {
+    pub fn new(
+        _signed_view_change: SignedViewChange,
+        _validator_id: u16,
+        _active_validators: ValidatorSlots,
+    ) -> Self {
         unimplemented!()
     }
 }

@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use beserial::{Deserialize, Serialize};
-use nimiq_block_albatross::{MultiSignature, TendermintVote};
+use nimiq_block::{MultiSignature, TendermintVote};
 use nimiq_bls::{AggregateSignature, SecretKey};
 use nimiq_collections::bitset::BitSet;
 use nimiq_hash::Blake2bHash;

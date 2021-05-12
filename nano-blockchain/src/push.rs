@@ -1,5 +1,5 @@
-use nimiq_block_albatross::{Block, BlockError, BlockType, MacroHeader};
-use nimiq_blockchain_albatross::{
+use nimiq_block::{Block, BlockError, BlockType, MacroHeader};
+use nimiq_blockchain::{
     AbstractBlockchain, Blockchain, ChainInfo, ChainOrdering, PushError, PushResult,
 };
 use nimiq_hash::{Blake2bHash, Hash};

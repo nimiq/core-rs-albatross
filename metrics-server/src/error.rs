@@ -1,24 +1,12 @@
 use std::io::Error as IoError;
 
-use failure::Fail;
 use native_tls::Error as NativeTlsError;
+use thiserror::Error;
 
-#[derive(Fail, Debug)]
+#[derive(Error, Debug)]
 pub enum Error {
-    #[fail(display = "{}", _0)]
-    IoError(#[cause] IoError),
-    #[fail(display = "{}", _0)]
-    NativeTlsError(#[cause] NativeTlsError),
-}
-
-impl From<IoError> for Error {
-    fn from(e: IoError) -> Self {
-        Error::IoError(e)
-    }
-}
-
-impl From<NativeTlsError> for Error {
-    fn from(e: NativeTlsError) -> Self {
-        Error::NativeTlsError(e)
-    }
+    #[error("{0}")]
+    IoError(#[from] IoError),
+    #[error("{0}")]
+    NativeTlsError(#[from] NativeTlsError),
 }

@@ -1,7 +1,7 @@
 use std::sync::{Arc, RwLock};
 
-use nimiq_block_albatross::{Block, MacroBlock};
-use nimiq_blockchain_albatross::ChainInfo;
+use nimiq_block::{Block, MacroBlock};
+use nimiq_blockchain::ChainInfo;
 use nimiq_genesis::NetworkInfo;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::slots::Validators;

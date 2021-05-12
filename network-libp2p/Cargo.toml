@@ -33,21 +33,14 @@ hex = "0.4"
 wasm-timer = "0.2"
 serde = { version = "1.0", features = ["derive"], optional = true }
 async-std = "1.7" # Used in some places, but can we not depend on a runtime?
-dashmap = "4.0"
 tokio-util = { version = "0.3", features = ["codec"] }
 derive_more = "0.99"
-crc = "1.8"
-async-stream = "0.3"
 tracing = "0.1"
-tracing-futures = "0.1"
-tracing-log = "0.1"
 tracing-attributes = "0.1"
 
 beserial = { path = "../beserial", features = ["libp2p"] }
 beserial_derive = { path = "../beserial/beserial_derive" }
 nimiq-network-interface = { path = "../network-interface" }
-nimiq-keys = { path = "../keys" }
-nimiq-peer-address = { path = "../peer-address" }
 nimiq-macros = { path = "../macros" }
 nimiq-hash = { path = "../hash" }
 nimiq-utils = { path = "../utils", features = ["tagged-signing", "serde-derive", "libp2p", "time"] }
