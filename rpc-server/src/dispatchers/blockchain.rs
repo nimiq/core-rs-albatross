@@ -199,7 +199,7 @@ impl BlockchainInterface for BlockchainDispatcher {
             .get_block_at(macro_block_number, true, None) // The lost_reward_set is in the MacroBody
             .ok_or_else(|| Error::BlockNotFound(macro_block_number.into()))?;
 
-        let mut extended_tx_vec = vec![];
+        let mut inherent_tx_vec = vec![];
 
         let macro_body = macro_block.unwrap_macro().body.unwrap();
 
@@ -216,26 +216,28 @@ impl BlockchainInterface for BlockchainDispatcher {
 
                 for ext_tx in micro_ext_tx_vec {
                     if ext_tx.is_inherent() {
-                        extended_tx_vec.push(ext_tx);
+                        inherent_tx_vec.push(ext_tx);
                     }
                 }
             }
         }
 
         // Append inherents of the macro block (we do this after the micro blocks so the inherents are in order)
-        extended_tx_vec.append(
+        inherent_tx_vec.append(
             &mut self
                 .blockchain
                 .history_store
-                .get_block_transactions(macro_block_number, None),
+                .get_block_transactions(macro_block_number, None)
+                .into_iter()
+                // Macro blocks include validator rewards as regular transactions, filter them out
+                .filter(|ext_tx| ext_tx.is_inherent())
+                .collect(),
         );
 
-        Ok(extended_tx_vec
+        Ok(inherent_tx_vec
             .into_iter()
             .map(|ext_tx| {
                 Inherent::from_transaction(
-                    // The extended txs are guaranteed to be inherents because we filter
-                    // for those above and fetch the other txs from a macro block
                     ext_tx.unwrap_inherent().clone(),
                     ext_tx.block_number,
                     ext_tx.block_time,
