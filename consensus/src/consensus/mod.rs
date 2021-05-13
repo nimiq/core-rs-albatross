@@ -5,10 +5,11 @@ use std::time::{Duration, Instant};
 
 use futures::stream::BoxStream;
 use futures::task::{Context, Poll};
-use futures::{FutureExt, Stream, StreamExt};
+use futures::{Future, FutureExt, StreamExt};
 use tokio::sync::broadcast::{
     channel as broadcast, Receiver as BroadcastReceiver, Sender as BroadcastSender,
 };
+use tokio::time::Delay;
 
 use block::Block;
 use blockchain::Blockchain;
@@ -104,6 +105,9 @@ pub struct Consensus<N: Network> {
     block_queue: BlockQueue<N::PeerType, BlockRequestComponent<N::PeerType>>,
     tx_stream: BoxStream<'static, Transaction>,
 
+    /// A Delay which exists purely for the waker on its poll to reactivate the task running Consensus::poll
+    next_execution_timer: Option<Delay>,
+
     events: BroadcastSender<ConsensusEvent<N>>,
     established_flag: Arc<AtomicBool>,
     head_requests: Option<HeadRequests<N::PeerType>>,
@@ -115,10 +119,17 @@ pub struct Consensus<N: Network> {
 impl<N: Network> Consensus<N> {
     /// Minimum number of peers for consensus to be established.
     const MIN_PEERS_ESTABLISHED: usize = 3;
+
     /// Minimum number of block announcements extending the chain for consensus to be established.
     const MIN_BLOCKS_ESTABLISHED: usize = 5;
+
     /// Timeout after which head requests will be performed again to determine consensus established state.
     const HEAD_REQUESTS_TIMEOUT: Duration = Duration::from_secs(20); // currently 2 * view change delay
+
+    /// Timeout after which the consensus is polled after it ran last
+    ///
+    /// TODO: Set appropriate duration
+    const CONSENSUS_POLL_TIMER: Duration = Duration::from_secs(1);
 
     pub async fn from_network(
         env: Environment,
@@ -205,6 +216,8 @@ impl<N: Network> Consensus<N> {
             block_queue,
             tx_stream,
             events: tx,
+
+            next_execution_timer: Some(tokio::time::delay_for(Self::CONSENSUS_POLL_TIMER)),
 
             established_flag: Arc::new(AtomicBool::new(false)),
             head_requests: None,
@@ -321,25 +334,19 @@ impl<N: Network> Consensus<N> {
     }
 }
 
-impl<N: Network> Stream for Consensus<N> {
-    type Item = ();
+impl<N: Network> Future for Consensus<N> {
+    type Output = ();
 
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        macro_rules! return_event {
-            ($event:expr) => {
-                self.events.send($event.clone()).ok(); // Ignore result.
-            };
-        }
-
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         // 1. Poll and advance block queue
         while let Poll::Ready(Some(event)) = self.block_queue.poll_next_unpin(cx) {
             match event {
                 BlockQueueEvent::PeerMacroSynced(peer) => {
                     let e = ConsensusEvent::PeerMacroSynced(peer);
-                    return_event!(e);
+                    self.events.send(e.clone()).ok(); // Ignore result.
                 }
                 BlockQueueEvent::PeerLeft(_) => {
-                    return_event!(ConsensusEvent::PeerLeft);
+                    self.events.send(ConsensusEvent::PeerLeft).ok(); // Ignore result.
                 }
                 _ => {}
             }
@@ -347,7 +354,7 @@ impl<N: Network> Stream for Consensus<N> {
 
         // Check consensus established state on changes.
         if let Some(event) = self.set_established(None) {
-            return_event!(event);
+            self.events.send(event).ok(); // Ignore result.
         }
 
         // 2. Poll and push transactions once consensus is established.
@@ -367,10 +374,20 @@ impl<N: Network> Stream for Consensus<N> {
                 }
                 // Update established state using the result.
                 if let Some(event) = self.set_established(Some(result)) {
-                    return_event!(event);
+                    self.events.send(event).ok(); // Ignore result.
                 }
             }
         }
+
+        // 4. Update timer and poll it so the task gets woken when the timer runs out (at the latest)
+        // The timer itself running out (producing an Instant) is of no interest to the execution. This poll method
+        // was potentially awoken by the delays waker, but even then all there is to do is set up a new timer such
+        // that it will wake this task again after another time frame has ellapsed. No interval was used as that
+        // would periodically wake the task even though it might have just executed
+        let _ = self.next_execution_timer.take();
+        let mut timer = tokio::time::delay_for(Self::CONSENSUS_POLL_TIMER);
+        let _ = timer.poll_unpin(cx);
+        self.next_execution_timer = Some(timer);
 
         Poll::Pending
     }

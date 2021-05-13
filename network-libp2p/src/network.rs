@@ -219,11 +219,9 @@ impl Network {
             .with_max_established_per_peer(Some(MAX_CONNECTIONS_PER_PEER));
 
         // TODO add proper config
-        let swarm = SwarmBuilder::new(transport, behaviour, local_peer_id)
+        SwarmBuilder::new(transport, behaviour, local_peer_id)
             .connection_limits(limits)
-            .build();
-
-        swarm
+            .build()
     }
 
     pub fn local_peer_id(&self) -> &PeerId {

@@ -116,7 +116,7 @@ async fn mock_validators(hub: &mut MockHub, num_validators: usize) -> Vec<Valida
 
     // Start consensus.
     for consensus in consensus {
-        tokio::spawn(consensus.for_each(|_| async {}));
+        tokio::spawn(consensus);
     }
 
     future::join_all(events.iter_mut().map(|e| e.next())).await;

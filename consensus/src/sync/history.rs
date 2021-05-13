@@ -125,8 +125,8 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
                 // TODO: Can probably be done more efficiently.
                 let known_chunk = self
                     .blockchain
-                .history_store
-                .prove_chunk(epoch_number, num_full_chunks * CHUNK_SIZE, 0, None)
+                    .history_store
+                    .prove_chunk(epoch_number, num_full_chunks * CHUNK_SIZE, 0, None)
                     .expect("History chunk missing");
                 pending_batch_set.history = known_chunk.history;
             }
@@ -234,7 +234,10 @@ impl<TPeer: Peer + 'static> Stream for SyncCluster<TPeer> {
                         }
                     }
                     Err(e) => {
-                        log::debug!("Polling the batch set queue encountered error result: {:?}", e);
+                        log::debug!(
+                            "Polling the batch set queue encountered error result: {:?}",
+                            e
+                        );
                         return Poll::Ready(Some(Err(SyncClusterResult::Error)));
                     } // TODO Error
                 }
@@ -340,9 +343,12 @@ impl<T, E: std::fmt::Debug> From<Result<T, E>> for SyncClusterResult {
         match res {
             Ok(_) => SyncClusterResult::EpochSuccessful,
             Err(err) => {
-                log::debug!("SyncClusterResult From<Result<T, E>> encountered error: {:?}", err);
+                log::debug!(
+                    "SyncClusterResult From<Result<T, E>> encountered error: {:?}",
+                    err
+                );
                 SyncClusterResult::Error
-            },
+            }
         }
     }
 }
@@ -628,7 +634,10 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
                     //  the peer).
                     if epoch_ids.ids.is_empty() && epoch_ids.checkpoint_id.is_none() {
                         // We are synced with this peer.
-                        debug!("Peer has finished syncing: {:?}", epoch_ids.sender.peer.id());
+                        debug!(
+                            "Peer has finished syncing: {:?}",
+                            epoch_ids.sender.peer.id()
+                        );
                         return Poll::Ready(Some(epoch_ids.sender));
                     }
                     self.cluster_epoch_ids(epoch_ids);
@@ -658,7 +667,7 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
                 Some(Err(e)) => {
                     log::debug!("Polling the best SyncCluster returned an error: {:?}", e);
                     SyncClusterResult::Error
-                },
+                }
                 None => SyncClusterResult::NoMoreEpochs,
             };
 
@@ -690,7 +699,10 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
                 }
 
                 // TODO: What if there are no clusters left for this peer?
-                let removed_clusters: Vec<_> = self.epoch_sync_clusters.drain_filter(|cluster| cluster.len() == 0).collect();
+                let removed_clusters: Vec<_> = self
+                    .epoch_sync_clusters
+                    .drain_filter(|cluster| cluster.len() == 0)
+                    .collect();
 
                 for cluster in removed_clusters.iter() {
                     // Decrement the cluster count for all peers in the evicted cluster.
@@ -715,9 +727,11 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
                                 if result == SyncClusterResult::NoMoreEpochs
                                     && cluster.adopted_batch_set
                                 {
-                                    let future =
-                                        Self::request_epoch_ids(Arc::clone(&self.blockchain), agent)
-                                            .boxed();
+                                    let future = Self::request_epoch_ids(
+                                        Arc::clone(&self.blockchain),
+                                        agent,
+                                    )
+                                    .boxed();
                                     self.epoch_ids_stream.push(future);
                                 } else {
                                     // FIXME: Disconnect peer

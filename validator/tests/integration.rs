@@ -121,7 +121,7 @@ async fn validators(num_validators: usize) -> Vec<Validator> {
             .await
             .expect("Failed to dial seed");
 
-        tokio::spawn(consensus.for_each(|_| async {}));
+        tokio::spawn(consensus);
     }
 
     validators

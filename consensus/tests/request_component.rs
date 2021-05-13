@@ -57,10 +57,8 @@ impl Node {
     }
 
     pub fn consume(&mut self) {
-        if let Some(c) = self.consensus.take() {
-            tokio::spawn(async move {
-                c.for_each(|_| async {}).await;
-            });
+        if let Some(consensus) = self.consensus.take() {
+            tokio::spawn(consensus);
         }
     }
 }

@@ -146,7 +146,7 @@ impl Handle<ResponseBlocks> for RequestMissingBlocks {
         }
 
         // if no start_block can be found, assume the last macro block before target_block
-        let start_block = if let None = start_block {
+        let start_block = if start_block.is_none() {
             blockchain.get_block_at(
                 policy::macro_block_before(target_block.block_number()),
                 false,
