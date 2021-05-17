@@ -1,14 +1,14 @@
 use std::marker::PhantomData;
 use std::str::FromStr;
 
-use account::AccountsTreeLeave;
-use database::{Database, Environment, Transaction, WriteTransaction};
-use hash::{Blake2bHash, Hash};
-use keys::Address;
-use tree_primitives::accounts_proof::AccountsProof;
-use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
-use tree_primitives::accounts_tree_node::{AccountsTreeNode, NO_CHILDREN};
-use tree_primitives::address_nibbles::AddressNibbles;
+use nimiq_account::AccountsTreeLeave;
+use nimiq_database::{Database, Environment, Transaction, WriteTransaction};
+use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_keys::Address;
+use nimiq_tree::accounts_proof::AccountsProof;
+use nimiq_tree::accounts_tree_chunk::AccountsTreeChunk;
+use nimiq_tree::accounts_tree_node::{AccountsTreeNode, NO_CHILDREN};
+use nimiq_tree::address_nibbles::AddressNibbles;
 
 #[derive(Debug)]
 pub struct AccountsTree<A: AccountsTreeLeave> {
@@ -340,7 +340,7 @@ impl<A: AccountsTreeLeave> AccountsTree<A> {
 mod tests {
     use std::convert::TryFrom;
 
-    use account::Account;
+    use nimiq_account::Account;
     use nimiq_primitives::coin::Coin;
 
     use super::*;
@@ -349,21 +349,21 @@ mod tests {
     fn it_can_create_valid_chunk() {
         let address1 =
             Address::from(&hex::decode("0000000000000000000000000000000000000000").unwrap()[..]);
-        let account1 = Account::Basic(account::BasicAccount {
+        let account1 = Account::Basic(nimiq_account::BasicAccount {
             balance: Coin::try_from(5).unwrap(),
         });
         let address2 =
             Address::from(&hex::decode("1000000000000000000000000000000000000000").unwrap()[..]);
-        let account2 = Account::Basic(account::BasicAccount {
+        let account2 = Account::Basic(nimiq_account::BasicAccount {
             balance: Coin::try_from(55).unwrap(),
         });
         let address3 =
             Address::from(&hex::decode("1200000000000000000000000000000000000000").unwrap()[..]);
-        let account3 = Account::Basic(account::BasicAccount {
+        let account3 = Account::Basic(nimiq_account::BasicAccount {
             balance: Coin::try_from(55555555).unwrap(),
         });
 
-        let env = database::volatile::VolatileEnvironment::new(10).unwrap();
+        let env = nimiq_database::volatile::VolatileEnvironment::new(10).unwrap();
         let tree = AccountsTree::new(env.clone());
         let mut txn = WriteTransaction::new(&env);
 

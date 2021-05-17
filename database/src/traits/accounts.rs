@@ -3,8 +3,8 @@ use std::io;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_account::{AccountsTreeLeave, Receipts};
-use nimiq_tree_primitives::accounts_tree_node::AccountsTreeNode;
-use nimiq_tree_primitives::address_nibbles::AddressNibbles;
+use nimiq_tree::accounts_tree_node::AccountsTreeNode;
+use nimiq_tree::address_nibbles::AddressNibbles;
 
 use crate::{AsDatabaseBytes, FromDatabaseValue, IntoDatabaseValue};
 

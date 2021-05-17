@@ -1,7 +1,7 @@
 use nimiq_account::Account;
 use nimiq_blockchain::{AbstractBlockchain, HistoryTreeProof};
 use nimiq_hash::Blake2bHash;
-use nimiq_tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
+use nimiq_tree::accounts_tree_chunk::AccountsTreeChunk;
 
 use crate::blockchain::NanoBlockchain;
 use crate::error::NanoError;

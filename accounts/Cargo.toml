@@ -24,6 +24,6 @@ nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-primitives = { path = "../primitives", features = ["coin", "networks", "policy"] }
 nimiq-transaction = { path = "../primitives/transaction" }
-nimiq-tree-primitives = { path = "./tree-primitives" }
+nimiq-tree = { path = "../primitives/tree" }
 
 hex = "0.4"
