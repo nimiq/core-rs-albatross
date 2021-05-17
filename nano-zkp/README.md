@@ -1,5 +1,5 @@
-# Nano Sync
-Nano sync is a library that implements the zero knowledge proof part of Nimiq's Nano Sync.
+# Nano ZKP
+Nano ZKP is a library that implements the zero knowledge proof part of Nimiq's Nano Sync.
 Specifically, it contains code that allows one to generate parameters, create proofs and verify proofs for several circuits
 that together create a chain of proofs that can be used to recursively prove the entire header chain starting at the
 Genesis block.

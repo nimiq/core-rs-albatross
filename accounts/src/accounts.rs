@@ -1,17 +1,17 @@
 use std::collections::HashMap;
 
-use account::inherent::{AccountInherentInteraction, Inherent};
-use account::{
+use nimiq_account::inherent::{AccountInherentInteraction, Inherent};
+use nimiq_account::{
     Account, AccountError, AccountTransactionInteraction, AccountType, PrunedAccount, Receipt,
     Receipts,
 };
-use database as db;
-use database::{Environment, ReadTransaction, WriteTransaction};
-use hash::Blake2bHash;
-use keys::Address;
-use transaction::{Transaction, TransactionFlags};
-use tree_primitives::accounts_proof::AccountsProof;
-use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
+use nimiq_database as db;
+use nimiq_database::{Environment, ReadTransaction, WriteTransaction};
+use nimiq_hash::Blake2bHash;
+use nimiq_keys::Address;
+use nimiq_transaction::{Transaction, TransactionFlags};
+use nimiq_tree::accounts_proof::AccountsProof;
+use nimiq_tree::accounts_tree_chunk::AccountsTreeChunk;
 
 use crate::tree::AccountsTree;
 

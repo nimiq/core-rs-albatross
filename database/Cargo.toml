@@ -30,7 +30,7 @@ nimiq-account = { path = "../primitives/account", optional = true }
 nimiq-block = { path = "../primitives/block", optional = true }
 nimiq-hash = { path = "../hash", optional = true }
 nimiq-keys = { path = "../keys", optional = true }
-nimiq-tree-primitives = { path = "../accounts/tree-primitives", optional = true }
+nimiq-tree = { path = "../primitives/tree", optional = true }
 nimiq-utils = { path = "../utils", features = ["otp"], optional = true }
 
 [features]
@@ -38,6 +38,6 @@ nimiq-utils = { path = "../utils", features = ["otp"], optional = true }
 full-nimiq = ["hash", "block", "account", "keys", "otp"]
 hash = ["nimiq-hash"]
 block = ["nimiq-block"]
-account = ["nimiq-tree-primitives", "nimiq-account"]
+account = ["nimiq-tree", "nimiq-account"]
 keys = ["nimiq-keys"]
 otp = ["nimiq-utils"]

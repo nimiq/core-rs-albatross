@@ -1,7 +1,6 @@
 [workspace]
 members = [
   "accounts",
-  "accounts/tree-primitives",
   "beserial",
   "beserial/beserial_derive",
   "block-production",
@@ -38,6 +37,7 @@ members = [
   "primitives/mmr",
   "primitives/subscription",
   "primitives/transaction",
+  "primitives/tree",
   "rpc-client",
   "rpc-interface",
   "rpc-server",

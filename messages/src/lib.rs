@@ -3,19 +3,6 @@
 
 #[macro_use]
 extern crate beserial_derive;
-extern crate nimiq_account as account;
-extern crate nimiq_block as block;
-extern crate nimiq_bls as bls;
-extern crate nimiq_handel as handel;
-extern crate nimiq_hash as hash;
-extern crate nimiq_keys as keys;
-extern crate nimiq_macros as macros;
-extern crate nimiq_network_interface as network_interface;
-extern crate nimiq_peer_address as peer_address;
-extern crate nimiq_subscription as subscription;
-extern crate nimiq_transaction as transaction;
-extern crate nimiq_tree_primitives as tree_primitives;
-extern crate nimiq_utils as utils;
 
 use std::fmt::Display;
 use std::io;
@@ -26,31 +13,28 @@ use parking_lot::RwLock;
 use rand::rngs::OsRng;
 use rand::Rng;
 
-use account::Account;
 use beserial::{
     uvar, Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
     SerializingError, WriteBytesExt,
 };
-use block::{
-    Block as BlockAlbatross, BlockHeader as BlockHeaderAlbatross, ForkProof, MultiSignature,
-    ViewChange, ViewChangeProof,
-};
-use handel::update::LevelUpdateMessage;
-use hash::Blake2bHash;
-use keys::{Address, KeyPair, PublicKey, Signature};
-use macros::{add_hex_io_fns_typed_arr, create_typed_array};
-use network_interface::message::Message as MessageInterface;
-use peer_address::address::{PeerAddress, PeerId};
-use peer_address::protocol::ProtocolFlags;
-use peer_address::services::ServiceFlags;
-use peer_address::version;
-use subscription::Subscription;
-use transaction::{Transaction, TransactionReceipt, TransactionsProof};
-use tree_primitives::accounts_proof::AccountsProof;
-use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
-use utils::crc::Crc32Computer;
-use utils::merkle::partial::Blake2bPartialMerkleProof;
-use utils::observer::{PassThroughListener, PassThroughNotifier};
+use nimiq_account::Account;
+use nimiq_block::{Block, BlockHeader, ForkProof, MultiSignature, ViewChange, ViewChangeProof};
+use nimiq_handel::update::LevelUpdateMessage;
+use nimiq_hash::Blake2bHash;
+use nimiq_keys::{Address, KeyPair, PublicKey, Signature};
+use nimiq_macros::{add_hex_io_fns_typed_arr, create_typed_array};
+use nimiq_network_interface::message::Message as MessageInterface;
+use nimiq_peer_address::address::{PeerAddress, PeerId};
+use nimiq_peer_address::protocol::ProtocolFlags;
+use nimiq_peer_address::services::ServiceFlags;
+use nimiq_peer_address::version;
+use nimiq_subscription::Subscription;
+use nimiq_transaction::{Transaction, TransactionReceipt, TransactionsProof};
+use nimiq_tree::accounts_proof::AccountsProof;
+use nimiq_tree::accounts_tree_chunk::AccountsTreeChunk;
+use nimiq_utils::crc::Crc32Computer;
+use nimiq_utils::merkle::partial::Blake2bPartialMerkleProof;
+use nimiq_utils::observer::{PassThroughListener, PassThroughNotifier};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 #[repr(u64)]
@@ -178,8 +162,8 @@ pub enum Message {
     VerAck(Box<VerAckMessage>),
 
     // Albatross
-    BlockAlbatross(Box<BlockAlbatross>),
-    HeaderAlbatross(Box<BlockHeaderAlbatross>),
+    BlockAlbatross(Box<Block>),
+    HeaderAlbatross(Box<BlockHeader>),
     ForkProof(Box<ForkProof>),
     ViewChange(Box<LevelUpdateMessage<MultiSignature, ViewChange>>),
     ViewChangeProof(Box<ViewChangeProofMessage>),
@@ -585,8 +569,8 @@ pub struct MessageNotifier {
     pub transaction_receipts: RwLock<PassThroughNotifier<'static, TransactionReceiptsMessage>>,
     pub get_head: RwLock<PassThroughNotifier<'static, ()>>,
     // Albatross
-    pub block_albatross: RwLock<PassThroughNotifier<'static, BlockAlbatross>>,
-    pub header_albatross: RwLock<PassThroughNotifier<'static, BlockHeaderAlbatross>>,
+    pub block_albatross: RwLock<PassThroughNotifier<'static, Block>>,
+    pub header_albatross: RwLock<PassThroughNotifier<'static, BlockHeader>>,
     pub fork_proof: RwLock<PassThroughNotifier<'static, ForkProof>>,
     pub view_change:
         RwLock<PassThroughNotifier<'static, LevelUpdateMessage<MultiSignature, ViewChange>>>,
@@ -659,26 +643,26 @@ pub trait MessageAdapter<B, H> {
 }
 
 pub struct AlbatrossMessageAdapter {}
-impl MessageAdapter<BlockAlbatross, BlockHeaderAlbatross> for AlbatrossMessageAdapter {
-    fn register_block_listener<T: PassThroughListener<BlockAlbatross> + 'static>(
+impl MessageAdapter<Block, BlockHeader> for AlbatrossMessageAdapter {
+    fn register_block_listener<T: PassThroughListener<Block> + 'static>(
         notifier: &MessageNotifier,
         listener: T,
     ) {
         notifier.block_albatross.write().register(listener)
     }
 
-    fn register_header_listener<T: PassThroughListener<BlockHeaderAlbatross> + 'static>(
+    fn register_header_listener<T: PassThroughListener<BlockHeader> + 'static>(
         notifier: &MessageNotifier,
         listener: T,
     ) {
         notifier.header_albatross.write().register(listener)
     }
 
-    fn new_block_message(block: BlockAlbatross) -> Message {
+    fn new_block_message(block: Block) -> Message {
         Message::BlockAlbatross(Box::new(block))
     }
 
-    fn new_header_message(header: BlockHeaderAlbatross) -> Message {
+    fn new_header_message(header: BlockHeader) -> Message {
         Message::HeaderAlbatross(Box::new(header))
     }
 }
