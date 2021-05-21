@@ -6,14 +6,19 @@ use std::{
     task::{Context, Poll},
 };
 
-use futures::stream::{BoxStream, Stream};
+use futures::{
+    stream::{BoxStream, Stream},
+    StreamExt,
+};
 use pin_project::pin_project;
 
-use network_interface::peer::Peer;
+use network_interface::{
+    network::{MsgAcceptance, Network, Topic},
+    peer::Peer,
+};
 use nimiq_block::Block;
 use nimiq_blockchain::{Blockchain, PushResult};
 use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::network::Topic;
 use nimiq_primitives::policy;
 
 use super::request_component::RequestComponent;
@@ -32,11 +37,11 @@ impl Topic for BlockTopic {
     }
 
     fn validate(&self) -> bool {
-        false
+        true
     }
 }
 
-pub type BlockStream = BoxStream<'static, Block>;
+pub type BlockStream<N> = BoxStream<'static, (Block, <N as Network>::PubsubId)>;
 
 #[derive(Clone, Debug)]
 pub enum BlockQueueEvent<TPeer: Peer> {
@@ -63,12 +68,15 @@ impl Default for BlockQueueConfig {
     }
 }
 
-struct Inner {
+struct Inner<N: Network> {
     /// Configuration for the block queue
     config: BlockQueueConfig,
 
     /// Reference to the block chain
     blockchain: Arc<Blockchain>,
+
+    /// Reference to the network
+    network: Arc<N>,
 
     /// Buffered blocks - `block_height -> [Block]`. There can be multiple blocks at a height if there are forks.
     ///
@@ -79,23 +87,24 @@ struct Inner {
     buffer: BTreeMap<u32, Vec<Block>>,
 }
 
-impl Inner {
+impl<N: Network> Inner<N> {
     /// Handles a block announcement and returns true if the block has successfully extended
     /// the blockchain.
     fn on_block_announced<TPeer: Peer, TReq: RequestComponent<TPeer>>(
         &mut self,
         block: Block,
         mut request_component: Pin<&mut TReq>,
+        pubsub_id: Option<<N as Network>::PubsubId>,
     ) -> bool {
         let block_height = block.block_number();
         let head_height = self.blockchain.block_number();
 
         if block_height <= head_height {
             // Fork block
-            return self.push_block(block);
+            return self.push_block(block, pubsub_id);
         } else if block_height == head_height + 1 {
             // New head block
-            let result = self.push_block(block);
+            let result = self.push_block(block, pubsub_id);
             self.push_buffered();
             return result;
         } else if block_height > head_height + self.config.window_max {
@@ -210,17 +219,43 @@ impl Inner {
     }
 
     /// Pushes the block to the blockchain and returns whether it has extended the blockchain.
-    fn push_block(&mut self, block: Block) -> bool {
-        match self.blockchain.push(block) {
+    fn push_block(&mut self, block: Block, pubsub_id: Option<<N as Network>::PubsubId>) -> bool {
+        let acceptance;
+        let extended = match self.blockchain.push(block) {
             Ok(result) => {
                 log::trace!("Block pushed: {:?}", result);
+
+                acceptance = match result {
+                    PushResult::Known | PushResult::Extended | PushResult::Rebranched => {
+                        MsgAcceptance::Accept
+                    }
+                    PushResult::Forked | PushResult::Ignored => MsgAcceptance::Ignore,
+                };
+
                 result == PushResult::Extended
             }
             Err(e) => {
                 log::warn!("Failed to push block: {}", e);
+
+                acceptance = MsgAcceptance::Reject;
+
                 false
             }
-        }
+        };
+
+        // Let the network layer know if it should relay the message this block came from
+        if let Some(pubsub_id) = pubsub_id {
+            let network1 = Arc::clone(&self.network);
+            tokio::spawn(async move {
+                match network1.validate_message(pubsub_id, acceptance).await {
+                    Ok(true) => log::trace!("The block message was relayed succesfully"),
+                    Ok(false) => log::warn!("Validation took too long: the block message was no longer in the message cache"),
+                    Err(e) => log::error!("Network error while relaying block message: {}", e),
+                };
+            });
+        };
+
+        extended
     }
 
     fn push_buffered(&mut self) {
@@ -249,7 +284,7 @@ impl Inner {
                         head_height,
                         self.buffer.len(),
                     );
-                    self.push_block(block);
+                    self.push_block(block, None);
                 }
             } else {
                 break;
@@ -266,17 +301,17 @@ impl Inner {
 }
 
 #[pin_project]
-pub struct BlockQueue<TPeer: Peer, TReq: RequestComponent<TPeer>> {
+pub struct BlockQueue<TPeer: Peer, TReq: RequestComponent<TPeer>, N: Network> {
     /// The Peer Tracking and Request Component.
     #[pin]
     request_component: TReq,
 
     /// The blocks received via gossipsub.
     #[pin]
-    block_stream: BlockStream,
+    block_stream: BlockStream<N>,
 
     /// The inner state of the block queue.
-    inner: Inner,
+    inner: Inner<N>,
 
     /// The number of extended blocks through announcements.
     accepted_announcements: usize,
@@ -284,12 +319,28 @@ pub struct BlockQueue<TPeer: Peer, TReq: RequestComponent<TPeer>> {
     peer_type: PhantomData<TPeer>,
 }
 
-impl<TPeer: Peer, TReq: RequestComponent<TPeer>> BlockQueue<TPeer, TReq> {
-    pub fn new(
+impl<TPeer: Peer, TReq: RequestComponent<TPeer>, N: Network> BlockQueue<TPeer, TReq, N> {
+    pub async fn new(
         config: BlockQueueConfig,
         blockchain: Arc<Blockchain>,
+        network: Arc<N>,
         request_component: TReq,
-        block_stream: BlockStream,
+    ) -> Self {
+        let block_stream = network
+            .subscribe::<BlockTopic>(&BlockTopic::default())
+            .await
+            .unwrap()
+            .boxed();
+
+        Self::with_block_stream(config, blockchain, network, request_component, block_stream)
+    }
+
+    pub fn with_block_stream(
+        config: BlockQueueConfig,
+        blockchain: Arc<Blockchain>,
+        network: Arc<N>,
+        request_component: TReq,
+        block_stream: BlockStream<N>,
     ) -> Self {
         let buffer = BTreeMap::new();
 
@@ -299,6 +350,7 @@ impl<TPeer: Peer, TReq: RequestComponent<TPeer>> BlockQueue<TPeer, TReq> {
             inner: Inner {
                 config,
                 blockchain,
+                network,
                 buffer,
             },
             accepted_announcements: 0,
@@ -328,11 +380,11 @@ impl<TPeer: Peer, TReq: RequestComponent<TPeer>> BlockQueue<TPeer, TReq> {
 
     pub fn push_block(&mut self, block: Block) {
         self.inner
-            .on_block_announced(block, Pin::new(&mut self.request_component));
+            .on_block_announced(block, Pin::new(&mut self.request_component), None);
     }
 }
 
-impl<TPeer: Peer, TReq: RequestComponent<TPeer>> Stream for BlockQueue<TPeer, TReq> {
+impl<TPeer: Peer, TReq: RequestComponent<TPeer>, N: Network> Stream for BlockQueue<TPeer, TReq, N> {
     type Item = BlockQueueEvent<TPeer>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
@@ -343,10 +395,14 @@ impl<TPeer: Peer, TReq: RequestComponent<TPeer>> Stream for BlockQueue<TPeer, TR
 
         // First, try to get as many blocks from the gossipsub stream as possible
         match this.block_stream.poll_next(cx) {
-            Poll::Ready(Some(block)) => {
+            Poll::Ready(Some((block, pubsub_id))) => {
                 // Ignore all block announcements until there is at least once synced peer.
                 if num_peers > 0 {
-                    let result = this.inner.on_block_announced(block, this.request_component);
+                    let result = this.inner.on_block_announced(
+                        block,
+                        this.request_component,
+                        Some(pubsub_id),
+                    );
                     if result {
                         *this.accepted_announcements =
                             this.accepted_announcements.saturating_add(1);

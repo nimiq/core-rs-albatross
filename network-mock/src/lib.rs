@@ -9,6 +9,7 @@ use beserial::{Deserialize, Serialize};
 use derive_more::{Display, From, Into};
 
 pub use hub::MockHub;
+pub use network::MockId;
 pub use network::MockNetwork;
 pub use peer::MockPeer;
 
