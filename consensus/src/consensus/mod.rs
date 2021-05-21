@@ -10,7 +10,6 @@ use tokio::sync::broadcast::{
 };
 use tokio::time::Delay;
 
-use block::Block;
 use blockchain::Blockchain;
 use database::Environment;
 use mempool::{Mempool, ReturnCode};
@@ -19,7 +18,7 @@ use transaction::Transaction;
 
 use crate::consensus::head_requests::{HeadRequests, HeadRequestsResult};
 use crate::consensus_agent::ConsensusAgent;
-use crate::sync::block_queue::{BlockQueue, BlockQueueConfig, BlockQueueEvent, BlockTopic};
+use crate::sync::block_queue::{BlockQueue, BlockQueueConfig, BlockQueueEvent};
 use crate::sync::request_component::BlockRequestComponent;
 
 mod head_requests;
@@ -100,7 +99,7 @@ pub struct Consensus<N: Network> {
     pub network: Arc<N>,
     pub env: Environment,
 
-    block_queue: BlockQueue<N::PeerType, BlockRequestComponent<N::PeerType>>,
+    block_queue: BlockQueue<N::PeerType, BlockRequestComponent<N::PeerType>, N>,
     tx_future: BoxFuture<'static, ()>,
 
     /// A Delay which exists purely for the waker on its poll to reactivate the task running Consensus::poll
@@ -155,12 +154,16 @@ impl<N: Network> Consensus<N> {
         sync_protocol: BoxStream<'static, Arc<ConsensusAgent<N::PeerType>>>,
         min_peers: usize,
     ) -> Self {
-        let block_stream = network
-            .subscribe::<BlockTopic>(&BlockTopic::default())
-            .await
-            .unwrap()
-            .map(|(block, _peer_id)| block)
-            .boxed();
+        let request_component =
+            BlockRequestComponent::new(sync_protocol, network.subscribe_events());
+
+        let block_queue = BlockQueue::new(
+            BlockQueueConfig::default(),
+            Arc::clone(&blockchain),
+            Arc::clone(&network),
+            request_component,
+        )
+        .await;
 
         let tx_stream = network
             .subscribe::<TransactionTopic>(&TransactionTopic::default())
@@ -173,9 +176,8 @@ impl<N: Network> Consensus<N> {
             blockchain,
             mempool,
             network,
-            block_stream,
+            block_queue,
             tx_stream,
-            sync_protocol,
             min_peers,
         )
     }
@@ -185,22 +187,11 @@ impl<N: Network> Consensus<N> {
         blockchain: Arc<Blockchain>,
         mempool: Arc<Mempool>,
         network: Arc<N>,
-        block_stream: BoxStream<'static, Block>,
+        block_queue: BlockQueue<N::PeerType, BlockRequestComponent<N::PeerType>, N>,
         tx_stream: BoxStream<'static, (Transaction, <N as Network>::PubsubId)>,
-        sync_protocol: BoxStream<'static, Arc<ConsensusAgent<N::PeerType>>>,
         min_peers: usize,
     ) -> Self {
         let (tx, _rx) = broadcast(256);
-
-        let request_component =
-            BlockRequestComponent::new(sync_protocol, network.subscribe_events());
-
-        let block_queue = BlockQueue::new(
-            BlockQueueConfig::default(),
-            Arc::clone(&blockchain),
-            request_component,
-            block_stream,
-        );
 
         Self::init_network_requests(&network, &blockchain);
 

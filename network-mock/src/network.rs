@@ -31,9 +31,15 @@ pub enum MockNetworkError {
     NotConnected,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct MockId<P> {
     propagation_source: P,
+}
+
+impl MockId<MockPeerId> {
+    pub fn new(propagation_source: MockPeerId) -> Self {
+        Self { propagation_source }
+    }
 }
 
 impl PubsubId<MockPeerId> for MockId<MockPeerId> {

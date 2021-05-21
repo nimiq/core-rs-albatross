@@ -24,7 +24,7 @@ use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_hash::Blake2bHash;
 use nimiq_mempool::{Mempool, MempoolConfig};
 use nimiq_network_interface::peer::Peer;
-use nimiq_network_mock::MockPeer;
+use nimiq_network_mock::{MockHub, MockId, MockPeer};
 use nimiq_primitives::networks::NetworkId;
 use std::marker::PhantomData;
 use std::sync::Weak;
@@ -103,14 +103,17 @@ async fn send_single_micro_block_to_block_queue() {
         KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(Blockchain::new(env, NetworkId::UnitAlbatross).unwrap());
+    let mut hub = MockHub::new();
+    let network = Arc::new(hub.new_network());
     let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
     let producer = BlockProducer::new(Arc::clone(&blockchain), Arc::clone(&mempool), keypair);
     let request_component = MockRequestComponent::<MockPeer>::default();
     let (mut tx, rx) = mpsc::channel(32);
 
-    let mut block_queue = BlockQueue::new(
+    let mut block_queue = BlockQueue::with_block_stream(
         Default::default(),
         Arc::clone(&blockchain),
+        Arc::clone(&network),
         request_component,
         rx.boxed(),
     );
@@ -118,7 +121,8 @@ async fn send_single_micro_block_to_block_queue() {
     // push one micro block to the queue
     let block =
         Block::Micro(producer.next_micro_block(blockchain.time.now(), 0, None, vec![], vec![0x42]));
-    tx.send(block).await.unwrap();
+    let mock_id = MockId::new(hub.new_address().into());
+    tx.send((block, mock_id)).await.unwrap();
 
     assert_eq!(blockchain.block_number(), 0);
 
@@ -138,15 +142,18 @@ async fn send_two_micro_blocks_out_of_order() {
     let env2 = VolatileEnvironment::new(10).unwrap();
     let blockchain1 = Arc::new(Blockchain::new(env1, NetworkId::UnitAlbatross).unwrap());
     let blockchain2 = Arc::new(Blockchain::new(env2, NetworkId::UnitAlbatross).unwrap());
+    let mut hub = MockHub::new();
+    let network = Arc::new(hub.new_network());
     let mempool = Mempool::new(Arc::clone(&blockchain2), MempoolConfig::default());
     let producer = BlockProducer::new(Arc::clone(&blockchain2), Arc::clone(&mempool), keypair);
     let (request_component, mut mock_ptarc_rx, _mock_ptarc_tx) =
         MockRequestComponent::<MockPeer>::new();
     let (mut tx, rx) = mpsc::channel(32);
 
-    let mut block_queue = BlockQueue::new(
+    let mut block_queue = BlockQueue::with_block_stream(
         Default::default(),
         Arc::clone(&blockchain1),
+        network,
         request_component,
         rx.boxed(),
     );
@@ -167,8 +174,10 @@ async fn send_two_micro_blocks_out_of_order() {
         vec![0x42],
     ));
 
+    let mock_id = MockId::new(hub.new_address().into());
+
     // send block2 first
-    tx.send(block2.clone()).await.unwrap();
+    tx.send((block2.clone(), mock_id.clone())).await.unwrap();
 
     assert_eq!(blockchain1.block_number(), 0);
 
@@ -188,7 +197,7 @@ async fn send_two_micro_blocks_out_of_order() {
     assert_eq!(target_block_hash, block2.hash());
 
     // now send block1 to fill the gap
-    tx.send(block1.clone()).await.unwrap();
+    tx.send((block1.clone(), mock_id)).await.unwrap();
 
     // run the block_queue one iteration, i.e. until it processed one block
     block_queue.next().await;
@@ -210,15 +219,18 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
     let env2 = VolatileEnvironment::new(10).unwrap();
     let blockchain1 = Arc::new(Blockchain::new(env1, NetworkId::UnitAlbatross).unwrap());
     let blockchain2 = Arc::new(Blockchain::new(env2, NetworkId::UnitAlbatross).unwrap());
+    let mut hub = MockHub::new();
+    let network = Arc::new(hub.new_network_with_address(1));
     let mempool = Mempool::new(Arc::clone(&blockchain2), MempoolConfig::default());
     let producer = BlockProducer::new(Arc::clone(&blockchain2), Arc::clone(&mempool), keypair);
     let (request_component, mut mock_ptarc_rx, mock_ptarc_tx) =
         MockRequestComponent::<MockPeer>::new();
     let (mut tx, rx) = mpsc::channel(32);
 
-    let mut block_queue = BlockQueue::new(
+    let mut block_queue = BlockQueue::with_block_stream(
         Default::default(),
         Arc::clone(&blockchain1),
+        network,
         request_component,
         rx.boxed(),
     );
@@ -239,8 +251,10 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
         vec![0x42],
     ));
 
+    let mock_id = MockId::new(hub.new_address().into());
+
     // send block2 first
-    tx.send(block2.clone()).await.unwrap();
+    tx.send((block2.clone(), mock_id)).await.unwrap();
 
     assert_eq!(blockchain1.block_number(), 0);
 
