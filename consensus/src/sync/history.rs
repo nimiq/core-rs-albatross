@@ -387,14 +387,20 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         blockchain: Arc<Blockchain>,
         agent: Arc<ConsensusAgent<TNetwork::PeerType>>,
     ) -> Option<EpochIds<TNetwork::PeerType>> {
+        trace!("requesting epoch ids");
         let (locators, epoch_number) = {
+            // Order matters here. The first hash found by the recipient of the request  will be used, so they need to be
+            // in backwards bllock height order.
             let election_head = blockchain.election_head();
             let macro_head = blockchain.macro_head();
 
-            let mut locators = vec![election_head.hash()];
+            // So if there is a checkpoint hash that should be included in addition to the election block hash, it should come first.
+            let mut locators = vec![];
             if macro_head.hash() != election_head.hash() {
                 locators.push(macro_head.hash());
             }
+            // The election bock is at the end here
+            locators.push(election_head.hash());
 
             (
                 locators,
