@@ -10,6 +10,7 @@ use beserial::SerializingError;
 use beserial::WriteBytesExt;
 use beserial::{Deserialize, DeserializeWithLength, Serialize, SerializeWithLength};
 use nimiq_hash::argon2kdf::{compute_argon2_kdf, Argon2Error};
+use std::io;
 
 pub trait Verify {
     fn verify(&self) -> bool;
@@ -294,6 +295,26 @@ impl<T: Clear + Deserialize + Serialize> Deserialize for Locked<T> {
             iterations,
             phantom: PhantomData,
         })
+    }
+}
+
+impl<T: Default + Deserialize + Serialize> IntoDatabaseValue for Locked<T> {
+    fn database_byte_size(&self) -> usize {
+        self.serialized_size()
+    }
+
+    fn copy_into_database(&self, mut bytes: &mut [u8]) {
+        Serialize::serialize(&self, &mut bytes).unwrap();
+    }
+}
+
+impl<T: Default + Deserialize + Serialize> FromDatabaseValue for Locked<T> {
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
+    where
+        Self: Sized,
+    {
+        let mut cursor = io::Cursor::new(bytes);
+        Ok(Deserialize::deserialize(&mut cursor)?)
     }
 }
 

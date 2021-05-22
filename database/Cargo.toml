@@ -26,18 +26,3 @@ rand = "0.7"
 tempfile = "3"
 
 beserial = { path = "../beserial" }
-nimiq-account = { path = "../primitives/account", optional = true }
-nimiq-block = { path = "../primitives/block", optional = true }
-nimiq-hash = { path = "../hash", optional = true }
-nimiq-keys = { path = "../keys", optional = true }
-nimiq-tree = { path = "../primitives/tree", optional = true }
-nimiq-utils = { path = "../utils", features = ["otp"], optional = true }
-
-[features]
-# Compiles this package with all features needed for the nimiq client.
-full-nimiq = ["hash", "block", "account", "keys", "otp"]
-hash = ["nimiq-hash"]
-block = ["nimiq-block"]
-account = ["nimiq-tree", "nimiq-account"]
-keys = ["nimiq-keys"]
-otp = ["nimiq-utils"]

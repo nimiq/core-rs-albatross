@@ -11,6 +11,7 @@ use beserial::{
 };
 use hash::{Hash, SerializeContent};
 use keys::Address;
+use std::borrow::Cow;
 
 // Stores a compact representation of length nibbles.
 // Each u8 stores up to 2 nibbles.
@@ -31,11 +32,6 @@ impl AddressNibbles {
     #[inline]
     pub fn len(&self) -> usize {
         self.length as usize
-    }
-
-    #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.length == 0
     }
 
     pub fn get(&self, index: usize) -> Option<usize> {
@@ -151,17 +147,6 @@ impl<'a> From<&'a [u8]> for AddressNibbles {
     }
 }
 
-impl fmt::Display for AddressNibbles {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut hex_representation = hex::encode(&self.bytes);
-        // If prefix ends in the middle of a byte, remove last char.
-        if self.length % 2 == 1 {
-            hex_representation.pop();
-        }
-        f.write_str(&hex_representation)
-    }
-}
-
 impl str::FromStr for AddressNibbles {
     type Err = hex::FromHexError;
 
@@ -188,6 +173,17 @@ impl str::FromStr for AddressNibbles {
     }
 }
 
+impl fmt::Display for AddressNibbles {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut hex_representation = hex::encode(&self.bytes);
+        // If prefix ends in the middle of a byte, remove last char.
+        if self.length % 2 == 1 {
+            hex_representation.pop();
+        }
+        f.write_str(&hex_representation)
+    }
+}
+
 impl SerializeContent for AddressNibbles {
     fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
         let size = SerializeWithLength::serialize::<u8, W>(&self.to_string(), writer)?;
@@ -195,8 +191,6 @@ impl SerializeContent for AddressNibbles {
     }
 }
 
-// Different hash implementation than std
-#[allow(clippy::derive_hash_xor_eq)] // TODO: Shouldn't be necessary
 impl Hash for AddressNibbles {}
 
 impl<'a, 'b> ops::Add<&'b AddressNibbles> for &'a AddressNibbles {
@@ -246,6 +240,14 @@ impl ops::Add<AddressNibbles> for AddressNibbles {
     type Output = AddressNibbles;
     fn add(self, rhs: AddressNibbles) -> AddressNibbles {
         &self + &rhs
+    }
+}
+
+impl AsDatabaseBytes for AddressNibbles {
+    fn as_database_bytes(&self) -> Cow<[u8]> {
+        // TODO: Improve AddressNibbles, so that no serialization is needed.
+        let v = Serialize::serialize_to_vec(&self);
+        Cow::Owned(v)
     }
 }
 

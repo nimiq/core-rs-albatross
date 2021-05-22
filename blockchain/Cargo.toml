@@ -28,7 +28,7 @@ nimiq-accounts = { path = "../accounts" }
 nimiq-block = { path = "../primitives/block" }
 nimiq-bls = { path = "../bls", features = ["beserial"] }
 nimiq-collections = { path = "../collections" }
-nimiq-database = { path = "../database", features = ["full-nimiq"] }
+nimiq-database = { path = "../database" }
 nimiq-genesis = { path = "../genesis" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }

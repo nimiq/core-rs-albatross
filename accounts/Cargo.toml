@@ -19,7 +19,7 @@ maintenance = { status = "experimental" }
 [dependencies]
 beserial = { path = "../beserial" }
 nimiq-account = { path = "../primitives/account" }
-nimiq-database = { path = "../database", features = ["full-nimiq"] }
+nimiq-database = { path = "../database" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-primitives = { path = "../primitives", features = ["coin", "networks", "policy"] }

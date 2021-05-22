@@ -13,6 +13,7 @@ use macros::create_typed_array;
 
 use crate::key_pair::KeyPair;
 use crate::PublicKey;
+use std::borrow::Cow;
 
 create_typed_array!(Address, u8, 20);
 hash_typed_array!(Address);
@@ -186,6 +187,21 @@ impl Display for Address {
 impl Debug for Address {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("Address").field(&self.to_hex()).finish()
+    }
+}
+
+impl AsDatabaseBytes for Address {
+    fn as_database_bytes(&self) -> Cow<[u8]> {
+        Cow::Borrowed(self.as_bytes())
+    }
+}
+
+impl FromDatabaseValue for Address {
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
+    where
+        Self: Sized,
+    {
+        Ok(bytes.into())
     }
 }
 

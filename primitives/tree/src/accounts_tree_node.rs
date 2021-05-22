@@ -255,6 +255,26 @@ impl<A: AccountsTreeLeave> SerializeContent for AccountsTreeNode<A> {
 #[allow(clippy::derive_hash_xor_eq)] // TODO: Shouldn't be necessary
 impl<A: AccountsTreeLeave> Hash for AccountsTreeNode<A> {}
 
+impl<A: AccountsTreeLeave> IntoDatabaseValue for AccountsTreeNode<A> {
+    fn database_byte_size(&self) -> usize {
+        self.serialized_size()
+    }
+
+    fn copy_into_database(&self, mut bytes: &mut [u8]) {
+        Serialize::serialize(&self, &mut bytes).unwrap();
+    }
+}
+
+impl<A: AccountsTreeLeave> FromDatabaseValue for AccountsTreeNode<A> {
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
+    where
+        Self: Sized,
+    {
+        let mut cursor = io::Cursor::new(bytes);
+        Ok(Deserialize::deserialize(&mut cursor)?)
+    }
+}
+
 #[allow(clippy::type_complexity)]
 type AccountsTreeNodeIter<'a> = Option<
     iter::FilterMap<

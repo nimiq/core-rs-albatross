@@ -12,6 +12,7 @@ use beserial::{Deserialize, Serialize};
 use nimiq_macros::{add_hex_io_fns_typed_arr, create_typed_array};
 
 pub use self::sha512::*;
+use std::borrow::Cow;
 
 pub mod argon2kdf;
 pub mod hmac;
@@ -154,6 +155,21 @@ impl Hasher for Blake2bHasher {
     fn finish(self) -> Blake2bHash {
         let result = self.0.finalize();
         Blake2bHash::from(result.as_bytes())
+    }
+}
+
+impl AsDatabaseBytes for Blake2bHash {
+    fn as_database_bytes(&self) -> Cow<[u8]> {
+        Cow::Borrowed(self.as_bytes())
+    }
+}
+
+impl FromDatabaseValue for Blake2bHash {
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
+    where
+        Self: Sized,
+    {
+        Ok(bytes.into())
     }
 }
 
