@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::cmp;
 use std::fmt;
 use std::io;
@@ -9,9 +10,9 @@ use beserial::{
     Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
     SerializingError, WriteBytesExt,
 };
-use hash::{Hash, SerializeContent};
-use keys::Address;
-use std::borrow::Cow;
+use nimiq_database::AsDatabaseBytes;
+use nimiq_hash::{Hash, SerializeContent};
+use nimiq_keys::Address;
 
 // Stores a compact representation of length nibbles.
 // Each u8 stores up to 2 nibbles.

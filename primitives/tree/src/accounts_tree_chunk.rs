@@ -1,18 +1,17 @@
-use account::AccountsTreeLeave;
 use beserial::{Deserialize, Serialize};
-use hash::Blake2bHash;
+use nimiq_hash::Blake2bHash;
 
 use crate::accounts_proof::AccountsProof;
 use crate::accounts_tree_node::AccountsTreeNode;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AccountsTreeChunk<A: AccountsTreeLeave> {
+pub struct AccountsTreeChunk<A: Serialize + Deserialize + Clone> {
     #[beserial(len_type(u16))]
     pub nodes: Vec<AccountsTreeNode<A>>,
     pub proof: AccountsProof<A>,
 }
 
-impl<A: AccountsTreeLeave> AccountsTreeChunk<A> {
+impl<A: Serialize + Deserialize + Clone> AccountsTreeChunk<A> {
     pub fn new(nodes: Vec<AccountsTreeNode<A>>, proof: AccountsProof<A>) -> AccountsTreeChunk<A> {
         AccountsTreeChunk { nodes, proof }
     }

@@ -12,6 +12,7 @@ use beserial::{Deserialize, Serialize};
 use nimiq_macros::{add_hex_io_fns_typed_arr, create_typed_array};
 
 pub use self::sha512::*;
+use nimiq_database::{AsDatabaseBytes, FromDatabaseValue};
 use std::borrow::Cow;
 
 pub mod argon2kdf;

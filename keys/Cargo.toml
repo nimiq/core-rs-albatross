@@ -27,6 +27,7 @@ serde = { version = "1.0", optional = true }
 
 beserial = { path = "../beserial" }
 beserial_derive = { path = "../beserial/beserial_derive" }
+nimiq-database = { path = "../database" }
 nimiq-hash = { path = "../hash" }
 nimiq-macros = { path = "../macros" }
 nimiq-utils = { path = "../utils", features = ["key-rng"] }
