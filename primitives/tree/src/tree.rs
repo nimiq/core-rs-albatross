@@ -1,21 +1,21 @@
 use std::marker::PhantomData;
 use std::str::FromStr;
 
-use nimiq_account::AccountsTreeLeave;
+use crate::accounts_proof::AccountsProof;
+use crate::accounts_tree_chunk::AccountsTreeChunk;
+use crate::accounts_tree_node::{AccountsTreeNode, NO_CHILDREN};
+use crate::address_nibbles::AddressNibbles;
+use beserial::{Deserialize, Serialize};
 use nimiq_database::{Database, Environment, Transaction, WriteTransaction};
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_tree::accounts_proof::AccountsProof;
-use nimiq_tree::accounts_tree_chunk::AccountsTreeChunk;
-use nimiq_tree::accounts_tree_node::{AccountsTreeNode, NO_CHILDREN};
-use nimiq_tree::address_nibbles::AddressNibbles;
 
 #[derive(Debug)]
-pub struct AccountsTree<A: AccountsTreeLeave> {
+pub struct AccountsTree<A: Serialize + Deserialize + Clone> {
     db: Database,
     _account: PhantomData<A>,
 }
 
-impl<A: AccountsTreeLeave> AccountsTree<A> {
+impl<A: Serialize + Deserialize + Clone> AccountsTree<A> {
     const DB_NAME: &'static str = "AccountsTree";
 
     pub fn new(env: Environment) -> Self {
@@ -50,11 +50,6 @@ impl<A: AccountsTreeLeave> AccountsTree<A> {
     }
 
     pub fn put_batch(&self, txn: &mut WriteTransaction, address: &AddressNibbles, account: A) {
-        // TODO: Is this necessary???
-        if account.is_initial() && self.get(txn, address).is_none() {
-            return;
-        }
-
         // Insert account into the tree at address.
         self.insert_batch(
             txn,
@@ -94,16 +89,6 @@ impl<A: AccountsTreeLeave> AccountsTree<A> {
         // If the commonPrefix is the specified address, we have found an (existing) node
         // with the given address. Update the account.
         if node_prefix == prefix {
-            // XXX How does this generalize to more than one account type?
-            // Special case: If the new balance is the initial balance
-            // (i.e. balance=0), it is like the account never existed
-            // in the first place. Delete the node in this case.
-            if account.is_initial() {
-                txn.remove(&self.db, &node_prefix);
-                // We have already deleted the node, remove the subtree it was on.
-                return self.prune_batch(txn, node_prefix, root_path);
-            }
-
             // Update the account.
             let node: AccountsTreeNode<A> = txn.get(&self.db, &node_prefix).unwrap();
             let node = node.with_account(account).unwrap();
@@ -131,7 +116,7 @@ impl<A: AccountsTreeLeave> AccountsTree<A> {
         self.update_keys_batch(txn, node_prefix, root_path)
     }
 
-    fn prune_batch(
+    pub fn prune_batch(
         &self,
         txn: &mut WriteTransaction,
         prefix: AddressNibbles,
@@ -288,7 +273,7 @@ impl<A: AccountsTreeLeave> AccountsTree<A> {
         None
     }
 
-    pub(crate) fn get_chunk(
+    pub fn get_chunk(
         &self,
         txn: &Transaction,
         start: &str,
@@ -308,7 +293,7 @@ impl<A: AccountsTreeLeave> AccountsTree<A> {
         Some(AccountsTreeChunk::new(chunk, proof))
     }
 
-    pub(crate) fn get_terminal_nodes(
+    pub fn get_terminal_nodes(
         &self,
         txn: &Transaction,
         start: &AddressNibbles,

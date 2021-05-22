@@ -1,21 +1,19 @@
-use account::AccountsTreeLeave;
 use beserial::{Deserialize, Serialize};
-use hash::Blake2bHash;
-use hash::Hash;
-use keys::Address;
+use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_keys::Address;
 
 use crate::accounts_tree_node::AccountsTreeNode;
 use crate::address_nibbles::AddressNibbles;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AccountsProof<A: AccountsTreeLeave> {
+pub struct AccountsProof<A: Serialize + Deserialize + Clone> {
     #[beserial(len_type(u16))]
     nodes: Vec<AccountsTreeNode<A>>,
     #[beserial(skip)]
     verified: bool,
 }
 
-impl<A: AccountsTreeLeave> AccountsProof<A> {
+impl<A: Serialize + Deserialize + Clone> AccountsProof<A> {
     pub fn new(nodes: Vec<AccountsTreeNode<A>>) -> AccountsProof<A> {
         AccountsProof {
             nodes,
@@ -81,7 +79,6 @@ impl<A: AccountsTreeLeave> AccountsProof<A> {
 mod tests {
     use std::convert::TryFrom;
 
-    use account::{Account, BasicAccount};
     use nimiq_primitives::coin::Coin;
 
     use crate::accounts_tree_node::AccountsTreeNodeChild;

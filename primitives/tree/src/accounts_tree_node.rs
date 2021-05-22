@@ -2,9 +2,9 @@ use std::io;
 use std::iter;
 use std::slice;
 
-use account::AccountsTreeLeave;
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
-use hash::{Blake2bHash, Hash, SerializeContent};
+use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
+use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
 
 use crate::address_nibbles::AddressNibbles;
 
@@ -26,7 +26,7 @@ pub enum AccountsTreeNodeType {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
-pub enum AccountsTreeNode<A: AccountsTreeLeave> {
+pub enum AccountsTreeNode<A: Serialize + Deserialize + Clone> {
     BranchNode {
         prefix: AddressNibbles,
         children: Box<[Option<AccountsTreeNodeChild>; 16]>,
@@ -37,7 +37,7 @@ pub enum AccountsTreeNode<A: AccountsTreeLeave> {
     },
 }
 
-impl<A: AccountsTreeLeave> AccountsTreeNode<A> {
+impl<A: Serialize + Deserialize + Clone> AccountsTreeNode<A> {
     pub fn new_terminal(prefix: AddressNibbles, account: A) -> Self {
         AccountsTreeNode::TerminalNode { prefix, account }
     }
@@ -174,7 +174,7 @@ impl<A: AccountsTreeLeave> AccountsTreeNode<A> {
     }
 }
 
-impl<A: AccountsTreeLeave> Serialize for AccountsTreeNode<A> {
+impl<A: Serialize + Deserialize + Clone> Serialize for AccountsTreeNode<A> {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size: usize = 0;
         size += Serialize::serialize(&self.node_type(), writer)?;
@@ -218,7 +218,7 @@ impl<A: AccountsTreeLeave> Serialize for AccountsTreeNode<A> {
     }
 }
 
-impl<A: AccountsTreeLeave> Deserialize for AccountsTreeNode<A> {
+impl<A: Serialize + Deserialize + Clone> Deserialize for AccountsTreeNode<A> {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let node_type: AccountsTreeNodeType = Deserialize::deserialize(reader)?;
         let prefix: AddressNibbles = Deserialize::deserialize(reader)?;
@@ -245,17 +245,15 @@ impl<A: AccountsTreeLeave> Deserialize for AccountsTreeNode<A> {
     }
 }
 
-impl<A: AccountsTreeLeave> SerializeContent for AccountsTreeNode<A> {
+impl<A: Serialize + Deserialize + Clone> SerializeContent for AccountsTreeNode<A> {
     fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
         Ok(self.serialize(writer)?)
     }
 }
 
-// Different hash implementation than std
-#[allow(clippy::derive_hash_xor_eq)] // TODO: Shouldn't be necessary
-impl<A: AccountsTreeLeave> Hash for AccountsTreeNode<A> {}
+impl<A: Serialize + Deserialize + Clone> Hash for AccountsTreeNode<A> {}
 
-impl<A: AccountsTreeLeave> IntoDatabaseValue for AccountsTreeNode<A> {
+impl<A: Serialize + Deserialize + Clone> IntoDatabaseValue for AccountsTreeNode<A> {
     fn database_byte_size(&self) -> usize {
         self.serialized_size()
     }
@@ -265,7 +263,7 @@ impl<A: AccountsTreeLeave> IntoDatabaseValue for AccountsTreeNode<A> {
     }
 }
 
-impl<A: AccountsTreeLeave> FromDatabaseValue for AccountsTreeNode<A> {
+impl<A: Serialize + Deserialize + Clone> FromDatabaseValue for AccountsTreeNode<A> {
     fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
     where
         Self: Sized,
@@ -298,7 +296,7 @@ impl<'a> iter::Iterator for Iter<'a> {
     }
 }
 
-impl<'a, A: AccountsTreeLeave> iter::IntoIterator for &'a AccountsTreeNode<A> {
+impl<'a, A: Serialize + Deserialize + Clone> iter::IntoIterator for &'a AccountsTreeNode<A> {
     type Item = &'a AccountsTreeNodeChild;
     type IntoIter = Iter<'a>;
 
@@ -332,7 +330,7 @@ impl<'a> iter::Iterator for IterMut<'a> {
     }
 }
 
-impl<'a, A: AccountsTreeLeave> iter::IntoIterator for &'a mut AccountsTreeNode<A> {
+impl<'a, A: Serialize + Deserialize + Clone> iter::IntoIterator for &'a mut AccountsTreeNode<A> {
     type Item = &'a mut AccountsTreeNodeChild;
     type IntoIter = IterMut<'a>;
 
@@ -350,14 +348,12 @@ impl<'a, A: AccountsTreeLeave> iter::IntoIterator for &'a mut AccountsTreeNode<A
 
 #[cfg(test)]
 mod tests {
-    use account::Account;
-
-    use super::*;
-    use nimiq_account::{BasicAccount, HashedTimeLockedContract, VestingContract};
     use nimiq_hash::HashOutput;
     use nimiq_keys::Address;
     use nimiq_primitives::coin::Coin;
     use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm};
+
+    use super::*;
 
     const EMPTY_ROOT: &str = "000000";
     const ROOT: &str = "0000100130038679a597d998138965b1793503993691e50d3910347f2e6274327e0806c72d01311f5fec71d6df5709e7adb711835a80da5cca8ce27896a3e4a241977f62c142eb0132ef92a236c7622e6790bf8cfd13084488aa13d46109ecbbcca4579a4de8da2bdf01330ca9352121ed6a6ab793e124fb6453d96886cfdb9b8a399176ebc791313fd93001342161b614ecf10695066f82254149101292df15a8c7592ae3b44a2839247eeb1a01353604eb34e8720018f389a124eb7c05997b02c345a3f35ae06138584bb849d1b90136cfdf697dced7f0c07a09fdf2a7ba11641575205080cd9179f182a96ea01a69ca0137aea67da2ffc348458e4d8444477be2d6720da53c18414e0f6aed72ba4b5fd8b801383a6fc24a01fb88dc151dcc4d861e61e6951312c07be024d4df52ef5821dd77110139113ecaa04dfeeccef55576e7edc42a882cf9abb166509aca9598eb1b07b32f9a0161043cf8dd6f459a1edfdd1c7c25bd94263e0d00e650912967bb54ff899aa101bf01621cf41c547dba18db0b92b09a59d73c64e1be0f026ffcc7f56aad1f91938f07bd0163f4f3a285954a201a850e4331c7eeace387a83556dbac3c8ada406630b231110e0164297b13179a75cb0dd2288297d167c59cfd9fd29e20a0a20ad9a3c7e8f97ce308016596ee021457f86b14100eebe16efbe1c207f5914f59582cf7f64c986a3dca53040166ba6e9a80a103cac67f82938f6d6a63f1c87b9f4d1e06161ee63943461199b46e";

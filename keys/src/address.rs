@@ -13,6 +13,7 @@ use macros::create_typed_array;
 
 use crate::key_pair::KeyPair;
 use crate::PublicKey;
+use nimiq_database::{AsDatabaseBytes, FromDatabaseValue};
 use std::borrow::Cow;
 
 create_typed_array!(Address, u8, 20);
