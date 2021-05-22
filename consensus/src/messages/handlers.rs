@@ -28,6 +28,7 @@ impl Handle<BlockHashes> for RequestBlockHashes {
             {
                 // We found a block, ignore remaining block locator hashes.
                 start_block_hash = locator.clone();
+                trace!("Start block found: {:?}", &start_block_hash);
                 break;
             }
         }
@@ -63,7 +64,9 @@ impl Handle<BlockHashes> for RequestBlockHashes {
             && hashes.len() < self.max_blocks as usize
         {
             let checkpoint_block = blockchain.macro_head();
-            if !checkpoint_block.is_election_block() {
+            // Only include the latest checkpoint block if it is not the locator given by the requester
+            if !checkpoint_block.is_election_block() && checkpoint_block.hash() != start_block_hash
+            {
                 hashes.push((BlockHashType::Checkpoint, checkpoint_block.hash()));
             }
         }
