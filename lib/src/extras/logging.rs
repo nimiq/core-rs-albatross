@@ -120,7 +120,7 @@ fn pretty_logging_with_timestamps(
         let target = format!("{: <width$}", target_text, width = max_width);
         out.finish(format_args!(
             " {timestamp} {level: <5} {target} | {message}",
-            timestamp = Local::now().format("%Y-%m-%d %H:%M:%S"),
+            timestamp = Local::now().format("%Y-%m-%d %T.%3f"),
             target = target.bold(),
             level = colors_level.color(record.level()),
             message = message,
