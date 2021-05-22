@@ -35,7 +35,7 @@ nimiq-accounts = { path = "../accounts" }
 nimiq-block = { path = "../primitives/block" }
 nimiq-bls = { path = "../bls" }
 nimiq-collections = { path = "../collections" }
-nimiq-database = { path = "../database", features = ["account"] }
+nimiq-database = { path = "../database" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-primitives = { path = "../primitives" }

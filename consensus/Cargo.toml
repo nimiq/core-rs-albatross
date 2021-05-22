@@ -32,7 +32,7 @@ beserial_derive = { path = "../beserial/beserial_derive" }
 nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain = { path = "../blockchain" }
 nimiq-collections = { path = "../collections" }
-nimiq-database = { path = "../database", features = ["full-nimiq"] }
+nimiq-database = { path = "../database" }
 nimiq-genesis = { path = "../genesis" }
 nimiq-hash = { path = "../hash" }
 nimiq-macros = { path = "../macros" }

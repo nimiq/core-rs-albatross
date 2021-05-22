@@ -4,7 +4,6 @@ use std::str::FromStr;
 use nimiq_account::AccountsTreeLeave;
 use nimiq_database::{Database, Environment, Transaction, WriteTransaction};
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_keys::Address;
 use nimiq_tree::accounts_proof::AccountsProof;
 use nimiq_tree::accounts_tree_chunk::AccountsTreeChunk;
 use nimiq_tree::accounts_tree_node::{AccountsTreeNode, NO_CHILDREN};
@@ -17,41 +16,53 @@ pub struct AccountsTree<A: AccountsTreeLeave> {
 }
 
 impl<A: AccountsTreeLeave> AccountsTree<A> {
-    const DB_NAME: &'static str = "accounts";
+    const DB_NAME: &'static str = "AccountsTree";
 
     pub fn new(env: Environment) -> Self {
         let db = env.open_database(Self::DB_NAME.to_string());
+
         let tree = AccountsTree {
             db,
             _account: PhantomData,
         };
 
         let mut txn = WriteTransaction::new(&env);
+
         if tree.get_root(&txn).is_none() {
             let root = AddressNibbles::empty();
+
             txn.put_reserve(
                 &tree.db,
                 &root,
                 &AccountsTreeNode::<A>::new_branch(root.clone(), NO_CHILDREN),
             );
         }
+
         txn.commit();
+
         tree
     }
 
-    pub fn put(&self, txn: &mut WriteTransaction, address: &Address, account: A) {
+    pub fn put(&self, txn: &mut WriteTransaction, address: &AddressNibbles, account: A) {
         self.put_batch(txn, address, account);
+
         self.finalize_batch(txn);
     }
 
-    pub fn put_batch(&self, txn: &mut WriteTransaction, address: &Address, account: A) {
+    pub fn put_batch(&self, txn: &mut WriteTransaction, address: &AddressNibbles, account: A) {
+        // TODO: Is this necessary???
         if account.is_initial() && self.get(txn, address).is_none() {
             return;
         }
 
         // Insert account into the tree at address.
-        let prefix = AddressNibbles::from(address);
-        self.insert_batch(txn, AddressNibbles::empty(), prefix, account, Vec::new());
+        self.insert_batch(
+            txn,
+            AddressNibbles::empty(),
+            address.clone(),
+            account,
+            Vec::new(),
+        );
     }
 
     fn insert_batch(
@@ -85,7 +96,7 @@ impl<A: AccountsTreeLeave> AccountsTree<A> {
         if node_prefix == prefix {
             // XXX How does this generalize to more than one account type?
             // Special case: If the new balance is the initial balance
-            // (i.e. balance=0, nonce=0), it is like the account never existed
+            // (i.e. balance=0), it is like the account never existed
             // in the first place. Delete the node in this case.
             if account.is_initial() {
                 txn.remove(&self.db, &node_prefix);
@@ -193,10 +204,14 @@ impl<A: AccountsTreeLeave> AccountsTree<A> {
         node.hash()
     }
 
-    pub fn get_accounts_proof(&self, txn: &Transaction, addresses: &[Address]) -> AccountsProof<A> {
+    pub fn get_accounts_proof(
+        &self,
+        txn: &Transaction,
+        addresses: &[AddressNibbles],
+    ) -> AccountsProof<A> {
         let mut prefixes = Vec::new();
         for address in addresses {
-            prefixes.push(AddressNibbles::from(address));
+            prefixes.push(address.clone());
         }
         // We sort the addresses to simplify traversal in post order (leftmost addresses first).
         prefixes.sort();
@@ -266,10 +281,8 @@ impl<A: AccountsTreeLeave> AccountsTree<A> {
         include_node
     }
 
-    pub fn get(&self, txn: &Transaction, address: &Address) -> Option<A> {
-        if let AccountsTreeNode::TerminalNode { account, .. } =
-            txn.get(&self.db, &AddressNibbles::from(address))?
-        {
+    pub fn get(&self, txn: &Transaction, address: &AddressNibbles) -> Option<A> {
+        if let AccountsTreeNode::TerminalNode { account, .. } = txn.get(&self.db, address)? {
             return Some(account);
         }
         None
@@ -285,11 +298,11 @@ impl<A: AccountsTreeLeave> AccountsTree<A> {
             self.get_terminal_nodes(txn, &AddressNibbles::from_str(start).ok()?, size)?;
         let last_node = chunk.pop();
         let proof = if let Some(node) = last_node {
-            self.get_accounts_proof(txn, &[node.prefix().to_address()?])
+            self.get_accounts_proof(txn, &[node.prefix().clone()])
         } else {
             self.get_accounts_proof(
                 txn,
-                &[Address::from_str("ffffffffffffffffffffffffffffffffffffffff").ok()?],
+                &[AddressNibbles::from_str("ffffffffffffffffffffffffffffffffffffffff").ok()?],
             )
         };
         Some(AccountsTreeChunk::new(chunk, proof))

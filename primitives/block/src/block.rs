@@ -334,6 +334,26 @@ impl fmt::Display for Block {
     }
 }
 
+impl IntoDatabaseValue for Block {
+    fn database_byte_size(&self) -> usize {
+        self.serialized_size()
+    }
+
+    fn copy_into_database(&self, mut bytes: &mut [u8]) {
+        Serialize::serialize(&self, &mut bytes).unwrap();
+    }
+}
+
+impl FromDatabaseValue for Block {
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
+    where
+        Self: Sized,
+    {
+        let mut cursor = io::Cursor::new(bytes);
+        Ok(Deserialize::deserialize(&mut cursor)?)
+    }
+}
+
 /// The enum representing a block header. Blocks can either be Micro blocks or Macro blocks (which
 /// includes both checkpoint and election blocks).
 #[derive(Clone, Debug, Eq, PartialEq, SerializeContent)]
