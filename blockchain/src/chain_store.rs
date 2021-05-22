@@ -328,7 +328,7 @@ impl ChainStore {
         }
     }
 
-    /// Returns None if given start_block_hash is not a macro block or, depending on `election_blocks_only`, has no election.
+    /// Returns None if given start_block_hash is not a macro block.
     pub fn get_macro_blocks_backward(
         &self,
         start_block_hash: &Blake2bHash,
@@ -348,13 +348,7 @@ impl ChainStore {
 
         let mut blocks = Vec::new();
         let start_block = match self.get_block(start_block_hash, false, Some(&txn)) {
-            Some(Block::Macro(block)) => {
-                if election_blocks_only && !block.is_election_block() {
-                    return None;
-                } else {
-                    block
-                }
-            }
+            Some(Block::Macro(block)) => block,
             Some(_) => return None,
             None => return Some(blocks),
         };
@@ -381,7 +375,7 @@ impl ChainStore {
         Some(blocks)
     }
 
-    /// Returns None if given start_block_hash is not a macro block or, depending on `election_blocks_only`, has no election.
+    /// Returns None if given start_block_hash is not a macro block.
     pub fn get_macro_blocks_forward(
         &self,
         start_block_hash: &Blake2bHash,
@@ -401,13 +395,7 @@ impl ChainStore {
 
         let mut blocks = Vec::new();
         let block = match self.get_block(start_block_hash, false, Some(&txn)) {
-            Some(Block::Macro(block)) => {
-                if election_blocks_only && !block.is_election_block() {
-                    return None;
-                } else {
-                    block
-                }
-            }
+            Some(Block::Macro(block)) => block,
             Some(_) => return None,
             None => return Some(blocks),
         };
@@ -434,7 +422,7 @@ impl ChainStore {
         Some(blocks)
     }
 
-    /// Returns None if given start_block_hash is not a macro block or, depending on `election_blocks_only`, has no election.
+    /// Returns None if given start_block_hash is not a macro block.
     pub fn get_macro_blocks(
         &self,
         start_block_hash: &Blake2bHash,
