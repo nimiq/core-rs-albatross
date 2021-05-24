@@ -312,25 +312,35 @@ impl<N: Network> Consensus<N> {
                         }
                     }
                     // If there's no ongoing head request, check whether we should start a new one.
-                    if self.head_requests.is_none() {
-                        // This is the case if `head_requests_time` is unset or the timeout is hit.
-                        let should_start_request = self
-                            .head_requests_time
-                            .map(|time| time.elapsed() >= Self::HEAD_REQUESTS_TIMEOUT)
-                            .unwrap_or(true);
-                        if should_start_request {
-                            trace!("Trying to establish consensus, initiating head requests.");
-                            self.head_requests = Some(HeadRequests::new(
-                                self.block_queue.peers(),
-                                Arc::clone(&self.blockchain),
-                            ));
-                            self.head_requests_time = Some(Instant::now());
-                        }
-                    }
+                    self.request_heads();
                 }
             }
         }
         None
+    }
+
+    /// Requests heads from connected peers in a predefined interval.
+    fn request_heads(&mut self) {
+        // If we do not have consensus, there's no ongoing head request,
+        // and we have at least one peer, check whether we should start a new one.
+        if !self.is_established()
+            && self.head_requests.is_none()
+            && self.block_queue.num_peers() > 0
+        {
+            // This is the case if `head_requests_time` is unset or the timeout is hit.
+            let should_start_request = self
+                .head_requests_time
+                .map(|time| time.elapsed() >= Self::HEAD_REQUESTS_TIMEOUT)
+                .unwrap_or(true);
+            if should_start_request {
+                trace!("Trying to establish consensus, initiating head requests.");
+                self.head_requests = Some(HeadRequests::new(
+                    self.block_queue.peers(),
+                    Arc::clone(&self.blockchain),
+                ));
+                self.head_requests_time = Some(Instant::now());
+            }
+        }
     }
 }
 
@@ -388,6 +398,9 @@ impl<N: Network> Future for Consensus<N> {
         let mut timer = tokio::time::delay_for(Self::CONSENSUS_POLL_TIMER);
         let _ = timer.poll_unpin(cx);
         self.next_execution_timer = Some(timer);
+
+        // 5. Advance consensus and catch-up through head requests.
+        self.request_heads();
 
         Poll::Pending
     }
