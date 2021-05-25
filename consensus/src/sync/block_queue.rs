@@ -344,6 +344,7 @@ impl<TPeer: Peer, TReq: RequestComponent<TPeer>> Stream for BlockQueue<TPeer, TR
         // First, try to get as many blocks from the gossipsub stream as possible
         match this.block_stream.poll_next(cx) {
             Poll::Ready(Some(block)) => {
+                // Ignore all block announcements until there is at least once synced peer.
                 if num_peers > 0 {
                     let result = this.inner.on_block_announced(block, this.request_component);
                     if result {
