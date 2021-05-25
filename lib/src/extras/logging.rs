@@ -4,6 +4,7 @@ use chrono::Local;
 use colored::Colorize;
 use fern::colors::{Color, ColoredLevelConfig};
 use fern::{log_file, Dispatch};
+use file_rotate::{FileRotate, RotationMode};
 use lazy_static::lazy_static;
 use log::{Level, LevelFilter};
 
@@ -120,7 +121,7 @@ fn pretty_logging_with_timestamps(
         let target = format!("{: <width$}", target_text, width = max_width);
         out.finish(format_args!(
             " {timestamp} {level: <5} {target} | {message}",
-            timestamp = Local::now().format("%Y-%m-%d %H:%M:%S"),
+            timestamp = Local::now().format("%Y-%m-%d %T.%3f"),
             target = target.bold(),
             level = colors_level.color(record.level()),
             message = message,
@@ -219,6 +220,28 @@ pub fn initialize_logging(
         dispatch = dispatch.chain(std::io::stderr());
     }
 
+    if let Some(rotating_file_settings) = settings.rotating_trace_log {
+        std::fs::create_dir_all(rotating_file_settings.path.clone())?;
+
+        // Create rotating log file according to settings
+        let log = FileRotate::new(
+            rotating_file_settings.path.join("log.log"),
+            RotationMode::BytesSurpassed(rotating_file_settings.size),
+            rotating_file_settings.file_count,
+        );
+
+        dispatch = Dispatch::new()
+            .chain(dispatch);
+
+        dispatch = dispatch.chain(Dispatch::new()
+            .pretty_logging(true) // always log with timestamps
+            .level(LevelFilter::Trace)
+            .level_for_nimiq(LevelFilter::Trace)
+            .chain(Box::new(log) as Box<dyn std::io::Write + Send>),
+        );
+    }
+
     dispatch.apply()?;
+
     Ok(())
 }

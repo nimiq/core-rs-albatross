@@ -95,10 +95,11 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
     }
 
     fn on_epoch_received(&mut self, epoch: BatchSetInfo) -> Result<(), SyncClusterResult> {
+        // this might be a checkpoint
         // TODO Verify macro blocks and their ordering
         // Currently we only do a very basic check here
         let current_block_number = self.blockchain.block_number();
-        if epoch.block.header.block_number < current_block_number {
+        if epoch.block.header.block_number <= current_block_number {
             debug!("Received outdated epoch at block {}", current_block_number);
             return Err(SyncClusterResult::Outdated);
         }
@@ -118,15 +119,20 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
                 .blockchain
                 .history_store
                 .get_num_extended_transactions(epoch_number, None);
+
             let num_full_chunks = num_known / CHUNK_SIZE;
             start_index = num_full_chunks;
-            // TODO: Can probably be done more efficiently.
-            let known_chunk = self
-                .blockchain
-                .history_store
-                .prove_chunk(epoch_number, num_full_chunks * CHUNK_SIZE, 0, None)
-                .expect("History chunk missing");
-            pending_batch_set.history = known_chunk.history;
+
+            // Only if there are full chunks they need to be proven.
+            if num_full_chunks > 0 {
+                // TODO: Can probably be done more efficiently.
+                let known_chunk = self
+                    .blockchain
+                    .history_store
+                    .prove_chunk(epoch_number, num_full_chunks * CHUNK_SIZE, 0, None)
+                    .expect("History chunk missing");
+                pending_batch_set.history = known_chunk.history;
+            }
         }
 
         // Queue history chunks for the given epoch for download.
@@ -160,6 +166,7 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
             .verify(epoch.block.header.history_root.clone(), epoch.history.len())
             .unwrap_or(false)
         {
+            log::debug!("History Chunk failed to verify");
             return Err(SyncClusterResult::Error);
         }
         // Add the received history chunk to the pending epoch.
@@ -203,9 +210,17 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
     }
 
     fn remove_front(&mut self, at: usize) {
-        let mut new_cluster = self.split_off(at);
+        let mut new_cluster = if self.ids.len() < at {
+            self.split_off(self.len())
+        } else {
+            self.split_off(at)
+        };
         new_cluster.adopted_batch_set = self.adopted_batch_set;
         *self = new_cluster;
+    }
+
+    fn len(&self) -> usize {
+        self.ids.len()
     }
 }
 
@@ -221,7 +236,11 @@ impl<TPeer: Peer + 'static> Stream for SyncCluster<TPeer> {
                             return Poll::Ready(Some(Err(e)));
                         }
                     }
-                    Err(_e) => {
+                    Err(e) => {
+                        log::debug!(
+                            "Polling the batch set queue encountered error result: {:?}",
+                            e
+                        );
                         return Poll::Ready(Some(Err(SyncClusterResult::Error)));
                     } // TODO Error
                 }
@@ -245,7 +264,8 @@ impl<TPeer: Peer + 'static> Stream for SyncCluster<TPeer> {
                         return Poll::Ready(Some(Ok(epoch)));
                     }
                 }
-                Err(_e) => {
+                Err(e) => {
+                    log::debug!("Polling the history queue resulted in an error for epoch #{}, history_chunk: #{}", e.0, e.1);
                     return Poll::Ready(Some(Err(SyncClusterResult::Error)));
                 } // TODO Error
             }
@@ -321,11 +341,17 @@ enum SyncClusterResult {
     Outdated,
 }
 
-impl<T, E> From<Result<T, E>> for SyncClusterResult {
+impl<T, E: std::fmt::Debug> From<Result<T, E>> for SyncClusterResult {
     fn from(res: Result<T, E>) -> Self {
         match res {
             Ok(_) => SyncClusterResult::EpochSuccessful,
-            Err(_) => SyncClusterResult::Error,
+            Err(err) => {
+                log::debug!(
+                    "SyncClusterResult From<Result<T, E>> encountered error: {:?}",
+                    err
+                );
+                SyncClusterResult::Error
+            }
         }
     }
 }
@@ -364,17 +390,30 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         blockchain: Arc<Blockchain>,
         agent: Arc<ConsensusAgent<TNetwork::PeerType>>,
     ) -> Option<EpochIds<TNetwork::PeerType>> {
-        let (locator, epoch_number) = {
+        trace!("requesting epoch ids");
+        let (locators, epoch_number) = {
+            // Order matters here. The first hash found by the recipient of the request  will be used, so they need to be
+            // in backwards bllock height order.
             let election_head = blockchain.election_head();
+            let macro_head = blockchain.macro_head();
+
+            // So if there is a checkpoint hash that should be included in addition to the election block hash, it should come first.
+            let mut locators = vec![];
+            if macro_head.hash() != election_head.hash() {
+                locators.push(macro_head.hash());
+            }
+            // The election bock is at the end here
+            locators.push(election_head.hash());
+
             (
-                election_head.hash(),
+                locators,
                 policy::epoch_at(election_head.header.block_number),
             )
         };
 
         let result = agent
             .request_block_hashes(
-                vec![locator],
+                locators,
                 1000, // TODO: Use other value
                 RequestBlockHashesFilter::ElectionAndLatestCheckpoint,
             )
@@ -426,7 +465,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         let current_offset =
             policy::epoch_at(self.blockchain.election_head().header.block_number) as usize;
         // If `epoch_ids` includes known blocks, truncate (or discard on fork prior to our accepted state).
-        if epoch_ids.offset <= current_offset {
+        if !epoch_ids.ids.is_empty() && epoch_ids.offset <= current_offset {
             // Check most recent id against our state.
             if current_id == epoch_ids.ids[current_offset - epoch_ids.offset] {
                 // Remove known blocks.
@@ -602,8 +641,12 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
                     // FIXME We want to distinguish between "locator hash not found" (i.e. peer is
                     //  on a different chain) and "no more hashes past locator" (we are in sync with
                     //  the peer).
-                    if epoch_ids.ids.is_empty() {
+                    if epoch_ids.ids.is_empty() && epoch_ids.checkpoint_id.is_none() {
                         // We are synced with this peer.
+                        debug!(
+                            "Peer has finished syncing: {:?}",
+                            epoch_ids.sender.peer.id()
+                        );
                         return Poll::Ready(Some(epoch_ids.sender));
                     }
                     self.cluster_epoch_ids(epoch_ids);
@@ -630,7 +673,10 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
                     self.blockchain
                         .push_history_sync(Block::Macro(epoch.block), &epoch.history),
                 ),
-                Some(Err(_)) => SyncClusterResult::Error,
+                Some(Err(e)) => {
+                    log::debug!("Polling the best SyncCluster returned an error: {:?}", e);
+                    SyncClusterResult::Error
+                }
                 None => SyncClusterResult::NoMoreEpochs,
             };
 
@@ -660,6 +706,51 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
                         break;
                     }
                 }
+
+                // TODO: What if there are no clusters left for this peer?
+                let removed_clusters: Vec<_> = self
+                    .epoch_sync_clusters
+                    .drain_filter(|cluster| cluster.len() == 0)
+                    .collect();
+
+                for cluster in removed_clusters.iter() {
+                    // Decrement the cluster count for all peers in the evicted cluster.
+                    for peer in cluster.peers() {
+                        if let Some(agent) = Weak::upgrade(peer) {
+                            let cluster_count = {
+                                let pair = self
+                                    .agents
+                                    .get_mut(&agent.peer)
+                                    .expect("Agent should be present");
+                                pair.1 -= 1;
+                                pair.1
+                            };
+
+                            // If the peer isn't in any more clusters, request more epoch_ids from it.
+                            // Only do so if the cluster was synced.
+                            if cluster_count == 0 {
+                                // Always remove agent from agents map. It will be re-added if it returns more
+                                // epoch_ids and dropped otherwise.
+                                self.agents.remove(&agent.peer);
+
+                                if result == SyncClusterResult::NoMoreEpochs
+                                    && cluster.adopted_batch_set
+                                {
+                                    let future = Self::request_epoch_ids(
+                                        Arc::clone(&self.blockchain),
+                                        agent,
+                                    )
+                                    .boxed();
+                                    self.epoch_ids_stream.push(future);
+                                } else {
+                                    // FIXME: Disconnect peer
+                                    // agent.peer.close()
+                                }
+                            }
+                        }
+                    }
+                }
+
                 self.epoch_sync_clusters.sort();
             } else {
                 // Evict current best cluster and move to next one.

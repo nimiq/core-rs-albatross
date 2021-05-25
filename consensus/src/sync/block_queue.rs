@@ -336,6 +336,7 @@ impl<TPeer: Peer, TReq: RequestComponent<TPeer>> Stream for BlockQueue<TPeer, TR
     type Item = BlockQueueEvent<TPeer>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+        let num_peers = self.num_peers();
         let this = self.project();
 
         // Note: I think it doesn't matter what is done first
@@ -343,12 +344,16 @@ impl<TPeer: Peer, TReq: RequestComponent<TPeer>> Stream for BlockQueue<TPeer, TR
         // First, try to get as many blocks from the gossipsub stream as possible
         match this.block_stream.poll_next(cx) {
             Poll::Ready(Some(block)) => {
-                let result = this.inner.on_block_announced(block, this.request_component);
-                if result {
-                    *this.accepted_announcements = this.accepted_announcements.saturating_add(1);
-                }
+                // Ignore all block announcements until there is at least once synced peer.
+                if num_peers > 0 {
+                    let result = this.inner.on_block_announced(block, this.request_component);
+                    if result {
+                        *this.accepted_announcements =
+                            this.accepted_announcements.saturating_add(1);
+                    }
 
-                return Poll::Ready(Some(BlockQueueEvent::ReceivedBlocks));
+                    return Poll::Ready(Some(BlockQueueEvent::ReceivedBlocks));
+                }
             }
 
             // If the block_stream is exhausted, we quit as well

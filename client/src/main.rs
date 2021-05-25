@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-use futures::StreamExt;
 pub use nimiq::{
     client::{Client, Consensus},
     config::command_line::CommandLine,
@@ -86,7 +85,7 @@ async fn main_inner() -> Result<(), Error> {
     let consensus = client.consensus().unwrap();
 
     log::info!("Spawning consensus");
-    tokio::spawn(async move { consensus.for_each(|_| async {}).await });
+    tokio::spawn(consensus);
     let consensus = client.consensus_proxy();
 
     // Start validator

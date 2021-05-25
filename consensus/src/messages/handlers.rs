@@ -28,6 +28,7 @@ impl Handle<BlockHashes> for RequestBlockHashes {
             {
                 // We found a block, ignore remaining block locator hashes.
                 start_block_hash = locator.clone();
+                trace!("Start block found: {:?}", &start_block_hash);
                 break;
             }
         }
@@ -63,7 +64,9 @@ impl Handle<BlockHashes> for RequestBlockHashes {
             && hashes.len() < self.max_blocks as usize
         {
             let checkpoint_block = blockchain.macro_head();
-            if !checkpoint_block.is_election_block() {
+            // Only include the latest checkpoint block if it is not the locator given by the requester
+            if !checkpoint_block.is_election_block() && checkpoint_block.hash() != start_block_hash
+            {
                 hashes.push((BlockHashType::Checkpoint, checkpoint_block.hash()));
             }
         }
@@ -145,8 +148,18 @@ impl Handle<ResponseBlocks> for RequestMissingBlocks {
             }
         }
 
+        // if no start_block can be found, assume the last macro block before target_block
+        let start_block = if start_block.is_none() {
+            blockchain.get_block_at(
+                policy::macro_block_before(target_block.block_number()),
+                false,
+                None,
+            )?
+        } else {
+            start_block.unwrap()
+        };
+
         // Check that the distance is sensible.
-        let start_block = start_block?;
         let num_blocks = target_block.block_number() - start_block.block_number();
         if num_blocks > policy::BATCH_LENGTH * 2 {
             debug!("Received missing block request across more than 2 batches.");

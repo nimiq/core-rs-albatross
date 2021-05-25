@@ -116,7 +116,7 @@ async fn mock_validators(hub: &mut MockHub, num_validators: usize) -> Vec<Valida
 
     // Start consensus.
     for consensus in consensus {
-        tokio::spawn(consensus.for_each(|_| async {}));
+        tokio::spawn(consensus);
     }
 
     future::join_all(events.iter_mut().map(|e| e.next())).await;
@@ -275,8 +275,8 @@ async fn validator_can_catch_up() {
     // resulting in him producing the first block.
     let mut hub = MockHub::default();
 
-    // In total 9 validator are registered. after 3 validators are taken offline the remaining 6 should not be able to progress on their own
-    let mut validators = mock_validators(&mut hub, 9).await;
+    // In total 8 validator are registered. after 3 validators are taken offline the remaining 5 should not be able to progress on their own
+    let mut validators = mock_validators(&mut hub, 8).await;
     // Maintain a collection of the correspponding networks.
 
     let networks: Vec<Arc<MockNetwork>> = validators
