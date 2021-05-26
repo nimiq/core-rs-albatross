@@ -230,14 +230,14 @@ pub fn initialize_logging(
             rotating_file_settings.file_count,
         );
 
-        dispatch = Dispatch::new()
-            .chain(dispatch);
+        dispatch = Dispatch::new().chain(dispatch);
 
-        dispatch = dispatch.chain(Dispatch::new()
-            .pretty_logging(true) // always log with timestamps
-            .level(LevelFilter::Trace)
-            .level_for_nimiq(LevelFilter::Trace)
-            .chain(Box::new(log) as Box<dyn std::io::Write + Send>),
+        dispatch = dispatch.chain(
+            Dispatch::new()
+                .pretty_logging(true) // always log with timestamps
+                .level(LevelFilter::Trace)
+                .level_for_nimiq(LevelFilter::Trace)
+                .chain(Box::new(log) as Box<dyn std::io::Write + Send>),
         );
     }
 
