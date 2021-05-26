@@ -62,7 +62,6 @@ echo '[log]'
 optional level NIMIQ_LOG_LEVEL string
 optional timestamps NIMIQ_LOG_TIMESTAMPS boolean
 optional tags NIMIQ_LOG_TAGS object
-entry file /home/nimiq/nimiq.log.pipe string
 optional statistics NIMIQ_LOG_STATISTICS number
 optional file NIMIQ_LOG_FILE string
 
