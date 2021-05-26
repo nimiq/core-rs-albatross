@@ -19,7 +19,7 @@ nimiq-genesis = { path = "../genesis" }
 nimiq-hash = { path = "../hash" }
 nimiq-nano-zkp = { path = "../nano-zkp" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
-nimiq-tree = { path = "../primitives/tree" }
+nimiq-trie = { path = "../primitives/trie" }
 nimiq-utils = { path = "../utils", features = ["time"] }
 
 [dev-dependencies]

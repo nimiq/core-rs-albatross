@@ -30,8 +30,8 @@ use nimiq_peer_address::services::ServiceFlags;
 use nimiq_peer_address::version;
 use nimiq_subscription::Subscription;
 use nimiq_transaction::{Transaction, TransactionReceipt, TransactionsProof};
-use nimiq_tree::accounts_proof::AccountsProof;
-use nimiq_tree::accounts_tree_chunk::AccountsTreeChunk;
+use nimiq_trie::trie_chunk::TrieChunk;
+use nimiq_trie::trie_proof::TrieProof;
 use nimiq_utils::crc::Crc32Computer;
 use nimiq_utils::merkle::partial::Blake2bPartialMerkleProof;
 use nimiq_utils::observer::{PassThroughListener, PassThroughNotifier};
@@ -784,7 +784,7 @@ impl InvVector {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TxMessage {
     pub transaction: Transaction,
-    pub accounts_proof: Option<AccountsProof<Account>>,
+    pub accounts_proof: Option<TrieProof<Account>>,
 }
 impl TxMessage {
     pub fn new(transaction: Transaction) -> Message {
@@ -1040,11 +1040,11 @@ pub struct GetAccountsProofMessage {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AccountsProofMessage {
     pub block_hash: Blake2bHash,
-    pub proof: Option<AccountsProof<Account>>,
+    pub proof: Option<TrieProof<Account>>,
 }
 
 impl AccountsProofMessage {
-    pub fn new(block_hash: Blake2bHash, proof: Option<AccountsProof<Account>>) -> Message {
+    pub fn new(block_hash: Blake2bHash, proof: Option<TrieProof<Account>>) -> Message {
         Message::AccountsProof(Box::new(AccountsProofMessage { block_hash, proof }))
     }
 }
@@ -1061,7 +1061,7 @@ pub struct GetAccountsTreeChunkMessage {
 #[derive(Clone, Debug)]
 pub enum AccountsTreeChunkData {
     Serialized(Vec<u8>),
-    Structured(AccountsTreeChunk<Account>),
+    Structured(TrieChunk<Account>),
 }
 
 impl AccountsTreeChunkData {

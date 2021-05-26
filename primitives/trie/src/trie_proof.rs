@@ -1,34 +1,35 @@
 use beserial::{Deserialize, Serialize};
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_keys::Address;
 
-use crate::accounts_tree_node::AccountsTreeNode;
-use crate::address_nibbles::AddressNibbles;
+use crate::prefix_nibbles::PrefixNibbles;
+use crate::trie_node::TrieNode;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AccountsProof<A: Serialize + Deserialize + Clone> {
+pub struct TrieProof<A: Serialize + Deserialize + Clone> {
     #[beserial(len_type(u16))]
-    nodes: Vec<AccountsTreeNode<A>>,
+    nodes: Vec<TrieNode<A>>,
     #[beserial(skip)]
     verified: bool,
 }
 
-impl<A: Serialize + Deserialize + Clone> AccountsProof<A> {
-    pub fn new(nodes: Vec<AccountsTreeNode<A>>) -> AccountsProof<A> {
-        AccountsProof {
+impl<A: Serialize + Deserialize + Clone> TrieProof<A> {
+    pub fn new(nodes: Vec<TrieNode<A>>) -> TrieProof<A> {
+        TrieProof {
             nodes,
             verified: false,
         }
     }
 
     pub fn verify(&mut self) -> bool {
-        let mut children: Vec<AccountsTreeNode<A>> = Vec::new();
+        let mut children: Vec<TrieNode<A>> = Vec::new();
+
         for node in &self.nodes {
             // If node is a branch node, validate its children.
             if node.is_branch() {
                 while let Some(child) = children.pop() {
                     if node.prefix().is_prefix_of(child.prefix()) {
                         let hash = child.hash::<Blake2bHash>();
+
                         // If the child is not valid, return false.
                         if node.get_child_hash(child.prefix()).unwrap() != &hash
                             || &node.get_child_prefix(child.prefix()).unwrap() != child.prefix()
@@ -43,47 +44,53 @@ impl<A: Serialize + Deserialize + Clone> AccountsProof<A> {
             }
             children.push(node.clone());
         }
-        let root_nibbles: AddressNibbles = "".parse().unwrap();
+
+        let root_nibbles: PrefixNibbles = "".parse().unwrap();
+
         let valid =
             children.len() == 1 && children[0].prefix() == &root_nibbles && children[0].is_branch();
+
         self.verified = valid;
+
         valid
     }
 
-    pub fn get_account(&self, address: &Address) -> Option<A> {
+    pub fn get_value(&self, key: &PrefixNibbles) -> Option<A> {
         assert!(
             self.verified,
             "AccountsProof must be verified before retrieving accounts. Call verify() first."
         );
 
         for node in &self.nodes {
-            if let AccountsTreeNode::TerminalNode { prefix, account } = node {
-                if prefix == &AddressNibbles::from(address) {
-                    return Some(account.clone());
+            if let TrieNode::TerminalNode { prefix, value } = node {
+                if prefix == key {
+                    return Some(value.clone());
                 }
             }
         }
+
         None
     }
 
     pub fn root_hash(&self) -> Blake2bHash {
-        (&self.nodes[self.nodes.len() - 1]).hash()
+        self.nodes.last().unwrap().hash()
     }
 
-    pub fn nodes(&self) -> &Vec<AccountsTreeNode<A>> {
+    pub fn nodes(&self) -> &Vec<TrieNode<A>> {
         &self.nodes
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::convert::TryFrom;
-
-    use nimiq_primitives::coin::Coin;
-
-    use crate::accounts_tree_node::AccountsTreeNodeChild;
+    use crate::trie_node::TrieNodeChild;
 
     use super::*;
+
+    #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+    struct TestAccount {
+        balance: u64,
+    }
 
     #[test]
     fn it_can_verify() {
@@ -99,43 +106,31 @@ mod tests {
          *    T3 T4
          */
 
-        let an1: AddressNibbles = "0011111111111111111111111111111111111111".parse().unwrap();
-        let account1 = Account::Basic(BasicAccount {
-            balance: Coin::try_from(25).unwrap(),
-        });
-        let address1 = Address::from(hex::decode(an1.to_string()).unwrap().as_slice());
-        let t1 = AccountsTreeNode::new_terminal(an1, account1.clone());
+        let nibbles1: PrefixNibbles = "0011111111111111111111111111111111111111".parse().unwrap();
+        let value1 = TestAccount { balance: 25 };
+        let t1 = TrieNode::new_terminal(nibbles1.clone(), value1.clone());
 
-        let an2: AddressNibbles = "0033333333333333333333333333333333333333".parse().unwrap();
-        let account2 = Account::Basic(BasicAccount {
-            balance: Coin::try_from(1).unwrap(),
-        });
-        let address2 = Address::from(hex::decode(an2.to_string()).unwrap().as_slice());
-        let t2 = AccountsTreeNode::new_terminal(an2, account2.clone());
+        let nibbles2: PrefixNibbles = "0033333333333333333333333333333333333333".parse().unwrap();
+        let value2 = TestAccount { balance: 1 };
+        let t2 = TrieNode::new_terminal(nibbles2.clone(), value2.clone());
 
-        let an3: AddressNibbles = "0020000000000000000000000000000000000000".parse().unwrap();
-        let account3 = Account::Basic(BasicAccount {
-            balance: Coin::try_from(1322).unwrap(),
-        });
-        let address3 = Address::from(hex::decode(an3.to_string()).unwrap().as_slice());
-        let t3 = AccountsTreeNode::new_terminal(an3, account3.clone());
+        let nibbles3: PrefixNibbles = "0020000000000000000000000000000000000000".parse().unwrap();
+        let value3 = TestAccount { balance: 1332 };
+        let t3 = TrieNode::new_terminal(nibbles3.clone(), value3.clone());
 
-        let an4: AddressNibbles = "0022222222222222222222222222222222222222".parse().unwrap();
-        let account4 = Account::Basic(BasicAccount {
-            balance: Coin::try_from(93).unwrap(),
-        });
-        let address4 = Address::from(hex::decode(an4.to_string()).unwrap().as_slice());
-        let t4 = AccountsTreeNode::new_terminal(an4, account4.clone());
+        let nibbles4: PrefixNibbles = "0022222222222222222222222222222222222222".parse().unwrap();
+        let value4 = TestAccount { balance: 93 };
+        let t4 = TrieNode::new_terminal(nibbles4.clone(), value4.clone());
 
-        let b2 = AccountsTreeNode::new_branch(
+        let b2 = TrieNode::new_branch(
             "002".parse().unwrap(),
             [
-                Some(AccountsTreeNodeChild {
+                Some(TrieNodeChild {
                     suffix: "0000000000000000000000000000000000000".parse().unwrap(),
                     hash: t3.hash(),
                 }),
                 None,
-                Some(AccountsTreeNodeChild {
+                Some(TrieNodeChild {
                     suffix: "2222222222222222222222222222222222222".parse().unwrap(),
                     hash: t4.hash(),
                 }),
@@ -155,19 +150,19 @@ mod tests {
             ],
         );
 
-        let b1 = AccountsTreeNode::new_branch(
+        let b1 = TrieNode::new_branch(
             "00".parse().unwrap(),
             [
                 None,
-                Some(AccountsTreeNodeChild {
+                Some(TrieNodeChild {
                     suffix: "11111111111111111111111111111111111111".parse().unwrap(),
                     hash: t1.hash(),
                 }),
-                Some(AccountsTreeNodeChild {
+                Some(TrieNodeChild {
                     suffix: "2".parse().unwrap(),
                     hash: b2.hash(),
                 }),
-                Some(AccountsTreeNodeChild {
+                Some(TrieNodeChild {
                     suffix: "33333333333333333333333333333333333333".parse().unwrap(),
                     hash: t2.hash(),
                 }),
@@ -186,10 +181,10 @@ mod tests {
             ],
         );
 
-        let r1 = AccountsTreeNode::new_branch(
+        let r1 = TrieNode::new_branch(
             "".parse().unwrap(),
             [
-                Some(AccountsTreeNodeChild {
+                Some(TrieNodeChild {
                     suffix: "00".parse().unwrap(),
                     hash: b1.hash(),
                 }),
@@ -212,7 +207,7 @@ mod tests {
         );
 
         // The first proof proves the 4 terminal nodes (T1, T2, T3 and T4)
-        let mut proof1 = AccountsProof::new(vec![
+        let mut proof1 = TrieProof::new(vec![
             t1.clone(),
             t3.clone(),
             t4.clone(),
@@ -222,28 +217,28 @@ mod tests {
             r1.clone(),
         ]);
         assert!(proof1.verify());
-        assert_eq!(account1, proof1.get_account(&address1).unwrap());
-        assert_eq!(account2, proof1.get_account(&address2).unwrap());
-        assert_eq!(account3, proof1.get_account(&address3).unwrap());
-        assert_eq!(account4, proof1.get_account(&address4).unwrap());
+        assert_eq!(value1, proof1.get_value(&nibbles1).unwrap());
+        assert_eq!(value2, proof1.get_value(&nibbles2).unwrap());
+        assert_eq!(value3, proof1.get_value(&nibbles3).unwrap());
+        assert_eq!(value4, proof1.get_value(&nibbles4).unwrap());
 
         // The second proof proves the 2 leftmost terminal nodes (T1 and T3)
-        let mut proof2 = AccountsProof::new(vec![t1, t3, b2.clone(), b1.clone(), r1.clone()]);
+        let mut proof2 = TrieProof::new(vec![t1, t3, b2.clone(), b1.clone(), r1.clone()]);
         assert!(proof2.verify());
-        assert_eq!(account1, proof2.get_account(&address1).unwrap());
-        assert_eq!(account3, proof2.get_account(&address3).unwrap());
-        assert_eq!(None, proof2.get_account(&address2));
-        assert_eq!(None, proof2.get_account(&address4));
+        assert_eq!(value1, proof2.get_value(&nibbles1).unwrap());
+        assert_eq!(value3, proof2.get_value(&nibbles3).unwrap());
+        assert_eq!(None, proof2.get_value(&nibbles2));
+        assert_eq!(None, proof2.get_value(&nibbles4));
 
         // The third proof just proves T4
-        let mut proof3 = AccountsProof::new(vec![t4, b2, b1, r1.clone()]);
+        let mut proof3 = TrieProof::new(vec![t4, b2, b1, r1.clone()]);
         assert!(proof3.verify());
-        assert_eq!(account4, proof3.get_account(&address4).unwrap());
-        assert_eq!(None, proof3.get_account(&address1));
-        assert_eq!(None, proof3.get_account(&address2));
-        assert_eq!(None, proof3.get_account(&address3));
+        assert_eq!(value4, proof3.get_value(&nibbles4).unwrap());
+        assert_eq!(None, proof3.get_value(&nibbles1));
+        assert_eq!(None, proof3.get_value(&nibbles2));
+        assert_eq!(None, proof3.get_value(&nibbles3));
 
-        // must return the correct root hash
+        // It must return the correct root hash
         assert!(proof1.root_hash() == r1.hash());
     }
 }

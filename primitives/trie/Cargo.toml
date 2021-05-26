@@ -1,9 +1,9 @@
 [package]
-name = "nimiq-tree"
+name = "nimiq-trie"
 version = "0.1.0"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2018"
-description = "Patricia Merkle tree primitives for Nimiq's Rust implementation"
+description = "Patricia Merkle trie primitive for Nimiq's Rust implementation"
 homepage = "https://nimiq.com"
 repository = "https://github.com/nimiq/core-rs-albatross"
 license = "Apache-2.0"

@@ -35,7 +35,7 @@ nimiq-keys = { path = "../keys" }
 nimiq-mmr = { path = "../primitives/mmr" }
 nimiq-primitives = { path = "../primitives" }
 nimiq-transaction = { path = "../primitives/transaction" }
-nimiq-tree = { path = "../primitives/tree" }
+nimiq-trie = { path = "../primitives/trie" }
 nimiq-utils = { path = "../utils", features = ["observer", "unique-ptr", "iterators", "time", "math"] }
 nimiq-vrf = { path = "../vrf" }
 

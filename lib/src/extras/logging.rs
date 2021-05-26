@@ -63,7 +63,7 @@ lazy_static! {
         "nimiq_tools",
         "nimiq_transaction",
         "nimiq_transaction_builder",
-        "nimiq_tree",
+        "nimiq_trie",
         "nimiq_utils",
         "nimiq_validator",
         "nimiq_validator_network",

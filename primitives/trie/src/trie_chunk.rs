@@ -1,65 +1,60 @@
 use beserial::{Deserialize, Serialize};
 use nimiq_hash::Blake2bHash;
 
-use crate::accounts_proof::AccountsProof;
-use crate::accounts_tree_node::AccountsTreeNode;
+use crate::trie_node::TrieNode;
+use crate::trie_proof::TrieProof;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AccountsTreeChunk<A: Serialize + Deserialize + Clone> {
+pub struct TrieChunk<A: Serialize + Deserialize + Clone> {
     #[beserial(len_type(u16))]
-    pub nodes: Vec<AccountsTreeNode<A>>,
-    pub proof: AccountsProof<A>,
+    pub nodes: Vec<TrieNode<A>>,
+    pub proof: TrieProof<A>,
 }
 
-impl<A: Serialize + Deserialize + Clone> AccountsTreeChunk<A> {
-    pub fn new(nodes: Vec<AccountsTreeNode<A>>, proof: AccountsProof<A>) -> AccountsTreeChunk<A> {
-        AccountsTreeChunk { nodes, proof }
+impl<A: Serialize + Deserialize + Clone> TrieChunk<A> {
+    pub fn new(nodes: Vec<TrieNode<A>>, proof: TrieProof<A>) -> TrieChunk<A> {
+        TrieChunk { nodes, proof }
     }
 
     pub fn verify(&mut self) -> bool {
         if !self.proof.verify() {
             return false;
         }
+
         let mut last_prefix = Option::None;
+
         for node in &self.nodes {
             if last_prefix > Option::Some(node.prefix()) {
                 return false;
             }
+
             last_prefix = Option::Some(node.prefix());
         }
+
         if last_prefix > Option::Some(self.tail().prefix()) {
             return false;
         }
+
         true
     }
 
-    #[inline]
-    pub fn len(&self) -> usize {
-        self.nodes.len() + 1
-    }
-
-    #[inline]
-    pub fn is_empty(&self) -> bool {
-        false
-    }
-
-    #[inline]
-    pub fn head(&self) -> &AccountsTreeNode<A> {
+    pub fn head(&self) -> &TrieNode<A> {
         self.nodes.get(0).unwrap_or_else(|| self.tail())
     }
 
-    #[inline]
-    pub fn terminal_nodes(&self) -> Vec<&AccountsTreeNode<A>> {
-        let mut vec = Vec::with_capacity(self.len());
+    pub fn terminal_nodes(&self) -> Vec<&TrieNode<A>> {
+        let mut vec = Vec::with_capacity(self.nodes.len() + 1);
+
         for node in &self.nodes {
             vec.push(node)
         }
+
         vec.push(self.tail());
+
         vec
     }
 
-    #[inline]
-    pub fn tail(&self) -> &AccountsTreeNode<A> {
+    pub fn tail(&self) -> &TrieNode<A> {
         self.proof.nodes().get(0).unwrap()
     }
 
