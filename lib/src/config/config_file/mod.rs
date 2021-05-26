@@ -314,7 +314,6 @@ impl From<ReverseProxySettings> for ReverseProxyConfig {
 }
 */
 
-
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RotatingLogFileConfig {
