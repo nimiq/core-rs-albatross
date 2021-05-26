@@ -39,7 +39,7 @@ nimiq-network-interface = { path = "../network-interface" }
 nimiq-peer-address = { path = "../peer-address" }
 nimiq-subscription = { path = "../primitives/subscription" }
 nimiq-transaction = { path = "../primitives/transaction" }
-nimiq-tree = { path = "../primitives/tree" }
+nimiq-trie = { path = "../primitives/trie" }
 nimiq-utils = { path = "../utils", features = ["observer", "crc"] }
 
 [dev-dependencies]

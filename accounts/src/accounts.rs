@@ -10,8 +10,8 @@ use nimiq_database::{Environment, ReadTransaction, WriteTransaction};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_transaction::{Transaction, TransactionFlags};
-use nimiq_tree::accounts_proof::AccountsProof;
-use nimiq_tree::accounts_tree_chunk::AccountsTreeChunk;
+use nimiq_trie::accounts_proof::AccountsProof;
+use nimiq_trie::accounts_tree_chunk::AccountsTreeChunk;
 
 use crate::tree::AccountsTree;
 

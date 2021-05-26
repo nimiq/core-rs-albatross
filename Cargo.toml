@@ -37,7 +37,7 @@ members = [
   "primitives/mmr",
   "primitives/subscription",
   "primitives/transaction",
-  "primitives/tree",
+  "primitives/trie",
   "rpc-client",
   "rpc-interface",
   "rpc-server",

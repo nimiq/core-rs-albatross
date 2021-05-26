@@ -1,7 +1,7 @@
 use nimiq_account::Account;
 use nimiq_blockchain::{AbstractBlockchain, HistoryTreeProof};
 use nimiq_hash::Blake2bHash;
-use nimiq_tree::accounts_tree_chunk::AccountsTreeChunk;
+use nimiq_trie::trie_chunk::TrieChunk;
 
 use crate::blockchain::NanoBlockchain;
 use crate::error::NanoError;
@@ -15,7 +15,7 @@ impl NanoBlockchain {
     pub fn check_account(
         &self,
         block_hash: Blake2bHash,
-        mut account_proof: AccountsTreeChunk<Account>,
+        mut account_proof: TrieChunk<Account>,
     ) -> Result<(), NanoError> {
         // Get the block.
         let block = self
