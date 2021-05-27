@@ -5,7 +5,6 @@ use nimiq_database::{Database, Environment, Transaction, WriteTransaction};
 use nimiq_hash::{Blake2bHash, Hash};
 
 use crate::prefix_nibbles::PrefixNibbles;
-use crate::trie_chunk::TrieChunk;
 use crate::trie_node::{TrieNode, NO_CHILDREN};
 use crate::trie_proof::TrieProof;
 
@@ -236,12 +235,13 @@ impl<A: Serialize + Deserialize + Clone> PatriciaTrie<A> {
         }
     }
 
+    // Starting prefix might or not exist, it still produces a proof.
     pub fn get_chunk(
         &self,
         txn: &Transaction,
         start: &PrefixNibbles,
         size: usize,
-    ) -> Option<TrieChunk<A>> {
+    ) -> Option<TrieProof<A>> {
         let mut chunk = Vec::new();
 
         let mut stack = vec![self.get_root(txn)?];
@@ -269,17 +269,16 @@ impl<A: Serialize + Deserialize + Clone> PatriciaTrie<A> {
 
         let chunk_prefixes = chunk.iter().map(|node| node.prefix().clone()).collect();
 
-        let proof = self.get_accounts_proof(txn, chunk_prefixes);
-
-        Some(TrieChunk::new(chunk, proof))
+        self.get_accounts_proof(txn, chunk_prefixes)
     }
 
-    // Does not return leaves. Nodes in post order.
+    // Does return leaves. Nodes in post order. If prefix doesn't exist it returns None. Non-existence
+    // can be proven but requires us to state if the node is part of the trie or not.
     pub fn get_accounts_proof(
         &self,
         txn: &Transaction,
         mut prefixes: Vec<PrefixNibbles>,
-    ) -> TrieProof<A> {
+    ) -> Option<TrieProof<A>> {
         // We sort the prefixes to simplify traversal in post order (leftmost prefixes first).
         prefixes.sort();
 
@@ -304,24 +303,31 @@ impl<A: Serialize + Deserialize + Clone> PatriciaTrie<A> {
         loop {
             // Go down the trie until we find a node with our prefix or we can't go any further.
             loop {
-                // If the prefix fully matches, we have found the requested node.
-                // If the prefix does not match, the requested prefix is not part of this trie.
-                // Include the node in the proof nevertheless to prove that the node doesn't exist.
-                if pointer_node.prefix() == &cur_prefix
-                    || !pointer_node.prefix().is_prefix_of(&cur_prefix)
-                {
+                // If the prefix does not match, the requested prefix is not part of this trie. In
+                // this case, we can't produce a proof so we terminate now.
+                if !pointer_node.prefix().is_prefix_of(&cur_prefix) {
+                    return None;
+                }
+
+                // If the prefix fully matches, we have found the requested node. We must check that
+                // it is a terminal node, we don't want to prove branch nodes. If it is, we add it
+                // to the root path.
+                if pointer_node.prefix() == &cur_prefix {
+                    if pointer_node.is_branch() {
+                        return None;
+                    }
+
                     root_path.push(pointer_node.clone());
+
                     break;
                 }
 
                 // Otherwise, try to find a child of the pointer node that matches our prefix.
                 match pointer_node.get_child_prefix(&cur_prefix) {
                     // If no matching child exists, then the requested prefix is not part of this
-                    // trie. We still include the node in the proof to prove that the node doesn't
-                    // exist.
+                    // trie. Once again, we can't produce a proof so we terminate now.
                     None => {
-                        root_path.push(pointer_node.clone());
-                        break;
+                        return None;
                     }
                     // If there's a child, then we update the pointer node and the root path, and
                     // continue down the trie.
@@ -355,7 +361,7 @@ impl<A: Serialize + Deserialize + Clone> PatriciaTrie<A> {
         proof_nodes.append(&mut root_path);
 
         // Return the proof.
-        TrieProof::new(proof_nodes)
+        Some(TrieProof::new(proof_nodes))
     }
 
     /// Returns the root node, if there is one.
