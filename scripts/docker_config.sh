@@ -65,6 +65,13 @@ optional tags NIMIQ_LOG_TAGS object
 optional statistics NIMIQ_LOG_STATISTICS number
 optional file NIMIQ_LOG_FILE string
 
+if [[ "$ROTATING_LOG_ENABLED" == "true" ]]; then
+    echo '[log.rotating_trace_log]'
+    optional path ROTATING_LOG_PATH string
+    optional size ROTATING_LOG_SIZE number
+    optional file_count ROTATING_LOG_FILE_COUNT number
+fi
+
 echo '[validator]'
 optional validator_key_file VALIDATOR_KEY_FILE string
 optional validator_key VALIDATOR_KEY string
