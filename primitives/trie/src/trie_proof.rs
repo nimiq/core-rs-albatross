@@ -7,77 +7,89 @@ use crate::trie_node::TrieNode;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TrieProof<A: Serialize + Deserialize + Clone> {
     #[beserial(len_type(u16))]
-    nodes: Vec<TrieNode<A>>,
-    #[beserial(skip)]
-    verified: bool,
+    pub nodes: Vec<TrieNode<A>>,
 }
 
 impl<A: Serialize + Deserialize + Clone> TrieProof<A> {
     pub fn new(nodes: Vec<TrieNode<A>>) -> TrieProof<A> {
-        TrieProof {
-            nodes,
-            verified: false,
-        }
+        TrieProof { nodes }
     }
 
-    pub fn verify(&mut self) -> bool {
-        let mut children: Vec<TrieNode<A>> = Vec::new();
+    pub fn terminal_nodes(&self) -> Vec<TrieNode<A>> {
+        let mut terminal_nodes = Vec::new();
 
         for node in &self.nodes {
-            // If node is a branch node, validate its children.
+            if node.is_terminal() {
+                terminal_nodes.push(node.clone());
+            }
+        }
+
+        terminal_nodes
+    }
+
+    pub fn verify(&self, root_hash: Blake2bHash) -> bool {
+        // There must be nodes in the proof.
+        if self.nodes.is_empty() {
+            return false;
+        }
+
+        // We'll use this vector to temporarily store child nodes before they are verified.
+        let mut children: Vec<TrieNode<A>> = Vec::new();
+
+        // Check that the proof is a valid trie.
+        for node in &self.nodes {
+            // If the node is a branch node, validate its children.
             if node.is_branch() {
+                // Pop the last node from the children.
                 while let Some(child) = children.pop() {
+                    // If the node is a prefix of the child node, we need to verify that it is a
+                    // correct child node.
                     if node.prefix().is_prefix_of(child.prefix()) {
+                        // Get the hash of the child hash.
                         let hash = child.hash::<Blake2bHash>();
 
-                        // If the child is not valid, return false.
+                        // The child node must match the hash and the prefix, otherwise the proof is
+                        // invalid.
                         if node.get_child_hash(child.prefix()).unwrap() != &hash
                             || &node.get_child_prefix(child.prefix()).unwrap() != child.prefix()
                         {
                             return false;
                         }
-                    } else {
+                    }
+                    // If the node is not a prefix of the child node, then we put the child node
+                    // back into the children and move to the next node in the proof.
+                    else {
                         children.push(child);
                         break;
                     }
                 }
             }
-            children.push(node.clone());
-        }
-
-        let root_nibbles: PrefixNibbles = "".parse().unwrap();
-
-        let valid =
-            children.len() == 1 && children[0].prefix() == &root_nibbles && children[0].is_branch();
-
-        self.verified = valid;
-
-        valid
-    }
-
-    pub fn get_value(&self, key: &PrefixNibbles) -> Option<A> {
-        assert!(
-            self.verified,
-            "AccountsProof must be verified before retrieving accounts. Call verify() first."
-        );
-
-        for node in &self.nodes {
-            if let TrieNode::TerminalNode { prefix, value } = node {
-                if prefix == key {
-                    return Some(value.clone());
-                }
+            // If the node is a terminal node, just push it into the children.
+            else {
+                children.push(node.clone());
             }
         }
 
-        None
-    }
+        // There must be no more children now, otherwise there are unverified nodes and the proof is
+        // invalid.
+        if !children.is_empty() {
+            return false;
+        }
 
-    pub fn root_hash(&self) -> Blake2bHash {
-        self.nodes.last().unwrap().hash()
-    }
+        // The last node in the proof must be the root node.
+        let root = self.nodes.last().unwrap();
 
-    pub fn nodes(&self) -> &Vec<TrieNode<A>> {
-        &self.nodes
+        if root.prefix() != &PrefixNibbles::empty() {
+            return false;
+        }
+
+        // And must match the hash given as the root hash.
+        if root.hash::<Blake2bHash>() != root_hash {
+            return false;
+        }
+
+        // The proof is valid!
+        true
     }
 }
 
