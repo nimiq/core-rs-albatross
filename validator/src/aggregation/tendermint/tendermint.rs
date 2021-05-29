@@ -647,6 +647,7 @@ where
                 AggregationResult::Aggregation(map) => {
                     // keep trck of the combined weight of all proposals which this node has not signed.
                     let mut combined_weight = 0usize;
+                    let mut total_weight = 0usize;
 
                     // iterate all proposals present in this contribution
                     for (proposal, (_, weight)) in map.iter() {
@@ -669,6 +670,8 @@ where
                         if proposal != &proposal_hash {
                             combined_weight += weight;
                         }
+
+                        total_weight += weight;
                     }
 
                     // combined weight of all proposals excluding the one this node signed reached 2f+1
@@ -687,6 +690,22 @@ where
                             "Tendermint: {}-{:?}: All other proposals have > 2f + 1 votes",
                             &round, &step
                         );
+                        return Ok(result);
+                    }
+
+                    // none of the above but every signatory is present and thus no improvement can be made
+                    if total_weight == policy::SLOTS as usize {
+                        if step == TendermintStep::PreCommit {
+                            // PreCommit Aggreations are never requested again, so the aggregation can be canceled.
+                            self.event_sender
+                                .send(AggregationEvent::Cancel(round, step))
+                                .await
+                                .map_err(|err| {
+                                    debug!("event_sender.send failed: {:?}", err);
+                                    TendermintError::AggregationError
+                                })?;
+                        }
+                        debug!("Tendermint: {}-{:?}: Everybody signed", &round, &step);
                         return Ok(result);
                     }
                 }
