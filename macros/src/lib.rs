@@ -99,7 +99,7 @@ macro_rules! add_hex_io_fns_typed_arr {
             type Err = ::hex::FromHexError;
 
             fn from_str(s: &str) -> Result<Self, Self::Err> {
-                use ::hex::FromHex;
+                use hex::FromHex;
 
                 let vec = Vec::from_hex(s)?;
                 if vec.len() == $len {
