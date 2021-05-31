@@ -1,7 +1,6 @@
 use crate::consensus_agent::ConsensusAgent;
 use crate::sync::sync_queue::SyncQueue;
 use block::Block;
-use futures::stream::BoxStream;
 use futures::task::{Context, Poll};
 use futures::{FutureExt, Stream, StreamExt};
 use hash::Blake2bHash;
@@ -18,6 +17,8 @@ pub trait RequestComponent<P: Peer>: Stream<Item = RequestComponentEvent<P>> + U
         locators: Vec<Blake2bHash>,
     );
 
+    fn put_peer_into_sync_mode(&mut self, peer: Arc<P>);
+
     fn num_peers(&self) -> usize;
 
     fn peers(&self) -> Vec<Weak<ConsensusAgent<P>>>;
@@ -28,6 +29,12 @@ pub enum RequestComponentEvent<P: Peer> {
     PeerMacroSynced(Weak<ConsensusAgent<P>>),
     PeerLeft(Arc<ConsensusAgent<P>>),
     ReceivedBlocks(Vec<Block>),
+}
+
+pub trait HistorySyncStream<TPeer: Peer>:
+    Stream<Item = Arc<ConsensusAgent<TPeer>>> + Unpin + Send
+{
+    fn add_peer(&self, peer: Arc<TPeer>);
 }
 
 /// Peer Tracking & Request Component
@@ -41,7 +48,7 @@ pub enum RequestComponentEvent<P: Peer> {
 /// The blocks instead are returned by polling the component.
 pub struct BlockRequestComponent<TPeer: Peer> {
     sync_queue: SyncQueue<TPeer, (Blake2bHash, Vec<Blake2bHash>), Vec<Block>>, // requesting missing blocks from peers
-    sync_method: BoxStream<'static, Arc<ConsensusAgent<TPeer>>>,
+    sync_method: Pin<Box<dyn HistorySyncStream<TPeer>>>,
     agents: HashMap<Arc<TPeer>, Arc<ConsensusAgent<TPeer>>>, // this map holds the strong references to connected peers
     network_event_rx: broadcast::Receiver<NetworkEvent<TPeer>>,
 }
@@ -50,7 +57,7 @@ impl<TPeer: Peer + 'static> BlockRequestComponent<TPeer> {
     const NUM_PENDING_BLOCKS: usize = 5;
 
     pub fn new(
-        sync_method: BoxStream<'static, Arc<ConsensusAgent<TPeer>>>,
+        sync_method: Pin<Box<dyn HistorySyncStream<TPeer>>>,
         network_event_rx: broadcast::Receiver<NetworkEvent<TPeer>>,
     ) -> Self {
         Self {
@@ -81,6 +88,11 @@ impl<TPeer: Peer> RequestComponent<TPeer> for BlockRequestComponent<TPeer> {
         locators: Vec<Blake2bHash>,
     ) {
         self.sync_queue.add_ids(vec![(target_block_hash, locators)]);
+    }
+
+    fn put_peer_into_sync_mode(&mut self, peer: Arc<TPeer>) {
+        self.sync_method.add_peer(peer.clone());
+        self.agents.remove(&peer);
     }
 
     fn num_peers(&self) -> usize {

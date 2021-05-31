@@ -18,11 +18,13 @@ use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_consensus::consensus_agent::ConsensusAgent;
+use nimiq_consensus::sync::block_queue::BlockQueueConfig;
 use nimiq_consensus::sync::request_component::RequestComponentEvent;
 use nimiq_consensus::sync::{block_queue::BlockQueue, request_component::RequestComponent};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_hash::Blake2bHash;
 use nimiq_mempool::{Mempool, MempoolConfig};
+use nimiq_network_interface::network::Network;
 use nimiq_network_interface::peer::Peer;
 use nimiq_network_mock::{MockHub, MockId, MockPeer};
 use nimiq_primitives::networks::NetworkId;
@@ -36,6 +38,7 @@ const SECRET_KEY: &str =
 #[pin_project]
 #[derive(Debug)]
 pub struct MockRequestComponent<P> {
+    pub peer_put_into_sync: bool,
     pub tx: mpsc::UnboundedSender<(Blake2bHash, Vec<Blake2bHash>)>,
     #[pin]
     pub rx: mpsc::UnboundedReceiver<Vec<Block>>,
@@ -53,6 +56,7 @@ impl<P> MockRequestComponent<P> {
 
         (
             Self {
+                peer_put_into_sync: false,
                 tx: tx1,
                 rx: rx2,
                 peer_type: PhantomData,
@@ -70,6 +74,10 @@ impl<P: Peer> RequestComponent<P> for MockRequestComponent<P> {
         locators: Vec<Blake2bHash>,
     ) {
         self.tx.unbounded_send((target_block_hash, locators)).ok(); // ignore error
+    }
+
+    fn put_peer_into_sync_mode(&mut self, _peer: Arc<P>) {
+        self.peer_put_into_sync = true;
     }
 
     fn num_peers(&self) -> usize {
@@ -285,4 +293,61 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
     assert!(block_queue.buffered_blocks().next().is_none());
     assert_eq!(blockchain1.get_block_at(1, true, None).unwrap(), block1);
     assert_eq!(blockchain1.get_block_at(2, true, None).unwrap(), block2);
+}
+
+#[tokio::test]
+async fn put_peer_back_into_sync_mode() {
+    let keypair =
+        KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
+    let env1 = VolatileEnvironment::new(10).unwrap();
+    let env2 = VolatileEnvironment::new(10).unwrap();
+    let blockchain1 = Arc::new(Blockchain::new(env1, NetworkId::UnitAlbatross).unwrap());
+    let blockchain2 = Arc::new(Blockchain::new(env2, NetworkId::UnitAlbatross).unwrap());
+    let mut hub = MockHub::new();
+    let network = Arc::new(hub.new_network_with_address(1));
+    let mempool = Mempool::new(Arc::clone(&blockchain2), MempoolConfig::default());
+    let producer = BlockProducer::new(Arc::clone(&blockchain2), Arc::clone(&mempool), keypair);
+    let (request_component, _, _) = MockRequestComponent::<MockPeer>::new();
+    let (mut tx, rx) = mpsc::channel(32);
+
+    let peer_addr = hub.new_address().into();
+    let mock_id = MockId::new(peer_addr);
+    network.dial_peer(peer_addr).await.unwrap();
+
+    let mut block_queue = BlockQueue::with_block_stream(
+        BlockQueueConfig {
+            buffer_max: 10,
+            window_max: 10,
+        },
+        Arc::clone(&blockchain1),
+        network,
+        request_component,
+        rx.boxed(),
+    );
+
+    for _ in 1..11 {
+        let block = Block::Micro(producer.next_micro_block(
+            blockchain2.time.now(),
+            0,
+            None,
+            vec![],
+            vec![0x42],
+        ));
+        blockchain2.push(block).unwrap();
+    }
+
+    let block = Block::Micro(producer.next_micro_block(
+        blockchain2.time.now(),
+        0,
+        None,
+        vec![],
+        vec![0x42],
+    ));
+
+    tx.send((block, mock_id)).await.unwrap();
+
+    // run the block_queue one iteration, i.e. until it processed one block
+    block_queue.next().await;
+
+    assert!(block_queue.request_component.peer_put_into_sync);
 }

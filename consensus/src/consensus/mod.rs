@@ -19,7 +19,7 @@ use transaction::Transaction;
 use crate::consensus::head_requests::{HeadRequests, HeadRequestsResult};
 use crate::consensus_agent::ConsensusAgent;
 use crate::sync::block_queue::{BlockQueue, BlockQueueConfig, BlockQueueEvent};
-use crate::sync::request_component::BlockRequestComponent;
+use crate::sync::request_component::{BlockRequestComponent, HistorySyncStream};
 
 mod head_requests;
 mod request_response;
@@ -99,7 +99,7 @@ pub struct Consensus<N: Network> {
     pub network: Arc<N>,
     pub env: Environment,
 
-    block_queue: BlockQueue<N::PeerType, BlockRequestComponent<N::PeerType>, N>,
+    block_queue: BlockQueue<N, BlockRequestComponent<N::PeerType>>,
     tx_future: BoxFuture<'static, ()>,
 
     /// A Delay which exists purely for the waker on its poll to reactivate the task running Consensus::poll
@@ -133,7 +133,7 @@ impl<N: Network> Consensus<N> {
         blockchain: Arc<Blockchain>,
         mempool: Arc<Mempool>,
         network: Arc<N>,
-        sync_protocol: BoxStream<'static, Arc<ConsensusAgent<N::PeerType>>>,
+        sync_protocol: Pin<Box<dyn HistorySyncStream<N::PeerType>>>,
     ) -> Self {
         Self::with_min_peers(
             env,
@@ -151,7 +151,7 @@ impl<N: Network> Consensus<N> {
         blockchain: Arc<Blockchain>,
         mempool: Arc<Mempool>,
         network: Arc<N>,
-        sync_protocol: BoxStream<'static, Arc<ConsensusAgent<N::PeerType>>>,
+        sync_protocol: Pin<Box<dyn HistorySyncStream<N::PeerType>>>,
         min_peers: usize,
     ) -> Self {
         let request_component =
@@ -187,7 +187,7 @@ impl<N: Network> Consensus<N> {
         blockchain: Arc<Blockchain>,
         mempool: Arc<Mempool>,
         network: Arc<N>,
-        block_queue: BlockQueue<N::PeerType, BlockRequestComponent<N::PeerType>, N>,
+        block_queue: BlockQueue<N, BlockRequestComponent<N::PeerType>>,
         tx_stream: BoxStream<'static, (Transaction, <N as Network>::PubsubId)>,
         min_peers: usize,
     ) -> Self {
@@ -290,7 +290,7 @@ impl<N: Network> Consensus<N> {
     /// via the block queue.
     fn set_established(
         &mut self,
-        finished_head_request: Option<HeadRequestsResult>,
+        finished_head_request: Option<HeadRequestsResult<N::PeerType>>,
     ) -> Option<ConsensusEvent<N>> {
         // We can only loose established state right now if we loose all our peers.
         if self.is_established() {
@@ -393,8 +393,8 @@ impl<N: Network> Future for Consensus<N> {
         if let Some(ref mut head_requests) = self.head_requests {
             if let Poll::Ready(mut result) = head_requests.poll_unpin(cx) {
                 // Push unknown blocks to the block queue, trying to sync.
-                for block in result.unknown_blocks.drain(..) {
-                    self.block_queue.push_block(block);
+                for (block, peer) in result.unknown_blocks.drain(..) {
+                    self.block_queue.push_block(block, peer);
                 }
                 // Update established state using the result.
                 if let Some(event) = self.set_established(Some(result)) {

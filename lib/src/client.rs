@@ -23,7 +23,6 @@ use nimiq_wallet::WalletStore;
 use crate::config::config::ClientConfig;
 use crate::error::Error;
 use nimiq_consensus::sync::history::HistorySync;
-use nimiq_network_libp2p::libp2p::futures::StreamExt;
 
 /// Alias for the Consensus and Validator specialized over libp2p network
 pub type Consensus = AbstractConsensus<Network>;
@@ -123,7 +122,7 @@ impl ClientInner {
             blockchain,
             mempool,
             Arc::clone(&network),
-            sync.boxed(),
+            Box::pin(sync),
         )
         .await;
 

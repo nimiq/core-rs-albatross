@@ -2,9 +2,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use beserial::Deserialize;
-use futures::StreamExt;
-use tokio::stream::pending;
+use futures::{Stream, StreamExt};
 
+use futures::task::{Context, Poll};
 use nimiq_block_production::{test_utils::*, BlockProducer};
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_bls::{KeyPair, SecretKey};
@@ -12,12 +12,30 @@ use nimiq_consensus::consensus::Consensus;
 use nimiq_consensus::consensus_agent::ConsensusAgent;
 use nimiq_consensus::messages::RequestBlockHashesFilter;
 use nimiq_consensus::sync::history::HistorySync;
+use nimiq_consensus::sync::request_component::HistorySyncStream;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
 use nimiq_mempool::{Mempool, MempoolConfig};
-use nimiq_network_interface::prelude::Network;
+use nimiq_network_interface::network::Network;
 use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_primitives::policy;
+use std::pin::Pin;
+
+pub struct MockHistorySyncStream<TNetwork: Network> {
+    network: Arc<TNetwork>,
+}
+
+impl<TNetwork: Network> HistorySyncStream<TNetwork::PeerType> for MockHistorySyncStream<TNetwork> {
+    fn add_peer(&self, _peer: Arc<TNetwork::PeerType>) {}
+}
+
+impl<TNetwork: Network> Stream for MockHistorySyncStream<TNetwork> {
+    type Item = Arc<ConsensusAgent<TNetwork::PeerType>>;
+
+    fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        Poll::Pending
+    }
+}
 
 /// Secret key of validator. Tests run with `network-primitives/src/genesis/unit-albatross.toml`
 const SECRET_KEY: &str =
@@ -56,7 +74,7 @@ async fn peers_can_sync() {
         blockchain1,
         mempool1,
         Arc::clone(&net1),
-        sync1.boxed(),
+        Box::pin(sync1),
     )
     .await;
 
@@ -73,7 +91,9 @@ async fn peers_can_sync() {
         blockchain2,
         mempool2,
         Arc::clone(&net2),
-        pending().boxed(),
+        Box::pin(MockHistorySyncStream {
+            network: Arc::clone(&net2),
+        }),
     )
     .await;
 
@@ -190,7 +210,9 @@ async fn sync_ingredients() {
         blockchain1,
         mempool1,
         Arc::clone(&net1),
-        pending().boxed(),
+        Box::pin(MockHistorySyncStream {
+            network: Arc::clone(&net1),
+        }),
     )
     .await;
 
@@ -205,7 +227,9 @@ async fn sync_ingredients() {
         blockchain2,
         mempool2,
         Arc::clone(&net2),
-        pending().boxed(),
+        Box::pin(MockHistorySyncStream {
+            network: Arc::clone(&net2),
+        }),
     )
     .await;
 

@@ -1,7 +1,5 @@
 use std::{sync::Arc, time::Duration};
 
-use futures::stream::StreamExt;
-
 use beserial::Deserialize;
 use nimiq_block_production::test_utils::produce_macro_blocks;
 use nimiq_block_production::BlockProducer;
@@ -44,7 +42,7 @@ impl Node {
             Arc::clone(&blockchain),
             Arc::clone(&mempool),
             Arc::clone(&network),
-            history_sync.boxed(),
+            Box::pin(history_sync),
         )
         .await;
 

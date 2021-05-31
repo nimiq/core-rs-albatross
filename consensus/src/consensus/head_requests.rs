@@ -17,18 +17,19 @@ use std::sync::{Arc, Weak};
 pub struct HeadRequests<TPeer: Peer + 'static> {
     peers: Vec<Arc<ConsensusAgent<TPeer>>>,
     head_hashes: FuturesUnordered<BoxFuture<'static, (usize, Result<Blake2bHash, RequestError>)>>,
-    head_blocks: FuturesUnordered<BoxFuture<'static, Result<Option<Block>, RequestError>>>,
+    head_blocks:
+        FuturesUnordered<BoxFuture<'static, (Result<Option<Block>, RequestError>, TPeer::Id)>>,
     requested_hashes: HashSet<Blake2bHash>,
     blockchain: Arc<Blockchain>,
     num_known_blocks: usize,
     num_unknown_blocks: usize,
-    unknown_blocks: Vec<Block>,
+    unknown_blocks: Vec<(Block, TPeer::Id)>,
 }
 
-pub struct HeadRequestsResult {
+pub struct HeadRequestsResult<TPeer: Peer + 'static> {
     pub num_known_blocks: usize,
     pub num_unknown_blocks: usize,
-    pub unknown_blocks: Vec<Block>,
+    pub unknown_blocks: Vec<(Block, TPeer::Id)>,
 }
 
 impl<TPeer: Peer + 'static> HeadRequests<TPeer> {
@@ -55,7 +56,7 @@ impl<TPeer: Peer + 'static> HeadRequests<TPeer> {
             blockchain,
             num_known_blocks: 0,
             num_unknown_blocks: 0,
-            unknown_blocks: vec![],
+            unknown_blocks: Default::default(),
         }
     }
 
@@ -65,7 +66,7 @@ impl<TPeer: Peer + 'static> HeadRequests<TPeer> {
 }
 
 impl<TPeer: Peer + 'static> Future for HeadRequests<TPeer> {
-    type Output = HeadRequestsResult;
+    type Output = HeadRequestsResult<TPeer>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         // We poll the hashes first.
@@ -81,8 +82,10 @@ impl<TPeer: Peer + 'static> Future for HeadRequests<TPeer> {
                         if !self.requested_hashes.contains(&hash) {
                             self.requested_hashes.insert(hash.clone());
                             let peer = Arc::clone(&self.peers[i]);
-                            self.head_blocks
-                                .push(async move { peer.request_block(hash).await }.boxed());
+                            self.head_blocks.push(
+                                async move { (peer.request_block(hash).await, peer.peer.id()) }
+                                    .boxed(),
+                            );
                         }
                     }
                 }
@@ -95,8 +98,8 @@ impl<TPeer: Peer + 'static> Future for HeadRequests<TPeer> {
         // Then poll blocks.
         while let Poll::Ready(Some(result)) = self.head_blocks.poll_next_unpin(cx) {
             match result {
-                Ok(Some(block)) => {
-                    self.unknown_blocks.push(block);
+                (Ok(Some(block)), peer_id) => {
+                    self.unknown_blocks.push((block, peer_id));
                 }
                 _ => {
                     trace!("Failed block request");

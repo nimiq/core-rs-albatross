@@ -18,6 +18,7 @@ use utils::math::CeilingDiv;
 
 use crate::consensus_agent::ConsensusAgent;
 use crate::messages::{BatchSetInfo, BlockHashType, HistoryChunk, RequestBlockHashesFilter};
+use crate::sync::request_component::HistorySyncStream;
 use crate::sync::sync_queue::SyncQueue;
 
 struct PendingBatchSet {
@@ -615,10 +616,7 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
                 }
                 Ok(NetworkEvent::PeerJoined(peer)) => {
                     // Create a ConsensusAgent for the peer that joined and request epoch_ids from it.
-                    let agent = Arc::new(ConsensusAgent::new(peer));
-                    let future =
-                        Self::request_epoch_ids(Arc::clone(&self.blockchain), agent).boxed();
-                    self.epoch_ids_stream.push(future);
+                    self.add_peer(peer);
                 }
                 Err(_) => return Poll::Ready(None),
             }
@@ -866,6 +864,14 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
         }
 
         Poll::Pending
+    }
+}
+
+impl<TNetwork: Network> HistorySyncStream<TNetwork::PeerType> for HistorySync<TNetwork> {
+    fn add_peer(&self, peer: Arc<TNetwork::PeerType>) {
+        let agent = Arc::new(ConsensusAgent::new(peer));
+        let future = Self::request_epoch_ids(Arc::clone(&self.blockchain), agent).boxed();
+        self.epoch_ids_stream.push(future);
     }
 }
 

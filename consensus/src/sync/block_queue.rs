@@ -1,19 +1,15 @@
 use std::{
     collections::{BTreeMap, HashSet},
-    marker::PhantomData,
     pin::Pin,
     sync::{Arc, Weak},
     task::{Context, Poll},
 };
 
-use futures::{
-    stream::{BoxStream, Stream},
-    StreamExt,
-};
+use futures::stream::{BoxStream, Stream, StreamExt};
 use pin_project::pin_project;
 
 use network_interface::{
-    network::{MsgAcceptance, Network, Topic},
+    network::{MsgAcceptance, Network, PubsubId, Topic},
     peer::Peer,
 };
 use nimiq_block::Block;
@@ -53,10 +49,10 @@ pub enum BlockQueueEvent<TPeer: Peer> {
 #[derive(Clone, Debug)]
 pub struct BlockQueueConfig {
     /// Buffer size limit
-    buffer_max: usize,
+    pub buffer_max: usize,
 
     /// How many blocks ahead we will buffer.
-    window_max: u32,
+    pub window_max: u32,
 }
 
 impl Default for BlockQueueConfig {
@@ -90,10 +86,11 @@ struct Inner<N: Network> {
 impl<N: Network> Inner<N> {
     /// Handles a block announcement and returns true if the block has successfully extended
     /// the blockchain.
-    fn on_block_announced<TPeer: Peer, TReq: RequestComponent<TPeer>>(
+    fn on_block_announced<TReq: RequestComponent<N::PeerType>>(
         &mut self,
         block: Block,
         mut request_component: Pin<&mut TReq>,
+        peer_id: <N::PeerType as Peer>::Id,
         pubsub_id: Option<<N as Network>::PubsubId>,
     ) -> bool {
         let block_height = block.block_number();
@@ -113,6 +110,10 @@ impl<N: Network> Inner<N> {
                 block_height,
                 head_height + self.config.window_max,
             );
+
+            if let Some(peer) = self.network.get_peer(peer_id) {
+                request_component.put_peer_into_sync_mode(peer);
+            }
         } else if self.buffer.len() >= self.config.buffer_max {
             log::warn!(
                 "Discarding block #{}, buffer full (max {})",
@@ -301,10 +302,10 @@ impl<N: Network> Inner<N> {
 }
 
 #[pin_project]
-pub struct BlockQueue<TPeer: Peer, TReq: RequestComponent<TPeer>, N: Network> {
+pub struct BlockQueue<N: Network, TReq: RequestComponent<N::PeerType>> {
     /// The Peer Tracking and Request Component.
     #[pin]
-    request_component: TReq,
+    pub request_component: TReq,
 
     /// The blocks received via gossipsub.
     #[pin]
@@ -315,11 +316,9 @@ pub struct BlockQueue<TPeer: Peer, TReq: RequestComponent<TPeer>, N: Network> {
 
     /// The number of extended blocks through announcements.
     accepted_announcements: usize,
-
-    peer_type: PhantomData<TPeer>,
 }
 
-impl<TPeer: Peer, TReq: RequestComponent<TPeer>, N: Network> BlockQueue<TPeer, TReq, N> {
+impl<N: Network, TReq: RequestComponent<N::PeerType>> BlockQueue<N, TReq> {
     pub async fn new(
         config: BlockQueueConfig,
         blockchain: Arc<Blockchain>,
@@ -354,7 +353,6 @@ impl<TPeer: Peer, TReq: RequestComponent<TPeer>, N: Network> BlockQueue<TPeer, T
                 buffer,
             },
             accepted_announcements: 0,
-            peer_type: PhantomData,
         }
     }
 
@@ -370,7 +368,7 @@ impl<TPeer: Peer, TReq: RequestComponent<TPeer>, N: Network> BlockQueue<TPeer, T
         self.request_component.num_peers()
     }
 
-    pub fn peers(&self) -> Vec<Weak<ConsensusAgent<TPeer>>> {
+    pub fn peers(&self) -> Vec<Weak<ConsensusAgent<N::PeerType>>> {
         self.request_component.peers()
     }
 
@@ -378,14 +376,14 @@ impl<TPeer: Peer, TReq: RequestComponent<TPeer>, N: Network> BlockQueue<TPeer, T
         self.accepted_announcements
     }
 
-    pub fn push_block(&mut self, block: Block) {
+    pub fn push_block(&mut self, block: Block, peer_id: <N::PeerType as Peer>::Id) {
         self.inner
-            .on_block_announced(block, Pin::new(&mut self.request_component), None);
+            .on_block_announced(block, Pin::new(&mut self.request_component), peer_id, None);
     }
 }
 
-impl<TPeer: Peer, TReq: RequestComponent<TPeer>, N: Network> Stream for BlockQueue<TPeer, TReq, N> {
-    type Item = BlockQueueEvent<TPeer>;
+impl<N: Network, TReq: RequestComponent<N::PeerType>> Stream for BlockQueue<N, TReq> {
+    type Item = BlockQueueEvent<N::PeerType>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         let num_peers = self.num_peers();
@@ -401,6 +399,7 @@ impl<TPeer: Peer, TReq: RequestComponent<TPeer>, N: Network> Stream for BlockQue
                     let result = this.inner.on_block_announced(
                         block,
                         this.request_component,
+                        pubsub_id.propagation_source(),
                         Some(pubsub_id),
                     );
                     if result {

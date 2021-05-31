@@ -61,7 +61,15 @@ async fn consensus(peer_id: u64, genesis_info: GenesisInfo) -> Consensus {
 
     let sync_protocol =
         HistorySync::<Network>::new(Arc::clone(&blockchain), network.subscribe_events());
-    Consensus::with_min_peers(env, blockchain, mempool, network, sync_protocol.boxed(), 1).await
+    Consensus::with_min_peers(
+        env,
+        blockchain,
+        mempool,
+        network,
+        Box::pin(sync_protocol),
+        1,
+    )
+    .await
 }
 
 async fn validator(

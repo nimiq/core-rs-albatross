@@ -53,7 +53,7 @@ async fn mock_consensus(hub: &mut MockHub, peer_id: u64, genesis_info: GenesisIn
     let network = Arc::new(hub.new_network_with_address(peer_id));
     let sync_protocol =
         HistorySync::<MockNetwork>::new(Arc::clone(&blockchain), network.subscribe_events());
-    Consensus::from_network(env, blockchain, mempool, network, sync_protocol.boxed()).await
+    Consensus::from_network(env, blockchain, mempool, network, Box::pin(sync_protocol)).await
 }
 
 async fn mock_validator(
