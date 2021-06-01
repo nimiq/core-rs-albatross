@@ -1,3 +1,4 @@
-.git
-target
-*Dockerfile
+*
+!/target/debug/nimiq-client
+!/target/release/nimiq-client
+!/scripts/docker_*.sh
