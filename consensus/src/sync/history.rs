@@ -600,6 +600,54 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         self.epoch_sync_clusters.append(&mut new_clusters);
         self.epoch_sync_clusters.sort();
     }
+
+    /// Reduces the number of clusters for each peer present in each of the clusters by 1.
+    ///
+    /// If for any given peer the cluster count falls to zero and the cluster which reduced the
+    /// count to zero was adopted without an Error, a request for more epoch ids will be send to the peer.
+    ///
+    /// Peers with no clusters are always removed from the agent set as they are re added if they provide new epoch ids
+    /// or emitted as synced peers if there are no new ids to sync.
+    fn finish_clusters(
+        &mut self,
+        clusters: Vec<SyncCluster<<TNetwork as Network>::PeerType>>,
+        result: SyncClusterResult,
+    ) {
+        for cluster in clusters.iter() {
+            // Decrement the cluster count for all peers in the evicted cluster.
+            for peer in cluster.peers() {
+                if let Some(agent) = Weak::upgrade(peer) {
+                    let cluster_count = {
+                        let pair = self
+                            .agents
+                            .get_mut(&agent.peer)
+                            .expect("Agent should be present");
+                        pair.1 -= 1;
+                        pair.1
+                    };
+
+                    // If the peer isn't in any more clusters, request more epoch_ids from it.
+                    // Only do so if the cluster was synced.
+                    if cluster_count == 0 {
+                        // Always remove agent from agents map. It will be re-added if it returns more
+                        // epoch_ids and dropped otherwise.
+                        self.agents.remove(&agent.peer);
+
+                        if result != SyncClusterResult::Error && cluster.adopted_batch_set {
+                            trace!("Requesting more epoch ids for peer: {:?}", agent.peer.id());
+                            let future =
+                                Self::request_epoch_ids(Arc::clone(&self.blockchain), agent)
+                                    .boxed();
+                            self.epoch_ids_stream.push(future);
+                        } else {
+                            // FIXME: Disconnect peer
+                            // agent.peer.close()
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
@@ -711,43 +759,8 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
                     .drain_filter(|cluster| cluster.len() == 0)
                     .collect();
 
-                for cluster in removed_clusters.iter() {
-                    // Decrement the cluster count for all peers in the evicted cluster.
-                    for peer in cluster.peers() {
-                        if let Some(agent) = Weak::upgrade(peer) {
-                            let cluster_count = {
-                                let pair = self
-                                    .agents
-                                    .get_mut(&agent.peer)
-                                    .expect("Agent should be present");
-                                pair.1 -= 1;
-                                pair.1
-                            };
-
-                            // If the peer isn't in any more clusters, request more epoch_ids from it.
-                            // Only do so if the cluster was synced.
-                            if cluster_count == 0 {
-                                // Always remove agent from agents map. It will be re-added if it returns more
-                                // epoch_ids and dropped otherwise.
-                                self.agents.remove(&agent.peer);
-
-                                if result == SyncClusterResult::NoMoreEpochs
-                                    && cluster.adopted_batch_set
-                                {
-                                    let future = Self::request_epoch_ids(
-                                        Arc::clone(&self.blockchain),
-                                        agent,
-                                    )
-                                    .boxed();
-                                    self.epoch_ids_stream.push(future);
-                                } else {
-                                    // FIXME: Disconnect peer
-                                    // agent.peer.close()
-                                }
-                            }
-                        }
-                    }
-                }
+                // Decrement the cluster count for all peers in the evicted cluster.
+                self.finish_clusters(removed_clusters, result);
 
                 self.epoch_sync_clusters.sort();
             } else {
@@ -758,38 +771,7 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
                     .expect("sync_clusters not empty");
 
                 // Decrement the cluster count for all peers in the evicted cluster.
-                for peer in cluster.peers() {
-                    if let Some(agent) = Weak::upgrade(peer) {
-                        let cluster_count = {
-                            let pair = self
-                                .agents
-                                .get_mut(&agent.peer)
-                                .expect("Agent should be present");
-                            pair.1 -= 1;
-                            pair.1
-                        };
-
-                        // If the peer isn't in any more clusters, request more epoch_ids from it.
-                        // Only do so if the cluster was synced.
-                        if cluster_count == 0 {
-                            // Always remove agent from agents map. It will be re-added if it returns more
-                            // epoch_ids and dropped otherwise.
-                            self.agents.remove(&agent.peer);
-
-                            if result == SyncClusterResult::NoMoreEpochs
-                                && cluster.adopted_batch_set
-                            {
-                                let future =
-                                    Self::request_epoch_ids(Arc::clone(&self.blockchain), agent)
-                                        .boxed();
-                                self.epoch_ids_stream.push(future);
-                            } else {
-                                // FIXME: Disconnect peer
-                                // agent.peer.close()
-                            }
-                        }
-                    }
-                }
+                self.finish_clusters(vec![cluster], result);
             }
         }
 
@@ -831,36 +813,7 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
                 .expect("sync_clusters not empty");
 
             // Decrement the cluster count for all peers in the evicted cluster.
-            for peer in cluster.peers() {
-                if let Some(agent) = Weak::upgrade(peer) {
-                    let cluster_count = {
-                        let pair = self
-                            .agents
-                            .get_mut(&agent.peer)
-                            .expect("Agent should be present");
-                        pair.1 -= 1;
-                        pair.1
-                    };
-
-                    // If the peer isn't in any more clusters, request more epoch_ids from it.
-                    // Only do so if the cluster was synced.
-                    if cluster_count == 0 {
-                        // Always remove agent from agents map. It will be re-added if it returns more
-                        // epoch_ids and dropped otherwise.
-                        self.agents.remove(&agent.peer);
-
-                        if result != SyncClusterResult::Error {
-                            let future =
-                                Self::request_epoch_ids(Arc::clone(&self.blockchain), agent)
-                                    .boxed();
-                            self.epoch_ids_stream.push(future);
-                        } else {
-                            // FIXME: Disconnect peer
-                            // agent.peer.close()
-                        }
-                    }
-                }
-            }
+            self.finish_clusters(vec![cluster], result);
         }
 
         Poll::Pending
