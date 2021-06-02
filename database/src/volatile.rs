@@ -3,12 +3,11 @@ use std::fmt;
 use std::io;
 use std::sync::Arc;
 
-use tempdir::TempDir;
-
-use crate::cursor::{ReadCursor, WriteCursor as WriteCursorTrait};
+use tempfile::TempDir;
 
 use super::lmdb::*;
 use super::*;
+use crate::cursor::{ReadCursor, WriteCursor as WriteCursorTrait};
 
 #[derive(Debug)]
 pub struct VolatileEnvironment {
@@ -52,7 +51,7 @@ impl Error for VolatileDatabaseError {
 impl VolatileEnvironment {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(max_dbs: u32) -> Result<Environment, VolatileDatabaseError> {
-        let temp_dir = TempDir::new("volatile-core").map_err(VolatileDatabaseError::IoError)?;
+        let temp_dir = TempDir::new().map_err(VolatileDatabaseError::IoError)?;
         let path = temp_dir
             .path()
             .to_str()
@@ -79,7 +78,7 @@ impl VolatileEnvironment {
         max_dbs: u32,
         flags: open::Flags,
     ) -> Result<Environment, VolatileDatabaseError> {
-        let temp_dir = TempDir::new("volatile-core").map_err(VolatileDatabaseError::IoError)?;
+        let temp_dir = TempDir::new().map_err(VolatileDatabaseError::IoError)?;
         let path = temp_dir
             .path()
             .to_str()

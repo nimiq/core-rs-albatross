@@ -23,7 +23,7 @@ lmdb-zero = "0.4"
 log = "0.4"
 parking_lot = "0.9"
 rand = "0.7"
-tempdir = "0.3"
+tempfile = "3"
 
 beserial = { path = "../beserial" }
 nimiq-account = { path = "../primitives/account", optional = true }
