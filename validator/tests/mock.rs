@@ -293,7 +293,6 @@ async fn validator_can_catch_up() {
         validator.consensus.network.disconnect();
         let id2 = validator.validator_id();
         assert_ne!(id2, id1);
-        drop(validator);
 
         // ideally we would remove the validators from the vec for them to not even execute.
         // However the implementation does still progress their chains and since they have registered listeners, they would panic.

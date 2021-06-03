@@ -6,6 +6,7 @@ pub mod command_line;
 ///
 /// * Load config from environment variables. envopt doesn't look very usable, but we can easily
 ///   write our own derive macro, that will also use FromStr to parse the variables.
+#[allow(clippy::module_inception)]
 pub mod config;
 pub mod config_file;
 pub mod consts;

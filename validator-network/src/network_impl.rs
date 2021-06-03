@@ -278,6 +278,6 @@ where
         self.network
             .validate_message(id, acceptance)
             .await
-            .map_err(|err| NetworkError::Network(err))
+            .map_err(NetworkError::Network)
     }
 }

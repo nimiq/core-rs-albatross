@@ -17,8 +17,8 @@ fn it_can_compute_sha256() {
         Sha256Hash::from("9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08")
     );
     let mut h = Sha256Hasher::default();
-    h.write(b"te").unwrap();
-    h.write(b"st").unwrap();
+    h.write_all(b"te").unwrap();
+    h.write_all(b"st").unwrap();
     assert_eq!(
         h.finish(),
         Sha256Hash::from("9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08")
@@ -34,8 +34,8 @@ fn it_can_compute_argon2d() {
         Argon2dHash::from("8c259fdcc2ad6799df728c11e895a3369e9dbae6a3166ebc3b353399fc565524")
     );
     let mut h = Argon2dHasher::default();
-    h.write(b"te").unwrap();
-    h.write(b"st").unwrap();
+    h.write_all(b"te").unwrap();
+    h.write_all(b"st").unwrap();
     assert_eq!(
         h.finish(),
         Argon2dHash::from("8c259fdcc2ad6799df728c11e895a3369e9dbae6a3166ebc3b353399fc565524")
@@ -51,8 +51,8 @@ fn it_can_compute_blake2b() {
         Blake2bHash::from("928b20366943e2afd11ebc0eae2e53a93bf177a4fcf35bcc64d503704e65e202")
     );
     let mut h = Blake2bHasher::default();
-    h.write(b"te").unwrap();
-    h.write(b"st").unwrap();
+    h.write_all(b"te").unwrap();
+    h.write_all(b"st").unwrap();
     assert_eq!(
         h.finish(),
         Blake2bHash::from("928b20366943e2afd11ebc0eae2e53a93bf177a4fcf35bcc64d503704e65e202")
@@ -68,8 +68,8 @@ fn it_can_compute_blake2s() {
         Blake2sHash::from("f308fc02ce9172ad02a7d75800ecfc027109bc67987ea32aba9b8dcc7b10150e")
     );
     let mut h = Blake2sHasher::default();
-    h.write(b"te").unwrap();
-    h.write(b"st").unwrap();
+    h.write_all(b"te").unwrap();
+    h.write_all(b"st").unwrap();
     assert_eq!(
         h.finish(),
         Blake2sHash::from("f308fc02ce9172ad02a7d75800ecfc027109bc67987ea32aba9b8dcc7b10150e")
@@ -85,8 +85,8 @@ fn it_can_compute_sha512() {
         Sha512Hash::from("ee26b0dd4af7e749aa1a8ee3c10ae9923f618980772e473f8819a5d4940e0db27ac185f8a0e1d5f84f88bc887fd67b143732c304cc5fa9ad8e6f57f50028a8ff")
     );
     let mut h = Sha512Hasher::default();
-    h.write(b"te").unwrap();
-    h.write(b"st").unwrap();
+    h.write_all(b"te").unwrap();
+    h.write_all(b"st").unwrap();
     assert_eq!(
         h.finish(),
         Sha512Hash::from("ee26b0dd4af7e749aa1a8ee3c10ae9923f618980772e473f8819a5d4940e0db27ac185f8a0e1d5f84f88bc887fd67b143732c304cc5fa9ad8e6f57f50028a8ff")

@@ -166,6 +166,7 @@ impl<N: Network> Inner<N> {
         let mut invalid_blocks = HashSet::new();
 
         // Try to push blocks, until we encounter an inferior or invalid block
+        #[allow(clippy::while_let_on_iterator)]
         while let Some(block) = it.next() {
             let block_hash = block.hash();
 
