@@ -137,7 +137,7 @@ impl Handle<ResponseBlocks> for RequestMissingBlocks {
         // A peer has requested blocks. Check all requested block locator hashes
         // in the given order and pick the first hash that is found on our main
         // chain, ignore the rest. If none of the requested hashes is found,
-        // pick the genesis block hash. Send the main chain starting from the
+        // pick the last macro block hash. Send the main chain starting from the
         // picked hash back to the peer.
         let mut start_block = None;
         for locator in self.locators.iter() {

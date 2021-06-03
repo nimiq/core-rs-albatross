@@ -122,7 +122,7 @@ impl ConnectionPoolBehaviour {
                 .map(|e| e.get_score());
             if let Some(score) = peer_score {
                 if score < 0.0 {
-                    &self.events.push_back(NetworkBehaviourAction::GenerateEvent(
+                    self.events.push_back(NetworkBehaviourAction::GenerateEvent(
                         ConnectionPoolEvent::Disconnect { peer_id: *peer_id },
                     ));
                 }
@@ -161,8 +161,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
             .read()
             .get(peer_id)
             .map(|e| e.contact().addresses.clone())
-            .or(Some(vec![]))
-            .unwrap()
+            .unwrap_or_default()
     }
 
     fn inject_connection_established(
@@ -227,7 +226,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
     }
 
     fn inject_connected(&mut self, peer_id: &PeerId) {
-        if self.connected_peers.insert(peer_id.clone()) {
+        if self.connected_peers.insert(*peer_id) {
             log::trace!("{:?} added to connected set of peers", peer_id);
         } else {
             log::debug!("{:?} already part of connected set of peers", peer_id);
@@ -300,7 +299,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
         }
     }
 
-    fn poll(&mut self, cx: &mut Context<'_>, _params: &mut impl PollParameters) -> Poll<NetworkBehaviourAction<<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent, Self::OutEvent>>{
+    fn poll(&mut self, cx: &mut Context<'_>, _params: &mut impl PollParameters) -> Poll<NetworkBehaviourAction<<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent, Self::OutEvent>> {
         if self.pending_connections.is_empty() {
             if let Some(mut timer) = self.next_check_timeout.take() {
                 if let Poll::Ready(Some(_)) = timer.poll_next_unpin(cx) {
@@ -315,7 +314,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
                 self.pending_connections.len() - 1
             );
             return Poll::Ready(NetworkBehaviourAction::DialPeer {
-                peer_id: self.pending_connections.pop().unwrap().peer_id().clone(),
+                peer_id: *self.pending_connections.pop().unwrap().peer_id(),
                 condition: libp2p::swarm::DialPeerCondition::Always,
             });
         }
