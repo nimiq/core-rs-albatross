@@ -47,5 +47,5 @@ nimiq-database = { path = "../database" }
 nimiq-wallet = { path = "../wallet" }
 nimiq-network-libp2p = { path = "../network-libp2p" }
 nimiq-consensus = { path = "../consensus" }
-nimiq-rpc-interface = { path = "../rpc-interface" }
+nimiq-rpc-interface = { path = "../rpc-interface", features = ["proxy"] }
 nimiq-transaction-builder = { path = "../transaction-builder", features = ["serde-derive"] }
