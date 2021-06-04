@@ -82,8 +82,11 @@ impl<
         // invoke the partitioner to create the level structure of peers.
         let levels: Vec<Level> = Level::create_levels(protocol.partitioner());
 
-        // Create an empty todo list  which can later be polled for the best available todo.
-        let todos = Box::pin(TodoList::new(protocol.evaluator(), input_stream));
+        // Create an empty todo list which can later be polled for the best available todo.
+        let mut todos = Box::pin(TodoList::new(protocol.evaluator(), input_stream));
+
+        // Add our own contribution to the todo list.
+        todos.add_contribution(own_contribution.clone(), 0);
 
         // Regarless of level completion consecutive levels need to be activated at some point. Activate Levels every time this interval ticks,
         // if the level has not already been activated due to level completion
@@ -103,26 +106,12 @@ impl<
             config,
             todos,
             levels,
-            contribution: own_contribution.clone(),
+            contribution: own_contribution,
             sender,
             start_level_interval,
             periodic_update_interval,
             next_level_timeout: 0,
         };
-
-        // make sure the contribution of this instance is added to the store
-        this.protocol.store().write().put(
-            own_contribution.clone(),
-            0,
-            this.protocol
-                .registry()
-                .signers_identity(&own_contribution.contributors()),
-        );
-
-        // and check if that already completes a level
-        // Level 0 always only contains a single signature, the one of this instance. Thus it will always complete that level,
-        // startinng the next one and sending updates.
-        this.check_completed_level(own_contribution, 0);
 
         // return the NextAggregation struct
         this
