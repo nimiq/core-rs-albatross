@@ -59,13 +59,20 @@ pub(crate) struct TodoList<C: AggregatableContribution, E: Evaluator<C>> {
 impl<C: AggregatableContribution, E: Evaluator<C>> TodoList<C, E> {
     /// Create a new TodoList
     /// * `evaluator` - The evaluator which will be used for TodoItem scoring
-    /// * `input_stream` - Thestream on which new LevelUpdates can be polled, which will then be converted into TodoItems
+    /// * `input_stream` - The stream on which new LevelUpdates can be polled, which will then be converted into TodoItems
     pub fn new(evaluator: Arc<E>, input_stream: BoxStream<'static, LevelUpdate<C>>) -> Self {
         Self {
             list: HashSet::new(),
             evaluator,
             input_stream,
         }
+    }
+
+    pub fn add_contribution(&mut self, contribution: C, level: usize) {
+        self.list.insert(TodoItem {
+            contribution,
+            level,
+        });
     }
 }
 
