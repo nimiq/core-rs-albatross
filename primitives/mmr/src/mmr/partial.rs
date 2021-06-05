@@ -317,7 +317,9 @@ mod tests {
 
             for i in (0..leaves.len()).step_by(chunk_size) {
                 let to_prove = i..cmp::min(i + chunk_size, leaves.len());
-                let proof = mmr.prove_range(to_prove.clone(), mmr.len(), assume_previous).unwrap();
+                let proof = mmr
+                    .prove_range(to_prove.clone(), mmr.len(), assume_previous)
+                    .unwrap();
 
                 assert!(
                     !pmmr.is_finished(),

@@ -58,9 +58,10 @@ impl<N: Network> Consensus<N> {
         tokio::spawn(async move {
             while let Some((msg, peer)) = stream.next().await {
                 trace!(
-                    "[REQUEST_HISTORY_CHUNK] for epoch {}, chunk {} received from {:?}",
+                    "[REQUEST_HISTORY_CHUNK] for epoch {}, chunk {} with respect to block_number: {} received from {:?}",
                     msg.epoch_number,
                     msg.chunk_index,
+                    msg.block_number,
                     peer.id()
                 );
 

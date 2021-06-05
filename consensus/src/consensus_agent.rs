@@ -119,12 +119,14 @@ impl<P: Peer> ConsensusAgent<P> {
     pub async fn request_history_chunk(
         &self,
         epoch_number: u32,
+        block_number: u32,
         chunk_index: usize,
     ) -> Result<HistoryChunk, RequestError> {
         let result = self
             .history_chunk_requests
             .request(RequestHistoryChunk {
                 epoch_number,
+                block_number,
                 chunk_index: chunk_index as u64,
                 request_identifier: 0, // will automatically be set at a later point
             })

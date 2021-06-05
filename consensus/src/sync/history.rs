@@ -46,7 +46,7 @@ struct SyncCluster<TPeer: Peer> {
     epoch_offset: usize,
 
     batch_set_queue: SyncQueue<TPeer, Blake2bHash, BatchSetInfo>,
-    history_queue: SyncQueue<TPeer, (u32, usize), (u32, HistoryChunk)>,
+    history_queue: SyncQueue<TPeer, (u32, u32, usize), (u32, HistoryChunk)>,
 
     pending_batch_sets: VecDeque<PendingBatchSet>,
 
@@ -71,12 +71,12 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
             |id, peer| async move { peer.request_epoch(id).await.ok() }.boxed(),
         );
         let history_queue = SyncQueue::new(
-            Vec::<(u32, usize)>::new(),
+            Vec::<(u32, u32, usize)>::new(),
             peers,
             Self::NUM_PENDING_CHUNKS,
-            move |(epoch_number, chunk_index), peer| {
+            move |(epoch_number, block_number, chunk_index), peer| {
                 async move {
-                    peer.request_history_chunk(epoch_number, chunk_index)
+                    peer.request_history_chunk(epoch_number, block_number, chunk_index)
                         .await
                         .ok()
                         .map(|chunk| (epoch_number, chunk))
@@ -114,6 +114,7 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
 
         // If the block is in the same epoch, add already known history.
         let epoch_number = policy::epoch_at(pending_batch_set.block.header.block_number);
+
         let mut start_index = 0;
         if policy::epoch_at(current_block_number) == epoch_number {
             let num_known = self
@@ -130,7 +131,13 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
                 let known_chunk = self
                     .blockchain
                     .history_store
-                    .prove_chunk(epoch_number, num_full_chunks * CHUNK_SIZE, 0, None)
+                    .prove_chunk(
+                        epoch_number,
+                        pending_batch_set.block.header.block_number,
+                        num_full_chunks * CHUNK_SIZE,
+                        0,
+                        None,
+                    )
                     .expect("History chunk missing");
                 pending_batch_set.history = known_chunk.history;
             }
@@ -139,7 +146,7 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
         // Queue history chunks for the given epoch for download.
         let history_chunk_ids = (start_index
             ..((epoch.history_len as usize).ceiling_div(CHUNK_SIZE)))
-            .map(|i| (epoch_number, i))
+            .map(|i| (epoch_number, pending_batch_set.block.header.block_number, i))
             .collect();
         debug!("Requesting history for ids: {:?}", history_chunk_ids);
         self.history_queue.add_ids(history_chunk_ids);
@@ -161,6 +168,10 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
         let epoch = &mut self.pending_batch_sets[epoch_index];
 
         // TODO: This assumes that we have already filtered responses with no chunk.
+        if history_chunk.chunk.is_none() {
+            return Err(SyncClusterResult::Error);
+        }
+
         // Verify chunk.
         let chunk = history_chunk.chunk.expect("History chunk missing");
         if !chunk
@@ -266,7 +277,7 @@ impl<TPeer: Peer + 'static> Stream for SyncCluster<TPeer> {
                     }
                 }
                 Err(e) => {
-                    log::debug!("Polling the history queue resulted in an error for epoch #{}, history_chunk: #{}", e.0, e.1);
+                    log::debug!("Polling the history queue resulted in an error for epoch #{}, verifier_block_number : #{}, history_chunk: #{}", e.0, e.1, e.2);
                     return Poll::Ready(Some(Err(SyncClusterResult::Error)));
                 } // TODO Error
             }
