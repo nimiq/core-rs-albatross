@@ -20,7 +20,6 @@ use crate::history_store::{ExtendedTransaction, HistoryTreeChunk, HistoryTreePro
 use crate::ExtTxData;
 use nimiq_database::cursor::ReadCursor;
 use nimiq_keys::Address;
-use nimiq_primitives::policy::{BATCH_LENGTH, EPOCH_LENGTH};
 
 /// A struct that contains databases to store history trees (which are Merkle Mountain Ranges
 /// constructed from the list of extended transactions in an epoch) and extended transactions (which
@@ -473,17 +472,14 @@ impl HistoryStore {
             epoch_number,
         ));
 
-        let start = cmp::min(chunk_size * chunk_index, tree.num_leaves());
-        let end = cmp::min(start + chunk_size, tree.num_leaves());
-
         // Calculate number of nodes for the verifier.
         // TODO: This seriously needs to be refactored. NOT READY.
-        let ext_txs = self.get_block_transactions(verifier_block_number, txn_option);
+        let ext_txs = self.get_block_transactions(verifier_block_number, Some(txn));
 
         let mut max_leaf = 0;
 
         for ext_tx in ext_txs {
-            let leaves = self.get_leaves_by_tx_hash(&ext_tx.tx_hash(), txn_option);
+            let leaves = self.get_leaves_by_tx_hash(&ext_tx.tx_hash(), Some(txn));
 
             for leaf in leaves {
                 if leaf.index > max_leaf {
@@ -493,6 +489,9 @@ impl HistoryStore {
         }
 
         let number_of_nodes = leaf_number_to_index((max_leaf + 1) as usize);
+
+        let start = cmp::min(chunk_size * chunk_index, max_leaf as usize + 1);
+        let end = cmp::min(start + chunk_size, max_leaf as usize + 1);
 
         // TODO: Setting `assume_previous` to false allows the proofs to be verified independently.
         //  This, however, increases the size of the proof. We might change this in the future.

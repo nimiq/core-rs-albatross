@@ -19,10 +19,10 @@ pub const TWO_THIRD_SLOTS: u16 = (2 * SLOTS + 3 - 1) / 3;
 pub const BATCH_LENGTH: u32 = 32; // TODO Set
 
 /// How many batches constitute an epoch
-pub const BATCHES_PER_EPOCH: u32 = 4; // TODO Set
+pub const BATCHES_PER_EPOCH: u16 = 4; // TODO Set
 
 /// Length of epoch including election macro block
-pub const EPOCH_LENGTH: u32 = BATCH_LENGTH * BATCHES_PER_EPOCH;
+pub const EPOCH_LENGTH: u32 = BATCH_LENGTH * BATCHES_PER_EPOCH as u32;
 
 /// The maximum drift, in milliseconds, that is allowed between any block's timestamp and the node's
 /// system time. We only care about drifting to the future.

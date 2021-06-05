@@ -134,6 +134,7 @@ impl Message for BatchSetInfo {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestHistoryChunk {
     pub epoch_number: u32,
+    pub block_number: u32,
     pub chunk_index: u64,
     pub request_identifier: u32,
 }

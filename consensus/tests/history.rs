@@ -278,7 +278,7 @@ async fn sync_ingredients() {
 
     // Request history chunk.
     let chunk = agent
-        .request_history_chunk(1, 0)
+        .request_history_chunk(1, policy::EPOCH_LENGTH, 0)
         .await
         .expect("Should yield history chunk")
         .chunk
@@ -298,7 +298,7 @@ async fn sync_ingredients() {
     );
 
     let chunk = agent
-        .request_history_chunk(2, 0)
+        .request_history_chunk(2, 1, 0)
         .await
         .expect("Should yield history chunk")
         .chunk

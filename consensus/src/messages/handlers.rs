@@ -100,8 +100,10 @@ impl Handle<BatchSetInfo> for RequestBatchSet {
 
 impl Handle<HistoryChunk> for RequestHistoryChunk {
     fn handle(&self, blockchain: &Arc<Blockchain>) -> Option<HistoryChunk> {
+        // TODO checkpoint block as reference. Batch index is given in msg.batch_number
         let chunk = blockchain.history_store.prove_chunk(
             self.epoch_number,
+            self.block_number,
             CHUNK_SIZE,
             self.chunk_index as usize,
             None,
