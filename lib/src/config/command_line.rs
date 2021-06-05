@@ -92,7 +92,7 @@ pub enum LogTagParseError {
 }
 
 fn parse_log_tags(s: &str) -> Result<(String, LevelFilter), LogTagParseError> {
-    let p: Vec<&str> = s.splitn(1, ':').collect();
+    let p: Vec<&str> = s.splitn(2, ':').collect();
     let tag = p.get(0).unwrap().to_string();
     let level = p
         .get(1)
