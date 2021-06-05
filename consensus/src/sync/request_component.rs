@@ -32,7 +32,7 @@ pub enum RequestComponentEvent {
 pub trait HistorySyncStream<TPeer: Peer>:
     Stream<Item = Arc<ConsensusAgent<TPeer>>> + Unpin + Send
 {
-    fn add_peer(&self, peer: Arc<TPeer>);
+    fn add_agent(&self, agent: Arc<ConsensusAgent<TPeer>>);
 }
 
 /// Peer Tracking & Request Component
@@ -94,8 +94,10 @@ impl<TPeer: 'static + Peer> RequestComponent<TPeer> for BlockRequestComponent<TP
     }
 
     fn put_peer_into_sync_mode(&mut self, peer: Arc<TPeer>) {
-        self.sync_method.add_peer(peer.clone());
-        self.agents.remove(&peer);
+        // As ConsensusAgents register their RequestResponse handlers a new one cannot be created.
+        // Thus retrieve the one we already have.
+        let agent = self.agents.remove(&peer).expect("Agent should be present");
+        self.sync_method.add_agent(agent);
     }
 
     fn num_peers(&self) -> usize {

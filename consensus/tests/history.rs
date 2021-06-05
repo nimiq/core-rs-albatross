@@ -29,7 +29,7 @@ pub struct MockHistorySyncStream<TNetwork: Network> {
 }
 
 impl<TNetwork: Network> HistorySyncStream<TNetwork::PeerType> for MockHistorySyncStream<TNetwork> {
-    fn add_peer(&self, _peer: Arc<TNetwork::PeerType>) {}
+    fn add_agent(&self, _agent: Arc<ConsensusAgent<TNetwork::PeerType>>) {}
 }
 
 impl<TNetwork: Network> Stream for MockHistorySyncStream<TNetwork> {
