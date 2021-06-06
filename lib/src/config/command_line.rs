@@ -6,7 +6,7 @@ use thiserror::Error;
 
 use nimiq_primitives::networks::NetworkId;
 
-use crate::config::config_file::ConsensusType;
+use crate::config::config_file::SyncMode;
 
 /*lazy_static! {
     static ref VALID_LOG_LEVELS: [&'static str; 6] = ["off", "error", "warn", "info", "debug", "trace"];
@@ -53,14 +53,14 @@ pub struct CommandLine {
     #[structopt(long)]
     pub passive: bool,
 
-    /// Configure consensus type, one of full (default), or macro-sync
+    /// Configure sync mode, one of history (default)
     ///
     /// # Examples
     ///
-    /// * `nimiq-client --type macro-sync`
+    /// * `nimiq-client --mode history`
     ///
-    #[structopt(long = "type", parse(try_from_str))]
-    pub consensus_type: Option<ConsensusType>,
+    #[structopt(long = "mode", parse(try_from_str))]
+    pub sync_mode: Option<SyncMode>,
 
     /// Configure the network to connect to, one of test-albatross, dev-albatross (default)
     ///

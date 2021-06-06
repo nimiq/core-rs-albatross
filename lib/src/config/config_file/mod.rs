@@ -175,45 +175,42 @@ pub struct TlsSettings {
 pub struct ConsensusSettings {
     #[serde(rename = "type")]
     #[serde(default)]
-    pub consensus_type: ConsensusType,
+    pub sync_mode: SyncMode,
     #[serde(default)]
     pub network: Network,
+    pub min_peers: Option<usize>,
 }
 
 #[derive(Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
-pub enum ConsensusType {
-    Full,
-    MacroSync,
+pub enum SyncMode {
+    History,
 }
-
-impl Default for ConsensusType {
+impl Default for SyncMode {
     fn default() -> Self {
-        ConsensusType::Full
+        SyncMode::History
     }
 }
 
 #[derive(Debug, Error)]
-#[error("Invalid consensus type: {0}")]
-pub struct ConsensusTypeParseError(String);
+#[error("Invalid sync mode: {0}")]
+pub struct SyncModeParseError(String);
 
-impl FromStr for ConsensusType {
-    type Err = ConsensusTypeParseError;
+impl FromStr for SyncMode {
+    type Err = SyncModeParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s.to_lowercase().as_str() {
-            "full" => Self::Full,
-            "macro-sync" => Self::MacroSync,
-            _ => return Err(ConsensusTypeParseError(s.to_string())),
+            "history" => Self::History,
+            _ => return Err(SyncModeParseError(s.to_string())),
         })
     }
 }
 
-impl From<ConsensusType> for config::ConsensusConfig {
-    fn from(consensus_type: ConsensusType) -> Self {
-        match consensus_type {
-            ConsensusType::Full => Self::Full,
-            ConsensusType::MacroSync => Self::MacroSync,
+impl From<SyncMode> for config::SyncMode {
+    fn from(sync_mode: SyncMode) -> Self {
+        match sync_mode {
+            SyncMode::History => Self::History,
         }
     }
 }
@@ -227,6 +224,7 @@ pub enum Network {
     Dev,
     TestAlbatross,
     DevAlbatross,
+    UnitAlbatross,
 }
 
 impl Default for Network {
@@ -245,6 +243,7 @@ impl FromStr for Network {
             "dev" => Network::Dev,
             "test-albatross" => Network::TestAlbatross,
             "dev-albatross" => Network::DevAlbatross,
+            "unit-albatross" => Network::UnitAlbatross,
             _ => return Err(()),
         })
     }
@@ -258,6 +257,7 @@ impl From<Network> for NetworkId {
             Network::Dev => NetworkId::Dev,
             Network::TestAlbatross => NetworkId::TestAlbatross,
             Network::DevAlbatross => NetworkId::DevAlbatross,
+            Network::UnitAlbatross => NetworkId::UnitAlbatross,
         }
     }
 }

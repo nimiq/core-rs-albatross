@@ -97,17 +97,18 @@ impl ClientInner {
         let network = Arc::new(Network::new(Arc::clone(&time), network_config).await);
 
         // Start buffering network events as early as possible
-        let nw_events = network.subscribe_events();
+        let network_events = network.subscribe_events();
 
         // Load validator key (before we give away ownership of the storage config)
         #[cfg(feature = "validator")]
         let validator_key = config.storage.validator_key()?;
 
         // Open database
-        let environment =
-            config
-                .storage
-                .database(config.network_id, config.consensus, config.database)?;
+        let environment = config.storage.database(
+            config.network_id,
+            config.consensus.sync_mode,
+            config.database,
+        )?;
         let blockchain = Arc::new(Blockchain::new(environment.clone(), config.network_id).unwrap());
         let mempool = Mempool::new(Arc::clone(&blockchain), config.mempool);
 
@@ -115,14 +116,15 @@ impl ClientInner {
         #[cfg(feature = "wallet")]
         let wallet_store = Arc::new(WalletStore::new(environment.clone()));
 
-        let sync = HistorySync::<Network>::new(Arc::clone(&blockchain), nw_events);
+        let sync = HistorySync::<Network>::new(Arc::clone(&blockchain), network_events);
 
-        let consensus = Consensus::from_network(
+        let consensus = Consensus::with_min_peers(
             environment.clone(),
             blockchain,
             mempool,
             Arc::clone(&network),
             Box::pin(sync),
+            config.consensus.min_peers,
         )
         .await;
 
