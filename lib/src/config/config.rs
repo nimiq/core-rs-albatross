@@ -33,25 +33,42 @@ use crate::{
     error::Error,
 };
 
-/// The consensus type
+/// The sync mode
 ///
 /// # Notes
 ///
-/// core-rs / Albatross is currently only supporting full consensus.
+/// core-rs / Albatross currently only supports history sync.
 ///
 /// # ToDo
 ///
 /// * We'll propably have this enum somewhere in the primitives. So this is a placeholder.
 ///
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Display)]
-pub enum ConsensusConfig {
-    Full,
-    MacroSync,
+pub enum SyncMode {
+    History,
+}
+
+impl Default for SyncMode {
+    fn default() -> Self {
+        Self::History
+    }
+}
+
+#[derive(Debug, Clone, Builder)]
+#[builder(setter(into))]
+pub struct ConsensusConfig {
+    #[builder(default)]
+    pub sync_mode: SyncMode,
+    #[builder(default = "3")]
+    pub min_peers: usize,
 }
 
 impl Default for ConsensusConfig {
     fn default() -> Self {
-        Self::Full
+        ConsensusConfig {
+            sync_mode: SyncMode::default(),
+            min_peers: 3,
+        }
     }
 }
 
@@ -75,6 +92,7 @@ pub struct NetworkConfig {
     #[builder(default)]
     pub seeds: Vec<Seed>,
 
+    #[builder(setter(strip_option))]
     pub min_peers: Option<usize>,
 }
 
@@ -288,10 +306,10 @@ impl StorageConfig {
     pub fn database(
         &self,
         network_id: NetworkId,
-        consensus: ConsensusConfig,
+        sync_mode: SyncMode,
         db_config: DatabaseConfig,
     ) -> Result<Environment, Error> {
-        let db_name = format!("{}-{}-consensus", network_id, consensus).to_lowercase();
+        let db_name = format!("{}-{}-consensus", network_id, sync_mode).to_lowercase();
         log::info!("Opening database: {}", db_name);
 
         Ok(match self {
@@ -341,8 +359,8 @@ impl StorageConfig {
                             BlsSecretKey::deserialize_from_vec(&hex::decode(key).unwrap()).unwrap();
                         secret_key.into()
                     } else {
-                        //BlsKeyPair::generate_default_csprng()
-                        todo!("Load hex string");
+                        //todo!("Load hex string");
+                        BlsKeyPair::generate_default_csprng()
                     }
                 })?
             }
@@ -472,10 +490,7 @@ pub struct ClientConfig {
     /// Network config
     pub network: NetworkConfig,
 
-    /// Determines which consensus protocol to use.
-    ///
-    /// Default is full consensus.
-    ///
+    /// Consensus config
     #[builder(default)]
     pub consensus: ConsensusConfig,
 
@@ -580,19 +595,6 @@ impl ClientConfigBuilder {
         self.network_id(NetworkId::TestAlbatross)
     }
 
-    /// Sets the client to sync the full block chain.
-    ///
-    pub fn full(&mut self) -> &mut Self {
-        self.consensus(ConsensusConfig::Full)
-    }
-
-    /// Sets the client to sync only macro blocks util it's fully synced. Afterwards it behaves
-    /// like a full node.
-    ///
-    pub fn macro_sync(&mut self) -> &mut Self {
-        self.consensus(ConsensusConfig::MacroSync)
-    }
-
     /*
     /// Sets the reverse proxy configuration. You need to set this if you run your node behind
     /// a reverse proxy.
@@ -669,7 +671,14 @@ impl ClientConfigBuilder {
         });
 
         // Configure consensus
-        self.consensus(config_file.consensus.consensus_type);
+        let mut consensus = ConsensusConfigBuilder::default()
+            .sync_mode(config_file.consensus.sync_mode)
+            .build()
+            .unwrap();
+        if let Some(min_peers) = config_file.consensus.min_peers {
+            consensus.min_peers = min_peers;
+        }
+        self.consensus(consensus);
 
         // Configure network
         self.network_id(config_file.consensus.network);
@@ -778,13 +787,17 @@ impl ClientConfigBuilder {
 
     /// Applies settings from the command line
     pub fn command_line(&mut self, command_line: &CommandLine) -> Result<&mut Self, Error> {
-        // Set consensus type
-        command_line
-            .consensus_type
-            .map(|consensus| self.consensus(consensus));
+        // Set sync_mode
+        if let Some(sync_mode) = command_line.sync_mode {
+            self.consensus
+                .get_or_insert_with(ConsensusConfig::default)
+                .sync_mode = sync_mode.into()
+        }
 
         // Set network ID
-        command_line.network.map(|network| self.network_id(network));
+        if let Some(network_id) = command_line.network {
+            self.network_id(network_id);
+        }
 
         // NOTE: We're always return `Ok(_)`, but we might want to introduce errors later.
         Ok(self)

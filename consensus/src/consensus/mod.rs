@@ -292,9 +292,9 @@ impl<N: Network> Consensus<N> {
         &mut self,
         finished_head_request: Option<HeadRequestsResult<N::PeerType>>,
     ) -> Option<ConsensusEvent<N>> {
-        // We can only loose established state right now if we loose all our peers.
+        // We can only lose established state right now if we drop below our minimum peer threshold.
         if self.is_established() {
-            if self.num_agents() == 0 {
+            if self.num_agents() < self.min_peers {
                 warn!("Lost consensus!");
                 self.established_flag.swap(false, Ordering::Release);
                 return Some(ConsensusEvent::Lost);
@@ -322,7 +322,7 @@ impl<N: Network> Consensus<N> {
                     if let Some(head_request) = finished_head_request {
                         trace!("Trying to establish consensus, checking head request ({} known, {} unknown).", head_request.num_known_blocks, head_request.num_unknown_blocks);
                         // We would like that 2/3 of our peers have a known state.
-                        if head_request.num_known_blocks > 2 * head_request.num_unknown_blocks {
+                        if head_request.num_known_blocks >= 2 * head_request.num_unknown_blocks {
                             info!("Consensus established, 2/3 of heads known.");
                             self.established_flag.swap(true, Ordering::Release);
                             return Some(ConsensusEvent::Established);
@@ -342,7 +342,7 @@ impl<N: Network> Consensus<N> {
         // and we have at least one peer, check whether we should start a new one.
         if !self.is_established()
             && self.head_requests.is_none()
-            && self.block_queue.num_peers() > 0
+            && (self.num_agents() > 0 || self.min_peers == 0)
         {
             // This is the case if `head_requests_time` is unset or the timeout is hit.
             let should_start_request = self
@@ -384,7 +384,7 @@ impl<N: Network> Future for Consensus<N> {
             self.events.send(event).ok(); // Ignore result.
         }
 
-        // 2. Poll and push transactions (we chack that consensus is established in the future itself).
+        // 2. Poll and push transactions (we check that consensus is established in the future itself).
         if self.tx_future.poll_unpin(cx).is_ready() {
             panic!("This future is driving an infinite Stream so it should never complete")
         };
