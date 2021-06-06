@@ -79,7 +79,7 @@ impl<
         input_stream: BoxStream<'static, LevelUpdate<P::Contribution>>,
         sender: UnboundedSender<(LevelUpdateMessage<P::Contribution, T>, usize)>,
     ) -> Self {
-        // invoke the partitioner to create the level structure of peers.
+        // Invoke the partitioner to create the level structure of peers.
         let levels: Vec<Level> = Level::create_levels(protocol.partitioner());
 
         // Create an empty todo list which can later be polled for the best available todo.
@@ -99,8 +99,8 @@ impl<
             config.update_interval,
         );
 
-        // create the NextAggregation struct
-        let this = Self {
+        // Create the NextAggregation struct
+        Self {
             protocol,
             tag,
             config,
@@ -111,10 +111,7 @@ impl<
             start_level_interval,
             periodic_update_interval,
             next_level_timeout: 0,
-        };
-
-        // return the NextAggregation struct
-        this
+        }
     }
 
     /// Starts level `level`
