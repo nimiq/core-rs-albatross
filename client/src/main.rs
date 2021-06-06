@@ -92,8 +92,6 @@ async fn main_inner() -> Result<(), Error> {
     if let Some(validator) = client.validator() {
         log::info!("Spawning validator");
         tokio::spawn(validator);
-    } else {
-        todo!("Must use validator");
     }
 
     // Create the "monitor" future which never completes to keep the client alive.
