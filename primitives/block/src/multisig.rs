@@ -1,5 +1,4 @@
 use beserial::{BigEndian, Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
-
 use nimiq_bls::{AggregateSignature, Signature};
 use nimiq_collections::bitset::BitSet;
 use nimiq_handel::contribution::{AggregatableContribution, ContributionError};

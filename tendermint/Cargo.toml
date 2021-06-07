@@ -3,7 +3,7 @@ name = "nimiq-tendermint"
 version = "0.1.0"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2018"
-description = "Tendermint implementation"
+description = "Tendermint implementation for Nimiq's Albatross"
 homepage = "https://nimiq.com"
 repository = "https://github.com/nimiq/core-rs-albatross"
 license = "Apache-2.0"
@@ -13,6 +13,7 @@ async-stream = "0.3.0"
 async-trait = "0.1"
 futures = "0.3"
 log = "0.4"
+thiserror = "1.0"
 
 nimiq-block = { path = "../primitives/block" }
 nimiq-hash = { path = "../hash" }
