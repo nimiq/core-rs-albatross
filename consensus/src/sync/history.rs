@@ -601,48 +601,44 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         self.epoch_sync_clusters.sort();
     }
 
-    /// Reduces the number of clusters for each peer present in each of the clusters by 1.
+    /// Reduces the number of clusters for each peer present in the given cluster by 1.
     ///
-    /// If for any given peer the cluster count falls to zero and the cluster which reduced the
-    /// count to zero was adopted without an Error, a request for more epoch ids will be send to the peer.
+    /// If for any given peer the cluster count falls to zero and `request_more_epochs` is true,
+    /// a request for more epoch ids will be send to the peer.
     ///
-    /// Peers with no clusters are always removed from the agent set as they are re added if they provide new epoch ids
-    /// or emitted as synced peers if there are no new ids to sync.
-    fn finish_clusters(
+    /// Peers with no clusters are always removed from the agent set as they are re added if they
+    /// provide new epoch ids or emitted as synced peers if there are no new ids to sync.
+    fn finish_cluster(
         &mut self,
-        clusters: Vec<SyncCluster<<TNetwork as Network>::PeerType>>,
-        result: SyncClusterResult,
+        cluster: &SyncCluster<<TNetwork as Network>::PeerType>,
+        request_more_epochs: bool,
     ) {
-        for cluster in clusters.iter() {
-            // Decrement the cluster count for all peers in the evicted cluster.
-            for peer in cluster.peers() {
-                if let Some(agent) = Weak::upgrade(peer) {
-                    let cluster_count = {
-                        let pair = self
-                            .agents
-                            .get_mut(&agent.peer)
-                            .expect("Agent should be present");
-                        pair.1 -= 1;
-                        pair.1
-                    };
+        for peer in cluster.peers() {
+            if let Some(agent) = Weak::upgrade(peer) {
+                let cluster_count = {
+                    let pair = self
+                        .agents
+                        .get_mut(&agent.peer)
+                        .expect("Agent should be present");
+                    pair.1 -= 1;
+                    pair.1
+                };
 
-                    // If the peer isn't in any more clusters, request more epoch_ids from it.
-                    // Only do so if the cluster was synced.
-                    if cluster_count == 0 {
-                        // Always remove agent from agents map. It will be re-added if it returns more
-                        // epoch_ids and dropped otherwise.
-                        self.agents.remove(&agent.peer);
+                // If the peer isn't in any more clusters, request more epoch_ids from it.
+                // Only do so if the cluster was synced.
+                if cluster_count == 0 {
+                    // Always remove agent from agents map. It will be re-added if it returns more
+                    // epoch_ids and dropped otherwise.
+                    self.agents.remove(&agent.peer);
 
-                        if result != SyncClusterResult::Error && cluster.adopted_batch_set {
-                            trace!("Requesting more epoch ids for peer: {:?}", agent.peer.id());
-                            let future =
-                                Self::request_epoch_ids(Arc::clone(&self.blockchain), agent)
-                                    .boxed();
-                            self.epoch_ids_stream.push(future);
-                        } else {
-                            // FIXME: Disconnect peer
-                            // agent.peer.close()
-                        }
+                    if request_more_epochs {
+                        trace!("Requesting more epoch ids for peer: {:?}", agent.peer.id());
+                        let future =
+                            Self::request_epoch_ids(Arc::clone(&self.blockchain), agent).boxed();
+                        self.epoch_ids_stream.push(future);
+                    } else {
+                        // FIXME: Disconnect peer
+                        // agent.peer.close()
                     }
                 }
             }
@@ -712,7 +708,7 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
             let best_cluster = self
                 .epoch_sync_clusters
                 .last_mut()
-                .expect("sync_clusters no empty");
+                .expect("sync_clusters not empty");
 
             let result = match ready!(best_cluster.poll_next_unpin(cx)) {
                 Some(Ok(epoch)) => SyncClusterResult::from(
@@ -734,7 +730,7 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
                 let best_cluster = self
                     .epoch_sync_clusters
                     .last_mut()
-                    .expect("sync_clusters no empty");
+                    .expect("sync_clusters not empty");
                 best_cluster.adopted_batch_set = true;
 
                 // Cut off the ids we have already adopted from the start of the next cluster.
@@ -753,14 +749,15 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
                     }
                 }
 
+                // Evict all empty clusters and finish them.
                 // TODO: What if there are no clusters left for this peer?
                 let removed_clusters: Vec<_> = self
                     .epoch_sync_clusters
                     .drain_filter(|cluster| cluster.len() == 0)
                     .collect();
-
-                // Decrement the cluster count for all peers in the evicted cluster.
-                self.finish_clusters(removed_clusters, result);
+                for cluster in removed_clusters.iter() {
+                    self.finish_cluster(cluster, true);
+                }
 
                 self.epoch_sync_clusters.sort();
             } else {
@@ -771,7 +768,10 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
                     .expect("sync_clusters not empty");
 
                 // Decrement the cluster count for all peers in the evicted cluster.
-                self.finish_clusters(vec![cluster], result);
+                self.finish_cluster(
+                    &cluster,
+                    result != SyncClusterResult::Error && cluster.adopted_batch_set,
+                );
             }
         }
 
@@ -813,7 +813,7 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
                 .expect("sync_clusters not empty");
 
             // Decrement the cluster count for all peers in the evicted cluster.
-            self.finish_clusters(vec![cluster], result);
+            self.finish_cluster(&cluster, result != SyncClusterResult::Error);
         }
 
         Poll::Pending
