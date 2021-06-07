@@ -1,9 +1,10 @@
 use std::convert::TryFrom;
-use std::fmt;
+use std::{fmt, io};
 
 use bitflags::bitflags;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, SerializeContent};
 use nimiq_hash_derive::SerializeContent;
 use nimiq_primitives::coin::Coin;
@@ -483,7 +484,6 @@ impl BlockHeader {
     }
 }
 
-#[allow(clippy::derive_hash_xor_eq)] // TODO: Shouldn't be necessary
 impl Hash for BlockHeader {}
 
 impl Serialize for BlockHeader {

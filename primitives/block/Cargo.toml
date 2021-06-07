@@ -24,6 +24,7 @@ beserial = { path = "../../beserial" }
 beserial_derive = { path = "../../beserial/beserial_derive" }
 nimiq-bls = { path = "../../bls", features = ["beserial"]}
 nimiq-collections = { path = "../../collections", features = ["bitset"] }
+nimiq-database = { path = "../../database" }
 nimiq-handel = { path = "../../handel" }
 nimiq-hash = { path = "../../hash" }
 nimiq-hash_derive = { path = "../../hash/hash_derive" }

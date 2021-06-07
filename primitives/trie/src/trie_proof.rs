@@ -1,9 +1,27 @@
 use beserial::{Deserialize, Serialize};
 use nimiq_hash::{Blake2bHash, Hash};
 
-use crate::prefix_nibbles::PrefixNibbles;
+use crate::key_nibbles::KeyNibbles;
 use crate::trie_node::TrieNode;
 
+/// A Merkle proof of the inclusion of some leaf nodes in the Merkle Radix Trie. The
+/// proof consists of the path from the leaves that we want to prove inclusion all the way up
+/// to the root. For example, for the following trie:
+///              R
+///              |
+///              B1
+///          /   |   \
+///        B2   L3   B3
+///       / \        / \
+///      L1 L2      L4 L5
+/// If we want a proof for the nodes L1 and L3, the proof will consist of the nodes L1, B2, L3,
+/// B1 and R. Note that:
+///     1. Unlike Merkle proofs we don't need the adjacent branch nodes. That's because our
+///        branch nodes already include the hashes of its children.
+///     2. The nodes are always returned in post-order.
+/// If any of the given keys doesn't exist this function just returns None.
+/// The exclusion (non-inclusion) of keys in the Merkle Radix Trie could also be proven, but it
+/// requires some light refactoring to the way proofs work.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TrieProof<A: Serialize + Deserialize + Clone> {
     #[beserial(len_type(u16))]
@@ -15,19 +33,26 @@ impl<A: Serialize + Deserialize + Clone> TrieProof<A> {
         TrieProof { nodes }
     }
 
-    pub fn terminal_nodes(&self) -> Vec<TrieNode<A>> {
-        let mut terminal_nodes = Vec::new();
+    /// Returns all of the leaf nodes in the proof. These are the nodes that we are proving
+    /// inclusion in the trie.
+    pub fn leaf_nodes(&self) -> Vec<TrieNode<A>> {
+        let mut leaf_nodes = Vec::new();
 
         for node in &self.nodes {
-            if node.is_terminal() {
-                terminal_nodes.push(node.clone());
+            if node.is_leaf() {
+                leaf_nodes.push(node.clone());
             }
         }
 
-        terminal_nodes
+        leaf_nodes
     }
 
-    pub fn verify(&self, root_hash: Blake2bHash) -> bool {
+    /// Verifies a proof against the given root hash. Note that this doesn't check that whatever keys
+    /// we want to prove are actually included in the proof. For that we need to call leaf_nodes()
+    /// and compare their keys to the ones we want.
+    /// This function just checks that the proof is in fact a valid sub-trie and that its root
+    /// matches the given root hash.
+    pub fn verify(&self, root_hash: &Blake2bHash) -> bool {
         // There must be nodes in the proof.
         if self.nodes.is_empty() {
             return false;
@@ -44,47 +69,55 @@ impl<A: Serialize + Deserialize + Clone> TrieProof<A> {
                 while let Some(child) = children.pop() {
                     // If the node is a prefix of the child node, we need to verify that it is a
                     // correct child node.
-                    if node.prefix().is_prefix_of(child.prefix()) {
-                        // Get the hash of the child hash.
-                        let hash = child.hash::<Blake2bHash>();
+                    if node.key().is_prefix_of(child.key()) {
+                        // Get the hash and key of the child from the parent node.
+                        let child_hash = match node.get_child_hash(child.key()) {
+                            Ok(v) => v,
+                            Err(_) => {
+                                return false;
+                            }
+                        };
 
-                        // The child node must match the hash and the prefix, otherwise the proof is
+                        let child_key = match node.get_child_key(child.key()) {
+                            Ok(v) => v,
+                            Err(_) => {
+                                return false;
+                            }
+                        };
+
+                        // The child node must match the hash and the key, otherwise the proof is
                         // invalid.
-                        if node.get_child_hash(child.prefix()).unwrap() != &hash
-                            || &node.get_child_prefix(child.prefix()).unwrap() != child.prefix()
-                        {
+                        if child_hash != &child.hash::<Blake2bHash>() || &child_key != child.key() {
                             return false;
                         }
                     }
                     // If the node is not a prefix of the child node, then we put the child node
-                    // back into the children and move to the next node in the proof.
+                    // back into the children and exit the loop.
                     else {
                         children.push(child);
                         break;
                     }
                 }
             }
-            // If the node is a terminal node, just push it into the children.
-            else {
-                children.push(node.clone());
-            }
+
+            // Put the current node into the children and move to the next node in the proof.
+            children.push(node.clone());
         }
 
-        // There must be no more children now, otherwise there are unverified nodes and the proof is
-        // invalid.
-        if !children.is_empty() {
+        // There must be only one child now, the root node. Otherwise there are unverified nodes and
+        // the proof is invalid.
+        if children.len() != 1 {
             return false;
         }
 
-        // The last node in the proof must be the root node.
-        let root = self.nodes.last().unwrap();
+        let root = children.pop().unwrap();
 
-        if root.prefix() != &PrefixNibbles::empty() {
+        if root.key() != &KeyNibbles::empty() {
             return false;
         }
 
         // And must match the hash given as the root hash.
-        if root.hash::<Blake2bHash>() != root_hash {
+        if &root.hash::<Blake2bHash>() != root_hash {
             return false;
         }
 
@@ -95,162 +128,192 @@ impl<A: Serialize + Deserialize + Clone> TrieProof<A> {
 
 #[cfg(test)]
 mod tests {
-    use crate::trie_node::TrieNodeChild;
-
     use super::*;
 
-    #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-    struct TestAccount {
-        balance: u64,
-    }
-
+    // We're going to construct proofs based on this tree:
+    //
+    //        R
+    //        |
+    //        B1
+    //     /  |   \
+    //    L1  B2  L2
+    //       / \
+    //      L3 L4
+    //
     #[test]
-    fn it_can_verify() {
-        /*
-         * We're going to construct three proofs based on this tree:
-         *
-         *      R1
-         *      |
-         *      B1
-         *    / |  \
-         *   T1 B2 T2
-         *     / \
-         *    T3 T4
-         */
+    fn verify_works() {
+        let key_l1: KeyNibbles = "0011".parse().unwrap();
+        let l1 = TrieNode::new_leaf(key_l1.clone(), 1);
 
-        let nibbles1: PrefixNibbles = "0011111111111111111111111111111111111111".parse().unwrap();
-        let value1 = TestAccount { balance: 25 };
-        let t1 = TrieNode::new_terminal(nibbles1.clone(), value1.clone());
+        let key_l2: KeyNibbles = "0033".parse().unwrap();
+        let l2 = TrieNode::new_leaf(key_l2.clone(), 2);
 
-        let nibbles2: PrefixNibbles = "0033333333333333333333333333333333333333".parse().unwrap();
-        let value2 = TestAccount { balance: 1 };
-        let t2 = TrieNode::new_terminal(nibbles2.clone(), value2.clone());
+        let key_l3: KeyNibbles = "0020".parse().unwrap();
+        let l3 = TrieNode::new_leaf(key_l3.clone(), 3);
 
-        let nibbles3: PrefixNibbles = "0020000000000000000000000000000000000000".parse().unwrap();
-        let value3 = TestAccount { balance: 1332 };
-        let t3 = TrieNode::new_terminal(nibbles3.clone(), value3.clone());
+        let key_l4: KeyNibbles = "0022".parse().unwrap();
+        let l4 = TrieNode::new_leaf(key_l4.clone(), 4);
 
-        let nibbles4: PrefixNibbles = "0022222222222222222222222222222222222222".parse().unwrap();
-        let value4 = TestAccount { balance: 93 };
-        let t4 = TrieNode::new_terminal(nibbles4.clone(), value4.clone());
+        let key_b2: KeyNibbles = "002".parse().unwrap();
+        let b2 = TrieNode::new_branch(key_b2.clone())
+            .put_child(&key_l3, l3.hash())
+            .unwrap()
+            .put_child(&key_l4, l4.hash())
+            .unwrap();
 
-        let b2 = TrieNode::new_branch(
-            "002".parse().unwrap(),
-            [
-                Some(TrieNodeChild {
-                    suffix: "0000000000000000000000000000000000000".parse().unwrap(),
-                    hash: t3.hash(),
-                }),
-                None,
-                Some(TrieNodeChild {
-                    suffix: "2222222222222222222222222222222222222".parse().unwrap(),
-                    hash: t4.hash(),
-                }),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-            ],
-        );
+        let key_b1: KeyNibbles = "00".parse().unwrap();
+        let b1 = TrieNode::new_branch(key_b1.clone())
+            .put_child(&key_l1, l1.hash())
+            .unwrap()
+            .put_child(&key_b2, b2.hash())
+            .unwrap()
+            .put_child(&key_l2, l2.hash())
+            .unwrap();
 
-        let b1 = TrieNode::new_branch(
-            "00".parse().unwrap(),
-            [
-                None,
-                Some(TrieNodeChild {
-                    suffix: "11111111111111111111111111111111111111".parse().unwrap(),
-                    hash: t1.hash(),
-                }),
-                Some(TrieNodeChild {
-                    suffix: "2".parse().unwrap(),
-                    hash: b2.hash(),
-                }),
-                Some(TrieNodeChild {
-                    suffix: "33333333333333333333333333333333333333".parse().unwrap(),
-                    hash: t2.hash(),
-                }),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-            ],
-        );
+        let key_r: KeyNibbles = "".parse().unwrap();
+        let r = TrieNode::new_branch(key_r.clone())
+            .put_child(&key_b1, b1.hash())
+            .unwrap();
 
-        let r1 = TrieNode::new_branch(
-            "".parse().unwrap(),
-            [
-                Some(TrieNodeChild {
-                    suffix: "00".parse().unwrap(),
-                    hash: b1.hash(),
-                }),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-            ],
-        );
+        let root_hash = r.hash::<Blake2bHash>();
+        let wrong_root_hash = ":-E".hash::<Blake2bHash>();
 
-        // The first proof proves the 4 terminal nodes (T1, T2, T3 and T4)
-        let mut proof1 = TrieProof::new(vec![
-            t1.clone(),
-            t3.clone(),
-            t4.clone(),
+        // Correct proofs.
+        let proof1 = TrieProof::new(vec![
+            l1.clone(),
+            l3.clone(),
+            l4.clone(),
             b2.clone(),
-            t2,
+            l2.clone(),
             b1.clone(),
-            r1.clone(),
+            r.clone(),
         ]);
-        assert!(proof1.verify());
-        assert_eq!(value1, proof1.get_value(&nibbles1).unwrap());
-        assert_eq!(value2, proof1.get_value(&nibbles2).unwrap());
-        assert_eq!(value3, proof1.get_value(&nibbles3).unwrap());
-        assert_eq!(value4, proof1.get_value(&nibbles4).unwrap());
+        assert!(proof1.verify(&root_hash));
+        assert!(!proof1.verify(&wrong_root_hash));
 
-        // The second proof proves the 2 leftmost terminal nodes (T1 and T3)
-        let mut proof2 = TrieProof::new(vec![t1, t3, b2.clone(), b1.clone(), r1.clone()]);
-        assert!(proof2.verify());
-        assert_eq!(value1, proof2.get_value(&nibbles1).unwrap());
-        assert_eq!(value3, proof2.get_value(&nibbles3).unwrap());
-        assert_eq!(None, proof2.get_value(&nibbles2));
-        assert_eq!(None, proof2.get_value(&nibbles4));
+        let proof2 = TrieProof::new(vec![
+            l1.clone(),
+            l3.clone(),
+            b2.clone(),
+            b1.clone(),
+            r.clone(),
+        ]);
+        assert!(proof2.verify(&root_hash));
+        assert!(!proof2.verify(&wrong_root_hash));
 
-        // The third proof just proves T4
-        let mut proof3 = TrieProof::new(vec![t4, b2, b1, r1.clone()]);
-        assert!(proof3.verify());
-        assert_eq!(value4, proof3.get_value(&nibbles4).unwrap());
-        assert_eq!(None, proof3.get_value(&nibbles1));
-        assert_eq!(None, proof3.get_value(&nibbles2));
-        assert_eq!(None, proof3.get_value(&nibbles3));
+        let proof3 = TrieProof::new(vec![l4.clone(), b2.clone(), b1.clone(), r.clone()]);
+        assert!(proof3.verify(&root_hash));
+        assert!(!proof3.verify(&wrong_root_hash));
 
-        // It must return the correct root hash
-        assert!(proof1.root_hash() == r1.hash());
+        // Wrong proofs. Nodes in wrong order.
+        let proof1 = TrieProof::new(vec![
+            l1.clone(),
+            b2.clone(),
+            l3.clone(),
+            l4.clone(),
+            l2.clone(),
+            b1.clone(),
+            r.clone(),
+        ]);
+        assert!(!proof1.verify(&root_hash));
+        assert!(!proof1.verify(&wrong_root_hash));
+
+        let proof2 = TrieProof::new(vec![
+            l1.clone(),
+            l3.clone(),
+            r.clone(),
+            b2.clone(),
+            b1.clone(),
+        ]);
+        assert!(!proof2.verify(&root_hash));
+        assert!(!proof2.verify(&wrong_root_hash));
+
+        let proof3 = TrieProof::new(vec![l4.clone(), b1.clone(), b2.clone(), r.clone()]);
+        assert!(!proof3.verify(&root_hash));
+        assert!(!proof3.verify(&wrong_root_hash));
+
+        // Wrong proofs. Nodes with wrong hash.
+        let b2_wrong = TrieNode::new_branch(key_b2.clone())
+            .put_child(&key_l3, ":-[".hash())
+            .unwrap()
+            .put_child(&key_l4, l4.hash())
+            .unwrap();
+
+        let b1_wrong = TrieNode::new_branch(key_b1.clone())
+            .put_child(&key_l1, l1.hash())
+            .unwrap()
+            .put_child(&key_b2, ":-[".hash())
+            .unwrap()
+            .put_child(&key_l2, l2.hash())
+            .unwrap();
+
+        let proof1 = TrieProof::new(vec![
+            l1.clone(),
+            l3.clone(),
+            l4.clone(),
+            b2_wrong.clone(),
+            l2.clone(),
+            b1_wrong.clone(),
+            r.clone(),
+        ]);
+        assert!(!proof1.verify(&root_hash));
+        assert!(!proof1.verify(&wrong_root_hash));
+
+        let proof2 = TrieProof::new(vec![
+            l1.clone(),
+            l3.clone(),
+            b2_wrong.clone(),
+            b1.clone(),
+            r.clone(),
+        ]);
+        assert!(!proof2.verify(&root_hash));
+        assert!(!proof2.verify(&wrong_root_hash));
+
+        let proof3 = TrieProof::new(vec![l4.clone(), b2.clone(), b1_wrong.clone(), r.clone()]);
+        assert!(!proof3.verify(&root_hash));
+        assert!(!proof3.verify(&wrong_root_hash));
+
+        // Wrong proofs. Nodes with wrong key.
+        let key_l3_wrong: KeyNibbles = "00201".parse().unwrap();
+        let b2_wrong = TrieNode::new_branch(key_b2.clone())
+            .put_child(&key_l3_wrong, l3.hash())
+            .unwrap()
+            .put_child(&key_l4, l4.hash())
+            .unwrap();
+
+        let key_b2_wrong: KeyNibbles = "003".parse().unwrap();
+        let b1_wrong = TrieNode::new_branch(key_b1.clone())
+            .put_child(&key_l1, l1.hash())
+            .unwrap()
+            .put_child(&key_b2_wrong, b2.hash())
+            .unwrap()
+            .put_child(&key_l2, l2.hash())
+            .unwrap();
+
+        let proof1 = TrieProof::new(vec![
+            l1.clone(),
+            l3.clone(),
+            l4.clone(),
+            b2_wrong.clone(),
+            l2.clone(),
+            b1_wrong.clone(),
+            r.clone(),
+        ]);
+        assert!(!proof1.verify(&root_hash));
+        assert!(!proof1.verify(&wrong_root_hash));
+
+        let proof2 = TrieProof::new(vec![
+            l1.clone(),
+            l3.clone(),
+            b2_wrong.clone(),
+            b1.clone(),
+            r.clone(),
+        ]);
+        assert!(!proof2.verify(&root_hash));
+        assert!(!proof2.verify(&wrong_root_hash));
+
+        let proof3 = TrieProof::new(vec![l4.clone(), b2.clone(), b1_wrong.clone(), r.clone()]);
+        assert!(!proof3.verify(&root_hash));
+        assert!(!proof3.verify(&wrong_root_hash));
     }
 }

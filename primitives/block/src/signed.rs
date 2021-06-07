@@ -1,7 +1,8 @@
+use std::fmt::Debug;
+
 use beserial::{Deserialize, Serialize, WriteBytesExt};
 use nimiq_bls::{PublicKey, SecretKey, SigHash, Signature};
 use nimiq_hash::{Blake2sHasher, Hasher, SerializeContent};
-use std::fmt::Debug;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SignedMessage<M: Message> {

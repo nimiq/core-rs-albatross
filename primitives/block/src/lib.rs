@@ -3,7 +3,6 @@ extern crate beserial_derive;
 #[macro_use]
 extern crate log;
 
-use nimiq_transaction::TransactionError;
 use thiserror::Error;
 
 pub use block::*;
@@ -11,6 +10,7 @@ pub use fork_proof::*;
 pub use macro_block::*;
 pub use micro_block::*;
 pub use multisig::*;
+use nimiq_transaction::TransactionError;
 pub use signed::*;
 pub use tendermint::*;
 pub use view_change::*;

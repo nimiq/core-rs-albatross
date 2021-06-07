@@ -4,6 +4,7 @@ use nimiq_block::TendermintStep;
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::policy::TWO_THIRD_SLOTS;
 use std::collections::BTreeMap;
+use thiserror::Error;
 
 /// Represents the current stage of the Tendermint state machine. Each stage corresponds to a
 /// function of our implementation of the Tendermint protocol (see protocol.rs).
@@ -100,14 +101,21 @@ pub enum TendermintReturn<ProposalTy: ProposalTrait, ProofTy: ProofTrait, Result
 }
 
 /// An enum containing possible errors that can happen to Tendermint.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Error, Debug, Clone)]
 pub enum TendermintError {
+    #[error("Inconsistent initial state.")]
     BadInitState,
+    #[error("Handel aggregation failed.")]
     AggregationError,
+    #[error("Handel aggregation does not exist.")]
     AggregationDoesNotExist,
+    #[error("Broadcasting the proposal failed.")]
     ProposalBroadcastError,
+    #[error("Could not receive a proposal.")]
     CannotReceiveProposal,
+    #[error("Could not produce a proposal.")]
     CannotProduceProposal,
+    #[error("Could not assemble a finalized block.")]
     CannotAssembleBlock,
 }
 
