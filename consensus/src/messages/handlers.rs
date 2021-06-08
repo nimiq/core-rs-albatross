@@ -2,7 +2,6 @@ use crate::messages::*;
 use block::Block;
 use blockchain::{AbstractBlockchain, Blockchain, Direction, CHUNK_SIZE};
 use network_interface::message::ResponseMessage;
-use nimiq_genesis::NetworkInfo;
 use primitives::policy;
 use std::sync::Arc;
 
@@ -15,11 +14,8 @@ impl Handle<BlockHashes> for RequestBlockHashes {
     fn handle(&self, blockchain: &Arc<Blockchain>) -> BlockHashes {
         // A peer has requested blocks. Check all requested block locator hashes
         // in the given order and pick the first hash that is found on our main
-        // chain, ignore the rest. If none of the requested hashes is found,
-        // pick the genesis block hash. Send the main chain starting from the
-        // picked hash back to the peer.
-        let network_info = NetworkInfo::from_network_id(blockchain.network_id);
-        let mut start_block_hash = network_info.genesis_hash().clone();
+        // chain, ignore the rest.
+        let mut start_block_hash_opt = None;
         for locator in self.locators.iter() {
             if blockchain
                 .chain_store
@@ -27,11 +23,18 @@ impl Handle<BlockHashes> for RequestBlockHashes {
                 .is_some()
             {
                 // We found a block, ignore remaining block locator hashes.
-                start_block_hash = locator.clone();
-                trace!("Start block found: {:?}", &start_block_hash);
+                trace!("Start block found: {:?}", &locator);
+                start_block_hash_opt = Some(locator.clone());
                 break;
             }
         }
+        if start_block_hash_opt.is_none() {
+            return BlockHashes {
+                hashes: None,
+                request_identifier: self.get_request_identifier(),
+            };
+        }
+        let start_block_hash = start_block_hash_opt.unwrap();
 
         // Collect up to GETBLOCKS_VECTORS_MAX inventory vectors for the blocks starting right
         // after the identified block on the main chain.
@@ -72,7 +75,7 @@ impl Handle<BlockHashes> for RequestBlockHashes {
         }
 
         BlockHashes {
-            hashes,
+            hashes: Some(hashes),
             request_identifier: self.get_request_identifier(),
         }
     }

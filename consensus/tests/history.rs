@@ -251,13 +251,12 @@ async fn sync_ingredients() {
             RequestBlockHashesFilter::ElectionAndLatestCheckpoint,
         )
         .await
-        .expect("Should yield hashes");
-    assert_eq!(hashes.hashes.len(), 2);
-    assert_eq!(
-        hashes.hashes[0].1,
-        consensus1.blockchain.election_head_hash()
-    );
-    assert_eq!(hashes.hashes[1].1, consensus1.blockchain.macro_head_hash());
+        .expect("Should yield hashes")
+        .hashes
+        .expect("Should contain hashes");
+    assert_eq!(hashes.len(), 2);
+    assert_eq!(hashes[0].1, consensus1.blockchain.election_head_hash());
+    assert_eq!(hashes[1].1, consensus1.blockchain.macro_head_hash());
 
     // Request epoch
     let epoch = agent

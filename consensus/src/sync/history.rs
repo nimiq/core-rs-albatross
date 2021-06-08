@@ -344,6 +344,7 @@ impl<TPeer: Peer + 'static> Stream for SyncCluster<TPeer> {
 }
 
 struct EpochIds<TPeer: Peer> {
+    on_same_chain: bool,
     ids: Vec<Blake2bHash>,
     checkpoint_id: Option<Blake2bHash>, // The most recent checkpoint block in the latest epoch.
     first_epoch_number: usize,
@@ -353,6 +354,7 @@ struct EpochIds<TPeer: Peer> {
 impl<TPeer: Peer> Clone for EpochIds<TPeer> {
     fn clone(&self) -> Self {
         EpochIds {
+            on_same_chain: self.on_same_chain,
             ids: self.ids.clone(),
             checkpoint_id: self.checkpoint_id.clone(),
             first_epoch_number: self.first_epoch_number,
@@ -459,8 +461,20 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
 
         match result {
             Ok(block_hashes) => {
+                if block_hashes.hashes.is_none() {
+                    return Some(EpochIds {
+                        on_same_chain: false,
+                        ids: Vec::new(),
+                        checkpoint_id: None,
+                        first_epoch_number: 0,
+                        sender: agent,
+                    });
+                }
+
+                let hashes = block_hashes.hashes.unwrap();
+
                 // Get checkpoint id if exists.
-                let checkpoint_id = block_hashes.hashes.last().and_then(|(ty, id)| {
+                let checkpoint_id = hashes.last().and_then(|(ty, id)| {
                     if *ty == BlockHashType::Checkpoint {
                         Some(id.clone())
                     } else {
@@ -468,8 +482,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                     }
                 });
                 // Filter checkpoint from block hashes and map to hash.
-                let epoch_ids = block_hashes
-                    .hashes
+                let epoch_ids = hashes
                     .into_iter()
                     .filter_map(|(ty, id)| {
                         if ty == BlockHashType::Election {
@@ -480,6 +493,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                     })
                     .collect();
                 Some(EpochIds {
+                    on_same_chain: true,
                     ids: epoch_ids,
                     checkpoint_id,
                     first_epoch_number: epoch_number as usize + 1,
@@ -495,6 +509,10 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
     }
 
     fn cluster_epoch_ids(&mut self, mut epoch_ids: EpochIds<TNetwork::PeerType>) {
+        if !epoch_ids.on_same_chain {
+            return;
+        }
+
         let checkpoint_epoch = epoch_ids.get_checkpoint_epoch();
         let agent = epoch_ids.sender;
 
@@ -798,10 +816,13 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
                     // The peer might have disconnected during the request.
                     // FIXME Check if the peer is still connected
 
-                    // FIXME We want to distinguish between "locator hash not found" (i.e. peer is
-                    //  on a different chain) and "no more hashes past locator" (we are in sync with
-                    //  the peer).
-                    if epoch_ids.ids.is_empty() && epoch_ids.checkpoint_id.is_none() {
+                    if !epoch_ids.on_same_chain {
+                        debug!(
+                            "Peer is on different chain: {:?}",
+                            epoch_ids.sender.peer.id()
+                        );
+                        // TODO: Send further locators. Possibly find branching point of fork.
+                    } else if epoch_ids.ids.is_empty() && epoch_ids.checkpoint_id.is_none() {
                         // We are synced with this peer.
                         debug!(
                             "Peer has finished syncing: {:?}",
@@ -968,6 +989,7 @@ mod tests {
             }
 
             EpochIds {
+                on_same_chain: true,
                 ids,
                 checkpoint_id: None,
                 first_epoch_number,
