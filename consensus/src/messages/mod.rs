@@ -74,7 +74,7 @@ impl<'a> From<&'a Block> for BlockHashType {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BlockHashes {
     #[beserial(len_type(u16))]
-    pub hashes: Vec<(BlockHashType, Blake2bHash)>,
+    pub hashes: Option<Vec<(BlockHashType, Blake2bHash)>>,
     pub request_identifier: u32,
 }
 request_response!(BlockHashes);
