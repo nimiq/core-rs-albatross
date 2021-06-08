@@ -120,7 +120,7 @@ impl Message for RequestBatchSet {
 /// within this epoch.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct BatchSetInfo {
-    pub block: MacroBlock,
+    pub block: Option<MacroBlock>,
     pub history_len: u32,
     pub request_identifier: u32,
 }
@@ -132,13 +132,17 @@ impl Message for BatchSetInfo {
 
 impl Debug for BatchSetInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        f.debug_struct("BatchSetInfo")
-            .field("epoch_number", &self.block.epoch_number())
-            .field("block_number", &self.block.block_number())
-            .field("is_election_block", &self.block.is_election_block())
+        let mut debug_struct = f.debug_struct("BatchSetInfo");
+        if let Some(block) = &self.block {
+            debug_struct
+                .field("epoch_number", &block.epoch_number())
+                .field("block_number", &block.block_number())
+                .field("is_election_block", &block.is_election_block());
+        }
+        debug_struct
             .field("history_len", &self.history_len)
-            .field("request_identifier", &self.request_identifier)
-            .finish()
+            .field("request_identifier", &self.request_identifier);
+        debug_struct.finish()
     }
 }
 
@@ -194,7 +198,7 @@ impl Message for RequestBlock {
 pub struct ResponseBlocks {
     // TODO: Set to sensible limit (2 * BATCH_SIZE for example).
     #[beserial(len_type(u16, limit = 256))]
-    pub blocks: Vec<Block>,
+    pub blocks: Option<Vec<Block>>,
     pub request_identifier: u32,
 }
 request_response!(ResponseBlocks);

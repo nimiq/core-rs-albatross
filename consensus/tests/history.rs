@@ -266,7 +266,7 @@ async fn sync_ingredients() {
         .expect("Should yield epoch");
     assert_eq!(epoch.history_len, 3);
     assert_eq!(
-        epoch.block.hash(),
+        epoch.block.expect("Should have block").hash(),
         consensus1.blockchain.election_head_hash()
     );
 
@@ -275,7 +275,10 @@ async fn sync_ingredients() {
         .await
         .expect("Should yield epoch");
     assert_eq!(epoch.history_len, 1);
-    assert_eq!(epoch.block.hash(), consensus1.blockchain.macro_head_hash());
+    assert_eq!(
+        epoch.block.expect("Should have block").hash(),
+        consensus1.blockchain.macro_head_hash()
+    );
 
     // Request history chunk.
     let chunk = agent

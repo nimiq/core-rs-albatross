@@ -139,7 +139,7 @@ impl<P: Peer> ConsensusAgent<P> {
         &self,
         target_block_hash: Blake2bHash,
         locators: Vec<Blake2bHash>,
-    ) -> Result<Vec<Block>, RequestError> {
+    ) -> Result<Option<Vec<Block>>, RequestError> {
         let result = self
             .missing_block_requests
             .request(RequestMissingBlocks {

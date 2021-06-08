@@ -68,7 +68,17 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
             ids.clone(),
             peers.clone(),
             Self::NUM_PENDING_BATCH_SETS,
-            |id, peer| async move { peer.request_epoch(id).await.ok() }.boxed(),
+            |id, peer| {
+                async move {
+                    if let Ok(batch) = peer.request_epoch(id).await {
+                        if batch.block.is_some() {
+                            return Some(batch);
+                        }
+                    }
+                    None
+                }
+                .boxed()
+            },
         );
         let history_queue = SyncQueue::new(
             Vec::<(u32, u32, usize)>::new(),
@@ -96,18 +106,21 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
     }
 
     fn on_epoch_received(&mut self, epoch: BatchSetInfo) -> Result<(), SyncClusterResult> {
+        // `epoch.block` is Some, since we filtered it accordingly in the `request_fn`
+        let block = epoch.block.expect("epoch.block should exist");
+
         // this might be a checkpoint
         // TODO Verify macro blocks and their ordering
         // Currently we only do a very basic check here
         let current_block_number = self.blockchain.block_number();
-        if epoch.block.header.block_number <= current_block_number {
+        if block.header.block_number <= current_block_number {
             debug!("Received outdated epoch at block {}", current_block_number);
             return Err(SyncClusterResult::Outdated);
         }
 
         // Prepare pending info.
         let mut pending_batch_set = PendingBatchSet {
-            block: epoch.block,
+            block,
             history_len: epoch.history_len as usize,
             history: Vec::new(),
         };

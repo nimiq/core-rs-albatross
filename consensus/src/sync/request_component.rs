@@ -66,9 +66,12 @@ impl<TPeer: Peer + 'static> BlockRequestComponent<TPeer> {
                 Self::NUM_PENDING_BLOCKS,
                 |(target_block_hash, locators), peer| {
                     async move {
-                        peer.request_missing_blocks(target_block_hash, locators)
-                            .await
-                            .ok()
+                        let res = peer.request_missing_blocks(target_block_hash, locators).await;
+                        if let Ok(Some(missing_blocks)) = res {
+                            Some(missing_blocks)
+                        } else {
+                            None
+                        }
                     }
                     .boxed()
                 },
