@@ -472,7 +472,7 @@ mod tests {
             proof_nodes: &[Node],
             assume_previous: bool,
         ) {
-            let proof = mmr.prove_range(to_prove.clone(), assume_previous).unwrap();
+            let proof = mmr.prove_range(to_prove.clone(),  mmr.len(),assume_previous).unwrap();
             assert_eq!(proof.assume_previous, assume_previous);
             assert_eq!(proof.proof.mmr_size, mmr.len());
             assert_eq!(proof.proof.nodes.len(), proof_nodes.len());
@@ -535,27 +535,27 @@ mod tests {
         test_proof(&mmr, &nodes, 0..=1, &[], true);
 
         assert_eq!(
-            mmr.prove_range(0..0, false).map(|_| ()),
+            mmr.prove_range(0..0,  mmr.len(),false).map(|_| ()),
             Err(Error::ProveInvalidLeaves)
         );
         assert_eq!(
-            mmr.prove_range(0..0, true).map(|_| ()),
+            mmr.prove_range(0..0, mmr.len(), true).map(|_| ()),
             Err(Error::ProveInvalidLeaves)
         );
         assert_eq!(
-            mmr.prove_range(4..8, false).map(|_| ()),
+            mmr.prove_range(4..8, mmr.len(), false).map(|_| ()),
             Err(Error::ProveInvalidLeaves)
         );
         assert_eq!(
-            mmr.prove_range(4..8, true).map(|_| ()),
+            mmr.prove_range(4..8, mmr.len(), true).map(|_| ()),
             Err(Error::ProveInvalidLeaves)
         );
         assert_eq!(
-            mmr.prove_range(2..3, false).map(|_| ()),
+            mmr.prove_range(2..3, mmr.len(), false).map(|_| ()),
             Err(Error::ProveInvalidLeaves)
         );
         assert_eq!(
-            mmr.prove_range(2..3, true).map(|_| ()),
+            mmr.prove_range(2..3, mmr.len(), true).map(|_| ()),
             Err(Error::ProveInvalidLeaves)
         );
 
@@ -693,7 +693,7 @@ mod tests {
          *    /   \
          *   0     1
          */
-        let proof = mmr.prove_range(1..=1, false).unwrap();
+        let proof = mmr.prove_range(1..=1, mmr.len(),false).unwrap();
         // Proof for wrong position.
         assert_eq!(proof.verify(&mmr.get_root().unwrap(), &[(0, 2)]), Ok(false));
         assert_eq!(

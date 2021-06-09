@@ -12,7 +12,7 @@ use std::ops::RangeBounds;
 
 pub mod partial;
 pub mod peaks;
-mod position;
+pub mod position;
 pub mod proof;
 mod utils;
 
@@ -154,12 +154,13 @@ impl<H: Merge + Clone, S: Store<H>> MerkleMountainRange<H, S> {
         let mut positions = positions?;
         positions.sort_unstable();
 
-        self.prove_positions(positions, false)
+        self.prove_positions(positions, self.len(), false)
     }
 
     pub fn prove_range<R: RangeBounds<usize> + Iterator<Item = usize>>(
         &self,
         range: R,
+        verifier_state: usize,
         assume_previous: bool,
     ) -> Result<RangeProof<H>, Error> {
         // Find all leaves in the range.
@@ -186,7 +187,7 @@ impl<H: Merge + Clone, S: Store<H>> MerkleMountainRange<H, S> {
 
         // If we assume the previous proof to be known, we can remove all proof nodes with an index <= our first leaf.
         Ok(RangeProof {
-            proof: self.prove_positions(leaves, assume_previous)?,
+            proof: self.prove_positions(leaves, verifier_state, assume_previous)?,
             assume_previous,
         })
     }
@@ -195,6 +196,8 @@ impl<H: Merge + Clone, S: Store<H>> MerkleMountainRange<H, S> {
     fn prove_positions(
         &self,
         positions: Vec<Position>,
+        // Number of nodes in the verifier's MMR. Length of verifier's MMR.
+        verifier_state: usize,
         assume_previous: bool,
     ) -> Result<Proof<H>, Error> {
         // The slice of positions cannot be empty.
@@ -202,7 +205,7 @@ impl<H: Merge + Clone, S: Store<H>> MerkleMountainRange<H, S> {
             return Err(Error::ProveInvalidLeaves);
         }
 
-        let mut proof = Proof::new(self.len());
+        let mut proof = Proof::new(verifier_state);
         // Shortcut for trees of size 1.
         if proof.mmr_size == 1 && positions.len() == 1 && positions[0].index == 0 {
             return Ok(proof);
@@ -217,7 +220,7 @@ impl<H: Merge + Clone, S: Store<H>> MerkleMountainRange<H, S> {
         // Add proof nodes for each peak individually.
         let mut prev_i = 0; // Index into the `positions` Vec.
         let mut baggable_peaks = vec![]; // Collect empty peak positions since the last non-empty one (for bagging).
-        for peak in self.peaks() {
+        for peak in PeakIterator::new(verifier_state) {
             // Find all positions belonging to this peak.
             let peak_positions = &positions[prev_i..];
             let i_offset = peak_positions

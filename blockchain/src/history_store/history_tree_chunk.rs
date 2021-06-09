@@ -1,6 +1,6 @@
 use std::fmt::{self, Debug, Formatter};
 
-use merkle_mountain_range::mmr::proof::{Proof, RangeProof};
+use nimiq_mmr::mmr::proof::{Proof, RangeProof};
 
 use beserial::{
     Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,

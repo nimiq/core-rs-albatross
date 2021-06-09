@@ -175,7 +175,7 @@ pub(crate) fn index_to_height(mut index: usize) -> usize {
 
 /// Calculates the index inside the MMR store for the `leaf_number`th leaf.
 /// Both numbers are 0-based.
-pub(crate) fn leaf_number_to_index(leaf_number: usize) -> usize {
+pub fn leaf_number_to_index(leaf_number: usize) -> usize {
     2 * leaf_number - leaf_number.count_ones() as usize
 }
 

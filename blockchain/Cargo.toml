@@ -21,8 +21,6 @@ log = "0.4"
 parking_lot = "0.9"
 rand = "0.7"
 
-merkle-mountain-range = { git = "https://github.com/nimiq/merkle-mountain-range", branch= "main"}
-
 beserial = { path = "../beserial" }
 beserial_derive = { path = "../beserial/beserial_derive" }
 nimiq-account = { path = "../primitives/account" }
@@ -34,6 +32,7 @@ nimiq-database = { path = "../database", features = ["full-nimiq"] }
 nimiq-genesis = { path = "../genesis" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
+nimiq-mmr = { path = "../primitives/mmr" }
 nimiq-primitives = { path = "../primitives" }
 nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-tree-primitives = { path = "../accounts/tree-primitives" }
