@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::io;
 
-use merkle_mountain_range::hash::Merge;
+use nimiq_mmr::hash::Merge;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use nimiq_database::{AsDatabaseBytes, FromDatabaseValue};

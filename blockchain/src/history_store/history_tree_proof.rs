@@ -1,4 +1,4 @@
-use merkle_mountain_range::mmr::proof::Proof;
+use nimiq_mmr::mmr::proof::Proof;
 
 use beserial::{
     Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,

@@ -317,7 +317,7 @@ mod tests {
 
             for i in (0..leaves.len()).step_by(chunk_size) {
                 let to_prove = i..cmp::min(i + chunk_size, leaves.len());
-                let proof = mmr.prove_range(to_prove.clone(), assume_previous).unwrap();
+                let proof = mmr.prove_range(to_prove.clone(), mmr.len(), assume_previous).unwrap();
 
                 assert!(
                     !pmmr.is_finished(),
@@ -434,31 +434,31 @@ mod tests {
         let mut pmmr = PartialMerkleMountainRange::new(MemoryStore::new());
 
         // Proof for wrong position.
-        let proof = mmr.prove_range(1..=1, false).unwrap();
+        let proof = mmr.prove_range(1..=1, mmr.len(), false).unwrap();
         assert_ne!(pmmr.push_proof(proof, &[2]), mmr.get_root());
 
-        let proof = mmr.prove_range(1..=1, true).unwrap();
+        let proof = mmr.prove_range(1..=1, mmr.len(), true).unwrap();
         assert_ne!(pmmr.push_proof(proof, &[2]), mmr.get_root());
 
         // Proof for wrong value.
-        let proof = mmr.prove_range(0..=0, false).unwrap();
+        let proof = mmr.prove_range(0..=0, mmr.len(), false).unwrap();
         assert_ne!(pmmr.push_proof(proof, &[3]), mmr.get_root());
 
-        let proof = mmr.prove_range(0..=0, true).unwrap();
+        let proof = mmr.prove_range(0..=0, mmr.len(), true).unwrap();
         assert_ne!(pmmr.push_proof(proof, &[3]), mmr.get_root());
 
         // Proof for less values.
-        let proof = mmr.prove_range(0..=1, false).unwrap();
+        let proof = mmr.prove_range(0..=1, mmr.len(), false).unwrap();
         assert_eq!(pmmr.push_proof(proof, &[2]), Err(Error::InvalidProof));
 
-        let proof = mmr.prove_range(0..=1, true).unwrap();
+        let proof = mmr.prove_range(0..=1, mmr.len(), true).unwrap();
         assert_eq!(pmmr.push_proof(proof, &[2]), Err(Error::InvalidProof));
 
         // Proof for non-leaves.
-        let proof = mmr.prove_range(1..=1, false).unwrap();
+        let proof = mmr.prove_range(1..=1, mmr.len(), false).unwrap();
         assert_eq!(pmmr.push_proof(proof, &[2, 3, 5]), Err(Error::InvalidProof));
 
-        let proof = mmr.prove_range(1..=1, true).unwrap();
+        let proof = mmr.prove_range(1..=1, mmr.len(), true).unwrap();
         assert_eq!(pmmr.push_proof(proof, &[2, 3, 5]), Err(Error::InvalidProof));
     }
 }

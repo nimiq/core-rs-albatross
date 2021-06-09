@@ -1,7 +1,7 @@
 use std::cmp;
 use std::convert::TryInto;
 
-use merkle_mountain_range::store::Store;
+use nimiq_mmr::store::Store;
 
 use crate::history_store::history_tree_hash::HistoryTreeHash;
 use nimiq_database::cursor::ReadCursor;

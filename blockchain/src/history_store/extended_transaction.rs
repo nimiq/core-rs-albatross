@@ -1,6 +1,6 @@
 use std::io;
 
-use merkle_mountain_range::hash::Hash as MMRHash;
+use nimiq_mmr::hash::Hash as MMRHash;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use nimiq_account::{Inherent, InherentType};

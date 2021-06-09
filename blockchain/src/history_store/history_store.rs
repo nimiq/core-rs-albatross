@@ -1,11 +1,12 @@
 use std::cmp;
 
-use merkle_mountain_range::error::Error as MMRError;
-use merkle_mountain_range::hash::Hash as MMRHash;
-use merkle_mountain_range::mmr::partial::PartialMerkleMountainRange;
-use merkle_mountain_range::mmr::proof::RangeProof;
-use merkle_mountain_range::mmr::MerkleMountainRange;
-use merkle_mountain_range::store::memory::MemoryStore;
+use nimiq_mmr::error::Error as MMRError;
+use nimiq_mmr::hash::Hash as MMRHash;
+use nimiq_mmr::mmr::partial::PartialMerkleMountainRange;
+use nimiq_mmr::mmr::position::leaf_number_to_index;
+use nimiq_mmr::mmr::proof::RangeProof;
+use nimiq_mmr::mmr::MerkleMountainRange;
+use nimiq_mmr::store::memory::MemoryStore;
 
 use nimiq_database::{
     Database, DatabaseFlags, Environment, ReadTransaction, Transaction, WriteTransaction,
@@ -19,6 +20,7 @@ use crate::history_store::{ExtendedTransaction, HistoryTreeChunk, HistoryTreePro
 use crate::ExtTxData;
 use nimiq_database::cursor::ReadCursor;
 use nimiq_keys::Address;
+use nimiq_primitives::policy::{BATCH_LENGTH, EPOCH_LENGTH};
 
 /// A struct that contains databases to store history trees (which are Merkle Mountain Ranges
 /// constructed from the list of extended transactions in an epoch) and extended transactions (which
@@ -450,6 +452,7 @@ impl HistoryStore {
     pub fn prove_chunk(
         &self,
         epoch_number: u32,
+        verifier_block_number: u32,
         chunk_size: usize,
         chunk_index: usize,
         txn_option: Option<&Transaction>,
@@ -473,9 +476,27 @@ impl HistoryStore {
         let start = cmp::min(chunk_size * chunk_index, tree.num_leaves());
         let end = cmp::min(start + chunk_size, tree.num_leaves());
 
+        // Calculate number of nodes for the verifier.
+        // TODO: This seriously needs to be refactored. NOT READY.
+        let ext_txs = self.get_block_transactions(verifier_block_number, txn_option);
+
+        let mut max_leaf = 0;
+
+        for ext_tx in ext_txs {
+            let leaves = self.get_leaves_by_tx_hash(&ext_tx.tx_hash(), txn_option);
+
+            for leaf in leaves {
+                if leaf.index > max_leaf {
+                    max_leaf = leaf.index;
+                }
+            }
+        }
+
+        let number_of_nodes = leaf_number_to_index(max_leaf as usize);
+
         // TODO: Setting `assume_previous` to false allows the proofs to be verified independently.
         //  This, however, increases the size of the proof. We might change this in the future.
-        let proof = tree.prove_range(start..end, false).ok()?;
+        let proof = tree.prove_range(start..end, number_of_nodes, false).ok()?;
 
         // Get each extended transaction from the tree.
         let mut ext_txs = vec![];
