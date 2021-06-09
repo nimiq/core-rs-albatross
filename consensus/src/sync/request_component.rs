@@ -94,10 +94,11 @@ impl<TPeer: 'static + Peer> RequestComponent<TPeer> for BlockRequestComponent<TP
     }
 
     fn put_peer_into_sync_mode(&mut self, peer: Arc<TPeer>) {
-        // As ConsensusAgents register their RequestResponse handlers a new one cannot be created.
-        // Thus retrieve the one we already have.
-        let agent = self.agents.remove(&peer).expect("Agent should be present");
-        self.sync_method.add_agent(agent);
+        // If the peer is not in `agents`, it's already in sync mode.
+        if let Some(agent) = self.agents.remove(&peer) {
+            debug!("Putting peer back into sync mode: {:?}", peer.id());
+            self.sync_method.add_agent(agent);
+        }
     }
 
     fn num_peers(&self) -> usize {
