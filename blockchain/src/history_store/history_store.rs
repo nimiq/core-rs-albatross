@@ -492,7 +492,7 @@ impl HistoryStore {
             }
         }
 
-        let number_of_nodes = leaf_number_to_index(max_leaf as usize);
+        let number_of_nodes = leaf_number_to_index((max_leaf + 1) as usize);
 
         // TODO: Setting `assume_previous` to false allows the proofs to be verified independently.
         //  This, however, increases the size of the proof. We might change this in the future.
