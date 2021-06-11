@@ -267,7 +267,8 @@ impl Network for MockNetwork {
         _id: Self::PubsubId,
         _acceptance: MsgAcceptance,
     ) -> Result<bool, Self::Error> {
-        unimplemented!()
+        // TODO implement
+        Ok(true)
     }
 
     async fn dht_get<K, V>(&self, k: &K) -> Result<Option<V>, Self::Error>
