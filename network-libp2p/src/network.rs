@@ -344,6 +344,18 @@ impl Network {
                 state.incoming_listeners.remove(&send_back_addr);
             }
 
+            SwarmEvent::UnknownPeerUnreachableAddr { address, error } => {
+                tracing::trace!(
+                    "Dial to unknown peer at address {:?} failed: {:?}",
+                    address,
+                    error
+                );
+            }
+
+            SwarmEvent::Dialing(peer_id) => {
+                tracing::trace!("Dialing peer {:?}", peer_id);
+            }
+
             //SwarmEvent::ConnectionClosed { .. } => {},
             SwarmEvent::Behaviour(event) => {
                 match event {
