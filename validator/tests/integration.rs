@@ -55,7 +55,12 @@ async fn consensus(peer_id: u64, genesis_info: GenesisInfo) -> Consensus {
         None,
     );
     peer_contact.set_current_time();
-    let config = Config::new(peer_key, peer_contact, genesis_info.hash.clone());
+    let config = Config::new(
+        peer_key,
+        peer_contact,
+        Vec::new(),
+        genesis_info.hash.clone(),
+    );
     let network = Arc::new(Network::new(clock, config).await);
     network.listen_on_addresses(vec![peer_address]).await;
 

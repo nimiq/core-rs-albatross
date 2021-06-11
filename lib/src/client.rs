@@ -23,6 +23,7 @@ use nimiq_wallet::WalletStore;
 use crate::config::config::ClientConfig;
 use crate::error::Error;
 use nimiq_consensus::sync::history::HistorySync;
+use nimiq_network_libp2p::Multiaddr;
 
 /// Alias for the Consensus and Validator specialized over libp2p network
 pub type Consensus = AbstractConsensus<Network>;
@@ -82,10 +83,19 @@ impl ClientInner {
         );
         peer_contact.set_current_time();
 
+        let seeds: Vec<Multiaddr> = config
+            .network
+            .seeds
+            .clone()
+            .into_iter()
+            .map(|seed| seed.address)
+            .collect();
+
         // Setup libp2p network
         let mut network_config = NetworkConfig::new(
             identity_keypair,
             peer_contact,
+            seeds,
             network_info.genesis_hash().clone(),
         );
         if let Some(min_peers) = config.network.min_peers {
@@ -132,12 +142,6 @@ impl ClientInner {
         network
             .listen_on_addresses(config.network.listen_addresses)
             .await;
-
-        // Tell the network to connect to seed nodes
-        for seed in &config.network.seeds {
-            log::debug!("Dialing seed: {:?}", seed);
-            network.dial_address(seed.address.clone()).await?;
-        }
 
         #[cfg(feature = "validator")]
         let validator = {
