@@ -2,6 +2,7 @@ use libp2p::{
     gossipsub::{GossipsubConfig, GossipsubConfigBuilder},
     identity::Keypair,
     kad::KademliaConfig,
+    Multiaddr,
 };
 
 use nimiq_hash::Blake2bHash;
@@ -13,11 +14,9 @@ use crate::{
 
 pub struct Config {
     pub keypair: Keypair,
-
     pub peer_contact: PeerContact,
-
     pub min_peers: usize,
-
+    pub seeds: Vec<Multiaddr>,
     pub discovery: DiscoveryConfig,
     pub message: MessageConfig,
     pub kademlia: KademliaConfig,
@@ -25,7 +24,12 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new(keypair: Keypair, peer_contact: PeerContact, genesis_hash: Blake2bHash) -> Self {
+    pub fn new(
+        keypair: Keypair,
+        peer_contact: PeerContact,
+        seeds: Vec<Multiaddr>,
+        genesis_hash: Blake2bHash,
+    ) -> Self {
         // Hardcoding the minimum number of peers in mesh network before adding more
         // TODO: Maybe change this to a mesh limits configuration argument of this function
         let gossipsub_config = GossipsubConfigBuilder::default()
@@ -37,11 +41,12 @@ impl Config {
         Self {
             keypair,
             peer_contact,
+            min_peers: 5,
+            seeds,
             discovery: DiscoveryConfig::new(genesis_hash),
             message: MessageConfig::default(),
             kademlia: KademliaConfig::default(),
             gossipsub: gossipsub_config,
-            min_peers: 5,
         }
     }
 }

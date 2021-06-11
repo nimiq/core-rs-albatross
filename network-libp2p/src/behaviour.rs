@@ -130,7 +130,7 @@ impl NimiqBehaviour {
             peer_contact_book.clone(),
             clock,
         );
-        let peers = ConnectionPoolBehaviour::new(peer_contact_book.clone());
+        let peers = ConnectionPoolBehaviour::new(peer_contact_book.clone(), config.seeds);
 
         let message = MessageBehaviour::new(config.message);
 

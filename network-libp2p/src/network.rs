@@ -899,6 +899,7 @@ mod tests {
             keypair,
             peer_contact,
             min_peers: 0,
+            seeds: Vec::new(),
             discovery: DiscoveryConfig {
                 genesis_hash: Default::default(),
                 update_interval: Duration::from_secs(60),

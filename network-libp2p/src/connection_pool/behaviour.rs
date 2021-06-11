@@ -64,6 +64,7 @@ pub struct ConnectionPoolBehaviour {
     peer_contact_book: Arc<RwLock<PeerContactBook>>,
     connected_peers: HashSet<PeerId>,
     pending_connections: Vec<Arc<PeerContactInfo>>,
+    pending_seeds: Vec<Multiaddr>,
     next_check_timeout: Option<Interval>,
     limits: ConnectionPoolLimits,
     config: ConnectionPoolLimitsConfig,
@@ -72,7 +73,7 @@ pub struct ConnectionPoolBehaviour {
 }
 
 impl ConnectionPoolBehaviour {
-    pub fn new(peer_contact_book: Arc<RwLock<PeerContactBook>>) -> Self {
+    pub fn new(peer_contact_book: Arc<RwLock<PeerContactBook>>, seeds: Vec<Multiaddr>) -> Self {
         let limits = ConnectionPoolLimits {
             ip_count: HashMap::new(),
             ipv4_count: 0,
@@ -83,6 +84,7 @@ impl ConnectionPoolBehaviour {
             peer_contact_book,
             connected_peers: HashSet::new(),
             pending_connections: vec![],
+            pending_seeds: seeds,
             next_check_timeout: None,
             limits,
             config: ConnectionPoolLimitsConfig::default(),
@@ -299,13 +301,34 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
         }
     }
 
-    fn poll(&mut self, cx: &mut Context<'_>, _params: &mut impl PollParameters) -> Poll<NetworkBehaviourAction<<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent, Self::OutEvent>>{
+    fn poll(
+        &mut self,
+        cx: &mut Context<'_>,
+        _params: &mut impl PollParameters,
+    ) -> Poll<NetworkBehaviourAction<HandlerInEvent, ConnectionPoolEvent>> {
         if self.pending_connections.is_empty() {
             if let Some(mut timer) = self.next_check_timeout.take() {
+                let mut network_action: Poll<
+                    NetworkBehaviourAction<HandlerInEvent, ConnectionPoolEvent>,
+                > = Poll::Pending;
                 if let Poll::Ready(Some(_)) = timer.poll_next_unpin(cx) {
                     self.maintain_peers();
+
+                    // Connect to seed nodes
+                    if !self.pending_seeds.is_empty() {
+                        let address = self.pending_seeds.pop().unwrap();
+                        log::trace!(
+                            "Creating Dial Action for seed at {}; remaining pending elements: {}",
+                            address,
+                            self.pending_seeds.len()
+                        );
+                        network_action =
+                            Poll::Ready(NetworkBehaviourAction::DialAddress { address });
+                    }
                 }
                 self.next_check_timeout = Some(timer);
+
+                return network_action;
             }
             // If there is no timer yet, we do nothing as that means the network has not yet started.
         } else {
