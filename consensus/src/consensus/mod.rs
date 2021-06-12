@@ -121,7 +121,7 @@ impl<N: Network> Consensus<N> {
     const MIN_BLOCKS_ESTABLISHED: usize = 5;
 
     /// Timeout after which head requests will be performed again to determine consensus established state.
-    const HEAD_REQUESTS_TIMEOUT: Duration = Duration::from_secs(20); // currently 2 * view change delay
+    const HEAD_REQUESTS_TIMEOUT: Duration = Duration::from_secs(5); // currently 2 * view change delay
 
     /// Timeout after which the consensus is polled after it ran last
     ///
@@ -306,7 +306,7 @@ impl<N: Network> Consensus<N> {
             // - accepted a minimum number of block announcements, or
             // - know the head state of a majority of our peers
             if self.num_agents() >= self.min_peers {
-                trace!("Trying to establish consensus, number of synced peers satisfied.");
+                debug!("Trying to establish consensus, number of synced peers satisfied.");
                 if self.block_queue.accepted_block_announcements() >= Self::MIN_BLOCKS_ESTABLISHED {
                     info!("Consensus established, number of accepted announcements satisfied.");
                     self.established_flag.swap(true, Ordering::Release);
@@ -320,7 +320,7 @@ impl<N: Network> Consensus<N> {
                     // number of peers and then after certain time intervals until consensus is reached.
                     // If we have a finished one, check its outcome.
                     if let Some(head_request) = finished_head_request {
-                        trace!("Trying to establish consensus, checking head request ({} known, {} unknown).", head_request.num_known_blocks, head_request.num_unknown_blocks);
+                        debug!("Trying to establish consensus, checking head request ({} known, {} unknown).", head_request.num_known_blocks, head_request.num_unknown_blocks);
                         // We would like that 2/3 of our peers have a known state.
                         if head_request.num_known_blocks >= 2 * head_request.num_unknown_blocks {
                             info!("Consensus established, 2/3 of heads known.");
@@ -350,7 +350,7 @@ impl<N: Network> Consensus<N> {
                 .map(|time| time.elapsed() >= Self::HEAD_REQUESTS_TIMEOUT)
                 .unwrap_or(true);
             if should_start_request {
-                trace!("Trying to establish consensus, initiating head requests.");
+                debug!("Trying to establish consensus, initiating head requests.");
                 self.head_requests = Some(HeadRequests::new(
                     self.block_queue.peers(),
                     Arc::clone(&self.blockchain),
@@ -392,10 +392,14 @@ impl<N: Network> Future for Consensus<N> {
         // 3. Poll any head requests if active.
         if let Some(ref mut head_requests) = self.head_requests {
             if let Poll::Ready(mut result) = head_requests.poll_unpin(cx) {
+                // Reset head requests.
+                self.head_requests = None;
+
                 // Push unknown blocks to the block queue, trying to sync.
                 for (block, peer) in result.unknown_blocks.drain(..) {
                     self.block_queue.push_block(block, peer);
                 }
+
                 // Update established state using the result.
                 if let Some(event) = self.set_established(Some(result)) {
                     self.events.send(event).ok(); // Ignore result.
