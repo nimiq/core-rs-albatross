@@ -2,6 +2,8 @@
 #![feature(map_first_last)]
 #![feature(btree_drain_filter)]
 #![feature(drain_filter)]
+#![feature(vecdeque_binary_search)]
+#![feature(ordering_helpers)]
 
 #[macro_use]
 extern crate beserial_derive;
