@@ -43,7 +43,7 @@ pub struct BatchSet {
 
 struct SyncCluster<TPeer: Peer> {
     ids: Vec<Blake2bHash>,
-    epoch_offset: usize,
+    first_epoch_number: usize,
 
     batch_set_queue: SyncQueue<TPeer, Blake2bHash, BatchSetInfo>,
     history_queue: SyncQueue<TPeer, (u32, u32, usize), (u32, HistoryChunk)>,
@@ -60,7 +60,7 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
 
     fn new(
         ids: Vec<Blake2bHash>,
-        epoch_offset: usize,
+        first_epoch_number: usize,
         peers: Vec<Weak<ConsensusAgent<TPeer>>>,
         blockchain: Arc<Blockchain>,
     ) -> Self {
@@ -86,7 +86,7 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
         );
         Self {
             ids,
-            epoch_offset,
+            first_epoch_number,
             batch_set_queue,
             history_queue,
             pending_batch_sets: VecDeque::with_capacity(Self::NUM_PENDING_BATCH_SETS),
@@ -163,12 +163,15 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
         history_chunk: HistoryChunk,
     ) -> Result<(), SyncClusterResult> {
         // Find epoch in pending_epochs.
+        // TODO: This assumes that epochs are always dense in `pending_batch_sets`
+        // which might not be the case for misbehaving peers.
         let first_epoch_number = self.pending_batch_sets[0].epoch_number();
         let epoch_index = (epoch_number - first_epoch_number) as usize;
         let epoch = &mut self.pending_batch_sets[epoch_index];
 
         // TODO: This assumes that we have already filtered responses with no chunk.
         if history_chunk.chunk.is_none() {
+            log::error!("Received empty history chunk {:?}", history_chunk);
             return Err(SyncClusterResult::Error);
         }
 
@@ -184,6 +187,14 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
         // Add the received history chunk to the pending epoch.
         let mut chunk = chunk.history;
         epoch.history.append(&mut chunk);
+
+        log::trace!(
+            "Added history chunk to epoch {}, history_len={}, current_len={}, is_complete={}",
+            epoch.epoch_number(),
+            epoch.history_len,
+            epoch.history.len(),
+            epoch.is_complete()
+        );
 
         Ok(())
     }
@@ -208,24 +219,25 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
 
     fn split_off(&mut self, at: usize) -> Self {
         let ids = self.ids.split_off(at);
-        let offset = self.epoch_offset + at;
+        let first_epoch_number = self.first_epoch_number + at;
 
         // Remove the split-off ids from our epoch queue.
         self.batch_set_queue.truncate_ids(at);
 
         Self::new(
             ids,
-            offset,
+            first_epoch_number,
             self.batch_set_queue.peers.clone(),
             Arc::clone(&self.blockchain),
         )
     }
 
-    fn remove_front(&mut self, at: usize) {
-        let mut new_cluster = if self.ids.len() < at {
+    fn remove_front(&mut self, num_items: usize) {
+        // TODO Refactor
+        let mut new_cluster = if self.ids.len() < num_items {
             self.split_off(self.len())
         } else {
-            self.split_off(at)
+            self.split_off(num_items)
         };
         new_cluster.adopted_batch_set = self.adopted_batch_set;
         *self = new_cluster;
@@ -233,6 +245,32 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
 
     fn len(&self) -> usize {
         self.ids.len()
+    }
+
+    fn compare(&self, other: &Self, current_epoch: usize) -> Ordering {
+        let this_epoch_number = self.first_epoch_number.max(current_epoch);
+        let other_epoch_number = other.first_epoch_number.max(current_epoch);
+
+        let this_ids_len = self
+            .ids
+            .len()
+            .saturating_sub(current_epoch.saturating_sub(self.first_epoch_number));
+        let other_ids_len = other
+            .ids
+            .len()
+            .saturating_sub(current_epoch.saturating_sub(other.first_epoch_number));
+
+        this_epoch_number
+            .cmp(&other_epoch_number) // Lower epoch first
+            .then_with(|| {
+                other
+                    .batch_set_queue
+                    .num_peers()
+                    .cmp(&self.batch_set_queue.num_peers())
+            }) // Higher peer count first
+            .then_with(|| other_ids_len.cmp(&this_ids_len)) // More ids first
+            .then_with(|| self.ids.cmp(&other.ids)) //
+            .reverse() // We want the best cluster to be *last*
     }
 }
 
@@ -292,39 +330,10 @@ impl<TPeer: Peer + 'static> Stream for SyncCluster<TPeer> {
     }
 }
 
-impl<TPeer: Peer> PartialEq for SyncCluster<TPeer> {
-    fn eq(&self, other: &Self) -> bool {
-        self.epoch_offset == other.epoch_offset
-            && self.batch_set_queue.num_peers() == other.batch_set_queue.num_peers()
-            && self.ids == other.ids
-    }
-}
-impl<TPeer: Peer> Eq for SyncCluster<TPeer> {}
-impl<TPeer: Peer> PartialOrd for SyncCluster<TPeer> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(&other))
-    }
-}
-impl<TPeer: Peer> Ord for SyncCluster<TPeer> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.epoch_offset
-            .cmp(&other.epoch_offset) // Lower offset first
-            .then_with(|| {
-                other
-                    .batch_set_queue
-                    .num_peers()
-                    .cmp(&self.batch_set_queue.num_peers())
-            }) // Higher peer count first
-            .then_with(|| other.ids.len().cmp(&self.ids.len())) // More ids first
-            .then_with(|| self.ids.cmp(&other.ids)) //
-            .reverse() // We want the best cluster to be *last*
-    }
-}
-
 struct EpochIds<TPeer: Peer> {
     ids: Vec<Blake2bHash>,
     checkpoint_id: Option<Blake2bHash>, // The most recent checkpoint block in the latest epoch.
-    offset: usize,
+    first_epoch_number: usize,
     sender: Arc<ConsensusAgent<TPeer>>,
 }
 
@@ -333,7 +342,7 @@ impl<TPeer: Peer> Clone for EpochIds<TPeer> {
         EpochIds {
             ids: self.ids.clone(),
             checkpoint_id: self.checkpoint_id.clone(),
-            offset: self.offset,
+            first_epoch_number: self.first_epoch_number,
             sender: Arc::clone(&self.sender),
         }
     }
@@ -341,7 +350,7 @@ impl<TPeer: Peer> Clone for EpochIds<TPeer> {
 
 impl<TPeer: Peer> EpochIds<TPeer> {
     fn get_checkpoint_epoch(&self) -> usize {
-        self.offset + self.ids.len()
+        self.first_epoch_number + self.ids.len()
     }
 }
 
@@ -372,8 +381,10 @@ pub struct HistorySync<TNetwork: Network> {
     blockchain: Arc<Blockchain>,
     network_event_rx: broadcast::Receiver<NetworkEvent<TNetwork::PeerType>>,
     epoch_ids_stream: FuturesUnordered<BoxFuture<'static, Option<EpochIds<TNetwork::PeerType>>>>,
-    epoch_sync_clusters: Vec<SyncCluster<TNetwork::PeerType>>,
-    checkpoint_sync_clusters: Vec<SyncCluster<TNetwork::PeerType>>,
+    epoch_clusters: VecDeque<SyncCluster<TNetwork::PeerType>>,
+    active_epoch_cluster: Option<SyncCluster<TNetwork::PeerType>>,
+    checkpoint_clusters: VecDeque<SyncCluster<TNetwork::PeerType>>,
+    active_checkpoint_cluster: Option<SyncCluster<TNetwork::PeerType>>,
     agents: HashMap<Arc<TNetwork::PeerType>, (Arc<ConsensusAgent<TNetwork::PeerType>>, usize)>,
 }
 
@@ -388,8 +399,10 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
             blockchain,
             network_event_rx,
             epoch_ids_stream: FuturesUnordered::new(),
-            epoch_sync_clusters: Vec::new(),
-            checkpoint_sync_clusters: Vec::new(),
+            epoch_clusters: VecDeque::new(),
+            active_epoch_cluster: None,
+            checkpoint_clusters: VecDeque::new(),
+            active_checkpoint_cluster: None,
             agents: HashMap::new(),
         }
     }
@@ -405,7 +418,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         trace!("requesting epoch ids");
         let (locators, epoch_number) = {
             // Order matters here. The first hash found by the recipient of the request  will be used, so they need to be
-            // in backwards bllock height order.
+            // in backwards block height order.
             let election_head = blockchain.election_head();
             let macro_head = blockchain.macro_head();
 
@@ -456,7 +469,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                 Some(EpochIds {
                     ids: epoch_ids,
                     checkpoint_id,
-                    offset: epoch_number as usize + 1,
+                    first_epoch_number: epoch_number as usize + 1,
                     sender: agent,
                 })
             }
@@ -469,22 +482,23 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
     }
 
     fn cluster_epoch_ids(&mut self, mut epoch_ids: EpochIds<TNetwork::PeerType>) {
-        let checkpoint_epoch_offset = epoch_ids.get_checkpoint_epoch();
+        let checkpoint_epoch = epoch_ids.get_checkpoint_epoch();
         let agent = epoch_ids.sender;
 
         // Truncate beginning of cluster to our current blockchain state.
         let current_id = self.blockchain.election_head_hash();
-        let current_offset =
-            policy::epoch_at(self.blockchain.election_head().header.block_number) as usize;
+
         // If `epoch_ids` includes known blocks, truncate (or discard on fork prior to our accepted state).
-        if !epoch_ids.ids.is_empty() && epoch_ids.offset <= current_offset {
+        let current_epoch =
+            policy::epoch_at(self.blockchain.election_head().header.block_number) as usize;
+        if !epoch_ids.ids.is_empty() && epoch_ids.first_epoch_number <= current_epoch {
             // Check most recent id against our state.
-            if current_id == epoch_ids.ids[current_offset - epoch_ids.offset] {
+            if current_id == epoch_ids.ids[current_epoch - epoch_ids.first_epoch_number] {
                 // Remove known blocks.
                 epoch_ids.ids = epoch_ids
                     .ids
-                    .split_off(current_offset - epoch_ids.offset + 1);
-                epoch_ids.offset = current_offset;
+                    .split_off(current_epoch - epoch_ids.first_epoch_number + 1);
+                epoch_ids.first_epoch_number = current_epoch;
 
                 // If there are no new election blocks left, return.
                 if epoch_ids.ids.is_empty() {
@@ -498,16 +512,28 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         }
 
         let mut id_index = 0;
-        let mut new_clusters = Vec::new();
+        let mut new_clusters = VecDeque::new();
         let mut num_clusters = 0;
 
-        for cluster in &mut self.epoch_sync_clusters {
+        trace!(
+            "Clustering ids: first_epoch_number={}, num_ids={}, num_clusters={}, active_cluster={}",
+            epoch_ids.first_epoch_number,
+            epoch_ids.ids.len(),
+            self.epoch_clusters.len(),
+            self.active_epoch_cluster.is_some(),
+        );
+
+        let epoch_clusters = self
+            .epoch_clusters
+            .iter_mut()
+            .chain(self.active_epoch_cluster.iter_mut());
+        for cluster in epoch_clusters {
             // Check if given epoch_ids and the current cluster potentially overlap.
-            if cluster.epoch_offset <= epoch_ids.offset
-                && cluster.epoch_offset + cluster.ids.len() > epoch_ids.offset
+            if cluster.first_epoch_number <= epoch_ids.first_epoch_number
+                && cluster.first_epoch_number + cluster.ids.len() > epoch_ids.first_epoch_number
             {
                 // Compare epoch ids in the overlapping region.
-                let start_offset = epoch_ids.offset - cluster.epoch_offset;
+                let start_offset = epoch_ids.first_epoch_number - cluster.first_epoch_number;
                 let len = usize::min(
                     cluster.ids.len() - start_offset,
                     epoch_ids.ids.len() - id_index,
@@ -518,6 +544,13 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                     .position(|(first, second)| first != second)
                     .unwrap_or(len);
 
+                trace!(
+                    "Comparing with cluster: first_epoch_number={}, num_ids={}, match_until={}",
+                    cluster.first_epoch_number,
+                    cluster.ids.len(),
+                    match_until
+                );
+
                 // If there is no match at all, skip to the next cluster.
                 if match_until > 0 {
                     // If there is only a partial match, split the current cluster. The current cluster
@@ -525,7 +558,13 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                     // cluster. Buffer up the new clusters and insert them after we finish iterating over
                     // sync_clusters.
                     if match_until < cluster.ids.len() - start_offset {
-                        new_clusters.push(cluster.split_off(start_offset + match_until));
+                        trace!(
+                            "Splitting cluster: num_ids={}, start_offset={}, split_at={}",
+                            cluster.ids.len(),
+                            start_offset,
+                            start_offset + match_until
+                        );
+                        new_clusters.push_back(cluster.split_off(start_offset + match_until));
                     }
 
                     // The peer's epoch ids matched at least a part of this (now potentially truncated) cluster,
@@ -545,9 +584,15 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
 
         // Add remaining ids to a new cluster with only the sending peer in it.
         if id_index < epoch_ids.ids.len() {
-            new_clusters.push(SyncCluster::new(
+            trace!(
+                "Adding new cluster: id_index={}, first_epoch_number={}, num_ids={}",
+                id_index,
+                epoch_ids.first_epoch_number + id_index,
+                epoch_ids.ids.len() - id_index
+            );
+            new_clusters.push_back(SyncCluster::new(
                 Vec::from(&epoch_ids.ids[id_index..]),
-                epoch_ids.offset + id_index,
+                epoch_ids.first_epoch_number + id_index,
                 vec![Arc::downgrade(&agent)],
                 Arc::clone(&self.blockchain),
             ));
@@ -557,15 +602,18 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         // Now cluster the checkpoint id if present.
         if let Some(checkpoint_id) = epoch_ids.checkpoint_id {
             let mut found_cluster = false;
-            for cluster in &mut self.checkpoint_sync_clusters {
+            let checkpoint_clusters = self
+                .checkpoint_clusters
+                .iter_mut()
+                .chain(self.active_checkpoint_cluster.iter_mut());
+            for cluster in checkpoint_clusters {
                 // Currently, we do not need to remove old checkpoint ids from the same peer.
                 // Since we only request new epoch ids (and checkpoints) once a peer has 0 clusters,
                 // we can never receive an updated checkpoint.
                 // When this invariant changes, we need to remove old checkpoints of that peer here!
 
-                // Look for clusters at the same offset with the same hash.
-                if cluster.epoch_offset == checkpoint_epoch_offset
-                    && cluster.ids[0] == checkpoint_id
+                // Look for clusters at the same epoch with the same hash.
+                if cluster.first_epoch_number == checkpoint_epoch && cluster.ids[0] == checkpoint_id
                 {
                     // The peer's checkpoint id matched this cluster,
                     // so we add the peer to this cluster. We also increment the peer's number of clusters.
@@ -580,12 +628,11 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
             if !found_cluster {
                 let cluster = SyncCluster::new(
                     vec![checkpoint_id],
-                    checkpoint_epoch_offset,
+                    checkpoint_epoch,
                     vec![Arc::downgrade(&agent)],
                     Arc::clone(&self.blockchain),
                 );
-                self.checkpoint_sync_clusters.push(cluster);
-                self.checkpoint_sync_clusters.sort();
+                self.checkpoint_clusters.push_back(cluster);
                 num_clusters += 1;
             }
         }
@@ -607,9 +654,53 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
             }
         }
 
-        // Add buffered clusters to sync_clusters and sort it.
-        self.epoch_sync_clusters.append(&mut new_clusters);
-        self.epoch_sync_clusters.sort();
+        // Add buffered clusters to sync_clusters.
+        self.epoch_clusters.append(&mut new_clusters);
+    }
+
+    fn find_best_epoch_cluster(&mut self) -> Option<SyncCluster<TNetwork::PeerType>> {
+        HistorySync::<TNetwork>::find_best_cluster(&mut self.epoch_clusters, &self.blockchain)
+    }
+
+    fn find_best_checkpoint_cluster(&mut self) -> Option<SyncCluster<TNetwork::PeerType>> {
+        HistorySync::<TNetwork>::find_best_cluster(&mut self.checkpoint_clusters, &self.blockchain)
+    }
+
+    fn find_best_cluster(
+        clusters: &mut VecDeque<SyncCluster<TNetwork::PeerType>>,
+        blockchain: &Blockchain,
+    ) -> Option<SyncCluster<TNetwork::PeerType>> {
+        if clusters.is_empty() {
+            return None;
+        }
+
+        let current_epoch =
+            policy::epoch_at(blockchain.election_head().header.block_number) as usize;
+
+        let (best_idx, _) = clusters
+            .iter()
+            .enumerate()
+            .reduce(|a, b| {
+                if a.1.compare(b.1, current_epoch).is_gt() {
+                    a
+                } else {
+                    b
+                }
+            })
+            .expect("clusters not empty");
+
+        let mut best_cluster = clusters
+            .swap_remove_front(best_idx)
+            .expect("best cluster should be there");
+
+        debug!("Syncing cluster at index {} out of {} clusters: current_epoch={}, first_epoch_number={}, num_ids={}, num_peers: {}",
+               best_idx, clusters.len() + 1, current_epoch, best_cluster.first_epoch_number, best_cluster.ids.len(), best_cluster.peers().len());
+
+        if best_cluster.first_epoch_number <= current_epoch {
+            best_cluster.remove_front(current_epoch - best_cluster.first_epoch_number + 1);
+        }
+
+        Some(best_cluster)
     }
 
     /// Reduces the number of clusters for each peer present in the given cluster by 1.
@@ -678,9 +769,8 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
         }
 
         // Stop pulling in new EpochIds if we hit a maximum a number of clusters to prevent DoS.
-        trace!("Pulling epoch ids");
         loop {
-            if self.epoch_sync_clusters.len() >= Self::MAX_CLUSTERS {
+            if self.epoch_clusters.len() >= Self::MAX_CLUSTERS {
                 // TODO: We still want to get the wakes for the epoch_ids_stream
                 //  even if we don't poll it now.
                 break;
@@ -711,15 +801,20 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
 
         trace!(
             "Syncing epoch clusters ({} clusters)",
-            self.epoch_sync_clusters.len()
+            self.epoch_clusters.len()
         );
+
+        // Initialize active_epoch_cluster if there is none.
+        if self.active_epoch_cluster.is_none() {
+            self.active_epoch_cluster = self.find_best_epoch_cluster();
+        }
+
         // Poll the best epoch cluster.
-        // The best cluster is the last element in sync_clusters, so removing it is cheap.
-        while !self.epoch_sync_clusters.is_empty() {
+        while self.active_epoch_cluster.is_some() {
             let best_cluster = self
-                .epoch_sync_clusters
-                .last_mut()
-                .expect("sync_clusters not empty");
+                .active_epoch_cluster
+                .as_mut()
+                .expect("active_epoch_cluster should be set");
 
             let result = match ready!(best_cluster.poll_next_unpin(cx)) {
                 Some(Ok(epoch)) => SyncClusterResult::from(
@@ -733,75 +828,57 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
                 None => SyncClusterResult::NoMoreEpochs,
             };
 
-            trace!("Pushed epoch, result: {:?}", result);
+            debug!("Pushed epoch, result: {:?}", result);
 
             // If the epoch was successful, the cluster is not done yet
             // and we update the remaining clusters.
             if result == SyncClusterResult::EpochSuccessful {
                 let best_cluster = self
-                    .epoch_sync_clusters
-                    .last_mut()
-                    .expect("sync_clusters not empty");
+                    .active_epoch_cluster
+                    .as_mut()
+                    .expect("active_epoch_cluster should be set");
                 best_cluster.adopted_batch_set = true;
-
-                // Cut off the ids we have already adopted from the start of the next cluster.
-                // Empty clusters will be dealt with automatically.
-                let current_offset =
-                    policy::epoch_at(self.blockchain.election_head().header.block_number) as usize;
-
-                for cluster in self.epoch_sync_clusters.iter_mut().rev() {
-                    // If `epoch_ids` includes known blocks, truncate (or discard on fork prior to our accepted state).
-                    if cluster.epoch_offset <= current_offset {
-                        // TODO: Do we want to remove forks entirely here?
-                        cluster.remove_front(current_offset - cluster.epoch_offset + 1);
-                    } else {
-                        // Due to the sorting, we can break here.
-                        break;
-                    }
-                }
-
-                // Evict all empty clusters and finish them.
-                // TODO: What if there are no clusters left for this peer?
-                let removed_clusters: Vec<_> = self
-                    .epoch_sync_clusters
-                    .drain_filter(|cluster| cluster.len() == 0)
-                    .collect();
-                for cluster in removed_clusters.iter() {
-                    self.finish_cluster(cluster, true);
-                }
-
-                self.epoch_sync_clusters.sort();
             } else {
-                // Evict current best cluster and move to next one.
-                let cluster = self
-                    .epoch_sync_clusters
-                    .pop()
-                    .expect("sync_clusters not empty");
+                // TODO Do we really want to evict outdated clusters as well?
+                let best_cluster = self
+                    .active_epoch_cluster
+                    .take()
+                    .expect("active_epoch_cluster should be set");
 
                 // Decrement the cluster count for all peers in the evicted cluster.
                 self.finish_cluster(
-                    &cluster,
-                    result != SyncClusterResult::Error && cluster.adopted_batch_set,
+                    &best_cluster,
+                    result != SyncClusterResult::Error && best_cluster.adopted_batch_set,
                 );
+
+                // Evict current best cluster and move to next one.
+                self.active_epoch_cluster = self.find_best_epoch_cluster();
             }
         }
 
         trace!(
             "Syncing checkpoint clusters ({} clusters)",
-            self.checkpoint_sync_clusters.len()
+            self.checkpoint_clusters.len()
         );
+
         // When no more epochs are to be processed, we continue with checkpoint blocks.
         // Poll the best checkpoint cluster.
-        let current_offset =
+        let current_epoch =
             policy::epoch_at(self.blockchain.election_head().header.block_number) as usize;
-        while !self.checkpoint_sync_clusters.is_empty() {
+
+        // Initialize active_checkpoint_cluster if there is none.
+        if self.active_checkpoint_cluster.is_none() {
+            self.active_checkpoint_cluster = self.find_best_checkpoint_cluster();
+        }
+
+        while self.active_checkpoint_cluster.is_some() {
             let best_cluster = self
-                .checkpoint_sync_clusters
-                .last_mut()
-                .expect("sync_clusters no empty");
+                .active_checkpoint_cluster
+                .as_mut()
+                .expect("active_checkpoint_cluster should be set");
 
             let result;
-            if best_cluster.epoch_offset <= current_offset {
+            if best_cluster.first_epoch_number <= current_epoch {
                 result = SyncClusterResult::NoMoreEpochs;
             } else {
                 result = match ready!(best_cluster.poll_next_unpin(cx)) {
@@ -813,18 +890,20 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
                     None => SyncClusterResult::NoMoreEpochs,
                 };
 
-                trace!("Pushed checkpoint, result: {:?}", result);
+                debug!("Pushed checkpoint, result: {:?}", result);
             }
 
             // Since clusters here are always of length 1, we can remove them immediately.
-            // Evict current best cluster and move to next one.
-            let cluster = self
-                .checkpoint_sync_clusters
-                .pop()
-                .expect("sync_clusters not empty");
+            let best_cluster = self
+                .active_checkpoint_cluster
+                .take()
+                .expect("active_checkpoint_cluster should be set");
 
             // Decrement the cluster count for all peers in the evicted cluster.
-            self.finish_cluster(&cluster, result != SyncClusterResult::Error);
+            self.finish_cluster(&best_cluster, result != SyncClusterResult::Error);
+
+            // Move to next cluster.
+            self.active_checkpoint_cluster = self.find_best_checkpoint_cluster();
         }
 
         Poll::Pending
@@ -841,26 +920,29 @@ impl<TNetwork: Network> HistorySyncStream<TNetwork::PeerType> for HistorySync<TN
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use nimiq_database::volatile::VolatileEnvironment;
     use nimiq_genesis::NetworkId;
     use nimiq_network_mock::{MockHub, MockNetwork, MockPeer};
+
+    use super::*;
 
     #[tokio::test]
     async fn it_can_cluster_epoch_ids() {
         fn generate_epoch_ids(
             agent: &Arc<ConsensusAgent<MockPeer>>,
             len: usize,
-            offset: usize,
+            first_epoch_number: usize,
             diverge_at: Option<usize>,
         ) -> EpochIds<MockPeer> {
             let mut ids = vec![];
-            for i in offset..offset + len {
+            for i in first_epoch_number..first_epoch_number + len {
                 let mut epoch_id = [0u8; 32];
                 epoch_id[0..8].copy_from_slice(&i.to_le_bytes());
 
-                if diverge_at.map(|d| i >= d + offset).unwrap_or(false) {
+                if diverge_at
+                    .map(|d| i >= d + first_epoch_number)
+                    .unwrap_or(false)
+                {
                     epoch_id[9] = 1;
                 }
 
@@ -870,7 +952,7 @@ mod tests {
             EpochIds {
                 ids,
                 checkpoint_id: None,
-                offset,
+                first_epoch_number,
                 sender: Arc::clone(&agent),
             }
         }
@@ -921,7 +1003,24 @@ mod tests {
         }
 
         // This test tests several aspects of the epoch id clustering.
-        // 1) disjunct epoch ids
+        // 1) identical epoch ids
+        let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 10, 1, None);
+        let epoch_ids2 = generate_epoch_ids(&consensus_agents[1], 10, 1, None);
+        run_test(
+            &blockchain,
+            &net1,
+            epoch_ids1,
+            epoch_ids2,
+            |sync| {
+                assert_eq!(sync.epoch_clusters.len(), 1);
+                assert_eq!(sync.epoch_clusters[0].ids.len(), 10);
+                assert_eq!(sync.epoch_clusters[0].first_epoch_number, 1);
+                assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.len(), 2);
+            },
+            true,
+        );
+
+        // 2) disjoint epoch ids
         let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 10, 1, None);
         let epoch_ids2 = generate_epoch_ids(&consensus_agents[1], 10, 1, Some(0));
         run_test(
@@ -930,18 +1029,18 @@ mod tests {
             epoch_ids1,
             epoch_ids2,
             |sync| {
-                assert_eq!(sync.epoch_sync_clusters.len(), 2);
-                assert_eq!(sync.epoch_sync_clusters[0].ids.len(), 10);
-                assert_eq!(sync.epoch_sync_clusters[1].ids.len(), 10);
-                assert_eq!(sync.epoch_sync_clusters[0].epoch_offset, 1);
-                assert_eq!(sync.epoch_sync_clusters[1].epoch_offset, 1);
-                assert_eq!(sync.epoch_sync_clusters[0].batch_set_queue.peers.len(), 1);
-                assert_eq!(sync.epoch_sync_clusters[1].batch_set_queue.peers.len(), 1);
+                assert_eq!(sync.epoch_clusters.len(), 2);
+                assert_eq!(sync.epoch_clusters[0].ids.len(), 10);
+                assert_eq!(sync.epoch_clusters[1].ids.len(), 10);
+                assert_eq!(sync.epoch_clusters[0].first_epoch_number, 1);
+                assert_eq!(sync.epoch_clusters[1].first_epoch_number, 1);
+                assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.len(), 1);
+                assert_eq!(sync.epoch_clusters[1].batch_set_queue.peers.len(), 1);
             },
             true,
         );
 
-        // 2) same offset and history, second shorter than first
+        // 3) same offset and history, second shorter than first
         let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 10, 1, None);
         let epoch_ids2 = generate_epoch_ids(&consensus_agents[1], 8, 1, None);
         run_test(
@@ -950,18 +1049,18 @@ mod tests {
             epoch_ids1,
             epoch_ids2,
             |sync| {
-                assert_eq!(sync.epoch_sync_clusters.len(), 2);
-                assert_eq!(sync.epoch_sync_clusters[0].ids.len(), 2);
-                assert_eq!(sync.epoch_sync_clusters[0].epoch_offset, 9);
-                assert_eq!(sync.epoch_sync_clusters[0].batch_set_queue.peers.len(), 1);
-                assert_eq!(sync.epoch_sync_clusters[1].ids.len(), 8);
-                assert_eq!(sync.epoch_sync_clusters[1].epoch_offset, 1);
-                assert_eq!(sync.epoch_sync_clusters[1].batch_set_queue.peers.len(), 2);
+                assert_eq!(sync.epoch_clusters.len(), 2);
+                assert_eq!(sync.epoch_clusters[0].ids.len(), 8);
+                assert_eq!(sync.epoch_clusters[0].first_epoch_number, 1);
+                assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.len(), 2);
+                assert_eq!(sync.epoch_clusters[1].ids.len(), 2);
+                assert_eq!(sync.epoch_clusters[1].first_epoch_number, 9);
+                assert_eq!(sync.epoch_clusters[1].batch_set_queue.peers.len(), 1);
             },
             true,
         );
 
-        // 3) different offset, same history, but second is longer
+        // 4) different offset, same history, but second is longer
         let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 10, 1, None);
         let epoch_ids2 = generate_epoch_ids(&consensus_agents[1], 10, 3, None);
         run_test(
@@ -970,18 +1069,18 @@ mod tests {
             epoch_ids1,
             epoch_ids2,
             |sync| {
-                assert_eq!(sync.epoch_sync_clusters.len(), 2);
-                assert_eq!(sync.epoch_sync_clusters[0].ids.len(), 2);
-                assert_eq!(sync.epoch_sync_clusters[0].epoch_offset, 11);
-                assert_eq!(sync.epoch_sync_clusters[0].batch_set_queue.peers.len(), 1);
-                assert_eq!(sync.epoch_sync_clusters[1].ids.len(), 10);
-                assert_eq!(sync.epoch_sync_clusters[1].epoch_offset, 1);
-                assert_eq!(sync.epoch_sync_clusters[1].batch_set_queue.peers.len(), 2);
+                assert_eq!(sync.epoch_clusters.len(), 2);
+                assert_eq!(sync.epoch_clusters[0].ids.len(), 10);
+                assert_eq!(sync.epoch_clusters[0].first_epoch_number, 1);
+                assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.len(), 2);
+                assert_eq!(sync.epoch_clusters[1].ids.len(), 2);
+                assert_eq!(sync.epoch_clusters[1].first_epoch_number, 11);
+                assert_eq!(sync.epoch_clusters[1].batch_set_queue.peers.len(), 1);
             },
             false,
         ); // TODO: for a symmetric check, blockchain state would need to change
 
-        // 4) Irrelevant epoch ids (that would constitute forks from what we have already seen.
+        // 5) Irrelevant epoch ids (that would constitute forks from what we have already seen.
         let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 10, 0, None);
         let epoch_ids2 = generate_epoch_ids(&consensus_agents[1], 10, 0, Some(0));
         run_test(
@@ -990,12 +1089,12 @@ mod tests {
             epoch_ids1,
             epoch_ids2,
             |sync| {
-                assert_eq!(sync.epoch_sync_clusters.len(), 0);
+                assert_eq!(sync.epoch_clusters.len(), 0);
             },
             true,
         );
 
-        // 5) different offset, same history, but second is shorter
+        // 6) different offset, same history, but second is shorter
         let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 10, 1, None);
         let epoch_ids2 = generate_epoch_ids(&consensus_agents[1], 5, 3, None);
         run_test(
@@ -1004,18 +1103,18 @@ mod tests {
             epoch_ids1,
             epoch_ids2,
             |sync| {
-                assert_eq!(sync.epoch_sync_clusters.len(), 2);
-                assert_eq!(sync.epoch_sync_clusters[0].ids.len(), 3);
-                assert_eq!(sync.epoch_sync_clusters[0].epoch_offset, 8);
-                assert_eq!(sync.epoch_sync_clusters[0].batch_set_queue.peers.len(), 1);
-                assert_eq!(sync.epoch_sync_clusters[1].ids.len(), 7);
-                assert_eq!(sync.epoch_sync_clusters[1].epoch_offset, 1);
-                assert_eq!(sync.epoch_sync_clusters[1].batch_set_queue.peers.len(), 2);
+                assert_eq!(sync.epoch_clusters.len(), 2);
+                assert_eq!(sync.epoch_clusters[0].ids.len(), 7);
+                assert_eq!(sync.epoch_clusters[0].first_epoch_number, 1);
+                assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.len(), 2);
+                assert_eq!(sync.epoch_clusters[1].ids.len(), 3);
+                assert_eq!(sync.epoch_clusters[1].first_epoch_number, 8);
+                assert_eq!(sync.epoch_clusters[1].batch_set_queue.peers.len(), 1);
             },
             false,
         ); // TODO: for a symmetric check, blockchain state would need to change
 
-        // 6) different offset, diverging history, second longer
+        // 7) different offset, diverging history, second longer
         let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 10, 1, None);
         let epoch_ids2 = generate_epoch_ids(&consensus_agents[1], 8, 4, Some(6));
         run_test(
@@ -1024,16 +1123,16 @@ mod tests {
             epoch_ids1,
             epoch_ids2,
             |sync| {
-                assert_eq!(sync.epoch_sync_clusters.len(), 3);
-                assert_eq!(sync.epoch_sync_clusters[0].ids.len(), 1);
-                assert_eq!(sync.epoch_sync_clusters[0].epoch_offset, 10);
-                assert_eq!(sync.epoch_sync_clusters[0].batch_set_queue.peers.len(), 1);
-                assert_eq!(sync.epoch_sync_clusters[1].ids.len(), 2);
-                assert_eq!(sync.epoch_sync_clusters[1].epoch_offset, 10);
-                assert_eq!(sync.epoch_sync_clusters[1].batch_set_queue.peers.len(), 1);
-                assert_eq!(sync.epoch_sync_clusters[2].ids.len(), 9);
-                assert_eq!(sync.epoch_sync_clusters[2].epoch_offset, 1);
-                assert_eq!(sync.epoch_sync_clusters[2].batch_set_queue.peers.len(), 2);
+                assert_eq!(sync.epoch_clusters.len(), 3);
+                assert_eq!(sync.epoch_clusters[0].ids.len(), 9);
+                assert_eq!(sync.epoch_clusters[0].first_epoch_number, 1);
+                assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.len(), 2);
+                assert_eq!(sync.epoch_clusters[1].ids.len(), 1);
+                assert_eq!(sync.epoch_clusters[1].first_epoch_number, 10);
+                assert_eq!(sync.epoch_clusters[1].batch_set_queue.peers.len(), 1);
+                assert_eq!(sync.epoch_clusters[2].ids.len(), 2);
+                assert_eq!(sync.epoch_clusters[2].first_epoch_number, 10);
+                assert_eq!(sync.epoch_clusters[2].batch_set_queue.peers.len(), 1);
             },
             false,
         ); // TODO: for a symmetric check, blockchain state would need to change

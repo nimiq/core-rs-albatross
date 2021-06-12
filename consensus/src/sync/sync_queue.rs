@@ -2,6 +2,7 @@ use std::cmp;
 use std::cmp::Ordering;
 use std::collections::binary_heap::PeekMut;
 use std::collections::{BinaryHeap, VecDeque};
+use std::fmt::Debug;
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
 
@@ -84,7 +85,7 @@ pub struct SyncQueue<TPeer: Peer, TId, TOutput> {
 impl<TPeer, TId, TOutput> SyncQueue<TPeer, TId, TOutput>
 where
     TPeer: Peer,
-    TId: Clone,
+    TId: Clone + Debug,
     TOutput: Send + Unpin,
 {
     pub fn new(
@@ -93,6 +94,13 @@ where
         desired_pending_size: usize,
         request_fn: fn(TId, Arc<ConsensusAgent<TPeer>>) -> BoxFuture<'static, Option<TOutput>>,
     ) -> Self {
+        log::trace!(
+            "Creating SyncQueue with {} ids, {} peers, {} desired pending size",
+            ids.len(),
+            peers.len(),
+            desired_pending_size
+        );
+
         SyncQueue {
             peers,
             desired_pending_size,
@@ -131,6 +139,18 @@ where
                 .saturating_sub(self.pending_futures.len() + self.queued_outputs.len()),
         );
 
+        if num_ids_to_request > 0 {
+            log::trace!(
+                "Requesting {} ids (ids_to_request = {}, remaining_until_limit = {}, pending_futures = {}, queued_outputs = {})",
+                num_ids_to_request,
+                self.ids_to_request.len(),
+                self.desired_pending_size
+                    .saturating_sub(self.pending_futures.len() + self.queued_outputs.len()),
+                self.pending_futures.len(),
+                self.queued_outputs.len(),
+            );
+        }
+
         // Drain ids and produce futures.
         for _ in 0..num_ids_to_request {
             // Get next peer in line. Abort if there are no more peers.
@@ -140,6 +160,14 @@ where
             };
 
             let id = self.ids_to_request.pop_front().unwrap();
+
+            log::trace!(
+                "Requesting {:?} @ {} from peer {}",
+                id,
+                self.next_incoming_index,
+                self.current_peer_index
+            );
+
             let wrapper = OrderWrapper {
                 data: (self.request_fn)(id.clone(), peer),
                 id,
@@ -176,6 +204,37 @@ where
             .truncate(len.saturating_sub(self.next_incoming_index));
     }
 
+    /// Elements are counted from the *original* start of the ids vector.
+    pub fn remove_front(&mut self, num_items: usize) {
+        self.ids_to_request
+            .drain(0..(num_items.saturating_sub(self.next_incoming_index)));
+
+        // TODO Handle pending futures.
+        if !self.pending_futures.is_empty() {
+            warn!(
+                "SyncQueue.remove_front({}) called with {} pending futures",
+                num_items,
+                self.pending_futures.len()
+            );
+        }
+
+        self.queued_outputs = self
+            .queued_outputs
+            .drain()
+            .filter_map(|mut output| {
+                if output.index >= num_items {
+                    output.index -= num_items;
+                    Some(output)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        self.next_incoming_index = self.next_incoming_index.saturating_sub(num_items);
+        self.next_outgoing_index = self.next_outgoing_index.saturating_sub(num_items);
+    }
+
     pub fn num_peers(&self) -> usize {
         self.peers.len()
     }
@@ -192,7 +251,7 @@ where
 impl<TPeer, TId, TOutput> Stream for SyncQueue<TPeer, TId, TOutput>
 where
     TPeer: Peer,
-    TId: Clone + Unpin,
+    TId: Clone + Unpin + Debug,
     TOutput: Send + Unpin,
 {
     type Item = Result<TOutput, TId>;
@@ -237,6 +296,13 @@ where
                                 Some(peer) => peer,
                                 None => return Poll::Ready(Some(Err(result.id))),
                             };
+
+                            log::trace!(
+                                "Re-requesting {:?} @ {} from peer {}",
+                                result.id,
+                                result.index,
+                                next_peer
+                            );
 
                             let wrapper = OrderWrapper {
                                 data: (self.request_fn)(result.id.clone(), peer),
