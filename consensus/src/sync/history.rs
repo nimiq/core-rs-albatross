@@ -279,7 +279,7 @@ impl<TPeer: Peer + 'static> Stream for SyncCluster<TPeer> {
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         if self.pending_batch_sets.len() < Self::NUM_PENDING_BATCH_SETS {
-            while let Poll::Ready(Some(result)) = self.batch_set_queue.poll_next_unpin(cx) {
+            if let Poll::Ready(Some(result)) = self.batch_set_queue.poll_next_unpin(cx) {
                 match result {
                     Ok(epoch) => {
                         if let Err(e) = self.on_epoch_received(epoch) {
@@ -297,7 +297,7 @@ impl<TPeer: Peer + 'static> Stream for SyncCluster<TPeer> {
             }
         }
 
-        while let Poll::Ready(Some(result)) = self.history_queue.poll_next_unpin(cx) {
+        if let Poll::Ready(Some(result)) = self.history_queue.poll_next_unpin(cx) {
             match result {
                 Ok((epoch_number, history_chunk)) => {
                     if let Err(e) = self.on_history_chunk_received(epoch_number, history_chunk) {
