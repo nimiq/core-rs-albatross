@@ -1,3 +1,4 @@
+use log::error;
 use std::io;
 use std::iter;
 use std::slice;
@@ -99,7 +100,7 @@ impl<A: Serialize + Deserialize + Clone> TrieNode<A> {
         child_prefix: &KeyNibbles,
     ) -> Result<usize, MerkleRadixTrieError> {
         if !self.key().is_prefix_of(child_prefix) {
-            info!(
+            error!(
                 "Child's prefix {} is not a prefix of the node with key {}!",
                 child_prefix,
                 self.key()
@@ -117,11 +118,23 @@ impl<A: Serialize + Deserialize + Clone> TrieNode<A> {
         child_prefix: &KeyNibbles,
     ) -> Result<&Blake2bHash, MerkleRadixTrieError> {
         match self {
-            TrieNode::LeafNode { .. } => Err(MerkleRadixTrieError::LeavesHaveNoChildren),
+            TrieNode::LeafNode { .. } => {
+                error!(
+                    "Node with key {} is a leaf node and so it doesn't have any children!",
+                    self.key()
+                );
+                Err(MerkleRadixTrieError::LeavesHaveNoChildren)
+            }
             TrieNode::BranchNode { children, .. } => {
                 if let Some(child) = &children[self.get_child_index(child_prefix)?] {
                     return Ok(&child.hash);
                 }
+
+                error!(
+                    "Node with key {} does not have a child with prefix {}!",
+                    self.key(),
+                    child_prefix
+                );
                 Err(MerkleRadixTrieError::ChildDoesNotExist)
             }
         }
@@ -133,11 +146,23 @@ impl<A: Serialize + Deserialize + Clone> TrieNode<A> {
         child_prefix: &KeyNibbles,
     ) -> Result<KeyNibbles, MerkleRadixTrieError> {
         match self {
-            TrieNode::LeafNode { .. } => Err(MerkleRadixTrieError::LeavesHaveNoChildren),
+            TrieNode::LeafNode { .. } => {
+                error!(
+                    "Node with key {} is a leaf node and so it doesn't have any children!",
+                    self.key()
+                );
+                Err(MerkleRadixTrieError::LeavesHaveNoChildren)
+            }
             TrieNode::BranchNode { ref children, .. } => {
                 if let Some(ref child) = children[self.get_child_index(child_prefix)?] {
                     return Ok(self.key() + &child.suffix);
                 }
+
+                error!(
+                    "Node with key {} does not have a child with prefix {}!",
+                    self.key(),
+                    child_prefix
+                );
                 Err(MerkleRadixTrieError::ChildDoesNotExist)
             }
         }
@@ -156,6 +181,10 @@ impl<A: Serialize + Deserialize + Clone> TrieNode<A> {
 
         match self {
             TrieNode::LeafNode { .. } => {
+                error!(
+                    "Node with key {} is a leaf node and so it can't have any children!",
+                    self.key()
+                );
                 return Err(MerkleRadixTrieError::LeavesHaveNoChildren);
             }
             TrieNode::BranchNode {
@@ -178,6 +207,10 @@ impl<A: Serialize + Deserialize + Clone> TrieNode<A> {
 
         match self {
             TrieNode::LeafNode { .. } => {
+                error!(
+                    "Node with key {} is a leaf node and so it can't have any children!",
+                    self.key()
+                );
                 return Err(MerkleRadixTrieError::LeavesHaveNoChildren);
             }
             TrieNode::BranchNode {
@@ -198,6 +231,10 @@ impl<A: Serialize + Deserialize + Clone> TrieNode<A> {
                 *value = new_value;
             }
             TrieNode::BranchNode { .. } => {
+                error!(
+                    "Node with key {} is a branch node and so it can't have a value!",
+                    self.key()
+                );
                 return Err(MerkleRadixTrieError::BranchesHaveNoValue);
             }
         };

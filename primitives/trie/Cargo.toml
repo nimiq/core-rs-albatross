@@ -10,12 +10,6 @@ license = "Apache-2.0"
 categories = ["cryptography::cryptocurrencies"]
 keywords = ["nimiq", "cryptocurrency", "blockchain"]
 
-[badges]
-travis-ci = { repository = "nimiq/core-rs", branch = "master" }
-is-it-maintained-issue-resolution = { repository = "nimiq/core-rs" }
-is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
-maintenance = { status = "experimental" }
-
 [dependencies]
 hex = "0.4"
 log = "0.4"

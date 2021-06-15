@@ -1,3 +1,4 @@
+use log::error;
 use std::borrow::Cow;
 use std::cmp;
 use std::fmt;
@@ -40,6 +41,12 @@ impl KeyNibbles {
     /// character.
     pub fn get(&self, index: usize) -> Option<usize> {
         if index >= self.len() {
+            error!(
+                "Index {} exceeds the length of KeyNibbles {}, which has length {}.",
+                index,
+                self,
+                self.len()
+            );
             return None;
         }
 
@@ -53,8 +60,8 @@ impl KeyNibbles {
     /// Checks if the current key is a prefix of the given key. If the keys are equal it also
     /// returns true.
     pub fn is_prefix_of(&self, other: &KeyNibbles) -> bool {
-        // Prefix must be shorter or equal in length. Otherwise it can't be a prefix evidently.
         if self.length > other.length {
+            error!("Key {} must be shorter or equal in length than the other key {}. Otherwise it can't be a prefix evidently.", self, other);
             return false;
         }
 
@@ -109,6 +116,12 @@ impl KeyNibbles {
     pub fn slice(&self, start: usize, end: usize) -> KeyNibbles {
         // Do some basic sanity checks.
         if start >= self.len() || end <= start {
+            error!(
+                "Slice parameters don't make sense! Key length {}, start index {}, end index {}.",
+                self.len(),
+                start,
+                end
+            );
             return KeyNibbles::empty();
         }
 
@@ -260,7 +273,7 @@ impl ops::Add<&KeyNibbles> for &KeyNibbles {
 
 impl AsDatabaseBytes for KeyNibbles {
     fn as_database_bytes(&self) -> Cow<[u8]> {
-        // TODO: Improve PrefixNibbles, so that no serialization is needed.
+        // TODO: Improve KeyNibbles, so that no serialization is needed.
         let v = Serialize::serialize_to_vec(&self);
         Cow::Owned(v)
     }

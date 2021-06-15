@@ -1,4 +1,5 @@
 use beserial::{Deserialize, Serialize};
+use log::error;
 use nimiq_hash::{Blake2bHash, Hash};
 
 use crate::key_nibbles::KeyNibbles;
@@ -55,6 +56,7 @@ impl<A: Serialize + Deserialize + Clone> TrieProof<A> {
     pub fn verify(&self, root_hash: &Blake2bHash) -> bool {
         // There must be nodes in the proof.
         if self.nodes.is_empty() {
+            error!("There aren't any nodes in the trie proof!");
             return false;
         }
 
@@ -88,6 +90,8 @@ impl<A: Serialize + Deserialize + Clone> TrieProof<A> {
                         // The child node must match the hash and the key, otherwise the proof is
                         // invalid.
                         if child_hash != &child.hash::<Blake2bHash>() || &child_key != child.key() {
+                            error!("The child node doesn't match the given hash and/or key. Got hash {}, child has hash {}. Got key {}, child has key {}.",
+                                   child_hash, child.hash::<Blake2bHash>(), child_key, child.key());
                             return false;
                         }
                     }
@@ -104,20 +108,28 @@ impl<A: Serialize + Deserialize + Clone> TrieProof<A> {
             children.push(node.clone());
         }
 
-        // There must be only one child now, the root node. Otherwise there are unverified nodes and
-        // the proof is invalid.
         if children.len() != 1 {
+            error!("There must be only one child now, the root node. Otherwise there are unverified nodes and the proof is invalid. There are {} remaining nodes.", children.len());
             return false;
         }
 
         let root = children.pop().unwrap();
 
         if root.key() != &KeyNibbles::empty() {
+            error!(
+                "The root node doesn't have the correct key! It has key {}.",
+                root.key()
+            );
             return false;
         }
 
         // And must match the hash given as the root hash.
         if &root.hash::<Blake2bHash>() != root_hash {
+            error!(
+                "The root node doesn't have the correct has! It has hash {}, but it should be {}.",
+                root.hash::<Blake2bHash>(),
+                root_hash
+            );
             return false;
         }
 

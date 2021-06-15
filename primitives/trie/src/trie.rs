@@ -1,8 +1,8 @@
-use std::marker::PhantomData;
-
 use beserial::{Deserialize, Serialize};
+use log::error;
 use nimiq_database::{Database, Environment, Transaction, WriteTransaction};
 use nimiq_hash::{Blake2bHash, Hash};
+use std::marker::PhantomData;
 
 use crate::key_nibbles::KeyNibbles;
 use crate::trie_node::TrieNode;
@@ -100,7 +100,8 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
             if cur_node.key() == key {
                 assert!(
                     cur_node.is_leaf(),
-                    "We can't put a leaf node in the middle of a branch!"
+                    "We can't put a leaf node in the middle of a branch! The node has key {}.",
+                    key
                 );
 
                 // Update the node and store it.
@@ -166,7 +167,11 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
             // If the current node key is equal to our given key, we have found our node.
             // Remove the node.
             if cur_node.key() == key {
-                assert!(cur_node.is_leaf(), "We can't remove a branch node!");
+                assert!(
+                    cur_node.is_leaf(),
+                    "We can't remove a branch node! The node has key {}.",
+                    key
+                );
 
                 // Remove the node from the database.
                 txn.remove(&self.db, key);
@@ -286,6 +291,11 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
                 // If the key does not match, the requested key is not part of this trie. In
                 // this case, we can't produce a proof so we terminate now.
                 if !pointer_node.key().is_prefix_of(&cur_key) {
+                    error!(
+                        "Pointer node with key {} is not a prefix to the current node with key {}.",
+                        pointer_node.key(),
+                        cur_key
+                    );
                     return None;
                 }
 
@@ -293,6 +303,10 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
                 // it is a leaf node, we don't want to prove branch nodes.
                 if &pointer_node.key() == &cur_key {
                     if pointer_node.is_branch() {
+                        error!(
+                            "Pointer node with key {} is a branch node. We don't want to prove branch nodes.",
+                            pointer_node.key(),
+                        );
                         return None;
                     }
 
@@ -304,6 +318,10 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
                     // If no matching child exists, then the requested key is not part of this
                     // trie. Once again, we can't produce a proof so we terminate now.
                     Err(_) => {
+                        error!(
+                            "Key {} is not a part of the trie. Can't produce the proof.",
+                            cur_key
+                        );
                         return None;
                     }
                     // If there's a child, then we update the pointer node and the root path, and
