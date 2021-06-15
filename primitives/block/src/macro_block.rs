@@ -106,6 +106,16 @@ impl MacroBlock {
         // Create the tree
         pk_tree_construct(public_keys)
     }
+
+    /// Returns the block number of this macro block.
+    pub fn block_number(&self) -> u32 {
+        self.header.block_number
+    }
+
+    /// Returns the epoch number of this macro block.
+    pub fn epoch_number(&self) -> u32 {
+        policy::epoch_at(self.header.block_number)
+    }
 }
 
 impl MacroBody {

@@ -3,7 +3,7 @@ use block::{Block, MacroBlock};
 use blockchain::HistoryTreeChunk;
 use hash::Blake2bHash;
 use network_interface::message::*;
-use std::fmt::Debug;
+use std::fmt::{Debug, Error, Formatter};
 
 use crate::request_response;
 
@@ -118,7 +118,7 @@ impl Message for RequestBatchSet {
 
 /// This message contains a macro block and the number of extended transactions (transitions)
 /// within this epoch.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct BatchSetInfo {
     pub block: MacroBlock,
     pub history_len: u32,
@@ -128,6 +128,18 @@ request_response!(BatchSetInfo);
 
 impl Message for BatchSetInfo {
     const TYPE_ID: u64 = 203;
+}
+
+impl Debug for BatchSetInfo {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        f.debug_struct("BatchSetInfo")
+            .field("epoch_number", &self.block.epoch_number())
+            .field("block_number", &self.block.block_number())
+            .field("is_election_block", &self.block.is_election_block())
+            .field("history_len", &self.history_len)
+            .field("request_identifier", &self.request_identifier)
+            .finish()
+    }
 }
 
 /// This message contains a chunk of the history.
