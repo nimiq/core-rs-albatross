@@ -22,7 +22,16 @@ pub struct HistoryTreeChunk {
 
 impl Debug for HistoryTreeChunk {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "HistoryTreeChunk {{ /* TODO */ }}")
+        let mut dbg = f.debug_struct("HistoryTreeChunk");
+        let len = self.history.len();
+        dbg.field("length", &len);
+        if !self.history.is_empty() {
+            let first = self.history.first().unwrap();
+            let last = self.history.last().unwrap();
+            dbg.field("first_block", &first.block_number);
+            dbg.field("last_block", &last.block_number);
+        }
+        dbg.finish()
     }
 }
 

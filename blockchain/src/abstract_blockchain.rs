@@ -46,6 +46,11 @@ pub trait AbstractBlockchain {
         self.head().block_number()
     }
 
+    /// Returns the epoch number at the head of the main chain.
+    fn epoch_number(&self) -> u32 {
+        self.head().epoch_number()
+    }
+
     /// Returns the timestamp at the head of the main chain.
     fn timestamp(&self) -> u64 {
         self.head().timestamp()

@@ -14,6 +14,7 @@ use nimiq_vrf::VrfSeed;
 use crate::macro_block::{MacroBlock, MacroHeader};
 use crate::micro_block::{MicroBlock, MicroHeader};
 use crate::{MacroBody, MicroBody, MicroJustification, TendermintProof};
+use nimiq_primitives::policy;
 
 /// Defines the type of the block, either Micro or Macro (which includes both checkpoint and
 /// election blocks).
@@ -55,6 +56,11 @@ impl Block {
             Block::Macro(ref block) => block.header.block_number,
             Block::Micro(ref block) => block.header.block_number,
         }
+    }
+
+    /// Returns the epoch number of the block.
+    pub fn epoch_number(&self) -> u32 {
+        policy::epoch_at(self.block_number())
     }
 
     /// Returns the view number of the block.
