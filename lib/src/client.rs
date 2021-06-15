@@ -126,8 +126,8 @@ impl ClientInner {
         #[cfg(feature = "wallet")]
         let wallet_store = Arc::new(WalletStore::new(environment.clone()));
 
+        // Initialize consensus
         let sync = HistorySync::<Network>::new(Arc::clone(&blockchain), network_events);
-
         let consensus = Consensus::with_min_peers(
             environment.clone(),
             blockchain,
@@ -138,11 +138,7 @@ impl ClientInner {
         )
         .await;
 
-        // Tell the network to listen on the given addresses
-        network
-            .listen_on_addresses(config.network.listen_addresses)
-            .await;
-
+        // Initialize validator
         #[cfg(feature = "validator")]
         let validator = {
             if let Some(config) = &config.validator {
@@ -201,6 +197,10 @@ impl ClientInner {
                 None
             }
         };
+
+        // Start network.
+        network.listen_on(config.network.listen_addresses).await;
+        network.start_connecting().await;
 
         Ok((
             ClientInner {

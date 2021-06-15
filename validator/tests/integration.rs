@@ -62,7 +62,7 @@ async fn consensus(peer_id: u64, genesis_info: GenesisInfo) -> Consensus {
         genesis_info.hash.clone(),
     );
     let network = Arc::new(Network::new(clock, config).await);
-    network.listen_on_addresses(vec![peer_address]).await;
+    network.listen_on(vec![peer_address]).await;
 
     let sync_protocol =
         HistorySync::<Network>::new(Arc::clone(&blockchain), network.subscribe_events());
