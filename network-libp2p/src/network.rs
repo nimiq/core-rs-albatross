@@ -4,12 +4,15 @@ use std::{collections::HashMap, pin::Pin, sync::Arc};
 
 use async_trait::async_trait;
 use bytes::{buf::BufExt, Bytes};
+use futures::executor;
 use futures::{
     channel::{mpsc, oneshot},
     future::FutureExt,
     sink::SinkExt,
     stream::{BoxStream, Stream, StreamExt},
 };
+#[cfg(feature = "memory-transport")]
+use libp2p::core::transport::MemoryTransport;
 use libp2p::{
     core,
     core::{
@@ -29,9 +32,6 @@ use libp2p::{
 };
 use tokio::sync::broadcast;
 use tracing::Instrument;
-
-#[cfg(feature = "memory-transport")]
-use libp2p::core::transport::MemoryTransport;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_network_interface::{
@@ -99,9 +99,10 @@ pub(crate) enum NetworkAction {
         type_id: MessageType,
         output: mpsc::Sender<(Bytes, Arc<Peer>)>,
     },
-    ListenOnAddresses {
+    ListenOn {
         listen_addresses: Vec<Multiaddr>,
     },
+    StartConnecting,
 }
 
 struct TaskState {
@@ -593,11 +594,14 @@ impl Network {
             NetworkAction::ReceiveFromAll { type_id, output } => {
                 swarm.message.receive_from_all(type_id, output);
             }
-            NetworkAction::ListenOnAddresses { listen_addresses } => {
+            NetworkAction::ListenOn { listen_addresses } => {
                 for listen_address in listen_addresses {
                     Swarm::listen_on(swarm, listen_address)
                         .expect("Failed to listen on provided address");
                 }
+            }
+            NetworkAction::StartConnecting => {
+                swarm.peers.start_connecting();
             }
         }
 
@@ -614,12 +618,21 @@ impl Network {
         Ok(output_rx.await?)
     }
 
-    pub async fn listen_on_addresses(&self, listen_addresses: Vec<Multiaddr>) {
+    pub async fn listen_on(&self, listen_addresses: Vec<Multiaddr>) {
         self.action_tx
             .clone()
-            .send(NetworkAction::ListenOnAddresses { listen_addresses })
+            .send(NetworkAction::ListenOn { listen_addresses })
             .await
             .map_err(|e| log::error!("Failed to send NetworkAction::ListenOnAddress: {:?}", e))
+            .ok();
+    }
+
+    pub async fn start_connecting(&self) {
+        self.action_tx
+            .clone()
+            .send(NetworkAction::StartConnecting)
+            .await
+            .map_err(|e| log::error!("Failed to send NetworkAction::StartConnecting: {:?}", e))
             .ok();
     }
 }
@@ -658,7 +671,7 @@ impl NetworkInterface for Network {
         let mut action_tx = self.action_tx.clone();
 
         // Future to register the channel.
-        let register_stream = async move {
+        let register_future = async move {
             let (tx, rx) = mpsc::channel(0);
 
             action_tx
@@ -672,8 +685,13 @@ impl NetworkInterface for Network {
             rx
         };
 
-        register_stream
-            .flatten_stream()
+        // XXX Drive the register future to completion. This is needed because we want the receivers
+        // to be properly set up when this function returns. It should be ok to block here as we're
+        // only calling this during client initialization.
+        // A better way to do this would be make receive_from_all() async.
+        let receive_stream = executor::block_on(register_future);
+
+        receive_stream
             .filter_map(|(data, peer)| async move {
                 // Map the (data, peer) stream to (message, peer) by deserializing the messages.
                 match <T as Deserialize>::deserialize(&mut data.reader()) {
@@ -856,6 +874,7 @@ mod tests {
     use rand::{thread_rng, Rng};
 
     use beserial::{Deserialize, Serialize};
+    use nimiq_network_interface::network::{MsgAcceptance, NetworkEvent, Topic};
     use nimiq_network_interface::{
         message::Message,
         network::Network as NetworkInterface,
@@ -863,7 +882,6 @@ mod tests {
     };
     use nimiq_utils::time::OffsetTime;
 
-    use super::{Config, Network};
     use crate::{
         discovery::{
             behaviour::DiscoveryConfig,
@@ -871,7 +889,8 @@ mod tests {
         },
         message::peer::Peer,
     };
-    use nimiq_network_interface::network::{MsgAcceptance, NetworkEvent, Topic};
+
+    use super::{Config, Network};
 
     #[derive(Clone, Debug, Deserialize, Serialize)]
     struct TestMessage {
@@ -957,7 +976,7 @@ mod tests {
 
             let clock = Arc::new(OffsetTime::new());
             let net = Network::new(clock, network_config(address.clone())).await;
-            net.listen_on_addresses(vec![address.clone()]).await;
+            net.listen_on(vec![address.clone()]).await;
 
             tracing::debug!(address = ?address, peer_id = ?net.local_peer_id, "creating node");
 
@@ -992,10 +1011,10 @@ mod tests {
         let addr2 = multiaddr![Memory(thread_rng().gen::<u64>())];
 
         let net1 = Network::new(Arc::new(OffsetTime::new()), network_config(addr1.clone())).await;
-        net1.listen_on_addresses(vec![addr1.clone()]).await;
+        net1.listen_on(vec![addr1.clone()]).await;
 
         let net2 = Network::new(Arc::new(OffsetTime::new()), network_config(addr2.clone())).await;
-        net2.listen_on_addresses(vec![addr2.clone()]).await;
+        net2.listen_on(vec![addr2.clone()]).await;
 
         tracing::debug!(address = ?addr1, peer_id = ?net1.local_peer_id, "Network 1");
         tracing::debug!(address = ?addr2, peer_id = ?net2.local_peer_id, "Network 2");

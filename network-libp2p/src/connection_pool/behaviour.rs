@@ -80,7 +80,7 @@ impl ConnectionPoolBehaviour {
             ipv6_count: 0,
         };
 
-        let mut pb = Self {
+        Self {
             peer_contact_book,
             connected_peers: HashSet::new(),
             pending_connections: vec![],
@@ -90,12 +90,10 @@ impl ConnectionPoolBehaviour {
             config: ConnectionPoolLimitsConfig::default(),
             banned: HashSet::new(),
             events: VecDeque::new(),
-        };
-        pb.start_connecting();
-        pb
+        }
     }
 
-    fn start_connecting(&mut self) {
+    pub fn start_connecting(&mut self) {
         if self.next_check_timeout.is_none() {
             self.next_check_timeout =
                 Some(Interval::new_at(Instant::now(), Duration::from_secs(3)));
