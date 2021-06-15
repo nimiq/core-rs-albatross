@@ -46,9 +46,7 @@ impl<P: Peer> Debug for ConsensusAgent<P> {
 impl<P: Peer> ConsensusAgent<P> {
     pub fn new(peer: Arc<P>) -> Self {
         // TODO: Timeout
-        // NOTE: Set this very high for now. When starting a small test-net the first request
-        // can easily timeout.
-        let timeout = Duration::from_secs(60);
+        let timeout = Duration::from_secs(10);
         let block_hashes_requests = RequestResponse::new(Arc::clone(&peer), timeout);
         let epoch_requests = RequestResponse::new(Arc::clone(&peer), timeout);
         let history_chunk_requests = RequestResponse::new(Arc::clone(&peer), timeout);
