@@ -473,25 +473,15 @@ impl HistoryStore {
         ));
 
         // Calculate number of nodes for the verifier.
-        // TODO: This seriously needs to be refactored. NOT READY.
-        let ext_txs = self.get_block_transactions(verifier_block_number, Some(txn));
+        // Leaf indices are 0 based thus the + 1
+        // TODO Refactor get_last_leaf_index_of_block
+        let leaf_count =
+            self.get_last_leaf_index_of_block(verifier_block_number, Some(txn)) as usize + 1;
+        let number_of_nodes = leaf_number_to_index(leaf_count);
 
-        let mut max_leaf = 0;
-
-        for ext_tx in ext_txs {
-            let leaves = self.get_leaves_by_tx_hash(&ext_tx.tx_hash(), Some(txn));
-
-            for leaf in leaves {
-                if leaf.index > max_leaf {
-                    max_leaf = leaf.index;
-                }
-            }
-        }
-
-        let number_of_nodes = leaf_number_to_index((max_leaf + 1) as usize);
-
-        let start = cmp::min(chunk_size * chunk_index, max_leaf as usize + 1);
-        let end = cmp::min(start + chunk_size, max_leaf as usize + 1);
+        // Calculate chunk boundaries
+        let start = cmp::min(chunk_size * chunk_index, leaf_count);
+        let end = cmp::min(start + chunk_size, leaf_count);
 
         // TODO: Setting `assume_previous` to false allows the proofs to be verified independently.
         //  This, however, increases the size of the proof. We might change this in the future.
@@ -715,6 +705,30 @@ impl HistoryStore {
             }
             ExtTxData::Inherent(_) => {}
         }
+    }
+
+    // Calculate the maximum leaf index for a given block-height within its epoch
+    // This is generally only used for macro blocks, but it is for now not restricted to them.
+    // TODO: This seriously needs to be refactored. NOT READY.
+    pub fn get_last_leaf_index_of_block(
+        &self,
+        block_number: u32,
+        txn_option: Option<&Transaction>,
+    ) -> u32 {
+        let ext_txs = self.get_block_transactions(block_number, txn_option);
+
+        let mut max_leaf = 0;
+
+        for ext_tx in ext_txs {
+            let leaves = self.get_leaves_by_tx_hash(&ext_tx.tx_hash(), txn_option);
+
+            for leaf in leaves {
+                if leaf.index > max_leaf {
+                    max_leaf = leaf.index;
+                }
+            }
+        }
+        max_leaf
     }
 
     /// Returns a vector containing all leaf hashes and indexes corresponding to the given
