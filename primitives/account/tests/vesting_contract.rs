@@ -1,8 +1,9 @@
 use std::convert::{TryFrom, TryInto};
 
 use beserial::{Deserialize, Serialize, SerializingError};
-use nimiq_account::{AccountError, AccountTransactionInteraction, AccountType, VestingContract};
+use nimiq_account::{AccountError, AccountTransactionInteraction, VestingContract};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
+use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_transaction::account::AccountTransactionVerification;

@@ -3,27 +3,24 @@ use std::mem;
 use std::ops::Add;
 
 use beserial::{Deserialize, Serialize};
-use hash::{Blake2bHash, Hash};
 use nimiq_collections::BitSet;
-use primitives::account::ValidatorId;
-use primitives::coin::Coin;
-use primitives::policy;
-use primitives::slots::SlashedSlot;
-use transaction::account::staking_contract::{
+use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_primitives::account::{AccountType, ValidatorId};
+use nimiq_primitives::coin::Coin;
+use nimiq_primitives::policy;
+use nimiq_primitives::slots::SlashedSlot;
+use nimiq_transaction::account::staking_contract::{
     IncomingStakingTransactionData, OutgoingStakingTransactionProof, SelfStakingTransactionData,
 };
-use transaction::Transaction;
+use nimiq_transaction::Transaction;
 
-use crate::inherent::AccountInherentInteraction;
+use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction};
 use crate::staking_contract::actions::staker::InactiveStakeReceipt;
 use crate::staking_contract::actions::validator::{
     DropValidatorReceipt, InactiveValidatorReceipt, UnparkReceipt, UpdateValidatorReceipt,
 };
 use crate::staking_contract::SlashReceipt;
-use crate::{
-    Account, AccountError, AccountTransactionInteraction, AccountType, Inherent, InherentType,
-    StakingContract,
-};
+use crate::{Account, AccountError, Inherent, InherentType, StakingContract};
 
 pub mod staker;
 pub mod validator;

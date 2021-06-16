@@ -1,13 +1,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
-use beserial::{Deserialize, Serialize};
 use parking_lot::RwLock;
 
-use bls::CompressedPublicKey as BlsPublicKey;
-use keys::Address;
-use primitives::account::ValidatorId;
-use primitives::coin::Coin;
+use beserial::{Deserialize, Serialize};
+use nimiq_bls::CompressedPublicKey as BlsPublicKey;
+use nimiq_keys::Address;
+use nimiq_primitives::account::ValidatorId;
+use nimiq_primitives::coin::Coin;
 
 use crate::staking_contract::actions::staker::InactiveStakeReceipt;
 use crate::staking_contract::{InactiveValidator, Validator};

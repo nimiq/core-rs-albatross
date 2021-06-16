@@ -10,12 +10,6 @@ license = "Apache-2.0"
 categories = ["cryptography::cryptocurrencies"]
 keywords = ["nimiq", "cryptocurrency", "blockchain"]
 
-[badges]
-travis-ci = { repository = "nimiq/core-rs", branch = "master" }
-is-it-maintained-issue-resolution = { repository = "nimiq/core-rs" }
-is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
-maintenance = { status = "experimental" }
-
 [dependencies]
 hex = { version = "0.4" }
 lazy_static = "1.3"
@@ -30,10 +24,12 @@ beserial = { path = "../../beserial" }
 beserial_derive = { path = "../../beserial/beserial_derive" }
 nimiq-bls = { path = "../../bls" }
 nimiq-collections = { path = "../../collections", features = ["bitset"] }
+nimiq-database = { path = "../../database" }
 nimiq-hash = { path = "../../hash" }
 nimiq-keys = { path = "../../keys" }
 nimiq-primitives = { path = "..", features = ["coin", "policy", "validators"] }
 nimiq-transaction = { path = "../transaction" }
+nimiq-trie = { path = "../trie" }
 nimiq-utils = { path = "../../utils", features = ["hash-rng"] }
 nimiq-vrf = { path = "../../vrf" }
 nimiq-macros = { path = "../../macros" }

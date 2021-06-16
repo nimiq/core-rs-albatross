@@ -1,5 +1,6 @@
-use beserial::{Deserialize, Serialize};
 use log::error;
+
+use beserial::{Deserialize, Serialize};
 use nimiq_hash::{Blake2bHash, Hash};
 
 use crate::key_nibbles::KeyNibbles;

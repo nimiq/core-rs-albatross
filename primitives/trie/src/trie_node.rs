@@ -1,7 +1,8 @@
-use log::error;
 use std::io;
 use std::iter;
 use std::slice;
+
+use log::error;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};

@@ -8,15 +8,15 @@ use beserial::{
     Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
     SerializingError, WriteBytesExt,
 };
-use keys::Address;
 use nimiq_bls::CompressedSignature as BlsSignature;
 use nimiq_collections::BitSet;
-use primitives::account::ValidatorId;
-use primitives::slots::{Validators, ValidatorsBuilder};
-use primitives::{coin::Coin, policy};
-use transaction::account::staking_contract::IncomingStakingTransactionData;
-use transaction::{SignatureProof, Transaction};
-use vrf::{AliasMethod, VrfSeed, VrfUseCase};
+use nimiq_keys::Address;
+use nimiq_primitives::account::ValidatorId;
+use nimiq_primitives::slots::{Validators, ValidatorsBuilder};
+use nimiq_primitives::{coin::Coin, policy};
+use nimiq_transaction::account::staking_contract::IncomingStakingTransactionData;
+use nimiq_transaction::{SignatureProof, Transaction};
+use nimiq_vrf::{AliasMethod, VrfSeed, VrfUseCase};
 
 use crate::AccountError;
 

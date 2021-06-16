@@ -1,8 +1,10 @@
-use beserial::{Deserialize, Serialize};
+use std::marker::PhantomData;
+
 use log::error;
+
+use beserial::{Deserialize, Serialize};
 use nimiq_database::{Database, Environment, Transaction, WriteTransaction};
 use nimiq_hash::{Blake2bHash, Hash};
-use std::marker::PhantomData;
 
 use crate::key_nibbles::KeyNibbles;
 use crate::trie_node::TrieNode;

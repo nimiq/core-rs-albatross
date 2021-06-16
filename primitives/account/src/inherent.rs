@@ -1,10 +1,9 @@
-use keys::Address;
-use primitives::coin::Coin;
+use std::io;
 
-use crate::AccountError;
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use nimiq_hash::{Hash, SerializeContent};
-use std::io;
+use nimiq_keys::Address;
+use nimiq_primitives::coin::Coin;
 
 #[derive(Clone, Debug, Eq, PartialEq, Copy, Serialize, Deserialize)]
 #[repr(u8)]
@@ -40,30 +39,6 @@ impl Inherent {
     pub fn is_pre_transactions(&self) -> bool {
         self.ty.is_pre_transactions()
     }
-}
-
-pub trait AccountInherentInteraction: Sized {
-    fn check_inherent(
-        &self,
-        inherent: &Inherent,
-        block_height: u32,
-        time: u64,
-    ) -> Result<(), AccountError>;
-
-    fn commit_inherent(
-        &mut self,
-        inherent: &Inherent,
-        block_height: u32,
-        time: u64,
-    ) -> Result<Option<Vec<u8>>, AccountError>;
-
-    fn revert_inherent(
-        &mut self,
-        inherent: &Inherent,
-        block_height: u32,
-        time: u64,
-        receipt: Option<&Vec<u8>>,
-    ) -> Result<(), AccountError>;
 }
 
 impl Hash for Inherent {}
