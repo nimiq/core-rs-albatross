@@ -1,11 +1,13 @@
 use beserial::{Deserialize, Serialize};
-use keys::Address;
-use primitives::coin::Coin;
-use transaction::account::vesting_contract::CreationTransactionData;
-use transaction::{SignatureProof, Transaction};
+use nimiq_keys::Address;
+use nimiq_primitives::account::AccountType;
+use nimiq_primitives::coin::Coin;
+use nimiq_transaction::account::vesting_contract::CreationTransactionData;
+use nimiq_transaction::{SignatureProof, Transaction};
 
-use crate::inherent::{AccountInherentInteraction, Inherent};
-use crate::{Account, AccountError, AccountTransactionInteraction, AccountType};
+use crate::inherent::Inherent;
+use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction};
+use crate::{Account, AccountError};
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]

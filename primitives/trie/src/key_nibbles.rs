@@ -1,4 +1,3 @@
-use log::error;
 use std::borrow::Cow;
 use std::cmp;
 use std::fmt;
@@ -6,6 +5,8 @@ use std::io;
 use std::ops;
 use std::str;
 use std::usize;
+
+use log::error;
 
 use beserial::{
     Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,

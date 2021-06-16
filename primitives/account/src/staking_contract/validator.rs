@@ -10,10 +10,10 @@ use beserial::{
     Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
     SerializingError, WriteBytesExt,
 };
-use bls::CompressedPublicKey as BlsPublicKey;
-use keys::Address;
-use primitives::account::ValidatorId;
-use primitives::coin::Coin;
+use nimiq_bls::CompressedPublicKey as BlsPublicKey;
+use nimiq_keys::Address;
+use nimiq_primitives::account::ValidatorId;
+use nimiq_primitives::coin::Coin;
 
 use crate::{Account, AccountError};
 

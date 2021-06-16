@@ -3,15 +3,17 @@ use std::convert::TryInto;
 use rand::thread_rng;
 
 use beserial::{Deserialize, Serialize};
-use nimiq_account::inherent::{AccountInherentInteraction, Inherent, InherentType};
-use nimiq_account::{AccountError, AccountTransactionInteraction, AccountType, StakingContract};
+use nimiq_account::{
+    AccountError, AccountInherentInteraction, AccountTransactionInteraction, Inherent,
+    InherentType, StakingContract,
+};
 use nimiq_bls::CompressedPublicKey as BlsPublicKey;
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_bls::SecretKey as BlsSecretKey;
 use nimiq_bls::Signature as BlsSignature;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
-use nimiq_primitives::account::ValidatorId;
+use nimiq_primitives::account::{AccountType, ValidatorId};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::slots::SlashedSlot;

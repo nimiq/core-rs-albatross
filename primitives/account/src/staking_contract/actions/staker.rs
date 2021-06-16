@@ -1,7 +1,7 @@
 use beserial::{Deserialize, Serialize};
-use keys::Address;
-use primitives::account::ValidatorId;
-use primitives::coin::Coin;
+use nimiq_keys::Address;
+use nimiq_primitives::account::ValidatorId;
+use nimiq_primitives::coin::Coin;
 
 use crate::staking_contract::InactiveStake;
 use crate::{Account, AccountError, StakingContract};

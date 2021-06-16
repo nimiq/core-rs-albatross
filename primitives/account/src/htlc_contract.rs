@@ -1,16 +1,17 @@
 use std::convert::TryFrom;
 
 use beserial::{Deserialize, Serialize};
-use keys::Address;
-use primitives::account::*;
-use primitives::coin::Coin;
-use transaction::account::htlc_contract::{
+use nimiq_keys::Address;
+use nimiq_primitives::account::*;
+use nimiq_primitives::coin::Coin;
+use nimiq_transaction::account::htlc_contract::{
     AnyHash, CreationTransactionData, HashAlgorithm, ProofType,
 };
-use transaction::{SignatureProof, Transaction};
+use nimiq_transaction::{SignatureProof, Transaction};
 
-use crate::inherent::{AccountInherentInteraction, Inherent};
-use crate::{Account, AccountError, AccountTransactionInteraction};
+use crate::inherent::Inherent;
+use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction};
+use crate::{Account, AccountError};
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
