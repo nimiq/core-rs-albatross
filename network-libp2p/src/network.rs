@@ -213,7 +213,7 @@ impl Network {
 
         let limits = ConnectionLimits::default()
             .with_max_pending_incoming(Some(5))
-            .with_max_pending_outgoing(Some(2))
+            .with_max_pending_outgoing(Some(16))
             .with_max_established_incoming(Some(4800))
             .with_max_established_outgoing(Some(4800))
             .with_max_established_per_peer(Some(MAX_CONNECTIONS_PER_PEER));
