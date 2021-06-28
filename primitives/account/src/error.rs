@@ -37,6 +37,6 @@ pub enum AccountError {
     CoinConvert(#[from] CoinConvertError),
     #[error("Invalid inherent")]
     InvalidInherent,
-    #[error("Inherent target address {address} does not exist in the Accounts Tree.")]
-    InvalidTargetAddress { address: Address },
+    #[error("Address {address} does not exist in the Accounts Tree.")]
+    NonExistentAddress { address: Address },
 }
