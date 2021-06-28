@@ -19,7 +19,6 @@ pub enum AccountType {
     Vesting = 1,
     HTLC = 2,
     Staking = 3,
-    Reward = 4,
 }
 
 impl AccountType {
