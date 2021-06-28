@@ -55,17 +55,6 @@ impl Account {
             }),
         }
     }
-
-    pub fn balance_sufficient(balance: Coin, value: Coin) -> Result<(), AccountError> {
-        if balance < value {
-            Err(AccountError::InsufficientFunds {
-                balance,
-                needed: value,
-            })
-        } else {
-            Ok(())
-        }
-    }
 }
 
 impl AccountTransactionInteraction for Account {
