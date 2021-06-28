@@ -3,6 +3,7 @@ use std::io;
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use nimiq_hash::{Hash, SerializeContent};
 use nimiq_keys::Address;
+use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
 
 #[derive(Clone, Debug, Eq, PartialEq, Copy, Serialize, Deserialize)]
@@ -30,6 +31,7 @@ impl InherentType {
 pub struct Inherent {
     pub ty: InherentType,
     pub target: Address,
+    pub target_type: AccountType,
     pub value: Coin,
     pub data: Vec<u8>,
 }

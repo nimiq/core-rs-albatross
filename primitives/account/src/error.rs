@@ -1,6 +1,7 @@
 use thiserror::Error;
 
 use beserial::SerializingError;
+use nimiq_keys::Address;
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::{Coin, CoinConvertError, CoinParseError};
 use nimiq_transaction::TransactionError;
@@ -36,4 +37,6 @@ pub enum AccountError {
     CoinConvert(#[from] CoinConvertError),
     #[error("Invalid inherent")]
     InvalidInherent,
+    #[error("Inherent target address {address} does not exist in the Accounts Tree.")]
+    InvalidTargetAddress { address: Address },
 }
