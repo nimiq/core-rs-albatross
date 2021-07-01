@@ -11,7 +11,9 @@ use nimiq_transaction::{SignatureProof, Transaction};
 
 use crate::inherent::Inherent;
 use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction};
-use crate::{Account, AccountError};
+use crate::{Account, AccountError, AccountsTree};
+use nimiq_database::WriteTransaction;
+use nimiq_trie::key_nibbles::KeyNibbles;
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
@@ -49,7 +51,7 @@ impl HashedTimeLockedContract {
         }
     }
 
-    pub fn with_balance(&self, balance: Coin) -> Self {
+    pub fn change_balance(&self, balance: Coin) -> Self {
         HashedTimeLockedContract {
             balance,
             sender: self.sender.clone(),
@@ -64,28 +66,25 @@ impl HashedTimeLockedContract {
 }
 
 impl AccountTransactionInteraction for HashedTimeLockedContract {
-    fn new_contract(
-        account_type: AccountType,
-        balance: Coin,
-        transaction: &Transaction,
-        block_height: u32,
-        time: u64,
-    ) -> Result<Self, AccountError> {
-        if account_type == AccountType::HTLC {
-            HashedTimeLockedContract::create(balance, transaction, block_height, time)
-        } else {
-            Err(AccountError::InvalidForRecipient)
-        }
-    }
-
     fn create(
+        accounts_tree: &AccountsTree,
+        db_txn: &mut WriteTransaction,
         balance: Coin,
         transaction: &Transaction,
         _block_height: u32,
-        _time: u64,
-    ) -> Result<Self, AccountError> {
+        _block_time: u64,
+    ) -> Result<(), AccountError> {
         let data = CreationTransactionData::parse(transaction)?;
-        Ok(HashedTimeLockedContract::new(
+
+        let contract_key = KeyNibbles::from(transaction.contract_creation_address());
+
+        if accounts_tree.get(db_txn, &contract_key).is_some() {
+            return Err(AccountError::AlreadyExistentContract {
+                address: transaction.contract_creation_address(),
+            });
+        }
+
+        let contract = HashedTimeLockedContract::new(
             balance,
             data.sender,
             data.recipient,
@@ -94,58 +93,81 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
             data.hash_count,
             data.timeout,
             transaction.value,
-        ))
-    }
+        );
 
-    fn check_incoming_transaction(
-        _transaction: &Transaction,
-        _block_height: u32,
-        _time: u64,
-    ) -> Result<(), AccountError> {
-        Err(AccountError::InvalidForRecipient)
+        accounts_tree.put(db_txn, &contract_key, Account(contract));
+
+        Ok(())
     }
 
     fn commit_incoming_transaction(
-        &mut self,
+        _accounts_tree: &AccountsTree,
+        _db_txn: &mut WriteTransaction,
         _transaction: &Transaction,
         _block_height: u32,
-        _time: u64,
+        _block_time: u64,
     ) -> Result<Option<Vec<u8>>, AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
 
     fn revert_incoming_transaction(
-        &mut self,
+        _accounts_tree: &AccountsTree,
+        _db_txn: &mut WriteTransaction,
         _transaction: &Transaction,
         _block_height: u32,
-        _time: u64,
+        _block_time: u64,
         _receipt: Option<&Vec<u8>>,
     ) -> Result<(), AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
 
-    fn check_outgoing_transaction(
-        &self,
+    fn commit_outgoing_transaction(
+        accounts_tree: &AccountsTree,
+        db_txn: &mut WriteTransaction,
         transaction: &Transaction,
-        _block_height: u32,
-        time: u64,
-    ) -> Result<(), AccountError> {
-        let balance: Coin = Account::balance_sub(self.balance, transaction.total_value()?)?;
+        block_height: u32,
+        block_time: u64,
+    ) -> Result<Option<Vec<u8>>, AccountError> {
+        let key = KeyNibbles::from(transaction.sender.clone());
+
+        let account = accounts_tree
+            .get(db_txn, &key)
+            .ok_or(AccountError::NonExistentAddress {
+                address: transaction.sender.clone(),
+            })?;
+
+        let htlc = match account {
+            Account::HTLC(value) => value,
+            _ => {
+                return Err(AccountError::TypeMismatch {
+                    expected: AccountType::HTLC,
+                    got: account.account_type(),
+                })
+            }
+        };
+
+        let new_balance = Account::balance_sub(account.balance(), transaction.total_value()?)?;
+
         let proof_buf = &mut &transaction.proof[..];
+
         let proof_type: ProofType = Deserialize::deserialize(proof_buf)?;
+
         match proof_type {
             ProofType::RegularTransfer => {
                 // Check that the contract has not expired yet.
-                if self.timeout < time {
-                    warn!("HTLC has expired: {} < {}", self.timeout, time);
+                if htlc.timeout < block_time {
+                    warn!("HTLC has expired: {} < {}", htlc.timeout, block_time);
                     return Err(AccountError::InvalidForSender);
                 }
 
                 // Check that the provided hash_root is correct.
                 let hash_algorithm: HashAlgorithm = Deserialize::deserialize(proof_buf)?;
+
                 let hash_depth: u8 = Deserialize::deserialize(proof_buf)?;
+
                 let hash_root: AnyHash = Deserialize::deserialize(proof_buf)?;
-                if hash_algorithm != self.hash_algorithm || hash_root != self.hash_root {
+
+                if hash_algorithm != htlc.hash_algorithm || hash_root != htlc.hash_root {
                     warn!("HTLC hash mismatch");
                     return Err(AccountError::InvalidForSender);
                 }
@@ -155,20 +177,23 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
 
                 // Check that the transaction is signed by the authorized recipient.
                 let signature_proof: SignatureProof = Deserialize::deserialize(proof_buf)?;
-                if !signature_proof.is_signed_by(&self.recipient) {
+
+                if !signature_proof.is_signed_by(&htlc.recipient) {
                     return Err(AccountError::InvalidSignature);
                 }
 
                 // Check min cap.
-                let cap_ratio = 1f64 - (f64::from(hash_depth) / f64::from(self.hash_count));
+                let cap_ratio = 1f64 - (f64::from(hash_depth) / f64::from(htlc.hash_count));
+
                 let min_cap = Coin::try_from(
-                    (cap_ratio * u64::from(self.total_amount) as f64)
+                    (cap_ratio * u64::from(htlc.total_amount) as f64)
                         .floor()
                         .max(0f64) as u64,
                 )?;
-                if balance < min_cap {
+
+                if new_balance < min_cap {
                     return Err(AccountError::InsufficientFunds {
-                        balance,
+                        balance: new_balance,
                         needed: min_cap,
                     });
                 }
@@ -177,82 +202,84 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
                 // Check that the transaction is signed by both parties.
                 let signature_proof_recipient: SignatureProof =
                     Deserialize::deserialize(proof_buf)?;
+
                 let signature_proof_sender: SignatureProof = Deserialize::deserialize(proof_buf)?;
-                if !signature_proof_recipient.is_signed_by(&self.recipient)
-                    || !signature_proof_sender.is_signed_by(&self.sender)
+
+                if !signature_proof_recipient.is_signed_by(&htlc.recipient)
+                    || !signature_proof_sender.is_signed_by(&htlc.sender)
                 {
                     return Err(AccountError::InvalidSignature);
                 }
             }
             ProofType::TimeoutResolve => {
                 // Check that the contract has expired.
-                if self.timeout >= time {
-                    warn!("HTLC has not yet expired: {} >= {}", self.timeout, time);
+                if htlc.timeout >= block_time {
+                    warn!(
+                        "HTLC has not yet expired: {} >= {}",
+                        htlc.timeout, block_time
+                    );
                     return Err(AccountError::InvalidForSender);
                 }
 
                 // Check that the transaction is signed by the original sender.
                 let signature_proof: SignatureProof = Deserialize::deserialize(proof_buf)?;
-                if !signature_proof.is_signed_by(&self.sender) {
+
+                if !signature_proof.is_signed_by(&htlc.sender) {
                     return Err(AccountError::InvalidSignature);
                 }
             }
         }
 
-        Ok(())
-    }
+        accounts_tree.put(db_txn, &key, Account(htlc.change_balance(new_balance)));
 
-    fn commit_outgoing_transaction(
-        &mut self,
-        transaction: &Transaction,
-        block_height: u32,
-        time: u64,
-    ) -> Result<Option<Vec<u8>>, AccountError> {
-        self.check_outgoing_transaction(transaction, block_height, time)?;
-        self.balance = Account::balance_sub(self.balance, transaction.total_value()?)?;
         Ok(None)
     }
 
     fn revert_outgoing_transaction(
-        &mut self,
+        accounts_tree: &AccountsTree,
+        db_txn: &mut WriteTransaction,
         transaction: &Transaction,
         _block_height: u32,
-        _time: u64,
+        _block_time: u64,
         receipt: Option<&Vec<u8>>,
     ) -> Result<(), AccountError> {
         if receipt.is_some() {
             return Err(AccountError::InvalidReceipt);
         }
 
-        self.balance = Account::balance_add(self.balance, transaction.total_value()?)?;
+        let key = KeyNibbles::from(transaction.sender.clone());
+
+        let account = accounts_tree
+            .get(db_txn, &key)
+            .ok_or(AccountError::NonExistentAddress {
+                address: transaction.sender.clone(),
+            })?;
+
+        let new_balance = Account::balance_add(account.balance(), transaction.total_value()?)?;
+
+        accounts_tree.put(db_txn, &key, Account(htlc.change_balance(new_balance)));
+
         Ok(())
     }
 }
 
 impl AccountInherentInteraction for HashedTimeLockedContract {
-    fn check_inherent(
-        &self,
-        _inherent: &Inherent,
-        _block_height: u32,
-        _time: u64,
-    ) -> Result<(), AccountError> {
-        Err(AccountError::InvalidInherent)
-    }
-
     fn commit_inherent(
-        &mut self,
+        _accounts_tree: &AccountsTree,
+        _db_txn: &mut WriteTransaction,
         _inherent: &Inherent,
         _block_height: u32,
-        _time: u64,
+        _block_time: u64,
     ) -> Result<Option<Vec<u8>>, AccountError> {
         Err(AccountError::InvalidInherent)
     }
 
     fn revert_inherent(
-        &mut self,
+        _accounts_tree: &AccountsTree,
+        _db_txn: &mut WriteTransaction,
         _inherent: &Inherent,
         _block_height: u32,
-        _time: u64,
+        _block_time: u64,
         _receipt: Option<&Vec<u8>>,
     ) -> Result<(), AccountError> {
         Err(AccountError::InvalidInherent)

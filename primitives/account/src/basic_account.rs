@@ -61,7 +61,7 @@ impl AccountTransactionInteraction for BasicAccount {
         db_txn: &mut WriteTransaction,
         transaction: &Transaction,
         _block_height: u32,
-        _time: u64,
+        _block_time: u64,
         receipt: Option<&Vec<u8>>,
     ) -> Result<(), AccountError> {
         if receipt.is_some() {
@@ -94,7 +94,7 @@ impl AccountTransactionInteraction for BasicAccount {
         db_txn: &mut WriteTransaction,
         transaction: &Transaction,
         _block_height: u32,
-        _time: u64,
+        _block_time: u64,
     ) -> Result<Option<Vec<u8>>, AccountError> {
         let key = KeyNibbles::from(transaction.sender.clone());
 
@@ -126,7 +126,7 @@ impl AccountTransactionInteraction for BasicAccount {
         db_txn: &mut WriteTransaction,
         transaction: &Transaction,
         _block_height: u32,
-        _time: u64,
+        _block_time: u64,
         receipt: Option<&Vec<u8>>,
     ) -> Result<(), AccountError> {
         if receipt.is_some() {
@@ -194,8 +194,8 @@ impl AccountInherentInteraction for BasicAccount {
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
         inherent: &Inherent,
-        block_height: u32,
-        time: u64,
+        _block_height: u32,
+        _block_time: u64,
         receipt: Option<&Vec<u8>>,
     ) -> Result<(), AccountError> {
         if receipt.is_some() {

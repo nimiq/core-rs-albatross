@@ -39,4 +39,6 @@ pub enum AccountError {
     InvalidInherent,
     #[error("Address {address} does not exist in the Accounts Tree.")]
     NonExistentAddress { address: Address },
+    #[error("There is already a contract at address {address} in the Accounts Tree.")]
+    AlreadyExistentContract { address: Address },
 }
