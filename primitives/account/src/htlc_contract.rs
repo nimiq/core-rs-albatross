@@ -1,6 +1,7 @@
 use std::convert::TryFrom;
 
 use beserial::{Deserialize, Serialize};
+use nimiq_database::WriteTransaction;
 use nimiq_keys::Address;
 use nimiq_primitives::account::*;
 use nimiq_primitives::coin::Coin;
@@ -8,12 +9,11 @@ use nimiq_transaction::account::htlc_contract::{
     AnyHash, CreationTransactionData, HashAlgorithm, ProofType,
 };
 use nimiq_transaction::{SignatureProof, Transaction};
+use nimiq_trie::key_nibbles::KeyNibbles;
 
 use crate::inherent::Inherent;
 use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction};
 use crate::{Account, AccountError, AccountsTree};
-use nimiq_database::WriteTransaction;
-use nimiq_trie::key_nibbles::KeyNibbles;
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
@@ -76,7 +76,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     ) -> Result<(), AccountError> {
         let data = CreationTransactionData::parse(transaction)?;
 
-        let contract_key = KeyNibbles::from(transaction.contract_creation_address());
+        let contract_key = KeyNibbles::from(&transaction.contract_creation_address());
 
         if accounts_tree.get(db_txn, &contract_key).is_some() {
             return Err(AccountError::AlreadyExistentContract {
@@ -95,7 +95,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
             transaction.value,
         );
 
-        accounts_tree.put(db_txn, &contract_key, Account(contract));
+        accounts_tree.put(db_txn, &contract_key, Account::HTLC(contract));
 
         Ok(())
     }
@@ -125,10 +125,10 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
         transaction: &Transaction,
-        block_height: u32,
+        _block_height: u32,
         block_time: u64,
     ) -> Result<Option<Vec<u8>>, AccountError> {
-        let key = KeyNibbles::from(transaction.sender.clone());
+        let key = KeyNibbles::from(&transaction.sender);
 
         let account = accounts_tree
             .get(db_txn, &key)
@@ -137,7 +137,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
             })?;
 
         let htlc = match account {
-            Account::HTLC(value) => value,
+            Account::HTLC(ref value) => value,
             _ => {
                 return Err(AccountError::TypeMismatch {
                     expected: AccountType::HTLC,
@@ -230,7 +230,11 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
             }
         }
 
-        accounts_tree.put(db_txn, &key, Account(htlc.change_balance(new_balance)));
+        accounts_tree.put(
+            db_txn,
+            &key,
+            Account::HTLC(htlc.change_balance(new_balance)),
+        );
 
         Ok(None)
     }
@@ -247,7 +251,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
             return Err(AccountError::InvalidReceipt);
         }
 
-        let key = KeyNibbles::from(transaction.sender.clone());
+        let key = KeyNibbles::from(&transaction.sender);
 
         let account = accounts_tree
             .get(db_txn, &key)
@@ -255,9 +259,23 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
                 address: transaction.sender.clone(),
             })?;
 
+        let htlc = match account {
+            Account::HTLC(ref value) => value,
+            _ => {
+                return Err(AccountError::TypeMismatch {
+                    expected: AccountType::HTLC,
+                    got: account.account_type(),
+                })
+            }
+        };
+
         let new_balance = Account::balance_add(account.balance(), transaction.total_value()?)?;
 
-        accounts_tree.put(db_txn, &key, Account(htlc.change_balance(new_balance)));
+        accounts_tree.put(
+            db_txn,
+            &key,
+            Account::HTLC(htlc.change_balance(new_balance)),
+        );
 
         Ok(())
     }

@@ -1,14 +1,15 @@
 use beserial::{Deserialize, Serialize};
+use nimiq_database::WriteTransaction;
 use nimiq_keys::Address;
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
 use nimiq_transaction::account::vesting_contract::CreationTransactionData;
 use nimiq_transaction::{SignatureProof, Transaction};
+use nimiq_trie::key_nibbles::KeyNibbles;
 
 use crate::inherent::Inherent;
 use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction};
 use crate::{Account, AccountError, AccountsTree};
-use nimiq_database::WriteTransaction;
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
@@ -75,7 +76,7 @@ impl AccountTransactionInteraction for VestingContract {
     ) -> Result<(), AccountError> {
         let data = CreationTransactionData::parse(transaction)?;
 
-        let contract_key = KeyNibbles::from(transaction.contract_creation_address());
+        let contract_key = KeyNibbles::from(&transaction.contract_creation_address());
 
         if accounts_tree.get(db_txn, &contract_key).is_some() {
             return Err(AccountError::AlreadyExistentContract {
@@ -92,7 +93,7 @@ impl AccountTransactionInteraction for VestingContract {
             data.total_amount,
         );
 
-        accounts_tree.put(db_txn, &contract_key, Account(contract));
+        accounts_tree.put(db_txn, &contract_key, Account::Vesting(contract));
 
         Ok(())
     }
@@ -125,7 +126,7 @@ impl AccountTransactionInteraction for VestingContract {
         _block_height: u32,
         block_time: u64,
     ) -> Result<Option<Vec<u8>>, AccountError> {
-        let key = KeyNibbles::from(transaction.sender.clone());
+        let key = KeyNibbles::from(&transaction.sender);
 
         let account = accounts_tree
             .get(db_txn, &key)
@@ -134,10 +135,10 @@ impl AccountTransactionInteraction for VestingContract {
             })?;
 
         let vesting = match account {
-            Account::Vesting(value) => value,
+            Account::Vesting(ref value) => value,
             _ => {
                 return Err(AccountError::TypeMismatch {
-                    expected: AccountType::HTLC,
+                    expected: AccountType::Vesting,
                     got: account.account_type(),
                 })
             }
@@ -163,7 +164,11 @@ impl AccountTransactionInteraction for VestingContract {
             return Err(AccountError::InvalidSignature);
         }
 
-        accounts_tree.put(db_txn, &key, Account(vesting.change_balance(new_balance)));
+        accounts_tree.put(
+            db_txn,
+            &key,
+            Account::Vesting(vesting.change_balance(new_balance)),
+        );
 
         Ok(None)
     }
@@ -180,7 +185,7 @@ impl AccountTransactionInteraction for VestingContract {
             return Err(AccountError::InvalidReceipt);
         }
 
-        let key = KeyNibbles::from(transaction.sender.clone());
+        let key = KeyNibbles::from(&transaction.sender);
 
         let account = accounts_tree
             .get(db_txn, &key)
@@ -188,9 +193,23 @@ impl AccountTransactionInteraction for VestingContract {
                 address: transaction.sender.clone(),
             })?;
 
+        let vesting = match account {
+            Account::Vesting(ref value) => value,
+            _ => {
+                return Err(AccountError::TypeMismatch {
+                    expected: AccountType::Vesting,
+                    got: account.account_type(),
+                })
+            }
+        };
+
         let new_balance = Account::balance_add(account.balance(), transaction.total_value()?)?;
 
-        accounts_tree.put(db_txn, &key, Account(vesting.change_balance(new_balance)));
+        accounts_tree.put(
+            db_txn,
+            &key,
+            Account::Vesting(vesting.change_balance(new_balance)),
+        );
 
         Ok(())
     }
