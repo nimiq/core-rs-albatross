@@ -68,6 +68,10 @@ pub struct SlashedSlot {
     pub event_block: u32,
 }
 
+impl SlashedSlot {
+    pub const SIZE: usize = 2 + ValidatorId::SIZE + 4;
+}
+
 /// A collection of Validators. This struct is normally used to hold the validators for a specific
 /// epoch.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]

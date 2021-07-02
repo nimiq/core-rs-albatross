@@ -248,28 +248,6 @@ impl Transaction {
         tx
     }
 
-    pub fn new_reward(
-        recipient: Address,
-        value: Coin,
-        validity_start_height: u32,
-        network_id: NetworkId,
-    ) -> Self {
-        Self {
-            data: Vec::new(),
-            sender: Address::from([0u8; Address::SIZE]),
-            sender_type: AccountType::Reward,
-            recipient,
-            recipient_type: AccountType::Basic,
-            value,
-            fee: Coin::ZERO,
-            validity_start_height,
-            network_id,
-            flags: TransactionFlags::empty(),
-            proof: Vec::new(),
-            valid: false,
-        }
-    }
-
     pub fn format(&self) -> TransactionFormat {
         if self.sender_type == AccountType::Basic
             && self.recipient_type == AccountType::Basic

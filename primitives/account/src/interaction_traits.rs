@@ -1,5 +1,4 @@
-use nimiq_database::{Database, Environment, Transaction as DBTransaction, WriteTransaction};
-use nimiq_primitives::account::AccountType;
+use nimiq_database::WriteTransaction;
 use nimiq_primitives::coin::Coin;
 use nimiq_transaction::Transaction;
 

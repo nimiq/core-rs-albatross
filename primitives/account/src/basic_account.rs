@@ -1,13 +1,12 @@
 use beserial::{Deserialize, Serialize};
-use nimiq_primitives::account::AccountType;
+use nimiq_database::WriteTransaction;
 use nimiq_primitives::coin::Coin;
 use nimiq_transaction::Transaction;
+use nimiq_trie::key_nibbles::KeyNibbles;
 
 use crate::inherent::{Inherent, InherentType};
 use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction};
 use crate::{Account, AccountError, AccountsTree};
-use nimiq_database::WriteTransaction;
-use nimiq_trie::key_nibbles::KeyNibbles;
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
@@ -34,12 +33,12 @@ impl AccountTransactionInteraction for BasicAccount {
         _block_height: u32,
         _block_time: u64,
     ) -> Result<Option<Vec<u8>>, AccountError> {
-        let key = KeyNibbles::from(transaction.recipient.clone());
+        let key = KeyNibbles::from(&transaction.recipient);
 
         let leaf = accounts_tree.get(db_txn, &key);
 
         let current_balance = match leaf {
-            None => Coin::zero(),
+            None => Coin::ZERO,
             Some(account) => account.balance(),
         };
 
@@ -48,7 +47,7 @@ impl AccountTransactionInteraction for BasicAccount {
         accounts_tree.put(
             db_txn,
             &key,
-            Account(BasicAccount {
+            Account::Basic(BasicAccount {
                 balance: new_balance,
             }),
         );
@@ -68,7 +67,7 @@ impl AccountTransactionInteraction for BasicAccount {
             return Err(AccountError::InvalidReceipt);
         }
 
-        let key = KeyNibbles::from(transaction.recipient.clone());
+        let key = KeyNibbles::from(&transaction.recipient);
 
         let account = accounts_tree
             .get(db_txn, &key)
@@ -81,7 +80,7 @@ impl AccountTransactionInteraction for BasicAccount {
         accounts_tree.put(
             db_txn,
             &key,
-            Account(BasicAccount {
+            Account::Basic(BasicAccount {
                 balance: new_balance,
             }),
         );
@@ -96,7 +95,7 @@ impl AccountTransactionInteraction for BasicAccount {
         _block_height: u32,
         _block_time: u64,
     ) -> Result<Option<Vec<u8>>, AccountError> {
-        let key = KeyNibbles::from(transaction.sender.clone());
+        let key = KeyNibbles::from(&transaction.sender);
 
         let account = accounts_tree
             .get(db_txn, &key)
@@ -112,7 +111,7 @@ impl AccountTransactionInteraction for BasicAccount {
             accounts_tree.put(
                 db_txn,
                 &key,
-                Account(BasicAccount {
+                Account::Basic(BasicAccount {
                     balance: new_balance,
                 }),
             );
@@ -133,12 +132,12 @@ impl AccountTransactionInteraction for BasicAccount {
             return Err(AccountError::InvalidReceipt);
         }
 
-        let key = KeyNibbles::from(transaction.sender.clone());
+        let key = KeyNibbles::from(&transaction.sender);
 
         let leaf = accounts_tree.get(db_txn, &key);
 
         let current_balance = match leaf {
-            None => Coin::zero(),
+            None => Coin::ZERO,
             Some(account) => account.balance(),
         };
 
@@ -147,7 +146,7 @@ impl AccountTransactionInteraction for BasicAccount {
         accounts_tree.put(
             db_txn,
             &key,
-            Account(BasicAccount {
+            Account::Basic(BasicAccount {
                 balance: new_balance,
             }),
         );
@@ -168,12 +167,12 @@ impl AccountInherentInteraction for BasicAccount {
             return Err(AccountError::InvalidInherent);
         }
 
-        let key = KeyNibbles::from(inherent.target.clone());
+        let key = KeyNibbles::from(&inherent.target);
 
         let leaf = accounts_tree.get(db_txn, &key);
 
         let current_balance = match leaf {
-            None => Coin::zero(),
+            None => Coin::ZERO,
             Some(account) => account.balance(),
         };
 
@@ -182,7 +181,7 @@ impl AccountInherentInteraction for BasicAccount {
         accounts_tree.put(
             db_txn,
             &key,
-            Account(BasicAccount {
+            Account::Basic(BasicAccount {
                 balance: new_balance,
             }),
         );
@@ -206,7 +205,7 @@ impl AccountInherentInteraction for BasicAccount {
             return Err(AccountError::InvalidInherent);
         }
 
-        let key = KeyNibbles::from(inherent.target.clone());
+        let key = KeyNibbles::from(&inherent.target);
 
         let account = accounts_tree
             .get(db_txn, &key)
@@ -219,7 +218,7 @@ impl AccountInherentInteraction for BasicAccount {
         accounts_tree.put(
             db_txn,
             &key,
-            Account(BasicAccount {
+            Account::Basic(BasicAccount {
                 balance: new_balance,
             }),
         );

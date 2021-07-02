@@ -54,7 +54,6 @@ impl From<AccountType> for u8 {
             AccountType::Vesting => 1,
             AccountType::HTLC => 2,
             AccountType::Staking => 3,
-            AccountType::Reward => 4,
         }
     }
 }

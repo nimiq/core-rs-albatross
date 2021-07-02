@@ -1,15 +1,15 @@
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use nimiq_database::WriteTransaction;
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
 use nimiq_transaction::Transaction;
+use nimiq_trie::key_nibbles::KeyNibbles;
 
 use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction};
 use crate::{
     AccountError, AccountsTree, BasicAccount, HashedTimeLockedContract, Inherent, StakingContract,
     VestingContract,
 };
-use nimiq_database::WriteTransaction;
-use nimiq_trie::key_nibbles::KeyNibbles;
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
@@ -263,7 +263,16 @@ impl AccountInherentInteraction for Account {
         block_height: u32,
         block_time: u64,
     ) -> Result<Option<Vec<u8>>, AccountError> {
-        match inherent.target_type {
+        let key = KeyNibbles::from(&inherent.target);
+
+        let account_type = accounts_tree
+            .get(db_txn, &key)
+            .ok_or(AccountError::NonExistentAddress {
+                address: inherent.target.clone(),
+            })?
+            .account_type();
+
+        match account_type {
             AccountType::Basic => BasicAccount::commit_inherent(
                 accounts_tree,
                 db_txn,
@@ -303,7 +312,16 @@ impl AccountInherentInteraction for Account {
         block_time: u64,
         receipt: Option<&Vec<u8>>,
     ) -> Result<(), AccountError> {
-        match inherent.target_type {
+        let key = KeyNibbles::from(&inherent.target);
+
+        let account_type = accounts_tree
+            .get(db_txn, &key)
+            .ok_or(AccountError::NonExistentAddress {
+                address: inherent.target.clone(),
+            })?
+            .account_type();
+
+        match account_type {
             AccountType::Basic => BasicAccount::revert_inherent(
                 accounts_tree,
                 db_txn,
@@ -406,7 +424,6 @@ impl Deserialize for Account {
                 let account: StakingContract = Deserialize::deserialize(reader)?;
                 Ok(Account::Staking(account))
             }
-            AccountType::Reward => unimplemented!(),
         }
     }
 }
