@@ -32,7 +32,7 @@ where
     /// Alias table
     K: Vec<usize>,
 
-    /// Probabilities
+    /// Probabilities table
     U: Vec<P>,
 }
 
@@ -62,8 +62,9 @@ where
         let p = p.as_ref();
         let n = p.len();
 
-        // Construct scaled probabilities and total probability
+        // Construct scaled probabilities and total probability.
         let mut T = P::zero();
+
         let mut U: Vec<P> = p
             .iter()
             .map(|p| {
@@ -72,7 +73,7 @@ where
             })
             .collect();
 
-        // Construct overfull and underfull stack. These contain only indices into U
+        // Construct overfull and underfull stack. These contain only indices into U.
         let mut U_underfull = Vec::with_capacity(n);
         let mut U_overfull = Vec::with_capacity(n);
 
@@ -84,22 +85,17 @@ where
             }
         }
 
-        // Construct alias table
-        // K - alias table - n entries initialized with
-        // NOTE: initialize with usize::MAX.
-        let mut K: Vec<usize> = Vec::with_capacity(n);
-        K.resize_with(n, || std::usize::MAX);
+        // Construct alias table.
+        let mut K: Vec<usize> = (0..n).collect();
 
         while let (Some(i_u), Some(i_o)) = (U_underfull.pop(), U_overfull.pop()) {
-            //println!("i_u = {}, i_o = {}", i_u, i_o);
-
-            // Alias overfull into underfull
+            // Alias overfull into underfull.
             K[i_u] = i_o;
 
-            // Remove allocated space from U: U_o += U_u - T
-            U[i_o] = U[i_o] - T + U[i_u];
+            // Remove allocated space from U: U_o -= (T - U_u)
+            U[i_o] = U[i_o] + U[i_u] - T;
 
-            // Assign entry i_o to the appropriate category base on the new value
+            // Assign entry i_o to the appropriate category base on the new value.
             match U[i_o].cmp(&T) {
                 Ordering::Equal => (),
                 Ordering::Greater => U_overfull.push(i_o),
@@ -107,13 +103,13 @@ where
             }
         }
 
-        // Both must be empty now
+        // Both must be empty now.
         debug_assert!(U_underfull.is_empty() && U_overfull.is_empty());
 
-        // Entries that are "underfull" need an entry in the alias table
-        debug_assert!(U.iter().zip(K.iter()).all(|(U_i, K_i)| {
+        // Entries that are "underfull" need an entry in the alias table.
+        debug_assert!((0..n).all(|i| {
             // Both must be true or both must be false.
-            (U_i < &T) == (K_i != &std::usize::MAX)
+            (U[i] < &T) == (K[i] != i)
         }));
 
         Self { T, n, K, U }
@@ -144,13 +140,12 @@ where
     ///
     pub fn sample<R: Rng>(&self, rng: &mut R) -> usize {
         let x = rng.next_u64_max(self.n as u64) as usize;
+
         let y = P::from_u64(rng.next_u64_max(self.T.to_u64().unwrap())).unwrap();
 
-        let U_x = self.U[x];
-        if y < U_x {
+        if y < self.U[x] {
             x
         } else {
-            //assert_ne!(K_x, 0);
             self.K[x]
         }
     }

@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::mem;
 use std::ops::Add;
 
@@ -21,11 +21,12 @@ use crate::staking_contract::actions::staker::InactiveStakeReceipt;
 use crate::staking_contract::actions::validator::{
     DropValidatorReceipt, InactiveValidatorReceipt, UnparkReceipt, UpdateValidatorReceipt,
 };
+use crate::staking_contract::receipts::{
+    DropValidatorReceipt, InactiveStakeReceipt, InactiveValidatorReceipt, UnparkReceipt,
+    UpdateValidatorReceipt,
+};
 use crate::staking_contract::SlashReceipt;
 use crate::{Account, AccountError, AccountsTree, Inherent, InherentType, StakingContract};
-
-pub mod staker;
-pub mod validator;
 
 /// We need to distinguish three types of transactions:
 /// TODO: Should invalid incoming transactions just be no-ops?
@@ -698,7 +699,7 @@ impl AccountInherentInteraction for StakingContract {
                     // Disabled slots.
                     // Optimization: We actually only need the old slots for the first batch of the epoch.
                     let current_disabled_slots =
-                        mem::replace(&mut staking.current_disabled_slots, BTreeMap::new());
+                        mem::replace(&mut staking.current_disabled_slots, HashMap::new());
                     let _old_disabled_slots =
                         mem::replace(&mut staking.previous_disabled_slots, current_disabled_slots);
 
