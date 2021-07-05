@@ -109,7 +109,7 @@ where
         // Entries that are "underfull" need an entry in the alias table.
         debug_assert!((0..n).all(|i| {
             // Both must be true or both must be false.
-            (U[i] < &T) == (K[i] != i)
+            (U[i] < T) == (K[i] != i)
         }));
 
         Self { T, n, K, U }

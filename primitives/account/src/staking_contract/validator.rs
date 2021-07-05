@@ -11,6 +11,7 @@ use beserial::{
     SerializingError, WriteBytesExt,
 };
 use nimiq_bls::CompressedPublicKey as BlsPublicKey;
+use nimiq_database::{Database, Environment, Transaction as DBTransaction, WriteTransaction};
 use nimiq_keys::Address;
 use nimiq_primitives::account::ValidatorId;
 use nimiq_primitives::coin::Coin;
@@ -19,7 +20,8 @@ use crate::staking_contract::receipts::{
     DropValidatorReceipt, InactiveValidatorReceipt, RetirementReceipt, UnparkReceipt,
     UpdateValidatorReceipt,
 };
-use crate::{Account, AccountError, StakingContract};
+use crate::{Account, AccountError, AccountsTree, StakingContract};
+use nimiq_trie::key_nibbles::KeyNibbles;
 
 /// Struct representing a validator in the staking contract.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -43,7 +45,7 @@ pub struct Validator {
 
 /// Actions concerning a validator are:
 /// 1. Create: Creates a validator entry.
-/// 2. Update: Updates reward address and key of the validator entry.
+/// 2. Update: Updates the validator entry.
 /// 3. Retire: Inactivates a validator entry (also starts a cooldown period used for Drop).
 /// 4. Re-activate: Re-activates a validator entry.
 /// 5. Drop: Drops a validator entry (validator must have been inactive for the cooldown period).
@@ -72,33 +74,52 @@ pub struct Validator {
 impl StakingContract {
     /// Creates a new validator entry.
     /// The initial stake can only be retrieved by dropping the validator again.
-    /// XXX This is public to fill the genesis staking contract
+    /// This is public to fill the genesis staking contract.
     pub fn create_validator(
         &mut self,
+        accounts_tree: &AccountsTree,
+        db_txn: &mut WriteTransaction,
         validator_id: ValidatorId,
-        validator_key: BlsPublicKey,
+        balance: Coin,
         reward_address: Address,
-        initial_stake: Coin,
+        validator_key: BlsPublicKey,
+        extra_data: Option<[u8; 64]>,
     ) -> Result<(), AccountError> {
-        if self.active_validators_by_id.contains_key(&validator_id)
-            || self.inactive_validators_by_id.contains_key(&validator_id)
-        {
-            return Err(AccountError::InvalidForRecipient);
+        if StakingContract::get_validator(accounts_tree, db_txn, &validator_id).is_some() {
+            return Err(AccountError::AlreadyExistentValidator { id: validator_id });
         }
 
-        self.balance = Account::balance_add(self.balance, initial_stake)?;
+        self.balance = Account::balance_add(self.balance, balance)?;
 
         // All checks passed, not allowed to fail from here on!
-        let validator = Arc::new(Validator::new(
-            validator_id.clone(),
-            initial_stake,
+        let validator = Validator {
+            id: validator_id.clone(),
+            balance,
             reward_address,
             validator_key,
-        ));
+            extra_data,
+            inactive_flag: None,
+        };
 
-        self.active_validators_sorted.insert(Arc::clone(&validator));
-        self.active_validators_by_id
-            .insert(validator_id, Arc::clone(&validator));
+        self.active_validators.insert(validator_id, balance);
+
+        // Calculate key for the validator in the accounts tree.
+        let mut bytes: Vec<u8> = Vec::with_capacity(41);
+        bytes.extend(StakingContract::ADDRESS.as_bytes());
+        // This is the byte flag for the validator list in the staking contract.
+        bytes.push(1u8);
+        bytes.extend(validator_id.as_bytes());
+
+        let key = KeyNibbles::from(&bytes);
+
+        trace!(
+            "Trying to put validator with id {} at key {}.",
+            validator_id.to_string(),
+            key.to_string()
+        );
+
+        accounts_tree.put(db_txn, &key, Account::StakingValidator(validator));
+
         Ok(())
     }
 

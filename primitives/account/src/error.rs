@@ -2,7 +2,7 @@ use thiserror::Error;
 
 use beserial::SerializingError;
 use nimiq_keys::Address;
-use nimiq_primitives::account::AccountType;
+use nimiq_primitives::account::{AccountType, ValidatorId};
 use nimiq_primitives::coin::{Coin, CoinConvertError, CoinParseError};
 use nimiq_transaction::TransactionError;
 
@@ -41,4 +41,6 @@ pub enum AccountError {
     NonExistentAddress { address: Address },
     #[error("There is already a contract at address {address} in the Accounts Tree.")]
     AlreadyExistentContract { address: Address },
+    #[error("There is already a validtor with id {id} in the Accounts Tree.")]
+    AlreadyExistentValidator { id: ValidatorId },
 }

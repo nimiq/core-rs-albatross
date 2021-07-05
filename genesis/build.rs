@@ -6,26 +6,14 @@ use nimiq_build_tools::genesis::GenesisBuilder;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 
-fn write_genesis_rs(
-    directory: &Path,
-    name: &str,
-    genesis_hash: &Blake2bHash,
-    staking_contract: Option<Address>,
-) {
-    let staking_contract_str;
-    if let Some(address) = staking_contract {
-        staking_contract_str = format!("Some(\"{}\".parse().unwrap())", address);
-    } else {
-        staking_contract_str = "None".to_string();
-    }
+fn write_genesis_rs(directory: &Path, name: &str, genesis_hash: &Blake2bHash) {
     let genesis_rs = format!(
         r#"GenesisData {{
             block: include_bytes!(concat!(env!("OUT_DIR"), "/genesis/{}/block.dat")),
             hash: "{}".into(),
             accounts: include_bytes!(concat!(env!("OUT_DIR"), "/genesis/{}/accounts.dat")),
-            staking_contract: {},
     }}"#,
-        name, genesis_hash, name, staking_contract_str
+        name, genesis_hash, name,
     );
     log::debug!("Writing genesis source code: {}", &genesis_rs);
     fs::write(directory.join("genesis.rs"), genesis_rs.as_bytes()).unwrap();
@@ -51,17 +39,8 @@ fn generate_albatross(
 
     let mut builder = GenesisBuilder::new();
     builder.with_config_file(genesis_config).unwrap();
-    let staking_contract_address = builder
-        .staking_contract_address
-        .clone()
-        .expect("Missing staking contract address");
     let genesis_hash = builder.write_to_files(&directory).unwrap();
-    write_genesis_rs(
-        &directory,
-        name,
-        &genesis_hash,
-        Some(staking_contract_address),
-    );
+    write_genesis_rs(&directory, name, &genesis_hash);
 }
 
 fn main() {
