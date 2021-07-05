@@ -17,15 +17,10 @@ use nimiq_transaction::Transaction;
 use nimiq_trie::key_nibbles::KeyNibbles;
 
 use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction};
-use crate::staking_contract::actions::staker::InactiveStakeReceipt;
-use crate::staking_contract::actions::validator::{
-    DropValidatorReceipt, InactiveValidatorReceipt, UnparkReceipt, UpdateValidatorReceipt,
-};
 use crate::staking_contract::receipts::{
     DropValidatorReceipt, InactiveStakeReceipt, InactiveValidatorReceipt, UnparkReceipt,
     UpdateValidatorReceipt,
 };
-use crate::staking_contract::SlashReceipt;
 use crate::{Account, AccountError, AccountsTree, Inherent, InherentType, StakingContract};
 
 /// We need to distinguish three types of transactions:

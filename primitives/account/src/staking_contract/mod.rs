@@ -1,3 +1,4 @@
+use log::error;
 use std::cmp::Ordering;
 use std::collections::btree_set::BTreeSet;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -10,6 +11,7 @@ use beserial::{
 };
 use nimiq_bls::CompressedSignature as BlsSignature;
 use nimiq_collections::BitSet;
+use nimiq_database::{Database, Environment, Transaction as DBTransaction, WriteTransaction};
 use nimiq_keys::Address;
 use nimiq_primitives::account::ValidatorId;
 use nimiq_primitives::slots::{Validators, ValidatorsBuilder};
@@ -17,9 +19,11 @@ use nimiq_primitives::{coin::Coin, policy};
 use nimiq_transaction::account::staking_contract::IncomingStakingTransactionData;
 use nimiq_transaction::{SignatureProof, Transaction};
 use nimiq_vrf::{AliasMethod, VrfSeed, VrfUseCase};
+use validator::Validator;
 
-use crate::staking_contract::validator::Validator;
-use crate::AccountError;
+use crate::{Account, AccountError, AccountsTree};
+use nimiq_trie::key_nibbles::KeyNibbles;
+use staker::Staker;
 
 pub mod receipts;
 pub mod staker;
@@ -32,8 +36,9 @@ pub mod validator;
 pub struct StakingContract {
     // The total amount of coins staked.
     pub balance: Coin,
-    // A list of active validators IDs (i.e. are eligible to receive slots).
-    pub active_validators: HashSet<ValidatorId>,
+    // A list of active validators IDs (i.e. are eligible to receive slots) and their corresponding
+    // stakes/balances.
+    pub active_validators: HashMap<ValidatorId, Coin>,
     // The validators that were parked during the current epoch.
     pub current_epoch_parking: HashSet<ValidatorId>,
     // The validators that were parked during the previous epoch.
@@ -53,115 +58,119 @@ pub struct StakingContract {
 }
 
 impl StakingContract {
+    pub const ADDRESS: Address =
+        Address::from_user_friendly_address("NQ38 STAK 1NG0 0000 0000 C0NT RACT 0000 0000")
+            .unwrap();
+
     /// Get a validator information given its id.
-    pub fn get_validator(&self, validator_id: &ValidatorId) -> Option<&Arc<Validator>> {
-        self.active_validators_by_id.get(validator_id).or_else(|| {
-            self.inactive_validators_by_id
-                .get(validator_id)
-                .map(|inactive_validator| &inactive_validator.validator)
-        })
-    }
-
-    /// Get the amount staked by a staker, given the public key of the corresponding validator and
-    /// the address of the staker. Returns None if the active validator or the staker does not exist.
-    pub fn get_active_stake(
-        &self,
+    pub fn get_validator(
+        accounts_tree: &AccountsTree,
+        db_txn: &DBTransaction,
         validator_id: &ValidatorId,
-        staker_address: &Address,
-    ) -> Option<Coin> {
-        let validator = self.active_validators_by_id.get(validator_id)?;
+    ) -> Option<Validator> {
+        let mut bytes: Vec<u8> = Vec::with_capacity(41);
+        bytes.extend(StakingContract::ADDRESS.as_bytes());
+        // This is the byte flag for the validator list in the staking contract.
+        bytes.push(1u8);
+        bytes.extend(validator_id.as_bytes());
 
-        validator
-            .active_stake_by_address
-            .read()
-            .get(staker_address)
-            .cloned()
-    }
+        let key = KeyNibbles::from(&bytes);
 
-    /// Allows to modify both active and inactive validators.
-    /// It returns a validator entry, which subsumes active and inactive validators.
-    /// It also allows for deferred error handling after re-adding the validator using `restore_validator`.
-    pub fn remove_validator(&mut self, validator_id: &ValidatorId) -> Option<ValidatorEntry> {
-        if let Some(validator) = self.active_validators_by_id.remove(validator_id) {
-            self.active_validators_sorted.remove(&validator);
-            Some(ValidatorEntry::new_active_validator(validator))
-        } else {
-            //  The else case is needed to ensure the validator_key still exists.
-            self.inactive_validators_by_id
-                .remove(validator_id)
-                .map(ValidatorEntry::new_inactive_validator)
+        trace!(
+            "Trying to fetch validator with id {} at key {}.",
+            validator_id.to_string(),
+            key.to_string()
+        );
+
+        match accounts_tree.get(db_txn, &key) {
+            Some(Account::StakingValidator(validator)) => {
+                return Some(validator);
+            }
+            None => {
+                return None;
+            }
+            Some(account) => {
+                panic!(
+                    "Tried to fetch a validator from the accounts tree. Instead found a {}.",
+                    account.account_type()
+                );
+            }
         }
     }
 
-    /// Restores/saves a validator entry.
-    /// If modifying the validator failed, it is restored and the error is returned.
-    /// This makes it possible to remove the validator using `remove_validator`,
-    /// try modifying it and restoring it before the error is returned.
-    pub fn restore_validator(
-        &mut self,
-        validator_entry: ValidatorEntry,
-    ) -> Result<(), AccountError> {
-        match validator_entry {
-            ValidatorEntry::Active(validator, error) => {
-                // Update/restore validator.
-                self.active_validators_sorted.insert(Arc::clone(&validator));
-                self.active_validators_by_id
-                    .insert(validator.id.clone(), validator);
-                error.map(Err).unwrap_or(Ok(()))
+    /// Get a staker information given its address.
+    pub fn get_staker(
+        accounts_tree: &AccountsTree,
+        db_txn: &DBTransaction,
+        staker_address: &Address,
+    ) -> Option<Staker> {
+        let mut bytes: Vec<u8> = Vec::with_capacity(41);
+        bytes.extend(StakingContract::ADDRESS.as_bytes());
+        // This is the byte flag for the staker list in the staking contract.
+        bytes.push(2u8);
+        bytes.extend(staker_address.as_bytes());
+
+        let key = KeyNibbles::from(&bytes);
+
+        trace!(
+            "Trying to fetch staker with address {} at key {}.",
+            staker_address.to_string(),
+            key.to_string()
+        );
+
+        match accounts_tree.get(db_txn, &key) {
+            Some(Account::StakingStaker(staker)) => {
+                return Some(staker);
             }
-            ValidatorEntry::Inactive(validator, error) => {
-                // Update/restore validator.
-                self.inactive_validators_by_id
-                    .insert(validator.validator.id.clone(), validator);
-                error.map(Err).unwrap_or(Ok(()))
+            None => {
+                return None;
+            }
+            Some(account) => {
+                panic!(
+                    "Tried to fetch a staker from the accounts tree. Instead found a {}.",
+                    account.account_type()
+                );
             }
         }
     }
 
     /// Given a seed, it randomly distributes the validator slots across all validators. It can be
     /// used to select the validators for the next epoch.
-    pub fn select_validators(&self, seed: &VrfSeed) -> Validators {
-        // TODO: Depending on the circumstances and parameters, it might be more efficient to store
-        // active stake in an unsorted Vec.
-        // Then, we would not need to create the Vec here. But then, removal of stake is a O(n) operation.
-        // Assuming that validator selection happens less frequently than stake removal, the current
-        // implementation might be ok.
-        let mut potential_validators = Vec::with_capacity(self.active_validators_sorted.len());
-        let mut weights: Vec<u64> = Vec::with_capacity(self.active_validators_sorted.len());
+    pub fn select_validators(
+        &self,
+        accounts_tree: &AccountsTree,
+        db_txn: &DBTransaction,
+        seed: &VrfSeed,
+    ) -> Validators {
+        let mut validator_ids = Vec::with_capacity(self.active_validators.len());
+        let mut validator_stakes = Vec::with_capacity(self.active_validators.len());
 
-        debug!("Select validators: num_slots = {}", policy::SLOTS);
+        debug!("Selecting validators: num_slots = {}", policy::SLOTS);
 
-        // NOTE: `active_validators_sorted` is sorted from highest to lowest stake. `LookupTable`
-        // expects the reverse ordering.
-        for validator in self.active_validators_sorted.iter() {
-            potential_validators.push(Arc::clone(validator));
-            weights.push(validator.balance.into());
+        for (id, coin) in self.active_validators.iter() {
+            validator_ids.push(id);
+            validator_stakes.push(u64::from(coin));
         }
 
-        let mut slots_builder = ValidatorsBuilder::default();
-        let lookup = AliasMethod::new(weights);
         let mut rng = seed.rng(VrfUseCase::ValidatorSelection, 0);
+
+        let lookup = AliasMethod::new(validator_stakes);
+
+        let mut slots_builder = ValidatorsBuilder::default();
 
         for _ in 0..policy::SLOTS {
             let index = lookup.sample(&mut rng);
 
-            let active_validator = &potential_validators[index];
+            let chosen_validator =
+                StakingContract::get_validator(accounts_tree, db_txn, validator_ids[index]).expect("Couldn't find in the accounts tree a validator that was in the active validators list!");
 
             slots_builder.push(
-                active_validator.id.clone(),
-                active_validator.validator_key.clone(),
+                chosen_validator.id.clone(),
+                chosen_validator.validator_key.clone(),
             );
         }
 
         slots_builder.build()
-    }
-
-    /// Get the signature from a transaction.
-    fn get_self_signer(transaction: &Transaction) -> Result<Address, AccountError> {
-        let signature_proof: SignatureProof =
-            Deserialize::deserialize(&mut &transaction.proof[..])?;
-
-        Ok(signature_proof.compute_signer())
     }
 
     /// Returns a BitSet of slots that lost its rewards in the previous batch.
@@ -196,6 +205,14 @@ impl StakingContract {
         bitset
     }
 
+    /// Get the signature from a transaction.
+    fn get_self_signer(transaction: &Transaction) -> Result<Address, AccountError> {
+        let signature_proof: SignatureProof =
+            Deserialize::deserialize(&mut &transaction.proof[..])?;
+
+        Ok(signature_proof.compute_signer())
+    }
+
     fn verify_signature_incoming(
         &self,
         transaction: &Transaction,
@@ -227,5 +244,42 @@ impl StakingContract {
             return Err(AccountError::InvalidSignature);
         }
         Ok(())
+    }
+
+    /// Allows to modify both active and inactive validators.
+    /// It returns a validator entry, which subsumes active and inactive validators.
+    /// It also allows for deferred error handling after re-adding the validator using `restore_validator`.
+    fn remove_validator(&mut self, validator_id: &ValidatorId) -> Option<ValidatorEntry> {
+        if let Some(validator) = self.active_validators_by_id.remove(&validator_id) {
+            self.active_validators_sorted.remove(&validator);
+            Some(ValidatorEntry::new_active_validator(validator))
+        } else {
+            //  The else case is needed to ensure the validator_key still exists.
+            self.inactive_validators_by_id
+                .remove(&validator_id)
+                .map(ValidatorEntry::new_inactive_validator)
+        }
+    }
+
+    /// Restores/saves a validator entry.
+    /// If modifying the validator failed, it is restored and the error is returned.
+    /// This makes it possible to remove the validator using `remove_validator`,
+    /// try modifying it and restoring it before the error is returned.
+    fn restore_validator(&mut self, validator_entry: ValidatorEntry) -> Result<(), AccountError> {
+        match validator_entry {
+            ValidatorEntry::Active(validator, error) => {
+                // Update/restore validator.
+                self.active_validators_sorted.insert(Arc::clone(&validator));
+                self.active_validators_by_id
+                    .insert(validator.id.clone(), validator);
+                error.map(Err).unwrap_or(Ok(()))
+            }
+            ValidatorEntry::Inactive(validator, error) => {
+                // Update/restore validator.
+                self.inactive_validators_by_id
+                    .insert(validator.validator.id.clone(), validator);
+                error.map(Err).unwrap_or(Ok(()))
+            }
+        }
     }
 }

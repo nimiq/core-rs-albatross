@@ -2,8 +2,6 @@ name = "unit-albatross"
 seed_message = "Albatross Genesis for Unit Tests"
 signing_key = "99e7fa3c24074386ff6331e2fc6812c9dc6699f7f95891b38ec48283c8a22835831ef6e35261f7374509f563424a4cd71d98caae7d4cc2568aa43f8d9421dcb6084662aa9e2dd10aadde79998a1a100a6068b40a220cd93e6b319259b6cc0000"
 timestamp = "2019-08-18T02:04:20.999999999+02:00"
-staking_contract = "NQ38 STAK 1NG0 0000 0000 C0NT RACT 0000 0000"
-# private key for staking contract: 6e22d3b5ca0748ffce4fd4c87d7434e05495ca3e3902c376846c6d523392bf34
 
 [[validators]]
 validator_id = "0000000000000000000000000000000000000000"

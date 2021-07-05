@@ -6,6 +6,7 @@ use beserial::{Deserialize, Serialize};
 use nimiq_collections::BitSet;
 use nimiq_database::WriteTransaction;
 use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_keys::Address;
 use nimiq_primitives::account::{AccountType, ValidatorId};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
@@ -17,13 +18,7 @@ use nimiq_transaction::Transaction;
 use nimiq_trie::key_nibbles::KeyNibbles;
 
 use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction};
-use crate::staking_contract::actions::staker::InactiveStakeReceipt;
-use crate::staking_contract::actions::validator::{
-    DropValidatorReceipt, InactiveValidatorReceipt, UnparkReceipt, UpdateValidatorReceipt,
-};
-use crate::staking_contract::SlashReceipt;
 use crate::{Account, AccountError, AccountsTree, Inherent, InherentType, StakingContract};
-use nimiq_keys::Address;
 
 /// A receipt for slash inherents. It shows whether a given slot or validator was newly disabled,
 /// lost rewards or parked by a specific slash inherent. This is necessary to be able to revert
