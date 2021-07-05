@@ -1,14 +1,36 @@
-use beserial::{Deserialize, Serialize};
+use std::cmp::Ordering;
+use std::collections::BTreeMap;
+use std::mem;
+use std::ops::{Deref, DerefMut};
+use std::sync::Arc;
+
+use parking_lot::RwLock;
+
+use beserial::{
+    Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
+    SerializingError, WriteBytesExt,
+};
+use nimiq_bls::CompressedPublicKey as BlsPublicKey;
 use nimiq_keys::Address;
 use nimiq_primitives::account::ValidatorId;
 use nimiq_primitives::coin::Coin;
 
-use crate::staking_contract::InactiveStake;
+use crate::staking_contract::receipts::InactiveStakeReceipt;
 use crate::{Account, AccountError, StakingContract};
 
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub(super) struct InactiveStakeReceipt {
-    retire_time: u32,
+/// Struct representing a staker in the staking contract.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Staker {
+    // The reward address of the staker.
+    pub address: Address,
+    // The balance of the stake.
+    pub balance: Coin,
+    // The id of the validator for which it is staking for. If it is not staking for any validator,
+    // this will be set to None.
+    pub validator: Option<ValidatorId>,
+    // A flag stating if the staker is inactive. If it is inactive, then it contains the block
+    // height at which it became inactive.
+    pub inactive_flag: Option<u32>,
 }
 
 /// Actions concerning a staker are:

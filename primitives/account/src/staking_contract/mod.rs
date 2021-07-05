@@ -18,48 +18,22 @@ use nimiq_transaction::account::staking_contract::IncomingStakingTransactionData
 use nimiq_transaction::{SignatureProof, Transaction};
 use nimiq_vrf::{AliasMethod, VrfSeed, VrfUseCase};
 
+use crate::staking_contract::validator::Validator;
 use crate::AccountError;
 
-pub use self::validator::*;
-
-pub mod actions;
+pub mod receipts;
+pub mod staker;
+pub mod traits;
 pub mod validator;
-
-/// Struct represent an inactive staker. An inactive staker is a staker that got its stake not
-/// eligible for slot selection. In other words, this staker can no longer receive slots.
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct InactiveStake {
-    // The balance of the stake.
-    pub balance: Coin,
-    // The block number when the stake became inactive.
-    pub retire_time: u32,
-}
-
-/// A receipt for slash inherents. It shows whether a given slot or validator was newly disabled,
-/// lost rewards or parked by a specific slash inherent. This is necessary to be able to revert
-/// slash inherents.
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, Eq, PartialEq)]
-struct SlashReceipt {
-    newly_parked: bool,
-    newly_disabled: bool,
-    newly_lost_rewards: bool,
-}
 
 /// The struct representing the staking contract. The staking contract is a special contract that
 /// handles many functions related to validators and staking.
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct StakingContract {
     // The total amount of coins staked.
     pub balance: Coin,
-    // The active validators (i.e. are eligible to receive slots) sorted by public key.
-    pub active_validators_sorted: BTreeSet<Arc<Validator>>,
-    // A hashmap of the active validators, indexed by the validator id
-    pub active_validators_by_id: HashMap<ValidatorId, Arc<Validator>>,
-    // A hashmap of the inactive stakers (i.e. are NOT eligible to receive slots), indexed by the
-    // staker address.
-    pub inactive_stake_by_address: HashMap<Address, InactiveStake>,
-    // A tree of the inactive validators , searchable by the validator id.
-    pub inactive_validators_by_id: BTreeMap<ValidatorId, InactiveValidator>,
+    // A list of active validators IDs (i.e. are eligible to receive slots).
+    pub active_validators: HashSet<ValidatorId>,
     // The validators that were parked during the current epoch.
     pub current_epoch_parking: HashSet<ValidatorId>,
     // The validators that were parked during the previous epoch.
@@ -70,10 +44,10 @@ pub struct StakingContract {
     // The validator slots that lost rewards (i.e. are no longer eligible to receive rewards) during
     // the previous batch.
     pub previous_lost_rewards: BitSet,
-    // The validator slots, searchable by the validator public key, that are disabled (i.e. are no
+    // The validator slots, searchable by the validator ID, that are disabled (i.e. are no
     // longer eligible to produce blocks) currently.
-    pub current_disabled_slots: BTreeMap<ValidatorId, BTreeSet<u16>>,
-    // The validator slots, searchable by the validator public key, that were disabled (i.e. are no
+    pub current_disabled_slots: HashMap<ValidatorId, BTreeSet<u16>>,
+    // The validator slots, searchable by the validator ID, that were disabled (i.e. are no
     // longer eligible to produce blocks) at the end of the previous batch.
     pub previous_disabled_slots: BTreeMap<ValidatorId, BTreeSet<u16>>,
 }
@@ -253,249 +227,5 @@ impl StakingContract {
             return Err(AccountError::InvalidSignature);
         }
         Ok(())
-    }
-}
-
-impl Serialize for StakingContract {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        let mut size = 0;
-        size += Serialize::serialize(&self.balance, writer)?;
-
-        // Active validators first.
-        size += Serialize::serialize(&(self.active_validators_sorted.len() as u32), writer)?;
-        for active_validator in self.active_validators_sorted.iter() {
-            size += Serialize::serialize(active_validator, writer)?;
-        }
-
-        // Inactive validators next.
-        size += Serialize::serialize(&(self.inactive_validators_by_id.len() as u32), writer)?;
-        for (_, inactive_validator) in self.inactive_validators_by_id.iter() {
-            size += Serialize::serialize(inactive_validator, writer)?;
-        }
-
-        // Parking.
-        size += SerializeWithLength::serialize::<u32, _>(&self.current_epoch_parking, writer)?;
-        size += SerializeWithLength::serialize::<u32, _>(&self.previous_epoch_parking, writer)?;
-
-        // Lost rewards.
-        size += Serialize::serialize(&self.current_lost_rewards, writer)?;
-        size += Serialize::serialize(&self.previous_lost_rewards, writer)?;
-
-        // Disabled slots.
-        size += Serialize::serialize(&(self.current_disabled_slots.len() as u16), writer)?;
-        for (key, slots) in self.current_disabled_slots.iter() {
-            size += Serialize::serialize(key, writer)?;
-            size += SerializeWithLength::serialize::<u16, _>(slots, writer)?;
-        }
-        size += Serialize::serialize(&(self.previous_disabled_slots.len() as u16), writer)?;
-        for (key, slots) in self.previous_disabled_slots.iter() {
-            size += Serialize::serialize(key, writer)?;
-            size += SerializeWithLength::serialize::<u16, _>(slots, writer)?;
-        }
-
-        // Collect remaining inactive stakes.
-        let mut inactive_stakes = Vec::new();
-        for (staker_address, inactive_stake) in self.inactive_stake_by_address.iter() {
-            inactive_stakes.push((staker_address, inactive_stake));
-        }
-        inactive_stakes.sort_by(|a, b| {
-            a.0.cmp(b.0)
-                .then_with(|| a.1.balance.cmp(&b.1.balance))
-                .then_with(|| a.1.retire_time.cmp(&b.1.retire_time))
-        });
-
-        size += Serialize::serialize(&(inactive_stakes.len() as u32), writer)?;
-        for (staker_address, inactive_stake) in inactive_stakes {
-            size += Serialize::serialize(staker_address, writer)?;
-            size += Serialize::serialize(inactive_stake, writer)?;
-        }
-
-        Ok(size)
-    }
-
-    fn serialized_size(&self) -> usize {
-        let mut size = 0;
-        size += Serialize::serialized_size(&self.balance);
-
-        size += Serialize::serialized_size(&0u32);
-        for active_validator in self.active_validators_sorted.iter() {
-            size += Serialize::serialized_size(active_validator);
-        }
-
-        size += Serialize::serialized_size(&0u32);
-        for (_, inactive_validator) in self.inactive_validators_by_id.iter() {
-            size += Serialize::serialized_size(inactive_validator);
-        }
-
-        size += SerializeWithLength::serialized_size::<u32>(&self.current_epoch_parking);
-        size += SerializeWithLength::serialized_size::<u32>(&self.previous_epoch_parking);
-
-        // Lost rewards.
-        size += Serialize::serialized_size(&self.current_lost_rewards);
-        size += Serialize::serialized_size(&self.previous_lost_rewards);
-
-        // Disabled slots.
-        size += Serialize::serialized_size(&(self.current_disabled_slots.len() as u16));
-        for (key, slots) in self.current_disabled_slots.iter() {
-            size += Serialize::serialized_size(key);
-            size += SerializeWithLength::serialized_size::<u16>(slots);
-        }
-        size += Serialize::serialized_size(&(self.previous_disabled_slots.len() as u16));
-        for (key, slots) in self.previous_disabled_slots.iter() {
-            size += Serialize::serialized_size(key);
-            size += SerializeWithLength::serialized_size::<u16>(slots);
-        }
-
-        size += Serialize::serialized_size(&0u32);
-        for (staker_address, inactive_stake) in self.inactive_stake_by_address.iter() {
-            size += Serialize::serialized_size(staker_address);
-            size += Serialize::serialized_size(inactive_stake);
-        }
-
-        size
-    }
-}
-
-impl Deserialize for StakingContract {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let balance = Deserialize::deserialize(reader)?;
-
-        let mut active_validators_sorted = BTreeSet::new();
-        let mut active_validators_by_id = HashMap::new();
-        let mut inactive_validators_by_id = BTreeMap::new();
-        let mut inactive_stake_by_address = HashMap::new();
-
-        let num_active_validators: u32 = Deserialize::deserialize(reader)?;
-        for _ in 0..num_active_validators {
-            let active_validator: Validator = Deserialize::deserialize(reader)?;
-            let active_validator = Arc::new(active_validator);
-
-            active_validators_sorted.insert(Arc::clone(&active_validator));
-            active_validators_by_id.insert(active_validator.id.clone(), active_validator);
-        }
-
-        let num_inactive_validators: u32 = Deserialize::deserialize(reader)?;
-        for _ in 0..num_inactive_validators {
-            let inactive_validator: InactiveValidator = Deserialize::deserialize(reader)?;
-
-            inactive_validators_by_id
-                .insert(inactive_validator.validator.id.clone(), inactive_validator);
-        }
-
-        let current_epoch_parking: HashSet<ValidatorId> =
-            DeserializeWithLength::deserialize::<u32, _>(reader)?;
-        let previous_epoch_parking: HashSet<ValidatorId> =
-            DeserializeWithLength::deserialize::<u32, _>(reader)?;
-
-        // Lost rewards.
-        let current_lost_rewards: BitSet = Deserialize::deserialize(reader)?;
-        let previous_lost_rewards: BitSet = Deserialize::deserialize(reader)?;
-
-        // Disabled slots.
-        let num_current_disabled_slots: u16 = Deserialize::deserialize(reader)?;
-        let mut current_disabled_slots = BTreeMap::new();
-        for _ in 0..num_current_disabled_slots {
-            let key: ValidatorId = Deserialize::deserialize(reader)?;
-            let value = DeserializeWithLength::deserialize::<u16, _>(reader)?;
-            current_disabled_slots.insert(key, value);
-        }
-        let num_previous_disabled_slots: u16 = Deserialize::deserialize(reader)?;
-        let mut previous_disabled_slots = BTreeMap::new();
-        for _ in 0..num_previous_disabled_slots {
-            let key: ValidatorId = Deserialize::deserialize(reader)?;
-            let value = DeserializeWithLength::deserialize::<u16, _>(reader)?;
-            previous_disabled_slots.insert(key, value);
-        }
-
-        let num_inactive_stakes: u32 = Deserialize::deserialize(reader)?;
-        for _ in 0..num_inactive_stakes {
-            let staker_address = Deserialize::deserialize(reader)?;
-            let inactive_stake = Deserialize::deserialize(reader)?;
-            inactive_stake_by_address.insert(staker_address, inactive_stake);
-        }
-
-        Ok(StakingContract {
-            balance,
-            active_validators_sorted,
-            active_validators_by_id,
-            inactive_stake_by_address,
-            inactive_validators_by_id,
-            current_epoch_parking,
-            previous_epoch_parking,
-            current_lost_rewards,
-            previous_lost_rewards,
-            current_disabled_slots,
-            previous_disabled_slots,
-        })
-    }
-}
-
-// Not really useful traits for StakingContracts.
-// TODO: Assume a single staking contract for now, i.e. all staking contracts are equal.
-impl PartialEq for StakingContract {
-    fn eq(&self, _other: &StakingContract) -> bool {
-        true
-    }
-}
-
-impl Eq for StakingContract {}
-
-impl PartialOrd for StakingContract {
-    fn partial_cmp(&self, other: &StakingContract) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for StakingContract {
-    fn cmp(&self, _other: &Self) -> Ordering {
-        Ordering::Equal
-    }
-}
-
-impl Default for StakingContract {
-    fn default() -> Self {
-        StakingContract {
-            balance: Coin::ZERO,
-            active_validators_sorted: BTreeSet::new(),
-            active_validators_by_id: HashMap::new(),
-            inactive_validators_by_id: Default::default(),
-            current_epoch_parking: HashSet::new(),
-            previous_epoch_parking: HashSet::new(),
-            current_lost_rewards: Default::default(),
-            previous_lost_rewards: Default::default(),
-            current_disabled_slots: Default::default(),
-            previous_disabled_slots: Default::default(),
-            inactive_stake_by_address: HashMap::new(),
-        }
-    }
-}
-
-impl Clone for StakingContract {
-    fn clone(&self) -> Self {
-        let active_validators_by_id = HashMap::from_iter(
-            self.active_validators_by_id
-                .iter()
-                .map(|(key, value)| (key.clone(), Arc::new(value.as_ref().clone()))),
-        );
-        let inactive_validators_by_id = BTreeMap::from_iter(
-            self.inactive_validators_by_id
-                .iter()
-                .map(|(key, value)| (key.clone(), value.clone())),
-        );
-        StakingContract {
-            balance: self.balance,
-            active_validators_sorted: BTreeSet::from_iter(
-                active_validators_by_id.values().cloned(),
-            ),
-            active_validators_by_id,
-            inactive_validators_by_id,
-            current_epoch_parking: self.current_epoch_parking.clone(),
-            previous_epoch_parking: self.previous_epoch_parking.clone(),
-            current_lost_rewards: self.current_lost_rewards.clone(),
-            previous_lost_rewards: self.previous_lost_rewards.clone(),
-            current_disabled_slots: self.current_disabled_slots.clone(),
-            previous_disabled_slots: self.previous_disabled_slots.clone(),
-            inactive_stake_by_address: self.inactive_stake_by_address.clone(),
-        }
     }
 }

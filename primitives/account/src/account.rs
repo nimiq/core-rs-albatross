@@ -6,6 +6,8 @@ use nimiq_transaction::Transaction;
 use nimiq_trie::key_nibbles::KeyNibbles;
 
 use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction};
+use crate::staking_contract::staker::Staker;
+use crate::staking_contract::Validator;
 use crate::{
     AccountError, AccountsTree, BasicAccount, HashedTimeLockedContract, Inherent, StakingContract,
     VestingContract,
@@ -17,8 +19,10 @@ pub enum Account {
     Basic(BasicAccount),
     Vesting(VestingContract),
     HTLC(HashedTimeLockedContract),
-    #[cfg_attr(feature = "serde-derive", serde(skip))]
     Staking(StakingContract),
+    StakingStaker(Staker),
+    StakingValidator(Validator),
+    Dummy,
 }
 
 impl Account {
@@ -28,6 +32,9 @@ impl Account {
             Account::Vesting(_) => AccountType::Vesting,
             Account::HTLC(_) => AccountType::HTLC,
             Account::Staking(_) => AccountType::Staking,
+            _ => {
+                unreachable!()
+            }
         }
     }
 
@@ -37,6 +44,9 @@ impl Account {
             Account::Vesting(ref account) => account.balance,
             Account::HTLC(ref account) => account.balance,
             Account::Staking(ref account) => account.balance,
+            _ => {
+                unreachable!()
+            }
         }
     }
 
