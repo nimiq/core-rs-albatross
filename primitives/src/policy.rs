@@ -1,5 +1,8 @@
 use std::cmp;
 
+/// This is the address for the staking contract in user-friendly format.
+pub const STAKING_CONTRACT_ADDRESS: &str = "NQ38 STAK 1NG0 0000 0000 C0NT RACT 0000 0000";
+
 /// Number of blocks a transaction is valid with Albatross consensus.
 pub const TRANSACTION_VALIDITY_WINDOW: u32 = 7200;
 
@@ -43,7 +46,7 @@ pub const MIN_STAKE: u64 = 1;
 /// Minimum initial stake for validators in Lunas (1 NIM = 100,000 Lunas).
 /// A validator is someone who actually participates in block production. They are akin to miners
 /// in proof-of-work.
-pub const MIN_VALIDATOR_STAKE: u64 = 100_000_000;
+pub const MIN_VALIDATOR_STAKE: u64 = 1_000_000_000;
 
 /// Total supply in units.
 pub const TOTAL_SUPPLY: u64 = 2_100_000_000_000_000;

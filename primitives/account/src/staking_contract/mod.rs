@@ -58,10 +58,6 @@ pub struct StakingContract {
 }
 
 impl StakingContract {
-    pub const ADDRESS: Address =
-        Address::from_user_friendly_address("NQ38 STAK 1NG0 0000 0000 C0NT RACT 0000 0000")
-            .unwrap();
-
     // This is the byte path for the main struct in the staking contract.
     pub const PATH_CONTRACT_MAIN: u8 = 0;
 
@@ -79,7 +75,11 @@ impl StakingContract {
 
     pub fn get_key_staking_contract() -> KeyNibbles {
         let mut bytes = Vec::with_capacity(21);
-        bytes.extend(StakingContract::ADDRESS.as_bytes());
+        bytes.extend(
+            Address::from_user_friendly_address(policy::STAKING_CONTRACT_ADDRESS)
+                .expect("Couldn't parse the staking contract address!")
+                .as_bytes(),
+        );
         bytes.push(StakingContract::PATH_CONTRACT_MAIN);
 
         KeyNibbles::from(&bytes)
@@ -87,7 +87,11 @@ impl StakingContract {
 
     pub fn get_key_validator(validator_id: &ValidatorId) -> KeyNibbles {
         let mut bytes = Vec::with_capacity(42);
-        bytes.extend(StakingContract::ADDRESS.as_bytes());
+        bytes.extend(
+            Address::from_user_friendly_address(policy::STAKING_CONTRACT_ADDRESS)
+                .expect("Couldn't parse the staking contract address!")
+                .as_bytes(),
+        );
         bytes.push(StakingContract::PATH_VALIDATORS_LIST);
         bytes.extend(validator_id.as_bytes());
         bytes.push(StakingContract::PATH_VALIDATOR_MAIN);
@@ -97,7 +101,11 @@ impl StakingContract {
 
     pub fn get_key_staker(staker_address: &Address) -> KeyNibbles {
         let mut bytes = Vec::with_capacity(41);
-        bytes.extend(StakingContract::ADDRESS.as_bytes());
+        bytes.extend(
+            Address::from_user_friendly_address(policy::STAKING_CONTRACT_ADDRESS)
+                .expect("Couldn't parse the staking contract address!")
+                .as_bytes(),
+        );
         bytes.push(StakingContract::PATH_STAKERS_LIST);
         bytes.extend(staker_address.as_bytes());
 
