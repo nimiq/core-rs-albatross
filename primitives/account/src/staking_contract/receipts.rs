@@ -3,6 +3,7 @@ use std::mem;
 use std::ops::Add;
 
 use beserial::{Deserialize, Serialize};
+use nimiq_bls::CompressedPublicKey as BlsPublicKey;
 use nimiq_collections::BitSet;
 use nimiq_database::WriteTransaction;
 use nimiq_hash::{Blake2bHash, Hash};
@@ -36,13 +37,13 @@ pub struct UnparkReceipt {
     pub previous_epoch: bool,
     #[beserial(len_type(u16))]
     pub current_disabled_slots: Option<BTreeSet<u16>>,
-    #[beserial(len_type(u16))]
-    pub previous_disabled_slots: Option<BTreeSet<u16>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct UpdateValidatorReceipt {
+    pub old_validator_key: BlsPublicKey,
     pub old_reward_address: Address,
+    pub old_extra_data: Option<[u8; 32]>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
