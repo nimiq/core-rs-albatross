@@ -62,19 +62,77 @@ impl StakingContract {
         Address::from_user_friendly_address("NQ38 STAK 1NG0 0000 0000 C0NT RACT 0000 0000")
             .unwrap();
 
-    /// Get a validator information given its id.
+    // This is the byte path for the main struct in the staking contract.
+    pub const PATH_CONTRACT_MAIN: u8 = 0;
+
+    // This is the byte path for the validators list in the staking contract.
+    pub const PATH_VALIDATORS_LIST: u8 = 1;
+
+    // This is the byte path for the stakers list in the staking contract.
+    pub const PATH_STAKERS_LIST: u8 = 2;
+
+    // This is the byte path for the main struct for a single validator (in the validators list).
+    pub const PATH_VALIDATOR_MAIN: u8 = 0;
+
+    // This is the byte path for the stakers list for a single validator (in the validators list).
+    pub const PATH_VALIDATOR_STAKERS_LIST: u8 = 1;
+
+    pub fn get_key_staking_contract() -> KeyNibbles {
+        let mut bytes = Vec::with_capacity(21);
+        bytes.extend(StakingContract::ADDRESS.as_bytes());
+        bytes.push(StakingContract::PATH_CONTRACT_MAIN);
+
+        KeyNibbles::from(&bytes)
+    }
+
+    pub fn get_key_validator(validator_id: &ValidatorId) -> KeyNibbles {
+        let mut bytes = Vec::with_capacity(42);
+        bytes.extend(StakingContract::ADDRESS.as_bytes());
+        bytes.push(StakingContract::PATH_VALIDATORS_LIST);
+        bytes.extend(validator_id.as_bytes());
+        bytes.push(StakingContract::PATH_VALIDATOR_MAIN);
+
+        KeyNibbles::from(&bytes)
+    }
+
+    pub fn get_key_staker(staker_address: &Address) -> KeyNibbles {
+        let mut bytes = Vec::with_capacity(41);
+        bytes.extend(StakingContract::ADDRESS.as_bytes());
+        bytes.push(StakingContract::PATH_STAKERS_LIST);
+        bytes.extend(staker_address.as_bytes());
+
+        KeyNibbles::from(&bytes)
+    }
+
+    /// Get the staking contract information.
+    pub fn get_staking_contract(
+        accounts_tree: &AccountsTree,
+        db_txn: &DBTransaction,
+    ) -> StakingContract {
+        let key = StakingContract::get_key_staking_contract();
+
+        trace!(
+            "Trying to fetch staking contract at key {}.",
+            key.to_string()
+        );
+
+        match accounts_tree.get(db_txn, &key) {
+            Some(Account::Staking(contract)) => {
+                return contract;
+            }
+            _ => {
+                unreachable!()
+            }
+        }
+    }
+
+    /// Get a validator information given its id, if it exists.
     pub fn get_validator(
         accounts_tree: &AccountsTree,
         db_txn: &DBTransaction,
         validator_id: &ValidatorId,
     ) -> Option<Validator> {
-        let mut bytes: Vec<u8> = Vec::with_capacity(41);
-        bytes.extend(StakingContract::ADDRESS.as_bytes());
-        // This is the byte flag for the validator list in the staking contract.
-        bytes.push(1u8);
-        bytes.extend(validator_id.as_bytes());
-
-        let key = KeyNibbles::from(&bytes);
+        let key = StakingContract::get_key_validator(validator_id);
 
         trace!(
             "Trying to fetch validator with id {} at key {}.",
@@ -89,28 +147,19 @@ impl StakingContract {
             None => {
                 return None;
             }
-            Some(account) => {
-                panic!(
-                    "Tried to fetch a validator from the accounts tree. Instead found a {}.",
-                    account.account_type()
-                );
+            _ => {
+                unreachable!()
             }
         }
     }
 
-    /// Get a staker information given its address.
+    /// Get a staker information given its address, if it exists.
     pub fn get_staker(
         accounts_tree: &AccountsTree,
         db_txn: &DBTransaction,
         staker_address: &Address,
     ) -> Option<Staker> {
-        let mut bytes: Vec<u8> = Vec::with_capacity(41);
-        bytes.extend(StakingContract::ADDRESS.as_bytes());
-        // This is the byte flag for the staker list in the staking contract.
-        bytes.push(2u8);
-        bytes.extend(staker_address.as_bytes());
-
-        let key = KeyNibbles::from(&bytes);
+        let key = StakingContract::get_key_staker(staker_address);
 
         trace!(
             "Trying to fetch staker with address {} at key {}.",
@@ -125,11 +174,8 @@ impl StakingContract {
             None => {
                 return None;
             }
-            Some(account) => {
-                panic!(
-                    "Tried to fetch a staker from the accounts tree. Instead found a {}.",
-                    account.account_type()
-                );
+            _ => {
+                unreachable!()
             }
         }
     }
@@ -244,42 +290,5 @@ impl StakingContract {
             return Err(AccountError::InvalidSignature);
         }
         Ok(())
-    }
-
-    /// Allows to modify both active and inactive validators.
-    /// It returns a validator entry, which subsumes active and inactive validators.
-    /// It also allows for deferred error handling after re-adding the validator using `restore_validator`.
-    fn remove_validator(&mut self, validator_id: &ValidatorId) -> Option<ValidatorEntry> {
-        if let Some(validator) = self.active_validators_by_id.remove(&validator_id) {
-            self.active_validators_sorted.remove(&validator);
-            Some(ValidatorEntry::new_active_validator(validator))
-        } else {
-            //  The else case is needed to ensure the validator_key still exists.
-            self.inactive_validators_by_id
-                .remove(&validator_id)
-                .map(ValidatorEntry::new_inactive_validator)
-        }
-    }
-
-    /// Restores/saves a validator entry.
-    /// If modifying the validator failed, it is restored and the error is returned.
-    /// This makes it possible to remove the validator using `remove_validator`,
-    /// try modifying it and restoring it before the error is returned.
-    fn restore_validator(&mut self, validator_entry: ValidatorEntry) -> Result<(), AccountError> {
-        match validator_entry {
-            ValidatorEntry::Active(validator, error) => {
-                // Update/restore validator.
-                self.active_validators_sorted.insert(Arc::clone(&validator));
-                self.active_validators_by_id
-                    .insert(validator.id.clone(), validator);
-                error.map(Err).unwrap_or(Ok(()))
-            }
-            ValidatorEntry::Inactive(validator, error) => {
-                // Update/restore validator.
-                self.inactive_validators_by_id
-                    .insert(validator.validator.id.clone(), validator);
-                error.map(Err).unwrap_or(Ok(()))
-            }
-        }
     }
 }
