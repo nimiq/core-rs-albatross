@@ -99,6 +99,24 @@ impl StakingContract {
         KeyNibbles::from(&bytes)
     }
 
+    pub fn get_key_validator_staker(
+        validator_id: &ValidatorId,
+        staker_address: &Address,
+    ) -> KeyNibbles {
+        let mut bytes = Vec::with_capacity(62);
+        bytes.extend(
+            Address::from_user_friendly_address(policy::STAKING_CONTRACT_ADDRESS)
+                .expect("Couldn't parse the staking contract address!")
+                .as_bytes(),
+        );
+        bytes.push(StakingContract::PATH_VALIDATORS_LIST);
+        bytes.extend(validator_id.as_bytes());
+        bytes.push(StakingContract::PATH_VALIDATOR_STAKERS_LIST);
+        bytes.extend(staker_address.as_bytes());
+
+        KeyNibbles::from(&bytes)
+    }
+
     pub fn get_key_staker(staker_address: &Address) -> KeyNibbles {
         let mut bytes = Vec::with_capacity(41);
         bytes.extend(

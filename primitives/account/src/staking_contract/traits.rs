@@ -18,7 +18,7 @@ use nimiq_trie::key_nibbles::KeyNibbles;
 
 use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction};
 use crate::staking_contract::receipts::{
-    DropValidatorReceipt, InactiveStakeReceipt, InactiveValidatorReceipt, UnparkReceipt,
+    DropValidatorReceipt, InactiveStakeReceipt, ReactivateValidatorReceipt, UnparkValidatorReceipt,
     UpdateValidatorReceipt,
 };
 use crate::{Account, AccountError, AccountsTree, Inherent, InherentType, StakingContract};
@@ -253,13 +253,13 @@ impl AccountTransactionInteraction for StakingContract {
                     staking.revert_retire_validator(validator_id)?;
                 }
                 IncomingStakingTransactionData::ReactivateValidator { validator_id, .. } => {
-                    let receipt: InactiveValidatorReceipt = Deserialize::deserialize_from_vec(
+                    let receipt: ReactivateValidatorReceipt = Deserialize::deserialize_from_vec(
                         receipt.ok_or(AccountError::InvalidReceipt)?,
                     )?;
                     staking.revert_reactivate_validator(validator_id, receipt)?;
                 }
                 IncomingStakingTransactionData::UnparkValidator { validator_id, .. } => {
-                    let receipt: UnparkReceipt = Deserialize::deserialize_from_vec(
+                    let receipt: UnparkValidatorReceipt = Deserialize::deserialize_from_vec(
                         receipt.ok_or(AccountError::InvalidReceipt)?,
                     )?;
                     staking.revert_unpark_validator(&validator_id, receipt)?;

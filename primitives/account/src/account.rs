@@ -1,6 +1,6 @@
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use nimiq_database::WriteTransaction;
-use nimiq_primitives::account::AccountType;
+use nimiq_primitives::account::{AccountType, ValidatorId};
 use nimiq_primitives::coin::Coin;
 use nimiq_transaction::Transaction;
 use nimiq_trie::key_nibbles::KeyNibbles;
@@ -12,6 +12,7 @@ use crate::{
     AccountError, AccountsTree, BasicAccount, HashedTimeLockedContract, Inherent, StakingContract,
     VestingContract,
 };
+use nimiq_keys::Address;
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
@@ -20,9 +21,9 @@ pub enum Account {
     Vesting(VestingContract),
     HTLC(HashedTimeLockedContract),
     Staking(StakingContract),
-    StakingStaker(Staker),
     StakingValidator(Validator),
-    Dummy,
+    StakingValidatorStaker(Address),
+    StakingStaker(Staker),
 }
 
 impl Account {
