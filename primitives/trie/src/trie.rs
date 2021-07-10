@@ -63,6 +63,38 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
         }
     }
 
+    /// Returns a chunk of the Merkle Radix Trie that starts at the key `start` (which might or not
+    /// be a part of the trie, if it is then it will be part of the chunk) and contains at most
+    /// `size` leaf nodes.
+    pub fn get_chunk(&self, txn: &Transaction, start: &KeyNibbles, size: usize) -> Vec<A> {
+        let mut chunk = Vec::new();
+
+        let mut stack = vec![self.get_root(txn)?];
+
+        while let Some(item) = stack.pop() {
+            match item {
+                TrieNode::BranchNode { children, key } => {
+                    for child in children.iter().flatten().rev() {
+                        let combined = &key + &child.suffix;
+                        if combined.is_prefix_of(start) || *start <= combined {
+                            stack.push(txn.get(&self.db, &combined)?);
+                        }
+                    }
+                }
+                TrieNode::LeafNode { ref key, .. } => {
+                    if start.len() < key.len() || start <= key {
+                        chunk.push(item);
+                    }
+                    if chunk.len() >= size {
+                        break;
+                    }
+                }
+            }
+        }
+
+        chunk
+    }
+
     /// Insert a value into the Merkle Radix Trie at the given key. If the key already exists then
     /// it will overwrite it. You can't use this function to check the existence of a given key.
     pub fn put(&self, txn: &mut WriteTransaction, key: &KeyNibbles, value: A) {
@@ -367,37 +399,14 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
 
     /// Creates a proof for the chunk of the Merkle Radix Trie that starts at the key `start` (which
     /// might or not be a part of the trie, if it is then it will be part of the chunk) and contains
-    /// `size` leaf nodes.
-    pub fn get_chunk(
+    /// at most `size` leaf nodes.
+    pub fn get_chunk_proof(
         &self,
         txn: &Transaction,
         start: &KeyNibbles,
         size: usize,
     ) -> Option<TrieProof<A>> {
-        let mut chunk = Vec::new();
-
-        let mut stack = vec![self.get_root(txn)?];
-
-        while let Some(item) = stack.pop() {
-            match item {
-                TrieNode::BranchNode { children, key } => {
-                    for child in children.iter().flatten().rev() {
-                        let combined = &key + &child.suffix;
-                        if combined.is_prefix_of(start) || *start <= combined {
-                            stack.push(txn.get(&self.db, &combined)?);
-                        }
-                    }
-                }
-                TrieNode::LeafNode { ref key, .. } => {
-                    if start.len() < key.len() || start <= key {
-                        chunk.push(item);
-                    }
-                    if chunk.len() >= size {
-                        break;
-                    }
-                }
-            }
-        }
+        let chunk = self.get_chunk(txn, start, size);
 
         let chunk_keys = chunk.iter().map(|node| node.key()).collect();
 
@@ -534,23 +543,25 @@ mod tests {
         trie.put(&mut txn, &key_2, 8);
         trie.put(&mut txn, &key_3, 7);
 
-        let chunk = trie.get_chunk(&txn, &KeyNibbles::empty(), 100).unwrap();
+        let chunk = trie
+            .get_chunk_proof(&txn, &KeyNibbles::empty(), 100)
+            .unwrap();
         assert_eq!(chunk.nodes.len(), 6);
         assert_eq!(chunk.verify(&trie.root_hash(&txn)), true);
 
-        let chunk = trie.get_chunk(&txn, &KeyNibbles::empty(), 3).unwrap();
+        let chunk = trie.get_chunk_proof(&txn, &KeyNibbles::empty(), 3).unwrap();
         assert_eq!(chunk.nodes.len(), 6);
         assert_eq!(chunk.verify(&trie.root_hash(&txn)), true);
 
-        let chunk = trie.get_chunk(&txn, &KeyNibbles::empty(), 2).unwrap();
+        let chunk = trie.get_chunk_proof(&txn, &KeyNibbles::empty(), 2).unwrap();
         assert_eq!(chunk.nodes.len(), 5);
         assert_eq!(chunk.verify(&trie.root_hash(&txn)), true);
 
-        let chunk = trie.get_chunk(&txn, &key_3, 100).unwrap();
+        let chunk = trie.get_chunk_proof(&txn, &key_3, 100).unwrap();
         assert_eq!(chunk.nodes.len(), 3);
         assert_eq!(chunk.verify(&trie.root_hash(&txn)), true);
 
-        let chunk = trie.get_chunk(&txn, &key_4, 100).unwrap();
+        let chunk = trie.get_chunk_proof(&txn, &key_4, 100).unwrap();
         assert_eq!(chunk.nodes.len(), 3);
         assert_eq!(chunk.verify(&trie.root_hash(&txn)), true);
     }

@@ -32,38 +32,45 @@ pub struct SlashReceipt {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct UnparkReceipt {
-    pub current_epoch: bool,
-    pub previous_epoch: bool,
+pub struct UpdateValidatorReceipt {
+    pub old_validator_key: BlsPublicKey,
+    pub old_reward_address: Address,
+    pub old_extra_data: Option<Blake2bHash>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub struct RetireValidatorReceipt {
+    pub current_epoch_parking: bool,
+    pub previous_epoch_parking: bool,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub struct ReactivateValidatorReceipt {
+    pub retire_time: u32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub struct UnparkValidatorReceipt {
+    pub current_epoch_parking: bool,
+    pub previous_epoch_parking: bool,
     #[beserial(len_type(u16))]
     pub current_disabled_slots: Option<BTreeSet<u16>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct UpdateValidatorReceipt {
-    pub old_validator_key: BlsPublicKey,
-    pub old_reward_address: Address,
-    pub old_extra_data: Option<[u8; 32]>,
+pub struct DropValidatorReceipt {
+    pub reward_address: Address,
+    pub validator_key: BlsPublicKey,
+    pub extra_data: Option<Blake2bHash>,
+    pub retire_time: u32,
+    #[beserial(len_type(u32))]
+    pub stakers: Vec<Address>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct RetirementReceipt {
     pub stake: Coin,
     pub inactive_stake_receipt: Option<InactiveStakeReceipt>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct DropValidatorReceipt {
-    pub reward_address: Address,
-    #[beserial(len_type(u32))]
-    pub retirement_by_address: BTreeMap<Address, RetirementReceipt>,
-    pub retire_time: u32,
-    pub unpark_receipt: UnparkReceipt,
-}
-
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct InactiveValidatorReceipt {
-    pub retire_time: u32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]

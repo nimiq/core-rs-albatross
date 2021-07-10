@@ -14,16 +14,16 @@ keywords = ["nimiq", "cryptocurrency", "blockchain"]
 thiserror = "1.0.23"
 rand = { version = "0.7", features = ["small_rng"] }
 
-ark-std = "^0.2"
-ark-ff = "^0.2"
-ark-serialize = "^0.2"
-ark-ec = "^0.2"
-ark-relations = "^0.2"
-ark-mnt4-753 = "^0.2"
-ark-mnt6-753 = "^0.2"
-ark-crypto-primitives = "^0.2"
-ark-r1cs-std = "^0.2"
-ark-groth16 = "^0.2"
+ark-std = "0.2"
+ark-ff = "0.2"
+ark-serialize = "0.2"
+ark-ec = "0.2"
+ark-relations = "0.2"
+ark-mnt4-753 = "0.2"
+ark-mnt6-753 = "0.2"
+ark-crypto-primitives = "0.2"
+ark-r1cs-std = "0.2"
+ark-groth16 = "0.2"
 
 nimiq-bls = { path = "../bls" }
 nimiq-nano-primitives = { path = "../nano-primitives"}

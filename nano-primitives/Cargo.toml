@@ -12,11 +12,11 @@ edition = "2018"
 num-traits = "0.2"
 rayon = "^1.5"
 
-ark-ec = "^0.2"
-ark-mnt4-753 = "^0.2"
-ark-mnt6-753 = "^0.2"
-ark-crypto-primitives = "^0.2"
-ark-groth16 = "^0.2"
+ark-ec = "0.2"
+ark-mnt4-753 = "0.2"
+ark-mnt6-753 = "0.2"
+ark-crypto-primitives = "0.2"
+ark-groth16 = "0.2"
 
 nimiq-bls = { path = "../bls", version = "0.1" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }

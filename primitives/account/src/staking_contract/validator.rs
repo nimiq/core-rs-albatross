@@ -1,5 +1,5 @@
 use log::error;
-use std::cmp::Ordering;
+use std::cmp::{min, Ordering};
 use std::collections::BTreeMap;
 use std::mem;
 use std::ops::{Deref, DerefMut};
@@ -16,12 +16,14 @@ use nimiq_database::{Database, Environment, Transaction as DBTransaction, WriteT
 use nimiq_keys::Address;
 use nimiq_primitives::account::ValidatorId;
 use nimiq_primitives::coin::Coin;
+use nimiq_primitives::policy;
 
 use crate::staking_contract::receipts::{
-    DropValidatorReceipt, InactiveValidatorReceipt, RetirementReceipt, UnparkReceipt,
-    UpdateValidatorReceipt,
+    DropValidatorReceipt, ReactivateValidatorReceipt, RetireValidatorReceipt, RetirementReceipt,
+    UnparkValidatorReceipt, UpdateValidatorReceipt,
 };
 use crate::{Account, AccountError, AccountsTree, StakingContract};
+use nimiq_hash::Blake2bHash;
 use nimiq_trie::key_nibbles::KeyNibbles;
 
 /// Struct representing a validator in the staking contract.
@@ -32,13 +34,15 @@ pub struct Validator {
     // The amount of coins held by this validator. It also includes the coins delegated to him by
     // stakers.
     pub balance: Coin,
+    // The number of stakers that are staking for this validator.
+    pub num_stakers: u64,
     // The reward address of the validator.
     pub reward_address: Address,
     // The validator key.
     pub validator_key: BlsPublicKey,
     // Arbitrary data field. Can be used to do chain upgrades or for any other purpose that requires
     // validators to communicate arbitrary data.
-    pub extra_data: Option<[u8; 32]>,
+    pub extra_data: Option<Blake2bHash>,
     // A flag stating if the validator is inactive. If it is inactive, then it contains the block
     // height at which it became inactive.
     pub inactivity_flag: Option<u32>,
@@ -73,20 +77,25 @@ pub struct Validator {
 /// to the staking contract.
 /// Drop is a transaction from the staking contract to an arbitrary address.
 impl StakingContract {
-    /// Creates a new validator entry. The initial stake can only be retrieved by dropping the
-    /// validator. This is public to fill the genesis staking contract.
+    /// Creates a new validator entry. The initial stake is always equal to the minimum validator
+    /// stake and can only be retrieved by dropping the validator.
+    /// This is public to fill the genesis staking contract.
     pub fn create_validator(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
-        validator_id: ValidatorId,
-        initial_stake: Coin,
+        validator_id: &ValidatorId,
         reward_address: Address,
         validator_key: BlsPublicKey,
-        extra_data: Option<[u8; 32]>,
+        extra_data: Option<Blake2bHash>,
     ) -> Result<(), AccountError> {
+        // Get the initial stake value.
+        let initial_stake = Coin::from_u64_unchecked(policy::MIN_VALIDATOR_STAKE);
+
         // See if the validator already exists.
-        if StakingContract::get_validator(accounts_tree, db_txn, &validator_id).is_some() {
-            return Err(AccountError::AlreadyExistentValidator { id: validator_id });
+        if StakingContract::get_validator(accounts_tree, db_txn, validator_id).is_some() {
+            return Err(AccountError::AlreadyExistentValidator {
+                id: validator_id.clone(),
+            });
         }
 
         // Get the staking contract main and update it.
@@ -96,15 +105,13 @@ impl StakingContract {
 
         staking_contract
             .active_validators
-            .insert(validator_id, initial_stake);
-
-        // Calculate key for the validator in the accounts tree.
-        let key = StakingContract::get_key_validator(&validator_id);
+            .insert(validator_id.clone(), initial_stake);
 
         // Create validator struct.
         let validator = Validator {
             id: validator_id.clone(),
             balance: initial_stake,
+            num_stakers: 0,
             reward_address,
             validator_key,
             extra_data,
@@ -112,10 +119,7 @@ impl StakingContract {
         };
 
         // All checks passed, not allowed to fail from here on!
-        trace!(
-            "Trying to put staking contract with at key {}.",
-            StakingContract::get_key_staking_contract().to_string()
-        );
+        trace!("Trying to put staking contract in the accounts tree.");
 
         accounts_tree.put(
             db_txn,
@@ -124,12 +128,15 @@ impl StakingContract {
         );
 
         trace!(
-            "Trying to put validator with id {} at key {}.",
+            "Trying to put validator with id {} in the accounts tree.",
             validator_id.to_string(),
-            key.to_string()
         );
 
-        accounts_tree.put(db_txn, &key, Account::StakingValidator(validator));
+        accounts_tree.put(
+            db_txn,
+            &StakingContract::get_key_validator(validator_id),
+            Account::StakingValidator(validator),
+        );
 
         Ok(())
     }
@@ -138,12 +145,14 @@ impl StakingContract {
     fn revert_create_validator(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
-        validator_id: ValidatorId,
+        validator_id: &ValidatorId,
         initial_stake: Coin,
     ) -> Result<(), AccountError> {
         // See if the validator does not exists.
-        if StakingContract::get_validator(accounts_tree, db_txn, &validator_id).is_none() {
-            return Err(AccountError::NonExistentValidator { id: validator_id });
+        if StakingContract::get_validator(accounts_tree, db_txn, validator_id).is_none() {
+            return Err(AccountError::NonExistentValidator {
+                id: validator_id.clone(),
+            });
         }
 
         // Get the staking contract main and update it.
@@ -151,16 +160,10 @@ impl StakingContract {
 
         staking_contract.balance = Account::balance_sub(staking_contract.balance, initial_stake)?;
 
-        staking_contract.active_validators.remove(&validator_id);
-
-        // Calculate key for the validator in the accounts tree.
-        let key = StakingContract::get_key_validator(&validator_id);
+        staking_contract.active_validators.remove(validator_id);
 
         // All checks passed, not allowed to fail from here on!
-        trace!(
-            "Trying to put staking contract with at key {}.",
-            StakingContract::get_key_staking_contract().to_string()
-        );
+        trace!("Trying to put staking contract in the accounts tree.");
 
         accounts_tree.put(
             db_txn,
@@ -169,12 +172,11 @@ impl StakingContract {
         );
 
         trace!(
-            "Trying to remove validator with id {} at key {}.",
+            "Trying to remove validator with id {} in the accounts tree.",
             validator_id.to_string(),
-            key.to_string()
         );
 
-        accounts_tree.remove(db_txn, &key);
+        accounts_tree.remove(db_txn, &StakingContract::get_key_validator(validator_id));
 
         Ok(())
     }
@@ -186,11 +188,11 @@ impl StakingContract {
         validator_id: &ValidatorId,
         new_validator_key: Option<BlsPublicKey>,
         new_reward_address: Option<Address>,
-        new_extra_data: Option<Option<[u8; 32]>>,
+        new_extra_data: Option<Option<Blake2bHash>>,
     ) -> Result<UpdateValidatorReceipt, AccountError> {
         // Get the validator.
         let mut validator =
-            match StakingContract::get_validator(accounts_tree, db_txn, &validator_id) {
+            match StakingContract::get_validator(accounts_tree, db_txn, validator_id) {
                 Some(v) => v,
                 None => {
                     return Err(AccountError::NonExistentValidator {
@@ -219,30 +221,31 @@ impl StakingContract {
             validator.extra_data = value;
         }
 
-        // Calculate key for the validator in the accounts tree.
-        let key = StakingContract::get_key_validator(&validator_id);
-
         // All checks passed, not allowed to fail from here on!
         trace!(
-            "Trying to put validator with id {} at key {}.",
+            "Trying to put validator with id {} in the accounts tree.",
             validator_id.to_string(),
-            key.to_string()
         );
 
-        accounts_tree.put(db_txn, &key, Account::StakingValidator(validator));
+        accounts_tree.put(
+            db_txn,
+            &StakingContract::get_key_validator(validator_id),
+            Account::StakingValidator(validator),
+        );
 
         Ok(receipt)
     }
 
-    /// Reverts updating validator key.
+    /// Reverts updating details.
     fn revert_update_validator(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
-        validator_id: ValidatorId,
+        validator_id: &ValidatorId,
         receipt: UpdateValidatorReceipt,
     ) -> Result<(), AccountError> {
+        // Get the validator.
         let mut validator =
-            match StakingContract::get_validator(accounts_tree, db_txn, &validator_id) {
+            match StakingContract::get_validator(accounts_tree, db_txn, validator_id) {
                 Some(v) => v,
                 None => {
                     return Err(AccountError::NonExistentValidator {
@@ -256,34 +259,34 @@ impl StakingContract {
         validator.reward_address = receipt.old_reward_address;
         validator.extra_data = receipt.old_extra_data;
 
-        // Calculate key for the validator in the accounts tree.
-        let key = StakingContract::get_key_validator(&validator_id);
-
         // All checks passed, not allowed to fail from here on!
         trace!(
-            "Trying to put validator with id {} at key {}.",
+            "Trying to put validator with id {} in the accounts tree.",
             validator_id.to_string(),
-            key.to_string()
         );
 
-        accounts_tree.put(db_txn, &key, Account::StakingValidator(validator));
+        accounts_tree.put(
+            db_txn,
+            &StakingContract::get_key_validator(validator_id),
+            Account::StakingValidator(validator),
+        );
 
         Ok(())
     }
 
-    /// Inactivates a validator.
+    /// Inactivates a validator. This also removes the validator from the parking sets.
     fn retire_validator(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
-        validator_id: ValidatorId,
+        validator_id: &ValidatorId,
         block_height: u32,
-    ) -> Result<(), AccountError> {
+    ) -> Result<RetireValidatorReceipt, AccountError> {
         // Get the staking contract main and update it.
         let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
 
         if staking_contract
             .active_validators
-            .remove(&validator_id)
+            .remove(validator_id)
             .is_none()
         {
             error!(
@@ -293,9 +296,12 @@ impl StakingContract {
             return Err(AccountError::InvalidForRecipient);
         }
 
-        // Get the validator.
+        let current_parking = staking_contract.current_epoch_parking.remove(validator_id);
+        let previous_parking = staking_contract.previous_epoch_parking.remove(validator_id);
+
+        // Get the validator and update it.
         let mut validator =
-            match StakingContract::get_validator(accounts_tree, db_txn, &validator_id) {
+            match StakingContract::get_validator(accounts_tree, db_txn, validator_id) {
                 Some(v) => v,
                 None => {
                     return Err(AccountError::NonExistentValidator {
@@ -304,17 +310,10 @@ impl StakingContract {
                 }
             };
 
-        // Update validator inactivity flag.
         validator.inactivity_flag = Some(block_height);
 
-        // Calculate key for the validator in the accounts tree.
-        let key = StakingContract::get_key_validator(&validator_id);
-
         // All checks passed, not allowed to fail from here on!
-        trace!(
-            "Trying to put staking contract with at key {}.",
-            StakingContract::get_key_staking_contract().to_string()
-        );
+        trace!("Trying to put staking contract in the accounts tree.");
 
         accounts_tree.put(
             db_txn,
@@ -323,34 +322,89 @@ impl StakingContract {
         );
 
         trace!(
-            "Trying to put validator with id {} at key {}.",
+            "Trying to put validator with id {} in the accounts tree.",
             validator_id.to_string(),
-            key.to_string()
         );
 
-        accounts_tree.put(db_txn, &key, Account::StakingValidator(validator));
+        accounts_tree.put(
+            db_txn,
+            &StakingContract::get_key_validator(validator_id),
+            Account::StakingValidator(validator),
+        );
 
-        Ok(())
+        Ok(RetireValidatorReceipt {
+            current_epoch_parking,
+            previous_epoch_parking,
+        })
     }
 
     /// Reverts inactivating a validator entry.
     fn revert_retire_validator(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
-        validator_id: ValidatorId,
+        validator_id: &ValidatorId,
+        receipt: RetireValidatorReceipt,
     ) -> Result<(), AccountError> {
-        StakingContract::reactivate_validator(accounts_tree, db_txn, validator_id).map(|_| ())
+        // Get the staking contract main and update it.
+        let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
+
+        if receipt.current_epoch_parking {
+            staking_contract
+                .current_epoch_parking
+                .insert(validator_id.clone());
+        }
+
+        if receipt.previous_epoch_parking {
+            staking_contract
+                .previous_epoch_parking
+                .insert(validator_id.clone());
+        }
+
+        // Get the validator and update it.
+        let mut validator =
+            match StakingContract::get_validator(accounts_tree, db_txn, validator_id) {
+                Some(v) => v,
+                None => {
+                    return Err(AccountError::NonExistentValidator {
+                        id: validator_id.clone(),
+                    });
+                }
+            };
+
+        validator.inactivity_flag = Some(block_height);
+
+        // All checks passed, not allowed to fail from here on!
+        trace!("Trying to put staking contract in the accounts tree.");
+
+        accounts_tree.put(
+            db_txn,
+            &StakingContract::get_key_staking_contract(),
+            Account::Staking(staking_contract),
+        );
+
+        trace!(
+            "Trying to put validator with id {} in the accounts tree.",
+            validator_id.to_string(),
+        );
+
+        accounts_tree.put(
+            db_txn,
+            &StakingContract::get_key_validator(validator_id),
+            Account::StakingValidator(validator),
+        );
+
+        Ok(())
     }
 
     /// Reactivate a validator entry.
     fn reactivate_validator(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
-        validator_id: ValidatorId,
-    ) -> Result<InactiveValidatorReceipt, AccountError> {
+        validator_id: &ValidatorId,
+    ) -> Result<ReactivateValidatorReceipt, AccountError> {
         // Get the validator.
         let mut validator =
-            match StakingContract::get_validator(accounts_tree, db_txn, &validator_id) {
+            match StakingContract::get_validator(accounts_tree, db_txn, validator_id) {
                 Some(v) => v,
                 None => {
                     return Err(AccountError::NonExistentValidator {
@@ -361,7 +415,7 @@ impl StakingContract {
 
         // Create receipt now.
         let receipt = match validator.inactivity_flag {
-            Some(block_height) => InactiveValidatorReceipt {
+            Some(block_height) => ReactivateValidatorReceipt {
                 retire_time: block_height,
             },
             None => {
@@ -383,14 +437,8 @@ impl StakingContract {
             .active_validators
             .insert(validator_id.clone(), validator.balance);
 
-        // Calculate key for the validator in the accounts tree.
-        let key = StakingContract::get_key_validator(&validator_id);
-
         // All checks passed, not allowed to fail from here on!
-        trace!(
-            "Trying to put staking contract with at key {}.",
-            StakingContract::get_key_staking_contract().to_string()
-        );
+        trace!("Trying to put staking contract in the accounts tree.");
 
         accounts_tree.put(
             db_txn,
@@ -399,12 +447,15 @@ impl StakingContract {
         );
 
         trace!(
-            "Trying to put validator with id {} at key {}.",
+            "Trying to put validator with id {} in the accounts tree.",
             validator_id.to_string(),
-            key.to_string()
         );
 
-        accounts_tree.put(db_txn, &key, Account::StakingValidator(validator));
+        accounts_tree.put(
+            db_txn,
+            &StakingContract::get_key_validator(validator_id),
+            Account::StakingValidator(validator),
+        );
 
         Ok(receipt)
     }
@@ -413,10 +464,48 @@ impl StakingContract {
     fn revert_reactivate_validator(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
-        validator_id: ValidatorId,
-        receipt: InactiveValidatorReceipt,
+        validator_id: &ValidatorId,
+        receipt: ReactivateValidatorReceipt,
     ) -> Result<(), AccountError> {
-        StakingContract::retire_validator(accounts_tree, db_txn, validator_id, receipt.retire_time)
+        // Get the validator and update it.
+        let mut validator =
+            match StakingContract::get_validator(accounts_tree, db_txn, validator_id) {
+                Some(v) => v,
+                None => {
+                    return Err(AccountError::NonExistentValidator {
+                        id: validator_id.clone(),
+                    });
+                }
+            };
+
+        validator.inactivity_flag = Some(receipt.retire_time);
+
+        // Get the staking contract main and update it.
+        let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
+
+        staking_contract.active_validators.remove(validator_id);
+
+        // All checks passed, not allowed to fail from here on!
+        trace!("Trying to put staking contract in the accounts tree.");
+
+        accounts_tree.put(
+            db_txn,
+            &StakingContract::get_key_staking_contract(),
+            Account::Staking(staking_contract),
+        );
+
+        trace!(
+            "Trying to put validator with id {} in the accounts tree.",
+            validator_id.to_string(),
+        );
+
+        accounts_tree.put(
+            db_txn,
+            &StakingContract::get_key_validator(validator_id),
+            Account::StakingValidator(validator),
+        );
+
+        Ok(())
     }
 
     /// Removes a validator from the parking lists and the disabled slots.
@@ -424,7 +513,7 @@ impl StakingContract {
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
         validator_id: &ValidatorId,
-    ) -> Result<UnparkReceipt, AccountError> {
+    ) -> Result<UnparkValidatorReceipt, AccountError> {
         // Get the staking contract main and update it.
         let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
 
@@ -441,10 +530,7 @@ impl StakingContract {
         }
 
         // All checks passed, not allowed to fail from here on!
-        trace!(
-            "Trying to put staking contract with at key {}.",
-            StakingContract::get_key_staking_contract().to_string()
-        );
+        trace!("Trying to put staking contract in the accounts tree.");
 
         accounts_tree.put(
             db_txn,
@@ -452,9 +538,9 @@ impl StakingContract {
             Account::Staking(staking_contract),
         );
 
-        Ok(UnparkReceipt {
-            current_epoch,
-            previous_epoch,
+        Ok(UnparkValidatorReceipt {
+            current_epoch_parking: current_epoch,
+            previous_epoch_parking: previous_epoch,
             current_disabled_slots,
         })
     }
@@ -464,18 +550,18 @@ impl StakingContract {
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
         validator_id: &ValidatorId,
-        receipt: UnparkReceipt,
+        receipt: UnparkValidatorReceipt,
     ) -> Result<(), AccountError> {
         // Get the staking contract main and update it.
         let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
 
-        if receipt.current_epoch {
+        if receipt.current_epoch_parking {
             staking_contract
                 .current_epoch_parking
                 .insert(validator_id.clone());
         }
 
-        if receipt.previous_epoch {
+        if receipt.previous_epoch_parking {
             staking_contract
                 .previous_epoch_parking
                 .insert(validator_id.clone());
@@ -488,10 +574,7 @@ impl StakingContract {
         }
 
         // All checks passed, not allowed to fail from here on!
-        trace!(
-            "Trying to put staking contract with at key {}.",
-            StakingContract::get_key_staking_contract().to_string()
-        );
+        trace!("Trying to put staking contract in the accounts tree.");
 
         accounts_tree.put(
             db_txn,
@@ -502,98 +585,200 @@ impl StakingContract {
         Ok(())
     }
 
-    /// Drops a validator entry.
-    /// This can be used to drop inactive validators.
-    /// The validator must have been inactive for at least one macro block.
+    /// Drops a validator entry. This can only be used to drop inactive validators!
+    /// The validator must have been inactive for at least one election block.
     fn drop_validator(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
         validator_id: &ValidatorId,
+        block_height: u32,
     ) -> Result<DropValidatorReceipt, AccountError> {
-        // Initial stake vs. stakes has been checked in check_outgoing_transaction.
-
-        // All checks passed, not allowed to fail from here on!
-        // Retire all stakes.
-        let inactive_validator = self.inactive_validators_by_id.remove(validator_id).unwrap();
-        let validator = inactive_validator.validator;
-
-        // We first remove all stakes the validator holds and will re-add stakes afterwards
-        // when calling `retire_recipient`.
-        self.balance = Account::balance_sub(self.balance, validator.balance)?;
-
-        let mut retirement_by_address = BTreeMap::new();
-        for (staker_address, &stake) in validator.active_stake_by_address.read().iter() {
-            let receipt =
-                self.retire_recipient(staker_address, stake, Some(inactive_validator.retire_time))?;
-            retirement_by_address.insert(
-                staker_address.clone(),
-                RetirementReceipt {
-                    stake,
-                    inactive_stake_receipt: receipt,
-                },
-            );
-        }
-
-        // We need to check whether it is parked to prevent it from failing.
-        let unpark_receipt = if self.current_epoch_parking.contains(validator_id)
-            || self.previous_epoch_parking.contains(validator_id)
-            || self.current_disabled_slots.contains_key(validator_id)
-            || self.previous_disabled_slots.contains_key(validator_id)
-        {
-            self.unpark_validator(validator_id)?
-        } else {
-            UnparkReceipt {
-                current_epoch: false,
-                previous_epoch: false,
-                current_disabled_slots: None,
-                previous_disabled_slots: None,
+        // Get the validator.
+        let validator = match StakingContract::get_validator(accounts_tree, db_txn, validator_id) {
+            Some(v) => v,
+            None => {
+                return Err(AccountError::NonExistentValidator {
+                    id: validator_id.clone(),
+                });
             }
         };
 
-        Ok(DropValidatorReceipt {
-            reward_address: validator.reward_address.clone(),
-            retirement_by_address,
-            retire_time: inactive_validator.retire_time,
-            unpark_receipt,
-        })
+        // Check that the validator has been inactive for long enough.
+        match validator.inactivity_flag {
+            None => {
+                error!(
+                    "Tried to drop a validator which was still active! Validator ID {}",
+                    validator_id
+                );
+                return Err(AccountError::InvalidForSender);
+            }
+            Some(time) => {
+                if block_height < policy::election_block_after(time) {
+                    return Err(AccountError::InvalidForSender);
+                }
+            }
+        }
+
+        // All checks passed, not allowed to fail from here on!
+
+        // Initialize the receipts.
+        let mut receipt = DropValidatorReceipt {
+            reward_address: validator.reward_address,
+            validator_key: validator.validator_key,
+            extra_data: validator.extra_data,
+            retire_time: validator.inactivity_flag.expect(
+                "This can't fail since we already checked above that the inactivity flag is Some.",
+            ),
+            stakers: vec![],
+        };
+
+        // Remove the validator from all its stakers. Also delete all the validator's stakers entries.
+        let empty_staker_key =
+            StakingContract::get_key_validator_staker(validator_id, &Address::from([0; 20]));
+
+        let mut remaining_stakers = validator.num_stakers as usize;
+
+        // Here we use a chunk size of 100. It's completely arbitrary, we just don't want to
+        // download the entire staker list into memory since it might be huge.
+        let chunk_size = 100;
+
+        while remaining_stakers > 0 {
+            // Get chunk of stakers.
+            let chunk =
+                accounts_tree.get_chunk(txn, &empty_staker_key, min(remaining_stakers, chunk_size));
+
+            // Update the number of stakers.
+            remaining_stakers -= chunk.len();
+
+            for account in chunk {
+                if let Account::StakingValidatorStaker(staker_address) = account {
+                    // Update the staker.
+                    let mut staker = StakingContract::get_staker(accounts_tree, db_txn, &staker_address).expect("A validator had an staker staking for it that doesn't exist in the Accounts Tree!");
+
+                    staker.validator = None;
+
+                    trace!(
+                        "Trying to put staker with address {} in the accounts tree.",
+                        staker_address.to_string(),
+                    );
+
+                    accounts_tree.put(
+                        db_txn,
+                        &StakingContract::get_key_staker(&staker_address),
+                        Account::StakingStaker(staker),
+                    );
+
+                    // Remove the staker entry from the validator.
+                    accounts_tree.remove(
+                        db_txn,
+                        &StakingContract::get_key_validator_staker(validator_id, &staker_address),
+                    );
+
+                    // Update the receipt.
+                    receipt.stakers.push(staker_address);
+                } else {
+                    panic!("When trying to fetch a staker for a validator we got a different type of account. This should never happen!");
+                }
+            }
+        }
+
+        // Remove the validator entry.
+        accounts_tree.remove(db_txn, &StakingContract::get_key_validator(validator_id));
+
+        // Get the staking contract main and update it.
+        let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
+
+        let initial_stake = Coin::from_u64_unchecked(policy::MIN_VALIDATOR_STAKE);
+
+        staking_contract.balance = Account::balance_sub(staking_contract.balance, initial_stake)?;
+
+        trace!("Trying to put staking contract in the accounts tree.");
+
+        accounts_tree.put(
+            db_txn,
+            &StakingContract::get_key_staking_contract(),
+            Account::Staking(staking_contract),
+        );
+
+        // Return the receipt.
+        Ok(receipt)
     }
 
     /// Revert dropping a validator entry.
     fn revert_drop_validator(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
-        validator_id: ValidatorId,
+        validator_id: &ValidatorId,
         receipt: DropValidatorReceipt,
     ) -> Result<(), AccountError> {
-        // First, revert retiring the stakers.
-        let mut active_stake_by_address = BTreeMap::new();
-        for (staker_address, receipt) in receipt.retirement_by_address {
-            self.revert_retire_recipient(
-                &staker_address,
-                receipt.stake,
-                receipt.inactive_stake_receipt,
-            )?;
-            active_stake_by_address.insert(staker_address, receipt.stake);
-            total_value += receipt.stake;
+        // Re-add the validator to all its stakers. Also create all the validator's stakers entries.
+        let mut num_stakers = 0;
+
+        let mut balance = 0;
+
+        for staker_address in receipt.stakers {
+            // Get the staker.
+            let mut staker = StakingContract::get_staker(accounts_tree, db_txn, &staker_address)
+                .expect(
+                "A validator had an staker staking for it that doesn't exist in the Accounts Tree!",
+            );
+
+            // Update the counters.
+            num_stakers += 1;
+            balance += u64::from(staker.balance);
+
+            // Update the staker.
+            staker.validator = Some(validator_id.clone());
+
+            trace!(
+                "Trying to put staker with address {} in the accounts tree.",
+                staker_address.to_string(),
+            );
+
+            accounts_tree.put(
+                db_txn,
+                &StakingContract::get_key_staker(&staker_address),
+                Account::StakingStaker(staker),
+            );
+
+            // Add the staker entry to the validator.
+            accounts_tree.put(
+                db_txn,
+                &StakingContract::get_key_validator_staker(validator_id, &staker_address),
+                Account::StakingValidatorStaker(staker_address.clone()),
+            );
         }
 
-        self.balance = Account::balance_add(self.balance, total_value)?;
+        // Re-add the validator entry.
+        let validator = Validator {
+            id: validator_id.clone(),
+            balance: Coin::from_u64_unchecked(balance + policy::MIN_VALIDATOR_STAKE),
+            num_stakers,
+            reward_address: receipt.reward_address,
+            validator_key: receipt.validator_key,
+            extra_data: receipt.extra_data,
+            inactivity_flag: Some(receipt.retire_time),
+        };
 
-        // Cannot fail.
-        self.revert_unpark_validator(&validator_id, receipt.unpark_receipt)?;
+        accounts_tree.put(
+            db_txn,
+            &StakingContract::get_key_validator(validator_id),
+            Account::StakingValidator(validator),
+        );
 
-        self.inactive_validators_by_id.insert(
-            validator_id.clone(),
-            InactiveValidator {
-                validator: Arc::new(Validator {
-                    id: validator_id,
-                    balance: total_value,
-                    reward_address: receipt.reward_address,
-                    validator_key,
-                    active_stake_by_address: RwLock::new(active_stake_by_address),
-                }),
-                retire_time: receipt.retire_time,
-            },
+        // Get the staking contract main and update it.
+        let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
+
+        let initial_stake = Coin::from_u64_unchecked(policy::MIN_VALIDATOR_STAKE);
+
+        staking_contract.balance = Account::balance_sub(staking_contract.balance, initial_stake)?;
+
+        trace!("Trying to put staking contract in the accounts tree.");
+
+        accounts_tree.put(
+            db_txn,
+            &StakingContract::get_key_staking_contract(),
+            Account::Staking(staking_contract),
         );
 
         Ok(())
