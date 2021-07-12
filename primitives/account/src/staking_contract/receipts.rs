@@ -45,7 +45,7 @@ pub struct RetireValidatorReceipt {
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct ReactivateValidatorReceipt {
+pub struct ReactivateValidatorOrStakerReceipt {
     pub retire_time: u32,
 }
 
@@ -68,12 +68,11 @@ pub struct DropValidatorReceipt {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct RetirementReceipt {
-    pub stake: Coin,
-    pub inactive_stake_receipt: Option<InactiveStakeReceipt>,
+pub struct UpdateOrRetireStakerReceipt {
+    pub old_delegation: Option<ValidatorId>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct InactiveStakeReceipt {
+pub struct DropStakerReceipt {
     pub retire_time: u32,
 }

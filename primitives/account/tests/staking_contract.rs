@@ -837,7 +837,7 @@ fn it_can_apply_rededicate_stake_tx() {
         )
         .unwrap();
     contract
-        .stake(
+        .create_staker(
             Address::from(&ed25519_key_pair()),
             Coin::from_u64_unchecked(150000000),
             &validator_id1,
@@ -1696,14 +1696,14 @@ fn it_can_build_a_validator_set() {
 
     // Fill contract with stakes
     contract
-        .stake(
+        .create_staker(
             staker1.clone(),
             Coin::from_u64_unchecked(100_000_000),
             &validator_id1,
         )
         .unwrap();
     contract
-        .stake(
+        .create_staker(
             staker2.clone(),
             Coin::from_u64_unchecked(100_000_000),
             &validator_id1,
@@ -1736,28 +1736,28 @@ fn it_can_build_a_validator_set() {
         .unwrap();
 
     contract
-        .stake(
+        .create_staker(
             staker2,
             Coin::from_u64_unchecked(100_000_000),
             &validator_id2,
         )
         .unwrap();
     contract
-        .stake(
+        .create_staker(
             staker3.clone(),
             Coin::from_u64_unchecked(100_000_000),
             &validator_id2,
         )
         .unwrap();
     contract
-        .stake(
+        .create_staker(
             staker1,
             Coin::from_u64_unchecked(100_000_000),
             &validator_id3,
         )
         .unwrap();
     contract
-        .stake(
+        .create_staker(
             staker3,
             Coin::from_u64_unchecked(100_000_000),
             &validator_id3,
@@ -1883,7 +1883,7 @@ fn it_can_apply_validator_signalling() {
 
     // Create stake for the validator.
     contract
-        .stake(
+        .create_staker(
             Address::from(&key_pair),
             Coin::from_u64_unchecked(100_000_000),
             &validator_id,
@@ -3663,7 +3663,7 @@ fn make_sample_contract(
         )
         .unwrap();
     contract
-        .stake(
+        .create_staker(
             Address::from(key_pair),
             Coin::from_u64_unchecked(150_000_000),
             validator_id,

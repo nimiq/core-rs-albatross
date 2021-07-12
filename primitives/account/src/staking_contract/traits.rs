@@ -18,8 +18,8 @@ use nimiq_trie::key_nibbles::KeyNibbles;
 
 use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction};
 use crate::staking_contract::receipts::{
-    DropValidatorReceipt, InactiveStakeReceipt, ReactivateValidatorReceipt, UnparkValidatorReceipt,
-    UpdateValidatorReceipt,
+    DropValidatorReceipt, InactiveStakeReceipt, ReactivateValidatorOrStakerReceipt,
+    UnparkValidatorReceipt, UpdateValidatorReceipt,
 };
 use crate::{Account, AccountError, AccountsTree, Inherent, InherentType, StakingContract};
 
@@ -154,7 +154,7 @@ impl AccountTransactionInteraction for StakingContract {
                 } => {
                     let staker_address =
                         staker_address.unwrap_or_else(|| transaction.sender.clone());
-                    staking.stake(staker_address, transaction.value, &validator_id)?;
+                    staking.create_staker(staker_address, transaction.value, &validator_id)?;
                 }
             }
         } else {
@@ -253,9 +253,10 @@ impl AccountTransactionInteraction for StakingContract {
                     staking.revert_retire_validator(validator_id)?;
                 }
                 IncomingStakingTransactionData::ReactivateValidator { validator_id, .. } => {
-                    let receipt: ReactivateValidatorReceipt = Deserialize::deserialize_from_vec(
-                        receipt.ok_or(AccountError::InvalidReceipt)?,
-                    )?;
+                    let receipt: ReactivateValidatorOrStakerReceipt =
+                        Deserialize::deserialize_from_vec(
+                            receipt.ok_or(AccountError::InvalidReceipt)?,
+                        )?;
                     staking.revert_reactivate_validator(validator_id, receipt)?;
                 }
                 IncomingStakingTransactionData::UnparkValidator { validator_id, .. } => {
