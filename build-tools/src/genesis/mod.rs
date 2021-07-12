@@ -278,7 +278,7 @@ impl GenesisBuilder {
         }
 
         for stake in self.stakes.iter() {
-            contract.stake(
+            contract.create_staker(
                 stake.staker_address.clone(),
                 stake.balance,
                 &stake.validator_id,

@@ -45,4 +45,8 @@ pub enum AccountError {
     NonExistentValidator { id: ValidatorId },
     #[error("There is already a validator with id {id} in the Accounts Tree.")]
     AlreadyExistentValidator { id: ValidatorId },
+    #[error("Staker with address {address} does not exist in the Accounts Tree.")]
+    NonExistentStaker { address: Address },
+    #[error("There is already a staker with address {address} in the Accounts Tree.")]
+    AlreadyExistentStaker { address: Address },
 }
