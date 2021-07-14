@@ -1,5 +1,4 @@
-use std::collections::btree_map::BTreeMap;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::hash::BuildHasher;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -337,6 +336,70 @@ impl<T: Serialize> Serialize for Arc<T> {
 
     fn serialized_size(&self) -> usize {
         self.deref().serialized_size()
+    }
+}
+
+// HashMaps
+
+impl<K, V, H> DeserializeWithLength for HashMap<K, V, H>
+where
+    K: Deserialize + std::cmp::Eq + std::hash::Hash,
+    V: Deserialize,
+    H: BuildHasher + Default,
+{
+    fn deserialize_with_limit<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(
+        reader: &mut R,
+        limit: Option<usize>,
+    ) -> Result<Self, SerializingError> {
+        let len: D = Deserialize::deserialize(reader)?;
+        let len_u = len.to_usize().unwrap();
+
+        // If hash map is too large, abort.
+        if limit.map(|l| len_u > l).unwrap_or(false) {
+            return Err(SerializingError::LimitExceeded);
+        }
+
+        let mut v = HashMap::with_capacity_and_hasher(len_u, H::default());
+        for _ in 0..len_u {
+            v.insert(K::deserialize(reader)?, V::deserialize(reader)?);
+        }
+        Ok(v)
+    }
+}
+
+impl<K, V, H> SerializeWithLength for HashMap<K, V, H>
+where
+    K: Serialize + std::cmp::Eq + std::hash::Hash + std::cmp::Ord,
+    V: Serialize,
+    H: BuildHasher,
+{
+    fn serialize<S: Serialize + num::FromPrimitive, W: WriteBytesExt>(
+        &self,
+        writer: &mut W,
+    ) -> Result<usize, SerializingError> {
+        let mut size = S::from_usize(self.len()).unwrap().serialize(writer)?;
+
+        let mut vec = self.iter().collect::<Vec<(&K, &V)>>();
+
+        vec.sort_unstable_by_key(|t| t.0);
+
+        for (k, v) in vec {
+            size += k.serialize(writer)?;
+            size += v.serialize(writer)?;
+        }
+
+        Ok(size)
+    }
+
+    fn serialized_size<S: Serialize + num::FromPrimitive>(&self) -> usize {
+        let mut size = S::from_usize(self.len()).unwrap().serialized_size();
+
+        for (k, v) in self {
+            size += k.serialized_size();
+            size += v.serialized_size();
+        }
+
+        size
     }
 }
 
