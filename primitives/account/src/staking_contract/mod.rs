@@ -1,9 +1,10 @@
-use log::error;
 use std::cmp::Ordering;
 use std::collections::btree_set::BTreeSet;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::iter::FromIterator;
 use std::sync::Arc;
+
+use log::error;
 
 use beserial::{
     Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
@@ -18,21 +19,23 @@ use nimiq_primitives::slots::{Validators, ValidatorsBuilder};
 use nimiq_primitives::{coin::Coin, policy};
 use nimiq_transaction::account::staking_contract::IncomingStakingTransactionData;
 use nimiq_transaction::{SignatureProof, Transaction};
+use nimiq_trie::key_nibbles::KeyNibbles;
 use nimiq_vrf::{AliasMethod, VrfSeed, VrfUseCase};
-use validator::Validator;
 
 use crate::{Account, AccountError, AccountsTree};
-use nimiq_trie::key_nibbles::KeyNibbles;
-use staker::Staker;
 
-pub mod receipts;
-pub mod staker;
-pub mod traits;
-pub mod validator;
+pub use receipts::*;
+pub use staker::Staker;
+pub use validator::Validator;
+
+mod receipts;
+mod staker;
+mod traits;
+mod validator;
 
 /// The struct representing the staking contract. The staking contract is a special contract that
 /// handles many functions related to validators and staking.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StakingContract {
     // The total amount of coins staked.
     pub balance: Coin,
@@ -54,7 +57,7 @@ pub struct StakingContract {
     pub current_disabled_slots: HashMap<ValidatorId, BTreeSet<u16>>,
     // The validator slots, searchable by the validator ID, that were disabled (i.e. are no
     // longer eligible to produce blocks) at the end of the previous batch.
-    pub previous_disabled_slots: BTreeMap<ValidatorId, BTreeSet<u16>>,
+    pub previous_disabled_slots: HashMap<ValidatorId, BTreeSet<u16>>,
 }
 
 impl StakingContract {
@@ -82,7 +85,7 @@ impl StakingContract {
         );
         bytes.push(StakingContract::PATH_CONTRACT_MAIN);
 
-        KeyNibbles::from(&bytes)
+        KeyNibbles::from(bytes.as_slice())
     }
 
     pub fn get_key_validator(validator_id: &ValidatorId) -> KeyNibbles {
@@ -93,10 +96,10 @@ impl StakingContract {
                 .as_bytes(),
         );
         bytes.push(StakingContract::PATH_VALIDATORS_LIST);
-        bytes.extend(validator_id.as_bytes());
+        bytes.extend(validator_id.as_slice());
         bytes.push(StakingContract::PATH_VALIDATOR_MAIN);
 
-        KeyNibbles::from(&bytes)
+        KeyNibbles::from(bytes.as_slice())
     }
 
     pub fn get_key_validator_staker(
@@ -110,11 +113,11 @@ impl StakingContract {
                 .as_bytes(),
         );
         bytes.push(StakingContract::PATH_VALIDATORS_LIST);
-        bytes.extend(validator_id.as_bytes());
+        bytes.extend(validator_id.as_slice());
         bytes.push(StakingContract::PATH_VALIDATOR_STAKERS_LIST);
-        bytes.extend(staker_address.as_bytes());
+        bytes.extend(staker_address.as_slice());
 
-        KeyNibbles::from(&bytes)
+        KeyNibbles::from(bytes.as_slice())
     }
 
     pub fn get_key_staker(staker_address: &Address) -> KeyNibbles {
@@ -127,7 +130,7 @@ impl StakingContract {
         bytes.push(StakingContract::PATH_STAKERS_LIST);
         bytes.extend(staker_address.as_bytes());
 
-        KeyNibbles::from(&bytes)
+        KeyNibbles::from(bytes.as_slice())
     }
 
     /// Get the staking contract information.
@@ -221,7 +224,7 @@ impl StakingContract {
 
         for (id, coin) in self.active_validators.iter() {
             validator_ids.push(id);
-            validator_stakes.push(u64::from(coin));
+            validator_stakes.push(u64::from(coin.clone()));
         }
 
         let mut rng = seed.rng(VrfUseCase::ValidatorSelection, 0);
@@ -278,36 +281,40 @@ impl StakingContract {
     }
 
     /// Get the signature from a transaction.
-    fn get_self_signer(transaction: &Transaction) -> Result<Address, AccountError> {
+    pub(crate) fn get_self_signer(transaction: &Transaction) -> Result<Address, AccountError> {
         let signature_proof: SignatureProof =
             Deserialize::deserialize(&mut &transaction.proof[..])?;
 
         Ok(signature_proof.compute_signer())
     }
 
-    fn verify_signature_incoming(
-        &self,
+    pub(crate) fn verify_signature_incoming(
+        accounts_tree: &AccountsTree,
+        db_txn: &DBTransaction,
         transaction: &Transaction,
         validator_id: &ValidatorId,
         signature: &BlsSignature,
     ) -> Result<(), AccountError> {
-        let validator = self
-            .get_validator(validator_id)
+        let validator = StakingContract::get_validator(accounts_tree, db_txn, validator_id)
             .ok_or(AccountError::InvalidForRecipient)?;
+
         let key = validator
             .validator_key
             .uncompress()
             .map_err(|_| AccountError::InvalidForRecipient)?;
+
         let sig = signature
             .uncompress()
             .map_err(|_| AccountError::InvalidSignature)?;
 
         // On incoming transactions, we need to reset the signature first.
         let mut tx_without_sig = transaction.clone();
+
         tx_without_sig.data = IncomingStakingTransactionData::set_validator_signature_on_data(
             &tx_without_sig.data,
             BlsSignature::default(),
         )?;
+
         let tx = tx_without_sig.serialize_content();
 
         if !key.verify(&tx, &sig) {
@@ -315,6 +322,7 @@ impl StakingContract {
 
             return Err(AccountError::InvalidSignature);
         }
+
         Ok(())
     }
 }

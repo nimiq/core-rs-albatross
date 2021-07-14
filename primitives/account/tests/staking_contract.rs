@@ -443,11 +443,11 @@ fn test_proof_verification(transaction: Transaction) {
 fn it_can_verify_self_transactions() {
     let validator_id: ValidatorId = [0u8; 20].into();
     test_proof_verification(make_self_transaction(
-        SelfStakingTransactionData::RetireStake(validator_id.clone()),
+        SelfStakingTransactionData::RetireStaker(validator_id.clone()),
         10,
     ));
     test_proof_verification(make_self_transaction(
-        SelfStakingTransactionData::ReactivateStake(validator_id),
+        SelfStakingTransactionData::ReactivateStaker(validator_id),
         10,
     ));
 }
@@ -462,7 +462,7 @@ fn it_can_apply_retiring_transaction() {
 
     // Retire first half of stake
     let tx_1 = make_self_transaction(
-        SelfStakingTransactionData::RetireStake(validator_id.clone()),
+        SelfStakingTransactionData::RetireStaker(validator_id.clone()),
         99_999_900,
     );
     assert_eq!(contract.check_outgoing_transaction(&tx_1, 2, 0), Ok(()));
@@ -490,7 +490,7 @@ fn it_can_apply_retiring_transaction() {
 
     // Try to retire too much stake
     let tx_2 = make_self_transaction(
-        SelfStakingTransactionData::RetireStake(validator_id.clone()),
+        SelfStakingTransactionData::RetireStaker(validator_id.clone()),
         99_999_900,
     );
     let funds_error = AccountError::InsufficientFunds {
@@ -512,7 +512,7 @@ fn it_can_apply_retiring_transaction() {
 
     // Retire second half of stake in two transactions
     let tx_3 = make_self_transaction(
-        SelfStakingTransactionData::RetireStake(validator_id.clone()),
+        SelfStakingTransactionData::RetireStaker(validator_id.clone()),
         24_999_900,
     );
     assert_eq!(contract.check_outgoing_transaction(&tx_3, 3, 0), Ok(()));
@@ -615,7 +615,7 @@ fn it_can_apply_unstaking_transaction() {
 
     // Block 2: Retire first half of stake
     let tx_1 = make_self_transaction(
-        SelfStakingTransactionData::RetireStake(validator_id.clone()),
+        SelfStakingTransactionData::RetireStaker(validator_id.clone()),
         50_000_000,
     );
     assert_eq!(contract.commit_outgoing_transaction(&tx_1, 2, 0), Ok(None));
@@ -716,7 +716,7 @@ fn it_can_apply_unstaking_transaction() {
 
     // New block 40004: Retire second half of stake
     let tx_5 = make_self_transaction(
-        SelfStakingTransactionData::RetireStake(validator_id.clone()),
+        SelfStakingTransactionData::RetireStaker(validator_id.clone()),
         99_999_800,
     );
     assert_eq!(
@@ -845,8 +845,8 @@ fn it_can_apply_rededicate_stake_tx() {
         .unwrap();
 
     let tx_1 = make_self_transaction(
-        SelfStakingTransactionData::RededicateStake {
-            from_validator_id: validator_id1.clone(),
+        SelfStakingTransactionData::UpdateStaker {
+            new_delegation: validator_id1.clone(),
             to_validator_id: validator_id2.clone(),
         },
         50000000,
@@ -2439,7 +2439,7 @@ fn it_can_manage_stake() {
 
     // 2. Retire stake.
     let tx = make_self_transaction(
-        SelfStakingTransactionData::RetireStake(validator_id.clone()),
+        SelfStakingTransactionData::RetireStaker(validator_id.clone()),
         49_999_900,
     );
     assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
@@ -2590,7 +2590,7 @@ fn it_can_manage_stake() {
 
     // Re-activate stake to new validator.
     let tx = make_self_transaction(
-        SelfStakingTransactionData::ReactivateStake(validator_id2.clone()),
+        SelfStakingTransactionData::ReactivateStaker(validator_id2.clone()),
         29_999_800,
     );
     assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
@@ -2640,7 +2640,7 @@ fn it_can_manage_stake() {
     // Re-activate rest of stake.
     let mut contract_copy = contract.clone();
     let tx2 = make_self_transaction(
-        SelfStakingTransactionData::ReactivateStake(validator_id2.clone()),
+        SelfStakingTransactionData::ReactivateStaker(validator_id2.clone()),
         19_999_900,
     );
     assert_eq!(AccountType::verify_outgoing_transaction(&tx2), Ok(()));
@@ -3122,7 +3122,7 @@ fn it_can_manage_stake() {
 
     // 2. Retire stake.
     let tx = make_self_transaction(
-        SelfStakingTransactionData::RetireStake(validator_id.clone()),
+        SelfStakingTransactionData::RetireStaker(validator_id.clone()),
         49_999_900,
     );
     assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
@@ -3272,7 +3272,7 @@ fn it_can_manage_stake() {
 
     // Re-activate stake to new validator.
     let tx = make_self_transaction(
-        SelfStakingTransactionData::ReactivateStake(validator_id2.clone()),
+        SelfStakingTransactionData::ReactivateStaker(validator_id2.clone()),
         29_999_800,
     );
     assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
@@ -3322,7 +3322,7 @@ fn it_can_manage_stake() {
     // Re-activate rest of stake.
     let mut contract_copy = contract.clone();
     let tx2 = make_self_transaction(
-        SelfStakingTransactionData::ReactivateStake(validator_id2.clone()),
+        SelfStakingTransactionData::ReactivateStaker(validator_id2.clone()),
         19_999_900,
     );
     assert_eq!(AccountType::verify_outgoing_transaction(&tx2), Ok(()));

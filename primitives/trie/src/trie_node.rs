@@ -93,6 +93,21 @@ impl<A: Serialize + Deserialize + Clone> TrieNode<A> {
         }
     }
 
+    /// Returns the value of a node, if it is a leaf node.
+    pub fn value(&self) -> Result<A, MerkleRadixTrieError> {
+        match self {
+            TrieNode::LeafNode { value, .. } => Ok(value.clone()),
+            TrieNode::BranchNode { .. } => {
+                error!(
+                    "Node with key {} is a branch node and so it can't have a value!",
+                    self.key()
+                );
+
+                Err(MerkleRadixTrieError::BranchesHaveNoValue)
+            }
+        }
+    }
+
     /// Returns the child index of the given prefix in the current node. If the current node has the
     /// key "31f6d" and the given child key is "31f6d925ca" (both are in hexadecimal) then the child
     /// index is 9.

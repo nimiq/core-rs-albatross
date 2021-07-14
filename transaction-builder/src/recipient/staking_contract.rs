@@ -213,8 +213,8 @@ impl StakingRecipientBuilder {
         to_validator_id: &ValidatorId,
     ) -> &mut Self {
         self.staking_data = Some(StakingTransaction::SelfTransaction(
-            SelfStakingTransactionData::RededicateStake {
-                from_validator_id: from_validator_id.clone(),
+            SelfStakingTransactionData::UpdateStaker {
+                new_delegation: from_validator_id.clone(),
                 to_validator_id: to_validator_id.clone(),
             },
         ));
@@ -226,7 +226,7 @@ impl StakingRecipientBuilder {
     /// It is a necessary precondition to unstake funds.
     pub fn retire_stake(&mut self, validator_id: &ValidatorId) -> &mut Self {
         self.staking_data = Some(StakingTransaction::SelfTransaction(
-            SelfStakingTransactionData::RetireStake(validator_id.clone()),
+            SelfStakingTransactionData::RetireStaker(validator_id.clone()),
         ));
         self
     }
@@ -234,7 +234,7 @@ impl StakingRecipientBuilder {
     /// This method allows to reassign inactive stake to a validator with key `validator_key`.
     pub fn reactivate_stake(&mut self, validator_id: &ValidatorId) -> &mut Self {
         self.staking_data = Some(StakingTransaction::SelfTransaction(
-            SelfStakingTransactionData::ReactivateStake(validator_id.clone()),
+            SelfStakingTransactionData::ReactivateStaker(validator_id.clone()),
         ));
         self
     }

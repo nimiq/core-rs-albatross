@@ -47,7 +47,7 @@ fn it_can_verify_staker_transactions() {
 
     // Retire
     let tx = make_self_transaction(
-        SelfStakingTransactionData::RetireStake(validator_id.clone()),
+        SelfStakingTransactionData::RetireStaker(validator_id.clone()),
         150_000_000,
     );
 
@@ -65,7 +65,7 @@ fn it_can_verify_staker_transactions() {
 
     // Reactivate
     let tx = make_self_transaction(
-        SelfStakingTransactionData::ReactivateStake(validator_id.clone()),
+        SelfStakingTransactionData::ReactivateStaker(validator_id.clone()),
         150_000_000,
     );
 

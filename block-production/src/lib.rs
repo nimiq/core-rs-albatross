@@ -236,12 +236,18 @@ impl BlockProducer {
             .expect("Failed to compute history root during block production.");
 
         // Calculate the disabled set for the current validator set.
+        // Note: We are fetching the previous disabled set here because we have already updated the
+        // state. So the staking contract has already moved the disabled set for this batch into the
+        // previous disabled set.
         let disabled_set = self
             .blockchain
             .get_staking_contract()
             .previous_disabled_slots();
 
         // Calculate the lost reward set for the current validator set.
+        // Note: We are fetching the previous lost rewards set here because we have already updated the
+        // state. So the staking contract has already moved the lost rewards set for this batch into the
+        // previous lost rewards set.
         let lost_reward_set = self
             .blockchain
             .get_staking_contract()

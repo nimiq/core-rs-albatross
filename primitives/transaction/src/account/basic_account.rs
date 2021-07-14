@@ -33,6 +33,7 @@ impl AccountTransactionVerification for BasicAccountVerifier {
         // Verify signer & signature.
         let signature_proof: SignatureProof =
             Deserialize::deserialize(&mut &transaction.proof[..])?;
+
         if !signature_proof.is_signed_by(&transaction.sender)
             || !signature_proof.verify(transaction.serialize_content().as_slice())
         {

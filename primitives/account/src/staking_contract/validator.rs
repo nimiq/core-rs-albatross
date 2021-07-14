@@ -1,10 +1,10 @@
-use log::error;
 use std::cmp::{min, Ordering};
 use std::collections::BTreeMap;
 use std::mem;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
+use log::error;
 use parking_lot::RwLock;
 
 use beserial::{
@@ -13,21 +13,21 @@ use beserial::{
 };
 use nimiq_bls::CompressedPublicKey as BlsPublicKey;
 use nimiq_database::{Database, Environment, Transaction as DBTransaction, WriteTransaction};
+use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::account::ValidatorId;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
+use nimiq_trie::key_nibbles::KeyNibbles;
 
 use crate::staking_contract::receipts::{
     DropValidatorReceipt, ReactivateValidatorOrStakerReceipt, RetireValidatorReceipt,
-    RetirementReceipt, UnparkValidatorReceipt, UpdateValidatorReceipt,
+    UnparkValidatorReceipt, UpdateValidatorReceipt,
 };
 use crate::{Account, AccountError, AccountsTree, StakingContract};
-use nimiq_hash::Blake2bHash;
-use nimiq_trie::key_nibbles::KeyNibbles;
 
 /// Struct representing a validator in the staking contract.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Validator {
     // The id of the validator, the first 20 bytes of the transaction hash from which it was created.
     pub id: ValidatorId,
@@ -40,9 +40,9 @@ pub struct Validator {
     pub reward_address: Address,
     // The validator key.
     pub validator_key: BlsPublicKey,
-    // Arbitrary data field. Can be used to do chain upgrades or for any other purpose that requires
-    // validators to communicate arbitrary data.
-    pub extra_data: Option<Blake2bHash>,
+    // Signalling field. Can be used to do chain upgrades or for any other purpose that requires
+    // validators to coordinate among themselves.
+    pub signal_data: Option<Blake2bHash>,
     // A flag stating if the validator is inactive. If it is inactive, then it contains the block
     // height at which it became inactive.
     pub inactivity_flag: Option<u32>,
@@ -86,7 +86,7 @@ impl StakingContract {
         validator_id: &ValidatorId,
         reward_address: Address,
         validator_key: BlsPublicKey,
-        extra_data: Option<Blake2bHash>,
+        signal_data: Option<Blake2bHash>,
     ) -> Result<(), AccountError> {
         // Get the initial stake value.
         let initial_stake = Coin::from_u64_unchecked(policy::MIN_VALIDATOR_STAKE);
@@ -114,7 +114,7 @@ impl StakingContract {
             num_stakers: 0,
             reward_address,
             validator_key,
-            extra_data,
+            signal_data,
             inactivity_flag: None,
         };
 
@@ -142,7 +142,7 @@ impl StakingContract {
     }
 
     /// Reverts creating a new validator entry.
-    fn revert_create_validator(
+    pub(crate) fn revert_create_validator(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
         validator_id: &ValidatorId,
@@ -184,13 +184,13 @@ impl StakingContract {
     }
 
     /// Update validator details.
-    fn update_validator(
+    pub(crate) fn update_validator(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
         validator_id: &ValidatorId,
-        new_validator_key: Option<BlsPublicKey>,
         new_reward_address: Option<Address>,
-        new_extra_data: Option<Option<Blake2bHash>>,
+        new_validator_key: Option<BlsPublicKey>,
+        new_signal_data: Option<Option<Blake2bHash>>,
     ) -> Result<UpdateValidatorReceipt, AccountError> {
         // Get the validator.
         let mut validator =
@@ -207,7 +207,7 @@ impl StakingContract {
         let receipt = UpdateValidatorReceipt {
             old_validator_key: validator.validator_key.clone(),
             old_reward_address: validator.reward_address.clone(),
-            old_extra_data: validator.extra_data.clone(),
+            old_signal_data: validator.signal_data.clone(),
         };
 
         // Update validator info.
@@ -219,8 +219,8 @@ impl StakingContract {
             validator.reward_address = value;
         }
 
-        if let Some(value) = new_extra_data {
-            validator.extra_data = value;
+        if let Some(value) = new_signal_data {
+            validator.signal_data = value;
         }
 
         // All checks passed, not allowed to fail from here on!
@@ -239,7 +239,7 @@ impl StakingContract {
     }
 
     /// Reverts updating validator details.
-    fn revert_update_validator(
+    pub(crate) fn revert_update_validator(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
         validator_id: &ValidatorId,
@@ -259,7 +259,7 @@ impl StakingContract {
         // Revert validator info.
         validator.validator_key = receipt.old_validator_key;
         validator.reward_address = receipt.old_reward_address;
-        validator.extra_data = receipt.old_extra_data;
+        validator.signal_data = receipt.old_signal_data;
 
         // All checks passed, not allowed to fail from here on!
         trace!(
@@ -277,7 +277,7 @@ impl StakingContract {
     }
 
     /// Inactivates a validator. This also removes the validator from the parking sets.
-    fn retire_validator(
+    pub(crate) fn retire_validator(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
         validator_id: &ValidatorId,
@@ -335,13 +335,13 @@ impl StakingContract {
         );
 
         Ok(RetireValidatorReceipt {
-            current_epoch_parking,
-            previous_epoch_parking,
+            current_epoch_parking: current_parking,
+            previous_epoch_parking: previous_parking,
         })
     }
 
     /// Reverts inactivating a validator entry.
-    fn revert_retire_validator(
+    pub(crate) fn revert_retire_validator(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
         validator_id: &ValidatorId,
@@ -373,7 +373,7 @@ impl StakingContract {
                 }
             };
 
-        validator.inactivity_flag = Some(block_height);
+        validator.inactivity_flag = None;
 
         // All checks passed, not allowed to fail from here on!
         trace!("Trying to put staking contract in the accounts tree.");
@@ -399,7 +399,7 @@ impl StakingContract {
     }
 
     /// Reactivate a validator entry.
-    fn reactivate_validator(
+    pub(crate) fn reactivate_validator(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
         validator_id: &ValidatorId,
@@ -463,7 +463,7 @@ impl StakingContract {
     }
 
     /// Reverts re-activating a validator entry.
-    fn revert_reactivate_validator(
+    pub(crate) fn revert_reactivate_validator(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
         validator_id: &ValidatorId,
@@ -511,7 +511,7 @@ impl StakingContract {
     }
 
     /// Removes a validator from the parking lists and the disabled slots.
-    fn unpark_validator(
+    pub(crate) fn unpark_validator(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
         validator_id: &ValidatorId,
@@ -522,8 +522,15 @@ impl StakingContract {
         let current_parking = staking_contract.current_epoch_parking.remove(validator_id);
         let previous_parking = staking_contract.previous_epoch_parking.remove(validator_id);
         let current_disabled = staking_contract.current_disabled_slots.remove(validator_id);
+        let previous_disabled = staking_contract
+            .previous_disabled_slots
+            .remove(validator_id);
 
-        if !current_parking && !previous_parking && current_disabled.is_none() {
+        if !current_parking
+            && !previous_parking
+            && current_disabled.is_none()
+            && previous_disabled.is_none()
+        {
             error!(
                 "Tried to unpark a validator that was already unparked! It has id {}.",
                 validator_id
@@ -541,14 +548,15 @@ impl StakingContract {
         );
 
         Ok(UnparkValidatorReceipt {
-            current_epoch_parking: current_epoch,
-            previous_epoch_parking: previous_epoch,
-            current_disabled_slots,
+            current_epoch_parking: current_parking,
+            previous_epoch_parking: previous_parking,
+            current_disabled_slots: current_disabled,
+            previous_disabled_slots: previous_disabled,
         })
     }
 
     /// Reverts an unparking transaction.
-    fn revert_unpark_validator(
+    pub(crate) fn revert_unpark_validator(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
         validator_id: &ValidatorId,
@@ -575,6 +583,12 @@ impl StakingContract {
                 .insert(validator_id.clone(), slots);
         }
 
+        if let Some(slots) = receipt.previous_disabled_slots {
+            staking_contract
+                .previous_disabled_slots
+                .insert(validator_id.clone(), slots);
+        }
+
         // All checks passed, not allowed to fail from here on!
         trace!("Trying to put staking contract in the accounts tree.");
 
@@ -589,7 +603,7 @@ impl StakingContract {
 
     /// Drops a validator entry. This can only be used to drop inactive validators!
     /// The validator must have been inactive for at least one election block.
-    fn drop_validator(
+    pub(crate) fn drop_validator(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
         validator_id: &ValidatorId,
@@ -627,7 +641,7 @@ impl StakingContract {
         let mut receipt = DropValidatorReceipt {
             reward_address: validator.reward_address,
             validator_key: validator.validator_key,
-            extra_data: validator.extra_data,
+            signal_data: validator.signal_data,
             retire_time: validator.inactivity_flag.expect(
                 "This can't fail since we already checked above that the inactivity flag is Some.",
             ),
@@ -646,14 +660,17 @@ impl StakingContract {
 
         while remaining_stakers > 0 {
             // Get chunk of stakers.
-            let chunk =
-                accounts_tree.get_chunk(txn, &empty_staker_key, min(remaining_stakers, chunk_size));
+            let chunk = accounts_tree.get_chunk(
+                db_txn,
+                &empty_staker_key,
+                min(remaining_stakers, chunk_size),
+            );
 
             // Update the number of stakers.
             remaining_stakers -= chunk.len();
 
             for account in chunk {
-                if let Account::StakingValidatorStaker(staker_address) = account {
+                if let Account::StakingValidatorsStaker(staker_address) = account {
                     // Update the staker.
                     let mut staker = StakingContract::get_staker(accounts_tree, db_txn, &staker_address).expect("A validator had an staker staking for it that doesn't exist in the Accounts Tree!");
 
@@ -712,7 +729,7 @@ impl StakingContract {
     }
 
     /// Revert dropping a validator entry.
-    fn revert_drop_validator(
+    pub(crate) fn revert_drop_validator(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
         validator_id: &ValidatorId,
@@ -757,7 +774,7 @@ impl StakingContract {
             accounts_tree.put(
                 db_txn,
                 &StakingContract::get_key_validator_staker(validator_id, &staker_address),
-                Account::StakingValidatorStaker(staker_address.clone()),
+                Account::StakingValidatorsStaker(staker_address.clone()),
             );
         }
 
@@ -768,7 +785,7 @@ impl StakingContract {
             num_stakers,
             reward_address: receipt.reward_address,
             validator_key: receipt.validator_key,
-            extra_data: receipt.extra_data,
+            signal_data: receipt.signal_data,
             inactivity_flag: Some(receipt.retire_time),
         };
 
