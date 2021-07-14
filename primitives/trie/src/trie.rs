@@ -67,32 +67,9 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
     /// be a part of the trie, if it is then it will be part of the chunk) and contains at most
     /// `size` leaf nodes.
     pub fn get_chunk(&self, txn: &Transaction, start: &KeyNibbles, size: usize) -> Vec<A> {
-        let mut chunk = Vec::new();
+        let chunk = self.get_trie_chunk(txn, start, size);
 
-        let mut stack = vec![self.get_root(txn)?];
-
-        while let Some(item) = stack.pop() {
-            match item {
-                TrieNode::BranchNode { children, key } => {
-                    for child in children.iter().flatten().rev() {
-                        let combined = &key + &child.suffix;
-                        if combined.is_prefix_of(start) || *start <= combined {
-                            stack.push(txn.get(&self.db, &combined)?);
-                        }
-                    }
-                }
-                TrieNode::LeafNode { ref key, .. } => {
-                    if start.len() < key.len() || start <= key {
-                        chunk.push(item);
-                    }
-                    if chunk.len() >= size {
-                        break;
-                    }
-                }
-            }
-        }
-
-        chunk
+        chunk.iter().map(|node| node.value().unwrap()).collect()
     }
 
     /// Insert a value into the Merkle Radix Trie at the given key. If the key already exists then
@@ -406,7 +383,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
         start: &KeyNibbles,
         size: usize,
     ) -> Option<TrieProof<A>> {
-        let chunk = self.get_chunk(txn, start, size);
+        let chunk = self.get_trie_chunk(txn, start, size);
 
         let chunk_keys = chunk.iter().map(|node| node.key()).collect();
 
@@ -434,6 +411,46 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
 
             child_node = parent_node;
         }
+    }
+
+    /// Returns the nodes of the chunk of the Merkle Radix Trie that starts at the key `start` and
+    /// has size `size`. This is used by the `get_chunk` and `get_chunk_proof` functions.
+    fn get_trie_chunk(
+        &self,
+        txn: &Transaction,
+        start: &KeyNibbles,
+        size: usize,
+    ) -> Vec<TrieNode<A>> {
+        let mut chunk = Vec::new();
+
+        let mut stack = vec![self
+            .get_root(txn)
+            .expect("The Merkle Radix Trie didn't have a root node!")];
+
+        while let Some(item) = stack.pop() {
+            match item {
+                TrieNode::BranchNode { children, key } => {
+                    for child in children.iter().flatten().rev() {
+                        let combined = &key + &child.suffix;
+
+                        if combined.is_prefix_of(start) || *start <= combined {
+                            stack.push(txn.get(&self.db, &combined)
+                                .expect("Failed to find the child of a Merkle Radix Trie node. The database must be corrupt!"));
+                        }
+                    }
+                }
+                TrieNode::LeafNode { ref key, .. } => {
+                    if start.len() < key.len() || start <= key {
+                        chunk.push(item);
+                    }
+                    if chunk.len() >= size {
+                        break;
+                    }
+                }
+            }
+        }
+
+        chunk
     }
 }
 

@@ -50,6 +50,7 @@ impl AccountTransactionVerification for VestingContractVerifier {
         // Verify signature.
         let signature_proof: SignatureProof =
             Deserialize::deserialize(&mut &transaction.proof[..])?;
+
         if !signature_proof.verify(transaction.serialize_content().as_slice()) {
             warn!("Invalid signature");
             return Err(TransactionError::InvalidProof);

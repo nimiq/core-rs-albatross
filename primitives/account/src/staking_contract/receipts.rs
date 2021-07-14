@@ -35,7 +35,7 @@ pub struct SlashReceipt {
 pub struct UpdateValidatorReceipt {
     pub old_validator_key: BlsPublicKey,
     pub old_reward_address: Address,
-    pub old_extra_data: Option<Blake2bHash>,
+    pub old_signal_data: Option<Blake2bHash>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
@@ -55,13 +55,15 @@ pub struct UnparkValidatorReceipt {
     pub previous_epoch_parking: bool,
     #[beserial(len_type(u16))]
     pub current_disabled_slots: Option<BTreeSet<u16>>,
+    #[beserial(len_type(u16))]
+    pub previous_disabled_slots: Option<BTreeSet<u16>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct DropValidatorReceipt {
     pub reward_address: Address,
     pub validator_key: BlsPublicKey,
-    pub extra_data: Option<Blake2bHash>,
+    pub signal_data: Option<Blake2bHash>,
     pub retire_time: u32,
     #[beserial(len_type(u32))]
     pub stakers: Vec<Address>,

@@ -18,9 +18,10 @@ use nimiq_trie::key_nibbles::KeyNibbles;
 
 use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction};
 use crate::staking_contract::receipts::{
-    DropValidatorReceipt, InactiveStakeReceipt, ReactivateValidatorOrStakerReceipt,
-    UnparkValidatorReceipt, UpdateValidatorReceipt,
+    DropValidatorReceipt, ReactivateValidatorOrStakerReceipt, UnparkValidatorReceipt,
+    UpdateValidatorReceipt,
 };
+use crate::staking_contract::{DropStakerReceipt, RetireValidatorReceipt, SlashReceipt};
 use crate::{Account, AccountError, AccountsTree, Inherent, InherentType, StakingContract};
 
 /// We need to distinguish three types of transactions:
@@ -65,96 +66,152 @@ impl AccountTransactionInteraction for StakingContract {
         block_height: u32,
         _block_time: u64,
     ) -> Result<Option<Vec<u8>>, AccountError> {
-        let key = KeyNibbles::from(&transaction.recipient);
-
-        let account = accounts_tree
-            .get(db_txn, &key)
-            .ok_or(AccountError::NonExistentAddress {
-                address: transaction.recipient.clone(),
-            })?;
-
-        let mut staking = match account {
-            Account::Staking(value) => value,
-            _ => {
-                return Err(AccountError::TypeMismatch {
-                    expected: AccountType::Staking,
-                    got: account.account_type(),
-                })
-            }
-        };
-
         let mut receipt = None;
 
         if transaction.sender != transaction.recipient {
-            // Stake transaction
+            // Parse transaction.
             let data = IncomingStakingTransactionData::parse(transaction)?;
 
             match data {
                 IncomingStakingTransactionData::CreateValidator {
                     validator_key,
                     reward_address,
+                    signal_data,
                     ..
                 } => {
                     // Create validator id from creation tx hash
                     let validator_id: ValidatorId =
                         transaction.hash::<Blake2bHash>().as_slice()[0..20].into();
 
-                    staking.create_validator(
-                        validator_id,
-                        validator_key,
+                    // The proof of knowledge and the value of the transaction were already checked
+                    // in the transaction. See the verify function for the
+                    // IncomingStakingTransactionData struct.
+
+                    StakingContract::create_validator(
+                        accounts_tree,
+                        db_txn,
+                        &validator_id,
                         reward_address,
-                        transaction.value,
+                        validator_key,
+                        signal_data,
                     )?;
                 }
                 IncomingStakingTransactionData::UpdateValidator {
                     validator_id,
                     old_validator_key: _,
-                    new_validator_key,
                     new_reward_address,
+                    new_validator_key,
+                    new_signal_data,
                     signature,
                     ..
                 } => {
-                    // We couldn't verify the signature intrinsically before, since we need the validator key from the staking contract
-                    staking.verify_signature_incoming(&transaction, &validator_id, &signature)?;
+                    // We couldn't verify the signature intrinsically before, since we need the
+                    // validator key from the staking contract.
+                    StakingContract::verify_signature_incoming(
+                        accounts_tree,
+                        db_txn,
+                        &transaction,
+                        &validator_id,
+                        &signature,
+                    )?;
 
                     receipt = Some(
-                        staking
-                            .update_validator(&validator_id, new_validator_key, new_reward_address)?
-                            .serialize_to_vec(),
+                        StakingContract::update_validator(
+                            accounts_tree,
+                            db_txn,
+                            &validator_id,
+                            new_reward_address,
+                            new_validator_key,
+                            new_signal_data,
+                        )?
+                        .serialize_to_vec(),
                     )
                 }
                 IncomingStakingTransactionData::RetireValidator {
                     validator_id,
                     signature,
                 } => {
-                    staking.verify_signature_incoming(&transaction, &validator_id, &signature)?;
-                    staking.retire_validator(validator_id, block_height)?;
+                    // We couldn't verify the signature intrinsically before, since we need the
+                    // validator key from the staking contract.
+                    StakingContract::verify_signature_incoming(
+                        accounts_tree,
+                        db_txn,
+                        &transaction,
+                        &validator_id,
+                        &signature,
+                    )?;
+
+                    receipt = Some(
+                        StakingContract::retire_validator(
+                            accounts_tree,
+                            db_txn,
+                            &validator_id,
+                            block_height,
+                        )?
+                        .serialize_to_vec(),
+                    );
                 }
                 IncomingStakingTransactionData::ReactivateValidator {
                     validator_id,
                     signature,
                 } => {
-                    staking.verify_signature_incoming(&transaction, &validator_id, &signature)?;
+                    // We couldn't verify the signature intrinsically before, since we need the
+                    // validator key from the staking contract.
+                    StakingContract::verify_signature_incoming(
+                        accounts_tree,
+                        db_txn,
+                        &transaction,
+                        &validator_id,
+                        &signature,
+                    )?;
+
                     receipt = Some(
-                        staking
-                            .reactivate_validator(validator_id)?
-                            .serialize_to_vec(),
+                        StakingContract::reactivate_validator(
+                            accounts_tree,
+                            db_txn,
+                            &validator_id,
+                        )?
+                        .serialize_to_vec(),
                     );
                 }
                 IncomingStakingTransactionData::UnparkValidator {
                     validator_id,
                     signature,
                 } => {
-                    staking.verify_signature_incoming(&transaction, &validator_id, &signature)?;
-                    receipt = Some(staking.unpark_validator(&validator_id)?.serialize_to_vec());
+                    // We couldn't verify the signature intrinsically before, since we need the
+                    // validator key from the staking contract.
+                    StakingContract::verify_signature_incoming(
+                        accounts_tree,
+                        db_txn,
+                        &transaction,
+                        &validator_id,
+                        &signature,
+                    )?;
+
+                    receipt = Some(
+                        StakingContract::unpark_validator(accounts_tree, db_txn, &validator_id)?
+                            .serialize_to_vec(),
+                    );
                 }
-                IncomingStakingTransactionData::Stake {
-                    validator_id,
+                IncomingStakingTransactionData::Stake { staker_address } => {
+                    StakingContract::stake(
+                        accounts_tree,
+                        db_txn,
+                        &staker_address,
+                        transaction.value,
+                    )?;
+                }
+                IncomingStakingTransactionData::CreateStaker {
                     staker_address,
+                    delegation,
                 } => {
-                    let staker_address =
-                        staker_address.unwrap_or_else(|| transaction.sender.clone());
-                    staking.create_staker(staker_address, transaction.value, &validator_id)?;
+                    StakingContract::create_staker(
+                        accounts_tree,
+                        db_txn,
+                        &staker_address,
+                        transaction.value,
+                        delegation,
+                    )?;
                 }
             }
         } else {
@@ -166,21 +223,21 @@ impl AccountTransactionInteraction for StakingContract {
             let staker_address = StakingContract::get_self_signer(transaction)?;
 
             match data {
-                SelfStakingTransactionData::RetireStake(_) => {
+                SelfStakingTransactionData::RetireStaker(_) => {
                     // Retire transaction.
                     receipt = staking
                         .retire_recipient(&staker_address, transaction.value, Some(block_height))?
                         .map(|receipt| receipt.serialize_to_vec());
                 }
-                SelfStakingTransactionData::ReactivateStake(validator_id) => {
+                SelfStakingTransactionData::ReactivateStaker(validator_id) => {
                     staking.reactivate_recipient(
                         staker_address,
                         transaction.value,
                         &validator_id,
                     )?;
                 }
-                SelfStakingTransactionData::RededicateStake {
-                    from_validator_id: _,
+                SelfStakingTransactionData::UpdateStaker {
+                    new_delegation: _,
                     to_validator_id,
                 } => {
                     staking.rededicate_stake_receiver(
@@ -191,8 +248,6 @@ impl AccountTransactionInteraction for StakingContract {
                 }
             }
         }
-
-        accounts_tree.put(db_txn, &key, Account::Staking(staking));
 
         Ok(receipt)
     }
@@ -205,72 +260,77 @@ impl AccountTransactionInteraction for StakingContract {
         _time: u64,
         receipt: Option<&Vec<u8>>,
     ) -> Result<(), AccountError> {
-        let key = KeyNibbles::from(&transaction.recipient);
-
-        let account = accounts_tree
-            .get(db_txn, &key)
-            .ok_or(AccountError::NonExistentAddress {
-                address: transaction.recipient.clone(),
-            })?;
-
-        let mut staking = match account {
-            Account::Staking(value) => value,
-            _ => {
-                return Err(AccountError::TypeMismatch {
-                    expected: AccountType::Staking,
-                    got: account.account_type(),
-                })
-            }
-        };
-
         if transaction.sender != transaction.recipient {
             let data: IncomingStakingTransactionData =
                 Deserialize::deserialize(&mut &transaction.data[..])?;
 
             match data {
-                IncomingStakingTransactionData::CreateValidator { validator_key, .. } => {
+                IncomingStakingTransactionData::CreateValidator { .. } => {
                     // Validator id was generated from creation tx hash
                     let validator_id: ValidatorId =
                         transaction.hash::<Blake2bHash>().as_slice()[0..20].into();
-                    staking.revert_create_validator(
-                        validator_id,
-                        validator_key,
-                        transaction.value,
-                    )?;
+
+                    StakingContract::revert_create_validator(accounts_tree, db_txn, &validator_id)?;
                 }
-                IncomingStakingTransactionData::UpdateValidator {
-                    validator_id,
-                    old_validator_key,
-                    new_validator_key: _,
-                    ..
-                } => {
+                IncomingStakingTransactionData::UpdateValidator { validator_id, .. } => {
                     let receipt: UpdateValidatorReceipt = Deserialize::deserialize_from_vec(
                         receipt.ok_or(AccountError::InvalidReceipt)?,
                     )?;
-                    staking.revert_update_validator(validator_id, old_validator_key, receipt)?;
+
+                    StakingContract::revert_update_validator(
+                        accounts_tree,
+                        db_txn,
+                        &validator_id,
+                        receipt,
+                    )?;
                 }
                 IncomingStakingTransactionData::RetireValidator { validator_id, .. } => {
-                    staking.revert_retire_validator(validator_id)?;
+                    let receipt: RetireValidatorReceipt = Deserialize::deserialize_from_vec(
+                        receipt.ok_or(AccountError::InvalidReceipt)?,
+                    )?;
+
+                    StakingContract::revert_retire_validator(
+                        accounts_tree,
+                        db_txn,
+                        &validator_id,
+                        receipt,
+                    )?;
                 }
                 IncomingStakingTransactionData::ReactivateValidator { validator_id, .. } => {
                     let receipt: ReactivateValidatorOrStakerReceipt =
                         Deserialize::deserialize_from_vec(
                             receipt.ok_or(AccountError::InvalidReceipt)?,
                         )?;
-                    staking.revert_reactivate_validator(validator_id, receipt)?;
+
+                    StakingContract::revert_reactivate_validator(
+                        accounts_tree,
+                        db_txn,
+                        &validator_id,
+                        receipt,
+                    )?;
                 }
                 IncomingStakingTransactionData::UnparkValidator { validator_id, .. } => {
                     let receipt: UnparkValidatorReceipt = Deserialize::deserialize_from_vec(
                         receipt.ok_or(AccountError::InvalidReceipt)?,
                     )?;
-                    staking.revert_unpark_validator(&validator_id, receipt)?;
+
+                    StakingContract::revert_unpark_validator(
+                        accounts_tree,
+                        db_txn,
+                        &validator_id,
+                        receipt,
+                    )?;
                 }
-                IncomingStakingTransactionData::Stake {
-                    validator_id,
-                    staker_address,
-                } => {
-                    let staker_address_ref = staker_address.as_ref().unwrap_or(&transaction.sender);
-                    staking.revert_stake(staker_address_ref, transaction.value, &validator_id)?;
+                IncomingStakingTransactionData::Stake { staker_address } => {
+                    StakingContract::revert_stake(
+                        accounts_tree,
+                        db_txn,
+                        &staker_address,
+                        transaction.value,
+                    )?;
+                }
+                IncomingStakingTransactionData::CreateStaker { staker_address, .. } => {
+                    StakingContract::revert_create_staker(accounts_tree, db_txn, &staker_address)?;
                 }
             }
         } else {
@@ -279,20 +339,20 @@ impl AccountTransactionInteraction for StakingContract {
             let staker_address = StakingContract::get_self_signer(transaction)?;
 
             match data {
-                SelfStakingTransactionData::RetireStake(_) => {
+                SelfStakingTransactionData::RetireStaker(_) => {
                     let receipt: Option<InactiveStakeReceipt> = conditional_deserialize(receipt)?;
                     // Retire transaction.
                     staking.revert_retire_recipient(&staker_address, transaction.value, receipt)?;
                 }
-                SelfStakingTransactionData::ReactivateStake(validator_key) => {
+                SelfStakingTransactionData::ReactivateStaker(validator_key) => {
                     staking.revert_reactivate_recipient(
                         &staker_address,
                         transaction.value,
                         &validator_key,
                     )?;
                 }
-                SelfStakingTransactionData::RededicateStake {
-                    from_validator_id: _,
+                SelfStakingTransactionData::UpdateStaker {
+                    new_delegation: _,
                     to_validator_id,
                 } => {
                     staking.revert_rededicate_stake_receiver(
@@ -304,8 +364,6 @@ impl AccountTransactionInteraction for StakingContract {
             }
         }
 
-        accounts_tree.put(db_txn, &key, Account::Staking(staking));
-
         Ok(())
     }
 
@@ -316,24 +374,6 @@ impl AccountTransactionInteraction for StakingContract {
         block_height: u32,
         _block_time: u64,
     ) -> Result<Option<Vec<u8>>, AccountError> {
-        let key = KeyNibbles::from(&transaction.sender);
-
-        let account = accounts_tree
-            .get(db_txn, &key)
-            .ok_or(AccountError::NonExistentAddress {
-                address: transaction.sender.clone(),
-            })?;
-
-        let mut staking = match account {
-            Account::Staking(value) => value,
-            _ => {
-                return Err(AccountError::TypeMismatch {
-                    expected: AccountType::Staking,
-                    got: account.account_type(),
-                })
-            }
-        };
-
         let mut receipt = None;
 
         if transaction.sender != transaction.recipient {
@@ -341,60 +381,32 @@ impl AccountTransactionInteraction for StakingContract {
                 Deserialize::deserialize(&mut &transaction.proof[..])?;
 
             match proof {
+                OutgoingStakingTransactionProof::DropValidator { validator_id, .. } => {
+                    // The signature and the value of the transaction were already checked
+                    // in the transaction. See the verify function for the
+                    // OutgoingStakingTransactionProof struct.
+
+                    receipt = Some(
+                        StakingContract::drop_validator(
+                            accounts_tree,
+                            db_txn,
+                            &validator_id,
+                            block_height,
+                        )?
+                        .serialize_to_vec(),
+                    );
+                }
                 OutgoingStakingTransactionProof::Unstake(proof) => {
                     let staker_address = proof.compute_signer();
 
-                    // Unstake transaction.
-                    let inactive_stake = staking
-                        .inactive_stake_by_address
-                        .get(&staker_address)
-                        .ok_or(AccountError::InvalidForSender)?;
-
-                    // Check unstaking delay.
-                    if block_height < policy::election_block_after(inactive_stake.retire_time) {
-                        return Err(AccountError::InvalidForSender);
-                    }
-
-                    // Check balance.
-                    Account::balance_sub(inactive_stake.balance, transaction.total_value()?)?;
-
-                    receipt = staking
-                        .unstake(&staker_address, transaction.total_value()?)?
-                        .map(|r| r.serialize_to_vec());
-                }
-                OutgoingStakingTransactionProof::DropValidator { validator_id, .. } => {
-                    let inactive_validator = staking
-                        .inactive_validators_by_id
-                        .get(&validator_id)
-                        .ok_or(AccountError::InvalidForSender)?;
-
-                    // Check unstaking delay.
-                    if block_height < policy::election_block_after(inactive_validator.retire_time) {
-                        return Err(AccountError::InvalidForSender);
-                    }
-
-                    // Check stakes.
-                    let validator = &inactive_validator.validator;
-
-                    let staker_stake = validator
-                        .active_stake_by_address
-                        .read()
-                        .values()
-                        .cloned()
-                        .fold(Coin::ZERO, Add::add);
-
-                    if validator.balance - staker_stake != transaction.total_value()? {
-                        return Err(AccountError::InsufficientFunds {
-                            needed: staker_stake + transaction.total_value()?,
-                            balance: validator.balance,
-                        });
-                    }
-
-                    receipt = Some(
-                        staking
-                            .drop_validator(&validator_id, transaction.total_value()?)?
-                            .serialize_to_vec(),
-                    );
+                    receipt = StakingContract::unstake(
+                        accounts_tree,
+                        db_txn,
+                        &staker_address,
+                        transaction.total_value()?,
+                        block_height,
+                    )?
+                    .map(|r| r.serialize_to_vec());
                 }
             }
         } else {
@@ -403,7 +415,7 @@ impl AccountTransactionInteraction for StakingContract {
             let staker_address = Self::get_self_signer(transaction)?;
 
             match data {
-                SelfStakingTransactionData::RetireStake(validator_id) => {
+                SelfStakingTransactionData::RetireStaker(validator_id) => {
                     // Check that there is enough stake for this transaction.
                     let validator = staking
                         .get_validator(&validator_id)
@@ -425,7 +437,7 @@ impl AccountTransactionInteraction for StakingContract {
                         &validator_id,
                     )?;
                 }
-                SelfStakingTransactionData::ReactivateStake(validator_id) => {
+                SelfStakingTransactionData::ReactivateStaker(validator_id) => {
                     let inactive_stake = staking
                         .inactive_stake_by_address
                         .get(&staker_address)
@@ -443,8 +455,8 @@ impl AccountTransactionInteraction for StakingContract {
                         .reactivate_sender(&staker_address, transaction.total_value()?, None)?
                         .map(|r| r.serialize_to_vec());
                 }
-                SelfStakingTransactionData::RededicateStake {
-                    from_validator_id,
+                SelfStakingTransactionData::UpdateStaker {
+                    new_delegation: from_validator_id,
                     to_validator_id: _,
                 } => {
                     let validator = staking
@@ -470,8 +482,6 @@ impl AccountTransactionInteraction for StakingContract {
             }
         }
 
-        accounts_tree.put(db_txn, &key, Account::Staking(staking));
-
         Ok(receipt)
     }
 
@@ -483,34 +493,11 @@ impl AccountTransactionInteraction for StakingContract {
         _block_time: u64,
         receipt: Option<&Vec<u8>>,
     ) -> Result<(), AccountError> {
-        let key = KeyNibbles::from(&transaction.sender);
-
-        let account = accounts_tree
-            .get(db_txn, &key)
-            .ok_or(AccountError::NonExistentAddress {
-                address: transaction.sender.clone(),
-            })?;
-
-        let mut staking = match account {
-            Account::Staking(value) => value,
-            _ => {
-                return Err(AccountError::TypeMismatch {
-                    expected: AccountType::Staking,
-                    got: account.account_type(),
-                })
-            }
-        };
-
         if transaction.sender != transaction.recipient {
             let proof: OutgoingStakingTransactionProof =
                 Deserialize::deserialize(&mut &transaction.proof[..])?;
 
             match proof {
-                OutgoingStakingTransactionProof::Unstake(proof) => {
-                    let staker_address = proof.compute_signer();
-                    let receipt: Option<InactiveStakeReceipt> = conditional_deserialize(receipt)?;
-                    staking.revert_unstake(&staker_address, transaction.total_value()?, receipt)?;
-                }
                 OutgoingStakingTransactionProof::DropValidator {
                     validator_id,
                     validator_key,
@@ -519,9 +506,23 @@ impl AccountTransactionInteraction for StakingContract {
                     let receipt: DropValidatorReceipt = Deserialize::deserialize_from_vec(
                         receipt.ok_or(AccountError::InvalidReceipt)?,
                     )?;
-                    staking.revert_drop_validator(
-                        validator_id,
-                        validator_key,
+
+                    StakingContract::revert_drop_validator(
+                        accounts_tree,
+                        db_txn,
+                        &validator_id,
+                        receipt,
+                    )?;
+                }
+                OutgoingStakingTransactionProof::Unstake(proof) => {
+                    let staker_address = proof.compute_signer();
+
+                    let receipt: Option<DropStakerReceipt> = conditional_deserialize(receipt)?;
+
+                    StakingContract::revert_unstake(
+                        accounts_tree,
+                        db_txn,
+                        &staker_address,
                         transaction.total_value()?,
                         receipt,
                     )?;
@@ -533,14 +534,14 @@ impl AccountTransactionInteraction for StakingContract {
             let staker_address = Self::get_self_signer(transaction)?;
 
             match data {
-                SelfStakingTransactionData::RetireStake(validator_id) => {
+                SelfStakingTransactionData::RetireStaker(validator_id) => {
                     staking.revert_retire_sender(
                         staker_address,
                         transaction.total_value()?,
                         &validator_id,
                     )?;
                 }
-                SelfStakingTransactionData::ReactivateStake(_validator_id) => {
+                SelfStakingTransactionData::ReactivateStaker(_validator_id) => {
                     let receipt: Option<InactiveStakeReceipt> = conditional_deserialize(receipt)?;
                     staking.revert_reactivate_sender(
                         &staker_address,
@@ -548,8 +549,8 @@ impl AccountTransactionInteraction for StakingContract {
                         receipt,
                     )?;
                 }
-                SelfStakingTransactionData::RededicateStake {
-                    from_validator_id,
+                SelfStakingTransactionData::UpdateStaker {
+                    new_delegation: from_validator_id,
                     to_validator_id: _,
                 } => {
                     staking.revert_rededicate_stake_sender(
@@ -560,8 +561,6 @@ impl AccountTransactionInteraction for StakingContract {
                 }
             }
         }
-
-        accounts_tree.put(db_txn, &key, Account::Staking(staking));
 
         Ok(())
     }
@@ -575,56 +574,37 @@ impl AccountInherentInteraction for StakingContract {
         block_height: u32,
         _block_time: u64,
     ) -> Result<Option<Vec<u8>>, AccountError> {
-        let key = KeyNibbles::from(&inherent.target);
-
-        let account = accounts_tree
-            .get(db_txn, &key)
-            .ok_or(AccountError::NonExistentAddress {
-                address: inherent.target.clone(),
-            })?;
-
-        let mut staking = match account {
-            Account::Staking(value) => value,
-            _ => {
-                return Err(AccountError::TypeMismatch {
-                    expected: AccountType::Staking,
-                    got: account.account_type(),
-                })
-            }
-        };
-
         trace!("check inherent: {:?}", inherent);
-        // Inherent slashes nothing
+
+        // Inherent slashes nothing.
         if inherent.value != Coin::ZERO {
             return Err(AccountError::InvalidInherent);
         }
 
-        let receipt;
+        // Get the staking contract main.
+        let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
+
+        let mut receipt = None;
 
         match &inherent.ty {
             InherentType::Slash => {
-                // Invalid data length
+                // Check data length.
                 if inherent.data.len() != SlashedSlot::SIZE {
                     return Err(AccountError::InvalidInherent);
                 }
 
-                // Address doesn't exist in contract
+                // Deserialize slot.
                 let slot: SlashedSlot = Deserialize::deserialize(&mut &inherent.data[..])?;
 
-                if !staking
-                    .active_validators_by_id
-                    .contains_key(&slot.validator_id)
-                    && !staking
-                        .inactive_validators_by_id
-                        .contains_key(&slot.validator_id)
-                {
+                // Check that the slashed validator does exist.
+                if StakingContract::get_validator(accounts_tree, db_txn, validator_id).is_none() {
                     return Err(AccountError::InvalidInherent);
                 }
 
                 // Simply add validator address to parking.
                 // TODO: The inherent might have originated from a fork proof for the previous epoch.
-                // Right now, we don't care and start the parking period in the epoch the proof has been submitted.
-                let newly_parked = staking
+                //  Right now, we don't care and start the parking period in the epoch the proof has been submitted.
+                let newly_parked = staking_contract
                     .current_epoch_parking
                     .insert(slot.validator_id.clone());
 
@@ -639,29 +619,49 @@ impl AccountInherentInteraction for StakingContract {
                 // - current_disabled_slots
                 let newly_disabled;
                 let newly_lost_rewards;
+
                 if policy::epoch_at(slot.event_block) < policy::epoch_at(block_height) {
-                    newly_lost_rewards =
-                        !staking.previous_lost_rewards.contains(slot.slot as usize);
+                    newly_lost_rewards = !staking_contract
+                        .previous_lost_rewards
+                        .contains(slot.slot as usize);
+
                     newly_disabled = false;
-                    staking.previous_lost_rewards.insert(slot.slot as usize);
+
+                    staking_contract
+                        .previous_lost_rewards
+                        .insert(slot.slot as usize);
                 } else if policy::batch_at(slot.event_block) < policy::batch_at(block_height) {
-                    newly_lost_rewards =
-                        !staking.previous_lost_rewards.contains(slot.slot as usize);
-                    staking.previous_lost_rewards.insert(slot.slot as usize);
-                    newly_disabled = staking
+                    newly_lost_rewards = !staking_contract
+                        .previous_lost_rewards
+                        .contains(slot.slot as usize);
+
+                    staking_contract
+                        .previous_lost_rewards
+                        .insert(slot.slot as usize);
+
+                    newly_disabled = staking_contract
                         .current_disabled_slots
                         .entry(slot.validator_id.clone())
                         .or_insert_with(BTreeSet::new)
                         .insert(slot.slot);
                 } else {
-                    newly_lost_rewards = !staking.current_lost_rewards.contains(slot.slot as usize);
-                    staking.current_lost_rewards.insert(slot.slot as usize);
-                    newly_disabled = staking
+                    newly_lost_rewards = !staking_contract
+                        .current_lost_rewards
+                        .contains(slot.slot as usize);
+
+                    staking_contract
+                        .current_lost_rewards
+                        .insert(slot.slot as usize);
+
+                    newly_disabled = staking_contract
                         .current_disabled_slots
                         .entry(slot.validator_id.clone())
                         .or_insert_with(BTreeSet::new)
                         .insert(slot.slot);
                 }
+
+                // All checks passed, not allowed to fail from here on!
+                trace!("Trying to put staking contract in the accounts tree.");
 
                 receipt = Some(
                     SlashReceipt {
@@ -678,37 +678,32 @@ impl AccountInherentInteraction for StakingContract {
                     return Err(AccountError::InvalidInherent);
                 }
 
-                // Lost rewards.
-                let current_lost_rewards =
-                    mem::replace(&mut staking.current_lost_rewards, BitSet::new());
-                let _old_lost_rewards =
-                    mem::replace(&mut staking.previous_lost_rewards, current_lost_rewards);
+                // Clear the lost rewards set.
+                staking_contract.previous_lost_rewards = staking_contract.current_lost_rewards;
+                staking_contract.current_lost_rewards = BitSet::new();
 
-                // Parking sets and disabled slots are only swapped on epoch changes.
+                // Parking sets and disabled slots are only cleared on epoch changes.
                 if inherent.ty == InherentType::FinalizeEpoch {
-                    // Swap lists around.
-                    let current_epoch =
-                        mem::replace(&mut staking.current_epoch_parking, HashSet::new());
-                    let old_epoch =
-                        mem::replace(&mut staking.previous_epoch_parking, current_epoch);
-
-                    // Disabled slots.
-                    // Optimization: We actually only need the old slots for the first batch of the epoch.
-                    let current_disabled_slots =
-                        mem::replace(&mut staking.current_disabled_slots, HashMap::new());
-                    let _old_disabled_slots =
-                        mem::replace(&mut staking.previous_disabled_slots, current_disabled_slots);
-
-                    // Remove all parked validators.
-                    for validator_id in old_epoch {
-                        // We do not remove validators from the parking list if they send a retire transaction.
-                        // Instead, we simply skip these here.
-                        // This saves space in the receipts of retire transactions as they happen much more often
-                        // than stakers are added to the parking lists.
-                        if staking.active_validators_by_id.contains_key(&validator_id) {
-                            staking.retire_validator(validator_id, block_height)?;
-                        }
+                    // But first, retire all validators that have been parked for more than one epoch.
+                    for validator_id in staking_contract.previous_epoch_parking {
+                        StakingContract::retire_validator(
+                            accounts_tree,
+                            db_txn,
+                            &validator_id,
+                            block_height,
+                        )?;
                     }
+
+                    // Now we clear the parking set.
+                    staking_contract.previous_epoch_parking =
+                        staking_contract.current_epoch_parking;
+                    staking_contract.current_epoch_parking = HashSet::new();
+
+                    // And the disabled slots.
+                    // Optimization: We actually only need the old slots for the first batch of the epoch.
+                    staking_contract.previous_disabled_slots =
+                        staking_contract.current_disabled_slots;
+                    staking_contract.current_disabled_slots = HashMap::new();
                 }
 
                 // Since finalized epochs cannot be reverted, we don't need any receipts.
@@ -719,7 +714,11 @@ impl AccountInherentInteraction for StakingContract {
             }
         }
 
-        accounts_tree.put(db_txn, &key, Account::Staking(staking));
+        accounts_tree.put(
+            db_txn,
+            &StakingContract::get_key_staking_contract(),
+            Account::Staking(staking_contract),
+        );
 
         Ok(receipt)
     }
@@ -732,23 +731,8 @@ impl AccountInherentInteraction for StakingContract {
         _block_time: u64,
         receipt: Option<&Vec<u8>>,
     ) -> Result<(), AccountError> {
-        let key = KeyNibbles::from(&inherent.target);
-
-        let account = accounts_tree
-            .get(db_txn, &key)
-            .ok_or(AccountError::NonExistentAddress {
-                address: inherent.target.clone(),
-            })?;
-
-        let mut staking = match account {
-            Account::Staking(value) => value,
-            _ => {
-                return Err(AccountError::TypeMismatch {
-                    expected: AccountType::Staking,
-                    got: account.account_type(),
-                })
-            }
-        };
+        // Get the staking contract main.
+        let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
 
         match &inherent.ty {
             InherentType::Slash => {
