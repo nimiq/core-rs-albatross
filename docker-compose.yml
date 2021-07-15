@@ -55,7 +55,7 @@ services:
       # - RPC_USERNAME=rpcclient
       # - RPC_PASSWORD=7F8E0E42-8ACF-47E7-8CC1-0EC66FA3D82D
       - RUST_BACKTRACE="1"
-      - NIMIQ_LOG_LEVEL=error
+      - NIMIQ_LOG_LEVEL=info
       - NIMIQ_LOG_TIMESTAMPS=true
     networks:
       devnet:
@@ -86,7 +86,7 @@ services:
       - VALIDATOR_KEY=bfbf1e23855190f03222bb2b19dc9d25843494d22bf8ccc1f7abfe6b3b185b3bf76537ee70e7ac5c7c6d7a0046e671bf610572e1cf89b407a7cd095ab9f0868da80003121a26d4d3be1e1abd10861f6c8601e94e0e448f4b86b7512764460100
       - RPC_ENABLED=true
       - RUST_BACKTRACE="1"
-      - NIMIQ_LOG_LEVEL=error
+      - NIMIQ_LOG_LEVEL=info
       - NIMIQ_LOG_TIMESTAMPS=true
     networks:
       devnet:
@@ -117,7 +117,7 @@ services:
       - VALIDATOR_KEY=eacdbf28aff34ca60f0b57c98d5b4bb32948710d4afa4b3567d21ef871845ada28bc6721b7720ce74242d45674cbc91e317c64f1109b547ef07d13f4e5e936ebd1e68a292f82c71dbb50f6ef68386b8066efa9e40aaa637f86922e90f73f0100
       - RPC_ENABLED=true
       - RUST_BACKTRACE="1"
-      - NIMIQ_LOG_LEVEL=error
+      - NIMIQ_LOG_LEVEL=info
       - NIMIQ_LOG_TIMESTAMPS=true
     networks:
       devnet:
@@ -149,7 +149,7 @@ services:
       - VALIDATOR_KEY=1aa577387bd1b63ee93dc2aa5547d6c3e78494ebffbbbecc6cdddf058d98c3be543b4454b6e3fe01a3c9d1e3ca35933d96727e29e47e48077488288b02bf8c0a3954ea20471723194a83099f9b434ad47fc67b3d44c61cca134ab9bc0df00000
       - RPC_ENABLED=true
       - RUST_BACKTRACE="1"
-      - NIMIQ_LOG_LEVEL=error
+      - NIMIQ_LOG_LEVEL=info
       - NIMIQ_LOG_TIMESTAMPS=true
     networks:
       devnet:
