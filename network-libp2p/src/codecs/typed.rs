@@ -241,10 +241,12 @@ impl<M: Message> Encoder<&M> for MessageCodec {
         let message_length = header.serialized_size() + message.serialized_size();
         header.length = message_length as u32;
 
+        let existing_length = dst.len();
         dst.reserve(message_length);
-        dst.resize(message_length, 0); // FIXME: Here we initialize the buffer.
+        dst.resize(existing_length + message_length, 0);
 
         let mut c = Cursor::new(dst.as_mut());
+        c.set_position(existing_length as u64);
 
         // Write header
         header.serialize(&mut c)?;
