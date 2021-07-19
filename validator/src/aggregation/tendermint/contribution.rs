@@ -11,7 +11,7 @@ use nimiq_handel::contribution::{AggregatableContribution, ContributionError};
 #[derive(Serialize, Deserialize, std::fmt::Debug, Clone)]
 pub struct TendermintContribution {
     #[beserial(len_type(u16))]
-    pub(crate) contributions: BTreeMap<Option<Blake2bHash>, MultiSignature>,
+    pub contributions: BTreeMap<Option<Blake2bHash>, MultiSignature>,
 }
 
 impl TendermintContribution {

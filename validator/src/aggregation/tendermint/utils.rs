@@ -1,11 +1,15 @@
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
+use handel::update::LevelUpdateMessage;
+use nimiq_validator_network::ValidatorNetwork;
 use tokio::sync::mpsc;
 
-use nimiq_block::{MultiSignature, TendermintStep};
+use nimiq_block::{MultiSignature, TendermintIdentifier, TendermintStep};
 use nimiq_handel::update::LevelUpdate;
 use nimiq_tendermint::AggregationResult;
+
+use crate::aggregation::network_sink::NetworkSink;
 
 use super::contribution::TendermintContribution;
 
@@ -38,4 +42,24 @@ pub enum TendermintAggregationEvent {
     NewRound(u32),
     /// A new Aggregate(TendermintContribution) is available for a given round(u32) and step(TendermintStep)
     Aggregation(u32, TendermintStep, TendermintContribution),
+}
+
+/// Used to pass events from HandelTendermintAdapter to and from TendermintAggregations
+pub enum AggregationEvent<N: ValidatorNetwork> {
+    Start(
+        TendermintIdentifier,
+        TendermintContribution,
+        Vec<u8>,
+        Box<NetworkSink<LevelUpdateMessage<TendermintContribution, TendermintIdentifier>, N>>,
+    ),
+    Cancel(u32, TendermintStep),
+}
+
+impl<N: ValidatorNetwork> std::fmt::Debug for AggregationEvent<N> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AggregationEvent::Start(i, _, _, _) => f.debug_struct("Start").field("id", i).finish(),
+            AggregationEvent::Cancel(r, s) => f.debug_struct("Start").field("id", &(r, s)).finish(),
+        }
+    }
 }

@@ -172,6 +172,10 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
     fn init_epoch(&mut self) {
         log::debug!("Initializing epoch");
 
+        // clear producers here, as this validator might not be active anymore
+        self.macro_producer = None;
+        self.micro_producer = None;
+
         let validators = self.consensus.blockchain.current_validators().unwrap();
 
         // TODO: This code block gets this validators position in the validators struct by searching it
@@ -209,9 +213,6 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
     }
 
     fn init_block_producer(&mut self) {
-        self.macro_producer = None;
-        self.micro_producer = None;
-
         log::debug!("Initializing block producer");
 
         if !self.is_active() {
@@ -220,6 +221,10 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         }
 
         let _lock = self.consensus.blockchain.lock();
+
+        self.macro_producer = None;
+        self.micro_producer = None;
+
         match self.consensus.blockchain.get_next_block_type(None) {
             BlockType::Macro => {
                 let block_producer = BlockProducer::new(

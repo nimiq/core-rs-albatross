@@ -1,5 +1,5 @@
 use crate::state::TendermintState;
-use crate::ProofTrait;
+use crate::{ProofTrait, ProposalTrait, ResultTrait};
 use nimiq_block::TendermintStep;
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::policy::TWO_THIRD_SLOTS;
@@ -49,7 +49,7 @@ pub enum VoteDecision {
 
 /// Represents the results we can get when waiting for a proposal message.
 #[derive(Clone, Debug)]
-pub enum ProposalResult<ProposalTy> {
+pub enum ProposalResult<ProposalTy: ProposalTrait> {
     // Means we have received a proposal message. The first field is the actual proposal, the second
     // one is the valid round of the proposer (being None is equal to the -1 used in the protocol).
     Proposal(ProposalTy, Option<u32>),
@@ -59,7 +59,7 @@ pub enum ProposalResult<ProposalTy> {
 
 /// Represents the results we can get when waiting for a vote (either prevote or precommit).
 #[derive(Clone, Debug)]
-pub enum VoteResult<ProofTy> {
+pub enum VoteResult<ProofTy: ProofTrait> {
     // Means that we have received 2f+1 votes for a block. The field is the aggregation of the votes
     // signatures (it's a bit more complicated than this, see the Handel crate for more details).
     Block(ProofTy),
@@ -76,7 +76,7 @@ pub enum VoteResult<ProofTy> {
 /// Represents the results we can get from calling `broadcast_and_aggregate` from
 /// TendermintOutsideDeps.
 #[derive(Clone, Debug)]
-pub enum AggregationResult<ProofTy> {
+pub enum AggregationResult<ProofTy: ProofTrait> {
     // If the aggregation was able to complete (get 2f+1 votes), we receive a BTreeMap of the
     // different vote messages (Some(hash) is a vote for a proposal with that hash, None is a vote
     // for Nil) along with the corresponding proofs (the aggregation of the votes signatures) and
@@ -89,7 +89,7 @@ pub enum AggregationResult<ProofTy> {
 
 /// These are the possible return options for the `expect_block` Stream.
 #[derive(Clone, Debug)]
-pub enum TendermintReturn<ProposalTy, ProofTy, ResultTy> {
+pub enum TendermintReturn<ProposalTy: ProposalTrait, ProofTy: ProofTrait, ResultTy: ResultTrait> {
     // Means we got a completed block. The field is the block.
     Result(ResultTy),
     // This just sends our current state. It is useful in case we go down for some reason and need
@@ -109,6 +109,11 @@ pub enum TendermintError {
     CannotReceiveProposal,
     CannotProduceProposal,
     CannotAssembleBlock,
+}
+
+pub enum StreamResult<ProposalTy: ProposalTrait, ProofTy: ProofTrait, ResultTy: ResultTrait> {
+    Tendermint(TendermintReturn<ProposalTy, ProofTy, ResultTy>),
+    BackgroundTask,
 }
 
 /// An utility function that converts an AggregationResult into a VoteResult. The AggregationResult

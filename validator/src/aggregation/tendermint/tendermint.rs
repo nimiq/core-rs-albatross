@@ -1,289 +1,37 @@
-use std::collections::BTreeMap;
-use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-
-use tokio::sync::mpsc;
-use tokio::time;
-
-use futures::{
-    future,
-    sink::Sink,
-    stream::{BoxStream, SelectAll, Stream, StreamExt},
-    task::{Context, Poll},
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, RwLock},
 };
 
-use futures_locks::RwLock;
+use futures::{future, StreamExt};
+use tokio::{sync::mpsc, time};
 
+use bls::SecretKey;
 use nimiq_block::{
     MacroBlock, MultiSignature, TendermintIdentifier, TendermintStep, TendermintVote,
 };
-use nimiq_bls::SecretKey;
-use nimiq_collections::bitset::BitSet;
+use nimiq_handel::{identity::WeightRegistry, update::LevelUpdateMessage};
 use nimiq_hash::Blake2bHash;
-use nimiq_primitives::policy;
-use nimiq_primitives::slots::Validators;
-
-use nimiq_handel::aggregation::Aggregation;
-use nimiq_handel::config::Config;
-use nimiq_handel::contribution::AggregatableContribution;
-use nimiq_handel::identity::WeightRegistry;
-use nimiq_handel::update::{LevelUpdate, LevelUpdateMessage};
-
+use nimiq_primitives::{policy, slots::Validators};
 use nimiq_tendermint::{AggregationResult, TendermintError};
 use nimiq_validator_network::ValidatorNetwork;
 
-use super::super::network_sink::NetworkSink;
-use super::super::registry::ValidatorRegistry;
+use crate::aggregation::{
+    network_sink::NetworkSink, registry::ValidatorRegistry,
+    tendermint::aggregations::TendermintAggregations,
+};
 
-use super::contribution::TendermintContribution;
-use super::protocol::TendermintAggregationProtocol;
-use super::utils::{AggregationDescriptor, CurrentAggregation, TendermintAggregationEvent};
-
-/// Used to pass events from HandelTendermintAdapter to and from TendermintAggregations
-enum AggregationEvent<N: ValidatorNetwork> {
-    Start(
-        TendermintIdentifier,
-        TendermintContribution,
-        Vec<u8>,
-        Box<NetworkSink<LevelUpdateMessage<TendermintContribution, TendermintIdentifier>, N>>,
-    ),
-    Cancel(u32, TendermintStep),
-}
-
-impl<N: ValidatorNetwork> std::fmt::Debug for AggregationEvent<N> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            AggregationEvent::Start(i, _, _, _) => f.debug_struct("Start").field("id", i).finish(),
-            AggregationEvent::Cancel(r, s) => f.debug_struct("Start").field("id", &(r, s)).finish(),
-        }
-    }
-}
-
-/// Maintains various aggregations for different rounds and steps of Tendermint.
-///
-/// Note that `TendermintAggregations::broadcast_and_aggregate` needs to have been called at least once before the stream can meaningfully be awaited.
-pub struct TendermintAggregations<N: ValidatorNetwork> {
-    event_receiver: mpsc::Receiver<AggregationEvent<N>>,
-    combined_aggregation_streams:
-        Pin<Box<SelectAll<BoxStream<'static, ((u32, TendermintStep), TendermintContribution)>>>>,
-    aggregation_descriptors: BTreeMap<(u32, TendermintStep), AggregationDescriptor>,
-    input: BoxStream<'static, LevelUpdateMessage<TendermintContribution, TendermintIdentifier>>,
-    future_aggregations: BTreeMap<u32, BitSet>,
-    validator_id: u16,
-    validator_registry: Arc<ValidatorRegistry>,
-}
-
-impl<N: ValidatorNetwork> TendermintAggregations<N> {
-    fn new(
-        validator_id: u16,
-        validator_registry: Arc<ValidatorRegistry>,
-        input: BoxStream<'static, LevelUpdateMessage<TendermintContribution, TendermintIdentifier>>,
-        event_receiver: mpsc::Receiver<AggregationEvent<N>>,
-    ) -> Self {
-        // Create the instance and return it
-        TendermintAggregations {
-            combined_aggregation_streams: Box::pin(SelectAll::new()),
-            aggregation_descriptors: BTreeMap::new(),
-            future_aggregations: BTreeMap::new(),
-            input,
-            validator_id,
-            validator_registry,
-            event_receiver,
-        }
-    }
-
-    fn broadcast_and_aggregate<E: std::fmt::Debug + Send + 'static>(
-        &mut self,
-        id: TendermintIdentifier,
-        own_contribution: TendermintContribution,
-        validator_merkle_root: Vec<u8>,
-        output_sink: Box<
-            (dyn Sink<
-                (
-                    LevelUpdateMessage<TendermintContribution, TendermintIdentifier>,
-                    usize,
-                ),
-                Error = E,
-            > + Unpin
-                 + Send),
-        >,
-    ) {
-        // TODO: TendermintAggregationEvent
-        if !self
-            .aggregation_descriptors
-            .contains_key(&(id.round_number, id.step))
-        {
-            trace!("starting aggregation for {:?}", &id);
-            // crate the correct protocol instance
-            let protocol = TendermintAggregationProtocol::new(
-                self.validator_registry.clone(),
-                self.validator_id as usize,
-                1, // To be removed
-                id.clone(),
-                validator_merkle_root,
-            );
-
-            let (sender, receiver) =
-                mpsc::unbounded_channel::<LevelUpdate<TendermintContribution>>();
-
-            // create the aggregation
-            let aggregation = Aggregation::new(
-                protocol,
-                id.clone(),
-                Config::default(),
-                own_contribution,
-                receiver.boxed(),
-                output_sink,
-            );
-
-            // create the stream closer and wrap in Arc so it can be shared borrow
-            let stream_closer = Arc::new(AtomicBool::new(true));
-
-            // Create and store AggregationDescriptor
-            self.aggregation_descriptors.insert(
-                (id.round_number, id.step),
-                AggregationDescriptor {
-                    input: sender,
-                    is_running: stream_closer.clone(),
-                },
-            );
-
-            trace!(
-                "Aggregation_descriptors: {:?}",
-                &self.aggregation_descriptors
-            );
-
-            // copy round_number for use in drain_filter couple of lines down so that id can be moved into closure.
-            let round_number = id.round_number;
-
-            // wrap the aggregation stream
-            let aggregation = Box::pin(
-                aggregation
-                    .map(move |x| ((id.round_number, id.step), x))
-                    .take_while(move |_x| {
-                        future::ready(stream_closer.clone().load(Ordering::Relaxed))
-                        // Todo: Check Ordering
-                    }),
-            );
-
-            // Since this instance of Aggregation now becomes the current aggregation all bitsets containing contributors
-            // for future aggregations which are older or same age than this one can be discarded.
-            self.future_aggregations
-                .drain_filter(|round, _bitset| round <= &round_number);
-
-            // Push the aggregation to the select_all streams.
-            self.combined_aggregation_streams.push(aggregation);
-        }
-    }
-
-    pub fn cancel_aggregation(&self, round: u32, step: TendermintStep) {
-        if let Some(descriptor) = self.aggregation_descriptors.get(&(round, step)) {
-            debug!("canceling aggregation for {}-{:?}", &round, &step);
-            descriptor.is_running.store(false, Ordering::Relaxed);
-        }
-    }
-}
-
-impl<N: ValidatorNetwork + 'static> Stream for TendermintAggregations<N> {
-    type Item = TendermintAggregationEvent;
-
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        match self.event_receiver.poll_recv(cx) {
-            Poll::Pending => {}
-            Poll::Ready(None) => {
-                debug!("Event receiver created None value");
-                return Poll::Ready(None);
-            }
-            Poll::Ready(Some(AggregationEvent::Start(
-                id,
-                own_contribution,
-                validator_merkle_root,
-                output_sink,
-            ))) => self.broadcast_and_aggregate(
-                id,
-                own_contribution,
-                validator_merkle_root,
-                output_sink,
-            ),
-            Poll::Ready(Some(AggregationEvent::Cancel(round, step))) => {
-                self.cancel_aggregation(round, step)
-            }
-        }
-
-        // empty out the input stream dispatching messages to the appropriate aggregations
-        while let Poll::Ready(message) = self.input.poll_next_unpin(cx) {
-            match message {
-                Some(message) => {
-                    if let Some(descriptor) = self
-                        .aggregation_descriptors
-                        .get(&(message.tag.round_number, message.tag.step))
-                    {
-                        trace!("New message for ongoing aggregation: {:?}", &message);
-                        if descriptor.input.send(message.update).is_err() {
-                            debug!("Failed to relay LevelUpdate to aggregation");
-                        }
-                    } else if let Some(((highest_round, _), _)) =
-                        self.aggregation_descriptors.last_key_value()
-                    {
-                        // messages of future rounds need to be tracked in terrms of contributors only (without verifying them).
-                        // Also note that PreVote and PreCommit are tracked in the same bitset as the protocol requires.
-                        if highest_round < &message.tag.round_number {
-                            debug!("New contribution for future round: {:?}", &message);
-                            let future_contributors = self
-                                .future_aggregations
-                                .entry(message.tag.round_number)
-                                .and_modify(|bitset| {
-                                    *bitset |= message.update.aggregate.contributors()
-                                })
-                                .or_insert(message.update.aggregate.contributors())
-                                .clone();
-                            // now check if that suffices for a f+1 contributor weight
-                            if let Some(weight) =
-                                self.validator_registry.signers_weight(&future_contributors)
-                            {
-                                if weight
-                                    > policy::SLOTS as usize - policy::TWO_THIRD_SLOTS as usize
-                                {
-                                    return Poll::Ready(Some(
-                                        TendermintAggregationEvent::NewRound(
-                                            message.tag.round_number,
-                                        ),
-                                    ));
-                                }
-                            }
-                        }
-                    } else {
-                        // No last_key_value means there is no aggregation whatsoever.
-                        // Discard the update as there is no receiver for it and log to debug.
-                        debug!(
-                            "Found no agggregations, but received a LevelUpdateMessage: {:?}",
-                            &self.aggregation_descriptors
-                        );
-                    }
-                }
-                // Poll::Ready(None) means the stream has terminated, which is likelt the network having droped.
-                // Try and reconnect but also log an error
-                None => {
-                    error!("Networks receive from all returned Poll::Ready(None)");
-                }
-            }
-        }
-        // after that return whatever combined_aggregation_streams returns
-        match self.combined_aggregation_streams.poll_next_unpin(cx) {
-            Poll::Pending | Poll::Ready(None) => Poll::Pending,
-            Poll::Ready(Some(((round, step), aggregation))) => Poll::Ready(Some(
-                TendermintAggregationEvent::Aggregation(round, step, aggregation),
-            )),
-        }
-    }
-}
+use super::{
+    background_stream::BackgroundStream,
+    contribution::TendermintContribution,
+    utils::{AggregationEvent, CurrentAggregation},
+};
 
 /// Adaption for tendermint not using the handel stream directly. Ideally all of what this Adapter does would be done callerside just using the stream
 pub struct HandelTendermintAdapter<N: ValidatorNetwork> {
-    current_bests: RwLock<BTreeMap<(u32, TendermintStep), TendermintContribution>>,
-    current_aggregate: RwLock<Option<CurrentAggregation>>,
-    pending_new_round: RwLock<Option<u32>>,
+    current_bests: Arc<RwLock<BTreeMap<(u32, TendermintStep), TendermintContribution>>>,
+    current_aggregate: Arc<RwLock<Option<CurrentAggregation>>>,
+    pending_new_round: Arc<RwLock<Option<u32>>>,
     validator_merkle_root: Vec<u8>,
     block_height: u32,
     secret_key: SecretKey,
@@ -291,6 +39,7 @@ pub struct HandelTendermintAdapter<N: ValidatorNetwork> {
     validator_registry: Arc<ValidatorRegistry>,
     network: Arc<N>,
     event_sender: mpsc::Sender<AggregationEvent<N>>,
+    background_stream: Option<BackgroundStream<N>>,
 }
 
 impl<N: ValidatorNetwork + 'static> HandelTendermintAdapter<N>
@@ -315,6 +64,11 @@ where
                     future::ready(if msg.0.tag.block_number == block_height {
                         Some(msg.0)
                     } else {
+                        log::debug!(
+                            "Received message for different block_height: msg.0.tag.block_number: {} - actual block_height: {}",
+                            msg.0.tag.block_number,
+                            block_height
+                        );
                         None
                     })
                 }),
@@ -324,191 +78,37 @@ where
 
         let (event_sender, event_receiver) = mpsc::channel::<AggregationEvent<N>>(1);
 
-        let mut aggregations = TendermintAggregations::new(
+        let aggregations = TendermintAggregations::new(
             validator_id,
             validator_registry.clone(),
             input,
             event_receiver,
         );
-        let current_bests = RwLock::new(BTreeMap::new());
-        let current_aggregate = RwLock::new(None);
-        let pending_new_round = RwLock::new(None);
+        let current_bests = Arc::new(RwLock::new(BTreeMap::new()));
+        let current_aggregate = Arc::new(RwLock::new(None));
+        let pending_new_round = Arc::new(RwLock::new(None));
 
-        let this = Self {
-            current_bests: current_bests.clone(),
-            current_aggregate: current_aggregate.clone(),
-            pending_new_round: pending_new_round.clone(),
+        let background_stream = Some(BackgroundStream::new(
+            aggregations,
+            current_aggregate.clone(),
+            current_bests.clone(),
+            pending_new_round.clone(),
+            validator_registry.clone(),
+        ));
+
+        Self {
+            current_bests: current_bests,
+            current_aggregate: current_aggregate,
+            pending_new_round: pending_new_round,
             validator_merkle_root,
             block_height,
             secret_key,
             validator_id,
-            validator_registry: validator_registry.clone(),
+            validator_registry: validator_registry,
             network,
             event_sender,
-        };
-
-        // Here all the streams are polled to get each and every new aggregate and new round event.
-        // Special care needs to be taken to release locks as early as possible
-        tokio::spawn(async move {
-            loop {
-                if let Some(event) = aggregations.next().await {
-                    match event {
-                        TendermintAggregationEvent::NewRound(next_round) => {
-                            // This needs to be forwarded to a waiting current_aggregate sink if there is one.
-                            // if there is none, the highest round received in a TendermintAggregationEvent::NewRound(n) must be kept
-                            // such that it can be send to the next current_aggregate sink if it by then is still relevant.
-                            match current_aggregate.write().await.take() {
-                                // if there is a current ongoing aggregation it is retrieved
-                                Some(CurrentAggregation {
-                                    sender,
-                                    round,
-                                    step: _step,
-                                }) => {
-                                    // check that the next_round is actually higher than the round which is awaiting a result.
-                                    if round < next_round {
-                                        // Send the me NewRound event through the channel to the currently awaited aggregation for it to resolve.
-                                        if let Err(_err) =
-                                            sender.send(AggregationResult::NewRound(next_round))
-                                        {
-                                            error!(
-                                                "Sending of AggregationEvent::NewRound({}) failed",
-                                                round
-                                            );
-                                        }
-                                    } else {
-                                        // Otheriwse this event is meaningless and is droped, which in reality should never occur.
-                                        // trace it for debugging purposes.
-                                        trace!("received NewRound({}), but curret_aggregate is in round {}", next_round, round);
-                                    }
-                                }
-                                // if there is no caller awaiting a result
-                                None => {
-                                    // see if the pending_new_round field is actually set already
-                                    let mut lock = pending_new_round.write().await;
-                                    match lock.take() {
-                                        Some(current_round) => {
-                                            // if it is set the bigger of the existing value and the newly received one is maintained.
-                                            if current_round < next_round {
-                                                *lock = Some(next_round);
-                                            } else {
-                                                *lock = Some(current_round);
-                                            }
-                                        }
-                                        None => {
-                                            // since there is no new_round pending, the received value is set as such.
-                                            *lock = Some(next_round);
-                                        }
-                                    };
-                                }
-                            };
-                        }
-                        TendermintAggregationEvent::Aggregation(r, s, c) => {
-                            trace!("New Aggregate for {}-{:?}: {:?}", &r, &s, &c);
-                            // There is a new aggregate, check if it is a better aggregate for (round, step) than we curretly have
-                            // if so, store it.
-                            let contribution = current_bests
-                                .write()
-                                .await
-                                .entry((r, s))
-                                .and_modify(|contribution| {
-                                    // this test is not strictly necessary as the handel streams will only return a value if it is better  than the previous one.
-                                    if validator_registry
-                                        .signature_weight(contribution)
-                                        .expect("Failed to unwrap signature weight")
-                                        < validator_registry
-                                            .signature_weight(&c)
-                                            .expect("Failed to unwrap signature weight")
-                                    {
-                                        *contribution = c.clone();
-                                    }
-                                })
-                                .or_insert(c)
-                                .clone();
-
-                            // better or not, we need to check if it is actionable for tendermint, and if it is and there is a
-                            // current_aggregate sink present, we send it as well.
-                            let mut lock = current_aggregate.write().await;
-                            match lock.take() {
-                                // if there is a current ongoing aggregation it is retrieved
-                                Some(CurrentAggregation {
-                                    sender,
-                                    round,
-                                    step,
-                                }) => {
-                                    // only reply if it is the correct aggregation
-                                    if round == r && step == s {
-                                        // see if this is actionable
-                                        // Actionable here means everything with voter_weight > 2f+1 is potentially actionable.
-                                        // On the receiving end of this channel is a timeout, which will wait (if necessary) for better results
-                                        // but will, if nothing better is made available also return this aggregate.
-                                        if validator_registry
-                                            .signature_weight(&contribution)
-                                            .expect("Failed to unwrap signature weight")
-                                            > policy::TWO_THIRD_SLOTS as usize
-                                        {
-                                            trace!(
-                                                "Completed Round for {}-{:?}: {:?}",
-                                                &r,
-                                                &s,
-                                                &contribution
-                                            );
-                                            // Transform to the appropiate result type adding the weight to each proposals Contribution
-                                            let result = contribution
-                                                .contributions
-                                                .iter()
-                                                .map(|(hash, contribution)| {
-                                                    (
-                                                        hash.clone(),
-                                                        (
-                                                            contribution.clone(),
-                                                            validator_registry.signature_weight(contribution).expect("Cannot compute weight of signatories"),
-                                                        ),
-                                                    )
-                                                })
-                                                .collect();
-
-                                            // send the result
-                                            if let Err(err) =
-                                                sender.send(AggregationResult::Aggregation(result))
-                                            {
-                                                error!("failed sending message to broadcast_and_aggregate caller: {:?}", err);
-                                                // recoverable?
-                                            }
-                                        } else {
-                                            // re-set the current_aggregate
-                                            *lock = Some(CurrentAggregation {
-                                                sender,
-                                                round,
-                                                step,
-                                            });
-                                        }
-                                    } else {
-                                        // re-set the current_aggregate
-                                        *lock = Some(CurrentAggregation {
-                                            sender,
-                                            round,
-                                            step,
-                                        });
-                                    }
-                                }
-                                None => {
-                                    debug!("there was no receiver");
-                                    // do nothing, as there is no caller awaiting a response.
-                                }
-                            };
-                        }
-                    };
-                } else {
-                    // Once there is no items left on the combined handel stream then there is nothing being aggregated
-                    // so this task is finished and will terminate.
-                    debug!("Finished Aggregating");
-                    break;
-                    // TODO how to terminate this
-                }
-            }
-        });
-
-        this
+            background_stream,
+        }
     }
 
     /// starts an aggregation for given `round` and `step`.
@@ -525,7 +125,11 @@ where
         // make sure that there is no currently ongoing aggregation from a previous call to `broadcast_and_aggregate` which has not yet been awaited.
         // if there is none make sure to set this one with the same lock to prevent a race condition
         let (mut aggregate_receiver, _aggregate_sender) = {
-            let mut current_aggregate = self.current_aggregate.write().await;
+            let mut current_aggregate = self
+                .current_aggregate
+                .write()
+                .expect("current_aggregate lock could not be aquired.");
+
             match current_aggregate.take() {
                 Some(aggr) => {
                     // re-set the current_agggregate and return error
@@ -591,11 +195,20 @@ where
 
         // If a new round event was emitted before it needs to be checked if it is still relevant by
         // checking if it concerned a round higher than the one which is currently starting.
-        if let Some(pending_round) = self.pending_new_round.write().await.take() {
+        if let Some(pending_round) = self
+            .pending_new_round
+            .write()
+            .expect("pending_new_round lock could not be aquired.")
+            .take()
+        {
             if pending_round > round {
                 // If it is higher then the NewRound Event is emitted finishing this broadcast_and_aggregate call.
                 // The aggregation itself however willl remain valid, as it might get referenced in a future round.
-                self.current_aggregate.write().await.take();
+                self.current_aggregate
+                    .write()
+                    .expect("current_aggregate lock could not be aquired.")
+                    .take();
+
                 return Ok(AggregationResult::NewRound(pending_round));
             }
         }
@@ -686,9 +299,10 @@ where
                                     TendermintError::AggregationError
                                 })?;
                         }
-                        debug!(
+                        trace!(
                             "Tendermint: {}-{:?}: All other proposals have > 2f + 1 votes",
-                            &round, &step
+                            &round,
+                            &step
                         );
                         return Ok(result);
                     }
@@ -705,7 +319,7 @@ where
                                     TendermintError::AggregationError
                                 })?;
                         }
-                        debug!("Tendermint: {}-{:?}: Everybody signed", &round, &step);
+                        trace!("Tendermint: {}-{:?}: Everybody signed", &round, &step);
                         return Ok(result);
                     }
                 }
@@ -734,12 +348,17 @@ where
         }
     }
 
-    pub async fn get_aggregate(
+    pub fn get_aggregate(
         &self,
         round: u32,
         step: impl Into<TendermintStep>,
     ) -> Result<AggregationResult<MultiSignature>, TendermintError> {
-        if let Some(current_best) = self.current_bests.read().await.get(&(round, step.into())) {
+        if let Some(current_best) = self
+            .current_bests
+            .read()
+            .expect("current_bests lock could not be aquired.")
+            .get(&(round, step.into()))
+        {
             Ok(AggregationResult::Aggregation(
                 current_best
                     .contributions
@@ -760,5 +379,11 @@ where
         } else {
             Err(TendermintError::AggregationDoesNotExist)
         }
+    }
+
+    pub fn create_background_stream(&mut self) -> BackgroundStream<N> {
+        self.background_stream
+            .take()
+            .expect("The background stream cannot be creaed twice.")
     }
 }
