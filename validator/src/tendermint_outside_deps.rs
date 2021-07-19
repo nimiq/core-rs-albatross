@@ -356,7 +356,11 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
         round: u32,
         step: Step,
     ) -> Result<AggregationResult<Self::ProofTy>, TendermintError> {
-        self.aggregation_adapter.get_aggregate(round, step).await
+        self.aggregation_adapter.get_aggregate(round, step)
+    }
+
+    fn get_background_stream(&mut self) -> BoxStream<'static, ()> {
+        self.aggregation_adapter.create_background_stream().boxed()
     }
 }
 

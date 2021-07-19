@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use beserial::Serialize;
-use futures::{pin_mut, StreamExt};
+use futures::StreamExt;
 use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
 use nimiq_primitives::policy::{SLOTS, TWO_THIRD_SLOTS};
 use nimiq_tendermint::*;
@@ -206,6 +206,10 @@ impl TendermintOutsideDeps for TestValidator {
             Ok(AggregationResult::Aggregation(agg))
         }
     }
+
+    fn get_background_stream(&mut self) -> futures::stream::BoxStream<'static, ()> {
+        futures::stream::pending().boxed()
+    }
 }
 
 // This is the function that runs the Tendermint stream to completion. It takes as input a
@@ -223,10 +227,7 @@ async fn tendermint_loop(
     reference_proposal: TestProposal,
 ) {
     // Get the stream.
-    let tendermint = expect_block(deps, state_opt);
-
-    // Pin it.
-    pin_mut!(tendermint);
+    let mut tendermint = Tendermint::new(deps, state_opt);
 
     // Start running the stream. It runs until it returns a Result.
     while let Some(value) = tendermint.next().await {
@@ -237,6 +238,7 @@ async fn tendermint_loop(
             TendermintReturn::Result(result) => {
                 assert_eq!(result.0, reference_proposal.0);
                 assert_eq!(result.1, reference_proposal.1);
+                break;
             }
             // Whenever there is a state update we print it. That way if the test fails we have log
             // of what the validator did.

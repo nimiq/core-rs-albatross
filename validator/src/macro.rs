@@ -109,8 +109,8 @@ impl ProduceMacroBlock {
             current_proposal_vr: None,
         });
 
-        // create the Tendermint instance which is done using the expect_block function
-        let tendermint = Box::pin(nimiq_tendermint::expect_block(deps, state_opt));
+        // create the Tendermint instance, which implements Stream
+        let tendermint = Box::pin(nimiq_tendermint::Tendermint::new(deps, state_opt));
 
         // Create the instance and return it.
         Self { tendermint }

@@ -1,10 +1,17 @@
+use std::marker::PhantomData;
+use std::task::Poll;
+
 use crate::outside_deps::TendermintOutsideDeps;
 use crate::state::TendermintState;
 use crate::tendermint::Tendermint;
-use crate::utils::{Checkpoint, TendermintError, TendermintReturn};
+use crate::utils::{Checkpoint, StreamResult, TendermintError, TendermintReturn};
 use crate::{ProofTrait, ProposalTrait, ResultTrait};
 use async_stream::stream;
-use futures::Stream;
+use futures::StreamExt;
+use futures::{
+    stream::{BoxStream, SelectAll},
+    Stream,
+};
 
 /// This is the main function of the Tendermint crate. Calling this function returns a Stream that,
 /// when called repeatedly, yields state updates, errors and results produced by the Tendermint
@@ -19,12 +26,12 @@ use futures::Stream;
 /// that we received.
 /// Internally, our Tendermint code works like a state machine, moving from state to state until it
 /// either returns a completed block or an error.
-pub fn expect_block<DepsTy, ProposalTy, ProofTy, ResultTy>(
+fn expect_block<DepsTy, ProposalTy, ProofTy, ResultTy>(
     // A type that implements TendermintOutsideDeps.
     deps: DepsTy,
     // An optional input for the TendermintState.
     state_opt: Option<TendermintState<ProposalTy, ProofTy>>,
-) -> impl Stream<Item = TendermintReturn<ProposalTy, ProofTy, ResultTy>>
+) -> BoxStream<'static, StreamResult<ProposalTy, ProofTy, ResultTy>>
 where
     ProposalTy: ProposalTrait,
     ProofTy: ProofTrait,
@@ -32,14 +39,14 @@ where
     DepsTy: TendermintOutsideDeps<ProposalTy = ProposalTy, ResultTy = ResultTy, ProofTy = ProofTy>
         + 'static,
 {
-    stream! {
+    let stream = stream! {
     // We check if a state was inputted. If yes (and it is valid), we initialize Tendermint with it.
     // If not, we create a new empty Tendermint.
     let mut tendermint = if let Some(state) = state_opt {
         if deps.verify_state(&state) {
             Tendermint { deps, state }
         } else {
-            yield TendermintReturn::Error(TendermintError::BadInitState);
+            yield StreamResult::Tendermint(TendermintReturn::Error(TendermintError::BadInitState));
             return;
         }
     } else {
@@ -59,7 +66,7 @@ where
             Checkpoint::OnNilPolka => tendermint.on_nil_polka().await,
             Checkpoint::OnDecision => match tendermint.on_decision() {
                 Ok(block) => {
-                    yield TendermintReturn::Result(block);
+                    yield StreamResult::Tendermint(TendermintReturn::Result(block));
                     return;
                 }
                 Err(error) => Err(error),
@@ -71,12 +78,88 @@ where
 
         // If we got an error from the last state transition, we yield it and then terminate.
         if let Err(error) = checkpoint_res {
-            yield TendermintReturn::Error(error);
+            yield StreamResult::Tendermint(TendermintReturn::Error(error));
             return;
         }
 
         // If we did not get an error, we yield our current state and loop again.
-        yield TendermintReturn::StateUpdate(tendermint.state.clone());
+        let state = tendermint.state.clone();
+        yield StreamResult::Tendermint(TendermintReturn::StateUpdate(state));
     }
+    };
+
+    stream.boxed()
+}
+
+pub struct TendermintStreamWrapper<DepsTy, ProposalTy, ProofTy, ResultTy>
+where
+    ProposalTy: ProposalTrait,
+    ProofTy: ProofTrait,
+    ResultTy: ResultTrait,
+    DepsTy: TendermintOutsideDeps<ProposalTy = ProposalTy, ResultTy = ResultTy, ProofTy = ProofTy>
+        + 'static,
+{
+    tendermint_stream: BoxStream<'static, StreamResult<ProposalTy, ProofTy, ResultTy>>,
+    phantom: PhantomData<DepsTy>,
+}
+
+impl<DepsTy, ProposalTy, ProofTy, ResultTy>
+    TendermintStreamWrapper<DepsTy, ProposalTy, ProofTy, ResultTy>
+where
+    ProposalTy: ProposalTrait,
+    ProofTy: ProofTrait,
+    ResultTy: ResultTrait,
+    DepsTy: TendermintOutsideDeps<ProposalTy = ProposalTy, ResultTy = ResultTy, ProofTy = ProofTy>
+        + 'static,
+{
+    pub fn new(
+        // A type that implements TendermintOutsideDeps.
+        mut deps: DepsTy,
+        // An optional input for the TendermintState.
+        state_opt: Option<TendermintState<ProposalTy, ProofTy>>,
+    ) -> Self {
+        // get the background_stream fromthe outside deps.
+        let background_stream = deps
+            .get_background_stream()
+            .map(|_| -> StreamResult<ProposalTy, ProofTy, ResultTy> {
+                StreamResult::BackgroundTask
+            })
+            .boxed();
+
+        // also get the axctual tendermint stream
+        let tendermint_stream = expect_block(deps, state_opt);
+
+        // put them both in a select such that both of them are driven
+        let mut select = Box::pin(SelectAll::new());
+        select.push(tendermint_stream);
+        select.push(background_stream);
+
+        Self {
+            tendermint_stream: select,
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<DepsTy, ProposalTy, ProofTy, ResultTy> Stream
+    for TendermintStreamWrapper<DepsTy, ProposalTy, ProofTy, ResultTy>
+where
+    ProposalTy: ProposalTrait,
+    ProofTy: ProofTrait,
+    ResultTy: ResultTrait,
+    DepsTy: TendermintOutsideDeps<ProposalTy = ProposalTy, ResultTy = ResultTy, ProofTy = ProofTy>
+        + 'static,
+{
+    type Item = TendermintReturn<ProposalTy, ProofTy, ResultTy>;
+
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
+        match self.tendermint_stream.poll_next_unpin(cx) {
+            Poll::Pending | Poll::Ready(Some(StreamResult::BackgroundTask)) => Poll::Pending,
+            Poll::Ready(None) => Poll::Ready(None),
+            Poll::Ready(Some(StreamResult::Tendermint(result))) => Poll::Ready(Some(result)),
+        }
     }
 }
