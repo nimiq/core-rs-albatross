@@ -39,14 +39,10 @@ pub const TENDERMINT_TIMEOUT_INIT: u64 = 1000; // TODO: Set
 /// See https://arxiv.org/abs/1807.04938v3 for more information.
 pub const TENDERMINT_TIMEOUT_DELTA: u64 = 1000; // TODO: Set
 
-/// Minimum stake for stakers in Lunas (1 NIM = 100,000 Lunas).
-/// A staker is someone who delegates their stake to a validator.
-pub const MIN_STAKE: u64 = 1;
-
-/// Minimum initial stake for validators in Lunas (1 NIM = 100,000 Lunas).
+/// The deposit necessary to create a validator in Lunas (1 NIM = 100,000 Lunas).
 /// A validator is someone who actually participates in block production. They are akin to miners
 /// in proof-of-work.
-pub const MIN_VALIDATOR_STAKE: u64 = 1_000_000_000;
+pub const VALIDATOR_DEPOSIT: u64 = 1_000_000_000;
 
 /// Total supply in units.
 pub const TOTAL_SUPPLY: u64 = 2_100_000_000_000_000;

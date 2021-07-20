@@ -48,7 +48,7 @@ impl IdentityRegistry for ValidatorRegistry {
             // create a set of validator ids corresponding to the slots
             let mut ids: HashSet<u16> = HashSet::new();
             for slot in slots.iter() {
-                // insert each validator_id if there is one.
+                // insert each validator_address if there is one.
                 let _ = ids.insert(self.validators.get_band_from_slot(slot as u16));
             }
 

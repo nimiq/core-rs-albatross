@@ -38,7 +38,7 @@ pub trait ValidatorNetwork: Send + Sync {
         validator_id: usize,
     ) -> Result<Option<Arc<Self::PeerType>>, Self::Error>;
 
-    /// must make a reasonable efford to establish a connection to the peer denoted with `validator_id`
+    /// must make a reasonable efford to establish a connection to the peer denoted with `validator_address`
     /// before returning a connection not established error.
     async fn send_to<M: Message>(
         &self,

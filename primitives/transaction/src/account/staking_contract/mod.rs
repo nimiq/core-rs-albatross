@@ -1,9 +1,7 @@
-use beserial::Deserialize;
 use primitives::account::AccountType;
 use primitives::coin::Coin;
 
 use crate::account::AccountTransactionVerification;
-use crate::SignatureProof;
 use crate::{Transaction, TransactionError, TransactionFlags};
 
 pub use self::structs::*;
@@ -24,29 +22,15 @@ impl AccountTransactionVerification for StakingContractVerifier {
             return Err(TransactionError::InvalidForRecipient);
         }
 
-        // There are two cases of incoming transactions:
-        // Either self transactions (used for stakers) or real incoming transactions.
-        // Self transactions only need checks on the sender side.
-        // Real incoming transactions require the data field to be set correctly
+        // Incoming transactions require the data field to be set correctly
         // and we perform static signature checks here.
-        if transaction.sender != transaction.recipient {
-            let data = IncomingStakingTransactionData::parse(transaction)?;
+        let data = IncomingStakingTransactionData::parse(transaction)?;
 
-            data.verify(transaction)?;
+        data.verify(transaction)?;
 
-            if data.is_signalling() != transaction.flags.contains(TransactionFlags::SIGNALLING) {
-                warn!("Signalling must be set for signalling transactions");
-                return Err(TransactionError::InvalidForRecipient);
-            }
-        } else {
-            let data = SelfStakingTransactionData::parse(transaction)?;
-
-            data.verify(transaction)?;
-
-            if transaction.flags.contains(TransactionFlags::SIGNALLING) {
-                warn!("Signalling not allowed for self transactions");
-                return Err(TransactionError::InvalidForRecipient);
-            }
+        if data.is_signalling() != transaction.flags.contains(TransactionFlags::SIGNALLING) {
+            warn!("Signalling must be set for signalling transactions");
+            return Err(TransactionError::InvalidForRecipient);
         }
 
         Ok(())
@@ -60,23 +44,9 @@ impl AccountTransactionVerification for StakingContractVerifier {
             return Err(TransactionError::ZeroValue);
         }
 
-        // Again, we have two types of transactions here:
-        // Self transactions, which require a SignatureProof check and real outgoing transactions
-        // with a special proof field structure.
-        if transaction.sender != transaction.recipient {
-            let proof = OutgoingStakingTransactionProof::parse(transaction)?;
+        let data = OutgoingStakingTransactionData::parse(transaction)?;
 
-            proof.verify(transaction)?;
-        } else {
-            // Verify signature.
-            let signature_proof: SignatureProof =
-                Deserialize::deserialize(&mut &transaction.proof[..])?;
-
-            if !signature_proof.verify(transaction.serialize_content().as_slice()) {
-                warn!("Invalid signature");
-                return Err(TransactionError::InvalidProof);
-            }
-        }
+        data.verify(transaction)?;
 
         Ok(())
     }

@@ -11,6 +11,7 @@ extern crate nimiq_utils as utils;
 extern crate strum_macros;
 
 use std::cmp::{Ord, Ordering};
+use std::convert::TryFrom;
 use std::io;
 use std::sync::Arc;
 
@@ -31,7 +32,6 @@ use primitives::networks::NetworkId;
 use primitives::policy;
 
 use crate::account::AccountTransactionVerification;
-use std::convert::TryFrom;
 
 pub mod account;
 
@@ -116,8 +116,8 @@ impl SignatureProof {
         self.compute_signer() == *address
     }
 
-    pub fn verify(&self, data: &[u8]) -> bool {
-        self.public_key.verify(&self.signature, data)
+    pub fn verify(&self, message: &[u8]) -> bool {
+        self.public_key.verify(&self.signature, message)
     }
 }
 

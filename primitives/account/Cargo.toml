@@ -27,7 +27,7 @@ nimiq-collections = { path = "../../collections", features = ["bitset"] }
 nimiq-database = { path = "../../database" }
 nimiq-hash = { path = "../../hash" }
 nimiq-keys = { path = "../../keys" }
-nimiq-primitives = { path = "..", features = ["coin", "policy", "validators"] }
+nimiq-primitives = { path = "..", features = ["coin", "policy", "slots"] }
 nimiq-transaction = { path = "../transaction" }
 nimiq-trie = { path = "../trie" }
 nimiq-utils = { path = "../../utils", features = ["hash-rng"] }

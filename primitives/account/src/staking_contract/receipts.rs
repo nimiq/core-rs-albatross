@@ -1,25 +1,10 @@
-use std::collections::{BTreeMap, BTreeSet, HashSet};
-use std::mem;
-use std::ops::Add;
+use std::collections::BTreeSet;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_bls::CompressedPublicKey as BlsPublicKey;
-use nimiq_collections::BitSet;
-use nimiq_database::WriteTransaction;
-use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_keys::Address;
-use nimiq_primitives::account::{AccountType, ValidatorId};
-use nimiq_primitives::coin::Coin;
-use nimiq_primitives::policy;
-use nimiq_primitives::slots::SlashedSlot;
-use nimiq_transaction::account::staking_contract::{
-    IncomingStakingTransactionData, OutgoingStakingTransactionProof, SelfStakingTransactionData,
-};
-use nimiq_transaction::Transaction;
-use nimiq_trie::key_nibbles::KeyNibbles;
 
-use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction};
-use crate::{Account, AccountError, AccountsTree, Inherent, InherentType, StakingContract};
+use nimiq_hash::Blake2bHash;
+use nimiq_keys::Address;
 
 /// A receipt for slash inherents. It shows whether a given slot or validator was newly disabled,
 /// lost rewards or parked by a specific slash inherent. This is necessary to be able to revert
@@ -33,6 +18,7 @@ pub struct SlashReceipt {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct UpdateValidatorReceipt {
+    pub old_warm_key: Address,
     pub old_validator_key: BlsPublicKey,
     pub old_reward_address: Address,
     pub old_signal_data: Option<Blake2bHash>,
@@ -45,7 +31,7 @@ pub struct RetireValidatorReceipt {
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct ReactivateValidatorOrStakerReceipt {
+pub struct ReactivateValidatorReceipt {
     pub retire_time: u32,
 }
 
@@ -61,8 +47,9 @@ pub struct UnparkValidatorReceipt {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct DropValidatorReceipt {
-    pub reward_address: Address,
+    pub warm_key: Address,
     pub validator_key: BlsPublicKey,
+    pub reward_address: Address,
     pub signal_data: Option<Blake2bHash>,
     pub retire_time: u32,
     #[beserial(len_type(u32))]
@@ -70,11 +57,17 @@ pub struct DropValidatorReceipt {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct UpdateOrRetireStakerReceipt {
-    pub old_delegation: Option<ValidatorId>,
+pub struct UpdateStakerReceipt {
+    pub old_delegation: Option<Address>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub struct RetireStakerReceipt {
+    pub old_retire_time: Option<u32>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct DropStakerReceipt {
+    pub delegation: Option<Address>,
     pub retire_time: u32,
 }
