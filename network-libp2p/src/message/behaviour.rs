@@ -123,7 +123,7 @@ impl NetworkBehaviour for MessageBehaviour {
 
     fn inject_disconnected(&mut self, peer_id: &PeerId) {
         // No handler exists anymore.
-        log::trace!("inject_disconnected: {:?}", peer_id);
+        tracing::trace!("inject_disconnected: {:?}", peer_id);
     }
 
     fn inject_connection_established(
@@ -132,8 +132,8 @@ impl NetworkBehaviour for MessageBehaviour {
         connection_id: &ConnectionId,
         connected_point: &ConnectedPoint,
     ) {
-        log::info!(
-            "Connection established: peer_id={:?}, connection_id={:?}, connected_point={:?}",
+        tracing::debug!(
+            "Connection established: peer_id={}, connection_id={:?}, connected_point={:?}",
             peer_id,
             connection_id,
             connected_point
@@ -159,8 +159,8 @@ impl NetworkBehaviour for MessageBehaviour {
         connection_id: &ConnectionId,
         connected_point: &ConnectedPoint,
     ) {
-        log::info!(
-            "Connection closed: peer_id={:?}, connection_id={:?}, connected_point={:?}",
+        tracing::debug!(
+            "Connection closed: peer_id={}, connection_id={:?}, connected_point={:?}",
             peer_id,
             connection_id,
             connected_point
@@ -168,7 +168,7 @@ impl NetworkBehaviour for MessageBehaviour {
 
         // If we still know this peer, remove it and emit an `PeerLeft` event to the swarm.
         if let Some(peer) = self.peers.remove(peer_id) {
-            log::debug!("Peer disconnected: {:?}", peer);
+            tracing::debug!("Peer disconnected: {:?}", peer);
             self.push_event(NetworkBehaviourAction::GenerateEvent(
                 NetworkEvent::PeerLeft(peer),
             ));
@@ -176,7 +176,7 @@ impl NetworkBehaviour for MessageBehaviour {
     }
 
     fn inject_event(&mut self, peer_id: PeerId, _connection: ConnectionId, event: HandlerOutEvent) {
-        log::trace!(
+        tracing::trace!(
             "MessageBehaviour::inject_event: peer_id={:?}: {:?}",
             peer_id,
             event
@@ -205,7 +205,7 @@ impl NetworkBehaviour for MessageBehaviour {
     ) -> Poll<NetworkBehaviourAction<HandlerInEvent, NetworkEvent<Peer>>> {
         // Emit custom events.
         if let Some(event) = self.events.pop_front() {
-            //log::trace!("MessageBehaviour::poll: Emitting event: {:?}", event);
+            // tracing::trace!("MessageBehaviour::poll: Emitting event: {:?}", event);
             return Poll::Ready(event);
         }
 

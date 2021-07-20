@@ -11,7 +11,10 @@ use futures::{
 use libp2p::{
     core::connection::{ConnectedPoint, ConnectionId},
     identity::Keypair,
-    swarm::{AddressScore, KeepAlive, NetworkBehaviour, NetworkBehaviourAction, PollParameters},
+    swarm::{
+        AddressScore, KeepAlive, NetworkBehaviour, NetworkBehaviourAction, NotifyHandler,
+        PollParameters,
+    },
     Multiaddr, PeerId,
 };
 use parking_lot::RwLock;
@@ -179,6 +182,15 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         log::trace!("  - peer_id: {:?}", peer_id);
         log::trace!("  - connection_id: {:?}", connection_id);
         log::trace!("  - connected_point: {:?}", connected_point);
+
+        let remote_address = connected_point.get_remote_address();
+
+        self.events
+            .push_back(NetworkBehaviourAction::NotifyHandler {
+                peer_id: peer_id.clone(),
+                handler: NotifyHandler::One(*connection_id),
+                event: HandlerInEvent::ObservedAddress(vec![remote_address.clone()]),
+            });
     }
 
     fn inject_event(&mut self, peer_id: PeerId, _connection: ConnectionId, event: HandlerOutEvent) {

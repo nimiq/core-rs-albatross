@@ -1,7 +1,7 @@
 use libp2p::{
     gossipsub::{GossipsubConfig, GossipsubConfigBuilder},
     identity::Keypair,
-    kad::KademliaConfig,
+    kad::{KademliaBucketInserts, KademliaConfig},
     Multiaddr,
 };
 
@@ -32,11 +32,14 @@ impl Config {
     ) -> Self {
         // Hardcoding the minimum number of peers in mesh network before adding more
         // TODO: Maybe change this to a mesh limits configuration argument of this function
-        let gossipsub_config = GossipsubConfigBuilder::default()
+        let gossipsub = GossipsubConfigBuilder::default()
             .mesh_n_low(3)
             .validate_messages()
             .build()
             .expect("Invalid Gossipsub config");
+
+        let mut kademlia = KademliaConfig::default();
+        kademlia.set_kbucket_inserts(KademliaBucketInserts::OnConnected);
 
         Self {
             keypair,
@@ -45,8 +48,8 @@ impl Config {
             seeds,
             discovery: DiscoveryConfig::new(genesis_hash),
             message: MessageConfig::default(),
-            kademlia: KademliaConfig::default(),
-            gossipsub: gossipsub_config,
+            kademlia,
+            gossipsub,
         }
     }
 }
