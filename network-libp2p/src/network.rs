@@ -11,6 +11,7 @@ use futures::{
     sink::SinkExt,
     stream::{BoxStream, Stream, StreamExt},
 };
+use ip_network::IpNetwork;
 #[cfg(feature = "memory-transport")]
 use libp2p::core::transport::MemoryTransport;
 use libp2p::{
@@ -26,8 +27,9 @@ use libp2p::{
     identify::IdentifyEvent,
     identity::Keypair,
     kad::{GetRecordOk, KademliaEvent, QueryId, QueryResult, Quorum, Record},
+    multiaddr::Protocol,
     noise,
-    swarm::{NetworkBehaviourAction, NotifyHandler, SwarmBuilder, SwarmEvent},
+    swarm::{AddressScore, NetworkBehaviourAction, NotifyHandler, SwarmBuilder, SwarmEvent},
     tcp, websocket, yamux, Multiaddr, PeerId, Swarm, Transport,
 };
 use tokio::sync::broadcast;
@@ -108,7 +110,6 @@ struct TaskState {
     dht_puts: HashMap<QueryId, oneshot::Sender<Result<(), NetworkError>>>,
     dht_gets: HashMap<QueryId, oneshot::Sender<Result<Option<Vec<u8>>, NetworkError>>>,
     gossip_topics: HashMap<TopicHash, (mpsc::Sender<(GossipsubMessage, MessageId, PeerId)>, bool)>,
-    incoming_listeners: HashMap<Multiaddr, Multiaddr>,
     is_connected: bool,
 }
 
@@ -118,7 +119,6 @@ impl Default for TaskState {
             dht_puts: HashMap::new(),
             dht_gets: HashMap::new(),
             gossip_topics: HashMap::new(),
-            incoming_listeners: HashMap::new(),
             is_connected: false,
         }
     }
@@ -229,6 +229,18 @@ impl Network {
         &self.local_peer_id
     }
 
+    fn can_add_to_dht(addr: &Multiaddr) -> bool {
+        match addr.iter().next() {
+            Some(Protocol::Ip4(ip)) => return IpNetwork::from(ip).is_global(),
+            Some(Protocol::Ip6(ip)) => return IpNetwork::from(ip).is_global(),
+            Some(Protocol::Dns(_))
+            | Some(Protocol::Dns4(_))
+            | Some(Protocol::Dns6(_))
+            | Some(Protocol::Memory(_)) => return true,
+            _ => return false,
+        };
+    }
+
     async fn swarm_task(
         mut swarm: NimiqSwarm,
         events_tx: broadcast::Sender<NetworkEvent<Peer>>,
@@ -276,30 +288,19 @@ impl Network {
                 endpoint,
                 num_established,
             } => {
-                if let Some(listen_addr) = state
-                    .incoming_listeners
-                    .get(&endpoint.get_remote_address().clone())
-                {
-                    tracing::debug!(
-                        "Adding peer {:?} listen address to the peer contact book: {:?}",
-                        peer_id,
-                        listen_addr
-                    );
+                tracing::info!(
+                    "Connection established with peer {}, {:?}, connections established: {:?}",
+                    peer_id,
+                    endpoint,
+                    num_established
+                );
+
+                // Save dialed peer addresses
+                if endpoint.is_dialer() {
+                    let listen_addr = endpoint.get_remote_address();
+
+                    tracing::debug!("Saving peer {} listen address: {:?}", peer_id, listen_addr);
                     swarm.kademlia.add_address(&peer_id, listen_addr.clone());
-
-                    // TODO: Rework peer address book handling
-                    swarm
-                        .discovery
-                        .events
-                        .push_back(NetworkBehaviourAction::NotifyHandler {
-                            peer_id,
-                            handler: NotifyHandler::Any,
-                            event: HandlerInEvent::ObservedAddress(vec![listen_addr.clone()]),
-                        });
-
-                    state
-                        .incoming_listeners
-                        .remove(&endpoint.get_remote_address().clone());
                 }
 
                 if !state.is_connected {
@@ -328,20 +329,23 @@ impl Network {
                 send_back_addr,
             } => {
                 tracing::trace!(
-                    "Incoming connection from address {:?}, listen address: {:?}",
+                    "Incoming connection from address {:?} to listen address {:?}",
                     send_back_addr,
                     local_addr
                 );
-                state.incoming_listeners.insert(send_back_addr, local_addr);
             }
 
             SwarmEvent::IncomingConnectionError {
-                local_addr: _,
+                local_addr,
                 send_back_addr,
                 error,
             } => {
-                tracing::warn!("Incoming connection error: {:?}", error);
-                state.incoming_listeners.remove(&send_back_addr);
+                tracing::warn!(
+                    "Incoming connection error from address {:?} to listen address {:?}: {:?}",
+                    send_back_addr,
+                    local_addr,
+                    error
+                );
             }
 
             SwarmEvent::UnknownPeerUnreachableAddr { address, error } => {
@@ -353,7 +357,7 @@ impl Network {
             }
 
             SwarmEvent::Dialing(peer_id) => {
-                tracing::trace!("Dialing peer {:?}", peer_id);
+                tracing::trace!("Dialing peer {}", peer_id);
             }
 
             //SwarmEvent::ConnectionClosed { .. } => {},
@@ -446,12 +450,29 @@ impl Network {
                                 info,
                                 observed_addr,
                             } => {
-                                tracing::debug!("Received identifying info from peer {:?} at address {:?}: {:?}", peer_id, observed_addr, info);
-                                for listen_addr in info.listen_addrs.clone() {
-                                    swarm.kademlia.add_address(&peer_id, listen_addr);
+                                tracing::debug!(
+                                    "Received identifying info from peer {} at address {:?}: {:?}",
+                                    peer_id,
+                                    observed_addr,
+                                    info
+                                );
+
+                                if Self::can_add_to_dht(&observed_addr) {
+                                    Swarm::add_external_address(
+                                        swarm,
+                                        observed_addr,
+                                        AddressScore::Infinite,
+                                    );
                                 }
 
-                                // TODO: Rework peer address book handling
+                                // Save identified peer listen addresses
+                                for listen_addr in info.listen_addrs.clone() {
+                                    if Self::can_add_to_dht(&listen_addr) {
+                                        swarm.kademlia.add_address(&peer_id, listen_addr);
+                                    }
+                                }
+
+                                // TODO: Add public functions to the Discovery behaviour to add addresses from the network
                                 swarm.discovery.events.push_back(
                                     NetworkBehaviourAction::NotifyHandler {
                                         peer_id,
@@ -461,11 +482,11 @@ impl Network {
                                 );
                             }
                             IdentifyEvent::Sent { peer_id } => {
-                                tracing::debug!("Sent identifiyng info to peer {:?}", peer_id);
+                                tracing::trace!("Sent identifiyng info to peer {}", peer_id);
                             }
                             IdentifyEvent::Error { peer_id, error } => {
                                 tracing::error!(
-                                    "Error while identifying remote peer {:?}: {:?}",
+                                    "Error while identifying remote peer {}: {:?}",
                                     peer_id,
                                     error
                                 );
@@ -1069,7 +1090,7 @@ mod tests {
 
     #[tokio::test]
     async fn one_peer_can_send_multiple_messages() {
-        //tracing_subscriber::fmt::init();
+        // tracing_subscriber::fmt::init();
 
         let (net1, net2) = create_connected_networks().await;
 
@@ -1127,7 +1148,7 @@ mod tests {
     #[ignore]
     #[tokio::test]
     async fn connections_are_properly_closed() {
-        //tracing_subscriber::fmt::init();
+        // tracing_subscriber::fmt::init();
 
         let (net1, net2) = create_connected_networks().await;
 
@@ -1160,7 +1181,11 @@ mod tests {
 
     #[tokio::test]
     async fn dht_put_and_get() {
+        // tracing_subscriber::fmt::init();
         let (net1, net2) = create_connected_networks().await;
+
+        // FIXME: Add delay while networks share their addresses
+        tokio::time::delay_for(Duration::from_secs(2)).await;
 
         let put_record = TestRecord { x: 420 };
 
@@ -1193,7 +1218,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_gossipsub() {
-        tracing_subscriber::fmt::init();
+        // tracing_subscriber::fmt::init();
 
         let mut net = TestNetwork::new();
 
