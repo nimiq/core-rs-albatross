@@ -1,7 +1,7 @@
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use nimiq_database::WriteTransaction;
 use nimiq_keys::Address;
-use nimiq_primitives::account::{AccountType, ValidatorId};
+use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
 use nimiq_transaction::Transaction;
 use nimiq_trie::key_nibbles::KeyNibbles;
@@ -386,6 +386,16 @@ impl Serialize for Account {
             Account::Staking(ref account) => {
                 size += Serialize::serialize(&account, writer)?;
             }
+
+            Account::StakingValidator(ref account) => {
+                size += Serialize::serialize(&account, writer)?;
+            }
+            Account::StakingValidatorsStaker(ref account) => {
+                size += Serialize::serialize(&account, writer)?;
+            }
+            Account::StakingStaker(ref account) => {
+                size += Serialize::serialize(&account, writer)?;
+            }
         }
 
         Ok(size)
@@ -405,6 +415,15 @@ impl Serialize for Account {
                 size += Serialize::serialized_size(&account);
             }
             Account::Staking(ref account) => {
+                size += Serialize::serialized_size(&account);
+            }
+            Account::StakingValidator(ref account) => {
+                size += Serialize::serialized_size(&account);
+            }
+            Account::StakingValidatorsStaker(ref account) => {
+                size += Serialize::serialized_size(&account);
+            }
+            Account::StakingStaker(ref account) => {
                 size += Serialize::serialized_size(&account);
             }
         }

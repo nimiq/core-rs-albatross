@@ -298,7 +298,7 @@ async fn validator_can_catch_up() {
         // However the implementation does still progress their chains and since they have registered listeners, they would panic.
         // that is confusing, thus they are allowed to execute (with no validator network connection)
         // validators.retain(|v| {
-        //     v.validator_id() != id1 && v.validator_id() != id2
+        //     v.validator_address() != id1 && v.validator_address() != id2
         // });
 
         let validator = validator_for_slot(&validators, 1, 2);

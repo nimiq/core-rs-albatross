@@ -7,7 +7,7 @@ use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::account::ValidatorId;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_transaction::account::staking_contract::{
-    IncomingStakingTransactionData, OutgoingStakingTransactionProof, SelfStakingTransactionData,
+    IncomingStakingTransactionData, OutgoingStakingTransactionData, SelfStakingTransactionData,
 };
 use nimiq_transaction::{SignatureProof, Transaction};
 use nimiq_transaction_builder::{Recipient, TransactionBuilder};
@@ -333,7 +333,7 @@ fn make_signed_incoming_transaction(
     key_pair: &KeyPair,
 ) -> Transaction {
     let mut tx = make_incoming_transaction(data, value);
-    tx.data = IncomingStakingTransactionData::set_validator_signature_on_data(
+    tx.data = IncomingStakingTransactionData::set_signature_on_data(
         &tx.data,
         bls_pair.sign(&tx.serialize_content()).compress(),
     )
@@ -356,7 +356,7 @@ fn make_unstake_transaction(key_pair: &KeyPair, value: u64) -> Transaction {
         1,
         NetworkId::Dummy,
     );
-    let proof = OutgoingStakingTransactionProof::Unstake(SignatureProof::from(
+    let proof = OutgoingStakingTransactionData::Unstake(SignatureProof::from(
         key_pair.public,
         key_pair.sign(&tx.serialize_content()),
     ));
@@ -380,7 +380,7 @@ fn make_drop_transaction(
         1,
         NetworkId::Dummy,
     );
-    let proof = OutgoingStakingTransactionProof::DropValidator {
+    let proof = OutgoingStakingTransactionData::DropValidator {
         validator_id: validator_id.clone(),
         validator_key: key_pair.public_key.compress(),
         signature: key_pair.sign(&tx.serialize_content()).compress(),

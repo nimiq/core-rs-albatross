@@ -32,7 +32,7 @@ impl TendermintContribution {
             signers.insert(slot as usize);
         }
 
-        // create a MultiSignature with the single contributor `validator_id`
+        // create a MultiSignature with the single contributor `validator_address`
         let multi_signature = MultiSignature::new(signature, signers);
 
         let mut contributions = BTreeMap::new();

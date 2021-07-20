@@ -79,7 +79,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         let contract_key = KeyNibbles::from(&transaction.contract_creation_address());
 
         if accounts_tree.get(db_txn, &contract_key).is_some() {
-            return Err(AccountError::AlreadyExistentContract {
+            return Err(AccountError::AlreadyExistentAddress {
                 address: transaction.contract_creation_address(),
             });
         }

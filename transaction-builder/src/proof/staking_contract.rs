@@ -3,7 +3,7 @@ use bls::KeyPair as BlsKeyPair;
 use keys::KeyPair;
 use primitives::account::ValidatorId;
 use transaction::account::staking_contract::{
-    IncomingStakingTransactionData, OutgoingStakingTransactionProof,
+    IncomingStakingTransactionData, OutgoingStakingTransactionData,
 };
 use transaction::{SignatureProof, Transaction};
 
@@ -38,7 +38,7 @@ impl SignallingProofBuilder {
             Deserialize::deserialize_from_vec(&self.transaction.data[..]).unwrap();
         let validator_signature =
             validator_key_pair.sign(&self.transaction.serialize_content().as_slice());
-        data.set_validator_signature(validator_signature.compress());
+        data.set_signature(validator_signature.compress());
         self.data = Some(data);
         self
     }
@@ -59,7 +59,7 @@ impl SignallingProofBuilder {
 /// These are: unstaking transactions and transactions to drop validators.
 pub struct StakingProofBuilder {
     pub transaction: Transaction,
-    proof: Option<OutgoingStakingTransactionProof>,
+    proof: Option<OutgoingStakingTransactionData>,
 }
 
 impl StakingProofBuilder {
@@ -79,7 +79,7 @@ impl StakingProofBuilder {
         key_pair: &BlsKeyPair,
     ) -> &mut Self {
         let signature = key_pair.sign(&self.transaction.serialize_content().as_slice());
-        self.proof = Some(OutgoingStakingTransactionProof::DropValidator {
+        self.proof = Some(OutgoingStakingTransactionData::DropValidator {
             validator_id: validator_id.clone(),
             validator_key: key_pair.public_key.compress(),
             signature: signature.compress(),
@@ -91,7 +91,7 @@ impl StakingProofBuilder {
     /// from a staker's `key_pair`.
     pub fn unstake(&mut self, key_pair: &KeyPair) -> &mut Self {
         let signature = key_pair.sign(self.transaction.serialize_content().as_slice());
-        self.proof = Some(OutgoingStakingTransactionProof::Unstake(
+        self.proof = Some(OutgoingStakingTransactionData::Unstake(
             SignatureProof::from(key_pair.public, signature),
         ));
         self

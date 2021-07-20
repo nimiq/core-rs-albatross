@@ -33,17 +33,17 @@ strum_macros = "0.20"
 beserial = { path = "../beserial" }
 beserial_derive = { path = "../beserial/beserial_derive" }
 nimiq-bls = { path = "../bls", features = ["beserial"], optional = true }
-nimiq-macros = { path = "../macros", optional = true }
+nimiq-keys = { path = "../keys",  optional = true }
 nimiq-utils = { path = "../utils", features = ["math"], optional = true}
 
 [dev-dependencies]
 lazy_static = "1.2"
 
 [features]
-all = ["coin", "account", "policy", "networks", "validators"]
+all = ["coin", "account", "policy", "networks", "slots"]
 coin = ["hex", "thiserror", "num-traits", "regex"]
-account = ["hex", "nimiq-macros", "thiserror"]
+account = ["hex", "thiserror"]
 policy = ["num-bigint", "num-traits", "parking_lot", "lazy_static"]
 networks = ["thiserror"]
-validators = ["nimiq-bls", "nimiq-utils", "beserial/bitvec", "itertools", "policy"]
+slots = ["nimiq-bls", "nimiq-utils","nimiq-keys", "beserial/bitvec", "itertools", "policy"]
 serde-derive = ["serde"]
