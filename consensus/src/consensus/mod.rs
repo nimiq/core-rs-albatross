@@ -121,7 +121,7 @@ impl<N: Network> Consensus<N> {
     const MIN_BLOCKS_ESTABLISHED: usize = 5;
 
     /// Timeout after which head requests will be performed again to determine consensus established state.
-    const HEAD_REQUESTS_TIMEOUT: Duration = Duration::from_secs(5); // currently 2 * view change delay
+    const HEAD_REQUESTS_TIMEOUT: Duration = Duration::from_secs(10);
 
     /// Timeout after which the consensus is polled after it ran last
     ///
@@ -375,7 +375,13 @@ impl<N: Network> Future for Consensus<N> {
                 BlockQueueEvent::PeerLeft(_) => {
                     self.events.send(ConsensusEvent::PeerLeft).ok(); // Ignore result.
                 }
-                _ => {}
+                BlockQueueEvent::ReceivedBlocks => {
+                    // When syncing a stopped chain, we want to immediately start a new head request
+                    // after receiving blocks for the current epoch.
+                    if !self.is_established() {
+                        self.head_requests_time = None;
+                    }
+                }
             }
         }
 
