@@ -5,21 +5,18 @@ use beserial::{
     Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
     SerializingError, WriteBytesExt,
 };
-
 use nimiq_collections::BitSet;
 use nimiq_database::Transaction as DBTransaction;
 use nimiq_keys::Address;
 use nimiq_primitives::slots::{Validators, ValidatorsBuilder};
 use nimiq_primitives::{coin::Coin, policy};
-
 use nimiq_trie::key_nibbles::KeyNibbles;
 use nimiq_vrf::{AliasMethod, VrfSeed, VrfUseCase};
-
-use crate::{Account, AccountsTree};
-
 pub use receipts::*;
 pub use staker::Staker;
 pub use validator::Validator;
+
+use crate::{Account, AccountsTree};
 
 mod receipts;
 mod staker;
@@ -140,7 +137,7 @@ impl StakingContract {
 
         match accounts_tree.get(db_txn, &key) {
             Some(Account::Staking(contract)) => {
-                return contract;
+                contract
             }
             _ => {
                 unreachable!()
@@ -164,10 +161,10 @@ impl StakingContract {
 
         match accounts_tree.get(db_txn, &key) {
             Some(Account::StakingValidator(validator)) => {
-                return Some(validator);
+                Some(validator)
             }
             None => {
-                return None;
+                None
             }
             _ => {
                 unreachable!()
@@ -191,10 +188,10 @@ impl StakingContract {
 
         match accounts_tree.get(db_txn, &key) {
             Some(Account::StakingStaker(staker)) => {
-                return Some(staker);
+                Some(staker)
             }
             None => {
-                return None;
+                None
             }
             _ => {
                 unreachable!()
@@ -217,7 +214,7 @@ impl StakingContract {
 
         for (id, coin) in self.active_validators.iter() {
             validator_addresses.push(id);
-            validator_stakes.push(u64::from(coin.clone()));
+            validator_stakes.push(u64::from(*coin));
         }
 
         let mut rng = seed.rng(VrfUseCase::ValidatorSelection, 0);

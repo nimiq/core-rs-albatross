@@ -1,3 +1,7 @@
+use std::collections::VecDeque;
+use std::marker::PhantomData;
+use std::ops::Range;
+
 use crate::error::Error;
 use crate::hash::{Hash, Merge};
 use crate::mmr::peaks::PeakIterator;
@@ -7,9 +11,6 @@ use crate::mmr::utils::bagging;
 use crate::mmr::MerkleMountainRange;
 use crate::store::memory::MemoryTransaction;
 use crate::store::Store;
-use std::collections::VecDeque;
-use std::marker::PhantomData;
-use std::ops::Range;
 
 pub struct PartialMerkleMountainRange<H, S: Store<H>> {
     store: S,
@@ -294,13 +295,15 @@ impl<H: Merge + PartialEq + Clone, S: Store<H>> PartialMerkleMountainRange<H, S>
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::cmp;
+
     use crate::error::Error;
     use crate::mmr::utils::test_utils::TestHash;
     use crate::mmr::MerkleMountainRange;
     use crate::store::memory::MemoryStore;
     use crate::store::Store;
-    use std::cmp;
+
+    use super::*;
 
     #[test]
     fn it_correctly_verifies_range_proofs() {

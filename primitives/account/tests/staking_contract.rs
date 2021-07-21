@@ -18,7 +18,7 @@ use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::slots::SlashedSlot;
 use nimiq_transaction::account::staking_contract::{
-    IncomingStakingTransactionData, OutgoingStakingTransactionData, SelfStakingTransactionData,
+    IncomingStakingTransactionData, OutgoingStakingTransactionProof, SelfStakingTransactionData,
 };
 use nimiq_transaction::account::AccountTransactionVerification;
 use nimiq_transaction::{SignatureProof, Transaction, TransactionError};
@@ -376,17 +376,17 @@ fn test_proof_verification(transaction: Transaction) {
 
     if transaction.recipient_type != AccountType::Staking {
         // More complex proof.
-        let data: OutgoingStakingTransactionData =
+        let data: OutgoingStakingTransactionProof =
             Deserialize::deserialize_from_vec(&transaction.proof[..]).unwrap();
         match data {
-            OutgoingStakingTransactionData::Unstake(_) => {
-                tx_3.proof = OutgoingStakingTransactionData::Unstake(SignatureProof::from(
+            OutgoingStakingTransactionProof::Unstake(_) => {
+                tx_3.proof = OutgoingStakingTransactionProof::Unstake(SignatureProof::from(
                     key_pair.public,
                     other_pair.sign(&tx_3.serialize_content()),
                 ))
                 .serialize_to_vec();
             }
-            OutgoingStakingTransactionData::DropValidator {
+            OutgoingStakingTransactionProof::DropValidator {
                 validator_id,
                 validator_key,
                 ..
@@ -403,7 +403,7 @@ fn test_proof_verification(transaction: Transaction) {
                     .unwrap(),
                 );
 
-                let proof = OutgoingStakingTransactionData::DropValidator {
+                let proof = OutgoingStakingTransactionProof::DropValidator {
                     validator_id,
                     validator_key,
                     signature: bls_pair.sign(&tx_3.serialize_content()).compress(),
@@ -3733,7 +3733,7 @@ fn make_unstake_transaction(key_pair: &KeyPair, value: u64) -> Transaction {
         1,
         NetworkId::Dummy,
     );
-    let proof = OutgoingStakingTransactionData::Unstake(SignatureProof::from(
+    let proof = OutgoingStakingTransactionProof::Unstake(SignatureProof::from(
         key_pair.public,
         key_pair.sign(&tx.serialize_content()),
     ));
@@ -3757,7 +3757,7 @@ fn make_drop_transaction(
         1,
         NetworkId::Dummy,
     );
-    let proof = OutgoingStakingTransactionData::DropValidator {
+    let proof = OutgoingStakingTransactionProof::DropValidator {
         validator_id,
         validator_key: key_pair.public_key.compress(),
         signature: key_pair.sign(&tx.serialize_content()).compress(),

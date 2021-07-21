@@ -1,5 +1,4 @@
 use primitives::account::AccountType;
-use primitives::coin::Coin;
 
 use crate::account::AccountTransactionVerification;
 use crate::{Transaction, TransactionError, TransactionFlags};
@@ -26,12 +25,12 @@ impl AccountTransactionVerification for StakingContractVerifier {
         // and we perform static signature checks here.
         let data = IncomingStakingTransactionData::parse(transaction)?;
 
-        data.verify(transaction)?;
-
         if data.is_signalling() != transaction.flags.contains(TransactionFlags::SIGNALLING) {
             warn!("Signalling must be set for signalling transactions");
             return Err(TransactionError::InvalidForRecipient);
         }
+
+        data.verify(transaction)?;
 
         Ok(())
     }
@@ -39,14 +38,9 @@ impl AccountTransactionVerification for StakingContractVerifier {
     fn verify_outgoing_transaction(transaction: &Transaction) -> Result<(), TransactionError> {
         assert_eq!(transaction.sender_type, AccountType::Staking);
 
-        // Check that value > 0.
-        if transaction.value == Coin::ZERO {
-            return Err(TransactionError::ZeroValue);
-        }
+        let proof = OutgoingStakingTransactionProof::parse(transaction)?;
 
-        let data = OutgoingStakingTransactionData::parse(transaction)?;
-
-        data.verify(transaction)?;
+        proof.verify(transaction)?;
 
         Ok(())
     }

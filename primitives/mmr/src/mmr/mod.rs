@@ -1,3 +1,7 @@
+use std::collections::VecDeque;
+use std::marker::PhantomData;
+use std::ops::RangeBounds;
+
 use crate::error::Error;
 use crate::hash::{Hash, Merge};
 use crate::mmr::peaks::{PeakIterator, RevPeakIterator};
@@ -6,9 +10,6 @@ use crate::mmr::proof::{Proof, RangeProof};
 use crate::mmr::utils::bagging;
 use crate::store::memory::MemoryTransaction;
 use crate::store::Store;
-use std::collections::VecDeque;
-use std::marker::PhantomData;
-use std::ops::RangeBounds;
 
 pub mod partial;
 pub mod peaks;
@@ -376,9 +377,10 @@ impl<H: Merge + Clone + PartialEq, S: Store<H>> MerkleMountainRange<H, S> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::mmr::utils::test_utils::{hash_mmr, TestHash};
     use crate::store::memory::MemoryStore;
+
+    use super::*;
 
     #[test]
     fn it_correctly_constructs_trees() {

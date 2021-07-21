@@ -8,6 +8,7 @@ use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, SerializeContent};
 use nimiq_hash_derive::SerializeContent;
 use nimiq_primitives::coin::Coin;
+use nimiq_primitives::policy;
 use nimiq_primitives::slots::Validators;
 use nimiq_transaction::Transaction;
 use nimiq_vrf::VrfSeed;
@@ -15,7 +16,6 @@ use nimiq_vrf::VrfSeed;
 use crate::macro_block::{MacroBlock, MacroHeader};
 use crate::micro_block::{MicroBlock, MicroHeader};
 use crate::{MacroBody, MicroBody, MicroJustification, TendermintProof};
-use nimiq_primitives::policy;
 
 /// Defines the type of the block, either Micro or Macro (which includes both checkpoint and
 /// election blocks).
