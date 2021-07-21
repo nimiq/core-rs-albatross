@@ -547,28 +547,32 @@ impl Deserialize for IncomingStakingTransactionData {
 #[repr(u8)]
 pub enum OutgoingStakingTransactionType {
     DropValidator = 0,
-    Unstake = 5,
+    Unstake = 1,
+    DeductFees = 2,
 }
 
 #[derive(Clone, Debug)]
-pub enum OutgoingStakingTransactionData {
+pub enum OutgoingStakingTransactionProof {
     DropValidator {
         signature: SignatureProof,
     },
     Unstake {
-        value: Coin,
+        signature: SignatureProof,
+    },
+    DeductFees {
+        from_active_balance: bool,
         signature: SignatureProof,
     },
 }
 
-impl OutgoingStakingTransactionData {
+impl OutgoingStakingTransactionProof {
     pub fn parse(transaction: &Transaction) -> Result<Self, TransactionError> {
         full_parse(&transaction.proof[..])
     }
 
     pub fn verify(&self, transaction: &Transaction) -> Result<(), TransactionError> {
         match self {
-            OutgoingStakingTransactionData::DropValidator { signature } => {
+            OutgoingStakingTransactionProof::DropValidator { signature } => {
                 // When dropping a validator you get exactly the validator deposit back.
                 if transaction.total_value()? != Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT)
                 {
@@ -584,7 +588,22 @@ impl OutgoingStakingTransactionData {
 
                 Ok(())
             }
-            OutgoingStakingTransactionData::Unstake { signature, .. } => {
+            OutgoingStakingTransactionProof::Unstake { signature } => {
+                // Check that the signature is correct.
+                if !signature.verify(transaction.serialize_content().as_slice()) {
+                    warn!("Invalid signature");
+                    return Err(TransactionError::InvalidProof);
+                }
+
+                Ok(())
+            }
+            OutgoingStakingTransactionProof::DeductFees { signature, .. } => {
+                // We need to check that this is only used to pay fees and not to transfer value.
+                if !transaction.value.is_zero() {
+                    warn!("Trying to transfer value when calling the DeductFees interaction. You can't do this!");
+                    return Err(TransactionError::InvalidForSender);
+                }
+
                 // Check that the signature is correct.
                 if !signature.verify(transaction.serialize_content().as_slice()) {
                     warn!("Invalid signature");
@@ -597,18 +616,25 @@ impl OutgoingStakingTransactionData {
     }
 }
 
-impl Serialize for OutgoingStakingTransactionData {
+impl Serialize for OutgoingStakingTransactionProof {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size = 0;
         match self {
-            OutgoingStakingTransactionData::DropValidator { signature } => {
+            OutgoingStakingTransactionProof::DropValidator { signature } => {
                 size +=
                     Serialize::serialize(&OutgoingStakingTransactionType::DropValidator, writer)?;
                 size += Serialize::serialize(signature, writer)?;
             }
-            OutgoingStakingTransactionData::Unstake { value, signature } => {
+            OutgoingStakingTransactionProof::Unstake { signature } => {
                 size += Serialize::serialize(&OutgoingStakingTransactionType::Unstake, writer)?;
-                size += Serialize::serialize(value, writer)?;
+                size += Serialize::serialize(signature, writer)?;
+            }
+            OutgoingStakingTransactionProof::DeductFees {
+                from_active_balance,
+                signature,
+            } => {
+                size += Serialize::serialize(&OutgoingStakingTransactionType::DeductFees, writer)?;
+                size += Serialize::serialize(from_active_balance, writer)?;
                 size += Serialize::serialize(signature, writer)?;
             }
         }
@@ -618,13 +644,20 @@ impl Serialize for OutgoingStakingTransactionData {
     fn serialized_size(&self) -> usize {
         let mut size = 0;
         match self {
-            OutgoingStakingTransactionData::DropValidator { signature } => {
+            OutgoingStakingTransactionProof::DropValidator { signature } => {
                 size += Serialize::serialized_size(&OutgoingStakingTransactionType::DropValidator);
                 size += Serialize::serialized_size(signature);
             }
-            OutgoingStakingTransactionData::Unstake { value, signature } => {
+            OutgoingStakingTransactionProof::Unstake { signature } => {
                 size += Serialize::serialized_size(&OutgoingStakingTransactionType::Unstake);
-                size += Serialize::serialized_size(value);
+                size += Serialize::serialized_size(signature);
+            }
+            OutgoingStakingTransactionProof::DeductFees {
+                from_active_balance,
+                signature,
+            } => {
+                size += Serialize::serialized_size(&OutgoingStakingTransactionType::DeductFees);
+                size += Serialize::serialized_size(from_active_balance);
                 size += Serialize::serialized_size(signature);
             }
         }
@@ -632,18 +665,23 @@ impl Serialize for OutgoingStakingTransactionData {
     }
 }
 
-impl Deserialize for OutgoingStakingTransactionData {
+impl Deserialize for OutgoingStakingTransactionProof {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let ty: OutgoingStakingTransactionType = Deserialize::deserialize(reader)?;
         match ty {
             OutgoingStakingTransactionType::DropValidator => {
-                Ok(OutgoingStakingTransactionData::DropValidator {
+                Ok(OutgoingStakingTransactionProof::DropValidator {
                     signature: Deserialize::deserialize(reader)?,
                 })
             }
             OutgoingStakingTransactionType::Unstake => {
-                Ok(OutgoingStakingTransactionData::Unstake {
-                    value: Deserialize::deserialize(reader)?,
+                Ok(OutgoingStakingTransactionProof::Unstake {
+                    signature: Deserialize::deserialize(reader)?,
+                })
+            }
+            OutgoingStakingTransactionType::DeductFees => {
+                Ok(OutgoingStakingTransactionProof::DeductFees {
+                    from_active_balance: Deserialize::deserialize(reader)?,
                     signature: Deserialize::deserialize(reader)?,
                 })
             }

@@ -2,7 +2,6 @@ use std::collections::BTreeSet;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_bls::CompressedPublicKey as BlsPublicKey;
-
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 
@@ -63,7 +62,7 @@ pub struct UpdateStakerReceipt {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct RetireStakerReceipt {
-    pub old_retire_time: Option<u32>,
+    pub old_retire_time: u32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]

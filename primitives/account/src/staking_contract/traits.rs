@@ -1,26 +1,19 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-
-
 use beserial::{Deserialize, Serialize};
 use nimiq_collections::BitSet;
 use nimiq_database::WriteTransaction;
-
-
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
 use nimiq_primitives::slots::SlashedSlot;
 use nimiq_transaction::account::staking_contract::{
-    IncomingStakingTransactionData, OutgoingStakingTransactionData,
+    IncomingStakingTransactionData, OutgoingStakingTransactionProof,
 };
 use nimiq_transaction::Transaction;
 
-
 use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction};
-use crate::staking_contract::receipts::{
-    DropValidatorReceipt,
-};
-use crate::staking_contract::{SlashReceipt};
+use crate::staking_contract::receipts::DropValidatorReceipt;
+use crate::staking_contract::SlashReceipt;
 use crate::{Account, AccountError, AccountsTree, Inherent, InherentType, StakingContract};
 
 /// We need to distinguish three types of transactions:
@@ -346,13 +339,13 @@ impl AccountTransactionInteraction for StakingContract {
         block_height: u32,
         _block_time: u64,
     ) -> Result<Option<Vec<u8>>, AccountError> {
-        let mut receipt = None;
+        let receipt;
 
-        let data: OutgoingStakingTransactionData =
+        let data: OutgoingStakingTransactionProof =
             Deserialize::deserialize(&mut &transaction.proof[..])?;
 
         match data {
-            OutgoingStakingTransactionData::DropValidator { signature } => {
+            OutgoingStakingTransactionProof::DropValidator { signature } => {
                 let validator_address = signature.compute_signer();
 
                 receipt = Some(
@@ -365,15 +358,30 @@ impl AccountTransactionInteraction for StakingContract {
                     .serialize_to_vec(),
                 );
             }
-            OutgoingStakingTransactionData::Unstake { value, signature } => {
+            OutgoingStakingTransactionProof::Unstake { signature } => {
                 let staker_address = signature.compute_signer();
 
                 receipt = StakingContract::unstake(
                     accounts_tree,
                     db_txn,
                     &staker_address,
-                    value,
+                    transaction.total_value()?,
                     block_height,
+                )?
+                .map(|r| r.serialize_to_vec());
+            }
+            OutgoingStakingTransactionProof::DeductFees {
+                from_active_balance,
+                signature,
+            } => {
+                let staker_address = signature.compute_signer();
+
+                receipt = StakingContract::deduct_fees(
+                    accounts_tree,
+                    db_txn,
+                    &staker_address,
+                    from_active_balance,
+                    transaction.fee,
                 )?
                 .map(|r| r.serialize_to_vec());
             }
@@ -390,11 +398,11 @@ impl AccountTransactionInteraction for StakingContract {
         _block_time: u64,
         receipt: Option<&Vec<u8>>,
     ) -> Result<(), AccountError> {
-        let data: OutgoingStakingTransactionData =
+        let data: OutgoingStakingTransactionProof =
             Deserialize::deserialize(&mut &transaction.proof[..])?;
 
         match data {
-            OutgoingStakingTransactionData::DropValidator { signature } => {
+            OutgoingStakingTransactionProof::DropValidator { signature } => {
                 let validator_address = signature.compute_signer();
 
                 let receipt: DropValidatorReceipt = Deserialize::deserialize_from_vec(
@@ -408,7 +416,7 @@ impl AccountTransactionInteraction for StakingContract {
                     receipt,
                 )?;
             }
-            OutgoingStakingTransactionData::Unstake { value, signature } => {
+            OutgoingStakingTransactionProof::Unstake { signature } => {
                 let staker_address = signature.compute_signer();
 
                 let receipt = match receipt {
@@ -420,7 +428,27 @@ impl AccountTransactionInteraction for StakingContract {
                     accounts_tree,
                     db_txn,
                     &staker_address,
-                    value,
+                    transaction.total_value()?,
+                    receipt,
+                )?;
+            }
+            OutgoingStakingTransactionProof::DeductFees {
+                from_active_balance,
+                signature,
+            } => {
+                let staker_address = signature.compute_signer();
+
+                let receipt = match receipt {
+                    Some(v) => Some(Deserialize::deserialize_from_vec(v)?),
+                    None => None,
+                };
+
+                StakingContract::revert_deduct_fees(
+                    accounts_tree,
+                    db_txn,
+                    &staker_address,
+                    from_active_balance,
+                    transaction.fee,
                     receipt,
                 )?;
             }
@@ -448,7 +476,7 @@ impl AccountInherentInteraction for StakingContract {
         // Get the staking contract main.
         let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
 
-        let mut receipt = None;
+        let receipt;
 
         match &inherent.ty {
             InherentType::Slash => {
@@ -603,7 +631,7 @@ impl AccountInherentInteraction for StakingContract {
         match &inherent.ty {
             InherentType::Slash => {
                 let receipt: SlashReceipt = Deserialize::deserialize_from_vec(
-                    &receipt.ok_or(AccountError::InvalidReceipt)?,
+                    receipt.ok_or(AccountError::InvalidReceipt)?,
                 )?;
 
                 let slot: SlashedSlot = Deserialize::deserialize(&mut &inherent.data[..])?;

@@ -1,5 +1,6 @@
-use crate::mmr::utils::bit_length;
 use std::cmp::Ordering;
+
+use crate::mmr::utils::bit_length;
 
 /// Structure to hold a node's position.
 /// This structure contains and caches additional information that normally would need to be computed
@@ -181,8 +182,9 @@ pub fn leaf_number_to_index(leaf_number: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::collections::HashSet;
+
+    use super::*;
 
     #[test]
     fn it_correctly_computes_positions() {

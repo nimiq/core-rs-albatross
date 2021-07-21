@@ -1,9 +1,10 @@
+use std::collections::VecDeque;
+
 use crate::error::Error;
 use crate::hash::{Hash, Merge};
 use crate::mmr::peaks::PeakIterator;
 use crate::mmr::position::{leaf_number_to_index, Position};
 use crate::mmr::utils::bagging;
-use std::collections::VecDeque;
 
 #[derive(Clone, Debug)]
 pub struct Proof<H> {
@@ -259,13 +260,15 @@ impl<H: Merge + Clone + Eq> RangeProof<H> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::ops::RangeInclusive;
+
     use crate::error::Error;
     use crate::mmr::utils::test_utils::TestHash;
     use crate::mmr::MerkleMountainRange;
     use crate::store::memory::MemoryStore;
     use crate::store::Store;
-    use std::ops::RangeInclusive;
+
+    use super::*;
 
     #[test]
     fn it_correctly_constructs_proofs() {
