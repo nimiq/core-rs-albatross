@@ -14,6 +14,7 @@ use futures::{ready, Future, Stream, StreamExt};
 use network_interface::peer::Peer;
 
 use crate::consensus_agent::ConsensusAgent;
+use std::task::Waker;
 
 #[pin_project]
 #[derive(Debug)]
@@ -80,6 +81,7 @@ pub struct SyncQueue<TPeer: Peer, TId, TOutput> {
     next_outgoing_index: usize,
     current_peer_index: usize,
     request_fn: fn(TId, Arc<ConsensusAgent<TPeer>>) -> BoxFuture<'static, Option<TOutput>>,
+    waker: Option<Waker>,
 }
 
 impl<TPeer, TId, TOutput> SyncQueue<TPeer, TId, TOutput>
@@ -111,6 +113,7 @@ where
             next_outgoing_index: 0,
             current_peer_index: 0,
             request_fn,
+            waker: None,
         }
     }
 
@@ -195,6 +198,11 @@ where
         for id in ids {
             self.ids_to_request.push_back(id);
         }
+
+        // Adding new ids needs to wake the task that is polling the SyncQueue.
+        if let Some(waker) = &self.waker {
+            waker.wake_by_ref();
+        }
     }
 
     /// Truncates the stored ids, retaining only the first `len` elements.
@@ -257,9 +265,17 @@ where
     type Item = Result<TOutput, TId>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        // Store waker.
+        match &mut self.waker {
+            Some(waker) if !waker.will_wake(cx.waker()) => *waker = cx.waker().clone(),
+            None => self.waker = Some(cx.waker().clone()),
+            _ => {}
+        }
+
+        // Try to request more objects.
         self.try_push_futures();
 
-        // Check to see if we've already received the next value
+        // Check to see if we've already received the next value.
         let this = &mut *self;
         if let Some(next_output) = this.queued_outputs.peek_mut() {
             if next_output.index == this.next_outgoing_index {
@@ -297,7 +313,7 @@ where
                                 None => return Poll::Ready(Some(Err(result.id))),
                             };
 
-                            log::trace!(
+                            log::debug!(
                                 "Re-requesting {:?} @ {} from peer {}",
                                 result.id,
                                 result.index,

@@ -714,6 +714,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         &mut self,
         cluster: &SyncCluster<<TNetwork as Network>::PeerType>,
         request_more_epochs: bool,
+        cx: &mut Context<'_>,
     ) {
         for peer in cluster.peers() {
             if let Some(agent) = Weak::upgrade(peer) {
@@ -738,6 +739,9 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                         let future =
                             Self::request_epoch_ids(Arc::clone(&self.blockchain), agent).boxed();
                         self.epoch_ids_stream.push(future);
+                        // Pushing the future to FuturesUnordered above does not wake the task that
+                        // polls `epoch_ids_stream`. Therefore, we need to wake the task manually.
+                        cx.waker().wake_by_ref();
                     } else {
                         // FIXME: Disconnect peer
                         // agent.peer.close()
@@ -849,6 +853,7 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
                 self.finish_cluster(
                     &best_cluster,
                     result != SyncClusterResult::Error && best_cluster.adopted_batch_set,
+                    cx,
                 );
 
                 // Evict current best cluster and move to next one.
@@ -893,14 +898,14 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
                 debug!("Pushed checkpoint, result: {:?}", result);
             }
 
-            // Since clusters here are always of length 1, we can remove them immediately.
+            // Since checkpoint clusters are always of length 1, we can remove them immediately.
             let best_cluster = self
                 .active_checkpoint_cluster
                 .take()
                 .expect("active_checkpoint_cluster should be set");
 
             // Decrement the cluster count for all peers in the evicted cluster.
-            self.finish_cluster(&best_cluster, result != SyncClusterResult::Error);
+            self.finish_cluster(&best_cluster, result != SyncClusterResult::Error, cx);
 
             // Move to next cluster.
             self.active_checkpoint_cluster = self.find_best_checkpoint_cluster();
