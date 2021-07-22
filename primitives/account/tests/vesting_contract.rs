@@ -1,13 +1,18 @@
 use std::convert::{TryFrom, TryInto};
 
 use beserial::{Deserialize, Serialize, SerializingError};
-use nimiq_account::{AccountError, AccountTransactionInteraction, VestingContract};
+use nimiq_account::{
+    Account, AccountError, AccountTransactionInteraction, AccountsTree, VestingContract,
+};
+use nimiq_database::volatile::VolatileEnvironment;
+use nimiq_database::WriteTransaction;
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_transaction::account::AccountTransactionVerification;
 use nimiq_transaction::{SignatureProof, Transaction, TransactionError, TransactionFlags};
+use nimiq_trie::key_nibbles::KeyNibbles;
 
 const CONTRACT: &str = "00002fbf9bd9c800fd34ab7265a0e48c454ccbf4c9c61dfdf68f9a220000000000000001000000000003f480000002632e314a0000002fbf9bd9c800";
 
@@ -136,6 +141,10 @@ fn it_can_verify_creation_transaction() {
 #[test]
 #[allow(unused_must_use)]
 fn it_can_create_contract_from_transaction() {
+    let env = VolatileEnvironment::new(10).unwrap();
+    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let mut db_txn = WriteTransaction::new(&env);
+
     let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE + 8);
     let owner = Address::from([0u8; 20]);
     Serialize::serialize(&owner, &mut data);
@@ -151,8 +160,21 @@ fn it_can_create_contract_from_transaction() {
         0,
         NetworkId::Dummy,
     );
-    match VestingContract::create(100.try_into().unwrap(), &transaction, 0, 0) {
-        Ok(contract) => {
+
+    VestingContract::create(
+        &accounts_tree,
+        &mut db_txn,
+        100.try_into().unwrap(),
+        &transaction,
+        0,
+        0,
+    );
+
+    match accounts_tree.get(
+        &mut db_txn,
+        &KeyNibbles::from(&transaction.contract_creation_address()),
+    ) {
+        Some(Account::Vesting(contract)) => {
             assert_eq!(contract.balance, 100.try_into().unwrap());
             assert_eq!(contract.owner, owner);
             assert_eq!(contract.start_time, 0);
@@ -160,7 +182,7 @@ fn it_can_create_contract_from_transaction() {
             assert_eq!(contract.step_amount, 100.try_into().unwrap());
             assert_eq!(contract.total_amount, 100.try_into().unwrap());
         }
-        Err(_) => assert!(false),
+        _ => assert!(false),
     }
 
     let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE + 24);
@@ -171,8 +193,21 @@ fn it_can_create_contract_from_transaction() {
     Serialize::serialize(&Coin::try_from(50).unwrap(), &mut data);
     transaction.data = data;
     transaction.recipient = transaction.contract_creation_address();
-    match VestingContract::create(100.try_into().unwrap(), &transaction, 0, 0) {
-        Ok(contract) => {
+
+    VestingContract::create(
+        &accounts_tree,
+        &mut db_txn,
+        100.try_into().unwrap(),
+        &transaction,
+        0,
+        0,
+    );
+
+    match accounts_tree.get(
+        &mut db_txn,
+        &KeyNibbles::from(&transaction.contract_creation_address()),
+    ) {
+        Some(Account::Vesting(contract)) => {
             assert_eq!(contract.balance, 100.try_into().unwrap());
             assert_eq!(contract.owner, owner);
             assert_eq!(contract.start_time, 0);
@@ -180,7 +215,7 @@ fn it_can_create_contract_from_transaction() {
             assert_eq!(contract.step_amount, 50.try_into().unwrap());
             assert_eq!(contract.total_amount, 100.try_into().unwrap());
         }
-        Err(_) => assert!(false),
+        _ => assert!(false),
     }
 
     let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE + 32);
@@ -192,8 +227,21 @@ fn it_can_create_contract_from_transaction() {
     Serialize::serialize(&Coin::try_from(150).unwrap(), &mut data);
     transaction.data = data;
     transaction.recipient = transaction.contract_creation_address();
-    match VestingContract::create(100.try_into().unwrap(), &transaction, 0, 0) {
-        Ok(contract) => {
+
+    VestingContract::create(
+        &accounts_tree,
+        &mut db_txn,
+        100.try_into().unwrap(),
+        &transaction,
+        0,
+        0,
+    );
+
+    match accounts_tree.get(
+        &mut db_txn,
+        &KeyNibbles::from(&transaction.contract_creation_address()),
+    ) {
+        Some(Account::Vesting(contract)) => {
             assert_eq!(contract.balance, 100.try_into().unwrap());
             assert_eq!(contract.owner, owner);
             assert_eq!(contract.start_time, 0);
@@ -201,7 +249,7 @@ fn it_can_create_contract_from_transaction() {
             assert_eq!(contract.step_amount, 50.try_into().unwrap());
             assert_eq!(contract.total_amount, 150.try_into().unwrap());
         }
-        Err(_) => assert!(false),
+        _ => assert!(false),
     }
 
     // Invalid data
@@ -210,7 +258,14 @@ fn it_can_create_contract_from_transaction() {
     Serialize::serialize(&0u16, &mut transaction.data);
     transaction.recipient = transaction.contract_creation_address();
     assert_eq!(
-        VestingContract::create(0.try_into().unwrap(), &transaction, 0, 0),
+        VestingContract::create(
+            &accounts_tree,
+            &mut db_txn,
+            0.try_into().unwrap(),
+            &transaction,
+            0,
+            0,
+        ),
         Err(AccountError::InvalidTransaction(
             TransactionError::InvalidData
         ))
@@ -219,14 +274,9 @@ fn it_can_create_contract_from_transaction() {
 
 #[test]
 fn it_does_not_support_incoming_transactions() {
-    let mut contract = VestingContract {
-        balance: 1000.try_into().unwrap(),
-        owner: Address::from([1u8; 20]),
-        start_time: 0,
-        time_step: 100,
-        step_amount: 100.try_into().unwrap(),
-        total_amount: 1000.try_into().unwrap(),
-    };
+    let env = VolatileEnvironment::new(10).unwrap();
+    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let mut db_txn = WriteTransaction::new(&env);
 
     let mut tx = Transaction::new_basic(
         Address::from([1u8; 20]),
@@ -239,15 +289,11 @@ fn it_does_not_support_incoming_transactions() {
     tx.recipient_type = AccountType::Vesting;
 
     assert_eq!(
-        VestingContract::check_incoming_transaction(&tx, 1, 2),
+        VestingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 1, 2),
         Err(AccountError::InvalidForRecipient)
     );
     assert_eq!(
-        contract.commit_incoming_transaction(&tx, 1, 2),
-        Err(AccountError::InvalidForRecipient)
-    );
-    assert_eq!(
-        contract.revert_incoming_transaction(&tx, 2, 1, None),
+        VestingContract::revert_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 1, None),
         Err(AccountError::InvalidForRecipient)
     );
 }
@@ -305,8 +351,12 @@ fn it_can_apply_and_revert_valid_transaction() {
         &hex::decode("9d5bd02379e7e45cf515c788048f5cf3c454ffabd3e83bd1d7667716c325c3c0").unwrap(),
     )
     .unwrap();
-
     let key_pair = KeyPair::from(sender_priv_key);
+
+    let env = VolatileEnvironment::new(10).unwrap();
+    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let mut db_txn = WriteTransaction::new(&env);
+
     let start_contract = VestingContract {
         balance: 1000.try_into().unwrap(),
         owner: Address::from(&key_pair.public),
@@ -315,6 +365,12 @@ fn it_can_apply_and_revert_valid_transaction() {
         step_amount: 100.try_into().unwrap(),
         total_amount: 1000.try_into().unwrap(),
     };
+
+    accounts_tree.put(
+        &mut db_txn,
+        &KeyNibbles::from(&[1u8; 20][..]),
+        Account::Vesting(start_contract.clone()),
+    );
 
     let mut tx = Transaction::new_basic(
         Address::from([1u8; 20]),
@@ -330,13 +386,22 @@ fn it_can_apply_and_revert_valid_transaction() {
     let signature_proof = SignatureProof::from(key_pair.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
 
-    let mut contract = start_contract.clone();
-    contract.commit_outgoing_transaction(&tx, 1, 200).unwrap();
-    assert_eq!(contract.balance, 800.try_into().unwrap());
-    contract
-        .revert_outgoing_transaction(&tx, 1, 1, None)
+    VestingContract::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 1, 200).unwrap();
+    assert_eq!(
+        accounts_tree
+            .get(&mut db_txn, &KeyNibbles::from(&[1u8; 20][..]))
+            .unwrap()
+            .balance(),
+        800.try_into().unwrap()
+    );
+    VestingContract::revert_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 1, 1, None)
         .unwrap();
-    assert_eq!(contract, start_contract);
+    assert_eq!(
+        accounts_tree
+            .get(&mut db_txn, &KeyNibbles::from(&[1u8; 20][..]))
+            .unwrap(),
+        Account::Vesting(start_contract)
+    );
 
     let start_contract = VestingContract {
         balance: 1000.try_into().unwrap(),
@@ -347,13 +412,28 @@ fn it_can_apply_and_revert_valid_transaction() {
         total_amount: 1000.try_into().unwrap(),
     };
 
-    let mut contract = start_contract.clone();
-    contract.commit_outgoing_transaction(&tx, 1, 200).unwrap();
-    assert_eq!(contract.balance, 800.try_into().unwrap());
-    contract
-        .revert_outgoing_transaction(&tx, 1, 1, None)
+    accounts_tree.put(
+        &mut db_txn,
+        &KeyNibbles::from(&[1u8; 20][..]),
+        Account::Vesting(start_contract.clone()),
+    );
+
+    VestingContract::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 1, 200).unwrap();
+    assert_eq!(
+        accounts_tree
+            .get(&mut db_txn, &KeyNibbles::from(&[1u8; 20][..]))
+            .unwrap()
+            .balance(),
+        800.try_into().unwrap()
+    );
+    VestingContract::revert_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 1, 1, None)
         .unwrap();
-    assert_eq!(contract, start_contract);
+    assert_eq!(
+        accounts_tree
+            .get(&mut db_txn, &KeyNibbles::from(&[1u8; 20][..]))
+            .unwrap(),
+        Account::Vesting(start_contract)
+    );
 }
 
 #[test]
@@ -370,7 +450,11 @@ fn it_refuses_invalid_transaction() {
     let key_pair = KeyPair::from(priv_key);
     let key_pair_alt = KeyPair::from(priv_key_alt);
 
-    let mut start_contract = VestingContract {
+    let env = VolatileEnvironment::new(10).unwrap();
+    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let mut db_txn = WriteTransaction::new(&env);
+
+    let start_contract = VestingContract {
         balance: 1000.try_into().unwrap(),
         owner: Address::from(&key_pair.public),
         start_time: 0,
@@ -378,6 +462,12 @@ fn it_refuses_invalid_transaction() {
         step_amount: 100.try_into().unwrap(),
         total_amount: 1000.try_into().unwrap(),
     };
+
+    accounts_tree.put(
+        &mut db_txn,
+        &KeyNibbles::from(&[1u8; 20][..]),
+        Account::Vesting(start_contract.clone()),
+    );
 
     let mut tx = Transaction::new_basic(
         Address::from([1u8; 20]),
@@ -393,12 +483,9 @@ fn it_refuses_invalid_transaction() {
     let signature = key_pair_alt.sign(&tx.serialize_content()[..]);
     let signature_proof = SignatureProof::from(key_pair_alt.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
+
     assert_eq!(
-        start_contract.check_outgoing_transaction(&tx, 1, 200),
-        Err(AccountError::InvalidSignature)
-    );
-    assert_eq!(
-        start_contract.commit_outgoing_transaction(&tx, 1, 200),
+        VestingContract::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 1, 200),
         Err(AccountError::InvalidSignature)
     );
 
@@ -408,14 +495,7 @@ fn it_refuses_invalid_transaction() {
     tx.proof = signature_proof.serialize_to_vec();
 
     assert_eq!(
-        start_contract.check_outgoing_transaction(&tx, 1, 100),
-        Err(AccountError::InsufficientFunds {
-            needed: 900.try_into().unwrap(),
-            balance: 800.try_into().unwrap()
-        })
-    );
-    assert_eq!(
-        start_contract.commit_outgoing_transaction(&tx, 1, 100),
+        VestingContract::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 1, 100),
         Err(AccountError::InsufficientFunds {
             needed: 900.try_into().unwrap(),
             balance: 800.try_into().unwrap()

@@ -1,7 +1,11 @@
 use std::convert::TryInto;
 
 use beserial::{Deserialize, Serialize, SerializingError};
-use nimiq_account::{AccountError, AccountTransactionInteraction, HashedTimeLockedContract};
+use nimiq_account::{
+    Account, AccountError, AccountTransactionInteraction, AccountsTree, HashedTimeLockedContract,
+};
+use nimiq_database::volatile::VolatileEnvironment;
+use nimiq_database::WriteTransaction;
 use nimiq_hash::{Blake2bHasher, HashOutput, Hasher, Sha256Hasher};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::account::AccountType;
@@ -10,6 +14,7 @@ use nimiq_primitives::networks::NetworkId;
 use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm, ProofType};
 use nimiq_transaction::account::AccountTransactionVerification;
 use nimiq_transaction::{SignatureProof, Transaction, TransactionError, TransactionFlags};
+use nimiq_trie::key_nibbles::KeyNibbles;
 
 const HTLC: &str = "00000000000000001b215589344cf570d36bec770825eae30b73213924786862babbdb05e7c4430612135eb2a836812303daebe368963c60d22098a5e9f1ebcb8e54d0b7beca942a2a0a9d95391804fe8f0100000000000296350000000000000001";
 
@@ -145,6 +150,10 @@ fn it_can_verify_creation_transaction() {
 #[test]
 #[allow(unused_must_use)]
 fn it_can_create_contract_from_transaction() {
+    let env = VolatileEnvironment::new(10).unwrap();
+    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let mut db_txn = WriteTransaction::new(&env);
+
     let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE * 2 + AnyHash::SIZE + 10);
     let sender = Address::from([0u8; 20]);
     let recipient = Address::from([0u8; 20]);
@@ -164,8 +173,21 @@ fn it_can_create_contract_from_transaction() {
         0,
         NetworkId::Dummy,
     );
-    match HashedTimeLockedContract::create(100.try_into().unwrap(), &transaction, 0, 0) {
-        Ok(htlc) => {
+
+    HashedTimeLockedContract::create(
+        &accounts_tree,
+        &mut db_txn,
+        100.try_into().unwrap(),
+        &transaction,
+        0,
+        0,
+    );
+
+    match accounts_tree.get(
+        &mut db_txn,
+        &KeyNibbles::from(&transaction.contract_creation_address()),
+    ) {
+        Some(Account::HTLC(htlc)) => {
             assert_eq!(htlc.balance, 100.try_into().unwrap());
             assert_eq!(htlc.sender, sender);
             assert_eq!(htlc.recipient, recipient);
@@ -173,22 +195,15 @@ fn it_can_create_contract_from_transaction() {
             assert_eq!(htlc.hash_count, 2);
             assert_eq!(htlc.timeout, 1000);
         }
-        Err(_) => assert!(false),
+        _ => assert!(false),
     }
 }
 
 #[test]
 fn it_does_not_support_incoming_transactions() {
-    let mut contract = HashedTimeLockedContract {
-        balance: 1000.try_into().unwrap(),
-        sender: Address::from([1u8; 20]),
-        recipient: Address::from([2u8; 20]),
-        hash_algorithm: HashAlgorithm::Blake2b,
-        hash_root: AnyHash::from([3u8; 32]),
-        hash_count: 1,
-        timeout: 100,
-        total_amount: 1000.try_into().unwrap(),
-    };
+    let env = VolatileEnvironment::new(10).unwrap();
+    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let mut db_txn = WriteTransaction::new(&env);
 
     let mut tx = Transaction::new_basic(
         Address::from([1u8; 20]),
@@ -201,15 +216,24 @@ fn it_does_not_support_incoming_transactions() {
     tx.recipient_type = AccountType::HTLC;
 
     assert_eq!(
-        HashedTimeLockedContract::check_incoming_transaction(&tx, 2, 2),
+        HashedTimeLockedContract::commit_incoming_transaction(
+            &accounts_tree,
+            &mut db_txn,
+            &tx,
+            2,
+            2
+        ),
         Err(AccountError::InvalidForRecipient)
     );
     assert_eq!(
-        contract.commit_incoming_transaction(&tx, 2, 2),
-        Err(AccountError::InvalidForRecipient)
-    );
-    assert_eq!(
-        contract.revert_incoming_transaction(&tx, 2, 2, None),
+        HashedTimeLockedContract::revert_incoming_transaction(
+            &accounts_tree,
+            &mut db_txn,
+            &tx,
+            2,
+            2,
+            None
+        ),
         Err(AccountError::InvalidForRecipient)
     );
 }
@@ -458,6 +482,10 @@ fn it_can_verify_timeout_resolve() {
 #[test]
 #[allow(unused_must_use)]
 fn it_can_apply_and_revert_valid_transaction() {
+    let env = VolatileEnvironment::new(10).unwrap();
+    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let mut db_txn = WriteTransaction::new(&env);
+
     let (start_contract, mut tx, pre_image, sender_signature_proof, recipient_signature_proof) =
         prepare_outgoing_transaction();
 
@@ -472,13 +500,36 @@ fn it_can_apply_and_revert_valid_transaction() {
     Serialize::serialize(&recipient_signature_proof, &mut proof);
     tx.proof = proof;
 
-    let mut contract = start_contract.clone();
-    contract.commit_outgoing_transaction(&tx, 1, 1).unwrap();
-    assert_eq!(contract.balance, 0.try_into().unwrap());
-    contract
-        .revert_outgoing_transaction(&tx, 1, 1, None)
+    accounts_tree.put(
+        &mut db_txn,
+        &KeyNibbles::from(&[0u8; 20][..]),
+        Account::HTLC(start_contract.clone()),
+    );
+
+    HashedTimeLockedContract::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 1, 1)
         .unwrap();
-    assert_eq!(contract, start_contract);
+    assert_eq!(
+        accounts_tree
+            .get(&mut db_txn, &KeyNibbles::from(&[0u8; 20][..]))
+            .unwrap()
+            .balance(),
+        0.try_into().unwrap()
+    );
+    HashedTimeLockedContract::revert_outgoing_transaction(
+        &accounts_tree,
+        &mut db_txn,
+        &tx,
+        1,
+        1,
+        None,
+    )
+    .unwrap();
+    assert_eq!(
+        accounts_tree
+            .get(&mut db_txn, &KeyNibbles::from(&[0u8; 20][..]))
+            .unwrap(),
+        Account::HTLC(start_contract.clone())
+    );
 
     // early resolve
     let mut proof = Vec::with_capacity(
@@ -489,13 +540,36 @@ fn it_can_apply_and_revert_valid_transaction() {
     Serialize::serialize(&sender_signature_proof, &mut proof);
     tx.proof = proof;
 
-    let mut contract = start_contract.clone();
-    contract.commit_outgoing_transaction(&tx, 1, 1).unwrap();
-    assert_eq!(contract.balance, 0.try_into().unwrap());
-    contract
-        .revert_outgoing_transaction(&tx, 1, 1, None)
+    accounts_tree.put(
+        &mut db_txn,
+        &KeyNibbles::from(&[0u8; 20][..]),
+        Account::HTLC(start_contract.clone()),
+    );
+
+    HashedTimeLockedContract::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 1, 1)
         .unwrap();
-    assert_eq!(contract, start_contract);
+    assert_eq!(
+        accounts_tree
+            .get(&mut db_txn, &KeyNibbles::from(&[0u8; 20][..]))
+            .unwrap()
+            .balance(),
+        0.try_into().unwrap()
+    );
+    HashedTimeLockedContract::revert_outgoing_transaction(
+        &accounts_tree,
+        &mut db_txn,
+        &tx,
+        1,
+        1,
+        None,
+    )
+    .unwrap();
+    assert_eq!(
+        accounts_tree
+            .get(&mut db_txn, &KeyNibbles::from(&[0u8; 20][..]))
+            .unwrap(),
+        Account::HTLC(start_contract.clone())
+    );
 
     // timeout resolve
     let mut proof = Vec::with_capacity(1 + sender_signature_proof.serialized_size());
@@ -503,20 +577,53 @@ fn it_can_apply_and_revert_valid_transaction() {
     Serialize::serialize(&sender_signature_proof, &mut proof);
     tx.proof = proof;
 
-    let mut contract = start_contract.clone();
-    contract.commit_outgoing_transaction(&tx, 1, 101).unwrap();
-    assert_eq!(contract.balance, 0.try_into().unwrap());
-    contract
-        .revert_outgoing_transaction(&tx, 1, 1, None)
+    accounts_tree.put(
+        &mut db_txn,
+        &KeyNibbles::from(&[0u8; 20][..]),
+        Account::HTLC(start_contract.clone()),
+    );
+
+    HashedTimeLockedContract::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 1, 101)
         .unwrap();
-    assert_eq!(contract, start_contract);
+    assert_eq!(
+        accounts_tree
+            .get(&mut db_txn, &KeyNibbles::from(&[0u8; 20][..]))
+            .unwrap()
+            .balance(),
+        0.try_into().unwrap()
+    );
+    HashedTimeLockedContract::revert_outgoing_transaction(
+        &accounts_tree,
+        &mut db_txn,
+        &tx,
+        1,
+        1,
+        None,
+    )
+    .unwrap();
+    assert_eq!(
+        accounts_tree
+            .get(&mut db_txn, &KeyNibbles::from(&[0u8; 20][..]))
+            .unwrap(),
+        Account::HTLC(start_contract)
+    );
 }
 
 #[test]
 #[allow(unused_must_use)]
 fn it_refuses_invalid_transaction() {
-    let (mut start_contract, mut tx, pre_image, sender_signature_proof, recipient_signature_proof) =
+    let env = VolatileEnvironment::new(10).unwrap();
+    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let mut db_txn = WriteTransaction::new(&env);
+
+    let (start_contract, mut tx, pre_image, sender_signature_proof, recipient_signature_proof) =
         prepare_outgoing_transaction();
+
+    accounts_tree.put(
+        &mut db_txn,
+        &KeyNibbles::from(&[0u8; 20][..]),
+        Account::HTLC(start_contract.clone()),
+    );
 
     // regular transfer: timeout passed
     let mut proof =
@@ -528,12 +635,15 @@ fn it_refuses_invalid_transaction() {
     Serialize::serialize(&pre_image, &mut proof);
     Serialize::serialize(&recipient_signature_proof, &mut proof);
     tx.proof = proof;
+
     assert_eq!(
-        start_contract.check_outgoing_transaction(&tx, 1, 101),
-        Err(AccountError::InvalidForSender)
-    );
-    assert_eq!(
-        start_contract.commit_outgoing_transaction(&tx, 1, 101),
+        HashedTimeLockedContract::commit_outgoing_transaction(
+            &accounts_tree,
+            &mut db_txn,
+            &tx,
+            1,
+            101
+        ),
         Err(AccountError::InvalidForSender)
     );
 
@@ -547,12 +657,15 @@ fn it_refuses_invalid_transaction() {
     Serialize::serialize(&pre_image, &mut proof);
     Serialize::serialize(&recipient_signature_proof, &mut proof);
     tx.proof = proof;
+
     assert_eq!(
-        start_contract.check_outgoing_transaction(&tx, 1, 1),
-        Err(AccountError::InvalidForSender)
-    );
-    assert_eq!(
-        start_contract.commit_outgoing_transaction(&tx, 1, 1),
+        HashedTimeLockedContract::commit_outgoing_transaction(
+            &accounts_tree,
+            &mut db_txn,
+            &tx,
+            1,
+            1
+        ),
         Err(AccountError::InvalidForSender)
     );
 
@@ -566,12 +679,15 @@ fn it_refuses_invalid_transaction() {
     Serialize::serialize(&pre_image, &mut proof);
     Serialize::serialize(&sender_signature_proof, &mut proof);
     tx.proof = proof;
+
     assert_eq!(
-        start_contract.check_outgoing_transaction(&tx, 1, 1),
-        Err(AccountError::InvalidSignature)
-    );
-    assert_eq!(
-        start_contract.commit_outgoing_transaction(&tx, 1, 1),
+        HashedTimeLockedContract::commit_outgoing_transaction(
+            &accounts_tree,
+            &mut db_txn,
+            &tx,
+            1,
+            1
+        ),
         Err(AccountError::InvalidSignature)
     );
 
@@ -590,15 +706,15 @@ fn it_refuses_invalid_transaction() {
     );
     Serialize::serialize(&recipient_signature_proof, &mut proof);
     tx.proof = proof;
+
     assert_eq!(
-        start_contract.check_outgoing_transaction(&tx, 1, 1),
-        Err(AccountError::InsufficientFunds {
-            needed: 500.try_into().unwrap(),
-            balance: 0.try_into().unwrap()
-        })
-    );
-    assert_eq!(
-        start_contract.commit_outgoing_transaction(&tx, 1, 1),
+        HashedTimeLockedContract::commit_outgoing_transaction(
+            &accounts_tree,
+            &mut db_txn,
+            &tx,
+            1,
+            1
+        ),
         Err(AccountError::InsufficientFunds {
             needed: 500.try_into().unwrap(),
             balance: 0.try_into().unwrap()
@@ -613,12 +729,15 @@ fn it_refuses_invalid_transaction() {
     Serialize::serialize(&sender_signature_proof, &mut proof);
     Serialize::serialize(&recipient_signature_proof, &mut proof);
     tx.proof = proof;
+
     assert_eq!(
-        start_contract.check_outgoing_transaction(&tx, 1, 1),
-        Err(AccountError::InvalidSignature)
-    );
-    assert_eq!(
-        start_contract.commit_outgoing_transaction(&tx, 1, 1),
+        HashedTimeLockedContract::commit_outgoing_transaction(
+            &accounts_tree,
+            &mut db_txn,
+            &tx,
+            1,
+            1
+        ),
         Err(AccountError::InvalidSignature)
     );
 
@@ -627,12 +746,15 @@ fn it_refuses_invalid_transaction() {
     Serialize::serialize(&ProofType::TimeoutResolve, &mut proof);
     Serialize::serialize(&sender_signature_proof, &mut proof);
     tx.proof = proof;
+
     assert_eq!(
-        start_contract.check_outgoing_transaction(&tx, 1, 1),
-        Err(AccountError::InvalidForSender)
-    );
-    assert_eq!(
-        start_contract.commit_outgoing_transaction(&tx, 1, 1),
+        HashedTimeLockedContract::commit_outgoing_transaction(
+            &accounts_tree,
+            &mut db_txn,
+            &tx,
+            1,
+            1
+        ),
         Err(AccountError::InvalidForSender)
     );
 
@@ -641,12 +763,15 @@ fn it_refuses_invalid_transaction() {
     Serialize::serialize(&ProofType::TimeoutResolve, &mut proof);
     Serialize::serialize(&recipient_signature_proof, &mut proof);
     tx.proof = proof;
+
     assert_eq!(
-        start_contract.check_outgoing_transaction(&tx, 1, 101),
-        Err(AccountError::InvalidSignature)
-    );
-    assert_eq!(
-        start_contract.commit_outgoing_transaction(&tx, 1, 101),
+        HashedTimeLockedContract::commit_outgoing_transaction(
+            &accounts_tree,
+            &mut db_txn,
+            &tx,
+            1,
+            101
+        ),
         Err(AccountError::InvalidSignature)
     );
 }

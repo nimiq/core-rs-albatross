@@ -6,7 +6,7 @@ use nimiq_bls::{CompressedPublicKey, KeyPair, Signature};
 use nimiq_collections::bitset::BitSet;
 use nimiq_handel::update::LevelUpdate;
 use nimiq_hash::{Blake2bHasher, Hasher};
-use nimiq_primitives::account::ValidatorId;
+use nimiq_keys::Address;
 use nimiq_primitives::slots::ValidatorsBuilder;
 
 #[test]
@@ -71,14 +71,14 @@ fn it_can_convert_macro_block_into_slots() {
 
     let mut builder = ValidatorsBuilder::new();
 
-    for (validator_id, num_slots, data) in slot_allocation {
+    for (validator_address, num_slots, data) in slot_allocation {
         // The 6 unused bytes in the middle come from reducing the public key size to 270 bytes.
         let pubkey = CompressedPublicKey::from_str(&data[..570]).unwrap();
 
-        let id = ValidatorId::from(validator_id);
+        let address = Address::from(validator_address);
 
         for _ in 0..num_slots {
-            builder.push(id.clone(), pubkey.clone());
+            builder.push(address.clone(), pubkey.clone());
         }
     }
 
