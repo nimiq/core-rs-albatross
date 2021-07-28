@@ -292,7 +292,7 @@ impl<N: Network> Consensus<N> {
             // - know the head state of a majority of our peers
             if self.num_agents() >= self.min_peers {
                 if self.block_queue.accepted_block_announcements() >= Self::MIN_BLOCKS_ESTABLISHED {
-                    info!("Consensus established, number of accepted announcements satisfied.");
+                    debug!("Consensus established, number of accepted announcements satisfied.");
                     self.established_flag.swap(true, Ordering::Release);
 
                     // Also stop any other checks.
@@ -307,7 +307,7 @@ impl<N: Network> Consensus<N> {
                         debug!("Trying to establish consensus, checking head request ({} known, {} unknown).", head_request.num_known_blocks, head_request.num_unknown_blocks);
                         // We would like that 2/3 of our peers have a known state.
                         if head_request.num_known_blocks >= 2 * head_request.num_unknown_blocks {
-                            info!("Consensus established, 2/3 of heads known.");
+                            debug!("Consensus established, 2/3 of heads known.");
                             self.established_flag.swap(true, Ordering::Release);
                             return Some(ConsensusEvent::Established);
                         }

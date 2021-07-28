@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use nimiq_block::Block;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
+pub use nimiq_consensus::ConsensusEvent;
 use nimiq_consensus::{Consensus as AbstractConsensus, ConsensusProxy as AbstractConsensusProxy};
 use nimiq_database::Environment;
 use nimiq_genesis::NetworkInfo;

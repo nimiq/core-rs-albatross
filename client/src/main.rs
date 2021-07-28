@@ -1,7 +1,8 @@
+use futures::StreamExt;
 use std::time::Duration;
 
 pub use nimiq::{
-    client::{Client, Consensus},
+    client::{Client, Consensus, ConsensusEvent},
     config::command_line::CommandLine,
     config::config::ClientConfig,
     config::config_file::ConfigFile,
@@ -83,6 +84,20 @@ async fn main_inner() -> Result<(), Error> {
 
     // Start consensus.
     let consensus = client.consensus().unwrap();
+
+    let consensus_events = consensus.subscribe_events();
+    tokio::spawn(async move {
+        consensus_events
+            .for_each(|event| async move {
+                if Result::is_ok(&event) {
+                    match event.unwrap() {
+                        ConsensusEvent::Established => log::info!("Consensus established"),
+                        ConsensusEvent::Lost => log::warn!("Consensus lost"),
+                    }
+                }
+            })
+            .await
+    });
 
     log::info!("Spawning consensus");
     tokio::spawn(consensus);
