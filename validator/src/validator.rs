@@ -74,7 +74,7 @@ pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork + 's
 
     proposal_receiver: ProposalReceiver<TValidatorNetwork>,
 
-    consensus_event_rx: BroadcastStream<ConsensusEvent<TNetwork>>,
+    consensus_event_rx: BroadcastStream<ConsensusEvent>,
     blockchain_event_rx: UnboundedReceiverStream<BlockchainEvent>,
     fork_event_rx: UnboundedReceiverStream<ForkEvent>,
 
@@ -213,7 +213,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
     }
 
     fn init_block_producer(&mut self) {
-        log::debug!("Initializing block producer");
+        log::trace!("Initializing block producer");
 
         if !self.is_active() {
             log::debug!("Validator not active");
@@ -368,7 +368,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                             network
                                 .publish(&BlockTopic, Block::Macro(block_copy))
                                 .await
-                                .map_err(|e| error!("Failed to publish block: {:?}", e))
+                                .map_err(|e| trace!("Failed to publish block: {:?}", e))
                                 .ok();
                         });
                     }
@@ -424,7 +424,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                                 .await
                                 .is_err()
                             {
-                                error!("Failed to publish Block");
+                                trace!("Failed to publish Block");
                             }
                         });
                     }

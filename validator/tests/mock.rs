@@ -111,7 +111,7 @@ async fn mock_validators(hub: &mut MockHub, num_validators: usize) -> Vec<Valida
     }
 
     // Wait until validators are connected.
-    let mut events: Vec<BroadcastStream<ConsensusEvent<MockNetwork>>> =
+    let mut events: Vec<BroadcastStream<ConsensusEvent>> =
         consensus.iter().map(|v| v.subscribe_events()).collect();
 
     // Start consensus.

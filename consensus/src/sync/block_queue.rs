@@ -46,10 +46,9 @@ impl Topic for BlockTopic {
 pub type BlockStream<N> = BoxStream<'static, (Block, <N as Network>::PubsubId)>;
 
 #[derive(Clone, Debug)]
-pub enum BlockQueueEvent<TPeer: Peer> {
-    ReceivedBlocks,
-    PeerMacroSynced(Weak<ConsensusAgent<TPeer>>),
-    PeerLeft(Arc<ConsensusAgent<TPeer>>),
+pub enum BlockQueueEvent {
+    AcceptedAnnouncedBlock,
+    ReceivedMissingBlocks,
 }
 
 #[derive(Clone, Debug)]
@@ -337,7 +336,7 @@ impl<N: Network> Inner<N> {
 }
 
 impl<N: Network> Stream for Inner<N> {
-    type Item = ();
+    type Item = BlockQueueEvent;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         // Store waker.
@@ -356,12 +355,12 @@ impl<N: Network> Stream for Inner<N> {
                     if result == PushResult::Extended || result == PushResult::Rebranched =>
                 {
                     self.push_buffered();
-                    return Poll::Ready(Some(()));
+                    return Poll::Ready(Some(BlockQueueEvent::AcceptedAnnouncedBlock));
                 }
-                PushOpResult::Multi(result, invalid_blocks) => {
+                PushOpResult::Multi(_, invalid_blocks) => {
                     self.remove_invalid_blocks(invalid_blocks);
                     self.push_buffered();
-                    return Poll::Ready(Some(()));
+                    return Poll::Ready(Some(BlockQueueEvent::ReceivedMissingBlocks));
                 }
                 _ => {}
             };
@@ -455,7 +454,7 @@ impl<N: Network, TReq: RequestComponent<N::PeerType>> BlockQueue<N, TReq> {
 }
 
 impl<N: Network, TReq: RequestComponent<N::PeerType>> Stream for BlockQueue<N, TReq> {
-    type Item = BlockQueueEvent<N::PeerType>;
+    type Item = BlockQueueEvent;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         let num_peers = self.num_peers();
@@ -463,9 +462,12 @@ impl<N: Network, TReq: RequestComponent<N::PeerType>> Stream for BlockQueue<N, T
 
         // First, advance the internal future to process buffered blocks.
         match this.inner.poll_next_unpin(cx) {
-            Poll::Ready(Some(_)) => {
+            Poll::Ready(Some(BlockQueueEvent::AcceptedAnnouncedBlock)) => {
                 *this.accepted_announcements = this.accepted_announcements.saturating_add(1);
-                return Poll::Ready(Some(BlockQueueEvent::ReceivedBlocks));
+                return Poll::Ready(Some(BlockQueueEvent::AcceptedAnnouncedBlock));
+            }
+            Poll::Ready(Some(BlockQueueEvent::ReceivedMissingBlocks)) => {
+                return Poll::Ready(Some(BlockQueueEvent::ReceivedMissingBlocks))
             }
             Poll::Ready(None) => unreachable!(),
             Poll::Pending => {}
@@ -494,12 +496,6 @@ impl<N: Network, TReq: RequestComponent<N::PeerType>> Stream for BlockQueue<N, T
         match this.request_component.poll_next(cx) {
             Poll::Ready(Some(RequestComponentEvent::ReceivedBlocks(blocks))) => {
                 this.inner.on_missing_blocks_received(blocks);
-            }
-            Poll::Ready(Some(RequestComponentEvent::PeerMacroSynced(peer))) => {
-                return Poll::Ready(Some(BlockQueueEvent::PeerMacroSynced(peer)));
-            }
-            Poll::Ready(Some(RequestComponentEvent::PeerLeft(peer))) => {
-                return Poll::Ready(Some(BlockQueueEvent::PeerLeft(peer)));
             }
             Poll::Ready(None) => panic!("The request_component stream is exhausted"),
             Poll::Pending => {}

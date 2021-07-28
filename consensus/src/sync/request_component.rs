@@ -10,7 +10,7 @@ use std::pin::Pin;
 use std::sync::{Arc, Weak};
 use tokio_stream::wrappers::BroadcastStream;
 
-pub trait RequestComponent<P: Peer>: Stream<Item = RequestComponentEvent<P>> + Unpin {
+pub trait RequestComponent<P: Peer>: Stream<Item = RequestComponentEvent> + Unpin {
     fn request_missing_blocks(
         &mut self,
         target_block_hash: Blake2bHash,
@@ -25,9 +25,7 @@ pub trait RequestComponent<P: Peer>: Stream<Item = RequestComponentEvent<P>> + U
 }
 
 #[derive(Debug)]
-pub enum RequestComponentEvent<P: Peer> {
-    PeerMacroSynced(Weak<ConsensusAgent<P>>),
-    PeerLeft(Arc<ConsensusAgent<P>>),
+pub enum RequestComponentEvent {
     ReceivedBlocks(Vec<Block>),
 }
 
@@ -107,8 +105,8 @@ impl<TPeer: 'static + Peer> RequestComponent<TPeer> for BlockRequestComponent<TP
     }
 }
 
-impl<TPeer: 'static + Peer> Stream for BlockRequestComponent<TPeer> {
-    type Item = RequestComponentEvent<TPeer>;
+impl<TPeer: Peer + 'static> Stream for BlockRequestComponent<TPeer> {
+    type Item = RequestComponentEvent;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         // 1. Poll network events to remove peers.
@@ -122,9 +120,7 @@ impl<TPeer: 'static + Peer> Stream for BlockRequestComponent<TPeer> {
         // 2. Poll self.sync_method and add new peers to self.sync_queue.
         if let Poll::Ready(Some(result)) = self.sync_method.poll_next_unpin(cx) {
             self.sync_queue.add_peer(Arc::downgrade(&result));
-            let event = RequestComponentEvent::PeerMacroSynced(Arc::downgrade(&result));
             self.agents.insert(Arc::clone(&result.peer), result);
-            return Poll::Ready(Some(event));
         }
 
         // 3. Poll self.sync_queue, return results.
