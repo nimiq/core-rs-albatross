@@ -96,7 +96,7 @@ impl<P> Default for MockRequestComponent<P> {
 }
 
 impl<P: Peer> Stream for MockRequestComponent<P> {
-    type Item = RequestComponentEvent<P>;
+    type Item = RequestComponentEvent;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         Poll::Ready(
