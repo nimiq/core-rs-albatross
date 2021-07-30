@@ -1,9 +1,12 @@
+use std::marker::PhantomData;
+use std::sync::Weak;
 use std::{
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
 };
 
+use futures::task::noop_waker_ref;
 use futures::{
     channel::mpsc,
     sink::SinkExt,
@@ -12,7 +15,6 @@ use futures::{
 use pin_project::pin_project;
 
 use beserial::Deserialize;
-use futures::ready;
 use nimiq_block::Block;
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
@@ -28,8 +30,6 @@ use nimiq_network_interface::network::Network;
 use nimiq_network_interface::peer::Peer;
 use nimiq_network_mock::{MockHub, MockId, MockPeer};
 use nimiq_primitives::networks::NetworkId;
-use std::marker::PhantomData;
-use std::sync::Weak;
 
 /// Secret key of validator. Tests run with `network-primitives/src/genesis/unit-albatross.toml`
 const SECRET_KEY: &str =
@@ -99,9 +99,12 @@ impl<P: Peer> Stream for MockRequestComponent<P> {
     type Item = RequestComponentEvent;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-        Poll::Ready(
-            ready!(self.project().rx.poll_next(cx)).map(RequestComponentEvent::ReceivedBlocks),
-        )
+        match self.project().rx.poll_next(cx) {
+            Poll::Ready(Some(blocks)) => {
+                Poll::Ready(Some(RequestComponentEvent::ReceivedBlocks(blocks)))
+            }
+            _ => Poll::Pending,
+        }
     }
 }
 
@@ -190,7 +193,7 @@ async fn send_two_micro_blocks_out_of_order() {
     assert_eq!(blockchain1.block_number(), 0);
 
     // run the block_queue one iteration, i.e. until it processed one block
-    block_queue.next().await;
+    block_queue.poll_next_unpin(&mut Context::from_waker(noop_waker_ref()));
 
     // this block should be buffered now
     assert_eq!(blockchain1.block_number(), 0);
@@ -198,7 +201,7 @@ async fn send_two_micro_blocks_out_of_order() {
     assert_eq!(blocks.len(), 1);
     let (block_number, blocks) = blocks.get(0).unwrap();
     assert_eq!(*block_number, 2);
-    assert_eq!(blocks[0], block2);
+    assert_eq!(blocks[0], &block2);
 
     // Also we should've received a request to fill this gap
     let (target_block_hash, _locators) = mock_ptarc_rx.next().await.unwrap();
@@ -207,7 +210,8 @@ async fn send_two_micro_blocks_out_of_order() {
     // now send block1 to fill the gap
     tx.send((block1.clone(), mock_id)).await.unwrap();
 
-    // run the block_queue one iteration, i.e. until it processed one block
+    // run the block_queue until is has produced two events.
+    block_queue.next().await;
     block_queue.next().await;
 
     // now both blocks should've been pushed to the blockchain
@@ -219,8 +223,6 @@ async fn send_two_micro_blocks_out_of_order() {
 
 #[tokio::test]
 async fn send_block_with_gap_and_respond_to_missing_request() {
-    //simple_logger::init_by_env();
-
     let keypair =
         KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
     let env1 = VolatileEnvironment::new(10).unwrap();
@@ -267,7 +269,7 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
     assert_eq!(blockchain1.block_number(), 0);
 
     // run the block_queue one iteration, i.e. until it processed one block
-    block_queue.next().await;
+    block_queue.poll_next_unpin(&mut Context::from_waker(noop_waker_ref()));
 
     // this block should be buffered now
     assert_eq!(blockchain1.block_number(), 0);
@@ -275,7 +277,7 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
     assert_eq!(blocks.len(), 1);
     let (block_number, blocks) = blocks.get(0).unwrap();
     assert_eq!(*block_number, 2);
-    assert_eq!(blocks[0], block2);
+    assert_eq!(blocks[0], &block2);
 
     // Also we should've received a request to fill this gap
     // TODO: Check block locators
@@ -285,7 +287,8 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
     // Instead of gossiping the block, we'll answer the missing blocks request
     mock_ptarc_tx.unbounded_send(vec![block1.clone()]).unwrap();
 
-    // run the block_queue one iteration, i.e. until it processed one block
+    // run the block_queue until is has produced two events.
+    block_queue.next().await;
     block_queue.next().await;
 
     // now both blocks should've been pushed to the blockchain
@@ -347,7 +350,7 @@ async fn put_peer_back_into_sync_mode() {
     tx.send((block, mock_id)).await.unwrap();
 
     // run the block_queue one iteration, i.e. until it processed one block
-    block_queue.next().await;
+    block_queue.poll_next_unpin(&mut Context::from_waker(noop_waker_ref()));
 
     assert!(block_queue.request_component.peer_put_into_sync);
 }
