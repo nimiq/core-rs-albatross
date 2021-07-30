@@ -291,7 +291,6 @@ impl<N: Network> Consensus<N> {
             // - accepted a minimum number of block announcements, or
             // - know the head state of a majority of our peers
             if self.num_agents() >= self.min_peers {
-                debug!("Trying to establish consensus, number of synced peers satisfied.");
                 if self.block_queue.accepted_block_announcements() >= Self::MIN_BLOCKS_ESTABLISHED {
                     info!("Consensus established, number of accepted announcements satisfied.");
                     self.established_flag.swap(true, Ordering::Release);
@@ -353,13 +352,22 @@ impl<N: Network> Future for Consensus<N> {
         // 1. Poll and advance block queue
         while let Poll::Ready(Some(event)) = self.block_queue.poll_next_unpin(cx) {
             match event {
-                BlockQueueEvent::AcceptedAnnouncedBlock => {
+                BlockQueueEvent::AcceptedAnnouncedBlock(_) => {
                     debug!("Now at block #{}", self.blockchain.block_number());
                 }
-                BlockQueueEvent::ReceivedMissingBlocks => {
-                    // When syncing a stopped chain, we want to immediately start a new head request
-                    // after receiving blocks for the current epoch.
+                BlockQueueEvent::AcceptedBufferedBlock(_, remaining_in_buffer) => {
                     if !self.is_established() {
+                        info!(
+                            "Catching up to tip of the chain (now at #{}, {} blocks remaining)",
+                            self.blockchain.block_number(),
+                            remaining_in_buffer
+                        );
+                    }
+                }
+                BlockQueueEvent::ReceivedMissingBlocks(_, count) => {
+                    if !self.is_established() {
+                        // When syncing a stopped chain, we want to immediately start a new head request
+                        // after receiving blocks for the current epoch.
                         self.head_requests_time = None;
                     }
                 }
