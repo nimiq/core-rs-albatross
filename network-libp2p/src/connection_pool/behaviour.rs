@@ -1,12 +1,15 @@
+use std::collections::{BTreeMap, BTreeSet};
+use std::task::Waker;
+use std::time::{Duration, Instant};
 use std::{
     collections::{HashMap, HashSet, VecDeque},
+    error,
     sync::Arc,
     task::{Context, Poll},
-    time::Duration,
 };
 
-use futures::StreamExt;
 use ip_network::IpNetwork;
+use libp2p::swarm::DialPeerCondition;
 use libp2p::{
     core::connection::ConnectionId,
     core::multiaddr::Protocol,
@@ -17,11 +20,12 @@ use libp2p::{
     },
     Multiaddr, PeerId,
 };
-
 use parking_lot::RwLock;
-use wasm_timer::{Instant, Interval};
+use rand::seq::IteratorRandom;
+use rand::thread_rng;
+use tokio::time::Interval;
 
-use crate::discovery::peer_contacts::{PeerContactBook, PeerContactInfo};
+use crate::discovery::peer_contacts::{PeerContactBook, Services};
 
 use super::handler::{ConnectionPoolHandler, HandlerInEvent, HandlerOutEvent};
 
@@ -33,24 +37,32 @@ struct ConnectionPoolLimits {
 }
 
 #[derive(Clone, Debug)]
-struct ConnectionPoolLimitsConfig {
+struct ConnectionPoolConfig {
+    peer_count_desired: usize,
     peer_count_max: usize,
     peer_count_per_ip_max: usize,
     outbound_peer_count_per_subnet_max: usize,
     inbound_peer_count_per_subnet_max: usize,
     ipv4_subnet_mask: u8,
     ipv6_subnet_mask: u8,
+    dialing_count_max: usize,
+    retry_down_after: Duration,
+    housekeeping_interval: Duration,
 }
 
-impl Default for ConnectionPoolLimitsConfig {
+impl Default for ConnectionPoolConfig {
     fn default() -> Self {
         Self {
+            peer_count_desired: 12,
             peer_count_max: 4000,
             peer_count_per_ip_max: 20,
             outbound_peer_count_per_subnet_max: 2,
-            inbound_peer_count_per_subnet_max: 100,
+            inbound_peer_count_per_subnet_max: 10,
             ipv4_subnet_mask: 24,
             ipv6_subnet_mask: 96,
+            dialing_count_max: 3,
+            retry_down_after: Duration::from_secs(60 * 10), // 10 minutes
+            housekeeping_interval: Duration::from_secs(60 * 2), // 2 minutes
         }
     }
 }
@@ -60,93 +72,243 @@ pub enum ConnectionPoolEvent {
     Disconnect { peer_id: PeerId },
 }
 
+struct ConnectionState<T> {
+    dialing: BTreeSet<T>,
+    connected: BTreeSet<T>,
+    failed: BTreeMap<T, usize>,
+    down: BTreeMap<T, Instant>,
+    max_failures: usize,
+    retry_down_after: Duration,
+}
+
+impl<T: Ord> ConnectionState<T> {
+    fn new(max_failures: usize, retry_down_after: Duration) -> Self {
+        Self {
+            dialing: BTreeSet::new(),
+            connected: BTreeSet::new(),
+            failed: BTreeMap::new(),
+            down: BTreeMap::new(),
+            max_failures,
+            retry_down_after,
+        }
+    }
+
+    fn mark_dialing(&mut self, id: T) {
+        self.dialing.insert(id);
+    }
+
+    fn mark_connected(&mut self, id: T) {
+        self.dialing.remove(&id);
+        self.failed.remove(&id);
+        self.down.remove(&id);
+        self.connected.insert(id);
+    }
+
+    fn mark_closed(&mut self, id: T) {
+        self.connected.remove(&id);
+    }
+
+    fn mark_failed(&mut self, id: T) {
+        self.dialing.remove(&id);
+
+        // TODO Ignore failures if down?
+
+        if let Some(num_attempts) = self.failed.get_mut(&id) {
+            *num_attempts += 1;
+            if *num_attempts >= self.max_failures {
+                self.mark_down(id);
+            }
+        } else {
+            self.failed.insert(id, 1);
+        }
+    }
+
+    fn mark_down(&mut self, id: T) {
+        self.failed.remove(&id);
+        self.down.insert(id, Instant::now());
+    }
+
+    fn can_dial(&self, id: &T) -> bool {
+        !self.dialing.contains(id) && !self.connected.contains(id) && !self.down.contains_key(id)
+    }
+
+    fn num_dialing(&self) -> usize {
+        self.dialing.len()
+    }
+
+    fn num_connected(&self) -> usize {
+        self.connected.len()
+    }
+
+    fn housekeeping(&mut self) {
+        // Remove all down peers that we haven't dialed in a while from the `down` map to dial them again.
+        let retry_down_after = self.retry_down_after;
+        self.down
+            .retain(|_, down_since| down_since.elapsed() < retry_down_after);
+    }
+}
+
+impl<T> std::fmt::Display for ConnectionState<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "connected={}, dialing={}, failed={}, down={}",
+            self.connected.len(),
+            self.dialing.len(),
+            self.failed.len(),
+            self.down.len()
+        )
+    }
+}
+
 pub struct ConnectionPoolBehaviour {
-    peer_contact_book: Arc<RwLock<PeerContactBook>>,
-    connected_peers: HashSet<PeerId>,
-    pending_connections: Vec<Arc<PeerContactInfo>>,
-    pending_seeds: Vec<Multiaddr>,
-    next_check_timeout: Option<Interval>,
+    contacts: Arc<RwLock<PeerContactBook>>,
+    seeds: Vec<Multiaddr>,
+
+    peers: ConnectionState<PeerId>,
+    addresses: ConnectionState<Multiaddr>,
+
+    actions: VecDeque<NetworkBehaviourAction<HandlerInEvent, ConnectionPoolEvent>>,
+
+    active: bool,
+
     limits: ConnectionPoolLimits,
-    config: ConnectionPoolLimitsConfig,
+    config: ConnectionPoolConfig,
     banned: HashSet<IpNetwork>,
-    pub events: VecDeque<NetworkBehaviourAction<HandlerInEvent, ConnectionPoolEvent>>,
+    waker: Option<Waker>,
+    housekeeping_timer: Interval,
 }
 
 impl ConnectionPoolBehaviour {
-    pub fn new(peer_contact_book: Arc<RwLock<PeerContactBook>>, seeds: Vec<Multiaddr>) -> Self {
+    pub fn new(contacts: Arc<RwLock<PeerContactBook>>, seeds: Vec<Multiaddr>) -> Self {
         let limits = ConnectionPoolLimits {
             ip_count: HashMap::new(),
             ipv4_count: 0,
             ipv6_count: 0,
         };
+        let config = ConnectionPoolConfig::default();
+        let housekeeping_timer = tokio::time::interval(config.housekeeping_interval);
 
         Self {
-            peer_contact_book,
-            connected_peers: HashSet::new(),
-            pending_connections: vec![],
-            pending_seeds: seeds,
-            next_check_timeout: None,
+            contacts,
+            seeds,
+            peers: ConnectionState::new(2, config.retry_down_after),
+            addresses: ConnectionState::new(4, config.retry_down_after),
+            actions: VecDeque::new(),
+            active: false,
             limits,
-            config: ConnectionPoolLimitsConfig::default(),
+            config,
             banned: HashSet::new(),
-            events: VecDeque::new(),
+            waker: None,
+            housekeeping_timer,
         }
     }
 
     pub fn start_connecting(&mut self) {
-        if self.next_check_timeout.is_none() {
-            self.next_check_timeout =
-                Some(Interval::new_at(Instant::now(), Duration::from_secs(3)));
+        self.active = true;
+        self.maintain_peers();
+    }
+
+    pub fn maintain_peers(&mut self) {
+        log::debug!(
+            "Maintaining peers: {} | addresses: {}",
+            self.peers,
+            self.addresses
+        );
+
+        // Try to maintain at least `peer_count_desired` connections.
+        if self.active
+            && self.peers.num_connected() < self.config.peer_count_desired
+            && self.peers.num_dialing() < self.config.dialing_count_max
+        {
+            // Dial peers from the contact book.
+            for peer_id in self.choose_peers_to_dial() {
+                log::debug!("Dialing peer {}", peer_id);
+                self.peers.mark_dialing(peer_id);
+                self.actions.push_back(NetworkBehaviourAction::DialPeer {
+                    peer_id,
+                    condition: DialPeerCondition::Disconnected,
+                });
+            }
+
+            // Dial seeds.
+            for address in self.choose_seeds_to_dial() {
+                log::debug!("Dialing seed {}", address);
+                self.addresses.mark_dialing(address.clone());
+                self.actions
+                    .push_back(NetworkBehaviourAction::DialAddress { address });
+            }
+        }
+
+        if let Some(waker) = &self.waker {
+            waker.wake_by_ref();
         }
     }
 
-    fn maintain_peers(&mut self) {
-        log::trace!(
-            "Maintaining peers; #peers: {} peers: {:?}",
-            &self.connected_peers.len(),
-            &self.connected_peers
+    fn choose_peers_to_dial(&self) -> Vec<PeerId> {
+        let num_peers = usize::min(
+            self.config.peer_count_desired - self.peers.num_connected(),
+            self.config.dialing_count_max - self.peers.num_dialing(),
         );
-        if self.pending_connections.is_empty() && self.connected_peers.len() < 4 {
-            self.pending_connections = self
-                .peer_contact_book
-                .read()
-                .get_next_connections(4 - self.connected_peers.len(), &self.connected_peers);
+        let contacts = self.contacts.read();
+        let own_contact = contacts.get_own_contact();
+        let own_peer_id = own_contact.peer_id();
+
+        // TODO Services
+        contacts
+            .query(own_contact.protocols(), Services::all()) // TODO Services
+            .filter_map(|contact| {
+                let peer_id = contact.peer_id();
+                if peer_id != own_peer_id && self.peers.can_dial(peer_id) {
+                    Some(*peer_id)
+                } else {
+                    None
+                }
+            })
+            .choose_multiple(&mut thread_rng(), num_peers)
+    }
+
+    fn choose_seeds_to_dial(&self) -> Vec<Multiaddr> {
+        // We prefer to connect to non-seed peers. Thus, we only choose any seeds here if we're
+        // not already dialing any peers and at most one seed at a time.
+        if self.peers.num_dialing() > 0 || self.addresses.num_dialing() > 0 {
+            return vec![];
         }
 
-        // Disconnect peers that have negative scores
-        for peer_id in &self.connected_peers {
-            let peer_score = self
-                .peer_contact_book
-                .read()
-                .get(peer_id)
-                .map(|e| e.get_score());
+        let num_seeds = 1;
+        let contacts = self.contacts.read();
+        let own_addresses: HashSet<&Multiaddr> = contacts.get_own_contact().addresses().collect();
+        self.seeds
+            .iter()
+            .filter(|address| !own_addresses.contains(address) && self.addresses.can_dial(*address))
+            .cloned()
+            .choose_multiple(&mut thread_rng(), num_seeds)
+    }
+
+    fn housekeeping(&mut self) {
+        log::trace!("Doing housekeeping in connection pool.");
+
+        // Disconnect peers that have negative scores.
+        let contacts = self.contacts.read();
+        for peer_id in &self.peers.connected {
+            let peer_score = contacts.get(peer_id).map(|e| e.get_score());
             if let Some(score) = peer_score {
                 if score < 0.0 {
-                    self.events.push_back(NetworkBehaviourAction::GenerateEvent(
-                        ConnectionPoolEvent::Disconnect { peer_id: *peer_id },
-                    ));
+                    self.actions
+                        .push_back(NetworkBehaviourAction::GenerateEvent(
+                            ConnectionPoolEvent::Disconnect { peer_id: *peer_id },
+                        ));
                 }
             }
         }
+        drop(contacts);
+
+        self.peers.housekeeping();
+        self.addresses.housekeeping();
+
+        self.maintain_peers();
     }
 }
-
-// impl NetworkBehaviourEventProcess<NetworkEvent<Peer>> for ConnectionPoolBehaviour {
-//     fn inject_event(&mut self, event: NetworkEvent<Peer>) {
-//         log::error!(">>>>>> ConnectionPoolBehaviour::inject_event: {:?}", event);
-
-//         match event {
-//             NetworkEvent::PeerJoined(peer) => {
-//                 self.connected_peers.insert(peer.id)
-//             },
-//             NetworkEvent::PeerLeft(peer) => {
-//                 self.connected_peers.remove(&peer.id)
-//             },
-//         };
-
-//         self.emit_event(event);
-//     }
-// }
 
 impl NetworkBehaviour for ConnectionPoolBehaviour {
     type ProtocolsHandler = ConnectionPoolHandler;
@@ -157,11 +319,24 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
     }
 
     fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
-        self.peer_contact_book
+        self.contacts
             .read()
             .get(peer_id)
             .map(|e| e.contact().addresses.clone())
             .unwrap_or_default()
+    }
+
+    fn inject_connected(&mut self, peer_id: &PeerId) {
+        self.peers.mark_connected(*peer_id);
+        self.maintain_peers();
+    }
+
+    fn inject_disconnected(&mut self, peer_id: &PeerId) {
+        self.peers.mark_closed(*peer_id);
+        // If the connection was closed for any reason, don't dial the peer again.
+        // FIXME We want to be more selective here and only mark peers as down for specific CloseReasons.
+        self.peers.mark_down(*peer_id);
+        self.maintain_peers();
     }
 
     fn inject_connection_established(
@@ -171,6 +346,12 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
         endpoint: &ConnectedPoint,
     ) {
         let address = endpoint.get_remote_address();
+        log::debug!(
+            "Connection established: peer_id={}, address={}",
+            peer_id,
+            address
+        );
+
         let subnet_limit = match endpoint {
             ConnectedPoint::Dialer { .. } => self.config.outbound_peer_count_per_subnet_max,
             ConnectedPoint::Listener { .. } => self.config.inbound_peer_count_per_subnet_max,
@@ -212,9 +393,10 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
         }
 
         if close_connection {
-            self.events.push_back(NetworkBehaviourAction::GenerateEvent(
-                ConnectionPoolEvent::Disconnect { peer_id: *peer_id },
-            ));
+            self.actions
+                .push_back(NetworkBehaviourAction::GenerateEvent(
+                    ConnectionPoolEvent::Disconnect { peer_id: *peer_id },
+                ));
         } else {
             // Increment peer counts per IP
             *self.limits.ip_count.entry(ip).or_insert(0) += 1;
@@ -222,17 +404,9 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
                 IpNetwork::V4(..) => self.limits.ipv4_count += 1,
                 IpNetwork::V6(..) => self.limits.ipv6_count += 1,
             };
-        }
-    }
 
-    fn inject_connected(&mut self, peer_id: &PeerId) {
-        if self.connected_peers.insert(*peer_id) {
-            log::trace!("{:?} added to connected set of peers", peer_id);
-        } else {
-            log::debug!("{:?} already part of connected set of peers", peer_id);
+            self.addresses.mark_connected(address.clone());
         }
-
-        self.maintain_peers();
     }
 
     fn inject_connection_closed(
@@ -263,16 +437,8 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
             IpNetwork::V4(..) => self.limits.ipv4_count = self.limits.ipv4_count.saturating_sub(1),
             IpNetwork::V6(..) => self.limits.ipv6_count = self.limits.ipv6_count.saturating_sub(1),
         };
-    }
 
-    fn inject_disconnected(&mut self, peer_id: &PeerId) {
-        if self.connected_peers.remove(peer_id) {
-            log::trace!("{:?} removed from connected set of peers", peer_id);
-        } else {
-            log::debug!("{:?} was not part of connected set of peers", peer_id);
-        }
-
-        self.maintain_peers();
+        self.addresses.mark_closed(address.clone());
     }
 
     fn inject_event(
@@ -299,46 +465,49 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
         }
     }
 
+    fn inject_addr_reach_failure(
+        &mut self,
+        peer_id: Option<&PeerId>,
+        addr: &Multiaddr,
+        error: &dyn error::Error,
+    ) {
+        log::debug!(
+            "Failed to reach address: {}, peer_id={:?}, error={:?}",
+            addr,
+            peer_id,
+            error
+        );
+        self.addresses.mark_failed(addr.clone());
+        self.maintain_peers();
+    }
+
+    fn inject_dial_failure(&mut self, peer_id: &PeerId) {
+        log::debug!("Failed to dial peer: {}", peer_id);
+        self.peers.mark_failed(*peer_id);
+        self.maintain_peers();
+    }
+
     fn poll(
         &mut self,
         cx: &mut Context<'_>,
         _params: &mut impl PollParameters,
     ) -> Poll<NetworkBehaviourAction<HandlerInEvent, ConnectionPoolEvent>> {
-        if self.pending_connections.is_empty() {
-            if let Some(mut timer) = self.next_check_timeout.take() {
-                let mut network_action: Poll<
-                    NetworkBehaviourAction<HandlerInEvent, ConnectionPoolEvent>,
-                > = Poll::Pending;
-                if let Poll::Ready(Some(_)) = timer.poll_next_unpin(cx) {
-                    self.maintain_peers();
-
-                    // Connect to seed nodes
-                    if !self.pending_seeds.is_empty() {
-                        let address = self.pending_seeds.pop().unwrap();
-                        log::trace!(
-                            "Creating Dial Action for seed at {}; remaining pending elements: {}",
-                            address,
-                            self.pending_seeds.len()
-                        );
-                        network_action =
-                            Poll::Ready(NetworkBehaviourAction::DialAddress { address });
-                    }
-                }
-                self.next_check_timeout = Some(timer);
-
-                return network_action;
-            }
-            // If there is no timer yet, we do nothing as that means the network has not yet started.
-        } else {
-            log::trace!(
-                "Creating Dial Action; remaining pending elements: {}",
-                self.pending_connections.len() - 1
-            );
-            return Poll::Ready(NetworkBehaviourAction::DialPeer {
-                peer_id: *self.pending_connections.pop().unwrap().peer_id(),
-                condition: libp2p::swarm::DialPeerCondition::Always,
-            });
+        // Dispatch pending actions.
+        if let Some(action) = self.actions.pop_front() {
+            return Poll::Ready(action);
         }
+
+        // Perform housekeeping at regular intervals.
+        if self.housekeeping_timer.poll_tick(cx).is_ready() {
+            self.housekeeping();
+        }
+
+        // Store waker.
+        match &mut self.waker {
+            Some(waker) if !waker.will_wake(cx.waker()) => *waker = cx.waker().clone(),
+            None => self.waker = Some(cx.waker().clone()),
+            _ => {}
+        };
 
         Poll::Pending
     }

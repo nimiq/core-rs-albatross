@@ -174,7 +174,7 @@ impl NimiqBehaviour {
         cx: &mut Context,
         _params: &mut impl PollParameters,
     ) -> Poll<NetworkBehaviourAction<T, NimiqEvent>> {
-        while self.update_scores.poll_tick(cx).is_ready() {
+        if self.update_scores.poll_tick(cx).is_ready() {
             log::trace!("Update peer scores");
             self.peer_contact_book.read().update_scores(&self.gossipsub);
         }
@@ -210,6 +210,7 @@ impl NimiqBehaviour {
 impl NetworkBehaviourEventProcess<DiscoveryEvent> for NimiqBehaviour {
     fn inject_event(&mut self, event: DiscoveryEvent) {
         log::trace!("discovery event: {:?}", event);
+        self.peers.maintain_peers();
     }
 }
 

@@ -384,8 +384,7 @@ impl ProtocolsHandler for DiscoveryHandler {
                                     let mut peer_contact_book = self.peer_contact_book.write();
 
                                     // Update our own peer contact given the observed addresses we received
-                                    peer_contact_book
-                                        .self_add_addresses(observed_addresses.clone());
+                                    peer_contact_book.add_own_addresses(observed_addresses.clone());
 
                                     // Send the HandshakeAck
                                     let response_signature =
@@ -397,7 +396,10 @@ impl ProtocolsHandler for DiscoveryHandler {
                                     self.protocols_filter = protocols;
 
                                     let msg = DiscoveryMessage::HandshakeAck {
-                                        peer_contact: peer_contact_book.get_self().signed().clone(),
+                                        peer_contact: peer_contact_book
+                                            .get_own_contact()
+                                            .signed()
+                                            .clone(),
                                         response_signature,
                                         update_interval: Some(
                                             self.config.update_interval.as_secs(),
