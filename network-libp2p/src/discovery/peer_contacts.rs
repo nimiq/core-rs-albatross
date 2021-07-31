@@ -12,10 +12,8 @@ use libp2p::{
     Multiaddr, PeerId,
 };
 use parking_lot::RwLock;
-use rand::{seq::IteratorRandom, thread_rng};
 
 use beserial::{Deserialize, Serialize};
-
 use nimiq_utils::tagged_signing::{TaggedKeypair, TaggedSignable, TaggedSignature};
 
 /// Configuration for the peer contact book.
@@ -438,16 +436,16 @@ impl PeerContactInfo {
 pub struct PeerContactBook {
     config: PeerContactBookConfig,
 
-    self_peer_contact: PeerContactInfo,
+    own_peer_contact: PeerContactInfo,
 
     peer_contacts: HashMap<PeerId, Arc<PeerContactInfo>>,
 }
 
 impl PeerContactBook {
-    pub fn new(config: PeerContactBookConfig, self_peer_contact: SignedPeerContact) -> Self {
+    pub fn new(config: PeerContactBookConfig, own_peer_contact: SignedPeerContact) -> Self {
         Self {
             config,
-            self_peer_contact: self_peer_contact.into(),
+            own_peer_contact: own_peer_contact.into(),
             peer_contacts: HashMap::new(),
         }
     }
@@ -517,26 +515,6 @@ impl PeerContactBook {
         })
     }
 
-    pub fn get_next_connections(
-        &self,
-        count: usize,
-        connected_peers: &HashSet<PeerId>,
-    ) -> Vec<Arc<PeerContactInfo>> {
-        let mut rng = thread_rng();
-        let mut connected_peers = connected_peers.clone();
-        connected_peers.insert(self.self_peer_contact.peer_id().clone());
-        self.peer_contacts
-            .iter()
-            .filter_map(|peer_contact| {
-                if !connected_peers.contains(peer_contact.0) {
-                    Some(peer_contact.1.clone())
-                } else {
-                    None
-                }
-            })
-            .choose_multiple(&mut rng, count)
-    }
-
     pub fn update_scores(&self, gossipsub: &Gossipsub) {
         let contacts = self.peer_contacts.iter();
 
@@ -549,7 +527,7 @@ impl PeerContactBook {
         }
     }
 
-    pub fn self_add_addresses<I: IntoIterator<Item = Multiaddr>>(&mut self, addresses: I) {
+    pub fn add_own_addresses<I: IntoIterator<Item = Multiaddr>>(&mut self, addresses: I) {
         log::debug!(
             "Addresses observed for us: {:#?}",
             addresses.into_iter().collect::<Vec<Multiaddr>>()
@@ -557,9 +535,9 @@ impl PeerContactBook {
         // TODO: We could add these observed addresses to our advertised addresses (with restrictions).
     }
 
-    pub fn self_update(&mut self, keypair: &Keypair) {
+    pub fn update_own_contact(&mut self, keypair: &Keypair) {
         // Not really optimal to clone here, but *shrugs*
-        let mut contact = self.self_peer_contact.contact.inner.clone();
+        let mut contact = self.own_peer_contact.contact.inner.clone();
 
         // Update timestamp
         contact.set_current_time();
@@ -567,8 +545,8 @@ impl PeerContactBook {
         self.insert(contact.sign(keypair));
     }
 
-    pub fn get_self(&self) -> &PeerContactInfo {
-        &self.self_peer_contact
+    pub fn get_own_contact(&self) -> &PeerContactInfo {
+        &self.own_peer_contact
     }
 
     pub fn house_keeping(&mut self) {
@@ -641,7 +619,6 @@ mod tests {
 #[cfg(feature = "peer-contact-book-persistence")]
 mod serde_public_key {
     use libp2p::identity::PublicKey;
-
     use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 
     pub fn serialize<S>(public_key: &PublicKey, serializer: S) -> Result<S::Ok, S::Error>
