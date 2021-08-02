@@ -22,7 +22,8 @@ lmdb-zero = "0.4"
 log = "0.4"
 parking_lot = "0.9"
 rand = "0.7"
-tokio = { version = "0.2", features = ["rt-core", "time"] }
+tokio = { version = "1.9", features = ["rt", "time"] }
+tokio-stream ={ version = "0.1", features = ["sync"] }
 
 beserial = { path = "../beserial" }
 beserial_derive = { path = "../beserial/beserial_derive" }
@@ -50,11 +51,11 @@ nimiq-vrf = { path = "../vrf" }
 [dev-dependencies]
 hex = "0.4"
 simple_logger = "1.9.0"
-tokio = { version = "0.2", features = ["rt-core", "time", "test-util"] }
+tokio = { version = "1.9", features = ["rt", "test-util", "time"] }
 
 nimiq-build-tools = { path = "../build-tools" }
-nimiq-network-mock = { path = "../network-mock" }
 nimiq-network-libp2p = { path = "../network-libp2p", features = ["memory-transport"] }
+nimiq-network-mock = { path = "../network-mock" }
 
 [features]
 metrics = []

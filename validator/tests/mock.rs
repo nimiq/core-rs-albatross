@@ -1,8 +1,8 @@
 use futures::{future, StreamExt};
 use rand::prelude::StdRng;
 use rand::SeedableRng;
-use tokio::sync::broadcast;
 use tokio::time;
+use tokio_stream::wrappers::BroadcastStream;
 
 use nimiq_block::{MultiSignature, SignedViewChange, ViewChange};
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent};
@@ -111,7 +111,7 @@ async fn mock_validators(hub: &mut MockHub, num_validators: usize) -> Vec<Valida
     }
 
     // Wait until validators are connected.
-    let mut events: Vec<broadcast::Receiver<ConsensusEvent<MockNetwork>>> =
+    let mut events: Vec<BroadcastStream<ConsensusEvent<MockNetwork>>> =
         consensus.iter().map(|v| v.subscribe_events()).collect();
 
     // Start consensus.
@@ -333,7 +333,7 @@ async fn validator_can_catch_up() {
     tokio::spawn(future::join_all(validators));
 
     // while waiting for them to run into the view_change_timeout (10s)
-    time::delay_for(Duration::from_secs(11)).await;
+    time::sleep(Duration::from_secs(11)).await;
     // At which point the prepared view_change message is broadcast
     // (only a subset of the validators will accept it as it send as level 1 message)
     for network in &networks {
@@ -341,7 +341,7 @@ async fn validator_can_catch_up() {
     }
 
     // wait enough time to complete the view change (it really does not matter how long, as long as the vc completes)
-    time::delay_for(Duration::from_secs(8)).await;
+    time::sleep(Duration::from_secs(8)).await;
 
     // reconnect a validator (who has not seen the proof for the ViewChange to view 1)
     for network in &networks {

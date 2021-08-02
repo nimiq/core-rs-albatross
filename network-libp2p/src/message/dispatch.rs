@@ -1,6 +1,6 @@
 use std::{collections::HashMap, pin::Pin, sync::Arc};
 
-use bytes::{buf::BufExt, Bytes};
+use bytes::{Buf, Bytes};
 use futures::{
     channel::mpsc,
     future::Future,

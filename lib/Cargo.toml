@@ -47,6 +47,9 @@ nimiq-blockchain = { path = "../blockchain" }
 nimiq-bls = { path = "../bls", optional = true }
 nimiq-consensus = { path = "../consensus" }
 nimiq-database = { path = "../database" }
+nimiq-genesis = { path = "../genesis" }
+nimiq-jsonrpc-core = { git = "https://github.com/nimiq/jsonrpc.git" }
+nimiq-jsonrpc-server = { git = "https://github.com/nimiq/jsonrpc.git" }
 nimiq-keys = { path = "../keys" }
 nimiq-mempool = { path = "../mempool" }
 nimiq-metrics-server = { path = "../metrics-server", optional = true }
@@ -58,18 +61,15 @@ nimiq-rpc-server = { path = "../rpc-server", optional = true }
 nimiq-utils = { path = "../utils", features = ["time"] }
 nimiq-validator = { path = "../validator", optional = true }
 nimiq-validator-network = { path = "../validator-network", optional = true }
-nimiq-jsonrpc-core = { git = "https://github.com/nimiq/jsonrpc.git" }
-nimiq-jsonrpc-server = { git = "https://github.com/nimiq/jsonrpc.git" }
 nimiq-wallet = { path = "../wallet", optional = true }
-nimiq-genesis = { path = "../genesis" }
 
 [features]
-default = []
-validator = ["nimiq-validator", "nimiq-validator-network", "nimiq-bls", "nimiq-rpc-server"]
 deadlock = ["parking_lot"]
-panic = ["log-panics"]
-logging = ["fern", "colored"]
+default = []
 launcher = []
-rpc-server = ["validator", "nimiq-rpc-server", "parking_lot"]
+logging = ["fern", "colored"]
 metrics-server = ["nimiq-metrics-server"]
+panic = ["log-panics"]
+rpc-server = ["validator", "nimiq-rpc-server", "parking_lot"]
+validator = ["nimiq-validator", "nimiq-validator-network", "nimiq-bls", "nimiq-rpc-server"]
 wallet = ["nimiq-wallet"]

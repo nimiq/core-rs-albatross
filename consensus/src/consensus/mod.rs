@@ -5,10 +5,9 @@ use std::time::{Duration, Instant};
 
 use futures::task::{Context, Poll};
 use futures::{future::BoxFuture, stream::BoxStream, Future, FutureExt, StreamExt};
-use tokio::sync::broadcast::{
-    channel as broadcast, Receiver as BroadcastReceiver, Sender as BroadcastSender,
-};
-use tokio::time::Delay;
+use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
+use tokio::time::Sleep;
+use tokio_stream::wrappers::BroadcastStream;
 
 use blockchain::Blockchain;
 use database::Environment;
@@ -103,7 +102,7 @@ pub struct Consensus<N: Network> {
     tx_future: BoxFuture<'static, ()>,
 
     /// A Delay which exists purely for the waker on its poll to reactivate the task running Consensus::poll
-    next_execution_timer: Option<Delay>,
+    next_execution_timer: Option<Pin<Box<Sleep>>>,
 
     events: BroadcastSender<ConsensusEvent<N>>,
     established_flag: Arc<AtomicBool>,
@@ -224,18 +223,17 @@ impl<N: Network> Consensus<N> {
         }
         .boxed();
 
+        let timer = Box::pin(tokio::time::sleep(Self::CONSENSUS_POLL_TIMER));
+
         Consensus {
             blockchain,
             mempool,
             network,
             env,
-
             block_queue,
             tx_future,
             events: tx,
-
-            next_execution_timer: Some(tokio::time::delay_for(Self::CONSENSUS_POLL_TIMER)),
-
+            next_execution_timer: Some(timer),
             established_flag,
             head_requests: None,
             head_requests_time: None,
@@ -244,8 +242,8 @@ impl<N: Network> Consensus<N> {
         }
     }
 
-    pub fn subscribe_events(&self) -> BroadcastReceiver<ConsensusEvent<N>> {
-        self.events.subscribe()
+    pub fn subscribe_events(&self) -> BroadcastStream<ConsensusEvent<N>> {
+        BroadcastStream::new(self.events.subscribe())
     }
 
     pub fn is_established(&self) -> bool {
@@ -419,7 +417,7 @@ impl<N: Network> Future for Consensus<N> {
         // that it will wake this task again after another time frame has ellapsed. No interval was used as that
         // would periodically wake the task even though it might have just executed
         let _ = self.next_execution_timer.take();
-        let mut timer = tokio::time::delay_for(Self::CONSENSUS_POLL_TIMER);
+        let mut timer = Box::pin(tokio::time::sleep(Self::CONSENSUS_POLL_TIMER));
         let _ = timer.poll_unpin(cx);
         self.next_execution_timer = Some(timer);
 

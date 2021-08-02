@@ -61,6 +61,6 @@ pub enum Error {
 
 impl From<Error> for nimiq_jsonrpc_core::RpcError {
     fn from(e: Error) -> Self {
-        RpcError::internal_error(Some(e.to_string()))
+        RpcError::internal_error(Some(serde_json::value::Value::String(e.to_string())))
     }
 }

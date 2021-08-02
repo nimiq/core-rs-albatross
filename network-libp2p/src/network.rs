@@ -3,7 +3,7 @@
 use std::{collections::HashMap, pin::Pin, sync::Arc};
 
 use async_trait::async_trait;
-use bytes::{buf::BufExt, Bytes};
+use bytes::{Buf, Bytes};
 use futures::executor;
 use futures::{
     channel::{mpsc, oneshot},
@@ -33,6 +33,7 @@ use libp2p::{
     tcp, websocket, yamux, Multiaddr, PeerId, Swarm, Transport,
 };
 use tokio::sync::broadcast;
+use tokio_stream::wrappers::BroadcastStream;
 use tracing::Instrument;
 
 use beserial::{Deserialize, Serialize};
@@ -668,7 +669,7 @@ impl NetworkInterface for Network {
         &self,
     ) -> (
         Vec<Arc<Self::PeerType>>,
-        broadcast::Receiver<NetworkEvent<Self::PeerType>>,
+        BroadcastStream<NetworkEvent<Self::PeerType>>,
     ) {
         self.peers.subscribe()
     }
@@ -681,8 +682,8 @@ impl NetworkInterface for Network {
         self.peers.get_peer(&peer_id)
     }
 
-    fn subscribe_events(&self) -> broadcast::Receiver<NetworkEvent<Self::PeerType>> {
-        self.events_tx.subscribe()
+    fn subscribe_events(&self) -> BroadcastStream<NetworkEvent<Self::PeerType>> {
+        BroadcastStream::new(self.events_tx.subscribe())
     }
 
     /// Implements `receive_from_all`, but instead of selecting over all peer message streams, we register a channel in
@@ -1185,7 +1186,7 @@ mod tests {
         let (net1, net2) = create_connected_networks().await;
 
         // FIXME: Add delay while networks share their addresses
-        tokio::time::delay_for(Duration::from_secs(2)).await;
+        tokio::time::sleep(Duration::from_secs(2)).await;
 
         let put_record = TestRecord { x: 420 };
 
@@ -1236,7 +1237,7 @@ mod tests {
         let mut messages = net1.subscribe(&TestTopic).await.unwrap();
         consume_stream(net2.subscribe(&TestTopic).await.unwrap());
 
-        tokio::time::delay_for(Duration::from_secs(10)).await;
+        tokio::time::sleep(Duration::from_secs(10)).await;
 
         net2.publish(&TestTopic, test_message.clone())
             .await

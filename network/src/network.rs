@@ -14,7 +14,7 @@ use parking_lot::RwLockReadGuard;
 use rand::rngs::OsRng;
 use rand::Rng;
 use thiserror::Error;
-use tokio_02::sync::broadcast;
+use tokio_stream::wrappers::BroadcastStream;
 
 use beserial::{Deserialize, Serialize};
 use blockchain::Blockchain;
@@ -458,7 +458,7 @@ impl NetworkInterface for Network {
         &self,
     ) -> (
         Vec<Arc<Self::PeerType>>,
-        broadcast::Receiver<NetworkEventI<Self::PeerType>>,
+        BroadcastStream<NetworkEventI<Self::PeerType>>,
     ) {
         unimplemented!();
     }
@@ -483,7 +483,7 @@ impl NetworkInterface for Network {
             .flatten()
     }
 
-    fn subscribe_events(&self) -> broadcast::Receiver<NetworkEventI<Self::PeerType>> {
+    fn subscribe_events(&self) -> BroadcastStream<NetworkEventI<Self::PeerType>> {
         unimplemented!()
     }
 
