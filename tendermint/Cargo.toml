@@ -9,15 +9,15 @@ repository = "https://github.com/nimiq/core-rs-albatross"
 license = "Apache-2.0"
 
 [dependencies]
-futures = "0.3"
 async-stream = "0.3.0"
 async-trait = "0.1"
+futures = "0.3"
 log = "0.4"
 
+nimiq-block = { path = "../primitives/block" }
 nimiq-hash = { path = "../hash" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
-nimiq-block = { path = "../primitives/block" }
 
 [dev-dependencies]
 beserial = { path = "../beserial" }
-tokio = { version = "0.2", features = ["rt-threaded","macros"] }
+tokio = { version = "1.9", features = ["macros", "rt-multi-thread"] }

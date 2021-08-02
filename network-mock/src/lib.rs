@@ -69,7 +69,7 @@ pub async fn create_mock_validator_network(n: usize, dial: bool) -> Vec<MockNetw
 #[cfg(test)]
 pub mod tests {
     use futures::{Stream, StreamExt};
-    use tokio::sync::broadcast;
+    use tokio_stream::wrappers::BroadcastStream;
 
     use beserial::{Deserialize, Serialize};
     use nimiq_network_interface::{
@@ -81,26 +81,24 @@ pub mod tests {
     use super::{MockHub, MockPeer, MockPeerId};
 
     pub async fn assert_peer_joined(
-        events: &mut broadcast::Receiver<NetworkEvent<MockPeer>>,
+        events: &mut BroadcastStream<NetworkEvent<MockPeer>>,
         peer_id: MockPeerId,
     ) {
-        let event = events.recv().await.unwrap();
-        log::debug!("Peer list event: {:?}", event);
-        match event {
-            NetworkEvent::PeerJoined(peer) => assert_eq!(peer.id(), peer_id),
-            NetworkEvent::PeerLeft(_) => panic!("Expected PeerJoined event"),
+        if let Some(Ok(NetworkEvent::PeerJoined(peer))) = events.next().await {
+            assert_eq!(peer.id(), peer_id);
+        } else {
+            panic!("Expected PeerJoined event with id={}", peer_id);
         }
     }
 
     pub async fn assert_peer_left(
-        events: &mut broadcast::Receiver<NetworkEvent<MockPeer>>,
+        events: &mut BroadcastStream<NetworkEvent<MockPeer>>,
         peer_id: MockPeerId,
     ) {
-        let event = events.recv().await.unwrap();
-        log::debug!("Peer list event: {:?}", event);
-        match event {
-            NetworkEvent::PeerLeft(peer) => assert_eq!(peer.id(), peer_id),
-            NetworkEvent::PeerJoined(_) => panic!("Expected PeerLeft event"),
+        if let Some(Ok(NetworkEvent::PeerLeft(peer))) = events.next().await {
+            assert_eq!(peer.id(), peer_id);
+        } else {
+            panic!("Expected PeerLeft event with id={}", peer_id);
         }
     }
 
@@ -209,7 +207,7 @@ pub mod tests {
         consume_stream(net2.subscribe(&TestTopic).await.unwrap());
 
         // same as above
-        //tokio::time::delay_for(Duration::from_secs(10)).await;
+        // tokio::time::sleep(Duration::from_secs(10)).await;
 
         net2.publish(&TestTopic, test_message.clone())
             .await

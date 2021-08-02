@@ -1,6 +1,6 @@
 use std::{marker::PhantomData, pin::Pin};
 
-use bytes::{buf::BufMutExt, Buf, BytesMut};
+use bytes::{Buf, BufMut, BytesMut};
 use futures::{
     ready,
     task::{Context, Poll},
@@ -21,7 +21,7 @@ where
     W: AsyncWrite + Unpin,
 {
     if buffer.remaining() > 0 {
-        match Pin::new(inner).poll_write(cx, buffer.bytes()) {
+        match Pin::new(inner).poll_write(cx, buffer.chunk()) {
             Poll::Ready(Ok(0)) => {
                 log::warn!("MessageWriter: write_from_buf: Unexpected EOF.");
                 Poll::Ready(Err(SerializingError::from(std::io::Error::from(

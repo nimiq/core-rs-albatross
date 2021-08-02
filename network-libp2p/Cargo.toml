@@ -17,31 +17,33 @@ is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
+async-std = "1.7" # Used in some places, but can we not depend on a runtime?
 async-trait = "0.1"
+bitflags = "1.2"
+bytes = "1.0"
+derive_more = "0.99"
 futures = "0.3"
+hex = "0.4"
 ip_network = "0.3"
 libp2p = "0.34"
 log = "0.4"
 parking_lot = "0.9"
-rand = "0.7.3"
-tokio = { version = "0.2", features = ["macros", "rt-core"] }
-bytes = "0.5"
 pin-project = "1.0"
-bitflags = "1.2"
-thiserror = "1.0"
-hex = "0.4"
-wasm-timer = "0.2"
+pin-project-lite = "0.2.0"
+rand = "0.7.3"
 serde = { version = "1.0", features = ["derive"], optional = true }
-async-std = "1.7" # Used in some places, but can we not depend on a runtime?
-tokio-util = { version = "0.3", features = ["codec"] }
-derive_more = "0.99"
+thiserror = "1.0"
+tokio = { version = "1.9", features = ["macros", "rt"] }
+tokio-stream = "0.1"
+tokio-util = { version = "0.6", features = ["codec"] }
 tracing = "0.1"
 tracing-attributes = "0.1"
+wasm-timer = "0.2"
 
 beserial = { path = "../beserial", features = ["libp2p"] }
 beserial_derive = { path = "../beserial/beserial_derive" }
-nimiq-network-interface = { path = "../network-interface" }
 nimiq-macros = { path = "../macros" }
+nimiq-network-interface = { path = "../network-interface" }
 nimiq-hash = { path = "../hash" }
 nimiq-utils = { path = "../utils", features = ["tagged-signing", "serde-derive", "libp2p", "time"] }
 

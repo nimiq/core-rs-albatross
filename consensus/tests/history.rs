@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use beserial::Deserialize;
 use futures::{Stream, StreamExt};
+use simple_logger::SimpleLogger;
 
 use futures::task::{Context, Poll};
 use nimiq_block_production::{test_utils::*, BlockProducer};
@@ -17,7 +18,7 @@ use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
 use nimiq_mempool::{Mempool, MempoolConfig};
 use nimiq_network_interface::network::Network;
-use nimiq_network_mock::{MockHub, MockNetwork};
+use nimiq_network_mock::{MockHub, MockNetwork, MockPeer};
 use nimiq_primitives::policy;
 use std::pin::Pin;
 
@@ -43,7 +44,7 @@ const SECRET_KEY: &str =
 
 #[tokio::test]
 async fn peers_can_sync() {
-    //simple_logger::init_with_level(Level::Trace);
+    // SimpleLogger::new().init().unwrap();
 
     let mut hub = MockHub::default();
 
@@ -98,7 +99,7 @@ async fn peers_can_sync() {
     .await;
 
     net1.dial_mock(&net2);
-    tokio::time::delay_for(Duration::from_secs(1)).await;
+    tokio::time::sleep(Duration::from_secs(1)).await;
     let sync_result = sync2.next().await;
 
     assert!(sync_result.is_some());
@@ -237,8 +238,8 @@ async fn sync_ingredients() {
     let mut stream = consensus2.network.subscribe_events();
     net1.dial_mock(&net2);
     // Then wait for connection to be established.
-    stream.recv().await.unwrap();
-    tokio::time::delay_for(Duration::from_secs(1)).await; // FIXME, Prof. Berrang told me to do this
+    stream.next().await.unwrap();
+    tokio::time::sleep(Duration::from_secs(1)).await; // FIXME, Prof. Berrang told me to do this
 
     // Test ingredients:
     // Request hashes

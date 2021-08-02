@@ -13,6 +13,7 @@ use std::{
     task::Poll,
 };
 use tokio::sync::mpsc;
+use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use nimiq_block::{TendermintIdentifier, TendermintStep};
 use nimiq_collections::BitSet;
@@ -106,7 +107,7 @@ impl<N: ValidatorNetwork> TendermintAggregations<N> {
                 id.clone(),
                 Config::default(),
                 own_contribution,
-                receiver.boxed(),
+                Box::pin(UnboundedReceiverStream::new(receiver)),
                 output_sink,
             );
 

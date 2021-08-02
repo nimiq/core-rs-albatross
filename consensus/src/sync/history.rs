@@ -7,7 +7,7 @@ use futures::future::BoxFuture;
 use futures::stream::FuturesUnordered;
 use futures::task::{Context, Poll};
 use futures::{FutureExt, Stream, StreamExt};
-use tokio::sync::broadcast;
+use tokio_stream::wrappers::BroadcastStream;
 
 use block::{Block, MacroBlock};
 use blockchain::{AbstractBlockchain, Blockchain, ExtendedTransaction, CHUNK_SIZE};
@@ -379,7 +379,7 @@ impl<T, E: std::fmt::Debug> From<Result<T, E>> for SyncClusterResult {
 
 pub struct HistorySync<TNetwork: Network> {
     blockchain: Arc<Blockchain>,
-    network_event_rx: broadcast::Receiver<NetworkEvent<TNetwork::PeerType>>,
+    network_event_rx: BroadcastStream<NetworkEvent<TNetwork::PeerType>>,
     epoch_ids_stream: FuturesUnordered<BoxFuture<'static, Option<EpochIds<TNetwork::PeerType>>>>,
     epoch_clusters: VecDeque<SyncCluster<TNetwork::PeerType>>,
     active_epoch_cluster: Option<SyncCluster<TNetwork::PeerType>>,
@@ -393,7 +393,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
 
     pub fn new(
         blockchain: Arc<Blockchain>,
-        network_event_rx: broadcast::Receiver<NetworkEvent<TNetwork::PeerType>>,
+        network_event_rx: BroadcastStream<NetworkEvent<TNetwork::PeerType>>,
     ) -> Self {
         Self {
             blockchain,

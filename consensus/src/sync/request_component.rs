@@ -8,7 +8,7 @@ use network_interface::{network::NetworkEvent, peer::Peer};
 use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
-use tokio::sync::broadcast;
+use tokio_stream::wrappers::BroadcastStream;
 
 pub trait RequestComponent<P: Peer>: Stream<Item = RequestComponentEvent<P>> + Unpin {
     fn request_missing_blocks(
@@ -50,7 +50,7 @@ pub struct BlockRequestComponent<TPeer: Peer> {
     sync_queue: SyncQueue<TPeer, (Blake2bHash, Vec<Blake2bHash>), Vec<Block>>, // requesting missing blocks from peers
     sync_method: Pin<Box<dyn HistorySyncStream<TPeer>>>,
     agents: HashMap<Arc<TPeer>, Arc<ConsensusAgent<TPeer>>>, // this map holds the strong references to connected peers
-    network_event_rx: broadcast::Receiver<NetworkEvent<TPeer>>,
+    network_event_rx: BroadcastStream<NetworkEvent<TPeer>>,
 }
 
 impl<TPeer: Peer + 'static> BlockRequestComponent<TPeer> {
@@ -58,7 +58,7 @@ impl<TPeer: Peer + 'static> BlockRequestComponent<TPeer> {
 
     pub fn new(
         sync_method: Pin<Box<dyn HistorySyncStream<TPeer>>>,
-        network_event_rx: broadcast::Receiver<NetworkEvent<TPeer>>,
+        network_event_rx: BroadcastStream<NetworkEvent<TPeer>>,
     ) -> Self {
         Self {
             sync_method,
@@ -81,7 +81,7 @@ impl<TPeer: Peer + 'static> BlockRequestComponent<TPeer> {
     }
 }
 
-impl<TPeer: Peer> RequestComponent<TPeer> for BlockRequestComponent<TPeer> {
+impl<TPeer: 'static + Peer> RequestComponent<TPeer> for BlockRequestComponent<TPeer> {
     fn request_missing_blocks(
         &mut self,
         target_block_hash: Blake2bHash,
@@ -107,7 +107,7 @@ impl<TPeer: Peer> RequestComponent<TPeer> for BlockRequestComponent<TPeer> {
     }
 }
 
-impl<TPeer: Peer> Stream for BlockRequestComponent<TPeer> {
+impl<TPeer: 'static + Peer> Stream for BlockRequestComponent<TPeer> {
     type Item = RequestComponentEvent<TPeer>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {

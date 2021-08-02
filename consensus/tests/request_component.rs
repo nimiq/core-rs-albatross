@@ -62,7 +62,7 @@ impl Node {
 }
 
 #[ignore]
-#[tokio::test(core_threads = 4)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_request_component() {
     //simple_logger::init_by_env();
 
@@ -91,7 +91,7 @@ async fn test_request_component() {
         tokio::spawn(async move {
             loop {
                 produce_macro_blocks(1, &producer1, &prod_blockchain);
-                tokio::time::delay_for(Duration::from_secs(5)).await;
+                tokio::time::sleep(Duration::from_secs(5)).await;
             }
         });
     }

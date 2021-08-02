@@ -8,7 +8,7 @@ use futures::{
 };
 use linked_hash_map::LinkedHashMap;
 use parking_lot::RwLock;
-use tokio::sync::{broadcast, mpsc};
+use tokio_stream::wrappers::{BroadcastStream, UnboundedReceiverStream};
 
 use block::{Block, BlockType, SignedTendermintProposal, ViewChange, ViewChangeProof};
 use blockchain::{AbstractBlockchain, BlockchainEvent, ForkEvent, PushResult};
@@ -74,9 +74,9 @@ pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork + 's
 
     proposal_receiver: ProposalReceiver<TValidatorNetwork>,
 
-    consensus_event_rx: broadcast::Receiver<ConsensusEvent<TNetwork>>,
-    blockchain_event_rx: mpsc::UnboundedReceiver<BlockchainEvent>,
-    fork_event_rx: mpsc::UnboundedReceiver<ForkEvent>,
+    consensus_event_rx: BroadcastStream<ConsensusEvent<TNetwork>>,
+    blockchain_event_rx: UnboundedReceiverStream<BlockchainEvent>,
+    fork_event_rx: UnboundedReceiverStream<ForkEvent>,
 
     epoch_state: Option<ActiveEpochState>,
     blockchain_state: BlockchainState,

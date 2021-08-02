@@ -5,6 +5,7 @@ use std::{
     sync::Arc,
 };
 use tokio::sync::broadcast;
+use tokio_stream::wrappers::BroadcastStream;
 
 use crate::{network::NetworkEvent, peer::Peer};
 
@@ -155,12 +156,12 @@ where
             .collect()
     }
 
-    pub fn subscribe(&self) -> (Vec<Arc<P>>, broadcast::Receiver<NetworkEvent<P>>) {
+    pub fn subscribe(&self) -> (Vec<Arc<P>>, BroadcastStream<NetworkEvent<P>>) {
         let inner = self.inner.write();
 
         let peers = inner.peers.values().map(|peer| Arc::clone(peer)).collect();
 
-        let rx = inner.tx.subscribe();
+        let rx = BroadcastStream::new(inner.tx.subscribe());
 
         (peers, rx)
     }
@@ -172,7 +173,7 @@ mod tests {
 
     use futures::{Stream, StreamExt};
     use thiserror::Error;
-    use tokio::sync::broadcast;
+    use tokio_stream::wrappers::BroadcastStream;
 
     use super::ObservablePeerMap;
     use crate::{
@@ -224,7 +225,7 @@ mod tests {
         }
     }
 
-    async fn assert_peer_joined(listener: &mut broadcast::Receiver<NetworkEvent<Peer>>, id: u32) {
+    async fn assert_peer_joined(listener: &mut BroadcastStream<NetworkEvent<Peer>>, id: u32) {
         if let Some(Ok(NetworkEvent::PeerJoined(peer))) = listener.next().await {
             assert_eq!(peer.id(), id);
         } else {
@@ -232,7 +233,7 @@ mod tests {
         }
     }
 
-    async fn assert_peer_left(listener: &mut broadcast::Receiver<NetworkEvent<Peer>>, id: u32) {
+    async fn assert_peer_left(listener: &mut BroadcastStream<NetworkEvent<Peer>>, id: u32) {
         if let Some(Ok(NetworkEvent::PeerLeft(peer))) = listener.next().await {
             assert_eq!(peer.id(), id);
         } else {

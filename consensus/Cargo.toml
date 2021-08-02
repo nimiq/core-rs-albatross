@@ -17,14 +17,15 @@ is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
+async-trait = "0.1"
 futures = "0.3"
 log = "0.4"
 parking_lot = "0.9"
 pin-project = "0.4.8"
 rand = "0.7"
-tokio = { version = "0.2", features = ["full"] }
-async-trait = "0.1"
 thiserror = "1.0"
+tokio = { version = "1.9", features = ["full"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
 
 beserial = { path = "../beserial" }
 beserial_derive = { path = "../beserial/beserial_derive" }
@@ -32,15 +33,15 @@ nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain = { path = "../blockchain" }
 nimiq-collections = { path = "../collections" }
 nimiq-database = { path = "../database", features = ["full-nimiq"] }
+nimiq-genesis = { path = "../genesis" }
 nimiq-hash = { path = "../hash" }
 nimiq-macros = { path = "../macros" }
 nimiq-mempool = { path = "../mempool" }
 nimiq-messages = { path = "../messages" }
 nimiq-network-interface = { path = "../network-interface" }
-nimiq-genesis = { path = "../genesis" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
-nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-subscription = { path = "../primitives/subscription" }
+nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-utils = { path = "../utils", features = ["time", "observer", "timers", "mutable-once", "throttled-queue", "rate-limit", "merkle", "math"] }
 
 [dev-dependencies]
