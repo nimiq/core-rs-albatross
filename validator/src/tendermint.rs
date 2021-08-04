@@ -3,7 +3,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use futures::{stream::BoxStream, StreamExt};
+use futures::{
+    future::{BoxFuture, FutureExt},
+    stream::{BoxStream, StreamExt},
+};
 
 use block::{
     Block, BlockHeader, MacroBlock, MacroBody, MacroHeader, MultiSignature,
@@ -356,8 +359,8 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
         self.aggregation_adapter.get_aggregate(round, step)
     }
 
-    fn get_background_stream(&mut self) -> BoxStream<'static, ()> {
-        self.aggregation_adapter.create_background_stream().boxed()
+    fn get_background_task(&mut self) -> BoxFuture<'static, ()> {
+        self.aggregation_adapter.create_background_task().boxed()
     }
 }
 

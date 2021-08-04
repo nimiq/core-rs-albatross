@@ -2,7 +2,7 @@ use crate::state::TendermintState;
 use crate::utils::{AggregationResult, ProposalResult, Step, TendermintError};
 use crate::{ProofTrait, ProposalTrait, ResultTrait};
 use async_trait::async_trait;
-use futures::stream::BoxStream;
+use futures::future::BoxFuture;
 use nimiq_hash::Blake2bHash;
 
 /// The (async) trait that we need for all of Tendermint's low-level functions. The functions are
@@ -72,5 +72,5 @@ pub trait TendermintOutsideDeps: Send + Unpin {
         step: Step,
     ) -> Result<AggregationResult<Self::ProofTy>, TendermintError>;
 
-    fn get_background_stream(&mut self) -> BoxStream<'static, ()>;
+    fn get_background_task(&mut self) -> BoxFuture<'static, ()>;
 }

@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
 use std::task::Poll;
 
-use futures::{Stream, StreamExt};
+use futures::{Future, StreamExt};
 
 use nimiq_block::TendermintStep;
 use nimiq_handel::identity::WeightRegistry;
@@ -18,7 +18,7 @@ use super::utils::{CurrentAggregation, TendermintAggregationEvent};
 
 // Here all the streams are polled to get each and every new aggregate and new round event.
 // Special care needs to be taken to release locks as early as possible
-pub struct BackgroundStream<N: ValidatorNetwork> {
+pub struct BackgroundTask<N: ValidatorNetwork> {
     aggregations: TendermintAggregations<N>,
     current_aggregate: Arc<RwLock<Option<CurrentAggregation>>>,
     current_bests: Arc<RwLock<BTreeMap<(u32, TendermintStep), TendermintContribution>>>,
@@ -26,7 +26,7 @@ pub struct BackgroundStream<N: ValidatorNetwork> {
     validator_registry: Arc<ValidatorRegistry>,
 }
 
-impl<N: ValidatorNetwork + 'static> BackgroundStream<N> {
+impl<N: ValidatorNetwork + 'static> BackgroundTask<N> {
     pub(super) fn new(
         aggregations: TendermintAggregations<N>,
         current_aggregate: Arc<RwLock<Option<CurrentAggregation>>>,
@@ -44,18 +44,18 @@ impl<N: ValidatorNetwork + 'static> BackgroundStream<N> {
     }
 }
 
-impl<N: ValidatorNetwork + 'static> Stream for BackgroundStream<N> {
-    type Item = ();
+impl<N: ValidatorNetwork + 'static> Future for BackgroundTask<N> {
+    type Output = ();
 
-    fn poll_next(
+    fn poll(
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Option<Self::Item>> {
+    ) -> Poll<Self::Output> {
         match self.aggregations.poll_next_unpin(cx) {
             Poll::Pending => Poll::Pending,
             Poll::Ready(None) => {
                 debug!("BackgroundStream finished aggregating - Terminating");
-                Poll::Ready(None)
+                return Poll::Ready(());
             }
             Poll::Ready(Some(event)) => {
                 match event {

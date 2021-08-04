@@ -22,7 +22,7 @@ use crate::aggregation::{
 };
 
 use super::{
-    background_stream::BackgroundStream,
+    background_task::BackgroundTask,
     contribution::TendermintContribution,
     utils::{AggregationEvent, CurrentAggregation},
 };
@@ -39,7 +39,7 @@ pub struct HandelTendermintAdapter<N: ValidatorNetwork> {
     validator_registry: Arc<ValidatorRegistry>,
     network: Arc<N>,
     event_sender: mpsc::Sender<AggregationEvent<N>>,
-    background_stream: Option<BackgroundStream<N>>,
+    background_task: Option<BackgroundTask<N>>,
 }
 
 impl<N: ValidatorNetwork + 'static> HandelTendermintAdapter<N>
@@ -88,7 +88,7 @@ where
         let current_aggregate = Arc::new(RwLock::new(None));
         let pending_new_round = Arc::new(RwLock::new(None));
 
-        let background_stream = Some(BackgroundStream::new(
+        let background_task = Some(BackgroundTask::new(
             aggregations,
             current_aggregate.clone(),
             current_bests.clone(),
@@ -107,7 +107,7 @@ where
             validator_registry,
             network,
             event_sender,
-            background_stream,
+            background_task,
         }
     }
 
@@ -381,8 +381,8 @@ where
         }
     }
 
-    pub fn create_background_stream(&mut self) -> BackgroundStream<N> {
-        self.background_stream
+    pub fn create_background_task(&mut self) -> BackgroundTask<N> {
+        self.background_task
             .take()
             .expect("The background stream cannot be creaed twice.")
     }

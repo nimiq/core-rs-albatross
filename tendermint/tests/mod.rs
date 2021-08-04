@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use beserial::Serialize;
-use futures::StreamExt;
+use futures::{FutureExt, StreamExt};
 use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
 use nimiq_primitives::policy::{SLOTS, TWO_THIRD_SLOTS};
 use nimiq_tendermint::*;
@@ -207,8 +207,8 @@ impl TendermintOutsideDeps for TestValidator {
         }
     }
 
-    fn get_background_stream(&mut self) -> futures::stream::BoxStream<'static, ()> {
-        futures::stream::pending().boxed()
+    fn get_background_task(&mut self) -> futures::future::BoxFuture<'static, ()> {
+        futures::future::pending().boxed()
     }
 }
 

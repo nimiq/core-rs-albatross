@@ -1,5 +1,5 @@
 mod aggregations;
-mod background_stream;
+mod background_task;
 mod contribution;
 mod protocol;
 mod tendermint;
