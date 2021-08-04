@@ -10,19 +10,24 @@ use linked_hash_map::LinkedHashMap;
 use parking_lot::RwLock;
 use tokio_stream::wrappers::{BroadcastStream, UnboundedReceiverStream};
 
+use account::StakingContract;
 use block::{Block, BlockType, SignedTendermintProposal, ViewChange, ViewChangeProof};
+use block_production::BlockProducer;
 use blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent, ForkEvent, PushResult};
 use bls::CompressedPublicKey;
 use consensus::{sync::block_queue::BlockTopic, Consensus, ConsensusEvent, ConsensusProxy};
 use database::{Database, Environment, ReadTransaction, WriteTransaction};
 use hash::Blake2bHash;
+use keys::{Address, KeyPair};
 use network_interface::{
     network::{Network, PubsubId, Topic},
     peer::Peer,
 };
-use nimiq_block_production::BlockProducer;
-use nimiq_tendermint::TendermintReturn;
-use nimiq_validator_network::ValidatorNetwork;
+use primitives::coin::Coin;
+use primitives::policy;
+use tendermint_protocol::TendermintReturn;
+use transaction_builder::TransactionBuilder;
+use validator_network::ValidatorNetwork;
 
 use crate::micro::{ProduceMicroBlock, ProduceMicroBlockEvent};
 use crate::r#macro::{PersistedMacroState, ProduceMacroBlock};
@@ -62,11 +67,14 @@ struct ProduceMicroBlockState {
 pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork + 'static> {
     pub consensus: ConsensusProxy<TNetwork>,
     network: Arc<TValidatorNetwork>,
-    // TODO: Also have the validator ID here.
+
     signing_key: bls::KeyPair,
-    wallet_key: Option<keys::KeyPair>,
     database: Database,
     env: Environment,
+
+    validator_address: Address,
+    cold_key: KeyPair,
+    warm_key: KeyPair,
 
     proposal_receiver: ProposalReceiver<TValidatorNetwork>,
 
@@ -76,6 +84,7 @@ pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork + 's
 
     epoch_state: Option<ActiveEpochState>,
     blockchain_state: BlockchainState,
+    unpark_sent: bool,
 
     macro_producer: Option<ProduceMacroBlock>,
     macro_state: Option<PersistedMacroState<TValidatorNetwork>>,
@@ -96,7 +105,8 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         consensus: &Consensus<TNetwork>,
         network: Arc<TValidatorNetwork>,
         signing_key: bls::KeyPair,
-        wallet_key: Option<keys::KeyPair>,
+        cold_key: KeyPair,
+        warm_key: KeyPair,
     ) -> Self {
         let consensus_event_rx = consensus.subscribe_events();
 
@@ -129,10 +139,14 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         let mut this = Self {
             consensus: consensus.proxy(),
             network,
+
             signing_key,
-            wallet_key,
             database,
             env,
+
+            validator_address: Address::from(&cold_key),
+            cold_key,
+            warm_key,
 
             proposal_receiver,
 
@@ -142,6 +156,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
 
             epoch_state: None,
             blockchain_state,
+            unpark_sent: false,
 
             macro_producer: None,
             macro_state,
@@ -171,9 +186,12 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
     fn init_epoch(&mut self) {
         log::debug!("Initializing epoch");
 
-        // clear producers here, as this validator might not be active anymore
+        // Clear producers here, as this validator might not be active anymore.
         self.macro_producer = None;
         self.micro_producer = None;
+
+        // Send a new unpark transaction in case a validator is still parked from last epoch.
+        self.unpark_sent = false;
 
         let validators = self
             .consensus
@@ -450,6 +468,66 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         self.epoch_state.is_some()
     }
 
+    fn get_staking_state(&self) -> ValidatorStakingState {
+        let blockchain = self.consensus.blockchain.read();
+        let accounts_tree = &blockchain.state().accounts.tree;
+        let db_txn = blockchain.read_transaction();
+
+        // First, check if the validator is parked.
+        let staking_contract = StakingContract::get_staking_contract(accounts_tree, &db_txn);
+        if staking_contract
+            .parked_set
+            .contains(&self.validator_address)
+            || staking_contract
+                .current_disabled_slots
+                .contains_key(&self.validator_address)
+            || staking_contract
+                .previous_disabled_slots
+                .contains_key(&self.validator_address)
+        {
+            return ValidatorStakingState::Parked;
+        }
+
+        if let Some(validator) =
+            StakingContract::get_validator(accounts_tree, &db_txn, &self.validator_address)
+        {
+            if validator.inactivity_flag.is_some() {
+                return ValidatorStakingState::Inactive;
+            }
+            ValidatorStakingState::Active
+        } else {
+            ValidatorStakingState::NoStake
+        }
+    }
+
+    fn unpark(&mut self) {
+        if self.unpark_sent {
+            trace!("Unpark transaction already sent for this epoch");
+            return;
+        }
+
+        let validity_start_height =
+            policy::macro_block_before(self.consensus.mempool.current_height());
+
+        let unpark_transaction = TransactionBuilder::new_unpark_validator(
+            &self.cold_key,
+            self.validator_address.clone(),
+            &self.warm_key,
+            Coin::ZERO,
+            validity_start_height,
+            self.consensus.blockchain.read().network_id(),
+        );
+
+        let cn = self.consensus.clone();
+        tokio::spawn(async move {
+            trace!("Sending unpark transaction");
+            if cn.send_transaction(unpark_transaction).await.is_err() {
+                error!("Failed to send unpark transatction");
+            }
+        });
+        self.unpark_sent = true;
+    }
+
     pub fn validator_id(&self) -> u16 {
         self.epoch_state
             .as_ref()
@@ -459,6 +537,14 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
 
     pub fn signing_key(&self) -> bls::KeyPair {
         self.signing_key.clone()
+    }
+
+    pub fn cold_key(&self) -> KeyPair {
+        self.cold_key.clone()
+    }
+
+    pub fn warm_key(&self) -> KeyPair {
+        self.warm_key.clone()
     }
 }
 
@@ -499,6 +585,11 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Future
             if self.micro_producer.is_some() {
                 self.poll_micro(cx);
             }
+        }
+
+        // Check the validator staking state.
+        if let ValidatorStakingState::Parked = self.get_staking_state() {
+            self.unpark();
         }
 
         Poll::Pending

@@ -5,6 +5,7 @@
 extern crate log;
 #[macro_use]
 extern crate beserial_derive;
+extern crate nimiq_account as account;
 extern crate nimiq_block as block;
 extern crate nimiq_block_production as block_production;
 extern crate nimiq_blockchain as blockchain;
@@ -21,7 +22,9 @@ extern crate nimiq_mempool as mempool;
 extern crate nimiq_network_interface as network_interface;
 extern crate nimiq_primitives as primitives;
 extern crate nimiq_tendermint as tendermint_protocol;
+extern crate nimiq_transaction_builder as transaction_builder;
 extern crate nimiq_utils as utils;
+extern crate nimiq_validator_network as validator_network;
 extern crate nimiq_vrf as vrf;
 
 pub mod aggregation;

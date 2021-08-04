@@ -16,6 +16,7 @@ use nimiq_database::{
     volatile::VolatileEnvironment,
     Environment,
 };
+use nimiq_keys::{KeyPair, PrivateKey};
 use nimiq_mempool::{filter::Rules as MempoolRules, MempoolConfig};
 use nimiq_network_libp2p::{Keypair as IdentityKeypair, Multiaddr};
 use nimiq_primitives::networks::NetworkId;
@@ -159,16 +160,6 @@ pub enum ProtocolConfig {
     Rtc,
 }
 
-#[cfg(feature = "validator")]
-#[derive(Debug, Clone, Builder)]
-#[builder(setter(into))]
-pub struct ValidatorConfig {
-    #[builder(default)]
-    pub wallet_account: Option<String>,
-    #[builder(default)]
-    pub wallet_password: Option<String>,
-}
-
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct FileStorageConfig {
     /// The parent directory where the database will be stored. The database directory name
@@ -176,19 +167,35 @@ pub struct FileStorageConfig {
     /// method.
     database_parent: PathBuf,
 
-    /// Path to peer key
+    /// Path to peer key.
     peer_key_path: PathBuf,
 
     /// The key used for the peer key, if the file is not present.
     peer_key: Option<String>,
 
-    /// Path to validator key
+    /// Path to validator key.
     #[cfg(feature = "validator")]
     validator_key_path: Option<PathBuf>,
 
-    /// The key used for the validator, if the file is not present.
+    /// The validator key used for the validator, if the file is not present.
     #[cfg(feature = "validator")]
     validator_key: Option<String>,
+
+    /// Path to cold key.
+    #[cfg(feature = "validator")]
+    cold_key_path: Option<PathBuf>,
+
+    /// The cold key used for the validator, if the file is not present.
+    #[cfg(feature = "validator")]
+    cold_key: Option<String>,
+
+    /// Path to warm key.
+    #[cfg(feature = "validator")]
+    warm_key_path: Option<PathBuf>,
+
+    /// The warm key used for the validator, if the file is not present.
+    #[cfg(feature = "validator")]
+    warm_key: Option<String>,
 }
 
 impl FileStorageConfig {
@@ -204,6 +211,14 @@ impl FileStorageConfig {
             validator_key_path: Some(path.join("validator_key.dat")),
             #[cfg(feature = "validator")]
             validator_key: None,
+            #[cfg(feature = "validator")]
+            cold_key_path: Some(path.join("cold_key.dat")),
+            #[cfg(feature = "validator")]
+            cold_key: None,
+            #[cfg(feature = "validator")]
+            warm_key_path: Some(path.join("warm_key.dat")),
+            #[cfg(feature = "validator")]
+            warm_key: None,
         }
     }
 
@@ -367,6 +382,74 @@ impl StorageConfig {
                         secret_key.into()
                     } else {
                         BlsKeyPair::generate_default_csprng()
+                    }
+                })?
+            }
+            _ => return Err(self.not_available()),
+        })
+    }
+
+    #[cfg(feature = "validator")]
+    pub(crate) fn cold_keypair(&self) -> Result<KeyPair, Error> {
+        Ok(match self {
+            StorageConfig::Volatile => KeyPair::generate_default_csprng(),
+            StorageConfig::Filesystem(file_storage) => {
+                let key_path = file_storage
+                    .cold_key_path
+                    .as_ref()
+                    .ok_or_else(|| Error::config_error("No path for cold key specified"))?;
+                let key_path = key_path
+                    .to_str()
+                    .ok_or_else(|| {
+                        Error::config_error(format!(
+                            "Failed to convert path of cold key to string: {}",
+                            key_path.display()
+                        ))
+                    })?
+                    .to_string();
+
+                FileStore::new(key_path).load_or_store(|| {
+                    if let Some(key) = file_storage.cold_key.as_ref() {
+                        // TODO: handle errors
+                        KeyPair::from(
+                            PrivateKey::deserialize_from_vec(&hex::decode(key).unwrap()).unwrap(),
+                        )
+                    } else {
+                        KeyPair::generate_default_csprng()
+                    }
+                })?
+            }
+            _ => return Err(self.not_available()),
+        })
+    }
+
+    #[cfg(feature = "validator")]
+    pub(crate) fn warm_keypair(&self) -> Result<KeyPair, Error> {
+        Ok(match self {
+            StorageConfig::Volatile => KeyPair::generate_default_csprng(),
+            StorageConfig::Filesystem(file_storage) => {
+                let key_path = file_storage
+                    .warm_key_path
+                    .as_ref()
+                    .ok_or_else(|| Error::config_error("No path for warm key specified"))?;
+                let key_path = key_path
+                    .to_str()
+                    .ok_or_else(|| {
+                        Error::config_error(format!(
+                            "Failed to convert path of warm key to string: {}",
+                            key_path.display()
+                        ))
+                    })?
+                    .to_string();
+
+                FileStore::new(key_path).load_or_store(|| {
+                    if let Some(key) = file_storage.warm_key.as_ref() {
+                        // TODO: handle errors
+                        KeyPair::from(
+                            PrivateKey::deserialize_from_vec(&hex::decode(key).unwrap()).unwrap(),
+                        )
+                    } else {
+                        KeyPair::generate_default_csprng()
                     }
                 })?
             }
@@ -550,12 +633,6 @@ pub struct ClientConfig {
 
     /// The optional validator configuration
     ///
-    #[cfg(feature = "validator")]
-    #[builder(default, setter(custom))]
-    pub validator: Option<ValidatorConfig>,
-
-    /// The optional validator configuration
-    ///
     #[cfg(feature = "rpc-server")]
     #[builder(default)]
     pub rpc_server: Option<RpcServerConfig>,
@@ -647,18 +724,9 @@ impl ClientConfigBuilder {
         self
     }
 
-    /// Sets the validator config. Since there is no configuration for validators (except key file)
-    /// yet, this will just enable the validator.
+    /// Sets the validator config.
     #[cfg(feature = "validator")]
-    pub fn validator(
-        &mut self,
-        wallet_account: String,
-        wallet_password: Option<String>,
-    ) -> &mut Self {
-        self.validator = Some(Some(ValidatorConfig {
-            wallet_account: Some(wallet_account),
-            wallet_password,
-        }));
+    pub fn validator(&mut self) -> &mut Self {
         self
     }
 
@@ -716,6 +784,18 @@ impl ClientConfigBuilder {
             }
             if let Some(key) = &validator_config.validator_key {
                 file_storage.validator_key = Some(key.to_owned());
+            }
+            if let Some(key_path) = &validator_config.cold_key_file {
+                file_storage.cold_key_path = Some(PathBuf::from(key_path));
+            }
+            if let Some(key) = &validator_config.cold_key {
+                file_storage.cold_key = Some(key.to_owned());
+            }
+            if let Some(key_path) = &validator_config.warm_key_file {
+                file_storage.warm_key_path = Some(PathBuf::from(key_path));
+            }
+            if let Some(key) = &validator_config.warm_key {
+                file_storage.warm_key = Some(key.to_owned());
             }
         }
         self.storage = Some(file_storage.into());
@@ -785,17 +865,6 @@ impl ClientConfigBuilder {
                     bind_to,
                     port: metrics_config.port.unwrap_or(consts::METRICS_DEFAULT_PORT),
                     credentials,
-                }));
-            }
-        }
-
-        // Configure validator
-        #[cfg(feature = "validator")]
-        {
-            if let Some(validator_config) = &config_file.validator {
-                self.validator = Some(Some(ValidatorConfig {
-                    wallet_account: validator_config.wallet_account.to_owned(),
-                    wallet_password: validator_config.wallet_password.to_owned(),
                 }));
             }
         }

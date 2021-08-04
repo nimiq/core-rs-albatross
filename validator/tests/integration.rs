@@ -7,12 +7,11 @@ use rand::prelude::StdRng;
 use rand::SeedableRng;
 
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
-use nimiq_bls::KeyPair as BLSKeyPair;
+use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_build_tools::genesis::{GenesisBuilder, GenesisInfo};
 use nimiq_consensus::sync::history::HistorySync;
 use nimiq_consensus::Consensus as AbstractConsensus;
 use nimiq_database::volatile::VolatileEnvironment;
-use nimiq_hash::Hash;
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
 use nimiq_mempool::{Mempool, MempoolConfig};
 use nimiq_network_interface::network::Network as NetworkInterface;
@@ -80,13 +79,21 @@ async fn consensus(peer_id: u64, genesis_info: GenesisInfo) -> Consensus {
 
 async fn validator(
     peer_id: u64,
-    signing_key: BLSKeyPair,
+    signing_key: BlsKeyPair,
+    validator_key: KeyPair,
+    warm_key: KeyPair,
     genesis_info: GenesisInfo,
 ) -> (Validator, Consensus) {
     let consensus = consensus(peer_id, genesis_info).await;
     let validator_network = Arc::new(ValidatorNetworkImpl::new(consensus.network.clone()));
     (
-        Validator::new(&consensus, validator_network, signing_key, None),
+        Validator::new(
+            &consensus,
+            validator_network,
+            signing_key,
+            validator_key,
+            warm_key,
+        ),
         consensus,
     )
 }
@@ -94,18 +101,21 @@ async fn validator(
 async fn validators(num_validators: usize) -> Vec<Validator> {
     // Generate validator key pairs.
     let mut rng = seeded_rng(0);
-    let keys: Vec<KeyPair> = (0..num_validators)
+    let bls_keys: Vec<BlsKeyPair> = (0..num_validators)
+        .map(|_| BlsKeyPair::generate(&mut rng))
+        .collect();
+    let validator_keys: Vec<KeyPair> = (0..num_validators)
         .map(|_| KeyPair::generate(&mut rng))
         .collect();
-    let bls_keys: Vec<BLSKeyPair> = (0..num_validators)
-        .map(|_| BLSKeyPair::generate(&mut rng))
+    let warm_keys: Vec<KeyPair> = (0..num_validators)
+        .map(|_| KeyPair::generate(&mut rng))
         .collect();
 
     // Generate genesis block.
     let mut genesis_builder = GenesisBuilder::default();
     for i in 0..num_validators {
         genesis_builder.with_genesis_validator(
-            Address::from(&keys[i]),
+            Address::from(&validator_keys[i]),
             Address::from([0u8; 20]),
             bls_keys[i].public_key,
             Address::default(),
@@ -116,8 +126,15 @@ async fn validators(num_validators: usize) -> Vec<Validator> {
     // Instantiate validators.
     let mut validators = vec![];
     let mut consensus = vec![];
-    for (id, key) in bls_keys.into_iter().enumerate() {
-        let (v, c) = validator((id + 1) as u64, key, genesis.clone()).await;
+    for id in 0..num_validators {
+        let (v, c) = validator(
+            (id + 1) as u64,
+            bls_keys[id].clone(),
+            validator_keys[id].clone(),
+            warm_keys[id].clone(),
+            genesis.clone(),
+        )
+        .await;
         log::info!(
             "Validator #{}: {}",
             v.validator_id(),

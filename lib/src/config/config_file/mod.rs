@@ -4,7 +4,6 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use log::LevelFilter;
-use nimiq_network_libp2p::Multiaddr;
 use serde_derive::Deserialize;
 use thiserror::Error;
 
@@ -12,6 +11,7 @@ use nimiq_mempool::{
     filter::{MempoolFilter, Rules as MempoolRules},
     MempoolConfig,
 };
+use nimiq_network_libp2p::Multiaddr;
 use nimiq_peer_address::{address, protocol}; // TODO: probably not needed anymore
 use nimiq_primitives::{coin::Coin, networks::NetworkId};
 
@@ -83,7 +83,7 @@ impl ConfigFile {
             }
         }
 
-        // if example doesn't exist, create it
+        // If example doesn't exist, create it.
         let path_example = paths::home().join("client.toml.example");
         if !path_example.exists() {
             log::info!("Creating example config at: {}", path_example.display());
@@ -96,7 +96,7 @@ impl ConfigFile {
             }
         }
 
-        // check if config exists, otherwise tell user to create one
+        // Check if config exists, otherwise tell user to create one.
         let path = paths::home().join("client.toml");
         if !path.exists() {
             let msg = format!(
@@ -108,7 +108,7 @@ impl ConfigFile {
             return Err(Error::config_error(&msg));
         }
 
-        // load config
+        // Load config.
         Self::from_file(&path)
     }
 }
@@ -479,6 +479,8 @@ impl From<MempoolFilterSettings> for MempoolRules {
 pub struct ValidatorSettings {
     pub validator_key_file: Option<String>,
     pub validator_key: Option<String>,
-    pub wallet_account: Option<String>,
-    pub wallet_password: Option<String>,
+    pub cold_key_file: Option<String>,
+    pub cold_key: Option<String>,
+    pub warm_key_file: Option<String>,
+    pub warm_key: Option<String>,
 }

@@ -27,6 +27,7 @@ tokio-stream ={ version = "0.1", features = ["sync"] }
 
 beserial = { path = "../beserial" }
 beserial_derive = { path = "../beserial/beserial_derive" }
+nimiq-account = { path = "../primitives/account" }
 nimiq-block = { path = "../primitives/block" }
 nimiq-block-production = { path = "../block-production" }
 nimiq-blockchain = { path = "../blockchain" }
@@ -43,6 +44,7 @@ nimiq-mempool = { path = "../mempool" }
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-primitives = { path = "../primitives" }
 nimiq-tendermint = { path = "../tendermint" }
+nimiq-transaction-builder = { path = "../transaction-builder" }
 nimiq-utils = { path = "../utils", features = ["observer", "timers", "time", "mutable-once", "throttled-queue", "rate-limit"] }
 nimiq-validator-network = { path = "../validator-network" }
 nimiq-vrf = { path = "../vrf" }

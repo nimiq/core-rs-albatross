@@ -7,14 +7,13 @@ use tokio_stream::wrappers::BroadcastStream;
 
 use nimiq_block::{MultiSignature, SignedViewChange, ViewChange};
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent};
-use nimiq_bls::{AggregateSignature, KeyPair as BLSKeyPair};
+use nimiq_bls::{AggregateSignature, KeyPair as BlsKeyPair};
 use nimiq_build_tools::genesis::{GenesisBuilder, GenesisInfo};
 use nimiq_collections::BitSet;
 use nimiq_consensus::sync::history::HistorySync;
 use nimiq_consensus::{Consensus as AbstractConsensus, ConsensusEvent};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_handel::update::{LevelUpdate, LevelUpdateMessage};
-use nimiq_hash::Hash;
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
 use nimiq_mempool::{Mempool, MempoolConfig};
 use nimiq_network_interface::network::Network;
@@ -59,13 +58,21 @@ async fn mock_consensus(hub: &mut MockHub, peer_id: u64, genesis_info: GenesisIn
 async fn mock_validator(
     hub: &mut MockHub,
     peer_id: u64,
-    signing_key: BLSKeyPair,
+    signing_key: BlsKeyPair,
+    validator_key: KeyPair,
+    warm_key: KeyPair,
     genesis_info: GenesisInfo,
 ) -> (Validator, Consensus) {
     let consensus = mock_consensus(hub, peer_id, genesis_info).await;
     let validator_network = Arc::new(ValidatorNetworkImpl::new(consensus.network.clone()));
     (
-        Validator::new(&consensus, validator_network, signing_key, None),
+        Validator::new(
+            &consensus,
+            validator_network,
+            signing_key,
+            validator_key,
+            warm_key,
+        ),
         consensus,
     )
 }
@@ -73,18 +80,21 @@ async fn mock_validator(
 async fn mock_validators(hub: &mut MockHub, num_validators: usize) -> Vec<Validator> {
     // Generate validator key pairs.
     let mut rng = seeded_rng(0);
-    let keys: Vec<KeyPair> = (0..num_validators)
+    let bls_keys: Vec<BlsKeyPair> = (0..num_validators)
+        .map(|_| BlsKeyPair::generate(&mut rng))
+        .collect();
+    let validator_keys: Vec<KeyPair> = (0..num_validators)
         .map(|_| KeyPair::generate(&mut rng))
         .collect();
-    let bls_keys: Vec<BLSKeyPair> = (0..num_validators)
-        .map(|_| BLSKeyPair::generate(&mut rng))
+    let warm_keys: Vec<KeyPair> = (0..num_validators)
+        .map(|_| KeyPair::generate(&mut rng))
         .collect();
 
     // Generate genesis block.
     let mut genesis_builder = GenesisBuilder::default();
     for i in 0..num_validators {
         genesis_builder.with_genesis_validator(
-            Address::from(&keys[i]),
+            Address::from(&validator_keys[i]),
             Address::from([0u8; 20]),
             bls_keys[i].public_key,
             Address::default(),
@@ -95,8 +105,16 @@ async fn mock_validators(hub: &mut MockHub, num_validators: usize) -> Vec<Valida
     // Instantiate validators.
     let mut validators = vec![];
     let mut consensus = vec![];
-    for (id, key) in bls_keys.into_iter().enumerate() {
-        let (v, c) = mock_validator(hub, id as u64, key, genesis.clone()).await;
+    for id in 0..num_validators {
+        let (v, c) = mock_validator(
+            hub,
+            id as u64,
+            bls_keys[id].clone(),
+            validator_keys[id].clone(),
+            warm_keys[id].clone(),
+            genesis.clone(),
+        )
+        .await;
         validators.push(v);
         consensus.push(c);
     }
@@ -152,11 +170,12 @@ fn validator_for_slot(
 async fn one_validator_can_create_micro_blocks() {
     let mut hub = MockHub::default();
 
-    let key = KeyPair::generate(&mut seeded_rng(0));
-    let bls_key = BLSKeyPair::generate(&mut seeded_rng(0));
+    let bls_key = BlsKeyPair::generate(&mut seeded_rng(0));
+    let validator_key = KeyPair::generate(&mut seeded_rng(0));
+    let warm_key = KeyPair::generate(&mut seeded_rng(0));
     let genesis = GenesisBuilder::default()
         .with_genesis_validator(
-            Address::from(&key),
+            Address::from(&validator_key),
             Address::from([0u8; 20]),
             bls_key.public_key,
             Address::default(),
@@ -164,7 +183,15 @@ async fn one_validator_can_create_micro_blocks() {
         .generate()
         .unwrap();
 
-    let (validator, mut consensus1) = mock_validator(&mut hub, 1, bls_key, genesis.clone()).await;
+    let (validator, mut consensus1) = mock_validator(
+        &mut hub,
+        1,
+        bls_key,
+        validator_key,
+        warm_key,
+        genesis.clone(),
+    )
+    .await;
 
     log::debug!("Establishing consensus...");
     consensus1.force_established();
@@ -231,7 +258,7 @@ fn create_view_change_update(
     block_number: u32,
     new_view_number: u32,
     prev_seed: VrfSeed,
-    key_pair: BLSKeyPair,
+    key_pair: BlsKeyPair,
     validator_id: u16,
     slots: &Vec<u16>,
 ) -> LevelUpdateMessage<SignedViewChangeMessage, ViewChange> {

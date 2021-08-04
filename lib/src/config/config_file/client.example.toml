@@ -244,3 +244,13 @@ level = "debug"
 #sender_balance = 0
 #recipient_balance = 0
 
+##############################################################################
+##
+## Configure validator
+##
+###############################################################################
+
+[validator]
+validator_key_file = "validator_key.dat"
+cold_key_file = "cold_key.dat"
+warm_key_file = "warm_key.dat"

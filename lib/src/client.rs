@@ -4,14 +4,17 @@ use parking_lot::RwLock;
 
 use nimiq_block::Block;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
-use nimiq_consensus::{Consensus as AbstractConsensus, ConsensusProxy as AbstractConsensusProxy};
+use nimiq_consensus::{
+    sync::history::HistorySync, Consensus as AbstractConsensus,
+    ConsensusProxy as AbstractConsensusProxy,
+};
 use nimiq_database::Environment;
 use nimiq_genesis::NetworkInfo;
 use nimiq_mempool::Mempool;
 use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_libp2p::{
     discovery::peer_contacts::{PeerContact, Services},
-    Config as NetworkConfig, Network,
+    Config as NetworkConfig, Multiaddr, Network,
 };
 use nimiq_utils::time::OffsetTime;
 #[cfg(feature = "validator")]
@@ -23,8 +26,6 @@ use nimiq_wallet::WalletStore;
 
 use crate::config::config::ClientConfig;
 use crate::error::Error;
-use nimiq_consensus::sync::history::HistorySync;
-use nimiq_network_libp2p::Multiaddr;
 
 /// Alias for the Consensus and Validator specialized over libp2p network
 pub type Consensus = AbstractConsensus<Network>;
@@ -117,6 +118,14 @@ impl ClientInner {
         #[cfg(feature = "validator")]
         let validator_key = config.storage.validator_keypair()?;
 
+        // Load validator key (before we give away ownership of the storage config)
+        #[cfg(feature = "validator")]
+        let cold_key = config.storage.cold_keypair()?;
+
+        // Load warm key (before we give away ownership of the storage config)
+        #[cfg(feature = "validator")]
+        let warm_key = config.storage.warm_keypair()?;
+
         // Open database
         let environment = config.storage.database(
             config.network_id,
@@ -148,68 +157,15 @@ impl ClientInner {
         #[cfg(feature = "validator")]
         let validator = {
             let validator_network = Arc::new(ValidatorNetworkImpl::new(Arc::clone(&network)));
-            #[cfg(feature = "wallet")]
-            if let Some(config) = &config.validator {
-                let validator_wallet_key = {
-                    if let Some(wallet_account) = &config.wallet_account {
-                        let address = wallet_account.parse().map_err(|_| {
-                            Error::config_error(format!(
-                                "Failed to parse validator wallet address: {}",
-                                wallet_account
-                            ))
-                        })?;
-                        let locked = wallet_store.get(&address, None).ok_or_else(|| {
-                            Error::config_error(format!(
-                                "Could not find wallet account: {}",
-                                wallet_account
-                            ))
-                        })?;
-                        let unlocked = locked
-                            .unlock(
-                                config
-                                    .wallet_password
-                                    .clone()
-                                    .unwrap_or_default()
-                                    .as_bytes(),
-                            )
-                            .map_err(|_| {
-                                Error::config_error(format!(
-                                    "Failed to unlock validator wallet account: {}",
-                                    wallet_account
-                                ))
-                            })?;
-                        Some(unlocked.key_pair.clone())
-                    } else {
-                        None
-                    }
-                };
+            let validator = Validator::new(
+                &consensus,
+                validator_network,
+                validator_key,
+                cold_key,
+                warm_key,
+            );
 
-                let validator = Validator::new(
-                    &consensus,
-                    validator_network,
-                    validator_key,
-                    validator_wallet_key,
-                );
-
-                Some(validator)
-            } else {
-                None
-            }
-            #[cfg(not(feature = "wallet"))]
-            {
-                let validator_wallet_key = {
-                    log::warn!("Client is compiled without wallet and thus can't load the wallet account for the validator.");
-                    None
-                };
-                let validator = Validator::new(
-                    &consensus,
-                    validator_network,
-                    validator_key,
-                    validator_wallet_key,
-                );
-
-                Some(validator)
-            }
+            Some(validator)
         };
 
         // Start network.
