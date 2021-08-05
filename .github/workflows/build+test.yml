@@ -72,7 +72,23 @@ jobs:
     - uses: actions-rs/cargo@v1
       with:
         command: test
-        args: --release --all-features
+        args: --all-features
+      # Add flags for gcov
+      env:
+        CARGO_INCREMENTAL: '0'
+        RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off'
+        RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off'
+    - id: coverage
+      name: Generate coverage  report
+      uses: actions-rs/grcov@v0.1
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v2
+      with:
+        files: ${{ steps.coverage.outputs.report }}
+        fail_ci_if_error: false
+        flags: unittests
+        name: Nimiq code coverage
+        verbose: true
 
   clippy:
     runs-on: ubuntu-20.04
