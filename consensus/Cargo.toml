@@ -37,7 +37,6 @@ nimiq-genesis = { path = "../genesis" }
 nimiq-hash = { path = "../hash" }
 nimiq-macros = { path = "../macros" }
 nimiq-mempool = { path = "../mempool" }
-nimiq-messages = { path = "../messages" }
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
 nimiq-subscription = { path = "../primitives/subscription" }

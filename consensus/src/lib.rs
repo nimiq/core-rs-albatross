@@ -17,7 +17,6 @@ extern crate nimiq_database as database;
 extern crate nimiq_hash as hash;
 extern crate nimiq_macros as macros;
 extern crate nimiq_mempool as mempool;
-extern crate nimiq_messages as network_messages;
 extern crate nimiq_network_interface as network_interface;
 extern crate nimiq_primitives as primitives;
 extern crate nimiq_transaction as transaction;

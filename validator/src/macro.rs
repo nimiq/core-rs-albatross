@@ -17,7 +17,7 @@ use nimiq_tendermint::{
 };
 use nimiq_validator_network::ValidatorNetwork;
 
-use crate::tendermint_outside_deps::TendermintInterface;
+use crate::tendermint::TendermintInterface;
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct PersistedMacroState<TValidatorNetwork: ValidatorNetwork + 'static> {

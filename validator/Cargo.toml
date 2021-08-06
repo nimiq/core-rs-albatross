@@ -40,7 +40,6 @@ nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-macros = { path = "../macros" }
 nimiq-mempool = { path = "../mempool" }
-nimiq-messages = { path = "../messages" }
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-primitives = { path = "../primitives" }
 nimiq-tendermint = { path = "../tendermint" }
