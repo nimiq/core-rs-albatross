@@ -140,7 +140,7 @@ fn it_can_verify_validator_transactions() {
             new_validator_key: None,
             new_proof_of_knowledge: None,
             new_reward_address: Some(Address::from([1u8; 20])),
-            signature: Default::default(),
+            proof: Default::default(),
         },
         0,
         &bls_pair,
@@ -175,7 +175,7 @@ fn it_can_verify_validator_transactions() {
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::RetireValidator {
             validator_id: validator_id.clone(),
-            signature: Default::default(),
+            proof: Default::default(),
         },
         0,
         &bls_pair,
@@ -205,7 +205,7 @@ fn it_can_verify_validator_transactions() {
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::ReactivateValidator {
             validator_id: validator_id.clone(),
-            signature: Default::default(),
+            proof: Default::default(),
         },
         0,
         &bls_pair,
@@ -235,7 +235,7 @@ fn it_can_verify_validator_transactions() {
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::UnparkValidator {
             validator_id: validator_id.clone(),
-            signature: Default::default(),
+            proof: Default::default(),
         },
         0,
         &bls_pair,
@@ -383,7 +383,7 @@ fn make_drop_transaction(
     let proof = OutgoingStakingTransactionProof::DropValidator {
         validator_id: validator_id.clone(),
         validator_key: key_pair.public_key.compress(),
-        signature: key_pair.sign(&tx.serialize_content()).compress(),
+        proof: key_pair.sign(&tx.serialize_content()).compress(),
     };
     tx.proof = proof.serialize_to_vec();
     tx

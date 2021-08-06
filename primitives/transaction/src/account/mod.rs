@@ -20,6 +20,7 @@ pub trait AccountTransactionVerification: Sized {
 }
 
 impl AccountTransactionVerification for AccountType {
+    /// Verifies the incoming part of a transaction only using the static data available in the transaction.
     fn verify_incoming_transaction(transaction: &Transaction) -> Result<(), TransactionError> {
         match transaction.recipient_type {
             AccountType::Basic => BasicAccountVerifier::verify_incoming_transaction(transaction),
@@ -35,6 +36,7 @@ impl AccountTransactionVerification for AccountType {
         }
     }
 
+    /// Verifies the outgoing part of a transaction only using the static data available in the transaction.
     fn verify_outgoing_transaction(transaction: &Transaction) -> Result<(), TransactionError> {
         match transaction.sender_type {
             AccountType::Basic => BasicAccountVerifier::verify_outgoing_transaction(transaction),

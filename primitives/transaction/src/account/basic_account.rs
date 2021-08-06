@@ -1,3 +1,5 @@
+use log::error;
+
 use beserial::Deserialize;
 use primitives::account::AccountType;
 
@@ -5,6 +7,7 @@ use crate::account::AccountTransactionVerification;
 use crate::SignatureProof;
 use crate::{Transaction, TransactionError, TransactionFlags};
 
+/// The verifier trait for a basic account. This only uses data available in the transaction.
 pub struct BasicAccountVerifier {}
 
 impl AccountTransactionVerification for BasicAccountVerifier {
@@ -12,7 +15,19 @@ impl AccountTransactionVerification for BasicAccountVerifier {
         assert_eq!(transaction.recipient_type, AccountType::Basic);
 
         if transaction.sender == transaction.recipient {
+            error!(
+                "The following transaction can't have the same sender and recipient:\n{:?}",
+                transaction
+            );
             return Err(TransactionError::SenderEqualsRecipient);
+        }
+
+        if transaction.value.is_zero() {
+            error!(
+                "The following transaction can't have a zero value:\n{:?}",
+                transaction
+            );
+            return Err(TransactionError::ZeroValue);
         }
 
         if transaction
@@ -20,7 +35,10 @@ impl AccountTransactionVerification for BasicAccountVerifier {
             .contains(TransactionFlags::CONTRACT_CREATION)
             || transaction.flags.contains(TransactionFlags::SIGNALLING)
         {
-            warn!("Contract creation and signalling not allowed");
+            error!(
+                "Contract creation and signalling not allowed for this transaction:\n{:?}",
+                transaction
+            );
             return Err(TransactionError::InvalidForRecipient);
         }
 
@@ -37,7 +55,10 @@ impl AccountTransactionVerification for BasicAccountVerifier {
         if !signature_proof.is_signed_by(&transaction.sender)
             || !signature_proof.verify(transaction.serialize_content().as_slice())
         {
-            warn!("Invalid signature");
+            error!(
+                "The following transaction has an invalid proof:\n{:?}",
+                transaction
+            );
             return Err(TransactionError::InvalidProof);
         }
 

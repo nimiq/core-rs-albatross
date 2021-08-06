@@ -55,7 +55,7 @@ pub fn compute_root_from_slice<T: HashOutput>(values: &[T]) -> Cow<T> {
     Cow::Owned(hasher.finish())
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct MerklePath<H: HashOutput> {
     nodes: Vec<MerklePathNode<H>>,
 }

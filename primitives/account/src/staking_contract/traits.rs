@@ -69,7 +69,7 @@ impl AccountTransactionInteraction for StakingContract {
                 validator_key,
                 reward_address,
                 signal_data,
-                signature,
+                proof: signature,
                 ..
             } => {
                 let validator_address = signature.compute_signer();
@@ -89,7 +89,7 @@ impl AccountTransactionInteraction for StakingContract {
                 new_validator_key,
                 new_reward_address,
                 new_signal_data,
-                signature,
+                proof: signature,
                 ..
             } => {
                 let validator_address = signature.compute_signer();
@@ -107,7 +107,7 @@ impl AccountTransactionInteraction for StakingContract {
                     .serialize_to_vec(),
                 )
             }
-            IncomingStakingTransactionData::RetireValidator { signature } => {
+            IncomingStakingTransactionData::RetireValidator { proof: signature } => {
                 let validator_address = signature.compute_signer();
 
                 receipt = Some(
@@ -120,7 +120,7 @@ impl AccountTransactionInteraction for StakingContract {
                     .serialize_to_vec(),
                 );
             }
-            IncomingStakingTransactionData::ReactivateValidator { signature } => {
+            IncomingStakingTransactionData::ReactivateValidator { proof: signature } => {
                 let validator_address = signature.compute_signer();
 
                 receipt = Some(
@@ -132,7 +132,7 @@ impl AccountTransactionInteraction for StakingContract {
                     .serialize_to_vec(),
                 );
             }
-            IncomingStakingTransactionData::UnparkValidator { signature } => {
+            IncomingStakingTransactionData::UnparkValidator { proof: signature } => {
                 let validator_address = signature.compute_signer();
 
                 receipt = Some(
@@ -142,7 +142,7 @@ impl AccountTransactionInteraction for StakingContract {
             }
             IncomingStakingTransactionData::CreateStaker {
                 delegation,
-                signature,
+                proof: signature,
             } => {
                 let staker_address = signature.compute_signer();
 
@@ -159,7 +159,7 @@ impl AccountTransactionInteraction for StakingContract {
             }
             IncomingStakingTransactionData::UpdateStaker {
                 new_delegation,
-                signature,
+                proof: signature,
             } => {
                 let staker_address = signature.compute_signer();
 
@@ -173,7 +173,10 @@ impl AccountTransactionInteraction for StakingContract {
                     .serialize_to_vec(),
                 );
             }
-            IncomingStakingTransactionData::RetireStaker { value, signature } => {
+            IncomingStakingTransactionData::RetireStaker {
+                value,
+                proof: signature,
+            } => {
                 let staker_address = signature.compute_signer();
 
                 receipt = Some(
@@ -187,7 +190,10 @@ impl AccountTransactionInteraction for StakingContract {
                     .serialize_to_vec(),
                 );
             }
-            IncomingStakingTransactionData::ReactivateStaker { value, signature } => {
+            IncomingStakingTransactionData::ReactivateStaker {
+                value,
+                proof: signature,
+            } => {
                 let staker_address = signature.compute_signer();
 
                 StakingContract::reactivate_staker(accounts_tree, db_txn, &staker_address, value)?;
@@ -209,7 +215,9 @@ impl AccountTransactionInteraction for StakingContract {
             Deserialize::deserialize(&mut &transaction.data[..])?;
 
         match data {
-            IncomingStakingTransactionData::CreateValidator { signature, .. } => {
+            IncomingStakingTransactionData::CreateValidator {
+                proof: signature, ..
+            } => {
                 let validator_address = signature.compute_signer();
 
                 StakingContract::revert_create_validator(
@@ -218,7 +226,9 @@ impl AccountTransactionInteraction for StakingContract {
                     &validator_address,
                 )?;
             }
-            IncomingStakingTransactionData::UpdateValidator { signature, .. } => {
+            IncomingStakingTransactionData::UpdateValidator {
+                proof: signature, ..
+            } => {
                 let validator_address = signature.compute_signer();
 
                 let receipt = Deserialize::deserialize_from_vec(
@@ -232,7 +242,9 @@ impl AccountTransactionInteraction for StakingContract {
                     receipt,
                 )?;
             }
-            IncomingStakingTransactionData::RetireValidator { signature, .. } => {
+            IncomingStakingTransactionData::RetireValidator {
+                proof: signature, ..
+            } => {
                 let validator_address = signature.compute_signer();
 
                 let receipt = Deserialize::deserialize_from_vec(
@@ -246,7 +258,9 @@ impl AccountTransactionInteraction for StakingContract {
                     receipt,
                 )?;
             }
-            IncomingStakingTransactionData::ReactivateValidator { signature, .. } => {
+            IncomingStakingTransactionData::ReactivateValidator {
+                proof: signature, ..
+            } => {
                 let validator_address = signature.compute_signer();
 
                 let receipt = Deserialize::deserialize_from_vec(
@@ -260,7 +274,9 @@ impl AccountTransactionInteraction for StakingContract {
                     receipt,
                 )?;
             }
-            IncomingStakingTransactionData::UnparkValidator { signature, .. } => {
+            IncomingStakingTransactionData::UnparkValidator {
+                proof: signature, ..
+            } => {
                 let validator_address = signature.compute_signer();
 
                 let receipt = Deserialize::deserialize_from_vec(
@@ -274,7 +290,9 @@ impl AccountTransactionInteraction for StakingContract {
                     receipt,
                 )?;
             }
-            IncomingStakingTransactionData::CreateStaker { signature, .. } => {
+            IncomingStakingTransactionData::CreateStaker {
+                proof: signature, ..
+            } => {
                 let staker_address = signature.compute_signer();
 
                 StakingContract::revert_create_staker(accounts_tree, db_txn, &staker_address)?;
@@ -288,7 +306,9 @@ impl AccountTransactionInteraction for StakingContract {
                 )?;
             }
 
-            IncomingStakingTransactionData::UpdateStaker { signature, .. } => {
+            IncomingStakingTransactionData::UpdateStaker {
+                proof: signature, ..
+            } => {
                 let staker_address = signature.compute_signer();
 
                 let receipt = Deserialize::deserialize_from_vec(
@@ -302,7 +322,10 @@ impl AccountTransactionInteraction for StakingContract {
                     receipt,
                 )?;
             }
-            IncomingStakingTransactionData::RetireStaker { value, signature } => {
+            IncomingStakingTransactionData::RetireStaker {
+                value,
+                proof: signature,
+            } => {
                 let staker_address = signature.compute_signer();
 
                 let receipt = Deserialize::deserialize_from_vec(
@@ -317,7 +340,10 @@ impl AccountTransactionInteraction for StakingContract {
                     receipt,
                 )?;
             }
-            IncomingStakingTransactionData::ReactivateStaker { value, signature } => {
+            IncomingStakingTransactionData::ReactivateStaker {
+                value,
+                proof: signature,
+            } => {
                 let staker_address = signature.compute_signer();
 
                 StakingContract::revert_reactivate_staker(
@@ -345,7 +371,7 @@ impl AccountTransactionInteraction for StakingContract {
             Deserialize::deserialize(&mut &transaction.proof[..])?;
 
         match data {
-            OutgoingStakingTransactionProof::DropValidator { signature } => {
+            OutgoingStakingTransactionProof::DropValidator { proof: signature } => {
                 let validator_address = signature.compute_signer();
 
                 receipt = Some(
@@ -358,7 +384,7 @@ impl AccountTransactionInteraction for StakingContract {
                     .serialize_to_vec(),
                 );
             }
-            OutgoingStakingTransactionProof::Unstake { signature } => {
+            OutgoingStakingTransactionProof::Unstake { proof: signature } => {
                 let staker_address = signature.compute_signer();
 
                 receipt = StakingContract::unstake(
@@ -372,7 +398,7 @@ impl AccountTransactionInteraction for StakingContract {
             }
             OutgoingStakingTransactionProof::DeductFees {
                 from_active_balance,
-                signature,
+                proof: signature,
             } => {
                 let staker_address = signature.compute_signer();
 
@@ -402,7 +428,7 @@ impl AccountTransactionInteraction for StakingContract {
             Deserialize::deserialize(&mut &transaction.proof[..])?;
 
         match data {
-            OutgoingStakingTransactionProof::DropValidator { signature } => {
+            OutgoingStakingTransactionProof::DropValidator { proof: signature } => {
                 let validator_address = signature.compute_signer();
 
                 let receipt: DropValidatorReceipt = Deserialize::deserialize_from_vec(
@@ -416,7 +442,7 @@ impl AccountTransactionInteraction for StakingContract {
                     receipt,
                 )?;
             }
-            OutgoingStakingTransactionProof::Unstake { signature } => {
+            OutgoingStakingTransactionProof::Unstake { proof: signature } => {
                 let staker_address = signature.compute_signer();
 
                 let receipt = match receipt {
@@ -434,7 +460,7 @@ impl AccountTransactionInteraction for StakingContract {
             }
             OutgoingStakingTransactionProof::DeductFees {
                 from_active_balance,
-                signature,
+                proof: signature,
             } => {
                 let staker_address = signature.compute_signer();
 

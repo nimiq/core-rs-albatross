@@ -1,3 +1,5 @@
+use log::error;
+
 use primitives::account::AccountType;
 
 use crate::account::AccountTransactionVerification;
@@ -17,7 +19,10 @@ impl AccountTransactionVerification for StakingContractVerifier {
             .flags
             .contains(TransactionFlags::CONTRACT_CREATION)
         {
-            warn!("Contract creation not allowed");
+            error!(
+                "Contract creation not allowed for this transaction:\n{:?}",
+                transaction
+            );
             return Err(TransactionError::InvalidForRecipient);
         }
 
@@ -26,8 +31,13 @@ impl AccountTransactionVerification for StakingContractVerifier {
         let data = IncomingStakingTransactionData::parse(transaction)?;
 
         if data.is_signalling() != transaction.flags.contains(TransactionFlags::SIGNALLING) {
-            warn!("Signalling must be set for signalling transactions");
+            error!("Signalling must be set for signalling transactions. The offending transaction is the following:\n{:?}", transaction);
             return Err(TransactionError::InvalidForRecipient);
+        }
+
+        if data.is_signalling() && !transaction.value.is_zero() {
+            error!("Signalling transactions must have a value of zero. The offending transaction is the following:\n{:?}", transaction);
+            return Err(TransactionError::InvalidValue);
         }
 
         data.verify(transaction)?;

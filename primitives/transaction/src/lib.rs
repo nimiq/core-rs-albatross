@@ -121,6 +121,16 @@ impl SignatureProof {
     }
 }
 
+impl Default for SignatureProof {
+    fn default() -> Self {
+        SignatureProof {
+            public_key: Default::default(),
+            merkle_path: Default::default(),
+            signature: Signature::from_bytes(&[0u8; Signature::SIZE]).unwrap(),
+        }
+    }
+}
+
 #[derive(Clone, Eq, Debug)]
 #[repr(C)]
 pub struct Transaction {
@@ -314,10 +324,6 @@ impl Transaction {
         if self.network_id != network_id {
             return Err(TransactionError::ForeignNetwork);
         }
-
-        // Check that sender != recipient.
-        // This is no longer true for stake retire transactions.
-        // Check moved to AccountType::verify_incoming_transaction()
 
         // Check that value > 0 except if it is a signalling transaction..
         if self.flags.contains(TransactionFlags::SIGNALLING) {
@@ -554,6 +560,8 @@ pub enum TransactionError {
     ForeignNetwork,
     #[error("Transaction has 0 value")]
     ZeroValue,
+    #[error("Transaction has invalid value")]
+    InvalidValue,
     #[error("Overflow")]
     Overflow,
     #[error("Sender same as recipient")]
