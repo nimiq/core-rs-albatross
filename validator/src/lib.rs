@@ -18,10 +18,9 @@ extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
 extern crate nimiq_macros as macros;
 extern crate nimiq_mempool as mempool;
-extern crate nimiq_messages as messages;
 extern crate nimiq_network_interface as network_interface;
 extern crate nimiq_primitives as primitives;
-extern crate nimiq_tendermint as tendermint;
+extern crate nimiq_tendermint as tendermint_protocol;
 extern crate nimiq_utils as utils;
 extern crate nimiq_vrf as vrf;
 
@@ -29,5 +28,5 @@ pub mod aggregation;
 mod r#macro;
 mod micro;
 mod slash;
-mod tendermint_outside_deps;
+mod tendermint;
 pub mod validator;

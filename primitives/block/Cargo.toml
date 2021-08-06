@@ -30,7 +30,6 @@ nimiq-hash_derive = { path = "../../hash/hash_derive" }
 nimiq-keys = { path = "../../keys" }
 nimiq-macros = { path = "../../macros" }
 nimiq-nano-primitives = { path = "../../nano-primitives" }
-nimiq-network-interface = { path = "../../network-interface" }
 nimiq-primitives = { path = "..", features = ["policy", "networks", "coin"] }
 nimiq-transaction = { path = "../transaction" }
 nimiq-utils = { path = "../../utils", features = ["merkle"] }

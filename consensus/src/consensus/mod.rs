@@ -364,7 +364,7 @@ impl<N: Network> Future for Consensus<N> {
                         );
                     }
                 }
-                BlockQueueEvent::ReceivedMissingBlocks(_, count) => {
+                BlockQueueEvent::ReceivedMissingBlocks(_, _) => {
                     if !self.is_established() {
                         // When syncing a stopped chain, we want to immediately start a new head request
                         // after receiving blocks for the current epoch.

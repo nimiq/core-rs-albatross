@@ -18,7 +18,7 @@ use nimiq_network_interface::network::MsgAcceptance;
 use nimiq_primitives::slots::Validators;
 use nimiq_validator_network::ValidatorNetwork;
 use primitives::policy::{TENDERMINT_TIMEOUT_DELTA, TENDERMINT_TIMEOUT_INIT};
-use tendermint::{
+use tendermint_protocol::{
     AggregationResult, ProposalResult, Step, TendermintError, TendermintOutsideDeps,
     TendermintState,
 };
