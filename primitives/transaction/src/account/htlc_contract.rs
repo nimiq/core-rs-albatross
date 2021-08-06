@@ -1,3 +1,4 @@
+use log::error;
 use strum_macros::Display;
 
 use beserial::{Deserialize, Serialize};
@@ -10,6 +11,7 @@ use crate::account::AccountTransactionVerification;
 use crate::SignatureProof;
 use crate::{Transaction, TransactionError, TransactionFlags};
 
+/// The verifier trait for a hash time locked contract. This only uses data available in the transaction.
 pub struct HashedTimeLockedContractVerifier {}
 
 impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
@@ -17,6 +19,10 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
         assert_eq!(transaction.recipient_type, AccountType::HTLC);
 
         if transaction.sender == transaction.recipient {
+            error!(
+                "The following transaction can't have the same sender and recipient:\n{:?}",
+                transaction
+            );
             return Err(TransactionError::SenderEqualsRecipient);
         }
 
@@ -24,22 +30,32 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
             .flags
             .contains(TransactionFlags::CONTRACT_CREATION)
         {
-            warn!("Only contract creation is allowed");
+            error!(
+                "Only contract creation is allowed for the following transaction:\n{:?}",
+                transaction
+            );
             return Err(TransactionError::InvalidForRecipient);
         }
 
         if transaction.flags.contains(TransactionFlags::SIGNALLING) {
-            warn!("Signalling not allowed");
+            error!(
+                "Signalling not allowed for the following transaction:\n{:?}",
+                transaction
+            );
             return Err(TransactionError::InvalidForRecipient);
         }
 
         if transaction.recipient != transaction.contract_creation_address() {
-            warn!("Recipient address must match contract creation address");
+            warn!("Recipient address must match contract creation address for the following transaction:\n{:?}",
+                transaction);
             return Err(TransactionError::InvalidForRecipient);
         }
 
         if transaction.data.len() != (20 * 2 + 1 + 32 + 1 + 8) {
-            warn!("Invalid creation data: invalid length");
+            warn!(
+                "Invalid data length. For the following transaction:\n{:?}",
+                transaction
+            );
             return Err(TransactionError::InvalidData);
         }
 
@@ -64,7 +80,10 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
                 let signature_proof: SignatureProof = Deserialize::deserialize(proof_buf)?;
 
                 if !proof_buf.is_empty() {
-                    warn!("Over-long proof");
+                    warn!(
+                        "Over-long proof for the following transaction:\n{:?}",
+                        transaction
+                    );
                     return Err(TransactionError::InvalidProof);
                 }
 
@@ -80,12 +99,18 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
                 }
 
                 if hash_root != pre_image {
-                    warn!("Hash mismatch");
+                    warn!(
+                        "Hash algorithm mismatch for the following transaction:\n{:?}",
+                        transaction
+                    );
                     return Err(TransactionError::InvalidProof);
                 }
 
                 if !signature_proof.verify(tx_buf) {
-                    warn!("Invalid signature");
+                    warn!(
+                        "Invalid signature for the following transaction:\n{:?}",
+                        transaction
+                    );
                     return Err(TransactionError::InvalidProof);
                 }
             }
@@ -95,14 +120,20 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
                 let signature_proof_sender: SignatureProof = Deserialize::deserialize(proof_buf)?;
 
                 if !proof_buf.is_empty() {
-                    warn!("Over-long proof");
+                    warn!(
+                        "Over-long proof for the following transaction:\n{:?}",
+                        transaction
+                    );
                     return Err(TransactionError::InvalidProof);
                 }
 
                 if !signature_proof_recipient.verify(tx_buf)
                     || !signature_proof_sender.verify(tx_buf)
                 {
-                    warn!("Invalid signature");
+                    warn!(
+                        "Invalid signature for the following transaction:\n{:?}",
+                        transaction
+                    );
                     return Err(TransactionError::InvalidProof);
                 }
             }
@@ -110,12 +141,18 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
                 let signature_proof: SignatureProof = Deserialize::deserialize(proof_buf)?;
 
                 if !proof_buf.is_empty() {
-                    warn!("Over-long proof");
+                    warn!(
+                        "Over-long proof for the following transaction:\n{:?}",
+                        transaction
+                    );
                     return Err(TransactionError::InvalidProof);
                 }
 
                 if !signature_proof.verify(tx_buf) {
-                    warn!("Invalid signature");
+                    warn!(
+                        "Invalid signature for the following transaction:\n{:?}",
+                        transaction
+                    );
                     return Err(TransactionError::InvalidProof);
                 }
             }

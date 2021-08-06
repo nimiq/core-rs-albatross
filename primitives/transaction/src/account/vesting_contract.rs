@@ -1,3 +1,5 @@
+use log::error;
+
 use beserial::{Deserialize, Serialize, SerializingError, WriteBytesExt};
 use keys::Address;
 use primitives::account::AccountType;
@@ -7,6 +9,7 @@ use crate::account::AccountTransactionVerification;
 use crate::SignatureProof;
 use crate::{Transaction, TransactionError, TransactionFlags};
 
+/// The verifier trait for a basic account. This only uses data available in the transaction.
 pub struct VestingContractVerifier {}
 
 impl AccountTransactionVerification for VestingContractVerifier {
@@ -14,6 +17,10 @@ impl AccountTransactionVerification for VestingContractVerifier {
         assert_eq!(transaction.recipient_type, AccountType::Vesting);
 
         if transaction.sender == transaction.recipient {
+            error!(
+                "The following transaction can't have the same sender and recipient:\n{:?}",
+                transaction
+            );
             return Err(TransactionError::SenderEqualsRecipient);
         }
 
@@ -21,23 +28,33 @@ impl AccountTransactionVerification for VestingContractVerifier {
             .flags
             .contains(TransactionFlags::CONTRACT_CREATION)
         {
-            warn!("Only contract creation is allowed");
+            error!(
+                "Only contract creation is allowed for this transaction:\n{:?}",
+                transaction
+            );
             return Err(TransactionError::InvalidForRecipient);
         }
 
         if transaction.flags.contains(TransactionFlags::SIGNALLING) {
-            warn!("Signalling not allowed");
+            error!(
+                "Signalling not allowed for this transaction:\n{:?}",
+                transaction
+            );
             return Err(TransactionError::InvalidForRecipient);
         }
 
         if transaction.recipient != transaction.contract_creation_address() {
-            warn!("Recipient address must match contract creation address");
+            error!("Recipient address must match contract creation address for this transaction:\n{:?}",
+                transaction);
             return Err(TransactionError::InvalidForRecipient);
         }
 
         let allowed_sizes = [Address::SIZE + 8, Address::SIZE + 24, Address::SIZE + 32];
         if !allowed_sizes.contains(&transaction.data.len()) {
-            warn!("Invalid creation data: invalid length");
+            warn!(
+                "Invalid data length for this transaction:\n{:?}",
+                transaction
+            );
             return Err(TransactionError::InvalidData);
         }
 
@@ -52,7 +69,7 @@ impl AccountTransactionVerification for VestingContractVerifier {
             Deserialize::deserialize(&mut &transaction.proof[..])?;
 
         if !signature_proof.verify(transaction.serialize_content().as_slice()) {
-            warn!("Invalid signature");
+            warn!("Invalid signature for this transaction:\n{:?}", transaction);
             return Err(TransactionError::InvalidProof);
         }
 

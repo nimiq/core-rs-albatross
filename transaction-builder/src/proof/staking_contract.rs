@@ -82,7 +82,7 @@ impl StakingProofBuilder {
         self.proof = Some(OutgoingStakingTransactionProof::DropValidator {
             validator_id: validator_id.clone(),
             validator_key: key_pair.public_key.compress(),
-            signature: signature.compress(),
+            proof: signature.compress(),
         });
         self
     }

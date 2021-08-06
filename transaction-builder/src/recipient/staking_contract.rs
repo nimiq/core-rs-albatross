@@ -140,7 +140,7 @@ impl StakingRecipientBuilder {
                 new_proof_of_knowledge: new_key_pair
                     .map(|key| StakingRecipientBuilder::generate_proof_of_knowledge(key)),
                 new_reward_address,
-                signature: Default::default(),
+                proof: Default::default(),
             },
         ));
         self
@@ -154,7 +154,7 @@ impl StakingRecipientBuilder {
         self.staking_data = Some(StakingTransaction::IncomingTransaction(
             IncomingStakingTransactionData::RetireValidator {
                 validator_id: validator_id.clone(),
-                signature: Default::default(),
+                proof: Default::default(),
             },
         ));
         self
@@ -167,7 +167,7 @@ impl StakingRecipientBuilder {
         self.staking_data = Some(StakingTransaction::IncomingTransaction(
             IncomingStakingTransactionData::ReactivateValidator {
                 validator_id: validator_id.clone(),
-                signature: Default::default(),
+                proof: Default::default(),
             },
         ));
         self
@@ -184,7 +184,7 @@ impl StakingRecipientBuilder {
         self.staking_data = Some(StakingTransaction::IncomingTransaction(
             IncomingStakingTransactionData::UnparkValidator {
                 validator_id: validator_id.clone(),
-                signature: Default::default(),
+                proof: Default::default(),
             },
         ));
         self
