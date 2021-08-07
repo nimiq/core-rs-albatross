@@ -43,7 +43,6 @@ services:
       - LISTEN_ADDRESSES=/ip4/7.0.0.2/tcp/8443/ws
       - NIMIQ_HOST=seed1.${NETWORK_NAME:?err}
       - NIMIQ_NETWORK=dev-albatross
-      - NIMIQ_PEER_KEY=fe3b33ed720a5d532e27551c3b9aa83d97a27e82c30d87fe1378936890f81ea6
       - NIMIQ_PEER_KEY_FILE=/home/nimiq/.nimiq/peer_key.dat
       - NIMIQ_INSTANT_INBOUND=true
       - NIMIQ_VALIDATOR=validator
@@ -75,8 +74,6 @@ services:
       - NIMIQ_HOST=seed2.${NETWORK_NAME:?err}
       - NIMIQ_NETWORK=dev-albatross
       - NIMIQ_SEED_NODES=/ip4/7.0.0.2/tcp/8443/ws
-      # - NIMIQ_SEED_NODES=ws://seed1.${NETWORK_NAME:?err}:8443/5af4c3f30998573e8d3476cd0e0543bf7adba576ef321342e41c2bccc246c377
-      # - NIMIQ_PEER_KEY=3a55f2b5f7c66a4ce624c8189bb7d6217384ae67c4728591d5458beaab1b226a
       - NIMIQ_PEER_KEY_FILE=/home/nimiq/.nimiq/peer_key.dat
       - NIMIQ_INSTANT_INBOUND=true
       - NIMIQ_VALIDATOR=validator
@@ -107,7 +104,6 @@ services:
       - NIMIQ_NETWORK=dev-albatross
       - NIMIQ_SEED_NODES=/ip4/7.0.0.2/tcp/8443/ws
       # - NIMIQ_SEED_NODES=ws://seed1.${NETWORK_NAME:?err}:8443/5af4c3f30998573e8d3476cd0e0543bf7adba576ef321342e41c2bccc246c377
-      # - NIMIQ_PEER_KEY=3a55f2b5f7c66a4ce624c8189bb7d6217384ae67c4728591d5458beaab1b226a
       - NIMIQ_PEER_KEY_FILE=/home/nimiq/.nimiq/peer_key.dat
       - NIMIQ_INSTANT_INBOUND=true
       - NIMIQ_VALIDATOR=validator
@@ -139,7 +135,6 @@ services:
       - NIMIQ_NETWORK=dev-albatross
       - NIMIQ_SEED_NODES=/ip4/7.0.0.2/tcp/8443/ws
       # - NIMIQ_SEED_NODES=ws://seed1.${NETWORK_NAME:?err}:8443/5af4c3f30998573e8d3476cd0e0543bf7adba576ef321342e41c2bccc246c377
-      # - NIMIQ_PEER_KEY=3a55f2b5f7c66a4ce624c8189bb7d6217384ae67c4728591d5458beaab1b226a
       - NIMIQ_PEER_KEY_FILE=/home/nimiq/.nimiq/peer_key.dat
       - NIMIQ_INSTANT_INBOUND=true
       - NIMIQ_VALIDATOR=validator
