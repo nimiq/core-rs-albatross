@@ -74,6 +74,7 @@ services:
       - NIMIQ_HOST=seed2.${NETWORK_NAME:?err}
       - NIMIQ_NETWORK=dev-albatross
       - NIMIQ_SEED_NODES=/ip4/7.0.0.2/tcp/8443/ws
+      # - NIMIQ_SEED_NODES=ws://seed1.${NETWORK_NAME:?err}:8443/5af4c3f30998573e8d3476cd0e0543bf7adba576ef321342e41c2bccc246c377
       - NIMIQ_PEER_KEY_FILE=/home/nimiq/.nimiq/peer_key.dat
       - NIMIQ_INSTANT_INBOUND=true
       - NIMIQ_VALIDATOR=validator
