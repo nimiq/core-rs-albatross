@@ -285,8 +285,29 @@ impl StakingContract {
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
+        warm_address: Address,
         block_height: u32,
     ) -> Result<RetireValidatorReceipt, AccountError> {
+        // Get the validator and update it.
+        let mut validator =
+            match StakingContract::get_validator(accounts_tree, db_txn, validator_address) {
+                Some(v) => v,
+                None => {
+                    return Err(AccountError::NonExistentAddress {
+                        address: validator_address.clone(),
+                    });
+                }
+            };
+
+        if warm_address != validator.warm_key {
+            error!(
+                "The warm address that signed the transaction matches the warm address of the validator."
+            );
+            return Err(AccountError::InvalidSignature);
+        }
+
+        validator.inactivity_flag = Some(block_height);
+
         // Get the staking contract main and update it.
         let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
 
@@ -302,25 +323,7 @@ impl StakingContract {
             return Err(AccountError::InvalidForRecipient);
         }
 
-        let current_parking = staking_contract
-            .current_epoch_parking
-            .remove(validator_address);
-        let previous_parking = staking_contract
-            .previous_epoch_parking
-            .remove(validator_address);
-
-        // Get the validator and update it.
-        let mut validator =
-            match StakingContract::get_validator(accounts_tree, db_txn, validator_address) {
-                Some(v) => v,
-                None => {
-                    return Err(AccountError::NonExistentAddress {
-                        address: validator_address.clone(),
-                    });
-                }
-            };
-
-        validator.inactivity_flag = Some(block_height);
+        let parked_set = staking_contract.parked_set.remove(validator_address);
 
         // All checks passed, not allowed to fail from here on!
         trace!("Trying to put staking contract in the accounts tree.");
@@ -342,10 +345,7 @@ impl StakingContract {
             Account::StakingValidator(validator),
         );
 
-        Ok(RetireValidatorReceipt {
-            current_epoch_parking: current_parking,
-            previous_epoch_parking: previous_parking,
-        })
+        Ok(RetireValidatorReceipt { parked_set })
     }
 
     /// Reverts inactivating a validator entry.
@@ -358,15 +358,9 @@ impl StakingContract {
         // Get the staking contract main and update it.
         let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
 
-        if receipt.current_epoch_parking {
+        if receipt.parked_set {
             staking_contract
-                .current_epoch_parking
-                .insert(validator_address.clone());
-        }
-
-        if receipt.previous_epoch_parking {
-            staking_contract
-                .previous_epoch_parking
+                .parked_set
                 .insert(validator_address.clone());
         }
 
@@ -411,8 +405,9 @@ impl StakingContract {
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
+        warm_address: Address,
     ) -> Result<ReactivateValidatorReceipt, AccountError> {
-        // Get the validator.
+        // Get the validator and check that the signature is valid.
         let mut validator =
             match StakingContract::get_validator(accounts_tree, db_txn, validator_address) {
                 Some(v) => v,
@@ -422,6 +417,13 @@ impl StakingContract {
                     });
                 }
             };
+
+        if warm_address != validator.warm_key {
+            error!(
+                "The warm address that signed the transaction matches the warm address of the validator."
+            );
+            return Err(AccountError::InvalidSignature);
+        }
 
         // Create receipt now.
         let receipt = match validator.inactivity_flag {
@@ -518,33 +520,45 @@ impl StakingContract {
         Ok(())
     }
 
-    /// Removes a validator from the parking lists and the disabled slots.
+    /// Removes a validator from the parked set and the disabled slots.
     pub(crate) fn unpark_validator(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
+        warm_address: Address,
     ) -> Result<UnparkValidatorReceipt, AccountError> {
-        // Get the staking contract main and update it.
+        // Get the validator and check that the signature is valid.
+        let validator =
+            match StakingContract::get_validator(accounts_tree, db_txn, validator_address) {
+                Some(v) => v,
+                None => {
+                    return Err(AccountError::NonExistentAddress {
+                        address: validator_address.clone(),
+                    });
+                }
+            };
+
+        if warm_address != validator.warm_key {
+            error!(
+                "The warm address that signed the transaction matches the warm address of the validator."
+            );
+            return Err(AccountError::InvalidSignature);
+        }
+
+        // Get the staking contract and update it.
         let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
 
-        let current_parking = staking_contract
-            .current_epoch_parking
-            .remove(validator_address);
-        let previous_parking = staking_contract
-            .previous_epoch_parking
-            .remove(validator_address);
+        let parked_set = staking_contract.parked_set.remove(validator_address);
+
         let current_disabled = staking_contract
             .current_disabled_slots
             .remove(validator_address);
+
         let previous_disabled = staking_contract
             .previous_disabled_slots
             .remove(validator_address);
 
-        if !current_parking
-            && !previous_parking
-            && current_disabled.is_none()
-            && previous_disabled.is_none()
-        {
+        if !parked_set && current_disabled.is_none() && previous_disabled.is_none() {
             error!(
                 "Tried to unpark a validator that was already unparked! It has address {}.",
                 validator_address
@@ -562,8 +576,7 @@ impl StakingContract {
         );
 
         Ok(UnparkValidatorReceipt {
-            current_epoch_parking: current_parking,
-            previous_epoch_parking: previous_parking,
+            parked_set,
             current_disabled_slots: current_disabled,
             previous_disabled_slots: previous_disabled,
         })
@@ -579,15 +592,9 @@ impl StakingContract {
         // Get the staking contract main and update it.
         let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
 
-        if receipt.current_epoch_parking {
+        if receipt.parked_set {
             staking_contract
-                .current_epoch_parking
-                .insert(validator_address.clone());
-        }
-
-        if receipt.previous_epoch_parking {
-            staking_contract
-                .previous_epoch_parking
+                .parked_set
                 .insert(validator_address.clone());
         }
 
@@ -644,7 +651,7 @@ impl StakingContract {
                 return Err(AccountError::InvalidForSender);
             }
             Some(time) => {
-                if block_height < policy::election_block_after(time) {
+                if block_height <= policy::election_block_after(time) {
                     return Err(AccountError::InvalidForSender);
                 }
             }

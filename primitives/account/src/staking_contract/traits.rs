@@ -107,37 +107,53 @@ impl AccountTransactionInteraction for StakingContract {
                     .serialize_to_vec(),
                 )
             }
-            IncomingStakingTransactionData::RetireValidator { proof: signature } => {
-                let validator_address = signature.compute_signer();
+            IncomingStakingTransactionData::RetireValidator {
+                validator_address,
+                proof,
+            } => {
+                let warm_address = proof.compute_signer();
 
                 receipt = Some(
                     StakingContract::retire_validator(
                         accounts_tree,
                         db_txn,
                         &validator_address,
+                        warm_address,
                         block_height,
                     )?
                     .serialize_to_vec(),
                 );
             }
-            IncomingStakingTransactionData::ReactivateValidator { proof: signature } => {
-                let validator_address = signature.compute_signer();
+            IncomingStakingTransactionData::ReactivateValidator {
+                validator_address,
+                proof,
+            } => {
+                let warm_address = proof.compute_signer();
 
                 receipt = Some(
                     StakingContract::reactivate_validator(
                         accounts_tree,
                         db_txn,
                         &validator_address,
+                        warm_address,
                     )?
                     .serialize_to_vec(),
                 );
             }
-            IncomingStakingTransactionData::UnparkValidator { proof: signature } => {
-                let validator_address = signature.compute_signer();
+            IncomingStakingTransactionData::UnparkValidator {
+                validator_address,
+                proof,
+            } => {
+                let warm_address = proof.compute_signer();
 
                 receipt = Some(
-                    StakingContract::unpark_validator(accounts_tree, db_txn, &validator_address)?
-                        .serialize_to_vec(),
+                    StakingContract::unpark_validator(
+                        accounts_tree,
+                        db_txn,
+                        &validator_address,
+                        warm_address,
+                    )?
+                    .serialize_to_vec(),
                 );
             }
             IncomingStakingTransactionData::CreateStaker {
@@ -525,7 +541,7 @@ impl AccountInherentInteraction for StakingContract {
                 // TODO: The inherent might have originated from a fork proof for the previous epoch.
                 //  Right now, we don't care and start the parking period in the epoch the proof has been submitted.
                 let newly_parked = staking_contract
-                    .current_epoch_parking
+                    .parked_set
                     .insert(slot.validator_address.clone());
 
                 // Fork proof from previous epoch should affect:
@@ -580,9 +596,6 @@ impl AccountInherentInteraction for StakingContract {
                         .insert(slot.slot);
                 }
 
-                // All checks passed, not allowed to fail from here on!
-                trace!("Trying to put staking contract in the accounts tree.");
-
                 receipt = Some(
                     SlashReceipt {
                         newly_parked,
@@ -602,22 +615,39 @@ impl AccountInherentInteraction for StakingContract {
                 staking_contract.previous_lost_rewards = staking_contract.current_lost_rewards;
                 staking_contract.current_lost_rewards = BitSet::new();
 
-                // Parking sets and disabled slots are only cleared on epoch changes.
+                // Parking set and disabled slots are only cleared on epoch changes.
                 if inherent.ty == InherentType::FinalizeEpoch {
-                    // But first, retire all validators that have been parked for more than one epoch.
-                    for validator_address in staking_contract.previous_epoch_parking {
-                        StakingContract::retire_validator(
+                    // But first, retire all validators that have been parked this epoch.
+                    for validator_address in staking_contract.parked_set {
+                        // Get the validator and update it.
+                        let mut validator = StakingContract::get_validator(
                             accounts_tree,
                             db_txn,
                             &validator_address,
-                            block_height,
-                        )?;
+                        )
+                        .ok_or(AccountError::InvalidInherent)?;
+
+                        validator.inactivity_flag = Some(block_height);
+
+                        trace!(
+                            "Trying to put validator with address {} in the accounts tree.",
+                            validator_address.to_string(),
+                        );
+
+                        accounts_tree.put(
+                            db_txn,
+                            &StakingContract::get_key_validator(&validator_address),
+                            Account::StakingValidator(validator),
+                        );
+
+                        // Update the staking contract.
+                        staking_contract
+                            .active_validators
+                            .remove(&validator_address);
                     }
 
                     // Now we clear the parking set.
-                    staking_contract.previous_epoch_parking =
-                        staking_contract.current_epoch_parking;
-                    staking_contract.current_epoch_parking = BTreeSet::new();
+                    staking_contract.parked_set = BTreeSet::new();
 
                     // And the disabled slots.
                     // Optimization: We actually only need the old slots for the first batch of the epoch.
@@ -634,6 +664,7 @@ impl AccountInherentInteraction for StakingContract {
             }
         }
 
+        trace!("Trying to put the staking contract in the accounts tree.");
         accounts_tree.put(
             db_txn,
             &StakingContract::get_key_staking_contract(),
@@ -665,9 +696,8 @@ impl AccountInherentInteraction for StakingContract {
                 // Only remove if it was not already slashed.
                 // I kept this in two nested if's for clarity.
                 if receipt.newly_parked {
-                    let has_been_removed = staking_contract
-                        .current_epoch_parking
-                        .remove(&slot.validator_address);
+                    let has_been_removed =
+                        staking_contract.parked_set.remove(&slot.validator_address);
                     if !has_been_removed {
                         return Err(AccountError::InvalidInherent);
                     }

@@ -24,48 +24,73 @@ mod traits;
 mod validator;
 
 /// The struct representing the staking contract. The staking contract is a special contract that
-/// handles many functions related to validators and staking.
+/// handles most functions related to validators and staking.
+/// The overall staking contract is a subtrie in the AccountsTrie that is composed of several
+/// different account types. Each different account type is intended to store a different piece of
+/// data concerning the staking contract. By having the path to each account you can navigate the
+/// staking contract subtrie. The subtrie has the following format:
+///
+///     STAKING_CONTRACT_ADDRESS
+///         |--> PATH_CONTRACT_MAIN: Staking(StakingContract)
+///         |
+///         |--> PATH_VALIDATORS_LIST
+///         |       |--> VALIDATOR_ADDRESS
+///         |               |--> PATH_VALIDATOR_MAIN: StakingValidator(Validator)
+///         |               |--> PATH_VALIDATOR_STAKERS_LIST
+///         |                       |--> STAKER_ADDRESS: StakingValidatorsStaker(Address)
+///         |
+///         |--> PATH_STAKERS_LIST
+///                 |--> STAKER_ADDRESS: StakingStaker(Staker)
+///
+/// So, for example, if you want to get the validator with a given address then you just fetch the
+/// node with key STAKING_CONTRACT_ADDRESS||PATH_VALIDATORS_LIST||VALIDATOR_ADDRESS||PATH_VALIDATOR_MAIN
+/// from the AccountsTrie (|| means concatenation).
+/// At a high level, the Staking Contract subtrie contains:
+///     - The Staking contract main. A struct that contains general information about the Staking contract.
+///     - A list of Validators. Each of them is a subtrie containing the Validator struct, with all
+///       the information relative to the Validator and a list of stakers that are validating for
+///       this validator (we store only the staker address).
+///     - A list of Stakers, with each Staker struct containing all information about a staker.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StakingContract {
-    // The total amount of coins staked.
+    // The total amount of coins staked (also includes validator's deposits).
     pub balance: Coin,
-    // A list of active validators IDs (i.e. are eligible to receive slots) and their corresponding
-    // balances.
+    // The list of active validators addresses (i.e. are eligible to receive slots) and their
+    // corresponding balances.
     pub active_validators: BTreeMap<Address, Coin>,
     // The validators that were parked during the current epoch.
-    pub current_epoch_parking: BTreeSet<Address>,
-    // The validators that were parked during the previous epoch.
-    pub previous_epoch_parking: BTreeSet<Address>,
-    // The validator slots that lost rewards (i.e. are no longer eligible to receive rewards) during
+    pub parked_set: BTreeSet<Address>,
+    // The validator slots that lost rewards (i.e. are not eligible to receive rewards) during
     // the current batch.
     pub current_lost_rewards: BitSet,
-    // The validator slots that lost rewards (i.e. are no longer eligible to receive rewards) during
+    // The validator slots that lost rewards (i.e. are not eligible to receive rewards) during
     // the previous batch.
     pub previous_lost_rewards: BitSet,
-    // The validator slots, searchable by the validator ID, that are disabled (i.e. are no
+    // The validator slots, searchable by the validator address, that are disabled (i.e. are no
     // longer eligible to produce blocks) currently.
     pub current_disabled_slots: BTreeMap<Address, BTreeSet<u16>>,
-    // The validator slots, searchable by the validator ID, that were disabled (i.e. are no
-    // longer eligible to produce blocks) at the end of the previous batch.
+    // The validator slots, searchable by the validator address, that were disabled (i.e. are no
+    // longer eligible to produce blocks) during the previous batch.
     pub previous_disabled_slots: BTreeMap<Address, BTreeSet<u16>>,
 }
 
 impl StakingContract {
-    // This is the byte path for the main struct in the staking contract.
+    /// This is the byte path for the main struct in the staking contract.
     pub const PATH_CONTRACT_MAIN: u8 = 0;
 
-    // This is the byte path for the validators list in the staking contract.
+    /// This is the byte path for the validators list in the staking contract.
     pub const PATH_VALIDATORS_LIST: u8 = 1;
 
-    // This is the byte path for the stakers list in the staking contract.
+    /// This is the byte path for the stakers list in the staking contract.
     pub const PATH_STAKERS_LIST: u8 = 2;
 
-    // This is the byte path for the main struct for a single validator (in the validators list).
+    /// This is the byte path for the main struct for a single validator (in the validators list).
     pub const PATH_VALIDATOR_MAIN: u8 = 0;
 
-    // This is the byte path for the stakers list for a single validator (in the validators list).
+    /// This is the byte path for the stakers list for a single validator (in the validators list).
     pub const PATH_VALIDATOR_STAKERS_LIST: u8 = 1;
 
+    /// Returns the key in the AccountsTrie for the Staking contract struct.
     pub fn get_key_staking_contract() -> KeyNibbles {
         let mut bytes = Vec::with_capacity(21);
         bytes.extend(
@@ -78,6 +103,7 @@ impl StakingContract {
         KeyNibbles::from(bytes.as_slice())
     }
 
+    /// Returns the key in the AccountsTrie for a Validator struct with a given validator address.
     pub fn get_key_validator(validator_address: &Address) -> KeyNibbles {
         let mut bytes = Vec::with_capacity(42);
         bytes.extend(
@@ -92,6 +118,7 @@ impl StakingContract {
         KeyNibbles::from(bytes.as_slice())
     }
 
+    /// Returns the key in the AccountsTrie for the given staker validating for the given validator.
     pub fn get_key_validator_staker(
         validator_address: &Address,
         staker_address: &Address,
@@ -110,6 +137,7 @@ impl StakingContract {
         KeyNibbles::from(bytes.as_slice())
     }
 
+    /// Returns the key in the AccountsTrie for a Staker struct with a given staker address.
     pub fn get_key_staker(staker_address: &Address) -> KeyNibbles {
         let mut bytes = Vec::with_capacity(41);
         bytes.extend(
@@ -136,16 +164,14 @@ impl StakingContract {
         );
 
         match accounts_tree.get(db_txn, &key) {
-            Some(Account::Staking(contract)) => {
-                contract
-            }
+            Some(Account::Staking(contract)) => contract,
             _ => {
                 unreachable!()
             }
         }
     }
 
-    /// Get a validator information given its id, if it exists.
+    /// Get a validator information given its address, if it exists.
     pub fn get_validator(
         accounts_tree: &AccountsTree,
         db_txn: &DBTransaction,
@@ -154,18 +180,14 @@ impl StakingContract {
         let key = StakingContract::get_key_validator(validator_address);
 
         trace!(
-            "Trying to fetch validator with id {} at key {}.",
+            "Trying to fetch validator with address {} at key {}.",
             validator_address.to_string(),
             key.to_string()
         );
 
         match accounts_tree.get(db_txn, &key) {
-            Some(Account::StakingValidator(validator)) => {
-                Some(validator)
-            }
-            None => {
-                None
-            }
+            Some(Account::StakingValidator(validator)) => Some(validator),
+            None => None,
             _ => {
                 unreachable!()
             }
@@ -187,19 +209,15 @@ impl StakingContract {
         );
 
         match accounts_tree.get(db_txn, &key) {
-            Some(Account::StakingStaker(staker)) => {
-                Some(staker)
-            }
-            None => {
-                None
-            }
+            Some(Account::StakingStaker(staker)) => Some(staker),
+            None => None,
             _ => {
                 unreachable!()
             }
         }
     }
 
-    /// Given a seed, it randomly distributes the validator slots across all validators. It can be
+    /// Given a seed, it randomly distributes the validator slots across all validators. It is
     /// used to select the validators for the next epoch.
     pub fn select_validators(
         &self,
@@ -279,8 +297,7 @@ impl Serialize for StakingContract {
 
         size += SerializeWithLength::serialize::<u32, _>(&self.active_validators, writer)?;
 
-        size += SerializeWithLength::serialize::<u32, _>(&self.current_epoch_parking, writer)?;
-        size += SerializeWithLength::serialize::<u32, _>(&self.previous_epoch_parking, writer)?;
+        size += SerializeWithLength::serialize::<u32, _>(&self.parked_set, writer)?;
 
         size += Serialize::serialize(&self.current_lost_rewards, writer)?;
         size += Serialize::serialize(&self.previous_lost_rewards, writer)?;
@@ -305,8 +322,7 @@ impl Serialize for StakingContract {
 
         size += SerializeWithLength::serialized_size::<u32>(&self.active_validators);
 
-        size += SerializeWithLength::serialized_size::<u32>(&self.current_epoch_parking);
-        size += SerializeWithLength::serialized_size::<u32>(&self.previous_epoch_parking);
+        size += SerializeWithLength::serialized_size::<u32>(&self.parked_set);
 
         size += Serialize::serialized_size(&self.current_lost_rewards);
         size += Serialize::serialized_size(&self.previous_lost_rewards);
@@ -332,8 +348,7 @@ impl Deserialize for StakingContract {
 
         let active_validators = DeserializeWithLength::deserialize::<u32, _>(reader)?;
 
-        let current_epoch_parking = DeserializeWithLength::deserialize::<u32, _>(reader)?;
-        let previous_epoch_parking = DeserializeWithLength::deserialize::<u32, _>(reader)?;
+        let parked_set = DeserializeWithLength::deserialize::<u32, _>(reader)?;
 
         let current_lost_rewards = Deserialize::deserialize(reader)?;
         let previous_lost_rewards = Deserialize::deserialize(reader)?;
@@ -357,8 +372,7 @@ impl Deserialize for StakingContract {
         Ok(StakingContract {
             balance,
             active_validators,
-            current_epoch_parking,
-            previous_epoch_parking,
+            parked_set,
             current_lost_rewards,
             previous_lost_rewards,
             current_disabled_slots,
