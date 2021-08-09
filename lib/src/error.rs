@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 use nimiq_database::volatile::VolatileDatabaseError;
-#[cfg(feature = "rpc-server")]
+
 // #[cfg(feature = "validator")]
 // use validator::error::Error as ValidatorError;
 #[derive(Error, Debug)]

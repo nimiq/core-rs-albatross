@@ -58,7 +58,7 @@ nimiq-network-interface = { path = "../network-interface" }
 nimiq-peer-address = { path = "../peer-address" }
 nimiq-primitives = { path = "../primitives", features = ["networks"] }
 nimiq-rpc-server = { path = "../rpc-server", optional = true }
-nimiq-utils = { path = "../utils", features = ["time"] }
+nimiq-utils = { path = "../utils", features = ["time", "key-store"] }
 nimiq-validator = { path = "../validator", optional = true }
 nimiq-validator-network = { path = "../validator-network", optional = true }
 nimiq-wallet = { path = "../wallet", optional = true }

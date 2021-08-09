@@ -23,7 +23,7 @@ futures = "0.3"
 parking_lot = "0.11"
 thiserror = "1.0"
 tokio = { version = "1.9", features = ["macros", "rt", "sync", "time"] }
-tokio-stream = "0.1"
+tokio-stream = { version = "0.1", features = ["default", "sync"] }
 
 # Used during debugging
 pretty-hex = "0.2"

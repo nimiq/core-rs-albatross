@@ -12,7 +12,6 @@ use nimiq_network_libp2p::{
     Config as NetworkConfig, Network,
 };
 use nimiq_utils::time::OffsetTime;
-
 #[cfg(feature = "validator")]
 use nimiq_validator::validator::Validator as AbstractValidator;
 #[cfg(feature = "validator")]
@@ -28,6 +27,7 @@ use nimiq_network_libp2p::Multiaddr;
 /// Alias for the Consensus and Validator specialized over libp2p network
 pub type Consensus = AbstractConsensus<Network>;
 pub type ConsensusProxy = AbstractConsensusProxy<Network>;
+#[cfg(feature = "validator")]
 pub type Validator = AbstractValidator<Network, ValidatorNetworkImpl<Network>>;
 
 /// Holds references to the relevant structs. This is then Arc'd in `Client` and a nice API is
@@ -55,9 +55,7 @@ pub(crate) struct ClientInner {
 }
 
 impl ClientInner {
-    async fn from_config(
-        config: ClientConfig,
-    ) -> Result<(Self, Consensus, Option<Validator>), Error> {
+    async fn from_config(config: ClientConfig) -> Result<Client, Error> {
         // Get network info (i.e. which specific blokchain we're on)
         if !config.network_id.is_albatross() {
             return Err(Error::config_error(&format!(
@@ -206,17 +204,18 @@ impl ClientInner {
         network.listen_on(config.network.listen_addresses).await;
         network.start_connecting().await;
 
-        Ok((
-            ClientInner {
+        Ok(Client {
+            inner: Arc::new(ClientInner {
                 environment,
                 network,
                 consensus: consensus.proxy(),
                 #[cfg(feature = "wallet")]
                 wallet_store,
-            },
-            consensus,
-            validator,
-        ))
+            }),
+            consensus: Some(consensus),
+            #[cfg(feature = "validator")]
+            validator: validator,
+        })
     }
 }
 
@@ -241,17 +240,13 @@ impl ClientInner {
 pub struct Client {
     inner: Arc<ClientInner>,
     consensus: Option<Consensus>,
+    #[cfg(feature = "validator")]
     validator: Option<Validator>,
 }
 
 impl Client {
     pub async fn from_config(config: ClientConfig) -> Result<Self, Error> {
-        let (inner, consensus, validator) = ClientInner::from_config(config).await?;
-        Ok(Client {
-            inner: Arc::new(inner),
-            consensus: Some(consensus),
-            validator,
-        })
+        ClientInner::from_config(config).await
     }
 
     pub fn consensus(&mut self) -> Option<Consensus> {
