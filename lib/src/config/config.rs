@@ -7,8 +7,8 @@ use std::{
 use derive_builder::Builder;
 use strum_macros::Display;
 
-#[cfg(feature = "validator")]
 use beserial::Deserialize;
+#[cfg(feature = "validator")]
 use nimiq_bls::{KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
 use nimiq_database::{
     lmdb::{open as LmdbFlags, LmdbEnvironment},
