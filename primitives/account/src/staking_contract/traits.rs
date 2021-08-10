@@ -16,29 +16,28 @@ use crate::staking_contract::receipts::DropValidatorReceipt;
 use crate::staking_contract::SlashReceipt;
 use crate::{Account, AccountError, AccountsTree, Inherent, InherentType, StakingContract};
 
-/// We need to distinguish three types of transactions:
-/// TODO: Should invalid incoming transactions just be no-ops?
+/// We need to distinguish between two types of transactions:
 /// 1. Incoming transactions, which include:
 ///     - Validator
 ///         * Create
 ///         * Update
 ///         * Retire
-///         * Re-activate
+///         * Reactivate
 ///         * Unpark
 ///     - Staker
+///         * Create
 ///         * Stake
+///         * Update
+///         * Retire
+///         * Reactivate
 ///     The type of transaction is given in the data field.
 /// 2. Outgoing transactions, which include:
 ///     - Validator
 ///         * Drop
 ///     - Staker
 ///         * Unstake
+///         * Deduct fees
 ///     The type of transaction is given in the proof field.
-/// 3. Self transactions, which include:
-///     - Staker
-///         * Retire
-///         * Re-activate
-///     The type of transaction is given in the data field.
 impl AccountTransactionInteraction for StakingContract {
     fn create(
         _accounts_tree: &AccountsTree,
@@ -51,6 +50,7 @@ impl AccountTransactionInteraction for StakingContract {
         Err(AccountError::InvalidForRecipient)
     }
 
+    /// Commits an incoming transaction to the accounts trie.
     fn commit_incoming_transaction(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
@@ -60,7 +60,7 @@ impl AccountTransactionInteraction for StakingContract {
     ) -> Result<Option<Vec<u8>>, AccountError> {
         let mut receipt = None;
 
-        // Parse transaction.
+        // Parse transaction data.
         let data = IncomingStakingTransactionData::parse(transaction)?;
 
         match data {
@@ -69,10 +69,11 @@ impl AccountTransactionInteraction for StakingContract {
                 validator_key,
                 reward_address,
                 signal_data,
-                proof: signature,
+                proof,
                 ..
             } => {
-                let validator_address = signature.compute_signer();
+                // Get the validator address from the proof.
+                let validator_address = proof.compute_signer();
 
                 StakingContract::create_validator(
                     accounts_tree,
@@ -89,10 +90,11 @@ impl AccountTransactionInteraction for StakingContract {
                 new_validator_key,
                 new_reward_address,
                 new_signal_data,
-                proof: signature,
+                proof,
                 ..
             } => {
-                let validator_address = signature.compute_signer();
+                // Get the validator address from the proof.
+                let validator_address = proof.compute_signer();
 
                 receipt = Some(
                     StakingContract::update_validator(
@@ -111,6 +113,7 @@ impl AccountTransactionInteraction for StakingContract {
                 validator_address,
                 proof,
             } => {
+                // Get the warm address from the proof.
                 let warm_address = proof.compute_signer();
 
                 receipt = Some(
@@ -128,6 +131,7 @@ impl AccountTransactionInteraction for StakingContract {
                 validator_address,
                 proof,
             } => {
+                // Get the warm address from the proof.
                 let warm_address = proof.compute_signer();
 
                 receipt = Some(
@@ -144,6 +148,7 @@ impl AccountTransactionInteraction for StakingContract {
                 validator_address,
                 proof,
             } => {
+                // Get the warm address from the proof.
                 let warm_address = proof.compute_signer();
 
                 receipt = Some(
@@ -156,11 +161,9 @@ impl AccountTransactionInteraction for StakingContract {
                     .serialize_to_vec(),
                 );
             }
-            IncomingStakingTransactionData::CreateStaker {
-                delegation,
-                proof: signature,
-            } => {
-                let staker_address = signature.compute_signer();
+            IncomingStakingTransactionData::CreateStaker { delegation, proof } => {
+                // Get the staker address from the proof.
+                let staker_address = proof.compute_signer();
 
                 StakingContract::create_staker(
                     accounts_tree,
@@ -175,9 +178,10 @@ impl AccountTransactionInteraction for StakingContract {
             }
             IncomingStakingTransactionData::UpdateStaker {
                 new_delegation,
-                proof: signature,
+                proof,
             } => {
-                let staker_address = signature.compute_signer();
+                // Get the staker address from the proof.
+                let staker_address = proof.compute_signer();
 
                 receipt = Some(
                     StakingContract::update_staker(
@@ -189,11 +193,9 @@ impl AccountTransactionInteraction for StakingContract {
                     .serialize_to_vec(),
                 );
             }
-            IncomingStakingTransactionData::RetireStaker {
-                value,
-                proof: signature,
-            } => {
-                let staker_address = signature.compute_signer();
+            IncomingStakingTransactionData::RetireStaker { value, proof } => {
+                // Get the staker address from the proof.
+                let staker_address = proof.compute_signer();
 
                 receipt = Some(
                     StakingContract::retire_staker(
@@ -206,11 +208,9 @@ impl AccountTransactionInteraction for StakingContract {
                     .serialize_to_vec(),
                 );
             }
-            IncomingStakingTransactionData::ReactivateStaker {
-                value,
-                proof: signature,
-            } => {
-                let staker_address = signature.compute_signer();
+            IncomingStakingTransactionData::ReactivateStaker { value, proof } => {
+                // Get the staker address from the proof.
+                let staker_address = proof.compute_signer();
 
                 StakingContract::reactivate_staker(accounts_tree, db_txn, &staker_address, value)?;
             }
@@ -219,6 +219,7 @@ impl AccountTransactionInteraction for StakingContract {
         Ok(receipt)
     }
 
+    /// Reverts the commit of an incoming transaction to the accounts trie.
     fn revert_incoming_transaction(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
@@ -227,14 +228,13 @@ impl AccountTransactionInteraction for StakingContract {
         _time: u64,
         receipt: Option<&Vec<u8>>,
     ) -> Result<(), AccountError> {
-        let data: IncomingStakingTransactionData =
-            Deserialize::deserialize(&mut &transaction.data[..])?;
+        // Parse transaction data.
+        let data = IncomingStakingTransactionData::parse(transaction)?;
 
         match data {
-            IncomingStakingTransactionData::CreateValidator {
-                proof: signature, ..
-            } => {
-                let validator_address = signature.compute_signer();
+            IncomingStakingTransactionData::CreateValidator { proof, .. } => {
+                // Get the validator address from the proof.
+                let validator_address = proof.compute_signer();
 
                 StakingContract::revert_create_validator(
                     accounts_tree,
@@ -242,10 +242,9 @@ impl AccountTransactionInteraction for StakingContract {
                     &validator_address,
                 )?;
             }
-            IncomingStakingTransactionData::UpdateValidator {
-                proof: signature, ..
-            } => {
-                let validator_address = signature.compute_signer();
+            IncomingStakingTransactionData::UpdateValidator { proof, .. } => {
+                // Get the validator address from the proof.
+                let validator_address = proof.compute_signer();
 
                 let receipt = Deserialize::deserialize_from_vec(
                     receipt.ok_or(AccountError::InvalidReceipt)?,
@@ -259,10 +258,8 @@ impl AccountTransactionInteraction for StakingContract {
                 )?;
             }
             IncomingStakingTransactionData::RetireValidator {
-                proof: signature, ..
+                validator_address, ..
             } => {
-                let validator_address = signature.compute_signer();
-
                 let receipt = Deserialize::deserialize_from_vec(
                     receipt.ok_or(AccountError::InvalidReceipt)?,
                 )?;
@@ -275,10 +272,8 @@ impl AccountTransactionInteraction for StakingContract {
                 )?;
             }
             IncomingStakingTransactionData::ReactivateValidator {
-                proof: signature, ..
+                validator_address, ..
             } => {
-                let validator_address = signature.compute_signer();
-
                 let receipt = Deserialize::deserialize_from_vec(
                     receipt.ok_or(AccountError::InvalidReceipt)?,
                 )?;
@@ -291,10 +286,8 @@ impl AccountTransactionInteraction for StakingContract {
                 )?;
             }
             IncomingStakingTransactionData::UnparkValidator {
-                proof: signature, ..
+                validator_address, ..
             } => {
-                let validator_address = signature.compute_signer();
-
                 let receipt = Deserialize::deserialize_from_vec(
                     receipt.ok_or(AccountError::InvalidReceipt)?,
                 )?;
@@ -306,10 +299,9 @@ impl AccountTransactionInteraction for StakingContract {
                     receipt,
                 )?;
             }
-            IncomingStakingTransactionData::CreateStaker {
-                proof: signature, ..
-            } => {
-                let staker_address = signature.compute_signer();
+            IncomingStakingTransactionData::CreateStaker { proof, .. } => {
+                // Get the staker address from the proof.
+                let staker_address = proof.compute_signer();
 
                 StakingContract::revert_create_staker(accounts_tree, db_txn, &staker_address)?;
             }
@@ -321,11 +313,9 @@ impl AccountTransactionInteraction for StakingContract {
                     transaction.value,
                 )?;
             }
-
-            IncomingStakingTransactionData::UpdateStaker {
-                proof: signature, ..
-            } => {
-                let staker_address = signature.compute_signer();
+            IncomingStakingTransactionData::UpdateStaker { proof, .. } => {
+                // Get the staker address from the proof.
+                let staker_address = proof.compute_signer();
 
                 let receipt = Deserialize::deserialize_from_vec(
                     receipt.ok_or(AccountError::InvalidReceipt)?,
@@ -338,11 +328,9 @@ impl AccountTransactionInteraction for StakingContract {
                     receipt,
                 )?;
             }
-            IncomingStakingTransactionData::RetireStaker {
-                value,
-                proof: signature,
-            } => {
-                let staker_address = signature.compute_signer();
+            IncomingStakingTransactionData::RetireStaker { value, proof } => {
+                // Get the staker address from the proof.
+                let staker_address = proof.compute_signer();
 
                 let receipt = Deserialize::deserialize_from_vec(
                     receipt.ok_or(AccountError::InvalidReceipt)?,
@@ -356,11 +344,9 @@ impl AccountTransactionInteraction for StakingContract {
                     receipt,
                 )?;
             }
-            IncomingStakingTransactionData::ReactivateStaker {
-                value,
-                proof: signature,
-            } => {
-                let staker_address = signature.compute_signer();
+            IncomingStakingTransactionData::ReactivateStaker { value, proof } => {
+                // Get the staker address from the proof.
+                let staker_address = proof.compute_signer();
 
                 StakingContract::revert_reactivate_staker(
                     accounts_tree,
@@ -374,6 +360,7 @@ impl AccountTransactionInteraction for StakingContract {
         Ok(())
     }
 
+    /// Commits an outgoing transaction to the accounts trie.
     fn commit_outgoing_transaction(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
@@ -383,12 +370,13 @@ impl AccountTransactionInteraction for StakingContract {
     ) -> Result<Option<Vec<u8>>, AccountError> {
         let receipt;
 
-        let data: OutgoingStakingTransactionProof =
-            Deserialize::deserialize(&mut &transaction.proof[..])?;
+        // Parse transaction data.
+        let data = OutgoingStakingTransactionProof::parse(transaction)?;
 
         match data {
-            OutgoingStakingTransactionProof::DropValidator { proof: signature } => {
-                let validator_address = signature.compute_signer();
+            OutgoingStakingTransactionProof::DropValidator { proof } => {
+                // Get the validator address from the proof.
+                let validator_address = proof.compute_signer();
 
                 receipt = Some(
                     StakingContract::drop_validator(
@@ -400,8 +388,9 @@ impl AccountTransactionInteraction for StakingContract {
                     .serialize_to_vec(),
                 );
             }
-            OutgoingStakingTransactionProof::Unstake { proof: signature } => {
-                let staker_address = signature.compute_signer();
+            OutgoingStakingTransactionProof::Unstake { proof } => {
+                // Get the staker address from the proof.
+                let staker_address = proof.compute_signer();
 
                 receipt = StakingContract::unstake(
                     accounts_tree,
@@ -414,9 +403,10 @@ impl AccountTransactionInteraction for StakingContract {
             }
             OutgoingStakingTransactionProof::DeductFees {
                 from_active_balance,
-                proof: signature,
+                proof,
             } => {
-                let staker_address = signature.compute_signer();
+                // Get the staker address from the proof.
+                let staker_address = proof.compute_signer();
 
                 receipt = StakingContract::deduct_fees(
                     accounts_tree,
@@ -432,6 +422,7 @@ impl AccountTransactionInteraction for StakingContract {
         Ok(receipt)
     }
 
+    /// Reverts the commit of an incoming transaction to the accounts trie.
     fn revert_outgoing_transaction(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
@@ -440,12 +431,13 @@ impl AccountTransactionInteraction for StakingContract {
         _block_time: u64,
         receipt: Option<&Vec<u8>>,
     ) -> Result<(), AccountError> {
-        let data: OutgoingStakingTransactionProof =
-            Deserialize::deserialize(&mut &transaction.proof[..])?;
+        // Parse transaction data.
+        let data = OutgoingStakingTransactionProof::parse(transaction)?;
 
         match data {
-            OutgoingStakingTransactionProof::DropValidator { proof: signature } => {
-                let validator_address = signature.compute_signer();
+            OutgoingStakingTransactionProof::DropValidator { proof } => {
+                // Get the validator address from the proof.
+                let validator_address = proof.compute_signer();
 
                 let receipt: DropValidatorReceipt = Deserialize::deserialize_from_vec(
                     receipt.ok_or(AccountError::InvalidReceipt)?,
@@ -458,8 +450,9 @@ impl AccountTransactionInteraction for StakingContract {
                     receipt,
                 )?;
             }
-            OutgoingStakingTransactionProof::Unstake { proof: signature } => {
-                let staker_address = signature.compute_signer();
+            OutgoingStakingTransactionProof::Unstake { proof } => {
+                // Get the staker address from the proof.
+                let staker_address = proof.compute_signer();
 
                 let receipt = match receipt {
                     Some(v) => Some(Deserialize::deserialize_from_vec(v)?),
@@ -476,9 +469,10 @@ impl AccountTransactionInteraction for StakingContract {
             }
             OutgoingStakingTransactionProof::DeductFees {
                 from_active_balance,
-                proof: signature,
+                proof,
             } => {
-                let staker_address = signature.compute_signer();
+                // Get the staker address from the proof.
+                let staker_address = proof.compute_signer();
 
                 let receipt = match receipt {
                     Some(v) => Some(Deserialize::deserialize_from_vec(v)?),
@@ -501,6 +495,7 @@ impl AccountTransactionInteraction for StakingContract {
 }
 
 impl AccountInherentInteraction for StakingContract {
+    /// Commits an inherent to the accounts trie.
     fn commit_inherent(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
@@ -508,14 +503,15 @@ impl AccountInherentInteraction for StakingContract {
         block_height: u32,
         _block_time: u64,
     ) -> Result<Option<Vec<u8>>, AccountError> {
-        trace!("check inherent: {:?}", inherent);
+        trace!("Committing inherent to accounts trie: {:?}", inherent);
 
-        // Inherent slashes nothing.
+        // None of the allowed inherents for the staking contract has a value. Only reward inherents
+        // have a value.
         if inherent.value != Coin::ZERO {
             return Err(AccountError::InvalidInherent);
         }
 
-        // Get the staking contract main.
+        // Get the staking contract.
         let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
 
         let receipt;
@@ -537,7 +533,7 @@ impl AccountInherentInteraction for StakingContract {
                     return Err(AccountError::InvalidInherent);
                 }
 
-                // Simply add validator address to parking.
+                // Add the validator address to the parked set.
                 // TODO: The inherent might have originated from a fork proof for the previous epoch.
                 //  Right now, we don't care and start the parking period in the epoch the proof has been submitted.
                 let newly_parked = staking_contract
@@ -665,6 +661,7 @@ impl AccountInherentInteraction for StakingContract {
         }
 
         trace!("Trying to put the staking contract in the accounts tree.");
+
         accounts_tree.put(
             db_txn,
             &StakingContract::get_key_staking_contract(),
@@ -674,6 +671,7 @@ impl AccountInherentInteraction for StakingContract {
         Ok(receipt)
     }
 
+    /// Reverts the commit of an inherent to the accounts trie.
     fn revert_inherent(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
@@ -753,6 +751,8 @@ impl AccountInherentInteraction for StakingContract {
                 return Err(AccountError::InvalidForTarget);
             }
         }
+
+        trace!("Trying to put the staking contract in the accounts tree.");
 
         accounts_tree.put(
             db_txn,

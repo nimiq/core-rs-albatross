@@ -11,42 +11,46 @@ use crate::staking_contract::RetireStakerReceipt;
 use crate::{Account, AccountError, AccountsTree, StakingContract};
 
 /// Struct representing a staker in the staking contract.
+/// Actions concerning a staker are:
+/// 1. Create: Creates a staker.
+/// 2. Stake: Adds coins from any outside address to a staker's active balance.
+/// 3. Update: Updates the validator.
+/// 4. Retire: Removes coins from a staker's active balance and makes it inactive (starting the
+///            cooldown period for unstake).
+/// 5. Reactivate: Removes coins from a staker's inactive balance and makes it active.
+/// 6. Unstake: Removes from a staker's inactive balance to outside the staking contract (after it
+///             has been inactive for the cooldown period).
+/// 7. Deduct fees: Removes coins from a staker's in/active balance to pay for the transaction fees.
+///                 This can be used in signalling transactions if we don't want to pay the fees
+///                 from an outside address.
+///
+/// The actions can be summarized by the following state diagram:
+///        +--------+   retire    +----------+
+/// create |        +------------>+          | unstake
+///+------>+ active |             | inactive +--------->
+///  stake |        +<------------+          |
+///        +--------+  reactivate +----------+
+///
+/// Create, Stake, Update, Retire and Reactivate are incoming transactions to the staking contract.
+/// Unstake and Deduct fees are outgoing transactions from the staking contract.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Staker {
-    // The address of the staker.
+    // The address of the staker. The corresponding key is used for all transactions (except Stake
+    // which is open to any address).
     pub address: Address,
     // The portion of the staker's balance that is currently active.
     pub active_stake: Coin,
     // The portion of the staker's balance that is currently inactive.
     pub inactive_stake: Coin,
-    // The id of the validator for which the staker is delegating its stake for. If it is not
+    // The address of the validator for which the staker is delegating its stake for. If it is not
     // delegating to any validator, this will be set to None.
     pub delegation: Option<Address>,
     // A field stating when the stake was last retired (in block height).
     pub retire_time: u32,
 }
 
-/// Actions concerning a staker are:
-/// 1. Stake: Delegate stake from an outside address to a validator.
-/// 2. Retire: Remove stake from a validator and make it inactive
-///            (starting the cooldown period for Unstake).
-/// 3. Re-activate: Re-delegate inactive stake to a validator.
-/// 4. Unstake: Remove inactive stake from the staking contract
-///             (after it has been inactive for the cooldown period).
-///
-/// The actions can be summarized by the following state diagram:
-///        +--------+   retire    +----------+
-/// stake  |        +------------>+          | unstake
-///+------>+ staked |             | inactive +--------->
-///        |        +<------------+          |
-///        +--------+ re-activate +----------+
-///
-/// Stake is a transaction from an arbitrary address to the staking contract.
-/// Retire and Re-activate are self transactions on the staking address.
-/// Unstake is a transaction from the staking contract to an arbitrary address.
 impl StakingContract {
-    /// Adds funds to stake of `address` for validator `validator_key`.
-    /// XXX This is public to fill the genesis staking contract
+    /// Creates a new staker. This function is public to fill the genesis staking contract.
     pub fn create_staker(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
@@ -61,12 +65,12 @@ impl StakingContract {
             });
         }
 
-        // Get the staking contract main and update it.
+        // Get the staking contract and update it.
         let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
 
         staking_contract.balance = Account::balance_add(staking_contract.balance, balance)?;
 
-        // Create the staker struct.
+        // Create the staker struct. We create it with the stake already active.
         let staker = Staker {
             address: staker_address.clone(),
             active_stake: balance,
@@ -142,7 +146,7 @@ impl StakingContract {
         Ok(())
     }
 
-    /// Reverts a stake transaction.
+    /// Reverts a create staker transaction.
     pub(crate) fn revert_create_staker(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
@@ -227,6 +231,8 @@ impl StakingContract {
         Ok(())
     }
 
+    /// Adds stake to a staker. It will be directly added to the staker's active balance. Anyone can
+    /// stake for a staker.
     pub(crate) fn stake(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
@@ -304,6 +310,7 @@ impl StakingContract {
         Ok(())
     }
 
+    /// Reverts a stake transaction.
     pub(crate) fn revert_stake(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
@@ -381,7 +388,8 @@ impl StakingContract {
         Ok(())
     }
 
-    /// Update staker details.
+    /// Updates the staker details. Right now you can only update the delegation. Using this function
+    /// you can change validators without needing to retire and reactivate.
     pub(crate) fn update_staker(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
@@ -637,7 +645,9 @@ impl StakingContract {
         Ok(())
     }
 
-    /// Retires a staker.
+    /// Retires some balance from a staker. It is necessary to retire stake before being able to
+    /// unstake it. This just moves coins from the staker's active balance to the staker's  inactive
+    /// balance.
     pub(crate) fn retire_staker(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
@@ -777,7 +787,8 @@ impl StakingContract {
         Ok(())
     }
 
-    /// Reactivates a staker.
+    /// Reactivates some balance from a staker. It just moves coins from the staker's inactive
+    /// balance to the staker's  active balance.
     pub(crate) fn reactivate_staker(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
@@ -905,7 +916,8 @@ impl StakingContract {
         Ok(())
     }
 
-    /// Removes stake from an inactive staker. If the entire stake is removed then the staker is dropped.
+    /// Removes stake from a staker's inactive balance. If the entire staker's balance (both active
+    /// and inactive) is unstaked then the staker is dropped.
     pub(crate) fn unstake(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
@@ -1002,7 +1014,8 @@ impl StakingContract {
         Ok(())
     }
 
-    /// Used to pay fees
+    /// This function can be used to pay transaction fees directly from a staker's active or
+    /// inactive balance.
     pub(crate) fn deduct_fees(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,

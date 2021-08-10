@@ -53,7 +53,7 @@ mod validator;
 ///     - A list of Stakers, with each Staker struct containing all information about a staker.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StakingContract {
-    // The total amount of coins staked (also includes validator's deposits).
+    // The total amount of coins staked (also includes validators deposits).
     pub balance: Coin,
     // The list of active validators addresses (i.e. are eligible to receive slots) and their
     // corresponding balances.

@@ -17,15 +17,45 @@ use crate::staking_contract::receipts::{
 use crate::{Account, AccountError, AccountsTree, StakingContract};
 
 /// Struct representing a validator in the staking contract.
+/// Actions concerning a validator are:
+/// 1. Create: Creates a validator.
+/// 2. Update: Updates the validator.
+/// 3. Retire: Inactivates a validator (also starts a cooldown period used for Drop).
+/// 4. Reactivate: Reactivates a validator.
+/// 5. Unpark: Prevents a validator from being automatically inactivated.
+/// 6. Drop: Drops a validator (validator must have been inactive for the cooldown period).
+///
+/// The actions can be summarized by the following state diagram:
+///        +--------+   retire    +----------+
+/// create |        +------------>+          | drop
+///+------>+ active |             | inactive +------>
+///        |        +<------------+          |
+///        +-+--+---+  reactivate +-----+----+
+///          |  ^                       ^
+///          |  |                       |
+///          |  | unpark                | automatically
+/// slashing |  |                       |
+///          |  |     +--------+        |
+///          |  +-----+        |        |
+///          |        | parked +--------+
+///          +------->+        |
+///                   +--------+
+///
+/// Create, Update, Retire, Re-activate and Unpark are incoming transactions to the staking contract.
+/// Drop is an outgoing transaction from the staking contract.
+/// To Create, Update or Drop, the validator must use the cold key (the one corresponding to the
+/// validator address). For the other transactions, the validator must use the warm key (the one
+/// corresponding to the warm address).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Validator {
-    // The address of the validator. The corresponding can be used to update or drop the validator.
+    // The address of the validator. The corresponding key can be used to create, update or drop
+    // the validator.
     pub address: Address,
     // This key is used to retire, reactivate and unpark the validator.
     pub warm_key: Address,
     // The validator key, it is only used to sign blocks.
     pub validator_key: BlsPublicKey,
-    // The reward address of the validator.
+    // The reward address of the validator. All the block rewards are paid to this address.
     pub reward_address: Address,
     // Signalling field. Can be used to do chain upgrades or for any other purpose that requires
     // validators to coordinate among themselves.
@@ -40,38 +70,10 @@ pub struct Validator {
     pub inactivity_flag: Option<u32>,
 }
 
-/// Actions concerning a validator are:
-/// 1. Create: Creates a validator entry.
-/// 2. Update: Updates the validator entry.
-/// 3. Retire: Inactivates a validator entry (also starts a cooldown period used for Drop).
-/// 4. Re-activate: Re-activates a validator entry.
-/// 5. Drop: Drops a validator entry (validator must have been inactive for the cooldown period).
-///          This also automatically retires the associated stake (allowing immediate withdrawal).
-/// 6. Unpark: Prevents a validator entry from being automatically inactivated.
-///
-/// The actions can be summarized by the following state diagram:
-///        +--------+   retire    +----------+
-/// create |        +------------>+          | drop
-///+------>+ active |             | inactive +------>
-///        |        +<------------+          |
-///        +-+--+---+ re-activate +-----+----+
-///          |  ^                       ^
-///          |  |                       |
-/// mis-     |  | unpark                | automatically
-/// behavior |  |                       |
-///          |  |     +--------+        |
-///          |  +-----+        |        |
-///          |        | parked +--------+
-///          +------->+        |
-///                   +--------+
-///
-/// Create, Update, Retire, Re-activate, and Unpark are transactions from an arbitrary address
-/// to the staking contract.
-/// Drop is a transaction from the staking contract to an arbitrary address.
 impl StakingContract {
-    /// Creates a new validator entry. The initial stake is always equal to the minimum validator
-    /// stake and can only be retrieved by dropping the validator.
-    /// This is public to fill the genesis staking contract.
+    /// Creates a new validator. The initial stake is always equal to the validator deposit
+    /// and can only be retrieved by dropping the validator.
+    /// This function is public to fill the genesis staking contract.
     pub fn create_validator(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
@@ -180,7 +182,7 @@ impl StakingContract {
         Ok(())
     }
 
-    /// Update validator details.
+    /// Updates some of the validator details (warm key, validator key, reward address and/or signal data).
     pub(crate) fn update_validator(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
@@ -280,7 +282,8 @@ impl StakingContract {
         Ok(())
     }
 
-    /// Inactivates a validator. This also removes the validator from the parking sets.
+    /// Inactivates a validator. It is necessary to retire a validator before dropping it. This also
+    /// removes the validator from the parking set.
     pub(crate) fn retire_validator(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
@@ -301,7 +304,7 @@ impl StakingContract {
 
         if warm_address != validator.warm_key {
             error!(
-                "The warm address that signed the transaction matches the warm address of the validator."
+                "The warm address that signed the transaction doesn't match the warm address of the validator."
             );
             return Err(AccountError::InvalidSignature);
         }
@@ -348,22 +351,13 @@ impl StakingContract {
         Ok(RetireValidatorReceipt { parked_set })
     }
 
-    /// Reverts inactivating a validator entry.
+    /// Reverts inactivating a validator.
     pub(crate) fn revert_retire_validator(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
         receipt: RetireValidatorReceipt,
     ) -> Result<(), AccountError> {
-        // Get the staking contract main and update it.
-        let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
-
-        if receipt.parked_set {
-            staking_contract
-                .parked_set
-                .insert(validator_address.clone());
-        }
-
         // Get the validator and update it.
         let mut validator =
             match StakingContract::get_validator(accounts_tree, db_txn, validator_address) {
@@ -376,6 +370,19 @@ impl StakingContract {
             };
 
         validator.inactivity_flag = None;
+
+        // Get the staking contract main and update it.
+        let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
+
+        staking_contract
+            .active_validators
+            .insert(validator_address.clone(), validator.balance);
+
+        if receipt.parked_set {
+            staking_contract
+                .parked_set
+                .insert(validator_address.clone());
+        }
 
         // All checks passed, not allowed to fail from here on!
         trace!("Trying to put staking contract in the accounts tree.");
@@ -400,7 +407,7 @@ impl StakingContract {
         Ok(())
     }
 
-    /// Reactivate a validator entry.
+    /// Reactivates a validator.
     pub(crate) fn reactivate_validator(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
@@ -420,7 +427,7 @@ impl StakingContract {
 
         if warm_address != validator.warm_key {
             error!(
-                "The warm address that signed the transaction matches the warm address of the validator."
+                "The warm address that signed the transaction doesn't match the warm address of the validator."
             );
             return Err(AccountError::InvalidSignature);
         }
@@ -472,7 +479,7 @@ impl StakingContract {
         Ok(receipt)
     }
 
-    /// Reverts re-activating a validator entry.
+    /// Reverts reactivating a validator.
     pub(crate) fn revert_reactivate_validator(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
@@ -520,7 +527,8 @@ impl StakingContract {
         Ok(())
     }
 
-    /// Removes a validator from the parked set and the disabled slots.
+    /// Removes a validator from the parked set and the disabled slots. This is used by validators
+    /// after they get slashed so that they can produce blocks again.
     pub(crate) fn unpark_validator(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
@@ -540,7 +548,7 @@ impl StakingContract {
 
         if warm_address != validator.warm_key {
             error!(
-                "The warm address that signed the transaction matches the warm address of the validator."
+                "The warm address that signed the transaction doesn't match the warm address of the validator."
             );
             return Err(AccountError::InvalidSignature);
         }
@@ -622,7 +630,7 @@ impl StakingContract {
         Ok(())
     }
 
-    /// Drops a validator entry. This can only be used to drop inactive validators!
+    /// Drops a validator and returns its deposit. This can only be used on inactive validators!
     /// The validator must have been inactive for at least one election block.
     pub(crate) fn drop_validator(
         accounts_tree: &AccountsTree,
@@ -757,7 +765,7 @@ impl StakingContract {
         Ok(receipt)
     }
 
-    /// Revert dropping a validator entry.
+    /// Reverts dropping a validator.
     pub(crate) fn revert_drop_validator(
         accounts_tree: &AccountsTree,
         db_txn: &mut WriteTransaction,
