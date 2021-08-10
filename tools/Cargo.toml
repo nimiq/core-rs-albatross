@@ -22,6 +22,10 @@ path = "src/address/main.rs"
 name = "nimiq-signtx"
 path = "src/signtx/main.rs"
 
+[[bin]]
+name = "nimiq-peer_key"
+path = "src/peer_key/main.rs"
+
 [dependencies]
 anyhow = "1.0"
 clap = "2.33"
@@ -34,6 +38,7 @@ beserial = { path = "../beserial" }
 nimiq-bls = { path = "../bls" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
+nimiq-network-libp2p = { path = "../network-libp2p" }
 nimiq-primitives = { path = "../primitives" }
 nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-utils = { path = "../utils" }
