@@ -37,7 +37,7 @@ impl Blockchain {
 
         // Check if the block's immediate predecessor is part of the chain.
         let prev_info = blockchain
-            .get_chain_info(&header.parent_hash(), false, txn_opt)
+            .get_chain_info(header.parent_hash(), false, txn_opt)
             .unwrap();
 
         // Check that the block is a valid successor of its predecessor.
@@ -127,7 +127,7 @@ impl Blockchain {
 
                 // Check if a view change occurred - if so, validate the proof
                 let prev_info = blockchain
-                    .get_chain_info(&header.parent_hash(), false, txn_opt)
+                    .get_chain_info(header.parent_hash(), false, txn_opt)
                     .unwrap();
 
                 let view_number = if policy::is_macro_block_at(header.block_number() - 1) {
@@ -219,7 +219,7 @@ impl Blockchain {
                 for proof in &body.fork_proofs {
                     // Ensure proofs are ordered and unique.
                     if let Some(previous) = previous_proof {
-                        match previous.cmp(&proof) {
+                        match previous.cmp(proof) {
                             Ordering::Equal => {
                                 return Err(PushError::InvalidBlock(
                                     BlockError::DuplicateForkProof,
@@ -369,7 +369,7 @@ impl Blockchain {
 
             let real_disabled_slots = staking_contract.previous_disabled_slots();
 
-            let inherents = self.create_macro_block_inherents(&state, &macro_block.header);
+            let inherents = self.create_macro_block_inherents(state, &macro_block.header);
             let real_transactions = self.create_txs_from_inherents(&inherents);
 
             // Get the validators.

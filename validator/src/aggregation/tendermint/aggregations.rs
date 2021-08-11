@@ -1,16 +1,17 @@
-use futures::{
-    future,
-    stream::{BoxStream, SelectAll},
-    Sink, Stream, StreamExt,
-};
 use std::{
-    collections::BTreeMap,
+    collections::{btree_map::Entry, BTreeMap},
     pin::Pin,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
     task::Poll,
+};
+
+use futures::{
+    future,
+    stream::{BoxStream, SelectAll},
+    Sink, Stream, StreamExt,
 };
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -84,9 +85,9 @@ impl<N: ValidatorNetwork> TendermintAggregations<N> {
         >,
     ) {
         // TODO: TendermintAggregationEvent
-        if !self
+        if let Entry::Vacant(entry) = self
             .aggregation_descriptors
-            .contains_key(&(id.round_number, id.step))
+            .entry((id.round_number, id.step))
         {
             trace!("starting aggregation for {:?}", &id);
             // crate the correct protocol instance
@@ -115,13 +116,10 @@ impl<N: ValidatorNetwork> TendermintAggregations<N> {
             let stream_closer = Arc::new(AtomicBool::new(true));
 
             // Create and store AggregationDescriptor
-            self.aggregation_descriptors.insert(
-                (id.round_number, id.step),
-                AggregationDescriptor {
-                    input: sender,
-                    is_running: stream_closer.clone(),
-                },
-            );
+            entry.insert(AggregationDescriptor {
+                input: sender,
+                is_running: stream_closer.clone(),
+            });
 
             trace!(
                 "Aggregation_descriptors: {:?}",

@@ -239,7 +239,7 @@ impl<T: Clear + Deserialize + Serialize> Locked<T> {
     ) -> Result<Self, Argon2Error> {
         let mut salt = vec![0; salt_length];
         OsRng.fill_bytes(salt.as_mut_slice());
-        Self::lock(&secret, password, iterations, salt)
+        Self::lock(secret, password, iterations, salt)
     }
 
     pub fn into_otp_lock(self) -> OtpLock<T> {
@@ -396,7 +396,7 @@ impl<T: Clear + Deserialize + Serialize> OtpLock<T> {
     #[inline]
     pub fn unlocked_ref(&self) -> Option<&Unlocked<T>> {
         match self {
-            OtpLock::Unlocked(unlocked) => Some(&unlocked),
+            OtpLock::Unlocked(unlocked) => Some(unlocked),
             _ => None,
         }
     }

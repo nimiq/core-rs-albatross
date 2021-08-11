@@ -514,7 +514,7 @@ impl TransactionBuilder {
         let proof_builder = builder.generate().unwrap();
         match proof_builder {
             TransactionProofBuilder::Basic(mut builder) => {
-                builder.sign_with_key_pair(&key_pair);
+                builder.sign_with_key_pair(key_pair);
                 builder.generate().unwrap()
             }
             _ => unreachable!(),
@@ -554,7 +554,7 @@ impl TransactionBuilder {
         let proof_builder = builder.generate().unwrap();
         match proof_builder {
             TransactionProofBuilder::Basic(mut builder) => {
-                builder.sign_with_key_pair(&key_pair);
+                builder.sign_with_key_pair(key_pair);
                 builder.generate().unwrap()
             }
             _ => unreachable!(),
@@ -590,7 +590,7 @@ impl TransactionBuilder {
         let proof_builder = builder.generate().unwrap();
         match proof_builder {
             TransactionProofBuilder::StakingSelf(mut builder) => {
-                builder.sign_with_key_pair(&key_pair);
+                builder.sign_with_key_pair(key_pair);
                 builder.generate().unwrap()
             }
             _ => unreachable!(),
@@ -625,7 +625,7 @@ impl TransactionBuilder {
         let proof_builder = builder.generate().unwrap();
         match proof_builder {
             TransactionProofBuilder::StakingSelf(mut builder) => {
-                builder.sign_with_key_pair(&key_pair);
+                builder.sign_with_key_pair(key_pair);
                 builder.generate().unwrap()
             }
             _ => unreachable!(),
@@ -660,7 +660,7 @@ impl TransactionBuilder {
         let proof_builder = builder.generate().unwrap();
         match proof_builder {
             TransactionProofBuilder::StakingSelf(mut builder) => {
-                builder.sign_with_key_pair(&key_pair);
+                builder.sign_with_key_pair(key_pair);
                 builder.generate().unwrap()
             }
             _ => unreachable!(),
@@ -751,7 +751,7 @@ impl TransactionBuilder {
         let proof_builder = builder.generate().unwrap();
         match proof_builder {
             TransactionProofBuilder::Basic(mut builder) => {
-                builder.sign_with_key_pair(&key_pair);
+                builder.sign_with_key_pair(key_pair);
                 builder.generate().unwrap()
             }
             _ => unreachable!(),
@@ -814,7 +814,7 @@ impl TransactionBuilder {
         let proof_builder = builder.generate().unwrap();
         match proof_builder {
             TransactionProofBuilder::Signalling(mut builder) => {
-                builder.sign_with_validator_key_pair(&old_validator_key_pair);
+                builder.sign_with_validator_key_pair(old_validator_key_pair);
                 let mut builder = builder.generate().unwrap().unwrap_basic();
                 builder.sign_with_key_pair(key_pair);
                 builder.generate().unwrap()
@@ -856,7 +856,7 @@ impl TransactionBuilder {
         let staking_contract_address =
             fill_in_staking_contract_address(staking_contract, network_id);
         let mut recipient = Recipient::new_staking_builder(Some(staking_contract_address));
-        recipient.retire_validator(&validator_id);
+        recipient.retire_validator(validator_id);
 
         let mut builder = Self::new();
         builder
@@ -870,9 +870,9 @@ impl TransactionBuilder {
         let proof_builder = builder.generate().unwrap();
         match proof_builder {
             TransactionProofBuilder::Signalling(mut builder) => {
-                builder.sign_with_validator_key_pair(&validator_key_pair);
+                builder.sign_with_validator_key_pair(validator_key_pair);
                 let mut builder = builder.generate().unwrap().unwrap_basic();
-                builder.sign_with_key_pair(&key_pair);
+                builder.sign_with_key_pair(key_pair);
                 builder.generate().unwrap()
             }
             _ => unreachable!(),
@@ -912,7 +912,7 @@ impl TransactionBuilder {
         let staking_contract_address =
             fill_in_staking_contract_address(staking_contract, network_id);
         let mut recipient = Recipient::new_staking_builder(Some(staking_contract_address));
-        recipient.reactivate_validator(&validator_id);
+        recipient.reactivate_validator(validator_id);
 
         let mut builder = Self::new();
         builder
@@ -926,9 +926,9 @@ impl TransactionBuilder {
         let proof_builder = builder.generate().unwrap();
         match proof_builder {
             TransactionProofBuilder::Signalling(mut builder) => {
-                builder.sign_with_validator_key_pair(&validator_key_pair);
+                builder.sign_with_validator_key_pair(validator_key_pair);
                 let mut builder = builder.generate().unwrap().unwrap_basic();
-                builder.sign_with_key_pair(&key_pair);
+                builder.sign_with_key_pair(key_pair);
                 builder.generate().unwrap()
             }
             _ => unreachable!(),
@@ -980,7 +980,7 @@ impl TransactionBuilder {
         let proof_builder = builder.generate().unwrap();
         match proof_builder {
             TransactionProofBuilder::Staking(mut builder) => {
-                builder.drop_validator(&validator_id, &validator_key_pair);
+                builder.drop_validator(validator_id, validator_key_pair);
                 builder.generate().unwrap()
             }
             _ => unreachable!(),
@@ -1020,7 +1020,7 @@ impl TransactionBuilder {
         let staking_contract_address =
             fill_in_staking_contract_address(staking_contract, network_id);
         let mut recipient = Recipient::new_staking_builder(Some(staking_contract_address));
-        recipient.unpark_validator(&validator_id);
+        recipient.unpark_validator(validator_id);
 
         let mut builder = Self::new();
         builder
@@ -1034,9 +1034,9 @@ impl TransactionBuilder {
         let proof_builder = builder.generate().unwrap();
         match proof_builder {
             TransactionProofBuilder::Signalling(mut builder) => {
-                builder.sign_with_validator_key_pair(&validator_key_pair);
+                builder.sign_with_validator_key_pair(validator_key_pair);
                 let mut builder = builder.generate().unwrap().unwrap_basic();
-                builder.sign_with_key_pair(&key_pair);
+                builder.sign_with_key_pair(key_pair);
                 builder.generate().unwrap()
             }
             _ => unreachable!(),

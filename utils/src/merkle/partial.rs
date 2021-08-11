@@ -58,13 +58,13 @@ impl PartialMerkleProofBuilder {
             len => {
                 let mid = current_range.start + len.ceiling_div(2);
                 let left_hash = PartialMerkleProofBuilder::compute::<H>(
-                    &hashes,
+                    hashes,
                     chunk_size,
                     current_range.start..mid,
                     proofs,
                 );
                 let right_hash = PartialMerkleProofBuilder::compute::<H>(
-                    &hashes,
+                    hashes,
                     chunk_size,
                     mid..current_range.end,
                     proofs,
@@ -228,7 +228,7 @@ where
             len => {
                 let mid = current_range.start + len.ceiling_div(2);
                 let (proof_node_left, left_hash) = self.compute(
-                    &hashes,
+                    hashes,
                     current_range.start..mid,
                     index_offset,
                     helper_nodes,
@@ -237,7 +237,7 @@ where
                     helper_output,
                 )?;
                 let (proof_node_right, right_hash) = self.compute(
-                    &hashes,
+                    hashes,
                     mid..current_range.end,
                     index_offset,
                     helper_nodes,

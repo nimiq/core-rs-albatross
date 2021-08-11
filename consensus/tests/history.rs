@@ -3,7 +3,6 @@ use std::time::Duration;
 
 use beserial::Deserialize;
 use futures::{Stream, StreamExt};
-use simple_logger::SimpleLogger;
 
 use futures::task::{Context, Poll};
 use nimiq_block_production::{test_utils::*, BlockProducer};
@@ -18,7 +17,7 @@ use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
 use nimiq_mempool::{Mempool, MempoolConfig};
 use nimiq_network_interface::network::Network;
-use nimiq_network_mock::{MockHub, MockNetwork, MockPeer};
+use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_primitives::policy;
 use std::pin::Pin;
 
@@ -288,15 +287,7 @@ async fn sync_ingredients() {
         .expect("Should yield history chunk");
     assert_eq!(chunk.history.len(), 3);
     assert_eq!(
-        chunk.verify(
-            consensus1
-                .blockchain
-                .election_head()
-                .header
-                .history_root
-                .clone(),
-            0
-        ),
+        chunk.verify(consensus1.blockchain.election_head().header.history_root, 0),
         Some(true)
     );
 

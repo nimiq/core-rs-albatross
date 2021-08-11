@@ -247,7 +247,7 @@ mod impl_for_libp2p {
         type PublicKey = PublicKey;
 
         fn sign(&self, message: &[u8]) -> Vec<u8> {
-            Keypair::sign(&self, message).expect("Signing failed")
+            Keypair::sign(self, message).expect("Signing failed")
         }
     }
 

@@ -370,7 +370,7 @@ impl Blockchain {
 
         // Get the chain info for the head of the chain.
         let mut current_info = self
-            .get_chain_info(&self.head_hash(), true, Some(&write_txn))
+            .get_chain_info(&self.head_hash(), true, Some(write_txn))
             .expect("Couldn't fetch chain info for the head of the chain!");
 
         // Revert each block individually.
@@ -379,14 +379,14 @@ impl Blockchain {
                 Block::Micro(ref micro_block) => {
                     // Get the chain info for the parent of the current head of the chain.
                     let prev_info = self
-                        .get_chain_info(&micro_block.header.parent_hash, true, Some(&write_txn))
+                        .get_chain_info(&micro_block.header.parent_hash, true, Some(write_txn))
                         .expect("Failed to find main chain predecessor while reverting blocks!");
 
                     // Revert the accounts tree. This also reverts the history store.
                     self.revert_accounts(
                         &state.accounts,
                         write_txn,
-                        &micro_block,
+                        micro_block,
                         prev_info.head.view_number(),
                     )?;
 

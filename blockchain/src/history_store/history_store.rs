@@ -537,7 +537,7 @@ impl HistoryStore {
         // Then add all transactions to the database as the tree is finished.
         for (i, leaf) in all_leaves.iter().enumerate() {
             // The prefix is one because it is a leaf.
-            self.put_extended_tx(txn, &leaf.hash(1).unwrap(), i as u32, &leaf);
+            self.put_extended_tx(txn, &leaf.hash(1).unwrap(), i as u32, leaf);
         }
 
         Ok(root)

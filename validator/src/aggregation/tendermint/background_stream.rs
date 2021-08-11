@@ -55,7 +55,7 @@ impl<N: ValidatorNetwork + 'static> Stream for BackgroundStream<N> {
             Poll::Pending => Poll::Pending,
             Poll::Ready(None) => {
                 debug!("BackgroundStream finished aggregating - Terminating");
-                return Poll::Ready(None);
+                Poll::Ready(None)
             }
             Poll::Ready(Some(event)) => {
                 match event {

@@ -123,7 +123,7 @@ impl PeerAddressBookState {
 
     pub fn get_by_peer_id(&self, peer_id: &PeerId) -> Option<Arc<PeerAddress>> {
         if let Some(peer_address) = self.address_by_peer_id.get(peer_id) {
-            return Some(Arc::clone(&peer_address));
+            return Some(Arc::clone(peer_address));
         }
         None
     }
@@ -180,7 +180,7 @@ impl PeerAddressBookState {
         // Delete from net address index.
         if let Some(info) = self.info_by_address.get_mut(&peer_address) {
             for net_address in &info.added_by {
-                if let Some(addresses) = self.addresses_by_net_address.get_mut(&net_address) {
+                if let Some(addresses) = self.addresses_by_net_address.get_mut(net_address) {
                     addresses.remove(&peer_address);
                 }
             }

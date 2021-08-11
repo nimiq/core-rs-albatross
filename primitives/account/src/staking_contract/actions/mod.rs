@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::BTreeSet;
 use std::mem;
 use std::ops::Add;
 
@@ -106,7 +106,7 @@ impl AccountTransactionInteraction for StakingContract {
                     ..
                 } => {
                     // We couldn't verify the signature intrinsically before, since we need the validator key from the staking contract
-                    self.verify_signature_incoming(&transaction, &validator_id, &signature)?;
+                    self.verify_signature_incoming(transaction, &validator_id, &signature)?;
 
                     let receipt = self.update_validator(
                         &validator_id,
@@ -119,7 +119,7 @@ impl AccountTransactionInteraction for StakingContract {
                     validator_id,
                     signature,
                 } => {
-                    self.verify_signature_incoming(&transaction, &validator_id, &signature)?;
+                    self.verify_signature_incoming(transaction, &validator_id, &signature)?;
                     self.retire_validator(validator_id, block_height)?;
                     None
                 }
@@ -127,7 +127,7 @@ impl AccountTransactionInteraction for StakingContract {
                     validator_id,
                     signature,
                 } => {
-                    self.verify_signature_incoming(&transaction, &validator_id, &signature)?;
+                    self.verify_signature_incoming(transaction, &validator_id, &signature)?;
                     let receipt = self.reactivate_validator(validator_id)?;
                     Some(receipt.serialize_to_vec())
                 }
@@ -135,7 +135,7 @@ impl AccountTransactionInteraction for StakingContract {
                     validator_id,
                     signature,
                 } => {
-                    self.verify_signature_incoming(&transaction, &validator_id, &signature)?;
+                    self.verify_signature_incoming(transaction, &validator_id, &signature)?;
                     let receipt = self.unpark_validator(&validator_id)?;
                     Some(receipt.serialize_to_vec())
                 }
@@ -608,14 +608,12 @@ impl AccountInherentInteraction for StakingContract {
                 // Parking sets and disabled slots are only swapped on epoch changes.
                 if inherent.ty == InherentType::FinalizeEpoch {
                     // Swap lists around.
-                    let current_epoch =
-                        mem::replace(&mut self.current_epoch_parking, HashSet::new());
+                    let current_epoch = std::mem::take(&mut self.current_epoch_parking);
                     let old_epoch = mem::replace(&mut self.previous_epoch_parking, current_epoch);
 
                     // Disabled slots.
                     // Optimization: We actually only need the old slots for the first batch of the epoch.
-                    let current_disabled_slots =
-                        mem::replace(&mut self.current_disabled_slots, BTreeMap::new());
+                    let current_disabled_slots = std::mem::take(&mut self.current_disabled_slots);
                     let _old_disabled_slots =
                         mem::replace(&mut self.previous_disabled_slots, current_disabled_slots);
 
@@ -648,7 +646,7 @@ impl AccountInherentInteraction for StakingContract {
         match &inherent.ty {
             InherentType::Slash => {
                 let receipt: SlashReceipt = Deserialize::deserialize_from_vec(
-                    &receipt.ok_or(AccountError::InvalidReceipt)?,
+                    receipt.ok_or(AccountError::InvalidReceipt)?,
                 )?;
                 let slot: SlashedSlot = Deserialize::deserialize(&mut &inherent.data[..])?;
 

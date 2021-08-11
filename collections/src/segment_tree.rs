@@ -43,7 +43,7 @@ where
     pub fn new(weights: &mut [(T, U)]) -> Self {
         debug_assert!(weights.windows(2).all(|w| w[0].0 < w[1].0));
         SegmentTree {
-            root: Self::build_tree(&weights),
+            root: Self::build_tree(weights),
             size: weights.len(),
         }
     }

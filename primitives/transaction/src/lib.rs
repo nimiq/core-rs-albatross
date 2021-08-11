@@ -361,10 +361,10 @@ impl Transaction {
         }
 
         // Check transaction validity for sender account.
-        AccountType::verify_outgoing_transaction(&self)?;
+        AccountType::verify_outgoing_transaction(self)?;
 
         // Check transaction validity for recipient account.
-        AccountType::verify_incoming_transaction(&self)?;
+        AccountType::verify_incoming_transaction(self)?;
 
         Ok(())
     }

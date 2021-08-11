@@ -282,7 +282,7 @@ mod tests {
             to_prove: &[usize],
             proof_nodes: &[Node],
         ) {
-            let proof = mmr.prove(&to_prove).unwrap();
+            let proof = mmr.prove(to_prove).unwrap();
             assert_eq!(proof.mmr_size, mmr.len());
             assert_eq!(proof.nodes.len(), proof_nodes.len());
 
@@ -382,7 +382,7 @@ mod tests {
                 Node::Store(0),
                 Node::Store(11),
                 Node::Store(9),
-                Node::Hash(bagged_rhs.clone()),
+                Node::Hash(bagged_rhs),
             ],
         );
 
@@ -643,7 +643,7 @@ mod tests {
             &mmr,
             &nodes,
             1..=6,
-            &[Node::Store(11), Node::Hash(bagged_rhs.clone())],
+            &[Node::Store(11), Node::Hash(bagged_rhs)],
             true,
         );
 

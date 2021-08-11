@@ -31,7 +31,7 @@ impl SerializeWithLength for BitSlice<Msb0, u8> {
             // Slow path: Slice is unaligned, iterate over chunks of 8 bits
             // TODO Copy instead via to_vec()?
             let mut chunks = self.chunks_exact(8);
-            while let Some(chunk) = chunks.next() {
+            for chunk in &mut chunks {
                 let mut byte = 0u8;
                 byte.bits_mut().copy_from_slice(chunk);
                 writer.write_all(&[byte])?;

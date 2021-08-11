@@ -385,7 +385,7 @@ impl Mempool {
                     }
 
                     let sender_account = validator_registry.as_mut().unwrap();
-                    match sender_account.commit_outgoing_transaction(&tx, block_height, timestamp) {
+                    match sender_account.commit_outgoing_transaction(tx, block_height, timestamp) {
                         Err(_) => continue, // Ignore transaction.
                         Ok(receipt) => outgoing_receipt = receipt,
                     }
@@ -401,14 +401,14 @@ impl Mempool {
 
                     let recipient_account = validator_registry.as_mut().unwrap();
                     if recipient_account
-                        .commit_incoming_transaction(&tx, block_height, timestamp)
+                        .commit_incoming_transaction(tx, block_height, timestamp)
                         .is_err()
                     {
                         // Potentially revert sender side and ignore transaction.
                         if &tx.sender == validator_registry_address {
                             recipient_account
                                 .revert_outgoing_transaction(
-                                    &tx,
+                                    tx,
                                     block_height,
                                     timestamp,
                                     outgoing_receipt.as_ref(),
@@ -495,7 +495,7 @@ impl Mempool {
 
             for (address, transactions) in state.transactions_by_sender.iter() {
                 // TODO Eliminate copy
-                let mut sender_account = self.blockchain.get_account(&address);
+                let mut sender_account = self.blockchain.get_account(address);
                 for tx in transactions.iter().rev() {
                     // Check if the transaction has expired.
                     if !tx.is_valid_at(block_height) {
@@ -513,7 +513,7 @@ impl Mempool {
                     // TODO Eliminate copy
                     let mut recipient_account = self.blockchain.get_account(&tx.recipient);
                     if recipient_account
-                        .commit_incoming_transaction(&tx, block_height, timestamp)
+                        .commit_incoming_transaction(tx, block_height, timestamp)
                         .is_err()
                     {
                         txs_evicted.push(tx.clone());
@@ -524,7 +524,7 @@ impl Mempool {
                         && Account::new_contract(
                             tx.recipient_type,
                             recipient_account.balance(),
-                            &tx,
+                            tx,
                             block_height,
                             timestamp,
                         )
@@ -536,7 +536,7 @@ impl Mempool {
 
                     // Check if transaction is still valid for sender.
                     if sender_account
-                        .commit_outgoing_transaction(&tx, block_height, timestamp)
+                        .commit_outgoing_transaction(tx, block_height, timestamp)
                         .is_err()
                     {
                         txs_evicted.push(tx.clone());
@@ -605,7 +605,7 @@ impl Mempool {
                 // TODO Eliminate copy
                 let mut recipient_account = self.blockchain.get_account(&tx.recipient);
                 if recipient_account
-                    .commit_incoming_transaction(&tx, block_height, timestamp)
+                    .commit_incoming_transaction(tx, block_height, timestamp)
                     .is_err()
                 {
                     // This transaction cannot be accepted by the recipient anymore.
@@ -617,7 +617,7 @@ impl Mempool {
                     && Account::new_contract(
                         tx.recipient_type,
                         recipient_account.balance(),
-                        &tx,
+                        tx,
                         block_height,
                         timestamp,
                     )
@@ -641,7 +641,7 @@ impl Mempool {
 
             for (sender, restored_txs) in txs_by_sender {
                 let empty_btree;
-                let existing_txs = match state.transactions_by_sender.get(&sender) {
+                let existing_txs = match state.transactions_by_sender.get(sender) {
                     Some(txs) => txs,
                     None => {
                         empty_btree = BTreeSet::new();
@@ -650,7 +650,7 @@ impl Mempool {
                 };
 
                 // TODO Eliminate copy.
-                let sender_account = self.blockchain.get_account(&sender);
+                let sender_account = self.blockchain.get_account(sender);
                 let (txs_to_add, txs_to_remove) = Self::merge_transactions(
                     sender_account,
                     block_height,

@@ -125,7 +125,7 @@ impl Blockchain {
     ) -> Result<(), PushError> {
         assert_eq!(
             micro_block.header.state_root,
-            accounts.hash(Some(&txn)),
+            accounts.hash(Some(txn)),
             "Failed to revert - inconsistent state"
         );
 

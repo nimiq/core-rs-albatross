@@ -146,9 +146,8 @@ where
         if y < U_x {
             x
         } else {
-            let K_x = self.K[x];
             //assert_ne!(K_x, 0);
-            K_x
+            self.K[x]
         }
     }
 }

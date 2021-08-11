@@ -36,7 +36,7 @@ impl Blockchain {
         // Check if we have this block's parent.
         let prev_info = self
             .chain_store
-            .get_chain_info(&block.parent_hash(), false, Some(&read_txn))
+            .get_chain_info(block.parent_hash(), false, Some(&read_txn))
             .ok_or(PushError::Orphan)?;
 
         // Calculate chain ordering.
@@ -205,12 +205,8 @@ impl Blockchain {
 
         self.chain_store
             .put_chain_info(&mut txn, &block_hash, &chain_info, true);
-        self.chain_store.put_chain_info(
-            &mut txn,
-            &chain_info.head.parent_hash(),
-            &prev_info,
-            false,
-        );
+        self.chain_store
+            .put_chain_info(&mut txn, chain_info.head.parent_hash(), &prev_info, false);
         self.chain_store.set_head(&mut txn, &block_hash);
 
         let is_election_block = policy::is_election_block_at(self.block_number() + 1);
@@ -346,7 +342,7 @@ impl Blockchain {
                     self.revert_accounts(
                         &state.accounts,
                         &mut write_txn,
-                        &micro_block,
+                        micro_block,
                         prev_info.head.view_number(),
                     )?;
 
@@ -498,7 +494,7 @@ impl Blockchain {
         }
 
         // Commit block to AccountsTree.
-        if let Err(e) = self.commit_accounts(&state, &block, first_view_number, txn) {
+        if let Err(e) = self.commit_accounts(state, block, first_view_number, txn) {
             warn!("Rejecting block - commit failed: {:?}", e);
             #[cfg(feature = "metrics")]
             self.metrics.note_invalid_block();
@@ -506,7 +502,7 @@ impl Blockchain {
         }
 
         // Verify the state against the block.
-        if let Err(e) = self.verify_block_state(&state, &block, Some(&txn)) {
+        if let Err(e) = self.verify_block_state(state, block, Some(txn)) {
             warn!("Rejecting block - Bad state");
             return Err(e);
         }

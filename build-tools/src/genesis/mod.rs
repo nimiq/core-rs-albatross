@@ -188,7 +188,7 @@ impl GenesisBuilder {
             .into();
         debug!("Pre genesis seed: {}", pre_genesis_seed);
         // seed of genesis block = VRF(seed_0)
-        let seed = pre_genesis_seed.sign_next(&signing_key);
+        let seed = pre_genesis_seed.sign_next(signing_key);
         debug!("Genesis seed: {}", seed);
 
         // generate staking contract

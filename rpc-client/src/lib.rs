@@ -24,7 +24,7 @@ impl Client {
             blockchain: BlockchainProxy::new(client.clone()),
             consensus: ConsensusProxy::new(client.clone()),
             mempool: MempoolProxy::new(client.clone()),
-            wallet: WalletProxy::new(client.clone()),
+            wallet: WalletProxy::new(client),
         })
     }
 }

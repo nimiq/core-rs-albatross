@@ -95,8 +95,8 @@ impl<A: AccountsTreeLeave> AccountsTreeNode<A> {
     #[inline]
     pub fn prefix(&self) -> &AddressNibbles {
         match *self {
-            AccountsTreeNode::TerminalNode { ref prefix, .. } => &prefix,
-            AccountsTreeNode::BranchNode { ref prefix, .. } => &prefix,
+            AccountsTreeNode::TerminalNode { ref prefix, .. } => prefix,
+            AccountsTreeNode::BranchNode { ref prefix, .. } => prefix,
         }
     }
 
@@ -120,7 +120,7 @@ impl<A: AccountsTreeLeave> AccountsTreeNode<A> {
     }
 
     pub fn with_child(mut self, prefix: &AddressNibbles, hash: Blake2bHash) -> Option<Self> {
-        let child_index = self.get_child_index(&prefix)?;
+        let child_index = self.get_child_index(prefix)?;
         let suffix = prefix.suffix(self.prefix().len() as u8);
         match self {
             AccountsTreeNode::TerminalNode { .. } => {

@@ -271,7 +271,7 @@ impl Network for MockNetwork {
             let hub = self.hub.lock();
 
             if let Some(data) = hub.dht.get(k.as_ref()) {
-                Ok(Some(V::deserialize_from_vec(&data)?))
+                Ok(Some(V::deserialize_from_vec(data)?))
             } else {
                 Ok(None)
             }

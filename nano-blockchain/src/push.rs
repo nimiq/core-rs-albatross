@@ -20,7 +20,7 @@ impl NanoBlockchain {
 
         // Check if we have this block's parent.
         let prev_info = self
-            .get_chain_info(&block.parent_hash(), false, None)
+            .get_chain_info(block.parent_hash(), false, None)
             .ok_or(PushError::Orphan)?;
 
         // Calculate chain ordering.

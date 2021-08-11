@@ -322,7 +322,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             self.blockchain_state.fork_proofs.revert_block(block);
         }
         for (_hash, block) in new_chain.iter() {
-            self.blockchain_state.fork_proofs.apply_block(&block);
+            self.blockchain_state.fork_proofs.apply_block(block);
         }
     }
 
@@ -530,7 +530,9 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProposalSender<TValidatorNet
         let source = proposal.1.propagation_source();
         let mut shared = self.shared.write();
         shared.buffer.insert(source, proposal);
-        shared.waker.take().map(|waker| waker.wake());
+        if let Some(waker) = shared.waker.take() {
+            waker.wake()
+        }
     }
 }
 
