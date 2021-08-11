@@ -993,7 +993,7 @@ mod tests {
                 ids,
                 checkpoint_id: None,
                 first_epoch_number,
-                sender: Arc::clone(&agent),
+                sender: Arc::clone(agent),
             }
         }
 
@@ -1025,17 +1025,15 @@ mod tests {
             F: Fn(HistorySync<MockNetwork>),
         {
             let mut sync =
-                HistorySync::<MockNetwork>::new(Arc::clone(&blockchain), net.subscribe_events());
+                HistorySync::<MockNetwork>::new(Arc::clone(blockchain), net.subscribe_events());
             sync.cluster_epoch_ids(epoch_ids1.clone());
             sync.cluster_epoch_ids(epoch_ids2.clone());
             test(sync);
 
             // Symmetric check
             if symmetric {
-                let mut sync = HistorySync::<MockNetwork>::new(
-                    Arc::clone(&blockchain),
-                    net.subscribe_events(),
-                );
+                let mut sync =
+                    HistorySync::<MockNetwork>::new(Arc::clone(blockchain), net.subscribe_events());
                 sync.cluster_epoch_ids(epoch_ids2);
                 sync.cluster_epoch_ids(epoch_ids1);
                 test(sync);

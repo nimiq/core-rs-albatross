@@ -79,7 +79,7 @@ fn prepare_outgoing_transaction() -> (
     let hash_root = AnyHash::from(<[u8; 32]>::from(
         Blake2bHasher::default().digest(
             Blake2bHasher::default()
-                .digest(&pre_image.as_bytes())
+                .digest(pre_image.as_bytes())
                 .as_bytes(),
         ),
     ));

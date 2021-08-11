@@ -403,7 +403,7 @@ fn it_can_create_partial_signatures() {
                 &public_keys,
                 &test.secrets[i],
                 &test.commitments,
-                &test.message.as_slice(),
+                test.message.as_slice(),
             );
             assert_eq!(agg_public_key, test.agg_pub_key);
             assert_eq!(agg_commitment, test.agg_commitment);
@@ -429,7 +429,7 @@ fn it_sign_and_verify_multisigs() {
                 &test.pub_keys,
                 cp.random_secret(),
                 &test.commitments,
-                &test.message.as_slice(),
+                test.message.as_slice(),
             );
 
             aggregated_public_key = match aggregated_public_key {
@@ -455,7 +455,7 @@ fn it_sign_and_verify_multisigs() {
         assert_eq!(
             aggregated_public_key
                 .unwrap()
-                .verify(&final_signature, &test.message.as_slice()),
+                .verify(&final_signature, test.message.as_slice()),
             true
         );
     }

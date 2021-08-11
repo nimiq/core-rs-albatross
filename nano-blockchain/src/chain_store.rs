@@ -140,7 +140,7 @@ mod tests {
                 extra_data: vec![],
                 state_root: hash_1.clone(),
                 body_root: hash_1.clone(),
-                history_root: hash_1.clone(),
+                history_root: hash_1,
             },
             justification: Some(MicroJustification {
                 signature: Default::default(),
@@ -167,7 +167,7 @@ mod tests {
                 extra_data: vec![],
                 state_root: hash_2.clone(),
                 body_root: hash_2.clone(),
-                history_root: hash_2.clone(),
+                history_root: hash_2,
             },
             justification: Some(MicroJustification {
                 signature: Default::default(),
@@ -217,8 +217,8 @@ mod tests {
         }
 
         // Third case.
-        store.put_chain_info(ChainInfo::new(block_1.clone(), false));
-        store.put_chain_info(ChainInfo::new(block_2.clone(), false));
+        store.put_chain_info(ChainInfo::new(block_1, false));
+        store.put_chain_info(ChainInfo::new(block_2, false));
 
         match store.get_chain_info_at(0) {
             None => {}

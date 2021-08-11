@@ -104,7 +104,7 @@ impl StakingRecipientBuilder {
         self.staking_data = Some(StakingTransaction::IncomingTransaction(
             IncomingStakingTransactionData::CreateValidator {
                 validator_key: key_pair.public_key.compress(),
-                proof_of_knowledge: StakingRecipientBuilder::generate_proof_of_knowledge(&key_pair),
+                proof_of_knowledge: StakingRecipientBuilder::generate_proof_of_knowledge(key_pair),
                 reward_address,
             },
         ));
@@ -138,7 +138,7 @@ impl StakingRecipientBuilder {
                 old_validator_key: old_validator_key.compress(),
                 new_validator_key: new_key_pair.map(|key| key.public_key.compress()),
                 new_proof_of_knowledge: new_key_pair
-                    .map(|key| StakingRecipientBuilder::generate_proof_of_knowledge(&key)),
+                    .map(|key| StakingRecipientBuilder::generate_proof_of_knowledge(key)),
                 new_reward_address,
                 signature: Default::default(),
             },

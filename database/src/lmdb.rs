@@ -376,7 +376,7 @@ impl<'txn, 'db> RawReadCursor for RawLmdbCursor<'txn, 'db> {
         K: FromDatabaseValue,
         V: FromDatabaseValue,
     {
-        let result: Option<(&[u8], &[u8])> = self.cursor.first(&access).to_opt().unwrap();
+        let result: Option<(&[u8], &[u8])> = self.cursor.first(access).to_opt().unwrap();
         let (key, value) = result?;
         Some((
             FromDatabaseValue::copy_from_database(key).unwrap(),
@@ -388,7 +388,7 @@ impl<'txn, 'db> RawReadCursor for RawLmdbCursor<'txn, 'db> {
     where
         V: FromDatabaseValue,
     {
-        let result: Option<&[u8]> = self.cursor.first_dup(&access).to_opt().unwrap();
+        let result: Option<&[u8]> = self.cursor.first_dup(access).to_opt().unwrap();
         Some(FromDatabaseValue::copy_from_database(result?).unwrap())
     }
 
@@ -397,7 +397,7 @@ impl<'txn, 'db> RawReadCursor for RawLmdbCursor<'txn, 'db> {
         K: FromDatabaseValue,
         V: FromDatabaseValue,
     {
-        let result: Option<(&[u8], &[u8])> = self.cursor.last(&access).to_opt().unwrap();
+        let result: Option<(&[u8], &[u8])> = self.cursor.last(access).to_opt().unwrap();
         let (key, value) = result?;
         Some((
             FromDatabaseValue::copy_from_database(key).unwrap(),
@@ -409,7 +409,7 @@ impl<'txn, 'db> RawReadCursor for RawLmdbCursor<'txn, 'db> {
     where
         V: FromDatabaseValue,
     {
-        let result: Option<&[u8]> = self.cursor.last_dup(&access).to_opt().unwrap();
+        let result: Option<&[u8]> = self.cursor.last_dup(access).to_opt().unwrap();
         Some(FromDatabaseValue::copy_from_database(result?).unwrap())
     }
 
@@ -438,7 +438,7 @@ impl<'txn, 'db> RawReadCursor for RawLmdbCursor<'txn, 'db> {
         let value = AsDatabaseBytes::as_database_bytes(value);
         let result: Option<&[u8]> = self
             .cursor
-            .seek_k_nearest_v(&access, key.as_ref(), value.as_ref())
+            .seek_k_nearest_v(access, key.as_ref(), value.as_ref())
             .to_opt()
             .unwrap();
         Some(FromDatabaseValue::copy_from_database(result?).unwrap())
@@ -449,7 +449,7 @@ impl<'txn, 'db> RawReadCursor for RawLmdbCursor<'txn, 'db> {
         K: FromDatabaseValue,
         V: FromDatabaseValue,
     {
-        let result: Option<(&[u8], &[u8])> = self.cursor.get_current(&access).to_opt().unwrap();
+        let result: Option<(&[u8], &[u8])> = self.cursor.get_current(access).to_opt().unwrap();
         let (key, value) = result?;
         Some((
             FromDatabaseValue::copy_from_database(key).unwrap(),
@@ -462,7 +462,7 @@ impl<'txn, 'db> RawReadCursor for RawLmdbCursor<'txn, 'db> {
         K: FromDatabaseValue,
         V: FromDatabaseValue,
     {
-        let result: Option<(&[u8], &[u8])> = self.cursor.next(&access).to_opt().unwrap();
+        let result: Option<(&[u8], &[u8])> = self.cursor.next(access).to_opt().unwrap();
         let (key, value) = result?;
         Some((
             FromDatabaseValue::copy_from_database(key).unwrap(),
@@ -475,7 +475,7 @@ impl<'txn, 'db> RawReadCursor for RawLmdbCursor<'txn, 'db> {
         K: FromDatabaseValue,
         V: FromDatabaseValue,
     {
-        let result: Option<(&[u8], &[u8])> = self.cursor.next_dup(&access).to_opt().unwrap();
+        let result: Option<(&[u8], &[u8])> = self.cursor.next_dup(access).to_opt().unwrap();
         let (key, value) = result?;
         Some((
             FromDatabaseValue::copy_from_database(key).unwrap(),
@@ -488,7 +488,7 @@ impl<'txn, 'db> RawReadCursor for RawLmdbCursor<'txn, 'db> {
         K: FromDatabaseValue,
         V: FromDatabaseValue,
     {
-        let result: Option<(&[u8], &[u8])> = self.cursor.next_nodup(&access).to_opt().unwrap();
+        let result: Option<(&[u8], &[u8])> = self.cursor.next_nodup(access).to_opt().unwrap();
         let (key, value) = result?;
         Some((
             FromDatabaseValue::copy_from_database(key).unwrap(),
@@ -501,7 +501,7 @@ impl<'txn, 'db> RawReadCursor for RawLmdbCursor<'txn, 'db> {
         K: FromDatabaseValue,
         V: FromDatabaseValue,
     {
-        let result: Option<(&[u8], &[u8])> = self.cursor.prev(&access).to_opt().unwrap();
+        let result: Option<(&[u8], &[u8])> = self.cursor.prev(access).to_opt().unwrap();
         let (key, value) = result?;
         Some((
             FromDatabaseValue::copy_from_database(key).unwrap(),
@@ -514,7 +514,7 @@ impl<'txn, 'db> RawReadCursor for RawLmdbCursor<'txn, 'db> {
         K: FromDatabaseValue,
         V: FromDatabaseValue,
     {
-        let result: Option<(&[u8], &[u8])> = self.cursor.prev_dup(&access).to_opt().unwrap();
+        let result: Option<(&[u8], &[u8])> = self.cursor.prev_dup(access).to_opt().unwrap();
         let (key, value) = result?;
         Some((
             FromDatabaseValue::copy_from_database(key).unwrap(),
@@ -527,7 +527,7 @@ impl<'txn, 'db> RawReadCursor for RawLmdbCursor<'txn, 'db> {
         K: FromDatabaseValue,
         V: FromDatabaseValue,
     {
-        let result: Option<(&[u8], &[u8])> = self.cursor.prev_nodup(&access).to_opt().unwrap();
+        let result: Option<(&[u8], &[u8])> = self.cursor.prev_nodup(access).to_opt().unwrap();
         let (key, value) = result?;
         Some((
             FromDatabaseValue::copy_from_database(key).unwrap(),
@@ -541,7 +541,7 @@ impl<'txn, 'db> RawReadCursor for RawLmdbCursor<'txn, 'db> {
         V: FromDatabaseValue,
     {
         let key = AsDatabaseBytes::as_database_bytes(key);
-        let result: Option<&[u8]> = self.cursor.seek_k(&access, key.as_ref()).to_opt().unwrap();
+        let result: Option<&[u8]> = self.cursor.seek_k(access, key.as_ref()).to_opt().unwrap();
         Some(FromDatabaseValue::copy_from_database(result?).unwrap())
     }
 
@@ -553,7 +553,7 @@ impl<'txn, 'db> RawReadCursor for RawLmdbCursor<'txn, 'db> {
         let key = AsDatabaseBytes::as_database_bytes(key);
         let result: Option<(&[u8], &[u8])> = self
             .cursor
-            .seek_k_both(&access, key.as_ref())
+            .seek_k_both(access, key.as_ref())
             .to_opt()
             .unwrap();
         let (key, value) = result?;
@@ -571,7 +571,7 @@ impl<'txn, 'db> RawReadCursor for RawLmdbCursor<'txn, 'db> {
         let key = AsDatabaseBytes::as_database_bytes(key);
         let result: Option<(&[u8], &[u8])> = self
             .cursor
-            .seek_range_k(&access, key.as_ref())
+            .seek_range_k(access, key.as_ref())
             .to_opt()
             .unwrap();
         let (key, value) = result?;

@@ -187,7 +187,7 @@ impl ConnectionStatistics {
             return 0.0;
         }
 
-        latencies.sort_unstable_by(|a, b| a.partial_cmp(&b).unwrap());
+        latencies.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
 
         match length % 2 {
             0 => ((latencies[(length / 2) - 1] + latencies[length / 2]) / 2.0).round(),

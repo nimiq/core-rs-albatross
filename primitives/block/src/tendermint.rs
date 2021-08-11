@@ -67,7 +67,7 @@ impl TendermintProof {
 
         for (i, pk) in pks.iter().enumerate() {
             if self.sig.signers.contains(i as usize) {
-                agg_pk.aggregate(&pk);
+                agg_pk.aggregate(pk);
             }
 
             raw_pks.push(pk.public_key);

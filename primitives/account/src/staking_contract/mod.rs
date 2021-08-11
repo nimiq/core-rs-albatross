@@ -108,13 +108,13 @@ impl StakingContract {
     /// It returns a validator entry, which subsumes active and inactive validators.
     /// It also allows for deferred error handling after re-adding the validator using `restore_validator`.
     pub fn remove_validator(&mut self, validator_id: &ValidatorId) -> Option<ValidatorEntry> {
-        if let Some(validator) = self.active_validators_by_id.remove(&validator_id) {
+        if let Some(validator) = self.active_validators_by_id.remove(validator_id) {
             self.active_validators_sorted.remove(&validator);
             Some(ValidatorEntry::new_active_validator(validator))
         } else {
             //  The else case is needed to ensure the validator_key still exists.
             self.inactive_validators_by_id
-                .remove(&validator_id)
+                .remove(validator_id)
                 .map(ValidatorEntry::new_inactive_validator)
         }
     }

@@ -223,7 +223,7 @@ impl ChainStore {
         };
 
         // Iterate until we find all blocks at the same height.
-        while let Some(block) = self.get_block(&block_hash, include_body, Some(&txn)) {
+        while let Some(block) = self.get_block(&block_hash, include_body, Some(txn)) {
             blocks.push(block);
 
             // Get next block hash
@@ -253,14 +253,14 @@ impl ChainStore {
         };
 
         let mut blocks = Vec::new();
-        let start_block = match self.get_block(start_block_hash, false, Some(&txn)) {
+        let start_block = match self.get_block(start_block_hash, false, Some(txn)) {
             Some(block) => block,
             None => return blocks,
         };
 
         let mut hash = start_block.parent_hash().clone();
         while (blocks.len() as u32) < count {
-            if let Some(block) = self.get_block(&hash, include_body, Some(&txn)) {
+            if let Some(block) = self.get_block(&hash, include_body, Some(txn)) {
                 hash = block.parent_hash().clone();
                 blocks.push(block);
             } else {
@@ -288,14 +288,14 @@ impl ChainStore {
         };
 
         let mut blocks = Vec::new();
-        let mut chain_info = match self.get_chain_info(start_block_hash, false, Some(&txn)) {
+        let mut chain_info = match self.get_chain_info(start_block_hash, false, Some(txn)) {
             Some(chain_info) => chain_info,
             None => return blocks,
         };
 
         while (blocks.len() as u32) < count {
             if let Some(ref successor) = chain_info.main_chain_successor {
-                let chain_info_opt = self.get_chain_info(successor, include_body, Some(&txn));
+                let chain_info_opt = self.get_chain_info(successor, include_body, Some(txn));
                 if chain_info_opt.is_none() {
                     break;
                 }
@@ -347,7 +347,7 @@ impl ChainStore {
         };
 
         let mut blocks = Vec::new();
-        let start_block = match self.get_block(start_block_hash, false, Some(&txn)) {
+        let start_block = match self.get_block(start_block_hash, false, Some(txn)) {
             Some(Block::Macro(block)) => block,
             Some(_) => return None,
             None => return Some(blocks),
@@ -359,7 +359,7 @@ impl ChainStore {
             start_block.header.parent_hash
         };
         while (blocks.len() as u32) < count {
-            let block_opt = self.get_block(&hash, include_body, Some(&txn));
+            let block_opt = self.get_block(&hash, include_body, Some(txn));
             if let Some(Block::Macro(block)) = block_opt {
                 hash = if election_blocks_only {
                     block.header.parent_election_hash.clone()
@@ -394,7 +394,7 @@ impl ChainStore {
         };
 
         let mut blocks = Vec::new();
-        let block = match self.get_block(start_block_hash, false, Some(&txn)) {
+        let block = match self.get_block(start_block_hash, false, Some(txn)) {
             Some(Block::Macro(block)) => block,
             Some(_) => return None,
             None => return Some(blocks),
@@ -406,7 +406,7 @@ impl ChainStore {
             policy::macro_block_after(block.header.block_number)
         };
         while (blocks.len() as u32) < count {
-            let block_opt = self.get_block_at(next_macro_block, include_body, Some(&txn));
+            let block_opt = self.get_block_at(next_macro_block, include_body, Some(txn));
             if let Some(Block::Macro(block)) = block_opt {
                 next_macro_block = if election_blocks_only {
                     policy::election_block_after(block.header.block_number)

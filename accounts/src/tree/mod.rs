@@ -202,7 +202,7 @@ impl<A: AccountsTreeLeave> AccountsTree<A> {
         prefixes.sort();
 
         let mut nodes = Vec::new();
-        self.get_accounts_proof_rec(&txn, &self.get_root(txn).unwrap(), &prefixes, &mut nodes);
+        self.get_accounts_proof_rec(txn, &self.get_root(txn).unwrap(), &prefixes, &mut nodes);
         AccountsProof::new(nodes)
     }
 

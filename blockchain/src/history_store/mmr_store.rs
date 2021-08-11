@@ -124,7 +124,7 @@ impl<'a, 'env> Store<HistoryTreeHash> for MMRStore<'a, 'env> {
     fn push(&mut self, elem: HistoryTreeHash) {
         if let Tx::Write(ref mut tx) = self.tx {
             let key = index_to_key(self.epoch_number, self.size);
-            tx.put(&self.hist_tree_db, &key, &elem);
+            tx.put(self.hist_tree_db, &key, &elem);
             self.size += 1;
         }
     }
@@ -133,7 +133,7 @@ impl<'a, 'env> Store<HistoryTreeHash> for MMRStore<'a, 'env> {
         if let Tx::Write(ref mut tx) = self.tx {
             for _ in 0..cmp::min(num_elems, self.size) {
                 let key = index_to_key(self.epoch_number, self.size - 1);
-                tx.remove(&self.hist_tree_db, &key);
+                tx.remove(self.hist_tree_db, &key);
                 self.size -= 1;
             }
         }
@@ -142,8 +142,8 @@ impl<'a, 'env> Store<HistoryTreeHash> for MMRStore<'a, 'env> {
     fn get(&self, pos: usize) -> Option<HistoryTreeHash> {
         let key = index_to_key(self.epoch_number, pos);
         match self.tx {
-            Tx::Read(ref tx) => tx.get(&self.hist_tree_db, &key),
-            Tx::Write(ref tx) => tx.get(&self.hist_tree_db, &key),
+            Tx::Read(tx) => tx.get(self.hist_tree_db, &key),
+            Tx::Write(ref tx) => tx.get(self.hist_tree_db, &key),
         }
     }
 

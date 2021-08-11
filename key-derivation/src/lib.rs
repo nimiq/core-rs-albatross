@@ -33,7 +33,7 @@ impl ExtendedPrivateKey {
     /// Checks whether a string is a valid derivation path.
     pub fn is_valid_path(path: &str) -> bool {
         let re = Regex::new(r"^m(/[0-9]+')*$").unwrap();
-        if !re.is_match(&path) {
+        if !re.is_match(path) {
             return false;
         }
 

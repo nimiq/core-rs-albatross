@@ -3664,7 +3664,7 @@ fn make_sample_contract(
         .stake(
             Address::from(key_pair),
             Coin::from_u64_unchecked(150_000_000),
-            &validator_id,
+            validator_id,
         )
         .unwrap();
 

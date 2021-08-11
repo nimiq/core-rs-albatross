@@ -24,7 +24,7 @@ pub trait Deserialize: Sized {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError>;
 
     fn deserialize_from_vec(v: &[u8]) -> Result<Self, SerializingError> {
-        Self::deserialize(&mut &v[..])
+        Self::deserialize(&mut &*v)
     }
 }
 
@@ -241,7 +241,7 @@ pub trait DeserializeWithLength: Sized {
     fn deserialize_from_vec<D: Deserialize + num::ToPrimitive>(
         v: &[u8],
     ) -> Result<Self, SerializingError> {
-        Self::deserialize::<D, _>(&mut &v[..])
+        Self::deserialize::<D, _>(&mut &*v)
     }
     fn deserialize_with_limit<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(
         reader: &mut R,

@@ -276,7 +276,7 @@ impl<
             };
             // For an existing aggregate for this level send it around to the respective peers.
             if let Some(aggregate) = aggregate {
-                self.send_update(aggregate, &level, self.config.update_count);
+                self.send_update(aggregate, level, self.config.update_count);
             }
         }
     }

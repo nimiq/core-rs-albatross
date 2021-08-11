@@ -97,14 +97,14 @@ where
         ));
 
         Self {
-            current_bests: current_bests,
-            current_aggregate: current_aggregate,
-            pending_new_round: pending_new_round,
+            current_bests,
+            current_aggregate,
+            pending_new_round,
             validator_merkle_root,
             block_height,
             secret_key,
             validator_id,
-            validator_registry: validator_registry,
+            validator_registry,
             network,
             event_sender,
             background_stream,

@@ -128,8 +128,7 @@ impl NetworkConfig {
     }
 
     pub fn key_pair(&self) -> &KeyPair {
-        &self
-            .key_pair
+        self.key_pair
             .as_ref()
             .expect("NetworkConfig is uninitialized")
     }
@@ -143,8 +142,7 @@ impl NetworkConfig {
     }
 
     pub fn peer_id(&self) -> &PeerId {
-        &self
-            .peer_id
+        self.peer_id
             .as_ref()
             .expect("NetworkConfig is uninitialized")
     }

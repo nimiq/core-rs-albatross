@@ -750,7 +750,7 @@ impl ConnectionPool {
                 .map(NetworkConnection::net_address);
 
             if let Some(ref net_address) = net_address {
-                state.add_net_address(connection_id, &net_address);
+                state.add_net_address(connection_id, net_address);
             }
 
             // The extra lookup is needed to satisfy the borrow checker.
