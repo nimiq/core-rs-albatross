@@ -10,4 +10,5 @@ pub trait Store<H> {
     fn remove_back(&mut self, num_elems: usize);
     fn get(&self, pos: usize) -> Option<H>;
     fn len(&self) -> usize;
+    fn is_empty(&self) -> bool;
 }

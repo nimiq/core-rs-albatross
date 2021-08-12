@@ -284,7 +284,7 @@ impl ProtocolsHandler for MessageHandler {
             assert!(self.receive_from_all.is_some());
 
             // Take inbound and outbound and create a peer from it.
-            let peer_id = self.peer_id.clone().unwrap();
+            let peer_id = self.peer_id.unwrap();
             let mut socket = self.socket.take().unwrap();
 
             // Create a channel that is used to receive the close signal from the `Peer` struct (when `Peer::close` is called).

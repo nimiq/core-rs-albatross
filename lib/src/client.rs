@@ -214,7 +214,7 @@ impl ClientInner {
             }),
             consensus: Some(consensus),
             #[cfg(feature = "validator")]
-            validator: validator,
+            validator,
         })
     }
 }

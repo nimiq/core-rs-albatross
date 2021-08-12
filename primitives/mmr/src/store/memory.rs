@@ -34,6 +34,10 @@ impl<H: Clone> Store<H> for MemoryStore<H> {
     fn len(&self) -> usize {
         self.inner.len()
     }
+
+    fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
 }
 
 pub struct MemoryTransaction<'a, H, S> {
@@ -90,5 +94,9 @@ impl<'a, H: Clone, S: Store<H>> Store<H> for MemoryTransaction<'a, H, S> {
 
     fn len(&self) -> usize {
         self.tx_pos + self.data.len()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.data.is_empty()
     }
 }

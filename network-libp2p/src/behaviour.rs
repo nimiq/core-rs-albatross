@@ -152,7 +152,7 @@ impl NimiqBehaviour {
         let update_scores = tokio::time::interval(params.decay_interval);
 
         gossipsub
-            .with_peer_score(params.clone(), thresholds)
+            .with_peer_score(params, thresholds)
             .expect("Valid score params and thresholds");
 
         Self {
