@@ -232,14 +232,14 @@ impl Network {
 
     fn can_add_to_dht(addr: &Multiaddr) -> bool {
         match addr.iter().next() {
-            Some(Protocol::Ip4(ip)) => return IpNetwork::from(ip).is_global(),
-            Some(Protocol::Ip6(ip)) => return IpNetwork::from(ip).is_global(),
+            Some(Protocol::Ip4(ip)) => IpNetwork::from(ip).is_global(),
+            Some(Protocol::Ip6(ip)) => IpNetwork::from(ip).is_global(),
             Some(Protocol::Dns(_))
             | Some(Protocol::Dns4(_))
             | Some(Protocol::Dns6(_))
-            | Some(Protocol::Memory(_)) => return true,
-            _ => return false,
-        };
+            | Some(Protocol::Memory(_)) => true,
+            _ => false,
+        }
     }
 
     async fn swarm_task(

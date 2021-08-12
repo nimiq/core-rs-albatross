@@ -123,6 +123,10 @@ where
         self.n
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.n == 0
+    }
+
     pub fn total(&self) -> P {
         self.T
     }

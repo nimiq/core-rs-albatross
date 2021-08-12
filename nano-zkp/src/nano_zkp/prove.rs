@@ -61,8 +61,8 @@ impl NanoZKP {
         // Serialize the initial public keys into bits and chunk them into the number of leaves.
         let mut bytes = Vec::new();
 
-        for i in 0..initial_pks.len() {
-            bytes.extend_from_slice(&serialize_g2_mnt6(&initial_pks[i]));
+        for initial_pk in &initial_pks {
+            bytes.extend_from_slice(&serialize_g2_mnt6(initial_pk));
         }
 
         let bits = bytes_to_bits(&bytes);

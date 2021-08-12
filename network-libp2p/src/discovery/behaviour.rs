@@ -187,7 +187,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
         self.events
             .push_back(NetworkBehaviourAction::NotifyHandler {
-                peer_id: peer_id.clone(),
+                peer_id: *peer_id,
                 handler: NotifyHandler::One(*connection_id),
                 event: HandlerInEvent::ObservedAddress(vec![remote_address.clone()]),
             });

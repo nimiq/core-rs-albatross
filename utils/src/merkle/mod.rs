@@ -321,12 +321,11 @@ where
                 let is_leaf = hashes_to_proof.contains(&hash);
                 if is_leaf {
                     operations.push(MerkleProofOperation::ConsumeInput);
-                    (is_leaf, hash)
                 } else {
                     path.push(hash.clone());
                     operations.push(MerkleProofOperation::ConsumeProof);
-                    (is_leaf, hash)
                 }
+                (is_leaf, hash)
             }
             len => {
                 let mut sub_path: Vec<H> = Vec::new();

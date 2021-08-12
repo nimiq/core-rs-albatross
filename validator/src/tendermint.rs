@@ -325,11 +325,8 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
             .await
             .unwrap();
 
-        match acceptance {
-            MsgAcceptance::Reject => {
-                return Ok(ProposalResult::Timeout);
-            }
-            _ => (),
+        if let MsgAcceptance::Reject = acceptance {
+            return Ok(ProposalResult::Timeout);
         }
 
         // Return the proposal.

@@ -189,10 +189,8 @@ impl<A: AccountsTreeLeave> Serialize for AccountsTreeNode<A> {
                     .iter()
                     .fold(0, |acc, child| acc + if child.is_none() { 0 } else { 1 });
                 Serialize::serialize(&child_count, writer)?;
-                for child in children.iter() {
-                    if let Some(ref child) = child {
-                        size += Serialize::serialize(&child, writer)?;
-                    }
+                for child in children.iter().flatten() {
+                    size += Serialize::serialize(&child, writer)?;
                 }
             }
         }
@@ -210,10 +208,8 @@ impl<A: AccountsTreeLeave> Serialize for AccountsTreeNode<A> {
             }
             AccountsTreeNode::BranchNode { ref children, .. } => {
                 size += /*count*/ 1;
-                for child in children.iter() {
-                    if let Some(ref child) = child {
-                        size += Serialize::serialized_size(&child);
-                    }
+                for child in children.iter().flatten() {
+                    size += Serialize::serialized_size(&child);
                 }
             }
         }

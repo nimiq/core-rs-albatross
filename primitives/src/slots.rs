@@ -84,8 +84,8 @@ impl Validators {
     pub fn new(validators: Vec<Validator>) -> Self {
         let mut validator_map = HashMap::new();
 
-        for i in 0..validators.len() {
-            validator_map.insert(validators[i].validator_id.clone(), i as u16);
+        for (i, validator) in validators.iter().enumerate() {
+            validator_map.insert(validator.validator_id.clone(), i as u16);
         }
 
         Self {
