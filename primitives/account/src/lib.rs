@@ -16,7 +16,7 @@ pub use crate::htlc_contract::HashedTimeLockedContract;
 pub use crate::inherent::{Inherent, InherentType};
 pub use crate::interaction_traits::*;
 pub use crate::receipts::*;
-pub use crate::staking_contract::StakingContract;
+pub use crate::staking_contract::*;
 pub use crate::vesting_contract::VestingContract;
 
 mod account;

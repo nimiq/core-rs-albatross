@@ -838,7 +838,7 @@ impl StakingContract {
 
         let deposit = Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT);
 
-        staking_contract.balance = Account::balance_sub(staking_contract.balance, deposit)?;
+        staking_contract.balance = Account::balance_add(staking_contract.balance, deposit)?;
 
         trace!("Trying to put staking contract in the accounts tree.");
 
