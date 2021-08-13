@@ -32,9 +32,9 @@ impl Account {
             Account::Vesting(_) => AccountType::Vesting,
             Account::HTLC(_) => AccountType::HTLC,
             Account::Staking(_) => AccountType::Staking,
-            _ => {
-                unreachable!()
-            }
+            Account::StakingValidator(_) => AccountType::StakingValidator,
+            Account::StakingValidatorsStaker(_) => AccountType::StakingValidatorsStaker,
+            Account::StakingStaker(_) => AccountType::StakingStaker,
         }
     }
 
@@ -44,9 +44,11 @@ impl Account {
             Account::Vesting(ref account) => account.balance,
             Account::HTLC(ref account) => account.balance,
             Account::Staking(ref account) => account.balance,
-            _ => {
-                unreachable!()
+            Account::StakingValidator(ref account) => account.balance,
+            Account::StakingValidatorsStaker(_) => {
+                unimplemented!()
             }
+            Account::StakingStaker(ref account) => account.active_stake + account.inactive_stake,
         }
     }
 
@@ -95,6 +97,9 @@ impl AccountTransactionInteraction for Account {
                 block_time,
             ),
             AccountType::Staking => Err(AccountError::InvalidForRecipient),
+            _ => {
+                unreachable!()
+            }
         }
     }
 
@@ -134,6 +139,9 @@ impl AccountTransactionInteraction for Account {
                 block_height,
                 block_time,
             ),
+            _ => {
+                unreachable!()
+            }
         }
     }
 
@@ -178,6 +186,9 @@ impl AccountTransactionInteraction for Account {
                 block_time,
                 receipt,
             ),
+            _ => {
+                unreachable!()
+            }
         }
     }
 
@@ -217,6 +228,9 @@ impl AccountTransactionInteraction for Account {
                 block_height,
                 block_time,
             ),
+            _ => {
+                unreachable!()
+            }
         }
     }
 
@@ -261,6 +275,9 @@ impl AccountTransactionInteraction for Account {
                 block_time,
                 receipt,
             ),
+            _ => {
+                unreachable!()
+            }
         }
     }
 }
@@ -311,6 +328,9 @@ impl AccountInherentInteraction for Account {
                 block_height,
                 block_time,
             ),
+            _ => {
+                unreachable!()
+            }
         }
     }
 
@@ -364,6 +384,9 @@ impl AccountInherentInteraction for Account {
                 block_time,
                 receipt,
             ),
+            _ => {
+                unreachable!()
+            }
         }
     }
 }
@@ -386,7 +409,6 @@ impl Serialize for Account {
             Account::Staking(ref account) => {
                 size += Serialize::serialize(&account, writer)?;
             }
-
             Account::StakingValidator(ref account) => {
                 size += Serialize::serialize(&account, writer)?;
             }
@@ -452,6 +474,18 @@ impl Deserialize for Account {
             AccountType::Staking => {
                 let account: StakingContract = Deserialize::deserialize(reader)?;
                 Ok(Account::Staking(account))
+            }
+            AccountType::StakingValidator => {
+                let account: Validator = Deserialize::deserialize(reader)?;
+                Ok(Account::StakingValidator(account))
+            }
+            AccountType::StakingValidatorsStaker => {
+                let account: Address = Deserialize::deserialize(reader)?;
+                Ok(Account::StakingValidatorsStaker(account))
+            }
+            AccountType::StakingStaker => {
+                let account: Staker = Deserialize::deserialize(reader)?;
+                Ok(Account::StakingStaker(account))
             }
         }
     }

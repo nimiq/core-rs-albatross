@@ -6,18 +6,18 @@ use beserial::{
     SerializingError, WriteBytesExt,
 };
 use nimiq_collections::BitSet;
-use nimiq_database::Transaction as DBTransaction;
+use nimiq_database::{Transaction as DBTransaction, WriteTransaction};
 use nimiq_keys::Address;
 use nimiq_primitives::slots::{Validators, ValidatorsBuilder};
 use nimiq_primitives::{coin::Coin, policy};
 use nimiq_trie::key_nibbles::KeyNibbles;
 use nimiq_vrf::{AliasMethod, VrfSeed, VrfUseCase};
-pub use receipts::*;
-pub use staker::Staker;
-pub use validator::Validator;
 
 use crate::{Account, AccountsTree};
 
+pub use receipts::*;
+pub use staker::Staker;
+pub use validator::Validator;
 mod receipts;
 mod staker;
 mod traits;
@@ -29,7 +29,7 @@ mod validator;
 /// different account types. Each different account type is intended to store a different piece of
 /// data concerning the staking contract. By having the path to each account you can navigate the
 /// staking contract subtrie. The subtrie has the following format:
-///
+/**
 ///     STAKING_CONTRACT_ADDRESS
 ///         |--> PATH_CONTRACT_MAIN: Staking(StakingContract)
 ///         |
@@ -41,7 +41,7 @@ mod validator;
 ///         |
 ///         |--> PATH_STAKERS_LIST
 ///                 |--> STAKER_ADDRESS: StakingStaker(Staker)
-///
+*/
 /// So, for example, if you want to get the validator with a given address then you just fetch the
 /// node with key STAKING_CONTRACT_ADDRESS||PATH_VALIDATORS_LIST||VALIDATOR_ADDRESS||PATH_VALIDATOR_MAIN
 /// from the AccountsTrie (|| means concatenation).
@@ -51,7 +51,7 @@ mod validator;
 ///       the information relative to the Validator and a list of stakers that are validating for
 ///       this validator (we store only the staker address).
 ///     - A list of Stakers, with each Staker struct containing all information about a staker.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct StakingContract {
     // The total amount of coins staked (also includes validators deposits).
     pub balance: Coin,
@@ -215,6 +215,17 @@ impl StakingContract {
                 unreachable!()
             }
         }
+    }
+
+    /// Creates a new Staking contract into the given accounts tree.
+    pub fn create(accounts_tree: &AccountsTree, db_txn: &mut WriteTransaction) {
+        trace!("Trying to put the staking contract in the accounts tree.");
+
+        accounts_tree.put(
+            db_txn,
+            &StakingContract::get_key_staking_contract(),
+            Account::Staking(StakingContract::default()),
+        )
     }
 
     /// Given a seed, it randomly distributes the validator slots across all validators. It is
