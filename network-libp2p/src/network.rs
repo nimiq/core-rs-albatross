@@ -370,44 +370,37 @@ impl Network {
                         events_tx.send(event).ok();
                     }
                     NimiqEvent::Dht(event) => {
-                        match event {
-                            KademliaEvent::QueryResult { id, result, .. } => {
-                                match result {
-                                    QueryResult::GetRecord(result) => {
-                                        if let Some(output) = state.dht_gets.remove(&id) {
-                                            let result = result.map_err(Into::into).and_then(
-                                                |GetRecordOk { mut records }| {
-                                                    // TODO: What do we do, if we get multiple records?
-                                                    let data_opt =
-                                                        records.pop().map(|r| r.record.value);
-                                                    Ok(data_opt)
-                                                },
-                                            );
-                                            output.send(result).ok();
-                                        } else {
-                                            tracing::warn!(query_id = ?id, "GetRecord query result for unknown query ID");
-                                        }
+                        if let KademliaEvent::QueryResult { id, result, .. } = event {
+                            match result {
+                                QueryResult::GetRecord(result) => {
+                                    if let Some(output) = state.dht_gets.remove(&id) {
+                                        let result = result.map_err(Into::into).map(
+                                            |GetRecordOk { mut records }| {
+                                                // TODO: What do we do, if we get multiple records?
+                                                records.pop().map(|r| r.record.value)
+                                            },
+                                        );
+                                        output.send(result).ok();
+                                    } else {
+                                        tracing::warn!(query_id = ?id, "GetRecord query result for unknown query ID");
                                     }
-                                    QueryResult::PutRecord(result) => {
-                                        // dht_put resolved
-                                        if let Some(output) = state.dht_puts.remove(&id) {
-                                            output
-                                                .send(result.map(|_| ()).map_err(Into::into))
-                                                .ok();
-                                        } else {
-                                            tracing::warn!(query_id = ?id, "PutRecord query result for unknown query ID");
-                                        }
-                                    }
-                                    QueryResult::Bootstrap(result) => match result {
-                                        Ok(result) => {
-                                            tracing::debug!(result = ?result, "DHT bootstrap successful")
-                                        }
-                                        Err(e) => tracing::error!("DHT bootstrap error: {:?}", e),
-                                    },
-                                    _ => {}
                                 }
+                                QueryResult::PutRecord(result) => {
+                                    // dht_put resolved
+                                    if let Some(output) = state.dht_puts.remove(&id) {
+                                        output.send(result.map(|_| ()).map_err(Into::into)).ok();
+                                    } else {
+                                        tracing::warn!(query_id = ?id, "PutRecord query result for unknown query ID");
+                                    }
+                                }
+                                QueryResult::Bootstrap(result) => match result {
+                                    Ok(result) => {
+                                        tracing::debug!(result = ?result, "DHT bootstrap successful")
+                                    }
+                                    Err(e) => tracing::error!("DHT bootstrap error: {:?}", e),
+                                },
+                                _ => {}
                             }
-                            _ => {}
                         }
                     }
                     NimiqEvent::Gossip(event) => match event {
@@ -536,7 +529,7 @@ impl Network {
                 state.dht_gets.insert(query_id, output);
             }
             NetworkAction::DhtPut { key, value, output } => {
-                let local_peer_id = Swarm::local_peer_id(&swarm);
+                let local_peer_id = Swarm::local_peer_id(swarm);
 
                 let record = Record {
                     key: key.into(),

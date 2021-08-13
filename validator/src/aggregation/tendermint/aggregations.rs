@@ -208,7 +208,7 @@ impl<N: ValidatorNetwork + 'static> Stream for TendermintAggregations<N> {
                             .future_aggregations
                             .entry(message.tag.round_number)
                             .and_modify(|bitset| *bitset |= message.update.aggregate.contributors())
-                            .or_insert(message.update.aggregate.contributors())
+                            .or_insert_with(|| message.update.aggregate.contributors())
                             .clone();
                         // now check if that suffices for a f+1 contributor weight
                         if let Some(weight) =
@@ -230,12 +230,20 @@ impl<N: ValidatorNetwork + 'static> Stream for TendermintAggregations<N> {
                     );
                 }
             }
-            //else {
-            // Poll::Ready(None) means the stream has terminated, which is likelt the network having droped.
-            // Try and reconnect but also log an error
-            // error!("Networks receive from all returned Poll::Ready(None)");
-            // return Poll::Ready(None);
-            //}
+            /*
+            The code inside the `else {}` was commented before, so the `else {}` case was not doing anything anymore,
+            which means it made sense to refactor this from a `match` to an `if let`. I'm leaving the code here in case
+            the person who originally commented the code inside the `else {}` may need it in the future.
+
+            ```
+            else {
+             Poll::Ready(None) means the stream has terminated, which is likelt the network having droped.
+             Try and reconnect but also log an error
+             error!("Networks receive from all returned Poll::Ready(None)");
+             return Poll::Ready(None);
+            }
+            ```
+            */
         }
         // after that return whatever combined_aggregation_streams returns
         match self.combined_aggregation_streams.poll_next_unpin(cx) {
