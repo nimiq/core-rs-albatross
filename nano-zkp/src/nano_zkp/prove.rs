@@ -94,6 +94,7 @@ impl NanoZKP {
         let final_pk_tree_root = pk_tree_construct(final_pks.clone());
 
         // Start generating proofs for PKTree level 5.
+        #[allow(clippy::needless_range_loop)]
         for i in 0..32 {
             if proof_caching && Path::new(&format!("proofs/pk_tree_5_{}.bin", i)).exists() {
                 continue;
@@ -658,6 +659,7 @@ impl NanoZKP {
         for i in 0..2 {
             let mut agg_pk = G2MNT6::zero();
 
+            #[allow(clippy::needless_range_loop)]
             for j in i * SLOTS as usize / 2..(i + 1) * SLOTS as usize / 2 {
                 if block.signer_bitmap[j] {
                     agg_pk += initial_pks[j];
