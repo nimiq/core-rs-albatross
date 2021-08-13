@@ -180,7 +180,7 @@ where
 
                 // Decode the header: 16 bit length big-endian
                 // This will also advance the read position after the header.
-                let header = match Deserialize::deserialize_from_vec(&self_projected.buffer) {
+                let header = match Deserialize::deserialize_from_vec(self_projected.buffer) {
                     Ok(header) => header,
                     Err(e) => return Poll::Ready(Some(Err(e))),
                 };

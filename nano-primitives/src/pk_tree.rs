@@ -28,7 +28,7 @@ pub fn pk_tree_construct(public_keys: Vec<G2Projective>) -> Vec<u8> {
     // Serialize the public keys into bits.
     let bits: Vec<bool> = public_keys
         .par_iter()
-        .map(|pk| bytes_to_bits(&serialize_g2_mnt6(&pk)))
+        .map(|pk| bytes_to_bits(&serialize_g2_mnt6(pk)))
         .flatten()
         .collect();
 
