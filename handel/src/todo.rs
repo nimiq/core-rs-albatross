@@ -116,79 +116,71 @@ impl<C: AggregatableContribution, E: Evaluator<C>> Stream for TodoList<C, E> {
         // Scan the input for better todos. loop exits once the input has run out of LevelUpdates for now.
         // Note that computations are limited to the bare minimum. No Verification in particular.
         // As Verification is very computationally expensive it should only be done for TodoItems with the highest score.
-        while let Poll::Ready(msg) = self.input_stream.poll_next_unpin(cx) {
-            match msg {
-                // The input has ended, i.e. there is no producer left.
-                // In testcases that could mean the other instances have completed their aggreagtions and droped their network instances.
-                // In reality this should never happen as the network should not terminate those streams, but try to aquire new Peers in this situation.
-                // Panic here is viable, but makes testing a bit harder.
-                // TODO more robust handling of this case, as the aggregation might not be able to finish here (depending on what todos are left).
-                None => break,
+        while let Poll::Ready(Some(msg)) = self.input_stream.poll_next_unpin(cx) {
+            //TODO the case where the msg is None is not being handled which could mean that:
+            // The input has ended, i.e. there is no producer left.
+            // In testcases that could mean the other instances have completed their aggreagtions and droped their network instances.
+            // In reality this should never happen as the network should not terminate those streams, but try to aquire new Peers in this situation.
+            // Panic here is viable, but makes testing a bit harder.
+            // TODO more robust handling of this case, as the aggregation might not be able to finish here (depending on what todos are left).
 
-                // A new LevelUpdate is available.
-                Some(msg) => {
-                    if self
-                        .evaluator
-                        .level_contains_id(msg.level as usize, msg.origin as usize)
-                    {
-                        // Every LevelUpdates contains an aggregate which can be turned into a TodoItem
-                        let aggregate_todo = TodoItem {
-                            contribution: msg.aggregate,
-                            level: msg.level as usize,
-                        };
-                        // score the newly created TodoItem for the aggregate of the LevelUpdate
-                        let score = aggregate_todo.evaluate(Arc::clone(&self.evaluator));
-                        trace!("New todo with score: {}", &score);
-
-                        // TodoItems with a score of 0 are discarded (meaning not added to the retained set of TodoItems).
-                        if score > 0 {
-                            if score > best_score {
-                                // If the score is a new best remember the score and put the former best item into the list.
-                                best_score = score;
-                                if let Some(best_todo) = best_todo {
-                                    self.list.insert(best_todo);
-                                    // self.list.push(best_todo); // TODO: dedupe!
-                                }
-                                best_todo = Some(aggregate_todo);
-                            } else {
-                                // If the score is not a new best put the TodoItem in the list.
-                                self.list.insert(aggregate_todo);
-                                // self.list.push(aggregate_todo); // TODO: dedupe!
-                            }
+            // A new LevelUpdate is available when the msg is Some:
+            if self
+                .evaluator
+                .level_contains_id(msg.level as usize, msg.origin as usize)
+            {
+                // Every LevelUpdates contains an aggregate which can be turned into a TodoItem
+                let aggregate_todo = TodoItem {
+                    contribution: msg.aggregate,
+                    level: msg.level as usize,
+                };
+                // score the newly created TodoItem for the aggregate of the LevelUpdate
+                let score = aggregate_todo.evaluate(Arc::clone(&self.evaluator));
+                trace!("New todo with score: {}", &score);
+                // TodoItems with a score of 0 are discarded (meaning not added to the retained set of TodoItems).
+                if score > 0 {
+                    if score > best_score {
+                        // If the score is a new best remember the score and put the former best item into the list.
+                        best_score = score;
+                        if let Some(best_todo) = best_todo {
+                            self.list.insert(best_todo);
+                            // self.list.push(best_todo); // TODO: dedupe!
                         }
-
-                        // Some of the Level Updates also contain an individual Signature. In which case it is also converted into a TodoItem
-                        if let Some(individual) = msg.individual {
-                            let individual_todo = TodoItem {
-                                contribution: individual,
-                                level: msg.level as usize,
-                            };
-
-                            // Score the newly created TodoItem for the individual contribution of the LevelUpdate
-                            let score = individual_todo.evaluate(Arc::clone(&self.evaluator));
-
-                            // TodoItems with a score of 0 are discarded (meaning not added to the retained set of TodoItems).
-                            if score > 0 {
-                                if score > best_score {
-                                    // If the score is a new best remember the score and put the former best item into the list.
-                                    best_score = score;
-                                    if let Some(best_todo) = best_todo {
-                                        self.list.insert(best_todo);
-                                    }
-                                    best_todo = Some(individual_todo);
-                                } else {
-                                    // If the score is not a new best put the TodoItem in the list.
-                                    self.list.insert(individual_todo);
-                                }
-                            }
-                        }
+                        best_todo = Some(aggregate_todo);
                     } else {
-                        debug!(
-                            "Sender of update :{} is not on level {}",
-                            msg.origin, msg.level
-                        );
+                        // If the score is not a new best put the TodoItem in the list.
+                        self.list.insert(aggregate_todo);
+                        // self.list.push(aggregate_todo); // TODO: dedupe!
                     }
                 }
+                // Some of the Level Updates also contain an individual Signature. In which case it is also converted into a TodoItem
+                if let Some(individual) = msg.individual {
+                    let individual_todo = TodoItem {
+                        contribution: individual,
+                        level: msg.level as usize,
+                    };
+                    // Score the newly created TodoItem for the individual contribution of the LevelUpdate
+                    let score = individual_todo.evaluate(Arc::clone(&self.evaluator));
+                    // TodoItems with a score of 0 are discarded (meaning not added to the retained set of TodoItems).
+                    if score > 0 {
+                        if score > best_score {
+                            // If the score is a new best remember the score and put the former best item into the list.
+                            best_score = score;
+                            if let Some(best_todo) = best_todo {
+                                self.list.insert(best_todo);
+                            }
+                            best_todo = Some(individual_todo);
+                        } else {
+                            // If the score is not a new best put the TodoItem in the list.
+                            self.list.insert(individual_todo);
+                        }
+                    }
+                }
+            } else {
+                debug!(
+                    "Sender of update :{} is not on level {}",
+                    msg.origin, msg.level
+                );
             }
         }
 

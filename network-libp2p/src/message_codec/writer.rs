@@ -12,7 +12,7 @@ use beserial::{Serialize, SerializingError};
 
 use super::header::Header;
 
-fn write_from_buf<'w, W>(
+fn write_from_buf<W>(
     inner: &mut W,
     buffer: &mut BytesMut,
     cx: &mut Context,
