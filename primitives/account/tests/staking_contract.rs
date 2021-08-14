@@ -224,7 +224,7 @@ fn create_validator_works() {
     let validator =
         StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
 
-    assert_eq!(validator.address, validator_address.clone());
+    assert_eq!(validator.address, validator_address);
     assert_eq!(validator.warm_key, warm_address);
     assert_eq!(validator.validator_key, hot_pk);
     assert_eq!(validator.reward_address, Address::from([3u8; 20]));
@@ -322,7 +322,7 @@ fn update_validator_works() {
     let validator =
         StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
 
-    assert_eq!(validator.address, validator_address.clone());
+    assert_eq!(validator.address, validator_address);
     assert_eq!(validator.warm_key, Address::from([88u8; 20]));
     assert_eq!(
         validator.validator_key,
@@ -353,7 +353,7 @@ fn update_validator_works() {
     let validator =
         StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
 
-    assert_eq!(validator.address, validator_address.clone());
+    assert_eq!(validator.address, validator_address);
     assert_eq!(validator.warm_key, old_warm_key);
     assert_eq!(validator.validator_key, old_validator_key);
     assert_eq!(validator.reward_address, old_reward_address);
@@ -418,7 +418,7 @@ fn retire_validator_works() {
     let validator =
         StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
 
-    assert_eq!(validator.address, validator_address.clone());
+    assert_eq!(validator.address, validator_address);
     assert_eq!(validator.warm_key, warm_key);
     assert_eq!(validator.validator_key, hot_pk);
     assert_eq!(validator.reward_address, validator_address);
@@ -483,7 +483,7 @@ fn retire_validator_works() {
     let validator =
         StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
 
-    assert_eq!(validator.address, validator_address.clone());
+    assert_eq!(validator.address, validator_address);
     assert_eq!(validator.warm_key, warm_key);
     assert_eq!(validator.validator_key, hot_pk);
     assert_eq!(validator.reward_address, validator_address);
@@ -554,10 +554,10 @@ fn reactivate_validator_works() {
     let validator =
         StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
 
-    assert_eq!(validator.address, validator_address.clone());
+    assert_eq!(validator.address, validator_address);
     assert_eq!(validator.warm_key, warm_key);
     assert_eq!(validator.validator_key, hot_pk);
-    assert_eq!(validator.reward_address, validator_address.clone());
+    assert_eq!(validator.reward_address, validator_address);
     assert_eq!(validator.signal_data, None);
     assert_eq!(
         validator.balance,
@@ -618,7 +618,7 @@ fn reactivate_validator_works() {
     let validator =
         StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
 
-    assert_eq!(validator.address, validator_address.clone());
+    assert_eq!(validator.address, validator_address);
     assert_eq!(validator.warm_key, warm_key);
     assert_eq!(validator.validator_key, hot_pk);
     assert_eq!(validator.reward_address, validator_address);
@@ -688,7 +688,7 @@ fn unpark_validator_works() {
     let receipt = UnparkValidatorReceipt {
         parked_set: true,
         current_disabled_slots: Some(slots.clone()),
-        previous_disabled_slots: Some(slots.clone()),
+        previous_disabled_slots: Some(slots),
     }
     .serialize_to_vec();
 
@@ -940,7 +940,7 @@ fn create_staker_works() {
 
     let staker = StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address).unwrap();
 
-    assert_eq!(staker.address, staker_address.clone());
+    assert_eq!(staker.address, staker_address);
     assert_eq!(staker.active_stake, Coin::from_u64_unchecked(150_000_000));
     assert_eq!(staker.inactive_stake, Coin::ZERO);
     assert_eq!(staker.delegation, Some(validator_address.clone()));
@@ -1044,7 +1044,7 @@ fn stake_works() {
 
     let staker = StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address).unwrap();
 
-    assert_eq!(staker.address, staker_address.clone());
+    assert_eq!(staker.address, staker_address);
     assert_eq!(staker.active_stake, Coin::from_u64_unchecked(300_000_000));
     assert_eq!(staker.inactive_stake, Coin::ZERO);
     assert_eq!(staker.delegation, Some(validator_address.clone()));
@@ -1120,7 +1120,7 @@ fn update_staker_works() {
         &mut db_txn,
         &other_validator_address,
         validator_address.clone(),
-        hot_pk.clone(),
+        hot_pk,
         other_validator_address.clone(),
         None,
     )
@@ -1148,7 +1148,7 @@ fn update_staker_works() {
 
     let staker = StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address).unwrap();
 
-    assert_eq!(staker.address, staker_address.clone());
+    assert_eq!(staker.address, staker_address);
     assert_eq!(staker.active_stake, Coin::from_u64_unchecked(150_000_000));
     assert_eq!(staker.inactive_stake, Coin::ZERO);
     assert_eq!(staker.delegation, Some(other_validator_address.clone()));
@@ -1220,7 +1220,7 @@ fn update_staker_works() {
 
     let staker = StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address).unwrap();
 
-    assert_eq!(staker.address, staker_address.clone());
+    assert_eq!(staker.address, staker_address);
     assert_eq!(staker.active_stake, Coin::from_u64_unchecked(150_000_000));
     assert_eq!(staker.inactive_stake, Coin::ZERO);
     assert_eq!(staker.delegation, None);
@@ -1300,7 +1300,7 @@ fn retire_staker_works() {
 
     let staker = StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address).unwrap();
 
-    assert_eq!(staker.address, staker_address.clone());
+    assert_eq!(staker.address, staker_address);
     assert_eq!(staker.active_stake, Coin::from_u64_unchecked(50_000_000));
     assert_eq!(staker.inactive_stake, Coin::from_u64_unchecked(100_000_000));
     assert_eq!(staker.delegation, Some(validator_address.clone()));
@@ -1338,7 +1338,7 @@ fn retire_staker_works() {
 
     let staker = StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address).unwrap();
 
-    assert_eq!(staker.address, staker_address.clone());
+    assert_eq!(staker.address, staker_address);
     assert_eq!(staker.active_stake, Coin::from_u64_unchecked(150_000_000));
     assert_eq!(staker.inactive_stake, Coin::ZERO);
     assert_eq!(staker.delegation, Some(validator_address.clone()));
@@ -1396,7 +1396,7 @@ fn reactivate_staker_works() {
 
     let staker = StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address).unwrap();
 
-    assert_eq!(staker.address, staker_address.clone());
+    assert_eq!(staker.address, staker_address);
     assert_eq!(staker.active_stake, Coin::from_u64_unchecked(100_000_000));
     assert_eq!(staker.inactive_stake, Coin::from_u64_unchecked(50_000_000));
     assert_eq!(staker.delegation, Some(validator_address.clone()));
@@ -1427,7 +1427,7 @@ fn reactivate_staker_works() {
 
     let staker = StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address).unwrap();
 
-    assert_eq!(staker.address, staker_address.clone());
+    assert_eq!(staker.address, staker_address);
     assert_eq!(staker.active_stake, Coin::ZERO);
     assert_eq!(staker.inactive_stake, Coin::from_u64_unchecked(150_000_000));
     assert_eq!(staker.delegation, Some(validator_address.clone()));
@@ -1513,7 +1513,7 @@ fn unstake_works() {
 
     let staker = StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address).unwrap();
 
-    assert_eq!(staker.address, staker_address.clone());
+    assert_eq!(staker.address, staker_address);
     assert_eq!(staker.active_stake, Coin::from_u64_unchecked(50_000_000));
     assert_eq!(staker.inactive_stake, Coin::ZERO);
     assert_eq!(staker.delegation, Some(validator_address.clone()));
@@ -1653,7 +1653,7 @@ fn unstake_works() {
 
     let staker = StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address).unwrap();
 
-    assert_eq!(staker.address, staker_address.clone());
+    assert_eq!(staker.address, staker_address);
     assert_eq!(staker.active_stake, Coin::ZERO);
     assert_eq!(staker.inactive_stake, Coin::from_u64_unchecked(50_000_000));
     assert_eq!(staker.delegation, Some(validator_address.clone()));
@@ -1727,7 +1727,7 @@ fn deduct_fees_works() {
 
     let staker = StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address).unwrap();
 
-    assert_eq!(staker.address, staker_address.clone());
+    assert_eq!(staker.address, staker_address);
     assert_eq!(staker.active_stake, Coin::ZERO);
     assert_eq!(staker.inactive_stake, Coin::from_u64_unchecked(75_000_000));
     assert_eq!(staker.delegation, Some(validator_address.clone()));
@@ -1765,7 +1765,7 @@ fn deduct_fees_works() {
 
     let staker = StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address).unwrap();
 
-    assert_eq!(staker.address, staker_address.clone());
+    assert_eq!(staker.address, staker_address);
     assert_eq!(staker.active_stake, Coin::from_u64_unchecked(75_000_000));
     assert_eq!(staker.inactive_stake, Coin::from_u64_unchecked(75_000_000));
     assert_eq!(staker.delegation, Some(validator_address.clone()));
@@ -1820,7 +1820,7 @@ fn deduct_fees_works() {
 
     let staker = StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address).unwrap();
 
-    assert_eq!(staker.address, staker_address.clone());
+    assert_eq!(staker.address, staker_address);
     assert_eq!(staker.active_stake, Coin::from_u64_unchecked(75_000_000));
     assert_eq!(staker.inactive_stake, Coin::ZERO);
     assert_eq!(staker.delegation, Some(validator_address.clone()));
@@ -1858,7 +1858,7 @@ fn deduct_fees_works() {
 
     let staker = StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address).unwrap();
 
-    assert_eq!(staker.address, staker_address.clone());
+    assert_eq!(staker.address, staker_address);
     assert_eq!(staker.active_stake, Coin::from_u64_unchecked(75_000_000));
     assert_eq!(staker.inactive_stake, Coin::from_u64_unchecked(75_000_000));
     assert_eq!(staker.delegation, Some(validator_address.clone()));
@@ -1953,7 +1953,7 @@ fn deduct_fees_works() {
 
     let staker = StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address).unwrap();
 
-    assert_eq!(staker.address, staker_address.clone());
+    assert_eq!(staker.address, staker_address);
     assert_eq!(staker.active_stake, Coin::ZERO);
     assert_eq!(staker.inactive_stake, Coin::from_u64_unchecked(75_000_000));
     assert_eq!(staker.delegation, Some(validator_address.clone()));
@@ -2008,8 +2008,8 @@ fn make_sample_contract(
         accounts_tree,
         db_txn,
         &cold_address,
-        warm_address.clone(),
-        hot_pk.clone(),
+        warm_address,
+        hot_pk,
         cold_address.clone(),
         None,
     )

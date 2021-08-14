@@ -466,7 +466,7 @@ fn it_refuses_invalid_transaction() {
     accounts_tree.put(
         &mut db_txn,
         &KeyNibbles::from(&[1u8; 20][..]),
-        Account::Vesting(start_contract.clone()),
+        Account::Vesting(start_contract),
     );
 
     let mut tx = Transaction::new_basic(
