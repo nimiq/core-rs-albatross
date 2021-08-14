@@ -14,12 +14,16 @@ use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::policy;
-use nimiq_primitives::policy::{STAKING_CONTRACT_ADDRESS, VALIDATOR_DEPOSIT};
+use nimiq_primitives::policy::{
+    BATCH_LENGTH, EPOCH_LENGTH, STAKING_CONTRACT_ADDRESS, VALIDATOR_DEPOSIT,
+};
 
 use nimiq_transaction::account::staking_contract::{
     IncomingStakingTransactionData, OutgoingStakingTransactionProof,
 };
 
+use nimiq_collections::BitSet;
+use nimiq_primitives::slots::SlashedSlot;
 use nimiq_transaction::{SignatureProof, Transaction};
 use nimiq_utils::key_rng::SecureGenerate;
 use std::collections::BTreeSet;
@@ -1984,6 +1988,385 @@ fn deduct_fees_works() {
     );
 }
 
+#[test]
+fn zero_value_inherents_not_allowed() {
+    let env = VolatileEnvironment::new(10).unwrap();
+    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let mut db_txn = WriteTransaction::new(&env);
+
+    make_sample_contract(&accounts_tree, &mut db_txn, true);
+
+    let validator_address = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
+
+    let inherent = Inherent {
+        ty: InherentType::Slash,
+        target: validator_address,
+        value: Coin::ZERO,
+        data: vec![],
+    };
+
+    assert_eq!(
+        StakingContract::commit_inherent(&accounts_tree, &mut db_txn, &inherent, 2, 0),
+        Err(AccountError::InvalidInherent)
+    );
+}
+
+#[test]
+fn reward_inherents_not_allowed() {
+    let env = VolatileEnvironment::new(10).unwrap();
+    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let mut db_txn = WriteTransaction::new(&env);
+
+    make_sample_contract(&accounts_tree, &mut db_txn, true);
+
+    let validator_address = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
+
+    let inherent = Inherent {
+        ty: InherentType::Reward,
+        target: validator_address,
+        value: Coin::ZERO,
+        data: vec![],
+    };
+
+    assert_eq!(
+        StakingContract::commit_inherent(&accounts_tree, &mut db_txn, &inherent, 2, 0),
+        Err(AccountError::InvalidForTarget)
+    );
+}
+
+#[test]
+fn slash_inherents_work() {
+    let env = VolatileEnvironment::new(10).unwrap();
+    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let mut db_txn = WriteTransaction::new(&env);
+
+    make_sample_contract(&accounts_tree, &mut db_txn, true);
+
+    let validator_address = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
+
+    // Wrong data.
+    let inherent = Inherent {
+        ty: InherentType::Slash,
+        target: validator_address.clone(),
+        value: Coin::ZERO,
+        data: vec![],
+    };
+
+    assert_eq!(
+        StakingContract::commit_inherent(&accounts_tree, &mut db_txn, &inherent, 0, 0),
+        Err(AccountError::InvalidInherent)
+    );
+
+    // Prepare some data.
+    let slot = SlashedSlot {
+        slot: 0,
+        validator_address: validator_address.clone(),
+        event_block: 1,
+    };
+
+    let inherent = Inherent {
+        ty: InherentType::Slash,
+        target: Default::default(),
+        value: Coin::ZERO,
+        data: slot.serialize_to_vec(),
+    };
+
+    // Works in current epoch, current batch case.
+    let receipt = SlashReceipt {
+        newly_parked: true,
+        newly_disabled: true,
+        newly_lost_rewards: true,
+    }
+    .serialize_to_vec();
+
+    assert_eq!(
+        StakingContract::commit_inherent(&accounts_tree, &mut db_txn, &inherent, 1, 0),
+        Ok(Some(receipt.clone()))
+    );
+
+    let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &mut db_txn);
+
+    assert!(staking_contract.parked_set.contains(&validator_address));
+    assert!(staking_contract
+        .current_lost_rewards
+        .contains(slot.slot as usize));
+    assert!(!staking_contract
+        .previous_lost_rewards
+        .contains(slot.slot as usize));
+    assert!(staking_contract
+        .current_disabled_slots
+        .get(&validator_address)
+        .unwrap()
+        .contains(&slot.slot));
+    assert!(staking_contract
+        .previous_disabled_slots
+        .get(&validator_address)
+        .is_none());
+
+    revert_slash_inherent(
+        &accounts_tree,
+        &mut db_txn,
+        &inherent,
+        1,
+        Some(&receipt),
+        &validator_address,
+        slot.slot,
+    );
+
+    // Works in current epoch, previous batch case.
+    let receipt = SlashReceipt {
+        newly_parked: true,
+        newly_disabled: true,
+        newly_lost_rewards: true,
+    }
+    .serialize_to_vec();
+
+    assert_eq!(
+        StakingContract::commit_inherent(
+            &accounts_tree,
+            &mut db_txn,
+            &inherent,
+            1 + BATCH_LENGTH,
+            0
+        ),
+        Ok(Some(receipt.clone()))
+    );
+
+    let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &mut db_txn);
+
+    assert!(staking_contract.parked_set.contains(&validator_address));
+    assert!(!staking_contract
+        .current_lost_rewards
+        .contains(slot.slot as usize));
+    assert!(staking_contract
+        .previous_lost_rewards
+        .contains(slot.slot as usize));
+    assert!(staking_contract
+        .current_disabled_slots
+        .get(&validator_address)
+        .unwrap()
+        .contains(&slot.slot));
+    assert!(staking_contract
+        .previous_disabled_slots
+        .get(&validator_address)
+        .is_none());
+
+    revert_slash_inherent(
+        &accounts_tree,
+        &mut db_txn,
+        &inherent,
+        1 + BATCH_LENGTH,
+        Some(&receipt),
+        &validator_address,
+        slot.slot,
+    );
+
+    // Works in previous epoch, previous batch case.
+    let receipt = SlashReceipt {
+        newly_parked: true,
+        newly_disabled: false,
+        newly_lost_rewards: true,
+    }
+    .serialize_to_vec();
+
+    assert_eq!(
+        StakingContract::commit_inherent(
+            &accounts_tree,
+            &mut db_txn,
+            &inherent,
+            1 + EPOCH_LENGTH,
+            0
+        ),
+        Ok(Some(receipt.clone()))
+    );
+
+    let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &mut db_txn);
+
+    assert!(staking_contract.parked_set.contains(&validator_address));
+    assert!(!staking_contract
+        .current_lost_rewards
+        .contains(slot.slot as usize));
+    assert!(staking_contract
+        .previous_lost_rewards
+        .contains(slot.slot as usize));
+    assert!(staking_contract
+        .current_disabled_slots
+        .get(&validator_address)
+        .is_none());
+    assert!(staking_contract
+        .previous_disabled_slots
+        .get(&validator_address)
+        .is_none());
+
+    revert_slash_inherent(
+        &accounts_tree,
+        &mut db_txn,
+        &inherent,
+        1 + EPOCH_LENGTH,
+        Some(&receipt),
+        &validator_address,
+        slot.slot,
+    );
+}
+
+#[test]
+fn finalize_batch_inherents_work() {
+    let env = VolatileEnvironment::new(10).unwrap();
+    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let mut db_txn = WriteTransaction::new(&env);
+
+    make_sample_contract(&accounts_tree, &mut db_txn, true);
+
+    let validator_address = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
+
+    // Prepare the staking contract.
+    let mut staking_contract = StakingContract::get_staking_contract(&accounts_tree, &mut db_txn);
+
+    staking_contract.current_lost_rewards.insert(0);
+    staking_contract.previous_lost_rewards.insert(1);
+
+    accounts_tree.put(
+        &mut db_txn,
+        &StakingContract::get_key_staking_contract(),
+        Account::Staking(staking_contract),
+    );
+
+    // Wrong data.
+    let inherent = Inherent {
+        ty: InherentType::FinalizeBatch,
+        target: validator_address,
+        value: Coin::ZERO,
+        data: vec![123],
+    };
+
+    assert_eq!(
+        StakingContract::commit_inherent(&accounts_tree, &mut db_txn, &inherent, 0, 0),
+        Err(AccountError::InvalidInherent)
+    );
+
+    // Works in the valid case.
+    let inherent = Inherent {
+        ty: InherentType::FinalizeBatch,
+        target: Default::default(),
+        value: Coin::ZERO,
+        data: vec![],
+    };
+
+    assert_eq!(
+        StakingContract::commit_inherent(&accounts_tree, &mut db_txn, &inherent, 1, 0),
+        Ok(None)
+    );
+
+    let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &mut db_txn);
+
+    assert!(staking_contract.parked_set.is_empty());
+    assert!(staking_contract.current_lost_rewards.is_empty());
+    assert!(staking_contract.previous_lost_rewards.contains(0));
+    assert!(staking_contract.current_disabled_slots.is_empty());
+    assert!(staking_contract.previous_disabled_slots.is_empty());
+
+    // Cannot revert the inherent.
+    assert_eq!(
+        StakingContract::revert_inherent(&accounts_tree, &mut db_txn, &inherent, 1, 0, None),
+        Err(AccountError::InvalidForTarget)
+    );
+}
+
+#[test]
+fn finalize_epoch_inherents_work() {
+    let env = VolatileEnvironment::new(10).unwrap();
+    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let mut db_txn = WriteTransaction::new(&env);
+
+    make_sample_contract(&accounts_tree, &mut db_txn, true);
+
+    let validator_address = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
+
+    // Prepare the staking contract.
+    let mut staking_contract = StakingContract::get_staking_contract(&accounts_tree, &mut db_txn);
+
+    staking_contract
+        .parked_set
+        .insert(validator_address.clone());
+    staking_contract.current_lost_rewards.insert(0);
+    staking_contract.previous_lost_rewards.insert(1);
+    let mut set_c = BTreeSet::new();
+    set_c.insert(0);
+    staking_contract
+        .current_disabled_slots
+        .insert(validator_address.clone(), set_c.clone());
+    let mut set_p = BTreeSet::new();
+    set_p.insert(1);
+    staking_contract
+        .previous_disabled_slots
+        .insert(validator_address.clone(), set_p);
+
+    accounts_tree.put(
+        &mut db_txn,
+        &StakingContract::get_key_staking_contract(),
+        Account::Staking(staking_contract),
+    );
+
+    // Wrong data.
+    let inherent = Inherent {
+        ty: InherentType::FinalizeEpoch,
+        target: validator_address.clone(),
+        value: Coin::ZERO,
+        data: vec![123],
+    };
+
+    assert_eq!(
+        StakingContract::commit_inherent(&accounts_tree, &mut db_txn, &inherent, 0, 0),
+        Err(AccountError::InvalidInherent)
+    );
+
+    // Works in the valid case.
+    let inherent = Inherent {
+        ty: InherentType::FinalizeEpoch,
+        target: Default::default(),
+        value: Coin::ZERO,
+        data: vec![],
+    };
+
+    assert_eq!(
+        StakingContract::commit_inherent(&accounts_tree, &mut db_txn, &inherent, 1, 0),
+        Ok(None)
+    );
+
+    let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &mut db_txn);
+
+    assert!(!staking_contract
+        .active_validators
+        .contains_key(&validator_address));
+
+    assert!(staking_contract.parked_set.is_empty());
+
+    assert!(staking_contract.current_lost_rewards.is_empty());
+    let mut bitset = BitSet::new();
+    bitset.insert(0);
+    assert_eq!(staking_contract.previous_lost_rewards, bitset);
+
+    assert!(staking_contract.current_disabled_slots.is_empty());
+    assert_eq!(
+        staking_contract
+            .previous_disabled_slots
+            .get(&validator_address)
+            .unwrap(),
+        &set_c
+    );
+
+    let validator =
+        StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
+
+    assert_eq!(validator.inactivity_flag, Some(1));
+
+    // Cannot revert the inherent.
+    assert_eq!(
+        StakingContract::revert_inherent(&accounts_tree, &mut db_txn, &inherent, 1, 0, None),
+        Err(AccountError::InvalidForTarget)
+    );
+}
+
 fn make_empty_contract(accounts_tree: &AccountsTree, db_txn: &mut WriteTransaction) {
     StakingContract::create(accounts_tree, db_txn)
 }
@@ -2168,6 +2551,46 @@ fn make_deduct_fees_transaction(fee: u64, from_active_balance: bool) -> Transact
     tx.proof = proof.serialize_to_vec();
 
     tx
+}
+
+fn revert_slash_inherent(
+    accounts_tree: &AccountsTree,
+    db_txn: &mut WriteTransaction,
+    inherent: &Inherent,
+    block_height: u32,
+    receipt: Option<&Vec<u8>>,
+    validator_address: &Address,
+    slot: u16,
+) {
+    assert_eq!(
+        StakingContract::revert_inherent(
+            accounts_tree,
+            db_txn,
+            inherent,
+            block_height,
+            0,
+            receipt
+        ),
+        Ok(())
+    );
+
+    let staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
+
+    assert!(!staking_contract.parked_set.contains(validator_address));
+    assert!(!staking_contract
+        .current_lost_rewards
+        .contains(slot as usize));
+    assert!(!staking_contract
+        .previous_lost_rewards
+        .contains(slot as usize));
+    assert!(staking_contract
+        .current_disabled_slots
+        .get(validator_address)
+        .is_none());
+    assert!(staking_contract
+        .previous_disabled_slots
+        .get(validator_address)
+        .is_none());
 }
 
 fn bls_key_pair(sk: &str) -> BlsKeyPair {

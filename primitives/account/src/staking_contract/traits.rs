@@ -557,11 +557,11 @@ impl AccountInherentInteraction for StakingContract {
                         .previous_lost_rewards
                         .contains(slot.slot as usize);
 
-                    newly_disabled = false;
-
                     staking_contract
                         .previous_lost_rewards
                         .insert(slot.slot as usize);
+
+                    newly_disabled = false;
                 } else if policy::batch_at(slot.event_block) < policy::batch_at(block_height) {
                     newly_lost_rewards = !staking_contract
                         .previous_lost_rewards
