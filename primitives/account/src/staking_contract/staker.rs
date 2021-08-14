@@ -955,55 +955,7 @@ impl StakingContract {
 
         // Re-add or remove the staker entry, depending on remaining balance.
         if staker.active_stake.is_zero() && staker.inactive_stake.is_zero() {
-            trace!(
-                "Trying to remove staker with address {} in the accounts tree.",
-                staker_address.to_string(),
-            );
-
-            accounts_tree.remove(db_txn, &StakingContract::get_key_staker(staker_address));
-
-            // If necessary, also update the validator.
-            if let Some(validator_address) = &staker.delegation {
-                // Get the validator.
-                let mut validator = match StakingContract::get_validator(
-                    accounts_tree,
-                    db_txn,
-                    validator_address,
-                ) {
-                    Some(v) => v,
-                    None => {
-                        return Err(AccountError::NonExistentAddress {
-                            address: validator_address.clone(),
-                        });
-                    }
-                };
-
-                // Update it.
-                validator.num_stakers -= 1;
-
-                // Re-add the validator entry.
-                trace!(
-                    "Trying to put validator with address {} in the accounts tree.",
-                    validator_address.to_string(),
-                );
-
-                accounts_tree.put(
-                    db_txn,
-                    &StakingContract::get_key_validator(validator_address),
-                    Account::StakingValidator(validator),
-                );
-
-                // Remove the staker address from the validator.
-                accounts_tree.remove(
-                    db_txn,
-                    &StakingContract::get_key_validator_staker(validator_address, staker_address),
-                );
-            }
-
-            Ok(Some(DropStakerReceipt {
-                delegation: staker.delegation.clone(),
-                retire_time: staker.retire_time,
-            }))
+            StakingContract::drop_staker(accounts_tree, db_txn, &staker)
         } else {
             trace!(
                 "Trying to put staker with address {} in the accounts tree.",
@@ -1026,56 +978,17 @@ impl StakingContract {
         db_txn: &mut WriteTransaction,
         staker_address: &Address,
         value: Coin,
-        receipt: Option<DropStakerReceipt>,
+        receipt_opt: Option<DropStakerReceipt>,
     ) -> Result<(), AccountError> {
-        let mut staker = match receipt {
-            Some(x) => {
-                if let Some(validator_address) = &x.delegation {
-                    let mut validator = match StakingContract::get_validator(
-                        accounts_tree,
-                        db_txn,
-                        validator_address,
-                    ) {
-                        Some(v) => v,
-                        None => {
-                            return Err(AccountError::NonExistentAddress {
-                                address: validator_address.clone(),
-                            });
-                        }
-                    };
-
-                    validator.num_stakers += 1;
-
-                    trace!(
-                        "Trying to put validator with address {} in the accounts tree.",
-                        validator_address.to_string(),
-                    );
-
-                    accounts_tree.put(
-                        db_txn,
-                        &StakingContract::get_key_validator(validator_address),
-                        Account::StakingValidator(validator),
-                    );
-
-                    accounts_tree.put(
-                        db_txn,
-                        &StakingContract::get_key_validator_staker(
-                            validator_address,
-                            staker_address,
-                        ),
-                        Account::StakingValidatorsStaker(staker_address.clone()),
-                    );
-                }
-
-                Staker {
-                    address: staker_address.clone(),
-                    active_stake: Coin::ZERO,
-                    inactive_stake: Coin::ZERO,
-                    delegation: x.delegation,
-                    retire_time: x.retire_time,
-                }
+        let mut staker = match receipt_opt {
+            Some(receipt) => {
+                StakingContract::revert_drop_staker(accounts_tree, db_txn, staker_address, receipt)?
             }
-            None => StakingContract::get_staker(accounts_tree, db_txn, staker_address).unwrap(),
+            None => StakingContract::get_staker(accounts_tree, db_txn, staker_address).ok_or(
+                AccountError::NonExistentAddress {
+                    address: staker_address.clone(),
+                },
+            )?,
         };
 
         staker.inactive_stake = Account::balance_add(staker.inactive_stake, value)?;
@@ -1180,55 +1093,7 @@ impl StakingContract {
 
         // Re-add or remove the staker entry, depending on remaining balance.
         if staker.active_stake.is_zero() && staker.inactive_stake.is_zero() {
-            trace!(
-                "Trying to remove staker with address {} in the accounts tree.",
-                staker_address.to_string(),
-            );
-
-            accounts_tree.remove(db_txn, &StakingContract::get_key_staker(staker_address));
-
-            // If necessary, also update the validator.
-            if let Some(validator_address) = &staker.delegation {
-                // Get the validator.
-                let mut validator = match StakingContract::get_validator(
-                    accounts_tree,
-                    db_txn,
-                    validator_address,
-                ) {
-                    Some(v) => v,
-                    None => {
-                        return Err(AccountError::NonExistentAddress {
-                            address: validator_address.clone(),
-                        });
-                    }
-                };
-
-                // Update it.
-                validator.num_stakers -= 1;
-
-                // Re-add the validator entry.
-                trace!(
-                    "Trying to put validator with address {} in the accounts tree.",
-                    validator_address.to_string(),
-                );
-
-                accounts_tree.put(
-                    db_txn,
-                    &StakingContract::get_key_validator(validator_address),
-                    Account::StakingValidator(validator),
-                );
-
-                // Remove the staker address from the validator.
-                accounts_tree.remove(
-                    db_txn,
-                    &StakingContract::get_key_validator_staker(validator_address, staker_address),
-                );
-            }
-
-            Ok(Some(DropStakerReceipt {
-                delegation: staker.delegation.clone(),
-                retire_time: staker.retire_time,
-            }))
+            StakingContract::drop_staker(accounts_tree, db_txn, &staker)
         } else {
             trace!(
                 "Trying to put staker with address {} in the accounts tree.",
@@ -1252,56 +1117,17 @@ impl StakingContract {
         staker_address: &Address,
         from_active_balance: bool,
         value: Coin,
-        receipt: Option<DropStakerReceipt>,
+        receipt_opt: Option<DropStakerReceipt>,
     ) -> Result<(), AccountError> {
-        let mut staker = match receipt {
-            Some(x) => {
-                if let Some(validator_address) = &x.delegation {
-                    let mut validator = match StakingContract::get_validator(
-                        accounts_tree,
-                        db_txn,
-                        validator_address,
-                    ) {
-                        Some(v) => v,
-                        None => {
-                            return Err(AccountError::NonExistentAddress {
-                                address: validator_address.clone(),
-                            });
-                        }
-                    };
-
-                    validator.num_stakers += 1;
-
-                    trace!(
-                        "Trying to put validator with address {} in the accounts tree.",
-                        validator_address.to_string(),
-                    );
-
-                    accounts_tree.put(
-                        db_txn,
-                        &StakingContract::get_key_validator(validator_address),
-                        Account::StakingValidator(validator),
-                    );
-
-                    accounts_tree.put(
-                        db_txn,
-                        &StakingContract::get_key_validator_staker(
-                            validator_address,
-                            staker_address,
-                        ),
-                        Account::StakingValidatorsStaker(staker_address.clone()),
-                    );
-                }
-
-                Staker {
-                    address: staker_address.clone(),
-                    active_stake: Coin::ZERO,
-                    inactive_stake: Coin::ZERO,
-                    delegation: x.delegation,
-                    retire_time: x.retire_time,
-                }
+        let mut staker = match receipt_opt {
+            Some(receipt) => {
+                StakingContract::revert_drop_staker(accounts_tree, db_txn, staker_address, receipt)?
             }
-            None => StakingContract::get_staker(accounts_tree, db_txn, staker_address).unwrap(),
+            None => StakingContract::get_staker(accounts_tree, db_txn, staker_address).ok_or(
+                AccountError::NonExistentAddress {
+                    address: staker_address.clone(),
+                },
+            )?,
         };
 
         if from_active_balance {
@@ -1362,5 +1188,108 @@ impl StakingContract {
         );
 
         Ok(())
+    }
+
+    /// Drops a staker. This isn't an actual transaction, it's just a helper function to avoid code
+    /// duplication in the unstake and deduct fees transactions.
+    fn drop_staker(
+        accounts_tree: &AccountsTree,
+        db_txn: &mut WriteTransaction,
+        staker: &Staker,
+    ) -> Result<Option<DropStakerReceipt>, AccountError> {
+        trace!(
+            "Trying to remove staker with address {} in the accounts tree.",
+            &staker.address.to_string(),
+        );
+
+        accounts_tree.remove(db_txn, &StakingContract::get_key_staker(&staker.address));
+
+        // If necessary, also update the validator.
+        if let Some(validator_address) = &staker.delegation {
+            // Get the validator.
+            let mut validator =
+                match StakingContract::get_validator(accounts_tree, db_txn, validator_address) {
+                    Some(v) => v,
+                    None => {
+                        return Err(AccountError::NonExistentAddress {
+                            address: validator_address.clone(),
+                        });
+                    }
+                };
+
+            // Update it.
+            validator.num_stakers -= 1;
+
+            // Re-add the validator entry.
+            trace!(
+                "Trying to put validator with address {} in the accounts tree.",
+                validator_address.to_string(),
+            );
+
+            accounts_tree.put(
+                db_txn,
+                &StakingContract::get_key_validator(validator_address),
+                Account::StakingValidator(validator),
+            );
+
+            // Remove the staker address from the validator.
+            accounts_tree.remove(
+                db_txn,
+                &StakingContract::get_key_validator_staker(validator_address, &staker.address),
+            );
+        }
+
+        Ok(Some(DropStakerReceipt {
+            delegation: staker.delegation.clone(),
+            retire_time: staker.retire_time,
+        }))
+    }
+
+    /// Reverts dropping a staker. This isn't an actual transaction, it's just a helper function to
+    /// avoid code duplication in the unstake and deduct fees transactions.
+    fn revert_drop_staker(
+        accounts_tree: &AccountsTree,
+        db_txn: &mut WriteTransaction,
+        staker_address: &Address,
+        receipt: DropStakerReceipt,
+    ) -> Result<Staker, AccountError> {
+        if let Some(validator_address) = &receipt.delegation {
+            let mut validator =
+                match StakingContract::get_validator(accounts_tree, db_txn, validator_address) {
+                    Some(v) => v,
+                    None => {
+                        return Err(AccountError::NonExistentAddress {
+                            address: validator_address.clone(),
+                        });
+                    }
+                };
+
+            validator.num_stakers += 1;
+
+            trace!(
+                "Trying to put validator with address {} in the accounts tree.",
+                validator_address.to_string(),
+            );
+
+            accounts_tree.put(
+                db_txn,
+                &StakingContract::get_key_validator(validator_address),
+                Account::StakingValidator(validator),
+            );
+
+            accounts_tree.put(
+                db_txn,
+                &StakingContract::get_key_validator_staker(validator_address, staker_address),
+                Account::StakingValidatorsStaker(staker_address.clone()),
+            );
+        }
+
+        Ok(Staker {
+            address: staker_address.clone(),
+            active_stake: Coin::ZERO,
+            inactive_stake: Coin::ZERO,
+            delegation: receipt.delegation,
+            retire_time: receipt.retire_time,
+        })
     }
 }
