@@ -193,6 +193,8 @@ fn create_validator_works() {
 
     let cold_keypair = ed25519_key_pair(VALIDATOR_PRIVATE_KEY);
 
+    let validator_address = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
+
     let warm_address = Address::from_any_str(VALIDATOR_WARM_KEY).unwrap();
 
     let hot_pk =
@@ -219,17 +221,10 @@ fn create_validator_works() {
         Ok(None)
     );
 
-    let validator = StakingContract::get_validator(
-        &accounts_tree,
-        &mut db_txn,
-        &Address::from_any_str(VALIDATOR_ADDRESS).unwrap(),
-    )
-    .unwrap();
+    let validator =
+        StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
 
-    assert_eq!(
-        validator.address,
-        Address::from_any_str(VALIDATOR_ADDRESS).unwrap()
-    );
+    assert_eq!(validator.address, validator_address.clone());
     assert_eq!(validator.warm_key, warm_address);
     assert_eq!(validator.validator_key, hot_pk);
     assert_eq!(validator.reward_address, Address::from([3u8; 20]));
@@ -241,11 +236,18 @@ fn create_validator_works() {
     assert_eq!(validator.num_stakers, 0);
     assert_eq!(validator.inactivity_flag, None);
 
+    let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &mut db_txn);
+
+    assert_eq!(
+        staking_contract.balance,
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT)
+    );
+
     // Doesn't work when the validator already exists.
     assert_eq!(
         StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
         Err(AccountError::AlreadyExistentAddress {
-            address: Address::from_any_str(VALIDATOR_ADDRESS).unwrap()
+            address: validator_address.clone()
         })
     );
 
@@ -256,13 +258,13 @@ fn create_validator_works() {
     );
 
     assert_eq!(
-        StakingContract::get_validator(
-            &accounts_tree,
-            &mut db_txn,
-            &Address::from_any_str(VALIDATOR_ADDRESS).unwrap(),
-        ),
+        StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address,),
         None
     );
+
+    let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &mut db_txn);
+
+    assert_eq!(staking_contract.balance, Coin::ZERO);
 }
 
 #[test]
@@ -272,6 +274,8 @@ fn update_validator_works() {
     let mut db_txn = WriteTransaction::new(&env);
 
     make_sample_contract(&accounts_tree, &mut db_txn, true);
+
+    let validator_address = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
 
     let cold_keypair = ed25519_key_pair(VALIDATOR_PRIVATE_KEY);
 
@@ -315,17 +319,10 @@ fn update_validator_works() {
         Ok(Some(receipt.clone()))
     );
 
-    let validator = StakingContract::get_validator(
-        &accounts_tree,
-        &mut db_txn,
-        &Address::from_any_str(VALIDATOR_ADDRESS).unwrap(),
-    )
-    .unwrap();
+    let validator =
+        StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
 
-    assert_eq!(
-        validator.address,
-        Address::from_any_str(VALIDATOR_ADDRESS).unwrap()
-    );
+    assert_eq!(validator.address, validator_address.clone());
     assert_eq!(validator.warm_key, Address::from([88u8; 20]));
     assert_eq!(
         validator.validator_key,
@@ -353,17 +350,10 @@ fn update_validator_works() {
         Ok(())
     );
 
-    let validator = StakingContract::get_validator(
-        &accounts_tree,
-        &mut db_txn,
-        &Address::from_any_str(VALIDATOR_ADDRESS).unwrap(),
-    )
-    .unwrap();
+    let validator =
+        StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
 
-    assert_eq!(
-        validator.address,
-        Address::from_any_str(VALIDATOR_ADDRESS).unwrap()
-    );
+    assert_eq!(validator.address, validator_address.clone());
     assert_eq!(validator.warm_key, old_warm_key);
     assert_eq!(validator.validator_key, old_validator_key);
     assert_eq!(validator.reward_address, old_reward_address);
@@ -384,7 +374,7 @@ fn retire_validator_works() {
 
     make_sample_contract(&accounts_tree, &mut db_txn, true);
 
-    let cold_key = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
+    let validator_address = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
 
     let cold_keypair = ed25519_key_pair(VALIDATOR_PRIVATE_KEY);
 
@@ -398,7 +388,9 @@ fn retire_validator_works() {
     // First, park the validator.
     let mut staking_contract = StakingContract::get_staking_contract(&accounts_tree, &mut db_txn);
 
-    staking_contract.parked_set.insert(cold_key.clone());
+    staking_contract
+        .parked_set
+        .insert(validator_address.clone());
 
     accounts_tree.put(
         &mut db_txn,
@@ -409,7 +401,7 @@ fn retire_validator_works() {
     // Works in the valid case.
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::RetireValidator {
-            validator_address: cold_key.clone(),
+            validator_address: validator_address.clone(),
             proof: SignatureProof::default(),
         },
         0,
@@ -423,20 +415,13 @@ fn retire_validator_works() {
         Ok(Some(receipt.clone()))
     );
 
-    let validator = StakingContract::get_validator(
-        &accounts_tree,
-        &mut db_txn,
-        &Address::from_any_str(VALIDATOR_ADDRESS).unwrap(),
-    )
-    .unwrap();
+    let validator =
+        StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
 
-    assert_eq!(
-        validator.address,
-        Address::from_any_str(VALIDATOR_ADDRESS).unwrap()
-    );
+    assert_eq!(validator.address, validator_address.clone());
     assert_eq!(validator.warm_key, warm_key);
     assert_eq!(validator.validator_key, hot_pk);
-    assert_eq!(validator.reward_address, cold_key);
+    assert_eq!(validator.reward_address, validator_address);
     assert_eq!(validator.signal_data, None);
     assert_eq!(
         validator.balance,
@@ -447,13 +432,15 @@ fn retire_validator_works() {
 
     let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &mut db_txn);
 
-    assert!(!staking_contract.active_validators.contains_key(&cold_key));
-    assert!(!staking_contract.parked_set.contains(&cold_key));
+    assert!(!staking_contract
+        .active_validators
+        .contains_key(&validator_address));
+    assert!(!staking_contract.parked_set.contains(&validator_address));
 
     // Try with an already inactive validator.
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::RetireValidator {
-            validator_address: cold_key.clone(),
+            validator_address: validator_address.clone(),
             proof: SignatureProof::default(),
         },
         0,
@@ -468,7 +455,7 @@ fn retire_validator_works() {
     // Try with a wrong signature.
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::RetireValidator {
-            validator_address: cold_key.clone(),
+            validator_address: validator_address.clone(),
             proof: SignatureProof::default(),
         },
         0,
@@ -493,20 +480,13 @@ fn retire_validator_works() {
         Ok(())
     );
 
-    let validator = StakingContract::get_validator(
-        &accounts_tree,
-        &mut db_txn,
-        &Address::from_any_str(VALIDATOR_ADDRESS).unwrap(),
-    )
-    .unwrap();
+    let validator =
+        StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
 
-    assert_eq!(
-        validator.address,
-        Address::from_any_str(VALIDATOR_ADDRESS).unwrap()
-    );
+    assert_eq!(validator.address, validator_address.clone());
     assert_eq!(validator.warm_key, warm_key);
     assert_eq!(validator.validator_key, hot_pk);
-    assert_eq!(validator.reward_address, cold_key);
+    assert_eq!(validator.reward_address, validator_address);
     assert_eq!(validator.signal_data, None);
     assert_eq!(
         validator.balance,
@@ -517,8 +497,10 @@ fn retire_validator_works() {
 
     let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &mut db_txn);
 
-    assert!(staking_contract.active_validators.contains_key(&cold_key));
-    assert!(staking_contract.parked_set.contains(&cold_key));
+    assert!(staking_contract
+        .active_validators
+        .contains_key(&validator_address));
+    assert!(staking_contract.parked_set.contains(&validator_address));
 }
 
 #[test]
@@ -529,7 +511,7 @@ fn reactivate_validator_works() {
 
     make_sample_contract(&accounts_tree, &mut db_txn, true);
 
-    let cold_key = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
+    let validator_address = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
 
     let cold_keypair = ed25519_key_pair(VALIDATOR_PRIVATE_KEY);
 
@@ -543,7 +525,7 @@ fn reactivate_validator_works() {
     // To begin with, retire the validator.
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::RetireValidator {
-            validator_address: cold_key.clone(),
+            validator_address: validator_address.clone(),
             proof: SignatureProof::default(),
         },
         0,
@@ -555,7 +537,7 @@ fn reactivate_validator_works() {
     // Works in the valid case.
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::ReactivateValidator {
-            validator_address: cold_key.clone(),
+            validator_address: validator_address.clone(),
             proof: SignatureProof::default(),
         },
         0,
@@ -569,20 +551,13 @@ fn reactivate_validator_works() {
         Ok(Some(receipt.clone()))
     );
 
-    let validator = StakingContract::get_validator(
-        &accounts_tree,
-        &mut db_txn,
-        &Address::from_any_str(VALIDATOR_ADDRESS).unwrap(),
-    )
-    .unwrap();
+    let validator =
+        StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
 
-    assert_eq!(
-        validator.address,
-        Address::from_any_str(VALIDATOR_ADDRESS).unwrap()
-    );
+    assert_eq!(validator.address, validator_address.clone());
     assert_eq!(validator.warm_key, warm_key);
     assert_eq!(validator.validator_key, hot_pk);
-    assert_eq!(validator.reward_address, cold_key.clone());
+    assert_eq!(validator.reward_address, validator_address.clone());
     assert_eq!(validator.signal_data, None);
     assert_eq!(
         validator.balance,
@@ -593,12 +568,14 @@ fn reactivate_validator_works() {
 
     let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &mut db_txn);
 
-    assert!(staking_contract.active_validators.contains_key(&cold_key));
+    assert!(staking_contract
+        .active_validators
+        .contains_key(&validator_address));
 
     // Try with an already active validator.
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::ReactivateValidator {
-            validator_address: cold_key.clone(),
+            validator_address: validator_address.clone(),
             proof: SignatureProof::default(),
         },
         0,
@@ -613,7 +590,7 @@ fn reactivate_validator_works() {
     // Try with a wrong signature.
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::ReactivateValidator {
-            validator_address: cold_key.clone(),
+            validator_address: validator_address.clone(),
             proof: SignatureProof::default(),
         },
         0,
@@ -638,20 +615,13 @@ fn reactivate_validator_works() {
         Ok(())
     );
 
-    let validator = StakingContract::get_validator(
-        &accounts_tree,
-        &mut db_txn,
-        &Address::from_any_str(VALIDATOR_ADDRESS).unwrap(),
-    )
-    .unwrap();
+    let validator =
+        StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
 
-    assert_eq!(
-        validator.address,
-        Address::from_any_str(VALIDATOR_ADDRESS).unwrap()
-    );
+    assert_eq!(validator.address, validator_address.clone());
     assert_eq!(validator.warm_key, warm_key);
     assert_eq!(validator.validator_key, hot_pk);
-    assert_eq!(validator.reward_address, cold_key);
+    assert_eq!(validator.reward_address, validator_address);
     assert_eq!(validator.signal_data, None);
     assert_eq!(
         validator.balance,
@@ -662,7 +632,9 @@ fn reactivate_validator_works() {
 
     let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &mut db_txn);
 
-    assert!(!staking_contract.active_validators.contains_key(&cold_key));
+    assert!(!staking_contract
+        .active_validators
+        .contains_key(&validator_address));
 }
 
 #[test]
@@ -673,7 +645,7 @@ fn unpark_validator_works() {
 
     make_sample_contract(&accounts_tree, &mut db_txn, true);
 
-    let cold_key = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
+    let validator_address = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
 
     let cold_keypair = ed25519_key_pair(VALIDATOR_PRIVATE_KEY);
 
@@ -687,13 +659,15 @@ fn unpark_validator_works() {
     slots.insert(2);
     slots.insert(3);
 
-    staking_contract.parked_set.insert(cold_key.clone());
+    staking_contract
+        .parked_set
+        .insert(validator_address.clone());
     staking_contract
         .current_disabled_slots
-        .insert(cold_key.clone(), slots.clone());
+        .insert(validator_address.clone(), slots.clone());
     staking_contract
         .previous_disabled_slots
-        .insert(cold_key.clone(), slots.clone());
+        .insert(validator_address.clone(), slots.clone());
 
     accounts_tree.put(
         &mut db_txn,
@@ -704,7 +678,7 @@ fn unpark_validator_works() {
     // Works in the valid case.
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::UnparkValidator {
-            validator_address: cold_key.clone(),
+            validator_address: validator_address.clone(),
             proof: SignatureProof::default(),
         },
         0,
@@ -725,18 +699,18 @@ fn unpark_validator_works() {
 
     let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &mut db_txn);
 
-    assert!(!staking_contract.parked_set.contains(&cold_key));
+    assert!(!staking_contract.parked_set.contains(&validator_address));
     assert!(!staking_contract
         .current_disabled_slots
-        .contains_key(&cold_key));
+        .contains_key(&validator_address));
     assert!(!staking_contract
         .previous_disabled_slots
-        .contains_key(&cold_key));
+        .contains_key(&validator_address));
 
     // Try with an already unparked validator.
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::UnparkValidator {
-            validator_address: cold_key.clone(),
+            validator_address: validator_address.clone(),
             proof: SignatureProof::default(),
         },
         0,
@@ -751,7 +725,7 @@ fn unpark_validator_works() {
     // Try with a wrong signature.
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::UnparkValidator {
-            validator_address: cold_key.clone(),
+            validator_address: validator_address.clone(),
             proof: SignatureProof::default(),
         },
         0,
@@ -778,13 +752,13 @@ fn unpark_validator_works() {
 
     let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &mut db_txn);
 
-    assert!(staking_contract.parked_set.contains(&cold_key));
+    assert!(staking_contract.parked_set.contains(&validator_address));
     assert!(staking_contract
         .current_disabled_slots
-        .contains_key(&cold_key));
+        .contains_key(&validator_address));
     assert!(staking_contract
         .previous_disabled_slots
-        .contains_key(&cold_key));
+        .contains_key(&validator_address));
 }
 
 #[test]
@@ -935,6 +909,1081 @@ fn drop_validator_works() {
     );
 }
 
+#[test]
+fn create_staker_works() {
+    let env = VolatileEnvironment::new(10).unwrap();
+    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let mut db_txn = WriteTransaction::new(&env);
+
+    make_sample_contract(&accounts_tree, &mut db_txn, false);
+
+    let staker_keypair = ed25519_key_pair(STAKER_PRIVATE_KEY);
+
+    let staker_address = Address::from_any_str(STAKER_ADDRESS).unwrap();
+
+    let validator_address = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
+
+    // Works in the valid case.
+    let tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::CreateStaker {
+            delegation: Some(validator_address.clone()),
+            proof: SignatureProof::default(),
+        },
+        150_000_000,
+        &staker_keypair,
+    );
+
+    assert_eq!(
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
+        Ok(None)
+    );
+
+    let staker = StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address).unwrap();
+
+    assert_eq!(staker.address, staker_address.clone());
+    assert_eq!(staker.active_stake, Coin::from_u64_unchecked(150_000_000));
+    assert_eq!(staker.inactive_stake, Coin::ZERO);
+    assert_eq!(staker.delegation, Some(validator_address.clone()));
+    assert_eq!(staker.retire_time, 0);
+
+    let validator =
+        StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
+
+    assert_eq!(
+        validator.balance,
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 150_000_000)
+    );
+    assert_eq!(validator.num_stakers, 1);
+
+    assert_eq!(
+        accounts_tree.get(
+            &mut db_txn,
+            &StakingContract::get_key_validator_staker(&validator_address, &staker_address)
+        ),
+        Some(Account::StakingValidatorsStaker(staker_address.clone()))
+    );
+
+    let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &mut db_txn);
+
+    assert_eq!(
+        staking_contract.balance,
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 150_000_000)
+    );
+
+    // Doesn't work when the staker already exists.
+    assert_eq!(
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
+        Err(AccountError::AlreadyExistentAddress {
+            address: staker_address.clone()
+        })
+    );
+
+    // Can revert the transaction.
+    assert_eq!(
+        StakingContract::revert_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0, None),
+        Ok(())
+    );
+
+    assert_eq!(
+        StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address),
+        None
+    );
+
+    let validator =
+        StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
+
+    assert_eq!(
+        validator.balance,
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT)
+    );
+    assert_eq!(validator.num_stakers, 0);
+
+    assert_eq!(
+        accounts_tree.get(
+            &mut db_txn,
+            &StakingContract::get_key_validator_staker(&validator_address, &staker_address)
+        ),
+        None
+    );
+
+    let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &mut db_txn);
+
+    assert_eq!(
+        staking_contract.balance,
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT)
+    );
+}
+
+#[test]
+fn stake_works() {
+    let env = VolatileEnvironment::new(10).unwrap();
+    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let mut db_txn = WriteTransaction::new(&env);
+
+    make_sample_contract(&accounts_tree, &mut db_txn, true);
+
+    let staker_keypair = ed25519_key_pair(STAKER_PRIVATE_KEY);
+
+    let staker_address = Address::from_any_str(STAKER_ADDRESS).unwrap();
+
+    let validator_address = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
+
+    // Works in the valid case.
+    let tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::Stake {
+            staker_address: staker_address.clone(),
+        },
+        150_000_000,
+        &staker_keypair,
+    );
+
+    assert_eq!(
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
+        Ok(None)
+    );
+
+    let staker = StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address).unwrap();
+
+    assert_eq!(staker.address, staker_address.clone());
+    assert_eq!(staker.active_stake, Coin::from_u64_unchecked(300_000_000));
+    assert_eq!(staker.inactive_stake, Coin::ZERO);
+    assert_eq!(staker.delegation, Some(validator_address.clone()));
+    assert_eq!(staker.retire_time, 0);
+
+    let validator =
+        StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
+
+    assert_eq!(
+        validator.balance,
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 300_000_000)
+    );
+
+    let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &mut db_txn);
+
+    assert_eq!(
+        staking_contract.balance,
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 300_000_000)
+    );
+
+    // Can revert the transaction.
+    assert_eq!(
+        StakingContract::revert_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0, None),
+        Ok(())
+    );
+
+    let staker = StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address).unwrap();
+
+    assert_eq!(staker.address, staker_address);
+    assert_eq!(staker.active_stake, Coin::from_u64_unchecked(150_000_000));
+    assert_eq!(staker.inactive_stake, Coin::ZERO);
+    assert_eq!(staker.delegation, Some(validator_address.clone()));
+    assert_eq!(staker.retire_time, 0);
+
+    let validator =
+        StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
+
+    assert_eq!(
+        validator.balance,
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 150_000_000)
+    );
+
+    let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &mut db_txn);
+
+    assert_eq!(
+        staking_contract.balance,
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 150_000_000)
+    );
+}
+
+#[test]
+fn update_staker_works() {
+    let env = VolatileEnvironment::new(10).unwrap();
+    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let mut db_txn = WriteTransaction::new(&env);
+
+    make_sample_contract(&accounts_tree, &mut db_txn, true);
+
+    let staker_keypair = ed25519_key_pair(STAKER_PRIVATE_KEY);
+
+    let staker_address = Address::from_any_str(STAKER_ADDRESS).unwrap();
+
+    let validator_address = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
+
+    let other_validator_address = Address::from_any_str(VALIDATOR_WARM_KEY).unwrap();
+
+    let hot_pk =
+        BlsPublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_HOT_KEY).unwrap()).unwrap();
+
+    // To begin with, add another validator.
+    StakingContract::create_validator(
+        &accounts_tree,
+        &mut db_txn,
+        &other_validator_address,
+        validator_address.clone(),
+        hot_pk.clone(),
+        other_validator_address.clone(),
+        None,
+    )
+    .unwrap();
+
+    // Works when changing to another validator.
+    let tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::UpdateStaker {
+            new_delegation: Some(other_validator_address.clone()),
+            proof: SignatureProof::default(),
+        },
+        0,
+        &staker_keypair,
+    );
+
+    let receipt = UpdateStakerReceipt {
+        old_delegation: Some(validator_address.clone()),
+    }
+    .serialize_to_vec();
+
+    assert_eq!(
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
+        Ok(Some(receipt))
+    );
+
+    let staker = StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address).unwrap();
+
+    assert_eq!(staker.address, staker_address.clone());
+    assert_eq!(staker.active_stake, Coin::from_u64_unchecked(150_000_000));
+    assert_eq!(staker.inactive_stake, Coin::ZERO);
+    assert_eq!(staker.delegation, Some(other_validator_address.clone()));
+    assert_eq!(staker.retire_time, 0);
+
+    let old_validator =
+        StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
+
+    assert_eq!(
+        old_validator.balance,
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT)
+    );
+    assert_eq!(old_validator.num_stakers, 0);
+
+    let new_validator =
+        StakingContract::get_validator(&accounts_tree, &mut db_txn, &other_validator_address)
+            .unwrap();
+
+    assert_eq!(
+        new_validator.balance,
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 150_000_000)
+    );
+    assert_eq!(new_validator.num_stakers, 1);
+
+    assert_eq!(
+        accounts_tree.get(
+            &mut db_txn,
+            &StakingContract::get_key_validator_staker(&other_validator_address, &staker_address)
+        ),
+        Some(Account::StakingValidatorsStaker(staker_address.clone()))
+    );
+
+    // Doesn't work when the staker doesn't exist.
+    let tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::UpdateStaker {
+            new_delegation: Some(staker_address.clone()),
+            proof: SignatureProof::default(),
+        },
+        0,
+        &staker_keypair,
+    );
+
+    assert_eq!(
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
+        Err(AccountError::NonExistentAddress {
+            address: staker_address.clone()
+        })
+    );
+
+    // Works when changing to no validator.
+    let tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::UpdateStaker {
+            new_delegation: None,
+            proof: SignatureProof::default(),
+        },
+        0,
+        &staker_keypair,
+    );
+
+    let receipt = UpdateStakerReceipt {
+        old_delegation: Some(other_validator_address.clone()),
+    }
+    .serialize_to_vec();
+
+    assert_eq!(
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
+        Ok(Some(receipt.clone()))
+    );
+
+    let staker = StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address).unwrap();
+
+    assert_eq!(staker.address, staker_address.clone());
+    assert_eq!(staker.active_stake, Coin::from_u64_unchecked(150_000_000));
+    assert_eq!(staker.inactive_stake, Coin::ZERO);
+    assert_eq!(staker.delegation, None);
+    assert_eq!(staker.retire_time, 0);
+
+    let old_validator =
+        StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
+
+    assert_eq!(
+        old_validator.balance,
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT)
+    );
+    assert_eq!(old_validator.num_stakers, 0);
+
+    // Can revert the transaction.
+    assert_eq!(
+        StakingContract::revert_incoming_transaction(
+            &accounts_tree,
+            &mut db_txn,
+            &tx,
+            2,
+            0,
+            Some(&receipt)
+        ),
+        Ok(())
+    );
+
+    let validator =
+        StakingContract::get_validator(&accounts_tree, &mut db_txn, &other_validator_address)
+            .unwrap();
+
+    assert_eq!(
+        validator.balance,
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 150_000_000)
+    );
+    assert_eq!(validator.num_stakers, 1);
+
+    assert_eq!(
+        accounts_tree.get(
+            &mut db_txn,
+            &StakingContract::get_key_validator_staker(&other_validator_address, &staker_address)
+        ),
+        Some(Account::StakingValidatorsStaker(staker_address.clone()))
+    );
+}
+
+#[test]
+fn retire_staker_works() {
+    let env = VolatileEnvironment::new(10).unwrap();
+    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let mut db_txn = WriteTransaction::new(&env);
+
+    make_sample_contract(&accounts_tree, &mut db_txn, true);
+
+    let staker_keypair = ed25519_key_pair(STAKER_PRIVATE_KEY);
+
+    let staker_address = Address::from_any_str(STAKER_ADDRESS).unwrap();
+
+    let validator_address = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
+
+    // Works in the valid case.
+    let tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::RetireStaker {
+            value: Coin::from_u64_unchecked(100_000_000),
+            proof: SignatureProof::default(),
+        },
+        0,
+        &staker_keypair,
+    );
+
+    let receipt = RetireStakerReceipt { old_retire_time: 0 }.serialize_to_vec();
+
+    assert_eq!(
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
+        Ok(Some(receipt.clone()))
+    );
+
+    let staker = StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address).unwrap();
+
+    assert_eq!(staker.address, staker_address.clone());
+    assert_eq!(staker.active_stake, Coin::from_u64_unchecked(50_000_000));
+    assert_eq!(staker.inactive_stake, Coin::from_u64_unchecked(100_000_000));
+    assert_eq!(staker.delegation, Some(validator_address.clone()));
+    assert_eq!(staker.retire_time, 2);
+
+    let validator =
+        StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
+
+    assert_eq!(
+        validator.balance,
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 50_000_000)
+    );
+
+    // Doesn't work if the value is greater than the active stake.
+    assert_eq!(
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
+        Err(AccountError::InsufficientFunds {
+            needed: Coin::from_u64_unchecked(100_000_000),
+            balance: Coin::from_u64_unchecked(50_000_000)
+        })
+    );
+
+    // Can revert the transaction.
+    assert_eq!(
+        StakingContract::revert_incoming_transaction(
+            &accounts_tree,
+            &mut db_txn,
+            &tx,
+            2,
+            0,
+            Some(&receipt)
+        ),
+        Ok(())
+    );
+
+    let staker = StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address).unwrap();
+
+    assert_eq!(staker.address, staker_address.clone());
+    assert_eq!(staker.active_stake, Coin::from_u64_unchecked(150_000_000));
+    assert_eq!(staker.inactive_stake, Coin::ZERO);
+    assert_eq!(staker.delegation, Some(validator_address.clone()));
+    assert_eq!(staker.retire_time, 0);
+
+    let validator =
+        StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
+
+    assert_eq!(
+        validator.balance,
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 150_000_000)
+    );
+}
+
+#[test]
+fn reactivate_staker_works() {
+    let env = VolatileEnvironment::new(10).unwrap();
+    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let mut db_txn = WriteTransaction::new(&env);
+
+    make_sample_contract(&accounts_tree, &mut db_txn, true);
+
+    let staker_keypair = ed25519_key_pair(STAKER_PRIVATE_KEY);
+
+    let staker_address = Address::from_any_str(STAKER_ADDRESS).unwrap();
+
+    let validator_address = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
+
+    // To begin with, retire the staker's balance.
+    let tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::RetireStaker {
+            value: Coin::from_u64_unchecked(150_000_000),
+            proof: SignatureProof::default(),
+        },
+        0,
+        &staker_keypair,
+    );
+
+    StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0).unwrap();
+
+    // Works in the valid case.
+    let tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::ReactivateStaker {
+            value: Coin::from_u64_unchecked(100_000_000),
+            proof: SignatureProof::default(),
+        },
+        0,
+        &staker_keypair,
+    );
+
+    assert_eq!(
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
+        Ok(None)
+    );
+
+    let staker = StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address).unwrap();
+
+    assert_eq!(staker.address, staker_address.clone());
+    assert_eq!(staker.active_stake, Coin::from_u64_unchecked(100_000_000));
+    assert_eq!(staker.inactive_stake, Coin::from_u64_unchecked(50_000_000));
+    assert_eq!(staker.delegation, Some(validator_address.clone()));
+    assert_eq!(staker.retire_time, 2);
+
+    let validator =
+        StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
+
+    assert_eq!(
+        validator.balance,
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 100_000_000)
+    );
+
+    // Doesn't work if the value is greater than the inactive stake.
+    assert_eq!(
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
+        Err(AccountError::InsufficientFunds {
+            needed: Coin::from_u64_unchecked(100_000_000),
+            balance: Coin::from_u64_unchecked(50_000_000)
+        })
+    );
+
+    // Can revert the transaction.
+    assert_eq!(
+        StakingContract::revert_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0, None),
+        Ok(())
+    );
+
+    let staker = StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address).unwrap();
+
+    assert_eq!(staker.address, staker_address.clone());
+    assert_eq!(staker.active_stake, Coin::ZERO);
+    assert_eq!(staker.inactive_stake, Coin::from_u64_unchecked(150_000_000));
+    assert_eq!(staker.delegation, Some(validator_address.clone()));
+    assert_eq!(staker.retire_time, 2);
+
+    let validator =
+        StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
+
+    assert_eq!(
+        validator.balance,
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT)
+    );
+}
+
+#[test]
+fn unstake_works() {
+    let env = VolatileEnvironment::new(10).unwrap();
+    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let mut db_txn = WriteTransaction::new(&env);
+
+    make_sample_contract(&accounts_tree, &mut db_txn, true);
+
+    // To begin with, retire part of the staker's balance.
+    let staker_keypair = ed25519_key_pair(STAKER_PRIVATE_KEY);
+
+    let tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::RetireStaker {
+            value: Coin::from_u64_unchecked(100_000_000),
+            proof: SignatureProof::default(),
+        },
+        0,
+        &staker_keypair,
+    );
+
+    StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0).unwrap();
+
+    // Doesn't work until the next election block.
+    let tx = make_unstake_transaction(100_000_000);
+
+    let next_election_block = policy::election_block_after(2);
+
+    for h in 2..=next_election_block {
+        assert_eq!(
+            StakingContract::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, h, 0),
+            Err(AccountError::InvalidForSender)
+        );
+    }
+
+    // Doesn't work if the value is greater than the inactive stake.
+    let tx = make_unstake_transaction(200_000_000);
+
+    assert_eq!(
+        StakingContract::commit_outgoing_transaction(
+            &accounts_tree,
+            &mut db_txn,
+            &tx,
+            next_election_block + 1,
+            0
+        ),
+        Err(AccountError::InsufficientFunds {
+            needed: Coin::from_u64_unchecked(200_000_000),
+            balance: Coin::from_u64_unchecked(100_000_000)
+        })
+    );
+
+    // Works in the valid case.
+    let tx = make_unstake_transaction(100_000_000);
+
+    let staker_address = Address::from_any_str(STAKER_ADDRESS).unwrap();
+
+    let validator_address = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
+
+    assert_eq!(
+        StakingContract::commit_outgoing_transaction(
+            &accounts_tree,
+            &mut db_txn,
+            &tx,
+            next_election_block + 1,
+            0
+        ),
+        Ok(None)
+    );
+
+    let staker = StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address).unwrap();
+
+    assert_eq!(staker.address, staker_address.clone());
+    assert_eq!(staker.active_stake, Coin::from_u64_unchecked(50_000_000));
+    assert_eq!(staker.inactive_stake, Coin::ZERO);
+    assert_eq!(staker.delegation, Some(validator_address.clone()));
+    assert_eq!(staker.retire_time, 2);
+
+    let validator =
+        StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
+
+    assert_eq!(validator.num_stakers, 1);
+
+    assert_eq!(
+        accounts_tree.get(
+            &mut db_txn,
+            &StakingContract::get_key_validator_staker(&validator_address, &staker_address)
+        ),
+        Some(Account::StakingValidatorsStaker(staker_address.clone()))
+    );
+
+    let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &mut db_txn);
+
+    assert_eq!(
+        staking_contract.balance,
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 50_000_000)
+    );
+
+    // Retire the rest of the staker's balance.
+    let staker_keypair = ed25519_key_pair(STAKER_PRIVATE_KEY);
+
+    let tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::RetireStaker {
+            value: Coin::from_u64_unchecked(50_000_000),
+            proof: SignatureProof::default(),
+        },
+        0,
+        &staker_keypair,
+    );
+
+    StakingContract::commit_incoming_transaction(
+        &accounts_tree,
+        &mut db_txn,
+        &tx,
+        next_election_block + 2,
+        0,
+    )
+    .unwrap();
+
+    // Doesn't work until the next election block.
+    let tx = make_unstake_transaction(50_000_000);
+
+    let nextest_election_block = policy::election_block_after(next_election_block + 2);
+
+    for h in (next_election_block + 2)..=nextest_election_block {
+        assert_eq!(
+            StakingContract::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, h, 0),
+            Err(AccountError::InvalidForSender)
+        );
+    }
+
+    // Doesn't work if the value is greater than the inactive stake.
+    let tx = make_unstake_transaction(200_000_000);
+
+    assert_eq!(
+        StakingContract::commit_outgoing_transaction(
+            &accounts_tree,
+            &mut db_txn,
+            &tx,
+            nextest_election_block + 1,
+            0
+        ),
+        Err(AccountError::InsufficientFunds {
+            needed: Coin::from_u64_unchecked(200_000_000),
+            balance: Coin::from_u64_unchecked(50_000_000)
+        })
+    );
+
+    // Works when removing the entire balance.
+    let tx = make_unstake_transaction(50_000_000);
+
+    let staker_address = Address::from_any_str(STAKER_ADDRESS).unwrap();
+
+    let validator_address = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
+
+    let receipt = DropStakerReceipt {
+        delegation: Some(validator_address.clone()),
+        retire_time: next_election_block + 2,
+    }
+    .serialize_to_vec();
+
+    assert_eq!(
+        StakingContract::commit_outgoing_transaction(
+            &accounts_tree,
+            &mut db_txn,
+            &tx,
+            nextest_election_block + 1,
+            0
+        ),
+        Ok(Some(receipt.clone()))
+    );
+
+    assert_eq!(
+        StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address),
+        None
+    );
+
+    let validator =
+        StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
+
+    assert_eq!(validator.num_stakers, 0);
+
+    assert_eq!(
+        accounts_tree.get(
+            &mut db_txn,
+            &StakingContract::get_key_validator_staker(&validator_address, &staker_address)
+        ),
+        None
+    );
+
+    let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &mut db_txn);
+
+    assert_eq!(
+        staking_contract.balance,
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT)
+    );
+
+    // Can revert the transaction.
+    assert_eq!(
+        StakingContract::revert_outgoing_transaction(
+            &accounts_tree,
+            &mut db_txn,
+            &tx,
+            nextest_election_block + 1,
+            0,
+            Some(&receipt)
+        ),
+        Ok(())
+    );
+
+    let staker = StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address).unwrap();
+
+    assert_eq!(staker.address, staker_address.clone());
+    assert_eq!(staker.active_stake, Coin::ZERO);
+    assert_eq!(staker.inactive_stake, Coin::from_u64_unchecked(50_000_000));
+    assert_eq!(staker.delegation, Some(validator_address.clone()));
+    assert_eq!(staker.retire_time, next_election_block + 2);
+
+    let validator =
+        StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
+
+    assert_eq!(validator.num_stakers, 1);
+
+    assert_eq!(
+        accounts_tree.get(
+            &mut db_txn,
+            &StakingContract::get_key_validator_staker(&validator_address, &staker_address)
+        ),
+        Some(Account::StakingValidatorsStaker(staker_address.clone()))
+    );
+
+    let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &mut db_txn);
+
+    assert_eq!(
+        staking_contract.balance,
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 50_000_000)
+    );
+}
+
+#[test]
+fn deduct_fees_works() {
+    let env = VolatileEnvironment::new(10).unwrap();
+    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let mut db_txn = WriteTransaction::new(&env);
+
+    make_sample_contract(&accounts_tree, &mut db_txn, true);
+
+    // To begin with, retire part of the staker's balance.
+    let staker_keypair = ed25519_key_pair(STAKER_PRIVATE_KEY);
+
+    let tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::RetireStaker {
+            value: Coin::from_u64_unchecked(75_000_000),
+            proof: SignatureProof::default(),
+        },
+        0,
+        &staker_keypair,
+    );
+
+    StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0).unwrap();
+
+    // Doesn't work, when deducting from the active stake, if the value is greater than the active stake.
+    let tx = make_deduct_fees_transaction(200_000_000, true);
+
+    assert_eq!(
+        StakingContract::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
+        Err(AccountError::InsufficientFunds {
+            needed: Coin::from_u64_unchecked(200_000_000),
+            balance: Coin::from_u64_unchecked(75_000_000)
+        })
+    );
+
+    // Works in the valid case, when deducting from the active stake.
+    let tx = make_deduct_fees_transaction(75_000_000, true);
+
+    let staker_address = Address::from_any_str(STAKER_ADDRESS).unwrap();
+
+    let validator_address = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
+
+    assert_eq!(
+        StakingContract::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
+        Ok(None)
+    );
+
+    let staker = StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address).unwrap();
+
+    assert_eq!(staker.address, staker_address.clone());
+    assert_eq!(staker.active_stake, Coin::ZERO);
+    assert_eq!(staker.inactive_stake, Coin::from_u64_unchecked(75_000_000));
+    assert_eq!(staker.delegation, Some(validator_address.clone()));
+    assert_eq!(staker.retire_time, 2);
+
+    let validator =
+        StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
+
+    assert_eq!(
+        validator.balance,
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT)
+    );
+    assert_eq!(validator.num_stakers, 1);
+
+    assert_eq!(
+        accounts_tree.get(
+            &mut db_txn,
+            &StakingContract::get_key_validator_staker(&validator_address, &staker_address)
+        ),
+        Some(Account::StakingValidatorsStaker(staker_address.clone()))
+    );
+
+    let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &mut db_txn);
+
+    assert_eq!(
+        staking_contract.balance,
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 75_000_000)
+    );
+
+    // Can revert the transaction.
+    assert_eq!(
+        StakingContract::revert_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0, None),
+        Ok(())
+    );
+
+    let staker = StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address).unwrap();
+
+    assert_eq!(staker.address, staker_address.clone());
+    assert_eq!(staker.active_stake, Coin::from_u64_unchecked(75_000_000));
+    assert_eq!(staker.inactive_stake, Coin::from_u64_unchecked(75_000_000));
+    assert_eq!(staker.delegation, Some(validator_address.clone()));
+    assert_eq!(staker.retire_time, 2);
+
+    let validator =
+        StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
+
+    assert_eq!(
+        validator.balance,
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 75_000_000)
+    );
+    assert_eq!(validator.num_stakers, 1);
+
+    assert_eq!(
+        accounts_tree.get(
+            &mut db_txn,
+            &StakingContract::get_key_validator_staker(&validator_address, &staker_address)
+        ),
+        Some(Account::StakingValidatorsStaker(staker_address.clone()))
+    );
+
+    let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &mut db_txn);
+
+    assert_eq!(
+        staking_contract.balance,
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 150_000_000)
+    );
+
+    // Doesn't work, when deducting from the inactive stake, if the value is greater than the inactive stake.
+    let tx = make_deduct_fees_transaction(200_000_000, false);
+
+    assert_eq!(
+        StakingContract::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
+        Err(AccountError::InsufficientFunds {
+            needed: Coin::from_u64_unchecked(200_000_000),
+            balance: Coin::from_u64_unchecked(75_000_000)
+        })
+    );
+
+    // Works in the valid case, when deducting from the inactive stake.
+    let tx = make_deduct_fees_transaction(75_000_000, false);
+
+    let staker_address = Address::from_any_str(STAKER_ADDRESS).unwrap();
+
+    let validator_address = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
+
+    assert_eq!(
+        StakingContract::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
+        Ok(None)
+    );
+
+    let staker = StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address).unwrap();
+
+    assert_eq!(staker.address, staker_address.clone());
+    assert_eq!(staker.active_stake, Coin::from_u64_unchecked(75_000_000));
+    assert_eq!(staker.inactive_stake, Coin::ZERO);
+    assert_eq!(staker.delegation, Some(validator_address.clone()));
+    assert_eq!(staker.retire_time, 2);
+
+    let validator =
+        StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
+
+    assert_eq!(
+        validator.balance,
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 75_000_000)
+    );
+    assert_eq!(validator.num_stakers, 1);
+
+    assert_eq!(
+        accounts_tree.get(
+            &mut db_txn,
+            &StakingContract::get_key_validator_staker(&validator_address, &staker_address)
+        ),
+        Some(Account::StakingValidatorsStaker(staker_address.clone()))
+    );
+
+    let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &mut db_txn);
+
+    assert_eq!(
+        staking_contract.balance,
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 75_000_000)
+    );
+
+    // Can revert the transaction.
+    assert_eq!(
+        StakingContract::revert_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0, None),
+        Ok(())
+    );
+
+    let staker = StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address).unwrap();
+
+    assert_eq!(staker.address, staker_address.clone());
+    assert_eq!(staker.active_stake, Coin::from_u64_unchecked(75_000_000));
+    assert_eq!(staker.inactive_stake, Coin::from_u64_unchecked(75_000_000));
+    assert_eq!(staker.delegation, Some(validator_address.clone()));
+    assert_eq!(staker.retire_time, 2);
+
+    let validator =
+        StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
+
+    assert_eq!(validator.num_stakers, 1);
+
+    assert_eq!(
+        accounts_tree.get(
+            &mut db_txn,
+            &StakingContract::get_key_validator_staker(&validator_address, &staker_address)
+        ),
+        Some(Account::StakingValidatorsStaker(staker_address.clone()))
+    );
+
+    let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &mut db_txn);
+
+    assert_eq!(
+        staking_contract.balance,
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 150_000_000)
+    );
+
+    // Works when removing the entire balance.
+    let staker_address = Address::from_any_str(STAKER_ADDRESS).unwrap();
+
+    let validator_address = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
+
+    let tx = make_deduct_fees_transaction(75_000_000, true);
+
+    assert_eq!(
+        StakingContract::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
+        Ok(None)
+    );
+
+    let tx = make_deduct_fees_transaction(75_000_000, false);
+
+    let receipt = DropStakerReceipt {
+        delegation: Some(validator_address.clone()),
+        retire_time: 2,
+    }
+    .serialize_to_vec();
+
+    assert_eq!(
+        StakingContract::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
+        Ok(Some(receipt.clone()))
+    );
+
+    assert_eq!(
+        StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address),
+        None
+    );
+
+    let validator =
+        StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
+
+    assert_eq!(
+        validator.balance,
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT)
+    );
+    assert_eq!(validator.num_stakers, 0);
+
+    assert_eq!(
+        accounts_tree.get(
+            &mut db_txn,
+            &StakingContract::get_key_validator_staker(&validator_address, &staker_address)
+        ),
+        None
+    );
+
+    let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &mut db_txn);
+
+    assert_eq!(
+        staking_contract.balance,
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT)
+    );
+
+    // Can revert the transaction.
+    assert_eq!(
+        StakingContract::revert_outgoing_transaction(
+            &accounts_tree,
+            &mut db_txn,
+            &tx,
+            2,
+            0,
+            Some(&receipt)
+        ),
+        Ok(())
+    );
+
+    let staker = StakingContract::get_staker(&accounts_tree, &mut db_txn, &staker_address).unwrap();
+
+    assert_eq!(staker.address, staker_address.clone());
+    assert_eq!(staker.active_stake, Coin::ZERO);
+    assert_eq!(staker.inactive_stake, Coin::from_u64_unchecked(75_000_000));
+    assert_eq!(staker.delegation, Some(validator_address.clone()));
+    assert_eq!(staker.retire_time, 2);
+
+    let validator =
+        StakingContract::get_validator(&accounts_tree, &mut db_txn, &validator_address).unwrap();
+
+    assert_eq!(
+        validator.balance,
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT)
+    );
+    assert_eq!(validator.num_stakers, 1);
+
+    assert_eq!(
+        accounts_tree.get(
+            &mut db_txn,
+            &StakingContract::get_key_validator_staker(&validator_address, &staker_address)
+        ),
+        Some(Account::StakingValidatorsStaker(staker_address.clone()))
+    );
+
+    let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &mut db_txn);
+
+    assert_eq!(
+        staking_contract.balance,
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 75_000_000)
+    );
+}
+
 fn make_empty_contract(accounts_tree: &AccountsTree, db_txn: &mut WriteTransaction) {
     StakingContract::create(accounts_tree, db_txn)
 }
@@ -1078,7 +2127,7 @@ fn make_unstake_transaction(value: u64) -> Transaction {
     );
 
     let private_key =
-        PrivateKey::deserialize_from_vec(&hex::decode(VALIDATOR_PRIVATE_KEY).unwrap()).unwrap();
+        PrivateKey::deserialize_from_vec(&hex::decode(STAKER_PRIVATE_KEY).unwrap()).unwrap();
 
     let key_pair = KeyPair::from(private_key);
 
@@ -1091,28 +2140,28 @@ fn make_unstake_transaction(value: u64) -> Transaction {
     tx
 }
 
-fn make_deduct_fees_transaction() -> Transaction {
+fn make_deduct_fees_transaction(fee: u64, from_active_balance: bool) -> Transaction {
     let mut tx = Transaction::new_extended(
         Address::from_any_str(STAKING_CONTRACT_ADDRESS).unwrap(),
         AccountType::Staking,
-        Address::from_any_str(STAKER_ADDRESS).unwrap(),
-        AccountType::Basic,
+        Address::from_any_str(STAKING_CONTRACT_ADDRESS).unwrap(),
+        AccountType::Staking,
         0.try_into().unwrap(),
-        100.try_into().unwrap(),
+        fee.try_into().unwrap(),
         vec![],
         1,
         NetworkId::Dummy,
     );
 
     let private_key =
-        PrivateKey::deserialize_from_vec(&hex::decode(VALIDATOR_PRIVATE_KEY).unwrap()).unwrap();
+        PrivateKey::deserialize_from_vec(&hex::decode(STAKER_PRIVATE_KEY).unwrap()).unwrap();
 
     let key_pair = KeyPair::from(private_key);
 
     let sig = SignatureProof::from(key_pair.public, key_pair.sign(&tx.serialize_content()));
 
     let proof = OutgoingStakingTransactionProof::DeductFees {
-        from_active_balance: true,
+        from_active_balance,
         proof: sig,
     };
 
