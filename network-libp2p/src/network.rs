@@ -57,6 +57,7 @@ use crate::{
 const MAX_CONNECTIONS_PER_PEER: u32 = 1;
 
 type NimiqSwarm = Swarm<NimiqBehaviour>;
+
 #[derive(Debug)]
 pub(crate) enum NetworkAction {
     Dial {
