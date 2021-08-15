@@ -37,7 +37,7 @@ impl NetworkInterface for NetworkDispatcher {
         todo!()
     }
 
-    async fn get_peer_state(&mut self, peer_id: String) -> Result<Peer, Self::Error> {
+    async fn get_peer_state(&mut self, _peer_id: String) -> Result<Peer, Self::Error> {
         // TODO: Wait for connection pool implementation
         todo!()
     }

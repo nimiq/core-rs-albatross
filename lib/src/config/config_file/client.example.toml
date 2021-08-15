@@ -201,6 +201,20 @@ level = "debug"
 # Default: none
 #file = "nimiq-client.log"
 
+# Specify a rotating log file containing a trace log
+# [log.rotating_trace_log]
+
+# Set the path to the folder containing the log files
+# Default: "~/.nimiq/logs"
+# path = none
+
+# Size of each log file
+# Default: 50000000 (50mB)
+# size = 50000000
+
+# Count of additional log files. The total log files count will be file_count + 2.
+# Default: 3
+# file_count = 2
 
 
 ##############################################################################

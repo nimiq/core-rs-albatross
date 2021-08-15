@@ -3,7 +3,7 @@ name = "nimiq-subscription"
 version = "0.1.0"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2018"
-description = "Subscription primitive to be used in Nimiq's Rust implementation"
+description = "Subscription primitives to be used in Nimiq's Albatross implementation"
 homepage = "https://nimiq.com"
 repository = "https://github.com/nimiq/core-rs-albatross"
 license = "Apache-2.0"
@@ -13,7 +13,6 @@ travis-ci = { repository = "nimiq/core-rs", branch = "master" }
 
 [dependencies]
 bitflags = "1.0"
-failure = "0.1"
 hex = "0.4"
 log = "0.4"
 

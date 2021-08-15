@@ -4,7 +4,7 @@ use std::net::AddrParseError;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
 
-use failure::Fail;
+use thiserror::Error;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 
@@ -140,9 +140,9 @@ impl fmt::Display for NetAddress {
     }
 }
 
-#[derive(Debug, Clone, Fail)]
-#[fail(display = "{}", _0)]
-pub struct NetAddressParseError(#[cause] AddrParseError);
+#[derive(Debug, Clone, Error)]
+#[error("{0}")]
+pub struct NetAddressParseError(#[from] AddrParseError);
 
 impl FromStr for NetAddress {
     type Err = NetAddressParseError;

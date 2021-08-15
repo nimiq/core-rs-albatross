@@ -75,13 +75,7 @@ impl NetworkInfo {
     }
 
     #[inline]
-    // TODO: Deprecate this?
-    pub fn validator_registry_address(&self) -> Option<&Address> {
-        self.staking_contract()
-    }
-
-    #[inline]
-    pub fn staking_contract(&self) -> Option<&Address> {
+    pub fn staking_contract_address(&self) -> Option<&Address> {
         self.genesis.staking_contract.as_ref()
     }
 

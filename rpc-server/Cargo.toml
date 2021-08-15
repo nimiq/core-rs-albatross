@@ -33,8 +33,8 @@ nimiq-jsonrpc-derive = { git = "https://github.com/nimiq/jsonrpc.git" }
 nimiq-jsonrpc-server = { git = "https://github.com/nimiq/jsonrpc.git" }
 nimiq-primitives = { path = "../primitives", features = ["coin", "account", "serde-derive"] }
 nimiq-account = { path = "../primitives/account", features = ["serde-derive"] }
-nimiq-block-albatross = { path = "../primitives/block-albatross", features = ["serde-derive"] }
-nimiq-blockchain-albatross = { path = "../blockchain-albatross" }
+nimiq-block = { path = "../primitives/block", features = ["serde-derive"] }
+nimiq-blockchain = { path = "../blockchain" }
 nimiq-mempool = { path = "../mempool" }
 nimiq-hash = { path = "../hash", features = ["serde-derive"] }
 nimiq-vrf = { path = "../vrf", features = ["serde-derive"] }
@@ -42,14 +42,10 @@ nimiq-bls = { path = "../bls", features = ["serde-derive"] }
 nimiq-keys = { path = "../keys", features = ["serde-derive"] }
 nimiq-utils = { path = "../utils", features = ["otp"] }
 nimiq-transaction = { path = "../primitives/transaction", features = ["serde-derive"] }
-nimiq-validator = { path = "../validator", optional = true }
 nimiq-collections = { path = "../collections", features = ["serde-derive", "bitset"] }
 nimiq-database = { path = "../database" }
 nimiq-wallet = { path = "../wallet" }
 nimiq-network-libp2p = { path = "../network-libp2p" }
-nimiq-consensus-albatross = { path = "../consensus-albatross" }
+nimiq-consensus = { path = "../consensus" }
 nimiq-rpc-interface = { path = "../rpc-interface" }
 nimiq-transaction-builder = { path = "../transaction-builder", features = ["serde-derive"] }
-
-[features]
-validator = ["nimiq-validator"]

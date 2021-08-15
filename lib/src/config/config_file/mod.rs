@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fs::read_to_string;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use log::LevelFilter;
@@ -316,6 +316,27 @@ impl From<ReverseProxySettings> for ReverseProxyConfig {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct RotatingLogFileConfig {
+    #[serde(default)]
+    pub path: PathBuf,
+    #[serde(default)]
+    pub size: usize,
+    #[serde(default)]
+    pub file_count: usize,
+}
+
+impl Default for RotatingLogFileConfig {
+    fn default() -> Self {
+        Self {
+            path: paths::home().join("logs"),
+            size: 50000000, // 50mB
+            file_count: 3,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct LogSettings {
     #[serde(deserialize_with = "deserialize_string_option")]
     #[serde(default)]
@@ -329,11 +350,17 @@ pub struct LogSettings {
     pub statistics: u64,
     #[serde(default)]
     pub file: Option<String>,
+    #[serde(default = "LogSettings::default_rotating_trace_log")]
+    pub rotating_trace_log: Option<RotatingLogFileConfig>,
 }
 
 impl LogSettings {
     pub fn default_statistics_interval() -> u64 {
         10
+    }
+
+    pub fn default_rotating_trace_log() -> Option<RotatingLogFileConfig> {
+        Some(RotatingLogFileConfig::default())
     }
 }
 
@@ -345,6 +372,7 @@ impl Default for LogSettings {
             tags: HashMap::new(),
             statistics: Self::default_statistics_interval(),
             file: None,
+            rotating_trace_log: Self::default_rotating_trace_log(),
         }
     }
 }
@@ -363,7 +391,7 @@ impl Default for DatabaseSettings {
         DatabaseSettings {
             path: None,
             size: Some(1024 * 1024 * 50),
-            max_dbs: Some(10),
+            max_dbs: Some(12),
             no_lmdb_sync: None,
         }
     }

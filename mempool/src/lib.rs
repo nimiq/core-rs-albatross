@@ -1,8 +1,8 @@
 #[macro_use]
 extern crate log;
 extern crate nimiq_account as account;
-extern crate nimiq_block_albatross as block_albatross;
-extern crate nimiq_blockchain_albatross as blockchain_albatross;
+extern crate nimiq_block as block;
+extern crate nimiq_blockchain as blockchain;
 extern crate nimiq_collections as collections;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
@@ -18,8 +18,8 @@ use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 
 use account::{Account, AccountTransactionInteraction};
 use beserial::Serialize;
-use block_albatross::Block;
-use blockchain_albatross::{AbstractBlockchain, Blockchain, BlockchainEvent};
+use block::Block;
+use blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent};
 use hash::{Blake2bHash, Hash};
 use keys::Address;
 use primitives::networks::NetworkId;
@@ -373,7 +373,7 @@ impl Mempool {
             // Check validity of transactions concerning the staking contract.
             // We only do it for the staking contract, since this is the only place
             // where the transaction validity depends on the recipient's state.
-            if let Some(validator_registry_address) = self.blockchain.validator_registry_address() {
+            if let Some(validator_registry_address) = self.blockchain.staking_contract_address() {
                 // First apply the sender side to the staking contract if necessary.
                 // This could for example drop a validator and make subsequent update transactions invalid.
                 let mut outgoing_receipt = None;

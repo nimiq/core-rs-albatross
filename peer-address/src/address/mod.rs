@@ -74,8 +74,9 @@ fn is_ipv4_globally_reachable_legacy(ipv4: Ipv4Addr) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::is_ip_globally_reachable_legacy;
     use std::{net::IpAddr, str::FromStr};
+
+    use super::is_ip_globally_reachable_legacy;
 
     #[test]
     fn is_ip_globally_reachable_legacy_falsifys() {

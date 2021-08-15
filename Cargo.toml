@@ -4,13 +4,13 @@ members = [
   "accounts/tree-primitives",
   "beserial",
   "beserial/beserial_derive",
-  "block-production-albatross",
-  "blockchain-albatross",
+  "block-production",
+  "blockchain",
   "bls",
   "build-tools",
   "client",
   "collections",
-  "consensus-albatross",
+  "consensus",
   "database",
   "genesis",
   "handel",
@@ -25,16 +25,16 @@ members = [
   "metrics-server",
   "mnemonic",
   "nano-primitives",
-  "nano-sync",
+  "nano-zkp",
   "nano-blockchain",
-  "network-albatross",
+  "network",
   "network-interface",
   "network-libp2p",
   "network-mock",
   "peer-address",
   "primitives",
   "primitives/account",
-  "primitives/block-albatross",
+  "primitives/block",
   "primitives/subscription",
   "primitives/transaction",
   "rpc-client",
@@ -50,7 +50,7 @@ members = [
   "wallet",
 ]
 
-# Force nimiq-bls and nimiq-nano-sync to be built with the highest optimization level in the test profiles. This is
+# Force nimiq-bls and nimiq-nano-zkp to be built with the highest optimization level in the test profiles. This is
 # necessary in order to have decent tests performance.
 # We do the same with nimiq-bls dev profile because it is compiled for a lot of other crates's tests.
 [profile.dev.package.nimiq-bls]
@@ -62,7 +62,7 @@ opt-level = 3
 [profile.dev.package.nimiq-nano-primitives]
 opt-level = 3
 
-[profile.test.package.nimiq-nano-sync]
+[profile.test.package.nimiq-nano-zkp]
 opt-level = 3
 
 # Optimize the release profile for speed.

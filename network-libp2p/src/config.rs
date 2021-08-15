@@ -8,7 +8,6 @@ use nimiq_hash::Blake2bHash;
 
 use crate::{
     discovery::{behaviour::DiscoveryConfig, peer_contacts::PeerContact},
-    limit::behaviour::LimitConfig,
     message::behaviour::MessageConfig,
 };
 
@@ -21,7 +20,6 @@ pub struct Config {
 
     pub discovery: DiscoveryConfig,
     pub message: MessageConfig,
-    pub limit: LimitConfig,
     pub kademlia: KademliaConfig,
     pub gossipsub: GossipsubConfig,
 }
@@ -41,7 +39,6 @@ impl Config {
             peer_contact,
             discovery: DiscoveryConfig::new(genesis_hash),
             message: MessageConfig::default(),
-            limit: LimitConfig::default(),
             kademlia: KademliaConfig::default(),
             gossipsub: gossipsub_config,
             min_peers: 5,

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_account::{Inherent, InherentType};
-use nimiq_blockchain_albatross::Blockchain;
+use nimiq_blockchain::Blockchain;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_database::WriteTransaction;
 use nimiq_hash::Hash;

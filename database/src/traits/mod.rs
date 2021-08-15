@@ -7,8 +7,8 @@ use lmdb_zero::traits::AsLmdbBytes;
 #[cfg(feature = "hash")]
 mod hash;
 
-#[cfg(feature = "block-albatross")]
-mod block_albatross;
+#[cfg(feature = "block")]
+mod block;
 
 #[cfg(feature = "account")]
 mod accounts;

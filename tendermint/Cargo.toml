@@ -16,7 +16,7 @@ log = "0.4"
 
 nimiq-hash = { path = "../hash" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
-nimiq-block-albatross = { path = "../primitives/block-albatross" }
+nimiq-block = { path = "../primitives/block" }
 
 [dev-dependencies]
 beserial = { path = "../beserial" }

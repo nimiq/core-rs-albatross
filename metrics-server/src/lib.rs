@@ -2,11 +2,11 @@
 
 #[macro_use]
 extern crate log;
-extern crate nimiq_block_albatross as block_albatross;
-extern crate nimiq_blockchain_albatross as blockchain_albatross;
-extern crate nimiq_consensus_albatross as consensus_albatross;
+extern crate nimiq_block as block;
+extern crate nimiq_blockchain as blockchain;
+extern crate nimiq_consensus as consensus;
 extern crate nimiq_mempool as mempool;
-extern crate nimiq_network_albatross as network;
+extern crate nimiq_network as network;
 
 use std::fs::File;
 use std::io::Read;
@@ -20,7 +20,7 @@ use native_tls::{Identity, TlsAcceptor as NativeTlsAcceptor};
 use tokio::net::TcpListener;
 use tokio_tls::TlsAcceptor as TokioTlsAcceptor;
 
-use consensus_albatross::Consensus;
+use consensus::Consensus;
 use network::Network;
 
 use crate::error::Error;

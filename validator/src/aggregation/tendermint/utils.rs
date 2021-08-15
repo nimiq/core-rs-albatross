@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use tokio::sync::mpsc;
 
-use nimiq_block_albatross::{MultiSignature, TendermintStep};
+use nimiq_block::{MultiSignature, TendermintStep};
 use nimiq_handel::update::LevelUpdate;
 use nimiq_tendermint::AggregationResult;
 

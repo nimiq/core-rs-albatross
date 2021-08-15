@@ -1,6 +1,6 @@
-use nimiq_block_albatross::{Block, BlockError};
-use nimiq_blockchain_albatross::{AbstractBlockchain, ChainInfo, PushError, PushResult};
-use nimiq_nano_sync::{NanoProof, NanoZKP};
+use nimiq_block::{Block, BlockError};
+use nimiq_blockchain::{AbstractBlockchain, ChainInfo, PushError, PushResult};
+use nimiq_nano_zkp::{NanoProof, NanoZKP};
 use nimiq_primitives::policy;
 
 use crate::blockchain::NanoBlockchain;

@@ -15,7 +15,7 @@ use futures::{
 
 use futures_locks::RwLock;
 
-use nimiq_block_albatross::{
+use nimiq_block::{
     MacroBlock, MultiSignature, TendermintIdentifier, TendermintStep, TendermintVote,
 };
 use nimiq_bls::SecretKey;

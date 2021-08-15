@@ -18,17 +18,17 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 base64 = "0.10"
-failure = "0.1"
 futures = "0.1"
 hyper = "0.12"
 log = "0.4"
 native-tls = "0.2"
+thiserror = "1.0"
 tokio = "0.1"
 tokio-tls = "0.2"
 
 beserial = { path = "../beserial" }
-nimiq-block-albatross = { path = "../primitives/block-albatross" }
-nimiq-blockchain-albatross = { path = "../blockchain-albatross", features = ["metrics"] }
-nimiq-consensus-albatross = { path = "../consensus-albatross" }
+nimiq-block = { path = "../primitives/block" }
+nimiq-blockchain = { path = "../blockchain", features = ["metrics"] }
+nimiq-consensus = { path = "../consensus" }
 nimiq-mempool = { path = "../mempool" }
-nimiq-network-albatross = { path = "../network-albatross", features = ["metrics"] }
+nimiq-network = { path = "../network", features = ["metrics"] }

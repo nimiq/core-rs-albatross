@@ -1,5 +1,6 @@
-use crate::contribution::AggregatableContribution;
 use async_trait::async_trait;
+
+use crate::contribution::AggregatableContribution;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum VerificationResult {

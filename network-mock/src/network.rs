@@ -13,7 +13,7 @@ use thiserror::Error;
 use tokio::sync::broadcast;
 
 use beserial::{Deserialize, Serialize};
-use nimiq_network_interface::network::{NetworkEvent, PubsubId, Topic};
+use nimiq_network_interface::network::{MsgAcceptance, NetworkEvent, PubsubId, Topic};
 use nimiq_network_interface::peer::Peer;
 use nimiq_network_interface::{network::Network, peer_map::ObservablePeerMap};
 
@@ -32,11 +32,11 @@ pub enum MockNetworkError {
 }
 
 #[derive(Debug)]
-pub struct MockPubsubId<P> {
+pub struct MockId<P> {
     propagation_source: P,
 }
 
-impl PubsubId<MockPeerId> for MockPubsubId<MockPeerId> {
+impl PubsubId<MockPeerId> for MockId<MockPeerId> {
     fn propagation_source(&self) -> MockPeerId {
         self.propagation_source
     }
@@ -156,7 +156,7 @@ impl Network for MockNetwork {
     type PeerType = MockPeer;
     type AddressType = MockAddress;
     type Error = MockNetworkError;
-    type PubsubId = MockPubsubId<MockPeerId>;
+    type PubsubId = MockId<MockPeerId>;
 
     fn get_peer_updates(
         &self,
@@ -220,7 +220,7 @@ impl Network for MockNetwork {
 
         Ok(stream
             .map(|(topic, peer_id)| {
-                let id = MockPubsubId {
+                let id = MockId {
                     propagation_source: peer_id,
                 };
                 (topic, id)
@@ -256,7 +256,11 @@ impl Network for MockNetwork {
         }
     }
 
-    async fn validate_message(&self, _id: Self::PubsubId) -> Result<bool, Self::Error> {
+    async fn validate_message(
+        &self,
+        _id: Self::PubsubId,
+        _acceptance: MsgAcceptance,
+    ) -> Result<bool, Self::Error> {
         unimplemented!()
     }
 

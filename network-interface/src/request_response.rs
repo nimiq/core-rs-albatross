@@ -116,7 +116,7 @@ impl<P: Peer, Req: RequestMessage, Res: ResponseMessage + 'static> RequestRespon
                 Err(RequestError::ReceiveError)
             }
             Err(_) => {
-                log::error!("Timeout");
+                log::error!("Timeout: {:?}", request);
 
                 // Lock state and remove channel on timeout.
                 let mut state = self.state.lock();

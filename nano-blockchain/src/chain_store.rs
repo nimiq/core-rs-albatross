@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use nimiq_block_albatross::{Block, MacroHeader};
-use nimiq_blockchain_albatross::ChainInfo;
+use nimiq_block::{Block, MacroHeader};
+use nimiq_blockchain::ChainInfo;
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::policy;
 
@@ -118,7 +118,7 @@ impl ChainStore {
 mod tests {
     use rand::prelude::*;
 
-    use nimiq_block_albatross::{MicroBlock, MicroBody, MicroHeader, MicroJustification};
+    use nimiq_block::{MicroBlock, MicroBody, MicroHeader, MicroJustification};
 
     use super::*;
 

@@ -1,7 +1,7 @@
 use account::{Account, AccountError, AccountsList, BasicAccount, StakingContract};
 use accounts::Accounts;
 use beserial::{Serialize, SerializingError};
-use block_albatross::{Block, MacroBlock, MacroBody, MacroHeader};
+use block::{Block, MacroBlock, MacroBody, MacroHeader};
 use bls::{PublicKey as BlsPublicKey, SecretKey as BlsSecretKey};
 use chrono::{DateTime, Utc};
 use database::volatile::{VolatileDatabaseError, VolatileEnvironment};

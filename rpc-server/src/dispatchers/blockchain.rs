@@ -4,16 +4,13 @@ use async_trait::async_trait;
 use futures::stream::{BoxStream, StreamExt};
 
 use nimiq_account::Account;
-use nimiq_blockchain_albatross::{AbstractBlockchain, Blockchain, BlockchainEvent};
+use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::policy;
 use nimiq_rpc_interface::{
     blockchain::BlockchainInterface,
-    types::{
-        Block, ExtendedTransactions, Inherent, SlashedSlots, Slot, Stake, Stakes, Transaction,
-        Validator,
-    },
+    types::{Block, Inherent, SlashedSlots, Slot, Stake, Stakes, Transaction, Validator},
 };
 
 use crate::error::Error;
@@ -170,7 +167,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     async fn get_transactions_by_block_number(
         &mut self,
         block_number: u32,
-    ) -> Result<ExtendedTransactions, Error> {
+    ) -> Result<Vec<Transaction>, Error> {
         // Get all the extended transactions that correspond to this block.
         let extended_tx_vec = self
             .blockchain
@@ -178,16 +175,9 @@ impl BlockchainInterface for BlockchainDispatcher {
             .get_block_transactions(block_number, None);
 
         let mut transactions = vec![];
-        let mut inherents = vec![];
 
         for ext_tx in extended_tx_vec {
-            if ext_tx.is_inherent() {
-                inherents.push(Inherent::from_transaction(
-                    ext_tx.unwrap_inherent().clone(),
-                    ext_tx.block_number,
-                    ext_tx.block_time,
-                ));
-            } else {
+            if !ext_tx.is_inherent() {
                 transactions.push(Transaction::from_blockchain(
                     ext_tx.unwrap_basic().clone(),
                     ext_tx.block_number,
@@ -197,10 +187,7 @@ impl BlockchainInterface for BlockchainDispatcher {
             }
         }
 
-        Ok(ExtendedTransactions {
-            transactions,
-            inherents,
-        })
+        Ok(transactions)
     }
 
     async fn get_batch_inherents(&mut self, batch_number: u32) -> Result<Vec<Inherent>, Error> {
@@ -212,7 +199,7 @@ impl BlockchainInterface for BlockchainDispatcher {
             .get_block_at(macro_block_number, true, None) // The lost_reward_set is in the MacroBody
             .ok_or_else(|| Error::BlockNotFound(macro_block_number.into()))?;
 
-        let mut extended_tx_vec = vec![];
+        let mut inherent_tx_vec = vec![];
 
         let macro_body = macro_block.unwrap_macro().body.unwrap();
 
@@ -229,26 +216,28 @@ impl BlockchainInterface for BlockchainDispatcher {
 
                 for ext_tx in micro_ext_tx_vec {
                     if ext_tx.is_inherent() {
-                        extended_tx_vec.push(ext_tx);
+                        inherent_tx_vec.push(ext_tx);
                     }
                 }
             }
         }
 
         // Append inherents of the macro block (we do this after the micro blocks so the inherents are in order)
-        extended_tx_vec.append(
+        inherent_tx_vec.append(
             &mut self
                 .blockchain
                 .history_store
-                .get_block_transactions(macro_block_number, None),
+                .get_block_transactions(macro_block_number, None)
+                .into_iter()
+                // Macro blocks include validator rewards as regular transactions, filter them out
+                .filter(|ext_tx| ext_tx.is_inherent())
+                .collect(),
         );
 
-        Ok(extended_tx_vec
+        Ok(inherent_tx_vec
             .into_iter()
             .map(|ext_tx| {
                 Inherent::from_transaction(
-                    // The extended txs are guaranteed to be inherents because we filter
-                    // for those above and fetch the other txs from a macro block
                     ext_tx.unwrap_inherent().clone(),
                     ext_tx.block_number,
                     ext_tx.block_time,

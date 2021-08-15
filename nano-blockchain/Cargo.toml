@@ -12,12 +12,12 @@ edition = "2018"
 thiserror = "1.0"
 
 nimiq-account = { path = "../primitives/account" }
-nimiq-block-albatross = { path = "../primitives/block-albatross" }
-nimiq-blockchain-albatross = { path = "../blockchain-albatross" }
+nimiq-block = { path = "../primitives/block" }
+nimiq-blockchain = { path = "../blockchain" }
 nimiq-database = { path = "../database" }
 nimiq-genesis = { path = "../genesis" }
 nimiq-hash = { path = "../hash" }
-nimiq-nano-sync = { path = "../nano-sync" }
+nimiq-nano-zkp = { path = "../nano-zkp" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
 nimiq-tree-primitives = { path = "../accounts/tree-primitives" }
 nimiq-utils = { path = "../utils", features = ["time"] }
@@ -25,4 +25,4 @@ nimiq-utils = { path = "../utils", features = ["time"] }
 [dev-dependencies]
 rand = "^0.8"
 
-nimiq-block-production-albatross = { path = "../block-production-albatross", features = ["test-utils"] }
+nimiq-block-production = { path = "../block-production", features = ["test-utils"] }

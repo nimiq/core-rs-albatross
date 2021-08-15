@@ -10,19 +10,17 @@ use linked_hash_map::LinkedHashMap;
 use parking_lot::RwLock;
 use tokio::sync::{broadcast, mpsc};
 
-use block_albatross::{Block, BlockType, SignedTendermintProposal, ViewChange, ViewChangeProof};
-use blockchain_albatross::{AbstractBlockchain, BlockchainEvent, ForkEvent, PushResult};
+use block::{Block, BlockType, SignedTendermintProposal, ViewChange, ViewChangeProof};
+use blockchain::{AbstractBlockchain, BlockchainEvent, ForkEvent, PushResult};
 use bls::CompressedPublicKey;
-use consensus_albatross::{
-    sync::block_queue::BlockTopic, Consensus, ConsensusEvent, ConsensusProxy,
-};
+use consensus::{sync::block_queue::BlockTopic, Consensus, ConsensusEvent, ConsensusProxy};
 use database::{Database, Environment, ReadTransaction, WriteTransaction};
 use hash::Blake2bHash;
 use network_interface::{
     network::{Network, PubsubId, Topic},
     peer::Peer,
 };
-use nimiq_block_production_albatross::BlockProducer;
+use nimiq_block_production::BlockProducer;
 use nimiq_tendermint::TendermintReturn;
 use nimiq_validator_network::ValidatorNetwork;
 
@@ -40,7 +38,7 @@ impl Topic for ProposalTopic {
     }
 
     fn validate(&self) -> bool {
-        false
+        true
     }
 }
 

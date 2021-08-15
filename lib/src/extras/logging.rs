@@ -4,6 +4,7 @@ use chrono::Local;
 use colored::Colorize;
 use fern::colors::{Color, ColoredLevelConfig};
 use fern::{log_file, Dispatch};
+use file_rotate::{FileRotate, RotationMode};
 use lazy_static::lazy_static;
 use log::{Level, LevelFilter};
 
@@ -21,15 +22,15 @@ lazy_static! {
         "nimiq_account",
         "nimiq_accounts",
         "nimiq_address",
-        "nimiq_block_albatross",
-        "nimiq_block_production_albatross",
-        "nimiq_blockchain_albatross",
+        "nimiq_block",
+        "nimiq_block_production",
+        "nimiq_blockchain",
         "nimiq_bls",
         "nimiq_bls",
         "nimiq_build_tools",
         "nimiq_client",
         "nimiq_collections",
-        "nimiq_consensus_albatross",
+        "nimiq_consensus",
         "nimiq_database",
         "nimiq_devnet",
         "nimiq_genesis",
@@ -45,8 +46,8 @@ lazy_static! {
         "nimiq_messages",
         "nimiq_metrics_server",
         "nimiq_mnemonic",
-        "nimiq_nano_sync",
-        "nimiq_network_albatross",
+        "nimiq_nano_zkp",
+        "nimiq_network",
         "nimiq_network_interface",
         "nimiq_network_libp2p",
         "nimiq_network_mock",
@@ -86,7 +87,7 @@ fn max_module_width(target: &str) -> usize {
 /// Trait that implements Nimiq specific behavior for fern's Dispatch.
 pub trait NimiqDispatch {
     /// Setup logging in pretty_env_logger style.
-    fn pretty_logging(self, show_timestamps: bool) -> Self;
+    fn pretty_logging(self, show_timestamps: bool, formatted: bool) -> Self;
 
     /// Setup nimiq modules log level.
     fn level_for_nimiq(self, level: LevelFilter) -> Self;
@@ -96,40 +97,66 @@ pub trait NimiqDispatch {
     fn only_nimiq(self) -> Self;
 }
 
-fn pretty_logging(dispatch: Dispatch, colors_level: ColoredLevelConfig) -> Dispatch {
+fn pretty_logging(
+    dispatch: Dispatch,
+    colors_level: ColoredLevelConfig,
+    formatted: bool,
+) -> Dispatch {
     dispatch.format(move |out, message, record| {
         let target_text = record.target().split("::").last().unwrap();
         let max_width = max_module_width(target_text);
         let target = format!("{: <width$}", target_text, width = max_width);
-        out.finish(format_args!(
-            " {level: <5} {target} | {message}",
-            target = target.bold(),
-            level = colors_level.color(record.level()),
-            message = message,
-        ));
+
+        if formatted {
+            out.finish(format_args!(
+                " {level: <5} {target} | {message}",
+                target = target.bold(),
+                level = colors_level.color(record.level()),
+                message = message,
+            ));
+        } else {
+            out.finish(format_args!(
+                " {level: <5} {target} | {message}",
+                target = target,
+                level = record.level(),
+                message = message,
+            ));
+        }
     })
 }
 
 fn pretty_logging_with_timestamps(
     dispatch: Dispatch,
     colors_level: ColoredLevelConfig,
+    formatted: bool,
 ) -> Dispatch {
     dispatch.format(move |out, message, record| {
         let target_text = record.target().split("::").last().unwrap();
         let max_width = max_module_width(target_text);
         let target = format!("{: <width$}", target_text, width = max_width);
-        out.finish(format_args!(
-            " {timestamp} {level: <5} {target} | {message}",
-            timestamp = Local::now().format("%Y-%m-%d %H:%M:%S"),
-            target = target.bold(),
-            level = colors_level.color(record.level()),
-            message = message,
-        ));
+
+        if formatted {
+            out.finish(format_args!(
+                " {timestamp} {level: <5} {target} | {message}",
+                timestamp = Local::now().format("%Y-%m-%d %T.%3f"),
+                target = target.bold(),
+                level = colors_level.color(record.level()),
+                message = message,
+            ));
+        } else {
+            out.finish(format_args!(
+                " {timestamp} {level: <5} {target} | {message}",
+                timestamp = Local::now().format("%Y-%m-%d %T.%3f"),
+                target = target,
+                level = record.level(),
+                message = message,
+            ));
+        }
     })
 }
 
 impl NimiqDispatch for Dispatch {
-    fn pretty_logging(self, show_timestamps: bool) -> Self {
+    fn pretty_logging(self, show_timestamps: bool, formatted: bool) -> Self {
         let colors_level = ColoredLevelConfig::new()
             .error(Color::Red)
             .warn(Color::Yellow)
@@ -138,9 +165,9 @@ impl NimiqDispatch for Dispatch {
             .trace(Color::Magenta);
 
         if show_timestamps {
-            pretty_logging_with_timestamps(self, colors_level)
+            pretty_logging_with_timestamps(self, colors_level, formatted)
         } else {
-            pretty_logging(self, colors_level)
+            pretty_logging(self, colors_level, formatted)
         }
     }
 
@@ -203,7 +230,8 @@ pub fn initialize_logging(
 
     // Set logging level for Nimiq and all other modules
     let mut dispatch = Dispatch::new()
-        .pretty_logging(settings.timestamps)
+        // Do not format (colors, bold components) for file output
+        .pretty_logging(settings.timestamps, settings.file.is_none())
         .level(DEFAULT_LEVEL)
         .level_for_nimiq(settings.level.unwrap_or(DEFAULT_LEVEL));
 
@@ -219,6 +247,28 @@ pub fn initialize_logging(
         dispatch = dispatch.chain(std::io::stderr());
     }
 
+    if let Some(rotating_file_settings) = settings.rotating_trace_log {
+        std::fs::create_dir_all(rotating_file_settings.path.clone())?;
+
+        // Create rotating log file according to settings
+        let log = FileRotate::new(
+            rotating_file_settings.path.join("log.log"),
+            RotationMode::BytesSurpassed(rotating_file_settings.size),
+            rotating_file_settings.file_count,
+        );
+
+        dispatch = Dispatch::new().chain(dispatch);
+
+        dispatch = dispatch.chain(
+            Dispatch::new()
+                .pretty_logging(true, false) // always log with timestamps and without formatting
+                .level(DEFAULT_LEVEL)
+                .level_for_nimiq(LevelFilter::Trace)
+                .chain(Box::new(log) as Box<dyn std::io::Write + Send>),
+        );
+    }
+
     dispatch.apply()?;
+
     Ok(())
 }
