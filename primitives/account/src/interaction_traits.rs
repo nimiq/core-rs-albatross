@@ -1,5 +1,4 @@
 use nimiq_database::WriteTransaction;
-use nimiq_primitives::coin::Coin;
 use nimiq_transaction::Transaction;
 
 use crate::{AccountError, AccountsTrie, Inherent};
@@ -8,7 +7,6 @@ pub trait AccountTransactionInteraction: Sized {
     fn create(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
-        balance: Coin,
         transaction: &Transaction,
         block_height: u32,
         block_time: u64,

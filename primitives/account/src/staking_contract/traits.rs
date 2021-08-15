@@ -15,6 +15,7 @@ use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionIn
 use crate::staking_contract::receipts::DropValidatorReceipt;
 use crate::staking_contract::SlashReceipt;
 use crate::{Account, AccountError, AccountsTrie, Inherent, InherentType, StakingContract};
+use nimiq_keys::Address;
 
 /// We need to distinguish between two types of transactions:
 /// 1. Incoming transactions, which include:
@@ -42,7 +43,6 @@ impl AccountTransactionInteraction for StakingContract {
     fn create(
         _accounts_tree: &AccountsTrie,
         _db_txn: &mut WriteTransaction,
-        _balance: Coin,
         _transaction: &Transaction,
         _block_height: u32,
         _block_time: u64,
@@ -58,6 +58,12 @@ impl AccountTransactionInteraction for StakingContract {
         block_height: u32,
         _block_time: u64,
     ) -> Result<Option<Vec<u8>>, AccountError> {
+        // Check that the address is that of the Staking contract.
+        if transaction.recipient != Address::from_any_str(policy::STAKING_CONTRACT_ADDRESS).unwrap()
+        {
+            return Err(AccountError::InvalidForRecipient);
+        }
+
         let mut receipt = None;
 
         // Parse transaction data.
@@ -368,6 +374,11 @@ impl AccountTransactionInteraction for StakingContract {
         block_height: u32,
         _block_time: u64,
     ) -> Result<Option<Vec<u8>>, AccountError> {
+        // Check that the address is that of the Staking contract.
+        if transaction.sender != Address::from_any_str(policy::STAKING_CONTRACT_ADDRESS).unwrap() {
+            return Err(AccountError::InvalidForSender);
+        }
+
         let receipt;
 
         // Parse transaction data.

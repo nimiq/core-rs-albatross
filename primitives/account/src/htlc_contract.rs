@@ -69,7 +69,6 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     fn create(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
-        balance: Coin,
         transaction: &Transaction,
         _block_height: u32,
         _block_time: u64,
@@ -85,7 +84,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         }
 
         let contract = HashedTimeLockedContract::new(
-            balance,
+            transaction.value,
             data.sender,
             data.recipient,
             data.hash_algorithm,
