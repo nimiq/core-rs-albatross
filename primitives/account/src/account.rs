@@ -73,17 +73,14 @@ impl AccountTransactionInteraction for Account {
     fn create(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
-        balance: Coin,
         transaction: &Transaction,
         block_height: u32,
         block_time: u64,
     ) -> Result<(), AccountError> {
         match transaction.recipient_type {
-            AccountType::Basic => Err(AccountError::InvalidForRecipient),
             AccountType::Vesting => VestingContract::create(
                 accounts_tree,
                 db_txn,
-                balance,
                 transaction,
                 block_height,
                 block_time,
@@ -91,15 +88,11 @@ impl AccountTransactionInteraction for Account {
             AccountType::HTLC => HashedTimeLockedContract::create(
                 accounts_tree,
                 db_txn,
-                balance,
                 transaction,
                 block_height,
                 block_time,
             ),
-            AccountType::Staking => Err(AccountError::InvalidForRecipient),
-            _ => {
-                unreachable!()
-            }
+            _ => Err(AccountError::InvalidForRecipient),
         }
     }
 
@@ -139,9 +132,7 @@ impl AccountTransactionInteraction for Account {
                 block_height,
                 block_time,
             ),
-            _ => {
-                unreachable!()
-            }
+            _ => Err(AccountError::InvalidForRecipient),
         }
     }
 
@@ -186,9 +177,7 @@ impl AccountTransactionInteraction for Account {
                 block_time,
                 receipt,
             ),
-            _ => {
-                unreachable!()
-            }
+            _ => Err(AccountError::InvalidForRecipient),
         }
     }
 
@@ -228,9 +217,7 @@ impl AccountTransactionInteraction for Account {
                 block_height,
                 block_time,
             ),
-            _ => {
-                unreachable!()
-            }
+            _ => Err(AccountError::InvalidForSender),
         }
     }
 
@@ -275,9 +262,7 @@ impl AccountTransactionInteraction for Account {
                 block_time,
                 receipt,
             ),
-            _ => {
-                unreachable!()
-            }
+            _ => Err(AccountError::InvalidForSender),
         }
     }
 }
@@ -328,9 +313,7 @@ impl AccountInherentInteraction for Account {
                 block_height,
                 block_time,
             ),
-            _ => {
-                unreachable!()
-            }
+            _ => Err(AccountError::InvalidInherent),
         }
     }
 
@@ -384,9 +367,7 @@ impl AccountInherentInteraction for Account {
                 block_time,
                 receipt,
             ),
-            _ => {
-                unreachable!()
-            }
+            _ => Err(AccountError::InvalidInherent),
         }
     }
 }

@@ -69,7 +69,6 @@ impl AccountTransactionInteraction for VestingContract {
     fn create(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
-        balance: Coin,
         transaction: &Transaction,
         _block_height: u32,
         _block_time: u64,
@@ -85,7 +84,7 @@ impl AccountTransactionInteraction for VestingContract {
         }
 
         let contract = VestingContract::new(
-            balance,
+            transaction.value,
             data.owner,
             data.start_time,
             data.time_step,

@@ -7,6 +7,7 @@ use nimiq_trie::key_nibbles::KeyNibbles;
 use crate::inherent::{Inherent, InherentType};
 use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction};
 use crate::{Account, AccountError, AccountsTrie};
+use nimiq_primitives::account::AccountType;
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
@@ -18,7 +19,6 @@ impl AccountTransactionInteraction for BasicAccount {
     fn create(
         _accounts_tree: &AccountsTrie,
         _db_txn: &mut WriteTransaction,
-        _balance: Coin,
         _transaction: &Transaction,
         _block_height: u32,
         _block_time: u64,
@@ -37,9 +37,16 @@ impl AccountTransactionInteraction for BasicAccount {
 
         let leaf = accounts_tree.get(db_txn, &key);
 
+        // Implicitly also checks that the address is in fact from a basic account.
         let current_balance = match leaf {
+            Some(Account::Basic(account)) => account.balance,
             None => Coin::ZERO,
-            Some(account) => account.balance(),
+            _ => {
+                return Err(AccountError::TypeMismatch {
+                    expected: AccountType::Basic,
+                    got: leaf.unwrap().account_type(),
+                })
+            }
         };
 
         let new_balance = Account::balance_add(current_balance, transaction.value)?;
@@ -102,6 +109,13 @@ impl AccountTransactionInteraction for BasicAccount {
             .ok_or(AccountError::NonExistentAddress {
                 address: transaction.sender.clone(),
             })?;
+
+        if account.account_type() != AccountType::Basic {
+            return Err(AccountError::TypeMismatch {
+                expected: AccountType::Basic,
+                got: account.account_type(),
+            });
+        }
 
         let new_balance = Account::balance_sub(account.balance(), transaction.total_value()?)?;
 
