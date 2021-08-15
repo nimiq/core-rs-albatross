@@ -13,7 +13,7 @@ use nimiq_primitives::{coin::Coin, policy};
 use nimiq_trie::key_nibbles::KeyNibbles;
 use nimiq_vrf::{AliasMethod, VrfSeed, VrfUseCase};
 
-use crate::{Account, AccountsTree};
+use crate::{Account, AccountsTrie};
 
 pub use receipts::*;
 pub use staker::Staker;
@@ -153,7 +153,7 @@ impl StakingContract {
 
     /// Get the staking contract information.
     pub fn get_staking_contract(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &DBTransaction,
     ) -> StakingContract {
         let key = StakingContract::get_key_staking_contract();
@@ -173,7 +173,7 @@ impl StakingContract {
 
     /// Get a validator information given its address, if it exists.
     pub fn get_validator(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &DBTransaction,
         validator_address: &Address,
     ) -> Option<Validator> {
@@ -194,9 +194,49 @@ impl StakingContract {
         }
     }
 
+    /// Get a list containing the addresses of all the stakers that delegating for a given validator.
+    pub fn get_validator_stakers(
+        accounts_tree: &AccountsTrie,
+        db_txn: &DBTransaction,
+        validator_address: &Address,
+    ) -> Vec<Address> {
+        let key = StakingContract::get_key_validator(validator_address);
+
+        trace!(
+            "Trying to fetch validator with address {} at key {}.",
+            validator_address.to_string(),
+            key.to_string()
+        );
+
+        let validator = match accounts_tree.get(db_txn, &key) {
+            Some(Account::StakingValidator(validator)) => validator,
+            _ => return vec![],
+        };
+
+        let num_stakers = validator.num_stakers as usize;
+
+        let empty_staker_key =
+            StakingContract::get_key_validator_staker(validator_address, &Address::from([0; 20]));
+
+        let chunk = accounts_tree.get_chunk(db_txn, &empty_staker_key, num_stakers);
+
+        let mut stakers = vec![];
+
+        for account in chunk {
+            match account {
+                Account::StakingValidatorsStaker(address) => stakers.push(address),
+                _ => {
+                    unreachable!()
+                }
+            }
+        }
+
+        stakers
+    }
+
     /// Get a staker information given its address, if it exists.
     pub fn get_staker(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &DBTransaction,
         staker_address: &Address,
     ) -> Option<Staker> {
@@ -218,7 +258,7 @@ impl StakingContract {
     }
 
     /// Creates a new Staking contract into the given accounts tree.
-    pub fn create(accounts_tree: &AccountsTree, db_txn: &mut WriteTransaction) {
+    pub fn create(accounts_tree: &AccountsTrie, db_txn: &mut WriteTransaction) {
         trace!("Trying to put the staking contract in the accounts tree.");
 
         accounts_tree.put(
@@ -232,7 +272,7 @@ impl StakingContract {
     /// used to select the validators for the next epoch.
     pub fn select_validators(
         &self,
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &DBTransaction,
         seed: &VrfSeed,
     ) -> Validators {

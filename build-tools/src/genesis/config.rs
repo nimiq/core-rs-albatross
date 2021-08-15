@@ -7,7 +7,6 @@ use serde::{Deserialize, Deserializer};
 use beserial::Deserialize as BDeserialize;
 use bls::{PublicKey as BlsPublicKey, SecretKey as BlsSecretKey};
 use keys::Address;
-use primitives::account::ValidatorId;
 use primitives::coin::Coin;
 
 #[derive(Clone, Debug, Deserialize)]
@@ -36,8 +35,11 @@ pub struct GenesisConfig {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct GenesisValidator {
-    #[serde(deserialize_with = "deserialize_validator_id")]
-    pub validator_id: ValidatorId,
+    #[serde(deserialize_with = "deserialize_validator_address")]
+    pub validator_address: Address,
+
+    #[serde(deserialize_with = "deserialize_nimiq_address")]
+    pub warm_address: Address,
 
     #[serde(deserialize_with = "deserialize_nimiq_address")]
     pub reward_address: Address,
@@ -57,8 +59,8 @@ pub struct GenesisStake {
     #[serde(deserialize_with = "deserialize_coin")]
     pub balance: Coin,
 
-    #[serde(deserialize_with = "deserialize_validator_id")]
-    pub validator_id: ValidatorId,
+    #[serde(deserialize_with = "deserialize_nimiq_address_opt")]
+    pub delegation: Option<Address>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -101,15 +103,6 @@ where
     Coin::try_from(value).map_err(Error::custom)
 }
 
-pub(crate) fn deserialize_validator_id<'de, D>(deserializer: D) -> Result<ValidatorId, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let validator_id_hex: String = Deserialize::deserialize(deserializer)?;
-    let validator_id_raw = hex::decode(validator_id_hex).map_err(Error::custom)?;
-    ValidatorId::deserialize_from_vec(&validator_id_raw).map_err(Error::custom)
-}
-
 pub(crate) fn deserialize_bls_public_key<'de, D>(deserializer: D) -> Result<BlsPublicKey, D::Error>
 where
     D: Deserializer<'de>,
@@ -117,21 +110,4 @@ where
     let pkey_hex: String = Deserialize::deserialize(deserializer)?;
     let pkey_raw = hex::decode(pkey_hex).map_err(Error::custom)?;
     BlsPublicKey::deserialize_from_vec(&pkey_raw).map_err(Error::custom)
-}
-
-pub(crate) fn deserialize_bls_secret_key_opt<'de, D>(
-    deserializer: D,
-) -> Result<Option<BlsSecretKey>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let opt: Option<String> = Deserialize::deserialize(deserializer)?;
-    if let Some(skey_hex) = opt {
-        let skey_raw = hex::decode(skey_hex).map_err(Error::custom)?;
-        Ok(Some(
-            BlsSecretKey::deserialize_from_vec(&skey_raw).map_err(Error::custom)?,
-        ))
-    } else {
-        Ok(None)
-    }
 }

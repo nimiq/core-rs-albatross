@@ -9,7 +9,7 @@ use nimiq_trie::key_nibbles::KeyNibbles;
 use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction};
 use crate::staking_contract::{Staker, Validator};
 use crate::{
-    AccountError, AccountsTree, BasicAccount, HashedTimeLockedContract, Inherent, StakingContract,
+    AccountError, AccountsTrie, BasicAccount, HashedTimeLockedContract, Inherent, StakingContract,
     VestingContract,
 };
 
@@ -71,7 +71,7 @@ impl Account {
 
 impl AccountTransactionInteraction for Account {
     fn create(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         balance: Coin,
         transaction: &Transaction,
@@ -104,7 +104,7 @@ impl AccountTransactionInteraction for Account {
     }
 
     fn commit_incoming_transaction(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         transaction: &Transaction,
         block_height: u32,
@@ -146,7 +146,7 @@ impl AccountTransactionInteraction for Account {
     }
 
     fn revert_incoming_transaction(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         transaction: &Transaction,
         block_height: u32,
@@ -193,7 +193,7 @@ impl AccountTransactionInteraction for Account {
     }
 
     fn commit_outgoing_transaction(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         transaction: &Transaction,
         block_height: u32,
@@ -235,7 +235,7 @@ impl AccountTransactionInteraction for Account {
     }
 
     fn revert_outgoing_transaction(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         transaction: &Transaction,
         block_height: u32,
@@ -284,7 +284,7 @@ impl AccountTransactionInteraction for Account {
 
 impl AccountInherentInteraction for Account {
     fn commit_inherent(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         inherent: &Inherent,
         block_height: u32,
@@ -335,7 +335,7 @@ impl AccountInherentInteraction for Account {
     }
 
     fn revert_inherent(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         inherent: &Inherent,
         block_height: u32,

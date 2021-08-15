@@ -24,7 +24,6 @@ rand = "0.7"
 beserial = { path = "../beserial" }
 beserial_derive = { path = "../beserial/beserial_derive" }
 nimiq-account = { path = "../primitives/account" }
-nimiq-accounts = { path = "../accounts" }
 nimiq-block = { path = "../primitives/block" }
 nimiq-bls = { path = "../bls", features = ["beserial"] }
 nimiq-collections = { path = "../collections" }

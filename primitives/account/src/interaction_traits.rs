@@ -2,11 +2,11 @@ use nimiq_database::WriteTransaction;
 use nimiq_primitives::coin::Coin;
 use nimiq_transaction::Transaction;
 
-use crate::{AccountError, AccountsTree, Inherent};
+use crate::{AccountError, AccountsTrie, Inherent};
 
 pub trait AccountTransactionInteraction: Sized {
     fn create(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         balance: Coin,
         transaction: &Transaction,
@@ -15,7 +15,7 @@ pub trait AccountTransactionInteraction: Sized {
     ) -> Result<(), AccountError>;
 
     fn commit_incoming_transaction(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         transaction: &Transaction,
         block_height: u32,
@@ -23,7 +23,7 @@ pub trait AccountTransactionInteraction: Sized {
     ) -> Result<Option<Vec<u8>>, AccountError>;
 
     fn revert_incoming_transaction(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         transaction: &Transaction,
         block_height: u32,
@@ -32,7 +32,7 @@ pub trait AccountTransactionInteraction: Sized {
     ) -> Result<(), AccountError>;
 
     fn commit_outgoing_transaction(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         transaction: &Transaction,
         block_height: u32,
@@ -40,7 +40,7 @@ pub trait AccountTransactionInteraction: Sized {
     ) -> Result<Option<Vec<u8>>, AccountError>;
 
     fn revert_outgoing_transaction(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         transaction: &Transaction,
         block_height: u32,
@@ -51,7 +51,7 @@ pub trait AccountTransactionInteraction: Sized {
 
 pub trait AccountInherentInteraction: Sized {
     fn commit_inherent(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         inherent: &Inherent,
         block_height: u32,
@@ -59,7 +59,7 @@ pub trait AccountInherentInteraction: Sized {
     ) -> Result<Option<Vec<u8>>, AccountError>;
 
     fn revert_inherent(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         inherent: &Inherent,
         block_height: u32,

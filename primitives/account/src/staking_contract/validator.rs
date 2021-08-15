@@ -14,7 +14,7 @@ use crate::staking_contract::receipts::{
     DropValidatorReceipt, ReactivateValidatorReceipt, RetireValidatorReceipt,
     UnparkValidatorReceipt, UpdateValidatorReceipt,
 };
-use crate::{Account, AccountError, AccountsTree, StakingContract};
+use crate::{Account, AccountError, AccountsTrie, StakingContract};
 
 /// Struct representing a validator in the staking contract.
 /// Actions concerning a validator are:
@@ -75,7 +75,7 @@ impl StakingContract {
     /// and can only be retrieved by dropping the validator.
     /// This function is public to fill the genesis staking contract.
     pub fn create_validator(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
         warm_key: Address,
@@ -139,7 +139,7 @@ impl StakingContract {
 
     /// Reverts creating a new validator entry.
     pub(crate) fn revert_create_validator(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
     ) -> Result<(), AccountError> {
@@ -184,7 +184,7 @@ impl StakingContract {
 
     /// Updates some of the validator details (warm key, validator key, reward address and/or signal data).
     pub(crate) fn update_validator(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
         new_warm_key: Option<Address>,
@@ -245,7 +245,7 @@ impl StakingContract {
 
     /// Reverts updating validator details.
     pub(crate) fn revert_update_validator(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
         receipt: UpdateValidatorReceipt,
@@ -285,7 +285,7 @@ impl StakingContract {
     /// Inactivates a validator. It is necessary to retire a validator before dropping it. This also
     /// removes the validator from the parking set.
     pub(crate) fn retire_validator(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
         warm_address: Address,
@@ -353,7 +353,7 @@ impl StakingContract {
 
     /// Reverts inactivating a validator.
     pub(crate) fn revert_retire_validator(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
         receipt: RetireValidatorReceipt,
@@ -409,7 +409,7 @@ impl StakingContract {
 
     /// Reactivates a validator.
     pub(crate) fn reactivate_validator(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
         warm_address: Address,
@@ -481,7 +481,7 @@ impl StakingContract {
 
     /// Reverts reactivating a validator.
     pub(crate) fn revert_reactivate_validator(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
         receipt: ReactivateValidatorReceipt,
@@ -530,7 +530,7 @@ impl StakingContract {
     /// Removes a validator from the parked set and the disabled slots. This is used by validators
     /// after they get slashed so that they can produce blocks again.
     pub(crate) fn unpark_validator(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
         warm_address: Address,
@@ -592,7 +592,7 @@ impl StakingContract {
 
     /// Reverts an unparking transaction.
     pub(crate) fn revert_unpark_validator(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
         receipt: UnparkValidatorReceipt,
@@ -633,7 +633,7 @@ impl StakingContract {
     /// Drops a validator and returns its deposit. This can only be used on inactive validators!
     /// The validator must have been inactive for at least one election block.
     pub(crate) fn drop_validator(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
         block_height: u32,
@@ -767,7 +767,7 @@ impl StakingContract {
 
     /// Reverts dropping a validator.
     pub(crate) fn revert_drop_validator(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
         receipt: DropValidatorReceipt,
