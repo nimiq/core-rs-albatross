@@ -13,7 +13,7 @@ use nimiq_trie::key_nibbles::KeyNibbles;
 
 use crate::inherent::Inherent;
 use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction};
-use crate::{Account, AccountError, AccountsTree};
+use crate::{Account, AccountError, AccountsTrie};
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
@@ -67,7 +67,7 @@ impl HashedTimeLockedContract {
 
 impl AccountTransactionInteraction for HashedTimeLockedContract {
     fn create(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         balance: Coin,
         transaction: &Transaction,
@@ -101,7 +101,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     }
 
     fn commit_incoming_transaction(
-        _accounts_tree: &AccountsTree,
+        _accounts_tree: &AccountsTrie,
         _db_txn: &mut WriteTransaction,
         _transaction: &Transaction,
         _block_height: u32,
@@ -111,7 +111,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     }
 
     fn revert_incoming_transaction(
-        _accounts_tree: &AccountsTree,
+        _accounts_tree: &AccountsTrie,
         _db_txn: &mut WriteTransaction,
         _transaction: &Transaction,
         _block_height: u32,
@@ -122,7 +122,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     }
 
     fn commit_outgoing_transaction(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         transaction: &Transaction,
         _block_height: u32,
@@ -240,7 +240,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     }
 
     fn revert_outgoing_transaction(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         transaction: &Transaction,
         _block_height: u32,
@@ -283,7 +283,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
 
 impl AccountInherentInteraction for HashedTimeLockedContract {
     fn commit_inherent(
-        _accounts_tree: &AccountsTree,
+        _accounts_tree: &AccountsTrie,
         _db_txn: &mut WriteTransaction,
         _inherent: &Inherent,
         _block_height: u32,
@@ -293,7 +293,7 @@ impl AccountInherentInteraction for HashedTimeLockedContract {
     }
 
     fn revert_inherent(
-        _accounts_tree: &AccountsTree,
+        _accounts_tree: &AccountsTrie,
         _db_txn: &mut WriteTransaction,
         _inherent: &Inherent,
         _block_height: u32,

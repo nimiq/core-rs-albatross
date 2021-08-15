@@ -14,7 +14,7 @@ use nimiq_transaction::Transaction;
 use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction};
 use crate::staking_contract::receipts::DropValidatorReceipt;
 use crate::staking_contract::SlashReceipt;
-use crate::{Account, AccountError, AccountsTree, Inherent, InherentType, StakingContract};
+use crate::{Account, AccountError, AccountsTrie, Inherent, InherentType, StakingContract};
 
 /// We need to distinguish between two types of transactions:
 /// 1. Incoming transactions, which include:
@@ -40,7 +40,7 @@ use crate::{Account, AccountError, AccountsTree, Inherent, InherentType, Staking
 ///     The type of transaction is given in the proof field.
 impl AccountTransactionInteraction for StakingContract {
     fn create(
-        _accounts_tree: &AccountsTree,
+        _accounts_tree: &AccountsTrie,
         _db_txn: &mut WriteTransaction,
         _balance: Coin,
         _transaction: &Transaction,
@@ -52,7 +52,7 @@ impl AccountTransactionInteraction for StakingContract {
 
     /// Commits an incoming transaction to the accounts trie.
     fn commit_incoming_transaction(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         transaction: &Transaction,
         block_height: u32,
@@ -221,7 +221,7 @@ impl AccountTransactionInteraction for StakingContract {
 
     /// Reverts the commit of an incoming transaction to the accounts trie.
     fn revert_incoming_transaction(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         transaction: &Transaction,
         _block_height: u32,
@@ -362,7 +362,7 @@ impl AccountTransactionInteraction for StakingContract {
 
     /// Commits an outgoing transaction to the accounts trie.
     fn commit_outgoing_transaction(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         transaction: &Transaction,
         block_height: u32,
@@ -424,7 +424,7 @@ impl AccountTransactionInteraction for StakingContract {
 
     /// Reverts the commit of an incoming transaction to the accounts trie.
     fn revert_outgoing_transaction(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         transaction: &Transaction,
         _block_height: u32,
@@ -497,7 +497,7 @@ impl AccountTransactionInteraction for StakingContract {
 impl AccountInherentInteraction for StakingContract {
     /// Commits an inherent to the accounts trie.
     fn commit_inherent(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         inherent: &Inherent,
         block_height: u32,
@@ -673,7 +673,7 @@ impl AccountInherentInteraction for StakingContract {
 
     /// Reverts the commit of an inherent to the accounts trie.
     fn revert_inherent(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         inherent: &Inherent,
         block_height: u32,

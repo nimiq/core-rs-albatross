@@ -8,7 +8,7 @@ use nimiq_primitives::policy;
 
 use crate::staking_contract::receipts::{DropStakerReceipt, UpdateStakerReceipt};
 use crate::staking_contract::RetireStakerReceipt;
-use crate::{Account, AccountError, AccountsTree, StakingContract};
+use crate::{Account, AccountError, AccountsTrie, StakingContract};
 
 /// Struct representing a staker in the staking contract.
 /// Actions concerning a staker are:
@@ -52,7 +52,7 @@ pub struct Staker {
 impl StakingContract {
     /// Creates a new staker. This function is public to fill the genesis staking contract.
     pub fn create_staker(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         staker_address: &Address,
         balance: Coin,
@@ -148,7 +148,7 @@ impl StakingContract {
 
     /// Reverts a create staker transaction.
     pub(crate) fn revert_create_staker(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         staker_address: &Address,
     ) -> Result<(), AccountError> {
@@ -234,7 +234,7 @@ impl StakingContract {
     /// Adds stake to a staker. It will be directly added to the staker's active balance. Anyone can
     /// stake for a staker.
     pub(crate) fn stake(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         staker_address: &Address,
         value: Coin,
@@ -312,7 +312,7 @@ impl StakingContract {
 
     /// Reverts a stake transaction.
     pub(crate) fn revert_stake(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         staker_address: &Address,
         value: Coin,
@@ -391,7 +391,7 @@ impl StakingContract {
     /// Updates the staker details. Right now you can only update the delegation. Using this function
     /// you can change validators without needing to retire and reactivate.
     pub(crate) fn update_staker(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         staker_address: &Address,
         delegation: Option<Address>,
@@ -516,7 +516,7 @@ impl StakingContract {
 
     /// Reverts updating staker details.
     pub(crate) fn revert_update_staker(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         staker_address: &Address,
         receipt: UpdateStakerReceipt,
@@ -639,7 +639,7 @@ impl StakingContract {
     /// unstake it. This just moves coins from the staker's active balance to the staker's  inactive
     /// balance.
     pub(crate) fn retire_staker(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         staker_address: &Address,
         value: Coin,
@@ -713,7 +713,7 @@ impl StakingContract {
 
     /// Reverts retiring a staker.
     pub(crate) fn revert_retire_staker(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         staker_address: &Address,
         value: Coin,
@@ -780,7 +780,7 @@ impl StakingContract {
     /// Reactivates some balance from a staker. It just moves coins from the staker's inactive
     /// balance to the staker's  active balance.
     pub(crate) fn reactivate_staker(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         staker_address: &Address,
         value: Coin,
@@ -844,7 +844,7 @@ impl StakingContract {
 
     /// Reverts reactivating a staker.
     pub(crate) fn revert_reactivate_staker(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         staker_address: &Address,
         value: Coin,
@@ -909,7 +909,7 @@ impl StakingContract {
     /// Removes stake from a staker's inactive balance. If the entire staker's balance (both active
     /// and inactive) is unstaked then the staker is dropped.
     pub(crate) fn unstake(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         staker_address: &Address,
         value: Coin,
@@ -974,7 +974,7 @@ impl StakingContract {
 
     /// Reverts a unstake transaction.
     pub(crate) fn revert_unstake(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         staker_address: &Address,
         value: Coin,
@@ -1022,7 +1022,7 @@ impl StakingContract {
     /// This function can be used to pay transaction fees directly from a staker's active or
     /// inactive balance.
     pub(crate) fn deduct_fees(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         staker_address: &Address,
         from_active_balance: bool,
@@ -1112,7 +1112,7 @@ impl StakingContract {
 
     /// Reverts a deduct fees transaction.
     pub(crate) fn revert_deduct_fees(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         staker_address: &Address,
         from_active_balance: bool,
@@ -1193,7 +1193,7 @@ impl StakingContract {
     /// Drops a staker. This isn't an actual transaction, it's just a helper function to avoid code
     /// duplication in the unstake and deduct fees transactions.
     fn drop_staker(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         staker: &Staker,
     ) -> Result<Option<DropStakerReceipt>, AccountError> {
@@ -1248,7 +1248,7 @@ impl StakingContract {
     /// Reverts dropping a staker. This isn't an actual transaction, it's just a helper function to
     /// avoid code duplication in the unstake and deduct fees transactions.
     fn revert_drop_staker(
-        accounts_tree: &AccountsTree,
+        accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         staker_address: &Address,
         receipt: DropStakerReceipt,

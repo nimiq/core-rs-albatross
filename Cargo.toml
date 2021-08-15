@@ -1,6 +1,5 @@
 [workspace]
 members = [
-  "accounts",
   "beserial",
   "beserial/beserial_derive",
   "block-production",

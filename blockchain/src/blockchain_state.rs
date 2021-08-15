@@ -1,4 +1,4 @@
-use nimiq_accounts::Accounts;
+use nimiq_account::Accounts;
 use nimiq_block::MacroBlock;
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::slots::Validators;

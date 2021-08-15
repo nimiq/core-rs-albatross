@@ -8,7 +8,6 @@ use thiserror::Error;
 use toml::de::Error as TomlError;
 
 use account::{Account, AccountError, AccountsList, BasicAccount, StakingContract};
-use accounts::Accounts;
 use beserial::{Deserialize, Serialize, SerializingError};
 use block::{Block, MacroBlock, MacroBody, MacroHeader};
 use bls::{PublicKey as BlsPublicKey, SecretKey as BlsSecretKey};
@@ -16,7 +15,6 @@ use database::volatile::{VolatileDatabaseError, VolatileEnvironment};
 use database::WriteTransaction;
 use hash::{Blake2bHash, Blake2sHasher, Hash, Hasher};
 use keys::Address;
-use primitives::account::ValidatorId;
 use primitives::coin::Coin;
 use vrf::VrfSeed;
 
@@ -116,7 +114,7 @@ impl GenesisBuilder {
         balance: Coin,
     ) -> &mut Self {
         self.validators.push(config::GenesisValidator {
-            validator_id,
+            validator_address: validator_id,
             reward_address,
             balance,
             validator_key,
@@ -270,7 +268,7 @@ impl GenesisBuilder {
 
         for validator in self.validators.iter() {
             contract.create_validator(
-                validator.validator_id.clone(),
+                validator.validator_address.clone(),
                 validator.validator_key.compress(),
                 validator.reward_address.clone(),
                 validator.balance,

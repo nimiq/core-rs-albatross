@@ -31,7 +31,6 @@ toml = "0.5"
 
 beserial = { path = "../beserial" }
 nimiq-account = { path = "../primitives/account" }
-nimiq-accounts = { path = "../accounts" }
 nimiq-block = { path = "../primitives/block" }
 nimiq-bls = { path = "../bls" }
 nimiq-collections = { path = "../collections" }

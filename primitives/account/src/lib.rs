@@ -7,9 +7,9 @@ use std::convert::TryFrom;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use nimiq_keys::Address;
-use nimiq_trie::trie::MerkleRadixTrie;
 
 pub use crate::account::Account;
+pub use crate::accounts::{Accounts, AccountsTrie};
 pub use crate::basic_account::BasicAccount;
 pub use crate::error::AccountError;
 pub use crate::htlc_contract::HashedTimeLockedContract;
@@ -20,6 +20,7 @@ pub use crate::staking_contract::*;
 pub use crate::vesting_contract::VestingContract;
 
 mod account;
+mod accounts;
 mod basic_account;
 mod error;
 mod htlc_contract;
@@ -28,9 +29,6 @@ mod interaction_traits;
 mod receipts;
 mod staking_contract;
 mod vesting_contract;
-
-/// An alias for the accounts tree.
-pub type AccountsTree = MerkleRadixTrie<Account>;
 
 /// A small wrapper over a list of accounts with addresses. This is only used to have method
 /// of serializing and deserializing the genesis accounts.
