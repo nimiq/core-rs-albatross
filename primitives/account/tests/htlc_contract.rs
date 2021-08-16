@@ -174,14 +174,7 @@ fn it_can_create_contract_from_transaction() {
         NetworkId::Dummy,
     );
 
-    HashedTimeLockedContract::create(
-        &accounts_tree,
-        &mut db_txn,
-        100.try_into().unwrap(),
-        &transaction,
-        0,
-        0,
-    );
+    HashedTimeLockedContract::create(&accounts_tree, &mut db_txn, &transaction, 0, 0);
 
     match accounts_tree.get(
         &mut db_txn,

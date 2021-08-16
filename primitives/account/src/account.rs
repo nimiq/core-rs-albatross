@@ -277,29 +277,13 @@ impl AccountInherentInteraction for Account {
     ) -> Result<Option<Vec<u8>>, AccountError> {
         let key = KeyNibbles::from(&inherent.target);
 
-        let account_type = accounts_tree
-            .get(db_txn, &key)
-            .ok_or(AccountError::NonExistentAddress {
-                address: inherent.target.clone(),
-            })?
-            .account_type();
+        let account_type = match accounts_tree.get(db_txn, &key) {
+            Some(x) => x.account_type(),
+            None => AccountType::Basic,
+        };
 
         match account_type {
             AccountType::Basic => BasicAccount::commit_inherent(
-                accounts_tree,
-                db_txn,
-                inherent,
-                block_height,
-                block_time,
-            ),
-            AccountType::Vesting => VestingContract::commit_inherent(
-                accounts_tree,
-                db_txn,
-                inherent,
-                block_height,
-                block_time,
-            ),
-            AccountType::HTLC => HashedTimeLockedContract::commit_inherent(
                 accounts_tree,
                 db_txn,
                 inherent,

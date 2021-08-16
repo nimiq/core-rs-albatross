@@ -161,14 +161,7 @@ fn it_can_create_contract_from_transaction() {
         NetworkId::Dummy,
     );
 
-    VestingContract::create(
-        &accounts_tree,
-        &mut db_txn,
-        100.try_into().unwrap(),
-        &transaction,
-        0,
-        0,
-    );
+    VestingContract::create(&accounts_tree, &mut db_txn, &transaction, 0, 0);
 
     match accounts_tree.get(
         &mut db_txn,
@@ -194,14 +187,7 @@ fn it_can_create_contract_from_transaction() {
     transaction.data = data;
     transaction.recipient = transaction.contract_creation_address();
 
-    VestingContract::create(
-        &accounts_tree,
-        &mut db_txn,
-        100.try_into().unwrap(),
-        &transaction,
-        0,
-        0,
-    );
+    VestingContract::create(&accounts_tree, &mut db_txn, &transaction, 0, 0);
 
     match accounts_tree.get(
         &mut db_txn,
@@ -228,14 +214,7 @@ fn it_can_create_contract_from_transaction() {
     transaction.data = data;
     transaction.recipient = transaction.contract_creation_address();
 
-    VestingContract::create(
-        &accounts_tree,
-        &mut db_txn,
-        100.try_into().unwrap(),
-        &transaction,
-        0,
-        0,
-    );
+    VestingContract::create(&accounts_tree, &mut db_txn, &transaction, 0, 0);
 
     match accounts_tree.get(
         &mut db_txn,
@@ -258,14 +237,7 @@ fn it_can_create_contract_from_transaction() {
     Serialize::serialize(&0u16, &mut transaction.data);
     transaction.recipient = transaction.contract_creation_address();
     assert_eq!(
-        VestingContract::create(
-            &accounts_tree,
-            &mut db_txn,
-            0.try_into().unwrap(),
-            &transaction,
-            0,
-            0,
-        ),
+        VestingContract::create(&accounts_tree, &mut db_txn, &transaction, 0, 0,),
         Err(AccountError::InvalidTransaction(
             TransactionError::InvalidData
         ))

@@ -82,15 +82,19 @@ impl AccountTransactionInteraction for BasicAccount {
                 address: transaction.recipient.clone(),
             })?;
 
-        let new_balance = Account::balance_add(account.balance(), transaction.value)?;
+        let new_balance = Account::balance_sub(account.balance(), transaction.value)?;
 
-        accounts_tree.put(
-            db_txn,
-            &key,
-            Account::Basic(BasicAccount {
-                balance: new_balance,
-            }),
-        );
+        if new_balance.is_zero() {
+            accounts_tree.remove(db_txn, &key);
+        } else {
+            accounts_tree.put(
+                db_txn,
+                &key,
+                Account::Basic(BasicAccount {
+                    balance: new_balance,
+                }),
+            );
+        }
 
         Ok(())
     }

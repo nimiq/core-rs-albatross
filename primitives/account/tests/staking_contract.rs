@@ -152,7 +152,7 @@ fn it_can_de_serialize_a_staking_contract() {
 #[test]
 fn can_get_it() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
     make_sample_contract(&accounts_tree, &mut db_txn, true);
@@ -190,7 +190,7 @@ fn can_get_it() {
 #[test]
 fn create_validator_works() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
     make_empty_contract(&accounts_tree, &mut db_txn);
@@ -274,7 +274,7 @@ fn create_validator_works() {
 #[test]
 fn update_validator_works() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
     make_sample_contract(&accounts_tree, &mut db_txn, true);
@@ -373,7 +373,7 @@ fn update_validator_works() {
 #[test]
 fn retire_validator_works() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
     make_sample_contract(&accounts_tree, &mut db_txn, true);
@@ -510,7 +510,7 @@ fn retire_validator_works() {
 #[test]
 fn reactivate_validator_works() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
     make_sample_contract(&accounts_tree, &mut db_txn, true);
@@ -644,7 +644,7 @@ fn reactivate_validator_works() {
 #[test]
 fn unpark_validator_works() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
     make_sample_contract(&accounts_tree, &mut db_txn, true);
@@ -768,7 +768,7 @@ fn unpark_validator_works() {
 #[test]
 fn drop_validator_works() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
     make_sample_contract(&accounts_tree, &mut db_txn, true);
@@ -916,7 +916,7 @@ fn drop_validator_works() {
 #[test]
 fn create_staker_works() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
     make_sample_contract(&accounts_tree, &mut db_txn, false);
@@ -1021,7 +1021,7 @@ fn create_staker_works() {
 #[test]
 fn stake_works() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
     make_sample_contract(&accounts_tree, &mut db_txn, true);
@@ -1102,7 +1102,7 @@ fn stake_works() {
 #[test]
 fn update_staker_works() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
     make_sample_contract(&accounts_tree, &mut db_txn, true);
@@ -1274,7 +1274,7 @@ fn update_staker_works() {
 #[test]
 fn retire_staker_works() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
     make_sample_contract(&accounts_tree, &mut db_txn, true);
@@ -1360,7 +1360,7 @@ fn retire_staker_works() {
 #[test]
 fn reactivate_staker_works() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
     make_sample_contract(&accounts_tree, &mut db_txn, true);
@@ -1449,7 +1449,7 @@ fn reactivate_staker_works() {
 #[test]
 fn unstake_works() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
     make_sample_contract(&accounts_tree, &mut db_txn, true);
@@ -1687,7 +1687,7 @@ fn unstake_works() {
 #[test]
 fn deduct_fees_works() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
     make_sample_contract(&accounts_tree, &mut db_txn, true);
@@ -1991,7 +1991,7 @@ fn deduct_fees_works() {
 #[test]
 fn zero_value_inherents_not_allowed() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
     make_sample_contract(&accounts_tree, &mut db_txn, true);
@@ -2014,7 +2014,7 @@ fn zero_value_inherents_not_allowed() {
 #[test]
 fn reward_inherents_not_allowed() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
     make_sample_contract(&accounts_tree, &mut db_txn, true);
@@ -2037,7 +2037,7 @@ fn reward_inherents_not_allowed() {
 #[test]
 fn slash_inherents_work() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
     make_sample_contract(&accounts_tree, &mut db_txn, true);
@@ -2212,7 +2212,7 @@ fn slash_inherents_work() {
 #[test]
 fn finalize_batch_inherents_work() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
     make_sample_contract(&accounts_tree, &mut db_txn, true);
@@ -2275,7 +2275,7 @@ fn finalize_batch_inherents_work() {
 #[test]
 fn finalize_epoch_inherents_work() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts_tree = AccountsTree::new(env.clone(), "AccountsTree");
+    let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
     make_sample_contract(&accounts_tree, &mut db_txn, true);
@@ -2367,12 +2367,12 @@ fn finalize_epoch_inherents_work() {
     );
 }
 
-fn make_empty_contract(accounts_tree: &AccountsTree, db_txn: &mut WriteTransaction) {
+fn make_empty_contract(accounts_tree: &AccountsTrie, db_txn: &mut WriteTransaction) {
     StakingContract::create(accounts_tree, db_txn)
 }
 
 fn make_sample_contract(
-    accounts_tree: &AccountsTree,
+    accounts_tree: &AccountsTrie,
     db_txn: &mut WriteTransaction,
     with_staker: bool,
 ) {
@@ -2554,7 +2554,7 @@ fn make_deduct_fees_transaction(fee: u64, from_active_balance: bool) -> Transact
 }
 
 fn revert_slash_inherent(
-    accounts_tree: &AccountsTree,
+    accounts_tree: &AccountsTrie,
     db_txn: &mut WriteTransaction,
     inherent: &Inherent,
     block_height: u32,
@@ -2563,14 +2563,7 @@ fn revert_slash_inherent(
     slot: u16,
 ) {
     assert_eq!(
-        StakingContract::revert_inherent(
-            accounts_tree,
-            db_txn,
-            inherent,
-            block_height,
-            0,
-            receipt
-        ),
+        StakingContract::revert_inherent(accounts_tree, db_txn, inherent, block_height, 0, receipt),
         Ok(())
     );
 

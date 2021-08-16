@@ -1,18 +1,19 @@
 use std::convert::TryFrom;
 
-use beserial::Serialize;
+
 use nimiq_account::{
-    Account, AccountTransactionInteraction, Accounts, BasicAccount, Inherent, InherentType,
+    Accounts, Inherent, InherentType,
 };
 use nimiq_account::{Receipt, Receipts};
 use nimiq_database::volatile::VolatileEnvironment;
-use nimiq_database::ReadTransaction;
+
 use nimiq_database::WriteTransaction;
-use nimiq_keys::{Address, KeyPair, SecureGenerate};
-use nimiq_primitives::account::AccountType;
+use nimiq_keys::{Address};
+
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
-use nimiq_transaction::{SignatureProof, Transaction};
+use nimiq_transaction::{Transaction};
+use nimiq_trie::key_nibbles::KeyNibbles;
 
 #[test]
 fn it_can_commit_and_revert_a_block_body() {
@@ -31,24 +32,35 @@ fn it_can_commit_and_revert_a_block_body() {
         data: vec![],
     };
 
-    let receipts = Receipts::default();
+    let mut receipts = vec![Receipt::Inherent {
+        index: 0,
+        pre_transactions: false,
+        data: None,
+    }];
 
-    assert_eq!(accounts.get(&address_validator, None).balance(), Coin::ZERO);
+    assert_eq!(
+        accounts.get(&KeyNibbles::from(&address_validator), None),
+        None
+    );
 
     let mut txn = WriteTransaction::new(&env);
 
-    assert!(accounts
-        .commit(&mut txn, &[], &[reward.clone()], 1, 1)
-        .is_ok());
+    assert_eq!(
+        accounts.commit(&mut txn, &[], &[reward.clone()], 1, 1),
+        Ok(Receipts::from(receipts.clone()))
+    );
 
     txn.commit();
 
     assert_eq!(
-        accounts.get(&address_validator, None).balance(),
+        accounts
+            .get(&KeyNibbles::from(&address_validator), None)
+            .unwrap()
+            .balance(),
         Coin::from_u64_unchecked(10000)
     );
 
-    let hash1 = accounts.hash(None);
+    let hash1 = accounts.get_root(None);
 
     let tx = Transaction::new_basic(
         address_validator.clone(),
@@ -61,44 +73,86 @@ fn it_can_commit_and_revert_a_block_body() {
 
     let transactions = vec![tx];
 
-    assert_eq!(accounts.get(&address_recipient, None).balance(), Coin::ZERO);
+    receipts.insert(
+        0,
+        Receipt::Transaction {
+            index: 0,
+            sender: false,
+            data: None,
+        },
+    );
+
+    receipts.insert(
+        0,
+        Receipt::Transaction {
+            index: 0,
+            sender: true,
+            data: None,
+        },
+    );
+
+    assert_eq!(
+        accounts.get(&KeyNibbles::from(&address_recipient), None),
+        None
+    );
 
     let mut txn = WriteTransaction::new(&env);
 
-    assert!(accounts
-        .commit(&mut txn, &transactions, &[reward.clone()], 2, 2)
-        .is_ok());
+    assert_eq!(
+        accounts.commit(&mut txn, &transactions, &[reward.clone()], 2, 2),
+        Ok(Receipts::from(receipts.clone()))
+    );
 
     txn.commit();
 
     assert_eq!(
-        accounts.get(&address_recipient, None).balance(),
+        accounts
+            .get(&KeyNibbles::from(&address_recipient), None)
+            .unwrap()
+            .balance(),
         Coin::from_u64_unchecked(10)
     );
 
     assert_eq!(
-        accounts.get(&address_validator, None).balance(),
+        accounts
+            .get(&KeyNibbles::from(&address_validator), None)
+            .unwrap()
+            .balance(),
         Coin::from_u64_unchecked(10000 + 10000 - 10)
     );
 
-    assert_ne!(hash1, accounts.hash(None));
+    assert_ne!(hash1, accounts.get_root(None));
 
     let mut txn = WriteTransaction::new(&env);
 
-    assert!(accounts
-        .revert(&mut txn, &transactions, &[reward], 2, 2, &receipts)
-        .is_ok());
+    assert_eq!(
+        accounts.revert(
+            &mut txn,
+            &transactions,
+            &[reward],
+            2,
+            2,
+            &Receipts::from(receipts)
+        ),
+        Ok(())
+    );
 
     txn.commit();
 
-    assert_eq!(accounts.get(&address_recipient, None).balance(), Coin::ZERO);
+    assert_eq!(
+        accounts.get(&KeyNibbles::from(&address_recipient), None),
+        None
+    );
 
     assert_eq!(
-        accounts.get(&address_validator, None).balance(),
+        accounts
+            .get(&KeyNibbles::from(&address_validator), None)
+            .unwrap()
+            .balance(),
         Coin::from_u64_unchecked(10000)
     );
 
-    assert_eq!(hash1, accounts.hash(None));
+    assert_eq!(hash1, accounts.get_root(None));
 }
 
 #[test]
@@ -117,8 +171,8 @@ fn it_correctly_rewards_validators() {
 
     // Validator 1 mines first block.
     assert_eq!(
-        accounts.get(&address_validator_1, None).balance(),
-        Coin::ZERO
+        accounts.get(&KeyNibbles::from(&address_validator_1), None),
+        None
     );
 
     let reward = Inherent {
@@ -136,7 +190,10 @@ fn it_correctly_rewards_validators() {
 
     // Create transactions to Recipient 1 and Recipient 2.
     assert_eq!(
-        accounts.get(&address_validator_1, None).balance(),
+        accounts
+            .get(&KeyNibbles::from(&address_validator_1), None)
+            .unwrap()
+            .balance(),
         Coin::from_u64_unchecked(10000)
     );
 
@@ -168,8 +225,8 @@ fn it_correctly_rewards_validators() {
 
     // Validator 2 mines second block.
     assert_eq!(
-        accounts.get(&address_validator_2, None).balance(),
-        Coin::ZERO
+        accounts.get(&KeyNibbles::from(&address_validator_2), None),
+        None
     );
 
     let reward = Inherent {
@@ -188,18 +245,36 @@ fn it_correctly_rewards_validators() {
     txn.commit();
 
     assert_eq!(
-        accounts.get(&address_validator_1, None).balance(),
+        accounts
+            .get(&KeyNibbles::from(&address_validator_1), None)
+            .unwrap()
+            .balance(),
         Coin::from_u64_unchecked(10000) - value1 - fee1 - value2 - fee2
     );
 
     assert_eq!(
-        accounts.get(&address_validator_2, None).balance(),
+        accounts
+            .get(&KeyNibbles::from(&address_validator_2), None)
+            .unwrap()
+            .balance(),
         Coin::from_u64_unchecked(10000) + fee1 + fee2
     );
 
-    assert_eq!(accounts.get(&address_recipient_1, None).balance(), value1);
+    assert_eq!(
+        accounts
+            .get(&KeyNibbles::from(&address_recipient_1), None)
+            .unwrap()
+            .balance(),
+        value1
+    );
 
-    assert_eq!(accounts.get(&address_recipient_2, None).balance(), value2);
+    assert_eq!(
+        accounts
+            .get(&KeyNibbles::from(&address_recipient_2), None)
+            .unwrap()
+            .balance(),
+        value2
+    );
 }
 
 #[test]
@@ -228,11 +303,14 @@ fn it_checks_for_sufficient_funds() {
         data: vec![],
     };
 
-    let hash1 = accounts.hash(None);
+    let hash1 = accounts.get_root(None);
 
-    assert_eq!(accounts.get(&address_sender, None).balance(), Coin::ZERO);
+    assert_eq!(accounts.get(&KeyNibbles::from(&address_sender), None), None);
 
-    assert_eq!(accounts.get(&address_recipient, None).balance(), Coin::ZERO);
+    assert_eq!(
+        accounts.get(&KeyNibbles::from(&address_recipient), None),
+        None
+    );
 
     // Fails as address_sender does not have any funds.
     // Note: When the commit errors, we want to bracket the txn creation and the commit attempt.
@@ -245,11 +323,14 @@ fn it_checks_for_sufficient_funds() {
             .is_err());
     }
 
-    assert_eq!(accounts.get(&address_sender, None).balance(), Coin::ZERO);
+    assert_eq!(accounts.get(&KeyNibbles::from(&address_sender), None), None);
 
-    assert_eq!(accounts.get(&address_recipient, None).balance(), Coin::ZERO);
+    assert_eq!(
+        accounts.get(&KeyNibbles::from(&address_recipient), None),
+        None
+    );
 
-    assert_eq!(hash1, accounts.hash(None));
+    assert_eq!(hash1, accounts.get_root(None));
 
     // Give address_sender one block reward.
 
@@ -262,13 +343,19 @@ fn it_checks_for_sufficient_funds() {
     txn.commit();
 
     assert_eq!(
-        accounts.get(&address_sender, None).balance(),
+        accounts
+            .get(&KeyNibbles::from(&address_sender), None)
+            .unwrap()
+            .balance(),
         Coin::from_u64_unchecked(10000)
     );
 
-    assert_eq!(accounts.get(&address_recipient, None).balance(), Coin::ZERO);
+    assert_eq!(
+        accounts.get(&KeyNibbles::from(&address_recipient), None),
+        None
+    );
 
-    let hash2 = accounts.hash(None);
+    let hash2 = accounts.get_root(None);
 
     assert_ne!(hash1, hash2);
 
@@ -284,13 +371,19 @@ fn it_checks_for_sufficient_funds() {
     }
 
     assert_eq!(
-        accounts.get(&address_sender, None).balance(),
+        accounts
+            .get(&KeyNibbles::from(&address_sender), None)
+            .unwrap()
+            .balance(),
         Coin::from_u64_unchecked(10000)
     );
 
-    assert_eq!(accounts.get(&address_recipient, None).balance(), Coin::ZERO);
+    assert_eq!(
+        accounts.get(&KeyNibbles::from(&address_recipient), None),
+        None
+    );
 
-    assert_eq!(hash2, accounts.hash(None));
+    assert_eq!(hash2, accounts.get_root(None));
 
     // Multiple transactions exceeding funds.
     tx.value = Coin::from_u64_unchecked(5010);
@@ -308,11 +401,17 @@ fn it_checks_for_sufficient_funds() {
     }
 
     assert_eq!(
-        accounts.get(&address_sender, None).balance(),
+        accounts
+            .get(&KeyNibbles::from(&address_sender), None)
+            .unwrap()
+            .balance(),
         Coin::from_u64_unchecked(10000)
     );
 
-    assert_eq!(accounts.get(&address_recipient, None).balance(), Coin::ZERO);
+    assert_eq!(
+        accounts.get(&KeyNibbles::from(&address_recipient), None),
+        None
+    );
 
-    assert_eq!(hash2, accounts.hash(None));
+    assert_eq!(hash2, accounts.get_root(None));
 }
