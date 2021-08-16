@@ -10,7 +10,7 @@ FROM $RUST_IMAGE AS builder
 RUN rustup update nightly; rustup default nightly;
 
 # Fetch dependencies.
-RUN apk update && apk add musl-dev libressl-dev protoc
+RUN apk update && apk add musl-dev libretls-dev protoc
 
 # Copy sources.
 COPY . /build
