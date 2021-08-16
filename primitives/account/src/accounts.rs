@@ -13,6 +13,10 @@ use nimiq_trie::trie::MerkleRadixTrie;
 /// An alias for the accounts tree.
 pub type AccountsTrie = MerkleRadixTrie<Account>;
 
+/// The Accounts struct is simply an wrapper containing a database environment and, more importantly,
+/// a MerkleRadixTrie with accounts as leaf values. This struct basically holds all the accounts in
+/// the blockchain. It also has methods to commit and revert transactions, so we can use it to
+/// directly update the accounts.
 #[derive(Debug)]
 pub struct Accounts {
     env: Environment,

@@ -129,6 +129,10 @@ pub struct Receipts {
 }
 
 impl Receipts {
+    pub fn new() -> Receipts {
+        Receipts { receipts: vec![] }
+    }
+
     pub fn len(&self) -> usize {
         self.receipts.len()
     }
