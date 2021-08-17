@@ -5,7 +5,7 @@ use beserial::Deserialize;
 use futures::{Stream, StreamExt};
 
 use futures::task::{Context, Poll};
-use nimiq_block_production::{test_utils::*, BlockProducer};
+use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_consensus::consensus::Consensus;
@@ -19,6 +19,7 @@ use nimiq_mempool::{Mempool, MempoolConfig};
 use nimiq_network_interface::network::Network;
 use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_primitives::policy;
+use nimiq_test_utils::blockchain::produce_macro_blocks;
 use std::pin::Pin;
 
 pub struct MockHistorySyncStream<TNetwork: Network> {

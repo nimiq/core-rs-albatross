@@ -49,4 +49,5 @@ simple_logger = "1.0"
 
 nimiq-bls = { path = "../bls" }
 nimiq-network-mock = { path = "../network-mock" }
-nimiq-block-production = { path = "../block-production", features = ["test-utils"] }
+nimiq-block-production = { path = "../block-production"}
+nimiq-test-utils = { path = "../test-utils" }

@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use beserial::Deserialize;
 use nimiq_block::{
-    Block, MacroBlock, MacroBody, MacroHeader, MultiSignature, SignedViewChange,
-    TendermintIdentifier, TendermintProof, TendermintProposal, TendermintStep, TendermintVote,
-    ViewChange, ViewChangeProof,
+    Block, MacroBlock, MacroBody, MultiSignature, SignedViewChange, TendermintIdentifier,
+    TendermintProof, TendermintProposal, TendermintStep, TendermintVote, ViewChange,
+    ViewChangeProof,
 };
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, PushError, PushResult};
 use nimiq_bls::{AggregateSignature, KeyPair, SecretKey};
@@ -12,7 +12,6 @@ use nimiq_collections::BitSet;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_nano_primitives::pk_tree_construct;
 use nimiq_primitives::policy;
 
 use crate::BlockProducer;
@@ -164,141 +163,5 @@ impl TemporaryBlockProducer {
         ViewChangeProof {
             sig: MultiSignature::new(signature, signers),
         }
-    }
-}
-
-// Fill epoch with micro blocks
-pub fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<Blockchain>) {
-    let init_height = blockchain.block_number();
-    let macro_block_number = policy::macro_block_after(init_height + 1);
-    for i in (init_height + 1)..macro_block_number {
-        let last_micro_block = producer.next_micro_block(
-            blockchain.time.now() + i as u64 * 1000,
-            0,
-            None,
-            vec![],
-            vec![0x42],
-        );
-        assert_eq!(
-            blockchain.push(Block::Micro(last_micro_block)),
-            Ok(PushResult::Extended)
-        );
-    }
-    assert_eq!(blockchain.block_number(), macro_block_number - 1);
-}
-
-pub fn sign_macro_block(
-    keypair: &KeyPair,
-    header: MacroHeader,
-    body: Option<MacroBody>,
-) -> MacroBlock {
-    // Calculate block hash.
-    let block_hash = header.hash::<Blake2bHash>();
-
-    // Calculate the validator Merkle root (used in the nano sync).
-    let validator_merkle_root =
-        pk_tree_construct(vec![keypair.public_key.public_key; policy::SLOTS as usize]);
-
-    // Create the precommit tendermint vote.
-    let precommit = TendermintVote {
-        proposal_hash: Some(block_hash),
-        id: TendermintIdentifier {
-            block_number: header.block_number,
-            round_number: 0,
-            step: TendermintStep::PreCommit,
-        },
-        validator_merkle_root,
-    };
-
-    // Create signed precommit.
-    let signed_precommit = keypair.secret_key.sign(&precommit);
-
-    // Create signers Bitset.
-    let mut signers = BitSet::new();
-    for i in 0..policy::TWO_THIRD_SLOTS {
-        signers.insert(i as usize);
-    }
-
-    // Create multisignature.
-    let multisig = MultiSignature {
-        signature: AggregateSignature::from_signatures(&*vec![
-            signed_precommit;
-            policy::TWO_THIRD_SLOTS as usize
-        ]),
-        signers,
-    };
-
-    // Create Tendermint proof.
-    let tendermint_proof = TendermintProof {
-        round: 0,
-        sig: multisig,
-    };
-
-    // Create and return the macro block.
-    MacroBlock {
-        header,
-        body,
-        justification: Some(tendermint_proof),
-    }
-}
-
-// /// Currently unused
-// pub fn sign_view_change(
-//     keypair: &KeyPair,
-//     prev_seed: VrfSeed,
-//     block_number: u32,
-//     new_view_number: u32,
-// ) -> ViewChangeProof {
-//     // Create the view change.
-//     let view_change = ViewChange {
-//         block_number,
-//         new_view_number,
-//         prev_seed,
-//     };
-
-//     // Sign the view change.
-//     let signed_view_change =
-//         SignedViewChange::from_message(view_change.clone(), &keypair.secret_key, 0).signature;
-
-//     // Create signers Bitset.
-//     let mut signers = BitSet::new();
-//     for i in 0..policy::TWO_THIRD_SLOTS {
-//         signers.insert(i as usize);
-//     }
-
-//     // Create ViewChangeProof and return  it.
-//     ViewChangeProof::new(
-//         AggregateSignature::from_signatures(&*vec![
-//             signed_view_change;
-//             policy::TWO_THIRD_SLOTS as usize
-//         ]),
-//         signers,
-//     )
-// }
-
-pub fn produce_macro_blocks(
-    num_macro: usize,
-    producer: &BlockProducer,
-    blockchain: &Arc<Blockchain>,
-) {
-    for _ in 0..num_macro {
-        fill_micro_blocks(producer, blockchain);
-
-        let _next_block_height = blockchain.block_number() + 1;
-        let macro_block = producer.next_macro_block_proposal(
-            blockchain.time.now() + blockchain.block_number() as u64 * 1000,
-            0u32,
-            vec![],
-        );
-
-        let block = sign_macro_block(
-            &producer.validator_key,
-            macro_block.header,
-            macro_block.body,
-        );
-        assert_eq!(
-            blockchain.push(Block::Macro(block)),
-            Ok(PushResult::Extended)
-        );
     }
 }
