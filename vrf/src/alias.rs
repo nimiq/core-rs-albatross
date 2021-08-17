@@ -107,7 +107,7 @@ where
             }
         }
 
-        // Both must be emtpy now
+        // Both must be empty now
         debug_assert!(U_underfull.is_empty() && U_overfull.is_empty());
 
         // Entries that are "underfull" need an entry in the alias table
