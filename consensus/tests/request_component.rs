@@ -1,7 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
 use beserial::Deserialize;
-use nimiq_block_production::test_utils::produce_macro_blocks;
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_bls::{KeyPair, SecretKey};
@@ -12,6 +11,7 @@ use nimiq_mempool::{Mempool, MempoolConfig};
 use nimiq_network_interface::network::Network;
 use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_primitives::networks::NetworkId;
+use nimiq_test_utils::blockchain::produce_macro_blocks;
 
 /// Secret key of validator. Tests run with `network-primitives/src/genesis/unit-albatross.toml`
 const SECRET_KEY: &str =

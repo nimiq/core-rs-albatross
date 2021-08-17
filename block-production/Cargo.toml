@@ -37,6 +37,7 @@ nimiq-vrf = { path = "../vrf" }
 
 [dev-dependencies]
 nimiq-transaction = { path = "../primitives/transaction" }
+nimiq-test-utils = { path = "../test-utils" }
 
 [features]
 default = []
