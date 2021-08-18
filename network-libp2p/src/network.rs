@@ -262,7 +262,7 @@ impl Network {
                     },
                     action_opt = action_rx.next().fuse() => {
                         if let Some(action) = action_opt {
-                            Self::perform_action(action, &mut swarm, &mut task_state).await.unwrap();
+                            Self::perform_action(action, &mut swarm, &mut task_state).await;
                         }
                         else {
                             // `action_rx.next()` will return `None` if all senders (i.e. the `Network` object) are dropped.
@@ -503,11 +503,7 @@ impl Network {
         }
     }
 
-    async fn perform_action(
-        action: NetworkAction,
-        swarm: &mut NimiqSwarm,
-        state: &mut TaskState,
-    ) -> Result<(), NetworkError> {
+    async fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut TaskState) {
         tracing::debug!(action = ?action, "performing action");
 
         match action {
@@ -598,11 +594,12 @@ impl Network {
                 output,
             } => {
                 output
-                    .send(Ok(swarm.gossipsub.report_message_validation_result(
-                        &message_id,
-                        &source,
-                        acceptance,
-                    )?))
+                    .send(
+                        swarm
+                            .gossipsub
+                            .report_message_validation_result(&message_id, &source, acceptance)
+                            .map_err(Into::into),
+                    )
                     .ok();
             }
             NetworkAction::ReceiveFromAll { type_id, output } => {
@@ -618,8 +615,6 @@ impl Network {
                 swarm.peers.start_connecting();
             }
         }
-
-        Ok(())
     }
 
     pub async fn network_info(&self) -> Result<NetworkInfo, NetworkError> {
