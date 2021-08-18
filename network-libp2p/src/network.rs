@@ -262,7 +262,7 @@ impl Network {
                     },
                     action_opt = action_rx.next().fuse() => {
                         if let Some(action) = action_opt {
-                            Self::perform_action(action, &mut swarm, &mut task_state).await;
+                            Self::perform_action(action, &mut swarm, &mut task_state);
                         }
                         else {
                             // `action_rx.next()` will return `None` if all senders (i.e. the `Network` object) are dropped.
@@ -503,7 +503,7 @@ impl Network {
         }
     }
 
-    async fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut TaskState) {
+    fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut TaskState) {
         tracing::debug!(action = ?action, "performing action");
 
         match action {
