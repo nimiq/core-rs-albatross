@@ -2,7 +2,7 @@ use parking_lot::{MutexGuard, RwLockReadGuard};
 
 use nimiq_account::{Account, StakingContract};
 use nimiq_block::Block;
-use nimiq_database::WriteTransaction;
+use nimiq_database::{ReadTransaction, Transaction, WriteTransaction};
 use nimiq_genesis::NetworkInfo;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
@@ -13,6 +13,7 @@ use crate::blockchain_state::BlockchainState;
 #[cfg(feature = "metrics")]
 use crate::chain_metrics::BlockchainMetrics;
 use crate::{AbstractBlockchain, Blockchain, BlockchainEvent, Direction};
+use nimiq_trie::key_nibbles::KeyNibbles;
 
 /// Implements several wrapper functions.
 impl Blockchain {
@@ -56,17 +57,11 @@ impl Blockchain {
 
     /// Returns the current staking contract.
     pub fn get_staking_contract(&self) -> StakingContract {
-        let validator_registry = self
-            .staking_contract_address()
-            .expect("NetworkInfo doesn't have a staking contract address set!");
+        StakingContract::get_staking_contract(&self.state().accounts.tree, &self.read_transaction())
+    }
 
-        let account = self.state.read().accounts.get(validator_registry, None);
-
-        if let Account::Staking(x) = account {
-            x
-        } else {
-            unreachable!("Account type must be Staking.")
-        }
+    pub fn read_transaction(&self) -> ReadTransaction {
+        ReadTransaction::new(&self.env)
     }
 
     pub fn write_transaction(&self) -> WriteTransaction {
@@ -80,8 +75,11 @@ impl Blockchain {
         self.notifier.write().register(listener)
     }
 
-    pub fn get_account(&self, address: &Address) -> Account {
-        self.state.read().accounts.get(address, None)
+    pub fn get_account(&self, address: &Address) -> Option<Account> {
+        self.state
+            .read()
+            .accounts
+            .get(&KeyNibbles::from(address), None)
     }
 
     /// Checks if we have seen some transaction with this hash inside the validity window. This is
@@ -112,8 +110,9 @@ impl Blockchain {
         false
     }
 
-    pub fn staking_contract_address(&self) -> Option<&Address> {
-        NetworkInfo::from_network_id(self.network_id).staking_contract_address()
+    pub fn staking_contract_address(&self) -> Address {
+        Address::from_any_str(policy::STAKING_CONTRACT_ADDRESS)
+            .expect("Couldn't parse the Staking contract address from the policy file!")
     }
 
     pub fn lock(&self) -> MutexGuard<()> {

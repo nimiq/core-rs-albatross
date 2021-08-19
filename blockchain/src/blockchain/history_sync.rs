@@ -233,23 +233,7 @@ impl Blockchain {
             }
 
             match &ext_tx.data {
-                ExtTxData::Basic(tx) => {
-                    // If the transaction is a reward transaction, then we convert it to an inherent.
-                    // This is because we ignore reward transactions when syncing, we prefer to update
-                    // the state using the inherents.
-                    if tx.sender_type == AccountType::Reward {
-                        let reward = Inherent {
-                            ty: InherentType::Reward,
-                            target: tx.recipient.clone(),
-                            value: tx.value,
-                            data: vec![],
-                        };
-
-                        block_inherents.last_mut().unwrap().push(reward.clone())
-                    } else {
-                        block_transactions.last_mut().unwrap().push(tx.clone())
-                    };
-                }
+                ExtTxData::Basic(tx) => block_transactions.last_mut().unwrap().push(tx.clone()),
                 ExtTxData::Inherent(tx) => block_inherents.last_mut().unwrap().push(tx.clone()),
             }
         }
@@ -259,13 +243,9 @@ impl Blockchain {
         // so we need to add them again in order to correctly sync.
         for (i, block_number) in block_numbers.iter().enumerate() {
             if policy::is_macro_block_at(*block_number) {
-                let staking_contract_address = self
-                    .staking_contract_address()
-                    .expect("NetworkInfo doesn't have a staking contract address set!");
-
                 let finalize_batch = Inherent {
                     ty: InherentType::FinalizeBatch,
-                    target: staking_contract_address.clone(),
+                    target: self.staking_contract_address(),
                     value: Coin::ZERO,
                     data: vec![],
                 };
@@ -275,7 +255,7 @@ impl Blockchain {
                 if policy::is_election_block_at(*block_number) {
                     let finalize_epoch = Inherent {
                         ty: InherentType::FinalizeEpoch,
-                        target: staking_contract_address.clone(),
+                        target: self.staking_contract_address(),
                         value: Coin::ZERO,
                         data: vec![],
                     };

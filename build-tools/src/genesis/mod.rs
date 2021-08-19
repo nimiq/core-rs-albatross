@@ -110,7 +110,7 @@ impl GenesisBuilder {
         self
     }
 
-    pub fn with_genesis_stake(
+    pub fn with_genesis_staker(
         &mut self,
         staker_address: Address,
         validator_address: Address,

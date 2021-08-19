@@ -1,6 +1,5 @@
 use beserial::Serialize;
-use nimiq_account::inherent::AccountInherentInteraction;
-use nimiq_account::{Inherent, InherentType};
+use nimiq_account::{AccountInherentInteraction, Inherent, InherentType, StakingContract};
 use nimiq_block::{ForkProof, MacroHeader, ViewChanges};
 use nimiq_database as db;
 use nimiq_keys::Address;
@@ -12,7 +11,9 @@ use nimiq_vrf::{AliasMethod, VrfUseCase};
 use crate::blockchain_state::BlockchainState;
 use crate::reward::block_reward_for_batch;
 use crate::{AbstractBlockchain, Blockchain};
+use nimiq_primitives::account::AccountType;
 use nimiq_transaction::Transaction;
+use nimiq_trie::key_nibbles::KeyNibbles;
 
 /// Implements methods that create inherents.
 impl Blockchain {
@@ -62,11 +63,6 @@ impl Blockchain {
         fork_proof: &ForkProof,
         txn_option: Option<&db::Transaction>,
     ) -> Inherent {
-        // Get the address of the validator registry/staking contract.
-        let validator_registry = self
-            .staking_contract_address()
-            .expect("NetworkInfo doesn't have a staking contract address set!");
-
         // Get the slot owner and slot number for this block number and view number.
         let (producer, slot) = self
             .get_slot_owner_at(
@@ -79,14 +75,14 @@ impl Blockchain {
         // Create the SlashedSlot struct.
         let slot = SlashedSlot {
             slot,
-            validator_id: producer.validator_id,
+            validator_address: producer.validator_address,
             event_block: fork_proof.header1.block_number,
         };
 
         // Create the corresponding slash inherent.
         Inherent {
             ty: InherentType::Slash,
-            target: validator_registry.clone(),
+            target: self.staking_contract_address(),
             value: Coin::ZERO,
             data: slot.serialize_to_vec(),
         }
@@ -98,11 +94,6 @@ impl Blockchain {
         view_changes: &ViewChanges,
         txn_option: Option<&db::Transaction>,
     ) -> Vec<Inherent> {
-        // Get the address of the validator registry/staking contract.
-        let validator_registry = self
-            .staking_contract_address()
-            .expect("NetworkInfo doesn't have a staking contract address set!");
-
         // Iterate over all the view changes.
         (view_changes.first_view_number..view_changes.last_view_number)
             .map(|view_number| {
@@ -116,14 +107,14 @@ impl Blockchain {
                 // Create the SlashedSlot struct.
                 let slot = SlashedSlot {
                     slot,
-                    validator_id: producer.validator_id,
+                    validator_address: producer.validator_address,
                     event_block: view_changes.block_number,
                 };
 
                 // Create the corresponding slash inherent.
                 Inherent {
                     ty: InherentType::Slash,
-                    target: validator_registry.clone(),
+                    target: self.staking_contract_address(),
                     value: Coin::ZERO,
                     data: slot.serialize_to_vec(),
                 }
@@ -236,34 +227,36 @@ impl Blockchain {
                 .checked_mul(num_slashed_slots as u64)
                 .expect("Overflow in reward");
 
-            // Create inherent for the reward
+            // Create inherent for the reward.
+            let validator = StakingContract::get_validator(
+                &self.state().accounts.tree,
+                &self.read_transaction(),
+                &validator_slot.validator_address,
+            )
+            .expect("Couldn't find validator in the accounts trie when paying rewards!");
+
             let inherent = Inherent {
                 ty: InherentType::Reward,
-                target: staking_contract
-                    .get_validator(&validator_slot.validator_id)
-                    .unwrap()
-                    .reward_address
-                    .clone(),
+                target: validator.reward_address.clone(),
                 value: reward,
                 data: vec![],
             };
 
             // Test whether account will accept inherent. If it can't then the reward will be
             // burned.
-            let account = state.accounts.get(&inherent.target, None);
+            let account = state
+                .accounts
+                .get(&KeyNibbles::from(&inherent.target), None);
 
-            if account
-                .check_inherent(&inherent, macro_header.block_number, macro_header.timestamp)
-                .is_err()
-            {
+            if account.is_none() || account.unwrap().account_type() == AccountType::Basic {
+                num_eligible_slots_for_accepted_inherent.push(num_eligible_slots);
+                inherents.push(inherent);
+            } else {
                 debug!(
                     "{} can't accept epoch reward {}",
                     inherent.target, inherent.value
                 );
                 burned_reward += reward;
-            } else {
-                num_eligible_slots_for_accepted_inherent.push(num_eligible_slots);
-                inherents.push(inherent);
             }
 
             // Update first_slot_number for next iteration
@@ -300,13 +293,9 @@ impl Blockchain {
         }
 
         // Push FinalizeBatch inherent to update StakingContract.
-        let staking_contract_address = self
-            .staking_contract_address()
-            .expect("NetworkInfo doesn't have a staking contract address set!");
-
         inherents.push(Inherent {
             ty: InherentType::FinalizeBatch,
-            target: staking_contract_address.clone(),
+            target: self.staking_contract_address(),
             value: Coin::ZERO,
             data: Vec::new(),
         });
@@ -316,33 +305,12 @@ impl Blockchain {
 
     /// Creates the inherent to finalize an epoch. The inherent is for updating the StakingContract.
     pub fn finalize_previous_epoch(&self) -> Inherent {
-        // Get the address of the validator registry/staking contract.
-        let validator_registry = self
-            .staking_contract_address()
-            .expect("NetworkInfo doesn't have a staking contract address set!");
-
         // Create the FinalizeEpoch inherent.
         Inherent {
             ty: InherentType::FinalizeEpoch,
-            target: validator_registry.clone(),
+            target: self.staking_contract_address(),
             value: Coin::ZERO,
             data: Vec::new(),
         }
-    }
-
-    pub fn create_txs_from_inherents(&self, inherents: &[Inherent]) -> Vec<Transaction> {
-        let mut transactions = Vec::new();
-        for inherent in inherents {
-            if inherent.ty == InherentType::Reward {
-                let tx = Transaction::new_reward(
-                    inherent.target.clone(),
-                    inherent.value,
-                    self.block_number() + 1,
-                    self.network_id,
-                );
-                transactions.push(tx);
-            }
-        }
-        transactions
     }
 }
