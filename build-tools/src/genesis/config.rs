@@ -23,7 +23,7 @@ pub struct GenesisConfig {
     pub validators: Vec<GenesisValidator>,
 
     #[serde(default)]
-    pub stakes: Vec<GenesisStaker>,
+    pub stakers: Vec<GenesisStaker>,
 
     #[serde(default)]
     pub accounts: Vec<GenesisAccount>,
