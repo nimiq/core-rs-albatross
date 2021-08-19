@@ -156,13 +156,13 @@ impl GenesisBuilder {
     pub fn generate(&self) -> Result<GenesisInfo, GenesisBuilderError> {
         // Initialize the environment.
         let env = VolatileEnvironment::new(10)?;
-        let mut txn = WriteTransaction::new(&env);
         let timestamp = self.timestamp.unwrap_or_else(Utc::now);
 
         // Initialize the accounts.
         let accounts = Accounts::new(env.clone());
 
         debug!("Staking contract");
+        let mut txn = WriteTransaction::new(&env);
         self.generate_staking_contract(&accounts, &mut txn)?;
 
         debug!("Genesis accounts");
