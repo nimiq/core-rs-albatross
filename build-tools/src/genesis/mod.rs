@@ -139,7 +139,7 @@ impl GenesisBuilder {
             seed_message,
             timestamp,
             mut validators,
-            mut stakes,
+            mut stakers,
             mut accounts,
         } = toml::from_str(&read_to_string(path)?)?;
 
@@ -147,7 +147,7 @@ impl GenesisBuilder {
         seed_message.map(|msg| self.with_seed_message(msg));
         timestamp.map(|t| self.with_timestamp(t));
         self.validators.append(&mut validators);
-        self.stakers.append(&mut stakes);
+        self.stakers.append(&mut stakers);
         self.accounts.append(&mut accounts);
 
         Ok(self)
