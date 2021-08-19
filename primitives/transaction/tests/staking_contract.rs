@@ -32,23 +32,6 @@ const VALIDATOR_HOT_SECRET_KEY: &str =
 const STAKER_ADDRESS: &str = "8c551fabc6e6e00c609c3f0313257ad7e835643c";
 const STAKER_PRIVATE_KEY: &str = "62f21a296f00562c43999094587d02c0001676ddbd3f0acf9318efbcad0c8b43";
 
-// The following code is kept as a reference on how to generate the constants.
-// #[test]
-// fn gen_ed25519_keypair() {
-//     let pair = KeyPair::generate_default_csprng();
-//     println!("Address: {}", Address::from(&pair.public).to_hex());
-//     println!("Private Key: {}", pair.private.to_hex());
-//     assert!(false)
-// }
-//
-// #[test]
-// fn gen_bls_keypair() {
-//     let pair = BlsKeyPair::generate_default_csprng();
-//     println!("Public Key: {}", pair.public_key.to_string());
-//     println!("Secret Key: {}", pair.secret_key.to_string());
-//     assert!(false)
-// }
-
 #[test]
 fn it_does_not_support_contract_creation() {
     let data: Vec<u8> = Vec::with_capacity(0);
