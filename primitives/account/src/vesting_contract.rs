@@ -77,14 +77,13 @@ impl AccountTransactionInteraction for VestingContract {
 
         let contract_key = KeyNibbles::from(&transaction.contract_creation_address());
 
-        if accounts_tree.get(db_txn, &contract_key).is_some() {
-            return Err(AccountError::AlreadyExistentAddress {
-                address: transaction.contract_creation_address(),
-            });
-        }
+        let previous_balance = match accounts_tree.get(db_txn, &contract_key) {
+            None => Coin::ZERO,
+            Some(account) => account.balance(),
+        };
 
         let contract = VestingContract::new(
-            transaction.value,
+            previous_balance + transaction.value,
             data.owner,
             data.start_time,
             data.time_step,

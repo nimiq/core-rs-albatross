@@ -77,14 +77,13 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
 
         let contract_key = KeyNibbles::from(&transaction.contract_creation_address());
 
-        if accounts_tree.get(db_txn, &contract_key).is_some() {
-            return Err(AccountError::AlreadyExistentAddress {
-                address: transaction.contract_creation_address(),
-            });
-        }
+        let previous_balance = match accounts_tree.get(db_txn, &contract_key) {
+            None => Coin::ZERO,
+            Some(account) => account.balance(),
+        };
 
         let contract = HashedTimeLockedContract::new(
-            transaction.value,
+            previous_balance + transaction.value,
             data.sender,
             data.recipient,
             data.hash_algorithm,
