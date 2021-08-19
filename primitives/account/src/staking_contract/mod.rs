@@ -271,18 +271,19 @@ impl StakingContract {
     /// Given a seed, it randomly distributes the validator slots across all validators. It is
     /// used to select the validators for the next epoch.
     pub fn select_validators(
-        &self,
         accounts_tree: &AccountsTrie,
         db_txn: &DBTransaction,
         seed: &VrfSeed,
     ) -> Validators {
-        let mut validator_addresses = Vec::with_capacity(self.active_validators.len());
-        let mut validator_stakes = Vec::with_capacity(self.active_validators.len());
+        let staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
+
+        let mut validator_addresses = Vec::with_capacity(staking_contract.active_validators.len());
+        let mut validator_stakes = Vec::with_capacity(staking_contract.active_validators.len());
 
         debug!("Selecting validators: num_slots = {}", policy::SLOTS);
 
-        for (id, coin) in self.active_validators.iter() {
-            validator_addresses.push(id);
+        for (address, coin) in &staking_contract.active_validators {
+            validator_addresses.push(address);
             validator_stakes.push(u64::from(*coin));
         }
 

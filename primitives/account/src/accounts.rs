@@ -6,6 +6,7 @@ use nimiq_database::{
     Environment, ReadTransaction, Transaction as DBTransaction, WriteTransaction,
 };
 use nimiq_hash::Blake2bHash;
+use nimiq_keys::Address;
 use nimiq_transaction::{Transaction, TransactionFlags};
 use nimiq_trie::key_nibbles::KeyNibbles;
 use nimiq_trie::trie::MerkleRadixTrie;
@@ -19,8 +20,8 @@ pub type AccountsTrie = MerkleRadixTrie<Account>;
 /// directly update the accounts.
 #[derive(Debug)]
 pub struct Accounts {
-    env: Environment,
-    tree: AccountsTrie,
+    pub env: Environment,
+    pub tree: AccountsTrie,
 }
 
 impl Accounts {
@@ -29,9 +30,11 @@ impl Accounts {
         Accounts { env, tree }
     }
 
-    pub fn init(&self, txn: &mut WriteTransaction, genesis_accounts: Vec<(KeyNibbles, Account)>) {
-        for (key, account) in genesis_accounts {
-            self.tree.put(txn, &key, account);
+    /// Puts a series of Basic accounts tinto the accounts trie. It is used to create the genesis
+    /// block.
+    pub fn init(&self, txn: &mut WriteTransaction, genesis_accounts: Vec<(Address, Account)>) {
+        for (address, account) in genesis_accounts {
+            self.tree.put(txn, &KeyNibbles::from(&address), account);
         }
     }
 
