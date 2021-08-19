@@ -2,8 +2,7 @@ use std::sync::Arc;
 
 use parking_lot::{Mutex, RwLock};
 
-use nimiq_account::Account;
-use nimiq_accounts::Accounts;
+use nimiq_account::{Account, Accounts};
 use nimiq_block::Block;
 use nimiq_database::{Environment, WriteTransaction};
 use nimiq_genesis::NetworkInfo;
@@ -131,7 +130,7 @@ impl Blockchain {
         // Check that chain/accounts state is consistent.
         let accounts = Accounts::new(env.clone());
 
-        if main_chain.head.state_root() != &accounts.hash(None) {
+        if main_chain.head.state_root() != &accounts.get_root(None) {
             return Err(BlockchainError::InconsistentState);
         }
 

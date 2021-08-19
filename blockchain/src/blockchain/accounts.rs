@@ -1,4 +1,4 @@
-use nimiq_accounts::Accounts;
+use nimiq_account::Accounts;
 use nimiq_block::{Block, MicroBlock, ViewChanges};
 use nimiq_database::WriteTransaction;
 use nimiq_primitives::policy;
@@ -44,14 +44,11 @@ impl Blockchain {
                 // as rebranching across this block is not possible.
                 self.chain_store.clear_receipts(txn);
 
-                // Store the transactions and the inherents into the History tree. Remember that
-                // first we need to convert the reward inherents into transactions.
-                let reward_txs = self.create_txs_from_inherents(&inherents);
-
+                // Store the transactions and the inherents into the History tree.
                 let ext_txs = ExtendedTransaction::from(
                     macro_block.header.block_number,
                     macro_block.header.timestamp,
-                    reward_txs,
+                    vec![],
                     inherents,
                 );
 
@@ -125,7 +122,7 @@ impl Blockchain {
     ) -> Result<(), PushError> {
         assert_eq!(
             micro_block.header.state_root,
-            accounts.hash(Some(txn)),
+            accounts.get_root(Some(txn)),
             "Failed to revert - inconsistent state"
         );
 
@@ -157,7 +154,7 @@ impl Blockchain {
             micro_block.header.timestamp,
             &receipts,
         ) {
-            panic!("Failed to revert - {}", e);
+            panic!("Failed to revert - {:?}", e);
         }
 
         // Remove the transactions from the History tree. For this you only need to calculate the

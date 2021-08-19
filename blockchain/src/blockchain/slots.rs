@@ -3,6 +3,7 @@ use nimiq_primitives::slots::Validators;
 use nimiq_vrf::VrfSeed;
 
 use crate::Blockchain;
+use nimiq_account::StakingContract;
 
 /// Implements methods to handle slots and validators.
 impl Blockchain {
@@ -29,6 +30,10 @@ impl Blockchain {
 
     /// Calculates the next validators from a given seed.
     pub fn next_validators(&self, seed: &VrfSeed) -> Validators {
-        self.get_staking_contract().select_validators(seed)
+        StakingContract::select_validators(
+            &self.state().accounts.tree,
+            &self.read_transaction(),
+            seed,
+        )
     }
 }

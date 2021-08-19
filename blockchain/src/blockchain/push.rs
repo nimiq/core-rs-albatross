@@ -348,7 +348,7 @@ impl Blockchain {
 
                     assert_eq!(
                         prev_info.head.state_root(),
-                        &state.accounts.hash(Some(&write_txn)),
+                        &state.accounts.get_root(Some(&write_txn)),
                         "Failed to revert main chain while rebranching - inconsistent state"
                     );
 
