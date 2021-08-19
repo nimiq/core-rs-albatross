@@ -232,6 +232,14 @@ impl Accounts {
         let mut receipts = Vec::new();
 
         for (index, transaction) in transactions.iter().enumerate() {
+            // If this is a contract creation transaction, skip it.
+            if transaction
+                .flags
+                .contains(TransactionFlags::CONTRACT_CREATION)
+            {
+                continue;
+            }
+
             let data = Account::commit_incoming_transaction(
                 &self.tree,
                 txn,
