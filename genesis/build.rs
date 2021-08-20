@@ -4,7 +4,6 @@ use std::path::{Path, PathBuf};
 
 use nimiq_build_tools::genesis::GenesisBuilder;
 use nimiq_hash::Blake2bHash;
-use nimiq_keys::Address;
 
 fn write_genesis_rs(directory: &Path, name: &str, genesis_hash: &Blake2bHash) {
     let genesis_rs = format!(

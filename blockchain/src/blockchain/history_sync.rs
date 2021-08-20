@@ -10,7 +10,6 @@ use crate::chain_info::ChainInfo;
 use crate::history_store::{ExtTxData, ExtendedTransaction, HistoryStore};
 use crate::{AbstractBlockchain, Blockchain, BlockchainEvent, PushError, PushResult};
 use nimiq_account::{Inherent, InherentType};
-use nimiq_primitives::account::AccountType;
 
 /// Implements methods to push macro blocks into the chain when an history node is syncing. This
 /// type of syncing is called history syncing. It works by having the node get all the election

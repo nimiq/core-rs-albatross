@@ -25,6 +25,7 @@ nimiq-account = { path = "../primitives/account" }
 nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain = { path = "../blockchain" }
 nimiq-collections = { path = "../collections" }
+nimiq-database = { path = "../database" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-primitives = { path = "../primitives", features = ["coin", "networks"] }

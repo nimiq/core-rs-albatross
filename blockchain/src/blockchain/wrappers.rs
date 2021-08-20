@@ -2,8 +2,7 @@ use parking_lot::{MutexGuard, RwLockReadGuard};
 
 use nimiq_account::{Account, StakingContract};
 use nimiq_block::Block;
-use nimiq_database::{ReadTransaction, Transaction, WriteTransaction};
-use nimiq_genesis::NetworkInfo;
+use nimiq_database::{ReadTransaction, WriteTransaction};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::policy;
