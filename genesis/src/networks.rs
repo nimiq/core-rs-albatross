@@ -7,8 +7,8 @@ use account::Account;
 use account::AccountsList;
 use beserial::Deserialize;
 use hash::Blake2bHash;
-use keys::Address;
 use keys::PublicKey;
+use nimiq_trie::key_nibbles::KeyNibbles;
 use peer_address::address::seed_list::SeedList;
 use peer_address::address::{NetAddress, PeerAddress, PeerAddressType, PeerId};
 use peer_address::services::ServiceFlags;
@@ -66,7 +66,7 @@ impl NetworkInfo {
     }
 
     #[inline]
-    pub fn genesis_accounts(&self) -> Vec<(Address, Account)> {
+    pub fn genesis_accounts(&self) -> Vec<(KeyNibbles, Account)> {
         let accounts: AccountsList =
             Deserialize::deserialize_from_vec(&self.genesis.accounts.to_vec())
                 .expect("Failed to deserialize genesis accounts.");

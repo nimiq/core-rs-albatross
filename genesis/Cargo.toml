@@ -36,6 +36,7 @@ nimiq-macros = { path = "../macros" }
 nimiq-peer-address = { path = "../peer-address" }
 nimiq-primitives = { path = "../primitives", features = ["coin", "networks"] }
 nimiq-transaction = { path = "../primitives/transaction" }
+nimiq-trie = { path = "../primitives/trie" }
 nimiq-utils = { path = "../utils", features = ["observer", "crc", "time"] }
 
 [build-dependencies]

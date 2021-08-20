@@ -3,6 +3,7 @@ use nimiq_database::WriteTransaction;
 use nimiq_keys::Address;
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
+use nimiq_primitives::policy::STAKING_CONTRACT_ADDRESS;
 use nimiq_transaction::Transaction;
 use nimiq_trie::key_nibbles::KeyNibbles;
 
@@ -275,6 +276,20 @@ impl AccountInherentInteraction for Account {
         block_height: u32,
         block_time: u64,
     ) -> Result<Option<Vec<u8>>, AccountError> {
+        // If the inherent target is the staking contract then we forward it to the staking contract
+        // right here.
+        if &Address::from_any_str(STAKING_CONTRACT_ADDRESS).unwrap() == &inherent.target {
+            return StakingContract::commit_inherent(
+                accounts_tree,
+                db_txn,
+                inherent,
+                block_height,
+                block_time,
+            );
+        }
+
+        // Otherwise, we need to check if the target address belongs to a basic account (or a
+        // non-existent account).
         let key = KeyNibbles::from(&inherent.target);
 
         let account_type = match accounts_tree.get(db_txn, &key) {
@@ -282,22 +297,10 @@ impl AccountInherentInteraction for Account {
             None => AccountType::Basic,
         };
 
-        match account_type {
-            AccountType::Basic => BasicAccount::commit_inherent(
-                accounts_tree,
-                db_txn,
-                inherent,
-                block_height,
-                block_time,
-            ),
-            AccountType::Staking => StakingContract::commit_inherent(
-                accounts_tree,
-                db_txn,
-                inherent,
-                block_height,
-                block_time,
-            ),
-            _ => Err(AccountError::InvalidInherent),
+        if account_type == AccountType::Basic {
+            BasicAccount::commit_inherent(accounts_tree, db_txn, inherent, block_height, block_time)
+        } else {
+            Err(AccountError::InvalidInherent)
         }
     }
 
@@ -309,49 +312,39 @@ impl AccountInherentInteraction for Account {
         block_time: u64,
         receipt: Option<&Vec<u8>>,
     ) -> Result<(), AccountError> {
+        // If the inherent target is the staking contract then we forward it to the staking contract
+        // right here.
+        if &Address::from_any_str(STAKING_CONTRACT_ADDRESS).unwrap() == &inherent.target {
+            return StakingContract::revert_inherent(
+                accounts_tree,
+                db_txn,
+                inherent,
+                block_height,
+                block_time,
+                receipt,
+            );
+        }
+
+        // Otherwise, we need to check if the target address belongs to a basic account (or a
+        // non-existent account).
         let key = KeyNibbles::from(&inherent.target);
 
-        let account_type = accounts_tree
-            .get(db_txn, &key)
-            .ok_or(AccountError::NonExistentAddress {
-                address: inherent.target.clone(),
-            })?
-            .account_type();
+        let account_type = match accounts_tree.get(db_txn, &key) {
+            Some(x) => x.account_type(),
+            None => AccountType::Basic,
+        };
 
-        match account_type {
-            AccountType::Basic => BasicAccount::revert_inherent(
+        if account_type == AccountType::Basic {
+            BasicAccount::revert_inherent(
                 accounts_tree,
                 db_txn,
                 inherent,
                 block_height,
                 block_time,
                 receipt,
-            ),
-            AccountType::Vesting => VestingContract::revert_inherent(
-                accounts_tree,
-                db_txn,
-                inherent,
-                block_height,
-                block_time,
-                receipt,
-            ),
-            AccountType::HTLC => HashedTimeLockedContract::revert_inherent(
-                accounts_tree,
-                db_txn,
-                inherent,
-                block_height,
-                block_time,
-                receipt,
-            ),
-            AccountType::Staking => StakingContract::revert_inherent(
-                accounts_tree,
-                db_txn,
-                inherent,
-                block_height,
-                block_time,
-                receipt,
-            ),
-            _ => Err(AccountError::InvalidInherent),
+            )
+        } else {
+            Err(AccountError::InvalidInherent)
         }
     }
 }

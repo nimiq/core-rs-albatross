@@ -15,6 +15,7 @@ use database::volatile::{VolatileDatabaseError, VolatileEnvironment};
 use database::WriteTransaction;
 use hash::{Blake2bHash, Blake2sHasher, Hash, Hasher};
 use keys::Address;
+use nimiq_trie::key_nibbles::KeyNibbles;
 use primitives::coin::Coin;
 use vrf::VrfSeed;
 
@@ -44,7 +45,7 @@ pub enum GenesisBuilderError {
 pub struct GenesisInfo {
     pub block: Block,
     pub hash: Blake2bHash,
-    pub accounts: Vec<(Address, Account)>,
+    pub accounts: Vec<(KeyNibbles, Account)>,
 }
 
 pub struct GenesisBuilder {
@@ -160,25 +161,69 @@ impl GenesisBuilder {
 
         // Initialize the accounts.
         let accounts = Accounts::new(env.clone());
+        let mut genesis_accounts: Vec<(KeyNibbles, Account)> = Vec::new();
 
-        debug!("Staking contract");
+        // Note: This line needs to be AFTER we call Accounts::new().
         let mut txn = WriteTransaction::new(&env);
-        self.generate_staking_contract(&accounts, &mut txn)?;
 
         debug!("Genesis accounts");
-        let mut genesis_accounts: Vec<(Address, Account)> = Vec::new();
-
         for genesis_account in &self.accounts {
-            let address = genesis_account.address.clone();
+            let key = KeyNibbles::from(&genesis_account.address);
 
             let account = Account::Basic(BasicAccount {
                 balance: genesis_account.balance,
             });
 
-            genesis_accounts.push((address, account));
+            genesis_accounts.push((key, account));
         }
 
         accounts.init(&mut txn, genesis_accounts.clone());
+
+        debug!("Staking contract");
+        // First generate the Staking contract in the Accounts.
+        self.generate_staking_contract(&accounts, &mut txn)?;
+
+        // Then get all the accounts from the Staking contract and add them to the genesis_accounts.
+        // TODO: Maybe turn this code into a StakingContract method?
+        genesis_accounts.push((
+            StakingContract::get_key_staking_contract(),
+            Account::Staking(StakingContract::get_staking_contract(
+                &accounts.tree,
+                &mut txn,
+            )),
+        ));
+
+        for validator in &self.validators {
+            genesis_accounts.push((
+                StakingContract::get_key_validator(&validator.validator_address),
+                Account::StakingValidator(
+                    StakingContract::get_validator(
+                        &accounts.tree,
+                        &mut txn,
+                        &validator.validator_address,
+                    )
+                    .unwrap(),
+                ),
+            ));
+        }
+
+        for staker in &self.stakers {
+            genesis_accounts.push((
+                StakingContract::get_key_staker(&staker.staker_address),
+                Account::StakingStaker(
+                    StakingContract::get_staker(&accounts.tree, &mut txn, &staker.staker_address)
+                        .unwrap(),
+                ),
+            ));
+
+            genesis_accounts.push((
+                StakingContract::get_key_validator_staker(
+                    &staker.delegation,
+                    &staker.staker_address,
+                ),
+                Account::StakingValidatorsStaker(staker.staker_address.clone()),
+            ));
+        }
 
         // generate seeds
         let signing_key = self

@@ -1,18 +1,15 @@
 use std::convert::TryFrom;
 
-
-use nimiq_account::{
-    Accounts, Inherent, InherentType,
-};
+use nimiq_account::{Accounts, Inherent, InherentType};
 use nimiq_account::{Receipt, Receipts};
 use nimiq_database::volatile::VolatileEnvironment;
 
 use nimiq_database::WriteTransaction;
-use nimiq_keys::{Address};
+use nimiq_keys::Address;
 
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
-use nimiq_transaction::{Transaction};
+use nimiq_transaction::Transaction;
 use nimiq_trie::key_nibbles::KeyNibbles;
 
 #[test]

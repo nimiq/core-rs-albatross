@@ -35,10 +35,9 @@ thiserror = { version = "1.0", optional = true }
 
 beserial = { path = "../beserial", optional = true }
 beserial_derive = { path = "../beserial/beserial_derive", optional = true }
+nimiq-database = { path = "../database"}
 nimiq-collections = { path = "../collections", optional = true }
 nimiq-hash = { path = "../hash", optional = true }
-# This causes a circular dependency
-#nimiq-keys = { path = "../keys", optional = true }
 
 [dev-dependencies]
 beserial_derive = { path = "../beserial/beserial_derive" }
