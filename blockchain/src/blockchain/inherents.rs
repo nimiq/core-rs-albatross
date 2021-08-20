@@ -1,5 +1,5 @@
 use beserial::Serialize;
-use nimiq_account::{AccountInherentInteraction, Inherent, InherentType, StakingContract};
+use nimiq_account::{Inherent, InherentType, StakingContract};
 use nimiq_block::{ForkProof, MacroHeader, ViewChanges};
 use nimiq_database as db;
 use nimiq_keys::Address;
@@ -12,7 +12,6 @@ use crate::blockchain_state::BlockchainState;
 use crate::reward::block_reward_for_batch;
 use crate::{AbstractBlockchain, Blockchain};
 use nimiq_primitives::account::AccountType;
-use nimiq_transaction::Transaction;
 use nimiq_trie::key_nibbles::KeyNibbles;
 
 /// Implements methods that create inherents.

@@ -313,7 +313,7 @@ impl Blockchain {
         Ok(())
     }
 
-    /// Verifies a block against the blockchain state AFTER it gets updated with the block (ex: if
+    /// Verifies a block against the blockchain state AFTER it gets updated with the block (ex: checking if
     /// an account has enough funds).
     /// It receives a block as input but that block is only required to have a header (the body and
     /// justification are optional, we don't need them).
@@ -368,8 +368,6 @@ impl Blockchain {
             let real_lost_rewards = staking_contract.previous_lost_rewards();
 
             let real_disabled_slots = staking_contract.previous_disabled_slots();
-
-            let inherents = self.create_macro_block_inherents(state, &macro_block.header);
 
             // Get the validators.
             let real_validators = if macro_block.is_election_block() {

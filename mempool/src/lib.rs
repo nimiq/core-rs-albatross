@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 
-use account::{Account, AccountTransactionInteraction};
+use account::{Account, AccountTransactionInteraction, AccountsTrie, BasicAccount};
 use beserial::Serialize;
 use block::Block;
 use blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent};
@@ -27,6 +27,8 @@ use transaction::{Transaction, TransactionFlags};
 use utils::observer::{weak_listener, Notifier};
 
 use crate::filter::{MempoolFilter, Rules};
+use nimiq_database::WriteTransaction;
+use primitives::coin::Coin;
 
 pub mod filter;
 
@@ -167,8 +169,14 @@ impl Mempool {
             }
 
             // Retrieve recipient account and check account type.
-            // TODO Eliminate copy
-            let mut recipient_account = self.blockchain.get_account(&transaction.recipient);
+            // TODO: Eliminate copy
+            let recipient_account = match self.blockchain.get_account(&transaction.recipient) {
+                None => Account::Basic(BasicAccount {
+                    balance: Coin::ZERO,
+                }),
+                Some(x) => x,
+            };
+
             let is_contract_creation = transaction
                 .flags
                 .contains(TransactionFlags::CONTRACT_CREATION);
@@ -178,43 +186,58 @@ impl Mempool {
             }
 
             // Test incoming transaction.
+            let accounts_trie = &self.blockchain.state().accounts.tree;
+            let db_txn = &mut self.blockchain.write_transaction();
+
             let old_balance = recipient_account.balance();
-            match recipient_account.commit_incoming_transaction(
-                &transaction,
-                block_height,
-                timestamp,
-            ) {
-                Err(_) => return ReturnCode::Invalid,
-                Ok(_) => {
-                    // Check recipient account against filter rules.
-                    let new_balance = recipient_account.balance();
-                    if !state.filter.accepts_recipient_balance(
-                        &transaction,
-                        old_balance,
-                        new_balance,
-                    ) {
-                        self.state.write().filter.blacklist(hash);
-                        return ReturnCode::Filtered;
-                    }
+
+            if is_contract_creation {
+                if Account::create(accounts_trie, db_txn, &transaction, block_height, timestamp)
+                    .is_err()
+                {
+                    return ReturnCode::Invalid;
                 }
-            }
-            // Also check contract creation.
-            if is_contract_creation
-                && Account::new_contract(
-                    transaction.recipient_type,
-                    recipient_account.balance(),
+            } else {
+                if Account::commit_incoming_transaction(
+                    accounts_trie,
+                    db_txn,
                     &transaction,
                     block_height,
                     timestamp,
                 )
                 .is_err()
+                {
+                    return ReturnCode::Invalid;
+                }
+            }
+
+            // Check recipient account against filter rules.
+            let recipient_account = match self.blockchain.get_account(&transaction.recipient) {
+                None => Account::Basic(BasicAccount {
+                    balance: Coin::ZERO,
+                }),
+                Some(x) => x,
+            };
+
+            let new_balance = recipient_account.balance();
+
+            if !state
+                .filter
+                .accepts_recipient_balance(&transaction, old_balance, new_balance)
             {
-                return ReturnCode::Invalid;
+                self.state.write().filter.blacklist(hash);
+                return ReturnCode::Filtered;
             }
 
             // Retrieve sender account and check account type.
-            // TODO Eliminate copy
-            let mut sender_account = self.blockchain.get_account(&transaction.sender);
+            // TODO: Eliminate copy
+            let sender_account = match self.blockchain.get_account(&transaction.sender) {
+                None => {
+                    return ReturnCode::Invalid;
+                }
+                Some(x) => x,
+            };
+
             if sender_account.account_type() != transaction.sender_type {
                 return ReturnCode::Invalid;
             }
@@ -240,9 +263,14 @@ impl Mempool {
                     break;
                 }
                 // Reject the transaction, if after the intrinsic check, the balance went too low
-                if sender_account
-                    .commit_outgoing_transaction(tx, block_height, timestamp)
-                    .is_err()
+                if Account::commit_outgoing_transaction(
+                    accounts_trie,
+                    db_txn,
+                    tx,
+                    block_height,
+                    timestamp,
+                )
+                .is_err()
                 {
                     return ReturnCode::Invalid;
                 }
@@ -256,19 +284,29 @@ impl Mempool {
             }
 
             // Now, check the new transaction.
+            let sender_account = self.blockchain.get_account(&transaction.sender).unwrap();
             let old_sender_balance = sender_account.balance();
-            if sender_account
-                .commit_outgoing_transaction(&transaction, block_height, timestamp)
-                .is_err()
+
+            if Account::commit_outgoing_transaction(
+                accounts_trie,
+                db_txn,
+                &transaction,
+                block_height,
+                timestamp,
+            )
+            .is_err()
             {
                 return ReturnCode::Invalid; // XXX More specific return code here?
             };
 
             // Check sender account against filter rules.
+            let sender_account = self.blockchain.get_account(&transaction.sender).unwrap();
+            let new_sender_balance = sender_account.balance();
+
             if !state.filter.accepts_sender_balance(
                 &transaction,
                 old_sender_balance,
-                sender_account.balance(),
+                new_sender_balance,
             ) {
                 self.state.write().filter.blacklist(hash);
                 return ReturnCode::Filtered;
@@ -280,9 +318,14 @@ impl Mempool {
             // tx_opt already contains the first lower/fee byte transaction to check (if there is one remaining).
             while let Some(tx) = tx_opt {
                 if tx_count < TRANSACTIONS_PER_SENDER_MAX {
-                    if sender_account
-                        .commit_outgoing_transaction(tx, block_height, timestamp)
-                        .is_ok()
+                    if Account::commit_outgoing_transaction(
+                        accounts_trie,
+                        db_txn,
+                        tx,
+                        block_height,
+                        timestamp,
+                    )
+                    .is_ok()
                     {
                         tx_count += 1;
                     } else {
@@ -364,59 +407,58 @@ impl Mempool {
         let mut txs = Vec::new();
         let mut size = 0;
 
-        let mut validator_registry = None;
         let block_height = self.blockchain.block_number() + 1;
         let timestamp = self.blockchain.timestamp();
 
+        // Check validity of transactions concerning the staking contract.
+        // We only do it for the staking contract, since this is the only place
+        // where the transaction validity depends on the recipient's state.
+        let staking_contract_address = self.blockchain.staking_contract_address();
         let state = self.state.read();
+        let accounts_trie = &self.blockchain.state().accounts.tree;
+        let db_txn = &mut self.blockchain.write_transaction();
+
         for tx in state.transactions_sorted_fee.iter() {
-            // Check validity of transactions concerning the staking contract.
-            // We only do it for the staking contract, since this is the only place
-            // where the transaction validity depends on the recipient's state.
-            if let Some(validator_registry_address) = self.blockchain.staking_contract_address() {
-                // First apply the sender side to the staking contract if necessary.
-                // This could for example drop a validator and make subsequent update transactions invalid.
-                let mut outgoing_receipt = None;
-                if &tx.sender == validator_registry_address {
-                    // Get copy of staking contract if required.
-                    if validator_registry.is_none() {
-                        validator_registry =
-                            Some(self.blockchain.get_account(validator_registry_address));
-                    }
-
-                    let sender_account = validator_registry.as_mut().unwrap();
-                    match sender_account.commit_outgoing_transaction(tx, block_height, timestamp) {
-                        Err(_) => continue, // Ignore transaction.
-                        Ok(receipt) => outgoing_receipt = receipt,
-                    }
+            // First apply the sender side to the staking contract if necessary.
+            // This could for example drop a validator and make subsequent update transactions invalid.
+            let mut outgoing_receipt = None;
+            if &tx.sender == &staking_contract_address {
+                match Account::commit_outgoing_transaction(
+                    accounts_trie,
+                    db_txn,
+                    tx,
+                    block_height,
+                    timestamp,
+                ) {
+                    Err(_) => continue, // Ignore transaction.
+                    Ok(receipt) => outgoing_receipt = receipt,
                 }
+            }
 
-                // Then apply the recipient side to the staking contract.
-                if &tx.recipient == validator_registry_address {
-                    // Get copy of staking contract if required.
-                    if validator_registry.is_none() {
-                        validator_registry =
-                            Some(self.blockchain.get_account(validator_registry_address));
+            // Then apply the recipient side to the staking contract.
+            if &tx.recipient == &staking_contract_address {
+                if Account::commit_incoming_transaction(
+                    accounts_trie,
+                    db_txn,
+                    tx,
+                    block_height,
+                    timestamp,
+                )
+                .is_err()
+                {
+                    // Potentially revert sender side and ignore transaction.
+                    if &tx.sender == &staking_contract_address {
+                        Account::revert_outgoing_transaction(
+                            accounts_trie,
+                            db_txn,
+                            tx,
+                            block_height,
+                            timestamp,
+                            outgoing_receipt.as_ref(),
+                        )
+                        .unwrap();
                     }
-
-                    let recipient_account = validator_registry.as_mut().unwrap();
-                    if recipient_account
-                        .commit_incoming_transaction(tx, block_height, timestamp)
-                        .is_err()
-                    {
-                        // Potentially revert sender side and ignore transaction.
-                        if &tx.sender == validator_registry_address {
-                            recipient_account
-                                .revert_outgoing_transaction(
-                                    tx,
-                                    block_height,
-                                    timestamp,
-                                    outgoing_receipt.as_ref(),
-                                )
-                                .unwrap();
-                        }
-                        continue;
-                    }
+                    continue;
                 }
             }
 
@@ -481,7 +523,7 @@ impl Mempool {
     }
 
     /// Evict all transactions from the pool that have become invalid due to changes in the
-    /// account state (i.e. typically because the were included in a newly mined block). No need to re-check signatures.
+    /// account state (i.e. typically because they were included in a newly mined block). No need to re-check signatures.
     fn evict_transactions(&self) {
         // Only one mutating operation at a time.
         let _lock = self.mut_lock.lock();
@@ -493,9 +535,7 @@ impl Mempool {
             let block_height = self.blockchain.block_number() + 1;
             let timestamp = self.blockchain.timestamp();
 
-            for (address, transactions) in state.transactions_by_sender.iter() {
-                // TODO Eliminate copy
-                let mut sender_account = self.blockchain.get_account(address);
+            for (_address, transactions) in state.transactions_by_sender.iter() {
                 for tx in transactions.iter().rev() {
                     // Check if the transaction has expired.
                     if !tx.is_valid_at(block_height) {
@@ -510,34 +550,40 @@ impl Mempool {
                     }
 
                     // Check if transaction is still valid for recipient.
-                    // TODO Eliminate copy
-                    let mut recipient_account = self.blockchain.get_account(&tx.recipient);
-                    if recipient_account
-                        .commit_incoming_transaction(tx, block_height, timestamp)
-                        .is_err()
-                    {
-                        txs_evicted.push(tx.clone());
-                        continue;
-                    }
-                    // Also check contract creation.
-                    if tx.flags.contains(TransactionFlags::CONTRACT_CREATION)
-                        && Account::new_contract(
-                            tx.recipient_type,
-                            recipient_account.balance(),
+                    let accounts_trie = &self.blockchain.state().accounts.tree;
+                    let db_txn = &mut self.blockchain.write_transaction();
+
+                    if tx.flags.contains(TransactionFlags::CONTRACT_CREATION) {
+                        if Account::create(accounts_trie, db_txn, tx, block_height, timestamp)
+                            .is_err()
+                        {
+                            txs_evicted.push(tx.clone());
+                            continue;
+                        }
+                    } else {
+                        if Account::commit_incoming_transaction(
+                            accounts_trie,
+                            db_txn,
                             tx,
                             block_height,
                             timestamp,
                         )
                         .is_err()
-                    {
-                        txs_evicted.push(tx.clone());
-                        continue;
+                        {
+                            txs_evicted.push(tx.clone());
+                            continue;
+                        }
                     }
 
                     // Check if transaction is still valid for sender.
-                    if sender_account
-                        .commit_outgoing_transaction(tx, block_height, timestamp)
-                        .is_err()
+                    if Account::commit_outgoing_transaction(
+                        accounts_trie,
+                        db_txn,
+                        tx,
+                        block_height,
+                        timestamp,
+                    )
+                    .is_err()
                     {
                         txs_evicted.push(tx.clone());
                     }
@@ -602,30 +648,31 @@ impl Mempool {
                     continue;
                 }
 
-                // TODO Eliminate copy
-                let mut recipient_account = self.blockchain.get_account(&tx.recipient);
-                if recipient_account
-                    .commit_incoming_transaction(tx, block_height, timestamp)
-                    .is_err()
-                {
-                    // This transaction cannot be accepted by the recipient anymore.
-                    // XXX The transaction is lost!
-                    continue;
-                }
-                // Also check contract creation.
-                if tx.flags.contains(TransactionFlags::CONTRACT_CREATION)
-                    && Account::new_contract(
-                        tx.recipient_type,
-                        recipient_account.balance(),
+                // Check incoming transaction.
+                let accounts_trie = &self.blockchain.state().accounts.tree;
+                let db_txn = &mut self.blockchain.write_transaction();
+
+                if tx.flags.contains(TransactionFlags::CONTRACT_CREATION) {
+                    if Account::create(accounts_trie, db_txn, tx, block_height, timestamp).is_err()
+                    {
+                        // This transaction cannot be accepted by the recipient anymore.
+                        // XXX The transaction is lost!
+                        continue;
+                    }
+                } else {
+                    if Account::commit_incoming_transaction(
+                        accounts_trie,
+                        db_txn,
                         tx,
                         block_height,
                         timestamp,
                     )
                     .is_err()
-                {
-                    // This transaction cannot be accepted by the recipient anymore.
-                    // XXX The transaction is lost!
-                    continue;
+                    {
+                        // This transaction cannot be accepted by the recipient anymore.
+                        // XXX The transaction is lost!
+                        continue;
+                    }
                 }
 
                 let txs = txs_by_sender
@@ -639,6 +686,9 @@ impl Mempool {
         {
             let mut state = self.state.write();
 
+            let accounts_trie = &self.blockchain.state().accounts.tree;
+            let db_txn = &mut self.blockchain.write_transaction();
+
             for (sender, restored_txs) in txs_by_sender {
                 let empty_btree;
                 let existing_txs = match state.transactions_by_sender.get(sender) {
@@ -649,10 +699,9 @@ impl Mempool {
                     }
                 };
 
-                // TODO Eliminate copy.
-                let sender_account = self.blockchain.get_account(sender);
                 let (txs_to_add, txs_to_remove) = Self::merge_transactions(
-                    sender_account,
+                    accounts_trie,
+                    db_txn,
                     block_height,
                     timestamp,
                     existing_txs,
@@ -739,7 +788,8 @@ impl Mempool {
     }
 
     fn merge_transactions<'a>(
-        mut sender_account: Account,
+        accounts_trie: &AccountsTrie,
+        db_txn: &mut WriteTransaction,
         block_height: u32,
         timestamp: u64,
         old_txs: &BTreeSet<Arc<Transaction>>,
@@ -767,9 +817,14 @@ impl Mempool {
             if new_is_next {
                 if tx_count < TRANSACTIONS_PER_SENDER_MAX {
                     let tx = new_tx.unwrap();
-                    if sender_account
-                        .commit_outgoing_transaction(*tx, block_height, timestamp)
-                        .is_ok()
+                    if Account::commit_outgoing_transaction(
+                        accounts_trie,
+                        db_txn,
+                        *tx,
+                        block_height,
+                        timestamp,
+                    )
+                    .is_ok()
                     {
                         tx_count += 1;
                         txs_to_add.push(*tx)
@@ -779,9 +834,14 @@ impl Mempool {
             } else {
                 let tx = old_tx.unwrap();
                 if tx_count < TRANSACTIONS_PER_SENDER_MAX {
-                    if sender_account
-                        .commit_outgoing_transaction(tx, block_height, timestamp)
-                        .is_ok()
+                    if Account::commit_outgoing_transaction(
+                        accounts_trie,
+                        db_txn,
+                        tx,
+                        block_height,
+                        timestamp,
+                    )
+                    .is_ok()
                     {
                         tx_count += 1;
                     } else {
@@ -807,7 +867,7 @@ pub enum ReturnCode {
     Filtered,
 }
 
-/// Fee threshold in sat/byte below which transactions are considered "free".
+/// Fee threshold in luna/byte below which transactions are considered "free".
 const TRANSACTION_RELAY_FEE_MIN: f64 = 1f64;
 
 /// Maximum number of transactions per sender.

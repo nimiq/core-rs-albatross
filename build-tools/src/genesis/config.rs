@@ -73,6 +73,7 @@ where
     Address::from_user_friendly_address(&s).map_err(|e| Error::custom(format!("{:?}", e)))
 }
 
+#[allow(dead_code)]
 pub fn deserialize_nimiq_address_opt<'de, D>(deserializer: D) -> Result<Option<Address>, D::Error>
 where
     D: Deserializer<'de>,
