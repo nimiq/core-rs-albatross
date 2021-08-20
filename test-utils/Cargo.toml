@@ -11,18 +11,32 @@ categories = ["cryptography::cryptocurrencies"]
 keywords = ["nimiq", "cryptocurrency", "blockchain"]
 
 [dependencies]
+futures = "0.3"
 hex = "0.4"
+log = "0.4"
+rand = "0.8"
 parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
+tokio = { version = "1.14", features = ["rt", "time"] }
+tokio-stream = "0.1"
 
 beserial = { path = "../beserial" }
 nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain = { path = "../blockchain" }
 nimiq-block-production = { path = "../block-production" }
 nimiq-bls = { path = "../bls" }
+nimiq-build-tools = { path = "../build-tools" }
 nimiq-collections = { path = "../collections" }
+nimiq-consensus = { path = "../consensus" }
+nimiq-database = { path = "../database" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
+nimiq-mempool = { path = "../mempool" }
 nimiq-nano-primitives = { path = "../nano-primitives" }
 nimiq-network-interface = { path = "../network-interface" }
+nimiq-network-libp2p = { path = "../network-libp2p" }
+nimiq-network-mock = { path = "../network-mock" }
 nimiq-primitives = { path = "../primitives" }
+nimiq-validator = { path = "../validator" }
+nimiq-validator-network = { path = "../validator-network" }
+nimiq-utils = { path = "../utils" }
 nimiq-vrf = { path = "../vrf" }
