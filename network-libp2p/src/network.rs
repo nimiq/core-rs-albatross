@@ -158,7 +158,7 @@ impl Network {
         let min_peers = config.min_peers;
 
         let swarm = Self::new_swarm(clock, config);
-        let peers = swarm.message.peers.clone();
+        let peers = swarm.behaviour().message.peers.clone();
 
         let local_peer_id = *Swarm::local_peer_id(&swarm);
 
@@ -183,8 +183,9 @@ impl Network {
     fn new_transport(keypair: &Keypair) -> std::io::Result<Boxed<(PeerId, StreamMuxerBox)>> {
         let transport = {
             // Websocket over TCP/DNS
-            let transport =
-                websocket::WsConfig::new(dns::DnsConfig::new(tcp::TcpConfig::new().nodelay(true))?);
+            let transport = websocket::WsConfig::new(dns::TokioDnsConfig::system(
+                tcp::TcpConfig::new().nodelay(true),
+            )?);
 
             // Memory transport for testing
             // TODO: Use websocket over the memory transport
@@ -301,7 +302,10 @@ impl Network {
                     let listen_addr = endpoint.get_remote_address();
 
                     tracing::debug!("Saving peer {} listen address: {:?}", peer_id, listen_addr);
-                    swarm.kademlia.add_address(&peer_id, listen_addr.clone());
+                    swarm
+                        .behaviour_mut()
+                        .kademlia
+                        .add_address(&peer_id, listen_addr.clone());
                 }
 
                 if !state.is_connected {
@@ -318,7 +322,7 @@ impl Network {
                     if num_established.get() as usize >= min_peers {
                         // Bootstrap Kademlia
                         tracing::debug!("Bootstrapping DHT");
-                        if swarm.kademlia.bootstrap().is_err() {
+                        if swarm.behaviour_mut().kademlia.bootstrap().is_err() {
                             tracing::error!("Bootstrapping DHT error: No known peers");
                         }
                     }
@@ -374,7 +378,7 @@ impl Network {
                                 QueryResult::GetRecord(result) => {
                                     if let Some(output) = state.dht_gets.remove(&id) {
                                         let result = result.map_err(Into::into).map(
-                                            |GetRecordOk { mut records }| {
+                                            |GetRecordOk { mut records, .. }| {
                                                 // TODO: What do we do, if we get multiple records?
                                                 records.pop().map(|r| r.record.value)
                                             },
@@ -414,6 +418,7 @@ impl Network {
                                 let (output, validate) = topic_info;
                                 if !&*validate {
                                     swarm
+                                        .behaviour_mut()
                                         .gossipsub
                                         .report_message_validation_result(
                                             &message_id,
@@ -439,22 +444,18 @@ impl Network {
                     },
                     NimiqEvent::Identify(event) => {
                         match event {
-                            IdentifyEvent::Received {
-                                peer_id,
-                                info,
-                                observed_addr,
-                            } => {
+                            IdentifyEvent::Received { peer_id, info } => {
                                 tracing::debug!(
                                     "Received identifying info from peer {} at address {:?}: {:?}",
                                     peer_id,
-                                    observed_addr,
+                                    info.observed_addr,
                                     info
                                 );
 
-                                if Self::can_add_to_dht(&observed_addr) {
+                                if Self::can_add_to_dht(&info.observed_addr) {
                                     Swarm::add_external_address(
                                         swarm,
-                                        observed_addr,
+                                        info.observed_addr,
                                         AddressScore::Infinite,
                                     );
                                 }
@@ -462,18 +463,24 @@ impl Network {
                                 // Save identified peer listen addresses
                                 for listen_addr in info.listen_addrs.clone() {
                                     if Self::can_add_to_dht(&listen_addr) {
-                                        swarm.kademlia.add_address(&peer_id, listen_addr);
+                                        swarm
+                                            .behaviour_mut()
+                                            .kademlia
+                                            .add_address(&peer_id, listen_addr);
                                     }
                                 }
 
                                 // TODO: Add public functions to the Discovery behaviour to add addresses from the network
-                                swarm.discovery.events.push_back(
+                                swarm.behaviour_mut().discovery.events.push_back(
                                     NetworkBehaviourAction::NotifyHandler {
                                         peer_id,
                                         handler: NotifyHandler::Any,
                                         event: HandlerInEvent::ObservedAddress(info.listen_addrs),
                                     },
                                 );
+                            }
+                            IdentifyEvent::Pushed { peer_id } => {
+                                tracing::trace!("Pushed identifiyng info to peer {}", peer_id);
                             }
                             IdentifyEvent::Sent { peer_id } => {
                                 tracing::trace!("Sent identifiyng info to peer {}", peer_id);
@@ -514,13 +521,14 @@ impl Network {
             }
             NetworkAction::DialAddress { address, output } => {
                 output
-                    .send(Swarm::dial_addr(swarm, address).map_err(|l| {
-                        NetworkError::Dial(libp2p::swarm::DialError::ConnectionLimit(l))
-                    }))
+                    .send(Swarm::dial_addr(swarm, address).map_err(Into::into))
                     .ok();
             }
             NetworkAction::DhtGet { key, output } => {
-                let query_id = swarm.kademlia.get_record(&key.into(), Quorum::One);
+                let query_id = swarm
+                    .behaviour_mut()
+                    .kademlia
+                    .get_record(&key.into(), Quorum::One);
                 state.dht_gets.insert(query_id, output);
             }
             NetworkAction::DhtPut { key, value, output } => {
@@ -533,7 +541,11 @@ impl Network {
                     expires: None, // TODO: Records should expire at some point in time
                 };
 
-                match swarm.kademlia.put_record(record, Quorum::One) {
+                match swarm
+                    .behaviour_mut()
+                    .kademlia
+                    .put_record(record, Quorum::One)
+                {
                     Ok(query_id) => {
                         // Remember put operation to resolve when we receive a `QueryResult::PutRecord`
                         state.dht_puts.insert(query_id, output);
@@ -550,7 +562,7 @@ impl Network {
             } => {
                 let topic = IdentTopic::new(topic_name.clone());
 
-                match swarm.gossipsub.subscribe(&topic) {
+                match swarm.behaviour_mut().gossipsub.subscribe(&topic) {
                     // New subscription. Insert the sender into our subscription table.
                     Ok(true) => {
                         let (tx, rx) = mpsc::channel(16);
@@ -581,7 +593,13 @@ impl Network {
                 // TODO: Check if we're subscribed to the topic, otherwise we can't publish
                 let topic = IdentTopic::new(topic_name);
                 output
-                    .send(swarm.gossipsub.publish(topic, data).map_err(Into::into))
+                    .send(
+                        swarm
+                            .behaviour_mut()
+                            .gossipsub
+                            .publish(topic, data)
+                            .map_err(Into::into),
+                    )
                     .ok();
             }
             NetworkAction::NetworkInfo { output } => {
@@ -603,7 +621,10 @@ impl Network {
                     .ok();
             }
             NetworkAction::ReceiveFromAll { type_id, output } => {
-                swarm.message.receive_from_all(type_id, output);
+                swarm
+                    .behaviour_mut()
+                    .message
+                    .receive_from_all(type_id, output);
             }
             NetworkAction::ListenOn { listen_addresses } => {
                 for listen_address in listen_addresses {
@@ -612,7 +633,7 @@ impl Network {
                 }
             }
             NetworkAction::StartConnecting => {
-                swarm.peers.start_connecting();
+                swarm.behaviour_mut().peers.start_connecting();
             }
         }
     }

@@ -3,12 +3,12 @@ use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
 
 use libp2p::{
-    core::{either::EitherError, upgrade::ReadOneError},
+    core::either::EitherError,
     gossipsub::{
         error::GossipsubHandlerError, Gossipsub, GossipsubEvent, MessageAuthenticity,
         PeerScoreParams, PeerScoreThresholds,
     },
-    identify::{Identify, IdentifyEvent},
+    identify::{Identify, IdentifyConfig, IdentifyEvent},
     kad::{store::MemoryStore, Kademlia, KademliaEvent},
     swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters},
     NetworkBehaviour,
@@ -41,7 +41,7 @@ pub type NimiqNetworkBehaviourError = EitherError<
         >,
         GossipsubHandlerError,
     >,
-    ReadOneError,
+    std::io::Error,
 >;
 
 #[derive(Debug)]
@@ -135,17 +135,17 @@ impl NimiqBehaviour {
         let message = MessageBehaviour::new(config.message);
 
         let store = MemoryStore::new(peer_id);
+
         let kademlia = Kademlia::with_config(peer_id, store, config.kademlia);
+
         let mut gossipsub = Gossipsub::new(
             MessageAuthenticity::Signed(config.keypair),
             config.gossipsub,
         )
         .expect("Wrong configuration");
-        let identify = Identify::new(
-            "/albatross/2.0".to_string(),
-            "albatross_node".to_string(),
-            public_key,
-        );
+
+        let identify_config = IdentifyConfig::new("/albatross/2.0".to_string(), public_key);
+        let identify = Identify::new(identify_config);
 
         let params = PeerScoreParams::default();
         let thresholds = PeerScoreThresholds::default();
