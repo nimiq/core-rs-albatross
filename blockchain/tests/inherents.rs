@@ -18,10 +18,7 @@ fn it_can_create_batch_finalization_inherents() {
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(Blockchain::new(env, NetworkId::UnitAlbatross).unwrap());
 
-    let validator_registry_addr = blockchain
-        .staking_contract_address()
-        .expect("NetworkInfo doesn't have a staking contract address set!")
-        .clone();
+    let staking_contract_address = blockchain.staking_contract_address();
 
     let hash = Blake2bHasher::default().digest(&[]);
     let macro_header = MacroHeader {
@@ -42,13 +39,9 @@ fn it_can_create_batch_finalization_inherents() {
     let inherents = blockchain.finalize_previous_batch(&blockchain.state(), &macro_header);
     assert_eq!(inherents.len(), 2);
 
-    let validator = blockchain
-        .get_staking_contract()
-        .active_validators_sorted
-        .iter()
-        .next()
-        .unwrap()
-        .clone();
+    let active_validators = blockchain.get_staking_contract().active_validators;
+
+    let (validator_address, _) = active_validators.iter().next().unwrap();
 
     let mut got_reward = false;
     let mut got_finalize_batch = false;
@@ -56,12 +49,11 @@ fn it_can_create_batch_finalization_inherents() {
         match inherent.ty {
             InherentType::Reward => {
                 assert_eq!(inherent.value, Coin::from_u64_unchecked(8_74999));
-                assert_eq!(inherent.target, validator.reward_address);
                 got_reward = true;
             }
             InherentType::FinalizeBatch => {
                 assert_eq!(inherent.value, Coin::ZERO);
-                assert_eq!(inherent.target, validator_registry_addr.clone());
+                assert_eq!(inherent.target, staking_contract_address.clone());
                 got_finalize_batch = true;
             }
             _ => panic!(),
@@ -72,15 +64,16 @@ fn it_can_create_batch_finalization_inherents() {
     // Slash one slot. Expect 1x FinalizeBatch, 1x Reward to validator, 1x Reward burn
     let slot = SlashedSlot {
         slot: 0,
-        validator_id: validator.id.clone(),
+        validator_address: validator_address.clone(),
         event_block: 0,
     };
     let slash_inherent = Inherent {
         ty: InherentType::Slash,
-        target: validator_registry_addr.clone(),
+        target: staking_contract_address.clone(),
         value: Coin::ZERO,
         data: slot.serialize_to_vec(),
     };
+
     let mut txn = WriteTransaction::new(&blockchain.env);
     // adds slot 0 to previous_lost_rewards -> slot won't get reward on next finalize_previous_batch
     assert!(blockchain
@@ -91,7 +84,7 @@ fn it_can_create_batch_finalization_inherents() {
             &[],
             &[slash_inherent],
             policy::BATCH_LENGTH + 1,
-            0
+            0,
         )
         .is_ok());
     txn.commit();
@@ -114,12 +107,11 @@ fn it_can_create_batch_finalization_inherents() {
                         inherent.value,
                         Coin::from_u64_unchecked(8_74999 - one_slot_reward as u64)
                     );
-                    assert_eq!(inherent.target, validator.reward_address);
                     got_reward = true;
                 }
             }
             InherentType::FinalizeBatch => {
-                assert_eq!(inherent.target, validator_registry_addr.clone());
+                assert_eq!(inherent.target, staking_contract_address.clone());
                 assert_eq!(inherent.value, Coin::ZERO);
                 got_finalize_batch = true;
             }

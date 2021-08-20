@@ -106,7 +106,7 @@ impl BlockProducer {
             .blockchain
             .state()
             .accounts
-            .hash_with(&transactions, &inherents, block_number, timestamp)
+            .get_root_with(&transactions, &inherents, block_number, timestamp)
             .expect("Failed to compute accounts hash during block production");
 
         // Calculate the extended transactions from the transactions and the inherents.
@@ -214,17 +214,14 @@ impl BlockProducer {
             .blockchain
             .create_macro_block_inherents(&state, &header);
 
-        let transactions = self.blockchain.create_txs_from_inherents(&inherents);
-
         // Update the state and add the state root to the header.
         header.state_root = state
             .accounts
-            .hash_with(&[], &inherents, block_number, timestamp)
+            .get_root_with(&[], &inherents, block_number, timestamp)
             .expect("Failed to compute accounts hash during block production.");
 
         // Calculate the extended transactions from the transactions and the inherents.
-        let ext_txs =
-            ExtendedTransaction::from(block_number, timestamp, transactions.clone(), inherents);
+        let ext_txs = ExtendedTransaction::from(block_number, timestamp, vec![], inherents);
 
         // Store the extended transactions into the history tree and calculate the history root.
         let mut txn = self.blockchain.write_transaction();
@@ -265,7 +262,7 @@ impl BlockProducer {
             validators,
             lost_reward_set,
             disabled_set,
-            transactions,
+            transactions: vec![],
         };
 
         // Add the root of the body to the header.

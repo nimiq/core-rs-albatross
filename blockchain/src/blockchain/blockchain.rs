@@ -7,7 +7,6 @@ use nimiq_block::Block;
 use nimiq_database::{Environment, WriteTransaction};
 use nimiq_genesis::NetworkInfo;
 use nimiq_hash::Blake2bHash;
-use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::policy;
@@ -23,6 +22,7 @@ use crate::chain_store::ChainStore;
 use crate::history_store::HistoryStore;
 use crate::reward::genesis_parameters;
 use crate::{BlockchainError, BlockchainEvent, ForkEvent};
+use nimiq_trie::key_nibbles::KeyNibbles;
 
 /// The Blockchain struct. It stores all information of the blockchain. It is the main data
 /// structure in this crate.
@@ -72,7 +72,7 @@ impl Blockchain {
         time: Arc<OffsetTime>,
         network_id: NetworkId,
         genesis_block: Block,
-        genesis_accounts: Vec<(Address, Account)>,
+        genesis_accounts: Vec<(KeyNibbles, Account)>,
     ) -> Result<Self, BlockchainError> {
         let chain_store = Arc::new(ChainStore::new(env.clone()));
         let history_store = Arc::new(HistoryStore::new(env.clone()));
@@ -218,7 +218,7 @@ impl Blockchain {
         time: Arc<OffsetTime>,
         network_id: NetworkId,
         genesis_block: Block,
-        genesis_accounts: Vec<(Address, Account)>,
+        genesis_accounts: Vec<(KeyNibbles, Account)>,
     ) -> Result<Self, BlockchainError> {
         // Initialize chain & accounts with genesis block.
         let head_hash = genesis_block.hash();

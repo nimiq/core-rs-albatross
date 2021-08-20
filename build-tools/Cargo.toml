@@ -38,4 +38,5 @@ nimiq-database = { path = "../database" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-primitives = { path = "../primitives" }
+nimiq-trie = { path = "../primitives/trie" }
 nimiq-vrf = { path = "../vrf" }

@@ -56,7 +56,19 @@ impl Blockchain {
 
     /// Returns the current staking contract.
     pub fn get_staking_contract(&self) -> StakingContract {
-        StakingContract::get_staking_contract(&self.state().accounts.tree, &self.read_transaction())
+        let staking_contract_address = StakingContract::get_key_staking_contract();
+
+        match self
+            .state
+            .read()
+            .accounts
+            .get(&staking_contract_address, None)
+        {
+            Some(Account::Staking(x)) => x,
+            _ => {
+                unreachable!()
+            }
+        }
     }
 
     pub fn read_transaction(&self) -> ReadTransaction {

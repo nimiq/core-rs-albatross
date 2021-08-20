@@ -9,6 +9,7 @@ use beserial::ReadBytesExt;
 use beserial::SerializingError;
 use beserial::WriteBytesExt;
 use beserial::{Deserialize, DeserializeWithLength, Serialize, SerializeWithLength};
+use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::argon2kdf::{compute_argon2_kdf, Argon2Error};
 use std::io;
 
