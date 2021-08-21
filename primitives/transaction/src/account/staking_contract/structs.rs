@@ -66,7 +66,6 @@ impl IncomingStakingTransactionType {
 /// over the complete transaction with the `signature` field set to `Default::default()`.
 /// The field is populated only after computing the signature.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub enum IncomingStakingTransactionData {
     CreateValidator {
         warm_key: Address,

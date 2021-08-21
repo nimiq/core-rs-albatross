@@ -30,7 +30,6 @@ use nimiq_peer_address::services::ServiceFlags;
 use nimiq_peer_address::version;
 use nimiq_subscription::Subscription;
 use nimiq_transaction::{Transaction, TransactionReceipt, TransactionsProof};
-use nimiq_trie::trie_chunk::TrieChunk;
 use nimiq_trie::trie_proof::TrieProof;
 use nimiq_utils::crc::Crc32Computer;
 use nimiq_utils::merkle::partial::Blake2bPartialMerkleProof;
@@ -1061,7 +1060,7 @@ pub struct GetAccountsTreeChunkMessage {
 #[derive(Clone, Debug)]
 pub enum AccountsTreeChunkData {
     Serialized(Vec<u8>),
-    Structured(TrieChunk<Account>),
+    Structured(TrieProof<Account>),
 }
 
 impl AccountsTreeChunkData {
