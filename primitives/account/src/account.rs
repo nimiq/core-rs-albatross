@@ -20,9 +20,13 @@ pub enum Account {
     Basic(BasicAccount),
     Vesting(VestingContract),
     HTLC(HashedTimeLockedContract),
+    #[cfg_attr(feature = "serde-derive", serde(skip))]
     Staking(StakingContract),
+    #[cfg_attr(feature = "serde-derive", serde(skip))]
     StakingValidator(Validator),
+    #[cfg_attr(feature = "serde-derive", serde(skip))]
     StakingValidatorsStaker(Address),
+    #[cfg_attr(feature = "serde-derive", serde(skip))]
     StakingStaker(Staker),
 }
 
