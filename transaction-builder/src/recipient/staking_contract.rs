@@ -1,63 +1,15 @@
-use beserial::{Serialize, SerializingError, WriteBytesExt};
-use bls::{CompressedSignature, KeyPair, PublicKey};
+use bls::{CompressedSignature, KeyPair as BLSKeyPair};
+use hash::Blake2bHash;
 use keys::Address;
-use primitives::account::ValidatorId;
-use transaction::account::staking_contract::{
-    IncomingStakingTransactionData, SelfStakingTransactionData,
-};
-use utils::key_rng::SecureGenerate;
+use primitives::coin::Coin;
+use transaction::account::staking_contract::IncomingStakingTransactionData;
 
 use crate::recipient::Recipient;
-
-/// This datatype represents the two types of transactions that can have a staking contract
-/// as recipient:
-/// - Incoming transactions (such as staking or signalling transactions)
-/// - Self transactions (to retire/re-activate a stake)
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
-pub enum StakingTransaction {
-    IncomingTransaction(IncomingStakingTransactionData),
-    SelfTransaction(SelfStakingTransactionData),
-}
-
-impl StakingTransaction {
-    /// This method determines whether the transaction is a signalling transaction
-    /// (i.e., a zero value transaction).
-    pub fn is_signalling(&self) -> bool {
-        match self {
-            StakingTransaction::IncomingTransaction(data) => data.is_signalling(),
-            _ => false,
-        }
-    }
-
-    /// This method determines whether the transaction is a self transaction
-    /// (i.e., both sender and recipient are the staking contract).
-    pub fn is_self_transaction(&self) -> bool {
-        matches!(self, StakingTransaction::SelfTransaction(_))
-    }
-}
-
-impl Serialize for StakingTransaction {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        match self {
-            StakingTransaction::IncomingTransaction(data) => data.serialize(writer),
-            StakingTransaction::SelfTransaction(data) => data.serialize(writer),
-        }
-    }
-
-    fn serialized_size(&self) -> usize {
-        match self {
-            StakingTransaction::IncomingTransaction(data) => data.serialized_size(),
-            StakingTransaction::SelfTransaction(data) => data.serialized_size(),
-        }
-    }
-}
 
 /// A `StakingRecipientBuilder` can be used to build most transactions interacting
 /// with the staking contract (except such transactions that move funds out of the contract).
 ///
-/// We need to distinguish two types of transactions that have the staking contract as a recipient:
-/// 1. Incoming transactions, which include:
+/// Transactions that have the staking contract as a recipient:
 ///     - Validator
 ///         * Create
 ///         * Update (signalling)
@@ -65,182 +17,160 @@ impl Serialize for StakingTransaction {
 ///         * Re-activate (signalling)
 ///         * Unpark (signalling)
 ///     - Staker
+///         * Create
 ///         * Stake
-/// 2. Self transactions, which include:
-///     - Staker
-///         * Retire
-///         * Re-activate
+///         * Update (signalling)
+///         * Retire (signalling)
+///         * Re-activate (signalling)
 ///
 /// Signalling transactions have a special status as they require a zero value
 /// as well as an additional step during the proof generation.
 /// Also see [`SignallingProofBuilder`].
 ///
 /// [`SignallingProofBuilder`]: ../../proof/staking_contract/struct.SignallingProofBuilder.html
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct StakingRecipientBuilder {
-    staking_contract: Option<Address>,
-    staking_data: Option<StakingTransaction>,
-}
-
-impl Default for StakingRecipientBuilder {
-    fn default() -> Self {
-        Self::new(None)
-    }
+    data: Option<IncomingStakingTransactionData>,
 }
 
 impl StakingRecipientBuilder {
-    /// Creates a new `StakingRecipientBuilder` for the staking contract
-    /// at address `staking_contract`.
-    pub fn new(staking_contract: Option<Address>) -> Self {
+    /// Creates a new `StakingRecipientBuilder`.
+    pub fn new() -> Self {
         Self {
-            staking_contract,
-            staking_data: Default::default(),
+            data: Default::default(),
         }
     }
 
-    /// This method allows to create a new validator entry using a BLS key pair `key_pair`.
+    /// This method allows to create a new validator entry using two addresses and a BLS key pair.
     /// All rewards for this validator will be paid out to its `reward_address`.
-    pub fn create_validator(&mut self, key_pair: &KeyPair, reward_address: Address) -> &mut Self {
-        self.staking_data = Some(StakingTransaction::IncomingTransaction(
-            IncomingStakingTransactionData::CreateValidator {
-                validator_key: key_pair.public_key.compress(),
-                proof_of_knowledge: StakingRecipientBuilder::generate_proof_of_knowledge(key_pair),
-                reward_address,
-            },
-        ));
+    /// The proof needs to be signed by the cold keypair, which is the key pair that determines the
+    /// validator address, and is not an input to this function.
+    pub fn create_validator(
+        &mut self,
+        warm_address: Address,
+        bls_key_pair: &BLSKeyPair,
+        reward_address: Address,
+    ) -> &mut Self {
+        self.data = Some(IncomingStakingTransactionData::CreateValidator {
+            warm_key: warm_address,
+            validator_key: bls_key_pair.public_key.compress(),
+            proof_of_knowledge: StakingRecipientBuilder::generate_proof_of_knowledge(&bls_key_pair),
+            reward_address,
+            signal_data: None,
+            proof: Default::default(),
+        });
         self
     }
 
-    /// This method allows to create a new validator entry and also generates a new key pair for it.
-    /// All rewards for this validator will be paid out to its `reward_address`.
-    ///
-    /// The method returns the generated BLS key pair.
-    pub fn create_validator_with_new_bls_key(&mut self, reward_address: Address) -> KeyPair {
-        let key = KeyPair::generate_default_csprng();
-        self.create_validator(&key, reward_address);
-        key
-    }
-
-    /// This method allows to update the details of an existing validator entry with the
-    /// public key `old_validator_key`.
-    /// Both the key pair and the reward address can be updated.
-    /// All updates will only take effect starting in the following epoch.
+    /// This method allows to update the details of an existing validator entry. It needs to be
+    /// signed by the key pair corresponding to the validator address.
     pub fn update_validator(
         &mut self,
-        validator_id: &ValidatorId,
-        old_validator_key: &PublicKey,
-        new_key_pair: Option<&KeyPair>,
+        new_warm_address: Option<Address>,
+        new_key_pair: Option<&BLSKeyPair>,
         new_reward_address: Option<Address>,
+        new_signal_data: Option<Option<Blake2bHash>>,
     ) -> &mut Self {
-        self.staking_data = Some(StakingTransaction::IncomingTransaction(
-            IncomingStakingTransactionData::UpdateValidator {
-                validator_id: validator_id.clone(),
-                old_validator_key: old_validator_key.compress(),
-                new_validator_key: new_key_pair.map(|key| key.public_key.compress()),
-                new_proof_of_knowledge: new_key_pair
-                    .map(|key| StakingRecipientBuilder::generate_proof_of_knowledge(key)),
-                new_reward_address,
-                proof: Default::default(),
-            },
-        ));
+        self.data = Some(IncomingStakingTransactionData::UpdateValidator {
+            new_warm_key: new_warm_address,
+            new_validator_key: new_key_pair.map(|key| key.public_key.compress()),
+            new_proof_of_knowledge: new_key_pair
+                .map(|key| StakingRecipientBuilder::generate_proof_of_knowledge(key)),
+            new_reward_address,
+            new_signal_data,
+            proof: Default::default(),
+        });
         self
     }
 
-    /// This method allows to retire a validator entry.
-    /// Inactive validators will not be considered for the validator selection.
-    ///
-    /// Retiring a validator is also necessary to drop it and retrieve back its initial stake.
-    pub fn retire_validator(&mut self, validator_id: &ValidatorId) -> &mut Self {
-        self.staking_data = Some(StakingTransaction::IncomingTransaction(
-            IncomingStakingTransactionData::RetireValidator {
-                validator_id: validator_id.clone(),
-                proof: Default::default(),
-            },
-        ));
+    /// This method allows to retire a validator entry. Inactive validators will not be considered
+    /// for the validator selection. Retiring a validator is also necessary to drop it and retrieve
+    /// back its initial stake.
+    /// It needs to be signed by the key pair corresponding to the warm address.
+    pub fn retire_validator(&mut self, validator_address: Address) -> &mut Self {
+        self.data = Some(IncomingStakingTransactionData::RetireValidator {
+            validator_address,
+            proof: Default::default(),
+        });
         self
     }
 
-    /// This method allows to re-activate a validator.
-    /// This reverts the retirement of a validator and will result in the validator being
-    /// considered for the validator selection again.
-    pub fn reactivate_validator(&mut self, validator_id: &ValidatorId) -> &mut Self {
-        self.staking_data = Some(StakingTransaction::IncomingTransaction(
-            IncomingStakingTransactionData::ReactivateValidator {
-                validator_id: validator_id.clone(),
-                proof: Default::default(),
-            },
-        ));
+    /// This method allows to re-activate a validator. This reverts the retirement of a validator
+    /// and will result in the validator being considered for the validator selection again.
+    /// It needs to be signed by the key pair corresponding to the warm address.
+    pub fn reactivate_validator(&mut self, validator_address: Address) -> &mut Self {
+        self.data = Some(IncomingStakingTransactionData::ReactivateValidator {
+            validator_address,
+            proof: Default::default(),
+        });
         self
     }
 
     /// This method allows to prevent a validator from being automatically retired after slashing.
-    ///
     /// After misbehavior or being offline, a validator might be slashed.
-    /// This automatically moves a validator into a *parking* state. This means that
-    /// this validator is still considered for the next validator selection, but will be
-    /// automatically retired after two macro blocks.
+    /// This automatically moves a validator into a *parked* state. This means that
+    /// this validator will be automatically retired on the next election block.
     /// This signalling transaction will prevent the automatic retirement.
-    pub fn unpark_validator(&mut self, validator_id: &ValidatorId) -> &mut Self {
-        self.staking_data = Some(StakingTransaction::IncomingTransaction(
-            IncomingStakingTransactionData::UnparkValidator {
-                validator_id: validator_id.clone(),
-                proof: Default::default(),
-            },
-        ));
+    /// It needs to be signed by the key pair corresponding to the warm address.
+    pub fn unpark_validator(&mut self, validator_address: Address) -> &mut Self {
+        self.data = Some(IncomingStakingTransactionData::UnparkValidator {
+            validator_address,
+            proof: Default::default(),
+        });
         self
     }
 
-    /// This method allows to delegate stake to a validator with public key `validator_key`.
-    /// Optionally, the stake can be delegated in the name of an address different than
-    /// the sender of the transaction by using the `staker_address`.
-    pub fn stake(
-        &mut self,
-        validator_id: &ValidatorId,
-        staker_address: Option<Address>,
-    ) -> &mut Self {
-        self.staking_data = Some(StakingTransaction::IncomingTransaction(
-            IncomingStakingTransactionData::Stake {
-                validator_id: validator_id.clone(),
-                staker_address,
-            },
-        ));
+    /// This method allows to create a staker with a given (optional) delegation to a validator.
+    /// It needs to be signed by the key pair corresponding to the staker address.
+    pub fn create_staker(&mut self, delegation: Option<Address>) -> &mut Self {
+        self.data = Some(IncomingStakingTransactionData::CreateStaker {
+            delegation,
+            proof: Default::default(),
+        });
         self
     }
 
-    pub fn rededicate_stake(
-        &mut self,
-        from_validator_id: &ValidatorId,
-        to_validator_id: &ValidatorId,
-    ) -> &mut Self {
-        self.staking_data = Some(StakingTransaction::SelfTransaction(
-            SelfStakingTransactionData::UpdateStaker {
-                new_delegation: from_validator_id.clone(),
-                to_validator_id: to_validator_id.clone(),
-            },
-        ));
+    /// This method allows to add to a staker's active balance.
+    pub fn stake(&mut self, staker_address: Address) -> &mut Self {
+        self.data = Some(IncomingStakingTransactionData::Stake { staker_address });
         self
     }
 
-    /// This method allows to retire a stake.
-    /// This has the effect of removing the stake from the validator with key `validator_key`.
+    /// This method allows to change the delegation of a staker.
+    /// It needs to be signed by the key pair corresponding to the staker address.
+    pub fn update_staker(&mut self, new_delegation: Option<Address>) -> &mut Self {
+        self.data = Some(IncomingStakingTransactionData::UpdateStaker {
+            new_delegation,
+            proof: Default::default(),
+        });
+        self
+    }
+
+    /// This method allows to inactivate part, or all, of a staker's active balance.
+    /// This has the effect of removing the funds from the validator that the staker is delegating to.
     /// It is a necessary precondition to unstake funds.
-    pub fn retire_stake(&mut self, validator_id: &ValidatorId) -> &mut Self {
-        self.staking_data = Some(StakingTransaction::SelfTransaction(
-            SelfStakingTransactionData::RetireStaker(validator_id.clone()),
-        ));
+    /// It needs to be signed by the key pair corresponding to the staker address.
+    pub fn retire_stake(&mut self, value: Coin) -> &mut Self {
+        self.data = Some(IncomingStakingTransactionData::RetireStaker {
+            value,
+            proof: Default::default(),
+        });
         self
     }
 
-    /// This method allows to reassign inactive stake to a validator with key `validator_key`.
-    pub fn reactivate_stake(&mut self, validator_id: &ValidatorId) -> &mut Self {
-        self.staking_data = Some(StakingTransaction::SelfTransaction(
-            SelfStakingTransactionData::ReactivateStaker(validator_id.clone()),
-        ));
+    /// This method allows to reactivate part, or all, of a staker's inactive balance.
+    /// This has the effect of adding the funds to the validator that the staker is delegating to.
+    /// It needs to be signed by the key pair corresponding to the staker address.
+    pub fn reactivate_stake(&mut self, value: Coin) -> &mut Self {
+        self.data = Some(IncomingStakingTransactionData::ReactivateStaker {
+            value,
+            proof: Default::default(),
+        });
         self
     }
 
     /// A method to generate a proof of knowledge of the secret key by signing the public key.
-    pub fn generate_proof_of_knowledge(key_pair: &KeyPair) -> CompressedSignature {
+    pub fn generate_proof_of_knowledge(key_pair: &BLSKeyPair) -> CompressedSignature {
         key_pair.sign(&key_pair.public_key).compress()
     }
 
@@ -252,24 +182,23 @@ impl StakingRecipientBuilder {
     ///
     /// ```
     /// use nimiq_transaction_builder::Recipient;
-    /// use nimiq_keys::Address;
-    /// use nimiq_bls::KeyPair;
+    /// use nimiq_keys::{Address, KeyPair};
+    /// use nimiq_bls::KeyPair as BLSKeyPair;
     /// use nimiq_utils::key_rng::SecureGenerate;
     ///
-    /// let validator_key_pair = KeyPair::generate_default_csprng();
-    ///
+    /// let warm_key_pair = KeyPair::generate_default_csprng();
+    /// let warm_address = Address::from(&warm_key_pair);
+    /// let validator_key_pair = BLSKeyPair::generate_default_csprng();
     /// let reward_address = Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap();
-    /// let mut recipient_builder = Recipient::new_staking_builder(None);
-    /// recipient_builder.create_validator(&validator_key_pair, reward_address);
+    ///
+    /// let mut recipient_builder = Recipient::new_staking_builder();
+    /// recipient_builder.create_validator(warm_address, &validator_key_pair, reward_address);
     /// let recipient = recipient_builder.generate();
     /// assert!(recipient.is_some());
     /// ```
     ///
     /// [`Recipient`]: ../enum.Recipient.html
     pub fn generate(self) -> Option<Recipient> {
-        Some(Recipient::Staking {
-            address: self.staking_contract,
-            data: self.staking_data?,
-        })
+        Some(Recipient::Staking { data: self.data? })
     }
 }

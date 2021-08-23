@@ -9,27 +9,20 @@ extern crate nimiq_utils as utils;
 use thiserror::Error;
 
 use bls::KeyPair as BlsKeyPair;
-use genesis::NetworkInfo;
+
 use keys::{Address, KeyPair};
-use primitives::account::{AccountType, ValidatorId};
+use primitives::account::AccountType;
 use primitives::coin::Coin;
 use primitives::networks::NetworkId;
 use transaction::Transaction;
 
 pub use crate::proof::TransactionProofBuilder;
 pub use crate::recipient::Recipient;
+use hash::Blake2bHash;
+use primitives::policy::{STAKING_CONTRACT_ADDRESS, VALIDATOR_DEPOSIT};
 
 pub mod proof;
 pub mod recipient;
-
-fn fill_in_staking_contract_address(address: Option<Address>, network_id: NetworkId) -> Address {
-    address.unwrap_or_else(|| {
-        NetworkInfo::from_network_id(network_id)
-            .staking_contract_address()
-            .expect("NetworkInfo doesn't have a staking contract address set!")
-            .clone()
-    })
-}
 
 /// Building a transaction can fail if mandatory fields are not set.
 /// In these cases, a `TransactionBuilderError` is returned.
@@ -189,6 +182,9 @@ impl TransactionBuilder {
     /// * [`retire validators`]
     /// * [`re-activate validators`]
     /// * [`unpark validators`]
+    /// * [`update staker details`]
+    /// * [`retire staker funds`]
+    /// * [`re-activate staker funds`]
     /// Signalling transactions have a special status as they also require an additional step
     /// during the proof generation (see [`SignallingProofBuilder`]).
     ///
@@ -201,12 +197,6 @@ impl TransactionBuilder {
     /// let mut builder = TransactionBuilder::new();
     /// builder.with_value(Coin::from_u64_unchecked(100));
     /// ```
-    ///
-    /// [`update validator details`]: recipient/staking_contract/struct.StakingRecipientBuilder.html#method.update_validator
-    /// [`retire validators`]: recipient/staking_contract/struct.StakingRecipientBuilder.html#method.retire_validator
-    /// [`re-activate validators`]: recipient/staking_contract/struct.StakingRecipientBuilder.html#method.reactivate_validator
-    /// [`unpark validators`]: recipient/staking_contract/struct.StakingRecipientBuilder.html#method.unpark_validator
-    /// [`SignallingProofBuilder`]: proof/staking_contract/struct.SignallingProofBuilder.html
     pub fn with_value(&mut self, value: Coin) -> &mut Self {
         self.value = Some(value);
         self
@@ -432,10 +422,6 @@ impl TransactionBuilder {
         let sender = self.sender.ok_or(TransactionBuilderError::NoSender)?;
         let recipient = self.recipient.ok_or(TransactionBuilderError::NoRecipient)?;
 
-        if !recipient.is_valid_sender(&sender, self.sender_type) {
-            return Err(TransactionBuilderError::InvalidSender);
-        }
-
         let value = self.value.ok_or(TransactionBuilderError::NoValue)?;
         let validity_start_height = self
             .validity_start_height
@@ -464,7 +450,7 @@ impl TransactionBuilder {
             Transaction::new_signalling(
                 sender,
                 self.sender_type.unwrap_or(AccountType::Basic),
-                recipient.address().cloned().unwrap(), // For non-creation recipients, this should never return None.
+                recipient.address().unwrap(), // For non-creation recipients, this should never return None.
                 recipient.account_type(),
                 value,
                 self.fee.unwrap_or(Coin::ZERO),
@@ -476,7 +462,7 @@ impl TransactionBuilder {
             Transaction::new_extended(
                 sender,
                 self.sender_type.unwrap_or(AccountType::Basic),
-                recipient.address().cloned().unwrap(), // For non-creation recipients, this should never return None.
+                recipient.address().unwrap(), // For non-creation recipients, this should never return None.
                 recipient.account_type(),
                 value,
                 self.fee.unwrap_or(Coin::ZERO),
@@ -521,26 +507,36 @@ impl TransactionBuilder {
         }
     }
 
-    /// Creates a staking transaction from the address of a given `key_pair` to a specified `validator_key`.
+    /// Creates a transaction that creates a new staker with a given initial stake and delegation.
     ///
-    /// # TODO
+    /// # Arguments
     ///
-    ///  - Allow to delegate the staker address
+    ///  - `key_pair`:              The key pair used to sign the outgoing transaction. The initial
+    ///                             stake is sent from the basic account belonging to this key pair.
+    ///  - `staker_key_pair`:       The key pair used to sign the incoming transaction. The staker
+    ///                             address will be derived from this key pair.
+    ///  - `delegation`:            The (optional) delegation to a validator.
+    ///  - `value`:                 The value for the initial stake. This is sent from the account
+    ///                             belonging to `key_pair`.
+    ///  - `fee`:                   Transaction fee.
+    ///  - `validity_start_height`: Block height from which this transaction is valid.
+    ///  - `network_id`:            ID of network for which the transaction is meant.
     ///
-    pub fn new_stake(
-        staking_contract: Option<Address>,
+    /// # Returns
+    ///
+    /// The finalized transaction (signed using `key_pair`).
+    ///
+    pub fn new_create_staker(
         key_pair: &KeyPair,
-        validator_id: &ValidatorId,
-        staker_address: Option<Address>,
+        staker_key_pair: &KeyPair,
+        delegation: Option<Address>,
         value: Coin,
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Transaction {
-        let staking_contract_address =
-            fill_in_staking_contract_address(staking_contract, network_id);
-        let mut recipient = Recipient::new_staking_builder(Some(staking_contract_address));
-        recipient.stake(validator_id, staker_address);
+        let mut recipient = Recipient::new_staking_builder();
+        recipient.create_staker(delegation);
 
         let mut builder = Self::new();
         builder
@@ -553,7 +549,9 @@ impl TransactionBuilder {
 
         let proof_builder = builder.generate().unwrap();
         match proof_builder {
-            TransactionProofBuilder::Basic(mut builder) => {
+            TransactionProofBuilder::InStaking(mut builder) => {
+                builder.sign_with_key_pair(staker_key_pair);
+                let mut builder = builder.generate().unwrap().unwrap_basic();
                 builder.sign_with_key_pair(key_pair);
                 builder.generate().unwrap()
             }
@@ -561,26 +559,26 @@ impl TransactionBuilder {
         }
     }
 
-    /// Creates a rededicate transaction from the address of a given `key_pair` from `from_validator_id` to `to_validator_id`.
-    pub fn new_rededicate_stake(
-        staking_contract: Option<Address>,
+    /// Creates a staking transaction from the address of a given `key_pair` to a specified `staker_address`.
+    ///
+    /// # TODO
+    ///
+    ///  - Allow to add funds to the staker address.
+    ///
+    pub fn new_stake(
         key_pair: &KeyPair,
-        from_validator_id: &ValidatorId,
-        to_validator_id: &ValidatorId,
+        staker_address: Address,
         value: Coin,
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Transaction {
-        let staking_contract_address =
-            fill_in_staking_contract_address(staking_contract, network_id);
-        let mut recipient = Recipient::new_staking_builder(Some(staking_contract_address.clone()));
-        recipient.rededicate_stake(from_validator_id, to_validator_id);
+        let mut recipient = Recipient::new_staking_builder();
+        recipient.stake(staker_address);
 
         let mut builder = Self::new();
         builder
-            .with_sender(staking_contract_address)
-            .with_sender_type(AccountType::Staking)
+            .with_sender(Address::from(key_pair))
             .with_recipient(recipient.generate().unwrap())
             .with_value(value)
             .with_fee(fee)
@@ -589,7 +587,9 @@ impl TransactionBuilder {
 
         let proof_builder = builder.generate().unwrap();
         match proof_builder {
-            TransactionProofBuilder::StakingSelf(mut builder) => {
+            TransactionProofBuilder::InStaking(mut builder) => {
+                builder.sign_with_key_pair(key_pair);
+                let mut builder = builder.generate().unwrap().unwrap_basic();
                 builder.sign_with_key_pair(key_pair);
                 builder.generate().unwrap()
             }
@@ -597,82 +597,119 @@ impl TransactionBuilder {
         }
     }
 
-    /// Retires the stake from the address of a given `key_pair` and a specified `validator_key`.
-    pub fn new_retire(
-        staking_contract: Option<Address>,
-        key_pair: &KeyPair,
-        validator_id: &ValidatorId,
-        value: Coin,
+    /// Creates a update staker transaction for a given staker that changes the delegation. It pays
+    /// fees from the staker's active or inactive balance.
+    pub fn new_update_staker(
+        staker_key_pair: &KeyPair,
+        new_delegation: Option<Address>,
+        from_active_balance: bool,
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Transaction {
-        let staking_contract_address =
-            fill_in_staking_contract_address(staking_contract, network_id);
-        let mut recipient = Recipient::new_staking_builder(Some(staking_contract_address.clone()));
-        recipient.retire_stake(validator_id);
+        let staking_contract_address = Address::from_any_str(STAKING_CONTRACT_ADDRESS).unwrap();
+        let mut recipient = Recipient::new_staking_builder();
+        recipient.update_staker(new_delegation);
 
         let mut builder = Self::new();
         builder
             .with_sender(staking_contract_address)
             .with_sender_type(AccountType::Staking)
             .with_recipient(recipient.generate().unwrap())
-            .with_value(value)
+            .with_value(Coin::ZERO)
             .with_fee(fee)
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);
 
         let proof_builder = builder.generate().unwrap();
         match proof_builder {
-            TransactionProofBuilder::StakingSelf(mut builder) => {
-                builder.sign_with_key_pair(key_pair);
+            TransactionProofBuilder::InStaking(mut builder) => {
+                builder.sign_with_key_pair(staker_key_pair);
+                let mut builder = builder.generate().unwrap().unwrap_out_staking();
+                builder.deduct_fees(from_active_balance, staker_key_pair);
                 builder.generate().unwrap()
             }
             _ => unreachable!(),
         }
     }
 
-    /// Re-activates the stake from the address of a given `key_pair` to a new `validator_key`.
-    pub fn new_reactivate(
-        staking_contract: Option<Address>,
-        key_pair: &KeyPair,
-        validator_id: &ValidatorId,
+    /// Retires the stake of a given staker.  It pays
+    /// fees from the staker's active or inactive balance.
+    pub fn new_retire_staker(
+        staker_key_pair: &KeyPair,
+        from_active_balance: bool,
         value: Coin,
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Transaction {
-        let staking_contract_address =
-            fill_in_staking_contract_address(staking_contract, network_id);
-        let mut recipient = Recipient::new_staking_builder(Some(staking_contract_address.clone()));
-        recipient.reactivate_stake(validator_id);
+        let staking_contract_address = Address::from_any_str(STAKING_CONTRACT_ADDRESS).unwrap();
+        let mut recipient = Recipient::new_staking_builder();
+        recipient.retire_stake(value);
 
         let mut builder = Self::new();
         builder
             .with_sender(staking_contract_address)
             .with_sender_type(AccountType::Staking)
             .with_recipient(recipient.generate().unwrap())
-            .with_value(value)
+            .with_value(Coin::ZERO)
             .with_fee(fee)
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);
 
         let proof_builder = builder.generate().unwrap();
         match proof_builder {
-            TransactionProofBuilder::StakingSelf(mut builder) => {
-                builder.sign_with_key_pair(key_pair);
+            TransactionProofBuilder::InStaking(mut builder) => {
+                builder.sign_with_key_pair(staker_key_pair);
+                let mut builder = builder.generate().unwrap().unwrap_out_staking();
+                builder.deduct_fees(from_active_balance, staker_key_pair);
                 builder.generate().unwrap()
             }
             _ => unreachable!(),
         }
     }
 
-    /// Creates a transaction to move inactive/retired stake of a given `key_pair`
+    /// Re-activates the stake from a given staker. It pays
+    /// fees from the staker's active or inactive balance.
+    pub fn new_reactivate_staker(
+        staker_key_pair: &KeyPair,
+        from_active_balance: bool,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Transaction {
+        let staking_contract_address = Address::from_any_str(STAKING_CONTRACT_ADDRESS).unwrap();
+        let mut recipient = Recipient::new_staking_builder();
+        recipient.reactivate_stake(value);
+
+        let mut builder = Self::new();
+        builder
+            .with_sender(staking_contract_address)
+            .with_sender_type(AccountType::Staking)
+            .with_recipient(recipient.generate().unwrap())
+            .with_value(Coin::ZERO)
+            .with_fee(fee)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(network_id);
+
+        let proof_builder = builder.generate().unwrap();
+        match proof_builder {
+            TransactionProofBuilder::InStaking(mut builder) => {
+                builder.sign_with_key_pair(staker_key_pair);
+                let mut builder = builder.generate().unwrap().unwrap_out_staking();
+                builder.deduct_fees(from_active_balance, staker_key_pair);
+                builder.generate().unwrap()
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    /// Creates a transaction to move inactive/retired stake of a given staker
     /// from the staking contract to a new basic `recipient` address.
     ///
     /// Note that unstaking transactions can only be executed after the cooldown period has passed.
     pub fn new_unstake(
-        staking_contract: Option<Address>,
         key_pair: &KeyPair,
         recipient: Address,
         value: Coin,
@@ -680,8 +717,7 @@ impl TransactionBuilder {
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Transaction {
-        let staking_contract_address =
-            fill_in_staking_contract_address(staking_contract, network_id);
+        let staking_contract_address = Address::from_any_str(STAKING_CONTRACT_ADDRESS).unwrap();
         let recipient = Recipient::new_basic(recipient);
 
         let mut builder = Self::new();
@@ -696,7 +732,7 @@ impl TransactionBuilder {
 
         let proof_builder = builder.generate().unwrap();
         match proof_builder {
-            TransactionProofBuilder::Staking(mut builder) => {
+            TransactionProofBuilder::OutStaking(mut builder) => {
                 builder.unstake(key_pair);
                 builder.generate().unwrap()
             }
@@ -704,18 +740,17 @@ impl TransactionBuilder {
         }
     }
 
-    /// Creates a transaction that creates a new validator with an initial stake.
+    /// Creates a transaction that creates a new validator.
     ///
     /// # Arguments
     ///
-    ///  - `staking_contract`:      Address of the staking contract. If `None`, the address of the staking contract for
-    ///                             the network with ID `network_id` is used.
     ///  - `key_pair`:              The key pair used to sign the transaction. The initial stake is sent from the
     ///                             account belonging to this key pair.
-    ///  - `reward_address`:        The address to which the staking reward is sent.
-    ///  - `validator_key_pair`:    The validator BLS key pair used by the validator.
-    ///  - `value`:                 The value for the initial stake. This is sent from the account belonging to
-    ///                             `key_pair` to the initial stake.
+    ///  - `cold_key_pair`:         The key pair that will become the validator address. The data is
+    ///                             signed using this key pair.
+    ///  - `warm_address`:          The address corresponding to the warm key used by the validator.
+    ///  - `validator_key_pair`:    The BLS key pair used by the validator.
+    ///  - `reward_address`:        The address to which the staking rewards are sent.
     ///  - `fee`:                   Transaction fee.
     ///  - `validity_start_height`: Block height from which this transaction is valid.
     ///  - `network_id`:            ID of network for which the transaction is meant.
@@ -725,32 +760,32 @@ impl TransactionBuilder {
     /// The finalized transaction (signed using `key_pair`).
     ///
     pub fn new_create_validator(
-        staking_contract: Option<Address>,
         key_pair: &KeyPair,
-        reward_address: Address,
+        cold_key_pair: &KeyPair,
+        warm_address: Address,
         validator_key_pair: &BlsKeyPair,
-        value: Coin,
+        reward_address: Address,
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Transaction {
-        let staking_contract_address =
-            fill_in_staking_contract_address(staking_contract, network_id);
-        let mut recipient = Recipient::new_staking_builder(Some(staking_contract_address));
-        recipient.create_validator(validator_key_pair, reward_address);
+        let mut recipient = Recipient::new_staking_builder();
+        recipient.create_validator(warm_address, validator_key_pair, reward_address);
 
         let mut builder = Self::new();
         builder
             .with_sender(Address::from(key_pair))
             .with_recipient(recipient.generate().unwrap())
-            .with_value(value)
+            .with_value(Coin::from_u64_unchecked(VALIDATOR_DEPOSIT))
             .with_fee(fee)
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);
 
         let proof_builder = builder.generate().unwrap();
         match proof_builder {
-            TransactionProofBuilder::Basic(mut builder) => {
+            TransactionProofBuilder::InStaking(mut builder) => {
+                builder.sign_with_key_pair(cold_key_pair);
+                let mut builder = builder.generate().unwrap().unwrap_basic();
                 builder.sign_with_key_pair(key_pair);
                 builder.generate().unwrap()
             }
@@ -758,16 +793,17 @@ impl TransactionBuilder {
         }
     }
 
-    /// Creates a transaction that updates the validator BLS key and reward address for a validator entry.
+    /// Creates a transaction that updates the details of a validator.
     ///
     /// # Arguments
     ///
-    ///  - `staking_contract`:         Address of the staking contract. If `None`, the address of the staking contract for
-    ///                                the network with ID `network_id` is used.
     ///  - `key_pair`:                 The key pair used to sign the transaction. The transaction fee is taken from the
     ///                                account belonging to this key pair.
+    ///  - `cold_key_pair`:            The key pair that corresponds to the validator address. The data is
+    ///                                signed using this key pair.
+    ///  - `new_warm_address`:         The address corresponding to the new warm key used by the validator.
     ///  - `new_reward_address`:       The new address to which the staking reward is sent.
-    ///  - `old_validator_key_pair`:   The old BLS key pair used by this validator.
+    ///  - `new_signal_data`:          The new signal data showed by the validator.
     ///  - `new_validator_key_pair`:   The new validator BLS key pair used by the validator.
     ///  - `fee`:                      Transaction fee.
     ///  - `validity_start_height`:    Block height from which this transaction is valid.
@@ -782,39 +818,37 @@ impl TransactionBuilder {
     /// This is a *signalling transaction*.
     ///
     pub fn new_update_validator(
-        staking_contract: Option<Address>,
         key_pair: &KeyPair,
-        validator_id: &ValidatorId,
-        new_reward_address: Option<Address>,
-        old_validator_key_pair: &BlsKeyPair,
+        cold_key_pair: &KeyPair,
+        new_warm_address: Option<Address>,
         new_validator_key_pair: Option<&BlsKeyPair>,
+        new_reward_address: Option<Address>,
+        new_signal_data: Option<Option<Blake2bHash>>,
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Transaction {
-        let staking_contract_address =
-            fill_in_staking_contract_address(staking_contract, network_id);
-        let mut recipient = Recipient::new_staking_builder(Some(staking_contract_address));
+        let mut recipient = Recipient::new_staking_builder();
         recipient.update_validator(
-            validator_id,
-            &old_validator_key_pair.public_key,
+            new_warm_address,
             new_validator_key_pair,
             new_reward_address,
+            new_signal_data,
         );
 
         let mut builder = Self::new();
         builder
             .with_sender(Address::from(key_pair))
             .with_recipient(recipient.generate().unwrap())
-            .with_value(Coin::default())
+            .with_value(Coin::ZERO)
             .with_fee(fee)
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);
 
         let proof_builder = builder.generate().unwrap();
         match proof_builder {
-            TransactionProofBuilder::Signalling(mut builder) => {
-                builder.sign_with_validator_key_pair(old_validator_key_pair);
+            TransactionProofBuilder::InStaking(mut builder) => {
+                builder.sign_with_key_pair(cold_key_pair);
                 let mut builder = builder.generate().unwrap().unwrap_basic();
                 builder.sign_with_key_pair(key_pair);
                 builder.generate().unwrap()
@@ -827,11 +861,11 @@ impl TransactionBuilder {
     ///
     /// # Arguments
     ///
-    ///  - `staking_contract`:      Address of the staking contract. If `None`, the address of the staking contract for
-    ///                             the network with ID `network_id` is used.
     ///  - `key_pair`:              The key pair used to sign the transaction. The transaction fee is taken from the
     ///                             account belonging to this key pair.
-    ///  - `validator_key_pair`:    The BLS key pair of the validator that is to be retired.
+    ///  - `validator_address`:     The validator address.
+    ///  - `warm_key_pair`:         The key pair that corresponds to the validator's warm address.
+    ///                             The data is signed using this key pair.
     ///  - `fee`:                   Transaction fee.
     ///  - `validity_start_height`: Block height from which this transaction is valid.
     ///  - `network_id`:            ID of network for which the transaction is valid.
@@ -845,32 +879,29 @@ impl TransactionBuilder {
     /// This is a *signalling transaction*.
     ///
     pub fn new_retire_validator(
-        staking_contract: Option<Address>,
         key_pair: &KeyPair,
-        validator_id: &ValidatorId,
-        validator_key_pair: &BlsKeyPair,
+        validator_address: Address,
+        warm_key_pair: &KeyPair,
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Transaction {
-        let staking_contract_address =
-            fill_in_staking_contract_address(staking_contract, network_id);
-        let mut recipient = Recipient::new_staking_builder(Some(staking_contract_address));
-        recipient.retire_validator(validator_id);
+        let mut recipient = Recipient::new_staking_builder();
+        recipient.retire_validator(validator_address);
 
         let mut builder = Self::new();
         builder
             .with_sender(Address::from(key_pair))
             .with_recipient(recipient.generate().unwrap())
-            .with_value(Coin::default())
+            .with_value(Coin::ZERO)
             .with_fee(fee)
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);
 
         let proof_builder = builder.generate().unwrap();
         match proof_builder {
-            TransactionProofBuilder::Signalling(mut builder) => {
-                builder.sign_with_validator_key_pair(validator_key_pair);
+            TransactionProofBuilder::InStaking(mut builder) => {
+                builder.sign_with_key_pair(warm_key_pair);
                 let mut builder = builder.generate().unwrap().unwrap_basic();
                 builder.sign_with_key_pair(key_pair);
                 builder.generate().unwrap()
@@ -883,11 +914,11 @@ impl TransactionBuilder {
     ///
     /// # Arguments
     ///
-    ///  - `staking_contract`:      Address of the staking contract. If `None`, the address of the staking contract for
-    ///                             the network with ID `network_id` is used.
     ///  - `key_pair`:              The key pair used to sign the transaction. The transaction fee is taken from the
     ///                             account belonging to this key pair.
-    ///  - `validator_public_key`:  The public key of the validator that is to be reactivated.
+    ///  - `validator_address`:     The validator address.
+    ///  - `warm_key_pair`:         The key pair that corresponds to the validator's warm address.
+    ///                             The data is signed using this key pair.
     ///  - `fee`:                   Transaction fee.
     ///  - `validity_start_height`: Block height from which this transaction is valid.
     ///  - `network_id`:            ID of network for which the transaction is valid.
@@ -901,86 +932,31 @@ impl TransactionBuilder {
     /// This is a *signalling transaction*.
     ///
     pub fn new_reactivate_validator(
-        staking_contract: Option<Address>,
         key_pair: &KeyPair,
-        validator_id: &ValidatorId,
-        validator_key_pair: &BlsKeyPair,
+        validator_address: Address,
+        warm_key_pair: &KeyPair,
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Transaction {
-        let staking_contract_address =
-            fill_in_staking_contract_address(staking_contract, network_id);
-        let mut recipient = Recipient::new_staking_builder(Some(staking_contract_address));
-        recipient.reactivate_validator(validator_id);
+        let mut recipient = Recipient::new_staking_builder();
+        recipient.reactivate_validator(validator_address);
 
         let mut builder = Self::new();
         builder
             .with_sender(Address::from(key_pair))
             .with_recipient(recipient.generate().unwrap())
-            .with_value(Coin::default())
+            .with_value(Coin::ZERO)
             .with_fee(fee)
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);
 
         let proof_builder = builder.generate().unwrap();
         match proof_builder {
-            TransactionProofBuilder::Signalling(mut builder) => {
-                builder.sign_with_validator_key_pair(validator_key_pair);
+            TransactionProofBuilder::InStaking(mut builder) => {
+                builder.sign_with_key_pair(warm_key_pair);
                 let mut builder = builder.generate().unwrap().unwrap_basic();
                 builder.sign_with_key_pair(key_pair);
-                builder.generate().unwrap()
-            }
-            _ => unreachable!(),
-        }
-    }
-
-    /// Creates a transaction that drops an *inactive* validator. The validator must have been *inactive* for the
-    /// minimal cool-down period. This also retires the associated stake, allowing immediate withdrawal.
-    ///
-    /// # Arguments
-    ///
-    ///  - `staking_contract`:      Address of the staking contract. If `None`, the address of the staking contract for
-    ///                             the network with ID `network_id` is used.
-    ///  - `recipient`:             The recipient of the staked funds.
-    ///  - `validator_public_key`:  The public key of the validator that is to be reactivated.
-    ///  - `value`:                 The value of the retired stake, without the transaction fee.
-    ///  - `fee`:                   Transaction fee. The fee is subtracted from the staked funds.
-    ///  - `validity_start_height`: Block height from which this transaction is valid.
-    ///  - `network_id`:            ID of network for which the transaction is valid.
-    ///
-    /// # Returns
-    ///
-    /// The finalized transaction (signed using `validator_key_pair`).
-    ///
-    pub fn new_drop_validator(
-        staking_contract: Option<Address>,
-        validator_id: &ValidatorId,
-        recipient: Address,
-        validator_key_pair: &BlsKeyPair,
-        value: Coin,
-        fee: Coin,
-        validity_start_height: u32,
-        network_id: NetworkId,
-    ) -> Transaction {
-        let staking_contract_address =
-            fill_in_staking_contract_address(staking_contract, network_id);
-        let recipient = Recipient::new_basic(recipient);
-
-        let mut builder = Self::new();
-        builder
-            .with_sender(staking_contract_address)
-            .with_sender_type(AccountType::Staking)
-            .with_recipient(recipient)
-            .with_value(value)
-            .with_fee(fee)
-            .with_validity_start_height(validity_start_height)
-            .with_network_id(network_id);
-
-        let proof_builder = builder.generate().unwrap();
-        match proof_builder {
-            TransactionProofBuilder::Staking(mut builder) => {
-                builder.drop_validator(validator_id, validator_key_pair);
                 builder.generate().unwrap()
             }
             _ => unreachable!(),
@@ -991,11 +967,11 @@ impl TransactionBuilder {
     ///
     /// # Arguments
     ///
-    ///  - `staking_contract`:      Address of the staking contract. If `None`, the address of the staking contract for
-    ///                             the network with ID `network_id` is used.
     ///  - `key_pair`:              The key pair used to sign the transaction. The transaction fee is taken from the
     ///                             account belonging to this key pair.
-    ///  - `validator_public_key`:  The public key of the validator that is to be reactivated.
+    ///  - `validator_address`:     The validator address.
+    ///  - `warm_key_pair`:         The key pair that corresponds to the validator's warm address.
+    ///                             The data is signed using this key pair.
     ///  - `fee`:                   Transaction fee.
     ///  - `validity_start_height`: Block height from which this transaction is valid.
     ///  - `network_id`:            ID of network for which the transaction is valid.
@@ -1009,34 +985,77 @@ impl TransactionBuilder {
     /// This is a *signalling transaction*.
     ///
     pub fn new_unpark_validator(
-        staking_contract: Option<Address>,
         key_pair: &KeyPair,
-        validator_id: &ValidatorId,
-        validator_key_pair: &BlsKeyPair,
+        validator_address: Address,
+        warm_key_pair: &KeyPair,
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Transaction {
-        let staking_contract_address =
-            fill_in_staking_contract_address(staking_contract, network_id);
-        let mut recipient = Recipient::new_staking_builder(Some(staking_contract_address));
-        recipient.unpark_validator(validator_id);
+        let mut recipient = Recipient::new_staking_builder();
+        recipient.unpark_validator(validator_address);
 
         let mut builder = Self::new();
         builder
             .with_sender(Address::from(key_pair))
             .with_recipient(recipient.generate().unwrap())
-            .with_value(Coin::default())
+            .with_value(Coin::ZERO)
             .with_fee(fee)
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);
 
         let proof_builder = builder.generate().unwrap();
         match proof_builder {
-            TransactionProofBuilder::Signalling(mut builder) => {
-                builder.sign_with_validator_key_pair(validator_key_pair);
+            TransactionProofBuilder::InStaking(mut builder) => {
+                builder.sign_with_key_pair(warm_key_pair);
                 let mut builder = builder.generate().unwrap().unwrap_basic();
                 builder.sign_with_key_pair(key_pair);
+                builder.generate().unwrap()
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    /// Creates a transaction that drops an *inactive* validator. The validator must have been *inactive* for the
+    /// minimum cool-down period.
+    ///
+    /// # Arguments
+    ///
+    ///  - `recipient`:             The recipient of the staked funds.
+    ///  - `cold_key_pair`:         The key pair that corresponds to the validator address. The
+    ///                             transaction is signed using this key pair.
+    ///  - `fee`:                   Transaction fee. The fee is subtracted from the staked funds.
+    ///  - `validity_start_height`: Block height from which this transaction is valid.
+    ///  - `network_id`:            ID of network for which the transaction is valid.
+    ///
+    /// # Returns
+    ///
+    /// The finalized transaction (signed using `cold_key_pair`).
+    ///
+    pub fn new_drop_validator(
+        recipient: Address,
+        cold_key_pair: &KeyPair,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Transaction {
+        let staking_contract_address = Address::from_any_str(STAKING_CONTRACT_ADDRESS).unwrap();
+        let recipient = Recipient::new_basic(recipient);
+
+        let mut builder = Self::new();
+        builder
+            .with_sender(staking_contract_address)
+            .with_sender_type(AccountType::Staking)
+            .with_recipient(recipient)
+            .with_value(Coin::from_u64_unchecked(VALIDATOR_DEPOSIT) - fee)
+            .with_fee(fee)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(network_id);
+
+        let proof_builder = builder.generate().unwrap();
+        match proof_builder {
+            TransactionProofBuilder::OutStaking(mut builder) => {
+                builder.unstake(cold_key_pair);
                 builder.generate().unwrap()
             }
             _ => unreachable!(),

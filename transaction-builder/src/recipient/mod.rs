@@ -1,11 +1,13 @@
 use beserial::Serialize;
 use keys::Address;
-use nimiq_account::AccountType;
+use nimiq_primitives::account::AccountType;
+use nimiq_primitives::policy::STAKING_CONTRACT_ADDRESS;
 use transaction::account::htlc_contract::CreationTransactionData as HtlcCreationData;
+use transaction::account::staking_contract::IncomingStakingTransactionData;
 use transaction::account::vesting_contract::CreationTransactionData as VestingCreationData;
 
 use crate::recipient::htlc_contract::HtlcRecipientBuilder;
-use crate::recipient::staking_contract::{StakingRecipientBuilder, StakingTransaction};
+use crate::recipient::staking_contract::StakingRecipientBuilder;
 use crate::recipient::vesting_contract::VestingRecipientBuilder;
 
 pub mod htlc_contract;
@@ -40,8 +42,7 @@ pub enum Recipient {
         data: VestingCreationData,
     },
     Staking {
-        address: Option<Address>,
-        data: StakingTransaction,
+        data: IncomingStakingTransactionData,
     },
 }
 
@@ -143,44 +144,44 @@ impl Recipient {
     /// use nimiq_keys::Address;
     /// use nimiq_bls::KeyPair;
     /// use nimiq_utils::key_rng::SecureGenerate;
-    /// use nimiq_primitives::account::ValidatorId;
     ///
-    /// let validator_id: ValidatorId = [0;20].into();
+    /// let staker_address: Address = [0;20].into();
     ///
-    /// let mut recipient_builder = Recipient::new_staking_builder(None);
-    /// recipient_builder.stake(&validator_id, None);
+    /// let mut recipient_builder = Recipient::new_staking_builder();
+    /// recipient_builder.stake(staker_address);
     /// let recipient = recipient_builder.generate();
     /// assert!(recipient.is_some());
     /// ```
     ///
     /// [`StakingRecipientBuilder`]: staking_contract/struct.StakingRecipientBuilder.html
     /// [`generate`]: staking_contract/struct.StakingRecipientBuilder.html#method.generate
-    pub fn new_staking_builder(staking_contract: Option<Address>) -> StakingRecipientBuilder {
-        StakingRecipientBuilder::new(staking_contract)
+    pub fn new_staking_builder() -> StakingRecipientBuilder {
+        StakingRecipientBuilder::new()
     }
 
     /// This method checks whether the transaction is a contract creation.
     /// Vesting and HTLC recipients do create new contracts.
     /// Basic recipients and the staking contract do not create new contracts.
     pub fn is_creation(&self) -> bool {
-        !matches!(self, Recipient::Basic { .. } | Recipient::Staking { .. })
+        matches!(
+            self,
+            Recipient::HtlcCreation { .. } | Recipient::VestingCreation { .. }
+        )
     }
 
     /// This method checks whether the transaction is a signalling transaction
-    /// (i.e., requires a zero value and a special proof step).
+    /// (i.e., requires a zero value).
     /// Only the following transactions on the staking contract are signalling transactions:
-    /// * [`update validator details`]
-    /// * [`retire validators`]
-    /// * [`re-activate validators`]
-    /// * [`unpark validators`]
-    ///
-    /// [`update validator details`]: staking_contract/struct.StakingRecipientBuilder.html#method.update_validator
-    /// [`retire validators`]: staking_contract/struct.StakingRecipientBuilder.html#method.retire_validator
-    /// [`re-activate validators`]: staking_contract/struct.StakingRecipientBuilder.html#method.reactivate_validator
-    /// [`unpark validators`]: staking_contract/struct.StakingRecipientBuilder.html#method.unpark_validator
+    /// * [`update validator`]
+    /// * [`retire validator`]
+    /// * [`re-activate validator`]
+    /// * [`unpark validator`]
+    /// * [`update staker`]
+    /// * [`retire staker`]
+    /// * [`re-activate staker`]
     pub fn is_signalling(&self) -> bool {
         match self {
-            Recipient::Staking { data, .. } => data.is_signalling(),
+            Recipient::Staking { data } => data.is_signalling(),
             _ => false,
         }
     }
@@ -196,10 +197,12 @@ impl Recipient {
     }
 
     /// Returns the recipient address if this is not a contract creation.
-    pub fn address(&self) -> Option<&Address> {
+    pub fn address(&self) -> Option<Address> {
         match self {
-            Recipient::Basic { address } => Some(address),
-            Recipient::Staking { address, .. } => address.as_ref(),
+            Recipient::Basic { address } => Some(address.clone()),
+            Recipient::Staking { .. } => {
+                Some(Address::from_any_str(STAKING_CONTRACT_ADDRESS).unwrap())
+            }
             _ => None,
         }
     }
@@ -210,27 +213,7 @@ impl Recipient {
             Recipient::Basic { .. } => Vec::new(),
             Recipient::HtlcCreation { data } => data.serialize_to_vec(),
             Recipient::VestingCreation { data } => data.serialize_to_vec(),
-            Recipient::Staking { data, .. } => data.serialize_to_vec(),
+            Recipient::Staking { data } => data.serialize_to_vec(),
         }
-    }
-
-    /// Validates the sender of the transaction.
-    /// For certain transactions, the sender must equal the recipient.
-    /// Currently, only the following transactions require this:
-    /// * [`retire stake`]
-    /// * [`re-activate stake`]
-    ///
-    /// [`retire stake`]: recipient/staking_contract/struct.StakingRecipientBuilder.html#method.retire_stake
-    /// [`re-activate stake`]: recipient/staking_contract/struct.StakingRecipientBuilder.html#method.reactivate_stake
-    pub fn is_valid_sender(&self, sender: &Address, sender_type: Option<AccountType>) -> bool {
-        if let Recipient::Staking { address, data } = self {
-            if data.is_self_transaction() {
-                if let Some(address) = address {
-                    return address == sender && sender_type == Some(AccountType::Staking);
-                }
-            }
-        }
-
-        true
     }
 }

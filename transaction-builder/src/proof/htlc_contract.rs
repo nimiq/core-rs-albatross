@@ -18,6 +18,7 @@ use transaction::{SignatureProof, Transaction};
 ///     (called `RegularTransfer`)
 /// 3. If both `sender` and `recipient` sign the transaction, the funds can be withdrawn at any time.
 ///     (called `EarlyResolve`)
+#[derive(Clone, Debug)]
 pub enum HtlcProof {
     RegularTransfer {
         hash_algorithm: HashAlgorithm,
@@ -105,6 +106,7 @@ impl Serialize for HtlcProof {
 
 /// The `HtlcProofBuilder` can be used to build proofs for transactions
 /// that originate in a HTLC contract.
+#[derive(Clone, Debug)]
 pub struct HtlcProofBuilder {
     pub transaction: Transaction,
     proof: Option<HtlcProof>,
