@@ -1,7 +1,5 @@
 use beserial::{Deserialize, Serialize};
-use bls::KeyPair as BlsKeyPair;
 use keys::KeyPair;
-use primitives::account::ValidatorId;
 use transaction::account::staking_contract::{
     IncomingStakingTransactionData, OutgoingStakingTransactionProof,
 };
@@ -9,54 +7,65 @@ use transaction::{SignatureProof, Transaction};
 
 use crate::proof::TransactionProofBuilder;
 
-/// The `SignallingProofBuilder` can be used to build proofs for signalling transactions.
+/// The `StakingDataBuilder` can be used to build the data for incoming staking transactions.
 /// Such transactions still require a normal proof builder to be used in addition.
 ///
 /// Thus, the [`generate`] method of this proof builder will return another proof builder
 /// instead of the final transaction.
-///
-/// [`generate`]: struct.SignallingProofBuilder.html#method.generate
-pub struct SignallingProofBuilder {
+#[derive(Clone, Debug)]
+pub struct StakingDataBuilder {
     pub transaction: Transaction,
     data: Option<IncomingStakingTransactionData>,
 }
 
-impl SignallingProofBuilder {
-    /// Creates a new `SignallingProofBuilder` from a `transaction`.
+impl StakingDataBuilder {
+    /// Creates a new `StakingDataBuilder` from a `transaction`.
     pub fn new(transaction: Transaction) -> Self {
-        SignallingProofBuilder {
+        StakingDataBuilder {
             transaction,
             data: None,
         }
     }
 
-    /// This method sets the required signalling `signature` proof by signing the transaction
-    /// using a BLS key pair `validator_key_pair`.
-    pub fn sign_with_validator_key_pair(&mut self, validator_key_pair: &BlsKeyPair) -> &mut Self {
-        // Set validator signature first.
+    /// This method sets the required `signature` proof by signing the transaction
+    /// using a key pair.
+    pub fn sign_with_key_pair(&mut self, key_pair: &KeyPair) -> &mut Self {
+        // Deserialize the data.
         let mut data: IncomingStakingTransactionData =
             Deserialize::deserialize_from_vec(&self.transaction.data[..]).unwrap();
-        let validator_signature =
-            validator_key_pair.sign(&self.transaction.serialize_content().as_slice());
-        data.set_signature(validator_signature.compress());
+
+        // If this is a stake transaction, we don't need to sign it.
+        match data {
+            IncomingStakingTransactionData::Stake { .. } => {}
+            _ => {
+                let signature = key_pair.sign(&self.transaction.serialize_content().as_slice());
+                let proof = SignatureProof::from(key_pair.public, signature);
+                data.set_signature(proof);
+            }
+        }
+
         self.data = Some(data);
         self
     }
 
-    /// This method returns the next proof builder to be used if the signalling signature
+    /// This method returns the next proof builder to be used if the staking data signature
     /// has been set correctly.
     /// Otherwise, it returns `None`.
     pub fn generate(self) -> Option<TransactionProofBuilder> {
         let mut tx = self.transaction;
         tx.data = self.data?.serialize_to_vec();
-        Some(TransactionProofBuilder::without_signalling(tx))
+        Some(TransactionProofBuilder::without_in_staking(tx))
     }
 }
 
 /// The `StakingProofBuilder` can be used to build proofs for transactions
-/// to move funds out of the staking contract.
-///
-/// These are: unstaking transactions and transactions to drop validators.
+/// to move funds out of the staking contract. These are:
+///     - Validator
+///         * Drop
+///     - Staker
+///         * Unstake
+///         * Deduct fees
+#[derive(Clone, Debug)]
 pub struct StakingProofBuilder {
     pub transaction: Transaction,
     proof: Option<OutgoingStakingTransactionProof>,
@@ -72,18 +81,11 @@ impl StakingProofBuilder {
     }
 
     /// This methods sets the action to drop a validator and builds the corresponding proof
-    /// from a validator's BLS `key_pair`.
-    pub fn drop_validator(
-        &mut self,
-        validator_id: &ValidatorId,
-        key_pair: &BlsKeyPair,
-    ) -> &mut Self {
+    /// from a validator's `key_pair`.
+    pub fn drop_validator(&mut self, key_pair: &KeyPair) -> &mut Self {
         let signature = key_pair.sign(&self.transaction.serialize_content().as_slice());
-        self.proof = Some(OutgoingStakingTransactionProof::DropValidator {
-            validator_id: validator_id.clone(),
-            validator_key: key_pair.public_key.compress(),
-            proof: signature.compress(),
-        });
+        let proof = SignatureProof::from(key_pair.public, signature);
+        self.proof = Some(OutgoingStakingTransactionProof::DropValidator { proof });
         self
     }
 
@@ -91,9 +93,20 @@ impl StakingProofBuilder {
     /// from a staker's `key_pair`.
     pub fn unstake(&mut self, key_pair: &KeyPair) -> &mut Self {
         let signature = key_pair.sign(self.transaction.serialize_content().as_slice());
-        self.proof = Some(OutgoingStakingTransactionProof::Unstake(
-            SignatureProof::from(key_pair.public, signature),
-        ));
+        let proof = SignatureProof::from(key_pair.public, signature);
+        self.proof = Some(OutgoingStakingTransactionProof::Unstake { proof });
+        self
+    }
+
+    /// This methods sets the action to deduct fees and builds the corresponding proof
+    /// from a staker's `key_pair`.
+    pub fn deduct_fees(&mut self, from_active_balance: bool, key_pair: &KeyPair) -> &mut Self {
+        let signature = key_pair.sign(self.transaction.serialize_content().as_slice());
+        let proof = SignatureProof::from(key_pair.public, signature);
+        self.proof = Some(OutgoingStakingTransactionProof::DeductFees {
+            from_active_balance,
+            proof,
+        });
         self
     }
 

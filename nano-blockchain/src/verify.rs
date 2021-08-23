@@ -23,7 +23,7 @@ impl NanoBlockchain {
             .ok_or(NanoError::MissingBlock)?;
 
         // Verify the account proof.
-        if account_proof.verify(block.state_root()) {
+        if !account_proof.verify(block.state_root()) {
             return Err(NanoError::WrongProof);
         }
 

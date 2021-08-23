@@ -4,40 +4,40 @@ use beserial::Serialize;
 use hash::SerializeContent;
 use keys::KeyPair;
 use primitives::account::AccountType;
-use transaction::{SignatureProof, Transaction, TransactionFlags};
+use transaction::{SignatureProof, Transaction};
 
 use crate::proof::htlc_contract::HtlcProofBuilder;
-use crate::proof::staking_contract::{SignallingProofBuilder, StakingProofBuilder};
+use crate::proof::staking_contract::{StakingDataBuilder, StakingProofBuilder};
 
 pub mod htlc_contract;
 pub mod staking_contract;
 
 /// The `TransactionProofBuilder` subsumes the builders used to populate a transaction
 /// with the required proof to be valid.
-/// The proof mostly depends on the sender account (with the exception of signalling transactions).
+/// The proof mostly depends on the sender account (with the exception of incoming staking transactions).
 ///
 /// Thus, there exist four different types of proof builders:
-/// - [`SignallingProofBuilder`] (that build the signalling proof and return a normal proof builder)
-/// - [`BasicProofBuilder`] (for basic and vesting sender accounts, as well as staking self transactions)
+/// - [`StakingDataBuilder`] (that build the staking data and return a normal proof builder)
+/// - [`BasicProofBuilder`] (for basic and vesting sender accounts)
 /// - [`HtlcProofBuilder`] (for HTLC sender accounts)
-/// - [`StakingProofBuilder`] (for unstaking and validator dropping transactions)
+/// - [`StakingProofBuilder`] (for outgoing staking transactions)
 ///
-/// [`SignallingProofBuilder`]: staking_contract/struct.SignallingProofBuilder.html
+/// [`SignallingProofBuilder`]: staking_contract/struct.StakingDataBuilder.html
 /// [`BasicProofBuilder`]: struct.BasicProofBuilder.html
 /// [`HtlcProofBuilder`]: htlc_contract/struct.HtlcProofBuilder.html
 /// [`StakingProofBuilder`]: staking_contract/struct.StakingProofBuilder.html
+#[derive(Clone, Debug)]
 pub enum TransactionProofBuilder {
     Basic(BasicProofBuilder),
     Vesting(BasicProofBuilder),
     Htlc(HtlcProofBuilder),
-    Staking(StakingProofBuilder),
-    StakingSelf(BasicProofBuilder),
-    Signalling(SignallingProofBuilder),
+    OutStaking(StakingProofBuilder),
+    InStaking(StakingDataBuilder),
 }
 
 impl TransactionProofBuilder {
-    /// Internal method that ignores signalling transactions.
-    fn without_signalling(transaction: Transaction) -> Self {
+    /// Internal method that ignores incoming staking transactions.
+    fn without_in_staking(transaction: Transaction) -> Self {
         match transaction.sender_type {
             AccountType::Basic => {
                 TransactionProofBuilder::Basic(BasicProofBuilder::new(transaction))
@@ -47,24 +47,22 @@ impl TransactionProofBuilder {
             }
             AccountType::HTLC => TransactionProofBuilder::Htlc(HtlcProofBuilder::new(transaction)),
             AccountType::Staking => {
-                if transaction.sender == transaction.recipient {
-                    TransactionProofBuilder::StakingSelf(BasicProofBuilder::new(transaction))
-                } else {
-                    TransactionProofBuilder::Staking(StakingProofBuilder::new(transaction))
-                }
+                TransactionProofBuilder::OutStaking(StakingProofBuilder::new(transaction))
             }
-            AccountType::Reward => unimplemented!(),
+            _ => {
+                unreachable!()
+            }
         }
     }
 
     /// Given a `transaction`, this method creates the corresponding proof builder
     /// used to populate it with the required proof.
     pub fn new(transaction: Transaction) -> Self {
-        if transaction.flags.contains(TransactionFlags::SIGNALLING) {
-            return TransactionProofBuilder::Signalling(SignallingProofBuilder::new(transaction));
+        if transaction.recipient_type == AccountType::Staking {
+            return TransactionProofBuilder::InStaking(StakingDataBuilder::new(transaction));
         }
 
-        TransactionProofBuilder::without_signalling(transaction)
+        TransactionProofBuilder::without_in_staking(transaction)
     }
 
     /// This method returns a reference to the preliminary transaction without the required
@@ -100,15 +98,13 @@ impl TransactionProofBuilder {
             TransactionProofBuilder::Basic(builder) => &builder.transaction,
             TransactionProofBuilder::Vesting(builder) => &builder.transaction,
             TransactionProofBuilder::Htlc(builder) => &builder.transaction,
-            TransactionProofBuilder::StakingSelf(builder) => &builder.transaction,
-            TransactionProofBuilder::Staking(builder) => &builder.transaction,
-            TransactionProofBuilder::Signalling(builder) => &builder.transaction,
+            TransactionProofBuilder::OutStaking(builder) => &builder.transaction,
+            TransactionProofBuilder::InStaking(builder) => &builder.transaction,
         }
     }
 
     /// This method can be used for non-signalling transactions where the sender is
-    /// a basic account or a vesting contract, as well as for staking self transactions
-    /// (i.e., retire/re-activate stake).
+    /// a basic account or a vesting contract.
     /// It immediately returns the underlying [`BasicProofBuilder`].
     ///
     /// # Examples
@@ -141,7 +137,6 @@ impl TransactionProofBuilder {
         match self {
             TransactionProofBuilder::Basic(builder) => builder,
             TransactionProofBuilder::Vesting(builder) => builder,
-            TransactionProofBuilder::StakingSelf(builder) => builder,
             _ => panic!("TransactionProofBuilder was not a BasicProofBuilder"),
         }
     }
@@ -219,17 +214,16 @@ impl TransactionProofBuilder {
     /// use nimiq_transaction_builder::{Recipient, TransactionBuilder};
     /// use nimiq_primitives::coin::Coin;
     /// use nimiq_primitives::networks::NetworkId;
-    /// use nimiq_primitives::account::ValidatorId;
     /// # use nimiq_utils::key_rng::SecureGenerate;
     ///
-    /// # let key_pair = KeyPair::generate_default_csprng();
+    /// # let cold_key_pair = KeyPair::generate_default_csprng();
+    /// # let warm_key_pair = KeyPair::generate_default_csprng();
     /// # let bls_key_pair = BlsKeyPair::generate_default_csprng();
-    /// # let validator_id: ValidatorId = ValidatorId::default();
-    /// # let staking_contract_address = Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap();
+    /// # let validator_address = Address::from(&cold_key_pair.public);
     ///
-    /// let sender_address = Address::from(&key_pair.public);
-    /// let mut recipient = Recipient::new_staking_builder(Some(staking_contract_address));
-    /// recipient.update_validator(&validator_id, &bls_key_pair.public_key, None, Some(sender_address.clone()));
+    /// let sender_address = Address::from(&cold_key_pair.public);
+    /// let mut recipient = Recipient::new_staking_builder();
+    /// recipient.update_validator(Some(Address::from(&warm_key_pair)), Some(&bls_key_pair), None, None);
     ///
     /// let tx_builder = TransactionBuilder::with_required(
     ///     sender_address,
@@ -240,14 +234,14 @@ impl TransactionProofBuilder {
     /// );
     ///
     /// let proof_builder = tx_builder.generate().unwrap();
-    /// // Unwrap signalling proof builder first.
-    /// let mut signalling_proof_builder = proof_builder.unwrap_signalling();
-    /// signalling_proof_builder.sign_with_validator_key_pair(&bls_key_pair);
+    /// // Unwrap in staking proof builder first.
+    /// let mut signalling_proof_builder = proof_builder.unwrap_in_staking();
+    /// signalling_proof_builder.sign_with_key_pair(&cold_key_pair);
     ///
     /// let proof_builder = signalling_proof_builder.generate().unwrap();
     /// // Unwrap basic proof builder now.
     /// let mut basic_proof_builder = proof_builder.unwrap_basic();
-    /// basic_proof_builder.sign_with_key_pair(&key_pair);
+    /// basic_proof_builder.sign_with_key_pair(&cold_key_pair);
     ///
     /// let final_transaction = basic_proof_builder.generate();
     /// assert!(final_transaction.is_some());
@@ -255,10 +249,10 @@ impl TransactionProofBuilder {
     /// ```
     ///
     /// [`SignallingProofBuilder`]: staking_contract/struct.SignallingProofBuilder.html
-    pub fn unwrap_signalling(self) -> SignallingProofBuilder {
+    pub fn unwrap_in_staking(self) -> StakingDataBuilder {
         match self {
-            TransactionProofBuilder::Signalling(builder) => builder,
-            _ => panic!("TransactionProofBuilder was not a SignallingProofBuilder"),
+            TransactionProofBuilder::InStaking(builder) => builder,
+            _ => panic!("TransactionProofBuilder was not a StakingDataBuilder"),
         }
     }
 
@@ -274,16 +268,15 @@ impl TransactionProofBuilder {
     /// use nimiq_transaction_builder::{Recipient, TransactionBuilder};
     /// use nimiq_primitives::coin::Coin;
     /// use nimiq_primitives::networks::NetworkId;
-    /// use nimiq_primitives::account::{AccountType, ValidatorId};
+    /// use nimiq_primitives::account::{AccountType};
     /// # use nimiq_utils::key_rng::SecureGenerate;
+    /// use nimiq_primitives::policy::STAKING_CONTRACT_ADDRESS;
     ///
     /// # let key_pair = KeyPair::generate_default_csprng();
     /// # let recipient_address = Address::from(&key_pair.public);
-    /// # let bls_key_pair = BlsKeyPair::generate_default_csprng();
-    /// # let staking_contract_address = Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap();
     ///
     /// let recipient = Recipient::new_basic(recipient_address);
-    /// let validator_id: ValidatorId = ValidatorId::default();
+    /// let staking_contract_address = Address::from_any_str(STAKING_CONTRACT_ADDRESS).unwrap();
     ///
     /// let mut tx_builder = TransactionBuilder::with_required(
     ///     staking_contract_address,
@@ -296,18 +289,17 @@ impl TransactionProofBuilder {
     ///
     /// let proof_builder = tx_builder.generate().unwrap();
     /// // Unwrap staking proof builder.
-    /// let mut staking_proof_builder = proof_builder.unwrap_staking();
-    /// staking_proof_builder.drop_validator(&validator_id, &bls_key_pair);
+    /// let mut staking_proof_builder = proof_builder.unwrap_out_staking();
+    /// staking_proof_builder.drop_validator(&key_pair);
     ///
     /// let final_transaction = staking_proof_builder.generate();
     /// assert!(final_transaction.is_some());
-    /// assert!(final_transaction.unwrap().verify(NetworkId::Main).is_ok());
     /// ```
     ///
     /// [`StakingProofBuilder`]: staking_contract/struct.StakingProofBuilder.html
-    pub fn unwrap_staking(self) -> StakingProofBuilder {
+    pub fn unwrap_out_staking(self) -> StakingProofBuilder {
         match self {
-            TransactionProofBuilder::Staking(builder) => builder,
+            TransactionProofBuilder::OutStaking(builder) => builder,
             _ => panic!("TransactionProofBuilder was not a StakingProofBuilder"),
         }
     }
@@ -325,13 +317,10 @@ impl SerializeContent for TransactionProofBuilder {
             TransactionProofBuilder::Htlc(builder) => {
                 SerializeContent::serialize_content(&builder.transaction, writer)
             }
-            TransactionProofBuilder::StakingSelf(builder) => {
+            TransactionProofBuilder::InStaking(builder) => {
                 SerializeContent::serialize_content(&builder.transaction, writer)
             }
-            TransactionProofBuilder::Staking(builder) => {
-                SerializeContent::serialize_content(&builder.transaction, writer)
-            }
-            TransactionProofBuilder::Signalling(builder) => {
+            TransactionProofBuilder::OutStaking(builder) => {
                 SerializeContent::serialize_content(&builder.transaction, writer)
             }
         }
@@ -341,6 +330,7 @@ impl SerializeContent for TransactionProofBuilder {
 /// The `BasicProofBuilder` can be used to build proofs for transactions
 /// that originate in basic or vesting accounts, as well as for staking self transactions
 /// (i.e., retire/re-activate stake).
+#[derive(Clone, Debug)]
 pub struct BasicProofBuilder {
     pub transaction: Transaction,
     signature: Option<SignatureProof>,
