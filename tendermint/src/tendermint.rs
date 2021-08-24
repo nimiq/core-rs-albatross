@@ -15,20 +15,3 @@ pub struct Tendermint<
     pub deps: DepsTy,
     pub state: TendermintState<ProposalTy, ProofTy>,
 }
-
-impl<
-        ProposalTy: ProposalTrait,
-        ProofTy: ProofTrait,
-        ResultTy: ResultTrait,
-        DepsTy: TendermintOutsideDeps<ProposalTy = ProposalTy, ResultTy = ResultTy, ProofTy = ProofTy>
-            + 'static,
-    > Tendermint<ProposalTy, ProofTy, ResultTy, DepsTy>
-{
-    /// Creates a new Tendermint state machine with an "empty" state.
-    pub(crate) fn new(deps: DepsTy) -> Tendermint<ProposalTy, ProofTy, ResultTy, DepsTy> {
-        Self {
-            deps,
-            state: TendermintState::new(),
-        }
-    }
-}

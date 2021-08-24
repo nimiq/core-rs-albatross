@@ -49,7 +49,7 @@ where
             return;
         }
     } else {
-        Tendermint::new(deps)
+        Tendermint { state: TendermintState::new(deps.initial_round()), deps }
     };
 
     // This is the main loop of the function. It progresses the Tendermint state machine.

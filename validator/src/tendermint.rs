@@ -70,6 +70,12 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
     type ProofTy = MultiSignature;
     type ResultTy = MacroBlock;
 
+    fn initial_round(&self) -> u32 {
+        // Macro blocks follow the same rules as micro blocks when it comes to view_number/round.
+        // Thus the round is offset by the predecessors view.
+        self.blockchain.read().view_number()
+    }
+
     /// This function is meant to verify the validity of a TendermintState. However, this function
     /// is only used when Tendermint is starting from a saved state. There is no reasonable
     /// situation where anyone would need to edit the saved TendermintState, so there's no situation
@@ -77,8 +83,8 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
     /// in memory, but then we have bigger problems).
     /// So, we leave this function simply returning true and not doing any checks. Mostly likely we
     /// will get rid of it in the future.
-    fn verify_state(&self, _state: &TendermintState<Self::ProposalTy, Self::ProofTy>) -> bool {
-        true
+    fn verify_state(&self, state: &TendermintState<Self::ProposalTy, Self::ProofTy>) -> bool {
+        self.initial_round() <= state.round
     }
 
     /// States if it is our turn to be the Tendermint proposer or not.
@@ -209,11 +215,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
             let blockchain = self.blockchain.read();
             // Get the proposer's slot and slot number for this round.
             let (slot, slot_number) = blockchain
-                .get_slot_owner_at(
-                    blockchain.block_number() + 1,
-                    blockchain.view_number() + round,
-                    None,
-                )
+                .get_slot_owner_at(blockchain.block_number() + 1, round, None)
                 .expect("Couldn't find slot owner!");
 
             // Calculate the validator slot band from the slot number.

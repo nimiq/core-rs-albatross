@@ -13,6 +13,9 @@ pub trait TendermintOutsideDeps: Send + Unpin {
     type ProofTy: ProofTrait;
     type ResultTy: ResultTrait;
 
+    /// The round tendermint is supposed to start with.
+    fn initial_round(&self) -> u32;
+
     /// Verify that a given Tendermint state is valid. This is necessary when we are initializing
     /// using a previous state.
     fn verify_state(&self, state: &TendermintState<Self::ProposalTy, Self::ProofTy>) -> bool;

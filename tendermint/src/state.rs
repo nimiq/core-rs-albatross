@@ -21,9 +21,9 @@ pub struct TendermintState<ProposalTy: ProposalTrait, ProofTy: ProofTrait> {
 }
 
 impl<ProposalTy: ProposalTrait, ProofTy: ProofTrait> TendermintState<ProposalTy, ProofTy> {
-    pub fn new() -> Self {
+    pub fn new(initial_round: u32) -> Self {
         Self {
-            round: 0,
+            round: initial_round,
             step: Step::Propose,
             locked_value: None,
             locked_round: None,

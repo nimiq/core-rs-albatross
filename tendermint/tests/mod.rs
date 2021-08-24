@@ -68,6 +68,10 @@ impl TendermintOutsideDeps for TestValidator {
     // is just the empty type, our result is just the TestProposal.
     type ResultTy = TestProposal;
 
+    fn initial_round(&self) -> u32 {
+        0
+    }
+
     // We never call this on tests. Needs to be implemented if we want to use it.
     fn verify_state(&self, _state: &TendermintState<Self::ProposalTy, Self::ProofTy>) -> bool {
         unimplemented!()
