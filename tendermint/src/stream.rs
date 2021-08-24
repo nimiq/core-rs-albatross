@@ -124,7 +124,7 @@ where
 
         // also get the axctual tendermint stream
         let tendermint_stream = expect_block(deps, state_opt)
-            .map(|tendermint_return| StreamResult::Tendermint(tendermint_return))
+            .map(StreamResult::Tendermint)
             .boxed();
 
         // put them both in a select such that both of them are driven
