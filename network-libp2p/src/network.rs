@@ -616,6 +616,7 @@ impl Network {
                 output
                     .send(
                         swarm
+                            .behaviour_mut()
                             .gossipsub
                             .report_message_validation_result(&message_id, &source, acceptance)
                             .map_err(Into::into),
