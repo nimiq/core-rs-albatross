@@ -63,6 +63,8 @@ tokio = { version = "1.14", features = ["rt", "test-util", "time"] }
 nimiq-build-tools = { path = "../build-tools" }
 nimiq-network-libp2p = { path = "../network-libp2p" }
 nimiq-network-mock = { path = "../network-mock" }
+# This adds a circular dev-dependency which is fine but breaks VS code rust-analyzer.
+# See https://github.com/rust-analyzer/rust-analyzer/issues/2414
 nimiq-test-utils = { path = "../test-utils" }
 
 [features]

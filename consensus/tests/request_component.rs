@@ -1,22 +1,39 @@
 use std::{sync::Arc, time::Duration};
 
-use beserial::Deserialize;
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::AbstractBlockchain;
-use nimiq_bls::{KeyPair, SecretKey};
-use nimiq_network_mock::MockHub;
+use nimiq_bls::KeyPair as BLSKeyPair;
+use nimiq_build_tools::genesis::GenesisBuilder;
+use nimiq_keys::{Address, KeyPair, SecureGenerate};
+use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_test_utils::blockchain::{produce_macro_blocks, signing_key, voting_key};
 use nimiq_test_utils::node::Node;
+use nimiq_test_utils::validator::seeded_rng;
 
 #[ignore]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_request_component() {
     //simple_logger::init_by_env();
 
-    let mut hub = MockHub::default();
+    let mut hub = Some(MockHub::default());
 
-    let mut node1 = Node::new(&mut hub).await;
-    let mut node2 = Node::new(&mut hub).await;
+    // Generate genesis block.
+    let key = KeyPair::generate(&mut seeded_rng(0));
+    let sgn_key = KeyPair::generate(&mut seeded_rng(0));
+    let vtn_key = BLSKeyPair::generate(&mut seeded_rng(0));
+
+    let genesis = GenesisBuilder::default()
+        .with_genesis_validator(
+            Address::from(&key),
+            sgn_key.public.clone(),
+            vtn_key.public_key.clone(),
+            Address::default(),
+        )
+        .generate()
+        .unwrap();
+
+    let mut node1 = Node::<MockNetwork>::new(1, genesis.clone(), &mut hub).await;
+    let mut node2 = Node::<MockNetwork>::new(2, genesis.clone(), &mut hub).await;
 
     let producer1 = BlockProducer::new(signing_key(), voting_key());
 

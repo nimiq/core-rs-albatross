@@ -3,6 +3,7 @@ use std::sync::Arc;
 use futures::{future, StreamExt};
 use log::LevelFilter::{Debug, Info};
 use nimiq_blockchain::AbstractBlockchain;
+use nimiq_network_libp2p::Network;
 use nimiq_test_utils::validator::build_validators;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -19,7 +20,7 @@ async fn four_validators_can_create_an_epoch() {
         .init()
         .ok();
 
-    let validators = build_validators(4).await;
+    let validators = build_validators::<Network>(4, &mut None).await;
 
     let blockchain = Arc::clone(&validators.first().unwrap().consensus.blockchain);
 

@@ -58,6 +58,10 @@ hex = "0.4"
 simple_logger = "1.0"
 
 nimiq-bls = { path = "../bls" }
+nimiq-build-tools = { path = "../build-tools" }
+nimiq-keys = { path = "../keys" }
 nimiq-network-mock = { path = "../network-mock" }
-nimiq-block-production = { path = "../block-production" }
+nimiq-block-production = { path = "../block-production"}
+# This adds a circular dev-dependency which is fine but breaks VS code rust-analyzer.
+# See https://github.com/rust-analyzer/rust-analyzer/issues/2414
 nimiq-test-utils = { path = "../test-utils" }

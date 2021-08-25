@@ -11,6 +11,7 @@ categories = ["cryptography::cryptocurrencies"]
 keywords = ["nimiq", "cryptocurrency", "blockchain"]
 
 [dependencies]
+async-trait = "0.1"
 futures = "0.3"
 hex = "0.4"
 log = "0.4"

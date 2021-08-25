@@ -1,6 +1,4 @@
 use futures::{future, StreamExt};
-use rand::prelude::StdRng;
-use rand::SeedableRng;
 use tokio::time;
 
 use nimiq_block::{MultiSignature, SignedViewChange, ViewChange};
@@ -12,43 +10,40 @@ use nimiq_handel::update::{LevelUpdate, LevelUpdateMessage};
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
 use nimiq_network_interface::network::Network;
 use nimiq_network_mock::{MockHub, MockNetwork};
-use nimiq_test_utils::validator::{mock_validator, mock_validators, validator_for_slot};
+use nimiq_test_utils::validator::{
+    build_validator, build_validators, seeded_rng, validator_for_slot,
+};
 use nimiq_validator::aggregation::view_change::SignedViewChangeMessage;
 use nimiq_vrf::VrfSeed;
 use std::sync::Arc;
 use std::time::Duration;
 
-fn seeded_rng(seed: u64) -> StdRng {
-    StdRng::seed_from_u64(seed)
-}
-
 #[tokio::test]
 async fn one_validator_can_create_micro_blocks() {
-    let mut hub = MockHub::default();
+    let hub = MockHub::default();
 
-    let bls_key = BlsKeyPair::generate(&mut seeded_rng(0));
-    let voting_key = KeyPair::generate(&mut seeded_rng(0));
+    let voting_key = BlsKeyPair::generate(&mut seeded_rng(0));
+    let validator_key = KeyPair::generate(&mut seeded_rng(0));
     let fee_key = KeyPair::generate(&mut seeded_rng(0));
     let signing_key = KeyPair::generate(&mut seeded_rng(0));
     let genesis = GenesisBuilder::default()
         .with_genesis_validator(
-            Address::from(&voting_key),
+            Address::from(&validator_key),
             signing_key.public,
-            bls_key.public_key,
+            voting_key.public_key,
             Address::default(),
         )
         .generate()
         .unwrap();
 
-    let (validator, mut consensus1) = mock_validator(
-        &mut hub,
+    let (validator, mut consensus1) = build_validator::<MockNetwork>(
         1,
-        Address::from(&voting_key),
-        bls_key,
         Address::from(&validator_key),
-        fee_key,
         signing_key,
+        voting_key,
+        fee_key,
         genesis.clone(),
+        &mut Some(hub),
     )
     .await;
 
@@ -67,9 +62,9 @@ async fn one_validator_can_create_micro_blocks() {
 
 #[tokio::test]
 async fn four_validators_can_create_micro_blocks() {
-    let mut hub = MockHub::default();
+    let hub = MockHub::default();
 
-    let validators = mock_validators(&mut hub, 4).await;
+    let validators = build_validators::<MockNetwork>(4, &mut Some(hub)).await;
 
     let blockchain = Arc::clone(&validators.first().unwrap().consensus.blockchain);
 
@@ -88,9 +83,9 @@ async fn four_validators_can_create_micro_blocks() {
 
 #[tokio::test]
 async fn four_validators_can_view_change() {
-    let mut hub = MockHub::default();
+    let hub = MockHub::default();
 
-    let validators = mock_validators(&mut hub, 4).await;
+    let validators = build_validators::<MockNetwork>(4, &mut Some(hub)).await;
 
     // Disconnect the next block producer.
     let validator = validator_for_slot(&validators, 1, 0);
@@ -165,10 +160,10 @@ async fn validator_can_catch_up() {
     // remove the second block producer to trigger another view change after the first one (which we want someone to catch up to). Never connect him again
     // third block producer needs to be disconnected as well and then reconnected to catch up to the seconds view change while not having seen the first one,
     // resulting in him producing the first block.
-    let mut hub = MockHub::default();
+    let hub = MockHub::default();
 
     // In total 8 validator are registered. after 3 validators are taken offline the remaining 5 should not be able to progress on their own
-    let mut validators = mock_validators(&mut hub, 8).await;
+    let mut validators = build_validators::<MockNetwork>(8, &mut Some(hub)).await;
     // Maintain a collection of the corresponding networks.
 
     let networks: Vec<Arc<MockNetwork>> = validators

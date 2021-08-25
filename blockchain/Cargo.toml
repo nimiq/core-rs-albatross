@@ -43,7 +43,8 @@ atomic = "0.5"
 
 nimiq-block-production = { path = "../block-production", features = ["test-utils"] }
 nimiq-nano-primitives = { path= "../nano-primitives" }
-nimiq-network-mock = { path = "../network-mock" }
+# This adds a circular dev-dependency which is fine but breaks VS code rust-analyzer.
+# See https://github.com/rust-analyzer/rust-analyzer/issues/2414
 nimiq-test-utils = { path= "../test-utils" }
 
 [features]

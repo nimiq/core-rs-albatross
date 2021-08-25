@@ -3,39 +3,48 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 
 use nimiq_blockchain::Blockchain;
+use nimiq_build_tools::genesis::GenesisInfo;
 use nimiq_consensus::sync::history::HistorySync;
-use nimiq_consensus::Consensus;
+use nimiq_consensus::Consensus as AbstractConsensus;
 use nimiq_database::volatile::VolatileEnvironment;
-use nimiq_network_interface::network::Network;
-use nimiq_network_mock::{MockHub, MockNetwork};
+use nimiq_network_interface::network::Network as NetworkInterface;
+use nimiq_network_mock::MockHub;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_utils::time::OffsetTime;
 
-pub struct Node {
-    pub network: Arc<MockNetwork>,
+use crate::test_network::TestNetwork;
+
+pub struct Node<N: NetworkInterface + TestNetwork> {
+    pub network: Arc<N>,
     pub blockchain: Arc<RwLock<Blockchain>>,
-    pub consensus: Option<Consensus<MockNetwork>>,
+    pub consensus: Option<AbstractConsensus<N>>,
 }
 
-impl Node {
-    pub async fn new(hub: &mut MockHub) -> Self {
-        let time = Arc::new(OffsetTime::new());
-        let env = VolatileEnvironment::new(10).unwrap();
-
+impl<N: NetworkInterface + TestNetwork> Node<N> {
+    pub async fn new(peer_id: u64, genesis_info: GenesisInfo, hub: &mut Option<MockHub>) -> Self {
+        let env = VolatileEnvironment::new(12).unwrap();
+        let clock = Arc::new(OffsetTime::new());
         let blockchain = Arc::new(RwLock::new(
-            Blockchain::new(env.clone(), NetworkId::UnitAlbatross, time).unwrap(),
+            Blockchain::with_genesis(
+                env.clone(),
+                Arc::clone(&clock),
+                NetworkId::UnitAlbatross,
+                genesis_info.block,
+                genesis_info.accounts,
+            )
+            .unwrap(),
         ));
 
-        let network = Arc::new(hub.new_network());
+        let network = N::build_network(peer_id, genesis_info.hash, hub).await;
 
-        let history_sync =
-            HistorySync::<MockNetwork>::new(Arc::clone(&blockchain), network.subscribe_events());
-
-        let consensus = Consensus::from_network(
+        let sync_protocol =
+            HistorySync::<N>::new(Arc::clone(&blockchain), network.subscribe_events());
+        let consensus = AbstractConsensus::<N>::with_min_peers(
             env,
             Arc::clone(&blockchain),
             Arc::clone(&network),
-            Box::pin(history_sync),
+            Box::pin(sync_protocol),
+            1,
         )
         .await;
 
