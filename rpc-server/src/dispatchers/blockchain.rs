@@ -10,7 +10,7 @@ use nimiq_keys::Address;
 use nimiq_primitives::policy;
 use nimiq_rpc_interface::{
     blockchain::BlockchainInterface,
-    types::{Block, Inherent, SlashedSlots, Slot, Stake, Stakes, Transaction, Validator},
+    types::{Block, Inherent, SlashedSlots, Slot, Transaction, Validator},
 };
 
 use crate::error::Error;
@@ -160,10 +160,6 @@ impl BlockchainInterface for BlockchainDispatcher {
         ))
     }
 
-    async fn get_transaction_receipt(&mut self, _hash: Blake2bHash) -> Result<(), Error> {
-        Err(Error::NotImplemented)
-    }
-
     async fn get_transactions_by_block_number(
         &mut self,
         block_number: u32,
@@ -246,6 +242,10 @@ impl BlockchainInterface for BlockchainDispatcher {
             .collect())
     }
 
+    async fn get_transaction_receipt(&mut self, _hash: Blake2bHash) -> Result<(), Error> {
+        Err(Error::NotImplemented)
+    }
+
     async fn get_transaction_hashes_by_address(
         &mut self,
         address: Address,
@@ -276,36 +276,32 @@ impl BlockchainInterface for BlockchainDispatcher {
         Ok(txs)
     }
 
-    async fn list_stakes(&mut self) -> Result<Stakes, Error> {
+    async fn list_stakes(&mut self) -> Result<Vec<Address>, Error> {
         let staking_contract = self.blockchain.get_staking_contract();
 
-        let active_validators = staking_contract
-            .active_validators_by_id
-            .iter()
-            .map(|(_, validator)| Validator::from_active(validator))
-            .collect();
+        // let active_validators = staking_contract
+        //     .active_validators_by_id
+        //     .iter()
+        //     .map(|(_, validator)| Validator::from_active(validator))
+        //     .collect();
+        //
+        // let inactive_validators = staking_contract
+        //     .inactive_validators_by_id
+        //     .iter()
+        //     .map(|(_, validator)| Validator::from_inactive(validator))
+        //     .collect();
+        //
+        // let inactive_stakes = staking_contract
+        //     .inactive_stake_by_address
+        //     .iter()
+        //     .map(|(address, stake)| Stake {
+        //         staker_address: address.clone(),
+        //         balance: stake.balance,
+        //         retire_time: Some(stake.retire_time),
+        //     })
+        //     .collect();
 
-        let inactive_validators = staking_contract
-            .inactive_validators_by_id
-            .iter()
-            .map(|(_, validator)| Validator::from_inactive(validator))
-            .collect();
-
-        let inactive_stakes = staking_contract
-            .inactive_stake_by_address
-            .iter()
-            .map(|(address, stake)| Stake {
-                staker_address: address.clone(),
-                balance: stake.balance,
-                retire_time: Some(stake.retire_time),
-            })
-            .collect();
-
-        Ok(Stakes {
-            active_validators,
-            inactive_validators,
-            inactive_stakes,
-        })
+        Ok(vec![])
     }
 
     #[stream]
@@ -323,12 +319,11 @@ impl BlockchainInterface for BlockchainDispatcher {
             .boxed())
     }
 
-    async fn get_account(&mut self, address: Address) -> Result<Account, Error> {
+    async fn get_account(&mut self, address: Address) -> Result<Option<Account>, Error> {
         let account = self.blockchain.get_account(&address);
-        if matches!(account, Account::Staking(_)) {
-            Err(Error::GetAccountUnsupportedStakingContract)
-        } else {
-            Ok(account)
+        match account {
+            Some(Account::Staking(_)) => Err(Error::GetAccountUnsupportedStakingContract),
+            _ => Ok(account),
         }
     }
 }

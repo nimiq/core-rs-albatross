@@ -4,7 +4,6 @@ use structopt::StructOpt;
 
 use nimiq_jsonrpc_core::Credentials;
 use nimiq_keys::Address;
-use nimiq_primitives::account::ValidatorId;
 use nimiq_primitives::coin::Coin;
 use nimiq_rpc_client::Client;
 use nimiq_rpc_interface::{
@@ -114,13 +113,12 @@ enum TransactionCommand {
         dry: bool,
     },
 
-    /// Sends a staking transaction from the address of a given `key_pair` to a specified `validator_key`.
+    /// Sends a staking transaction from the address of a given `key_pair` to a given `staker_address`.
     Stake {
         /// The stake will be sent from this wallet.
         wallet: Address,
 
-        /// The id of the validator to stake for.
-        validator_id: ValidatorId,
+        staker_address: Address,
 
         /// The amount of NIM to stake.
         value: Coin,
@@ -136,12 +134,10 @@ enum TransactionCommand {
         dry: bool,
     },
 
-    /// Retires the stake from the address of a given `key_pair` and a specified `validator_key`.
+    /// Retires the stake from the address of a given `key_pair`.
     Retire {
-        /// The stake will be sent from this wallet.
+        /// The stake will be retired from this wallet.
         wallet: Address,
-
-        validator_id: ValidatorId,
 
         value: Coin,
 
@@ -156,11 +152,10 @@ enum TransactionCommand {
         dry: bool,
     },
 
+    /// Reactivates the stake from the address of a given `key_pair`.
     Reactivate {
-        /// The stake will be sent from this wallet.
+        /// The stake will be reactivated from this wallet.
         wallet: Address,
-
-        validator_id: ValidatorId,
 
         value: Coin,
 
@@ -329,7 +324,7 @@ impl Command {
 
                 TransactionCommand::Stake {
                     wallet,
-                    validator_id,
+                    staker_address,
                     value,
                     fee,
                     validity_start_height,
@@ -340,8 +335,7 @@ impl Command {
                             .consensus
                             .create_stake_transaction(
                                 wallet,
-                                validator_id,
-                                None,
+                                staker_address,
                                 value,
                                 fee,
                                 validity_start_height,
@@ -353,8 +347,7 @@ impl Command {
                             .consensus
                             .send_stake_transaction(
                                 wallet,
-                                validator_id,
-                                None,
+                                staker_address,
                                 value,
                                 fee,
                                 validity_start_height,
@@ -366,7 +359,6 @@ impl Command {
 
                 TransactionCommand::Retire {
                     wallet,
-                    validator_id,
                     value,
                     fee,
                     validity_start_height,
@@ -375,25 +367,13 @@ impl Command {
                     if dry {
                         let tx = client
                             .consensus
-                            .create_retire_transaction(
-                                wallet,
-                                validator_id,
-                                value,
-                                fee,
-                                validity_start_height,
-                            )
+                            .create_retire_transaction(wallet, value, fee, validity_start_height)
                             .await?;
                         println!("{}", tx);
                     } else {
                         let txid = client
                             .consensus
-                            .send_retire_transaction(
-                                wallet,
-                                validator_id,
-                                value,
-                                fee,
-                                validity_start_height,
-                            )
+                            .send_retire_transaction(wallet, value, fee, validity_start_height)
                             .await?;
                         println!("{}", txid);
                     }
@@ -401,7 +381,6 @@ impl Command {
 
                 TransactionCommand::Reactivate {
                     wallet,
-                    validator_id,
                     value,
                     fee,
                     validity_start_height,
@@ -412,7 +391,6 @@ impl Command {
                             .consensus
                             .create_reactivate_transaction(
                                 wallet,
-                                validator_id,
                                 value,
                                 fee,
                                 validity_start_height,
@@ -422,13 +400,7 @@ impl Command {
                     } else {
                         let txid = client
                             .consensus
-                            .send_reactivate_transaction(
-                                wallet,
-                                validator_id,
-                                value,
-                                fee,
-                                validity_start_height,
-                            )
+                            .send_reactivate_transaction(wallet, value, fee, validity_start_height)
                             .await?;
                         println!("{}", txid);
                     }
