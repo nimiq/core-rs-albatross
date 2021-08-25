@@ -499,15 +499,13 @@ impl Network {
                         }
                     }
                     NimiqEvent::Discovery(_e) => {}
-                    NimiqEvent::Peers(event) => {
-                        match event {
-                            ConnectionPoolEvent::Disconnect { peer_id } => {
-                                // Workaround to trigger a peer disconnection
-                                Swarm::ban_peer_id(swarm, peer_id);
-                                Swarm::unban_peer_id(swarm, peer_id);
-                            }
+                    NimiqEvent::Peers(event) => match event {
+                        ConnectionPoolEvent::Disconnect { peer_id } => {
+                            if let Err(e) = Swarm::disconnect_peer_id(swarm, peer_id) {
+                                tracing::error!("Couldn't disconnect peer {}: {:?}", peer_id, e);
+                            };
                         }
-                    }
+                    },
                 }
             }
             _ => {}
