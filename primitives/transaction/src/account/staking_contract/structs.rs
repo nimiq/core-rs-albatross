@@ -66,6 +66,7 @@ impl IncomingStakingTransactionType {
 /// over the complete transaction with the `signature` field set to `Default::default()`.
 /// The field is populated only after computing the signature.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub enum IncomingStakingTransactionData {
     CreateValidator {
         warm_key: Address,
@@ -74,6 +75,7 @@ pub enum IncomingStakingTransactionData {
         signal_data: Option<Blake2bHash>,
         proof_of_knowledge: BlsSignature,
         // This proof is signed with the validator cold key, which will become the validator address.
+        #[cfg_attr(feature = "serde-derive", serde(skip))]
         proof: SignatureProof,
     },
     UpdateValidator {
@@ -83,25 +85,30 @@ pub enum IncomingStakingTransactionData {
         new_signal_data: Option<Option<Blake2bHash>>,
         new_proof_of_knowledge: Option<BlsSignature>,
         // This proof is signed with the validator cold key.
+        #[cfg_attr(feature = "serde-derive", serde(skip))]
         proof: SignatureProof,
     },
     RetireValidator {
         validator_address: Address,
         // This proof is signed with the validator warm key.
+        #[cfg_attr(feature = "serde-derive", serde(skip))]
         proof: SignatureProof,
     },
     ReactivateValidator {
         validator_address: Address,
         // This proof is signed with the validator warm key.
+        #[cfg_attr(feature = "serde-derive", serde(skip))]
         proof: SignatureProof,
     },
     UnparkValidator {
         validator_address: Address,
         // This proof is signed with the validator warm key.
+        #[cfg_attr(feature = "serde-derive", serde(skip))]
         proof: SignatureProof,
     },
     CreateStaker {
         delegation: Option<Address>,
+        #[cfg_attr(feature = "serde-derive", serde(skip))]
         proof: SignatureProof,
     },
     Stake {
@@ -109,14 +116,17 @@ pub enum IncomingStakingTransactionData {
     },
     UpdateStaker {
         new_delegation: Option<Address>,
+        #[cfg_attr(feature = "serde-derive", serde(skip))]
         proof: SignatureProof,
     },
     RetireStaker {
         value: Coin,
+        #[cfg_attr(feature = "serde-derive", serde(skip))]
         proof: SignatureProof,
     },
     ReactivateStaker {
         value: Coin,
+        #[cfg_attr(feature = "serde-derive", serde(skip))]
         proof: SignatureProof,
     },
 }

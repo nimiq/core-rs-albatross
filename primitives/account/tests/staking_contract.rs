@@ -26,7 +26,7 @@ use nimiq_collections::BitSet;
 use nimiq_primitives::slots::SlashedSlot;
 use nimiq_transaction::{SignatureProof, Transaction};
 use nimiq_utils::key_rng::SecureGenerate;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 const CONTRACT_1: &str = "00000000000000000000000000000000000000000000";
 const CONTRACT_2: &str =
@@ -49,52 +49,52 @@ const STAKER_PRIVATE_KEY: &str = "62f21a296f00562c43999094587d02c0001676ddbd3f0a
 
 // The following code is kept as a reference on how to generate the constants.
 // #[test]
-fn generate_contract_2() {
-    let mut active_validators = BTreeMap::new();
-    active_validators.insert(
-        Address::from([0u8; 20]),
-        Coin::from_u64_unchecked(300_000_000),
-    );
-
-    let mut parked_set = BTreeSet::new();
-    parked_set.insert(Address::from([1u8; 20]));
-
-    let mut current_lost_rewards = BitSet::new();
-    current_lost_rewards.insert(0);
-    current_lost_rewards.insert(10);
-
-    let mut previous_lost_rewards = BitSet::new();
-    previous_lost_rewards.insert(100);
-    previous_lost_rewards.insert(101);
-    previous_lost_rewards.insert(102);
-    previous_lost_rewards.insert(104);
-
-    let mut b_set = BTreeSet::new();
-    b_set.insert(0);
-    b_set.insert(10);
-    let mut current_disabled_slots = BTreeMap::new();
-    current_disabled_slots.insert(Address::from([1u8; 20]), b_set);
-
-    let mut b_set = BTreeSet::new();
-    b_set.insert(100);
-    b_set.insert(101);
-    b_set.insert(102);
-    b_set.insert(104);
-    let mut previous_disabled_slots = BTreeMap::new();
-    previous_disabled_slots.insert(Address::from([2u8; 20]), b_set);
-
-    let mut contract = StakingContract {
-        balance: Coin::from_u64_unchecked(300_000_000),
-        active_validators,
-        parked_set,
-        current_lost_rewards,
-        previous_lost_rewards,
-        current_disabled_slots,
-        previous_disabled_slots,
-    };
-
-    assert_eq!(&hex::encode(contract.serialize_to_vec()), "");
-}
+// fn generate_contract_2() {
+//     let mut active_validators = BTreeMap::new();
+//     active_validators.insert(
+//         Address::from([0u8; 20]),
+//         Coin::from_u64_unchecked(300_000_000),
+//     );
+//
+//     let mut parked_set = BTreeSet::new();
+//     parked_set.insert(Address::from([1u8; 20]));
+//
+//     let mut current_lost_rewards = BitSet::new();
+//     current_lost_rewards.insert(0);
+//     current_lost_rewards.insert(10);
+//
+//     let mut previous_lost_rewards = BitSet::new();
+//     previous_lost_rewards.insert(100);
+//     previous_lost_rewards.insert(101);
+//     previous_lost_rewards.insert(102);
+//     previous_lost_rewards.insert(104);
+//
+//     let mut b_set = BTreeSet::new();
+//     b_set.insert(0);
+//     b_set.insert(10);
+//     let mut current_disabled_slots = BTreeMap::new();
+//     current_disabled_slots.insert(Address::from([1u8; 20]), b_set);
+//
+//     let mut b_set = BTreeSet::new();
+//     b_set.insert(100);
+//     b_set.insert(101);
+//     b_set.insert(102);
+//     b_set.insert(104);
+//     let mut previous_disabled_slots = BTreeMap::new();
+//     previous_disabled_slots.insert(Address::from([2u8; 20]), b_set);
+//
+//     let contract = StakingContract {
+//         balance: Coin::from_u64_unchecked(300_000_000),
+//         active_validators,
+//         parked_set,
+//         current_lost_rewards,
+//         previous_lost_rewards,
+//         current_disabled_slots,
+//         previous_disabled_slots,
+//     };
+//
+//     assert_eq!(&hex::encode(contract.serialize_to_vec()), "");
+// }
 
 #[test]
 fn it_can_de_serialize_a_staking_contract() {

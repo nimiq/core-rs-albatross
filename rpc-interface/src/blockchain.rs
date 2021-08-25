@@ -5,7 +5,7 @@ use nimiq_account::Account;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 
-use crate::types::{Block, Inherent, SlashedSlots, Slot, Stakes, Transaction};
+use crate::types::{Block, Inherent, SlashedSlots, Slot, Transaction};
 
 #[cfg_attr(
     feature = "proxy",
@@ -75,10 +75,10 @@ pub trait BlockchainInterface {
         max: Option<u16>,
     ) -> Result<Vec<Transaction>, Self::Error>;
 
-    async fn list_stakes(&mut self) -> Result<Stakes, Self::Error>;
+    async fn list_stakes(&mut self) -> Result<Vec<Address>, Self::Error>;
 
     #[stream]
     async fn head_subscribe(&mut self) -> Result<BoxStream<'static, Blake2bHash>, Self::Error>;
 
-    async fn get_account(&mut self, address: Address) -> Result<Account, Self::Error>;
+    async fn get_account(&mut self, address: Address) -> Result<Option<Account>, Self::Error>;
 }

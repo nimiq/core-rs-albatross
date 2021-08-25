@@ -22,7 +22,6 @@ use nimiq_transaction::account::htlc_contract::AnyHash;
 use nimiq_vrf::VrfSeed;
 
 use crate::error::Error;
-use nimiq_primitives::account::ValidatorId;
 
 #[derive(Clone, Debug)]
 pub enum BlockNumberOrHash {
@@ -174,7 +173,7 @@ pub struct Slots {
 
     pub num_slots: u16,
 
-    pub validator_id: ValidatorId,
+    pub validator: Address,
 
     pub public_key: CompressedPublicKey,
 }
@@ -187,7 +186,7 @@ impl Slots {
             slots.push(Slots {
                 first_slot_number: validator.slot_range.0,
                 num_slots: validator.num_slots(),
-                validator_id: validator.validator_id.clone(),
+                validator: validator.validator_address.clone(),
                 public_key: validator.public_key.compressed().clone(),
             })
         }
@@ -218,7 +217,7 @@ impl From<nimiq_block::MicroJustification> for MicroJustification {
 pub struct Slot {
     pub slot_number: u16,
 
-    pub validator_id: ValidatorId,
+    pub validator: Address,
 
     pub public_key: CompressedPublicKey,
 }
@@ -233,7 +232,7 @@ impl Slot {
 
         Slot {
             slot_number,
-            validator_id: validator.validator_id.clone(),
+            validator: validator.validator_address.clone(),
             public_key: validator.public_key.compressed().clone(),
         }
     }
@@ -569,71 +568,42 @@ pub struct SlashedSlots {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Stakes {
-    pub active_validators: Vec<Validator>,
-
-    pub inactive_validators: Vec<Validator>,
-
-    pub inactive_stakes: Vec<Stake>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Stake {
-    pub staker_address: Address,
-
-    pub balance: Coin,
-
+pub struct Staker {
+    pub address: Address,
+    pub active_stake: Coin,
+    pub inactive_stake: Coin,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub retire_time: Option<u32>,
+    pub delegation: Option<Address>,
+    pub retire_time: u32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Validator {
-    pub id: ValidatorId,
-
-    pub public_key: CompressedPublicKey,
-
-    pub balance: Coin,
-
+    pub address: Address,
+    pub warm_key: Address,
+    pub validator_key: CompressedPublicKey,
     pub reward_address: Address,
-
-    pub stakes: Vec<Stake>,
-
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub retire_time: Option<u32>,
+    pub signal_data: Option<Blake2bHash>,
+    pub balance: Coin,
+    pub num_stakers: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inactivity_flag: Option<u32>,
 }
 
 impl Validator {
-    pub fn from_validator(
-        validator: &nimiq_account::staking_contract::Validator,
-        _retire_time: Option<u32>,
-    ) -> Self {
+    pub fn from_validator(validator: &nimiq_account::Validator) -> Self {
         Validator {
-            id: validator.id.clone(),
-            public_key: validator.validator_key.clone(),
-            balance: validator.balance,
+            address: validator.address.clone(),
+            warm_key: validator.warm_key.clone(),
+            validator_key: validator.validator_key.clone(),
             reward_address: validator.reward_address.clone(),
-            stakes: validator
-                .active_stake_by_address
-                .read()
-                .iter()
-                .map(|(address, balance)| Stake {
-                    staker_address: address.clone(),
-                    balance: *balance,
-                    retire_time: None,
-                })
-                .collect(),
-            retire_time: None,
+            signal_data: validator.signal_data.clone(),
+            balance: validator.balance,
+            num_stakers: validator.num_stakers,
+            inactivity_flag: validator.inactivity_flag,
         }
-    }
-
-    pub fn from_active(validator: &nimiq_account::staking_contract::Validator) -> Self {
-        Self::from_validator(validator, None)
-    }
-
-    pub fn from_inactive(validator: &nimiq_account::staking_contract::InactiveValidator) -> Self {
-        Self::from_validator(&validator.validator, Some(validator.retire_time))
     }
 }
 
