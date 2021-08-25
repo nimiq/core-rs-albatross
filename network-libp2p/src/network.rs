@@ -257,9 +257,13 @@ impl Network {
         async move {
             loop {
                 futures::select! {
-                    event = swarm.next_event().fuse() => {
+                    event = swarm.next().fuse() => {
                         tracing::trace!(event=?event, "swarm task received event");
-                        Self::handle_event(event, &events_tx, &mut swarm, &mut task_state, min_peers).await;
+                        if let Some(event) = event {
+                            Self::handle_event(event, &events_tx, &mut swarm, &mut task_state, min_peers).await;
+                        } else {
+                            log::debug!("swarm stream exhausted, no new events");
+                        }
                     },
                     action_opt = action_rx.next().fuse() => {
                         if let Some(action) = action_opt {
@@ -373,7 +377,7 @@ impl Network {
                         events_tx.send(event).ok();
                     }
                     NimiqEvent::Dht(event) => {
-                        if let KademliaEvent::QueryResult { id, result, .. } = event {
+                        if let KademliaEvent::OutboundQueryCompleted { id, result, .. } = event {
                             match result {
                                 QueryResult::GetRecord(result) => {
                                     if let Some(output) = state.dht_gets.remove(&id) {

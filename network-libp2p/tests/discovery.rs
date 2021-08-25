@@ -9,7 +9,7 @@ use libp2p::{
     },
     identity::Keypair,
     noise::{self, NoiseConfig},
-    swarm::{KeepAlive, Swarm},
+    swarm::{KeepAlive, Swarm, SwarmEvent},
     yamux::YamuxConfig,
     PeerId, Transport,
 };
@@ -177,7 +177,7 @@ pub async fn test_exchanging_peers() {
         .take_while(move |e| {
             log::info!("Swarm event: {:?}", e);
 
-            if let DiscoveryEvent::Update = e {
+            if let SwarmEvent::Behaviour(DiscoveryEvent::Update) = e {
                 t += 1;
             }
 
@@ -219,7 +219,9 @@ pub async fn test_dialing_peer_from_contacts() {
         node2.swarm.for_each(|_| async {}).await;
     });
 
-    if let DiscoveryEvent::Established { peer_id } = node1.swarm.next().await {
+    if let Some(SwarmEvent::Behaviour(DiscoveryEvent::Established { peer_id })) =
+        node1.swarm.next().await
+    {
         log::info!("Established PEX with {}", peer_id);
         assert_eq!(peer2_id, peer_id);
     }
