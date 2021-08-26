@@ -577,6 +577,18 @@ pub struct Staker {
     pub retire_time: u32,
 }
 
+impl Staker {
+    pub fn from_staker(staker: &nimiq_account::Staker) -> Self {
+        Staker {
+            address: staker.address.clone(),
+            active_stake: staker.active_stake,
+            inactive_stake: staker.inactive_stake,
+            delegation: staker.delegation.clone(),
+            retire_time: staker.retire_time,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Validator {
@@ -590,10 +602,15 @@ pub struct Validator {
     pub num_stakers: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub inactivity_flag: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stakers: Option<Vec<Address>>,
 }
 
 impl Validator {
-    pub fn from_validator(validator: &nimiq_account::Validator) -> Self {
+    pub fn from_validator(
+        validator: &nimiq_account::Validator,
+        stakers: Option<Vec<Address>>,
+    ) -> Self {
         Validator {
             address: validator.address.clone(),
             warm_key: validator.warm_key.clone(),
@@ -603,6 +620,7 @@ impl Validator {
             balance: validator.balance,
             num_stakers: validator.num_stakers,
             inactivity_flag: validator.inactivity_flag,
+            stakers,
         }
     }
 }

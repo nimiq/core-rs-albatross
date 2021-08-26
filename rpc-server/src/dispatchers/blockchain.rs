@@ -1,16 +1,17 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use futures::stream::{BoxStream, StreamExt};
 
-use nimiq_account::Account;
+use nimiq_account::{Account, StakingContract};
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
-use nimiq_primitives::policy;
+use nimiq_primitives::{coin::Coin, policy};
 use nimiq_rpc_interface::{
     blockchain::BlockchainInterface,
-    types::{Block, Inherent, SlashedSlots, Slot, Transaction},
+    types::{Block, Inherent, SlashedSlots, Slot, Staker, Transaction},
 };
 
 use crate::error::Error;
@@ -276,32 +277,53 @@ impl BlockchainInterface for BlockchainDispatcher {
         Ok(txs)
     }
 
-    async fn list_stakes(&mut self) -> Result<Vec<Address>, Error> {
+    async fn list_stakes(&mut self) -> Result<HashMap<Address, Coin>, Error> {
         let staking_contract = self.blockchain.get_staking_contract();
 
-        // let active_validators = staking_contract
-        //     .active_validators_by_id
-        //     .iter()
-        //     .map(|(_, validator)| Validator::from_active(validator))
-        //     .collect();
-        //
-        // let inactive_validators = staking_contract
-        //     .inactive_validators_by_id
-        //     .iter()
-        //     .map(|(_, validator)| Validator::from_inactive(validator))
-        //     .collect();
-        //
-        // let inactive_stakes = staking_contract
-        //     .inactive_stake_by_address
-        //     .iter()
-        //     .map(|(address, stake)| Stake {
-        //         staker_address: address.clone(),
-        //         balance: stake.balance,
-        //         retire_time: Some(stake.retire_time),
-        //     })
-        //     .collect();
+        let mut active_validators = HashMap::new();
 
-        Ok(vec![])
+        for (address, balance) in staking_contract.active_validators {
+            active_validators.insert(address, balance);
+        }
+
+        Ok(active_validators)
+    }
+
+    async fn get_validator(
+        &mut self,
+        address: Address,
+        include_stakers: Option<bool>,
+    ) -> Result<Validator, Error> {
+        let accounts_tree = &self.blockchain.state().accounts.tree;
+        let db_txn = self.blockchain.read_transaction();
+        let validator = StakingContract::get_validator(accounts_tree, &db_txn, &address);
+
+        if validator.is_none() {
+            return Err(Error::ValidatorNotFound(address));
+        }
+
+        let mut stakers = None;
+
+        if include_stakers.is_some() && include_stakers.unwrap() == true {
+            stakers = Some(StakingContract::get_validator_stakers(
+                accounts_tree,
+                &db_txn,
+                &address,
+            ));
+        }
+
+        Ok(Validator::from_validator(&validator.unwrap(), stakers))
+    }
+
+    async fn get_staker(&mut self, address: Address) -> Result<Staker, Error> {
+        let accounts_tree = &self.blockchain.state().accounts.tree;
+        let db_txn = self.blockchain.read_transaction();
+        let staker = StakingContract::get_staker(accounts_tree, &db_txn, &address);
+
+        match staker {
+            Some(s) => Ok(Staker::from_staker(&s)),
+            None => Err(Error::StakerNotFound(address)),
+        }
     }
 
     #[stream]

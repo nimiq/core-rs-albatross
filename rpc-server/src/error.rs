@@ -31,6 +31,12 @@ pub enum Error {
     #[error("No account with address: {0}")]
     AccountNotFound(Address),
 
+    #[error("No validator with address: {0}")]
+    ValidatorNotFound(Address),
+
+    #[error("No staker with address: {0}")]
+    StakerNotFound(Address),
+
     #[error("Wrong passphrase")]
     WrongPassphrase,
 
