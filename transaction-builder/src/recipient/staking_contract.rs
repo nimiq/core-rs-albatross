@@ -50,13 +50,14 @@ impl StakingRecipientBuilder {
         warm_address: Address,
         bls_key_pair: &BLSKeyPair,
         reward_address: Address,
+        signal_data: Option<Blake2bHash>,
     ) -> &mut Self {
         self.data = Some(IncomingStakingTransactionData::CreateValidator {
             warm_key: warm_address,
             validator_key: bls_key_pair.public_key.compress(),
             proof_of_knowledge: StakingRecipientBuilder::generate_proof_of_knowledge(&bls_key_pair),
             reward_address,
-            signal_data: None,
+            signal_data,
             proof: Default::default(),
         });
         self
@@ -192,7 +193,7 @@ impl StakingRecipientBuilder {
     /// let reward_address = Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap();
     ///
     /// let mut recipient_builder = Recipient::new_staking_builder();
-    /// recipient_builder.create_validator(warm_address, &validator_key_pair, reward_address);
+    /// recipient_builder.create_validator(warm_address, &validator_key_pair, reward_address, None);
     /// let recipient = recipient_builder.generate();
     /// assert!(recipient.is_some());
     /// ```

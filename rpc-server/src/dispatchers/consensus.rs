@@ -330,6 +330,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         warm_key: Address,
         validator_secret_key: String,
         reward_address: Address,
+        signal_data: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Error> {
@@ -338,12 +339,25 @@ impl ConsensusInterface for ConsensusDispatcher {
                 .unwrap();
         let validator_keypair = BlsKeyPair::from(secret_key);
 
+        // Since JSON doesn't have a primitive for Option (it just has the null primitive), we can't
+        // have a double Option. This becomes an issue when creating an update_validator transaction.
+        // Instead we use the following work-around. We define the empty String to be None. So, in
+        // this situation we have:
+        // "" = None
+        // "0x29a4b..." = Some(hash)
+        let signal_data: Option<Blake2bHash> = if signal_data.is_empty() {
+            None
+        } else {
+            Some(Blake2bHash::deserialize_from_vec(&hex::decode(signal_data).unwrap()).unwrap())
+        };
+
         let transaction = TransactionBuilder::new_create_validator(
             &self.get_wallet_keypair(&wallet)?,
             &self.get_wallet_keypair(&wallet)?,
             warm_key,
             &validator_keypair,
             reward_address,
+            signal_data,
             fee,
             self.validity_start_height(validity_start_height),
             self.network_id(),
@@ -358,6 +372,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         warm_key: Address,
         validator_secret_key: String,
         reward_address: Address,
+        signal_data: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Error> {
@@ -367,6 +382,7 @@ impl ConsensusInterface for ConsensusDispatcher {
                 warm_key,
                 validator_secret_key,
                 reward_address,
+                signal_data,
                 fee,
                 validity_start_height,
             )
@@ -381,7 +397,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         new_warm_address: Option<Address>,
         new_validator_secret_key: Option<String>,
         new_reward_address: Option<Address>,
-        new_signal_data: Option<Option<Blake2bHash>>,
+        new_signal_data: Option<String>,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Error> {
@@ -392,6 +408,25 @@ impl ConsensusInterface for ConsensusDispatcher {
                 Some(BlsKeyPair::from(new_secret_key))
             }
             _ => None,
+        };
+
+        // Since JSON doesn't have a primitive for Option (it just has the null primitive), we can't
+        // have a double Option. Instead we use the following work-around. We define the empty String
+        // to be None. So, in this situation we have:
+        // null = None
+        // "" = Some(None)
+        // "0x29a4b..." = Some(Some(hash))
+        let new_signal_data: Option<Option<Blake2bHash>> = match new_signal_data {
+            None => None,
+            Some(string) => {
+                if string.is_empty() {
+                    Some(None)
+                } else {
+                    Some(Some(
+                        Blake2bHash::deserialize_from_vec(&hex::decode(string).unwrap()).unwrap(),
+                    ))
+                }
+            }
         };
 
         let transaction = TransactionBuilder::new_update_validator(
@@ -415,7 +450,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         new_warm_address: Option<Address>,
         new_validator_secret_key: Option<String>,
         new_reward_address: Option<Address>,
-        new_signal_data: Option<Option<Blake2bHash>>,
+        new_signal_data: Option<String>,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Error> {
