@@ -114,8 +114,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     ) -> Result<Blake2bHash, Error> {
         let raw_tx = self
             .create_basic_transaction(wallet, recipient, value, fee, validity_start_height)
-            .await
-            .unwrap();
+            .await?;
         self.send_raw_transaction(raw_tx).await
     }
 
@@ -150,8 +149,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     ) -> Result<Blake2bHash, Self::Error> {
         let raw_tx = self
             .create_new_staker_transaction(wallet, delegation, value, fee, validity_start_height)
-            .await
-            .unwrap();
+            .await?;
         self.send_raw_transaction(raw_tx).await
     }
 
@@ -185,8 +183,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     ) -> Result<Blake2bHash, Error> {
         let raw_tx = self
             .create_stake_transaction(wallet, staker_address, value, fee, validity_start_height)
-            .await
-            .unwrap();
+            .await?;
         self.send_raw_transaction(raw_tx).await
     }
 
@@ -218,8 +215,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     ) -> Result<Blake2bHash, Error> {
         let raw_tx = self
             .create_update_transaction(wallet, new_delegation, fee, validity_start_height)
-            .await
-            .unwrap();
+            .await?;
         self.send_raw_transaction(raw_tx).await
     }
 
@@ -251,8 +247,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     ) -> Result<Blake2bHash, Error> {
         let raw_tx = self
             .create_retire_transaction(wallet, value, fee, validity_start_height)
-            .await
-            .unwrap();
+            .await?;
         self.send_raw_transaction(raw_tx).await
     }
 
@@ -284,8 +279,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     ) -> Result<Blake2bHash, Error> {
         let raw_tx = self
             .create_reactivate_transaction(wallet, value, fee, validity_start_height)
-            .await
-            .unwrap();
+            .await?;
         self.send_raw_transaction(raw_tx).await
     }
 
@@ -319,8 +313,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     ) -> Result<Blake2bHash, Error> {
         let raw_tx = self
             .create_unstake_transaction(wallet, recipient, value, fee, validity_start_height)
-            .await
-            .unwrap();
+            .await?;
         self.send_raw_transaction(raw_tx).await
     }
 
@@ -386,8 +379,7 @@ impl ConsensusInterface for ConsensusDispatcher {
                 fee,
                 validity_start_height,
             )
-            .await
-            .unwrap();
+            .await?;
         self.send_raw_transaction(raw_tx).await
     }
 
@@ -464,8 +456,7 @@ impl ConsensusInterface for ConsensusDispatcher {
                 fee,
                 validity_start_height,
             )
-            .await
-            .unwrap();
+            .await?;
         self.send_raw_transaction(raw_tx).await
     }
 
@@ -506,8 +497,7 @@ impl ConsensusInterface for ConsensusDispatcher {
                 fee,
                 validity_start_height,
             )
-            .await
-            .unwrap();
+            .await?;
         self.send_raw_transaction(raw_tx).await
     }
 
@@ -548,8 +538,7 @@ impl ConsensusInterface for ConsensusDispatcher {
                 fee,
                 validity_start_height,
             )
-            .await
-            .unwrap();
+            .await?;
         self.send_raw_transaction(raw_tx).await
     }
 
@@ -590,8 +579,7 @@ impl ConsensusInterface for ConsensusDispatcher {
                 fee,
                 validity_start_height,
             )
-            .await
-            .unwrap();
+            .await?;
         self.send_raw_transaction(raw_tx).await
     }
 
@@ -622,8 +610,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     ) -> Result<Blake2bHash, Error> {
         let raw_tx = self
             .create_drop_validator_transaction(wallet, recipient, fee, validity_start_height)
-            .await
-            .unwrap();
+            .await?;
         self.send_raw_transaction(raw_tx).await
     }
 }
