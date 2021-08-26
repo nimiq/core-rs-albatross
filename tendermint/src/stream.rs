@@ -122,9 +122,9 @@ where
             .map(|_| StreamResult::BackgroundTask)
             .boxed();
 
-        // also get the axctual tendermint stream
+        // also get the actual tendermint stream
         let tendermint_stream = expect_block(deps, state_opt)
-            .map(StreamResult::Tendermint)
+            .map(|tendermint_return| StreamResult::Tendermint(tendermint_return))
             .boxed();
 
         // put them both in a select such that both of them are driven
