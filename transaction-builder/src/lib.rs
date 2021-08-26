@@ -751,6 +751,7 @@ impl TransactionBuilder {
     ///  - `warm_address`:          The address corresponding to the warm key used by the validator.
     ///  - `validator_key_pair`:    The BLS key pair used by the validator.
     ///  - `reward_address`:        The address to which the staking rewards are sent.
+    ///  - `signal_data`:           The signal data showed by the validator.
     ///  - `fee`:                   Transaction fee.
     ///  - `validity_start_height`: Block height from which this transaction is valid.
     ///  - `network_id`:            ID of network for which the transaction is meant.
@@ -765,12 +766,18 @@ impl TransactionBuilder {
         warm_address: Address,
         validator_key_pair: &BlsKeyPair,
         reward_address: Address,
+        signal_data: Option<Blake2bHash>,
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Transaction {
         let mut recipient = Recipient::new_staking_builder();
-        recipient.create_validator(warm_address, validator_key_pair, reward_address);
+        recipient.create_validator(
+            warm_address,
+            validator_key_pair,
+            reward_address,
+            signal_data,
+        );
 
         let mut builder = Self::new();
         builder

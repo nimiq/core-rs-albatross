@@ -144,6 +144,7 @@ pub trait ConsensusInterface {
         warm_key: Address,
         validator_secret_key: String,
         reward_address: Address,
+        signal_data: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Self::Error>;
@@ -154,6 +155,7 @@ pub trait ConsensusInterface {
         warm_key: Address,
         validator_secret_key: String,
         reward_address: Address,
+        signal_data: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Self::Error>;
@@ -164,7 +166,7 @@ pub trait ConsensusInterface {
         new_warm_address: Option<Address>,
         new_validator_secret_key: Option<String>,
         new_reward_address: Option<Address>,
-        new_signal_data: Option<Option<Blake2bHash>>,
+        new_signal_data: Option<String>,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Self::Error>;
@@ -175,7 +177,7 @@ pub trait ConsensusInterface {
         new_warm_address: Option<Address>,
         new_validator_secret_key: Option<String>,
         new_reward_address: Option<Address>,
-        new_signal: Option<Option<Blake2bHash>>,
+        new_signal_data: Option<String>,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Self::Error>;
