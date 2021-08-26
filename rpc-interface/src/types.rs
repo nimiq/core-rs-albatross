@@ -2,6 +2,7 @@
 ///!
 ///! [1] https://github.com/nimiq/core-js/wiki/JSON-RPC-API#common-data-types
 use std::{
+    collections::HashMap,
     fmt::{self, Display, Formatter},
     str::FromStr,
 };
@@ -603,13 +604,13 @@ pub struct Validator {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub inactivity_flag: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub stakers: Option<Vec<Address>>,
+    pub stakers: Option<HashMap<Address, Coin>>,
 }
 
 impl Validator {
     pub fn from_validator(
         validator: &nimiq_account::Validator,
-        stakers: Option<Vec<Address>>,
+        stakers: Option<HashMap<Address, Coin>>,
     ) -> Self {
         Validator {
             address: validator.address.clone(),

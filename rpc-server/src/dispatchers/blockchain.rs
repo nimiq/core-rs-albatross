@@ -305,11 +305,19 @@ impl BlockchainInterface for BlockchainDispatcher {
         let mut stakers = None;
 
         if include_stakers.is_some() && include_stakers.unwrap() == true {
-            stakers = Some(StakingContract::get_validator_stakers(
-                accounts_tree,
-                &db_txn,
-                &address,
-            ));
+            let staker_addresses =
+                StakingContract::get_validator_stakers(accounts_tree, &db_txn, &address);
+
+            let mut stakers_map = HashMap::new();
+
+            for address in staker_addresses {
+                let staker = StakingContract::get_staker(accounts_tree, &db_txn, &address).unwrap();
+                if !staker.active_stake.is_zero() {
+                    stakers_map.insert(address, staker.active_stake);
+                }
+            }
+
+            stakers = Some(stakers_map);
         }
 
         Ok(Validator::from_validator(&validator.unwrap(), stakers))
