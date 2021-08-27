@@ -1,3 +1,4 @@
+use rand::Rng;
 use std::marker::PhantomData;
 use std::sync::Weak;
 use std::{
@@ -219,6 +220,169 @@ async fn send_two_micro_blocks_out_of_order() {
     assert!(block_queue.buffered_blocks().next().is_none());
     assert_eq!(blockchain1.get_block_at(1, true, None).unwrap(), block1);
     assert_eq!(blockchain1.get_block_at(2, true, None).unwrap(), block2);
+}
+
+#[tokio::test]
+async fn send_micro_blocks_out_of_order() {
+    let keypair =
+        KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
+    let env1 = VolatileEnvironment::new(10).unwrap();
+    let env2 = VolatileEnvironment::new(10).unwrap();
+    let blockchain1 = Arc::new(Blockchain::new(env1, NetworkId::UnitAlbatross).unwrap());
+    let blockchain2 = Arc::new(Blockchain::new(env2, NetworkId::UnitAlbatross).unwrap());
+    let mut hub = MockHub::new();
+    let network = Arc::new(hub.new_network());
+    let mempool = Mempool::new(Arc::clone(&blockchain2), MempoolConfig::default());
+    let producer = BlockProducer::new(Arc::clone(&blockchain2), Arc::clone(&mempool), keypair);
+    let (request_component, mut mock_ptarc_rx, _mock_ptarc_tx) =
+        MockRequestComponent::<MockPeer>::new();
+    let (mut tx, rx) = mpsc::channel(32);
+
+    let mut block_queue = BlockQueue::with_block_stream(
+        Default::default(),
+        Arc::clone(&blockchain1),
+        network,
+        request_component,
+        rx.boxed(),
+    );
+
+    let mut rng = rand::thread_rng();
+    let mut ordered_blocks = Vec::new();
+
+    let mock_id = MockId::new(hub.new_address().into());
+
+    let n_blocks = rng.gen_range(2, 15);
+
+    for n in 0..n_blocks {
+        let block = Block::Micro(producer.next_micro_block(
+            blockchain2.time.now() + n * 1000,
+            0,
+            None,
+            vec![],
+            vec![0x42],
+        ));
+
+        // push it, so the producer actually produces a block
+        blockchain2.push(block.clone()).unwrap();
+
+        ordered_blocks.push(block);
+    }
+
+    let mut blocks = ordered_blocks.clone();
+
+    while blocks.len() > 1 {
+        let index = rng.gen_range(1, blocks.len());
+
+        tx.send((blocks.remove(index).clone(), mock_id.clone()))
+            .await
+            .unwrap();
+
+        // run the block_queue one iteration, i.e. until it processed one block
+        block_queue.poll_next_unpin(&mut Context::from_waker(noop_waker_ref()));
+    }
+
+    // All blocks should be buffered
+    assert_eq!(blockchain1.block_number(), 0);
+
+    // Obtain the buffered blocks
+    let buffered_blocks = block_queue.buffered_blocks().collect::<Vec<_>>();
+    assert_eq!(buffered_blocks.len() as u64, n_blocks - 1);
+
+    // now send block1 to fill the gap
+    tx.send((blocks[0].clone(), mock_id)).await.unwrap();
+
+    for _ in 0..n_blocks {
+        block_queue.next().await;
+    }
+
+    // Verify all blocks except the genesis
+    for i in 1..=n_blocks {
+        assert_eq!(
+            blockchain1.get_block_at(i as u32, true, None).unwrap(),
+            ordered_blocks[(i - 1) as usize]
+        );
+    }
+
+    // No blocks buffered
+    assert!(block_queue.buffered_blocks().next().is_none());
+}
+
+#[tokio::test]
+async fn send_invalid_block() {
+    let keypair =
+        KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
+    let env1 = VolatileEnvironment::new(10).unwrap();
+    let env2 = VolatileEnvironment::new(10).unwrap();
+    let blockchain1 = Arc::new(Blockchain::new(env1, NetworkId::UnitAlbatross).unwrap());
+    let blockchain2 = Arc::new(Blockchain::new(env2, NetworkId::UnitAlbatross).unwrap());
+    let mut hub = MockHub::new();
+    let network = Arc::new(hub.new_network());
+    let mempool = Mempool::new(Arc::clone(&blockchain2), MempoolConfig::default());
+    let producer = BlockProducer::new(Arc::clone(&blockchain2), Arc::clone(&mempool), keypair);
+    let (request_component, mut mock_ptarc_rx, _mock_ptarc_tx) =
+        MockRequestComponent::<MockPeer>::new();
+    let (mut tx, rx) = mpsc::channel(32);
+
+    let mut block_queue = BlockQueue::with_block_stream(
+        Default::default(),
+        Arc::clone(&blockchain1),
+        network,
+        request_component,
+        rx.boxed(),
+    );
+
+    let block1 = Block::Micro(producer.next_micro_block(
+        blockchain2.time.now() + 100000,
+        0,
+        None,
+        vec![],
+        vec![0x42],
+    ));
+    blockchain2.push(block1.clone()).unwrap();
+
+    // Block2's timestamp is less than Block1's timestamp, so Block 2 will be rejected by the blockchain
+    let block2 = Block::Micro(producer.next_micro_block(
+        blockchain2.time.now(),
+        0,
+        None,
+        vec![],
+        vec![0x42],
+    ));
+
+    let mock_id = MockId::new(hub.new_address().into());
+
+    // send block2 first
+    tx.send((block2.clone(), mock_id.clone())).await.unwrap();
+
+    assert_eq!(blockchain1.block_number(), 0);
+
+    // run the block_queue one iteration, i.e. until it processed one block
+    block_queue.poll_next_unpin(&mut Context::from_waker(noop_waker_ref()));
+
+    // this block should be buffered now
+    assert_eq!(blockchain1.block_number(), 0);
+    let blocks = block_queue.buffered_blocks().collect::<Vec<_>>();
+    assert_eq!(blocks.len(), 1);
+    let (block_number, blocks) = blocks.get(0).unwrap();
+    assert_eq!(*block_number, 2);
+    assert_eq!(blocks[0], &block2);
+
+    let (target_block_hash, _locators) = mock_ptarc_rx.next().await.unwrap();
+    assert_eq!(target_block_hash, block2.hash());
+
+    // now send block1 to fill the gap
+    tx.send((block1.clone(), mock_id)).await.unwrap();
+
+    // run the block_queue until is has produced two events.
+    // The second block will be rejected due to an Invalid Sucessor event
+    block_queue.next().await;
+    block_queue.next().await;
+
+    // Only Block 1 should be pushed to the blockchain
+    assert_eq!(blockchain1.block_number(), 1);
+    assert!(block_queue.buffered_blocks().next().is_none());
+    assert_eq!(blockchain1.get_block_at(1, true, None).unwrap(), block1);
+    assert_ne!(blockchain1.get_block_at(1, true, None).unwrap(), block2);
 }
 
 #[tokio::test]
