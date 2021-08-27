@@ -263,25 +263,21 @@ async fn sync_ingredients() {
         .request_epoch(consensus1.blockchain.election_head_hash())
         .await
         .expect("Should yield epoch");
+    let block1 = epoch.block.expect("Should have block");
     assert_eq!(epoch.history_len, 3);
-    assert_eq!(
-        epoch.block.expect("Should have block").hash(),
-        consensus1.blockchain.election_head_hash()
-    );
+    assert_eq!(block1.hash(), consensus1.blockchain.election_head_hash());
 
     let epoch = agent
         .request_epoch(consensus1.blockchain.macro_head_hash())
         .await
         .expect("Should yield epoch");
+    let block2 = epoch.block.expect("Should have block");
     assert_eq!(epoch.history_len, 1);
-    assert_eq!(
-        epoch.block.expect("Should have block").hash(),
-        consensus1.blockchain.macro_head_hash()
-    );
+    assert_eq!(block2.hash(), consensus1.blockchain.macro_head_hash());
 
     // Request history chunk.
     let chunk = agent
-        .request_history_chunk(1, policy::EPOCH_LENGTH, 0)
+        .request_history_chunk(1, block1.block_number(), 0)
         .await
         .expect("Should yield history chunk")
         .chunk
@@ -293,7 +289,7 @@ async fn sync_ingredients() {
     );
 
     let chunk = agent
-        .request_history_chunk(2, 1, 0)
+        .request_history_chunk(2, block2.block_number(), 0)
         .await
         .expect("Should yield history chunk")
         .chunk
