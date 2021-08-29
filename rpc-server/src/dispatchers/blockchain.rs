@@ -15,6 +15,7 @@ use nimiq_rpc_interface::{
 };
 
 use crate::error::Error;
+use nimiq_rpc_interface::types::Validator;
 
 pub struct BlockchainDispatcher {
     blockchain: Arc<Blockchain>,
