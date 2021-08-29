@@ -87,8 +87,8 @@ impl Handle<BatchSetInfo> for RequestBatchSet {
             // Leaf indices are 0 based thus the + 1
             let history_len = blockchain
                 .history_store
-                // TODO Refactor get_last_leaf_index_of_block
                 .get_last_leaf_index_of_block(block.header.block_number, None)
+                .expect("Can't find block number in the History Store!")
                 + 1;
             BatchSetInfo {
                 block: Some(block),
