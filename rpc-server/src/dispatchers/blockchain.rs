@@ -10,7 +10,7 @@ use nimiq_keys::Address;
 use nimiq_primitives::policy;
 use nimiq_rpc_interface::{
     blockchain::BlockchainInterface,
-    types::{Block, Inherent, SlashedSlots, Slot, Transaction, Validator},
+    types::{Block, Inherent, SlashedSlots, Slot, Transaction},
 };
 
 use crate::error::Error;

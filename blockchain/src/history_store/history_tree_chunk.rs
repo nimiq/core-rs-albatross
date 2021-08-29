@@ -31,6 +31,7 @@ impl Debug for HistoryTreeChunk {
             dbg.field("first_block", &first.block_number);
             dbg.field("last_block", &last.block_number);
         }
+        dbg.field("history", &self.history);
         dbg.finish()
     }
 }

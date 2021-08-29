@@ -44,7 +44,7 @@ const SECRET_KEY: &str =
 
 #[tokio::test]
 async fn peers_can_sync() {
-    // SimpleLogger::new().init().unwrap();
+    //simple_logger::SimpleLogger::new().init().unwrap();
 
     let mut hub = MockHub::default();
 
@@ -183,6 +183,7 @@ async fn peers_can_sync() {
 
 #[tokio::test]
 async fn sync_ingredients() {
+    //simple_logger::SimpleLogger::new().init().unwrap();
     let mut hub = MockHub::default();
 
     // Setup first peer.
@@ -264,6 +265,7 @@ async fn sync_ingredients() {
         .await
         .expect("Should yield epoch");
     let block1 = epoch.block.expect("Should have block");
+
     assert_eq!(epoch.history_len, 3);
     assert_eq!(block1.hash(), consensus1.blockchain.election_head_hash());
 
@@ -272,6 +274,7 @@ async fn sync_ingredients() {
         .await
         .expect("Should yield epoch");
     let block2 = epoch.block.expect("Should have block");
+
     assert_eq!(epoch.history_len, 1);
     assert_eq!(block2.hash(), consensus1.blockchain.macro_head_hash());
 
@@ -282,6 +285,7 @@ async fn sync_ingredients() {
         .expect("Should yield history chunk")
         .chunk
         .expect("Should yield history chunk");
+
     assert_eq!(chunk.history.len(), 3);
     assert_eq!(
         chunk.verify(consensus1.blockchain.election_head().header.history_root, 0),
@@ -294,6 +298,7 @@ async fn sync_ingredients() {
         .expect("Should yield history chunk")
         .chunk
         .expect("Should yield history chunk");
+
     assert_eq!(chunk.history.len(), 1);
     assert_eq!(
         chunk.verify(consensus1.blockchain.macro_head().header.history_root, 0),

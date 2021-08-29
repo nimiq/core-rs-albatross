@@ -25,7 +25,7 @@ pub struct ExtendedTransaction {
 impl ExtendedTransaction {
     /// Convert a set of inherents and basic transactions (together with a block number and a block
     /// timestamp) into a vector of extended transactions.
-    /// We only want to store slash inherents, so we ignore the other inherent types.
+    /// We only want to store slash inherents, so we ignore the other inherent types. TODO
     pub fn from(
         block_number: u32,
         block_time: u64,
@@ -43,7 +43,7 @@ impl ExtendedTransaction {
         }
 
         for inherent in inherents {
-            if inherent.ty == InherentType::Slash {
+            if inherent.ty == InherentType::Slash || inherent.ty == InherentType::Reward {
                 ext_txs.push(ExtendedTransaction {
                     block_number,
                     block_time,
