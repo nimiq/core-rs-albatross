@@ -18,12 +18,12 @@ parking_lot = { version = "0.11", optional = true }
 rand = "0.8"
 serde = { version = "1.0", features = ["derive"], optional = true }
 
-ark-std = "^0.2"
-ark-ff = "^0.2"
-ark-ec = "^0.2"
-ark-mnt4-753 = "^0.2"
-ark-mnt6-753 = "^0.2"
-ark-crypto-primitives = "^0.2"
+ark-std = "^0.3"
+ark-ff = "^0.3"
+ark-ec = "^0.3"
+ark-mnt4-753 = "^0.3"
+ark-mnt6-753 = "^0.3"
+ark-crypto-primitives = "^0.3"
 
 beserial = { path = "../beserial", optional = true }
 nimiq-hash = { path = "../hash" }
