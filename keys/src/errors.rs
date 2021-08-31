@@ -1,8 +1,8 @@
-use ed25519_dalek::SignatureError;
+use ed25519_zebra::Error;
 use hex::FromHexError;
 use thiserror::Error;
 
-pub type KeysError = SignatureError;
+pub type KeysError = Error;
 
 #[derive(Debug, Error)]
 pub enum ParseError {

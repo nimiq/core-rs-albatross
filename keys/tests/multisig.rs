@@ -314,7 +314,7 @@ fn it_correctly_calculates_commitments() {
     // Decompress the 32 byte cryptographically secure random data to 64 byte.
     let mut h: ::sha2::Sha512 = ::sha2::Sha512::default();
 
-    h.input(&randomness);
+    h.update(&randomness);
     let scalar = Scalar::from_hash::<::sha2::Sha512>(h);
 
     // Compute the point [scalar]B.
@@ -500,7 +500,7 @@ fn it_can_construct_commitments() {
         let test = TestVector::from_str(vector);
 
         for i in 0..test.priv_keys.len() {
-            let commitment: EdwardsPoint = test.secrets[i].to_scalar() * &::curve25519_dalek::constants::ED25519_BASEPOINT_TABLE;
+            let commitment: EdwardsPoint = test.secrets[i].to_scalar() * &::curve25519_dalek_ng::constants::ED25519_BASEPOINT_TABLE;
             assert_eq!((j, i, commitment.compress().to_bytes()), (j, i, test.commitments[i].to_bytes()));
         }
     }

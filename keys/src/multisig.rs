@@ -8,10 +8,10 @@ use curve25519_dalek::constants;
 use curve25519_dalek::edwards::{CompressedEdwardsY, EdwardsPoint};
 use curve25519_dalek::scalar::Scalar;
 use curve25519_dalek::traits::Identity;
-use ed25519_dalek::ExpandedSecretKey;
-use sha2::{self, Digest};
+use rand::Rng;
+use sha2::{self, Digest, Sha512};
 
-use utils::key_rng::{CryptoRng, Rng, SecureGenerate};
+use utils::key_rng::{CryptoRng, RngCore, SecureGenerate};
 
 use crate::{KeyPair, PublicKey, Signature};
 
@@ -99,7 +99,7 @@ impl CommitmentPair {
         }
     }
 
-    fn generate_internal<R: Rng + CryptoRng>(
+    fn generate_internal<R: Rng + RngCore + CryptoRng>(
         rng: &mut R,
     ) -> Result<CommitmentPair, InvalidScalarError> {
         // Create random 32 bytes.
@@ -109,7 +109,7 @@ impl CommitmentPair {
         // Decompress the 32 byte cryptographically secure random data to 64 byte.
         let mut h: sha2::Sha512 = sha2::Sha512::default();
 
-        h.input(&randomness);
+        h.update(&randomness);
         let scalar = Scalar::from_hash::<sha2::Sha512>(h);
         if scalar == Scalar::zero() || scalar == Scalar::one() {
             return Err(InvalidScalarError);
@@ -137,7 +137,7 @@ impl CommitmentPair {
 }
 
 impl SecureGenerate for CommitmentPair {
-    fn generate<R: Rng + CryptoRng>(rng: &mut R) -> Self {
+    fn generate<R: Rng + RngCore + CryptoRng>(rng: &mut R) -> Self {
         CommitmentPair::generate_internal(rng).expect("Failed to generate CommitmentPair")
     }
 }
@@ -210,9 +210,9 @@ impl KeyPair {
         // Compute H(commitment || public key || message).
         let mut h: sha2::Sha512 = sha2::Sha512::default();
 
-        h.input(aggregated_commitment.0.compress().as_bytes());
-        h.input(delinearized_pk_sum.compress().as_bytes());
-        h.input(data);
+        h.update(aggregated_commitment.0.compress().as_bytes());
+        h.update(delinearized_pk_sum.compress().as_bytes());
+        h.update(data);
         let s = Scalar::from_hash::<sha2::Sha512>(h);
         let partial_signature: Scalar = s * delinearized_private_key + secret.0;
         let mut public_key_bytes: [u8; PublicKey::SIZE] = [0u8; PublicKey::SIZE];
@@ -228,13 +228,12 @@ impl KeyPair {
         // Compute H(C||P).
         let mut h: sha2::Sha512 = sha2::Sha512::default();
 
-        h.input(&public_keys_hash[..]);
-        h.input(self.public.as_bytes());
+        h.update(&public_keys_hash[..]);
+        h.update(self.public.as_bytes());
         let s = Scalar::from_hash::<sha2::Sha512>(h);
 
-        // Expand the private key.
-        let expanded_private_key = ExpandedSecretKey::from(self.private.as_dalek());
-        let sk = expanded_private_key.to_scalar();
+        // Get a scalar representation of the private key
+        let sk = self.private.as_zebra().to_scalar();
 
         // Compute H(C||P)*sk
         s * sk
@@ -254,8 +253,8 @@ impl PublicKey {
         // Compute H(C||P).
         let mut h: sha2::Sha512 = sha2::Sha512::default();
 
-        h.input(&public_keys_hash[..]);
-        h.input(self.as_bytes());
+        h.update(&public_keys_hash[..]);
+        h.update(self.as_bytes());
         let s = Scalar::from_hash::<sha2::Sha512>(h);
 
         // Should always work, since we come from a valid public key.
@@ -270,9 +269,9 @@ fn hash_public_keys(public_keys: &[PublicKey]) -> [u8; 64] {
     let mut h: sha2::Sha512 = sha2::Sha512::default();
     let mut public_keys_hash: [u8; 64] = [0u8; 64];
     for public_key in public_keys {
-        h.input(public_key.as_bytes());
+        h.update(public_key.as_bytes());
     }
-    public_keys_hash.copy_from_slice(h.result().as_slice());
+    public_keys_hash.copy_from_slice(h.finalize().as_slice());
     public_keys_hash
 }
 
@@ -280,10 +279,17 @@ trait ToScalar {
     fn to_scalar(&self) -> Scalar;
 }
 
-impl ToScalar for ::ed25519_dalek::ExpandedSecretKey {
+impl ToScalar for ::ed25519_zebra::SigningKey {
     fn to_scalar(&self) -> Scalar {
-        let mut bytes: [u8; 32] = [0u8; 32];
-        bytes.copy_from_slice(&self.to_bytes()[..32]);
-        Scalar::from_bytes_mod_order(bytes)
+        // Expand the seed to a 64-byte array with SHA512.
+        let h = Sha512::digest(self.as_ref());
+
+        // Convert the low half to a scalar with Ed25519 "clamping"
+        let mut scalar_bytes = [0u8; 32];
+        scalar_bytes[..].copy_from_slice(&h.as_slice()[0..32]);
+        scalar_bytes[0] &= 248;
+        scalar_bytes[31] &= 127;
+        scalar_bytes[31] |= 64;
+        Scalar::from_bits(scalar_bytes)
     }
 }

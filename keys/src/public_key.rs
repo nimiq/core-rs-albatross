@@ -1,9 +1,10 @@
 use std::cmp::Ordering;
+use std::convert::TryFrom;
+use std::convert::TryInto;
 use std::fmt;
 use std::io;
 use std::str::FromStr;
 
-use ed25519_dalek::Verifier;
 use hex::FromHex;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
@@ -12,29 +13,32 @@ use hash::{Hash, SerializeContent};
 use crate::errors::{KeysError, ParseError};
 use crate::{PrivateKey, Signature};
 
-#[derive(Default, Eq, PartialEq, Clone, Copy)]
-pub struct PublicKey(pub(super) ed25519_dalek::PublicKey);
+#[derive(Clone, Copy)]
+pub struct PublicKey(pub(super) ed25519_zebra::VerificationKey);
 
 impl PublicKey {
     pub const SIZE: usize = 32;
 
     pub fn verify(&self, signature: &Signature, data: &[u8]) -> bool {
-        self.as_dalek().verify(data, signature.as_dalek()).is_ok()
+        self.as_zebra().verify(signature.as_zebra(), data).is_ok()
     }
 
     #[inline]
     pub fn as_bytes(&self) -> &[u8; PublicKey::SIZE] {
-        self.0.as_bytes()
+        self.0
+            .as_ref()
+            .try_into()
+            .expect("Obtained slice with an unexpected size")
     }
 
     #[inline]
-    pub(crate) fn as_dalek(&self) -> &ed25519_dalek::PublicKey {
+    pub(crate) fn as_zebra(&self) -> &ed25519_zebra::VerificationKey {
         &self.0
     }
 
     #[inline]
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, KeysError> {
-        Ok(PublicKey(ed25519_dalek::PublicKey::from_bytes(bytes)?))
+        Ok(PublicKey(ed25519_zebra::VerificationKey::try_from(bytes)?))
     }
 
     #[inline]
@@ -71,9 +75,24 @@ impl FromStr for PublicKey {
     }
 }
 
+impl Default for PublicKey {
+    fn default() -> Self {
+        let default_array: [u8; Self::SIZE] = Default::default();
+        Self::from(default_array)
+    }
+}
+
+impl PartialEq for PublicKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_bytes() == other.as_bytes()
+    }
+}
+
+impl Eq for PublicKey {}
+
 impl Ord for PublicKey {
     fn cmp(&self, other: &PublicKey) -> Ordering {
-        self.0.as_bytes().cmp(other.0.as_bytes())
+        <&[u8]>::from(self.0.as_ref()).cmp(<&[u8]>::from(other.0.as_ref()))
     }
 }
 
@@ -85,14 +104,16 @@ impl PartialOrd for PublicKey {
 
 impl<'a> From<&'a PrivateKey> for PublicKey {
     fn from(private_key: &'a PrivateKey) -> Self {
-        let public_key = ed25519_dalek::PublicKey::from(private_key.as_dalek());
+        let public_key = ed25519_zebra::VerificationKey::from(private_key.as_zebra());
         PublicKey(public_key)
     }
 }
 
 impl<'a> From<&'a [u8; PublicKey::SIZE]> for PublicKey {
     fn from(bytes: &'a [u8; PublicKey::SIZE]) -> Self {
-        PublicKey(ed25519_dalek::PublicKey::from_bytes(bytes).unwrap())
+        let vk_bytes =
+            ed25519_zebra::VerificationKey::try_from(bytes.clone()).expect("Unexpected size for");
+        PublicKey(vk_bytes)
     }
 }
 

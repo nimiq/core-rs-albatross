@@ -1,3 +1,4 @@
+use std::convert::{TryFrom, TryInto};
 use std::fmt::{Debug, Error, Formatter};
 use std::io;
 use std::str::FromStr;
@@ -6,28 +7,32 @@ use hex::FromHex;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use hash::{Hash, SerializeContent};
-use utils::key_rng::{CryptoRng, Rng, SecureGenerate};
+use rand_core::{CryptoRng, RngCore};
+use utils::key_rng::SecureGenerate;
 
 use crate::errors::{KeysError, ParseError};
 
-pub struct PrivateKey(pub(super) ed25519_dalek::SecretKey);
+pub struct PrivateKey(pub(super) ed25519_zebra::SigningKey);
 
 impl PrivateKey {
     pub const SIZE: usize = 32;
 
     #[inline]
-    pub fn as_bytes(&self) -> &[u8; PrivateKey::SIZE] {
-        self.0.as_bytes()
+    pub fn as_bytes(&self) -> &[u8; 32] {
+        self.0
+            .as_ref()
+            .try_into()
+            .expect("Obtained slice with an unexpected size")
     }
 
     #[inline]
-    pub(crate) fn as_dalek(&self) -> &ed25519_dalek::SecretKey {
+    pub(crate) fn as_zebra(&self) -> &ed25519_zebra::SigningKey {
         &self.0
     }
 
     #[inline]
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, KeysError> {
-        Ok(PrivateKey(ed25519_dalek::SecretKey::from_bytes(bytes)?))
+        Ok(PrivateKey(ed25519_zebra::SigningKey::try_from(bytes)?))
     }
 
     #[inline]
@@ -37,14 +42,14 @@ impl PrivateKey {
 }
 
 impl SecureGenerate for PrivateKey {
-    fn generate<R: Rng + CryptoRng>(rng: &mut R) -> Self {
-        PrivateKey(ed25519_dalek::SecretKey::generate(rng))
+    fn generate<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
+        PrivateKey(ed25519_zebra::SigningKey::new(rng))
     }
 }
 
 impl<'a> From<&'a [u8; PrivateKey::SIZE]> for PrivateKey {
     fn from(bytes: &'a [u8; PrivateKey::SIZE]) -> Self {
-        PrivateKey(ed25519_dalek::SecretKey::from_bytes(bytes).unwrap())
+        PrivateKey(ed25519_zebra::SigningKey::from(*bytes))
     }
 }
 
@@ -56,8 +61,8 @@ impl From<[u8; PrivateKey::SIZE]> for PrivateKey {
 
 impl Clone for PrivateKey {
     fn clone(&self) -> Self {
-        let cloned_dalek = ed25519_dalek::SecretKey::from_bytes(self.0.as_bytes()).unwrap();
-        PrivateKey(cloned_dalek)
+        let cloned_zebra = self.0.into();
+        PrivateKey(cloned_zebra)
     }
 }
 
