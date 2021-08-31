@@ -43,7 +43,7 @@ async fn main_inner() -> Result<(), Error> {
 
     // Clone config for RPC and metrics server
     let rpc_config = config.rpc_server.clone();
-    let _metrics_config = config.metrics_server.clone();
+    // let _metrics_config = config.metrics_server.clone();
 
     // Create client from config.
     log::info!("Initializing client");

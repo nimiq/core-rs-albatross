@@ -20,7 +20,7 @@ members = [
   "macros",
   "mempool",
   "messages",
-  "metrics-server",
+#   "metrics-server",
   "mnemonic",
   "nano-primitives",
   "nano-zkp",
