@@ -17,7 +17,6 @@ is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-async-std = "1.7" # Used in some places, but can we not depend on a runtime?
 async-trait = "0.1"
 bitflags = "1.2"
 bytes = "1.0"

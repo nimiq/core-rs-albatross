@@ -169,7 +169,7 @@ impl Network {
         let (events_tx, _) = broadcast::channel(64);
         let (action_tx, action_rx) = mpsc::channel(64);
 
-        async_std::task::spawn(Self::swarm_task(
+        tokio::spawn(Self::swarm_task(
             swarm,
             events_tx.clone(),
             action_rx,
