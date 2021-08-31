@@ -63,6 +63,6 @@ all = ["crc", "iterators", "key-store", "math", "merkle", "mutable-once", "obser
 # Compiles this package with the features needed for the nimiq client.
 full-nimiq = ["log", "crc", "iterators", "key-store", "merkle", "mutable-once", "observer", "time", "unique-ptr"]
 math = []
-key-rng = ["rand"]
-hash-rng = ["nimiq-hash", "rand_core",]
+key-rng = ["rand", "rand_core"]
+hash-rng = ["nimiq-hash", "rand_core"]
 serde-derive = ["serde"]

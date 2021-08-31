@@ -5,7 +5,7 @@ use std::fmt;
 use beserial::Serialize;
 use nimiq_hash::Hash;
 use nimiq_utils::key_rng::SecureGenerate;
-use nimiq_utils::key_rng::{CryptoRng, Rng};
+use nimiq_utils::key_rng::{CryptoRng, RngCore};
 
 use crate::{PublicKey, SecretKey, SigHash, Signature};
 
@@ -44,7 +44,7 @@ impl KeyPair {
 }
 
 impl SecureGenerate for KeyPair {
-    fn generate<R: Rng + CryptoRng>(rng: &mut R) -> Self {
+    fn generate<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
         let secret = SecretKey::generate(rng);
         KeyPair::from(secret)
     }

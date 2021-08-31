@@ -8,7 +8,7 @@ use ark_mnt6_753::{Fr, G1Projective};
 use beserial::Serialize;
 use nimiq_hash::Hash;
 use nimiq_utils::key_rng::SecureGenerate;
-use nimiq_utils::key_rng::{CryptoRng, Rng};
+use nimiq_utils::key_rng::{CryptoRng, RngCore};
 
 use crate::{SigHash, Signature};
 
@@ -41,7 +41,7 @@ impl SecretKey {
 }
 
 impl SecureGenerate for SecretKey {
-    fn generate<R: Rng + CryptoRng>(rng: &mut R) -> Self {
+    fn generate<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
         let mut x = Fr::rand(rng);
         loop {
             if !x.is_zero() {

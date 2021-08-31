@@ -8,29 +8,29 @@ use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteByte
 use crate::errors::{KeysError, ParseError};
 
 #[derive(Debug, Clone)]
-pub struct Signature(pub(super) ed25519_dalek::Signature);
+pub struct Signature(pub(super) ed25519_zebra::Signature);
 
 impl Signature {
     pub const SIZE: usize = 64;
 
     #[inline]
-    pub fn as_bytes(&self) -> &[u8] {
-        self.0.as_ref()
+    pub fn as_bytes(&self) -> [u8; Signature::SIZE] {
+        self.0.into()
     }
 
     #[inline]
     pub fn to_bytes(&self) -> [u8; Self::SIZE] {
-        self.0.to_bytes()
+        self.0.into()
     }
 
     #[inline]
-    pub(crate) fn as_dalek(&self) -> &ed25519_dalek::Signature {
+    pub(crate) fn as_zebra(&self) -> &ed25519_zebra::Signature {
         &self.0
     }
 
     #[inline]
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, KeysError> {
-        Ok(Signature(ed25519_dalek::Signature::try_from(bytes)?))
+        Ok(Signature(ed25519_zebra::Signature::try_from(bytes)?))
     }
 }
 
@@ -38,7 +38,7 @@ impl Eq for Signature {}
 
 impl PartialEq for Signature {
     fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
+        <[u8; 64]>::from(self.0) == <[u8; 64]>::from(other.0)
     }
 }
 
@@ -58,7 +58,7 @@ impl<'a> From<&'a [u8; Self::SIZE]> for Signature {
 
 impl From<[u8; Self::SIZE]> for Signature {
     fn from(bytes: [u8; Self::SIZE]) -> Self {
-        Signature(ed25519_dalek::Signature::from(bytes))
+        Signature(ed25519_zebra::Signature::from(bytes))
     }
 }
 
@@ -103,7 +103,7 @@ mod serde_derive {
         where
             S: Serializer,
         {
-            serializer.serialize_bytes(self.as_bytes())
+            serializer.serialize_bytes(&self.as_bytes())
         }
     }
 
