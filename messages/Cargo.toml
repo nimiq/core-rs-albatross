@@ -23,7 +23,7 @@ byteorder = "1.2"
 hex = "0.4"
 log = "0.4"
 parking_lot = "0.11"
-rand = "0.7"
+rand = "0.8"
 thiserror = "1.0"
 
 beserial = { path = "../beserial" }

@@ -278,7 +278,7 @@ async fn send_micro_blocks_out_of_order() {
 
     let mock_id = MockId::new(hub.new_address().into());
 
-    let n_blocks = rng.gen_range(2, 15);
+    let n_blocks = rng.gen_range(2..15);
 
     for n in 0..n_blocks {
         let block = Block::Micro(producer.next_micro_block(
@@ -298,7 +298,7 @@ async fn send_micro_blocks_out_of_order() {
     let mut blocks = ordered_blocks.clone();
 
     while blocks.len() > 1 {
-        let index = rng.gen_range(1, blocks.len());
+        let index = rng.gen_range(1..blocks.len());
 
         tx.send((blocks.remove(index).clone(), mock_id.clone()))
             .await

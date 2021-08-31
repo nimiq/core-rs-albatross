@@ -171,7 +171,7 @@ impl LmdbEnvironment {
         }
 
         let mut rng = thread_rng();
-        let resize_percent: f64 = rng.gen_range(0.6, 0.9);
+        let resize_percent: f64 = rng.gen_range(0.6..0.9);
 
         if (size_used as f64) / (info.mapsize as f64) > resize_percent {
             info!("DB resize (percent-based)");
