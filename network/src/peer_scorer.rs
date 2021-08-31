@@ -74,7 +74,7 @@ impl PeerScorer {
             return None;
         }
         candidates.sort_by(|a, b| a.1.cmp(&b.1));
-        let rand_ind = OsRng.gen_range(0, usize::min(Self::PICK_SELECTION_SIZE, candidates.len()));
+        let rand_ind = OsRng.gen_range(0..usize::min(Self::PICK_SELECTION_SIZE, candidates.len()));
         candidates
             .get(rand_ind)
             .map(|(peer_address, _)| Arc::clone(peer_address))
@@ -92,7 +92,7 @@ impl PeerScorer {
             .known_addresses_nr_for_protocol_mask(self.network_config.protocol_mask());
 
         let (start_index, end_index) = if num_addresses > num_candidates {
-            let start = OsRng.gen_range(0, num_addresses);
+            let start = OsRng.gen_range(0..num_addresses);
             (start, (start + num_candidates) % num_addresses)
         } else {
             (0, num_addresses)

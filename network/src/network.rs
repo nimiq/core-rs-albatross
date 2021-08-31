@@ -376,7 +376,7 @@ impl Network {
             let len = cmp::min(connection_scores.len(), cutoff);
 
             for _ in 0..cmp::min(Self::ADDRESS_REQUEST_PEERS, connection_scores.len()) {
-                let index = randrng.gen_range(0, len);
+                let index = randrng.gen_range(0..len);
                 let (id, _): &(ConnectionId, f64) = connection_scores.get(index).unwrap(); // Cannot fail, since len is at most the real length.
                 let peer_connection = state
                     .get_connection(*id)
@@ -399,7 +399,7 @@ impl Network {
             // Drop lock on connection_scores since it is empty.
             drop(connection_scores);
             if connections.count() > 0 {
-                let index = randrng.gen_range(0, cmp::min(connections.count(), 10));
+                let index = randrng.gen_range(0..cmp::min(connections.count(), 10));
 
                 let state = connections.state();
                 let mut peer_connection = None;

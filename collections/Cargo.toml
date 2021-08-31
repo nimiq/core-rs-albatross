@@ -26,7 +26,7 @@ beserial = { path = "../beserial", optional = true }
 
 [dev-dependencies]
 hex = "0.4"
-rand = "0.7"
+rand = "0.8"
 
 [features]
 bitset = ["itertools", "beserial"]
