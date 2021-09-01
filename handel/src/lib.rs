@@ -10,7 +10,6 @@ extern crate beserial_derive;
 ///
 /// [1] [Handel: Practical Multi-Signature Aggregation for Large Byzantine Committees](https://arxiv.org/abs/1906.05132)
 extern crate futures;
-extern crate futures_cpupool;
 #[macro_use]
 extern crate log;
 extern crate nimiq_bls as bls;
