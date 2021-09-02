@@ -1,12 +1,13 @@
 FROM ubuntu:21.04
 
-ARG BUILD=debug
-
 # Install dependencies.
-RUN apt-get update && apt-get install -y libssl1.1
+RUN apt-get update \
+  && apt-get --no-install-recommends -y install libssl1.1 tini \
+  && rm -rf /var/lib/apt/lists/*
 
 # Run as unprivileged user.
-RUN adduser --disabled-password --home /home/nimiq --shell /bin/bash --uid 1001 nimiq
+RUN groupadd --system --gid 1001 nimiq \
+    && adduser --system --home /home/nimiq --uid 1001 --gid 1001 nimiq
 USER nimiq
 
 WORKDIR /home/nimiq
@@ -18,12 +19,13 @@ VOLUME /home/nimiq/.nimiq
 
 # Copy necessary files from host environment
 COPY ./scripts/docker_*.sh /home/nimiq/
+
+ARG BUILD=debug
 COPY ./target/${BUILD}/nimiq-client /usr/local/bin/nimiq-client
 
 EXPOSE 8443/tcp 8648/tcp
 
-ENTRYPOINT [ "/bin/bash" ]
-CMD [ "/home/nimiq/docker_run.sh" ]
+ENTRYPOINT [ "/usr/bin/tini", "--", "/home/nimiq/docker_run.sh" ]
 
 
 # https://github.com/opencontainers/image-spec/blob/master/annotations.md
