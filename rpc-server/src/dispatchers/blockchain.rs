@@ -305,7 +305,7 @@ impl BlockchainInterface for BlockchainDispatcher {
 
         let mut stakers = None;
 
-        if include_stakers.is_some() && include_stakers.unwrap() == true {
+        if include_stakers.is_some() && include_stakers.unwrap() {
             let staker_addresses =
                 StakingContract::get_validator_stakers(accounts_tree, &db_txn, &address);
 

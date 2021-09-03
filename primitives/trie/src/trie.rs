@@ -301,7 +301,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
             loop {
                 // If the key does not match, the requested key is not part of this trie. In
                 // this case, we can't produce a proof so we terminate now.
-                if !pointer_node.key().is_prefix_of(&cur_key) {
+                if !pointer_node.key().is_prefix_of(cur_key) {
                     error!(
                         "Pointer node with key {} is not a prefix to the current node with key {}.",
                         pointer_node.key(),
@@ -325,7 +325,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
                 }
 
                 // Otherwise, try to find a child of the pointer node that matches our key.
-                match pointer_node.get_child_key(&cur_key) {
+                match pointer_node.get_child_key(cur_key) {
                     // If no matching child exists, then the requested key is not part of this
                     // trie. Once again, we can't produce a proof so we terminate now.
                     Err(_) => {
@@ -361,7 +361,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
 
             // Go up the root path until we get to a node that is a prefix to our current key.
             // Add the nodes you remove to the proof.
-            while !pointer_node.key().is_prefix_of(&cur_key) {
+            while !pointer_node.key().is_prefix_of(cur_key) {
                 proof_nodes.push(pointer_node.clone());
 
                 pointer_node = root_path

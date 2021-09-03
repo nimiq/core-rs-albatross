@@ -182,6 +182,6 @@ mod tests {
             bagging(positions.clone().into_iter().rev()),
             Ok(TestHash(42))
         );
-        assert_eq!(bagging(positions.clone().into_iter()), Ok(TestHash(42)));
+        assert_eq!(bagging(positions.into_iter()), Ok(TestHash(42)));
     }
 }

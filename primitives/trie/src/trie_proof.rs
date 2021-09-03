@@ -184,7 +184,7 @@ mod tests {
             .unwrap();
 
         let key_r: KeyNibbles = "".parse().unwrap();
-        let r = TrieNode::new_branch(key_r.clone())
+        let r = TrieNode::new_branch(key_r)
             .put_child(&key_b1, b1.hash())
             .unwrap();
 
@@ -275,27 +275,27 @@ mod tests {
         let proof2 = TrieProof::new(vec![
             l1.clone(),
             l3.clone(),
-            b2_wrong.clone(),
+            b2_wrong,
             b1.clone(),
             r.clone(),
         ]);
         assert!(!proof2.verify(&root_hash));
         assert!(!proof2.verify(&wrong_root_hash));
 
-        let proof3 = TrieProof::new(vec![l4.clone(), b2.clone(), b1_wrong.clone(), r.clone()]);
+        let proof3 = TrieProof::new(vec![l4.clone(), b2.clone(), b1_wrong, r.clone()]);
         assert!(!proof3.verify(&root_hash));
         assert!(!proof3.verify(&wrong_root_hash));
 
         // Wrong proofs. Nodes with wrong key.
         let key_l3_wrong: KeyNibbles = "00201".parse().unwrap();
-        let b2_wrong = TrieNode::new_branch(key_b2.clone())
+        let b2_wrong = TrieNode::new_branch(key_b2)
             .put_child(&key_l3_wrong, l3.hash())
             .unwrap()
             .put_child(&key_l4, l4.hash())
             .unwrap();
 
         let key_b2_wrong: KeyNibbles = "003".parse().unwrap();
-        let b1_wrong = TrieNode::new_branch(key_b1.clone())
+        let b1_wrong = TrieNode::new_branch(key_b1)
             .put_child(&key_l1, l1.hash())
             .unwrap()
             .put_child(&key_b2_wrong, b2.hash())
@@ -308,7 +308,7 @@ mod tests {
             l3.clone(),
             l4.clone(),
             b2_wrong.clone(),
-            l2.clone(),
+            l2,
             b1_wrong.clone(),
             r.clone(),
         ]);
@@ -316,16 +316,16 @@ mod tests {
         assert!(!proof1.verify(&wrong_root_hash));
 
         let proof2 = TrieProof::new(vec![
-            l1.clone(),
-            l3.clone(),
-            b2_wrong.clone(),
-            b1.clone(),
+            l1,
+            l3,
+            b2_wrong,
+            b1,
             r.clone(),
         ]);
         assert!(!proof2.verify(&root_hash));
         assert!(!proof2.verify(&wrong_root_hash));
 
-        let proof3 = TrieProof::new(vec![l4.clone(), b2.clone(), b1_wrong.clone(), r.clone()]);
+        let proof3 = TrieProof::new(vec![l4, b2, b1_wrong, r]);
         assert!(!proof3.verify(&root_hash));
         assert!(!proof3.verify(&wrong_root_hash));
     }

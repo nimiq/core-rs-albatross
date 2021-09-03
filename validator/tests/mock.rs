@@ -13,12 +13,12 @@ use nimiq_consensus::sync::history::HistorySync;
 use nimiq_consensus::{Consensus as AbstractConsensus, ConsensusEvent};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_handel::update::{LevelUpdate, LevelUpdateMessage};
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::{Hash};
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
 use nimiq_mempool::{Mempool, MempoolConfig};
 use nimiq_network_interface::network::Network;
 use nimiq_network_mock::{MockHub, MockNetwork};
-use nimiq_primitives::coin::Coin;
+
 use nimiq_primitives::networks::NetworkId;
 use nimiq_utils::time::OffsetTime;
 use nimiq_validator::aggregation::view_change::SignedViewChangeMessage;
@@ -85,7 +85,7 @@ async fn mock_validators(hub: &mut MockHub, num_validators: usize) -> Vec<Valida
         genesis_builder.with_genesis_validator(
             Address::from(&keys[i]),
             Address::from([0u8; 20]),
-            bls_keys[i].public_key.clone(),
+            bls_keys[i].public_key,
             Address::default(),
         );
     }
@@ -156,7 +156,7 @@ async fn one_validator_can_create_micro_blocks() {
         .with_genesis_validator(
             Address::from(&key),
             Address::from([0u8; 20]),
-            bls_key.public_key.clone(),
+            bls_key.public_key,
             Address::default(),
         )
         .generate()

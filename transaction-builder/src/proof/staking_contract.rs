@@ -38,7 +38,7 @@ impl StakingDataBuilder {
         match data {
             IncomingStakingTransactionData::Stake { .. } => {}
             _ => {
-                let signature = key_pair.sign(&self.transaction.serialize_content().as_slice());
+                let signature = key_pair.sign(self.transaction.serialize_content().as_slice());
                 let proof = SignatureProof::from(key_pair.public, signature);
                 data.set_signature(proof);
             }
@@ -83,7 +83,7 @@ impl StakingProofBuilder {
     /// This methods sets the action to drop a validator and builds the corresponding proof
     /// from a validator's `key_pair`.
     pub fn drop_validator(&mut self, key_pair: &KeyPair) -> &mut Self {
-        let signature = key_pair.sign(&self.transaction.serialize_content().as_slice());
+        let signature = key_pair.sign(self.transaction.serialize_content().as_slice());
         let proof = SignatureProof::from(key_pair.public, signature);
         self.proof = Some(OutgoingStakingTransactionProof::DropValidator { proof });
         self

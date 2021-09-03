@@ -88,8 +88,8 @@ impl<A: Serialize + Deserialize + Clone> TrieNode<A> {
     /// Returns the key of a node.
     pub fn key(&self) -> &KeyNibbles {
         match self {
-            TrieNode::LeafNode { ref key, .. } => &key,
-            TrieNode::BranchNode { ref key, .. } => &key,
+            TrieNode::LeafNode { ref key, .. } => key,
+            TrieNode::BranchNode { ref key, .. } => key,
         }
     }
 
@@ -191,7 +191,7 @@ impl<A: Serialize + Deserialize + Clone> TrieNode<A> {
         child_key: &KeyNibbles,
         child_hash: Blake2bHash,
     ) -> Result<Self, MerkleRadixTrieError> {
-        let child_index = self.get_child_index(&child_key)?;
+        let child_index = self.get_child_index(child_key)?;
 
         let suffix = child_key.suffix(self.key().len() as u8);
 
@@ -598,7 +598,7 @@ mod tests {
 
         assert_eq!(
             branch_node.get_child_key(&child_key_1.slice(0, 7)),
-            Ok(child_key_1.clone())
+            Ok(child_key_1)
         );
 
         assert_eq!(

@@ -55,7 +55,7 @@ impl StakingRecipientBuilder {
         self.data = Some(IncomingStakingTransactionData::CreateValidator {
             warm_key: warm_address,
             validator_key: bls_key_pair.public_key.compress(),
-            proof_of_knowledge: StakingRecipientBuilder::generate_proof_of_knowledge(&bls_key_pair),
+            proof_of_knowledge: StakingRecipientBuilder::generate_proof_of_knowledge(bls_key_pair),
             reward_address,
             signal_data,
             proof: Default::default(),

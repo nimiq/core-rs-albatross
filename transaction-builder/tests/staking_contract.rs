@@ -58,7 +58,7 @@ fn it_can_create_staker_transactions() {
 
     let tx2 = TransactionBuilder::new_stake(
         &key_pair,
-        address.clone(),
+        address,
         100_000_000.try_into().unwrap(),
         100.try_into().unwrap(),
         1,
@@ -169,7 +169,7 @@ fn it_can_create_validator_transactions() {
         &key_pair,
         &key_pair,
         address.clone(),
-        &bls_pair.clone(),
+        &bls_pair,
         address.clone(),
         Some(Blake2bHash::default()),
         100.try_into().unwrap(),
@@ -274,7 +274,7 @@ fn it_can_create_validator_transactions() {
     let tx = make_drop_transaction(&key_pair, VALIDATOR_DEPOSIT - 100);
 
     let tx2 = TransactionBuilder::new_drop_validator(
-        address.clone(),
+        address,
         &key_pair,
         100.try_into().unwrap(),
         1,

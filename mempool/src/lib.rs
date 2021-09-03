@@ -197,18 +197,16 @@ impl Mempool {
                 {
                     return ReturnCode::Invalid;
                 }
-            } else {
-                if Account::commit_incoming_transaction(
-                    accounts_trie,
-                    db_txn,
-                    &transaction,
-                    block_height,
-                    timestamp,
-                )
-                .is_err()
-                {
-                    return ReturnCode::Invalid;
-                }
+            } else if Account::commit_incoming_transaction(
+                accounts_trie,
+                db_txn,
+                &transaction,
+                block_height,
+                timestamp,
+            )
+            .is_err()
+            {
+                return ReturnCode::Invalid;
             }
 
             // Check recipient account against filter rules.
@@ -436,30 +434,27 @@ impl Mempool {
             }
 
             // Then apply the recipient side to the staking contract.
-            if &tx.recipient == &staking_contract_address {
-                if Account::commit_incoming_transaction(
+            if &tx.recipient == &staking_contract_address && Account::commit_incoming_transaction(
                     accounts_trie,
                     db_txn,
                     tx,
                     block_height,
                     timestamp,
                 )
-                .is_err()
-                {
-                    // Potentially revert sender side and ignore transaction.
-                    if &tx.sender == &staking_contract_address {
-                        Account::revert_outgoing_transaction(
-                            accounts_trie,
-                            db_txn,
-                            tx,
-                            block_height,
-                            timestamp,
-                            outgoing_receipt.as_ref(),
-                        )
-                        .unwrap();
-                    }
-                    continue;
+                .is_err() {
+                // Potentially revert sender side and ignore transaction.
+                if &tx.sender == &staking_contract_address {
+                    Account::revert_outgoing_transaction(
+                        accounts_trie,
+                        db_txn,
+                        tx,
+                        block_height,
+                        timestamp,
+                        outgoing_receipt.as_ref(),
+                    )
+                    .unwrap();
                 }
+                continue;
             }
 
             let tx_size = tx.serialized_size();
@@ -560,19 +555,17 @@ impl Mempool {
                             txs_evicted.push(tx.clone());
                             continue;
                         }
-                    } else {
-                        if Account::commit_incoming_transaction(
-                            accounts_trie,
-                            db_txn,
-                            tx,
-                            block_height,
-                            timestamp,
-                        )
-                        .is_err()
-                        {
-                            txs_evicted.push(tx.clone());
-                            continue;
-                        }
+                    } else if Account::commit_incoming_transaction(
+                        accounts_trie,
+                        db_txn,
+                        tx,
+                        block_height,
+                        timestamp,
+                    )
+                    .is_err()
+                    {
+                        txs_evicted.push(tx.clone());
+                        continue;
                     }
 
                     // Check if transaction is still valid for sender.
@@ -659,20 +652,18 @@ impl Mempool {
                         // XXX The transaction is lost!
                         continue;
                     }
-                } else {
-                    if Account::commit_incoming_transaction(
-                        accounts_trie,
-                        db_txn,
-                        tx,
-                        block_height,
-                        timestamp,
-                    )
-                    .is_err()
-                    {
-                        // This transaction cannot be accepted by the recipient anymore.
-                        // XXX The transaction is lost!
-                        continue;
-                    }
+                } else if Account::commit_incoming_transaction(
+                    accounts_trie,
+                    db_txn,
+                    tx,
+                    block_height,
+                    timestamp,
+                )
+                .is_err()
+                {
+                    // This transaction cannot be accepted by the recipient anymore.
+                    // XXX The transaction is lost!
+                    continue;
                 }
 
                 let txs = txs_by_sender

@@ -11,14 +11,14 @@ use nimiq_build_tools::genesis::{GenesisBuilder, GenesisInfo};
 use nimiq_consensus::sync::history::HistorySync;
 use nimiq_consensus::Consensus as AbstractConsensus;
 use nimiq_database::volatile::VolatileEnvironment;
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::{Hash};
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
 use nimiq_mempool::{Mempool, MempoolConfig};
 use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_libp2p::discovery::peer_contacts::{PeerContact, Services};
 use nimiq_network_libp2p::libp2p::core::multiaddr::multiaddr;
 use nimiq_network_libp2p::{Config, Keypair as P2PKeyPair, Network};
-use nimiq_primitives::coin::Coin;
+
 use nimiq_primitives::networks::NetworkId;
 use nimiq_utils::time::OffsetTime;
 use nimiq_validator::validator::Validator as AbstractValidator;
@@ -106,7 +106,7 @@ async fn validators(num_validators: usize) -> Vec<Validator> {
         genesis_builder.with_genesis_validator(
             Address::from(&keys[i]),
             Address::from([0u8; 20]),
-            bls_keys[i].public_key.clone(),
+            bls_keys[i].public_key,
             Address::default(),
         );
     }
