@@ -13,7 +13,7 @@ use nimiq_consensus::sync::history::HistorySync;
 use nimiq_consensus::{Consensus as AbstractConsensus, ConsensusEvent};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_handel::update::{LevelUpdate, LevelUpdateMessage};
-use nimiq_hash::{Hash};
+use nimiq_hash::Hash;
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
 use nimiq_mempool::{Mempool, MempoolConfig};
 use nimiq_network_interface::network::Network;

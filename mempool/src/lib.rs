@@ -434,14 +434,16 @@ impl Mempool {
             }
 
             // Then apply the recipient side to the staking contract.
-            if &tx.recipient == &staking_contract_address && Account::commit_incoming_transaction(
+            if &tx.recipient == &staking_contract_address
+                && Account::commit_incoming_transaction(
                     accounts_trie,
                     db_txn,
                     tx,
                     block_height,
                     timestamp,
                 )
-                .is_err() {
+                .is_err()
+            {
                 // Potentially revert sender side and ignore transaction.
                 if &tx.sender == &staking_contract_address {
                     Account::revert_outgoing_transaction(

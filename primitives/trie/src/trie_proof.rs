@@ -315,13 +315,7 @@ mod tests {
         assert!(!proof1.verify(&root_hash));
         assert!(!proof1.verify(&wrong_root_hash));
 
-        let proof2 = TrieProof::new(vec![
-            l1,
-            l3,
-            b2_wrong,
-            b1,
-            r.clone(),
-        ]);
+        let proof2 = TrieProof::new(vec![l1, l3, b2_wrong, b1, r.clone()]);
         assert!(!proof2.verify(&root_hash));
         assert!(!proof2.verify(&wrong_root_hash));
 

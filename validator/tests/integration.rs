@@ -11,7 +11,7 @@ use nimiq_build_tools::genesis::{GenesisBuilder, GenesisInfo};
 use nimiq_consensus::sync::history::HistorySync;
 use nimiq_consensus::Consensus as AbstractConsensus;
 use nimiq_database::volatile::VolatileEnvironment;
-use nimiq_hash::{Hash};
+use nimiq_hash::Hash;
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
 use nimiq_mempool::{Mempool, MempoolConfig};
 use nimiq_network_interface::network::Network as NetworkInterface;
