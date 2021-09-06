@@ -87,10 +87,17 @@ impl Blockchain {
     }
 
     pub fn get_account(&self, address: &Address) -> Option<Account> {
+        // TODO: Find a better place for this differentiation, it should be in a more general location
+        let key = if address.to_user_friendly_address() == policy::STAKING_CONTRACT_ADDRESS {
+            StakingContract::get_key_staking_contract()
+        } else {
+            KeyNibbles::from(address)
+        };
+
         self.state
             .read()
             .accounts
-            .get(&KeyNibbles::from(address), None)
+            .get(&key, None)
     }
 
     /// Checks if we have seen some transaction with this hash inside the validity window. This is

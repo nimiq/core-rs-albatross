@@ -132,6 +132,7 @@ impl Mempool {
 
             // Intrinsic transaction verification.
             if transaction.verify_mut(self.blockchain.network_id).is_err() {
+                trace!("Intrinsic transaction verification failed");
                 return ReturnCode::Invalid;
             }
 
@@ -158,6 +159,7 @@ impl Mempool {
             let block_height = self.blockchain.block_number() + 1;
 
             if !transaction.is_valid_at(block_height) {
+                trace!("Transaction invalid at block {}", block_height);
                 return ReturnCode::Invalid;
             }
 
@@ -165,6 +167,7 @@ impl Mempool {
 
             // Check if transaction has already been mined.
             if self.blockchain.contains_tx_in_validity_window(&hash) {
+                trace!("Transaction has already been mined");
                 return ReturnCode::Invalid;
             }
 
@@ -182,6 +185,7 @@ impl Mempool {
                 .contains(TransactionFlags::CONTRACT_CREATION);
             let is_type_change = recipient_account.account_type() != transaction.recipient_type;
             if is_contract_creation != is_type_change {
+                trace!("Is-contract-creation vs is-type-change: {} - {}", is_contract_creation, is_type_change);
                 return ReturnCode::Invalid;
             }
 
@@ -195,6 +199,7 @@ impl Mempool {
                 if Account::create(accounts_trie, db_txn, &transaction, block_height, timestamp)
                     .is_err()
                 {
+                    trace!("Contract account creation failed");
                     return ReturnCode::Invalid;
                 }
             } else if Account::commit_incoming_transaction(
@@ -206,6 +211,7 @@ impl Mempool {
             )
             .is_err()
             {
+                trace!("Incoming transaction could not be commited for recipient account");
                 return ReturnCode::Invalid;
             }
 
@@ -231,12 +237,14 @@ impl Mempool {
             // TODO: Eliminate copy
             let sender_account = match self.blockchain.get_account(&transaction.sender) {
                 None => {
+                    trace!("Sender account not found");
                     return ReturnCode::Invalid;
                 }
                 Some(x) => x,
             };
 
             if sender_account.account_type() != transaction.sender_type {
+                trace!("Sender account type does not match transaction sender type");
                 return ReturnCode::Invalid;
             }
 
@@ -270,6 +278,7 @@ impl Mempool {
                 )
                 .is_err()
                 {
+                    trace!("Outgoing transaction could not be commited for sender account (1)");
                     return ReturnCode::Invalid;
                 }
                 tx_count += 1;
@@ -294,6 +303,7 @@ impl Mempool {
             )
             .is_err()
             {
+                trace!("Outgoing transaction could not be commited for sender account (2)");
                 return ReturnCode::Invalid; // XXX More specific return code here?
             };
 
