@@ -185,7 +185,11 @@ impl Mempool {
                 .contains(TransactionFlags::CONTRACT_CREATION);
             let is_type_change = recipient_account.account_type() != transaction.recipient_type;
             if is_contract_creation != is_type_change {
-                trace!("Is-contract-creation vs is-type-change: {} - {}", is_contract_creation, is_type_change);
+                trace!(
+                    "Is-contract-creation vs is-type-change: {} - {}",
+                    is_contract_creation,
+                    is_type_change
+                );
                 return ReturnCode::Invalid;
             }
 

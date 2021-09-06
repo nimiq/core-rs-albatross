@@ -94,10 +94,7 @@ impl Blockchain {
             KeyNibbles::from(address)
         };
 
-        self.state
-            .read()
-            .accounts
-            .get(&key, None)
+        self.state.read().accounts.get(&key, None)
     }
 
     /// Checks if we have seen some transaction with this hash inside the validity window. This is
