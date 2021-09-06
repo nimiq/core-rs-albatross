@@ -94,6 +94,11 @@ impl StakingContract {
 
             // Update it.
             validator.balance = Account::balance_add(validator.balance, balance)?;
+            if validator.inactivity_flag.is_none() {
+                staking_contract
+                    .active_validators
+                    .insert(validator_address.clone(), validator.balance);
+            }
             validator.num_stakers += 1;
 
             // All checks passed, not allowed to fail from here on!
@@ -183,6 +188,11 @@ impl StakingContract {
 
             // Update it.
             validator.balance = Account::balance_sub(validator.balance, staker.active_stake)?;
+            if validator.inactivity_flag.is_none() {
+                staking_contract
+                    .active_validators
+                    .insert(validator_address.clone(), validator.balance);
+            }
             validator.num_stakers -= 1;
 
             // All checks passed, not allowed to fail from here on!
@@ -271,6 +281,11 @@ impl StakingContract {
 
             // Update it.
             validator.balance = Account::balance_add(validator.balance, value)?;
+            if validator.inactivity_flag.is_none() {
+                staking_contract
+                    .active_validators
+                    .insert(validator_address.clone(), validator.balance);
+            }
 
             // All checks passed, not allowed to fail from here on!
 
@@ -349,6 +364,11 @@ impl StakingContract {
 
             // Update it.
             validator.balance = Account::balance_sub(validator.balance, value)?;
+            if validator.inactivity_flag.is_none() {
+                staking_contract
+                    .active_validators
+                    .insert(validator_address.clone(), validator.balance);
+            }
 
             // All checks passed, not allowed to fail from here on!
 
@@ -434,6 +454,14 @@ impl StakingContract {
             // Update it.
             old_validator.balance =
                 Account::balance_sub(old_validator.balance, staker.active_stake)?;
+            if old_validator.inactivity_flag.is_none() {
+                // Get the staking contract main and update it.
+                let mut staking_contract =
+                    StakingContract::get_staking_contract(accounts_tree, db_txn);
+                staking_contract
+                    .active_validators
+                    .insert(old_validator_address.clone(), old_validator.balance);
+            }
             old_validator.num_stakers -= 1;
 
             // Re-add the validator entry.
@@ -470,6 +498,13 @@ impl StakingContract {
             // Update it.
             new_validator.balance =
                 Account::balance_add(new_validator.balance, staker.active_stake)?;
+            if new_validator.inactivity_flag.is_none() {
+                let mut staking_contract =
+                    StakingContract::get_staking_contract(accounts_tree, db_txn);
+                staking_contract
+                    .active_validators
+                    .insert(new_validator_address.clone(), new_validator.balance);
+            }
             new_validator.num_stakers += 1;
 
             // Re-add the validator entry.
@@ -548,6 +583,13 @@ impl StakingContract {
             // Update it.
             new_validator.balance =
                 Account::balance_sub(new_validator.balance, staker.active_stake)?;
+            if new_validator.inactivity_flag.is_none() {
+                let mut staking_contract =
+                    StakingContract::get_staking_contract(accounts_tree, db_txn);
+                staking_contract
+                    .active_validators
+                    .insert(new_validator_address.clone(), new_validator.balance);
+            }
             new_validator.num_stakers -= 1;
 
             // Re-add the validator entry.
@@ -591,6 +633,13 @@ impl StakingContract {
             // Update it.
             old_validator.balance =
                 Account::balance_add(old_validator.balance, staker.active_stake)?;
+            if old_validator.inactivity_flag.is_none() {
+                let mut staking_contract =
+                    StakingContract::get_staking_contract(accounts_tree, db_txn);
+                staking_contract
+                    .active_validators
+                    .insert(old_validator_address.clone(), old_validator.balance);
+            }
             old_validator.num_stakers += 1;
 
             // Re-add the validator entry.
@@ -680,6 +729,13 @@ impl StakingContract {
 
             // Update it.
             validator.balance = Account::balance_sub(validator.balance, value)?;
+            if validator.inactivity_flag.is_none() {
+                let mut staking_contract =
+                    StakingContract::get_staking_contract(accounts_tree, db_txn);
+                staking_contract
+                    .active_validators
+                    .insert(validator_address.clone(), validator.balance);
+            }
 
             // All checks passed, not allowed to fail from here on!
 
@@ -749,6 +805,13 @@ impl StakingContract {
 
             // Update it.
             validator.balance = Account::balance_add(validator.balance, value)?;
+            if validator.inactivity_flag.is_none() {
+                let mut staking_contract =
+                    StakingContract::get_staking_contract(accounts_tree, db_txn);
+                staking_contract
+                    .active_validators
+                    .insert(validator_address.clone(), validator.balance);
+            }
 
             // Re-add the validator entry.
             trace!(
@@ -814,6 +877,13 @@ impl StakingContract {
 
             // Update it.
             validator.balance = Account::balance_add(validator.balance, value)?;
+            if validator.inactivity_flag.is_none() {
+                let mut staking_contract =
+                    StakingContract::get_staking_contract(accounts_tree, db_txn);
+                staking_contract
+                    .active_validators
+                    .insert(validator_address.clone(), validator.balance);
+            }
 
             // Re-add the validator entry.
             trace!(
@@ -878,6 +948,13 @@ impl StakingContract {
 
             // Update it.
             validator.balance = Account::balance_sub(validator.balance, value)?;
+            if validator.inactivity_flag.is_none() {
+                let mut staking_contract =
+                    StakingContract::get_staking_contract(accounts_tree, db_txn);
+                staking_contract
+                    .active_validators
+                    .insert(validator_address.clone(), validator.balance);
+            }
 
             // Re-add the validator entry.
             trace!(
@@ -1061,6 +1138,13 @@ impl StakingContract {
 
                 // Update it.
                 validator.balance = Account::balance_sub(validator.balance, value)?;
+                if validator.inactivity_flag.is_none() {
+                    let mut staking_contract =
+                        StakingContract::get_staking_contract(accounts_tree, db_txn);
+                    staking_contract
+                        .active_validators
+                        .insert(validator_address.clone(), validator.balance);
+                }
 
                 // Re-add the validator entry.
                 trace!(
@@ -1148,6 +1232,13 @@ impl StakingContract {
                 };
 
                 validator.balance = Account::balance_add(validator.balance, value)?;
+                if validator.inactivity_flag.is_none() {
+                    let mut staking_contract =
+                        StakingContract::get_staking_contract(accounts_tree, db_txn);
+                    staking_contract
+                        .active_validators
+                        .insert(validator_address.clone(), validator.balance);
+                }
 
                 trace!(
                     "Trying to put validator with address {} in the accounts tree.",
