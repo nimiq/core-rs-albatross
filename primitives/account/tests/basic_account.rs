@@ -67,16 +67,13 @@ fn basic_transfer_works() {
     );
 
     assert_eq!(
-        accounts_tree
-            .get(&mut db_txn, &key_sender)
-            .unwrap()
-            .balance(),
+        accounts_tree.get(&db_txn, &key_sender).unwrap().balance(),
         Coin::from_u64_unchecked(899)
     );
 
     assert_eq!(
         accounts_tree
-            .get(&mut db_txn, &key_recipient)
+            .get(&db_txn, &key_recipient)
             .unwrap()
             .balance(),
         Coin::from_u64_unchecked(1100)
@@ -118,16 +115,13 @@ fn basic_transfer_works() {
     );
 
     assert_eq!(
-        accounts_tree
-            .get(&mut db_txn, &key_sender)
-            .unwrap()
-            .balance(),
+        accounts_tree.get(&db_txn, &key_sender).unwrap().balance(),
         Coin::from_u64_unchecked(1000)
     );
 
     assert_eq!(
         accounts_tree
-            .get(&mut db_txn, &key_recipient)
+            .get(&db_txn, &key_recipient)
             .unwrap()
             .balance(),
         Coin::from_u64_unchecked(1000)
@@ -160,11 +154,11 @@ fn create_and_prune_works() {
         Ok(None)
     );
 
-    assert_eq!(accounts_tree.get(&mut db_txn, &key_sender), None);
+    assert_eq!(accounts_tree.get(&db_txn, &key_sender), None);
 
     assert_eq!(
         accounts_tree
-            .get(&mut db_txn, &key_recipient)
+            .get(&db_txn, &key_recipient)
             .unwrap()
             .balance(),
         Coin::from_u64_unchecked(999)
@@ -182,14 +176,11 @@ fn create_and_prune_works() {
     );
 
     assert_eq!(
-        accounts_tree
-            .get(&mut db_txn, &key_sender)
-            .unwrap()
-            .balance(),
+        accounts_tree.get(&db_txn, &key_sender).unwrap().balance(),
         Coin::from_u64_unchecked(1000)
     );
 
-    assert_eq!(accounts_tree.get(&mut db_txn, &key_recipient), None);
+    assert_eq!(accounts_tree.get(&db_txn, &key_recipient), None);
 }
 
 fn init_tree(accounts_tree: &AccountsTrie, db_txn: &mut WriteTransaction) {

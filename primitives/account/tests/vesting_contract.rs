@@ -32,7 +32,7 @@ fn create_serialized_contract() {
     let mut bytes: Vec<u8> = Vec::with_capacity(contract.serialized_size());
     contract.serialize(&mut bytes).unwrap();
     println!("{}", hex::encode(bytes));
-    assert!(false);
+    panic!();
 }
 
 #[test]
@@ -164,7 +164,7 @@ fn it_can_create_contract_from_transaction() {
     VestingContract::create(&accounts_tree, &mut db_txn, &transaction, 0, 0);
 
     match accounts_tree.get(
-        &mut db_txn,
+        &db_txn,
         &KeyNibbles::from(&transaction.contract_creation_address()),
     ) {
         Some(Account::Vesting(contract)) => {
@@ -175,7 +175,7 @@ fn it_can_create_contract_from_transaction() {
             assert_eq!(contract.step_amount, 100.try_into().unwrap());
             assert_eq!(contract.total_amount, 100.try_into().unwrap());
         }
-        _ => assert!(false),
+        _ => panic!(),
     }
 
     let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE + 24);
@@ -190,7 +190,7 @@ fn it_can_create_contract_from_transaction() {
     VestingContract::create(&accounts_tree, &mut db_txn, &transaction, 0, 0);
 
     match accounts_tree.get(
-        &mut db_txn,
+        &db_txn,
         &KeyNibbles::from(&transaction.contract_creation_address()),
     ) {
         Some(Account::Vesting(contract)) => {
@@ -201,7 +201,7 @@ fn it_can_create_contract_from_transaction() {
             assert_eq!(contract.step_amount, 50.try_into().unwrap());
             assert_eq!(contract.total_amount, 100.try_into().unwrap());
         }
-        _ => assert!(false),
+        _ => panic!(),
     }
 
     let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE + 32);
@@ -217,7 +217,7 @@ fn it_can_create_contract_from_transaction() {
     VestingContract::create(&accounts_tree, &mut db_txn, &transaction, 0, 0);
 
     match accounts_tree.get(
-        &mut db_txn,
+        &db_txn,
         &KeyNibbles::from(&transaction.contract_creation_address()),
     ) {
         Some(Account::Vesting(contract)) => {
@@ -228,7 +228,7 @@ fn it_can_create_contract_from_transaction() {
             assert_eq!(contract.step_amount, 50.try_into().unwrap());
             assert_eq!(contract.total_amount, 150.try_into().unwrap());
         }
-        _ => assert!(false),
+        _ => panic!(),
     }
 
     // Invalid data
@@ -361,7 +361,7 @@ fn it_can_apply_and_revert_valid_transaction() {
     VestingContract::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 1, 200).unwrap();
     assert_eq!(
         accounts_tree
-            .get(&mut db_txn, &KeyNibbles::from(&[1u8; 20][..]))
+            .get(&db_txn, &KeyNibbles::from(&[1u8; 20][..]))
             .unwrap()
             .balance(),
         800.try_into().unwrap()
@@ -370,7 +370,7 @@ fn it_can_apply_and_revert_valid_transaction() {
         .unwrap();
     assert_eq!(
         accounts_tree
-            .get(&mut db_txn, &KeyNibbles::from(&[1u8; 20][..]))
+            .get(&db_txn, &KeyNibbles::from(&[1u8; 20][..]))
             .unwrap(),
         Account::Vesting(start_contract)
     );
@@ -393,7 +393,7 @@ fn it_can_apply_and_revert_valid_transaction() {
     VestingContract::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 1, 200).unwrap();
     assert_eq!(
         accounts_tree
-            .get(&mut db_txn, &KeyNibbles::from(&[1u8; 20][..]))
+            .get(&db_txn, &KeyNibbles::from(&[1u8; 20][..]))
             .unwrap()
             .balance(),
         800.try_into().unwrap()
@@ -402,7 +402,7 @@ fn it_can_apply_and_revert_valid_transaction() {
         .unwrap();
     assert_eq!(
         accounts_tree
-            .get(&mut db_txn, &KeyNibbles::from(&[1u8; 20][..]))
+            .get(&db_txn, &KeyNibbles::from(&[1u8; 20][..]))
             .unwrap(),
         Account::Vesting(start_contract)
     );

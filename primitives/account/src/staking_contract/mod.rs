@@ -12,12 +12,12 @@ use nimiq_primitives::slots::{Validators, ValidatorsBuilder};
 use nimiq_primitives::{coin::Coin, policy};
 use nimiq_trie::key_nibbles::KeyNibbles;
 use nimiq_vrf::{AliasMethod, VrfSeed, VrfUseCase};
-
-use crate::{Account, AccountsTrie};
-
 pub use receipts::*;
 pub use staker::Staker;
 pub use validator::Validator;
+
+use crate::{Account, AccountsTrie};
+
 mod receipts;
 mod staker;
 mod traits;

@@ -1,8 +1,9 @@
 use std::convert::TryFrom;
 
-use crate::Account;
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use nimiq_trie::key_nibbles::KeyNibbles;
+
+use crate::Account;
 
 /// A small wrapper over a list of accounts with keys. This is only used to have method
 /// of serializing and deserializing the genesis accounts.

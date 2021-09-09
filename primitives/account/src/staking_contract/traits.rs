@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use beserial::{Deserialize, Serialize};
 use nimiq_collections::BitSet;
 use nimiq_database::WriteTransaction;
+use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
 use nimiq_primitives::slots::SlashedSlot;
@@ -15,7 +16,6 @@ use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionIn
 use crate::staking_contract::receipts::DropValidatorReceipt;
 use crate::staking_contract::SlashReceipt;
 use crate::{Account, AccountError, AccountsTrie, Inherent, InherentType, StakingContract};
-use nimiq_keys::Address;
 
 /// We need to distinguish between two types of transactions:
 /// 1. Incoming transactions, which include:
