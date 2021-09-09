@@ -38,7 +38,7 @@ fn create_serialized_contract() {
     let mut bytes: Vec<u8> = Vec::with_capacity(contract.serialized_size());
     contract.serialize(&mut bytes).unwrap();
     println!("{}", hex::encode(bytes));
-    assert!(false);
+    panic!();
 }
 
 #[test]
@@ -177,7 +177,7 @@ fn it_can_create_contract_from_transaction() {
     HashedTimeLockedContract::create(&accounts_tree, &mut db_txn, &transaction, 0, 0);
 
     match accounts_tree.get(
-        &mut db_txn,
+        &db_txn,
         &KeyNibbles::from(&transaction.contract_creation_address()),
     ) {
         Some(Account::HTLC(htlc)) => {
@@ -188,7 +188,7 @@ fn it_can_create_contract_from_transaction() {
             assert_eq!(htlc.hash_count, 2);
             assert_eq!(htlc.timeout, 1000);
         }
-        _ => assert!(false),
+        _ => panic!(),
     }
 }
 
@@ -503,7 +503,7 @@ fn it_can_apply_and_revert_valid_transaction() {
         .unwrap();
     assert_eq!(
         accounts_tree
-            .get(&mut db_txn, &KeyNibbles::from(&[0u8; 20][..]))
+            .get(&db_txn, &KeyNibbles::from(&[0u8; 20][..]))
             .unwrap()
             .balance(),
         0.try_into().unwrap()
@@ -519,7 +519,7 @@ fn it_can_apply_and_revert_valid_transaction() {
     .unwrap();
     assert_eq!(
         accounts_tree
-            .get(&mut db_txn, &KeyNibbles::from(&[0u8; 20][..]))
+            .get(&db_txn, &KeyNibbles::from(&[0u8; 20][..]))
             .unwrap(),
         Account::HTLC(start_contract.clone())
     );
@@ -543,7 +543,7 @@ fn it_can_apply_and_revert_valid_transaction() {
         .unwrap();
     assert_eq!(
         accounts_tree
-            .get(&mut db_txn, &KeyNibbles::from(&[0u8; 20][..]))
+            .get(&db_txn, &KeyNibbles::from(&[0u8; 20][..]))
             .unwrap()
             .balance(),
         0.try_into().unwrap()
@@ -559,7 +559,7 @@ fn it_can_apply_and_revert_valid_transaction() {
     .unwrap();
     assert_eq!(
         accounts_tree
-            .get(&mut db_txn, &KeyNibbles::from(&[0u8; 20][..]))
+            .get(&db_txn, &KeyNibbles::from(&[0u8; 20][..]))
             .unwrap(),
         Account::HTLC(start_contract.clone())
     );
@@ -580,7 +580,7 @@ fn it_can_apply_and_revert_valid_transaction() {
         .unwrap();
     assert_eq!(
         accounts_tree
-            .get(&mut db_txn, &KeyNibbles::from(&[0u8; 20][..]))
+            .get(&db_txn, &KeyNibbles::from(&[0u8; 20][..]))
             .unwrap()
             .balance(),
         0.try_into().unwrap()
@@ -596,7 +596,7 @@ fn it_can_apply_and_revert_valid_transaction() {
     .unwrap();
     assert_eq!(
         accounts_tree
-            .get(&mut db_txn, &KeyNibbles::from(&[0u8; 20][..]))
+            .get(&db_txn, &KeyNibbles::from(&[0u8; 20][..]))
             .unwrap(),
         Account::HTLC(start_contract)
     );

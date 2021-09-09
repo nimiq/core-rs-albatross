@@ -1,7 +1,3 @@
-use crate::{
-    Account, AccountError, AccountInherentInteraction, AccountTransactionInteraction, Inherent,
-    Receipt, Receipts,
-};
 use nimiq_database::{
     Environment, ReadTransaction, Transaction as DBTransaction, WriteTransaction,
 };
@@ -9,6 +5,11 @@ use nimiq_hash::Blake2bHash;
 use nimiq_transaction::{Transaction, TransactionFlags};
 use nimiq_trie::key_nibbles::KeyNibbles;
 use nimiq_trie::trie::MerkleRadixTrie;
+
+use crate::{
+    Account, AccountError, AccountInherentInteraction, AccountTransactionInteraction, Inherent,
+    Receipt, Receipts,
+};
 
 /// An alias for the accounts tree.
 pub type AccountsTrie = MerkleRadixTrie<Account>;
