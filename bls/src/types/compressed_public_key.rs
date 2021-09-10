@@ -1,4 +1,6 @@
-use std::{cmp::Ordering, fmt, io::Error, str::FromStr};
+#[cfg(feature = "beserial")]
+use std::str::FromStr;
+use std::{cmp::Ordering, fmt, io::Error};
 
 use ark_ec::AffineCurve;
 use ark_mnt6_753::G2Affine;
@@ -7,7 +9,9 @@ use ark_mnt6_753::G2Affine;
 use beserial::Deserialize;
 
 use crate::compression::BeDeserialize;
-use crate::{ParseError, PublicKey};
+#[cfg(feature = "beserial")]
+use crate::ParseError;
+use crate::PublicKey;
 
 /// The serialized compressed form of a public key.
 /// This form consists of the x-coordinate of the point (in the affine form),

@@ -1,13 +1,16 @@
 use std::io::Error;
+#[cfg(feature = "beserial")]
 use std::str::FromStr;
 use std::{cmp::Ordering, fmt};
 
 use ark_ec::AffineCurve;
 use ark_mnt6_753::G1Affine;
 
+#[cfg(feature = "beserial")]
 use beserial::Deserialize;
 
 use crate::compression::BeDeserialize;
+#[cfg(feature = "beserial")]
 use crate::ParseError;
 use crate::Signature;
 
@@ -77,6 +80,7 @@ impl fmt::Display for CompressedSignature {
     }
 }
 
+#[cfg(feature = "beserial")]
 impl FromStr for CompressedSignature {
     type Err = ParseError;
 

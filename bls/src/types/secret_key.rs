@@ -1,3 +1,4 @@
+#[cfg(feature = "beserial")]
 use std::fmt;
 
 use ark_ff::{UniformRand, Zero};

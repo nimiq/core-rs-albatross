@@ -1,3 +1,4 @@
+#[cfg(feature = "beserial")]
 use std::fmt;
 
 #[cfg(feature = "beserial")]
