@@ -33,7 +33,7 @@ use primitives::coin::Coin;
 pub mod filter;
 
 pub struct Mempool {
-    blockchain: Arc<Blockchain>,
+    blockchain: Arc<RwLock<Blockchain>>,
     pub notifier: RwLock<Notifier<'static, MempoolEvent>>,
     state: RwLock<MempoolState>,
     mut_lock: Mutex<()>,
@@ -71,7 +71,7 @@ impl Default for MempoolConfig {
 }
 
 impl Mempool {
-    pub fn new(blockchain: Arc<Blockchain>, config: MempoolConfig) -> Arc<Self> {
+    pub fn new(blockchain: Arc<RwLock<Blockchain>>, config: MempoolConfig) -> Arc<Self> {
         let arc = Arc::new(Self {
             blockchain: blockchain.clone(),
             notifier: RwLock::new(Notifier::new()),
@@ -87,7 +87,7 @@ impl Mempool {
 
         // register listener to blockchain through weak reference
         let weak = Arc::downgrade(&arc);
-        blockchain.register_listener(weak_listener(
+        blockchain.write().register_listener(weak_listener(
             weak,
             |this: Arc<Self>, event: &BlockchainEvent| this.on_blockchain_event(event),
         ));
@@ -102,8 +102,7 @@ impl Mempool {
     pub fn push_transaction(&self, mut transaction: Transaction) -> ReturnCode {
         let hash: Blake2bHash = transaction.hash();
 
-        // Synchronize with `Blockchain::push`
-        let _push_lock = self.blockchain.lock();
+        let blockchain = self.blockchain.read();
 
         // Only one mutating operation at a time.
         let _lock = self.mut_lock.lock();
@@ -131,7 +130,7 @@ impl Mempool {
             };
 
             // Intrinsic transaction verification.
-            if transaction.verify_mut(self.blockchain.network_id).is_err() {
+            if transaction.verify_mut(blockchain.network_id).is_err() {
                 trace!("Intrinsic transaction verification failed");
                 return ReturnCode::Invalid;
             }
@@ -156,24 +155,24 @@ impl Mempool {
             }
 
             // Check if transaction is valid at the next block height.
-            let block_height = self.blockchain.block_number() + 1;
+            let block_height = blockchain.block_number() + 1;
 
             if !transaction.is_valid_at(block_height) {
                 trace!("Transaction invalid at block {}", block_height);
                 return ReturnCode::Invalid;
             }
 
-            let timestamp = self.blockchain.timestamp();
+            let timestamp = blockchain.timestamp();
 
             // Check if transaction has already been mined.
-            if self.blockchain.contains_tx_in_validity_window(&hash) {
+            if blockchain.contains_tx_in_validity_window(&hash) {
                 trace!("Transaction has already been mined");
                 return ReturnCode::Invalid;
             }
 
             // Retrieve recipient account and check account type.
             // TODO: Eliminate copy
-            let recipient_account = match self.blockchain.get_account(&transaction.recipient) {
+            let recipient_account = match blockchain.get_account(&transaction.recipient) {
                 None => Account::Basic(BasicAccount {
                     balance: Coin::ZERO,
                 }),
@@ -194,8 +193,8 @@ impl Mempool {
             }
 
             // Test incoming transaction.
-            let accounts_trie = &self.blockchain.state().accounts.tree;
-            let db_txn = &mut self.blockchain.write_transaction();
+            let accounts_trie = &blockchain.state().accounts.tree;
+            let db_txn = &mut blockchain.write_transaction();
 
             let old_balance = recipient_account.balance();
 
@@ -220,7 +219,7 @@ impl Mempool {
             }
 
             // Check recipient account against filter rules.
-            let recipient_account = match self.blockchain.get_account(&transaction.recipient) {
+            let recipient_account = match blockchain.get_account(&transaction.recipient) {
                 None => Account::Basic(BasicAccount {
                     balance: Coin::ZERO,
                 }),
@@ -239,7 +238,7 @@ impl Mempool {
 
             // Retrieve sender account and check account type.
             // TODO: Eliminate copy
-            let sender_account = match self.blockchain.get_account(&transaction.sender) {
+            let sender_account = match blockchain.get_account(&transaction.sender) {
                 None => {
                     trace!("Sender account not found");
                     return ReturnCode::Invalid;
@@ -295,7 +294,7 @@ impl Mempool {
             }
 
             // Now, check the new transaction.
-            let sender_account = self.blockchain.get_account(&transaction.sender).unwrap();
+            let sender_account = blockchain.get_account(&transaction.sender).unwrap();
             let old_sender_balance = sender_account.balance();
 
             if Account::commit_outgoing_transaction(
@@ -312,7 +311,7 @@ impl Mempool {
             };
 
             // Check sender account against filter rules.
-            let sender_account = self.blockchain.get_account(&transaction.sender).unwrap();
+            let sender_account = blockchain.get_account(&transaction.sender).unwrap();
             let new_sender_balance = sender_account.balance();
 
             if !state.filter.accepts_sender_balance(
@@ -374,9 +373,6 @@ impl Mempool {
             }
         }
 
-        // Drop the lock on blockchain::push
-        drop(_push_lock);
-
         // Tell listeners about the new transaction we received.
         self.notifier
             .read()
@@ -419,16 +415,19 @@ impl Mempool {
         let mut txs = Vec::new();
         let mut size = 0;
 
-        let block_height = self.blockchain.block_number() + 1;
-        let timestamp = self.blockchain.timestamp();
+        let blockchain = self.blockchain.read();
+
+        let block_height = blockchain.block_number() + 1;
+        let timestamp = blockchain.timestamp();
 
         // Check validity of transactions concerning the staking contract.
         // We only do it for the staking contract, since this is the only place
         // where the transaction validity depends on the recipient's state.
-        let staking_contract_address = self.blockchain.staking_contract_address();
+        let staking_contract_address = blockchain.staking_contract_address();
+
         let state = self.state.read();
-        let accounts_trie = &self.blockchain.state().accounts.tree;
-        let db_txn = &mut self.blockchain.write_transaction();
+        let accounts_trie = &blockchain.state().accounts.tree;
+        let db_txn = &mut blockchain.write_transaction();
 
         for tx in state.transactions_sorted_fee.iter() {
             // First apply the sender side to the staking contract if necessary.
@@ -513,12 +512,14 @@ impl Mempool {
         txs
     }
 
+    // should probably deprecate
     pub fn current_height(&self) -> u32 {
-        self.blockchain.block_number()
+        self.blockchain.read().block_number()
     }
 
+    // should probably deprecate
     pub fn network_id(&self) -> NetworkId {
-        self.blockchain.network_id
+        self.blockchain.read().network_id
     }
 
     fn on_blockchain_event(&self, event: &BlockchainEvent) {
@@ -536,6 +537,7 @@ impl Mempool {
     /// Evict all transactions from the pool that have become invalid due to changes in the
     /// account state (i.e. typically because they were included in a newly mined block). No need to re-check signatures.
     fn evict_transactions(&self) {
+        let blockchain = self.blockchain.read();
         // Only one mutating operation at a time.
         let _lock = self.mut_lock.lock();
 
@@ -543,8 +545,8 @@ impl Mempool {
         let mut txs_evicted = Vec::new();
         {
             let state = self.state.read();
-            let block_height = self.blockchain.block_number() + 1;
-            let timestamp = self.blockchain.timestamp();
+            let block_height = blockchain.block_number() + 1;
+            let timestamp = blockchain.timestamp();
 
             for (_address, transactions) in state.transactions_by_sender.iter() {
                 for tx in transactions.iter().rev() {
@@ -555,14 +557,14 @@ impl Mempool {
                     }
 
                     // Check if the transaction has been mined.
-                    if self.blockchain.contains_tx_in_validity_window(&tx.hash()) {
+                    if blockchain.contains_tx_in_validity_window(&tx.hash()) {
                         txs_mined.push(tx.clone());
                         continue;
                     }
 
                     // Check if transaction is still valid for recipient.
-                    let accounts_trie = &self.blockchain.state().accounts.tree;
-                    let db_txn = &mut self.blockchain.write_transaction();
+                    let accounts_trie = &blockchain.state().accounts.tree;
+                    let db_txn = &mut blockchain.write_transaction();
 
                     if tx.flags.contains(TransactionFlags::CONTRACT_CREATION) {
                         if Account::create(accounts_trie, db_txn, tx, block_height, timestamp)
@@ -628,13 +630,14 @@ impl Mempool {
     }
 
     fn restore_transactions(&self, reverted_blocks: &[(Blake2bHash, Block)]) {
+        let blockchain = self.blockchain.read();
         // Only one mutating operation at a time.
         let _lock = self.mut_lock.lock();
 
         let mut removed_transactions = Vec::new();
         let mut restored_transactions = Vec::new();
-        let block_height = self.blockchain.block_number() + 1;
-        let timestamp = self.blockchain.timestamp();
+        let block_height = blockchain.block_number() + 1;
+        let timestamp = blockchain.timestamp();
 
         // Collect all transactions from reverted blocks that are still valid.
         // Track them by sender and sort them by fee/byte.
@@ -652,14 +655,14 @@ impl Mempool {
                     continue;
                 }
 
-                if self.blockchain.contains_tx_in_validity_window(&tx.hash()) {
+                if blockchain.contains_tx_in_validity_window(&tx.hash()) {
                     // This transaction is also included in the new chain, ignore.
                     continue;
                 }
 
                 // Check incoming transaction.
-                let accounts_trie = &self.blockchain.state().accounts.tree;
-                let db_txn = &mut self.blockchain.write_transaction();
+                let accounts_trie = &blockchain.state().accounts.tree;
+                let db_txn = &mut blockchain.write_transaction();
 
                 if tx.flags.contains(TransactionFlags::CONTRACT_CREATION) {
                     if Account::create(accounts_trie, db_txn, tx, block_height, timestamp).is_err()
@@ -693,8 +696,8 @@ impl Mempool {
         {
             let mut state = self.state.write();
 
-            let accounts_trie = &self.blockchain.state().accounts.tree;
-            let db_txn = &mut self.blockchain.write_transaction();
+            let accounts_trie = &blockchain.state().accounts.tree;
+            let db_txn = &mut blockchain.write_transaction();
 
             for (sender, restored_txs) in txs_by_sender {
                 let empty_btree;

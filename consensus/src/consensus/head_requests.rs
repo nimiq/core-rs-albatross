@@ -1,3 +1,10 @@
+use std::collections::HashSet;
+use std::mem;
+use std::pin::Pin;
+use std::sync::{Arc, Weak};
+
+use parking_lot::RwLock;
+
 use crate::consensus_agent::ConsensusAgent;
 use block::Block;
 use blockchain::{AbstractBlockchain, Blockchain};
@@ -7,10 +14,6 @@ use futures::task::{Context, Poll};
 use futures::{Future, FutureExt, StreamExt};
 use hash::Blake2bHash;
 use network_interface::{peer::Peer, request_response::RequestError};
-use std::collections::HashSet;
-use std::mem;
-use std::pin::Pin;
-use std::sync::{Arc, Weak};
 
 /// Requests the head blocks for a set of peers.
 /// Calculates the number of known/unknown blocks and a vector of unknown blocks.
@@ -20,7 +23,7 @@ pub struct HeadRequests<TPeer: Peer + 'static> {
     head_blocks:
         FuturesUnordered<BoxFuture<'static, (Result<Option<Block>, RequestError>, TPeer::Id)>>,
     requested_hashes: HashSet<Blake2bHash>,
-    blockchain: Arc<Blockchain>,
+    blockchain: Arc<RwLock<Blockchain>>,
     num_known_blocks: usize,
     num_unknown_blocks: usize,
     unknown_blocks: Vec<(Block, TPeer::Id)>,
@@ -33,7 +36,10 @@ pub struct HeadRequestsResult<TPeer: Peer + 'static> {
 }
 
 impl<TPeer: Peer + 'static> HeadRequests<TPeer> {
-    pub fn new(peers: Vec<Weak<ConsensusAgent<TPeer>>>, blockchain: Arc<Blockchain>) -> Self {
+    pub fn new(
+        peers: Vec<Weak<ConsensusAgent<TPeer>>>,
+        blockchain: Arc<RwLock<Blockchain>>,
+    ) -> Self {
         let peers: Vec<_> = peers
             .into_iter()
             .filter_map(|peer| peer.upgrade())
@@ -74,7 +80,12 @@ impl<TPeer: Peer + 'static> Future for HeadRequests<TPeer> {
             // If we got a result, check it and classify it as known block/unknown block.
             match result {
                 Ok(hash) => {
-                    if self.blockchain.get_block(&hash, false, None).is_some() {
+                    if self
+                        .blockchain
+                        .read()
+                        .get_block(&hash, false, None)
+                        .is_some()
+                    {
                         self.num_known_blocks += 1;
                     } else {
                         // Request unknown blocks from peer that gave it to us.

@@ -8,6 +8,7 @@ use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
 use nimiq_primitives::policy::{BATCHES_PER_EPOCH, BATCH_LENGTH, EPOCH_LENGTH};
 use nimiq_test_utils::blockchain::produce_macro_blocks;
+use parking_lot::RwLock;
 
 // Secret key of validator. Tests run with `genesis/src/genesis/unit-albatross.toml`
 const SECRET_KEY: &str = "196ffdb1a8acc7cbd76a251aeac0600a1d68b3aba1eba823b5e4dc5dbdcdc730afa752c05ab4f6ef8518384ad514f403c5a088a22b17bf1bc14f8ff8decc2a512c0a200f68d7bdf5a319b30356fe8d1d75ef510aed7a8660968c216c328a0000";
@@ -24,7 +25,9 @@ fn history_sync_works() {
     // Create a blockchain to produce the macro blocks.
     let env = VolatileEnvironment::new(10).unwrap();
 
-    let blockchain = Arc::new(Blockchain::new(env, NetworkId::UnitAlbatross).unwrap());
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::new(env, NetworkId::UnitAlbatross).unwrap(),
+    ));
 
     // Produce the blocks.
     let keypair =
@@ -34,6 +37,7 @@ fn history_sync_works() {
 
     produce_macro_blocks(num_macro_blocks, &producer, &blockchain);
 
+    let blockchain = blockchain.read();
     // Get the election blocks and corresponding history tree transactions.
     let election_block_1 = blockchain
         .chain_store
@@ -90,31 +94,53 @@ fn history_sync_works() {
     // Create a second blockchain to push these blocks.
     let env2 = VolatileEnvironment::new(10).unwrap();
 
-    let blockchain2 = Arc::new(Blockchain::new(env2, NetworkId::UnitAlbatross).unwrap());
+    let blockchain2 = Arc::new(RwLock::new(
+        Blockchain::new(env2, NetworkId::UnitAlbatross).unwrap(),
+    ));
 
     // Push blocks using history sync.
     assert_eq!(
-        blockchain2.push_history_sync(election_block_1, &election_txs_1),
+        Blockchain::push_history_sync(
+            blockchain2.upgradable_read(),
+            election_block_1,
+            &election_txs_1
+        ),
         Ok(PushResult::Extended)
     );
 
     assert_eq!(
-        blockchain2.push_history_sync(checkpoint_block_2_1, &checkpoint_txs_2_1),
+        Blockchain::push_history_sync(
+            blockchain2.upgradable_read(),
+            checkpoint_block_2_1,
+            &checkpoint_txs_2_1
+        ),
         Ok(PushResult::Extended)
     );
 
     assert_eq!(
-        blockchain2.push_history_sync(checkpoint_block_2_3, &checkpoint_txs_2_3),
+        Blockchain::push_history_sync(
+            blockchain2.upgradable_read(),
+            checkpoint_block_2_3,
+            &checkpoint_txs_2_3
+        ),
         Ok(PushResult::Extended)
     );
 
     assert_eq!(
-        blockchain2.push_history_sync(election_block_2, &election_txs_2),
+        Blockchain::push_history_sync(
+            blockchain2.upgradable_read(),
+            election_block_2,
+            &election_txs_2
+        ),
         Ok(PushResult::Extended)
     );
 
     assert_eq!(
-        blockchain2.push_history_sync(checkpoint_block_3_1, &checkpoint_txs_3_1),
+        Blockchain::push_history_sync(
+            blockchain2.upgradable_read(),
+            checkpoint_block_3_1,
+            &checkpoint_txs_3_1
+        ),
         Ok(PushResult::Extended)
     );
 }
@@ -130,7 +156,9 @@ fn history_sync_works_with_micro_blocks() {
     // Create a blockchain to produce the macro blocks.
     let env = VolatileEnvironment::new(10).unwrap();
 
-    let blockchain = Arc::new(Blockchain::new(env, NetworkId::UnitAlbatross).unwrap());
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::new(env, NetworkId::UnitAlbatross).unwrap(),
+    ));
 
     // Produce the blocks.
     let keypair =
@@ -139,6 +167,8 @@ fn history_sync_works_with_micro_blocks() {
     let producer = BlockProducer::new_without_mempool(Arc::clone(&blockchain), keypair);
 
     produce_macro_blocks(num_macro_blocks, &producer, &blockchain);
+
+    let blockchain = blockchain.read();
 
     // Get the election blocks and corresponding history tree transactions.
     let election_block_1 = blockchain
@@ -204,38 +234,62 @@ fn history_sync_works_with_micro_blocks() {
     // Create a second blockchain to push these blocks.
     let env2 = VolatileEnvironment::new(10).unwrap();
 
-    let blockchain2 = Arc::new(Blockchain::new(env2, NetworkId::UnitAlbatross).unwrap());
+    let blockchain2 = Arc::new(RwLock::new(
+        Blockchain::new(env2, NetworkId::UnitAlbatross).unwrap(),
+    ));
 
     // Push blocks using history sync.
     assert_eq!(
-        blockchain2.push_history_sync(election_block_1, &election_txs_1),
+        Blockchain::push_history_sync(
+            blockchain2.upgradable_read(),
+            election_block_1,
+            &election_txs_1
+        ),
         Ok(PushResult::Extended)
     );
 
     assert_eq!(
-        blockchain2.push_history_sync(checkpoint_block_2_1, &checkpoint_txs_2_1),
+        Blockchain::push_history_sync(
+            blockchain2.upgradable_read(),
+            checkpoint_block_2_1,
+            &checkpoint_txs_2_1
+        ),
         Ok(PushResult::Extended)
     );
 
     // Now go into follow mode.
     for micro in micro_blocks_2_2 {
-        assert_eq!(blockchain2.push(micro,), Ok(PushResult::Extended));
+        assert_eq!(
+            Blockchain::push(blockchain2.upgradable_read(), micro),
+            Ok(PushResult::Extended)
+        );
     }
 
     // Now go back into history sync.
     assert_eq!(
-        blockchain2.push_history_sync(election_block_2, &election_txs_2),
+        Blockchain::push_history_sync(
+            blockchain2.upgradable_read(),
+            election_block_2,
+            &election_txs_2
+        ),
         Ok(PushResult::Extended)
     );
 
     // Into follow mode one more time.
     for micro in micro_blocks_3_1 {
-        assert_eq!(blockchain2.push(micro,), Ok(PushResult::Extended));
+        assert_eq!(
+            Blockchain::push(blockchain2.upgradable_read(), micro),
+            Ok(PushResult::Extended)
+        );
     }
 
     // End by going into history sync.
     assert_eq!(
-        blockchain2.push_history_sync(checkpoint_block_3_2, &checkpoint_txs_3_2),
+        Blockchain::push_history_sync(
+            blockchain2.upgradable_read(),
+            checkpoint_block_3_2,
+            &checkpoint_txs_3_2
+        ),
         Ok(PushResult::Extended)
     );
 }

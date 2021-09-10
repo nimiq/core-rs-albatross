@@ -58,11 +58,11 @@ impl ConsensusDispatcher {
     }
 
     fn network_id(&self) -> NetworkId {
-        self.consensus.blockchain.network_id
+        self.consensus.blockchain.read().network_id
     }
 
     fn validity_start_height(&self, validity_start_height: ValidityStartHeight) -> u32 {
-        validity_start_height.block_number(self.consensus.blockchain.block_number())
+        validity_start_height.block_number(self.consensus.blockchain.read().block_number())
     }
 }
 

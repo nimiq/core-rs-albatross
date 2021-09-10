@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use futures::stream::{BoxStream, Stream, StreamExt};
 use futures::task::{Context, Poll};
+use parking_lot::RwLock;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_block::{
@@ -62,7 +63,7 @@ pub(crate) struct ProduceMacroBlock {
 
 impl ProduceMacroBlock {
     pub fn new<TValidatorNetwork: ValidatorNetwork + 'static>(
-        blockchain: Arc<Blockchain>,
+        blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<TValidatorNetwork>,
         block_producer: BlockProducer,
         signing_key: bls::KeyPair, // probably SecretKey is enough (it is for the handel part of it).
@@ -77,7 +78,13 @@ impl ProduceMacroBlock {
         >,
     ) -> Self {
         // get validators for current epoch
-        let active_validators = blockchain.current_validators().unwrap();
+        let (active_validators, block_height) = {
+            let blockchain = blockchain.read();
+            (
+                blockchain.current_validators().unwrap(),
+                blockchain.head().block_number() + 1,
+            )
+        };
 
         // create the TendermintOutsideDeps instance
         // Replace here with the actual OutSide Deps instead of the Mocked ones.
@@ -86,9 +93,9 @@ impl ProduceMacroBlock {
             validator_id,
             network,
             active_validators,
-            blockchain.clone(),
+            blockchain,
             block_producer,
-            blockchain.head().block_number() + 1,
+            block_height,
             proposal_stream,
         );
 

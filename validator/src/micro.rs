@@ -5,6 +5,7 @@ use std::time::{Duration, SystemTime};
 use futures::future::BoxFuture;
 use futures::task::{Context, Poll};
 use futures::{ready, FutureExt, Stream};
+use parking_lot::RwLock;
 use tokio::time;
 
 use block::{ForkProof, MicroBlock, ViewChange, ViewChangeProof};
@@ -24,7 +25,7 @@ pub(crate) enum ProduceMicroBlockEvent {
 
 #[derive(Clone)]
 struct NextProduceMicroBlockEvent<TValidatorNetwork> {
-    blockchain: Arc<Blockchain>,
+    blockchain: Arc<RwLock<Blockchain>>,
     mempool: Arc<Mempool>,
     network: Arc<TValidatorNetwork>,
     signing_key: bls::KeyPair,
@@ -40,7 +41,7 @@ struct NextProduceMicroBlockEvent<TValidatorNetwork> {
 
 impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<TValidatorNetwork> {
     fn new(
-        blockchain: Arc<Blockchain>,
+        blockchain: Arc<RwLock<Blockchain>>,
         mempool: Arc<Mempool>,
         network: Arc<TValidatorNetwork>,
         signing_key: bls::KeyPair,
@@ -52,7 +53,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         view_change_delay: Duration,
     ) -> Self {
         let (block_number, prev_seed) = {
-            let head = blockchain.head();
+            let head = blockchain.read().head();
             (head.block_number() + 1, head.seed().clone())
         };
 
@@ -109,6 +110,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
     fn is_our_turn(&self) -> bool {
         let (slot, _) = self
             .blockchain
+            .read()
             .get_slot_owner_at(self.block_number, self.view_number, None)
             .expect("Couldn't find slot owner!");
 
@@ -122,9 +124,9 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             self.signing_key.clone(),
         );
 
-        let _lock = self.blockchain.lock();
+        let blockchain = self.blockchain.read(); // might need to be upgradable_read()
         let timestamp = u64::max(
-            self.blockchain.head().header().timestamp(),
+            blockchain.head().header().timestamp(),
             systemtime_to_timestamp(SystemTime::now()),
         );
         producer.next_micro_block(
@@ -154,7 +156,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         });
 
         // TODO get at init time?
-        let active_validators = self.blockchain.current_validators().unwrap();
+        let active_validators = self.blockchain.read().current_validators().unwrap();
         let (view_change, view_change_proof) = ViewChangeAggregation::start(
             view_change.clone(),
             view_change_proof,
@@ -187,7 +189,7 @@ pub(crate) struct ProduceMicroBlock<TValidatorNetwork> {
 
 impl<TValidatorNetwork: ValidatorNetwork + 'static> ProduceMicroBlock<TValidatorNetwork> {
     pub fn new(
-        blockchain: Arc<Blockchain>,
+        blockchain: Arc<RwLock<Blockchain>>,
         mempool: Arc<Mempool>,
         network: Arc<TValidatorNetwork>,
         signing_key: bls::KeyPair,

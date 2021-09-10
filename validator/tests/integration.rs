@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use futures::{future, StreamExt};
 use log::LevelFilter::{Debug, Info};
+use parking_lot::RwLock;
 use rand::prelude::StdRng;
 use rand::SeedableRng;
 
@@ -34,7 +35,7 @@ fn seeded_rng(seed: u64) -> StdRng {
 async fn consensus(peer_id: u64, genesis_info: GenesisInfo) -> Consensus {
     let env = VolatileEnvironment::new(12).unwrap();
     let clock = Arc::new(OffsetTime::new());
-    let blockchain = Arc::new(
+    let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
             env.clone(),
             Arc::clone(&clock),
@@ -43,7 +44,7 @@ async fn consensus(peer_id: u64, genesis_info: GenesisInfo) -> Consensus {
             genesis_info.accounts,
         )
         .unwrap(),
-    );
+    ));
     let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
 
     let peer_key = P2PKeyPair::generate_ed25519();
@@ -163,10 +164,10 @@ async fn four_validators_can_create_an_epoch() {
 
     tokio::spawn(future::join_all(validators));
 
-    let events = blockchain.notifier.write().as_stream();
+    let events = blockchain.write().notifier.as_stream();
 
     events.take(130).for_each(|_| future::ready(())).await;
 
-    assert!(blockchain.block_number() >= 130);
-    assert_eq!(blockchain.view_number(), 0);
+    assert!(blockchain.read().block_number() >= 130);
+    assert_eq!(blockchain.read().view_number(), 0);
 }

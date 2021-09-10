@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 
 use futures::task::{Context, Poll};
 use futures::{future::BoxFuture, stream::BoxStream, Future, FutureExt, StreamExt};
+use parking_lot::RwLock;
 use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 use tokio::time::Sleep;
 use tokio_stream::wrappers::BroadcastStream;
@@ -38,7 +39,7 @@ impl Topic for TransactionTopic {
 }
 
 pub struct ConsensusProxy<N: Network> {
-    pub blockchain: Arc<Blockchain>,
+    pub blockchain: Arc<RwLock<Blockchain>>,
     pub network: Arc<N>,
     pub mempool: Arc<Mempool>,
     established_flag: Arc<AtomicBool>,
@@ -80,7 +81,7 @@ pub enum ConsensusEvent {
 }
 
 pub struct Consensus<N: Network> {
-    pub blockchain: Arc<Blockchain>,
+    pub blockchain: Arc<RwLock<Blockchain>>,
     pub mempool: Arc<Mempool>,
     pub network: Arc<N>,
     pub env: Environment,
@@ -116,7 +117,7 @@ impl<N: Network> Consensus<N> {
 
     pub async fn from_network(
         env: Environment,
-        blockchain: Arc<Blockchain>,
+        blockchain: Arc<RwLock<Blockchain>>,
         mempool: Arc<Mempool>,
         network: Arc<N>,
         sync_protocol: Pin<Box<dyn HistorySyncStream<N::PeerType>>>,
@@ -134,7 +135,7 @@ impl<N: Network> Consensus<N> {
 
     pub async fn with_min_peers(
         env: Environment,
-        blockchain: Arc<Blockchain>,
+        blockchain: Arc<RwLock<Blockchain>>,
         mempool: Arc<Mempool>,
         network: Arc<N>,
         sync_protocol: Pin<Box<dyn HistorySyncStream<N::PeerType>>>,
@@ -170,7 +171,7 @@ impl<N: Network> Consensus<N> {
 
     pub fn new(
         env: Environment,
-        blockchain: Arc<Blockchain>,
+        blockchain: Arc<RwLock<Blockchain>>,
         mempool: Arc<Mempool>,
         network: Arc<N>,
         block_queue: BlockQueue<N, BlockRequestComponent<N::PeerType>>,
@@ -353,13 +354,13 @@ impl<N: Network> Future for Consensus<N> {
         while let Poll::Ready(Some(event)) = self.block_queue.poll_next_unpin(cx) {
             match event {
                 BlockQueueEvent::AcceptedAnnouncedBlock(_) => {
-                    debug!("Now at block #{}", self.blockchain.block_number());
+                    debug!("Now at block #{}", self.blockchain.read().block_number());
                 }
                 BlockQueueEvent::AcceptedBufferedBlock(_, remaining_in_buffer) => {
                     if !self.is_established() {
                         info!(
                             "Catching up to tip of the chain (now at #{}, {} blocks remaining)",
-                            self.blockchain.block_number(),
+                            self.blockchain.read().block_number(),
                             remaining_in_buffer
                         );
                     }

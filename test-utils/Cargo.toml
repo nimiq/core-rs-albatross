@@ -12,6 +12,7 @@ keywords = ["nimiq", "cryptocurrency", "blockchain"]
 
 [dependencies]
 hex = "0.4"
+parking_lot = "0.11"
 
 beserial = { path = "../beserial" }
 nimiq-block = { path = "../primitives/block" }

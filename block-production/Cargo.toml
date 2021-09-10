@@ -19,6 +19,7 @@ maintenance = { status = "experimental" }
 [dependencies]
 log = "0.4"
 hex = "0.4"
+parking_lot = "0.11"
 
 beserial = { path = "../beserial" }
 nimiq-account = { path = "../primitives/account" }
@@ -36,6 +37,8 @@ nimiq-primitives = { path = "../primitives" }
 nimiq-vrf = { path = "../vrf" }
 
 [dev-dependencies]
+simple_logger = "1.0"
+
 nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-test-utils = { path = "../test-utils" }
 

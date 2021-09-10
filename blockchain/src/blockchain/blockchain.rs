@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use parking_lot::{Mutex, RwLock};
-
 use nimiq_account::{Account, Accounts};
 use nimiq_block::Block;
 use nimiq_database::{Environment, WriteTransaction};
@@ -34,17 +32,15 @@ pub struct Blockchain {
     // The OffsetTime struct. It allows us to query the current time.
     pub time: Arc<OffsetTime>,
     // The notifier processes events relative to the blockchain.
-    pub notifier: RwLock<Notifier<'static, BlockchainEvent>>,
+    pub notifier: Notifier<'static, BlockchainEvent>,
     // The fork notifier processes fork events.
-    pub fork_notifier: RwLock<Notifier<'static, ForkEvent>>,
+    pub fork_notifier: Notifier<'static, ForkEvent>,
     // The chain store is a database containing all of the chain infos, blocks and receipts.
-    pub chain_store: Arc<ChainStore>,
+    pub chain_store: ChainStore,
     // The history store is a database containing all of the history trees and transactions.
-    pub history_store: Arc<HistoryStore>,
+    pub history_store: HistoryStore,
     // The current state of the blockchain.
-    pub state: RwLock<BlockchainState>,
-    // A write lock for the blockchain. Guarantees that only one thread writes to it at a time.
-    pub(crate) push_lock: Mutex<()>,
+    pub state: BlockchainState,
     // The metrics for the blockchain. Needed for analysis.
     #[cfg(feature = "metrics")]
     pub(crate) metrics: BlockchainMetrics,
@@ -74,8 +70,8 @@ impl Blockchain {
         genesis_block: Block,
         genesis_accounts: Vec<(KeyNibbles, Account)>,
     ) -> Result<Self, BlockchainError> {
-        let chain_store = Arc::new(ChainStore::new(env.clone()));
-        let history_store = Arc::new(HistoryStore::new(env.clone()));
+        let chain_store = ChainStore::new(env.clone());
+        let history_store = HistoryStore::new(env.clone());
 
         Ok(match chain_store.get_head(None) {
             Some(head_hash) => Blockchain::load(
@@ -102,8 +98,8 @@ impl Blockchain {
     /// Loads a blockchain from given inputs.
     fn load(
         env: Environment,
-        chain_store: Arc<ChainStore>,
-        history_store: Arc<HistoryStore>,
+        chain_store: ChainStore,
+        history_store: HistoryStore,
         time: Arc<OffsetTime>,
         network_id: NetworkId,
         genesis_block: Block,
@@ -187,11 +183,11 @@ impl Blockchain {
             env,
             network_id,
             time,
-            notifier: RwLock::new(Notifier::new()),
-            fork_notifier: RwLock::new(Notifier::new()),
+            notifier: Notifier::new(),
+            fork_notifier: Notifier::new(),
             chain_store,
             history_store,
-            state: RwLock::new(BlockchainState {
+            state: BlockchainState {
                 accounts,
                 main_chain,
                 head_hash,
@@ -201,8 +197,7 @@ impl Blockchain {
                 election_head_hash,
                 current_slots: Some(current_slots),
                 previous_slots: last_slots,
-            }),
-            push_lock: Mutex::new(()),
+            },
             #[cfg(feature = "metrics")]
             metrics: BlockchainMetrics::default(),
             genesis_supply,
@@ -213,8 +208,8 @@ impl Blockchain {
     /// Initializes a blockchain.
     fn init(
         env: Environment,
-        chain_store: Arc<ChainStore>,
-        history_store: Arc<HistoryStore>,
+        chain_store: ChainStore,
+        history_store: HistoryStore,
         time: Arc<OffsetTime>,
         network_id: NetworkId,
         genesis_block: Block,
@@ -243,11 +238,11 @@ impl Blockchain {
             env,
             network_id,
             time,
-            notifier: RwLock::new(Notifier::new()),
-            fork_notifier: RwLock::new(Notifier::new()),
+            notifier: Notifier::new(),
+            fork_notifier: Notifier::new(),
             chain_store,
             history_store,
-            state: RwLock::new(BlockchainState {
+            state: BlockchainState {
                 accounts,
                 macro_info: main_chain.clone(),
                 main_chain,
@@ -257,8 +252,7 @@ impl Blockchain {
                 election_head_hash: head_hash,
                 current_slots: Some(current_slots),
                 previous_slots: Some(Validators::default()),
-            }),
-            push_lock: Mutex::new(()),
+            },
 
             #[cfg(feature = "metrics")]
             metrics: BlockchainMetrics::default(),

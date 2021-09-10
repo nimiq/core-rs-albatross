@@ -9,14 +9,12 @@ use nimiq_account::StakingContract;
 impl Blockchain {
     /// Gets the validators for a given epoch.
     pub fn get_validators_for_epoch(&self, epoch: u32) -> Option<Validators> {
-        let state = self.state.read();
-
-        let current_epoch = policy::epoch_at(state.main_chain.head.block_number());
+        let current_epoch = policy::epoch_at(self.state.main_chain.head.block_number());
 
         let slots = if epoch == current_epoch {
-            state.current_slots.as_ref()?.clone()
+            self.state.current_slots.as_ref()?.clone()
         } else if epoch == current_epoch - 1 {
-            state.previous_slots.as_ref()?.clone()
+            self.state.previous_slots.as_ref()?.clone()
         } else {
             let macro_block = self
                 .chain_store

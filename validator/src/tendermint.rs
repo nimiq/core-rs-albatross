@@ -7,6 +7,7 @@ use futures::{
     future::{BoxFuture, FutureExt},
     stream::{BoxStream, StreamExt},
 };
+use parking_lot::RwLock;
 
 use block::{
     Block, BlockHeader, MacroBlock, MacroBody, MacroHeader, MultiSignature,
@@ -40,7 +41,7 @@ pub struct TendermintInterface<N: ValidatorNetwork> {
     // Necessary to produce blocks.
     pub block_producer: BlockProducer,
     // The main blockchain struct. Contains all of this validator information about the current chain.
-    pub blockchain: Arc<Blockchain>,
+    pub blockchain: Arc<RwLock<Blockchain>>,
     // The aggregation adapter allows Tendermint to use Handel functions and networking.
     pub aggregation_adapter: HandelTendermintAdapter<N>,
     // This validator's key pair.
@@ -75,10 +76,10 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
 
     /// States if it is our turn to be the Tendermint proposer or not.
     fn is_our_turn(&self, round: u32) -> bool {
+        let blockchain = self.blockchain.read();
         // Get the validator slot for this round.
-        let (slot, _) = self
-            .blockchain
-            .get_slot_owner_at(self.blockchain.block_number() + 1, round, None)
+        let (slot, _) = blockchain
+            .get_slot_owner_at(blockchain.block_number() + 1, round, None)
             .expect("Couldn't find slot owner!");
 
         // Get our public key.
@@ -153,6 +154,7 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
         let mut validator_index_opt = None;
         for (i, validator) in self
             .blockchain
+            .read()
             .current_validators()
             .unwrap()
             .iter()
@@ -196,40 +198,44 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
         &mut self,
         round: u32,
     ) -> Result<ProposalResult<Self::ProposalTy>, TendermintError> {
-        // Get the proposer's slot and slot number for this round.
-        let (slot, slot_number) = self
-            .blockchain
-            .get_slot_owner_at(
-                self.blockchain.block_number() + 1,
-                self.blockchain.view_number() + round,
-                None,
-            )
-            .expect("Couldn't find slot owner!");
+        let (timeout, validator_id, validator_key) = {
+            let blockchain = self.blockchain.read();
+            // Get the proposer's slot and slot number for this round.
+            let (slot, slot_number) = blockchain
+                .get_slot_owner_at(
+                    blockchain.block_number() + 1,
+                    blockchain.view_number() + round,
+                    None,
+                )
+                .expect("Couldn't find slot owner!");
 
-        // Calculate the validator slot band from the slot number.
-        // TODO: Again, just redo this. We shouldn't be using slot bands. Validator ID is a much better
-        //  field.
-        let validator_id = self
-            .blockchain
-            .current_validators()
-            .unwrap()
-            .get_band_from_slot(slot_number);
+            // Calculate the validator slot band from the slot number.
+            // TODO: Again, just redo this. We shouldn't be using slot bands. Validator ID is a much better
+            //  field.
+            let validator_id = blockchain
+                .current_validators()
+                .unwrap()
+                .get_band_from_slot(slot_number);
 
-        // Get the validator key.
-        let validator_key = *slot.public_key.uncompress_unchecked();
+            // Get the validator key.
+            let validator_key = *slot.public_key.uncompress_unchecked();
 
-        // Calculate the timeout duration.
-        let timeout = Duration::from_millis(
-            TENDERMINT_TIMEOUT_INIT + round as u64 * TENDERMINT_TIMEOUT_DELTA,
-        );
+            // Calculate the timeout duration.
+            let timeout = Duration::from_millis(
+                TENDERMINT_TIMEOUT_INIT + round as u64 * TENDERMINT_TIMEOUT_DELTA,
+            );
 
-        debug!(
-            "Awaiting proposal for {}.{}, expected producer: {}, timeout: {:?}",
-            self.blockchain.block_number() + 1,
-            &round,
-            &validator_id,
-            &timeout
-        );
+            debug!(
+                "Awaiting proposal for {}.{}, expected producer: {}, timeout: {:?}",
+                blockchain.block_number() + 1,
+                &round,
+                &validator_id,
+                &timeout
+            );
+
+            (timeout, validator_id, validator_key)
+        };
+
         // This waits for a proposal from the proposer until it timeouts.
         let await_res = tokio::time::timeout(
             timeout,
@@ -246,94 +252,93 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
             }
         };
 
-        // Get the header and valid round from the proposal.
-        let header = proposal.value;
-        let valid_round = proposal.valid_round;
+        let acceptance = {
+            let blockchain = self.blockchain.read();
 
-        // Check the validity of the block header. If it is invalid, we return a proposal timeout
-        // right here. This doesn't check anything that depends on the blockchain state.
-        if Blockchain::verify_block_header(
-            self.blockchain.deref(),
-            &BlockHeader::Macro(header.clone()),
-            &validator_key,
-            None,
-        )
-        .is_err()
-        {
-            debug!("Tendermint - await_proposal: Invalid block header");
+            // Get the header and valid round from the proposal.
+            let header = proposal.value;
+            let valid_round = proposal.valid_round;
 
-            // Reject the message so the network won't relay it to other peers.
+            // Check the validity of the block header. If it is invalid, we return a proposal timeout
+            // right here. This doesn't check anything that depends on the blockchain state.
+            if Blockchain::verify_block_header(
+                blockchain.deref(),
+                &BlockHeader::Macro(header.clone()),
+                &validator_key,
+                None,
+            )
+            .is_err()
+            {
+                debug!("Tendermint - await_proposal: Invalid block header");
+
+                drop(blockchain);
+                None
+            } else {
+                let mut acceptance = MsgAcceptance::Accept;
+
+                // Get a write transaction to the database.
+                let mut txn = WriteTransaction::new(&blockchain.env);
+
+                // Get the blockchain state.
+                let state = blockchain.state();
+
+                // Create a block with just our header.
+                let block = Block::Macro(MacroBlock {
+                    header: header.clone(),
+                    body: None,
+                    justification: None,
+                });
+
+                // Update our blockchain state using the received proposal. If we can't update the state, we
+                // return a proposal timeout.
+                if blockchain
+                    .commit_accounts(&state, &block, 0, &mut txn)
+                    .is_err()
+                {
+                    debug!("Tendermint - await_proposal: Can't update state");
+                    acceptance = MsgAcceptance::Reject;
+                } else {
+                    // Check the validity of the block against our state. If it is invalid, we return a proposal
+                    // timeout. This also returns the block body that matches the block header
+                    // (assuming that the block is valid).
+                    let block_state = blockchain.verify_block_state(&state, &block, Some(&txn));
+
+                    if let Ok(body) = block_state {
+                        // Cache the body that we calculated.
+                        self.cache_body = body;
+                    } else if let Err(err) = block_state {
+                        debug!(
+                            "Tendermint - await_proposal: Invalid block state: {:?}",
+                            err
+                        );
+                        acceptance = MsgAcceptance::Reject;
+                    }
+                }
+
+                // Abort the transaction so that we don't commit the changes we made to the blockchain state.
+                txn.abort();
+
+                Some((acceptance, header, valid_round))
+            }
+        };
+
+        // If the message was validated sucessfully, the network may now relay it to other peers.
+        // Otherwise, reject or ignore the message.
+        if let Some((MsgAcceptance::Accept, header, valid_round)) = acceptance {
+            self.network
+                .validate_message(id, MsgAcceptance::Accept)
+                .await
+                .unwrap();
+
+            // Return the proposal.
+            Ok(ProposalResult::Proposal(header, valid_round))
+        } else {
             self.network
                 .validate_message(id, MsgAcceptance::Reject)
                 .await
                 .unwrap();
-
-            return Ok(ProposalResult::Timeout);
+            Ok(ProposalResult::Timeout)
         }
-
-        let mut acceptance = MsgAcceptance::Accept;
-
-        // The block is necessary to drop the lock before awaiting the validate_message(id) call later on.
-        {
-            // Get a write transaction to the database.
-            let mut txn = WriteTransaction::new(&self.blockchain.env);
-
-            // Get the blockchain state.
-            let state = self.blockchain.state();
-
-            // Create a block with just our header.
-            let block = Block::Macro(MacroBlock {
-                header: header.clone(),
-                body: None,
-                justification: None,
-            });
-
-            // Update our blockchain state using the received proposal. If we can't update the state, we
-            // return a proposal timeout.
-            if self
-                .blockchain
-                .commit_accounts(&state, &block, 0, &mut txn) // view_number?
-                .is_err()
-            {
-                debug!("Tendermint - await_proposal: Can't update state");
-                acceptance = MsgAcceptance::Reject;
-            } else {
-                // Check the validity of the block against our state. If it is invalid, we return a proposal
-                // timeout. This also returns the block body that matches the block header
-                // (assuming that the block is valid).
-                let block_state = self
-                    .blockchain
-                    .verify_block_state(&state, &block, Some(&txn));
-
-                if let Ok(body) = block_state {
-                    // Cache the body that we calculated.
-                    self.cache_body = body;
-                } else if let Err(err) = block_state {
-                    debug!(
-                        "Tendermint - await_proposal: Invalid block state: {:?}",
-                        err
-                    );
-                    acceptance = MsgAcceptance::Reject;
-                }
-            }
-
-            // Abort the transaction so that we don't commit the changes we made to the blockchain state.
-            txn.abort();
-        }
-
-        // If the message was validated sucessfully, the network may now relay it to other peers.
-        // Otherwise, reject or ignore the message.
-        self.network
-            .validate_message(id, acceptance.clone())
-            .await
-            .unwrap();
-
-        if let MsgAcceptance::Reject = acceptance {
-            return Ok(ProposalResult::Timeout);
-        }
-
-        // Return the proposal.
-        Ok(ProposalResult::Proposal(header, valid_round))
     }
 
     /// This broadcasts our vote for a given proposal and aggregates the votes from the other
@@ -400,7 +405,7 @@ impl<N: ValidatorNetwork + 'static> TendermintInterface<N> {
         validator_id: u16,
         network: Arc<N>,
         active_validators: Validators,
-        blockchain: Arc<Blockchain>,
+        blockchain: Arc<RwLock<Blockchain>>,
         block_producer: BlockProducer,
         block_height: u32,
         proposal_stream: BoxStream<

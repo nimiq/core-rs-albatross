@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use parking_lot::RwLock;
+
 use nimiq_block::Block;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_consensus::{Consensus as AbstractConsensus, ConsensusProxy as AbstractConsensusProxy};
@@ -121,7 +123,9 @@ impl ClientInner {
             config.consensus.sync_mode,
             config.database,
         )?;
-        let blockchain = Arc::new(Blockchain::new(environment.clone(), config.network_id).unwrap());
+        let blockchain = Arc::new(RwLock::new(
+            Blockchain::new(environment.clone(), config.network_id).unwrap(),
+        ));
         let mempool = Mempool::new(Arc::clone(&blockchain), config.mempool);
 
         // Open wallet
@@ -272,13 +276,13 @@ impl Client {
     }
 
     /// Returns a reference to the blockchain
-    pub fn blockchain(&self) -> Arc<Blockchain> {
+    pub fn blockchain(&self) -> Arc<RwLock<Blockchain>> {
         Arc::clone(&self.inner.consensus.blockchain)
     }
 
     /// Returns the blockchain head
     pub fn blockchain_head(&self) -> Block {
-        Arc::clone(&self.inner.consensus.blockchain).head()
+        Arc::clone(&self.inner.consensus.blockchain).read().head()
     }
 
     /// Returns a reference to the *Mempool*

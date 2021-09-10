@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use futures::StreamExt;
+use parking_lot::RwLock;
 
 use crate::messages::handlers::Handle;
 use crate::messages::{
@@ -13,7 +14,7 @@ use blockchain::Blockchain;
 use network_interface::prelude::{Network, Peer};
 
 impl<N: Network> Consensus<N> {
-    pub(super) fn init_network_requests(network: &Arc<N>, blockchain: &Arc<Blockchain>) {
+    pub(super) fn init_network_requests(network: &Arc<N>, blockchain: &Arc<RwLock<Blockchain>>) {
         let blockchain_outer = blockchain;
         let blockchain = Arc::clone(blockchain_outer);
         let mut stream = network.receive_from_all::<RequestBlockHashes>();

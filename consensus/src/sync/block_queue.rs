@@ -1,15 +1,14 @@
-use std::collections::BTreeSet;
-use std::task::Waker;
 use std::{
-    collections::{BTreeMap, HashMap, HashSet, VecDeque},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
     pin::Pin,
     sync::{Arc, Weak},
-    task::{Context, Poll},
+    task::{Context, Poll, Waker},
 };
 
 use futures::future::BoxFuture;
 use futures::stream::{BoxStream, Stream, StreamExt};
 use futures::FutureExt;
+use parking_lot::RwLock;
 use pin_project::pin_project;
 use tokio::task::spawn_blocking;
 
@@ -76,7 +75,7 @@ struct Inner<N: Network> {
     config: BlockQueueConfig,
 
     /// Reference to the block chain
-    blockchain: Arc<Blockchain>,
+    blockchain: Arc<RwLock<Blockchain>>,
 
     /// Reference to the network
     network: Arc<N>,
@@ -118,9 +117,19 @@ impl<N: Network> Inner<N> {
         pubsub_id: Option<<N as Network>::PubsubId>,
     ) {
         let block_height = block.block_number();
-        let head_height = self.blockchain.block_number();
+
+        // Ideally we would acquire upgradable read here. And provide it to push_block. RwLockUpgradableRead however is not
+        // Send and cannot be moved into the future that is created.
+        // Howoever the push_block does not push the block but creates a future which pushes the block.
+        // Hence every future would only be created when an RwLockUpgradableReadGuard can be acquired, requiring
+        // to wait for the previous future to have been polled and concluded.
+        // Therefore the read here needs to suffice even though the condition (block_height <= head_height) might
+        //  no longer be met once the future executes.
+        let blockchain = self.blockchain.read();
+        let head_height = blockchain.block_number();
 
         if block_height <= head_height + 1 {
+            drop(blockchain);
             // New head or fork block.
             // TODO We should limit the number of push operations we queue here.
             self.push_block(block, pubsub_id, PushOpResult::Head);
@@ -184,14 +193,13 @@ impl<N: Network> Inner<N> {
             }
 
             // We don't know the predecessor of this block, request it.
-            let head_hash = self.blockchain.head_hash();
+            let head_hash = blockchain.head_hash();
             let prev_macro_block_height = policy::last_macro_block(head_height);
 
             log::debug!("Requesting missing blocks: target_hash = {}, head_hash = {}, prev_macro_block_height = {}", block_hash, head_hash, prev_macro_block_height);
 
             // Get block locators.
-            let block_locators = self
-                .blockchain
+            let block_locators = blockchain
                 .chain_store
                 .get_blocks_backward(
                     &head_hash,
@@ -242,9 +250,10 @@ impl<N: Network> Inner<N> {
                 );
 
                 let blockchain1 = Arc::clone(&blockchain);
-                push_result = spawn_blocking(move || blockchain1.push(block))
-                    .await
-                    .expect("blockchain.push() should not panic");
+                push_result =
+                    spawn_blocking(move || Blockchain::push(blockchain1.upgradable_read(), block))
+                        .await
+                        .expect("blockchain.push() should not panic");
                 match &push_result {
                     Ok(PushResult::Ignored) => {
                         log::warn!("Inferior chain - Aborting");
@@ -291,9 +300,10 @@ impl<N: Network> Inner<N> {
         let blockchain = Arc::clone(&self.blockchain);
         let network = Arc::clone(&self.network);
         let future = async move {
-            let push_result = spawn_blocking(move || blockchain.push(block))
-                .await
-                .expect("blockchain.push() should not panic");
+            let push_result =
+                spawn_blocking(move || Blockchain::push(blockchain.upgradable_read(), block))
+                    .await
+                    .expect("blockchain.push() should not panic");
             let acceptance = match &push_result {
                 Ok(result) => {
                     log::trace!("Block pushed: {:?}", result);
@@ -331,7 +341,7 @@ impl<N: Network> Inner<N> {
     }
 
     fn push_buffered(&mut self) {
-        let head_height = self.blockchain.block_number();
+        let head_height = self.blockchain.read().block_number();
 
         // Check if queued block can be pushed to block chain
         if let Some(entry) = self.buffer.first_entry() {
@@ -447,8 +457,6 @@ impl<N: Network> Stream for Inner<N> {
                     self.pending_blocks.remove(&hash);
                     return Poll::Ready(Some(BlockQueueEvent::RejectedBlock(hash)));
                 }
-
-                _ => {}
             };
         }
 
@@ -475,7 +483,7 @@ pub struct BlockQueue<N: Network, TReq: RequestComponent<N::PeerType>> {
 impl<N: Network, TReq: RequestComponent<N::PeerType>> BlockQueue<N, TReq> {
     pub async fn new(
         config: BlockQueueConfig,
-        blockchain: Arc<Blockchain>,
+        blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<N>,
         request_component: TReq,
     ) -> Self {
@@ -490,7 +498,7 @@ impl<N: Network, TReq: RequestComponent<N::PeerType>> BlockQueue<N, TReq> {
 
     pub fn with_block_stream(
         config: BlockQueueConfig,
-        blockchain: Arc<Blockchain>,
+        blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<N>,
         request_component: TReq,
         block_stream: BlockStream<N>,

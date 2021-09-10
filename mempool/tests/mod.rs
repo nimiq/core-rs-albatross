@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use parking_lot::RwLock;
+
 use beserial::{Deserialize, Serialize};
 use nimiq_account::{Inherent, InherentType};
 use nimiq_blockchain::Blockchain;
@@ -19,7 +21,9 @@ const BASIC_TRANSACTION: &str = "000222666efadc937148a6d61589ce6d4aeecca97fda4c3
 fn push_same_tx_twice() {
     let env = VolatileEnvironment::new(10).unwrap();
 
-    let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::UnitAlbatross).unwrap());
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::new(env.clone(), NetworkId::UnitAlbatross).unwrap(),
+    ));
 
     let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
 
@@ -40,7 +44,8 @@ fn push_same_tx_twice() {
     let mut txn = WriteTransaction::new(&env);
 
     blockchain
-        .state()
+        .read()
+        .state
         .accounts
         .commit(&mut txn, &[], &[reward], 0, 0)
         .unwrap();
@@ -69,7 +74,9 @@ fn push_same_tx_twice() {
 fn push_tx_with_wrong_signature() {
     let env = VolatileEnvironment::new(10).unwrap();
 
-    let blockchain = Arc::new(Blockchain::new(env, NetworkId::UnitAlbatross).unwrap());
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::new(env, NetworkId::UnitAlbatross).unwrap(),
+    ));
 
     let mempool = Mempool::new(blockchain, MempoolConfig::default());
 
@@ -87,7 +94,9 @@ fn push_tx_with_wrong_signature() {
 fn push_tx_with_insufficient_balance() {
     let env = VolatileEnvironment::new(10).unwrap();
 
-    let blockchain = Arc::new(Blockchain::new(env, NetworkId::UnitAlbatross).unwrap());
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::new(env, NetworkId::UnitAlbatross).unwrap(),
+    ));
 
     let mempool = Mempool::new(blockchain, MempoolConfig::default());
 
@@ -102,7 +111,9 @@ fn push_tx_with_insufficient_balance() {
 fn push_and_get_valid_tx() {
     let env = VolatileEnvironment::new(10).unwrap();
 
-    let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::UnitAlbatross).unwrap());
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::new(env.clone(), NetworkId::UnitAlbatross).unwrap(),
+    ));
 
     let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
 
@@ -123,7 +134,8 @@ fn push_and_get_valid_tx() {
     let mut txn = WriteTransaction::new(&env);
 
     blockchain
-        .state()
+        .read()
+        .state
         .accounts
         .commit(&mut txn, &[], &[reward], 1, 1)
         .unwrap();
@@ -162,7 +174,9 @@ fn push_and_get_valid_tx() {
 fn push_and_get_two_tx_same_user() {
     let env = VolatileEnvironment::new(10).unwrap();
 
-    let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::UnitAlbatross).unwrap());
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::new(env.clone(), NetworkId::UnitAlbatross).unwrap(),
+    ));
 
     let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
 
@@ -183,7 +197,8 @@ fn push_and_get_two_tx_same_user() {
     let mut txn = WriteTransaction::new(&env);
 
     blockchain
-        .state()
+        .read()
+        .state
         .accounts
         .commit(&mut txn, &[], &[reward], 1, 1)
         .unwrap();
@@ -241,7 +256,9 @@ fn push_and_get_two_tx_same_user() {
 fn reject_free_tx_beyond_limit() {
     let env = VolatileEnvironment::new(10).unwrap();
 
-    let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::UnitAlbatross).unwrap());
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::new(env.clone(), NetworkId::UnitAlbatross).unwrap(),
+    ));
 
     let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
 
@@ -262,7 +279,8 @@ fn reject_free_tx_beyond_limit() {
     let mut txn = WriteTransaction::new(&env);
 
     blockchain
-        .state()
+        .read()
+        .state
         .accounts
         .commit(&mut txn, &[], &[reward], 1, 1)
         .unwrap();

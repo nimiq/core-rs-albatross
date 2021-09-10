@@ -1,6 +1,8 @@
-use beserial::Deserialize;
 use std::sync::Arc;
 
+use parking_lot::RwLock;
+
+use beserial::Deserialize;
 use nimiq_block::{
     Block, MacroBlock, MacroBody, MacroHeader, MultiSignature, SignedViewChange,
     TendermintIdentifier, TendermintProof, TendermintStep, TendermintVote, ViewChange,
@@ -22,11 +24,12 @@ pub const SECRET_KEY: &str = "196ffdb1a8acc7cbd76a251aeac0600a1d68b3aba1eba823b5
 pub fn produce_macro_blocks(
     num_macro: usize,
     producer: &BlockProducer,
-    blockchain: &Arc<Blockchain>,
+    blockchain: &Arc<RwLock<Blockchain>>,
 ) {
     for _ in 0..num_macro {
         fill_micro_blocks(producer, blockchain);
 
+        let blockchain = blockchain.upgradable_read();
         let next_block_height = (blockchain.block_number() + 1) as u64;
 
         let macro_block_proposal = producer.next_macro_block_proposal(
@@ -42,21 +45,22 @@ pub fn produce_macro_blocks(
         );
 
         assert_eq!(
-            blockchain.push(Block::Macro(block)),
+            Blockchain::push(blockchain, Block::Macro(block)),
             Ok(PushResult::Extended)
         );
     }
 }
 
 // Fill batch with micro blocks.
-pub fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<Blockchain>) {
-    let init_height = blockchain.block_number();
+pub fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<RwLock<Blockchain>>) {
+    let init_height = blockchain.read().block_number();
 
     assert!(policy::is_macro_block_at(init_height));
 
     let macro_block_number = init_height + policy::BATCH_LENGTH;
 
     for i in (init_height + 1)..macro_block_number {
+        let blockchain = blockchain.upgradable_read();
         let last_micro_block = producer.next_micro_block(
             blockchain.time.now() + i as u64 * 1000,
             0,
@@ -66,12 +70,12 @@ pub fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<Blockchain>)
         );
 
         assert_eq!(
-            blockchain.push(Block::Micro(last_micro_block)),
+            Blockchain::push(blockchain, Block::Micro(last_micro_block)),
             Ok(PushResult::Extended)
         );
     }
 
-    assert_eq!(blockchain.block_number(), macro_block_number - 1);
+    assert_eq!(blockchain.read().block_number(), macro_block_number - 1);
 }
 
 // Signs a macro block proposal.

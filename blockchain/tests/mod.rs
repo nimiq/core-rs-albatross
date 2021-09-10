@@ -170,8 +170,8 @@ fn create_fork_proof() {
 
     producer1
         .blockchain
-        .fork_notifier
         .write()
+        .fork_notifier
         .register(move |e: &ForkEvent| match e {
             ForkEvent::Detected(_) => *event1_rc2.write().unwrap() = true,
         });

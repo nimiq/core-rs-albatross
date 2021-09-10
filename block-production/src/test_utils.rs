@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use parking_lot::RwLock;
+
 use beserial::Deserialize;
 use nimiq_block::{
     Block, MacroBlock, MacroBody, MultiSignature, SignedViewChange, TendermintIdentifier,
@@ -20,14 +22,16 @@ use crate::BlockProducer;
 const SECRET_KEY: &str = "196ffdb1a8acc7cbd76a251aeac0600a1d68b3aba1eba823b5e4dc5dbdcdc730afa752c05ab4f6ef8518384ad514f403c5a088a22b17bf1bc14f8ff8decc2a512c0a200f68d7bdf5a319b30356fe8d1d75ef510aed7a8660968c216c328a0000";
 
 pub struct TemporaryBlockProducer {
-    pub blockchain: Arc<Blockchain>,
+    pub blockchain: Arc<RwLock<Blockchain>>,
     pub producer: BlockProducer,
 }
 
 impl TemporaryBlockProducer {
     pub fn new() -> Self {
         let env = VolatileEnvironment::new(10).unwrap();
-        let blockchain = Arc::new(Blockchain::new(env, NetworkId::UnitAlbatross).unwrap());
+        let blockchain = Arc::new(RwLock::new(
+            Blockchain::new(env, NetworkId::UnitAlbatross).unwrap(),
+        ));
 
         let keypair = KeyPair::from(
             SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap(),
@@ -40,22 +44,23 @@ impl TemporaryBlockProducer {
     }
 
     pub fn push(&self, block: Block) -> Result<PushResult, PushError> {
-        self.blockchain.push(block)
+        Blockchain::push(self.blockchain.upgradable_read(), block)
     }
 
     pub fn next_block(&self, view_number: u32, extra_data: Vec<u8>) -> Block {
-        let height = self.blockchain.block_number() + 1;
+        let blockchain = self.blockchain.read();
+
+        let height = blockchain.block_number() + 1;
 
         let block = if policy::is_macro_block_at(height) {
             let macro_block_proposal = self.producer.next_macro_block_proposal(
-                self.blockchain.time.now() + height as u64 * 1000,
+                blockchain.time.now() + height as u64 * 1000,
                 0u32,
                 extra_data,
             );
             // Get validator set and make sure it exists.
-            let validators = self
-                .blockchain
-                .get_validators_for_epoch(policy::epoch_at(self.blockchain.block_number() + 1));
+            let validators = blockchain
+                .get_validators_for_epoch(policy::epoch_at(blockchain.block_number() + 1));
             assert!(validators.is_some());
 
             let validator_merkle_root = MacroBlock::create_pk_tree_root(&validators.unwrap());
@@ -72,20 +77,23 @@ impl TemporaryBlockProducer {
                 validator_merkle_root,
             ))
         } else {
-            let view_change_proof = if self.blockchain.next_view_number() == view_number {
+            let view_change_proof = if blockchain.next_view_number() == view_number {
                 None
             } else {
                 Some(self.create_view_change_proof(view_number))
             };
 
             Block::Micro(self.producer.next_micro_block(
-                self.blockchain.time.now() + height as u64 * 1000,
+                blockchain.time.now() + height as u64 * 1000,
                 view_number,
                 view_change_proof,
                 vec![],
                 extra_data,
             ))
         };
+
+        // drop the ock before pushing the block as that will acquire write eventually
+        drop(blockchain);
 
         assert_eq!(self.push(block.clone()), Ok(PushResult::Extended));
         block
@@ -143,10 +151,13 @@ impl TemporaryBlockProducer {
             SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap(),
         );
 
-        let view_change = ViewChange {
-            block_number: self.blockchain.block_number() + 1,
-            new_view_number: view_number,
-            prev_seed: self.blockchain.head().seed().clone(),
+        let view_change = {
+            let blockchain = self.blockchain.read();
+            ViewChange {
+                block_number: blockchain.block_number() + 1,
+                new_view_number: view_number,
+                prev_seed: blockchain.head().seed().clone(),
+            }
         };
 
         // create signed view change

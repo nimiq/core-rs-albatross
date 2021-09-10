@@ -1,5 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
+use parking_lot::RwLock;
+
 use beserial::Deserialize;
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
@@ -19,7 +21,7 @@ const SECRET_KEY: &str =
 
 struct Node {
     network: Arc<MockNetwork>,
-    blockchain: Arc<Blockchain>,
+    blockchain: Arc<RwLock<Blockchain>>,
     mempool: Arc<Mempool>,
     consensus: Option<Consensus<MockNetwork>>,
 }
@@ -28,7 +30,9 @@ impl Node {
     pub async fn new(hub: &mut MockHub) -> Self {
         let env = VolatileEnvironment::new(10).unwrap();
 
-        let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::UnitAlbatross).unwrap());
+        let blockchain = Arc::new(RwLock::new(
+            Blockchain::new(env.clone(), NetworkId::UnitAlbatross).unwrap(),
+        ));
 
         let network = Arc::new(hub.new_network());
 
@@ -99,7 +103,7 @@ async fn test_request_component() {
     let mut connected = false;
     let mut interval = tokio::time::interval(Duration::from_secs(1));
     loop {
-        if node1.blockchain.block_number() > 200 && !connected {
+        if node1.blockchain.read().block_number() > 200 && !connected {
             log::info!("Connecting node2 to node 1");
             node2.network.dial_mock(&node1.network);
             connected = true;
@@ -107,13 +111,13 @@ async fn test_request_component() {
 
         log::info!(
             "Node1: at #{} - {}",
-            node1.blockchain.block_number(),
-            node1.blockchain.head_hash()
+            node1.blockchain.read().block_number(),
+            node1.blockchain.read().head_hash()
         );
         log::info!(
             "Node2: at #{} - {}",
-            node2.blockchain.block_number(),
-            node2.blockchain.head_hash()
+            node2.blockchain.read().block_number(),
+            node2.blockchain.read().head_hash()
         );
 
         interval.tick().await;

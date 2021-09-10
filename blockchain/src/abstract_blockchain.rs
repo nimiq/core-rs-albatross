@@ -222,23 +222,23 @@ impl AbstractBlockchain for Blockchain {
     }
 
     fn head(&self) -> Block {
-        self.state.read().main_chain.head.clone()
+        self.state.main_chain.head.clone()
     }
 
     fn macro_head(&self) -> MacroBlock {
-        self.state.read().macro_info.head.unwrap_macro_ref().clone()
+        self.state.macro_info.head.unwrap_macro_ref().clone()
     }
 
     fn election_head(&self) -> MacroBlock {
-        self.state.read().election_head.clone()
+        self.state.election_head.clone()
     }
 
     fn current_validators(&self) -> Option<Validators> {
-        self.state.read().current_slots.clone()
+        self.state.current_slots.clone()
     }
 
     fn previous_validators(&self) -> Option<Validators> {
-        self.state.read().previous_slots.clone()
+        self.state.previous_slots.clone()
     }
 
     fn contains(&self, hash: &Blake2bHash, include_forks: bool) -> bool {

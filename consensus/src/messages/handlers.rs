@@ -1,17 +1,21 @@
+use std::sync::Arc;
+
+use parking_lot::RwLock;
+
 use crate::messages::*;
 use block::Block;
 use blockchain::{AbstractBlockchain, Blockchain, Direction, CHUNK_SIZE};
 use network_interface::message::ResponseMessage;
 use primitives::policy;
-use std::sync::Arc;
 
 /// This trait defines the behaviour when receiving a message and how to generate the response.
 pub trait Handle<Response> {
-    fn handle(&self, blockchain: &Arc<Blockchain>) -> Response;
+    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> Response;
 }
 
 impl Handle<BlockHashes> for RequestBlockHashes {
-    fn handle(&self, blockchain: &Arc<Blockchain>) -> BlockHashes {
+    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> BlockHashes {
+        let blockchain = blockchain.read();
         // A peer has requested blocks. Check all requested block locator hashes
         // in the given order and pick the first hash that is found on our main
         // chain, ignore the rest.
@@ -82,7 +86,8 @@ impl Handle<BlockHashes> for RequestBlockHashes {
 }
 
 impl Handle<BatchSetInfo> for RequestBatchSet {
-    fn handle(&self, blockchain: &Arc<Blockchain>) -> BatchSetInfo {
+    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> BatchSetInfo {
+        let blockchain = blockchain.read();
         if let Some(Block::Macro(block)) = blockchain.get_block(&self.hash, true, None) {
             // Leaf indices are 0 based thus the + 1
             let history_len = blockchain
@@ -106,8 +111,8 @@ impl Handle<BatchSetInfo> for RequestBatchSet {
 }
 
 impl Handle<HistoryChunk> for RequestHistoryChunk {
-    fn handle(&self, blockchain: &Arc<Blockchain>) -> HistoryChunk {
-        let chunk = blockchain.history_store.prove_chunk(
+    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> HistoryChunk {
+        let chunk = blockchain.read().history_store.prove_chunk(
             self.epoch_number,
             self.block_number,
             CHUNK_SIZE,
@@ -122,8 +127,8 @@ impl Handle<HistoryChunk> for RequestHistoryChunk {
 }
 
 impl Handle<ResponseBlock> for RequestBlock {
-    fn handle(&self, blockchain: &Arc<Blockchain>) -> ResponseBlock {
-        let block = blockchain.get_block(&self.hash, true, None);
+    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> ResponseBlock {
+        let block = blockchain.read().get_block(&self.hash, true, None);
         ResponseBlock {
             block,
             request_identifier: self.get_request_identifier(),
@@ -132,7 +137,8 @@ impl Handle<ResponseBlock> for RequestBlock {
 }
 
 impl Handle<ResponseBlocks> for RequestMissingBlocks {
-    fn handle(&self, blockchain: &Arc<Blockchain>) -> ResponseBlocks {
+    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> ResponseBlocks {
+        let blockchain = blockchain.read();
         // Behaviour of our missing blocks request:
         // 1. Receives `target_block_hash: Blake2bHash, locators: Vec<Blake2bHash>`
         // 2. Return all blocks in between most recent locator on our main chain and target block hash
@@ -203,8 +209,8 @@ impl Handle<ResponseBlocks> for RequestMissingBlocks {
 }
 
 impl Handle<HeadResponse> for RequestHead {
-    fn handle(&self, blockchain: &Arc<Blockchain>) -> HeadResponse {
-        let hash = blockchain.head_hash();
+    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> HeadResponse {
+        let hash = blockchain.read().head_hash();
         HeadResponse {
             hash,
             request_identifier: self.get_request_identifier(),

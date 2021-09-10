@@ -1,5 +1,3 @@
-use parking_lot::{MutexGuard, RwLockReadGuard};
-
 use nimiq_account::{Account, StakingContract};
 use nimiq_block::Block;
 use nimiq_database::{ReadTransaction, WriteTransaction};
@@ -16,9 +14,9 @@ use nimiq_trie::key_nibbles::KeyNibbles;
 
 /// Implements several wrapper functions.
 impl Blockchain {
-    /// Returns the current state (with a read transaction).
-    pub fn state(&self) -> RwLockReadGuard<BlockchainState> {
-        self.state.read()
+    /// Returns the current state
+    pub fn state(&self) -> &BlockchainState {
+        &self.state
     }
 
     /// Fetches a given number of blocks, starting at a specific block (by its hash).
@@ -58,12 +56,7 @@ impl Blockchain {
     pub fn get_staking_contract(&self) -> StakingContract {
         let staking_contract_address = StakingContract::get_key_staking_contract();
 
-        match self
-            .state
-            .read()
-            .accounts
-            .get(&staking_contract_address, None)
-        {
+        match self.state.accounts.get(&staking_contract_address, None) {
             Some(Account::Staking(x)) => x,
             _ => {
                 unreachable!()
@@ -80,10 +73,10 @@ impl Blockchain {
     }
 
     pub fn register_listener<T: Listener<BlockchainEvent> + 'static>(
-        &self,
+        &mut self,
         listener: T,
     ) -> ListenerHandle {
-        self.notifier.write().register(listener)
+        self.notifier.register(listener)
     }
 
     pub fn get_account(&self, address: &Address) -> Option<Account> {
@@ -94,7 +87,7 @@ impl Blockchain {
             KeyNibbles::from(address)
         };
 
-        self.state.read().accounts.get(&key, None)
+        self.state.accounts.get(&key, None)
     }
 
     /// Checks if we have seen some transaction with this hash inside the validity window. This is
@@ -128,10 +121,6 @@ impl Blockchain {
     pub fn staking_contract_address(&self) -> Address {
         Address::from_any_str(policy::STAKING_CONTRACT_ADDRESS)
             .expect("Couldn't parse the Staking contract address from the policy file!")
-    }
-
-    pub fn lock(&self) -> MutexGuard<()> {
-        self.push_lock.lock()
     }
 
     #[cfg(feature = "metrics")]

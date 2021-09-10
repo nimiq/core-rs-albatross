@@ -1,4 +1,5 @@
 use futures::{future, StreamExt};
+use parking_lot::RwLock;
 use rand::prelude::StdRng;
 use rand::SeedableRng;
 use tokio::time;
@@ -38,7 +39,7 @@ fn seeded_rng(seed: u64) -> StdRng {
 async fn mock_consensus(hub: &mut MockHub, peer_id: u64, genesis_info: GenesisInfo) -> Consensus {
     let env = VolatileEnvironment::new(12).unwrap();
     let time = Arc::new(OffsetTime::new());
-    let blockchain = Arc::new(
+    let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
             env.clone(),
             time,
@@ -47,7 +48,7 @@ async fn mock_consensus(hub: &mut MockHub, peer_id: u64, genesis_info: GenesisIn
             genesis_info.accounts,
         )
         .unwrap(),
-    );
+    ));
     let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
     let network = Arc::new(hub.new_network_with_address(peer_id));
     let sync_protocol =
@@ -135,6 +136,7 @@ fn validator_for_slot(
 
     let (slot, _) = consensus
         .blockchain
+        .read()
         .get_slot_owner_at(block_number, view_number, None)
         .expect("Couldn't find slot owner!");
 
@@ -171,10 +173,10 @@ async fn one_validator_can_create_micro_blocks() {
     log::debug!("Spawning validator...");
     tokio::spawn(validator);
 
-    let events1 = consensus1.blockchain.notifier.write().as_stream();
+    let events1 = consensus1.blockchain.write().notifier.as_stream();
     events1.take(10).for_each(|_| future::ready(())).await;
 
-    assert!(consensus1.blockchain.block_number() >= 10);
+    assert!(consensus1.blockchain.read().block_number() >= 10);
 }
 
 #[tokio::test]
@@ -187,7 +189,7 @@ async fn four_validators_can_create_micro_blocks() {
 
     tokio::spawn(future::join_all(validators));
 
-    let events = blockchain.notifier.write().as_stream();
+    let events = blockchain.write().notifier.as_stream();
     time::timeout(
         Duration::from_secs(60),
         events.take(30).for_each(|_| future::ready(())),
@@ -195,7 +197,7 @@ async fn four_validators_can_create_micro_blocks() {
     .await
     .unwrap();
 
-    assert!(blockchain.block_number() >= 30);
+    assert!(blockchain.read().block_number() >= 30);
 }
 
 #[tokio::test]
@@ -211,7 +213,7 @@ async fn four_validators_can_view_change() {
     // Listen for blockchain events from the new block producer (after view change).
     let validator = validator_for_slot(&validators, 1, 1);
     let blockchain = Arc::clone(&validator.consensus.blockchain);
-    let mut events = blockchain.notifier.write().as_stream();
+    let mut events = blockchain.write().notifier.as_stream();
 
     // Freeze time to immediately trigger the view change timeout.
     // time::pause();
@@ -221,8 +223,8 @@ async fn four_validators_can_view_change() {
     // Wait for the new block producer to create a block.
     events.next().await;
 
-    assert!(blockchain.block_number() >= 1);
-    assert_eq!(blockchain.view_number(), 1);
+    assert!(blockchain.read().block_number() >= 1);
+    assert_eq!(blockchain.read().view_number(), 1);
 }
 
 fn create_view_change_update(
@@ -314,9 +316,9 @@ async fn validator_can_catch_up() {
 
     let blockchain = validator.consensus.blockchain.clone();
     // Listen for blockchain events from the block producer (after two view changes).
-    let mut events = blockchain.notifier.write().as_stream();
+    let mut events = blockchain.write().notifier.as_stream();
 
-    let (start, end) = blockchain.current_validators().unwrap().validators
+    let (start, end) = blockchain.read().current_validators().unwrap().validators
         [validator.validator_id() as usize]
         .slot_range;
 
@@ -326,7 +328,7 @@ async fn validator_can_catch_up() {
     let vc = create_view_change_update(
         1,
         1,
-        blockchain.head().seed().clone(),
+        blockchain.read().head().seed().clone(),
         validator.signing_key(),
         validator.validator_id(),
         &slots,
@@ -355,7 +357,7 @@ async fn validator_can_catch_up() {
     // Wait for the new block producer to create a blockchainEvent (which is always an extended event for block 1) and keep the hash
     if let Some(BlockchainEvent::Extended(hash)) = events.next().await {
         // retrieve the block for height 1
-        if let Some(block) = blockchain.get_block_at(1, false, None) {
+        if let Some(block) = blockchain.read().get_block_at(1, false, None) {
             // the hash needs to be the one the extended event returned.
             // (the chain itself i.e blockchain.header_hash() might have already progressed further)
             assert_eq!(block.header().hash(), hash);
