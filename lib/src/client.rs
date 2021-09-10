@@ -143,14 +143,9 @@ impl ClientInner {
         // Initialize validator
         #[cfg(feature = "validator")]
         let validator = {
+            let validator_network = Arc::new(ValidatorNetworkImpl::new(Arc::clone(&network)));
+            #[cfg(feature = "wallet")]
             if let Some(config) = &config.validator {
-                #[cfg(not(feature = "wallet"))]
-                let validator_wallet_key = {
-                    log::warn!("Client is compiled without wallet and thus can't load the wallet account for the validator.");
-                    None
-                };
-
-                #[cfg(feature = "wallet")]
                 let validator_wallet_key = {
                     if let Some(wallet_account) = &config.wallet_account {
                         let address = wallet_account.parse().map_err(|_| {
@@ -185,8 +180,6 @@ impl ClientInner {
                     }
                 };
 
-                let validator_network = Arc::new(ValidatorNetworkImpl::new(Arc::clone(&network)));
-
                 let validator = Validator::new(
                     &consensus,
                     validator_network,
@@ -197,6 +190,21 @@ impl ClientInner {
                 Some(validator)
             } else {
                 None
+            }
+            #[cfg(not(feature = "wallet"))]
+            {
+                let validator_wallet_key = {
+                    log::warn!("Client is compiled without wallet and thus can't load the wallet account for the validator.");
+                    None
+                };
+                let validator = Validator::new(
+                    &consensus,
+                    validator_network,
+                    validator_key,
+                    validator_wallet_key,
+                );
+
+                Some(validator)
             }
         };
 

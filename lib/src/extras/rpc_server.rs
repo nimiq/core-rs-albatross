@@ -8,12 +8,14 @@ use nimiq_jsonrpc_server::{AllowListDispatcher, Config, ModularDispatcher, Serve
 use nimiq_wallet::WalletStore;
 
 use crate::client::Client;
+#[cfg(feature = "rpc-server")]
 use crate::config::config::RpcServerConfig;
 use crate::config::consts::default_bind;
 use crate::error::Error;
 
 pub type Server = _Server<AllowListDispatcher<ModularDispatcher>>;
 
+#[cfg(feature = "rpc-server")]
 pub fn initialize_rpc_server(
     client: &Client,
     config: RpcServerConfig,

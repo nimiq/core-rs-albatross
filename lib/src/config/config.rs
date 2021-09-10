@@ -1,5 +1,6 @@
+#[cfg(any(feature = "rpc-server", feature = "metrics-server"))]
+use std::net::IpAddr;
 use std::{
-    net::IpAddr,
     path::{Path, PathBuf},
     string::ToString,
 };
@@ -22,12 +23,14 @@ use nimiq_utils::file_store::FileStore;
 #[cfg(feature = "validator")]
 use nimiq_utils::key_rng::SecureGenerate;
 
+#[cfg(any(feature = "rpc-server", feature = "metrics-server"))]
+use crate::config::consts;
 use crate::{
     client::Client,
     config::{
         command_line::CommandLine,
         config_file::{self, ConfigFile, Seed},
-        consts, paths,
+        paths,
         user_agent::UserAgent,
     },
     error::Error,
