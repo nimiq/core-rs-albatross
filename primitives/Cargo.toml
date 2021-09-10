@@ -41,7 +41,7 @@ lazy_static = "1.2"
 
 [features]
 all = ["coin", "account", "policy", "networks", "slots"]
-coin = ["hex", "thiserror", "num-traits", "regex"]
+coin = ["hex", "lazy_static", "thiserror", "num-traits", "regex"]
 account = ["hex", "thiserror"]
 policy = ["num-bigint", "num-traits", "parking_lot", "lazy_static"]
 networks = ["thiserror"]

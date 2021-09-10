@@ -1,3 +1,4 @@
+#[cfg(any(feature = "account", feature = "networks", feature = "slots"))]
 #[macro_use]
 extern crate beserial_derive;
 
