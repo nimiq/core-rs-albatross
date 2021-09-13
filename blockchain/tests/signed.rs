@@ -80,9 +80,13 @@ fn test_replay() {
 
     let validators = blockchain.current_validators().unwrap();
 
-    // Calculate the validator Merkle root (used in the nano sync).
-    let validator_merkle_root =
-        pk_tree_construct(vec![key_pair.public_key.public_key; policy::SLOTS as usize]);
+    // Calculate the validator Merkle root (used in the nano sync). This only needs to be calculated
+    // on election blocks.
+    let validator_merkle_root = if policy::is_election_block_at(1u32) {
+        pk_tree_construct(vec![key_pair.public_key.public_key; policy::SLOTS as usize])
+    } else {
+        vec![]
+    };
 
     // create a TendermintVote for the PreVote round
     let vote = TendermintVote {
