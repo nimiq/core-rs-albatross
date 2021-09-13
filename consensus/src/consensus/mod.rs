@@ -371,6 +371,10 @@ impl<N: Network> Future for Consensus<N> {
                         self.head_requests_time = None;
                     }
                 }
+
+                BlockQueueEvent::RejectedBlock(hash) => {
+                    debug!("rejected block hash{}", hash);
+                }
             }
         }
 
