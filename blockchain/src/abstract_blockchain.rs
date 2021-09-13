@@ -183,16 +183,32 @@ pub trait AbstractBlockchain {
 
         // Check if all slots are disabled. In this case, we will accept any slot, since we want the
         // chain to progress.
-        let all_disabled = disabled_slots.len() == policy::SLOTS as usize;
+        if disabled_slots.len() == policy::SLOTS as usize {
+            // Sample a random slot number.
+            return rng.next_u64_max(policy::SLOTS as u64) as u16;
+        }
 
-        // Sample until we find a slot that is not slashed
-        loop {
-            let slot_number = rng.next_u64_max(policy::SLOTS as u64) as u16;
+        // Sample a random index. See that we only consider the non-disabled slots here.
+        let mut r =
+            rng.next_u64_max((policy::SLOTS as usize - disabled_slots.len()) as u64) as usize;
 
-            if !disabled_slots.contains(slot_number as usize) || all_disabled {
+        // Now we just iterate over all the slots until we find the r-th non-disabled slot.
+        let mut slot_number = 0;
+        for is_disabled in disabled_slots.iter_bits() {
+            if is_disabled {
+                slot_number += 1;
+                continue;
+            }
+
+            if r == 0 {
                 return slot_number;
+            } else {
+                slot_number += 1;
+                r -= 1;
             }
         }
+
+        unreachable!()
     }
 }
 
