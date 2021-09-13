@@ -16,6 +16,9 @@ pub const PK_TREE_BREADTH: usize = 2_usize.pow(PK_TREE_DEPTH as u32);
 /// This function is meant to calculate the public key tree "off-circuit". Generating the public key
 /// tree with this function guarantees that it is compatible with the ZK circuit.
 pub fn pk_tree_construct(public_keys: Vec<G2Projective>) -> Vec<u8> {
+    // FIXME This computation is too slow ATM. Disable it for the time being.
+    return Default::default();
+
     // Checking that the number of public keys is equal to the number of validator slots.
     assert_eq!(public_keys.len(), SLOTS as usize);
 

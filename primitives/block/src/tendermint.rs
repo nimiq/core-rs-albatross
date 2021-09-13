@@ -4,6 +4,7 @@ use beserial::{Deserialize, Serialize};
 use nimiq_bls::AggregatePublicKey;
 use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
 use nimiq_hash_derive::SerializeContent;
+use nimiq_nano_primitives::pk_tree_construct;
 use nimiq_primitives::policy::TWO_THIRD_SLOTS;
 use nimiq_primitives::slots::Validators;
 
@@ -11,7 +12,7 @@ use crate::signed::{
     Message, SignedMessage, PREFIX_TENDERMINT_COMMIT, PREFIX_TENDERMINT_PREPARE,
     PREFIX_TENDERMINT_PROPOSAL,
 };
-use crate::{MacroBlock, MacroHeader, MultiSignature};
+use crate::{MacroHeader, MultiSignature};
 
 /// The proposal message sent by the Tendermint leader.
 #[derive(Clone, Debug, Serialize, Deserialize, SerializeContent, PartialEq, Eq)]
@@ -57,18 +58,25 @@ impl TendermintProof {
             return false;
         }
 
-        // Get the public key for each SLOT and add them together to get the aggregated public key
-        // (if they are part of the Multisignature Bitset).
-        let mut agg_pk = AggregatePublicKey::new();
+        // Get the public key for each SLOT and:
+        // 1) add them together to get the aggregated public key (if they are part of the
+        //    Multisignature Bitset),
+        // 2) get the raw elliptic curve point for each one and push them to a vector.
+        let pks = validators.to_pks();
 
-        for (i, pk) in validators.to_pks().iter().enumerate() {
+        let mut agg_pk = AggregatePublicKey::new();
+        let mut raw_pks = Vec::new();
+
+        for (i, pk) in pks.iter().enumerate() {
             if self.sig.signers.contains(i as usize) {
                 agg_pk.aggregate(pk);
             }
+
+            raw_pks.push(pk.public_key);
         }
 
         // Calculate the validator Merkle root (used in the nano sync).
-        let validator_merkle_root = MacroBlock::create_pk_tree_root(validators, block_number);
+        let validator_merkle_root = pk_tree_construct(raw_pks);
 
         // Calculate the message that was actually signed by the validators.
         let message = TendermintVote {

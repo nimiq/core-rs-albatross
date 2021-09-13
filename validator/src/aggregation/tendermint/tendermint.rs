@@ -53,10 +53,9 @@ where
         network: Arc<N>,
         secret_key: SecretKey,
     ) -> Self {
-        let validator_merkle_root =
-            MacroBlock::create_pk_tree_root(&active_validators, block_height);
+        let validator_merkle_root = MacroBlock::create_pk_tree_root(&active_validators);
 
-        // the input stream is all levelUpdateMessages concerning a TendermintContribution and TendermintIdentifier.
+        // the input stream is all levelUpdateMessages concerning a TendemrintContribution and TendemrintIdentifier.
         // We get rid of the sender, but while processing these messages they need to be dispatched to the appropriate Aggregation.
         let input = Box::pin(
             network
