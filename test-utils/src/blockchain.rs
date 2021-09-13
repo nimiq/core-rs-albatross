@@ -87,9 +87,13 @@ pub fn sign_macro_block(
     // Calculate block hash.
     let block_hash = header.hash::<Blake2bHash>();
 
-    // Calculate the validator Merkle root (used in the nano sync).
-    let validator_merkle_root =
-        pk_tree_construct(vec![keypair.public_key.public_key; policy::SLOTS as usize]);
+    // Calculate the validator Merkle root (used in the nano sync). This only needs to be calculated
+    // on election blocks.
+    let validator_merkle_root = if policy::is_election_block_at(header.block_number) {
+        pk_tree_construct(vec![keypair.public_key.public_key; policy::SLOTS as usize])
+    } else {
+        vec![]
+    };
 
     // Create the precommit tendermint vote.
     let precommit = TendermintVote {
