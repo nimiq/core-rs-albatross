@@ -8,8 +8,6 @@ use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_transaction::Transaction as BlockchainTransaction;
 
-use crate::history_store::history_tree_hash::HistoryTreeHash;
-
 /// A single struct that stores information that represents any possible transaction (basic
 /// transaction or inherent) on the blockchain.
 #[derive(Clone, Debug)]
@@ -106,13 +104,13 @@ impl ExtendedTransaction {
     }
 }
 
-impl MMRHash<HistoryTreeHash> for ExtendedTransaction {
-    /// Hashes a prefix and an extended transaction into a HistoryTreeHash. The prefix is necessary
+impl MMRHash<Blake2bHash> for ExtendedTransaction {
+    /// Hashes a prefix and an extended transaction into a Blake2bHash. The prefix is necessary
     /// to include it into the History Tree.
-    fn hash(&self, prefix: u64) -> HistoryTreeHash {
+    fn hash(&self, prefix: u64) -> Blake2bHash {
         let mut message = prefix.to_be_bytes().to_vec();
         message.append(&mut self.serialize_to_vec());
-        HistoryTreeHash(message.hash())
+        message.hash()
     }
 }
 

@@ -14,7 +14,6 @@ use nimiq_database::{
 };
 use nimiq_hash::Blake2bHash;
 
-use crate::history_store::history_tree_hash::HistoryTreeHash;
 use crate::history_store::mmr_store::MMRStore;
 use crate::history_store::ordered_hash::OrderedHash;
 use crate::history_store::{ExtendedTransaction, HistoryTreeChunk, HistoryTreeProof};
@@ -102,13 +101,13 @@ impl HistoryStore {
             leaf_idx.push(i as u32);
         }
 
-        let root = tree.get_root().ok()?.unwrap();
+        let root = tree.get_root().ok()?;
 
         // Add the extended transactions into the respective database.
         // We need to do this separately due to the borrowing rules of Rust.
         for (tx, i) in ext_txs.iter().zip(leaf_idx.iter()) {
             // The prefix is one because it is a leaf.
-            self.put_extended_tx(txn, &tx.hash(1).unwrap(), *i, tx);
+            self.put_extended_tx(txn, &tx.hash(1), *i, tx);
         }
 
         // Return the history root.
@@ -131,7 +130,7 @@ impl HistoryStore {
         ));
 
         // Get the history root. We need to get it here because of Rust's borrowing rules.
-        let root = tree.get_root().ok()?.unwrap();
+        let root = tree.get_root().ok()?;
 
         // Remove all leaves from the history tree and remember the respective hashes and indexes.
         let mut hashes = Vec::with_capacity(num_ext_txs);
@@ -147,7 +146,7 @@ impl HistoryStore {
         // Remove each of the extended transactions in the history tree from the extended
         // transaction database.
         for (index, hash) in hashes {
-            self.remove_extended_tx(txn, &hash.unwrap(), index as u32);
+            self.remove_extended_tx(txn, &hash, index as u32);
         }
 
         // Return the history root.
@@ -176,7 +175,7 @@ impl HistoryStore {
         // Remove each of the extended transactions in the history tree from the extended
         // transaction database.
         for (index, hash) in hashes {
-            self.remove_extended_tx(txn, &hash.unwrap(), index as u32);
+            self.remove_extended_tx(txn, &hash, index as u32);
         }
 
         Some(())
@@ -205,7 +204,7 @@ impl HistoryStore {
         ));
 
         // Return the history root.
-        Some(tree.get_root().ok()?.unwrap())
+        Some(tree.get_root().ok()?)
     }
 
     /// Calculates the history tree root from a vector of extended transactions. It doesn't use the
@@ -220,7 +219,7 @@ impl HistoryStore {
         }
 
         // Return the history root.
-        Some(tree.get_root().ok()?.unwrap())
+        Some(tree.get_root().ok()?)
     }
 
     /// Gets an extended transaction given its hash.
@@ -281,7 +280,7 @@ impl HistoryStore {
         let mut ext_txs = vec![];
 
         for i in start..end {
-            let leaf_hash = tree.get_leaf(i as usize).expect("meh").unwrap();
+            let leaf_hash = tree.get_leaf(i as usize).unwrap();
             let ext_tx = self.get_extended_tx(&leaf_hash, Some(txn)).unwrap();
             ext_txs.push(ext_tx);
         }
@@ -316,10 +315,7 @@ impl HistoryStore {
 
         for i in 0..tree.num_leaves() {
             let leaf_hash = tree.get_leaf(i).unwrap();
-            ext_txs.push(
-                self.get_extended_tx(&leaf_hash.unwrap(), Some(txn))
-                    .unwrap(),
-            );
+            ext_txs.push(self.get_extended_tx(&leaf_hash, Some(txn)).unwrap());
         }
 
         ext_txs
@@ -452,10 +448,7 @@ impl HistoryStore {
 
         for i in &positions {
             let leaf_hash = tree.get_leaf(*i).unwrap();
-            ext_txs.push(
-                self.get_extended_tx(&leaf_hash.unwrap(), Some(txn))
-                    .unwrap(),
-            );
+            ext_txs.push(self.get_extended_tx(&leaf_hash, Some(txn)).unwrap());
         }
 
         Some(HistoryTreeProof {
@@ -513,10 +506,7 @@ impl HistoryStore {
 
         for i in start..end {
             let leaf_hash = tree.get_leaf(i).unwrap();
-            ext_txs.push(
-                self.get_extended_tx(&leaf_hash.unwrap(), Some(txn))
-                    .unwrap(),
-            );
+            ext_txs.push(self.get_extended_tx(&leaf_hash, Some(txn)).unwrap());
         }
 
         Some(HistoryTreeChunk {
@@ -529,7 +519,7 @@ impl HistoryStore {
     pub fn tree_from_chunks(
         &self,
         epoch_number: u32,
-        chunks: Vec<(Vec<ExtendedTransaction>, RangeProof<HistoryTreeHash>)>,
+        chunks: Vec<(Vec<ExtendedTransaction>, RangeProof<Blake2bHash>)>,
         txn: &mut WriteTransaction,
     ) -> Result<Blake2bHash, MMRError> {
         // Get partial history tree for given epoch.
@@ -553,12 +543,12 @@ impl HistoryStore {
             return Err(MMRError::IncompleteProof);
         }
 
-        let root = tree.get_root()?.unwrap();
+        let root = tree.get_root()?;
 
         // Then add all transactions to the database as the tree is finished.
         for (i, leaf) in all_leaves.iter().enumerate() {
             // The prefix is one because it is a leaf.
-            self.put_extended_tx(txn, &leaf.hash(1).unwrap(), i as u32, leaf);
+            self.put_extended_tx(txn, &leaf.hash(1), i as u32, leaf);
         }
 
         Ok(root)

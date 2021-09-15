@@ -27,6 +27,7 @@ serde = { version = "1.0", features = ["derive"], optional = true }
 beserial = { path = "../beserial" }
 nimiq-database = { path = "../database" }
 nimiq-macros = { path = "../macros" }
+nimiq-mmr = { path = "../primitives/mmr" }
 
 [features]
 serde-derive = ["serde"]
