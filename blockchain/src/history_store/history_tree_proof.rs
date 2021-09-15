@@ -6,13 +6,12 @@ use beserial::{
 };
 use nimiq_hash::Blake2bHash;
 
-use crate::history_store::history_tree_hash::HistoryTreeHash;
 use crate::history_store::ExtendedTransaction;
 
 /// Struct containing a vector of extended transactions together with a Merkle proof for them. It
 /// allows one to prove/verify that specific transactions are part of the History Tree.
 pub struct HistoryTreeProof {
-    pub(crate) proof: Proof<HistoryTreeHash>,
+    pub(crate) proof: Proof<Blake2bHash>,
     pub(crate) positions: Vec<usize>,
     pub history: Vec<ExtendedTransaction>,
 }
@@ -20,8 +19,6 @@ pub struct HistoryTreeProof {
 impl HistoryTreeProof {
     /// Verifies the Merkle proof. It will return None if the verification encounters an error.
     pub fn verify(&self, expected_root: Blake2bHash) -> Option<bool> {
-        let expected_root = HistoryTreeHash(expected_root);
-
         assert_eq!(self.history.len(), self.positions.len());
 
         let mut zipped = vec![];
