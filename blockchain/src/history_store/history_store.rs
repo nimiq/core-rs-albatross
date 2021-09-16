@@ -441,7 +441,7 @@ impl HistoryStore {
         ));
 
         // Create Merkle proof.
-        let proof = tree.prove(&positions).ok()?;
+        let proof = tree.prove(&positions, None).ok()?;
 
         // Get each extended transaction from the tree.
         let mut ext_txs = vec![];
@@ -499,7 +499,9 @@ impl HistoryStore {
 
         // TODO: Setting `assume_previous` to false allows the proofs to be verified independently.
         //  This, however, increases the size of the proof. We might change this in the future.
-        let proof = tree.prove_range(start..end, number_of_nodes, false).ok()?;
+        let proof = tree
+            .prove_range(start..end, Some(number_of_nodes), false)
+            .ok()?;
 
         // Get each extended transaction from the tree.
         let mut ext_txs = vec![];

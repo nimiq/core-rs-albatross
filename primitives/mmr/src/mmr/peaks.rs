@@ -1,5 +1,6 @@
 use crate::mmr::position::{index_to_height, Position};
 
+/// An iterator for the MMR peaks in normal order. From biggest/left to smallest/right.
 pub(crate) struct PeakIterator {
     size: usize,
     current_peak: Option<Position>,
@@ -59,6 +60,7 @@ impl Iterator for PeakIterator {
     }
 }
 
+/// An iterator for the MMR peaks in reverse order. From smallest/right to biggest/left.
 pub(crate) struct RevPeakIterator {
     current_peak: Option<Position>,
 }

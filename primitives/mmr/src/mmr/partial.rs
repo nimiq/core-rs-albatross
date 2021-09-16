@@ -12,6 +12,7 @@ use crate::mmr::MerkleMountainRange;
 use crate::store::memory::MemoryTransaction;
 use crate::store::Store;
 
+/// A struct that holds part of a MMR. Its main use is to construct a full MMR from a series of proofs.
 pub struct PartialMerkleMountainRange<H, S: Store<H>> {
     store: S,
     num_proven_leaves: usize,
@@ -21,6 +22,7 @@ pub struct PartialMerkleMountainRange<H, S: Store<H>> {
 }
 
 impl<H: Merge + PartialEq + Clone, S: Store<H>> PartialMerkleMountainRange<H, S> {
+    /// Creates a new partial MMR.
     pub fn new(store: S) -> Self {
         PartialMerkleMountainRange {
             store,
@@ -41,16 +43,19 @@ impl<H: Merge + PartialEq + Clone, S: Store<H>> PartialMerkleMountainRange<H, S>
         self.store.len()
     }
 
+    /// Returns true if the tree is empty. It will return None if we don't know the size of the tree.
     pub fn is_empty(&self) -> Option<bool> {
         self.size.map(|size| size == 0)
     }
 
+    /// Returns true if the tree is finished.
     pub fn is_finished(&self) -> bool {
         self.size
             .map(|size| size == self.store.len())
             .unwrap_or(false)
     }
 
+    /// Transforms a partial MMR into a MMR, if the the partial MMR is finished.
     pub fn into_mmr(self) -> Result<MerkleMountainRange<H, S>, Self> {
         if self.is_finished() {
             return Ok(MerkleMountainRange::new(self.store));
@@ -321,7 +326,7 @@ mod tests {
             for i in (0..leaves.len()).step_by(chunk_size) {
                 let to_prove = i..cmp::min(i + chunk_size, leaves.len());
                 let proof = mmr
-                    .prove_range(to_prove.clone(), mmr.len(), assume_previous)
+                    .prove_range(to_prove.clone(), Some(mmr.len()), assume_previous)
                     .unwrap();
 
                 assert!(
@@ -439,31 +444,31 @@ mod tests {
         let mut pmmr = PartialMerkleMountainRange::new(MemoryStore::new());
 
         // Proof for wrong position.
-        let proof = mmr.prove_range(1..=1, mmr.len(), false).unwrap();
+        let proof = mmr.prove_range(1..=1, Some(mmr.len()), false).unwrap();
         assert_ne!(pmmr.push_proof(proof, &[2]), mmr.get_root());
 
-        let proof = mmr.prove_range(1..=1, mmr.len(), true).unwrap();
+        let proof = mmr.prove_range(1..=1, Some(mmr.len()), true).unwrap();
         assert_ne!(pmmr.push_proof(proof, &[2]), mmr.get_root());
 
         // Proof for wrong value.
-        let proof = mmr.prove_range(0..=0, mmr.len(), false).unwrap();
+        let proof = mmr.prove_range(0..=0, Some(mmr.len()), false).unwrap();
         assert_ne!(pmmr.push_proof(proof, &[3]), mmr.get_root());
 
-        let proof = mmr.prove_range(0..=0, mmr.len(), true).unwrap();
+        let proof = mmr.prove_range(0..=0, Some(mmr.len()), true).unwrap();
         assert_ne!(pmmr.push_proof(proof, &[3]), mmr.get_root());
 
         // Proof for less values.
-        let proof = mmr.prove_range(0..=1, mmr.len(), false).unwrap();
+        let proof = mmr.prove_range(0..=1, Some(mmr.len()), false).unwrap();
         assert_eq!(pmmr.push_proof(proof, &[2]), Err(Error::InvalidProof));
 
-        let proof = mmr.prove_range(0..=1, mmr.len(), true).unwrap();
+        let proof = mmr.prove_range(0..=1, Some(mmr.len()), true).unwrap();
         assert_eq!(pmmr.push_proof(proof, &[2]), Err(Error::InvalidProof));
 
         // Proof for non-leaves.
-        let proof = mmr.prove_range(1..=1, mmr.len(), false).unwrap();
+        let proof = mmr.prove_range(1..=1, Some(mmr.len()), false).unwrap();
         assert_eq!(pmmr.push_proof(proof, &[2, 3, 5]), Err(Error::InvalidProof));
 
-        let proof = mmr.prove_range(1..=1, mmr.len(), true).unwrap();
+        let proof = mmr.prove_range(1..=1, Some(mmr.len()), true).unwrap();
         assert_eq!(pmmr.push_proof(proof, &[2, 3, 5]), Err(Error::InvalidProof));
     }
 }
