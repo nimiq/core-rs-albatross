@@ -20,7 +20,6 @@ extern crate nimiq_macros as macros;
 extern crate nimiq_utils as utils;
 extern crate parking_lot;
 extern crate rand;
-extern crate stopwatch;
 extern crate tokio;
 
 pub mod aggregation;
