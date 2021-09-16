@@ -77,14 +77,15 @@ pub(crate) enum NetworkAction {
         output: oneshot::Sender<Result<(), NetworkError>>,
     },
     Subscribe {
-        topic_name: String,
+        topic_name: &'static str,
+        buffer_size: usize,
         validate: bool,
         output: oneshot::Sender<
             Result<mpsc::Receiver<(GossipsubMessage, MessageId, PeerId)>, NetworkError>,
         >,
     },
     Publish {
-        topic_name: String,
+        topic_name: &'static str,
         data: Vec<u8>,
         output: oneshot::Sender<Result<MessageId, NetworkError>>,
     },
@@ -431,8 +432,13 @@ impl Network {
                                         .ok();
                                 }
                                 output
-                                    .send((message, message_id, propagation_source))
-                                    .await
+                                    .try_send((message, message_id, propagation_source))
+                                    .map_err(|e| {
+                                        tracing::error!(
+                                            "Failed to relay Gossipsub message: {:?}",
+                                            e
+                                        )
+                                    })
                                     .ok();
                             } else {
                                 tracing::warn!(topic = ?message.topic, "unknown topic hash");
@@ -558,15 +564,16 @@ impl Network {
             }
             NetworkAction::Subscribe {
                 topic_name,
+                buffer_size,
                 validate,
                 output,
             } => {
-                let topic = IdentTopic::new(topic_name.clone());
+                let topic = IdentTopic::new(topic_name);
 
                 match swarm.behaviour_mut().gossipsub.subscribe(&topic) {
                     // New subscription. Insert the sender into our subscription table.
                     Ok(true) => {
-                        let (tx, rx) = mpsc::channel(16);
+                        let (tx, rx) = mpsc::channel(buffer_size);
 
                         state.gossip_topics.insert(topic.hash(), (tx, validate));
 
@@ -749,8 +756,9 @@ impl NetworkInterface for Network {
         self.action_tx
             .clone()
             .send(NetworkAction::Subscribe {
-                topic_name: topic.topic(),
-                validate: topic.validate(),
+                topic_name: <T as Topic>::NAME,
+                buffer_size: <T as Topic>::BUFFER_SIZE,
+                validate: <T as Topic>::VALIDATE,
                 output: tx,
             })
             .await?;
@@ -783,7 +791,7 @@ impl NetworkInterface for Network {
         self.action_tx
             .clone()
             .send(NetworkAction::Publish {
-                topic_name: topic.topic(),
+                topic_name: <T as Topic>::NAME,
                 data: buf,
                 output: output_tx,
             })
@@ -1213,13 +1221,9 @@ mod tests {
     impl Topic for TestTopic {
         type Item = TestRecord;
 
-        fn topic(&self) -> String {
-            "hello_world".to_owned()
-        }
-
-        fn validate(&self) -> bool {
-            true
-        }
+        const BUFFER_SIZE: usize = 8;
+        const NAME: &'static str = "hello_world";
+        const VALIDATE: bool = true;
     }
 
     fn consume_stream<T: std::fmt::Debug>(
@@ -1254,9 +1258,9 @@ mod tests {
             .await
             .unwrap();
 
-        tracing::info!("Waiting for GossipSub message...");
+        tracing::info!("Waiting for Gossipsub message...");
         let (received_message, message_id) = messages.next().await.unwrap();
-        tracing::info!("Received GossipSub message: {:?}", received_message);
+        tracing::info!("Received Gossipsub message: {:?}", received_message);
 
         assert_eq!(received_message, test_message);
 
@@ -1266,5 +1270,13 @@ mod tests {
             .validate_message(message_id, MsgAcceptance::Accept)
             .await
             .unwrap());
+
+        // Call the network_info async function after filling up a topic message buffer to verify that the
+        // network drops messages without stalling it's functionality.
+        for i in 0..10i32 {
+            let msg = TestRecord { x: i };
+            net2.publish(&TestTopic, msg.clone()).await.unwrap();
+        }
+        net1.network_info().await.unwrap();
     }
 }

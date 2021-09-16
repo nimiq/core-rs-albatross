@@ -29,13 +29,9 @@ pub struct TransactionTopic;
 impl Topic for TransactionTopic {
     type Item = Transaction;
 
-    fn topic(&self) -> String {
-        "transactions".to_owned()
-    }
-
-    fn validate(&self) -> bool {
-        true
-    }
+    const BUFFER_SIZE: usize = 1024;
+    const NAME: &'static str = "transactions";
+    const VALIDATE: bool = true;
 }
 
 pub struct ConsensusProxy<N: Network> {

@@ -33,13 +33,9 @@ pub struct ProposalTopic;
 impl Topic for ProposalTopic {
     type Item = SignedTendermintProposal;
 
-    fn topic(&self) -> String {
-        "tendermint-proposal".to_owned()
-    }
-
-    fn validate(&self) -> bool {
-        true
-    }
+    const BUFFER_SIZE: usize = 8;
+    const NAME: &'static str = "tendermint-proposal";
+    const VALIDATE: bool = true;
 }
 
 enum ValidatorStakingState {

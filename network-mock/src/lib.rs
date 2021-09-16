@@ -171,13 +171,9 @@ pub mod tests {
     impl Topic for TestTopic {
         type Item = TestRecord;
 
-        fn topic(&self) -> String {
-            "hello_world".to_owned()
-        }
-
-        fn validate(&self) -> bool {
-            false
-        }
+        const BUFFER_SIZE: usize = 8;
+        const NAME: &'static str = "hello_world";
+        const VALIDATE: bool = false;
     }
 
     fn consume_stream<T: std::fmt::Debug>(

@@ -187,8 +187,8 @@ impl Network for MockNetwork {
         let mut hub = self.hub.lock();
         let is_connected = Arc::clone(&self.is_connected);
 
-        let stream =
-            BroadcastStream::new(hub.get_topic(topic.topic()).subscribe()).filter_map(move |r| {
+        let stream = BroadcastStream::new(hub.get_topic(<T as Topic>::NAME).subscribe())
+            .filter_map(move |r| {
                 let is_connected = Arc::clone(&is_connected);
 
                 async move {
@@ -230,7 +230,7 @@ impl Network for MockNetwork {
     {
         let mut hub = self.hub.lock();
 
-        let topic = topic.topic();
+        let topic = T::NAME;
         let data = item.serialize_to_vec();
 
         log::debug!(

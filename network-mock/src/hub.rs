@@ -29,7 +29,7 @@ pub(crate) struct MockHubInner {
     /// Senders for gossipsub topics
     ///
     /// The data is Arc'd, such that cloning is cheap, and we need only a borrow when we deserialize.
-    pub gossipsub_topics: HashMap<String, broadcast::Sender<(Arc<Vec<u8>>, MockPeerId)>>,
+    pub gossipsub_topics: HashMap<&'static str, broadcast::Sender<(Arc<Vec<u8>>, MockPeerId)>>,
 
     /// DHT
     pub dht: HashMap<Vec<u8>, Vec<u8>>,
@@ -39,7 +39,10 @@ pub(crate) struct MockHubInner {
 }
 
 impl MockHubInner {
-    pub fn get_topic(&mut self, topic: String) -> &broadcast::Sender<(Arc<Vec<u8>>, MockPeerId)> {
+    pub fn get_topic(
+        &mut self,
+        topic: &'static str,
+    ) -> &broadcast::Sender<(Arc<Vec<u8>>, MockPeerId)> {
         self.gossipsub_topics
             .entry(topic)
             .or_insert_with(|| broadcast::channel(16).0)

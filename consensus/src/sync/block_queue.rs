@@ -33,13 +33,9 @@ pub struct BlockTopic;
 impl Topic for BlockTopic {
     type Item = Block;
 
-    fn topic(&self) -> String {
-        "blocks".to_owned()
-    }
-
-    fn validate(&self) -> bool {
-        true
-    }
+    const BUFFER_SIZE: usize = 16;
+    const NAME: &'static str = "blocks";
+    const VALIDATE: bool = true;
 }
 
 pub type BlockStream<N> = BoxStream<'static, (Block, <N as Network>::PubsubId)>;

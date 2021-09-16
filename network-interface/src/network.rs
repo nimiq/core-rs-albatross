@@ -22,8 +22,9 @@ pub enum NetworkEvent<P> {
 pub trait Topic {
     type Item: Serialize + Deserialize + Send + Sync + std::fmt::Debug + 'static;
 
-    fn topic(&self) -> String;
-    fn validate(&self) -> bool;
+    const BUFFER_SIZE: usize;
+    const NAME: &'static str;
+    const VALIDATE: bool;
 }
 
 impl<P: Peer> std::fmt::Debug for NetworkEvent<P> {
