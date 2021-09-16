@@ -21,11 +21,11 @@ thiserror = "1.0"
 
 beserial = { path = "../../beserial" }
 beserial_derive = { path = "../../beserial/beserial_derive" }
-nimiq-bls = { path = "../../bls", features = ["beserial"] }
-nimiq-hash = { path = "../../hash" }
-nimiq-keys = { path = "../../keys" }
+nimiq-bls = { path = "../../bls", features = ["serde-derive"] }
+nimiq-hash = { path = "../../hash", features = ["serde-derive"] }
+nimiq-keys = { path = "../../keys", features = ["serde-derive"] }
 nimiq-macros = { path = "../../macros" }
-nimiq-primitives = { path = "..", features = ["policy", "networks", "account", "coin"] }
+nimiq-primitives = { path = "..", features = ["account", "coin", "networks", "policy", "serde-derive"] }
 nimiq-utils = { path = "../../utils", features = ["merkle"] }
 
 [dev-dependencies]

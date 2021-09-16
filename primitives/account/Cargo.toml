@@ -16,7 +16,7 @@ lazy_static = "1.3"
 log = "0.4"
 parking_lot = "0.9"
 rand = "0.7"
-serde = { version = "1.0", optional = true }
+serde = { version = "1.0", features = ["derive"], optional = true }
 strum_macros = "0.20"
 thiserror = "1.0"
 
@@ -26,9 +26,9 @@ nimiq-bls = { path = "../../bls" }
 nimiq-collections = { path = "../../collections", features = ["bitset"] }
 nimiq-database = { path = "../../database" }
 nimiq-hash = { path = "../../hash" }
-nimiq-keys = { path = "../../keys" }
-nimiq-primitives = { path = "..", features = ["coin", "policy", "slots"] }
-nimiq-transaction = { path = "../transaction" }
+nimiq-keys = { path = "../../keys", features = ["serde-derive"] }
+nimiq-primitives = { path = "..", features = ["coin", "policy", "serde-derive", "slots"] }
+nimiq-transaction = { path = "../transaction", features = ["serde-derive"] }
 nimiq-trie = { path = "../trie" }
 nimiq-utils = { path = "../../utils", features = ["hash-rng"] }
 nimiq-vrf = { path = "../../vrf" }
