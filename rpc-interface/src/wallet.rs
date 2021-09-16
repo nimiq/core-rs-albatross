@@ -47,6 +47,8 @@ pub trait WalletInterface {
         duration: Option<u64>,
     ) -> Result<(), Self::Error>;
 
+    async fn is_account_unlocked(&mut self, address: Address) -> Result<bool, Self::Error>;
+
     async fn sign(
         &mut self,
         message: String,

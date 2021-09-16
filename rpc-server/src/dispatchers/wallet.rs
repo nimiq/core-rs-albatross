@@ -111,6 +111,13 @@ impl WalletInterface for WalletDispatcher {
         Ok(())
     }
 
+    async fn is_account_unlocked(&mut self, address: Address) -> Result<bool, Error> {
+        let unlocked_wallets = self.unlocked_wallets.read();
+        let is_unlocked = unlocked_wallets.get(&address).is_some();
+
+        Ok(is_unlocked)
+    }
+
     async fn sign(
         &mut self,
         message: String,
