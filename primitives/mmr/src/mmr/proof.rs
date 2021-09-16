@@ -6,6 +6,7 @@ use crate::mmr::peaks::PeakIterator;
 use crate::mmr::position::{leaf_number_to_index, Position};
 use crate::mmr::utils::bagging;
 
+/// A Merkle proof for a MMR.
 #[derive(Clone, Debug)]
 pub struct Proof<H> {
     pub mmr_size: usize,
@@ -159,6 +160,7 @@ impl<H: Merge + Clone> Proof<H> {
 }
 
 impl<H: Merge + Clone + Eq> Proof<H> {
+    /// Verifies a Merkle proof given the root of the MMR and the leaves that are to be proven.
     pub fn verify<T>(&self, root: &H, leaves: &[(usize, T)]) -> Result<bool, Error>
     where
         T: Hash<H>,
@@ -168,6 +170,8 @@ impl<H: Merge + Clone + Eq> Proof<H> {
     }
 }
 
+/// A Merkle proof for a MMR. This is equal to the regular Merkle proof, but has the `assume_previous`
+/// flag which can be used when we are verifying consecutive range proofs.
 pub struct RangeProof<H> {
     pub proof: Proof<H>,
     pub assume_previous: bool,
@@ -186,7 +190,7 @@ impl<H: Merge + Clone> RangeProof<H> {
         self.proof.calculate_root(leaves)
     }
 
-    /// `leaf_index` is the number of leaves preceeding this proof.
+    /// `leaf_index` is the number of leaves preceding this proof.
     pub fn calculate_root_with_start<T>(
         &self,
         leaf_index: usize,
@@ -285,7 +289,7 @@ mod tests {
             to_prove: &[usize],
             proof_nodes: &[Node],
         ) {
-            let proof = mmr.prove(to_prove).unwrap();
+            let proof = mmr.prove(to_prove, None).unwrap();
             assert_eq!(proof.mmr_size, mmr.len());
             assert_eq!(proof.nodes.len(), proof_nodes.len());
 
@@ -326,9 +330,18 @@ mod tests {
         test_proof(&mmr, &nodes, &[1], &[Node::Store(0)]);
         test_proof(&mmr, &nodes, &[1, 0], &[]);
 
-        assert_eq!(mmr.prove(&[]).map(|_| ()), Err(Error::ProveInvalidLeaves));
-        assert_eq!(mmr.prove(&[4]).map(|_| ()), Err(Error::ProveInvalidLeaves));
-        assert_eq!(mmr.prove(&[2]).map(|_| ()), Err(Error::ProveInvalidLeaves));
+        assert_eq!(
+            mmr.prove(&[], None).map(|_| ()),
+            Err(Error::ProveInvalidLeaves)
+        );
+        assert_eq!(
+            mmr.prove(&[4], None).map(|_| ()),
+            Err(Error::ProveInvalidLeaves)
+        );
+        assert_eq!(
+            mmr.prove(&[2], None).map(|_| ()),
+            Err(Error::ProveInvalidLeaves)
+        );
 
         /*        root
          *       /    \
@@ -440,7 +453,7 @@ mod tests {
          *    /   \
          *   0     1
          */
-        let proof = mmr.prove(&[1]).unwrap();
+        let proof = mmr.prove(&[1], None).unwrap();
         // Proof for wrong position.
         assert_eq!(proof.verify(&mmr.get_root().unwrap(), &[(0, 2)]), Ok(false));
         // Proof for wrong value.
@@ -476,7 +489,7 @@ mod tests {
             assume_previous: bool,
         ) {
             let proof = mmr
-                .prove_range(to_prove.clone(), mmr.len(), assume_previous)
+                .prove_range(to_prove.clone(), Some(mmr.len()), assume_previous)
                 .unwrap();
             assert_eq!(proof.assume_previous, assume_previous);
             assert_eq!(proof.proof.mmr_size, mmr.len());
@@ -540,27 +553,27 @@ mod tests {
         test_proof(&mmr, &nodes, 0..=1, &[], true);
 
         assert_eq!(
-            mmr.prove_range(0..0, mmr.len(), false).map(|_| ()),
+            mmr.prove_range(0..0, Some(mmr.len()), false).map(|_| ()),
             Err(Error::ProveInvalidLeaves)
         );
         assert_eq!(
-            mmr.prove_range(0..0, mmr.len(), true).map(|_| ()),
+            mmr.prove_range(0..0, Some(mmr.len()), true).map(|_| ()),
             Err(Error::ProveInvalidLeaves)
         );
         assert_eq!(
-            mmr.prove_range(4..8, mmr.len(), false).map(|_| ()),
+            mmr.prove_range(4..8, Some(mmr.len()), false).map(|_| ()),
             Err(Error::ProveInvalidLeaves)
         );
         assert_eq!(
-            mmr.prove_range(4..8, mmr.len(), true).map(|_| ()),
+            mmr.prove_range(4..8, Some(mmr.len()), true).map(|_| ()),
             Err(Error::ProveInvalidLeaves)
         );
         assert_eq!(
-            mmr.prove_range(2..3, mmr.len(), false).map(|_| ()),
+            mmr.prove_range(2..3, Some(mmr.len()), false).map(|_| ()),
             Err(Error::ProveInvalidLeaves)
         );
         assert_eq!(
-            mmr.prove_range(2..3, mmr.len(), true).map(|_| ()),
+            mmr.prove_range(2..3, Some(mmr.len()), true).map(|_| ()),
             Err(Error::ProveInvalidLeaves)
         );
 
@@ -698,7 +711,7 @@ mod tests {
          *    /   \
          *   0     1
          */
-        let proof = mmr.prove_range(1..=1, mmr.len(), false).unwrap();
+        let proof = mmr.prove_range(1..=1, Some(mmr.len()), false).unwrap();
         // Proof for wrong position.
         assert_eq!(proof.verify(&mmr.get_root().unwrap(), &[(0, 2)]), Ok(false));
         assert_eq!(
