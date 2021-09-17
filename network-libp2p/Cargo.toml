@@ -24,7 +24,16 @@ derive_more = "0.99"
 futures = "0.3"
 hex = "0.4"
 ip_network = "0.3"
-libp2p = { version = "0.39", features = ["dns-tokio"] }
+libp2p = { version = "0.39", default-features = false, features = [
+    "gossipsub",
+    "kad",
+    "identify",
+    "noise",
+    "yamux",
+    "websocket",
+    "dns-tokio",
+    "tcp-tokio",
+]}
 log = "0.4"
 parking_lot = "0.11"
 pin-project = "1.0"

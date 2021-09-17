@@ -188,7 +188,7 @@ impl Network {
         let transport = {
             // Websocket over TCP/DNS
             let transport = websocket::WsConfig::new(dns::TokioDnsConfig::system(
-                tcp::TcpConfig::new().nodelay(true),
+                tcp::TokioTcpConfig::new().nodelay(true),
             )?);
 
             // Memory transport for testing
