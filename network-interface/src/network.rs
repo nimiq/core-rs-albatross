@@ -94,11 +94,10 @@ pub trait Network: Send + Sync + 'static {
         ReceiveFromAll::new(self).boxed()
     }
 
-    // TODO: Use `BoxStream`
-    async fn subscribe<T>(
+    async fn subscribe<'a, T>(
         &self,
         topic: &T,
-    ) -> Result<Pin<Box<dyn Stream<Item = (T::Item, Self::PubsubId)> + Send>>, Self::Error>
+    ) -> Result<BoxStream<'a, (T::Item, Self::PubsubId)>, Self::Error>
     where
         T: Topic + Sync;
 

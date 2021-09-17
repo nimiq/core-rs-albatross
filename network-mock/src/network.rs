@@ -1,13 +1,10 @@
-use std::{
-    pin::Pin,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
 };
 
 use async_trait::async_trait;
-use futures::stream::{Stream, StreamExt};
+use futures::stream::{BoxStream, StreamExt};
 use parking_lot::Mutex;
 use thiserror::Error;
 use tokio_stream::wrappers::{errors::BroadcastStreamRecvError, BroadcastStream};
@@ -180,10 +177,10 @@ impl Network for MockNetwork {
         self.get_peer_updates().1
     }
 
-    async fn subscribe<T>(
+    async fn subscribe<'a, T>(
         &self,
         topic: &T,
-    ) -> Result<Pin<Box<dyn Stream<Item = (T::Item, Self::PubsubId)> + Send>>, Self::Error>
+    ) -> Result<BoxStream<'a, (T::Item, Self::PubsubId)>, Self::Error>
     where
         T: Topic + Sync,
     {

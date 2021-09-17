@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::{collections::HashMap, pin::Pin, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
 use bytes::{Buf, Bytes};
@@ -9,7 +9,7 @@ use futures::{
     channel::{mpsc, oneshot},
     future::FutureExt,
     sink::SinkExt,
-    stream::{BoxStream, Stream, StreamExt},
+    stream::{BoxStream, StreamExt},
 };
 use ip_network::IpNetwork;
 #[cfg(feature = "memory-transport")]
@@ -149,7 +149,6 @@ impl Network {
     ///
     /// # Arguments
     ///
-    ///  - `listen_addresses`: The multi-addresses on which to listen for inbound connections.
     ///  - `clock`: The clock that is used to establish the network time. The discovery behaviour will determine the
     ///             offset by exchanging their wall-time with other peers.
     ///  - `config`: The network configuration, containing key pair, and other behaviour-specific configuration.
@@ -738,10 +737,10 @@ impl NetworkInterface for Network {
             .boxed()
     }
 
-    async fn subscribe<T>(
+    async fn subscribe<'a, T>(
         &self,
         topic: &T,
-    ) -> Result<Pin<Box<dyn Stream<Item = (T::Item, Self::PubsubId)> + Send>>, Self::Error>
+    ) -> Result<BoxStream<'a, (T::Item, Self::PubsubId)>, Self::Error>
     where
         T: Topic + Sync,
     {

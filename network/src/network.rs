@@ -1,6 +1,5 @@
 use std::{
     cmp,
-    pin::Pin,
     sync::{Arc, Weak},
     time::Duration,
 };
@@ -8,7 +7,7 @@ use std::{
 use async_trait::async_trait;
 use atomic::Atomic;
 use atomic::Ordering;
-use futures_03::Stream;
+use futures_03::stream::BoxStream;
 use parking_lot::RwLock;
 use parking_lot::RwLockReadGuard;
 use rand::rngs::OsRng;
@@ -487,10 +486,10 @@ impl NetworkInterface for Network {
         unimplemented!()
     }
 
-    async fn subscribe<T>(
+    async fn subscribe<'a, T>(
         &self,
         _topic: &T,
-    ) -> Result<Pin<Box<dyn Stream<Item = (T::Item, Self::PubsubId)> + Send>>, Self::Error>
+    ) -> Result<BoxStream<'a, (T::Item, Self::PubsubId)>, Self::Error>
     where
         T: Topic + Sync,
     {
