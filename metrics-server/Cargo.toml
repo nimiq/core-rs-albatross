@@ -31,4 +31,4 @@ nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain = { path = "../blockchain", features = ["metrics"] }
 nimiq-consensus = { path = "../consensus" }
 nimiq-mempool = { path = "../mempool" }
-nimiq-network = { path = "../network", features = ["metrics"] }
+nimiq-network-interface = { path = "../network-interface" }

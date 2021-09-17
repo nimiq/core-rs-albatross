@@ -6,7 +6,7 @@ extern crate nimiq_block as block;
 extern crate nimiq_blockchain as blockchain;
 extern crate nimiq_consensus as consensus;
 extern crate nimiq_mempool as mempool;
-extern crate nimiq_network as network;
+extern crate nimiq_network_interface as network;
 
 use std::fs::File;
 use std::io::Read;
@@ -21,7 +21,7 @@ use tokio::net::TcpListener;
 use tokio_tls::TlsAcceptor as TokioTlsAcceptor;
 
 use consensus::Consensus;
-use network::Network;
+use network::network::Network;
 
 use crate::error::Error;
 pub use crate::metrics::chain::{AbstractChainMetrics, AlbatrossChainMetrics};
@@ -72,17 +72,18 @@ pub struct MetricsServer {
 }
 
 impl MetricsServer {
-    pub fn new<CM>(
+    pub fn new<CM, N>(
         ip: IpAddr,
         port: u16,
         username: Option<String>,
         password: Option<String>,
         pkcs12_key_file: &str,
         pkcs12_passphrase: &str,
-        consensus: Arc<Consensus<Network>>,
+        consensus: Arc<Consensus<N>>,
     ) -> Result<MetricsServer, Error>
     where
         CM: AbstractChainMetrics + server::Metrics + 'static,
+        N: Network + 'static,
     {
         let mut file = File::open(pkcs12_key_file)?;
         let mut pkcs12 = vec![];

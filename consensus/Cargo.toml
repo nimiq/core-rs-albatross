@@ -41,7 +41,7 @@ nimiq-network-interface = { path = "../network-interface" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
 nimiq-subscription = { path = "../primitives/subscription" }
 nimiq-transaction = { path = "../primitives/transaction" }
-nimiq-utils = { path = "../utils", features = ["time", "observer", "timers", "mutable-once", "throttled-queue", "rate-limit", "merkle", "math"] }
+nimiq-utils = { path = "../utils", features = ["time", "observer", "mutable-once", "throttled-queue", "rate-limit", "merkle", "math"] }
 
 [dev-dependencies]
 hex = "0.4"

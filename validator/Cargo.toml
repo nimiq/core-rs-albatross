@@ -45,7 +45,7 @@ nimiq-network-interface = { path = "../network-interface" }
 nimiq-primitives = { path = "../primitives" }
 nimiq-tendermint = { path = "../tendermint" }
 nimiq-transaction-builder = { path = "../transaction-builder" }
-nimiq-utils = { path = "../utils", features = ["observer", "timers", "time", "mutable-once", "throttled-queue", "rate-limit"] }
+nimiq-utils = { path = "../utils", features = ["observer", "time", "mutable-once", "throttled-queue", "rate-limit"] }
 nimiq-validator-network = { path = "../validator-network" }
 nimiq-vrf = { path = "../vrf" }
 

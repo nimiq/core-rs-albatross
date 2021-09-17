@@ -20,7 +20,7 @@ maintenance = { status = "experimental" }
 atomic = { version = "0.4", optional = true }
 
 clear_on_drop = { version = "0.2", optional = true }
-futures = { version = "0.1", optional = true }
+futures = { version = "0.3", optional = true }
 hex = { version = "0.4", optional = true }
 libp2p = { version = "0.39", optional = true }
 log = { version = "0.4", optional = true }
@@ -29,8 +29,7 @@ rand = { version = "0.7", optional = true }
 rand_core = { version = "0.5", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 thiserror = { version = "1.0", optional = true }
-tokio = { version = "0.1", optional = true }
-tokio-02 = { package = "tokio", version = "1.9", features = ["sync"], optional = true }
+tokio = { package = "tokio", version = "1.9", features = ["sync"], optional = true }
 tokio-stream = "0.1"
 
 beserial = { path = "../beserial", optional = true }
@@ -48,21 +47,21 @@ crc = []
 otp = ["beserial", "clear_on_drop", "nimiq-hash", "rand"]
 key-store = ["beserial", "log", "thiserror"]
 iterators = []
-locking = ["futures", "parking_lot"]
+# locking = ["futures", "parking_lot"]
 merkle = ["beserial", "beserial_derive", "math", "nimiq-collections/bitset", "nimiq-hash"]
 mutable-once = []
-observer = ["log", "tokio-02"]
+observer = ["log", "tokio"]
 time = ["atomic"]
-timers = ["futures", "log", "parking_lot", "tokio"]
+# timers = ["futures", "log", "parking_lot", "tokio"]
 unique-ptr = []
 tagged-signing = ["beserial", "beserial_derive", "hex"]
 throttled-queue = ["nimiq-collections"]
 rate-limit = []
 unique-id = []
 # Compiles this package with all features.
-all = ["crc", "iterators", "key-store", "locking", "math", "merkle", "mutable-once", "observer", "otp", "rate-limit", "throttled-queue", "time", "timers", "unique-id", "unique-ptr"]
+all = ["crc", "iterators", "key-store", "math", "merkle", "mutable-once", "observer", "otp", "rate-limit", "throttled-queue", "time", "unique-id", "unique-ptr"]
 # Compiles this package with the features needed for the nimiq client.
-full-nimiq = ["crc", "iterators", "key-store", "locking", "merkle", "mutable-once", "observer", "time", "timers", "unique-ptr"]
+full-nimiq = ["log", "crc", "iterators", "key-store", "merkle", "mutable-once", "observer", "time", "unique-ptr"]
 math = []
 key-rng = ["rand"]
 hash-rng = ["nimiq-hash", "rand_core",]

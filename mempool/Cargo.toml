@@ -30,7 +30,7 @@ nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-primitives = { path = "../primitives", features = ["coin", "networks"] }
 nimiq-transaction = { path = "../primitives/transaction" }
-nimiq-utils = { path = "../utils", features = ["observer", "timers", "mutable-once"] }
+nimiq-utils = { path = "../utils", features = ["observer", "mutable-once"] }
 
 [dev-dependencies]
 hex = "0.4"

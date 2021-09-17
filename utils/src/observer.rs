@@ -1,6 +1,6 @@
 use std::sync::{Arc, Weak};
 
-use tokio_02::sync::mpsc;
+use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
 pub trait Listener<E>: Send + Sync {
@@ -61,7 +61,7 @@ impl<'l, E: Clone + Send + 'static> Notifier<'l, E> {
         let (tx, rx) = mpsc::unbounded_channel();
         self.register(move |event: &E| {
             tx.send(event.clone())
-                .unwrap_or_else(|e| error!("Failed to send event to channel: {}", e));
+                .unwrap_or_else(|e| log::error!("Failed to send event to channel: {}", e));
         });
         UnboundedReceiverStream::new(rx)
     }
