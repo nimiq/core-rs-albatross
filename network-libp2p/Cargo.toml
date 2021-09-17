@@ -61,4 +61,4 @@ tracing-subscriber = "0.2"
 [features]
 default = ["peer-contact-book-persistence"]
 peer-contact-book-persistence = ["serde"]
-memory-transport = []
+

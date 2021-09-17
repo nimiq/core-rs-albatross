@@ -54,7 +54,7 @@ simple_logger = "1.9.0"
 tokio = { version = "1.9", features = ["rt", "test-util", "time"] }
 
 nimiq-build-tools = { path = "../build-tools" }
-nimiq-network-libp2p = { path = "../network-libp2p", features = ["memory-transport"] }
+nimiq-network-libp2p = { path = "../network-libp2p" }
 nimiq-network-mock = { path = "../network-mock" }
 
 [features]

@@ -12,7 +12,7 @@ use futures::{
     stream::{BoxStream, StreamExt},
 };
 use ip_network::IpNetwork;
-#[cfg(feature = "memory-transport")]
+#[cfg(test)]
 use libp2p::core::transport::MemoryTransport;
 use libp2p::{
     core,
@@ -193,7 +193,7 @@ impl Network {
 
             // Memory transport for testing
             // TODO: Use websocket over the memory transport
-            #[cfg(feature = "memory-transport")]
+            #[cfg(test)]
             let transport = transport.or_transport(MemoryTransport::default());
 
             transport
@@ -263,6 +263,7 @@ impl Network {
 
         async move {
             loop {
+
                 futures::select! {
                     event = swarm.next().fuse() => {
                         tracing::trace!(event=?event, "swarm task received event");
@@ -1258,7 +1259,7 @@ mod tests {
 
     #[tokio::test]
     async fn dht_put_and_get() {
-        // tracing_subscriber::fmt::init();
+        tracing_subscriber::fmt::init();
         let (net1, net2) = create_connected_networks().await;
 
         // FIXME: Add delay while networks share their addresses
