@@ -3,7 +3,7 @@
 - [ ] All tests pass. Demo project builds and runs.
 - [ ] I have resolved any merge conflicts.
 
-#### This fixes issue #___.
+#### This fixes #___.
 
 ## What's in this pull request?
 
