@@ -32,6 +32,7 @@ pub struct HandelTendermintAdapter<N: ValidatorNetwork> {
     current_bests: Arc<RwLock<BTreeMap<(u32, TendermintStep), TendermintContribution>>>,
     current_aggregate: Arc<RwLock<Option<CurrentAggregation>>>,
     pending_new_round: Arc<RwLock<Option<u32>>>,
+    validator_merkle_root: Vec<u8>,
     block_height: u32,
     secret_key: SecretKey,
     validator_id: u16,
@@ -52,6 +53,9 @@ where
         network: Arc<N>,
         secret_key: SecretKey,
     ) -> Self {
+        let validator_merkle_root =
+            MacroBlock::create_pk_tree_root(&active_validators, block_height);
+
         // the input stream is all levelUpdateMessages concerning a TendermintContribution and TendermintIdentifier.
         // We get rid of the sender, but while processing these messages they need to be dispatched to the appropriate Aggregation.
         let input = Box::pin(
@@ -97,6 +101,7 @@ where
             current_bests,
             current_aggregate,
             pending_new_round,
+            validator_merkle_root,
             block_height,
             secret_key,
             validator_id,
@@ -116,7 +121,6 @@ where
         round: u32,
         step: impl Into<TendermintStep>,
         proposal_hash: Option<Blake2bHash>,
-        validator_merkle_root: Vec<u8>,
     ) -> Result<AggregationResult<MultiSignature>, TendermintError> {
         let step = step.into();
         // make sure that there is no currently ongoing aggregation from a previous call to `broadcast_and_aggregate` which has not yet been awaited.
@@ -129,13 +133,13 @@ where
 
             match current_aggregate.take() {
                 Some(aggr) => {
-                    // re-set the current_aggregate and return error
+                    // re-set the current_agggregate and return error
                     *current_aggregate = Some(aggr);
                     debug!("An aggregation was started before the previous one was cleared");
                     return Err(TendermintError::AggregationError);
                 }
                 None => {
-                    // create channel for result propagation
+                    // create channel foor result propagation
                     let (sender, aggregate_receiver) =
                         mpsc::unbounded_channel::<AggregationResult<MultiSignature>>();
                     // set the current aggregate
@@ -150,7 +154,7 @@ where
             }
         };
 
-        // Assemble identifier from available information
+        // Assemble identifier from availablle information
         let id = TendermintIdentifier {
             block_number: self.block_height,
             round_number: round,
@@ -161,7 +165,7 @@ where
         let vote = TendermintVote {
             proposal_hash: proposal_hash.clone(),
             id: id.clone(),
-            validator_merkle_root: validator_merkle_root.clone(),
+            validator_merkle_root: self.validator_merkle_root.clone(),
         };
 
         // Create the signed contribution of this validator
@@ -181,7 +185,7 @@ where
             .send(AggregationEvent::Start(
                 id.clone(),
                 own_contribution,
-                validator_merkle_root.clone(),
+                self.validator_merkle_root.clone(),
                 output_sink,
             ))
             .await

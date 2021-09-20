@@ -159,14 +159,6 @@ impl Block {
         }
     }
 
-    /// Returns the Blake2s hash of the block header.
-    pub fn hash_blake2s(&self) -> Blake2sHash {
-        match self {
-            Block::Macro(ref block) => block.header.hash(),
-            Block::Micro(ref block) => block.header.hash(),
-        }
-    }
-
     /// Returns a copy of the validators. Only returns Some if it is an election block.
     pub fn validators(&self) -> Option<Validators> {
         match self {

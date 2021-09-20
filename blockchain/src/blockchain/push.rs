@@ -81,7 +81,7 @@ impl Blockchain {
         // Check the justification.
         if let Err(e) = Blockchain::verify_block_justification(
             &*this,
-            &block,
+            &block.header(),
             &block.justification(),
             &intended_slot_owner,
             Some(&read_txn),

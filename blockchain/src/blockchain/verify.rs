@@ -1,8 +1,8 @@
 use std::cmp::Ordering;
 
 use nimiq_block::{
-    Block, BlockBody, BlockError, BlockHeader, BlockJustification, BlockType, ForkProof,
-    MacroBlock, MacroBody, ViewChange,
+    Block, BlockBody, BlockError, BlockHeader, BlockJustification, BlockType, ForkProof, MacroBody,
+    ViewChange,
 };
 use nimiq_bls::PublicKey;
 use nimiq_database::Transaction as DBtx;
@@ -95,7 +95,7 @@ impl Blockchain {
     //       might be a better way to do this though.
     pub fn verify_block_justification<B: AbstractBlockchain>(
         blockchain: &B,
-        block: &Block,
+        header: &BlockHeader,
         justification_opt: &Option<BlockJustification>,
         intended_slot_owner: &PublicKey,
         txn_opt: Option<&DBtx>,
@@ -116,10 +116,10 @@ impl Blockchain {
                 }
 
                 // Verify the signature on the justification.
-                if !intended_slot_owner.verify_hash(block.hash_blake2s(), &signature.unwrap()) {
+                if !intended_slot_owner.verify_hash(header.hash_blake2s(), &signature.unwrap()) {
                     warn!("Rejecting block - invalid signature for intended slot owner");
 
-                    debug!("Block hash: {}", block.hash());
+                    debug!("Block hash: {}", header.hash());
 
                     debug!("Intended slot owner: {:?}", intended_slot_owner.compress());
                     return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
@@ -127,22 +127,22 @@ impl Blockchain {
 
                 // Check if a view change occurred - if so, validate the proof
                 let prev_info = blockchain
-                    .get_chain_info(block.parent_hash(), false, txn_opt)
+                    .get_chain_info(header.parent_hash(), false, txn_opt)
                     .unwrap();
 
-                let view_number = if policy::is_macro_block_at(block.block_number() - 1) {
+                let view_number = if policy::is_macro_block_at(header.block_number() - 1) {
                     // Reset view number in new batch
                     0
                 } else {
                     prev_info.head.view_number()
                 };
 
-                let new_view_number = block.view_number();
+                let new_view_number = header.view_number();
 
                 if new_view_number < view_number {
                     warn!(
                         "Rejecting block - lower view number {:?} < {:?}",
-                        block.view_number(),
+                        header.view_number(),
                         view_number
                     );
                     return Err(PushError::InvalidBlock(BlockError::InvalidViewNumber));
@@ -158,8 +158,8 @@ impl Blockchain {
                 } else if new_view_number > view_number && justification.view_change_proof.is_some()
                 {
                     let view_change = ViewChange {
-                        block_number: block.block_number(),
-                        new_view_number: block.view_number(),
+                        block_number: header.block_number(),
+                        new_view_number: header.view_number(),
                         prev_seed: prev_info.head.seed().clone(),
                     };
 
@@ -175,18 +175,11 @@ impl Blockchain {
                 }
             }
             BlockJustification::Macro(justification) => {
-                // Check if there's a block body from which to get the pk_tree_root.
-                let pk_tree_root = match block.body() {
-                    Some(body) => body.unwrap_macro().pk_tree_root,
-                    None => None,
-                };
-
                 // If the block is a macro block, verify the Tendermint proof.
                 if !justification.verify(
-                    block.hash(),
-                    block.block_number(),
+                    header.hash(),
+                    header.block_number(),
                     &blockchain.current_validators().unwrap(),
-                    pk_tree_root,
                 ) {
                     warn!("Rejecting block - macro block with bad justification");
                     return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
@@ -383,15 +376,6 @@ impl Blockchain {
                 None
             };
 
-            // Calculate the PK Tree root.
-            let real_pk_tree_root = if macro_block.is_election_block() {
-                Some(MacroBlock::create_pk_tree_root(
-                    real_validators.as_ref().unwrap(),
-                ))
-            } else {
-                None
-            };
-
             // Check the real values against the block.
             if let Some(body) = &macro_block.body {
                 // If we were given a body, then check each value against the corresponding value in
@@ -411,11 +395,6 @@ impl Blockchain {
                     return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
                 }
 
-                if real_pk_tree_root != body.pk_tree_root {
-                    warn!("Rejecting block - PK Tree root doesn't match real PK Tree root");
-                    return Err(PushError::InvalidBlock(BlockError::InvalidPKTreeRoot));
-                }
-
                 if !body.transactions.is_empty() {
                     warn!("Rejecting block - Macro block contains transactions");
                     return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
@@ -425,7 +404,6 @@ impl Blockchain {
                 // its hash against the block header.
                 let real_body = MacroBody {
                     validators: real_validators,
-                    pk_tree_root: real_pk_tree_root,
                     lost_reward_set: real_lost_rewards,
                     disabled_set: real_disabled_slots,
                     transactions: vec![],

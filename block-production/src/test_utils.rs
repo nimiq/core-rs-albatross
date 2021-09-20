@@ -77,6 +77,7 @@ impl TemporaryBlockProducer {
                     .body
                     .or(Some(MacroBody::new()))
                     .unwrap(),
+                validator_merkle_root,
             ))
         } else {
             let view_change_proof = if blockchain.next_view_number() == view_number {
@@ -103,19 +104,12 @@ impl TemporaryBlockProducer {
 
     pub fn finalize_macro_block(
         proposal: TendermintProposal,
-        proposal_body: MacroBody,
+        extrinsics: MacroBody,
+        validator_merkle_root: Vec<u8>,
     ) -> MacroBlock {
         let keypair = KeyPair::from(
             SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap(),
         );
-
-        // Get the validator Merkle root. This only exists on election blocks.
-        let validator_merkle_root = match &proposal_body.pk_tree_root {
-            Some(v) => v.clone(),
-            None => {
-                vec![]
-            }
-        };
 
         // Create a TendemrintVote instance out of known properties.
         // round_number is for now fixed at 0 for tests, but it could be anything,
@@ -151,7 +145,7 @@ impl TemporaryBlockProducer {
         MacroBlock {
             header: proposal.value,
             justification,
-            body: Some(proposal_body),
+            body: Some(extrinsics),
         }
     }
 

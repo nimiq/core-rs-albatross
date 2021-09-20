@@ -4,7 +4,7 @@ use beserial::{Deserialize, Serialize};
 use nimiq_bls::AggregatePublicKey;
 use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
 use nimiq_hash_derive::SerializeContent;
-use nimiq_primitives::policy;
+use nimiq_primitives::policy::TWO_THIRD_SLOTS;
 use nimiq_primitives::slots::Validators;
 
 use crate::signed::{
@@ -51,10 +51,9 @@ impl TendermintProof {
         block_hash: Blake2bHash,
         block_number: u32,
         validators: &Validators,
-        pk_tree_root: Option<Vec<u8>>,
     ) -> bool {
         // Check if there are enough votes.
-        if self.votes() < policy::TWO_THIRD_SLOTS {
+        if self.votes() < TWO_THIRD_SLOTS {
             return false;
         }
 
@@ -68,14 +67,8 @@ impl TendermintProof {
             }
         }
 
-        // If the pk_tree_root is None (i.e. in checkpoint blocks), then we serialize it as an empty
-        // vec.
-        let validator_merkle_root = match pk_tree_root {
-            Some(x) => x,
-            None => {
-                vec![]
-            }
-        };
+        // Calculate the validator Merkle root (used in the nano sync).
+        let validator_merkle_root = MacroBlock::create_pk_tree_root(validators, block_number);
 
         // Calculate the message that was actually signed by the validators.
         let message = TendermintVote {

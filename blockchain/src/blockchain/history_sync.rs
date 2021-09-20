@@ -120,7 +120,6 @@ impl Blockchain {
             macro_block.hash(),
             macro_block.header.block_number,
             &this.current_validators().unwrap(),
-            body.pk_tree_root.clone(),
         ) {
             warn!("Rejecting block - macro block with bad justification");
             return Err(PushError::InvalidBlock(BlockError::InvalidJustification));

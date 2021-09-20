@@ -156,18 +156,11 @@ impl NanoBlockchain {
             .as_ref()
             .ok_or(PushError::InvalidBlock(BlockError::NoJustification))?;
 
-        // Check if there's a block body from which to get the pk_tree_root.
-        let pk_tree_root = match block.body() {
-            Some(body) => body.unwrap_macro().pk_tree_root,
-            None => None,
-        };
-
         // Verify the justification.
         if !justification.verify(
             block.hash(),
             block.block_number(),
             &self.current_validators().unwrap(),
-            pk_tree_root,
         ) {
             return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
         }

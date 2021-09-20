@@ -57,7 +57,7 @@ impl NanoBlockchain {
         // Check the justification.
         Blockchain::verify_block_justification(
             self,
-            &block,
+            &block.header(),
             &block.justification(),
             &intended_slot_owner,
             None,

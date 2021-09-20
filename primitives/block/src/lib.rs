@@ -81,6 +81,4 @@ pub enum BlockError {
     InvalidHistoryRoot,
     #[error("Incorrect validators")]
     InvalidValidators,
-    #[error("Incorrect PK Tree root")]
-    InvalidPKTreeRoot,
 }
