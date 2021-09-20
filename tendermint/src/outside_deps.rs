@@ -17,7 +17,7 @@ pub trait TendermintOutsideDeps: Send + Unpin {
     /// using a previous state.
     fn verify_state(&self, state: &TendermintState<Self::ProposalTy, Self::ProofTy>) -> bool;
 
-    /// Checks if it our turn to propose for the given round.
+    /// Checks if it is our turn to propose for the given round.
     fn is_our_turn(&self, round: u32) -> bool;
 
     /// Produces a proposal for the given round. It is used when it is our turn to propose. The

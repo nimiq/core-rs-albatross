@@ -61,10 +61,14 @@ pub struct MacroHeader {
 /// The struct representing the body of a Macro block (can be either checkpoint or election).
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MacroBody {
-    /// Contains all the information regarding the current validator set, i.e. their validator
-    /// public key, their reward address and their assigned validator slots.
+    /// Contains all the information regarding the validator set for the next epoch, i.e. their
+    /// validator public key, their reward address and their assigned validator slots.
     /// Is only Some when the macro block is an election block.
     pub validators: Option<Validators>,
+    /// Contains the root of the PK Tree calculated using the validator keys for the next epoch.
+    /// Is only Some when the macro block is an election block.
+    #[beserial(len_type(u8))]
+    pub pk_tree_root: Option<Vec<u8>>,
     /// A bitset representing which validator slots had their reward slashed at the time when this
     /// block was produced. It is used later on for reward distribution.
     pub lost_reward_set: BitSet,
@@ -99,13 +103,8 @@ impl MacroBlock {
     }
 
     /// Calculates the PKTree root from the given validators. This only needs to be calculated
-    /// if we are in an election block, otherwise we return an empty vector.
-    pub fn create_pk_tree_root(validators: &Validators, block_number: u32) -> Vec<u8> {
-        // Check if we are in an election block.
-        if !policy::is_election_block_at(block_number) {
-            return vec![];
-        }
-
+    /// if we are in an election block.
+    pub fn create_pk_tree_root(validators: &Validators) -> Vec<u8> {
         // Get the public keys.
         let public_keys = validators.to_pks().iter().map(|pk| pk.public_key).collect();
 
@@ -129,6 +128,7 @@ impl MacroBody {
     pub fn new() -> Self {
         MacroBody {
             validators: None,
+            pk_tree_root: None,
             lost_reward_set: BitSet::new(),
             disabled_set: BitSet::new(),
             transactions: vec![],

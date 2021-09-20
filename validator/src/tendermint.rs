@@ -322,7 +322,7 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
             }
         };
 
-        // If the message was validated sucessfully, the network may now relay it to other peers.
+        // If the message was validated successfully, the network may now relay it to other peers.
         // Otherwise, reject or ignore the message.
         if let Some((MsgAcceptance::Accept, header, valid_round)) = acceptance {
             self.network
@@ -349,8 +349,17 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
         step: Step,
         proposal: Option<Blake2bHash>,
     ) -> Result<AggregationResult<Self::ProofTy>, TendermintError> {
+        // If the pk_tree_root is None (i.e. in checkpoint blocks), then we serialize it as an empty
+        // vec.
+        let validator_merkle_root = match &self.cache_body.as_ref().unwrap().pk_tree_root {
+            Some(x) => x.clone(),
+            None => {
+                vec![]
+            }
+        };
+
         self.aggregation_adapter
-            .broadcast_and_aggregate(round, step, proposal)
+            .broadcast_and_aggregate(round, step, proposal, validator_merkle_root)
             .await
     }
 
