@@ -90,6 +90,12 @@ fn test_replay() {
         vec![]
     };
 
+    let pk_tree_root = if policy::is_election_block_at(1u32) {
+        Some(validator_merkle_root.clone())
+    } else {
+        None
+    };
+
     // create a TendermintVote for the PreVote round
     let vote = TendermintVote {
         proposal_hash: Some(block_hash.clone()),
@@ -118,7 +124,7 @@ fn test_replay() {
         sig: MultiSignature::new(signature, signers),
     };
     // verify commit - this should fail
-    assert!(!justification.verify(block_hash.clone(), 1u32, &validators));
+    assert!(!justification.verify(block_hash.clone(), 1u32, &validators, pk_tree_root.clone()));
 
     // create the same thing again but for the PreCommit round
     let vote = TendermintVote {
@@ -149,5 +155,5 @@ fn test_replay() {
     };
     // verify commit - this should not fail as this time it is the correct round
     // assert exists to make sure this is in fact the deciding factor (not i.e wrong validator slots or something else)
-    assert!(justification.verify(block_hash, 1u32, &validators));
+    assert!(justification.verify(block_hash, 1u32, &validators, pk_tree_root));
 }
