@@ -65,6 +65,9 @@ impl TemporaryBlockProducer {
                 .get_validators_for_epoch(policy::epoch_at(blockchain.block_number() + 1));
             assert!(validators.is_some());
 
+            let validator_merkle_root =
+                MacroBlock::create_pk_tree_root(&validators.unwrap(), height);
+
             Block::Macro(TemporaryBlockProducer::finalize_macro_block(
                 TendermintProposal {
                     valid_round: None,

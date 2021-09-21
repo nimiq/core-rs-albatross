@@ -11,7 +11,7 @@ use crate::signed::{
     Message, SignedMessage, PREFIX_TENDERMINT_COMMIT, PREFIX_TENDERMINT_PREPARE,
     PREFIX_TENDERMINT_PROPOSAL,
 };
-use crate::{MacroHeader, MultiSignature};
+use crate::{MacroBlock, MacroHeader, MultiSignature};
 
 /// The proposal message sent by the Tendermint leader.
 #[derive(Clone, Debug, Serialize, Deserialize, SerializeContent, PartialEq, Eq)]

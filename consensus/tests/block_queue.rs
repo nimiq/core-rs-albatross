@@ -312,8 +312,8 @@ async fn send_micro_blocks_out_of_order() {
     assert_eq!(blockchain1.read().block_number(), 0);
 
     // Obtain the buffered blocks
-
-    assert_eq!(block_queue.buffered_blocks().count() as u64, n_blocks - 1);
+    let buffered_blocks = block_queue.buffered_blocks().collect::<Vec<_>>();
+    assert_eq!(buffered_blocks.len() as u64, n_blocks - 1);
 
     // now send block1 to fill the gap
     tx.send((blocks[0].clone(), mock_id)).await.unwrap();

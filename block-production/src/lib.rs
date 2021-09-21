@@ -222,7 +222,7 @@ impl BlockProducer {
         // Get the state.
         let state = blockchain.state();
 
-        let inherents: Vec<Inherent> = blockchain.create_macro_block_inherents(state, &header);
+        let inherents: Vec<Inherent> = blockchain.create_macro_block_inherents(&state, &header);
 
         // Update the state and add the state root to the header.
         header.state_root = state
@@ -261,7 +261,7 @@ impl BlockProducer {
         };
 
         // If this is an election block, calculate the validator set for the next epoch.
-        let pk_tree_root = if policy::is_election_block_at(blockchain.block_number() + 1) {
+        let pk_tree_root = if policy::is_election_block_at(self.blockchain.block_number() + 1) {
             Some(MacroBlock::create_pk_tree_root(
                 validators.as_ref().unwrap(),
             ))
