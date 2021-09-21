@@ -30,7 +30,7 @@ pub struct Blockchain {
     // The network ID. It determines if this is the mainnet or one of the testnets.
     pub network_id: NetworkId,
     // The OffsetTime struct. It allows us to query the current time.
-    pub time: Arc<OffsetTime>,
+    pub time: Arc<OffsetTime>, // shared with network
     // The notifier processes events relative to the blockchain.
     pub notifier: Notifier<'static, BlockchainEvent>,
     // The fork notifier processes fork events.
@@ -53,9 +53,11 @@ pub struct Blockchain {
 /// Implements methods to start a Blockchain.
 impl Blockchain {
     /// Creates a new blockchain from a given environment and network ID.
-    pub fn new(env: Environment, network_id: NetworkId) -> Result<Self, BlockchainError> {
-        // TODO `time` should be passed by the caller.
-        let time = Arc::new(OffsetTime::new());
+    pub fn new(
+        env: Environment,
+        network_id: NetworkId,
+        time: Arc<OffsetTime>,
+    ) -> Result<Self, BlockchainError> {
         let network_info = NetworkInfo::from_network_id(network_id);
         let genesis_block = network_info.genesis_block::<Block>();
         let genesis_accounts = network_info.genesis_accounts();

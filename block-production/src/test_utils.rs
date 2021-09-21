@@ -15,6 +15,7 @@ use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::policy;
+use nimiq_utils::time::OffsetTime;
 
 use crate::BlockProducer;
 
@@ -28,9 +29,10 @@ pub struct TemporaryBlockProducer {
 
 impl TemporaryBlockProducer {
     pub fn new() -> Self {
+        let time = Arc::new(OffsetTime::new());
         let env = VolatileEnvironment::new(10).unwrap();
         let blockchain = Arc::new(RwLock::new(
-            Blockchain::new(env, NetworkId::UnitAlbatross).unwrap(),
+            Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
         ));
 
         let keypair = KeyPair::from(

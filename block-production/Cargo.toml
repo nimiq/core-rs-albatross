@@ -35,6 +35,7 @@ nimiq-mempool = { path = "../mempool" }
 nimiq-nano-primitives = { path = "../nano-primitives" }
 nimiq-primitives = { path = "../primitives" }
 nimiq-vrf = { path = "../vrf" }
+nimiq-utils = { path = "../utils"}
 
 [dev-dependencies]
 simple_logger = "1.0"

@@ -967,6 +967,7 @@ mod tests {
     use nimiq_database::volatile::VolatileEnvironment;
     use nimiq_genesis::NetworkId;
     use nimiq_network_mock::{MockHub, MockNetwork, MockPeer};
+    use nimiq_utils::time::OffsetTime;
 
     use super::*;
 
@@ -1002,9 +1003,10 @@ mod tests {
             }
         }
 
+        let time = Arc::new(OffsetTime::new());
         let env1 = VolatileEnvironment::new(10).unwrap();
         let blockchain = Arc::new(RwLock::new(
-            Blockchain::new(env1, NetworkId::UnitAlbatross).unwrap(),
+            Blockchain::new(env1, NetworkId::UnitAlbatross, time).unwrap(),
         ));
 
         let mut hub = MockHub::default();

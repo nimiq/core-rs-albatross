@@ -124,7 +124,7 @@ impl ClientInner {
             config.database,
         )?;
         let blockchain = Arc::new(RwLock::new(
-            Blockchain::new(environment.clone(), config.network_id).unwrap(),
+            Blockchain::new(environment.clone(), config.network_id, time).unwrap(),
         ));
         let mempool = Mempool::new(Arc::clone(&blockchain), config.mempool);
 

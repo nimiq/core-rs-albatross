@@ -14,13 +14,15 @@ use nimiq_primitives::policy;
 use nimiq_test_utils::blockchain::{
     fill_micro_blocks, sign_macro_block, sign_view_change, SECRET_KEY,
 };
+use nimiq_utils::time::OffsetTime;
 use nimiq_vrf::VrfSeed;
 
 #[test]
 fn it_can_produce_micro_blocks() {
+    let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(RwLock::new(
-        Blockchain::new(env, NetworkId::UnitAlbatross).unwrap(),
+        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
     ));
     let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
     let keypair =
@@ -103,9 +105,10 @@ fn it_can_produce_micro_blocks() {
 
 #[test]
 fn it_can_produce_macro_blocks() {
+    let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(RwLock::new(
-        Blockchain::new(env, NetworkId::UnitAlbatross).unwrap(),
+        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
     ));
     let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
 
@@ -137,9 +140,10 @@ fn it_can_produce_macro_blocks() {
 
 #[test]
 fn it_can_produce_election_blocks() {
+    let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(RwLock::new(
-        Blockchain::new(env, NetworkId::UnitAlbatross).unwrap(),
+        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
     ));
     let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
 

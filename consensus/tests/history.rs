@@ -22,6 +22,7 @@ use nimiq_network_interface::network::Network;
 use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_primitives::policy;
 use nimiq_test_utils::blockchain::produce_macro_blocks;
+use nimiq_utils::time::OffsetTime;
 
 pub struct MockHistorySyncStream<TNetwork: Network> {
     network: Arc<TNetwork>,
@@ -51,8 +52,9 @@ async fn peers_can_sync() {
 
     // Setup first peer.
     let env1 = VolatileEnvironment::new(10).unwrap();
+    let time = Arc::new(OffsetTime::new());
     let blockchain1 = Arc::new(RwLock::new(
-        Blockchain::new(env1.clone(), NetworkId::UnitAlbatross).unwrap(),
+        Blockchain::new(env1.clone(), NetworkId::UnitAlbatross, time).unwrap(),
     ));
     let mempool1 = Mempool::new(Arc::clone(&blockchain1), MempoolConfig::default());
 
@@ -83,9 +85,10 @@ async fn peers_can_sync() {
     .await;
 
     // Setup second peer (not synced yet).
+    let time = Arc::new(OffsetTime::new());
     let env2 = VolatileEnvironment::new(10).unwrap();
     let blockchain2 = Arc::new(RwLock::new(
-        Blockchain::new(env2.clone(), NetworkId::UnitAlbatross).unwrap(),
+        Blockchain::new(env2.clone(), NetworkId::UnitAlbatross, time).unwrap(),
     ));
     let mempool2 = Mempool::new(Arc::clone(&blockchain2), MempoolConfig::default());
 
@@ -192,9 +195,10 @@ async fn sync_ingredients() {
     let mut hub = MockHub::default();
 
     // Setup first peer.
+    let time = Arc::new(OffsetTime::new());
     let env1 = VolatileEnvironment::new(10).unwrap();
     let blockchain1 = Arc::new(RwLock::new(
-        Blockchain::new(env1.clone(), NetworkId::UnitAlbatross).unwrap(),
+        Blockchain::new(env1.clone(), NetworkId::UnitAlbatross, time).unwrap(),
     ));
     let mempool1 = Mempool::new(Arc::clone(&blockchain1), MempoolConfig::default());
 
@@ -227,8 +231,9 @@ async fn sync_ingredients() {
 
     // Setup second peer (not synced yet).
     let env2 = VolatileEnvironment::new(10).unwrap();
+    let time = Arc::new(OffsetTime::new());
     let blockchain2 = Arc::new(RwLock::new(
-        Blockchain::new(env2.clone(), NetworkId::UnitAlbatross).unwrap(),
+        Blockchain::new(env2.clone(), NetworkId::UnitAlbatross, time).unwrap(),
     ));
     let mempool2 = Mempool::new(Arc::clone(&blockchain2), MempoolConfig::default());
 

@@ -8,6 +8,7 @@ use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
 use nimiq_primitives::policy::{BATCHES_PER_EPOCH, BATCH_LENGTH, EPOCH_LENGTH};
 use nimiq_test_utils::blockchain::produce_macro_blocks;
+use nimiq_utils::time::OffsetTime;
 use parking_lot::RwLock;
 
 // Secret key of validator. Tests run with `genesis/src/genesis/unit-albatross.toml`
@@ -22,11 +23,13 @@ fn history_sync_works() {
     // checkpoint blocks to push.
     let num_macro_blocks = (2 * BATCHES_PER_EPOCH + 1) as usize;
 
+    let time = Arc::new(OffsetTime::new());
+
     // Create a blockchain to produce the macro blocks.
     let env = VolatileEnvironment::new(10).unwrap();
 
     let blockchain = Arc::new(RwLock::new(
-        Blockchain::new(env, NetworkId::UnitAlbatross).unwrap(),
+        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
     ));
 
     // Produce the blocks.
@@ -91,11 +94,12 @@ fn history_sync_works() {
 
     let checkpoint_txs_3_1 = blockchain.history_store.get_epoch_transactions(3, None);
 
+    let time = Arc::new(OffsetTime::new());
     // Create a second blockchain to push these blocks.
     let env2 = VolatileEnvironment::new(10).unwrap();
 
     let blockchain2 = Arc::new(RwLock::new(
-        Blockchain::new(env2, NetworkId::UnitAlbatross).unwrap(),
+        Blockchain::new(env2, NetworkId::UnitAlbatross, time).unwrap(),
     ));
 
     // Push blocks using history sync.
@@ -153,11 +157,13 @@ fn history_sync_works_with_micro_blocks() {
     // checkpoint blocks to push.
     let num_macro_blocks = (2 * BATCHES_PER_EPOCH + 2) as usize;
 
+    let time = Arc::new(OffsetTime::new());
+
     // Create a blockchain to produce the macro blocks.
     let env = VolatileEnvironment::new(10).unwrap();
 
     let blockchain = Arc::new(RwLock::new(
-        Blockchain::new(env, NetworkId::UnitAlbatross).unwrap(),
+        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
     ));
 
     // Produce the blocks.
@@ -231,11 +237,12 @@ fn history_sync_works_with_micro_blocks() {
         )
     }
 
+    let time = Arc::new(OffsetTime::new());
     // Create a second blockchain to push these blocks.
     let env2 = VolatileEnvironment::new(10).unwrap();
 
     let blockchain2 = Arc::new(RwLock::new(
-        Blockchain::new(env2, NetworkId::UnitAlbatross).unwrap(),
+        Blockchain::new(env2, NetworkId::UnitAlbatross, time).unwrap(),
     ));
 
     // Push blocks using history sync.

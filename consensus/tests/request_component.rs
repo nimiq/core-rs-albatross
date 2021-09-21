@@ -14,6 +14,7 @@ use nimiq_network_interface::network::Network;
 use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_primitives::networks::NetworkId;
 use nimiq_test_utils::blockchain::produce_macro_blocks;
+use nimiq_utils::time::OffsetTime;
 
 /// Secret key of validator. Tests run with `network-primitives/src/genesis/unit-albatross.toml`
 const SECRET_KEY: &str =
@@ -28,10 +29,11 @@ struct Node {
 
 impl Node {
     pub async fn new(hub: &mut MockHub) -> Self {
+        let time = Arc::new(OffsetTime::new());
         let env = VolatileEnvironment::new(10).unwrap();
 
         let blockchain = Arc::new(RwLock::new(
-            Blockchain::new(env.clone(), NetworkId::UnitAlbatross).unwrap(),
+            Blockchain::new(env.clone(), NetworkId::UnitAlbatross, time).unwrap(),
         ));
 
         let network = Arc::new(hub.new_network());
