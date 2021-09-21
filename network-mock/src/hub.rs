@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     hash::Hash,
     sync::{atomic::AtomicBool, Arc},
 };
@@ -18,6 +18,15 @@ pub(crate) struct SenderKey {
     pub message_type: u64,
 }
 
+#[derive(Debug)]
+pub(crate) struct MockTopic {
+    /// Subscribed peer list
+    peers: HashSet<MockAddress>,
+
+    /// Sender channel for the topic
+    pub sender: broadcast::Sender<(Arc<Vec<u8>>, MockPeerId)>,
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct MockHubInner {
     /// Peer maps of all networks.
@@ -29,7 +38,7 @@ pub(crate) struct MockHubInner {
     /// Senders for gossipsub topics
     ///
     /// The data is Arc'd, such that cloning is cheap, and we need only a borrow when we deserialize.
-    pub gossipsub_topics: HashMap<&'static str, broadcast::Sender<(Arc<Vec<u8>>, MockPeerId)>>,
+    pub gossipsub_topics: HashMap<&'static str, MockTopic>,
 
     /// DHT
     pub dht: HashMap<Vec<u8>, Vec<u8>>,
@@ -39,13 +48,53 @@ pub(crate) struct MockHubInner {
 }
 
 impl MockHubInner {
-    pub fn get_topic(
+    /// Returns the requested MockTopic.
+    pub fn get_topic(&mut self, topic_name: &'static str) -> Option<&MockTopic> {
+        self.gossipsub_topics.get(topic_name)
+    }
+
+    /// Subscribe to a MockTopic; if the topic doesn't exist yet, this function creates it.
+    /// Return the MockTopic when a new address is inserted into the subscribed peer list.
+    pub fn subscribe(
         &mut self,
-        topic: &'static str,
-    ) -> &broadcast::Sender<(Arc<Vec<u8>>, MockPeerId)> {
-        self.gossipsub_topics
-            .entry(topic)
-            .or_insert_with(|| broadcast::channel(16).0)
+        topic_name: &'static str,
+        address: MockAddress,
+    ) -> Option<&mut MockTopic> {
+        // Get the topic. If the topic doesn't exist yet, insert it into the topics list.
+        let topic = self
+            .gossipsub_topics
+            .entry(topic_name)
+            .or_insert_with(|| MockTopic {
+                peers: HashSet::new(),
+                sender: broadcast::channel(16).0,
+            });
+
+        // Add the peer address to the subscribed peer list.
+        if topic.peers.insert(address) {
+            Some(topic)
+        } else {
+            None
+        }
+    }
+
+    /// Unsubscribe from a MockTopic.
+    /// Return 'false' if the topic doesn't exist or if the peer wasn't subscribed to it.
+    /// Otherwise, return 'true'
+    pub fn unsubscribe(&mut self, topic_name: &'static str, address: &MockAddress) -> bool {
+        if let Some(topic) = self.gossipsub_topics.get_mut(topic_name) {
+            // Verify that the peer was actually subscribed to the topic.
+            if !topic.peers.remove(address) {
+                return false;
+            }
+
+            // If there are no more peers left, remove the topic from the list and drop the sender.
+            if topic.peers.is_empty() {
+                drop(self.gossipsub_topics.remove(topic_name).unwrap());
+            }
+            true
+        } else {
+            false
+        }
     }
 }
 

@@ -84,6 +84,10 @@ pub(crate) enum NetworkAction {
             Result<mpsc::Receiver<(GossipsubMessage, MessageId, PeerId)>, NetworkError>,
         >,
     },
+    Unsubscribe {
+        topic_name: &'static str,
+        output: oneshot::Sender<Result<(), NetworkError>>,
+    },
     Publish {
         topic_name: &'static str,
         data: Vec<u8>,
@@ -587,10 +591,44 @@ impl Network {
                             .ok();
                     }
 
-                    // Failed. Send back error.
+                    // Subscribe failed. Send back error.
                     Err(e) => {
                         output.send(Err(e.into())).ok();
                     }
+                }
+            }
+
+            NetworkAction::Unsubscribe { topic_name, output } => {
+                let topic = IdentTopic::new(topic_name);
+
+                if state.gossip_topics.get_mut(&topic.hash()).is_some() {
+                    match swarm.behaviour_mut().gossipsub.unsubscribe(&topic) {
+                        // Unsubscription. Remove the topic from the subscription table.
+                        Ok(true) => {
+                            drop(state.gossip_topics.remove(&topic.hash()).unwrap().0);
+
+                            output.send(Ok(())).ok();
+                        }
+
+                        // Apparently we're already unsubscribed.
+                        Ok(false) => {
+                            drop(state.gossip_topics.remove(&topic.hash()).unwrap().0);
+
+                            output
+                                .send(Err(NetworkError::AlreadyUnsubscribed { topic_name }))
+                                .ok();
+                        }
+
+                        // Unsubscribe failed. Send back error.
+                        Err(e) => {
+                            output.send(Err(e.into())).ok();
+                        }
+                    }
+                } else {
+                    // If the topic wasn't in the topics list, we're not subscribed to it.
+                    output
+                        .send(Err(NetworkError::AlreadyUnsubscribed { topic_name }))
+                        .ok();
                 }
             }
             NetworkAction::Publish {
@@ -598,8 +636,8 @@ impl Network {
                 data,
                 output,
             } => {
-                // TODO: Check if we're subscribed to the topic, otherwise we can't publish
                 let topic = IdentTopic::new(topic_name);
+
                 output
                     .send(
                         swarm
@@ -764,9 +802,9 @@ impl NetworkInterface for Network {
             .await?;
 
         // Receive the mpsc::Receiver, but propagate errors first.
-        let rx = rx.await??;
+        let subscribe_rx = rx.await??;
 
-        Ok(rx
+        Ok(subscribe_rx
             .map(|(msg, msg_id, source)| {
                 let item: <T as Topic>::Item =
                     Deserialize::deserialize_from_vec(&msg.data).unwrap();
@@ -777,6 +815,23 @@ impl NetworkInterface for Network {
                 (item, id)
             })
             .boxed())
+    }
+
+    async fn unsubscribe<'a, T>(&self) -> Result<(), Self::Error>
+    where
+        T: Topic + Sync,
+    {
+        let (output_tx, output_rx) = oneshot::channel();
+
+        self.action_tx
+            .clone()
+            .send(NetworkAction::Unsubscribe {
+                topic_name: <T as Topic>::NAME,
+                output: output_tx,
+            })
+            .await?;
+
+        output_rx.await?
     }
 
     async fn publish<T>(&self, topic: &T, item: <T as Topic>::Item) -> Result<(), Self::Error>
@@ -1241,6 +1296,7 @@ mod tests {
         let net1 = net.spawn().await;
         let net2 = net.spawn().await;
 
+        // Our Gossipsub configuration requires a minimum of 6 peers for the mesh network
         for _ in 0..5i32 {
             let net_n = net.spawn().await;
             let stream_n = net_n.subscribe(&TestTopic).await.unwrap();

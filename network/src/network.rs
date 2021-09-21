@@ -496,6 +496,13 @@ impl NetworkInterface for Network {
         unimplemented!()
     }
 
+    async fn unsubscribe<'a, T>(&self) -> Result<(), Self::Error>
+    where
+        T: Topic + Sync,
+    {
+        unimplemented!()
+    }
+
     async fn publish<T>(&self, _topic: &T, _item: <T as Topic>::Item) -> Result<(), Self::Error>
     where
         T: Topic + Sync,
