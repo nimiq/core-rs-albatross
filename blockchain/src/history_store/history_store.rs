@@ -1271,6 +1271,25 @@ mod tests {
         }
     }
 
+    #[test]
+    fn prove_empty_tree_works() {
+        // Initialize History Store.
+        let env = VolatileEnvironment::new(10).unwrap();
+        let history_store = HistoryStore::new(env.clone());
+
+        let txn = WriteTransaction::new(&env);
+
+        // Verify method works.
+        let root = history_store.get_history_tree_root(0, Some(&txn)).unwrap();
+
+        let proof = history_store.prove(0, vec![], Some(&txn)).unwrap();
+
+        assert_eq!(proof.positions.len(), 0);
+        assert_eq!(proof.history.len(), 0);
+
+        assert!(proof.verify(root).unwrap());
+    }
+
     fn create_transaction(block: u32, value: u64) -> ExtendedTransaction {
         ExtendedTransaction {
             block_number: block,
