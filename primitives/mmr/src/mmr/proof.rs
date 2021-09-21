@@ -165,6 +165,13 @@ impl<H: Merge + Clone + Eq> Proof<H> {
     where
         T: Hash<H>,
     {
+        // If the proof came from an empty tree we just need to check that we are not trying to
+        // prove any leaves and that the given root matches the empty tree root.
+        if self.mmr_size == 0 && self.nodes.is_empty() {
+            return Ok(root == &H::empty(0));
+        }
+
+        // Otherwise we just calculate the root.
         self.calculate_root(leaves)
             .map(|calculated_root| &calculated_root == root)
     }

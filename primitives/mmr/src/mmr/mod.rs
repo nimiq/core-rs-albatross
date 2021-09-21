@@ -247,9 +247,14 @@ impl<H: Merge + Clone, S: Store<H>> MerkleMountainRange<H, S> {
         tree_length: usize,
         assume_previous: bool,
     ) -> Result<Proof<H>, Error> {
-        // The slice of positions cannot be empty.
+        // The slice of positions cannot be empty. Except if the tree is also empty.
         if positions.is_empty() {
-            return Err(Error::ProveInvalidLeaves);
+            return if tree_length == 0 {
+                // In this case we return an empty proof.
+                Ok(Proof::new(0))
+            } else {
+                Err(Error::ProveInvalidLeaves)
+            };
         }
 
         let mut proof = Proof::new(tree_length);
