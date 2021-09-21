@@ -7,9 +7,7 @@ use futures::{future, StreamExt};
 use tokio::{sync::mpsc, time};
 
 use bls::SecretKey;
-use nimiq_block::{
-    MacroBlock, MultiSignature, TendermintIdentifier, TendermintStep, TendermintVote,
-};
+use nimiq_block::{MultiSignature, TendermintIdentifier, TendermintStep, TendermintVote};
 use nimiq_handel::{identity::WeightRegistry, update::LevelUpdateMessage};
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::{policy, slots::Validators};
