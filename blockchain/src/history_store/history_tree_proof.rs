@@ -1,10 +1,9 @@
-use nimiq_mmr::mmr::proof::Proof;
-
 use beserial::{
     Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
     SerializingError, WriteBytesExt,
 };
 use nimiq_hash::Blake2bHash;
+use nimiq_mmr::mmr::proof::Proof;
 
 use crate::history_store::ExtendedTransaction;
 

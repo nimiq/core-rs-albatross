@@ -3,6 +3,10 @@ use std::cmp;
 /// This is the address for the staking contract in user-friendly format.
 pub const STAKING_CONTRACT_ADDRESS: &str = "NQ38 STAK 1NG0 0000 0000 C0NT RACT 0000 0000";
 
+/// This is the address for the coinbase in user-friendly format. Note that this is not a real
+/// account, it is just the address we use to denote that some coins originated from a coinbase event.
+pub const COINBASE_ADDRESS: &str = "NQ81 C01N BASE 0000 0000 0000 0000 0000 0000";
+
 /// Number of blocks a transaction is valid with Albatross consensus.
 pub const TRANSACTION_VALIDITY_WINDOW: u32 = 7200;
 

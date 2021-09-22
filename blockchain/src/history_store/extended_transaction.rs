@@ -1,11 +1,14 @@
 use std::io;
 
-use nimiq_mmr::hash::Hash as MMRHash;
-
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use nimiq_account::{Inherent, InherentType};
 use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_keys::Address;
+use nimiq_mmr::hash::Hash as MMRHash;
+use nimiq_primitives::coin::Coin;
+use nimiq_primitives::networks::NetworkId;
+use nimiq_primitives::policy::COINBASE_ADDRESS;
 use nimiq_transaction::Transaction as BlockchainTransaction;
 
 /// A single struct that stores information that represents any possible transaction (basic
@@ -23,7 +26,7 @@ pub struct ExtendedTransaction {
 impl ExtendedTransaction {
     /// Convert a set of inherents and basic transactions (together with a block number and a block
     /// timestamp) into a vector of extended transactions.
-    /// We only want to store slash inherents, so we ignore the other inherent types. TODO
+    /// We only want to store slash and reward inherents, so we ignore the other inherent types.
     pub fn from(
         block_number: u32,
         block_time: u64,
@@ -95,11 +98,43 @@ impl ExtendedTransaction {
         }
     }
 
-    /// Returns the hash of the underlying transaction.
+    /// Returns the hash of the underlying transaction/inherent. For reward inherents we return the
+    /// hash of the corresponding reward transaction. This results into an unique hash for the
+    /// reward inherents (which wouldn't happen otherwise) and allows front-end to fetch rewards by
+    /// their transaction hash.
     pub fn tx_hash(&self) -> Blake2bHash {
         match &self.data {
             ExtTxData::Basic(tx) => tx.hash(),
-            ExtTxData::Inherent(tx) => tx.hash(),
+            ExtTxData::Inherent(v) => {
+                if v.ty == InherentType::Reward {
+                    self.clone().into_transaction().unwrap().hash()
+                } else {
+                    v.hash()
+                }
+            }
+        }
+    }
+
+    /// Tries to convert an extended transaction into a regular transaction. This will work for all
+    /// extended transactions that wrap over regular transactions and reward inherents.
+    pub fn into_transaction(self) -> Result<BlockchainTransaction, ()> {
+        match self.data {
+            ExtTxData::Basic(tx) => Ok(tx),
+            ExtTxData::Inherent(x) => {
+                if x.ty == InherentType::Reward {
+                    Ok(BlockchainTransaction::new_basic(
+                        Address::from_user_friendly_address(COINBASE_ADDRESS)
+                            .expect("Couldn't convert Coinbase address!"),
+                        x.target,
+                        x.value,
+                        Coin::ZERO,
+                        self.block_number,
+                        NetworkId::DevAlbatross,
+                    ))
+                } else {
+                    Err(())
+                }
+            }
         }
     }
 }
