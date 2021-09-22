@@ -31,6 +31,8 @@ pub trait WalletInterface {
         passphrase: Option<String>,
     ) -> Result<Address, Self::Error>;
 
+    async fn is_account_imported(&mut self, address: Address) -> Result<bool, Self::Error>;
+
     async fn list_accounts(&mut self) -> Result<Vec<Address>, Self::Error>;
 
     async fn lock_account(&mut self, address: Address) -> Result<(), Self::Error>;
