@@ -347,7 +347,7 @@ impl HistoryStore {
         tree.num_leaves()
     }
 
-    /// Returns a vector containing all transaction (no inherents) hashes corresponding to the given
+    /// Returns a vector containing all transaction (and reward inherents) hashes corresponding to the given
     /// address. It fetches the transactions from most recent to least recent up to the maximum
     /// number given.
     pub fn get_tx_hashes_by_address(
@@ -1246,17 +1246,17 @@ mod tests {
         assert_eq!(query_2[0], ext_txs[6].tx_hash());
         assert_eq!(query_2[1], ext_txs[5].tx_hash());
 
-        let query_2 = history_store.get_tx_hashes_by_address(
+        let query_3 = history_store.get_tx_hashes_by_address(
             &Address::from_user_friendly_address("NQ04 B79B R4FF 4NGU A9H0 2PT9 9ART 5A88 J73T")
                 .unwrap(),
             99,
             Some(&txn),
         );
 
-        assert_eq!(query_2.len(), 3);
-        assert_eq!(query_2[0], ext_txs[7].tx_hash());
-        assert_eq!(query_2[1], ext_txs[4].tx_hash());
-        assert_eq!(query_2[2], ext_txs[2].tx_hash());
+        assert_eq!(query_3.len(), 3);
+        assert_eq!(query_3[0], ext_txs[7].tx_hash());
+        assert_eq!(query_3[1], ext_txs[4].tx_hash());
+        assert_eq!(query_3[2], ext_txs[2].tx_hash());
     }
 
     #[test]
@@ -1342,6 +1342,7 @@ mod tests {
 
     fn create_inherent(block: u32, value: u64) -> ExtendedTransaction {
         ExtendedTransaction {
+            network_id: NetworkId::UnitAlbatross,
             block_number: block,
             block_time: 0,
             data: ExtTxData::Inherent(Inherent {
@@ -1358,6 +1359,7 @@ mod tests {
 
     fn create_transaction(block: u32, value: u64) -> ExtendedTransaction {
         ExtendedTransaction {
+            network_id: NetworkId::UnitAlbatross,
             block_number: block,
             block_time: 0,
             data: ExtTxData::Basic(BlockchainTransaction::new_basic(
