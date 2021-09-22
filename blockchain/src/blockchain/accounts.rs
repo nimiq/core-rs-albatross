@@ -46,6 +46,7 @@ impl Blockchain {
 
                 // Store the transactions and the inherents into the History tree.
                 let ext_txs = ExtendedTransaction::from(
+                    self.network_id,
                     macro_block.header.block_number,
                     macro_block.header.timestamp,
                     vec![],
@@ -94,6 +95,7 @@ impl Blockchain {
 
                 // Store the transactions and the inherents into the History tree.
                 let ext_txs = ExtendedTransaction::from(
+                    self.network_id,
                     micro_block.header.block_number,
                     micro_block.header.timestamp,
                     body.transactions.clone(),

@@ -15,6 +15,8 @@ use nimiq_transaction::Transaction as BlockchainTransaction;
 /// transaction or inherent) on the blockchain.
 #[derive(Clone, Debug)]
 pub struct ExtendedTransaction {
+    // The ID of the network where the transaction happened.
+    pub network_id: NetworkId,
     // The number of the block when the transaction happened.
     pub block_number: u32,
     // The timestamp of the block when the transaction happened.
@@ -24,10 +26,11 @@ pub struct ExtendedTransaction {
 }
 
 impl ExtendedTransaction {
-    /// Convert a set of inherents and basic transactions (together with a block number and a block
-    /// timestamp) into a vector of extended transactions.
+    /// Convert a set of inherents and basic transactions (together with a network id, a block
+    /// number and a block timestamp) into a vector of extended transactions.
     /// We only want to store slash and reward inherents, so we ignore the other inherent types.
     pub fn from(
+        network_id: NetworkId,
         block_number: u32,
         block_time: u64,
         transactions: Vec<BlockchainTransaction>,
@@ -37,6 +40,7 @@ impl ExtendedTransaction {
 
         for transaction in transactions {
             ext_txs.push(ExtendedTransaction {
+                network_id,
                 block_number,
                 block_time,
                 data: ExtTxData::Basic(transaction),
@@ -46,6 +50,7 @@ impl ExtendedTransaction {
         for inherent in inherents {
             if inherent.ty == InherentType::Slash || inherent.ty == InherentType::Reward {
                 ext_txs.push(ExtendedTransaction {
+                    network_id,
                     block_number,
                     block_time,
                     data: ExtTxData::Inherent(inherent),
@@ -129,7 +134,7 @@ impl ExtendedTransaction {
                         x.value,
                         Coin::ZERO,
                         self.block_number,
-                        NetworkId::DevAlbatross,
+                        self.network_id,
                     ))
                 } else {
                     Err(())
@@ -152,6 +157,7 @@ impl MMRHash<Blake2bHash> for ExtendedTransaction {
 impl Serialize for ExtendedTransaction {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size = 0;
+        size += Serialize::serialize(&self.network_id, writer)?;
         size += Serialize::serialize(&self.block_number, writer)?;
         size += Serialize::serialize(&self.block_time, writer)?;
         size += Serialize::serialize(&self.data, writer)?;
@@ -160,6 +166,7 @@ impl Serialize for ExtendedTransaction {
 
     fn serialized_size(&self) -> usize {
         let mut size = 0;
+        size += Serialize::serialized_size(&self.network_id);
         size += Serialize::serialized_size(&self.block_number);
         size += Serialize::serialized_size(&self.block_time);
         size += Serialize::serialized_size(&self.data);
@@ -169,10 +176,12 @@ impl Serialize for ExtendedTransaction {
 
 impl Deserialize for ExtendedTransaction {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        let network_id: NetworkId = Deserialize::deserialize(reader)?;
         let block_number: u32 = Deserialize::deserialize(reader)?;
         let block_time: u64 = Deserialize::deserialize(reader)?;
         let data: ExtTxData = Deserialize::deserialize(reader)?;
         Ok(ExtendedTransaction {
+            network_id,
             block_number,
             block_time,
             data,
