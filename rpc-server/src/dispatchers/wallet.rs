@@ -60,6 +60,12 @@ impl WalletInterface for WalletDispatcher {
         Ok(address)
     }
 
+    async fn is_account_imported(&mut self, address: Address) -> Result<bool, Error> {
+        let is_imported = self.wallet_store.get(&address, None).is_some();
+
+        Ok(is_imported)
+    }
+
     async fn list_accounts(&mut self) -> Result<Vec<Address>, Error> {
         Ok(self.wallet_store.list(None))
     }
