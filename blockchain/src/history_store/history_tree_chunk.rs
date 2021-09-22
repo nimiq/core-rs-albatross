@@ -1,12 +1,11 @@
 use std::fmt::{self, Debug, Formatter};
 
-use nimiq_mmr::mmr::proof::{Proof, RangeProof};
-
 use beserial::{
     Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
     SerializingError, WriteBytesExt,
 };
 use nimiq_hash::Blake2bHash;
+use nimiq_mmr::mmr::proof::{Proof, RangeProof};
 
 use crate::history_store::ExtendedTransaction;
 

@@ -1,11 +1,10 @@
 use std::cmp;
 use std::convert::TryInto;
 
-use nimiq_mmr::store::Store;
-
 use nimiq_database::cursor::ReadCursor;
 use nimiq_database::{Database, Transaction, WriteTransaction};
 use nimiq_hash::Blake2bHash;
+use nimiq_mmr::store::Store;
 
 #[derive(Debug)]
 enum Tx<'a, 'env> {

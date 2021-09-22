@@ -1,9 +1,9 @@
 use std::borrow::Cow;
+use std::convert::TryInto;
 use std::io;
 
 use nimiq_database::{AsDatabaseBytes, FromDatabaseValue};
 use nimiq_hash::{Blake2bHash, HashOutput};
-use std::convert::TryInto;
 
 /// A wrapper for an u32 and a Blake2bHash. We use it to for two different functions:
 /// 1) store the hash and index of leaf nodes

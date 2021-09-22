@@ -1,5 +1,12 @@
 use std::cmp;
 
+use nimiq_account::InherentType;
+use nimiq_database::cursor::ReadCursor;
+use nimiq_database::{
+    Database, DatabaseFlags, Environment, ReadTransaction, Transaction, WriteTransaction,
+};
+use nimiq_hash::Blake2bHash;
+use nimiq_keys::Address;
 use nimiq_mmr::error::Error as MMRError;
 use nimiq_mmr::hash::Hash as MMRHash;
 use nimiq_mmr::mmr::partial::PartialMerkleMountainRange;
@@ -9,17 +16,10 @@ use nimiq_mmr::mmr::MerkleMountainRange;
 use nimiq_mmr::store::memory::MemoryStore;
 use nimiq_primitives::policy;
 
-use nimiq_database::{
-    Database, DatabaseFlags, Environment, ReadTransaction, Transaction, WriteTransaction,
-};
-use nimiq_hash::Blake2bHash;
-
 use crate::history_store::mmr_store::MMRStore;
 use crate::history_store::ordered_hash::OrderedHash;
 use crate::history_store::{ExtendedTransaction, HistoryTreeChunk, HistoryTreeProof};
 use crate::ExtTxData;
-use nimiq_database::cursor::ReadCursor;
-use nimiq_keys::Address;
 
 /// A struct that contains databases to store history trees (which are Merkle Mountain Ranges
 /// constructed from the list of extended transactions in an epoch) and extended transactions (which
@@ -39,7 +39,8 @@ pub struct HistoryStore {
     tx_hash_db: Database,
     // A database of the last leaf index for each block number.
     last_leaf_db: Database,
-    // A database of all transaction (not inherent) hashes indexed by their sender address.
+    // A database of all transaction (and reward inherent) hashes indexed by their sender and
+    // recipient addresses.
     address_db: Database,
 }
 
@@ -222,10 +223,10 @@ impl HistoryStore {
         Some(tree.get_root().ok()?)
     }
 
-    /// Gets an extended transaction given its hash.
+    /// Gets an extended transaction given its transaction hash.
     pub fn get_ext_tx_by_hash(
         &self,
-        hash: &Blake2bHash,
+        tx_hash: &Blake2bHash,
         txn_option: Option<&Transaction>,
     ) -> Vec<ExtendedTransaction> {
         let read_txn: ReadTransaction;
@@ -238,7 +239,7 @@ impl HistoryStore {
         };
 
         // Get leaf hash(es).
-        let leaves = self.get_leaves_by_tx_hash(hash, Some(txn));
+        let leaves = self.get_leaves_by_tx_hash(tx_hash, Some(txn));
 
         // Get extended transactions.
         let mut ext_txs = vec![];
@@ -623,7 +624,22 @@ impl HistoryStore {
                     },
                 );
             }
-            ExtTxData::Inherent(_) => {}
+            ExtTxData::Inherent(tx) => {
+                // We only add reward inherents to the address database.
+                if tx.ty == InherentType::Reward {
+                    let index_tx_recipient =
+                        self.get_last_tx_index_for_address(&tx.target, Some(txn)) + 1;
+
+                    txn.put(
+                        &self.address_db,
+                        &tx.target,
+                        &OrderedHash {
+                            index: index_tx_recipient,
+                            hash: tx_hash,
+                        },
+                    );
+                }
+            }
         }
     }
 
@@ -739,7 +755,40 @@ impl HistoryStore {
                     txn.remove_item(&self.address_db, &tx.recipient, &v);
                 }
             }
-            ExtTxData::Inherent(_) => {}
+            ExtTxData::Inherent(tx) => {
+                if tx.ty == InherentType::Reward {
+                    let mut cursor = txn.cursor(&self.address_db);
+
+                    // Seek to the last inherent hash at the target's address and
+                    // go back until you find the correct one.
+                    let mut recipient_value = None;
+
+                    if cursor
+                        .seek_key::<Address, OrderedHash>(&tx.target)
+                        .is_some()
+                    {
+                        let mut duplicate = cursor.last_duplicate::<OrderedHash>();
+
+                        while let Some(v) = duplicate {
+                            if v.hash == tx_hash {
+                                recipient_value = Some(v);
+                                break;
+                            }
+
+                            duplicate = cursor
+                                .prev_duplicate::<Address, OrderedHash>()
+                                .map(|(_, v)| v);
+                        }
+                    }
+
+                    // Now remove the value. This weird construction is because of Rust's borrowing rules.
+                    drop(cursor);
+
+                    if let Some(v) = recipient_value {
+                        txn.remove_item(&self.address_db, &tx.target, &v);
+                    }
+                }
+            }
         }
     }
 
@@ -828,7 +877,7 @@ impl HistoryStore {
         (start, end)
     }
 
-    /// Returns the index of the last transaction (no inherent) associated to the given address.
+    /// Returns the index of the last transaction (or reward inherent) associated to the given address.
     fn get_last_tx_index_for_address(
         &self,
         address: &Address,
@@ -860,13 +909,15 @@ impl HistoryStore {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::ExtTxData;
     use nimiq_account::{Inherent, InherentType};
     use nimiq_database::volatile::VolatileEnvironment;
     use nimiq_primitives::coin::Coin;
     use nimiq_primitives::networks::NetworkId;
     use nimiq_transaction::Transaction as BlockchainTransaction;
+
+    use crate::ExtTxData;
+
+    use super::*;
 
     #[test]
     fn get_root_from_ext_txs_works() {
@@ -1174,26 +1225,38 @@ mod tests {
         history_store.add_to_history(&mut txn, 1, &ext_txs[3..]);
 
         // Verify method works.
-        let query_sender = history_store.get_tx_hashes_by_address(
+        let query_1 = history_store.get_tx_hashes_by_address(
             &Address::from_user_friendly_address("NQ09 VF5Y 1PKV MRM4 5LE1 55KV P6R2 GXYJ XYQF")
                 .unwrap(),
             99,
             Some(&txn),
         );
 
-        assert_eq!(query_sender.len(), 5);
-        assert_eq!(query_sender[0], ext_txs[6].tx_hash());
-        assert_eq!(query_sender[1], ext_txs[5].tx_hash());
-        assert_eq!(query_sender[2], ext_txs[3].tx_hash());
-        assert_eq!(query_sender[3], ext_txs[1].tx_hash());
-        assert_eq!(query_sender[4], ext_txs[0].tx_hash());
+        assert_eq!(query_1.len(), 5);
+        assert_eq!(query_1[0], ext_txs[6].tx_hash());
+        assert_eq!(query_1[1], ext_txs[5].tx_hash());
+        assert_eq!(query_1[2], ext_txs[3].tx_hash());
+        assert_eq!(query_1[3], ext_txs[1].tx_hash());
+        assert_eq!(query_1[4], ext_txs[0].tx_hash());
 
-        let query_recipient =
+        let query_2 =
             history_store.get_tx_hashes_by_address(&Address::burn_address(), 2, Some(&txn));
 
-        assert_eq!(query_recipient.len(), 2);
-        assert_eq!(query_recipient[0], ext_txs[6].tx_hash());
-        assert_eq!(query_recipient[1], ext_txs[5].tx_hash());
+        assert_eq!(query_2.len(), 2);
+        assert_eq!(query_2[0], ext_txs[6].tx_hash());
+        assert_eq!(query_2[1], ext_txs[5].tx_hash());
+
+        let query_2 = history_store.get_tx_hashes_by_address(
+            &Address::from_user_friendly_address("NQ04 B79B R4FF 4NGU A9H0 2PT9 9ART 5A88 J73T")
+                .unwrap(),
+            99,
+            Some(&txn),
+        );
+
+        assert_eq!(query_2.len(), 3);
+        assert_eq!(query_2[0], ext_txs[7].tx_hash());
+        assert_eq!(query_2[1], ext_txs[4].tx_hash());
+        assert_eq!(query_2[2], ext_txs[2].tx_hash());
     }
 
     #[test]
@@ -1258,19 +1321,6 @@ mod tests {
         assert!(proof.verify(root).unwrap());
     }
 
-    fn create_inherent(block: u32, value: u64) -> ExtendedTransaction {
-        ExtendedTransaction {
-            block_number: block,
-            block_time: 0,
-            data: ExtTxData::Inherent(Inherent {
-                ty: InherentType::Reward,
-                target: Default::default(),
-                value: Coin::from_u64_unchecked(value),
-                data: vec![],
-            }),
-        }
-    }
-
     #[test]
     fn prove_empty_tree_works() {
         // Initialize History Store.
@@ -1288,6 +1338,22 @@ mod tests {
         assert_eq!(proof.history.len(), 0);
 
         assert!(proof.verify(root).unwrap());
+    }
+
+    fn create_inherent(block: u32, value: u64) -> ExtendedTransaction {
+        ExtendedTransaction {
+            block_number: block,
+            block_time: 0,
+            data: ExtTxData::Inherent(Inherent {
+                ty: InherentType::Reward,
+                target: Address::from_user_friendly_address(
+                    "NQ04 B79B R4FF 4NGU A9H0 2PT9 9ART 5A88 J73T",
+                )
+                .unwrap(),
+                value: Coin::from_u64_unchecked(value),
+                data: vec![],
+            }),
+        }
     }
 
     fn create_transaction(block: u32, value: u64) -> ExtendedTransaction {
