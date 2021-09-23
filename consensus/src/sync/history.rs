@@ -8,6 +8,7 @@ use futures::stream::FuturesUnordered;
 use futures::task::{Context, Poll};
 use futures::{FutureExt, Stream, StreamExt};
 use parking_lot::RwLock;
+use tokio::task::spawn_blocking;
 use tokio_stream::wrappers::BroadcastStream;
 
 use block::{Block, MacroBlock};
@@ -784,62 +785,8 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
             }
         }
     }
-}
 
-impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
-    type Item = Arc<ConsensusAgent<TNetwork::PeerType>>;
-
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        while let Poll::Ready(Some(result)) = self.network_event_rx.poll_next_unpin(cx) {
-            match result {
-                Ok(NetworkEvent::PeerLeft(peer)) => {
-                    // Delete the ConsensusAgent from the agents map, removing the only "persistent"
-                    // strong reference to it. There might not be an entry for every peer (e.g. if
-                    // it didn't send any epoch ids).
-                    self.agents.remove(&peer);
-                }
-                Ok(NetworkEvent::PeerJoined(peer)) => {
-                    // Create a ConsensusAgent for the peer that joined and request epoch_ids from it.
-                    self.add_peer(peer);
-                }
-                Err(_) => return Poll::Ready(None),
-            }
-        }
-
-        // Stop pulling in new EpochIds if we hit a maximum a number of clusters to prevent DoS.
-        loop {
-            if self.epoch_clusters.len() >= Self::MAX_CLUSTERS {
-                // TODO: We still want to get the wakes for the epoch_ids_stream
-                //  even if we don't poll it now.
-                break;
-            }
-
-            if let Poll::Ready(Some(epoch_ids)) = self.epoch_ids_stream.poll_next_unpin(cx) {
-                if let Some(epoch_ids) = epoch_ids {
-                    // The peer might have disconnected during the request.
-                    // FIXME Check if the peer is still connected
-
-                    if !epoch_ids.on_same_chain {
-                        debug!(
-                            "Peer is on different chain: {:?}",
-                            epoch_ids.sender.peer.id()
-                        );
-                        // TODO: Send further locators. Possibly find branching point of fork.
-                    } else if epoch_ids.ids.is_empty() && epoch_ids.checkpoint_id.is_none() {
-                        // We are synced with this peer.
-                        debug!(
-                            "Peer has finished syncing: {:?}",
-                            epoch_ids.sender.peer.id()
-                        );
-                        return Poll::Ready(Some(epoch_ids.sender));
-                    }
-                    self.cluster_epoch_ids(epoch_ids);
-                }
-            } else {
-                break;
-            }
-        }
-
+    fn sync_epochs(&mut self, cx: &mut Context<'_>) -> Poll<()> {
         trace!(
             "Syncing epoch clusters ({} clusters)",
             self.epoch_clusters.len()
@@ -898,7 +845,10 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
                 self.active_epoch_cluster = self.find_best_epoch_cluster();
             }
         }
+        Poll::Ready(())
+    }
 
+    fn sync_batches(&mut self, cx: &mut Context<'_>) -> Poll<()> {
         trace!(
             "Syncing checkpoint clusters ({} clusters)",
             self.checkpoint_clusters.len()
@@ -949,6 +899,67 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
             // Move to next cluster.
             self.active_checkpoint_cluster = self.find_best_checkpoint_cluster();
         }
+        Poll::Ready(())
+    }
+}
+
+impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
+    type Item = Arc<ConsensusAgent<TNetwork::PeerType>>;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        while let Poll::Ready(Some(result)) = self.network_event_rx.poll_next_unpin(cx) {
+            match result {
+                Ok(NetworkEvent::PeerLeft(peer)) => {
+                    // Delete the ConsensusAgent from the agents map, removing the only "persistent"
+                    // strong reference to it. There might not be an entry for every peer (e.g. if
+                    // it didn't send any epoch ids).
+                    self.agents.remove(&peer);
+                }
+                Ok(NetworkEvent::PeerJoined(peer)) => {
+                    // Create a ConsensusAgent for the peer that joined and request epoch_ids from it.
+                    self.add_peer(peer);
+                }
+                Err(_) => return Poll::Ready(None),
+            }
+        }
+
+        // Stop pulling in new EpochIds if we hit a maximum a number of clusters to prevent DoS.
+        loop {
+            if self.epoch_clusters.len() >= Self::MAX_CLUSTERS {
+                // TODO: We still want to get the wakes for the epoch_ids_stream
+                //  even if we don't poll it now.
+                break;
+            }
+
+            if let Poll::Ready(Some(epoch_ids)) = self.epoch_ids_stream.poll_next_unpin(cx) {
+                if let Some(epoch_ids) = epoch_ids {
+                    // The peer might have disconnected during the request.
+                    // FIXME Check if the peer is still connected
+
+                    if !epoch_ids.on_same_chain {
+                        debug!(
+                            "Peer is on different chain: {:?}",
+                            epoch_ids.sender.peer.id()
+                        );
+                        // TODO: Send further locators. Possibly find branching point of fork.
+                    } else if epoch_ids.ids.is_empty() && epoch_ids.checkpoint_id.is_none() {
+                        // We are synced with this peer.
+                        debug!(
+                            "Peer has finished syncing: {:?}",
+                            epoch_ids.sender.peer.id()
+                        );
+                        return Poll::Ready(Some(epoch_ids.sender));
+                    }
+                    self.cluster_epoch_ids(epoch_ids);
+                }
+            } else {
+                break;
+            }
+        }
+
+        ready!(self.sync_epochs(cx));
+
+        ready!(self.sync_batches(cx));
 
         Poll::Pending
     }
