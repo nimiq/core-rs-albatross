@@ -60,7 +60,7 @@ impl<N: Network> ConsensusProxy<N> {
         }
 
         self.network
-            .publish(&TransactionTopic::default(), tx)
+            .publish::<TransactionTopic>(tx)
             .await
             .map(|_| ReturnCode::Accepted)
     }
@@ -149,7 +149,7 @@ impl<N: Network> Consensus<N> {
         .await;
 
         let tx_stream = network
-            .subscribe::<TransactionTopic>(&TransactionTopic::default())
+            .subscribe::<TransactionTopic>()
             .await
             .unwrap()
             .boxed();

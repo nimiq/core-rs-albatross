@@ -186,7 +186,6 @@ impl Network for MockNetwork {
 
     async fn subscribe<'a, T>(
         &self,
-        topic: &T,
     ) -> Result<BoxStream<'a, (T::Item, Self::PubsubId)>, Self::Error>
     where
         T: Topic + Sync,
@@ -243,8 +242,6 @@ impl Network for MockNetwork {
                 (topic, id)
             })
             .boxed())
-
-        //   Ok(stream.boxed())
     }
 
     async fn unsubscribe<'a, T>(&self) -> Result<(), Self::Error>
@@ -272,7 +269,7 @@ impl Network for MockNetwork {
         }
     }
 
-    async fn publish<T: Topic>(&self, topic: &T, item: T::Item) -> Result<(), Self::Error>
+    async fn publish<T: Topic>(&self, item: T::Item) -> Result<(), Self::Error>
     where
         T: Topic + Sync,
     {

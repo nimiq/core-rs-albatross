@@ -483,11 +483,7 @@ impl<N: Network, TReq: RequestComponent<N::PeerType>> BlockQueue<N, TReq> {
         network: Arc<N>,
         request_component: TReq,
     ) -> Self {
-        let block_stream = network
-            .subscribe::<BlockTopic>(&BlockTopic::default())
-            .await
-            .unwrap()
-            .boxed();
+        let block_stream = network.subscribe::<BlockTopic>().await.unwrap().boxed();
 
         Self::with_block_stream(config, blockchain, network, request_component, block_stream)
     }

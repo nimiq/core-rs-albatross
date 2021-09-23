@@ -97,7 +97,6 @@ pub trait Network: Send + Sync + 'static {
 
     async fn subscribe<'a, T>(
         &self,
-        topic: &T,
     ) -> Result<BoxStream<'a, (T::Item, Self::PubsubId)>, Self::Error>
     where
         T: Topic + Sync;
@@ -106,7 +105,7 @@ pub trait Network: Send + Sync + 'static {
     where
         T: Topic + Sync;
 
-    async fn publish<T: Topic>(&self, topic: &T, item: T::Item) -> Result<(), Self::Error>
+    async fn publish<T>(&self, item: T::Item) -> Result<(), Self::Error>
     where
         T: Topic + Sync;
 

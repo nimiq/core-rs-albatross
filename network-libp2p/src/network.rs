@@ -784,7 +784,6 @@ impl NetworkInterface for Network {
 
     async fn subscribe<'a, T>(
         &self,
-        topic: &T,
     ) -> Result<BoxStream<'a, (T::Item, Self::PubsubId)>, Self::Error>
     where
         T: Topic + Sync,
@@ -834,7 +833,7 @@ impl NetworkInterface for Network {
         output_rx.await?
     }
 
-    async fn publish<T>(&self, topic: &T, item: <T as Topic>::Item) -> Result<(), Self::Error>
+    async fn publish<T>(&self, item: <T as Topic>::Item) -> Result<(), Self::Error>
     where
         T: Topic + Sync,
     {
@@ -1299,18 +1298,18 @@ mod tests {
         // Our Gossipsub configuration requires a minimum of 6 peers for the mesh network
         for _ in 0..5i32 {
             let net_n = net.spawn().await;
-            let stream_n = net_n.subscribe(&TestTopic).await.unwrap();
+            let stream_n = net_n.subscribe::<TestTopic>().await.unwrap();
             consume_stream(stream_n);
         }
 
         let test_message = TestRecord { x: 42 };
 
-        let mut messages = net1.subscribe(&TestTopic).await.unwrap();
-        consume_stream(net2.subscribe(&TestTopic).await.unwrap());
+        let mut messages = net1.subscribe::<TestTopic>().await.unwrap();
+        consume_stream(net2.subscribe::<TestTopic>().await.unwrap());
 
         tokio::time::sleep(Duration::from_secs(10)).await;
 
-        net2.publish(&TestTopic, test_message.clone())
+        net2.publish::<TestTopic>(test_message.clone())
             .await
             .unwrap();
 
@@ -1331,7 +1330,7 @@ mod tests {
         // network drops messages without stalling it's functionality.
         for i in 0..10i32 {
             let msg = TestRecord { x: i };
-            net2.publish(&TestTopic, msg.clone()).await.unwrap();
+            net2.publish::<TestTopic>(msg.clone()).await.unwrap();
         }
         net1.network_info().await.unwrap();
     }

@@ -488,7 +488,6 @@ impl NetworkInterface for Network {
 
     async fn subscribe<'a, T>(
         &self,
-        _topic: &T,
     ) -> Result<BoxStream<'a, (T::Item, Self::PubsubId)>, Self::Error>
     where
         T: Topic + Sync,
@@ -503,7 +502,7 @@ impl NetworkInterface for Network {
         unimplemented!()
     }
 
-    async fn publish<T>(&self, _topic: &T, _item: <T as Topic>::Item) -> Result<(), Self::Error>
+    async fn publish<T>(&self, _item: <T as Topic>::Item) -> Result<(), Self::Error>
     where
         T: Topic + Sync,
     {

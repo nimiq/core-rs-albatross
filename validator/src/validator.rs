@@ -153,7 +153,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
 
         tokio::spawn(async move {
             network1
-                .subscribe(&ProposalTopic)
+                .subscribe::<ProposalTopic>()
                 .await
                 .expect("Failed to subscribe to proposal topic")
                 .for_each(|proposal| async { proposal_sender.send(proposal) })
@@ -373,7 +373,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                         tokio::spawn(async move {
                             trace!("publishing macro block: {:?}", &block_copy);
                             network
-                                .publish(&BlockTopic, Block::Macro(block_copy))
+                                .publish::<BlockTopic>(Block::Macro(block_copy))
                                 .await
                                 .map_err(|e| trace!("Failed to publish block: {:?}", e))
                                 .ok();
@@ -428,7 +428,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                         tokio::spawn(async move {
                             trace!("publishing micro block: {:?}", &block_copy);
                             if nw
-                                .publish(&BlockTopic, Block::Micro(block_copy))
+                                .publish::<BlockTopic>(Block::Micro(block_copy))
                                 .await
                                 .is_err()
                             {

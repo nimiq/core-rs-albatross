@@ -191,10 +191,10 @@ pub mod tests {
 
         let test_message = TestRecord { x: 42 };
 
-        let mut messages = net1.subscribe(&TestTopic).await.unwrap();
-        consume_stream(net2.subscribe(&TestTopic).await.unwrap());
+        let mut messages = net1.subscribe::<TestTopic>().await.unwrap();
+        consume_stream(net2.subscribe::<TestTopic>().await.unwrap());
 
-        net2.publish(&TestTopic, test_message.clone())
+        net2.publish::<TestTopic>(test_message.clone())
             .await
             .unwrap();
 

@@ -7,7 +7,7 @@ pub mod network_impl;
 use std::{pin::Pin, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
-use futures::Stream;
+use futures::{stream::BoxStream, Stream};
 
 use nimiq_bls::{CompressedPublicKey, SecretKey};
 use nimiq_network_interface::{
@@ -49,16 +49,11 @@ pub trait ValidatorNetwork: Send + Sync {
     /// Will receive from all connected peers
     fn receive<M: Message>(&self) -> MessageStream<M, <Self::PeerType as Peer>::Id>;
 
-    async fn publish<TTopic: Topic + Sync>(
-        &self,
-        topic: &TTopic,
-        item: TTopic::Item,
-    ) -> Result<(), Self::Error>;
+    async fn publish<TTopic: Topic + Sync>(&self, item: TTopic::Item) -> Result<(), Self::Error>;
 
-    async fn subscribe<TTopic: Topic + Sync>(
+    async fn subscribe<'a, TTopic: Topic + Sync>(
         &self,
-        topic: &TTopic,
-    ) -> Result<Pin<Box<dyn Stream<Item = (TTopic::Item, Self::PubsubId)> + Send>>, Self::Error>;
+    ) -> Result<BoxStream<'a, (TTopic::Item, Self::PubsubId)>, Self::Error>;
 
     /// registers a cache for the specified message type.
     /// Incoming messages of this type shuld be held in a FIFO queue of total size `buffer_size`, each with a lifetime of `lifetime`

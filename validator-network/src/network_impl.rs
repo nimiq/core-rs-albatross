@@ -1,13 +1,12 @@
 use std::{
     collections::{btree_map::Entry, BTreeMap},
-    pin::Pin,
     sync::Arc,
     time::Duration,
 };
 
 use async_trait::async_trait;
 use beserial::{Deserialize, Serialize};
-use futures::{future::join_all, lock::Mutex, Stream, StreamExt};
+use futures::{future::join_all, lock::Mutex, stream::BoxStream, StreamExt};
 
 use nimiq_bls::{CompressedPublicKey, PublicKey, SecretKey, Signature};
 use nimiq_network_interface::network::{MsgAcceptance, Network, Topic};
@@ -234,22 +233,21 @@ where
         )
     }
 
-    async fn publish<TTopic>(&self, topic: &TTopic, item: TTopic::Item) -> Result<(), Self::Error>
+    async fn publish<TTopic>(&self, item: TTopic::Item) -> Result<(), Self::Error>
     where
         TTopic: Topic + Sync,
     {
-        self.network.publish(topic, item).await?;
+        self.network.publish::<TTopic>(item).await?;
         Ok(())
     }
 
-    async fn subscribe<TTopic>(
+    async fn subscribe<'a, TTopic>(
         &self,
-        topic: &TTopic,
-    ) -> Result<Pin<Box<dyn Stream<Item = (TTopic::Item, Self::PubsubId)> + Send>>, Self::Error>
+    ) -> Result<BoxStream<'a, (TTopic::Item, Self::PubsubId)>, Self::Error>
     where
         TTopic: Topic + Sync,
     {
-        Ok(self.network.subscribe(topic).await?)
+        Ok(self.network.subscribe::<TTopic>().await?)
     }
 
     fn cache<M: Message>(&self, _buffer_size: usize, _lifetime: Duration) {

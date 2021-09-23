@@ -181,7 +181,7 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
         );
 
         // Broadcast the signed proposal to the network.
-        if let Err(err) = self.network.publish(&ProposalTopic, signed_proposal).await {
+        if let Err(err) = self.network.publish::<ProposalTopic>(signed_proposal).await {
             error!("Publishing proposal failed: {:?}", err);
         }
 
