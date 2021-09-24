@@ -2,7 +2,7 @@ use std::io;
 use std::iter;
 use std::slice;
 
-use log::error;
+use log::{error, trace};
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
@@ -146,7 +146,7 @@ impl<A: Serialize + Deserialize + Clone> TrieNode<A> {
                     return Ok(&child.hash);
                 }
 
-                error!(
+                trace!(
                     "Node with key {} does not have a child with prefix {}!",
                     self.key(),
                     child_prefix
@@ -174,7 +174,7 @@ impl<A: Serialize + Deserialize + Clone> TrieNode<A> {
                     return Ok(self.key() + &child.suffix);
                 }
 
-                error!(
+                trace!(
                     "Node with key {} does not have a child with prefix {}!",
                     self.key(),
                     child_prefix
