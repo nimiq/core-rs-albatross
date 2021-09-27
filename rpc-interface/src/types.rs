@@ -482,8 +482,6 @@ impl Block {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Account {
-    pub id: String,
-
     pub address: Address,
 
     pub balance: Coin,
@@ -491,8 +489,57 @@ pub struct Account {
     #[serde(rename = "type", with = "crate::serde_helpers::account_type")]
     pub ty: AccountType,
 
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(flatten)]
-    pub account_additional_fields: AccountAdditionalFields,
+    pub account_additional_fields: Option<AccountAdditionalFields>,
+}
+
+impl Account {
+    pub fn from_account(address: Address, account: nimiq_account::Account) -> Self {
+        match account {
+            nimiq_account::Account::Basic(basic) => Account {
+                address,
+                balance: basic.balance,
+                ty: AccountType::Basic,
+                account_additional_fields: None,
+            },
+            nimiq_account::Account::Vesting(vesting) => Account {
+                address,
+                balance: vesting.balance,
+                ty: AccountType::Vesting,
+                account_additional_fields: Some(AccountAdditionalFields::VestingContract {
+                    owner: vesting.owner.clone(),
+                    vesting_start: vesting.start_time,
+                    vesting_step_blocks: vesting.time_step,
+                    vesting_step_amount: vesting.step_amount,
+                    vesting_total_amount: vesting.total_amount,
+                }),
+            },
+            nimiq_account::Account::HTLC(htlc) => Account {
+                address,
+                balance: htlc.balance,
+                ty: AccountType::Vesting,
+                account_additional_fields: Some(AccountAdditionalFields::HTLC {
+                    sender: htlc.sender.clone(),
+                    recipient: htlc.recipient.clone(),
+                    hash_root: htlc.hash_root,
+                    hash_count: htlc.hash_count,
+                    timeout: htlc.timeout,
+                    total_amount: htlc.total_amount,
+                }),
+            },
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn empty(address: Address) -> Self {
+        Account {
+            address,
+            balance: Coin::ZERO,
+            ty: AccountType::Basic,
+            account_additional_fields: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -500,19 +547,14 @@ pub struct Account {
 pub enum AccountAdditionalFields {
     /// Additional account information for vesting contracts.
     VestingContract {
-        /// Hex-encoded 20 byte address of the owner of the vesting contract.
-        #[serde(with = "crate::serde_helpers::address_hex")]
+        /// User friendly address (NQ-address) of the owner of the vesting contract.
         owner: Address,
 
-        /// User friendly address (NQ-address) of the owner of the vesting contract.
-        #[serde(with = "crate::serde_helpers::address_friendly")]
-        owner_address: Address,
-
         /// The block that the vesting contracted commenced.
-        vesting_start: u32,
+        vesting_start: u64,
 
         /// The number of blocks after which some part of the vested funds is released.
-        vesting_step_blocks: u32,
+        vesting_step_blocks: u64,
 
         /// The amount (in Luna) released every vestingStepBlocks blocks.
         vesting_step_amount: Coin,
@@ -523,21 +565,11 @@ pub enum AccountAdditionalFields {
 
     /// Additional account information for HTLC contracts.
     HTLC {
-        /// Hex-encoded 20 byte address of the sender of the HTLC.
-        #[serde(with = "crate::serde_helpers::address_hex")]
+        /// User friendly address (NQ-address) of the sender of the HTLC.
         sender: Address,
 
-        /// User friendly address (NQ-address) of the sender of the HTLC.
-        #[serde(with = "crate::serde_helpers::address_friendly")]
-        sender_address: Address,
-
-        /// Hex-encoded 20 byte address of the recipient of the HTLC.
-        #[serde(with = "crate::serde_helpers::address_hex")]
-        recipient: Address,
-
         /// User friendly address (NQ-address) of the recipient of the HTLC.
-        #[serde(with = "crate::serde_helpers::address_friendly")]
-        recipient_address: Address,
+        recipient: Address,
 
         /// Hex-encoded 32 byte hash root.
         #[serde(with = "serde_with::rust::display_fromstr")]
@@ -547,13 +579,10 @@ pub enum AccountAdditionalFields {
         hash_count: u8,
 
         /// Block after which the contract can only be used by the original sender to recover funds.
-        timeout: u32,
+        timeout: u64,
 
         /// The total amount (in smallest unit) that was provided at the contract creation.
         total_amount: Coin,
-    },
-    Staking {
-        // TODO
     },
 }
 
