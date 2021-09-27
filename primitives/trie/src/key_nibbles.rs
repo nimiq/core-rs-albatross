@@ -6,7 +6,7 @@ use std::ops;
 use std::str;
 use std::usize;
 
-use log::error;
+use log::{error, trace};
 
 use beserial::{
     Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
@@ -62,7 +62,7 @@ impl KeyNibbles {
     /// returns true.
     pub fn is_prefix_of(&self, other: &KeyNibbles) -> bool {
         if self.length > other.length {
-            error!("Key {} must be shorter or equal in length than the other key {}. Otherwise it can't be a prefix evidently.", self, other);
+            trace!("Key {} must be shorter or equal in length than the other key {}. Otherwise it can't be a prefix evidently.", self, other);
             return false;
         }
 
