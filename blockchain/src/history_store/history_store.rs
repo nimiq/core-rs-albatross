@@ -371,16 +371,16 @@ impl HistoryStore {
 
         let mut tx_hashes = vec![];
 
-        // Seek to the first transaction hash at the given address.
+        // Seek to the first transaction hash at the given address. If there's none, stop here.
         let mut cursor = txn.cursor(&self.address_db);
 
-        cursor.seek_key::<Address, OrderedHash>(address);
+        if cursor.seek_key::<Address, OrderedHash>(address).is_none() {
+            return tx_hashes;
+        }
 
-        // Then go to the last transaction hash at the given address.
-        match cursor.last_duplicate::<OrderedHash>() {
-            Some(v) => tx_hashes.push(v.hash),
-            None => return tx_hashes,
-        };
+        // Then go to the last transaction hash at the given address and add it to the transaction
+        // hashes list.
+        tx_hashes.push(cursor.last_duplicate::<OrderedHash>().expect("This shouldn't panic since we already verified before that there is at least one transactions at this address!").hash);
 
         while tx_hashes.len() < max as usize {
             // Get previous transaction hash.
@@ -1257,6 +1257,15 @@ mod tests {
         assert_eq!(query_3[0], ext_txs[7].tx_hash());
         assert_eq!(query_3[1], ext_txs[4].tx_hash());
         assert_eq!(query_3[2], ext_txs[2].tx_hash());
+
+        let query_4 = history_store.get_tx_hashes_by_address(
+            &Address::from_user_friendly_address("NQ28 1U7R M38P GN5A 7J8R GE62 8QS7 PK2S 4S31")
+                .unwrap(),
+            99,
+            Some(&txn),
+        );
+
+        assert_eq!(query_4.len(), 0);
     }
 
     #[test]
