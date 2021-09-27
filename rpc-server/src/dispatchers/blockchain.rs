@@ -360,4 +360,12 @@ impl BlockchainInterface for BlockchainDispatcher {
             _ => Ok(account),
         }
     }
+
+    async fn get_balance(&mut self, address: Address) -> Result<Coin, Error> {
+        let account = self.get_account(address.clone()).await?;
+        match account {
+            Some(account) => Ok(account.balance()),
+            None => Err(Error::AccountNotFound(address)),
+        }
+    }
 }

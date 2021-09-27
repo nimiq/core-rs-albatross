@@ -91,4 +91,6 @@ pub trait BlockchainInterface {
     async fn head_subscribe(&mut self) -> Result<BoxStream<'static, Blake2bHash>, Self::Error>;
 
     async fn get_account(&mut self, address: Address) -> Result<Option<Account>, Self::Error>;
+
+    async fn get_balance(&mut self, address: Address) -> Result<Coin, Self::Error>;
 }
