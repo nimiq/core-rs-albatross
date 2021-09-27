@@ -4,14 +4,14 @@ use async_trait::async_trait;
 use futures::stream::{BoxStream, StreamExt};
 use parking_lot::RwLock;
 
-use nimiq_account::{Account, StakingContract};
+use nimiq_account::StakingContract;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::{coin::Coin, policy};
 use nimiq_rpc_interface::{
     blockchain::BlockchainInterface,
-    types::{Block, Inherent, SlashedSlots, Slot, Staker, Transaction},
+    types::{Account, Block, Inherent, SlashedSlots, Slot, Staker, Transaction},
 };
 
 use crate::error::Error;
@@ -353,11 +353,16 @@ impl BlockchainInterface for BlockchainDispatcher {
             .boxed())
     }
 
-    async fn get_account(&mut self, address: Address) -> Result<Option<Account>, Error> {
-        let account = self.blockchain.read().get_account(&address);
-        match account {
-            Some(Account::Staking(_)) => Err(Error::GetAccountUnsupportedStakingContract),
-            _ => Ok(account),
+    async fn get_account(&mut self, address: Address) -> Result<Account, Error> {
+        let result = self.blockchain.read().get_account(&address);
+        match result {
+            Some(account) => match account {
+                nimiq_account::Account::Staking(_) => {
+                    Err(Error::GetAccountUnsupportedStakingContract)
+                }
+                _ => Ok(Account::from_account(address, account)),
+            },
+            None => Ok(Account::empty(address)),
         }
     }
 }
