@@ -12,15 +12,26 @@ pub mod account_type {
     where
         S: Serializer,
     {
-        Serialize::serialize(&u8::from(*account_type), serializer)
+        let ty = match account_type {
+            AccountType::Basic => "basic",
+            AccountType::Vesting => "vesting",
+            AccountType::HTLC => "htlc",
+            _ => unreachable!(),
+        };
+        Serialize::serialize(ty, serializer)
     }
 
     pub fn deserialize<'de, D>(deserializer: D) -> Result<AccountType, D::Error>
     where
         D: Deserializer<'de>,
     {
-        let n: u8 = Deserialize::deserialize(deserializer)?;
-        AccountType::try_from(n).map_err(D::Error::custom)
+        let ty: AccountType = match Deserialize::deserialize(deserializer)? {
+            "basic" => AccountType::Basic,
+            "vesting" => AccountType::Vesting,
+            "htlc" => AccountType::HTLC,
+            _ => unreachable!(),
+        };
+        AccountType::try_from(ty).map_err(D::Error::custom)
     }
 }
 
