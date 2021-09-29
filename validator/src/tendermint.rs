@@ -303,7 +303,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
                 // Update our blockchain state using the received proposal. If we can't update the state, we
                 // return a proposal timeout.
                 if blockchain
-                    .commit_accounts(&state, &block, 0, &mut txn)
+                    .commit_accounts(state, &block, 0, &mut txn)
                     .is_err()
                 {
                     debug!("Tendermint - await_proposal: Can't update state");
@@ -312,7 +312,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
                     // Check the validity of the block against our state. If it is invalid, we return a proposal
                     // timeout. This also returns the block body that matches the block header
                     // (assuming that the block is valid).
-                    let block_state = blockchain.verify_block_state(&state, &block, Some(&txn));
+                    let block_state = blockchain.verify_block_state(state, &block, Some(&txn));
 
                     if let Ok(body) = block_state {
                         // Cache the body that we calculated.
