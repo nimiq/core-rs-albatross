@@ -37,7 +37,7 @@ fn it_can_create_batch_finalization_inherents() {
     };
 
     // Simple case. Expect 1x FinalizeBatch, 1x Reward to validator
-    let inherents = blockchain.finalize_previous_batch(&blockchain.state(), &macro_header);
+    let inherents = blockchain.finalize_previous_batch(blockchain.state(), &macro_header);
     assert_eq!(inherents.len(), 2);
 
     let active_validators = blockchain.get_staking_contract().active_validators;
@@ -90,7 +90,7 @@ fn it_can_create_batch_finalization_inherents() {
         .is_ok());
     txn.commit();
 
-    let inherents = blockchain.finalize_previous_batch(&blockchain.state(), &macro_header);
+    let inherents = blockchain.finalize_previous_batch(blockchain.state(), &macro_header);
     assert_eq!(inherents.len(), 3);
     let one_slot_reward = 875 / policy::SLOTS as u64;
     let mut got_reward = false;

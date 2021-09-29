@@ -394,11 +394,6 @@ impl Blockchain {
                     warn!("Rejecting block - Validators don't match real validators");
                     return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
                 }
-
-                if !body.transactions.is_empty() {
-                    warn!("Rejecting block - Macro block contains transactions");
-                    return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
-                }
             } else {
                 // If we were not given a body, then we construct a body from our values and check
                 // its hash against the block header.
@@ -406,7 +401,6 @@ impl Blockchain {
                     validators: real_validators,
                     lost_reward_set: real_lost_rewards,
                     disabled_set: real_disabled_slots,
-                    transactions: vec![],
                 };
 
                 if real_body.hash::<Blake2bHash>() != macro_block.header.body_root {

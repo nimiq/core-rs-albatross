@@ -241,7 +241,7 @@ impl HistoryStore {
         ));
 
         // Return the history root.
-        Some(tree.get_root().ok()?)
+        tree.get_root().ok()
     }
 
     /// Calculates the history tree root from a vector of extended transactions. It doesn't use the
@@ -256,7 +256,7 @@ impl HistoryStore {
         }
 
         // Return the history root.
-        Some(tree.get_root().ok()?)
+        tree.get_root().ok()
     }
 
     /// Gets an extended transaction given its transaction hash.
