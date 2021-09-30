@@ -52,9 +52,6 @@ pub enum Error {
     #[error("{0}")]
     Argon2(#[from] nimiq_hash::argon2kdf::Argon2Error),
 
-    #[error("Transaction rejected: {0:?}")]
-    TransactionRejected(nimiq_mempool::ReturnCode),
-
     #[error("Transaction not found: {0}")]
     TransactionNotFound(Blake2bHash),
 

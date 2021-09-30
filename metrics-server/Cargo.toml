@@ -32,3 +32,4 @@ nimiq-blockchain = { path = "../blockchain", features = ["metrics"] }
 nimiq-consensus = { path = "../consensus" }
 nimiq-mempool = { path = "../mempool" }
 nimiq-network-interface = { path = "../network-interface" }
+nimiq-transaction = { path = "../primitives/transaction" }

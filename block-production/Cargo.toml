@@ -33,13 +33,16 @@ nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-mempool = { path = "../mempool" }
 nimiq-nano-primitives = { path = "../nano-primitives" }
+nimiq-network-interface = { path = "../network-interface" }
 nimiq-primitives = { path = "../primitives" }
+nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-vrf = { path = "../vrf" }
 nimiq-utils = { path = "../utils"}
 
 [dev-dependencies]
 simple_logger = "1.0"
 
+nimiq-network-mock = { path = "../network-mock" }
 nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-test-utils = { path = "../test-utils" }
 

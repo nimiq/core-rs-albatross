@@ -8,7 +8,6 @@ use nimiq_bls::{KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
 use nimiq_consensus::ConsensusProxy;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
-use nimiq_mempool::ReturnCode;
 use nimiq_network_libp2p::Network;
 use nimiq_primitives::{coin::Coin, networks::NetworkId};
 use nimiq_transaction::Transaction;
@@ -38,11 +37,8 @@ impl ConsensusDispatcher {
 
     async fn push_transaction(&self, tx: Transaction) -> Result<Blake2bHash, Error> {
         let txid = tx.hash::<Blake2bHash>();
-        match self.consensus.send_transaction(tx).await {
-            Ok(ReturnCode::Accepted) => Ok(txid),
-            Ok(return_code) => Err(Error::TransactionRejected(return_code)),
-            Err(e) => Err(Error::NetworkError(e)),
-        }
+        //Fixme, this needs to go trough the network
+        Ok(txid)
     }
 
     fn get_wallet_keypair(&self, address: &Address) -> Result<KeyPair, Error> {

@@ -10,7 +10,6 @@ use nimiq_consensus::{
 };
 use nimiq_database::Environment;
 use nimiq_genesis::NetworkInfo;
-use nimiq_mempool::Mempool;
 use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_libp2p::{
     discovery::peer_contacts::{PeerContact, Services},
@@ -135,7 +134,6 @@ impl ClientInner {
         let blockchain = Arc::new(RwLock::new(
             Blockchain::new(environment.clone(), config.network_id, time).unwrap(),
         ));
-        let mempool = Mempool::new(Arc::clone(&blockchain), config.mempool);
 
         // Open wallet
         #[cfg(feature = "wallet")]
@@ -146,7 +144,6 @@ impl ClientInner {
         let consensus = Consensus::with_min_peers(
             environment.clone(),
             blockchain,
-            mempool,
             Arc::clone(&network),
             Box::pin(sync),
             config.consensus.min_peers,
@@ -163,6 +160,7 @@ impl ClientInner {
                 validator_key,
                 cold_key,
                 warm_key,
+                config.mempool,
             );
 
             Some(validator)
@@ -239,11 +237,6 @@ impl Client {
     /// Returns the blockchain head
     pub fn blockchain_head(&self) -> Block {
         Arc::clone(&self.inner.consensus.blockchain).read().head()
-    }
-
-    /// Returns a reference to the *Mempool*
-    pub fn mempool(&self) -> Arc<Mempool> {
-        Arc::clone(&self.inner.consensus.mempool)
     }
 
     #[cfg(feature = "wallet")]

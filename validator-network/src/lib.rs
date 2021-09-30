@@ -38,7 +38,7 @@ pub trait ValidatorNetwork: Send + Sync {
         validator_id: usize,
     ) -> Result<Option<Arc<Self::PeerType>>, Self::Error>;
 
-    /// must make a reasonable efford to establish a connection to the peer denoted with `validator_address`
+    /// must make a reasonable effort to establish a connection to the peer denoted with `validator_address`
     /// before returning a connection not established error.
     async fn send_to<M: Message>(
         &self,
@@ -56,7 +56,7 @@ pub trait ValidatorNetwork: Send + Sync {
     ) -> Result<BoxStream<'a, (TTopic::Item, Self::PubsubId)>, Self::Error>;
 
     /// registers a cache for the specified message type.
-    /// Incoming messages of this type shuld be held in a FIFO queue of total size `buffer_size`, each with a lifetime of `lifetime`
+    /// Incoming messages of this type should be held in a FIFO queue of total size `buffer_size`, each with a lifetime of `lifetime`
     /// `lifetime` or `buffer_size` of 0 should disable the cache.
     fn cache<M: Message>(&self, buffer_size: usize, lifetime: Duration);
 
@@ -66,7 +66,7 @@ pub trait ValidatorNetwork: Send + Sync {
         secret_key: &SecretKey,
     ) -> Result<(), Self::Error>;
 
-    /// Signals that a Gossipsup'd message with `id` was verified sucessfully and can be relayed
+    /// Signals that a Gossipsup'd message with `id` was verified successfully and can be relayed
     async fn validate_message(
         &self,
         id: Self::PubsubId,

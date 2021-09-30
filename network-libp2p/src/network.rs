@@ -154,9 +154,9 @@ impl Network {
     ///
     /// # Arguments
     ///
-    ///  - `clock`: The clock that is used to establish the network time. The discovery behaviour will determine the
+    ///  - `clock`: The clock that is used to establish the network time. The discovery behavior will determine the
     ///             offset by exchanging their wall-time with other peers.
-    ///  - `config`: The network configuration, containing key pair, and other behaviour-specific configuration.
+    ///  - `config`: The network configuration, containing key pair, and other behavior-specific configuration.
     ///
     pub async fn new(clock: Arc<OffsetTime>, config: Config) -> Self {
         let min_peers = config.min_peers;
@@ -807,17 +807,14 @@ impl NetworkInterface for Network {
         // Receive the mpsc::Receiver, but propagate errors first.
         let subscribe_rx = rx.await??;
 
-        Ok(subscribe_rx
-            .map(|(msg, msg_id, source)| {
-                let item: <T as Topic>::Item =
-                    Deserialize::deserialize_from_vec(&msg.data).unwrap();
-                let id = GossipsubId {
-                    message_id: msg_id,
-                    propagation_source: source,
-                };
-                (item, id)
-            })
-            .boxed())
+        Ok(Box::pin(subscribe_rx.map(|(msg, msg_id, source)| {
+            let item: <T as Topic>::Item = Deserialize::deserialize_from_vec(&msg.data).unwrap();
+            let id = GossipsubId {
+                message_id: msg_id,
+                propagation_source: source,
+            };
+            (item, id)
+        })))
     }
 
     async fn unsubscribe<'a, T>(&self) -> Result<(), Self::Error>

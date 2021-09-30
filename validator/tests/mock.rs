@@ -15,7 +15,6 @@ use nimiq_consensus::{Consensus as AbstractConsensus, ConsensusEvent};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_handel::update::{LevelUpdate, LevelUpdateMessage};
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
-use nimiq_mempool::{Mempool, MempoolConfig};
 use nimiq_network_interface::network::Network;
 use nimiq_network_mock::{MockHub, MockNetwork};
 
@@ -48,11 +47,10 @@ async fn mock_consensus(hub: &mut MockHub, peer_id: u64, genesis_info: GenesisIn
         )
         .unwrap(),
     ));
-    let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
     let network = Arc::new(hub.new_network_with_address(peer_id));
     let sync_protocol =
         HistorySync::<MockNetwork>::new(Arc::clone(&blockchain), network.subscribe_events());
-    Consensus::from_network(env, blockchain, mempool, network, Box::pin(sync_protocol)).await
+    Consensus::from_network(env, blockchain, network, Box::pin(sync_protocol)).await
 }
 
 async fn mock_validator(
@@ -309,7 +307,7 @@ async fn validator_can_catch_up() {
 
     // In total 8 validator are registered. after 3 validators are taken offline the remaining 5 should not be able to progress on their own
     let mut validators = mock_validators(&mut hub, 8).await;
-    // Maintain a collection of the correspponding networks.
+    // Maintain a collection of the corresponding networks.
 
     let networks: Vec<Arc<MockNetwork>> = validators
         .iter()

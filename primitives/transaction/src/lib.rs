@@ -527,6 +527,12 @@ impl SerializeContent for Transaction {
 
 impl Hash for Transaction {}
 
+impl std::hash::Hash for Transaction {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::hash::Hash::hash(&self.serialize_content(), state);
+    }
+}
+
 impl PartialEq for Transaction {
     fn eq(&self, other: &Self) -> bool {
         self.sender == other.sender

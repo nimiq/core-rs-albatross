@@ -60,7 +60,9 @@ pub fn initialize_rpc_server(
         Some(unlocked_wallets),
     ));
     dispatcher.add(wallet_dispatcher);
-    dispatcher.add(MempoolDispatcher::new(client.mempool()));
+    //if let Some(validator) = client.validator() {
+    //    dispatcher.add(MempoolDispatcher::new(validator.mempool));
+    //}
     dispatcher.add(NetworkDispatcher::new(client.network()));
 
     Ok(Server::new(

@@ -17,7 +17,7 @@ use nimiq_consensus::sync::history::HistorySync;
 use nimiq_consensus::sync::request_component::HistorySyncStream;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
-use nimiq_mempool::{Mempool, MempoolConfig};
+use nimiq_mempool::mempool::Mempool;
 use nimiq_network_interface::network::Network;
 use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_primitives::policy;
@@ -56,13 +56,13 @@ async fn peers_can_sync() {
     let blockchain1 = Arc::new(RwLock::new(
         Blockchain::new(env1.clone(), NetworkId::UnitAlbatross, time).unwrap(),
     ));
-    let mempool1 = Mempool::new(Arc::clone(&blockchain1), MempoolConfig::default());
+    let mempool1 = Mempool::new(Arc::clone(&blockchain1));
 
     let keypair =
         KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
     let producer = BlockProducer::new(
         Arc::clone(&blockchain1),
-        Arc::clone(&mempool1),
+        Arc::new(mempool1),
         keypair.clone(),
     );
 
@@ -75,14 +75,8 @@ async fn peers_can_sync() {
 
     let net1 = Arc::new(hub.new_network());
     let sync1 = HistorySync::<MockNetwork>::new(Arc::clone(&blockchain1), net1.subscribe_events());
-    let consensus1 = Consensus::from_network(
-        env1,
-        blockchain1,
-        mempool1,
-        Arc::clone(&net1),
-        Box::pin(sync1),
-    )
-    .await;
+    let consensus1 =
+        Consensus::from_network(env1, blockchain1, Arc::clone(&net1), Box::pin(sync1)).await;
 
     // Setup second peer (not synced yet).
     let time = Arc::new(OffsetTime::new());
@@ -90,7 +84,6 @@ async fn peers_can_sync() {
     let blockchain2 = Arc::new(RwLock::new(
         Blockchain::new(env2.clone(), NetworkId::UnitAlbatross, time).unwrap(),
     ));
-    let mempool2 = Mempool::new(Arc::clone(&blockchain2), MempoolConfig::default());
 
     let net2 = Arc::new(hub.new_network());
     let mut sync2 =
@@ -98,7 +91,6 @@ async fn peers_can_sync() {
     let consensus2 = Consensus::from_network(
         env2,
         blockchain2,
-        mempool2,
         Arc::clone(&net2),
         Box::pin(MockHistorySyncStream {
             network: Arc::clone(&net2),
@@ -200,13 +192,13 @@ async fn sync_ingredients() {
     let blockchain1 = Arc::new(RwLock::new(
         Blockchain::new(env1.clone(), NetworkId::UnitAlbatross, time).unwrap(),
     ));
-    let mempool1 = Mempool::new(Arc::clone(&blockchain1), MempoolConfig::default());
+    let mempool1 = Mempool::new(Arc::clone(&blockchain1));
 
     let keypair =
         KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
     let producer = BlockProducer::new(
         Arc::clone(&blockchain1),
-        Arc::clone(&mempool1),
+        Arc::new(mempool1),
         keypair.clone(),
     );
 
@@ -221,7 +213,6 @@ async fn sync_ingredients() {
     let consensus1 = Consensus::from_network(
         env1,
         blockchain1,
-        mempool1,
         Arc::clone(&net1),
         Box::pin(MockHistorySyncStream {
             network: Arc::clone(&net1),
@@ -235,13 +226,11 @@ async fn sync_ingredients() {
     let blockchain2 = Arc::new(RwLock::new(
         Blockchain::new(env2.clone(), NetworkId::UnitAlbatross, time).unwrap(),
     ));
-    let mempool2 = Mempool::new(Arc::clone(&blockchain2), MempoolConfig::default());
 
     let net2 = Arc::new(hub.new_network());
     let consensus2 = Consensus::from_network(
         env2,
         blockchain2,
-        mempool2,
         Arc::clone(&net2),
         Box::pin(MockHistorySyncStream {
             network: Arc::clone(&net2),

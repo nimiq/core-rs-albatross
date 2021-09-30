@@ -1,11 +1,16 @@
+use parking_lot::RwLock;
 use std::io;
 use std::sync::Arc;
 
 use beserial::Serialize;
-use mempool::{Mempool, SIZE_MAX};
+use mempool::mempool::Mempool;
+use nimiq_network_interface::network::Network;
+use nimiq_transaction::Transaction;
 
 use crate::server;
 use crate::server::SerializationType;
+
+const SIZE_MAX: usize = 100_000;
 
 pub struct MempoolMetrics {
     mempool: Arc<Mempool>,
@@ -13,7 +18,9 @@ pub struct MempoolMetrics {
 
 impl MempoolMetrics {
     pub fn new(mempool: Arc<Mempool>) -> Self {
-        MempoolMetrics { mempool }
+        MempoolMetrics {
+            mempool: Arc::clone(&mempool),
+        }
     }
 }
 
@@ -22,7 +29,11 @@ impl server::Metrics for MempoolMetrics {
         &self,
         serializer: &mut server::MetricsSerializer<SerializationType>,
     ) -> Result<(), io::Error> {
-        let txs = self.mempool.get_transactions(SIZE_MAX, 0f64);
+        let txs: Vec<Transaction>;
+        {
+            // Context to drop the write lock immediately
+            txs = self.mempool.get_transactions(SIZE_MAX).unwrap_or_default();
+        }
         let group = [
             0usize, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000,
         ];

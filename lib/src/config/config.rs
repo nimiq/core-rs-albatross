@@ -17,7 +17,7 @@ use nimiq_database::{
     Environment,
 };
 use nimiq_keys::{KeyPair, PrivateKey};
-use nimiq_mempool::{filter::Rules as MempoolRules, MempoolConfig};
+use nimiq_mempool::{config::MempoolConfig, filter::MempoolRules};
 use nimiq_network_libp2p::{Keypair as IdentityKeypair, Multiaddr};
 use nimiq_primitives::networks::NetworkId;
 use nimiq_utils::file_store::FileStore;

@@ -13,7 +13,6 @@ use nimiq_consensus::sync::history::HistorySync;
 use nimiq_consensus::Consensus as AbstractConsensus;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
-use nimiq_mempool::{Mempool, MempoolConfig};
 use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_libp2p::discovery::peer_contacts::{PeerContact, Services};
 use nimiq_network_libp2p::libp2p::core::multiaddr::multiaddr;
@@ -44,7 +43,6 @@ async fn consensus(peer_id: u64, genesis_info: GenesisInfo) -> Consensus {
         )
         .unwrap(),
     ));
-    let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
 
     let peer_key = P2PKeyPair::generate_ed25519();
     let peer_address = multiaddr![Memory(peer_id)];
@@ -66,15 +64,7 @@ async fn consensus(peer_id: u64, genesis_info: GenesisInfo) -> Consensus {
 
     let sync_protocol =
         HistorySync::<Network>::new(Arc::clone(&blockchain), network.subscribe_events());
-    Consensus::with_min_peers(
-        env,
-        blockchain,
-        mempool,
-        network,
-        Box::pin(sync_protocol),
-        1,
-    )
-    .await
+    Consensus::with_min_peers(env, blockchain, network, Box::pin(sync_protocol), 1).await
 }
 
 async fn validator(

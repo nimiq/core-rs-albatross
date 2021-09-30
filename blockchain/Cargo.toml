@@ -43,6 +43,7 @@ atomic = "0.4"
 
 nimiq-block-production = { path = "../block-production", features = ["test-utils"] }
 nimiq-nano-primitives = { path= "../nano-primitives" }
+nimiq-network-mock = { path = "../network-mock" }
 nimiq-test-utils = { path= "../test-utils" }
 
 [features]

@@ -1,18 +1,18 @@
-use collections::LimitHashSet;
+use nimiq_collections::LimitHashSet;
 use nimiq_hash::Blake2bHash;
-use primitives::coin::Coin;
-use transaction::{Transaction, TransactionFlags};
+use nimiq_primitives::coin::Coin;
+use nimiq_transaction::{Transaction, TransactionFlags};
 
 #[derive(Debug)]
 pub struct MempoolFilter {
     blacklist: LimitHashSet<Blake2bHash>,
-    rules: Rules,
+    rules: MempoolRules,
 }
 
 impl MempoolFilter {
     pub const DEFAULT_BLACKLIST_SIZE: usize = 25000;
 
-    pub fn new(rules: Rules, blacklist_limit: usize) -> Self {
+    pub fn new(rules: MempoolRules, blacklist_limit: usize) -> Self {
         MempoolFilter {
             blacklist: LimitHashSet::new(blacklist_limit),
             rules,
@@ -79,12 +79,12 @@ impl MempoolFilter {
 
 impl Default for MempoolFilter {
     fn default() -> Self {
-        MempoolFilter::new(Rules::default(), Self::DEFAULT_BLACKLIST_SIZE)
+        MempoolFilter::new(MempoolRules::default(), Self::DEFAULT_BLACKLIST_SIZE)
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct Rules {
+pub struct MempoolRules {
     pub tx_fee: Coin,
     pub tx_fee_per_byte: f64,
     pub tx_value: Coin,
@@ -99,9 +99,9 @@ pub struct Rules {
     pub sender_balance: Coin,
 }
 
-impl Default for Rules {
-    fn default() -> Rules {
-        Rules {
+impl Default for MempoolRules {
+    fn default() -> MempoolRules {
+        MempoolRules {
             tx_fee: Coin::ZERO,
             tx_fee_per_byte: 0.0,
             tx_value: Coin::ZERO,

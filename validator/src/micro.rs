@@ -11,7 +11,7 @@ use tokio::time;
 use block::{ForkProof, MicroBlock, ViewChange, ViewChangeProof};
 use block_production::BlockProducer;
 use blockchain::{AbstractBlockchain, Blockchain};
-use mempool::Mempool;
+use mempool::mempool::Mempool;
 use nimiq_validator_network::ValidatorNetwork;
 use utils::time::systemtime_to_timestamp;
 use vrf::VrfSeed;

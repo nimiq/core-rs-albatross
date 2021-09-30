@@ -7,6 +7,7 @@ use futures::{
     Future, Stream, StreamExt,
 };
 use linked_hash_map::LinkedHashMap;
+use mempool::{config::MempoolConfig, mempool::Mempool};
 use parking_lot::RwLock;
 use tokio_stream::wrappers::{BroadcastStream, UnboundedReceiverStream};
 
@@ -64,6 +65,11 @@ struct ProduceMicroBlockState {
     view_change: Option<ViewChange>,
 }
 
+enum MempoolState {
+    Active,
+    Inactive,
+}
+
 pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork + 'static> {
     pub consensus: ConsensusProxy<TNetwork>,
     network: Arc<TValidatorNetwork>,
@@ -91,6 +97,9 @@ pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork + 's
 
     micro_producer: Option<ProduceMicroBlock<TValidatorNetwork>>,
     micro_state: ProduceMicroBlockState,
+
+    pub mempool: Arc<Mempool>,
+    mempool_state: MempoolState,
 }
 
 impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
@@ -107,6 +116,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         signing_key: bls::KeyPair,
         cold_key: KeyPair,
         warm_key: KeyPair,
+        mempool_config: MempoolConfig,
     ) -> Self {
         let consensus_event_rx = consensus.subscribe_events();
 
@@ -136,6 +146,9 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         let network1 = Arc::clone(&network);
         let (proposal_sender, proposal_receiver) = ProposalBuffer::new();
 
+        let mempool = Arc::new(Mempool::new(consensus.blockchain.clone(), mempool_config));
+        let mempool_state = MempoolState::Inactive;
+
         let mut this = Self {
             consensus: consensus.proxy(),
             network,
@@ -163,6 +176,9 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
 
             micro_producer: None,
             micro_state,
+
+            mempool: Arc::clone(&mempool),
+            mempool_state,
         };
         this.init();
 
@@ -246,12 +262,13 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
 
         self.macro_producer = None;
         self.micro_producer = None;
+        let mempool = Arc::clone(&self.mempool);
 
         match blockchain.get_next_block_type(None) {
             BlockType::Macro => {
                 let block_producer = BlockProducer::new(
                     Arc::clone(&self.consensus.blockchain),
-                    Arc::clone(&self.consensus.mempool),
+                    Arc::clone(&mempool),
                     self.signing_key.clone(),
                 );
 
@@ -296,7 +313,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                     .get_fork_proofs_for_block(Self::FORK_PROOFS_MAX_SIZE);
                 self.micro_producer = Some(ProduceMicroBlock::new(
                     Arc::clone(&self.consensus.blockchain),
-                    Arc::clone(&self.consensus.mempool),
+                    Arc::clone(&mempool),
                     Arc::clone(&self.network),
                     self.signing_key.clone(),
                     self.validator_id(),
@@ -333,7 +350,11 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             .read()
             .get_block(hash, true, None)
             .expect("Head block not found");
+
+        // Update mempool and blockchain state
         self.blockchain_state.fork_proofs.apply_block(&block);
+        self.mempool
+            .mempool_update(&vec![(hash.clone(), block.clone())], &[].to_vec());
     }
 
     fn on_blockchain_rebranched(
@@ -341,12 +362,15 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         old_chain: &[(Blake2bHash, Block)],
         new_chain: &[(Blake2bHash, Block)],
     ) {
+        // Update mempool and blockchain state
         for (_hash, block) in old_chain.iter() {
             self.blockchain_state.fork_proofs.revert_block(block);
         }
         for (_hash, block) in new_chain.iter() {
             self.blockchain_state.fork_proofs.apply_block(block);
         }
+        self.mempool
+            .mempool_update(&new_chain.to_vec(), &old_chain.to_vec());
     }
 
     fn on_fork_event(&mut self, event: ForkEvent) {
@@ -506,8 +530,9 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             return;
         }
 
-        let validity_start_height =
-            policy::macro_block_before(self.consensus.mempool.current_height());
+        let blockchain = self.consensus.blockchain.read();
+
+        let validity_start_height = policy::macro_block_before(blockchain.block_number());
 
         let unpark_transaction = TransactionBuilder::new_unpark_validator(
             &self.cold_key,
@@ -515,7 +540,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             &self.warm_key,
             Coin::ZERO,
             validity_start_height,
-            self.consensus.blockchain.read().network_id(),
+            blockchain.network_id(),
         );
 
         let cn = self.consensus.clone();
@@ -557,7 +582,27 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Future
         // Process consensus updates.
         while let Poll::Ready(Some(event)) = self.consensus_event_rx.poll_next_unpin(cx) {
             match event {
-                Ok(ConsensusEvent::Established) => self.init(),
+                Ok(ConsensusEvent::Established) => {
+                    self.init();
+                    if let MempoolState::Inactive = self.mempool_state {
+                        let mempool = Arc::clone(&self.mempool);
+                        let network = Arc::clone(&self.consensus.network);
+                        tokio::spawn(async move {
+                            mempool.subscribe(network).await;
+                        });
+                        self.mempool_state = MempoolState::Active;
+                    }
+                }
+                Ok(ConsensusEvent::Lost) => {
+                    if let MempoolState::Active = self.mempool_state {
+                        let mempool = Arc::clone(&self.mempool);
+                        let network = Arc::clone(&self.consensus.network);
+                        tokio::spawn(async move {
+                            mempool.unsuscribe(network).await;
+                        });
+                        self.mempool_state = MempoolState::Inactive;
+                    }
+                }
                 Err(_) => return Poll::Ready(()),
                 _ => {}
             }

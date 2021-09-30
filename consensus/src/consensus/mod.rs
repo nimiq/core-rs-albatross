@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use futures::task::{Context, Poll};
-use futures::{future::BoxFuture, stream::BoxStream, Future, FutureExt, StreamExt};
+use futures::{Future, FutureExt, StreamExt};
 use parking_lot::RwLock;
 use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 use tokio::time::Sleep;
@@ -12,8 +12,7 @@ use tokio_stream::wrappers::BroadcastStream;
 
 use blockchain::{AbstractBlockchain, Blockchain};
 use database::Environment;
-use mempool::{Mempool, ReturnCode};
-use network_interface::network::{MsgAcceptance, Network, Topic};
+use network_interface::network::{Network, Topic};
 use transaction::Transaction;
 
 use crate::consensus::head_requests::{HeadRequests, HeadRequestsResult};
@@ -37,7 +36,6 @@ impl Topic for TransactionTopic {
 pub struct ConsensusProxy<N: Network> {
     pub blockchain: Arc<RwLock<Blockchain>>,
     pub network: Arc<N>,
-    pub mempool: Arc<Mempool>,
     established_flag: Arc<AtomicBool>,
 }
 
@@ -46,23 +44,14 @@ impl<N: Network> Clone for ConsensusProxy<N> {
         Self {
             blockchain: Arc::clone(&self.blockchain),
             network: Arc::clone(&self.network),
-            mempool: Arc::clone(&self.mempool),
             established_flag: Arc::clone(&self.established_flag),
         }
     }
 }
 
 impl<N: Network> ConsensusProxy<N> {
-    pub async fn send_transaction(&self, tx: Transaction) -> Result<ReturnCode, N::Error> {
-        match self.mempool.push_transaction(tx.clone()) {
-            ReturnCode::Accepted => {}
-            e => return Ok(e),
-        }
-
-        self.network
-            .publish::<TransactionTopic>(tx)
-            .await
-            .map(|_| ReturnCode::Accepted)
+    pub async fn send_transaction(&self, tx: Transaction) -> Result<(), N::Error> {
+        self.network.publish::<TransactionTopic>(tx).await
     }
 
     pub fn is_established(&self) -> bool {
@@ -78,12 +67,10 @@ pub enum ConsensusEvent {
 
 pub struct Consensus<N: Network> {
     pub blockchain: Arc<RwLock<Blockchain>>,
-    pub mempool: Arc<Mempool>,
     pub network: Arc<N>,
     pub env: Environment,
 
     block_queue: BlockQueue<N, BlockRequestComponent<N::PeerType>>,
-    tx_future: BoxFuture<'static, ()>,
 
     /// A Delay which exists purely for the waker on its poll to reactivate the task running Consensus::poll
     next_execution_timer: Option<Pin<Box<Sleep>>>,
@@ -114,14 +101,12 @@ impl<N: Network> Consensus<N> {
     pub async fn from_network(
         env: Environment,
         blockchain: Arc<RwLock<Blockchain>>,
-        mempool: Arc<Mempool>,
         network: Arc<N>,
         sync_protocol: Pin<Box<dyn HistorySyncStream<N::PeerType>>>,
     ) -> Self {
         Self::with_min_peers(
             env,
             blockchain,
-            mempool,
             network,
             sync_protocol,
             Self::MIN_PEERS_ESTABLISHED,
@@ -132,7 +117,6 @@ impl<N: Network> Consensus<N> {
     pub async fn with_min_peers(
         env: Environment,
         blockchain: Arc<RwLock<Blockchain>>,
-        mempool: Arc<Mempool>,
         network: Arc<N>,
         sync_protocol: Pin<Box<dyn HistorySyncStream<N::PeerType>>>,
         min_peers: usize,
@@ -148,30 +132,14 @@ impl<N: Network> Consensus<N> {
         )
         .await;
 
-        let tx_stream = network
-            .subscribe::<TransactionTopic>()
-            .await
-            .unwrap()
-            .boxed();
-
-        Self::new(
-            env,
-            blockchain,
-            mempool,
-            network,
-            block_queue,
-            tx_stream,
-            min_peers,
-        )
+        Self::new(env, blockchain, network, block_queue, min_peers)
     }
 
     pub fn new(
         env: Environment,
         blockchain: Arc<RwLock<Blockchain>>,
-        mempool: Arc<Mempool>,
         network: Arc<N>,
         block_queue: BlockQueue<N, BlockRequestComponent<N::PeerType>>,
-        tx_stream: BoxStream<'static, (Transaction, <N as Network>::PubsubId)>,
         min_peers: usize,
     ) -> Self {
         let (tx, _rx) = broadcast(256);
@@ -180,42 +148,13 @@ impl<N: Network> Consensus<N> {
 
         let established_flag = Arc::new(AtomicBool::new(false));
 
-        let established_flag1 = Arc::clone(&established_flag);
-        let mempool1 = Arc::clone(&mempool);
-        let network1 = Arc::clone(&network);
-        let tx_future = async move {
-            tx_stream
-                .for_each(|(tx, pubsub_id)| async {
-
-                    // Make sure consensus has been established before processing transactions
-                    if established_flag1.load(Ordering::Acquire) {
-                        let acceptance = match mempool1.push_transaction(tx) {
-                            ReturnCode::Accepted | ReturnCode::Known => MsgAcceptance::Accept,
-                            ReturnCode::Filtered | ReturnCode::FeeTooLow => MsgAcceptance::Ignore,
-                            ReturnCode::Invalid => MsgAcceptance::Reject,
-                        };
-
-                        // Let the network layer know if it should relay the message this tx came from
-                        match network1.validate_message(pubsub_id, acceptance).await {
-                            Ok(true) => trace!("The tx message was relayed succesfully"),
-                            Ok(false) => warn!("Validation took too long: the tx message was no longer in the message cache"),
-                            Err(e) => error!("Network error while relaying tx message: {}", e),
-                        };
-                    }
-                })
-                .await
-        }
-        .boxed();
-
         let timer = Box::pin(tokio::time::sleep(Self::CONSENSUS_POLL_TIMER));
 
         Consensus {
             blockchain,
-            mempool,
             network,
             env,
             block_queue,
-            tx_future,
             events: tx,
             next_execution_timer: Some(timer),
             established_flag,
@@ -242,7 +181,6 @@ impl<N: Network> Consensus<N> {
         ConsensusProxy {
             blockchain: Arc::clone(&self.blockchain),
             network: Arc::clone(&self.network),
-            mempool: Arc::clone(&self.mempool),
             established_flag: Arc::clone(&self.established_flag),
         }
     }
@@ -380,12 +318,7 @@ impl<N: Network> Future for Consensus<N> {
             self.events.send(event).ok(); // Ignore result.
         }
 
-        // 2. Poll and push transactions (we check that consensus is established in the future itself).
-        if self.tx_future.poll_unpin(cx).is_ready() {
-            panic!("This future is driving an infinite Stream so it should never complete")
-        };
-
-        // 3. Poll any head requests if active.
+        // 2. Poll any head requests if active.
         if let Some(ref mut head_requests) = self.head_requests {
             if let Poll::Ready(mut result) = head_requests.poll_unpin(cx) {
                 // Reset head requests.
@@ -403,17 +336,17 @@ impl<N: Network> Future for Consensus<N> {
             }
         }
 
-        // 4. Update timer and poll it so the task gets woken when the timer runs out (at the latest)
+        // 3. Update timer and poll it so the task gets woken when the timer runs out (at the latest)
         // The timer itself running out (producing an Instant) is of no interest to the execution. This poll method
         // was potentially awoken by the delays waker, but even then all there is to do is set up a new timer such
-        // that it will wake this task again after another time frame has ellapsed. No interval was used as that
+        // that it will wake this task again after another time frame has elapsed. No interval was used as that
         // would periodically wake the task even though it might have just executed
         let _ = self.next_execution_timer.take();
         let mut timer = Box::pin(tokio::time::sleep(Self::CONSENSUS_POLL_TIMER));
         let _ = timer.poll_unpin(cx);
         self.next_execution_timer = Some(timer);
 
-        // 5. Advance consensus and catch-up through head requests.
+        // 4. Advance consensus and catch-up through head requests.
         self.request_heads();
 
         Poll::Pending

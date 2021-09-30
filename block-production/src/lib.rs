@@ -10,8 +10,9 @@ use nimiq_block::{
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, ExtendedTransaction};
 use nimiq_bls::KeyPair;
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_mempool::Mempool;
+use nimiq_mempool::mempool::Mempool;
 use nimiq_primitives::policy;
+use nimiq_transaction::Transaction;
 
 /// Struct that contains all necessary information to actually produce blocks. It has the current
 /// blockchain store and state, the current mempool for this validator and the validator key for
@@ -31,7 +32,7 @@ impl BlockProducer {
     ) -> Self {
         BlockProducer {
             blockchain,
-            mempool: Some(mempool),
+            mempool: Some(Arc::clone(&mempool)),
             validator_key,
         }
     }
@@ -84,16 +85,18 @@ impl BlockProducer {
             .sign_next(&self.validator_key.secret_key);
 
         // Calculate the maximum allowed size for the micro block body.
-        let max_size = MicroBlock::MAX_SIZE
+        let max_size_bytes = MicroBlock::MAX_SIZE
             - MicroHeader::SIZE
             - MicroBody::get_metadata_size(fork_proofs.len());
 
         // Get the transactions from the mempool.
-        let mut transactions = self
-            .mempool
-            .as_ref()
-            .map(|mempool| mempool.get_transactions_for_block(max_size))
-            .unwrap_or_else(Vec::new);
+        let mut transactions: Vec<Transaction>;
+
+        if let Some(mempool) = &self.mempool {
+            transactions = mempool.get_transactions(max_size_bytes).unwrap_or_default();
+        } else {
+            transactions = Vec::new();
+        }
 
         // Sort the transactions.
         transactions.sort_unstable_by(|a, b| a.cmp_block_order(b));

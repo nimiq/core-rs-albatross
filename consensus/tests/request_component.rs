@@ -9,7 +9,7 @@ use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_consensus::sync::history::HistorySync;
 use nimiq_consensus::Consensus;
 use nimiq_database::volatile::VolatileEnvironment;
-use nimiq_mempool::{Mempool, MempoolConfig};
+use nimiq_mempool::mempool::Mempool;
 use nimiq_network_interface::network::Network;
 use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_primitives::networks::NetworkId;
@@ -41,12 +41,11 @@ impl Node {
         let history_sync =
             HistorySync::<MockNetwork>::new(Arc::clone(&blockchain), network.subscribe_events());
 
-        let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
+        let mempool = Arc::new(Mempool::new(Arc::clone(&blockchain)));
 
         let consensus = Consensus::from_network(
             env,
             Arc::clone(&blockchain),
-            Arc::clone(&mempool),
             Arc::clone(&network),
             Box::pin(history_sync),
         )

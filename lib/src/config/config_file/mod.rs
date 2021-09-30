@@ -8,8 +8,8 @@ use serde_derive::Deserialize;
 use thiserror::Error;
 
 use nimiq_mempool::{
-    filter::{MempoolFilter, Rules as MempoolRules},
-    MempoolConfig,
+    config::MempoolConfig,
+    filter::{MempoolFilter, MempoolRules},
 };
 use nimiq_network_libp2p::Multiaddr;
 use nimiq_peer_address::{address, protocol}; // TODO: probably not needed anymore

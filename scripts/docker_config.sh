@@ -88,16 +88,4 @@ if [[ "$RPC_ENABLED" == "true" ]]; then
     optional password RPC_PASSWORD string
 fi
 
-echo '[mempool]'
-optional tx_fee MEMPOOL_TX_FEE number
-optional tx_fee_per_byte MEMPOOL_TX_FEE_PER_BYTE number
-optional tx_value MEMPOOL_TX_VALUE number
-optional tx_value_total MEMPOOL_TX_VALUE_TOTAL number
-optional contract_fee MEMPOOL_CONTRACT_FEE number
-optional contract_fee_per_byte MEMPOOL_CONTRACT_FEE_PER_BYTE number
-optional contract_value MEMPOOL_CONTRACT_VALUE number
-optional creation_fee MEMPOOL_CREATION_FEE number
-optional creation_fee_per_byte MEMPOOL_CREATION_FEE_PER_BYTE number
-optional creation_value MEMPOOL_CREATION_VALUE number
-optional recipient_balance MEMPOOL_RECIPIENT_BALANCE number
-optional sender_balance MEMPOOL_SENDER_BALANCE number
+

@@ -33,9 +33,9 @@ use crate::validator::ProposalTopic;
 
 /// The struct that interfaces with the Tendermint crate. It only has to implement the
 /// TendermintOutsideDeps trait in order to do this.
-pub struct TendermintInterface<N: ValidatorNetwork> {
+pub struct TendermintInterface<TValidatorNetwork: ValidatorNetwork> {
     // The network that is going to be used to communicate with the other validators.
-    pub network: Arc<N>,
+    pub network: Arc<TValidatorNetwork>,
     // This is used to maintain a network-wide time.
     pub offset_time: OffsetTime,
     // Necessary to produce blocks.
@@ -43,7 +43,7 @@ pub struct TendermintInterface<N: ValidatorNetwork> {
     // The main blockchain struct. Contains all of this validator information about the current chain.
     pub blockchain: Arc<RwLock<Blockchain>>,
     // The aggregation adapter allows Tendermint to use Handel functions and networking.
-    pub aggregation_adapter: HandelTendermintAdapter<N>,
+    pub aggregation_adapter: HandelTendermintAdapter<TValidatorNetwork>,
     // This validator's key pair.
     pub validator_key: KeyPair,
     // Just a field to temporarily store a block body. Since the body of a macro block is completely
@@ -53,12 +53,19 @@ pub struct TendermintInterface<N: ValidatorNetwork> {
     // body several times, we can cache it here.
     pub cache_body: Option<MacroBody>,
 
-    proposal_stream:
-        BoxStream<'static, (SignedTendermintProposal, <N as ValidatorNetwork>::PubsubId)>,
+    proposal_stream: BoxStream<
+        'static,
+        (
+            SignedTendermintProposal,
+            <TValidatorNetwork as ValidatorNetwork>::PubsubId,
+        ),
+    >,
 }
 
 #[async_trait]
-impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterface<N> {
+impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
+    for TendermintInterface<TValidatorNetwork>
+{
     type ProposalTy = MacroHeader;
     type ProofTy = MultiSignature;
     type ResultTy = MacroBlock;
@@ -369,14 +376,14 @@ impl<N: ValidatorNetwork + 'static> TendermintOutsideDeps for TendermintInterfac
     }
 }
 
-impl<N: ValidatorNetwork + 'static> TendermintInterface<N> {
+impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintInterface<TValidatorNetwork> {
     /// This function waits in a loop until it gets a proposal message from a given validator with a
     /// valid signature. It is just a helper function for the await_proposal function in this file.
     async fn await_proposal_loop(
         &mut self,
         validator_id: u16,
         validator_key: &PublicKey,
-    ) -> (TendermintProposal, N::PubsubId) {
+    ) -> (TendermintProposal, TValidatorNetwork::PubsubId) {
         while let Some((msg, id)) = self.proposal_stream.as_mut().next().await {
             // Check if the proposal comes from the correct validator and the signature of the
             // proposal is valid. If not, keep awaiting.
@@ -403,14 +410,17 @@ impl<N: ValidatorNetwork + 'static> TendermintInterface<N> {
     pub fn new(
         validator_key: KeyPair,
         validator_id: u16,
-        network: Arc<N>,
+        network: Arc<TValidatorNetwork>,
         active_validators: Validators,
         blockchain: Arc<RwLock<Blockchain>>,
         block_producer: BlockProducer,
         block_height: u32,
         proposal_stream: BoxStream<
             'static,
-            (SignedTendermintProposal, <N as ValidatorNetwork>::PubsubId),
+            (
+                SignedTendermintProposal,
+                <TValidatorNetwork as ValidatorNetwork>::PubsubId,
+            ),
         >,
     ) -> Self {
         // Create the aggregation object.

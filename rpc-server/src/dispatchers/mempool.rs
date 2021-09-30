@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use parking_lot::RwLock;
 
 use nimiq_hash::Blake2bHash;
-use nimiq_mempool::Mempool;
+use nimiq_mempool::mempool::Mempool;
 use nimiq_rpc_interface::mempool::MempoolInterface;
 
 use crate::{error::Error, wallets::UnlockedWallets};

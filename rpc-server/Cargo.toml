@@ -43,6 +43,7 @@ nimiq-jsonrpc-derive = { git = "https://github.com/nimiq/jsonrpc.git" }
 nimiq-jsonrpc-server = { git = "https://github.com/nimiq/jsonrpc.git" }
 nimiq-keys = { path = "../keys", features = ["serde-derive"] }
 nimiq-mempool = { path = "../mempool" }
+nimiq-network-interface = { path = "../network-interface" }
 nimiq-network-libp2p = { path = "../network-libp2p" }
 nimiq-primitives = { path = "../primitives", features = ["coin", "account", "serde-derive"] }
 nimiq-rpc-interface = { path = "../rpc-interface", features = ["proxy"] }

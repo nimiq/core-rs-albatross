@@ -1,4 +1,4 @@
-use std::convert::TryFrom;
+/*use std::convert::TryFrom;
 
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
@@ -46,4 +46,4 @@ fn it_accepts_and_rejects_transactions() {
     assert!(!f.accepts_transaction(&tx));
     tx.fee = Coin::try_from(1).unwrap();
     assert!(f.accepts_transaction(&tx));
-}
+}*/

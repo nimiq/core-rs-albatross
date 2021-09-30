@@ -234,14 +234,12 @@ impl Network for MockNetwork {
             }
         });
 
-        Ok(stream
-            .map(|(topic, peer_id)| {
-                let id = MockId {
-                    propagation_source: peer_id,
-                };
-                (topic, id)
-            })
-            .boxed())
+        Ok(Box::pin(stream.map(|(topic, peer_id)| {
+            let id = MockId {
+                propagation_source: peer_id,
+            };
+            (topic, id)
+        })))
     }
 
     async fn unsubscribe<'a, T>(&self) -> Result<(), Self::Error>
