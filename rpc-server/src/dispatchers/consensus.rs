@@ -77,6 +77,10 @@ impl ConsensusInterface for ConsensusDispatcher {
         Ok(self.consensus.is_established())
     }
 
+    async fn get_raw_transaction_info(&mut self, _raw_tx: String) -> Result<(), Error> {
+        Err(Error::NotImplemented)
+    }
+
     async fn send_raw_transaction(&mut self, raw_tx: String) -> Result<Blake2bHash, Error> {
         let tx = Deserialize::deserialize_from_vec(&hex::decode(&raw_tx)?)?;
         self.push_transaction(tx).await

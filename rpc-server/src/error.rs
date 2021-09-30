@@ -55,11 +55,11 @@ pub enum Error {
     #[error("Transaction not found: {0}")]
     TransactionNotFound(Blake2bHash),
 
+    #[error("Multiple transactions found: {0}")]
+    MultipleTransactionsFound(Blake2bHash),
+
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
-
-    #[error("getAccount doesn't support returning the staking contract. Use listStakes instead.")]
-    GetAccountUnsupportedStakingContract,
 }
 
 impl From<Error> for nimiq_jsonrpc_core::RpcError {

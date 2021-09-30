@@ -16,6 +16,8 @@ pub trait ConsensusInterface {
 
     async fn is_established(&mut self) -> Result<bool, Self::Error>;
 
+    async fn get_raw_transaction_info(&mut self, raw_tx: String) -> Result<(), Self::Error>;
+
     async fn send_raw_transaction(&mut self, raw_tx: String) -> Result<Blake2bHash, Self::Error>;
 
     async fn create_basic_transaction(

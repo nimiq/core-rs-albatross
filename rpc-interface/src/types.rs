@@ -144,6 +144,7 @@ pub struct Block {
 pub enum BlockAdditionalFields {
     Macro {
         is_election_block: bool,
+        proposer: Slot,
 
         parent_election_hash: Blake2bHash,
 
@@ -151,6 +152,9 @@ pub enum BlockAdditionalFields {
         slots: Option<Vec<Slots>>,
         lost_reward_set: Option<BitSet>,
         disabled_set: Option<BitSet>,
+
+        #[serde(skip_serializing_if = "Option::is_none")]
+        transactions: Option<Vec<Transaction>>,
 
         #[serde(skip_serializing_if = "Option::is_none")]
         justification: Option<TendermintProof>,
@@ -175,6 +179,7 @@ impl Block {
         include_transactions: bool,
     ) -> Self {
         let block_number = block.block_number();
+        let timestamp = block.timestamp();
         let batch = policy::batch_at(block_number);
         let epoch = policy::epoch_at(block_number);
 
@@ -187,6 +192,29 @@ impl Block {
                     Some(body) => (Some(body.lost_reward_set), Some(body.disabled_set)),
                 };
 
+                // Get the reward inherents and convert them to reward transactions.
+                let ext_txs = blockchain
+                    .history_store
+                    .get_block_transactions(block_number, None);
+
+                let mut transactions = vec![];
+
+                for ext_tx in ext_txs {
+                    if ext_tx.is_inherent() {
+                        match ext_tx.into_transaction() {
+                            Ok(tx) => {
+                                transactions.push(Transaction::from_blockchain(
+                                    tx,
+                                    block_number,
+                                    timestamp,
+                                    blockchain.block_number(),
+                                ));
+                            }
+                            Err(_) => {}
+                        }
+                    }
+                }
+
                 Block {
                     block_type: BlockType::Macro,
                     hash: macro_block.hash(),
@@ -195,7 +223,7 @@ impl Block {
                     version: macro_block.header.version,
                     block_number,
                     view_number: macro_block.header.view_number,
-                    timestamp: macro_block.header.timestamp,
+                    timestamp,
                     parent_hash: macro_block.header.parent_hash,
                     seed: macro_block.header.seed,
                     extra_data: macro_block.header.extra_data,
@@ -204,10 +232,16 @@ impl Block {
                     history_root: macro_block.header.history_root,
                     additional_fields: BlockAdditionalFields::Macro {
                         is_election_block: policy::is_election_block_at(block_number),
+                        proposer: Slot::from(
+                            blockchain,
+                            block_number,
+                            macro_block.header.view_number,
+                        ),
                         parent_election_hash: macro_block.header.parent_election_hash,
                         slots,
                         lost_reward_set,
                         disabled_set,
+                        transactions: Some(transactions),
                         justification: macro_block.justification.map(TendermintProof::from),
                     },
                 }
@@ -234,7 +268,7 @@ impl Block {
                                         Transaction::from_blockchain(
                                             tx,
                                             block_number,
-                                            micro_block.header.timestamp,
+                                            timestamp,
                                             head_height,
                                         )
                                     })
@@ -254,7 +288,7 @@ impl Block {
                     version: micro_block.header.version,
                     block_number,
                     view_number: micro_block.header.view_number,
-                    timestamp: micro_block.header.timestamp,
+                    timestamp,
                     parent_hash: micro_block.header.parent_hash,
                     seed: micro_block.header.seed,
                     extra_data: micro_block.header.extra_data,
@@ -262,7 +296,7 @@ impl Block {
                     body_root: micro_block.header.body_root,
                     history_root: micro_block.header.history_root,
                     additional_fields: BlockAdditionalFields::Micro {
-                        producer: Slot::from_producer(
+                        producer: Slot::from(
                             blockchain,
                             block_number,
                             micro_block.header.view_number,
@@ -318,7 +352,7 @@ pub struct Slot {
 }
 
 impl Slot {
-    pub fn from_producer(blockchain: &Blockchain, block_number: u32, view_number: u32) -> Self {
+    pub fn from(blockchain: &Blockchain, block_number: u32, view_number: u32) -> Self {
         let (validator, slot_number) = blockchain
             .get_slot_owner_at(block_number, view_number, None)
             .expect("Couldn't calculate slot owner!");
@@ -361,8 +395,15 @@ impl Slots {
 #[serde(rename_all = "camelCase")]
 pub struct SlashedSlots {
     pub block_number: u32,
-    pub current: BitSet,
-    pub previous: BitSet,
+    pub lost_rewards: BitSet,
+    pub disabled: BitSet,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ParkedSet {
+    pub block_number: u32,
+    pub validators: Vec<Address>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -540,6 +581,12 @@ impl Account {
                     timeout: htlc.timeout,
                     total_amount: htlc.total_amount,
                 }),
+            },
+            nimiq_account::Account::Staking(staking) => Account {
+                address,
+                balance: staking.balance,
+                ty: AccountType::Staking,
+                account_additional_fields: None,
             },
             _ => unreachable!(),
         }
