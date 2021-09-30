@@ -15,7 +15,7 @@ use nimiq_rpc_interface::{
 };
 
 use crate::error::Error;
-use nimiq_rpc_interface::types::Validator;
+use nimiq_rpc_interface::types::{ParkedSet, Validator};
 
 pub struct BlockchainDispatcher {
     blockchain: Arc<RwLock<Blockchain>>,
@@ -36,32 +36,40 @@ impl BlockchainInterface for BlockchainDispatcher {
         Ok(self.blockchain.read().block_number())
     }
 
-    async fn get_epoch_number(&mut self) -> Result<u32, Error> {
-        Ok(policy::epoch_at(self.blockchain.read().block_number()))
-    }
-
     async fn get_batch_number(&mut self) -> Result<u32, Error> {
         Ok(policy::batch_at(self.blockchain.read().block_number()))
+    }
+
+    async fn get_epoch_number(&mut self) -> Result<u32, Error> {
+        Ok(policy::epoch_at(self.blockchain.read().block_number()))
     }
 
     async fn get_block_by_hash(
         &mut self,
         hash: Blake2bHash,
-        include_transactions: bool,
+        include_transactions: Option<bool>,
     ) -> Result<Block, Error> {
         let blockchain = self.blockchain.read();
+
         blockchain
             .get_block(&hash, true, None)
-            .map(|block| Block::from_block(blockchain.deref(), block, include_transactions))
+            .map(|block| {
+                Block::from_block(
+                    blockchain.deref(),
+                    block,
+                    include_transactions.unwrap_or(false),
+                )
+            })
             .ok_or_else(|| Error::BlockNotFound(hash.into()))
     }
 
     async fn get_block_by_number(
         &mut self,
         block_number: u32,
-        include_transactions: bool,
+        include_transactions: Option<bool>,
     ) -> Result<Block, Error> {
         let blockchain = self.blockchain.read();
+
         let block = blockchain
             .get_block_at(block_number, true, None)
             .ok_or_else(|| Error::BlockNotFound(block_number.into()))?;
@@ -69,18 +77,21 @@ impl BlockchainInterface for BlockchainDispatcher {
         Ok(Block::from_block(
             blockchain.deref(),
             block,
-            include_transactions,
+            include_transactions.unwrap_or(false),
         ))
     }
 
-    async fn get_latest_block(&mut self, include_transactions: bool) -> Result<Block, Error> {
+    async fn get_latest_block(
+        &mut self,
+        include_transactions: Option<bool>,
+    ) -> Result<Block, Error> {
         let blockchain = self.blockchain.read();
         let block = blockchain.head();
 
         Ok(Block::from_block(
             blockchain.deref(),
             block,
-            include_transactions,
+            include_transactions.unwrap_or(false),
         ))
     }
 
@@ -89,13 +100,6 @@ impl BlockchainInterface for BlockchainDispatcher {
         block_number: u32,
         view_number_opt: Option<u32>,
     ) -> Result<Slot, Error> {
-        // Check if it's not a macro block
-        //
-        // TODO: Macro blocks have a slot too. It's just only for the proposal.
-        if policy::is_macro_block_at(block_number) {
-            return Err(Error::UnexpectedMacroBlock(block_number.into()));
-        }
-
         let blockchain = self.blockchain.read();
 
         let view_number = if let Some(view_number) = view_number_opt {
@@ -108,62 +112,49 @@ impl BlockchainInterface for BlockchainDispatcher {
                 .view_number()
         };
 
-        Ok(Slot::from_producer(
-            blockchain.deref(),
-            block_number,
-            view_number,
-        ))
+        Ok(Slot::from(blockchain.deref(), block_number, view_number))
     }
 
-    async fn get_slashed_slots(&mut self) -> Result<SlashedSlots, Error> {
-        let blockchain = self.blockchain.read();
-
-        // FIXME: Race condition
-        let block_number = blockchain.block_number();
-        let staking_contract = blockchain.get_staking_contract();
-
-        let current_slashed_set =
-            staking_contract.current_lost_rewards() & staking_contract.current_disabled_slots();
-
-        let previous_slashed_set =
-            staking_contract.previous_lost_rewards() & staking_contract.previous_disabled_slots();
-
-        Ok(SlashedSlots {
-            block_number,
-            current: current_slashed_set,
-            previous: previous_slashed_set,
-        })
-    }
-
-    async fn get_raw_transaction_info(&mut self, _raw_tx: String) -> Result<(), Error> {
-        Err(Error::NotImplemented)
-    }
-
-    async fn get_transaction_by_hash(&mut self, hash: Blake2bHash) -> Result<Transaction, Error> {
-        // TODO: Check mempool for the transaction, too
+    async fn get_transaction_by_hash(
+        &mut self,
+        hash: Blake2bHash,
+        // TODO: Check mempool for the transaction, too!
+        _check_mempool: Option<bool>,
+    ) -> Result<Transaction, Error> {
         let blockchain = self.blockchain.read();
 
         // Get all the extended transactions that correspond to this hash.
         let mut extended_tx_vec = blockchain.history_store.get_ext_tx_by_hash(&hash, None);
 
-        // If we get more than 1 extended transaction, we panic. This shouldn't happen.
-        assert!(extended_tx_vec.len() < 2);
-
         // Unpack the transaction or raise an error.
-        let extended_tx = if extended_tx_vec.is_empty() {
-            return Err(Error::TransactionNotFound(hash));
-        } else {
-            extended_tx_vec.pop().unwrap()
+        let extended_tx = match extended_tx_vec.len() {
+            0 => {
+                return Err(Error::TransactionNotFound(hash));
+            }
+            1 => extended_tx_vec.pop().unwrap(),
+            _ => {
+                return Err(Error::MultipleTransactionsFound(hash));
+            }
         };
 
-        let transaction = extended_tx.unwrap_basic(); // Because we found the extended_tx above, this cannot be None
+        // Convert the extended transaction into a regular transaction. This will also convert
+        // reward inherents.
+        let block_number = extended_tx.block_number;
+        let timestamp = extended_tx.block_time;
 
-        Ok(Transaction::from_blockchain(
-            transaction.clone(),
-            extended_tx.block_number,
-            extended_tx.block_time,
-            blockchain.block_number(),
-        ))
+        match extended_tx.into_transaction() {
+            Ok(tx) => {
+                return Ok(Transaction::from_blockchain(
+                    tx,
+                    block_number,
+                    timestamp,
+                    blockchain.block_number(),
+                ));
+            }
+            Err(_) => {
+                return Err(Error::TransactionNotFound(hash));
+            }
+        }
     }
 
     async fn get_transactions_by_block_number(
@@ -171,21 +162,102 @@ impl BlockchainInterface for BlockchainDispatcher {
         block_number: u32,
     ) -> Result<Vec<Transaction>, Error> {
         let blockchain = self.blockchain.read();
+
         // Get all the extended transactions that correspond to this block.
         let extended_tx_vec = blockchain
             .history_store
             .get_block_transactions(block_number, None);
 
+        // Get the timestamp of the block from one of the extended transactions. This complicated
+        // setup is because we might not have any transactions.
+        let timestamp = extended_tx_vec.first().map(|x| x.block_time).unwrap_or(0);
+
+        // Convert the extended transactions into regular transactions. This will also convert
+        // reward inherents.
         let mut transactions = vec![];
 
         for ext_tx in extended_tx_vec {
-            if !ext_tx.is_inherent() {
-                transactions.push(Transaction::from_blockchain(
-                    ext_tx.unwrap_basic().clone(),
-                    ext_tx.block_number,
-                    ext_tx.block_time,
-                    blockchain.block_number(),
+            match ext_tx.into_transaction() {
+                Ok(tx) => {
+                    transactions.push(Transaction::from_blockchain(
+                        tx,
+                        block_number,
+                        timestamp,
+                        blockchain.block_number(),
+                    ));
+                }
+                Err(_) => {}
+            }
+        }
+
+        Ok(transactions)
+    }
+
+    async fn get_inherents_by_block_number(
+        &mut self,
+        block_number: u32,
+    ) -> Result<Vec<Inherent>, Self::Error> {
+        let blockchain = self.blockchain.read();
+
+        // Get all the extended transactions that correspond to this block.
+        let extended_tx_vec = blockchain
+            .history_store
+            .get_block_transactions(block_number, None);
+
+        // Get the timestamp of the block from one of the extended transactions. This complicated
+        // setup is because we might not have any transactions.
+        let timestamp = extended_tx_vec.first().map(|x| x.block_time).unwrap_or(0);
+
+        // Get only the inherents. This includes reward inherents.
+        let mut inherents = vec![];
+
+        for ext_tx in extended_tx_vec {
+            if ext_tx.is_inherent() {
+                inherents.push(Inherent::from_transaction(
+                    ext_tx.unwrap_inherent().clone(),
+                    block_number,
+                    timestamp,
                 ));
+            }
+        }
+
+        Ok(inherents)
+    }
+
+    async fn get_batch_transactions(
+        &mut self,
+        batch_number: u32,
+    ) -> Result<Vec<Transaction>, Self::Error> {
+        let blockchain = self.blockchain.read();
+
+        // Calculate the numbers for the micro blocks in the batch.
+        let first_block = policy::first_block_of_batch(batch_number);
+        let last_block = policy::macro_block_of(batch_number);
+
+        // Search all micro blocks of the batch to find the transactions.
+        let mut transactions = vec![];
+
+        for i in first_block..=last_block {
+            let ext_txs = blockchain.history_store.get_block_transactions(i, None);
+
+            // Get the timestamp of the block from one of the extended transactions. This complicated
+            // setup is because we might not have any transactions.
+            let timestamp = ext_txs.first().map(|x| x.block_time).unwrap_or(0);
+
+            // Convert the extended transactions into regular transactions. This will also convert
+            // reward inherents.
+            for ext_tx in ext_txs {
+                match ext_tx.into_transaction() {
+                    Ok(tx) => {
+                        transactions.push(Transaction::from_blockchain(
+                            tx,
+                            i,
+                            timestamp,
+                            blockchain.block_number(),
+                        ));
+                    }
+                    Err(_) => {}
+                }
             }
         }
 
@@ -197,7 +269,7 @@ impl BlockchainInterface for BlockchainDispatcher {
 
         let macro_block_number = policy::macro_block_of(batch_number);
 
-        // Check the batch's macro block to see if the batch includes slashes
+        // Check the batch's macro block to see if the batch includes slashes.
         let macro_block = blockchain
             .get_block_at(macro_block_number, true, None) // The lost_reward_set is in the MacroBody
             .ok_or_else(|| Error::BlockNotFound(macro_block_number.into()))?;
@@ -207,11 +279,11 @@ impl BlockchainInterface for BlockchainDispatcher {
         let macro_body = macro_block.unwrap_macro().body.unwrap();
 
         if !macro_body.lost_reward_set.is_empty() {
-            // Search all micro blocks of the batch to find the slash inherents
+            // Search all micro blocks of the batch to find the slash inherents.
             let first_micro_block = policy::first_block_of_batch(batch_number);
             let last_micro_block = macro_block_number - 1;
 
-            for i in first_micro_block..last_micro_block {
+            for i in first_micro_block..=last_micro_block {
                 let micro_ext_tx_vec = blockchain.history_store.get_block_transactions(i, None);
 
                 for ext_tx in micro_ext_tx_vec {
@@ -228,8 +300,6 @@ impl BlockchainInterface for BlockchainDispatcher {
                 .history_store
                 .get_block_transactions(macro_block_number, None)
                 .into_iter()
-                // Macro blocks include validator rewards as regular transactions, filter them out
-                .filter(|ext_tx| ext_tx.is_inherent())
                 .collect(),
         );
 
@@ -243,10 +313,6 @@ impl BlockchainInterface for BlockchainDispatcher {
                 )
             })
             .collect())
-    }
-
-    async fn get_transaction_receipt(&mut self, _hash: Blake2bHash) -> Result<(), Error> {
-        Err(Error::NotImplemented)
     }
 
     async fn get_transaction_hashes_by_address(
@@ -266,20 +332,62 @@ impl BlockchainInterface for BlockchainDispatcher {
         address: Address,
         max: Option<u16>,
     ) -> Result<Vec<Transaction>, Error> {
-        let tx_hashes = self.get_transaction_hashes_by_address(address, max).await?;
+        let blockchain = self.blockchain.read();
+
+        // Get the transaction hashes for this address.
+        let tx_hashes =
+            blockchain
+                .history_store
+                .get_tx_hashes_by_address(&address, max.unwrap_or(500), None);
 
         let mut txs = vec![];
 
-        // TODO: Use a single database transaction for all queries
+        for hash in tx_hashes {
+            // Get all the extended transactions that correspond to this hash.
+            let mut extended_tx_vec = blockchain.history_store.get_ext_tx_by_hash(&hash, None);
 
-        for tx_hash in tx_hashes {
-            txs.push(self.get_transaction_by_hash(tx_hash).await?);
+            // Unpack the transaction or raise an error.
+            let extended_tx = match extended_tx_vec.len() {
+                0 => {
+                    return Err(Error::TransactionNotFound(hash));
+                }
+                1 => extended_tx_vec.pop().unwrap(),
+                _ => {
+                    return Err(Error::MultipleTransactionsFound(hash));
+                }
+            };
+
+            // Convert the extended transaction into a regular transaction. This will also convert
+            // reward inherents.
+            let block_number = extended_tx.block_number;
+            let timestamp = extended_tx.block_time;
+
+            match extended_tx.into_transaction() {
+                Ok(tx) => {
+                    txs.push(Transaction::from_blockchain(
+                        tx,
+                        block_number,
+                        timestamp,
+                        blockchain.block_number(),
+                    ));
+                }
+                Err(_) => {}
+            }
         }
 
         Ok(txs)
     }
 
-    async fn list_stakes(&mut self) -> Result<HashMap<Address, Coin>, Error> {
+    async fn get_account(&mut self, address: Address) -> Result<Account, Error> {
+        let result = self.blockchain.read().get_account(&address);
+
+        match result {
+            Some(account) => Ok(Account::from_account(address, account)),
+            None => Ok(Account::empty(address)),
+        }
+    }
+
+    async fn get_active_validators(&mut self) -> Result<HashMap<Address, Coin>, Error> {
         let staking_contract = self.blockchain.read().get_staking_contract();
 
         let mut active_validators = HashMap::new();
@@ -291,12 +399,54 @@ impl BlockchainInterface for BlockchainDispatcher {
         Ok(active_validators)
     }
 
-    async fn get_validator(
+    async fn get_current_slashed_sets(&mut self) -> Result<SlashedSlots, Self::Error> {
+        let blockchain = self.blockchain.read();
+
+        // FIXME: Race condition
+        let block_number = blockchain.block_number();
+        let staking_contract = blockchain.get_staking_contract();
+
+        Ok(SlashedSlots {
+            block_number,
+            lost_rewards: staking_contract.current_lost_rewards(),
+            disabled: staking_contract.current_disabled_slots(),
+        })
+    }
+
+    async fn get_previous_slashed_sets(&mut self) -> Result<SlashedSlots, Self::Error> {
+        let blockchain = self.blockchain.read();
+
+        // FIXME: Race condition
+        let block_number = blockchain.block_number();
+        let staking_contract = blockchain.get_staking_contract();
+
+        Ok(SlashedSlots {
+            block_number,
+            lost_rewards: staking_contract.previous_lost_rewards(),
+            disabled: staking_contract.previous_disabled_slots(),
+        })
+    }
+
+    async fn get_parked_set(&mut self) -> Result<ParkedSet, Self::Error> {
+        let blockchain = self.blockchain.read();
+
+        // FIXME: Race condition
+        let block_number = blockchain.block_number();
+        let staking_contract = blockchain.get_staking_contract();
+
+        Ok(ParkedSet {
+            block_number,
+            validators: staking_contract.parked_set(),
+        })
+    }
+
+    async fn get_validator_by_address(
         &mut self,
         address: Address,
         include_stakers: Option<bool>,
     ) -> Result<Validator, Error> {
         let blockchain = self.blockchain.read();
+
         let accounts_tree = &blockchain.state().accounts.tree;
         let db_txn = blockchain.read_transaction();
         let validator = StakingContract::get_validator(accounts_tree, &db_txn, &address);
@@ -307,7 +457,7 @@ impl BlockchainInterface for BlockchainDispatcher {
 
         let mut stakers = None;
 
-        if include_stakers.is_some() && include_stakers.unwrap() {
+        if include_stakers == Some(true) {
             let staker_addresses =
                 StakingContract::get_validator_stakers(accounts_tree, &db_txn, &address);
 
@@ -326,8 +476,9 @@ impl BlockchainInterface for BlockchainDispatcher {
         Ok(Validator::from_validator(&validator.unwrap(), stakers))
     }
 
-    async fn get_staker(&mut self, address: Address) -> Result<Staker, Error> {
+    async fn get_staker_by_address(&mut self, address: Address) -> Result<Staker, Error> {
         let blockchain = self.blockchain.read();
+
         let accounts_tree = &blockchain.state().accounts.tree;
         let db_txn = blockchain.read_transaction();
         let staker = StakingContract::get_staker(accounts_tree, &db_txn, &address);
@@ -351,18 +502,5 @@ impl BlockchainInterface for BlockchainDispatcher {
                 }
             })
             .boxed())
-    }
-
-    async fn get_account(&mut self, address: Address) -> Result<Account, Error> {
-        let result = self.blockchain.read().get_account(&address);
-        match result {
-            Some(account) => match account {
-                nimiq_account::Account::Staking(_) => {
-                    Err(Error::GetAccountUnsupportedStakingContract)
-                }
-                _ => Ok(Account::from_account(address, account)),
-            },
-            None => Ok(Account::empty(address)),
-        }
     }
 }

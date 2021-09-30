@@ -310,6 +310,11 @@ impl StakingContract {
         }
         bitset
     }
+
+    /// Returns a Vector with the addresses of all the currently parked Validators.
+    pub fn parked_set(&self) -> Vec<Address> {
+        self.parked_set.iter().cloned().collect()
+    }
 }
 
 impl Serialize for StakingContract {
