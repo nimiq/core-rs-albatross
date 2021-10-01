@@ -203,6 +203,8 @@ impl Blockchain {
         mut chain_info: ChainInfo,
         mut prev_info: ChainInfo,
     ) -> Result<PushResult, PushError> {
+        // Upgrade the lock as late as possible but before creating the WriteTxn
+        let mut this = RwLockUpgradableReadGuard::upgrade(this);
         let env = this.env.clone();
         let mut txn = WriteTransaction::new(&env);
 
@@ -228,9 +230,6 @@ impl Blockchain {
         let is_election_block = policy::is_election_block_at(this.block_number() + 1);
 
         let mut is_macro = false;
-
-        // Upgrade the lock as late as possible
-        let mut this = RwLockUpgradableReadGuard::upgrade(this);
 
         if let Block::Macro(ref macro_block) = chain_info.head {
             is_macro = true;
