@@ -312,6 +312,7 @@ impl Blockchain {
 
             current = (prev_hash, prev_info);
         }
+        read_txn.close();
 
         debug!(
             "Found common ancestor {} at height #{}, {} blocks up",
@@ -323,6 +324,9 @@ impl Blockchain {
         // Revert AccountsTree & TransactionCache to the common ancestor state.
         let mut revert_chain: Vec<(Blake2bHash, ChainInfo)> = vec![];
         let mut ancestor = current;
+
+        // Upgrade the lock as late as possible but before creating the Write Transaction
+        let mut this = RwLockUpgradableReadGuard::upgrade(this);
 
         let mut write_txn = WriteTransaction::new(&env);
 
@@ -346,7 +350,7 @@ impl Blockchain {
 
                     let prev_info = this
                         .chain_store
-                        .get_chain_info(&prev_hash, true, Some(&read_txn))
+                        .get_chain_info(&prev_hash, true, Some(&write_txn))
                         .expect("Corrupted store: Failed to find main chain predecessor while rebranching");
 
                     this.revert_accounts(
@@ -443,9 +447,6 @@ impl Blockchain {
             this.chain_store
                 .put_chain_info(&mut write_txn, &fork_block.0, &fork_block.1, i == 0);
         }
-
-        // Upgrade the lock as late as possible
-        let mut this = RwLockUpgradableReadGuard::upgrade(this);
 
         // Commit transaction & update head.
         this.chain_store.set_head(&mut write_txn, &fork_chain[0].0);

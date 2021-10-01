@@ -138,16 +138,19 @@ impl Blockchain {
         ext_txs: &[ExtendedTransaction],
         mut prev_macro_info: ChainInfo,
     ) -> Result<PushResult, PushError> {
-        let env = this.env.clone();
-        // Create a new database write transaction.
-        let mut txn = WriteTransaction::new(&env);
-
         // If there are micro blocks already in the blockchain, then we need to revert the
         // blockchain to the last macro block.
         let num_blocks = this
             .block_number()
             .checked_sub(prev_macro_info.head.block_number())
             .expect("Head of the chain can't be before the macro head!");
+
+        // upgrade to Write before creating the Write Transaction
+        let mut this = RwLockUpgradableReadGuard::upgrade(this);
+
+        let env = this.env.clone();
+        // Create a new database write transaction.
+        let mut txn = WriteTransaction::new(&env);
 
         this.revert_blocks(num_blocks, &mut txn)?;
 
@@ -309,8 +312,6 @@ impl Blockchain {
 
         // Check if this block is an election block.
         let is_election_block = macro_block.is_election_block();
-
-        let mut this = RwLockUpgradableReadGuard::upgrade(this);
 
         // Update the blockchain state.
         this.state.main_chain = chain_info.clone();
