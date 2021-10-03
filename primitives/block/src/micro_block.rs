@@ -10,6 +10,7 @@ use nimiq_vrf::VrfSeed;
 
 use crate::fork_proof::ForkProof;
 use crate::ViewChangeProof;
+use std::fmt::{Debug, Formatter};
 
 /// The struct representing a Micro block.
 /// A Micro block, unlike a Macro block, doesn't contain any inherents (data that can be calculated
@@ -66,7 +67,7 @@ pub struct MicroJustification {
 }
 
 /// The struct representing the body of a Micro block.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, SerializeContent)]
+#[derive(Clone, Eq, PartialEq, Serialize, Deserialize, SerializeContent)]
 pub struct MicroBody {
     /// A vector containing the fork proofs for this block. It might be empty.
     #[beserial(len_type(u16))]
@@ -139,3 +140,12 @@ impl fmt::Display for MicroHeader {
 }
 
 impl Hash for MicroBody {}
+
+impl Debug for MicroBody {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        let mut dbg = f.debug_struct("MicroBody");
+        dbg.field("num_fork_proofs", &self.fork_proofs.len());
+        dbg.field("num_transactions", &self.transactions.len());
+        dbg.finish()
+    }
+}

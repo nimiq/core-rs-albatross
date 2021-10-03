@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::{Arc, Weak};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use futures::{
     channel::oneshot::{channel, Sender},
@@ -75,8 +75,6 @@ impl<P: Peer, Req: RequestMessage, Res: ResponseMessage + 'static> RequestRespon
     }
 
     pub async fn request(&self, mut request: Req) -> Result<Res, RequestError> {
-        log::debug!("Sending request: {:#?}", request);
-
         // Lock state, set identifier and send out request. Also add channel to the state.
         let (request_identifier, receiver) = {
             let mut state = self.state.lock();
@@ -91,6 +89,8 @@ impl<P: Peer, Req: RequestMessage, Res: ResponseMessage + 'static> RequestRespon
             (request_identifier, receiver)
         };
 
+        log::trace!("-> [{}] {:#?}", request_identifier, request);
+
         // TODO: CloseType
         // If sending fails, remove channel and return error.
         if let Err(e) = self
@@ -104,9 +104,15 @@ impl<P: Peer, Req: RequestMessage, Res: ResponseMessage + 'static> RequestRespon
         }
 
         // Now we only have to wait for the response.
+        let start = Instant::now();
         match timeout(self.timeout, receiver).await {
             Ok(Ok(response)) => {
-                log::debug!("Received response: {:#?}", response);
+                log::trace!(
+                    "<- [{}] {:?} {:#?}",
+                    request_identifier,
+                    start.elapsed(),
+                    response
+                );
 
                 Ok(response)
             }

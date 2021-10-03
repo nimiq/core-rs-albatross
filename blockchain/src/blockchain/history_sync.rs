@@ -125,8 +125,6 @@ impl Blockchain {
             return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
         }
 
-        info!("Syncing at macro block #{}", block.block_number());
-
         drop(read_txn);
 
         // Extend the chain with this block.

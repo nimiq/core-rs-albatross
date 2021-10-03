@@ -5,6 +5,7 @@ use std::collections::{BinaryHeap, VecDeque};
 use std::fmt::Debug;
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
+use std::task::Waker;
 
 use futures::future::BoxFuture;
 use futures::stream::FuturesUnordered;
@@ -14,7 +15,6 @@ use futures::{ready, Future, Stream, StreamExt};
 use network_interface::peer::Peer;
 
 use crate::consensus_agent::ConsensusAgent;
-use std::task::Waker;
 
 #[pin_project]
 #[derive(Debug)]
@@ -97,10 +97,10 @@ where
         request_fn: fn(TId, Arc<ConsensusAgent<TPeer>>) -> BoxFuture<'static, Option<TOutput>>,
     ) -> Self {
         log::trace!(
-            "Creating SyncQueue with {} ids, {} peers, {} desired pending size",
+            "Creating SyncQueue for {} with {} ids and {} peers",
+            std::any::type_name::<TOutput>(),
             ids.len(),
             peers.len(),
-            desired_pending_size
         );
 
         SyncQueue {

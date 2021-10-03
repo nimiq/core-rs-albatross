@@ -320,7 +320,7 @@ impl<N: Network> Inner<N> {
             // Let the network layer know if it should relay the message this block came from
             if let Some(pubsub_id) = pubsub_id {
                 match network.validate_message(pubsub_id, acceptance).await {
-                    Ok(true) => log::trace!("The block message was relayed succesfully"),
+                    Ok(true) => {}, // success
                     Ok(false) => log::warn!("Validation took too long: the block message was no longer in the message cache"),
                     Err(e) => log::error!("Network error while relaying block message: {}", e),
                 };
@@ -367,8 +367,6 @@ impl<N: Network> Inner<N> {
         if invalid_blocks.is_empty() {
             return;
         }
-
-        log::trace!("Removing any blocks that depend on: {:?}", invalid_blocks);
 
         // Iterate over all offsets, remove element if no blocks remain at that offset.
         self.buffer.drain_filter(|_block_number, blocks| {
@@ -560,7 +558,7 @@ impl<N: Network, TReq: RequestComponent<N::PeerType>> Stream for BlockQueue<N, T
         // Then, try to get as many blocks from the gossipsub stream as possible.
         match this.block_stream.poll_next(cx) {
             Poll::Ready(Some((block, pubsub_id))) => {
-                // Ignore all block announcements until there is at least once synced peer.
+                // Ignore all block announcements until there is at least one synced peer.
                 if num_peers > 0 {
                     log::trace!("Received block #{} via gossipsub", block.block_number());
                     this.inner.on_block_announced(

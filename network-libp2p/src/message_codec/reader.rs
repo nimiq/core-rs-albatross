@@ -28,25 +28,15 @@ where
     if n > n0 {
         buffer.resize(n, 0);
 
-        //log::trace!("MessageReader: read_to_buf: n={}, n0={}", n, n0);
-
         match AsyncRead::poll_read(reader, cx, &mut buffer[n0..n]) {
             // EOF
             Poll::Ready(Ok(0)) => {
-                //log::trace!("MessageReader: read_to_buf: poll_read returned 0");
-
                 buffer.resize(n0, 0);
                 Poll::Ready(Ok(false))
             }
 
             // Data was read
             Poll::Ready(Ok(n_read)) => {
-                log::trace!(
-                    "MessageReader: read_to_buf: Received {} bytes, buffer={:?}",
-                    n_read,
-                    buffer
-                );
-
                 // New length of buffer
                 let n_new = n0 + n_read;
 
@@ -66,7 +56,6 @@ where
 
             // Reader is not ready
             Poll::Pending => {
-                //log::trace!("MessageReader: read_to_buf: poll_read pending");
                 buffer.resize(n0, 0);
                 Poll::Pending
             }
@@ -142,8 +131,6 @@ where
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let self_projected = self.project();
 
-        //log::trace!("MessageReader::poll_next: buffer={:?}", self_projected.buffer);
-
         let (new_state, message) = match &self_projected.state {
             ReaderState::Head => {
                 // Read header. This returns `Poll::Pending` until all header bytes have been read.
@@ -201,7 +188,7 @@ where
                     // Wait for more data.
                     Poll::Pending => return Poll::Pending,
 
-                    // An error occured.
+                    // An error occurred.
                     Poll::Ready(Err(e)) => return Poll::Ready(Some(Err(e.into()))),
 
                     // EOF while reading the data.
@@ -224,8 +211,6 @@ where
                 // Reset the buffer
                 self_projected.buffer.clear();
 
-                //log::trace!("MessageReader: Received message: {:?}", message);
-
                 (ReaderState::Head, Some(message))
             }
         };
@@ -243,13 +228,14 @@ where
 
 #[cfg(test)]
 mod tests {
+    use bytes::{BufMut, BytesMut};
     use futures::{io::Cursor, StreamExt};
 
     use beserial::{Deserialize, Serialize};
-    use bytes::{BufMut, BytesMut};
+
+    use crate::message_codec::header::Header;
 
     use super::MessageReader;
-    use crate::message_codec::header::Header;
 
     #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
     struct TestMessage {

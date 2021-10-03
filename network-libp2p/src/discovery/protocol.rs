@@ -112,8 +112,7 @@ where
     type Error = SerializingError;
     type Future = future::Ready<Result<Self::Output, Self::Error>>;
 
-    fn upgrade_inbound(self, socket: C, info: Self::Info) -> Self::Future {
-        log::trace!("upgrade_inbound: {:?}", info);
+    fn upgrade_inbound(self, socket: C, _info: Self::Info) -> Self::Future {
         future::ok(MessageReader::new(socket))
     }
 }
@@ -126,8 +125,7 @@ where
     type Error = SerializingError;
     type Future = future::Ready<Result<Self::Output, Self::Error>>;
 
-    fn upgrade_outbound(self, socket: C, info: Self::Info) -> Self::Future {
-        log::trace!("upgrade_outbound: {:?}", info);
+    fn upgrade_outbound(self, socket: C, _info: Self::Info) -> Self::Future {
         future::ok(MessageWriter::new(socket))
     }
 }

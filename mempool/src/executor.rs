@@ -91,8 +91,6 @@ impl<N: Network> Future for MempoolExecutor<N> {
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         while let Poll::Ready(Some((tx, pubsub_id))) = self.txn_stream.as_mut().poll_next_unpin(cx)
         {
-            log::debug!("Received new transaction");
-
             if self.verification_tasks.fetch_add(0, AtomicOrdering::SeqCst)
                 == CONCURRENT_VERIF_TASKS
             {
@@ -105,14 +103,10 @@ impl<N: Network> Future for MempoolExecutor<N> {
             let filter = Arc::clone(&self.filter);
             let tasks_count = Arc::clone(&self.verification_tasks);
 
-            log::debug!("Spawning a new verification task");
-
             let network = Arc::clone(&self.network);
 
             // Spawn the transaction verification task
             tokio::task::spawn(async move {
-                log::debug!("Starting execution of new verification task");
-
                 tasks_count.fetch_add(1, AtomicOrdering::SeqCst);
 
                 let rc = verify_tx(&tx, blockchain, Arc::clone(&mempool_state), filter);

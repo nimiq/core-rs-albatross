@@ -3,7 +3,7 @@ use block::{Block, MacroBlock};
 use blockchain::HistoryTreeChunk;
 use hash::Blake2bHash;
 use network_interface::message::*;
-use std::fmt::{Debug, Error, Formatter};
+use std::fmt::{Debug, Formatter};
 
 use crate::request_response;
 
@@ -71,7 +71,7 @@ impl<'a> From<&'a Block> for BlockHashType {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct BlockHashes {
     #[beserial(len_type(u16))]
     pub hashes: Option<Vec<(BlockHashType, Blake2bHash)>>,
@@ -81,6 +81,24 @@ request_response!(BlockHashes);
 
 impl Message for BlockHashes {
     const TYPE_ID: u64 = 201;
+}
+
+impl Debug for BlockHashes {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        let mut dbg = f.debug_struct("BlockHashes");
+        if let Some(hashes) = &self.hashes {
+            let len = hashes.len();
+            dbg.field("length", &len);
+            if !hashes.is_empty() {
+                let first = hashes.first().unwrap();
+                let last = hashes.last().unwrap();
+                dbg.field("first_hash", &first);
+                dbg.field("last_hash", &last);
+            }
+        }
+        dbg.field("request_identifier", &self.request_identifier);
+        dbg.finish()
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
@@ -131,7 +149,7 @@ impl Message for BatchSetInfo {
 }
 
 impl Debug for BatchSetInfo {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut debug_struct = f.debug_struct("BatchSetInfo");
         if let Some(block) = &self.block {
             debug_struct
@@ -172,7 +190,7 @@ impl Message for HistoryChunk {
     const TYPE_ID: u64 = 205;
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ResponseBlock {
     pub block: Option<Block>,
     pub request_identifier: u32,
@@ -183,6 +201,17 @@ impl Message for ResponseBlock {
     const TYPE_ID: u64 = 206;
 }
 
+impl Debug for ResponseBlock {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        let mut dbg = f.debug_struct("ResponseBlock");
+        if let Some(block) = &self.block {
+            dbg.field("hash", &block.hash());
+            dbg.field("header", &block.header());
+        }
+        dbg.field("request_identifier", &self.request_identifier);
+        dbg.finish()
+    }
+}
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestBlock {
     pub hash: Blake2bHash,
@@ -194,7 +223,7 @@ impl Message for RequestBlock {
     const TYPE_ID: u64 = 207;
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ResponseBlocks {
     // TODO: Set to sensible limit (2 * BATCH_SIZE for example).
     #[beserial(len_type(u16, limit = 256))]
@@ -205,6 +234,24 @@ request_response!(ResponseBlocks);
 
 impl Message for ResponseBlocks {
     const TYPE_ID: u64 = 208;
+}
+
+impl Debug for ResponseBlocks {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        let mut dbg = f.debug_struct("ResponseBlocks");
+        if let Some(blocks) = &self.blocks {
+            let len = blocks.len();
+            dbg.field("length", &len);
+            if !blocks.is_empty() {
+                let first = blocks.first().unwrap();
+                let last = blocks.last().unwrap();
+                dbg.field("first_block", &first.block_number());
+                dbg.field("last_block", &last.block_number());
+            }
+        }
+        dbg.field("request_identifier", &self.request_identifier);
+        dbg.finish()
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -46,11 +46,7 @@ impl Peer {
     /// Polls the underlying dispatch's inbound stream by first trying to acquire the mutex. If it's not availble,
     /// this will return `Poll::Pending` and make sure that the task is woken up, once the mutex was released.
     pub fn poll_inbound(self: &Arc<Peer>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
-        let p = self.dispatch.lock().poll_inbound(cx, self);
-
-        log::trace!("Polled socket: peer={:?}: {:?}", self.id, p);
-
-        p
+        self.dispatch.lock().poll_inbound(cx, self)
     }
 
     pub fn poll_close(&self, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {

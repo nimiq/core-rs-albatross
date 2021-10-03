@@ -266,15 +266,12 @@ impl Network {
 
                 futures::select! {
                     event = swarm.next().fuse() => {
-                        tracing::trace!(event=?event, "swarm task received event");
                         if let Some(event) = event {
-                            Self::handle_event(event, &events_tx, &mut swarm, &mut task_state, min_peers).await;
-                        } else {
-                            log::debug!("swarm stream exhausted, no new events");
+                            Self::handle_event(event, &events_tx, &mut swarm, &mut task_state, min_peers);
                         }
                     },
-                    action_opt = action_rx.next().fuse() => {
-                        if let Some(action) = action_opt {
+                    action = action_rx.next().fuse() => {
+                        if let Some(action) = action {
                             Self::perform_action(action, &mut swarm, &mut task_state);
                         }
                         else {
@@ -289,7 +286,7 @@ impl Network {
             .await
     }
 
-    async fn handle_event(
+    fn handle_event(
         event: SwarmEvent<NimiqEvent, NimiqNetworkBehaviourError>,
         events_tx: &broadcast::Sender<NetworkEvent<Peer>>,
         swarm: &mut NimiqSwarm,
@@ -377,11 +374,9 @@ impl Network {
                 tracing::trace!("Dialing peer {}", peer_id);
             }
 
-            //SwarmEvent::ConnectionClosed { .. } => {},
             SwarmEvent::Behaviour(event) => {
                 match event {
                     NimiqEvent::Message(event) => {
-                        tracing::trace!(event = ?event, "network event");
                         events_tx.send(event).ok();
                     }
                     NimiqEvent::Dht(event) => {
@@ -424,8 +419,6 @@ impl Network {
                             message_id,
                             message,
                         } => {
-                            tracing::trace!(id = ?message_id, source = ?propagation_source, message = ?message, "received message");
-
                             if let Some(topic_info) = state.gossip_topics.get_mut(&message.topic) {
                                 let (output, validate) = topic_info;
                                 if !&*validate {
@@ -439,15 +432,17 @@ impl Network {
                                         )
                                         .ok();
                                 }
-                                output
-                                    .try_send((message, message_id, propagation_source))
-                                    .map_err(|e| {
-                                        tracing::error!(
-                                            "Failed to relay Gossipsub message: {:?}",
-                                            e
-                                        )
-                                    })
-                                    .ok();
+
+                                let topic = message.topic.clone();
+                                if let Err(e) =
+                                    output.try_send((message, message_id, propagation_source))
+                                {
+                                    tracing::error!(
+                                        "Failed to dispatch gossipsub '{}' message: {:?}",
+                                        topic.as_str(),
+                                        e
+                                    )
+                                }
                             } else {
                                 tracing::warn!(topic = ?message.topic, "unknown topic hash");
                             }
@@ -462,8 +457,8 @@ impl Network {
                     NimiqEvent::Identify(event) => {
                         match event {
                             IdentifyEvent::Received { peer_id, info } => {
-                                tracing::debug!(
-                                    "Received identifying info from peer {} at address {:?}: {:?}",
+                                tracing::trace!(
+                                    "Received identity from peer {} at address {:?}: {:?}",
                                     peer_id,
                                     info.observed_addr,
                                     info
@@ -497,10 +492,10 @@ impl Network {
                                 );
                             }
                             IdentifyEvent::Pushed { peer_id } => {
-                                tracing::trace!("Pushed identifiyng info to peer {}", peer_id);
+                                tracing::trace!("Pushed identity to peer {}", peer_id);
                             }
                             IdentifyEvent::Sent { peer_id } => {
-                                tracing::trace!("Sent identifiyng info to peer {}", peer_id);
+                                tracing::trace!("Sent identity to peer {}", peer_id);
                             }
                             IdentifyEvent::Error { peer_id, error } => {
                                 tracing::error!(
@@ -526,7 +521,8 @@ impl Network {
     }
 
     fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut TaskState) {
-        tracing::debug!(action = ?action, "performing action");
+        // FIXME implement compact debug format for NetworkAction
+        //tracing::trace!(action = ?action, "performing action");
 
         match action {
             NetworkAction::Dial { peer_id, output } => {

@@ -392,14 +392,8 @@ impl PeerContactInfo {
 
     /// Returns whether the peer contact exceeds its age limit (specified in `config`).
     pub fn exceeds_age(&self, config: &PeerContactBookConfig, unix_time: Duration) -> bool {
-        log::trace!("exceeds_age():");
-        log::trace!("  config: {:#?}", config);
-        log::trace!("  unix_time: {:#?}", unix_time);
-
         if let Some(timestamp) = self.contact.inner.timestamp {
-            log::trace!("  timestamp: {:#?}", timestamp);
             if let Some(age) = unix_time.checked_sub(Duration::from_secs(timestamp)) {
-                log::trace!("  age: {:#?}", age);
                 return age > config.protocols_max_age(self.protocols);
             }
         }

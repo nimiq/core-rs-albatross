@@ -11,7 +11,7 @@ use crate::history_store::ExtendedTransaction;
 
 /// The chunk size used in our protocol.
 /// TODO: Update number.
-pub const CHUNK_SIZE: usize = 1000;
+pub const CHUNK_SIZE: usize = 1024;
 
 pub struct HistoryTreeChunk {
     pub(crate) proof: RangeProof<Blake2bHash>,
@@ -29,7 +29,6 @@ impl Debug for HistoryTreeChunk {
             dbg.field("first_block", &first.block_number);
             dbg.field("last_block", &last.block_number);
         }
-        dbg.field("history", &self.history);
         dbg.finish()
     }
 }

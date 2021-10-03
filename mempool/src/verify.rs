@@ -139,6 +139,5 @@ pub(crate) fn verify_tx(
         return ReturnCode::NotEnoughFunds;
     }
 
-    log::debug!("Accepting new transaction");
     ReturnCode::Accepted
 }

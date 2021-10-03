@@ -365,7 +365,7 @@ impl LogSettings {
     }
 
     pub fn default_rotating_trace_log() -> Option<RotatingLogFileConfig> {
-        Some(RotatingLogFileConfig::default())
+        None
     }
 }
 

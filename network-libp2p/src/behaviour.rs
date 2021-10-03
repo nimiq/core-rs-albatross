@@ -175,12 +175,10 @@ impl NimiqBehaviour {
         _params: &mut impl PollParameters,
     ) -> Poll<NetworkBehaviourAction<T, NimiqEvent>> {
         if self.update_scores.poll_tick(cx).is_ready() {
-            log::trace!("Update peer scores");
             self.peer_contact_book.read().update_scores(&self.gossipsub);
         }
 
         if let Some(event) = self.events.pop_front() {
-            log::trace!("NimiqBehaviour: emitting event: {:?}", event);
             return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));
         }
 
@@ -208,43 +206,37 @@ impl NimiqBehaviour {
 }
 
 impl NetworkBehaviourEventProcess<DiscoveryEvent> for NimiqBehaviour {
-    fn inject_event(&mut self, event: DiscoveryEvent) {
-        log::trace!("discovery event: {:?}", event);
+    fn inject_event(&mut self, _event: DiscoveryEvent) {
         self.peers.maintain_peers();
     }
 }
 
 impl NetworkBehaviourEventProcess<NetworkEvent<Peer>> for NimiqBehaviour {
     fn inject_event(&mut self, event: NetworkEvent<Peer>) {
-        log::trace!("NimiqBehaviour::inject_event: {:?}", event);
         self.emit_event(event);
     }
 }
 
 impl NetworkBehaviourEventProcess<KademliaEvent> for NimiqBehaviour {
     fn inject_event(&mut self, event: KademliaEvent) {
-        log::trace!("NimiqBehaviour::inject_event: {:?}", event);
         self.emit_event(event);
     }
 }
 
 impl NetworkBehaviourEventProcess<GossipsubEvent> for NimiqBehaviour {
     fn inject_event(&mut self, event: GossipsubEvent) {
-        log::trace!("NimiqBehaviour::inject_event: {:?}", event);
         self.emit_event(event);
     }
 }
 
 impl NetworkBehaviourEventProcess<IdentifyEvent> for NimiqBehaviour {
     fn inject_event(&mut self, event: IdentifyEvent) {
-        log::trace!("NimiqBehaviour::inject_event: {:?}", event);
         self.emit_event(event);
     }
 }
 
 impl NetworkBehaviourEventProcess<ConnectionPoolEvent> for NimiqBehaviour {
     fn inject_event(&mut self, event: ConnectionPoolEvent) {
-        log::trace!("NimiqBehaviour::inject_event: {:?}", event);
         self.emit_event(event);
     }
 }

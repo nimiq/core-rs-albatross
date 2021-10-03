@@ -30,7 +30,6 @@ where
             }
 
             Poll::Ready(Ok(n)) => {
-                //log::trace!("MessageWriter: write_from_buf: {} bytes written", n);
                 buffer.advance(n);
                 if buffer.remaining() > 0 {
                     Poll::Pending
@@ -80,8 +79,6 @@ where
     fn poll_ready(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
         let self_projected = self.project();
 
-        //log::trace!("MessageWriter: poll_ready");
-
         // Try to write from buffer to the inner `AsyncWrite`
         match write_from_buf(self_projected.inner, self_projected.buffer, cx) {
             Poll::Pending => Poll::Pending,
@@ -100,9 +97,6 @@ where
             )));
         }
 
-        //log::trace!("MessageWriter: Sending {:?}", item);
-        //log::trace!("MessageWriter: serialized_size = {}", item.serialized_size());
-
         // Reserve space for the header and message.
         let n = Serialize::serialized_size(item);
         self_projected.buffer.reserve(n + Header::SIZE);
@@ -117,15 +111,11 @@ where
         // Serialize the message into the buffer.
         Serialize::serialize(item, &mut w)?;
 
-        //log::trace!("MessageWriter: buffer = {:?}", self_projected.buffer);
-
         Ok(())
     }
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
         let self_projected = self.project();
-
-        //log::trace!("MessageWriter: poll_flush called.");
 
         // Try to finish writing from buffer to the inner `AsyncWrite`
         match write_from_buf(self_projected.inner, self_projected.buffer, cx) {
@@ -142,8 +132,6 @@ where
 
     fn poll_close(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
         let self_projected = self.project();
-
-        //log::trace!("MessageWriter: poll_close called.");
 
         // Try to finish writing from buffer to the inner `AsyncWrite`
         match write_from_buf(self_projected.inner, self_projected.buffer, cx) {

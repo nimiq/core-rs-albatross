@@ -636,11 +636,6 @@ impl AccountInherentInteraction for StakingContract {
 
                         validator.inactivity_flag = Some(block_height);
 
-                        trace!(
-                            "Trying to put validator with address {} in the accounts tree.",
-                            validator_address.to_string(),
-                        );
-
                         accounts_tree.put(
                             db_txn,
                             &StakingContract::get_key_validator(&validator_address),
@@ -670,8 +665,6 @@ impl AccountInherentInteraction for StakingContract {
                 return Err(AccountError::InvalidForTarget);
             }
         }
-
-        trace!("Trying to put the staking contract in the accounts tree.");
 
         accounts_tree.put(
             db_txn,
@@ -762,8 +755,6 @@ impl AccountInherentInteraction for StakingContract {
                 return Err(AccountError::InvalidForTarget);
             }
         }
-
-        trace!("Trying to put the staking contract in the accounts tree.");
 
         accounts_tree.put(
             db_txn,

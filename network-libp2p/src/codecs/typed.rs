@@ -93,10 +93,6 @@ impl Header {
     }
 }
 
-/*pub trait Message: Serialize + Deserialize + Send + Sync + Debug + 'static {
-    const TYPE_ID: MessageType;
-}*/
-
 #[derive(Clone, Debug)]
 enum DecodeState {
     Head,
@@ -135,12 +131,8 @@ impl Decoder for MessageCodec {
         let span = tracing::trace_span!("decode");
         let _enter = span.enter();
         loop {
-            tracing::trace!(state = ?self.state);
-
             match &self.state {
                 DecodeState::Head => {
-                    tracing::trace!(src = ?src);
-
                     // Reserve enough space for the header
                     //
                     // TODO: What's the max size of a header though? I think the max length of the header is 21 bytes.
@@ -152,9 +144,6 @@ impl Decoder for MessageCodec {
                     match Header::deserialize(&mut c) {
                         Ok(header) => {
                             // Deserializing the header was successful
-
-                            tracing::trace!(header = ?header);
-
                             let header_length = c.position() as usize;
 
                             // Drop the cursor, so we can mut-borrow the `src` buffer again.
@@ -162,8 +151,6 @@ impl Decoder for MessageCodec {
 
                             // Preliminary header check (we can't verify the checksum yet)
                             header.preliminary_check()?;
-
-                            tracing::trace!("passed preliminary check");
 
                             // Reserve enough space
                             src.reserve(header.length as usize);
@@ -180,11 +167,10 @@ impl Decoder for MessageCodec {
                             if matches!(e.kind(), io::ErrorKind::UnexpectedEof) =>
                         {
                             // We just need to wait for more data
-                            tracing::trace!("not enough data");
                             return Ok(None);
                         }
                         Err(e) => {
-                            tracing::warn!("error: {}", e);
+                            tracing::warn!("Error decoding message header: {}", e);
                             return Err(e.into());
                         }
                     }
@@ -195,14 +181,10 @@ impl Decoder for MessageCodec {
                 } => {
                     if src.len() >= header.length as usize {
                         // We have read enough bytes to read the full message
-                        tracing::trace!("reading message body");
-
                         let message_type = header.type_id.into();
-                        tracing::trace!(message_type = ?message_type);
 
                         // Get buffer of full message
                         let mut data = src.split_to(header.length as usize);
-                        tracing::trace!(data = ?data);
 
                         // Verify the message (i.e. checksum)
                         self.verify(&data)?;
@@ -223,8 +205,6 @@ impl Decoder for MessageCodec {
     }
 
     fn decode_eof(&mut self, buf: &mut BytesMut) -> Result<Option<(MessageType, BytesMut)>, Error> {
-        tracing::trace!("decode_eof");
-
         match self.decode(buf) {
             Ok(None) if buf.has_remaining() => Err(Error::eof()),
             r => r,

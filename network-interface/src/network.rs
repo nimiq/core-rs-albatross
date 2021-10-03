@@ -166,7 +166,6 @@ impl<T: Message, P: Peer + 'static> Stream for ReceiveFromAll<T, P> {
             match self.event_stream.poll_next_unpin(cx) {
                 Poll::Pending => break,
                 Poll::Ready(Some(Ok(NetworkEvent::PeerJoined(peer)))) => {
-                    log::trace!("peers joined {:?}", peer.id());
                     // We have a new peer to receive from.
                     let peer_inner = Arc::clone(&peer);
                     self.inner.push(

@@ -348,9 +348,11 @@ impl Mempool {
             tx_vec.push(tx);
         }
 
-        log::debug!("Returning vector with {} transactions", tx_vec.len());
-
-        drop(mempool_state_upgraded);
+        log::debug!(
+            "Returning {} transactions from mempool ({} remaining)",
+            tx_vec.len(),
+            mempool_state_upgraded.transactions.len()
+        );
 
         Ok(tx_vec)
     }
@@ -360,8 +362,6 @@ impl Mempool {
         let blockchain = Arc::clone(&self.blockchain);
         let mempool_state = Arc::clone(&self.state);
         let filter = Arc::clone(&self.filter);
-
-        log::debug!("Verifying manually added transaction.");
 
         let rc = verify_tx(&transaction, blockchain, Arc::clone(&mempool_state), filter);
 

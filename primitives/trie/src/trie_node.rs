@@ -2,7 +2,7 @@ use std::io;
 use std::iter;
 use std::slice;
 
-use log::{error, trace};
+use log::error;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
@@ -145,12 +145,6 @@ impl<A: Serialize + Deserialize + Clone> TrieNode<A> {
                 if let Some(child) = &children[self.get_child_index(child_prefix)?] {
                     return Ok(&child.hash);
                 }
-
-                trace!(
-                    "Node with key {} does not have a child with prefix {}!",
-                    self.key(),
-                    child_prefix
-                );
                 Err(MerkleRadixTrieError::ChildDoesNotExist)
             }
         }
@@ -173,12 +167,6 @@ impl<A: Serialize + Deserialize + Clone> TrieNode<A> {
                 if let Some(ref child) = children[self.get_child_index(child_prefix)?] {
                     return Ok(self.key() + &child.suffix);
                 }
-
-                trace!(
-                    "Node with key {} does not have a child with prefix {}!",
-                    self.key(),
-                    child_prefix
-                );
                 Err(MerkleRadixTrieError::ChildDoesNotExist)
             }
         }

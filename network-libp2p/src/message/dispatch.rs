@@ -89,12 +89,6 @@ where
         loop {
             // Try to dispatch the buffered value. This will return Poll::Pending if the buffer can't be cleared.
             if let Some((type_id, _)) = &self.buffer {
-                log::trace!(
-                    "dispatch buffered value: type_id={}, peer={:?}",
-                    type_id,
-                    peer
-                );
-
                 let type_id = *type_id;
 
                 if let Some(tx) = self.channels.get_mut(&type_id) {
@@ -114,8 +108,6 @@ where
                         Poll::Ready(Ok(())) => {
                             // Take the buffered message. We know that there is one, from the outer `if let Some`-block
                             let (_, data) = self.buffer.take().unwrap();
-
-                            log::trace!("dispatching message to receiver: {:?}", data);
 
                             // Not sure why this still can fail, but if it does, we consider the receiver to be gone.
                             if tx.start_send((data, Arc::clone(peer))).is_err() {
@@ -152,9 +144,6 @@ where
                     // A message was received. The stream gives us tuples of message type and data (BytesMut)
                     // Store the message into the buffer and continue the loop (i.e. immediately trying to send it to the
                     // receivers).
-
-                    log::trace!("received message: type_id={}, data={:?}", type_id, data);
-
                     assert!(self.buffer.is_none());
 
                     // We 'freeze' the message, i.e. turning the `BytesMut` into a `Bytes`. We could use this to cheaply
@@ -177,7 +166,6 @@ where
 
                 // We need to wait for more data
                 Poll::Pending => {
-                    log::trace!("inbound socket pending");
                     return Poll::Pending;
                 }
             }
@@ -194,7 +182,6 @@ where
 
         {
             let sink: Pin<&mut Framed<TokioAdapter<C>, MessageCodec>> = Pin::new(&mut self.framed);
-            tracing::trace!("flushing");
             match Sink::<&CompilerShutUp>::poll_flush(sink, cx) {
                 Poll::Ready(Ok(())) => {}
                 Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
@@ -204,7 +191,6 @@ where
 
         {
             let sink: Pin<&mut Framed<TokioAdapter<C>, MessageCodec>> = Pin::new(&mut self.framed);
-            tracing::trace!("closing");
             Sink::<&CompilerShutUp>::poll_close(sink, cx).map_err(|e| e)
         }
     }
@@ -224,23 +210,28 @@ where
 
         if self.channels.contains_key(&type_id) {
             panic!(
-                "Local receiver for channel already registered: type_id = {}",
+                "Receiver for {} message (type_id = {}) already registered",
+                std::any::type_name::<M>(),
                 type_id
             );
         }
 
         // We don't really need buffering here, since we already have that in the `MessageDispatch`.
-        // TODO: Remove magic number
         let (tx, rx) = mpsc::channel(self.channel_size);
 
         // Insert sender into channels
         self.channels.insert(M::TYPE_ID.into(), tx);
 
-        rx.filter_map(|(data, _peer)| async move {
+        rx.filter_map(|(data, peer)| async move {
             match Deserialize::deserialize(&mut data.reader()) {
                 Ok(message) => Some(message),
                 Err(e) => {
-                    log::error!("Error while deserializing message for receiver: {}", e);
+                    log::warn!(
+                        "Error deserializing {} message from {}: {}",
+                        std::any::type_name::<M>(),
+                        peer.id,
+                        e
+                    );
                     None
                 }
             }
@@ -309,14 +300,10 @@ where
     type Output = Result<(), Error>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
-        //let sink: Pin<&mut Framed<TokioAdapter<C>, MessageCodec>> = Pin::new(&mut dispatch.framed);
-
         // If we haven't already sent the message
         if self.message.is_some() {
             // First poll sink until it's ready
             {
-                tracing::trace!("polling sink to be ready");
-
                 let mut dispatch = self.dispatch.lock();
                 let sink = Pin::new(&mut dispatch.framed);
 
@@ -334,8 +321,6 @@ where
                 // This always gives us a message, since the outer if-block checks for it.
                 let message = self.message.take().unwrap();
 
-                tracing::trace!(message = ?message, "start sending");
-
                 let mut dispatch = self.dispatch.lock();
                 let sink = Pin::new(&mut dispatch.framed);
 
@@ -347,8 +332,6 @@ where
 
         // Flush
         {
-            tracing::trace!("flushing");
-
             let mut dispatch = self.dispatch.lock();
             let sink = Pin::new(&mut dispatch.framed);
             Sink::<&M>::poll_flush(sink, cx)

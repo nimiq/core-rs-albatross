@@ -230,6 +230,14 @@ impl AbstractBlockchain for Blockchain {
         self.state.election_head.clone()
     }
 
+    fn block_number(&self) -> u32 {
+        self.state.main_chain.head.block_number()
+    }
+
+    fn epoch_number(&self) -> u32 {
+        self.state.main_chain.head.epoch_number()
+    }
+
     fn current_validators(&self) -> Option<Validators> {
         self.state.current_slots.clone()
     }

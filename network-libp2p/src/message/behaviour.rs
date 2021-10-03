@@ -176,11 +176,6 @@ impl NetworkBehaviour for MessageBehaviour {
     }
 
     fn inject_event(&mut self, peer_id: PeerId, _connection: ConnectionId, event: HandlerOutEvent) {
-        tracing::trace!(
-            "MessageBehaviour::inject_event: peer_id={:?}: {:?}",
-            peer_id,
-            event
-        );
         match event {
             HandlerOutEvent::PeerJoined { peer } => {
                 self.peers.insert(Arc::clone(&peer));

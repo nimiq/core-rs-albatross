@@ -106,11 +106,6 @@ impl StakingContract {
             // All checks passed, not allowed to fail from here on!
 
             // Re-add the validator entry.
-            trace!(
-                "Trying to put validator with address {} in the accounts tree.",
-                validator_address.to_string(),
-            );
-
             accounts_tree.put(
                 db_txn,
                 &StakingContract::get_key_validator(&validator_address),
@@ -118,11 +113,6 @@ impl StakingContract {
             );
 
             // Add the staker entry to the validator.
-            trace!(
-                "Trying to put validator's staker with address {} in the accounts tree.",
-                staker_address.to_string(),
-            );
-
             accounts_tree.put(
                 db_txn,
                 &StakingContract::get_key_validator_staker(&validator_address, staker_address),
@@ -131,17 +121,10 @@ impl StakingContract {
         }
 
         // Add the staking contract and the staker entries.
-        trace!("Trying to put staking contract in the accounts tree.");
-
         accounts_tree.put(
             db_txn,
             &StakingContract::get_key_staking_contract(),
             Account::Staking(staking_contract),
-        );
-
-        trace!(
-            "Trying to put staker with address {} in the accounts tree.",
-            staker_address.to_string(),
         );
 
         accounts_tree.put(
@@ -202,11 +185,6 @@ impl StakingContract {
             // All checks passed, not allowed to fail from here on!
 
             // Re-add the validator entry.
-            trace!(
-                "Trying to put validator with address {} in the accounts tree.",
-                validator_address.to_string(),
-            );
-
             accounts_tree.put(
                 db_txn,
                 &StakingContract::get_key_validator(&validator_address),
@@ -214,11 +192,6 @@ impl StakingContract {
             );
 
             // Remove the staker entry from the validator.
-            trace!(
-                "Trying to remove validator's staker with address {} in the accounts tree.",
-                staker_address.to_string(),
-            );
-
             accounts_tree.remove(
                 db_txn,
                 &StakingContract::get_key_validator_staker(&validator_address, staker_address),
@@ -226,8 +199,6 @@ impl StakingContract {
         }
 
         // Add the staking contract entry.
-        trace!("Trying to put staking contract in the accounts tree.");
-
         accounts_tree.put(
             db_txn,
             &StakingContract::get_key_staking_contract(),
@@ -235,11 +206,6 @@ impl StakingContract {
         );
 
         // Remove the staker entry.
-        trace!(
-            "Trying to remove staker with address {} in the accounts tree.",
-            staker_address.to_string(),
-        );
-
         accounts_tree.remove(db_txn, &StakingContract::get_key_staker(staker_address));
 
         Ok(())
@@ -295,11 +261,6 @@ impl StakingContract {
             // All checks passed, not allowed to fail from here on!
 
             // Re-add the validator entry.
-            trace!(
-                "Trying to put validator with address {} in the accounts tree.",
-                validator_address.to_string(),
-            );
-
             accounts_tree.put(
                 db_txn,
                 &StakingContract::get_key_validator(validator_address),
@@ -308,17 +269,10 @@ impl StakingContract {
         }
 
         // Add the staking contract and the staker entries.
-        trace!("Trying to put staking contract in the accounts tree.");
-
         accounts_tree.put(
             db_txn,
             &StakingContract::get_key_staking_contract(),
             Account::Staking(staking_contract),
-        );
-
-        trace!(
-            "Trying to put staker with address {} in the accounts tree.",
-            staker_address.to_string(),
         );
 
         accounts_tree.put(
@@ -379,11 +333,6 @@ impl StakingContract {
             // All checks passed, not allowed to fail from here on!
 
             // Re-add the validator entry.
-            trace!(
-                "Trying to put validator with address {} in the accounts tree.",
-                validator_address.to_string(),
-            );
-
             accounts_tree.put(
                 db_txn,
                 &StakingContract::get_key_validator(validator_address),
@@ -392,17 +341,10 @@ impl StakingContract {
         }
 
         // Add the staking contract and the staker entries.
-        trace!("Trying to put staking contract in the accounts tree.");
-
         accounts_tree.put(
             db_txn,
             &StakingContract::get_key_staking_contract(),
             Account::Staking(staking_contract),
-        );
-
-        trace!(
-            "Trying to put staker with address {} in the accounts tree.",
-            staker_address.to_string(),
         );
 
         accounts_tree.put(
@@ -473,11 +415,6 @@ impl StakingContract {
             old_validator.num_stakers -= 1;
 
             // Re-add the validator entry.
-            trace!(
-                "Trying to put validator with address {} in the accounts tree.",
-                old_validator_address.to_string(),
-            );
-
             accounts_tree.put(
                 db_txn,
                 &StakingContract::get_key_validator(old_validator_address),
@@ -485,11 +422,6 @@ impl StakingContract {
             );
 
             // Remove the staker entry from the validator.
-            trace!(
-                "Trying to remove validator's staker with address {} in the accounts tree.",
-                staker_address.to_string(),
-            );
-
             accounts_tree.remove(
                 db_txn,
                 &StakingContract::get_key_validator_staker(old_validator_address, staker_address),
@@ -516,11 +448,6 @@ impl StakingContract {
             new_validator.num_stakers += 1;
 
             // Re-add the validator entry.
-            trace!(
-                "Trying to put validator with address {} in the accounts tree.",
-                new_validator_address.to_string(),
-            );
-
             accounts_tree.put(
                 db_txn,
                 &StakingContract::get_key_validator(new_validator_address),
@@ -528,11 +455,6 @@ impl StakingContract {
             );
 
             // Add the staker entry to the validator.
-            trace!(
-                "Trying to put validator's staker with address {} in the accounts tree.",
-                staker_address.to_string(),
-            );
-
             accounts_tree.put(
                 db_txn,
                 &StakingContract::get_key_validator_staker(new_validator_address, staker_address),
@@ -543,11 +465,6 @@ impl StakingContract {
         // Update the staker and re-add it to the accounts tree.
         staker.delegation = delegation;
 
-        trace!(
-            "Trying to put staker with address {} in the accounts tree.",
-            staker_address.to_string(),
-        );
-
         accounts_tree.put(
             db_txn,
             &StakingContract::get_key_staker(staker_address),
@@ -555,8 +472,6 @@ impl StakingContract {
         );
 
         // Save the staking contract.
-        trace!("Trying to put staking contract in the accounts tree.");
-
         accounts_tree.put(
             db_txn,
             &StakingContract::get_key_staking_contract(),
@@ -613,11 +528,6 @@ impl StakingContract {
             new_validator.num_stakers -= 1;
 
             // Re-add the validator entry.
-            trace!(
-                "Trying to put validator with address {} in the accounts tree.",
-                new_validator_address.to_string(),
-            );
-
             accounts_tree.put(
                 db_txn,
                 &StakingContract::get_key_validator(&new_validator_address),
@@ -625,11 +535,6 @@ impl StakingContract {
             );
 
             // Remove the staker entry from the validator.
-            trace!(
-                "Trying to remove validator's staker with address {} in the accounts tree.",
-                staker_address.to_string(),
-            );
-
             accounts_tree.remove(
                 db_txn,
                 &StakingContract::get_key_validator_staker(&new_validator_address, staker_address),
@@ -663,11 +568,6 @@ impl StakingContract {
             old_validator.num_stakers += 1;
 
             // Re-add the validator entry.
-            trace!(
-                "Trying to put validator with address {} in the accounts tree.",
-                old_validator_address.to_string(),
-            );
-
             accounts_tree.put(
                 db_txn,
                 &StakingContract::get_key_validator(&old_validator_address),
@@ -675,11 +575,6 @@ impl StakingContract {
             );
 
             // Add the staker entry to the validator.
-            trace!(
-                "Trying to put validator's staker with address {} in the accounts tree.",
-                staker_address.to_string(),
-            );
-
             accounts_tree.put(
                 db_txn,
                 &StakingContract::get_key_validator_staker(&old_validator_address, staker_address),
@@ -690,11 +585,6 @@ impl StakingContract {
         // Update the staker and re-add it to the accounts tree.
         staker.delegation = receipt.old_delegation;
 
-        trace!(
-            "Trying to put staker with address {} in the accounts tree.",
-            staker_address.to_string(),
-        );
-
         accounts_tree.put(
             db_txn,
             &StakingContract::get_key_staker(staker_address),
@@ -702,8 +592,6 @@ impl StakingContract {
         );
 
         // Save the staking contract.
-        trace!("Trying to put staking contract in the accounts tree.");
-
         accounts_tree.put(
             db_txn,
             &StakingContract::get_key_staking_contract(),
@@ -771,11 +659,6 @@ impl StakingContract {
             // All checks passed, not allowed to fail from here on!
 
             // Re-add the validator entry.
-            trace!(
-                "Trying to put validator with address {} in the accounts tree.",
-                validator_address.to_string(),
-            );
-
             accounts_tree.put(
                 db_txn,
                 &StakingContract::get_key_validator(validator_address),
@@ -784,11 +667,6 @@ impl StakingContract {
         }
 
         // Re-add the staker entry.
-        trace!(
-            "Trying to put staker with address {} in the accounts tree.",
-            staker_address.to_string(),
-        );
-
         accounts_tree.put(
             db_txn,
             &StakingContract::get_key_staker(staker_address),
@@ -796,8 +674,6 @@ impl StakingContract {
         );
 
         // Save the staking contract.
-        trace!("Trying to put staking contract in the accounts tree.");
-
         accounts_tree.put(
             db_txn,
             &StakingContract::get_key_staking_contract(),
@@ -856,22 +732,12 @@ impl StakingContract {
             }
 
             // Re-add the validator entry.
-            trace!(
-                "Trying to put validator with address {} in the accounts tree.",
-                validator_address.to_string(),
-            );
-
             accounts_tree.put(
                 db_txn,
                 &StakingContract::get_key_validator(validator_address),
                 Account::StakingValidator(validator),
             );
         }
-
-        trace!(
-            "Trying to put staker with address {} in the accounts tree.",
-            staker_address.to_string(),
-        );
 
         accounts_tree.put(
             db_txn,
@@ -880,8 +746,6 @@ impl StakingContract {
         );
 
         // Save the staking contract.
-        trace!("Trying to put staking contract in the accounts tree.");
-
         accounts_tree.put(
             db_txn,
             &StakingContract::get_key_staking_contract(),
@@ -938,22 +802,12 @@ impl StakingContract {
             }
 
             // Re-add the validator entry.
-            trace!(
-                "Trying to put validator with address {} in the accounts tree.",
-                validator_address.to_string(),
-            );
-
             accounts_tree.put(
                 db_txn,
                 &StakingContract::get_key_validator(validator_address),
                 Account::StakingValidator(validator),
             );
         }
-
-        trace!(
-            "Trying to put staker with address {} in the accounts tree.",
-            staker_address.to_string(),
-        );
 
         accounts_tree.put(
             db_txn,
@@ -962,8 +816,6 @@ impl StakingContract {
         );
 
         // Save the staking contract.
-        trace!("Trying to put staking contract in the accounts tree.");
-
         accounts_tree.put(
             db_txn,
             &StakingContract::get_key_staking_contract(),
@@ -1019,22 +871,12 @@ impl StakingContract {
             }
 
             // Re-add the validator entry.
-            trace!(
-                "Trying to put validator with address {} in the accounts tree.",
-                validator_address.to_string(),
-            );
-
             accounts_tree.put(
                 db_txn,
                 &StakingContract::get_key_validator(validator_address),
                 Account::StakingValidator(validator),
             );
         }
-
-        trace!(
-            "Trying to put staker with address {} in the accounts tree.",
-            staker_address.to_string(),
-        );
 
         accounts_tree.put(
             db_txn,
@@ -1043,8 +885,6 @@ impl StakingContract {
         );
 
         // Save the staking contract.
-        trace!("Trying to put staking contract in the accounts tree.");
-
         accounts_tree.put(
             db_txn,
             &StakingContract::get_key_staking_contract(),
@@ -1093,8 +933,6 @@ impl StakingContract {
 
         staking_contract.balance = Account::balance_sub(staking_contract.balance, value)?;
 
-        trace!("Trying to put staking contract in the accounts tree.");
-
         accounts_tree.put(
             db_txn,
             &StakingContract::get_key_staking_contract(),
@@ -1105,11 +943,6 @@ impl StakingContract {
         if staker.active_stake.is_zero() && staker.inactive_stake.is_zero() {
             StakingContract::drop_staker(accounts_tree, db_txn, &staker)
         } else {
-            trace!(
-                "Trying to put staker with address {} in the accounts tree.",
-                staker_address.to_string(),
-            );
-
             accounts_tree.put(
                 db_txn,
                 &StakingContract::get_key_staker(staker_address),
@@ -1141,11 +974,6 @@ impl StakingContract {
 
         staker.inactive_stake = Account::balance_add(staker.inactive_stake, value)?;
 
-        trace!(
-            "Trying to put staker with address {} in the accounts tree.",
-            staker_address.to_string(),
-        );
-
         accounts_tree.put(
             db_txn,
             &StakingContract::get_key_staker(staker_address),
@@ -1155,8 +983,6 @@ impl StakingContract {
         let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
 
         staking_contract.balance = Account::balance_add(staking_contract.balance, value)?;
-
-        trace!("Trying to put staking contract in the accounts tree.");
 
         accounts_tree.put(
             db_txn,
@@ -1220,11 +1046,6 @@ impl StakingContract {
                 }
 
                 // Re-add the validator entry.
-                trace!(
-                    "Trying to put validator with address {} in the accounts tree.",
-                    validator_address.to_string(),
-                );
-
                 accounts_tree.put(
                     db_txn,
                     &StakingContract::get_key_validator(validator_address),
@@ -1238,8 +1059,6 @@ impl StakingContract {
         // Update and store the staking contract.
         staking_contract.balance = Account::balance_sub(staking_contract.balance, value)?;
 
-        trace!("Trying to put staking contract in the accounts tree.");
-
         accounts_tree.put(
             db_txn,
             &StakingContract::get_key_staking_contract(),
@@ -1250,11 +1069,6 @@ impl StakingContract {
         if staker.active_stake.is_zero() && staker.inactive_stake.is_zero() {
             StakingContract::drop_staker(accounts_tree, db_txn, &staker)
         } else {
-            trace!(
-                "Trying to put staker with address {} in the accounts tree.",
-                staker_address.to_string(),
-            );
-
             accounts_tree.put(
                 db_txn,
                 &StakingContract::get_key_staker(staker_address),
@@ -1311,11 +1125,6 @@ impl StakingContract {
                         .insert(validator_address.clone(), validator.balance);
                 }
 
-                trace!(
-                    "Trying to put validator with address {} in the accounts tree.",
-                    validator_address.to_string(),
-                );
-
                 accounts_tree.put(
                     db_txn,
                     &StakingContract::get_key_validator(validator_address),
@@ -1326,11 +1135,6 @@ impl StakingContract {
             staker.inactive_stake = Account::balance_add(staker.inactive_stake, value)?;
         }
 
-        trace!(
-            "Trying to put staker with address {} in the accounts tree.",
-            staker_address.to_string(),
-        );
-
         accounts_tree.put(
             db_txn,
             &StakingContract::get_key_staker(staker_address),
@@ -1338,8 +1142,6 @@ impl StakingContract {
         );
 
         staking_contract.balance = Account::balance_add(staking_contract.balance, value)?;
-
-        trace!("Trying to put staking contract in the accounts tree.");
 
         accounts_tree.put(
             db_txn,
@@ -1357,11 +1159,6 @@ impl StakingContract {
         db_txn: &mut WriteTransaction,
         staker: &Staker,
     ) -> Result<Option<DropStakerReceipt>, AccountError> {
-        trace!(
-            "Trying to remove staker with address {} in the accounts tree.",
-            &staker.address.to_string(),
-        );
-
         accounts_tree.remove(db_txn, &StakingContract::get_key_staker(&staker.address));
 
         // If necessary, also update the validator.
@@ -1381,11 +1178,6 @@ impl StakingContract {
             validator.num_stakers -= 1;
 
             // Re-add the validator entry.
-            trace!(
-                "Trying to put validator with address {} in the accounts tree.",
-                validator_address.to_string(),
-            );
-
             accounts_tree.put(
                 db_txn,
                 &StakingContract::get_key_validator(validator_address),
@@ -1425,11 +1217,6 @@ impl StakingContract {
                 };
 
             validator.num_stakers += 1;
-
-            trace!(
-                "Trying to put validator with address {} in the accounts tree.",
-                validator_address.to_string(),
-            );
 
             accounts_tree.put(
                 db_txn,

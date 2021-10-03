@@ -110,8 +110,14 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
     fn on_epoch_received(&mut self, epoch: BatchSetInfo) -> Result<(), SyncClusterResult> {
         // `epoch.block` is Some, since we filtered it accordingly in the `request_fn`
         let block = epoch.block.expect("epoch.block should exist");
-
         let blockchain = self.blockchain.read();
+
+        info!(
+            "Syncing epoch #{}/{} ({} history items)",
+            block.epoch_number(),
+            self.first_epoch_number + self.len() - 1,
+            epoch.history_len
+        );
 
         // this might be a checkpoint
         // TODO Verify macro blocks and their ordering
@@ -130,7 +136,7 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
         };
 
         // If the block is in the same epoch, add already known history.
-        let epoch_number = policy::epoch_at(pending_batch_set.block.header.block_number);
+        let epoch_number = pending_batch_set.block.epoch_number();
 
         let mut start_index = 0;
         if policy::epoch_at(current_block_number) == epoch_number {
@@ -163,7 +169,6 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
             ..((epoch.history_len as usize).ceiling_div(CHUNK_SIZE)))
             .map(|i| (epoch_number, pending_batch_set.block.header.block_number, i))
             .collect();
-        debug!("Requesting history for ids: {:?}", history_chunk_ids);
         self.history_queue.add_ids(history_chunk_ids);
 
         // We keep the epoch in pending_epochs while the history is downloading.
@@ -179,7 +184,7 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
     ) -> Result<(), SyncClusterResult> {
         // Find epoch in pending_epochs.
         // TODO: This assumes that epochs are always dense in `pending_batch_sets`
-        // which might not be the case for misbehaving peers.
+        //  which might not be the case for misbehaving peers.
         let first_epoch_number = self.pending_batch_sets[0].epoch_number();
         let epoch_index = (epoch_number - first_epoch_number) as usize;
         let epoch = &mut self.pending_batch_sets[epoch_index];
@@ -199,17 +204,20 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
             log::debug!("History Chunk failed to verify");
             return Err(SyncClusterResult::Error);
         }
+
         // Add the received history chunk to the pending epoch.
         let mut chunk = chunk.history;
         epoch.history.append(&mut chunk);
 
-        log::trace!(
-            "Added history chunk to epoch {}, history_len={}, current_len={}, is_complete={}",
-            epoch.epoch_number(),
-            epoch.history_len,
-            epoch.history.len(),
-            epoch.is_complete()
-        );
+        if epoch.history_len > CHUNK_SIZE {
+            log::info!(
+                "Downloading history for epoch #{}: {}/{} ({:.0}%)",
+                epoch.epoch_number(),
+                epoch.history.len(),
+                epoch.history_len,
+                (epoch.history.len() as f64 / epoch.history_len as f64) * 100 as f64
+            );
+        }
 
         Ok(())
     }
@@ -293,6 +301,7 @@ impl<TPeer: Peer + 'static> Stream for SyncCluster<TPeer> {
     type Item = Result<BatchSet, SyncClusterResult>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        // TODO Wake when space in pending_batch_sets becomes available
         if self.pending_batch_sets.len() < Self::NUM_PENDING_BATCH_SETS {
             if let Poll::Ready(Some(result)) = self.batch_set_queue.poll_next_unpin(cx) {
                 match result {
@@ -436,7 +445,6 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         blockchain: Arc<RwLock<Blockchain>>,
         agent: Arc<ConsensusAgent<TNetwork::PeerType>>,
     ) -> Option<EpochIds<TNetwork::PeerType>> {
-        trace!("requesting epoch ids");
         let (locators, epoch_number) = {
             // Order matters here. The first hash found by the recipient of the request  will be used, so they need to be
             // in backwards block height order.
@@ -791,11 +799,6 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
     }
 
     fn sync_epochs(&mut self, cx: &mut Context<'_>) -> Poll<()> {
-        trace!(
-            "Syncing epoch clusters ({} clusters)",
-            self.epoch_clusters.len()
-        );
-
         if self.push_epoch_future.is_none() {
             // Initialize active_epoch_cluster if there is none.
             if self.active_epoch_cluster.is_none() {
@@ -810,6 +813,11 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                 let future = async move {
                     match cluster_res {
                         Some(Ok(epoch)) => {
+                            debug!(
+                                "Processing epoch #{} ({} history items)",
+                                epoch.block.epoch_number(),
+                                epoch.history.len()
+                            );
                             let push_result = spawn_blocking(move || {
                                 Blockchain::push_history_sync(
                                     blockchain.upgradable_read(),
@@ -836,7 +844,6 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
 
         if let Some(op) = self.push_epoch_future.as_mut() {
             let result = ready!(op.poll_unpin(cx));
-            debug!("Pushed epoch, result: {:?}", result);
             self.push_epoch_future = None;
 
             // If the epoch was successful, the cluster is not done yet
@@ -848,6 +855,10 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                     .expect("active_epoch_cluster should be set");
                 best_cluster.adopted_batch_set = true;
             } else {
+                if result != SyncClusterResult::NoMoreEpochs {
+                    debug!("Failed to push epoch: {:?}", result);
+                }
+
                 // TODO Do we really want to evict outdated clusters as well?
                 let best_cluster = self
                     .active_epoch_cluster
@@ -869,17 +880,10 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
     }
 
     fn sync_batches(&mut self, cx: &mut Context<'_>) -> Poll<()> {
-        trace!(
-            "Syncing checkpoint clusters ({} clusters)",
-            self.checkpoint_clusters.len()
-        );
-
         if self.push_checkpoint_future.is_none() {
             // When no more epochs are to be processed, we continue with checkpoint blocks.
             // Poll the best checkpoint cluster.
-            let current_epoch =
-                policy::epoch_at(self.blockchain.read().election_head().header.block_number)
-                    as usize;
+            let current_epoch = self.blockchain.read().epoch_number() as usize;
 
             // Initialize active_checkpoint_cluster if there is none.
             if self.active_checkpoint_cluster.is_none() {
@@ -919,8 +923,11 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
 
         if let Some(op) = self.push_checkpoint_future.as_mut() {
             let result = ready!(op.poll_unpin(cx));
-            debug!("Pushed checkpoint, result: {:?}", result);
             self.push_checkpoint_future = None;
+
+            if result == SyncClusterResult::Error || result == SyncClusterResult::Outdated {
+                debug!("Failed to push checkpoint: {:?}", result);
+            }
 
             // Since checkpoint clusters are always of length 1, we can remove them immediately.
             let best_cluster = self

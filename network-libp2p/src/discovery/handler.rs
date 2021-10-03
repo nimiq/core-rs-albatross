@@ -487,7 +487,6 @@ impl ProtocolsHandler for DiscoveryHandler {
 
                                     // Insert the initial set of peer contacts into the peer contact book.
                                     // TODO: This doesn't actually filter and just assumes the peer already filtered.
-                                    log::trace!("inserting peers: {:?}", &peer_contacts);
                                     peer_contact_book.insert_all(peer_contacts);
 
                                     // Store peer contact in handler
@@ -495,8 +494,6 @@ impl ProtocolsHandler for DiscoveryHandler {
 
                                     // Timer for periodic updates
                                     if let Some(mut update_interval) = update_interval {
-                                        log::trace!("update interval: {:?}", update_interval);
-
                                         let min_secs =
                                             self.config.min_send_update_interval.as_secs();
                                         if update_interval < min_secs {

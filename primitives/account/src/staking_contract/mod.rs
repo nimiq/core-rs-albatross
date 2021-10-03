@@ -157,12 +157,6 @@ impl StakingContract {
         db_txn: &DBTransaction,
     ) -> StakingContract {
         let key = StakingContract::get_key_staking_contract();
-
-        trace!(
-            "Trying to fetch staking contract at key {}.",
-            key.to_string()
-        );
-
         match accounts_tree.get(db_txn, &key) {
             Some(Account::Staking(contract)) => contract,
             _ => {
@@ -178,13 +172,6 @@ impl StakingContract {
         validator_address: &Address,
     ) -> Option<Validator> {
         let key = StakingContract::get_key_validator(validator_address);
-
-        trace!(
-            "Trying to fetch validator with address {} at key {}.",
-            validator_address.to_string(),
-            key.to_string()
-        );
-
         match accounts_tree.get(db_txn, &key) {
             Some(Account::StakingValidator(validator)) => Some(validator),
             None => None,
@@ -201,13 +188,6 @@ impl StakingContract {
         validator_address: &Address,
     ) -> Vec<Address> {
         let key = StakingContract::get_key_validator(validator_address);
-
-        trace!(
-            "Trying to fetch validator with address {} at key {}.",
-            validator_address.to_string(),
-            key.to_string()
-        );
-
         let validator = match accounts_tree.get(db_txn, &key) {
             Some(Account::StakingValidator(validator)) => validator,
             _ => return vec![],
@@ -241,13 +221,6 @@ impl StakingContract {
         staker_address: &Address,
     ) -> Option<Staker> {
         let key = StakingContract::get_key_staker(staker_address);
-
-        trace!(
-            "Trying to fetch staker with address {} at key {}.",
-            staker_address.to_string(),
-            key.to_string()
-        );
-
         match accounts_tree.get(db_txn, &key) {
             Some(Account::StakingStaker(staker)) => Some(staker),
             None => None,
@@ -259,8 +232,6 @@ impl StakingContract {
 
     /// Creates a new Staking contract into the given accounts tree.
     pub fn create(accounts_tree: &AccountsTrie, db_txn: &mut WriteTransaction) {
-        trace!("Trying to put the staking contract in the accounts tree.");
-
         accounts_tree.put(
             db_txn,
             &StakingContract::get_key_staking_contract(),

@@ -251,10 +251,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
     }
 
     fn init_block_producer(&mut self) {
-        log::trace!("Initializing block producer");
-
         if !self.is_active() {
-            log::debug!("Validator not active");
             return;
         }
 
@@ -413,16 +410,21 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                         // todo get rid of spawn
                         let network = Arc::clone(&self.network);
                         tokio::spawn(async move {
-                            trace!("publishing macro block: {:?}", &block_copy);
-                            network
+                            let block_number = block_copy.header.block_number;
+                            trace!("Publishing macro block #{}", block_number);
+
+                            if let Err(e) = network
                                 .publish::<BlockTopic>(Block::Macro(block_copy))
                                 .await
-                                .map_err(|e| trace!("Failed to publish block: {:?}", e))
-                                .ok();
+                            {
+                                warn!("Failed to publish block #{}: {:?}", block_number, e);
+                            }
                         });
                     }
                 }
-                // in case of a new state update we need to store th enew version of it disregarding any old state which potentially still lingers.
+
+                // In case of a new state update we need to store the new version of it disregarding
+                // any old state which potentially still lingers.
                 TendermintReturn::StateUpdate(update) => {
                     let mut write_transaction = WriteTransaction::new(&self.env);
                     let persistable_state = PersistedMacroState::<TValidatorNetwork> {
@@ -466,15 +468,16 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                         || result == Some(PushResult::Rebranched)
                     {
                         // todo get rid of spawn
-                        let nw = self.network.clone();
+                        let network = self.network.clone();
                         tokio::spawn(async move {
-                            trace!("publishing micro block: {:?}", &block_copy);
-                            if nw
+                            let block_number = block_copy.header.block_number;
+                            trace!("Publishing micro block #{}", block_number);
+
+                            if let Err(e) = network
                                 .publish::<BlockTopic>(Block::Micro(block_copy))
                                 .await
-                                .is_err()
                             {
-                                trace!("Failed to publish Block");
+                                warn!("Failed to publish block #{}: {:?}", block_number, e);
                             }
                         });
                     }
