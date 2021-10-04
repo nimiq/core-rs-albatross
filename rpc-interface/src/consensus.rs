@@ -40,7 +40,8 @@ pub trait ConsensusInterface {
 
     async fn create_new_staker_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Address,
+        staker_wallet: Address,
         delegation: Option<Address>,
         value: Coin,
         fee: Coin,
@@ -49,7 +50,8 @@ pub trait ConsensusInterface {
 
     async fn send_new_staker_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Address,
+        staker_wallet: Address,
         delegation: Option<Address>,
         value: Coin,
         fee: Coin,
@@ -58,7 +60,7 @@ pub trait ConsensusInterface {
 
     async fn create_stake_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Address,
         staker_address: Address,
         value: Coin,
         fee: Coin,
@@ -67,7 +69,7 @@ pub trait ConsensusInterface {
 
     async fn send_stake_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Address,
         staker_address: Address,
         value: Coin,
         fee: Coin,
@@ -76,7 +78,9 @@ pub trait ConsensusInterface {
 
     async fn create_update_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Option<Address>,
+        from_active_balance: Option<bool>,
+        staker_wallet: Address,
         new_delegation: Option<Address>,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
@@ -84,7 +88,9 @@ pub trait ConsensusInterface {
 
     async fn send_update_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Option<Address>,
+        from_active_balance: Option<bool>,
+        staker_wallet: Address,
         new_delegation: Option<Address>,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
@@ -92,7 +98,9 @@ pub trait ConsensusInterface {
 
     async fn create_retire_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Option<Address>,
+        from_active_balance: Option<bool>,
+        staker_wallet: Address,
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
@@ -100,7 +108,9 @@ pub trait ConsensusInterface {
 
     async fn send_retire_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Option<Address>,
+        from_active_balance: Option<bool>,
+        staker_wallet: Address,
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
@@ -108,7 +118,9 @@ pub trait ConsensusInterface {
 
     async fn create_reactivate_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Option<Address>,
+        from_active_balance: Option<bool>,
+        staker_wallet: Address,
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
@@ -116,7 +128,9 @@ pub trait ConsensusInterface {
 
     async fn send_reactivate_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Option<Address>,
+        from_active_balance: Option<bool>,
+        staker_wallet: Address,
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
@@ -124,7 +138,7 @@ pub trait ConsensusInterface {
 
     async fn create_unstake_transaction(
         &mut self,
-        wallet: Address,
+        staker_wallet: Address,
         recipient: Address,
         value: Coin,
         fee: Coin,
@@ -133,7 +147,7 @@ pub trait ConsensusInterface {
 
     async fn send_unstake_transaction(
         &mut self,
-        wallet: Address,
+        staker_wallet: Address,
         recipient: Address,
         value: Coin,
         fee: Coin,
@@ -142,9 +156,10 @@ pub trait ConsensusInterface {
 
     async fn create_new_validator_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Address,
+        validator_wallet: Address,
         warm_key: Address,
-        validator_secret_key: String,
+        hot_secret_key: String,
         reward_address: Address,
         signal_data: String,
         fee: Coin,
@@ -153,9 +168,10 @@ pub trait ConsensusInterface {
 
     async fn send_new_validator_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Address,
+        validator_wallet: Address,
         warm_key: Address,
-        validator_secret_key: String,
+        hot_secret_key: String,
         reward_address: Address,
         signal_data: String,
         fee: Coin,
@@ -164,9 +180,10 @@ pub trait ConsensusInterface {
 
     async fn create_update_validator_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Address,
+        validator_wallet: Address,
         new_warm_address: Option<Address>,
-        new_validator_secret_key: Option<String>,
+        new_hot_secret_key: Option<String>,
         new_reward_address: Option<Address>,
         new_signal_data: Option<String>,
         fee: Coin,
@@ -175,9 +192,10 @@ pub trait ConsensusInterface {
 
     async fn send_update_validator_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Address,
+        validator_wallet: Address,
         new_warm_address: Option<Address>,
-        new_validator_secret_key: Option<String>,
+        new_hot_secret_key: Option<String>,
         new_reward_address: Option<Address>,
         new_signal_data: Option<String>,
         fee: Coin,
@@ -186,7 +204,8 @@ pub trait ConsensusInterface {
 
     async fn create_retire_validator_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Address,
+        validator_address: Address,
         warm_secret_key: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
@@ -194,7 +213,8 @@ pub trait ConsensusInterface {
 
     async fn send_retire_validator_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Address,
+        validator_address: Address,
         warm_secret_key: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
@@ -202,7 +222,8 @@ pub trait ConsensusInterface {
 
     async fn create_reactivate_validator_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Address,
+        validator_address: Address,
         warm_secret_key: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
@@ -210,7 +231,8 @@ pub trait ConsensusInterface {
 
     async fn send_reactivate_validator_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Address,
+        validator_address: Address,
         warm_secret_key: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
@@ -218,7 +240,8 @@ pub trait ConsensusInterface {
 
     async fn create_unpark_validator_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Address,
+        validator_address: Address,
         warm_secret_key: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
@@ -226,7 +249,8 @@ pub trait ConsensusInterface {
 
     async fn send_unpark_validator_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Address,
+        validator_address: Address,
         warm_secret_key: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
@@ -234,7 +258,7 @@ pub trait ConsensusInterface {
 
     async fn create_drop_validator_transaction(
         &mut self,
-        wallet: Address,
+        validator_wallet: Address,
         recipient: Address,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
@@ -242,7 +266,7 @@ pub trait ConsensusInterface {
 
     async fn send_drop_validator_transaction(
         &mut self,
-        wallet: Address,
+        validator_wallet: Address,
         recipient: Address,
         fee: Coin,
         validity_start_height: ValidityStartHeight,

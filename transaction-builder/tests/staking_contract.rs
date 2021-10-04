@@ -68,6 +68,28 @@ fn it_can_create_staker_transactions() {
     assert_eq!(tx, tx2);
 
     // Update
+    let tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::UpdateStaker {
+            new_delegation: None,
+            proof: Default::default(),
+        },
+        0,
+        &key_pair,
+    );
+
+    let tx2 = TransactionBuilder::new_update_staker(
+        Some(&key_pair),
+        true,
+        &key_pair,
+        None,
+        100.try_into().unwrap(),
+        1,
+        NetworkId::Dummy,
+    );
+
+    assert_eq!(tx, tx2);
+
+    // Update with deduct fees
     let tx = make_self_transaction(
         IncomingStakingTransactionData::UpdateStaker {
             new_delegation: None,
@@ -78,9 +100,10 @@ fn it_can_create_staker_transactions() {
     );
 
     let tx2 = TransactionBuilder::new_update_staker(
-        &key_pair,
         None,
         true,
+        &key_pair,
+        None,
         100.try_into().unwrap(),
         1,
         NetworkId::Dummy,
@@ -89,6 +112,28 @@ fn it_can_create_staker_transactions() {
     assert_eq!(tx, tx2);
 
     // Retire
+    let tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::RetireStaker {
+            value: Coin::from_u64_unchecked(1000),
+            proof: Default::default(),
+        },
+        0,
+        &key_pair,
+    );
+
+    let tx2 = TransactionBuilder::new_retire_staker(
+        Some(&key_pair),
+        true,
+        &key_pair,
+        1000.try_into().unwrap(),
+        100.try_into().unwrap(),
+        1,
+        NetworkId::Dummy,
+    );
+
+    assert_eq!(tx, tx2);
+
+    // Retire with deduct fees.
     let tx = make_self_transaction(
         IncomingStakingTransactionData::RetireStaker {
             value: Coin::from_u64_unchecked(1000),
@@ -99,8 +144,9 @@ fn it_can_create_staker_transactions() {
     );
 
     let tx2 = TransactionBuilder::new_retire_staker(
-        &key_pair,
+        None,
         true,
+        &key_pair,
         1000.try_into().unwrap(),
         100.try_into().unwrap(),
         1,
@@ -110,6 +156,28 @@ fn it_can_create_staker_transactions() {
     assert_eq!(tx, tx2);
 
     // Reactivate
+    let tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::ReactivateStaker {
+            value: Coin::from_u64_unchecked(1000),
+            proof: Default::default(),
+        },
+        0,
+        &key_pair,
+    );
+
+    let tx2 = TransactionBuilder::new_reactivate_staker(
+        Some(&key_pair),
+        true,
+        &key_pair,
+        1000.try_into().unwrap(),
+        100.try_into().unwrap(),
+        1,
+        NetworkId::Dummy,
+    );
+
+    assert_eq!(tx, tx2);
+
+    // Reactivate with deduct fees
     let tx = make_self_transaction(
         IncomingStakingTransactionData::ReactivateStaker {
             value: Coin::from_u64_unchecked(1000),
@@ -120,8 +188,9 @@ fn it_can_create_staker_transactions() {
     );
 
     let tx2 = TransactionBuilder::new_reactivate_staker(
-        &key_pair,
+        None,
         true,
+        &key_pair,
         1000.try_into().unwrap(),
         100.try_into().unwrap(),
         1,

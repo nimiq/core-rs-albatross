@@ -20,7 +20,6 @@ use nimiq_blockchain::AbstractBlockchain;
 
 pub struct ConsensusDispatcher {
     consensus: ConsensusProxy<Network>,
-
     unlocked_wallets: Option<Arc<RwLock<UnlockedWallets>>>,
 }
 
@@ -52,7 +51,7 @@ impl ConsensusDispatcher {
             .get(address)
             .ok_or_else(|| Error::UnlockedWalletNotFound(address.clone()))?
             .key_pair
-            .clone()) // TODO: Avoid cloning
+            .clone())
     }
 
     fn network_id(&self) -> NetworkId {
@@ -95,7 +94,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Error> {
         let transaction = TransactionBuilder::new_simple(
-            &self.get_wallet_keypair(&wallet)?,
+            &&self.get_wallet_keypair(&wallet)?,
             recipient,
             value,
             fee,
@@ -122,15 +121,16 @@ impl ConsensusInterface for ConsensusDispatcher {
 
     async fn create_new_staker_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Address,
+        staker_wallet: Address,
         delegation: Option<Address>,
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Self::Error> {
         let transaction = TransactionBuilder::new_create_staker(
-            &self.get_wallet_keypair(&wallet)?,
-            &self.get_wallet_keypair(&wallet)?,
+            &self.get_wallet_keypair(&sender_wallet)?,
+            &self.get_wallet_keypair(&staker_wallet)?,
             delegation,
             value,
             fee,
@@ -143,28 +143,36 @@ impl ConsensusInterface for ConsensusDispatcher {
 
     async fn send_new_staker_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Address,
+        staker_wallet: Address,
         delegation: Option<Address>,
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Self::Error> {
         let raw_tx = self
-            .create_new_staker_transaction(wallet, delegation, value, fee, validity_start_height)
+            .create_new_staker_transaction(
+                sender_wallet,
+                staker_wallet,
+                delegation,
+                value,
+                fee,
+                validity_start_height,
+            )
             .await?;
         self.send_raw_transaction(raw_tx).await
     }
 
     async fn create_stake_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Address,
         staker_address: Address,
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Error> {
         let transaction = TransactionBuilder::new_stake(
-            &self.get_wallet_keypair(&wallet)?,
+            &self.get_wallet_keypair(&sender_wallet)?,
             staker_address,
             value,
             fee,
@@ -177,29 +185,43 @@ impl ConsensusInterface for ConsensusDispatcher {
 
     async fn send_stake_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Address,
         staker_address: Address,
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Error> {
         let raw_tx = self
-            .create_stake_transaction(wallet, staker_address, value, fee, validity_start_height)
+            .create_stake_transaction(
+                sender_wallet,
+                staker_address,
+                value,
+                fee,
+                validity_start_height,
+            )
             .await?;
         self.send_raw_transaction(raw_tx).await
     }
 
     async fn create_update_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Option<Address>,
+        from_active_balance: Option<bool>,
+        staker_wallet: Address,
         new_delegation: Option<Address>,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Error> {
+        let sender_key = match sender_wallet {
+            None => None,
+            Some(address) => Some(self.get_wallet_keypair(&address)?),
+        };
+
         let transaction = TransactionBuilder::new_update_staker(
-            &self.get_wallet_keypair(&wallet)?,
+            sender_key.as_ref(),
+            from_active_balance.unwrap_or(true),
+            &self.get_wallet_keypair(&staker_wallet)?,
             new_delegation,
-            true,
             fee,
             self.validity_start_height(validity_start_height),
             self.network_id(),
@@ -210,27 +232,44 @@ impl ConsensusInterface for ConsensusDispatcher {
 
     async fn send_update_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Option<Address>,
+        from_active_balance: Option<bool>,
+        staker_wallet: Address,
         new_delegation: Option<Address>,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Error> {
         let raw_tx = self
-            .create_update_transaction(wallet, new_delegation, fee, validity_start_height)
+            .create_update_transaction(
+                sender_wallet,
+                from_active_balance,
+                staker_wallet,
+                new_delegation,
+                fee,
+                validity_start_height,
+            )
             .await?;
         self.send_raw_transaction(raw_tx).await
     }
 
     async fn create_retire_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Option<Address>,
+        from_active_balance: Option<bool>,
+        staker_wallet: Address,
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Error> {
+        let sender_key = match sender_wallet {
+            None => None,
+            Some(address) => Some(self.get_wallet_keypair(&address)?),
+        };
+
         let transaction = TransactionBuilder::new_retire_staker(
-            &self.get_wallet_keypair(&wallet)?,
-            true,
+            sender_key.as_ref(),
+            from_active_balance.unwrap_or(true),
+            &self.get_wallet_keypair(&staker_wallet)?,
             value,
             fee,
             self.validity_start_height(validity_start_height),
@@ -242,27 +281,44 @@ impl ConsensusInterface for ConsensusDispatcher {
 
     async fn send_retire_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Option<Address>,
+        from_active_balance: Option<bool>,
+        staker_wallet: Address,
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Error> {
         let raw_tx = self
-            .create_retire_transaction(wallet, value, fee, validity_start_height)
+            .create_retire_transaction(
+                sender_wallet,
+                from_active_balance,
+                staker_wallet,
+                value,
+                fee,
+                validity_start_height,
+            )
             .await?;
         self.send_raw_transaction(raw_tx).await
     }
 
     async fn create_reactivate_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Option<Address>,
+        from_active_balance: Option<bool>,
+        staker_wallet: Address,
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Error> {
+        let sender_key = match sender_wallet {
+            None => None,
+            Some(address) => Some(self.get_wallet_keypair(&address)?),
+        };
+
         let transaction = TransactionBuilder::new_reactivate_staker(
-            &self.get_wallet_keypair(&wallet)?,
-            false,
+            sender_key.as_ref(),
+            from_active_balance.unwrap_or(true),
+            &self.get_wallet_keypair(&staker_wallet)?,
             value,
             fee,
             self.validity_start_height(validity_start_height),
@@ -274,27 +330,36 @@ impl ConsensusInterface for ConsensusDispatcher {
 
     async fn send_reactivate_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Option<Address>,
+        from_active_balance: Option<bool>,
+        staker_wallet: Address,
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Error> {
         let raw_tx = self
-            .create_reactivate_transaction(wallet, value, fee, validity_start_height)
+            .create_reactivate_transaction(
+                sender_wallet,
+                from_active_balance,
+                staker_wallet,
+                value,
+                fee,
+                validity_start_height,
+            )
             .await?;
         self.send_raw_transaction(raw_tx).await
     }
 
     async fn create_unstake_transaction(
         &mut self,
-        wallet: Address,
+        staker_wallet: Address,
         recipient: Address,
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Error> {
         let transaction = TransactionBuilder::new_unstake(
-            &self.get_wallet_keypair(&wallet)?,
+            &self.get_wallet_keypair(&staker_wallet)?,
             recipient,
             value,
             fee,
@@ -307,32 +372,32 @@ impl ConsensusInterface for ConsensusDispatcher {
 
     async fn send_unstake_transaction(
         &mut self,
-        wallet: Address,
+        staker_wallet: Address,
         recipient: Address,
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Error> {
         let raw_tx = self
-            .create_unstake_transaction(wallet, recipient, value, fee, validity_start_height)
+            .create_unstake_transaction(staker_wallet, recipient, value, fee, validity_start_height)
             .await?;
         self.send_raw_transaction(raw_tx).await
     }
 
     async fn create_new_validator_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Address,
+        validator_wallet: Address,
         warm_key: Address,
-        validator_secret_key: String,
+        hot_secret_key: String,
         reward_address: Address,
         signal_data: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Error> {
         let secret_key =
-            BlsSecretKey::deserialize_from_vec(&hex::decode(validator_secret_key).unwrap())
-                .unwrap();
-        let validator_keypair = BlsKeyPair::from(secret_key);
+            BlsSecretKey::deserialize_from_vec(&hex::decode(hot_secret_key).unwrap()).unwrap();
+        let hot_keypair = BlsKeyPair::from(secret_key);
 
         // Since JSON doesn't have a primitive for Option (it just has the null primitive), we can't
         // have a double Option. This becomes an issue when creating an update_validator transaction.
@@ -347,10 +412,10 @@ impl ConsensusInterface for ConsensusDispatcher {
         };
 
         let transaction = TransactionBuilder::new_create_validator(
-            &self.get_wallet_keypair(&wallet)?,
-            &self.get_wallet_keypair(&wallet)?,
+            &self.get_wallet_keypair(&sender_wallet)?,
+            &self.get_wallet_keypair(&validator_wallet)?,
             warm_key,
-            &validator_keypair,
+            &hot_keypair,
             reward_address,
             signal_data,
             fee,
@@ -363,9 +428,10 @@ impl ConsensusInterface for ConsensusDispatcher {
 
     async fn send_new_validator_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Address,
+        validator_wallet: Address,
         warm_key: Address,
-        validator_secret_key: String,
+        hot_secret_key: String,
         reward_address: Address,
         signal_data: String,
         fee: Coin,
@@ -373,9 +439,10 @@ impl ConsensusInterface for ConsensusDispatcher {
     ) -> Result<Blake2bHash, Error> {
         let raw_tx = self
             .create_new_validator_transaction(
-                wallet,
+                sender_wallet,
+                validator_wallet,
                 warm_key,
-                validator_secret_key,
+                hot_secret_key,
                 reward_address,
                 signal_data,
                 fee,
@@ -387,15 +454,16 @@ impl ConsensusInterface for ConsensusDispatcher {
 
     async fn create_update_validator_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Address,
+        validator_wallet: Address,
         new_warm_address: Option<Address>,
-        new_validator_secret_key: Option<String>,
+        new_hot_secret_key: Option<String>,
         new_reward_address: Option<Address>,
         new_signal_data: Option<String>,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Error> {
-        let new_validator_keypair = match new_validator_secret_key {
+        let new_hot_keypair = match new_hot_secret_key {
             Some(key) => {
                 let new_secret_key =
                     BlsSecretKey::deserialize_from_vec(&hex::decode(key).unwrap()).unwrap();
@@ -424,10 +492,10 @@ impl ConsensusInterface for ConsensusDispatcher {
         };
 
         let transaction = TransactionBuilder::new_update_validator(
-            &self.get_wallet_keypair(&wallet)?,
-            &self.get_wallet_keypair(&wallet)?,
+            &self.get_wallet_keypair(&sender_wallet)?,
+            &self.get_wallet_keypair(&validator_wallet)?,
             new_warm_address,
-            new_validator_keypair.as_ref(),
+            new_hot_keypair.as_ref(),
             new_reward_address,
             new_signal_data,
             fee,
@@ -440,9 +508,10 @@ impl ConsensusInterface for ConsensusDispatcher {
 
     async fn send_update_validator_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Address,
+        validator_wallet: Address,
         new_warm_address: Option<Address>,
-        new_validator_secret_key: Option<String>,
+        new_hot_secret_key: Option<String>,
         new_reward_address: Option<Address>,
         new_signal_data: Option<String>,
         fee: Coin,
@@ -450,9 +519,10 @@ impl ConsensusInterface for ConsensusDispatcher {
     ) -> Result<Blake2bHash, Error> {
         let raw_tx = self
             .create_update_validator_transaction(
-                wallet,
+                sender_wallet,
+                validator_wallet,
                 new_warm_address,
-                new_validator_secret_key,
+                new_hot_secret_key,
                 new_reward_address,
                 new_signal_data,
                 fee,
@@ -464,7 +534,8 @@ impl ConsensusInterface for ConsensusDispatcher {
 
     async fn create_retire_validator_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Address,
+        validator_address: Address,
         warm_secret_key: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
@@ -474,8 +545,8 @@ impl ConsensusInterface for ConsensusDispatcher {
         let warm_key_pair = KeyPair::from(secret_key);
 
         let transaction = TransactionBuilder::new_retire_validator(
-            &self.get_wallet_keypair(&wallet)?,
-            wallet,
+            &self.get_wallet_keypair(&sender_wallet)?,
+            validator_address,
             &warm_key_pair,
             fee,
             self.validity_start_height(validity_start_height),
@@ -487,14 +558,16 @@ impl ConsensusInterface for ConsensusDispatcher {
 
     async fn send_retire_validator_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Address,
+        validator_address: Address,
         warm_secret_key: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Error> {
         let raw_tx = self
             .create_retire_validator_transaction(
-                wallet,
+                sender_wallet,
+                validator_address,
                 warm_secret_key,
                 fee,
                 validity_start_height,
@@ -505,7 +578,8 @@ impl ConsensusInterface for ConsensusDispatcher {
 
     async fn create_reactivate_validator_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Address,
+        validator_address: Address,
         warm_secret_key: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
@@ -515,8 +589,8 @@ impl ConsensusInterface for ConsensusDispatcher {
         let warm_key_pair = KeyPair::from(secret_key);
 
         let transaction = TransactionBuilder::new_reactivate_validator(
-            &self.get_wallet_keypair(&wallet)?,
-            wallet,
+            &self.get_wallet_keypair(&sender_wallet)?,
+            validator_address,
             &warm_key_pair,
             fee,
             self.validity_start_height(validity_start_height),
@@ -528,14 +602,16 @@ impl ConsensusInterface for ConsensusDispatcher {
 
     async fn send_reactivate_validator_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Address,
+        validator_address: Address,
         warm_secret_key: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Error> {
         let raw_tx = self
             .create_reactivate_validator_transaction(
-                wallet,
+                sender_wallet,
+                validator_address,
                 warm_secret_key,
                 fee,
                 validity_start_height,
@@ -546,7 +622,8 @@ impl ConsensusInterface for ConsensusDispatcher {
 
     async fn create_unpark_validator_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Address,
+        validator_address: Address,
         warm_secret_key: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
@@ -556,8 +633,8 @@ impl ConsensusInterface for ConsensusDispatcher {
         let warm_key_pair = KeyPair::from(secret_key);
 
         let transaction = TransactionBuilder::new_unpark_validator(
-            &self.get_wallet_keypair(&wallet)?,
-            wallet,
+            &self.get_wallet_keypair(&sender_wallet)?,
+            validator_address,
             &warm_key_pair,
             fee,
             self.validity_start_height(validity_start_height),
@@ -569,14 +646,16 @@ impl ConsensusInterface for ConsensusDispatcher {
 
     async fn send_unpark_validator_transaction(
         &mut self,
-        wallet: Address,
+        sender_wallet: Address,
+        validator_address: Address,
         warm_secret_key: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Error> {
         let raw_tx = self
             .create_unpark_validator_transaction(
-                wallet,
+                sender_wallet,
+                validator_address,
                 warm_secret_key,
                 fee,
                 validity_start_height,
@@ -587,14 +666,14 @@ impl ConsensusInterface for ConsensusDispatcher {
 
     async fn create_drop_validator_transaction(
         &mut self,
-        wallet: Address,
+        validator_wallet: Address,
         recipient: Address,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Error> {
         let transaction = TransactionBuilder::new_drop_validator(
             recipient,
-            &self.get_wallet_keypair(&wallet)?,
+            &self.get_wallet_keypair(&validator_wallet)?,
             fee,
             self.validity_start_height(validity_start_height),
             self.network_id(),
@@ -605,13 +684,18 @@ impl ConsensusInterface for ConsensusDispatcher {
 
     async fn send_drop_validator_transaction(
         &mut self,
-        wallet: Address,
+        validator_wallet: Address,
         recipient: Address,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Error> {
         let raw_tx = self
-            .create_drop_validator_transaction(wallet, recipient, fee, validity_start_height)
+            .create_drop_validator_transaction(
+                validator_wallet,
+                recipient,
+                fee,
+                validity_start_height,
+            )
             .await?;
         self.send_raw_transaction(raw_tx).await
     }
