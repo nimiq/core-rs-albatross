@@ -430,9 +430,11 @@ impl From<nimiq_block::ForkProof> for ForkProof {
 #[serde(rename_all = "camelCase")]
 pub struct Transaction {
     pub hash: Blake2bHash,
-    pub block_number: u32,
-    pub timestamp: u64,
-    pub confirmations: u32,
+
+    pub block_number: Option<u32>,
+    pub timestamp: Option<u64>,
+    pub confirmations: Option<u32>,
+
     pub from: Address,
     pub to: Address,
     pub value: Coin,
@@ -454,9 +456,9 @@ impl Transaction {
     ) -> Self {
         Transaction {
             hash: transaction.hash(),
-            block_number,
-            timestamp,
-            confirmations: head_height.saturating_sub(block_number) + 1,
+            block_number: Some(block_number),
+            timestamp: Some(timestamp),
+            confirmations: Some(head_height.saturating_sub(block_number) + 1),
             from: transaction.sender,
             to: transaction.recipient,
             value: transaction.value,
