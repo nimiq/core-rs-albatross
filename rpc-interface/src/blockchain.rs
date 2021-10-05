@@ -1,10 +1,11 @@
-use async_trait::async_trait;
+use std::collections::HashMap;
 
+use async_trait::async_trait;
 use futures::stream::BoxStream;
+
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
-use std::collections::HashMap;
 
 use crate::types::{
     Account, Block, Inherent, ParkedSet, SlashedSlots, Slot, Staker, Transaction, Validator,

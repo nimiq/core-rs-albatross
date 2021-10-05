@@ -3,8 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 
 use nimiq_network_libp2p::Network;
-
-use nimiq_rpc_interface::{network::NetworkInterface, types::Peer};
+use nimiq_rpc_interface::network::NetworkInterface;
 
 use crate::error::Error;
 
@@ -28,17 +27,15 @@ impl NetworkInterface for NetworkDispatcher {
     }
 
     async fn get_peer_count(&mut self) -> Result<usize, Self::Error> {
-        // TODO: Wait for connection pool implementation
-        todo!()
+        Ok(self.network.get_peers().len())
     }
 
-    async fn get_peer_list(&mut self) -> Result<Vec<Peer>, Self::Error> {
-        // TODO: Wait for connection pool implementation
-        todo!()
-    }
-
-    async fn get_peer_state(&mut self, _peer_id: String) -> Result<Peer, Self::Error> {
-        // TODO: Wait for connection pool implementation
-        todo!()
+    async fn get_peer_list(&mut self) -> Result<Vec<String>, Self::Error> {
+        Ok(self
+            .network
+            .get_peers()
+            .iter()
+            .map(|peer| peer.id.to_string())
+            .collect())
     }
 }

@@ -4,19 +4,21 @@ use async_trait::async_trait;
 use parking_lot::RwLock;
 
 use beserial::{Deserialize, Serialize};
+use nimiq_blockchain::AbstractBlockchain;
 use nimiq_bls::{KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
 use nimiq_consensus::ConsensusProxy;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_network_libp2p::Network;
 use nimiq_primitives::{coin::Coin, networks::NetworkId};
+use nimiq_rpc_interface::{
+    consensus::ConsensusInterface,
+    types::{Transaction as RPCTransaction, ValidityStartHeight},
+};
 use nimiq_transaction::Transaction;
 use nimiq_transaction_builder::TransactionBuilder;
 
-use nimiq_rpc_interface::{consensus::ConsensusInterface, types::ValidityStartHeight};
-
 use crate::{error::Error, wallets::UnlockedWallets};
-use nimiq_blockchain::AbstractBlockchain;
 
 pub struct ConsensusDispatcher {
     consensus: ConsensusProxy<Network>,
@@ -76,8 +78,23 @@ impl ConsensusInterface for ConsensusDispatcher {
         Ok(self.consensus.is_established())
     }
 
-    async fn get_raw_transaction_info(&mut self, _raw_tx: String) -> Result<(), Error> {
-        Err(Error::NotImplemented)
+    async fn get_raw_transaction_info(&mut self, raw_tx: String) -> Result<RPCTransaction, Error> {
+        let transaction: Transaction = Deserialize::deserialize_from_vec(&hex::decode(&raw_tx)?)?;
+
+        Ok(RPCTransaction {
+            hash: transaction.hash::<Blake2bHash>(),
+            block_number: None,
+            timestamp: None,
+            confirmations: None,
+            from: transaction.sender,
+            to: transaction.recipient,
+            value: transaction.value,
+            fee: transaction.fee,
+            flags: transaction.flags.bits() as u8,
+            data: transaction.data,
+            validity_start_height: transaction.validity_start_height,
+            proof: transaction.proof,
+        })
     }
 
     async fn send_raw_transaction(&mut self, raw_tx: String) -> Result<Blake2bHash, Error> {

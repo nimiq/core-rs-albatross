@@ -9,13 +9,13 @@ use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::{coin::Coin, policy};
+use nimiq_rpc_interface::types::{ParkedSet, Validator};
 use nimiq_rpc_interface::{
     blockchain::BlockchainInterface,
     types::{Account, Block, Inherent, SlashedSlots, Slot, Staker, Transaction},
 };
 
 use crate::error::Error;
-use nimiq_rpc_interface::types::{ParkedSet, Validator};
 
 pub struct BlockchainDispatcher {
     blockchain: Arc<RwLock<Blockchain>>,
