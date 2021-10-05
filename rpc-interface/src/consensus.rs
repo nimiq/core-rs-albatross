@@ -4,7 +4,7 @@ use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
 
-use crate::types::ValidityStartHeight;
+use crate::types::{Transaction, ValidityStartHeight};
 
 #[cfg_attr(
     feature = "proxy",
@@ -16,7 +16,10 @@ pub trait ConsensusInterface {
 
     async fn is_established(&mut self) -> Result<bool, Self::Error>;
 
-    async fn get_raw_transaction_info(&mut self, raw_tx: String) -> Result<(), Self::Error>;
+    async fn get_raw_transaction_info(
+        &mut self,
+        raw_tx: String,
+    ) -> Result<Transaction, Self::Error>;
 
     async fn send_raw_transaction(&mut self, raw_tx: String) -> Result<Blake2bHash, Self::Error>;
 

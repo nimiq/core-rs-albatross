@@ -16,6 +16,7 @@ use nimiq_bls::{CompressedPublicKey, CompressedSignature};
 use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
+use nimiq_network_libp2p::PeerId;
 use nimiq_primitives::policy;
 use nimiq_primitives::slots::Validators;
 use nimiq_primitives::{account::AccountType, coin::Coin};
@@ -148,11 +149,13 @@ pub enum BlockAdditionalFields {
 
         parent_election_hash: Blake2bHash,
 
-        // None if not an election block
+        // None if not an election block.
+        #[serde(skip_serializing_if = "Option::is_none")]
         slots: Option<Vec<Slots>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         lost_reward_set: Option<BitSet>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         disabled_set: Option<BitSet>,
-
         #[serde(skip_serializing_if = "Option::is_none")]
         transactions: Option<Vec<Transaction>>,
 
@@ -331,6 +334,7 @@ impl From<nimiq_block::TendermintProof> for TendermintProof {
 #[serde(rename_all = "camelCase")]
 pub struct MicroJustification {
     signature: CompressedSignature,
+    #[serde(skip_serializing_if = "Option::is_none")]
     view_change_proof: Option<ViewChangeProof>,
 }
 
@@ -430,9 +434,11 @@ impl From<nimiq_block::ForkProof> for ForkProof {
 #[serde(rename_all = "camelCase")]
 pub struct Transaction {
     pub hash: Blake2bHash,
-
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub block_number: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub timestamp: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub confirmations: Option<u32>,
 
     pub from: Address,
@@ -661,9 +667,4 @@ impl Validator {
             stakers,
         }
     }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Peer {
-    // TODO
 }

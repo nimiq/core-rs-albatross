@@ -1,7 +1,7 @@
+use nimiq_jsonrpc_core::RpcError;
 use thiserror::Error;
 
 use nimiq_hash::Blake2bHash;
-use nimiq_jsonrpc_core::RpcError;
 use nimiq_keys::Address;
 use nimiq_rpc_interface::types::BlockNumberOrHash;
 
