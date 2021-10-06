@@ -9,7 +9,7 @@ use nimiq_blockchain::{AbstractBlockchain, Blockchain, PushError, PushResult};
 use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
-use nimiq_mempool::mempool::Mempool;
+use nimiq_mempool::{config::MempoolConfig, mempool::Mempool};
 use nimiq_primitives::policy;
 use nimiq_test_utils::blockchain::{
     fill_micro_blocks, sign_macro_block, sign_view_change, SECRET_KEY,
@@ -24,7 +24,7 @@ fn it_can_produce_micro_blocks() {
     let blockchain = Arc::new(RwLock::new(
         Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
     ));
-    let mempool = Mempool::new(Arc::clone(&blockchain));
+    let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
     let keypair =
         KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
     let producer = BlockProducer::new(Arc::clone(&blockchain), Arc::new(mempool), keypair.clone());
@@ -110,7 +110,7 @@ fn it_can_produce_macro_blocks() {
     let blockchain = Arc::new(RwLock::new(
         Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
     ));
-    let mempool = Mempool::new(Arc::clone(&blockchain));
+    let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
 
     let keypair =
         KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
@@ -145,7 +145,7 @@ fn it_can_produce_election_blocks() {
     let blockchain = Arc::new(RwLock::new(
         Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
     ));
-    let mempool = Mempool::new(Arc::clone(&blockchain));
+    let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
 
     let keypair =
         KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());

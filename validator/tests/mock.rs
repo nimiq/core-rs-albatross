@@ -15,6 +15,7 @@ use nimiq_consensus::{Consensus as AbstractConsensus, ConsensusEvent};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_handel::update::{LevelUpdate, LevelUpdateMessage};
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
+use nimiq_mempool::config::MempoolConfig;
 use nimiq_network_interface::network::Network;
 use nimiq_network_mock::{MockHub, MockNetwork};
 
@@ -70,6 +71,7 @@ async fn mock_validator(
             signing_key,
             validator_key,
             warm_key,
+            MempoolConfig::default(),
         ),
         consensus,
     )

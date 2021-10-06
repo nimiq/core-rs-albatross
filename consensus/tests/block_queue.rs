@@ -26,7 +26,7 @@ use nimiq_consensus::sync::request_component::RequestComponentEvent;
 use nimiq_consensus::sync::{block_queue::BlockQueue, request_component::RequestComponent};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_hash::Blake2bHash;
-use nimiq_mempool::mempool::Mempool;
+use nimiq_mempool::{config::MempoolConfig, mempool::Mempool};
 use nimiq_network_interface::network::Network;
 use nimiq_network_interface::peer::Peer;
 use nimiq_network_mock::{MockHub, MockId, MockPeer};
@@ -121,7 +121,7 @@ async fn send_single_micro_block_to_block_queue() {
     ));
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
-    let mempool = Mempool::new(Arc::clone(&blockchain));
+    let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
     let producer = BlockProducer::new(Arc::clone(&blockchain), Arc::new(mempool), keypair);
     let request_component = MockRequestComponent::<MockPeer>::default();
     let (mut tx, rx) = mpsc::channel(32);
@@ -171,7 +171,7 @@ async fn send_two_micro_blocks_out_of_order() {
     ));
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
-    let mempool = Mempool::new(Arc::clone(&blockchain2));
+    let mempool = Mempool::new(Arc::clone(&blockchain2), MempoolConfig::default());
     let producer = BlockProducer::new(Arc::clone(&blockchain2), Arc::new(mempool), keypair);
     let (request_component, mut mock_ptarc_rx, _mock_ptarc_tx) =
         MockRequestComponent::<MockPeer>::new();
@@ -259,7 +259,7 @@ async fn send_micro_blocks_out_of_order() {
     ));
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
-    let mempool = Mempool::new(Arc::clone(&blockchain2));
+    let mempool = Mempool::new(Arc::clone(&blockchain2), MempoolConfig::default());
     let producer = BlockProducer::new(Arc::clone(&blockchain2), Arc::new(mempool), keypair);
     let (request_component, _mock_ptarc_rx, _mock_ptarc_tx) =
         MockRequestComponent::<MockPeer>::new();
@@ -353,7 +353,7 @@ async fn send_invalid_block() {
     ));
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
-    let mempool = Mempool::new(Arc::clone(&blockchain2));
+    let mempool = Mempool::new(Arc::clone(&blockchain2), MempoolConfig::default());
     let producer = BlockProducer::new(Arc::clone(&blockchain2), Arc::new(mempool), keypair);
     let (request_component, mut mock_ptarc_rx, _mock_ptarc_tx) =
         MockRequestComponent::<MockPeer>::new();
@@ -443,7 +443,7 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
     ));
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network_with_address(1));
-    let mempool = Mempool::new(Arc::clone(&blockchain2));
+    let mempool = Mempool::new(Arc::clone(&blockchain2), MempoolConfig::default());
     let producer = BlockProducer::new(Arc::clone(&blockchain2), Arc::new(mempool), keypair);
     let (request_component, mut mock_ptarc_rx, mock_ptarc_tx) =
         MockRequestComponent::<MockPeer>::new();
@@ -532,7 +532,7 @@ async fn put_peer_back_into_sync_mode() {
     ));
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network_with_address(1));
-    let mempool = Mempool::new(Arc::clone(&blockchain2));
+    let mempool = Mempool::new(Arc::clone(&blockchain2), MempoolConfig::default());
     let producer = BlockProducer::new(Arc::clone(&blockchain2), Arc::new(mempool), keypair);
     let (request_component, _, _) = MockRequestComponent::<MockPeer>::new();
     let (mut tx, rx) = mpsc::channel(32);

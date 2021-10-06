@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use futures::{future, StreamExt};
 use log::LevelFilter::{Debug, Info};
+use nimiq_mempool::config::MempoolConfig;
 use parking_lot::RwLock;
 use rand::prelude::StdRng;
 use rand::SeedableRng;
@@ -83,6 +84,7 @@ async fn validator(
             signing_key,
             validator_key,
             warm_key,
+            MempoolConfig::default(),
         ),
         consensus,
     )

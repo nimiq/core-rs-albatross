@@ -43,8 +43,7 @@ async fn send_txn_to_mempool(
     let (mut txn_stream_tx, txn_stream_rx) = mpsc::channel(64);
 
     // Create mempool and subscribe with a custom txn stream.
-    let mempool_config = MempoolConfig::default();
-    let mempool = Mempool::new(Arc::clone(&blockchain), mempool_config.clone());
+    let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
     let mut hub = MockHub::new();
     let mock_id = MockId::new(hub.new_address().into());
 
