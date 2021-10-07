@@ -32,18 +32,23 @@ impl BlockchainDispatcher {
 impl BlockchainInterface for BlockchainDispatcher {
     type Error = Error;
 
+    /// Returns the block number for the current head.
     async fn get_block_number(&mut self) -> Result<u32, Error> {
         Ok(self.blockchain.read().block_number())
     }
 
+    /// Returns the batch number for the current head.
     async fn get_batch_number(&mut self) -> Result<u32, Error> {
         Ok(policy::batch_at(self.blockchain.read().block_number()))
     }
 
+    /// Returns the epoch number for the current head.
     async fn get_epoch_number(&mut self) -> Result<u32, Error> {
         Ok(policy::epoch_at(self.blockchain.read().block_number()))
     }
 
+    /// Tries to fetch a block given its hash. It has an option to include the transactions in the
+    /// block, which defaults to false.
     async fn get_block_by_hash(
         &mut self,
         hash: Blake2bHash,
@@ -63,6 +68,9 @@ impl BlockchainInterface for BlockchainDispatcher {
             .ok_or_else(|| Error::BlockNotFound(hash.into()))
     }
 
+    /// Tries to fetch a block given its number. It has an option to include the transactions in the
+    /// block, which defaults to false. Note that this function will only fetch blocks that are part
+    /// of the main chain.
     async fn get_block_by_number(
         &mut self,
         block_number: u32,
@@ -81,6 +89,8 @@ impl BlockchainInterface for BlockchainDispatcher {
         ))
     }
 
+    /// Returns the block at the head of the main chain. It has an option to include the
+    /// transactions in the block, which defaults to false.
     async fn get_latest_block(
         &mut self,
         include_transactions: Option<bool>,
@@ -95,6 +105,9 @@ impl BlockchainInterface for BlockchainDispatcher {
         ))
     }
 
+    /// Returns the information for the slot owner at the given block height and view number. The
+    /// view number is optional, it will default to getting the view number for the existing block
+    /// at the given height.
     async fn get_slot_at(
         &mut self,
         block_number: u32,
@@ -115,6 +128,8 @@ impl BlockchainInterface for BlockchainDispatcher {
         Ok(Slot::from(blockchain.deref(), block_number, view_number))
     }
 
+    /// Tries to fetch a transaction (including reward transactions) given its hash. It has an option
+    /// to also search the mempool for the transaction, it defaults to false.
     async fn get_transaction_by_hash(
         &mut self,
         hash: Blake2bHash,
@@ -157,6 +172,8 @@ impl BlockchainInterface for BlockchainDispatcher {
         }
     }
 
+    /// Returns all the transactions (including reward transactions) for the given block number. Note
+    /// that this only considers blocks in the main chain.
     async fn get_transactions_by_block_number(
         &mut self,
         block_number: u32,
@@ -193,6 +210,8 @@ impl BlockchainInterface for BlockchainDispatcher {
         Ok(transactions)
     }
 
+    /// Returns all the inherents (including reward inherents) for the given block number. Note
+    /// that this only considers blocks in the main chain.
     async fn get_inherents_by_block_number(
         &mut self,
         block_number: u32,
@@ -224,6 +243,8 @@ impl BlockchainInterface for BlockchainDispatcher {
         Ok(inherents)
     }
 
+    /// Returns all the transactions (including reward transactions) for the given batch number. Note
+    /// that this only considers blocks in the main chain.
     async fn get_batch_transactions(
         &mut self,
         batch_number: u32,
@@ -264,6 +285,8 @@ impl BlockchainInterface for BlockchainDispatcher {
         Ok(transactions)
     }
 
+    /// Returns all the inherents (including reward inherents) for the given batch number. Note
+    /// that this only considers blocks in the main chain.
     async fn get_batch_inherents(&mut self, batch_number: u32) -> Result<Vec<Inherent>, Error> {
         let blockchain = self.blockchain.read();
 
@@ -315,6 +338,10 @@ impl BlockchainInterface for BlockchainDispatcher {
             .collect())
     }
 
+    /// Returns the hashes for the latest transactions for a given address. All the transactions
+    /// where the given address is listed as a recipient or as a sender are considered. Reward
+    /// transactions are also returned. It has an option to specify the maximum number of hashes to
+    /// fetch, it defaults to 500.
     async fn get_transaction_hashes_by_address(
         &mut self,
         address: Address,
@@ -327,6 +354,10 @@ impl BlockchainInterface for BlockchainDispatcher {
             .get_tx_hashes_by_address(&address, max.unwrap_or(500), None))
     }
 
+    /// Returns the latest transactions for a given address. All the transactions
+    /// where the given address is listed as a recipient or as a sender are considered. Reward
+    /// transactions are also returned. It has an option to specify the maximum number of transactions
+    /// to fetch, it defaults to 500.
     async fn get_transactions_by_address(
         &mut self,
         address: Address,
@@ -378,6 +409,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         Ok(txs)
     }
 
+    /// Tries to fetch the account at the given address.
     async fn get_account(&mut self, address: Address) -> Result<Account, Error> {
         let result = self.blockchain.read().get_account(&address);
 
@@ -387,6 +419,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         }
     }
 
+    /// Returns a map of the currently active validator's addresses and balances.
     async fn get_active_validators(&mut self) -> Result<HashMap<Address, Coin>, Error> {
         let staking_contract = self.blockchain.read().get_staking_contract();
 
@@ -399,6 +432,8 @@ impl BlockchainInterface for BlockchainDispatcher {
         Ok(active_validators)
     }
 
+    /// Returns information about the currently slashed slots. This includes slots that lost rewards
+    /// and that were disabled.
     async fn get_current_slashed_sets(&mut self) -> Result<SlashedSlots, Self::Error> {
         let blockchain = self.blockchain.read();
 
@@ -413,6 +448,8 @@ impl BlockchainInterface for BlockchainDispatcher {
         })
     }
 
+    /// Returns information about the slashed slots of the previous batch. This includes slots that
+    /// lost rewards and that were disabled.
     async fn get_previous_slashed_sets(&mut self) -> Result<SlashedSlots, Self::Error> {
         let blockchain = self.blockchain.read();
 
@@ -427,6 +464,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         })
     }
 
+    /// Returns information about the currently parked validators.
     async fn get_parked_set(&mut self) -> Result<ParkedSet, Self::Error> {
         let blockchain = self.blockchain.read();
 
@@ -440,6 +478,8 @@ impl BlockchainInterface for BlockchainDispatcher {
         })
     }
 
+    /// Tries to fetch a validator information given its address. It has an option to include a map
+    /// containing the addresses and stakes of all the stakers that are delegating to the validator.
     async fn get_validator_by_address(
         &mut self,
         address: Address,
@@ -476,6 +516,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         Ok(Validator::from_validator(&validator.unwrap(), stakers))
     }
 
+    /// Tries to fetch a staker information given its address.
     async fn get_staker_by_address(&mut self, address: Address) -> Result<Staker, Error> {
         let blockchain = self.blockchain.read();
 
@@ -489,6 +530,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         }
     }
 
+    /// Subscribes to blockchain events.
     #[stream]
     async fn head_subscribe(&mut self) -> Result<BoxStream<'static, Blake2bHash>, Error> {
         let stream = self.blockchain.write().notifier.as_stream();

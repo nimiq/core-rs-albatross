@@ -22,16 +22,19 @@ impl ValidatorDispatcher {
 impl ValidatorInterface for ValidatorDispatcher {
     type Error = Error;
 
+    /// Returns our validator address.
     async fn get_address(&mut self) -> Result<Address, Self::Error> {
         Ok(self.validator.validator_address.read().clone())
     }
 
+    /// Returns our validator warm key.
     async fn get_warm_key(&mut self) -> Result<String, Self::Error> {
         Ok(hex::encode(
             self.validator.warm_key.read().private.serialize_to_vec(),
         ))
     }
 
+    /// Returns our validator hot key (also called the signing key).
     async fn get_hot_key(&mut self) -> Result<String, Self::Error> {
         Ok(hex::encode(
             self.validator
