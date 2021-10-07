@@ -37,8 +37,10 @@ impl ConsensusDispatcher {
 
     async fn push_transaction(&self, tx: Transaction) -> Result<Blake2bHash, Error> {
         let txid = tx.hash::<Blake2bHash>();
-        //Fixme, this needs to go trough the network
-        Ok(txid)
+        match self.consensus.send_transaction(tx).await {
+            Ok(_) => Ok(txid),
+            Err(e) => Err(Error::NetworkError(e)),
+        }
     }
 
     fn get_wallet_keypair(&self, address: &Address) -> Result<KeyPair, Error> {
