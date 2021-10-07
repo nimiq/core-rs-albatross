@@ -70,17 +70,35 @@ enum MempoolState {
     Inactive,
 }
 
+pub struct ValidatorProxy {
+    pub validator_address: Arc<RwLock<Address>>,
+    pub cold_key: Arc<RwLock<KeyPair>>,
+    pub warm_key: Arc<RwLock<KeyPair>>,
+    pub signing_key: Arc<RwLock<bls::KeyPair>>,
+}
+
+impl Clone for ValidatorProxy {
+    fn clone(&self) -> Self {
+        Self {
+            validator_address: Arc::clone(&self.validator_address),
+            cold_key: Arc::clone(&self.cold_key),
+            warm_key: Arc::clone(&self.warm_key),
+            signing_key: Arc::clone(&self.signing_key),
+        }
+    }
+}
+
 pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork + 'static> {
     pub consensus: ConsensusProxy<TNetwork>,
     network: Arc<TValidatorNetwork>,
 
-    signing_key: bls::KeyPair,
     database: Database,
     env: Environment,
 
-    validator_address: Address,
-    cold_key: KeyPair,
-    warm_key: KeyPair,
+    validator_address: Arc<RwLock<Address>>,
+    cold_key: Arc<RwLock<KeyPair>>,
+    warm_key: Arc<RwLock<KeyPair>>,
+    signing_key: Arc<RwLock<bls::KeyPair>>,
 
     proposal_receiver: ProposalReceiver<TValidatorNetwork>,
 
@@ -153,13 +171,13 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             consensus: consensus.proxy(),
             network,
 
-            signing_key,
             database,
             env,
 
-            validator_address: Address::from(&cold_key),
-            cold_key,
-            warm_key,
+            validator_address: Arc::new(RwLock::new(Address::from(&cold_key))),
+            cold_key: Arc::new(RwLock::new(cold_key)),
+            warm_key: Arc::new(RwLock::new(warm_key)),
+            signing_key: Arc::new(RwLock::new(signing_key)),
 
             proposal_receiver,
 
@@ -216,12 +234,9 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             .current_validators()
             .unwrap();
 
-        // TODO: This code block gets this validators position in the validators struct by searching it
-        //  with its public key. This is an insane way of doing this. Just start saving the validator
-        //  id in the Validator struct (the one in this crate).
         self.epoch_state = None;
         for (i, validator) in validators.iter().enumerate() {
-            if validator.public_key.compressed() == &self.signing_key.public_key.compress() {
+            if validator.validator_address == self.validator_address() {
                 self.epoch_state = Some(ActiveEpochState {
                     validator_id: i as u16,
                 });
@@ -233,7 +248,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             .iter()
             .map(|validator| validator.public_key.compressed().clone())
             .collect();
-        let key = self.signing_key.clone();
+        let key = self.signing_key();
         let network = Arc::clone(&self.network);
 
         // TODO might better be done without the task.
@@ -266,7 +281,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                 let block_producer = BlockProducer::new(
                     Arc::clone(&self.consensus.blockchain),
                     Arc::clone(&mempool),
-                    self.signing_key.clone(),
+                    self.signing_key(),
                 );
 
                 // Take the current state and see if it is applicable to the current height.
@@ -291,7 +306,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                     Arc::clone(&self.consensus.blockchain),
                     Arc::clone(&self.network),
                     block_producer,
-                    self.signing_key.clone(),
+                    self.signing_key(),
                     self.validator_id(),
                     state,
                     proposal_stream,
@@ -312,7 +327,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                     Arc::clone(&self.consensus.blockchain),
                     Arc::clone(&mempool),
                     Arc::clone(&self.network),
-                    self.signing_key.clone(),
+                    self.signing_key(),
                     self.validator_id(),
                     fork_proofs,
                     self.micro_state.view_number,
@@ -504,19 +519,19 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         let staking_contract = StakingContract::get_staking_contract(accounts_tree, &db_txn);
         if staking_contract
             .parked_set
-            .contains(&self.validator_address)
+            .contains(&self.validator_address())
             || staking_contract
                 .current_disabled_slots
-                .contains_key(&self.validator_address)
+                .contains_key(&self.validator_address())
             || staking_contract
                 .previous_disabled_slots
-                .contains_key(&self.validator_address)
+                .contains_key(&self.validator_address())
         {
             return ValidatorStakingState::Parked;
         }
 
         if let Some(validator) =
-            StakingContract::get_validator(accounts_tree, &db_txn, &self.validator_address)
+            StakingContract::get_validator(accounts_tree, &db_txn, &self.validator_address())
         {
             if validator.inactivity_flag.is_some() {
                 return ValidatorStakingState::Inactive;
@@ -538,9 +553,9 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         let validity_start_height = policy::macro_block_before(blockchain.block_number());
 
         let unpark_transaction = TransactionBuilder::new_unpark_validator(
-            &self.cold_key,
-            self.validator_address.clone(),
-            &self.warm_key,
+            &self.cold_key(),
+            self.validator_address(),
+            &self.warm_key(),
             Coin::ZERO,
             validity_start_height,
             blockchain.network_id(),
@@ -564,15 +579,19 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
     }
 
     pub fn signing_key(&self) -> bls::KeyPair {
-        self.signing_key.clone()
+        self.signing_key.read().clone()
+    }
+
+    pub fn validator_address(&self) -> Address {
+        self.validator_address.read().clone()
     }
 
     pub fn cold_key(&self) -> KeyPair {
-        self.cold_key.clone()
+        self.cold_key.read().clone()
     }
 
     pub fn warm_key(&self) -> KeyPair {
-        self.warm_key.clone()
+        self.warm_key.read().clone()
     }
 }
 
