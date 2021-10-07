@@ -3,8 +3,9 @@ use std::collections::HashMap;
 use std::io::Error;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU32, Ordering as AtomicOrdering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
+use futures::future::{AbortHandle, Abortable};
 use futures::task::{Context, Poll};
 use futures::{stream::BoxStream, Future, StreamExt};
 use keyed_priority_queue::KeyedPriorityQueue;
@@ -56,6 +57,9 @@ pub struct Mempool {
 
     // Mempool filter
     filter: Arc<RwLock<MempoolFilter>>,
+
+    // Mempool executor handle used to stop the executor
+    executor_handle: Mutex<Option<AbortHandle>>,
 }
 
 impl Mempool {
@@ -75,10 +79,16 @@ impl Mempool {
                 config.filter_rules,
                 config.filter_limit,
             ))),
+            executor_handle: Mutex::new(None),
         }
     }
 
-    pub async fn subscribe<N: Network>(&self, network: Arc<N>) {
+    pub async fn start_executor<N: Network>(&self, network: Arc<N>) {
+        if self.executor_handle.lock().unwrap().is_some() {
+            //If we already have an executor running, dont do anything
+            return;
+        }
+
         let network_id = self.blockchain.read().network_id;
         let mempool_executor = MempoolExecutor::new(
             Arc::clone(&self.blockchain),
@@ -88,17 +98,28 @@ impl Mempool {
             network_id,
         )
         .await;
-        tokio::spawn(mempool_executor);
+
+        // Start the executor and obtain its handle
+        let (abort_handle, abort_registration) = AbortHandle::new_pair();
+        let _ = Abortable::new(tokio::spawn(mempool_executor), abort_registration);
+
+        //Set the executor handle
+        *self.executor_handle.lock().unwrap() = Some(abort_handle);
     }
 
     pub fn is_filtered(&self, hash: &Blake2bHash) -> bool {
         self.filter.read().blacklisted(hash)
     }
 
-    pub async fn subscribe_with_txn_stream<N: Network>(
+    pub async fn start_executor_with_txn_stream<N: Network>(
         &self,
         txn_stream: BoxStream<'static, (Transaction, <N as Network>::PubsubId)>,
     ) {
+        if self.executor_handle.lock().unwrap().is_some() {
+            //If we already have an executor running, dont do anything
+            return;
+        }
+
         let network_id = self.blockchain.read().network_id;
         let mempool_executor = MempoolExecutor::<N>::with_txn_stream(
             Arc::clone(&self.blockchain),
@@ -107,11 +128,25 @@ impl Mempool {
             network_id,
             txn_stream,
         );
-        tokio::spawn(mempool_executor);
+
+        // Start the executor and obtain its handle
+        let (abort_handle, abort_registration) = AbortHandle::new_pair();
+        let _ = Abortable::new(tokio::spawn(mempool_executor), abort_registration);
+
+        //Set the executor handle
+        *self.executor_handle.lock().unwrap() = Some(abort_handle);
     }
 
-    pub async fn unsuscribe<N: Network>(&self, network: Arc<N>) {
-        // TODO: Implement this function
+    pub fn stop_executor(&self) {
+        let mut handle = self.executor_handle.lock().unwrap();
+
+        if handle.is_none() {
+            //If there isnt any executor running we return
+            return;
+        }
+
+        // Stop the executor
+        handle.take().expect("Expected an executor handle").abort();
     }
 
     // Return the highest fee per byte up to max_count transactions and removes them from the mempool
@@ -475,8 +510,6 @@ impl<N: Network> Future for MempoolExecutor<N> {
     type Output = ();
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        log::debug!("Mempool future, poll function");
-
         while let Poll::Ready(Some((tx, _pubsub_id))) = self.txn_stream.as_mut().poll_next_unpin(cx)
         {
             log::debug!("Received new transaction");

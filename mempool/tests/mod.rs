@@ -49,7 +49,7 @@ async fn send_txn_to_mempool(
 
     // Subscribe mempool with the mpsc stream created
     mempool
-        .subscribe_with_txn_stream::<MockNetwork>(Box::pin(txn_stream_rx))
+        .start_executor_with_txn_stream::<MockNetwork>(Box::pin(txn_stream_rx))
         .await;
 
     // Send the transactions
@@ -67,6 +67,7 @@ async fn send_txn_to_mempool(
     loop {
         let now = tokio::time::Instant::now();
         if now - start_time >= timeout {
+            mempool.stop_executor();
             break;
         }
         tokio::task::yield_now().await;
