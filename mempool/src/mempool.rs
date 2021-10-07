@@ -103,7 +103,7 @@ impl Mempool {
         let (abort_handle, abort_registration) = AbortHandle::new_pair();
         let _ = Abortable::new(tokio::spawn(mempool_executor), abort_registration);
 
-        //Set the executor handle
+        // Set the executor handle
         *self.executor_handle.lock().unwrap() = Some(abort_handle);
     }
 
@@ -116,7 +116,7 @@ impl Mempool {
         txn_stream: BoxStream<'static, (Transaction, <N as Network>::PubsubId)>,
     ) {
         if self.executor_handle.lock().unwrap().is_some() {
-            //If we already have an executor running, dont do anything
+            // If we already have an executor running, don't do anything
             return;
         }
 
@@ -133,7 +133,7 @@ impl Mempool {
         let (abort_handle, abort_registration) = AbortHandle::new_pair();
         let _ = Abortable::new(tokio::spawn(mempool_executor), abort_registration);
 
-        //Set the executor handle
+        // Set the executor handle
         *self.executor_handle.lock().unwrap() = Some(abort_handle);
     }
 
@@ -141,7 +141,7 @@ impl Mempool {
         let mut handle = self.executor_handle.lock().unwrap();
 
         if handle.is_none() {
-            //If there isnt any executor running we return
+            // If there isn't any executor running we return
             return;
         }
 
