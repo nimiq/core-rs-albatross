@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
+use nimiq_network_interface::network::Network as InterfaceNetwork;
 use nimiq_network_libp2p::Network;
 use nimiq_rpc_interface::network::NetworkInterface;
 

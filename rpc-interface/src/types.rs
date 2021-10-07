@@ -16,7 +16,6 @@ use nimiq_bls::{CompressedPublicKey, CompressedSignature};
 use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
-use nimiq_network_libp2p::PeerId;
 use nimiq_primitives::policy;
 use nimiq_primitives::slots::Validators;
 use nimiq_primitives::{account::AccountType, coin::Coin};

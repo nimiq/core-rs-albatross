@@ -202,19 +202,19 @@ impl Command {
                     Some(BlockNumberOrHash::Hash(hash)) => {
                         client
                             .blockchain
-                            .get_block_by_hash(hash, include_transactions)
+                            .get_block_by_hash(hash, Some(include_transactions))
                             .await
                     }
                     Some(BlockNumberOrHash::Number(number)) => {
                         client
                             .blockchain
-                            .get_block_by_number(number, include_transactions)
+                            .get_block_by_number(number, Some(include_transactions))
                             .await
                     }
                     None => {
                         client
                             .blockchain
-                            .get_latest_block(include_transactions)
+                            .get_latest_block(Some(include_transactions))
                             .await
                     }
                 }?;
@@ -223,7 +223,7 @@ impl Command {
             }
 
             Command::Stakes {} => {
-                let stakes = client.blockchain.list_stakes().await?;
+                let stakes = client.blockchain.get_active_validators().await?;
                 println!("{:#?}", stakes);
             }
 
@@ -232,7 +232,10 @@ impl Command {
 
                 while let Some(block_hash) = stream.next().await {
                     if show_block {
-                        let block = client.blockchain.get_block_by_hash(block_hash, false).await;
+                        let block = client
+                            .blockchain
+                            .get_block_by_hash(block_hash, Some(false))
+                            .await;
                         println!("{:#?}", block);
                     } else {
                         println!("{}", block_hash);
@@ -367,13 +370,27 @@ impl Command {
                     if dry {
                         let tx = client
                             .consensus
-                            .create_retire_transaction(wallet, value, fee, validity_start_height)
+                            .create_retire_transaction(
+                                None,
+                                None,
+                                wallet,
+                                value,
+                                fee,
+                                validity_start_height,
+                            )
                             .await?;
                         println!("{}", tx);
                     } else {
                         let txid = client
                             .consensus
-                            .send_retire_transaction(wallet, value, fee, validity_start_height)
+                            .send_retire_transaction(
+                                None,
+                                None,
+                                wallet,
+                                value,
+                                fee,
+                                validity_start_height,
+                            )
                             .await?;
                         println!("{}", txid);
                     }
@@ -390,6 +407,8 @@ impl Command {
                         let tx = client
                             .consensus
                             .create_reactivate_transaction(
+                                None,
+                                None,
                                 wallet,
                                 value,
                                 fee,
@@ -400,7 +419,14 @@ impl Command {
                     } else {
                         let txid = client
                             .consensus
-                            .send_reactivate_transaction(wallet, value, fee, validity_start_height)
+                            .send_reactivate_transaction(
+                                None,
+                                None,
+                                wallet,
+                                value,
+                                fee,
+                                validity_start_height,
+                            )
                             .await?;
                         println!("{}", txid);
                     }
