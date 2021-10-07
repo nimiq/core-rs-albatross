@@ -1,8 +1,8 @@
-/*use std::convert::TryFrom;
+use std::convert::TryFrom;
 
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
-use nimiq_mempool::filter::{MempoolFilter, Rules};
+use nimiq_mempool::filter::{MempoolFilter, MempoolRules};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_transaction::Transaction;
@@ -29,7 +29,7 @@ fn it_can_blacklist_transactions() {
 
 #[test]
 fn it_accepts_and_rejects_transactions() {
-    let mut s: Rules = Rules::default();
+    let mut s = MempoolRules::default();
     s.tx_fee = Coin::try_from(1).unwrap();
 
     let f = MempoolFilter::new(s, MempoolFilter::DEFAULT_BLACKLIST_SIZE);
@@ -46,4 +46,4 @@ fn it_accepts_and_rejects_transactions() {
     assert!(!f.accepts_transaction(&tx));
     tx.fee = Coin::try_from(1).unwrap();
     assert!(f.accepts_transaction(&tx));
-}*/
+}

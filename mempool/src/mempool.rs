@@ -12,7 +12,7 @@ use keyed_priority_queue::KeyedPriorityQueue;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 
 use beserial::Serialize;
-use nimiq_account::Account;
+use nimiq_account::{Account, BasicAccount};
 use nimiq_block::Block;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_hash::{Blake2bHash, Hash};
@@ -523,9 +523,10 @@ impl<N: Network> Future for MempoolExecutor<N> {
 
             // Obtain the network id from the blockchain
             let network_id = self.network_id;
-            let blockchain = self.blockchain.clone();
-            let tasks_count = self.verification_tasks.clone();
-            let mempool_state = self.state.clone();
+            let blockchain = Arc::clone(&self.blockchain);
+            let tasks_count = Arc::clone(&self.verification_tasks);
+            let mempool_state = Arc::clone(&self.state);
+            let filter = Arc::clone(&self.filter);
 
             // Check if we already know the transaction
             {
@@ -609,30 +610,72 @@ impl<N: Network> Future for MempoolExecutor<N> {
                     return ReturnCode::Invalid;
                 }
 
-                let blockchain_balance = sender_account.balance();
+                // Get recipient account to later check against filter rules.
+                let recipient_account = match blockchain.get_account(&tx.recipient) {
+                    None => Account::Basic(BasicAccount {
+                        balance: Coin::ZERO,
+                    }),
+                    Some(x) => x,
+                };
+
+                let blockchain_sender_balance = sender_account.balance();
+                let blockchain_recipient_balance = recipient_account.balance();
 
                 // Read the pending transactions balance
-                let mut current_balance = Coin::ZERO;
+                let mut sender_current_balance = Coin::ZERO;
+                let mut recipient_current_balance = blockchain_recipient_balance;
 
                 let mut mempool_state = mempool_state.write();
 
                 if let Some(sender_state) = mempool_state.state_by_sender.get_mut(&tx.sender) {
-                    current_balance = sender_state.total;
+                    sender_current_balance = sender_state.total;
                 }
-                // Calculate the new balance assuming we add this transaction to the mempool
-                let in_fly_balance = tx.total_value().unwrap() + current_balance;
+                if let Some(recipient_state) = mempool_state.state_by_sender.get_mut(&tx.recipient)
+                {
+                    // We found the recipient in the mempool. Subtract the mempool balance from the recipient balance
+                    recipient_current_balance -= recipient_state.total;
+                }
 
-                if in_fly_balance <= blockchain_balance {
+                // Calculate the new balance assuming we add this transaction to the mempool
+                let sender_in_fly_balance = tx.total_value().unwrap() + sender_current_balance;
+                let recipient_in_fly_balance =
+                    tx.total_value().unwrap() + recipient_current_balance;
+
+                // Check the balance against filters
+                // Do it in a separate scope to drop the lock.
+                {
+                    let filter = filter.read();
+                    if !filter.accepts_sender_balance(
+                        &tx,
+                        blockchain_sender_balance,
+                        sender_in_fly_balance,
+                    ) {
+                        log::debug!(
+                            "Transaction filtered: Not accepting transaction due to sender balance"
+                        );
+                        return ReturnCode::Filtered;
+                    }
+                    if !filter.accepts_recipient_balance(
+                        &tx,
+                        blockchain_recipient_balance,
+                        recipient_in_fly_balance,
+                    ) {
+                        log::debug!("Transaction filtered: Not accepting transaction due to recipient balance");
+                        return ReturnCode::Filtered;
+                    }
+                }
+
+                if sender_in_fly_balance <= blockchain_sender_balance {
                     log::debug!(" Accepting new transaction");
 
                     if let Some(sender_state) = mempool_state.state_by_sender.get_mut(&tx.sender) {
-                        sender_state.total = in_fly_balance;
+                        sender_state.total = sender_in_fly_balance;
                         sender_state.txns.insert(tx.hash(), tx.clone());
                     } else {
                         mempool_state.state_by_sender.insert(
                             tx.sender.clone(),
                             SenderPendingState {
-                                total: in_fly_balance,
+                                total: sender_in_fly_balance,
                                 txns: HashMap::new(),
                             },
                         );
