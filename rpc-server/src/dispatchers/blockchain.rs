@@ -434,7 +434,7 @@ impl BlockchainInterface for BlockchainDispatcher {
 
     /// Returns information about the currently slashed slots. This includes slots that lost rewards
     /// and that were disabled.
-    async fn get_current_slashed_sets(&mut self) -> Result<SlashedSlots, Self::Error> {
+    async fn get_current_slashed_slots(&mut self) -> Result<SlashedSlots, Self::Error> {
         let blockchain = self.blockchain.read();
 
         // FIXME: Race condition
@@ -450,7 +450,7 @@ impl BlockchainInterface for BlockchainDispatcher {
 
     /// Returns information about the slashed slots of the previous batch. This includes slots that
     /// lost rewards and that were disabled.
-    async fn get_previous_slashed_sets(&mut self) -> Result<SlashedSlots, Self::Error> {
+    async fn get_previous_slashed_slots(&mut self) -> Result<SlashedSlots, Self::Error> {
         let blockchain = self.blockchain.read();
 
         // FIXME: Race condition
