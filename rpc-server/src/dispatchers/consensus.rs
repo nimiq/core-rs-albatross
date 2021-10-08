@@ -36,15 +36,6 @@ impl ConsensusDispatcher {
         }
     }
 
-    /// Pushes the given transaction to the network.
-    async fn push_transaction(&self, tx: Transaction) -> Result<Blake2bHash, Error> {
-        let txid = tx.hash::<Blake2bHash>();
-        match self.consensus.send_transaction(tx).await {
-            Ok(_) => Ok(txid),
-            Err(e) => Err(Error::NetworkError(e)),
-        }
-    }
-
     /// Tries to fetch the key pair for the wallet with the given address.
     fn get_wallet_keypair(&self, address: &Address) -> Result<KeyPair, Error> {
         Ok(self
@@ -59,7 +50,7 @@ impl ConsensusDispatcher {
     }
 
     /// Returns the network ID for our current blockchain.
-    fn network_id(&self) -> NetworkId {
+    fn get_network_id(&self) -> NetworkId {
         self.consensus.blockchain.read().network_id
     }
 
@@ -106,8 +97,14 @@ impl ConsensusInterface for ConsensusDispatcher {
 
     /// Sends the given serialized transaction to the network.
     async fn send_raw_transaction(&mut self, raw_tx: String) -> Result<Blake2bHash, Error> {
-        let tx = Deserialize::deserialize_from_vec(&hex::decode(&raw_tx)?)?;
-        self.push_transaction(tx).await
+        let tx: Transaction = Deserialize::deserialize_from_vec(&hex::decode(&raw_tx)?)?;
+        let txid = tx.hash::<Blake2bHash>();
+
+        match self.consensus.send_transaction(tx).await {
+            Ok(ReturnCode::Accepted) => Ok(txid),
+            Ok(return_code) => Err(Error::TransactionRejected(return_code)),
+            Err(e) => Err(Error::NetworkError(e)),
+        }
     }
 
     /// Returns a serialized basic transaction.
@@ -120,12 +117,12 @@ impl ConsensusInterface for ConsensusDispatcher {
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Error> {
         let transaction = TransactionBuilder::new_simple(
-            &&self.get_wallet_keypair(&wallet)?,
+            &self.get_wallet_keypair(&wallet)?,
             recipient,
             value,
             fee,
             self.validity_start_height(validity_start_height),
-            self.network_id(),
+            self.get_network_id(),
         );
 
         Ok(transaction_to_hex_string(&transaction))
@@ -164,7 +161,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             value,
             fee,
             self.validity_start_height(validity_start_height),
-            self.network_id(),
+            self.get_network_id(),
         );
 
         Ok(transaction_to_hex_string(&transaction))
@@ -210,7 +207,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             value,
             fee,
             self.validity_start_height(validity_start_height),
-            self.network_id(),
+            self.get_network_id(),
         );
 
         Ok(transaction_to_hex_string(&transaction))
@@ -238,7 +235,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         self.send_raw_transaction(raw_tx).await
     }
 
-    /// Returns a serialized `update_staker` transaction. You can the transaction fee from a basic
+    /// Returns a serialized `update_staker` transaction. You can pay the transaction fee from a basic
     /// account (by providing the sender wallet) or from the staker account's active/inactive balance
     /// (by not providing the sender wallet and correctly setting the `from_active_balance` flag).
     async fn create_update_transaction(
@@ -262,13 +259,13 @@ impl ConsensusInterface for ConsensusDispatcher {
             new_delegation,
             fee,
             self.validity_start_height(validity_start_height),
-            self.network_id(),
+            self.get_network_id(),
         );
 
         Ok(transaction_to_hex_string(&transaction))
     }
 
-    /// Sends a `update_staker` transaction to the network. You can the transaction fee from a basic
+    /// Sends a `update_staker` transaction to the network. You can pay the transaction fee from a basic
     /// account (by providing the sender wallet) or from the staker account's active/inactive balance
     /// (by not providing the sender wallet and correctly setting the `from_active_balance` flag).
     async fn send_update_transaction(
@@ -293,7 +290,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         self.send_raw_transaction(raw_tx).await
     }
 
-    /// Returns a serialized `retire_staker` transaction. You can the transaction fee from a basic
+    /// Returns a serialized `retire_staker` transaction. You can pay the transaction fee from a basic
     /// account (by providing the sender wallet) or from the staker account's active/inactive balance
     /// (by not providing the sender wallet and correctly setting the `from_active_balance` flag).
     async fn create_retire_transaction(
@@ -317,13 +314,13 @@ impl ConsensusInterface for ConsensusDispatcher {
             value,
             fee,
             self.validity_start_height(validity_start_height),
-            self.network_id(),
+            self.get_network_id(),
         );
 
         Ok(transaction_to_hex_string(&transaction))
     }
 
-    /// Sends a `retire_staker` transaction to the network. You can the transaction fee from a basic
+    /// Sends a `retire_staker` transaction to the network. You can pay the transaction fee from a basic
     /// account (by providing the sender wallet) or from the staker account's active/inactive balance
     /// (by not providing the sender wallet and correctly setting the `from_active_balance` flag).
     async fn send_retire_transaction(
@@ -348,7 +345,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         self.send_raw_transaction(raw_tx).await
     }
 
-    /// Returns a serialized `reactivate_staker` transaction. You can the transaction fee from a basic
+    /// Returns a serialized `reactivate_staker` transaction. You can pay the transaction fee from a basic
     /// account (by providing the sender wallet) or from the staker account's active/inactive balance
     /// (by not providing the sender wallet and correctly setting the `from_active_balance` flag).
     async fn create_reactivate_transaction(
@@ -372,13 +369,13 @@ impl ConsensusInterface for ConsensusDispatcher {
             value,
             fee,
             self.validity_start_height(validity_start_height),
-            self.network_id(),
+            self.get_network_id(),
         );
 
         Ok(transaction_to_hex_string(&transaction))
     }
 
-    /// Sends a `reactivate_staker` transaction to the network. You can the transaction fee from a basic
+    /// Sends a `reactivate_staker` transaction to the network. You can pay the transaction fee from a basic
     /// account (by providing the sender wallet) or from the staker account's active/inactive balance
     /// (by not providing the sender wallet and correctly setting the `from_active_balance` flag).
     async fn send_reactivate_transaction(
@@ -419,7 +416,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             value,
             fee,
             self.validity_start_height(validity_start_height),
-            self.network_id(),
+            self.get_network_id(),
         );
 
         Ok(transaction_to_hex_string(&transaction))
@@ -442,12 +439,16 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     /// Returns a serialized `new_validator` transaction. You need to provide the address of a basic
-    /// account (the sender wallet) to pay the transaction fee.
+    /// account (the sender wallet) to pay the transaction fee and the validator deposit.
+    ///  Since JSON doesn't have a primitive for Option (it just has the null primitive), we can't
+    /// have a double Option. So we use the following work-around for the signal data:
+    ///  "" = Set the signal data field to None.
+    ///  "0x29a4b..." = Set the signal data field to Some(0x29a4b...).
     async fn create_new_validator_transaction(
         &mut self,
         sender_wallet: Address,
         validator_wallet: Address,
-        warm_key: Address,
+        warm_address: Address,
         hot_secret_key: String,
         reward_address: Address,
         signal_data: String,
@@ -473,25 +474,29 @@ impl ConsensusInterface for ConsensusDispatcher {
         let transaction = TransactionBuilder::new_create_validator(
             &self.get_wallet_keypair(&sender_wallet)?,
             &self.get_wallet_keypair(&validator_wallet)?,
-            warm_key,
+            warm_address,
             &hot_keypair,
             reward_address,
             signal_data,
             fee,
             self.validity_start_height(validity_start_height),
-            self.network_id(),
+            self.get_network_id(),
         );
 
         Ok(transaction_to_hex_string(&transaction))
     }
 
     /// Sends a `new_validator` transaction to the network. You need to provide the address of a basic
-    /// account (the sender wallet) to pay the transaction fee.
+    /// account (the sender wallet) to pay the transaction fee and the validator deposit.
+    ///  Since JSON doesn't have a primitive for Option (it just has the null primitive), we can't
+    /// have a double Option. So we use the following work-around for the signal data:
+    ///  "" = Set the signal data field to None.
+    ///  "0x29a4b..." = Set the signal data field to Some(0x29a4b...).
     async fn send_new_validator_transaction(
         &mut self,
         sender_wallet: Address,
         validator_wallet: Address,
-        warm_key: Address,
+        warm_address: Address,
         hot_secret_key: String,
         reward_address: Address,
         signal_data: String,
@@ -502,7 +507,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             .create_new_validator_transaction(
                 sender_wallet,
                 validator_wallet,
-                warm_key,
+                warm_address,
                 hot_secret_key,
                 reward_address,
                 signal_data,
@@ -515,6 +520,11 @@ impl ConsensusInterface for ConsensusDispatcher {
 
     /// Returns a serialized `update_validator` transaction. You need to provide the address of a basic
     /// account (the sender wallet) to pay the transaction fee.
+    ///  Since JSON doesn't have a primitive for Option (it just has the null primitive), we can't
+    /// have a double Option. So we use the following work-around for the signal data:
+    ///  null = No change in the signal data field.
+    ///  "" = Change the signal data field to None.
+    ///  "0x29a4b..." = Change the signal data field to Some(0x29a4b...).
     async fn create_update_validator_transaction(
         &mut self,
         sender_wallet: Address,
@@ -563,7 +573,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             new_signal_data,
             fee,
             self.validity_start_height(validity_start_height),
-            self.network_id(),
+            self.get_network_id(),
         );
 
         Ok(transaction_to_hex_string(&transaction))
@@ -571,6 +581,11 @@ impl ConsensusInterface for ConsensusDispatcher {
 
     /// Sends a `update_validator` transaction to the network. You need to provide the address of a basic
     /// account (the sender wallet) to pay the transaction fee.
+    ///  Since JSON doesn't have a primitive for Option (it just has the null primitive), we can't
+    /// have a double Option. So we use the following work-around for the signal data:
+    ///  null = No change in the signal data field.
+    ///  "" = Change the signal data field to None.
+    ///  "0x29a4b..." = Change the signal data field to Some(0x29a4b...).
     async fn send_update_validator_transaction(
         &mut self,
         sender_wallet: Address,
@@ -617,7 +632,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             &warm_key_pair,
             fee,
             self.validity_start_height(validity_start_height),
-            self.network_id(),
+            self.get_network_id(),
         );
 
         Ok(transaction_to_hex_string(&transaction))
@@ -665,7 +680,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             &warm_key_pair,
             fee,
             self.validity_start_height(validity_start_height),
-            self.network_id(),
+            self.get_network_id(),
         );
 
         Ok(transaction_to_hex_string(&transaction))
@@ -713,7 +728,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             &warm_key_pair,
             fee,
             self.validity_start_height(validity_start_height),
-            self.network_id(),
+            self.get_network_id(),
         );
 
         Ok(transaction_to_hex_string(&transaction))
@@ -755,7 +770,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             &self.get_wallet_keypair(&validator_wallet)?,
             fee,
             self.validity_start_height(validity_start_height),
-            self.network_id(),
+            self.get_network_id(),
         );
 
         Ok(transaction_to_hex_string(&transaction))

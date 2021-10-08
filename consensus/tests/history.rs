@@ -25,7 +25,7 @@ use nimiq_test_utils::blockchain::produce_macro_blocks;
 use nimiq_utils::time::OffsetTime;
 
 pub struct MockHistorySyncStream<TNetwork: Network> {
-    network: Arc<TNetwork>,
+    _network: Arc<TNetwork>,
 }
 
 impl<TNetwork: Network> HistorySyncStream<TNetwork::PeerType> for MockHistorySyncStream<TNetwork> {
@@ -93,7 +93,7 @@ async fn peers_can_sync() {
         blockchain2,
         Arc::clone(&net2),
         Box::pin(MockHistorySyncStream {
-            network: Arc::clone(&net2),
+            _network: Arc::clone(&net2),
         }),
     )
     .await;
@@ -215,7 +215,7 @@ async fn sync_ingredients() {
         blockchain1,
         Arc::clone(&net1),
         Box::pin(MockHistorySyncStream {
-            network: Arc::clone(&net1),
+            _network: Arc::clone(&net1),
         }),
     )
     .await;
@@ -233,7 +233,7 @@ async fn sync_ingredients() {
         blockchain2,
         Arc::clone(&net2),
         Box::pin(MockHistorySyncStream {
-            network: Arc::clone(&net2),
+            _network: Arc::clone(&net2),
         }),
     )
     .await;

@@ -91,9 +91,9 @@ pub trait BlockchainInterface {
 
     async fn get_active_validators(&mut self) -> Result<HashMap<Address, Coin>, Self::Error>;
 
-    async fn get_current_slashed_sets(&mut self) -> Result<SlashedSlots, Self::Error>;
+    async fn get_current_slashed_slots(&mut self) -> Result<SlashedSlots, Self::Error>;
 
-    async fn get_previous_slashed_sets(&mut self) -> Result<SlashedSlots, Self::Error>;
+    async fn get_previous_slashed_slots(&mut self) -> Result<SlashedSlots, Self::Error>;
 
     async fn get_parked_set(&mut self) -> Result<ParkedSet, Self::Error>;
 
