@@ -3,6 +3,7 @@ use nimiq_hash::Blake2bHash;
 use nimiq_primitives::coin::Coin;
 use nimiq_transaction::{Transaction, TransactionFlags};
 
+/// Struct defining a Mempool filter
 #[derive(Debug)]
 pub struct MempoolFilter {
     blacklist: LimitHashSet<Blake2bHash>,
@@ -10,8 +11,10 @@ pub struct MempoolFilter {
 }
 
 impl MempoolFilter {
+    /// Constant defining the default size for the blacklist
     pub const DEFAULT_BLACKLIST_SIZE: usize = 25000;
 
+    /// Creates a new MempoolFilter
     pub fn new(rules: MempoolRules, blacklist_limit: usize) -> Self {
         MempoolFilter {
             blacklist: LimitHashSet::new(blacklist_limit),
@@ -19,20 +22,34 @@ impl MempoolFilter {
         }
     }
 
+    /// Blacklists a new transaction given its hash
     pub fn blacklist(&mut self, hash: Blake2bHash) -> &mut Self {
         self.blacklist.insert(hash);
         self
     }
 
+    /// Removes a transaction from the blacklist
     pub fn remove(&mut self, hash: &Blake2bHash) -> &mut Self {
         self.blacklist.remove(hash);
         self
     }
 
+    /// Checks wether a transaction is blacklisted
     pub fn blacklisted(&self, hash: &Blake2bHash) -> bool {
         self.blacklist.contains(hash)
     }
 
+    /// Checks wether a transaction is accepted according to the general Mempool filter rules
+    ///
+    /// The following rules are checked in this function:
+    /// - tx_fee
+    /// - tx_value
+    /// - tx_value_total
+    /// - tx_fee_per_byte
+    /// - contract_fee
+    /// - contract_fee
+    /// - contract_fee_per_byte
+    /// - contract_value
     pub fn accepts_transaction(&self, tx: &Transaction) -> bool {
         tx.fee >= self.rules.tx_fee &&
              tx.value >= self.rules.tx_value &&
@@ -47,6 +64,7 @@ impl MempoolFilter {
          )
     }
 
+    /// Checks wether a transaction is accepted according to the Mempool filter rules for the recipient balance
     pub fn accepts_recipient_balance(
         &self,
         tx: &Transaction,
@@ -64,6 +82,7 @@ impl MempoolFilter {
             )
     }
 
+    /// Checks wether a transaction is accepted according to the Mempool filter rules for the sender balance
     pub fn accepts_sender_balance(
         &self,
         _tx: &Transaction,
@@ -83,19 +102,32 @@ impl Default for MempoolFilter {
     }
 }
 
+/// Struct defining a Mempool rule
 #[derive(Debug, Clone)]
 pub struct MempoolRules {
+    /// Transaction fee
     pub tx_fee: Coin,
+    /// Transaction fee per byte
     pub tx_fee_per_byte: f64,
+    /// Transaction value
     pub tx_value: Coin,
+    /// Transaction total value
     pub tx_value_total: Coin,
+    /// Contract fee
     pub contract_fee: Coin,
+    /// Contract fee per byte
     pub contract_fee_per_byte: f64,
+    /// Contract value
     pub contract_value: Coin,
+    /// Creation fee
     pub creation_fee: Coin,
+    /// Creation fee per byte
     pub creation_fee_per_byte: f64,
+    /// Creation value
     pub creation_value: Coin,
+    /// Recipient balance
     pub recipient_balance: Coin,
+    /// Sender balance
     pub sender_balance: Coin,
 }
 

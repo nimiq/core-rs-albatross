@@ -1,8 +1,11 @@
 use crate::filter::{MempoolFilter, MempoolRules};
 
+/// Struct defining a Mempool configuration
 #[derive(Debug, Clone)]
 pub struct MempoolConfig {
+    /// Mempool filter rules
     pub filter_rules: MempoolRules,
+    /// Mempool filter limit or size
     pub filter_limit: usize,
 }
 

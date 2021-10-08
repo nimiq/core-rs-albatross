@@ -27,6 +27,7 @@ use crate::filter::MempoolFilter;
 
 const CONCURRENT_VERIF_TASKS: u32 = 1000;
 
+/// Transaction topic for the MempoolExecutor to request transactions from the network
 #[derive(Clone, Debug, Default)]
 pub struct TransactionTopic;
 
@@ -38,31 +39,40 @@ impl Topic for TransactionTopic {
     const VALIDATE: bool = true;
 }
 
+/// Return code for the Mempool executor future
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ReturnCode {
+    /// Fee is too low
     FeeTooLow,
+    /// Transaction is invalid
     Invalid,
+    /// Transaction is accepted
     Accepted,
+    /// TRansaction is already known
     Known,
+    /// Transaction is filtered
     Filtered,
+    /// Transaction signature is correct
     SignOk,
 }
 
+/// Struct defining the Mempool
 pub struct Mempool {
-    // Blockchain reference
+    /// Blockchain reference
     blockchain: Arc<RwLock<Blockchain>>,
 
-    // The mempool state: the data structure where the transactions are stored
+    /// The mempool state: the data structure where the transactions are stored
     state: Arc<RwLock<MemPoolState>>,
 
-    // Mempool filter
+    /// Mempool filter
     filter: Arc<RwLock<MempoolFilter>>,
 
-    // Mempool executor handle used to stop the executor
+    /// Mempool executor handle used to stop the executor
     executor_handle: Mutex<Option<AbortHandle>>,
 }
 
 impl Mempool {
+    /// Creates a new mempool
     pub fn new(blockchain: Arc<RwLock<Blockchain>>, config: MempoolConfig) -> Self {
         let state = MemPoolState {
             transactions_by_fee: KeyedPriorityQueue::new(),
@@ -83,9 +93,13 @@ impl Mempool {
         }
     }
 
+    /// Starts the mempool executor
+    ///
+    /// Once this function is called, the mempool executor is spawned.
+    /// The executor will subscribe to the transaction topic from the the network.
     pub async fn start_executor<N: Network>(&self, network: Arc<N>) {
         if self.executor_handle.lock().unwrap().is_some() {
-            //If we already have an executor running, dont do anything
+            // If we already have an executor running, don't do anything
             return;
         }
 
@@ -107,10 +121,16 @@ impl Mempool {
         *self.executor_handle.lock().unwrap() = Some(abort_handle);
     }
 
+    /// Checks wether a transaction has is filtered
     pub fn is_filtered(&self, hash: &Blake2bHash) -> bool {
         self.filter.read().blacklisted(hash)
     }
 
+    /// Starts the mempool executor with a custom transaction stream
+    ///
+    /// Once this function is called, the mempool executor is spawned.
+    /// The executor won't subscribe to the transaction topic from the network but will use the provided transaction
+    /// stream instead.
     pub async fn start_executor_with_txn_stream<N: Network>(
         &self,
         txn_stream: BoxStream<'static, (Transaction, <N as Network>::PubsubId)>,
@@ -137,6 +157,9 @@ impl Mempool {
         *self.executor_handle.lock().unwrap() = Some(abort_handle);
     }
 
+    /// Stops the mempool executor
+    ///
+    /// This functions should only be called only after one of the functions to start the executor is called.
     pub fn stop_executor(&self) {
         let mut handle = self.executor_handle.lock().unwrap();
 
@@ -149,7 +172,9 @@ impl Mempool {
         handle.take().expect("Expected an executor handle").abort();
     }
 
-    // Return the highest fee per byte up to max_count transactions and removes them from the mempool
+    /// Returns a vector with accepted transactions from the mempool.
+    ///
+    /// Returns the highest fee per byte up to max_bytes transactions and removes them from the mempool
     pub fn get_transactions(&self, max_bytes: usize) -> Result<Vec<Transaction>, Error> {
         let mut tx_vec = vec![];
 
@@ -210,18 +235,20 @@ impl Mempool {
         Ok(tx_vec)
     }
 
-    // During a Blockchain extend event a new block is mined which implies that
-    //
-    //      1. Existing transactions in the mempool can become invalidated because:
-    //          A. They are no longer valid at the new block height (aging)
-    //          B. Some were already mined
-    //
-    //      2. A transaction, that we didn't know about, from a known sender could be included in the blockchain, which implies:
-    //          A. We need to update the sender balances in our mempool because some txns in or mempool could become invalid
-    //
-    //      1.B and 2.A can be iterated over the txs in the adopted blocks, that is, it is not
-    //      necessary to iterate all transactions in the mempool
-    //
+    /// Updates the mempool given a set of reverted and adopted blocks.
+    ///
+    /// During a Blockchain extend event a new block is mined which implies that:
+    ///
+    /// 1. Existing transactions in the mempool can become invalidated because:
+    ///     A. They are no longer valid at the new block height (aging)
+    ///     B. Some were already mined
+    ///
+    /// 2. A transaction, that we didn't know about, from a known sender could be included in the blockchain, which implies:
+    ///     A. We need to update the sender balances in our mempool because some txns in or mempool could become invalid
+    ///
+    /// 1.B and 2.A can be iterated over the txs in the adopted blocks, that is, it is not
+    /// necessary to iterate all transactions in the mempool.
+    ///
     pub fn mempool_update(
         &self,
         adopted_blocks: &[(Blake2bHash, Block)],
