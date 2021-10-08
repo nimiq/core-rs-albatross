@@ -1079,10 +1079,11 @@ mod tests {
             tracing::debug!(address = ?address, peer_id = ?net.local_peer_id, "creating node");
 
             if let Some(dial_address) = self.addresses.first() {
+                let mut events = net.subscribe_events();
+
                 tracing::debug!(address = ?dial_address, "dialing peer");
                 net.dial_address(dial_address.clone()).await.unwrap();
 
-                let mut events = net.subscribe_events();
                 tracing::debug!("waiting for join event");
                 let event = events.next().await;
                 tracing::trace!(event = ?event);
@@ -1117,11 +1118,11 @@ mod tests {
         tracing::debug!(address = ?addr1, peer_id = ?net1.local_peer_id, "Network 1");
         tracing::debug!(address = ?addr2, peer_id = ?net2.local_peer_id, "Network 2");
 
-        tracing::debug!("dialing peer 1 from peer 2...");
-        net2.dial_address(addr1).await.unwrap();
-
         let mut events1 = net1.subscribe_events();
         let mut events2 = net2.subscribe_events();
+
+        tracing::debug!("dialing peer 1 from peer 2...");
+        net2.dial_address(addr1).await.unwrap();
 
         tracing::debug!("waiting for join events");
 
