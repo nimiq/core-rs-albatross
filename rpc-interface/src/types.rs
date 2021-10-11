@@ -440,8 +440,12 @@ pub struct Transaction {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub confirmations: Option<u32>,
 
+    #[serde(with = "crate::serde_helpers::address_hex")]
     pub from: Address,
+    pub from_address: Address,
+    #[serde(with = "crate::serde_helpers::address_hex")]
     pub to: Address,
+    pub to_address: Address,
     pub value: Coin,
     pub fee: Coin,
     #[serde(with = "crate::serde_helpers::hex")]
@@ -453,19 +457,45 @@ pub struct Transaction {
 }
 
 impl Transaction {
+    pub fn from_transaction(transaction: nimiq_transaction::Transaction) -> Self {
+        Transaction::from(transaction, None, None, None)
+    }
+
     pub fn from_blockchain(
         transaction: nimiq_transaction::Transaction,
         block_number: u32,
         timestamp: u64,
         head_height: u32,
     ) -> Self {
+        Transaction::from(
+            transaction,
+            Some(block_number),
+            Some(timestamp),
+            Some(head_height),
+        )
+    }
+
+    fn from(
+        transaction: nimiq_transaction::Transaction,
+        block_number: Option<u32>,
+        timestamp: Option<u64>,
+        head_height: Option<u32>,
+    ) -> Self {
         Transaction {
             hash: transaction.hash(),
-            block_number: Some(block_number),
-            timestamp: Some(timestamp),
-            confirmations: Some(head_height.saturating_sub(block_number) + 1),
-            from: transaction.sender,
-            to: transaction.recipient,
+            block_number: block_number,
+            timestamp: timestamp,
+            confirmations: match head_height {
+                Some(height) => match block_number {
+                    Some(block) => Some(height.saturating_sub(block) + 1),
+                    None => None,
+                },
+                None => None,
+            },
+            from: transaction.sender.clone(),
+            from_address: transaction.sender,
+            to: transaction.recipient.clone(),
+            to_address: transaction.recipient,
             value: transaction.value,
             fee: transaction.fee,
             flags: transaction.flags.bits() as u8,

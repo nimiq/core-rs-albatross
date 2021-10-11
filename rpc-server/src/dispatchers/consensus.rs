@@ -78,21 +78,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     /// Given a serialized transaction, it will return the corresponding transaction struct.
     async fn get_raw_transaction_info(&mut self, raw_tx: String) -> Result<RPCTransaction, Error> {
         let transaction: Transaction = Deserialize::deserialize_from_vec(&hex::decode(&raw_tx)?)?;
-
-        Ok(RPCTransaction {
-            hash: transaction.hash::<Blake2bHash>(),
-            block_number: None,
-            timestamp: None,
-            confirmations: None,
-            from: transaction.sender,
-            to: transaction.recipient,
-            value: transaction.value,
-            fee: transaction.fee,
-            flags: transaction.flags.bits() as u8,
-            data: transaction.data,
-            validity_start_height: transaction.validity_start_height,
-            proof: transaction.proof,
-        })
+        Ok(RPCTransaction::from_transaction(transaction))
     }
 
     /// Sends the given serialized transaction to the network.
