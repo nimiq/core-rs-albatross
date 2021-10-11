@@ -28,6 +28,17 @@ impl Blockchain {
         this: RwLockUpgradableReadGuard<Self>,
         block: Block,
     ) -> Result<PushResult, PushError> {
+        // get_chain_info doesn't necessarily work with all blocks, even if we already synced their contents
+        if block.block_number() < policy::last_macro_block(this.block_number()) {
+            info!(
+                "Ignoring block (#{}, {})- we already know a later macro block (we're at {})",
+                block.block_number(),
+                block.hash(),
+                this.block_number()
+            );
+            return Ok(PushResult::Ignored);
+        }
+
         // TODO: We might want to pass this as argument to this method.
         let read_txn = ReadTransaction::new(&this.env);
 

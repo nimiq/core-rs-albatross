@@ -129,7 +129,8 @@ fn it_cant_rebranch_across_epochs() {
     }
 
     let fork = temp_producer2.next_block(1, vec![]);
-    assert_eq!(temp_producer1.push(fork), Err(PushError::InvalidFork));
+    // Pushing a block from a previous batch/epoch is atm cought before checking if it's a fork or known block
+    assert_eq!(temp_producer1.push(fork), Ok(PushResult::Ignored));
 }
 
 #[test]
