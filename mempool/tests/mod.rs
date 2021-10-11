@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use futures::{channel::mpsc, sink::SinkExt};
 use log::LevelFilter::Debug;
-//use nimiq_mempool::filter::MempoolFilter;
 use parking_lot::RwLock;
 use rand::prelude::StdRng;
 use rand::SeedableRng;
@@ -23,6 +22,7 @@ use nimiq_utils::time::OffsetTime;
 
 const BASIC_TRANSACTION: &str = "000222666efadc937148a6d61589ce6d4aeecca97fda4c32348d294eab582f14a0754d1260f15bea0e8fb07ab18f45301483599e34000000000000c350000000000000008a00019640023fecb82d3aef4be76853d5c5b263754b7d495d9838f6ae5df60cf3addd3512a82988db0056059c7a52ae15285983ef0db8229ae446c004559147686d28f0a30a";
 const ENABLE_LOG: bool = false;
+const NUM_TXNS_START_STOP: usize = 1000;
 
 // Tests we want
 // 1. ~Get transactions sorted by fee~
@@ -62,7 +62,9 @@ async fn send_txn_to_mempool(
                 .await
                 .unwrap();
         }
-    });
+    })
+    .await
+    .expect("Send failed");
 
     let timeout = tokio::time::Duration::from_secs(1);
     tokio::time::sleep(timeout).await;
@@ -72,6 +74,113 @@ async fn send_txn_to_mempool(
     mempool
         .get_transactions_block(txn_len)
         .expect("expected transaction vec")
+}
+
+async fn multiple_start_stop_send(
+    blockchain: Arc<RwLock<Blockchain>>,
+    transactions: Vec<Transaction>,
+) {
+    // Create a MPSC channel to directly send transactions to the mempool
+    let (mut txn_stream_tx, txn_stream_rx) = mpsc::channel(64);
+
+    // Create mempool and subscribe with a custom txn stream.
+    let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
+    let mut hub = MockHub::new();
+    let mock_id = MockId::new(hub.new_address().into());
+    let mock_network = Arc::new(hub.new_network());
+
+    // Subscribe mempool with the mpsc stream created
+    mempool
+        .start_executor_with_txn_stream::<MockNetwork>(Box::pin(txn_stream_rx), mock_network)
+        .await;
+
+    // Send the transactions
+    let mut txn_stream_tx1 = txn_stream_tx.clone();
+    let mock_id1 = mock_id.clone();
+    let txns = transactions.clone();
+    tokio::task::spawn(async move {
+        for txn in txns {
+            txn_stream_tx1
+                .send((txn.clone(), mock_id1.clone()))
+                .await
+                .unwrap();
+        }
+    })
+    .await
+    .expect("Send failed");
+
+    let timeout = tokio::time::Duration::from_secs(2);
+    tokio::time::sleep(timeout).await;
+    mempool.stop_executor();
+
+    // Get the transactions from the mempool
+    let obtained_txns = mempool.get_transactions_block(usize::MAX).unwrap();
+
+    // We should obtain the same amount of transactions
+    assert_eq!(obtained_txns.len(), NUM_TXNS_START_STOP);
+
+    // Now send more transactions via the transaction stream.
+    let txns = transactions.clone();
+    tokio::task::spawn(async move {
+        for txn in txns {
+            txn_stream_tx
+                .send((txn.clone(), mock_id.clone()))
+                .await
+                .expect_err("Send should fail, executor is stopped");
+        }
+    })
+    .await
+    .expect("Send failed");
+
+    let timeout = tokio::time::Duration::from_secs(2);
+    tokio::time::sleep(timeout).await;
+
+    // Call stop again, nothing should happen.
+    mempool.stop_executor();
+
+    // We should not obtain any, since the executor should not be running.
+    let obtained_txns = mempool.get_transactions_block(usize::MAX).unwrap();
+
+    // We should obtain 0 transactions
+    assert_eq!(obtained_txns.len(), 0_usize);
+
+    // Restart the executor
+    // Create a MPSC channel to directly send transactions to the mempool
+    let (mut txn_stream_tx, txn_stream_rx) = mpsc::channel(64);
+
+    // Create mempool and subscribe with a custom txn stream.
+    let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
+    let mut hub = MockHub::new();
+    let mock_id = MockId::new(hub.new_address().into());
+    let mock_network = Arc::new(hub.new_network());
+
+    // Subscribe mempool with the mpsc stream created
+    mempool
+        .start_executor_with_txn_stream::<MockNetwork>(Box::pin(txn_stream_rx), mock_network)
+        .await;
+
+    // Send the transactions
+    let txns = transactions.clone();
+    tokio::task::spawn(async move {
+        for txn in txns {
+            txn_stream_tx
+                .send((txn.clone(), mock_id.clone()))
+                .await
+                .unwrap();
+        }
+    })
+    .await
+    .expect("Send failed");
+
+    let timeout = tokio::time::Duration::from_secs(2);
+    tokio::time::sleep(timeout).await;
+    mempool.stop_executor();
+
+    // Get the transactions from the mempool
+    let obtained_txns = mempool.get_transactions_block(usize::MAX).unwrap();
+
+    // We should obtain same number of txns
+    assert_eq!(obtained_txns.len(), NUM_TXNS_START_STOP);
 }
 
 #[tokio::test]
@@ -659,4 +768,93 @@ async fn mempool_tps() {
         );
         prev_txn = txn.clone();
     }
+}
+
+#[tokio::test]
+async fn multiple_start_stop() {
+    if ENABLE_LOG {
+        simple_logger::SimpleLogger::new()
+            .with_level(Debug)
+            .init()
+            .ok();
+    }
+
+    let mut rng = StdRng::seed_from_u64(0);
+    let time = Arc::new(OffsetTime::new());
+    let env = VolatileEnvironment::new(10).unwrap();
+    let mut genesis_builder = GenesisBuilder::default();
+
+    // Generate and sign transaction from address_a using a balance that will be used to create the account later
+    let balance = 100;
+    let num_txns = NUM_TXNS_START_STOP as u64;
+    let txns_value: Vec<u64> = vec![balance; num_txns as usize];
+    let txns_fee: Vec<u64> = (1..num_txns + 1).collect();
+    let mut txns: Vec<Transaction> = vec![];
+    let mut sender_addresses: Vec<Address> = vec![];
+    let mut sender_keypairs: Vec<KeyPair> = vec![];
+    let mut reciver_addresses: Vec<Address> = vec![];
+
+    log::debug!("Generating transactions and accounts");
+
+    for i in 0..num_txns as usize {
+        // Generate the txns_sender and txns_rec vectors to later generate transactions
+        let sender_keypair = KeyPair::generate_default_csprng();
+        let receiver_keypair = KeyPair::generate_default_csprng();
+        let sender_address = Address::from(&sender_keypair.public);
+        let receiver_address = Address::from(&receiver_keypair.public);
+        sender_keypairs.push(sender_keypair);
+        sender_addresses.push(sender_address);
+        reciver_addresses.push(receiver_address);
+
+        // Generate transactions
+        let mut txn = Transaction::new_basic(
+            sender_addresses[i].clone(),
+            reciver_addresses[i].clone(),
+            Coin::from_u64_unchecked(txns_value[i]),
+            Coin::from_u64_unchecked(txns_fee[i]),
+            1,
+            NetworkId::UnitAlbatross,
+        );
+
+        let signature_proof = SignatureProof::from(
+            sender_keypairs[i].public,
+            sender_keypairs[i].sign(&txn.serialize_content()),
+        );
+
+        txn.proof = signature_proof.serialize_to_vec();
+        txns.push(txn.clone());
+
+        // Add accounts to the genesis builder
+        genesis_builder.with_basic_account(
+            sender_addresses[i].clone(),
+            Coin::from_u64_unchecked(balance + num_txns * num_txns),
+        );
+    }
+
+    log::debug!("Done generating transactions and accounts");
+
+    // Add validator to genesis
+    genesis_builder.with_genesis_validator(
+        Address::from(&KeyPair::generate(&mut rng)),
+        Address::from([0u8; 20]),
+        BLSKeyPair::generate(&mut rng).public_key,
+        Address::default(),
+    );
+
+    // Generate the genesis and blockchain
+    let genesis_info = genesis_builder.generate().unwrap();
+
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::with_genesis(
+            env.clone(),
+            time,
+            NetworkId::UnitAlbatross,
+            genesis_info.block,
+            genesis_info.accounts,
+        )
+        .unwrap(),
+    ));
+
+    // Send the transactions
+    multiple_start_stop_send(blockchain, txns).await;
 }
