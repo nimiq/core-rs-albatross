@@ -119,31 +119,32 @@ pub enum BlockType {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Block {
-    pub block_type: BlockType,
+    #[serde(rename = "type")]
+    pub ty: BlockType,
+    pub number: u32,
     pub hash: Blake2bHash,
     pub size: u32,
     pub batch: u32,
     pub epoch: u32,
+    pub view: u32,
 
     pub version: u16,
-    pub block_number: u32,
-    pub view_number: u32,
     pub timestamp: u64,
     pub parent_hash: Blake2bHash,
     pub seed: VrfSeed,
     #[serde(with = "crate::serde_helpers::hex")]
     pub extra_data: Vec<u8>,
-    pub state_root: Blake2bHash,
-    pub body_root: Blake2bHash,
-    pub history_root: Blake2bHash,
+    pub state_hash: Blake2bHash,
+    pub body_hash: Blake2bHash,
+    pub history_hash: Blake2bHash,
 
     #[serde(flatten)]
     pub additional_fields: BlockAdditionalFields,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", tag = "type")]
 pub enum BlockAdditionalFields {
+    #[serde(rename_all = "camelCase")]
     Macro {
         is_election_block: bool,
         proposer: Slot,
@@ -163,6 +164,7 @@ pub enum BlockAdditionalFields {
         #[serde(skip_serializing_if = "Option::is_none")]
         justification: Option<TendermintProof>,
     },
+    #[serde(rename_all = "camelCase")]
     Micro {
         producer: Slot,
 
@@ -221,21 +223,21 @@ impl Block {
                 }
 
                 Block {
-                    block_type: BlockType::Macro,
+                    ty: BlockType::Macro,
                     hash: macro_block.hash(),
                     size,
                     batch,
                     epoch,
                     version: macro_block.header.version,
-                    block_number,
-                    view_number: macro_block.header.view_number,
+                    number: block_number,
+                    view: macro_block.header.view_number,
                     timestamp,
                     parent_hash: macro_block.header.parent_hash,
                     seed: macro_block.header.seed,
                     extra_data: macro_block.header.extra_data,
-                    state_root: macro_block.header.state_root,
-                    body_root: macro_block.header.body_root,
-                    history_root: macro_block.header.history_root,
+                    state_hash: macro_block.header.state_root,
+                    body_hash: macro_block.header.body_root,
+                    history_hash: macro_block.header.history_root,
                     additional_fields: BlockAdditionalFields::Macro {
                         is_election_block: policy::is_election_block_at(block_number),
                         proposer: Slot::from(
@@ -287,21 +289,21 @@ impl Block {
                 };
 
                 Block {
-                    block_type: BlockType::Micro,
+                    ty: BlockType::Micro,
                     hash: micro_block.hash(),
                     size,
                     batch,
                     epoch,
                     version: micro_block.header.version,
-                    block_number,
-                    view_number: micro_block.header.view_number,
+                    number: block_number,
+                    view: micro_block.header.view_number,
                     timestamp,
                     parent_hash: micro_block.header.parent_hash,
                     seed: micro_block.header.seed,
                     extra_data: micro_block.header.extra_data,
-                    state_root: micro_block.header.state_root,
-                    body_root: micro_block.header.body_root,
-                    history_root: micro_block.header.history_root,
+                    state_hash: micro_block.header.state_root,
+                    body_hash: micro_block.header.body_root,
+                    history_hash: micro_block.header.history_root,
                     additional_fields: BlockAdditionalFields::Micro {
                         producer: Slot::from(
                             blockchain,
@@ -367,7 +369,7 @@ impl Slot {
 
         Slot {
             slot_number,
-            validator: validator.validator_address.clone(),
+            validator: validator.validator_address,
             public_key: validator.public_key.compressed().clone(),
         }
     }
@@ -445,12 +447,8 @@ pub struct Transaction {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub confirmations: Option<u32>,
 
-    #[serde(with = "crate::serde_helpers::address_hex")]
     pub from: Address,
-    pub from_address: Address,
-    #[serde(with = "crate::serde_helpers::address_hex")]
     pub to: Address,
-    pub to_address: Address,
     pub value: Coin,
     pub fee: Coin,
     #[serde(with = "crate::serde_helpers::hex")]
@@ -497,10 +495,8 @@ impl Transaction {
                 },
                 None => None,
             },
-            from: transaction.sender.clone(),
-            from_address: transaction.sender,
-            to: transaction.recipient.clone(),
-            to_address: transaction.recipient,
+            from: transaction.sender,
+            to: transaction.recipient,
             value: transaction.value,
             fee: transaction.fee,
             flags: transaction.flags.bits() as u8,
@@ -556,7 +552,7 @@ pub struct Account {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", tag = "type")]
+#[serde(rename_all = "camelCase")]
 pub enum AccountAdditionalFields {
     /// Additional account information for vesting contracts.
     VestingContract {
@@ -604,7 +600,7 @@ impl Account {
                 balance: vesting.balance,
                 ty: AccountType::Vesting,
                 account_additional_fields: Some(AccountAdditionalFields::VestingContract {
-                    owner: vesting.owner.clone(),
+                    owner: vesting.owner,
                     vesting_start: vesting.start_time,
                     vesting_step_blocks: vesting.time_step,
                     vesting_step_amount: vesting.step_amount,
@@ -614,10 +610,10 @@ impl Account {
             nimiq_account::Account::HTLC(htlc) => Account {
                 address,
                 balance: htlc.balance,
-                ty: AccountType::Vesting,
+                ty: AccountType::HTLC,
                 account_additional_fields: Some(AccountAdditionalFields::HTLC {
-                    sender: htlc.sender.clone(),
-                    recipient: htlc.recipient.clone(),
+                    sender: htlc.sender,
+                    recipient: htlc.recipient,
                     hash_root: htlc.hash_root,
                     hash_count: htlc.hash_count,
                     timeout: htlc.timeout,
@@ -671,7 +667,7 @@ impl Staker {
 #[serde(rename_all = "camelCase")]
 pub struct Validator {
     pub address: Address,
-    pub warm_key: Address,
+    pub warm_address: Address,
     pub validator_key: CompressedPublicKey,
     pub reward_address: Address,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -691,7 +687,7 @@ impl Validator {
     ) -> Self {
         Validator {
             address: validator.address.clone(),
-            warm_key: validator.warm_key.clone(),
+            warm_address: validator.warm_key.clone(),
             validator_key: validator.validator_key.clone(),
             reward_address: validator.reward_address.clone(),
             signal_data: validator.signal_data.clone(),
