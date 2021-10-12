@@ -53,6 +53,33 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
         self.get_root(txn).unwrap().hash()
     }
 
+    /// Returns the number of leaf nodes in the Merkle Radix Trie. It will traverse the entire tree.
+    pub fn size(&self, txn: &Transaction) -> usize {
+        let mut size = 0;
+
+        let mut stack = vec![self
+            .get_root(txn)
+            .expect("The Merkle Radix Trie didn't have a root node!")];
+
+        while let Some(item) = stack.pop() {
+            match item {
+                TrieNode::BranchNode { children, key } => {
+                    for child in children.iter().flatten().rev() {
+                        let combined = &key + &child.suffix;
+
+                        stack.push(txn.get(&self.db, &combined)
+                                .expect("Failed to find the child of a Merkle Radix Trie node. The database must be corrupt!"));
+                    }
+                }
+                TrieNode::LeafNode { .. } => {
+                    size += 1;
+                }
+            }
+        }
+
+        size
+    }
+
     /// Get the value at the given key. If there's no leaf node at the given key then it returns None.
     pub fn get(&self, txn: &Transaction, key: &KeyNibbles) -> Option<A> {
         let node = txn.get(&self.db, key)?;
@@ -469,31 +496,38 @@ mod tests {
         let trie = MerkleRadixTrie::new(env.clone(), "database");
         let mut txn = WriteTransaction::new(&env);
 
+        assert_eq!(trie.size(&txn), 0);
+
         trie.put(&mut txn, &key_1, 80085);
         trie.put(&mut txn, &key_2, 999);
         trie.put(&mut txn, &key_3, 1337);
 
+        assert_eq!(trie.size(&txn), 3);
         assert_eq!(trie.get(&txn, &key_1), Some(80085));
         assert_eq!(trie.get(&txn, &key_2), Some(999));
         assert_eq!(trie.get(&txn, &key_3), Some(1337));
         assert_eq!(trie.get(&txn, &key_4), None);
 
         trie.remove(&mut txn, &key_4);
+        assert_eq!(trie.size(&txn), 3);
         assert_eq!(trie.get(&txn, &key_1), Some(80085));
         assert_eq!(trie.get(&txn, &key_2), Some(999));
         assert_eq!(trie.get(&txn, &key_3), Some(1337));
 
         trie.remove(&mut txn, &key_1);
+        assert_eq!(trie.size(&txn), 2);
         assert_eq!(trie.get(&txn, &key_1), None);
         assert_eq!(trie.get(&txn, &key_2), Some(999));
         assert_eq!(trie.get(&txn, &key_3), Some(1337));
 
         trie.remove(&mut txn, &key_2);
+        assert_eq!(trie.size(&txn), 1);
         assert_eq!(trie.get(&txn, &key_1), None);
         assert_eq!(trie.get(&txn, &key_2), None);
         assert_eq!(trie.get(&txn, &key_3), Some(1337));
 
         trie.remove(&mut txn, &key_3);
+        assert_eq!(trie.size(&txn), 0);
         assert_eq!(trie.get(&txn, &key_1), None);
         assert_eq!(trie.get(&txn, &key_2), None);
         assert_eq!(trie.get(&txn, &key_3), None);

@@ -38,6 +38,14 @@ impl Accounts {
         }
     }
 
+    /// Returns the number of accounts in the Accounts Trie. It will traverse the entire tree.
+    pub fn size(&self, txn_option: Option<&DBTransaction>) -> usize {
+        match txn_option {
+            Some(txn) => self.tree.size(txn),
+            None => self.tree.size(&ReadTransaction::new(&self.env)),
+        }
+    }
+
     pub fn get(&self, key: &KeyNibbles, txn_option: Option<&DBTransaction>) -> Option<Account> {
         match txn_option {
             Some(txn) => self.tree.get(txn, key),
