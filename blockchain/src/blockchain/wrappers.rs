@@ -79,6 +79,12 @@ impl Blockchain {
         self.notifier.register(listener)
     }
 
+    /// Returns the number of accounts in the Accounts Tree. An account id defined as any leaf node
+    /// in the tree. This method will traverse the entire tree, so it may be a bit slow.
+    pub fn get_number_accounts(&self) -> usize {
+        self.state.accounts.size(None)
+    }
+
     pub fn get_account(&self, address: &Address) -> Option<Account> {
         // TODO: Find a better place for this differentiation, it should be in a more general location
         let key = if address.to_user_friendly_address() == policy::STAKING_CONTRACT_ADDRESS {
