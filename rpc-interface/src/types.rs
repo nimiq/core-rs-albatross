@@ -7,6 +7,7 @@ use std::{
     str::FromStr,
 };
 
+use beserial::Serialize as BeSerialize;
 use serde::{Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
 
@@ -120,6 +121,7 @@ pub enum BlockType {
 pub struct Block {
     pub block_type: BlockType,
     pub hash: Blake2bHash,
+    pub size: u32,
     pub batch: u32,
     pub epoch: u32,
 
@@ -182,6 +184,7 @@ impl Block {
     ) -> Self {
         let block_number = block.block_number();
         let timestamp = block.timestamp();
+        let size = block.serialized_size() as u32;
         let batch = policy::batch_at(block_number);
         let epoch = policy::epoch_at(block_number);
 
@@ -220,6 +223,7 @@ impl Block {
                 Block {
                     block_type: BlockType::Macro,
                     hash: macro_block.hash(),
+                    size,
                     batch,
                     epoch,
                     version: macro_block.header.version,
@@ -285,6 +289,7 @@ impl Block {
                 Block {
                     block_type: BlockType::Micro,
                     hash: micro_block.hash(),
+                    size,
                     batch,
                     epoch,
                     version: micro_block.header.version,
