@@ -271,7 +271,7 @@ impl Blockchain {
         );
 
         // Get RNG from last block's seed and build lookup table based on number of eligible slots.
-        let mut rng = macro_header.seed.rng(VrfUseCase::RewardDistribution, 0);
+        let mut rng = macro_header.seed.rng(VrfUseCase::RewardDistribution);
         let lookup = AliasMethod::new(num_eligible_slots_for_accepted_inherent);
 
         // Randomly give remainder to one accepting slot. We don't bother to distribute it over all
