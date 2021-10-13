@@ -171,7 +171,7 @@ pub trait AbstractBlockchain {
         disabled_slots: BitSet,
         txn_option: Option<&Transaction>,
     ) -> u16 {
-        // Get the last block's seed.
+        // Get the previous block's seed.
         let seed = self
             .get_block_at(block_number - 1, false, txn_option)
             .expect("Can't find previous block!")
@@ -179,36 +179,33 @@ pub trait AbstractBlockchain {
             .clone();
 
         // RNG for slot selection
-        let mut rng = seed.rng(VrfUseCase::SlotSelection, view_number);
+        let mut rng = seed.rng(VrfUseCase::SlotSelection);
 
-        // Check if all slots are disabled. In this case, we will accept any slot, since we want the
-        // chain to progress.
+        // Create a list of viable slots.
+        let mut slots = vec![];
+
         if disabled_slots.len() == policy::SLOTS as usize {
-            // Sample a random slot number.
-            return rng.next_u64_max(policy::SLOTS as u64) as u16;
-        }
-
-        // Sample a random index. See that we only consider the non-disabled slots here.
-        let mut r =
-            rng.next_u64_max((policy::SLOTS as usize - disabled_slots.len()) as u64) as usize;
-
-        // Now we just iterate over all the slots until we find the r-th non-disabled slot.
-        let mut slot_number = 0;
-        for is_disabled in disabled_slots.iter_bits() {
-            if is_disabled {
-                slot_number += 1;
-                continue;
-            }
-
-            if r == 0 {
-                return slot_number;
-            } else {
-                slot_number += 1;
-                r -= 1;
+            // If all slots are disabled, we will accept any slot, since we want the
+            // chain to progress.
+            slots = (0..policy::SLOTS).collect();
+        } else {
+            // Otherwise, we will only accept slots that are not disabled.
+            for i in 0..policy::SLOTS {
+                if !disabled_slots.contains(i as usize) {
+                    slots.push(i);
+                }
             }
         }
 
-        unreachable!()
+        // Shuffle the slots vector using the Fisher–Yates shuffle.
+        for i in (1..slots.len()).rev() {
+            let r = rng.next_u64_max((i + 1) as u64) as usize;
+            slots.swap(r, i);
+        }
+
+        // Now simply take the view number modulo the number of viable slots and that will give us
+        // the chosen slot.
+        slots[view_number as usize % slots.len()]
     }
 }
 

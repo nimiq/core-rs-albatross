@@ -20,9 +20,13 @@ pub enum VrfError {
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 #[repr(u8)]
 pub enum VrfUseCase {
+    /// Used to produce the next seed in the VRF seed chain.
     Seed = 1,
+    /// Used to select the validator list at the end of each epoch.
     ValidatorSelection = 2,
+    /// Used to determine the slot owners at each block height.
     SlotSelection = 3,
+    /// Used to randomly distribute the rewards.
     RewardDistribution = 4,
 }
 
@@ -60,13 +64,13 @@ impl VrfSeed {
         hasher.write_u8(VrfUseCase::Seed as u8).unwrap();
         hasher.write_all(self.signature.as_ref()).unwrap();
 
-        // Sign that hash and contruct new VrfSeed from it
+        // Sign that hash and construct the new VrfSeed from it
         let signature = secret_key.sign_hash(hasher.finish()).compress();
         Self { signature }
     }
 
-    pub fn rng(&self, use_case: VrfUseCase, round: u32) -> VrfRng {
-        VrfRng::new(&self.signature, use_case, round)
+    pub fn rng(&self, use_case: VrfUseCase) -> VrfRng {
+        VrfRng::new(&self.signature, use_case)
     }
 }
 
@@ -103,25 +107,22 @@ impl FromStr for VrfSeed {
 pub struct VrfRng<'s> {
     signature: &'s CompressedSignature,
     use_case: VrfUseCase,
-    round: u32,
     counter: u64,
 }
 
 impl<'s> VrfRng<'s> {
-    fn new(signature: &'s CompressedSignature, use_case: VrfUseCase, round: u32) -> Self {
+    fn new(signature: &'s CompressedSignature, use_case: VrfUseCase) -> Self {
         Self {
             signature,
             use_case,
-            round,
             counter: 0,
         }
     }
 
     pub fn next_hash(&mut self) -> Blake2sHash {
-        // Hash use-case prefix, round, counter and signature
+        // Hash use-case prefix, counter and signature
         let mut hasher = Blake2sHasher::new();
         hasher.write_u8(self.use_case as u8).unwrap();
-        hasher.write_u32::<BigEndian>(self.round).unwrap();
         hasher.write_u64::<BigEndian>(self.counter).unwrap();
         hasher.write_all(self.signature.as_ref()).unwrap();
 
