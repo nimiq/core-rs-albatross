@@ -93,7 +93,7 @@ impl BlockProducer {
         let mut transactions: Vec<Transaction>;
 
         if let Some(mempool) = &self.mempool {
-            transactions = mempool.get_transactions(max_size_bytes).unwrap_or_default();
+            transactions = mempool.fill_block(max_size_bytes).unwrap_or_default();
         } else {
             transactions = Vec::new();
         }
