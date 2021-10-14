@@ -324,18 +324,18 @@ impl Blockchain {
         let mut revert_chain: Vec<(Blake2bHash, ChainInfo)> = vec![];
         let mut ancestor = current;
 
+        // Check if ancestor is in current batch.
+        if ancestor.1.head.block_number() < this.state.macro_info.head.block_number() {
+            info!("Ancestor is in finalized epoch");
+            return Err(PushError::InvalidFork);
+        }
+
         // Upgrade the lock as late as possible but before creating the Write Transaction
         let mut this = RwLockUpgradableReadGuard::upgrade(this);
 
         let mut write_txn = this.write_transaction();
 
         current = (this.state.head_hash.clone(), this.state.main_chain.clone());
-
-        // Check if ancestor is in current batch.
-        if ancestor.1.head.block_number() < this.state.macro_info.head.block_number() {
-            info!("Ancestor is in finalized epoch");
-            return Err(PushError::InvalidFork);
-        }
 
         while current.0 != ancestor.0 {
             match current.1.head {
