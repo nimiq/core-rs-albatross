@@ -1,4 +1,3 @@
-#![deny(missing_docs)]
 #![feature(hash_drain_filter)]
 
 //! Mempool implementation
@@ -10,6 +9,8 @@
 extern crate log;
 /// Mempool config module
 pub mod config;
+/// Mempool executor module
+pub mod executor;
 /// Mempool filter module
 pub mod filter;
 /// Main mempool module

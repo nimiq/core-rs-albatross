@@ -6,8 +6,8 @@ use nimiq_transaction::{Transaction, TransactionFlags};
 /// Struct defining a Mempool filter
 #[derive(Debug)]
 pub struct MempoolFilter {
-    blacklist: LimitHashSet<Blake2bHash>,
-    rules: MempoolRules,
+    pub blacklist: LimitHashSet<Blake2bHash>,
+    pub rules: MempoolRules,
 }
 
 impl MempoolFilter {
