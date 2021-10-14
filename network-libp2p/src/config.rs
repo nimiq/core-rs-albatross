@@ -35,6 +35,7 @@ impl Config {
         let gossipsub = GossipsubConfigBuilder::default()
             .mesh_n_low(3)
             .validate_messages()
+            .max_transmit_size(131_072)
             .build()
             .expect("Invalid Gossipsub config");
 
