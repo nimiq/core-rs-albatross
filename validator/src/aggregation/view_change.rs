@@ -41,14 +41,14 @@ struct InputStreamSwitch {
     input: BoxStream<'static, LevelUpdateMessage<SignedViewChangeMessage, ViewChange>>,
     sender: UnboundedSender<ViewChangeResult>,
     future_view_changes: BitSet,
-    current_view_change: u32,
+    current_view_change: ViewChange,
     identity_registry: Arc<ValidatorRegistry>,
 }
 
 impl InputStreamSwitch {
     fn new(
         input: BoxStream<'static, LevelUpdateMessage<SignedViewChangeMessage, ViewChange>>,
-        current_view_change: u32,
+        current_view_change: ViewChange,
         identity_registry: Arc<ValidatorRegistry>,
     ) -> (Self, UnboundedReceiver<ViewChangeResult>) {
         let (sender, receiver) = unbounded::<ViewChangeResult>();
@@ -75,20 +75,28 @@ impl Stream for InputStreamSwitch {
                 if message.update.aggregate.previous_proof.is_some() {
                     warn!("received past proof");
                 }
-                if message.tag.new_view_number == self.current_view_change {
-                    Poll::Ready(Some(message.update))
-                } else {
-                    if message.tag.new_view_number > self.current_view_change {
-                        if let Err(err) =
-                            self.sender
-                                .unbounded_send(ViewChangeResult::FutureViewChange(
-                                    message.update.aggregate,
-                                    message.tag,
-                                ))
-                        {
-                            error!("Sending failed: {:?}", err);
+                if message.tag.block_number == self.current_view_change.block_number
+                    && message.tag.prev_seed == self.current_view_change.prev_seed
+                {
+                    if message.tag.new_view_number == self.current_view_change.new_view_number {
+                        Poll::Ready(Some(message.update))
+                    } else {
+                        if message.tag.new_view_number > self.current_view_change.new_view_number {
+                            if let Err(err) =
+                                self.sender
+                                    .unbounded_send(ViewChangeResult::FutureViewChange(
+                                        message.update.aggregate,
+                                        message.tag,
+                                    ))
+                            {
+                                error!("Sending failed: {:?}", err);
+                            }
                         }
+                        Poll::Pending
                     }
+                } else {
+                    // The LevelUpdate is not for this view Change and thus irrelevant
+                    // TODO if it is for a future view change we might want to shortcut a HreadRequest here.
                     Poll::Pending
                 }
             }
@@ -267,7 +275,7 @@ impl ViewChangeAggregation {
                         .receive::<LevelUpdateMessage<SignedViewChangeMessage, ViewChange>>()
                         .map(move |msg| msg.0),
                 ),
-                view_change.new_view_number,
+                view_change.clone(),
                 weights.clone(),
             );
 
