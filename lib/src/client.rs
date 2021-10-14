@@ -236,7 +236,7 @@ impl Client {
 
     /// Returns the blockchain head
     pub fn blockchain_head(&self) -> Block {
-        Arc::clone(&self.inner.consensus.blockchain).read().head()
+        self.inner.consensus.blockchain.read().head()
     }
 
     #[cfg(feature = "wallet")]
