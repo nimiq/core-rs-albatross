@@ -545,7 +545,7 @@ impl<N: Network> Future for MempoolExecutor<N> {
                 == CONCURRENT_VERIF_TASKS
             {
                 log::debug!("Reached the max number of verification tasks");
-                return Poll::Pending;
+                continue;
             }
 
             // Obtain the network id from the blockchain
@@ -564,7 +564,7 @@ impl<N: Network> Future for MempoolExecutor<N> {
                     if sender_state.txns.contains_key(&tx.hash()) {
                         //We already know this transaction, no need to process
                         log::debug!("Transaction is already known ");
-                        return Poll::Pending;
+                        continue;
                     }
                 }
             }
@@ -574,7 +574,7 @@ impl<N: Network> Future for MempoolExecutor<N> {
                 let filter = self.filter.read();
                 if !filter.accepts_transaction(&tx) || filter.blacklisted(&tx.hash()) {
                     log::debug!("Transaction filtered");
-                    return Poll::Pending;
+                    continue;
                 }
             }
 
