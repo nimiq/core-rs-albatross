@@ -115,9 +115,10 @@ async fn main_inner() -> Result<(), Error> {
                     let head = client.blockchain_head().clone();
 
                     log::info!(
-                        "Consensus established: {:?} - Head: #{} - {}, Peers: {}",
+                        "Consensus established: {:?} - Head: #{}.{}- {}, Peers: {}",
                         consensus.is_established(),
                         head.block_number(),
+                        head.view_number(),
                         head.hash(),
                         network_info.num_peers()
                     );
