@@ -19,7 +19,7 @@ use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
 use nimiq_primitives::policy;
 use nimiq_primitives::slots::Validators;
-use nimiq_primitives::{account::AccountType, coin::Coin};
+use nimiq_primitives::coin::Coin;
 use nimiq_transaction::account::htlc_contract::AnyHash;
 use nimiq_vrf::VrfSeed;
 
@@ -128,18 +128,9 @@ impl FromStr for ValidityStartHeight {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "snake_case")]
-pub enum BlockType {
-    Macro,
-    Micro,
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Block {
-    #[serde(rename = "type")]
-    pub ty: BlockType,
     pub number: u32,
     pub hash: Blake2bHash,
     pub size: u32,
@@ -157,11 +148,15 @@ pub struct Block {
     pub body_hash: Blake2bHash,
     pub history_hash: Blake2bHash,
 
+    #[serde(skip_serializing_if = "Option::is_none")]
+    transactions: Option<Vec<Transaction>>,
+
     #[serde(flatten)]
     pub additional_fields: BlockAdditionalFields,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "type")]
 pub enum BlockAdditionalFields {
     #[serde(rename_all = "camelCase")]
     Macro {
@@ -177,8 +172,6 @@ pub enum BlockAdditionalFields {
         lost_reward_set: Option<BitSet>,
         #[serde(skip_serializing_if = "Option::is_none")]
         disabled_set: Option<BitSet>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        transactions: Option<Vec<Transaction>>,
 
         #[serde(skip_serializing_if = "Option::is_none")]
         justification: Option<TendermintProof>,
@@ -189,8 +182,6 @@ pub enum BlockAdditionalFields {
 
         #[serde(skip_serializing_if = "Option::is_none")]
         fork_proofs: Option<Vec<ForkProof>>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        transactions: Option<Vec<Transaction>>,
 
         #[serde(skip_serializing_if = "Option::is_none")]
         justification: Option<MicroJustification>,
@@ -242,7 +233,6 @@ impl Block {
                 }
 
                 Block {
-                    ty: BlockType::Macro,
                     hash: macro_block.hash(),
                     size,
                     batch,
@@ -257,6 +247,7 @@ impl Block {
                     state_hash: macro_block.header.state_root,
                     body_hash: macro_block.header.body_root,
                     history_hash: macro_block.header.history_root,
+                    transactions: Some(transactions),
                     additional_fields: BlockAdditionalFields::Macro {
                         is_election_block: policy::is_election_block_at(block_number),
                         proposer: Slot::from(
@@ -268,7 +259,6 @@ impl Block {
                         slots,
                         lost_reward_set,
                         disabled_set,
-                        transactions: Some(transactions),
                         justification: macro_block.justification.map(TendermintProof::from),
                     },
                 }
@@ -308,7 +298,6 @@ impl Block {
                 };
 
                 Block {
-                    ty: BlockType::Micro,
                     hash: micro_block.hash(),
                     size,
                     batch,
@@ -323,6 +312,7 @@ impl Block {
                     state_hash: micro_block.header.state_root,
                     body_hash: micro_block.header.body_root,
                     history_hash: micro_block.header.history_root,
+                    transactions,
                     additional_fields: BlockAdditionalFields::Micro {
                         producer: Slot::from(
                             blockchain,
@@ -330,7 +320,6 @@ impl Block {
                             micro_block.header.view_number,
                         ),
                         fork_proofs,
-                        transactions,
                         justification: micro_block.justification.map(Into::into),
                     },
                 }
@@ -563,18 +552,21 @@ impl Inherent {
 pub struct Account {
     pub address: Address,
     pub balance: Coin,
-    #[serde(rename = "type", with = "crate::serde_helpers::account_type")]
-    pub ty: AccountType,
-    #[serde(skip_serializing_if = "Option::is_none")]
+
     #[serde(flatten)]
-    pub account_additional_fields: Option<AccountAdditionalFields>,
+    pub account_additional_fields: AccountAdditionalFields,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", tag = "type")]
 pub enum AccountAdditionalFields {
+    /// Additional account information for basic accounts.
+    #[serde(rename_all = "camelCase")]
+    Basic {},
+
     /// Additional account information for vesting contracts.
-    VestingContract {
+    #[serde(rename_all = "camelCase")]
+    Vesting {
         /// User friendly address (NQ-address) of the owner of the vesting contract.
         owner: Address,
         /// The block that the vesting contracted commenced.
@@ -588,6 +580,7 @@ pub enum AccountAdditionalFields {
     },
 
     /// Additional account information for HTLC contracts.
+    #[serde(rename_all = "camelCase")]
     HTLC {
         /// User friendly address (NQ-address) of the sender of the HTLC.
         sender: Address,
@@ -611,39 +604,30 @@ impl Account {
             nimiq_account::Account::Basic(basic) => Account {
                 address,
                 balance: basic.balance,
-                ty: AccountType::Basic,
-                account_additional_fields: None,
+                account_additional_fields: AccountAdditionalFields::Basic {},
             },
             nimiq_account::Account::Vesting(vesting) => Account {
                 address,
                 balance: vesting.balance,
-                ty: AccountType::Vesting,
-                account_additional_fields: Some(AccountAdditionalFields::VestingContract {
+                account_additional_fields: AccountAdditionalFields::Vesting {
                     owner: vesting.owner,
                     vesting_start: vesting.start_time,
                     vesting_step_blocks: vesting.time_step,
                     vesting_step_amount: vesting.step_amount,
                     vesting_total_amount: vesting.total_amount,
-                }),
+                },
             },
             nimiq_account::Account::HTLC(htlc) => Account {
                 address,
                 balance: htlc.balance,
-                ty: AccountType::HTLC,
-                account_additional_fields: Some(AccountAdditionalFields::HTLC {
+                account_additional_fields: AccountAdditionalFields::HTLC {
                     sender: htlc.sender,
                     recipient: htlc.recipient,
                     hash_root: htlc.hash_root,
                     hash_count: htlc.hash_count,
                     timeout: htlc.timeout,
                     total_amount: htlc.total_amount,
-                }),
-            },
-            nimiq_account::Account::Staking(staking) => Account {
-                address,
-                balance: staking.balance,
-                ty: AccountType::Staking,
-                account_additional_fields: None,
+                },
             },
             _ => unreachable!(),
         }
@@ -653,8 +637,7 @@ impl Account {
         Account {
             address,
             balance: Coin::ZERO,
-            ty: AccountType::Basic,
-            account_additional_fields: None,
+            account_additional_fields: AccountAdditionalFields::Basic {},
         }
     }
 }
