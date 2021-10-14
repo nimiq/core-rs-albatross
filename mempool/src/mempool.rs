@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 
 use futures::future::{AbortHandle, Abortable};
 
-use futures::{stream::BoxStream, StreamExt};
+use futures::stream::BoxStream;
 use keyed_priority_queue::KeyedPriorityQueue;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 
@@ -23,7 +23,7 @@ use nimiq_transaction::Transaction;
 
 use crate::config::MempoolConfig;
 use crate::executor::MempoolExecutor;
-use crate::filter::MempoolFilter;
+use crate::filter::{MempoolFilter, MempoolRules};
 
 /// Struct defining the Mempool
 pub struct Mempool {
@@ -309,15 +309,10 @@ impl Mempool {
         }
     }
 
-    /// Checks whether a transaction has been filtered
-    pub fn is_filtered(&self, hash: &Blake2bHash) -> bool {
-        self.filter.read().blacklisted(hash)
-    }
-
     /// Returns a vector with accepted transactions from the mempool.
     ///
     /// Returns the highest fee per byte up to max_bytes transactions and removes them from the mempool
-    pub fn get_transactions(&self, max_bytes: usize) -> Result<Vec<Transaction>, Error> {
+    pub fn fill_block(&self, max_bytes: usize) -> Result<Vec<Transaction>, Error> {
         let mut tx_vec = vec![];
 
         let state = self.state.upgradable_read();
@@ -363,6 +358,36 @@ impl Mempool {
         drop(mempool_state_upgraded);
 
         Ok(tx_vec)
+    }
+
+    /// Checks whether a transaction has been filtered
+    pub fn is_filtered(&self, hash: &Blake2bHash) -> bool {
+        self.filter.read().blacklisted(hash)
+    }
+
+    /// Returns the rules for the mempool.
+    pub fn get_rules(&self) -> MempoolRules {
+        self.filter.read().rules.clone()
+    }
+
+    /// Checks if a transactions is in the mempool, by its hash.
+    pub fn contains_transaction_by_hash(&self, hash: &Blake2bHash) -> bool {
+        self.state.read().contains(hash)
+    }
+
+    /// Gets a transactions by its hash.
+    pub fn get_transaction_by_hash(&self, hash: &Blake2bHash) -> Option<Transaction> {
+        self.state.read().get(hash).cloned()
+    }
+
+    /// Gets all transaction hashes in the mempool.
+    pub fn get_transaction_hashes(&self) -> Vec<Blake2bHash> {
+        self.state.read().transactions.keys().cloned().collect()
+    }
+
+    /// Gets all transactions in the mempool.
+    pub fn get_transactions(&self) -> Vec<Transaction> {
+        self.state.read().transactions.values().cloned().collect()
     }
 }
 
