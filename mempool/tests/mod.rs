@@ -68,7 +68,7 @@ async fn send_txn_to_mempool(
 
     // Get the transactions from the mempool
     mempool
-        .fill_block(txn_len)
+        .get_transactions_block(txn_len)
         .expect("expected transaction vec")
 }
 
