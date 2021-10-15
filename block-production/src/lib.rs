@@ -99,7 +99,7 @@ impl BlockProducer {
         }
 
         // Sort the transactions.
-        transactions.sort_unstable_by(|a, b| a.cmp_block_order(b));
+        transactions.sort_unstable();
 
         // Creates a new ViewChanges struct.
         let view_changes = ViewChanges::new(

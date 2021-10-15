@@ -396,10 +396,10 @@ pub struct MempoolState {
     pub(crate) transactions: HashMap<Blake2bHash, Transaction>,
 
     // Transactions ordered by fee (higher fee transactions pop first)
-    pub(crate) transactions_by_fee: KeyedPriorityQueue<Blake2bHash, TransactionFeePerByteOrdering>,
+    pub(crate) transactions_by_fee: KeyedPriorityQueue<Blake2bHash, FeeWrapper>,
 
     // Transactions ordered by age (older transactions pop first)
-    pub(crate) transactions_by_age: KeyedPriorityQueue<Blake2bHash, TransactionAgeOrdering>,
+    pub(crate) transactions_by_age: KeyedPriorityQueue<Blake2bHash, u32>,
 
     // The in-fly balance per sender
     pub(crate) state_by_sender: HashMap<Address, SenderPendingState>,
@@ -423,19 +423,11 @@ impl MempoolState {
 
         self.transactions.insert(tx_hash.clone(), tx.clone());
 
-        self.transactions_by_fee.push(
-            tx_hash.clone(),
-            TransactionFeePerByteOrdering {
-                transaction: Arc::new(tx.clone()),
-            },
-        );
+        self.transactions_by_fee
+            .push(tx_hash.clone(), FeeWrapper(tx.fee_per_byte()));
 
-        self.transactions_by_age.push(
-            tx_hash.clone(),
-            TransactionAgeOrdering {
-                transaction: Arc::new(tx.clone()),
-            },
-        );
+        self.transactions_by_age
+            .push(tx_hash.clone(), tx.validity_start_height);
 
         match self.state_by_sender.get_mut(&tx.sender) {
             None => {
@@ -486,62 +478,18 @@ pub(crate) struct SenderPendingState {
     pub(crate) txns: HashSet<Blake2bHash>,
 }
 
-#[derive(Eq, PartialEq)]
-pub(crate) struct TransactionFeePerByteOrdering {
-    transaction: Arc<Transaction>,
-}
+/// Since f64 doesn't implement Ord, we cannot sort f64's or use them in KeyedPriorityQueues. So we
+/// create this wrapper and implement Ord ourselves.
+// TODO: Maybe use this wrapper to do more fine ordering. For example, we might prefer small size
+//       transactions over large size transactions (assuming they have the same fee per byte). Or
+//       we might prefer basic transactions over staking contract transactions, etc, etc.
+#[derive(PartialEq, PartialOrd)]
+pub struct FeeWrapper(f64);
 
-impl Ord for TransactionFeePerByteOrdering {
+impl Eq for FeeWrapper {}
+
+impl Ord for FeeWrapper {
     fn cmp(&self, other: &Self) -> Ordering {
-        let this = self.transaction.as_ref();
-        let other = other.transaction.as_ref();
-        Ordering::Equal
-            //.then_with(|| this.fee_per_byte().total_cmp(&other.fee_per_byte()))
-            .then_with(|| this.fee.cmp(&other.fee))
-            .then_with(|| this.value.cmp(&other.value))
-            .then_with(|| this.recipient.cmp(&other.recipient))
-            .then_with(|| this.validity_start_height.cmp(&other.validity_start_height))
-            .then_with(|| this.sender.cmp(&other.sender))
-            .then_with(|| this.recipient_type.cmp(&other.recipient_type))
-            .then_with(|| this.sender_type.cmp(&other.sender_type))
-            .then_with(|| this.flags.cmp(&other.flags))
-            .then_with(|| this.data.len().cmp(&other.data.len()))
-            .then_with(|| this.data.cmp(&other.data))
-    }
-}
-
-impl PartialOrd for TransactionFeePerByteOrdering {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-#[derive(Eq, PartialEq)]
-pub(crate) struct TransactionAgeOrdering {
-    transaction: Arc<Transaction>,
-}
-
-impl Ord for TransactionAgeOrdering {
-    fn cmp(&self, other: &Self) -> Ordering {
-        let this = self.transaction.as_ref();
-        let other = other.transaction.as_ref();
-        Ordering::Equal
-            .then_with(|| this.validity_start_height.cmp(&other.validity_start_height))
-            //.then_with(|| this.fee_per_byte().total_cmp(&other.fee_per_byte()))
-            .then_with(|| this.fee.cmp(&other.fee))
-            .then_with(|| this.value.cmp(&other.value))
-            .then_with(|| this.recipient.cmp(&other.recipient))
-            .then_with(|| this.sender.cmp(&other.sender))
-            .then_with(|| this.recipient_type.cmp(&other.recipient_type))
-            .then_with(|| this.sender_type.cmp(&other.sender_type))
-            .then_with(|| this.flags.cmp(&other.flags))
-            .then_with(|| this.data.len().cmp(&other.data.len()))
-            .then_with(|| this.data.cmp(&other.data))
-    }
-}
-
-impl PartialOrd for TransactionAgeOrdering {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
+        self.0.total_cmp(&other.0)
     }
 }

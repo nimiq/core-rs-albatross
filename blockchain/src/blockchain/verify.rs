@@ -266,15 +266,15 @@ impl Blockchain {
                 for tx in &body.transactions {
                     // Ensure transactions are ordered and unique.
                     if let Some(previous) = previous_tx {
-                        match previous.cmp_block_order(tx) {
-                            Ordering::Equal => {
-                                return Err(PushError::InvalidBlock(
-                                    BlockError::DuplicateTransaction,
-                                ));
-                            }
+                        match previous.cmp(tx) {
                             Ordering::Greater => {
                                 return Err(PushError::InvalidBlock(
                                     BlockError::TransactionsNotOrdered,
+                                ));
+                            }
+                            Ordering::Equal => {
+                                return Err(PushError::InvalidBlock(
+                                    BlockError::DuplicateTransaction,
                                 ));
                             }
                             _ => (),
