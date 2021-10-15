@@ -275,39 +275,6 @@ impl Transaction {
         TransactionFormat::Extended
     }
 
-    pub fn cmp_mempool_order(&self, other: &Transaction) -> Ordering {
-        Ordering::Equal
-            .then_with(|| {
-                self.fee_per_byte()
-                    .partial_cmp(&other.fee_per_byte())
-                    .unwrap_or(Ordering::Equal)
-            })
-            .then_with(|| self.fee.cmp(&other.fee))
-            .then_with(|| self.value.cmp(&other.value))
-            .then_with(|| self.recipient.cmp(&other.recipient))
-            .then_with(|| self.validity_start_height.cmp(&other.validity_start_height))
-            .then_with(|| self.sender.cmp(&other.sender))
-            .then_with(|| self.recipient_type.cmp(&other.recipient_type))
-            .then_with(|| self.sender_type.cmp(&other.sender_type))
-            .then_with(|| self.flags.cmp(&other.flags))
-            .then_with(|| self.data.len().cmp(&other.data.len()))
-            .then_with(|| self.data.cmp(&other.data))
-    }
-
-    pub fn cmp_block_order(&self, other: &Transaction) -> Ordering {
-        Ordering::Equal
-            .then_with(|| self.recipient.cmp(&other.recipient))
-            .then_with(|| self.validity_start_height.cmp(&other.validity_start_height))
-            .then_with(|| other.fee.cmp(&self.fee))
-            .then_with(|| other.value.cmp(&self.value))
-            .then_with(|| self.sender.cmp(&other.sender))
-            .then_with(|| self.recipient_type.cmp(&other.recipient_type))
-            .then_with(|| self.sender_type.cmp(&other.sender_type))
-            .then_with(|| self.flags.cmp(&other.flags))
-            .then_with(|| self.data.len().cmp(&other.data.len()))
-            .then_with(|| self.data.cmp(&other.data))
-    }
-
     pub fn verify_mut(&mut self, network_id: NetworkId) -> Result<(), TransactionError> {
         let ret = self.verify(network_id);
         if ret.is_ok() {
@@ -556,7 +523,17 @@ impl PartialOrd for Transaction {
 
 impl Ord for Transaction {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.cmp_mempool_order(other)
+        Ordering::Equal
+            .then_with(|| self.recipient.cmp(&other.recipient))
+            .then_with(|| self.validity_start_height.cmp(&other.validity_start_height))
+            .then_with(|| other.fee.cmp(&self.fee))
+            .then_with(|| other.value.cmp(&self.value))
+            .then_with(|| self.sender.cmp(&other.sender))
+            .then_with(|| self.recipient_type.cmp(&other.recipient_type))
+            .then_with(|| self.sender_type.cmp(&other.sender_type))
+            .then_with(|| self.flags.cmp(&other.flags))
+            .then_with(|| self.data.len().cmp(&other.data.len()))
+            .then_with(|| self.data.cmp(&other.data))
     }
 }
 

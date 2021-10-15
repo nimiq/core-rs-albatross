@@ -1,4 +1,4 @@
-#![feature(hash_drain_filter)]
+#![feature(total_cmp)]
 
 //! Mempool implementation
 //!

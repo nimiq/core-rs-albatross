@@ -34,12 +34,12 @@ impl MempoolFilter {
         self
     }
 
-    /// Checks wether a transaction is blacklisted
+    /// Checks whether a transaction is blacklisted
     pub fn blacklisted(&self, hash: &Blake2bHash) -> bool {
         self.blacklist.contains(hash)
     }
 
-    /// Checks wether a transaction is accepted according to the general Mempool filter rules
+    /// Checks whether a transaction is accepted according to the general Mempool filter rules
     ///
     /// The following rules are checked in this function:
     /// - tx_fee
