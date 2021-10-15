@@ -461,6 +461,7 @@ impl<N: Network> Stream for Inner<N> {
 #[pin_project]
 pub struct BlockQueue<N: Network, TReq: RequestComponent<N::PeerType>> {
     /// The Peer Tracking and Request Component.
+    #[pin]
     pub request_component: TReq,
 
     /// The blocks received via gossipsub.
@@ -540,7 +541,7 @@ impl<N: Network, TReq: RequestComponent<N::PeerType>> Stream for BlockQueue<N, T
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         let num_peers = self.num_peers();
-        let this = self.project();
+        let mut this = self.project();
 
         // First, advance the internal future to process buffered blocks.
         match this.inner.poll_next_unpin(cx) {
@@ -556,31 +557,35 @@ impl<N: Network, TReq: RequestComponent<N::PeerType>> Stream for BlockQueue<N, T
         }
 
         // Then, try to get as many blocks from the gossipsub stream as possible.
-        match this.block_stream.poll_next(cx) {
-            Poll::Ready(Some((block, pubsub_id))) => {
-                // Ignore all block announcements until there is at least one synced peer.
-                if num_peers > 0 {
-                    log::trace!("Received block #{} via gossipsub", block.block_number());
-                    this.inner.on_block_announced(
-                        block,
-                        Pin::new(this.request_component),
-                        pubsub_id.propagation_source(),
-                        Some(pubsub_id),
-                    );
+        loop {
+            match this.block_stream.as_mut().poll_next(cx) {
+                Poll::Ready(Some((block, pubsub_id))) => {
+                    // Ignore all block announcements until there is at least one synced peer.
+                    if num_peers > 0 {
+                        log::debug!("Received block #{} via gossipsub", block.block_number());
+                        this.inner.on_block_announced(
+                            block,
+                            this.request_component.as_mut(),
+                            pubsub_id.propagation_source(),
+                            Some(pubsub_id),
+                        );
+                    }
                 }
+                // If the block_stream is exhausted, we quit as well.
+                Poll::Ready(None) => return Poll::Ready(None),
+                Poll::Pending => break,
             }
-            // If the block_stream is exhausted, we quit as well.
-            Poll::Ready(None) => return Poll::Ready(None),
-            Poll::Pending => {}
         }
 
         // Then, read all the responses we got for our missing blocks requests.
-        match this.request_component.poll_next_unpin(cx) {
-            Poll::Ready(Some(RequestComponentEvent::ReceivedBlocks(blocks))) => {
-                this.inner.on_missing_blocks_received(blocks);
+        loop {
+            match this.request_component.as_mut().poll_next(cx) {
+                Poll::Ready(Some(RequestComponentEvent::ReceivedBlocks(blocks))) => {
+                    this.inner.on_missing_blocks_received(blocks);
+                }
+                Poll::Ready(None) => unreachable!(),
+                Poll::Pending => break,
             }
-            Poll::Ready(None) => panic!("The request_component stream is exhausted"),
-            Poll::Pending => {}
         }
 
         Poll::Pending
