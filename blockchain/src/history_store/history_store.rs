@@ -488,10 +488,14 @@ impl HistoryStore {
 
         // Calculate number of nodes in the verifier's history tree.
         // Leaf indices are 0 based thus the + 1.
-        let leaf_count = self
-            .get_last_leaf_index_of_block(verifier_block_number, Some(txn))
-            .unwrap() as usize
-            + 1;
+        let leaf_count = match self.get_last_leaf_index_of_block(verifier_block_number, Some(txn)) {
+            Some(index) => index as usize + 1,
+            None => {
+                error!("Cannot prove chunk for epoch #{} (size = {}, index = {}): reference block #{} unknown",
+                       epoch_number, chunk_size, chunk_index, verifier_block_number);
+                return None;
+            }
+        };
         let number_of_nodes = leaf_number_to_index(leaf_count);
 
         // Calculate chunk boundaries

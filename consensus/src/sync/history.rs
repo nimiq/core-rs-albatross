@@ -154,7 +154,7 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
                     .history_store
                     .prove_chunk(
                         epoch_number,
-                        pending_batch_set.block.header.block_number,
+                        current_block_number,
                         num_full_chunks * CHUNK_SIZE,
                         0,
                         None,
