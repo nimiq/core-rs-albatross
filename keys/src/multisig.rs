@@ -182,15 +182,18 @@ impl KeyPair {
         commitments: &[Commitment],
         data: &[u8],
     ) -> (PartialSignature, PublicKey, Commitment) {
-        if public_keys.len() != commitments.len() {
-            panic!("Number of public keys and commitments must be the same.");
-        }
-        if public_keys.is_empty() {
-            panic!("Number of public keys and commitments must be greater than 0.");
-        }
-        if !public_keys.contains(&self.public) {
-            panic!("Public keys must contain own key.")
-        }
+        assert!(
+            public_keys.len() == commitments.len(),
+            "Number of public keys and commitments must be the same."
+        );
+        assert!(
+            !public_keys.is_empty(),
+            "Number of public keys and commitments must be greater than 0."
+        );
+        assert!(
+            public_keys.contains(&self.public),
+            "Public keys must contain own key."
+        );
 
         // Sort public keys.
         // public_keys.sort();
@@ -241,7 +244,7 @@ impl KeyPair {
 }
 
 impl PublicKey {
-    fn to_edwards_point(&self) -> Option<EdwardsPoint> {
+    fn to_edwards_point(self) -> Option<EdwardsPoint> {
         let mut bits: [u8; PublicKey::SIZE] = [0u8; PublicKey::SIZE];
         bits.copy_from_slice(&self.as_bytes()[..PublicKey::SIZE]);
 
