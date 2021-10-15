@@ -312,7 +312,7 @@ impl Mempool {
     /// Returns a vector with accepted transactions from the mempool.
     ///
     /// Returns the highest fee per byte up to max_bytes transactions and removes them from the mempool
-    pub fn fill_block(&self, max_bytes: usize) -> Result<Vec<Transaction>, Error> {
+    pub fn get_transactions_block(&self, max_bytes: usize) -> Result<Vec<Transaction>, Error> {
         let mut tx_vec = vec![];
 
         let state = self.state.upgradable_read();
@@ -391,7 +391,7 @@ impl Mempool {
     }
 }
 
-pub struct MempoolState {
+pub(crate) struct MempoolState {
     // A hashmap containing the transactions indexed by their hash.
     pub(crate) transactions: HashMap<Blake2bHash, Transaction>,
 
@@ -483,10 +483,16 @@ pub(crate) struct SenderPendingState {
 // TODO: Maybe use this wrapper to do more fine ordering. For example, we might prefer small size
 //       transactions over large size transactions (assuming they have the same fee per byte). Or
 //       we might prefer basic transactions over staking contract transactions, etc, etc.
-#[derive(PartialEq, PartialOrd)]
+#[derive(PartialEq)]
 pub struct FeeWrapper(f64);
 
 impl Eq for FeeWrapper {}
+
+impl PartialOrd for FeeWrapper {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
 
 impl Ord for FeeWrapper {
     fn cmp(&self, other: &Self) -> Ordering {

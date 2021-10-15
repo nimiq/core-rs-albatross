@@ -1,3 +1,4 @@
+#![deny(missing_docs)]
 #![feature(total_cmp)]
 
 //! Mempool implementation
