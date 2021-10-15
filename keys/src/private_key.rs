@@ -61,8 +61,7 @@ impl From<[u8; PrivateKey::SIZE]> for PrivateKey {
 
 impl Clone for PrivateKey {
     fn clone(&self) -> Self {
-        let cloned_zebra = self.0.into();
-        PrivateKey(cloned_zebra)
+        PrivateKey(self.0.clone())
     }
 }
 

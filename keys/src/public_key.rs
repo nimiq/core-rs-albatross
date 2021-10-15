@@ -92,7 +92,7 @@ impl Eq for PublicKey {}
 
 impl Ord for PublicKey {
     fn cmp(&self, other: &PublicKey) -> Ordering {
-        <&[u8]>::from(self.0.as_ref()).cmp(<&[u8]>::from(other.0.as_ref()))
+        self.0.as_ref().cmp(other.0.as_ref())
     }
 }
 
@@ -112,7 +112,7 @@ impl<'a> From<&'a PrivateKey> for PublicKey {
 impl<'a> From<&'a [u8; PublicKey::SIZE]> for PublicKey {
     fn from(bytes: &'a [u8; PublicKey::SIZE]) -> Self {
         let vk_bytes =
-            ed25519_zebra::VerificationKey::try_from(bytes.clone()).expect("Unexpected size for");
+            ed25519_zebra::VerificationKey::try_from(*bytes).expect("Unexpected size for");
         PublicKey(vk_bytes)
     }
 }
