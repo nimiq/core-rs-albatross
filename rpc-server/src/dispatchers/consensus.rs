@@ -87,8 +87,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         let txid = tx.hash::<Blake2bHash>();
 
         match self.consensus.send_transaction(tx).await {
-            Ok(ReturnCode::Accepted) => Ok(txid),
-            Ok(return_code) => Err(Error::TransactionRejected(return_code)),
+            Ok(_) => Ok(txid),
             Err(e) => Err(Error::NetworkError(e)),
         }
     }

@@ -25,7 +25,7 @@ use crate::verify::{verify_tx, VerifyErr};
 /// Struct defining the Mempool
 pub struct Mempool {
     /// Blockchain reference
-    pub(crate) blockchain: Arc<RwLock<Blockchain>>,
+    pub blockchain: Arc<RwLock<Blockchain>>,
 
     /// The mempool state: the data structure where the transactions are stored
     pub(crate) state: Arc<RwLock<MempoolState>>,
