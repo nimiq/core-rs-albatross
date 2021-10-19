@@ -1,29 +1,26 @@
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::io::Error;
-
 use std::sync::{Arc, Mutex};
 
 use futures::future::{AbortHandle, Abortable};
-
 use futures::stream::BoxStream;
 use keyed_priority_queue::KeyedPriorityQueue;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 
 use beserial::Serialize;
-
 use nimiq_block::Block;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
 use nimiq_network_interface::network::Network;
 use nimiq_primitives::coin::Coin;
-
 use nimiq_transaction::Transaction;
 
 use crate::config::MempoolConfig;
 use crate::executor::MempoolExecutor;
 use crate::filter::{MempoolFilter, MempoolRules};
+use crate::verify::{verify_tx, ReturnCode};
 
 /// Struct defining the Mempool
 pub struct Mempool {
@@ -73,13 +70,11 @@ impl Mempool {
             return;
         }
 
-        let network_id = self.blockchain.read().network_id;
         let mempool_executor = MempoolExecutor::new(
             Arc::clone(&self.blockchain),
             Arc::clone(&self.state),
             Arc::clone(&self.filter),
             Arc::clone(&network),
-            network_id,
         )
         .await;
 
@@ -105,12 +100,10 @@ impl Mempool {
             return;
         }
 
-        let network_id = self.blockchain.read().network_id;
         let mempool_executor = MempoolExecutor::<N>::with_txn_stream(
             Arc::clone(&self.blockchain),
             Arc::clone(&self.state),
             Arc::clone(&self.filter),
-            network_id,
             txn_stream,
         );
 
@@ -358,6 +351,23 @@ impl Mempool {
         drop(mempool_state_upgraded);
 
         Ok(tx_vec)
+    }
+
+    /// Adds a transaction to the Mempool.
+    pub fn add_transaction(&self, transaction: Transaction) -> ReturnCode {
+        let blockchain = Arc::clone(&self.blockchain);
+        let mempool_state = Arc::clone(&self.state);
+        let filter = Arc::clone(&self.filter);
+
+        log::debug!("Verifying manually added transaction.");
+
+        let rc = verify_tx(&transaction, blockchain, Arc::clone(&mempool_state), filter);
+
+        if rc == ReturnCode::Accepted {
+            mempool_state.write().put(&transaction);
+        };
+
+        rc
     }
 
     /// Checks whether a transaction has been filtered
