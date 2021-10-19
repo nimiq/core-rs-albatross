@@ -25,6 +25,25 @@ use nimiq_vrf::VrfSeed;
 
 use crate::error::Error;
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum HashOrTx {
+    Hash(Blake2bHash),
+    Tx(Transaction),
+}
+
+impl From<Blake2bHash> for HashOrTx {
+    fn from(hash: Blake2bHash) -> Self {
+        HashOrTx::Hash(hash)
+    }
+}
+
+impl From<nimiq_transaction::Transaction> for HashOrTx {
+    fn from(transaction: nimiq_transaction::Transaction) -> Self {
+        HashOrTx::Tx(Transaction::from_transaction(transaction))
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum BlockNumberOrHash {
     Number(u32),
@@ -696,5 +715,184 @@ impl Validator {
             inactivity_flag: validator.inactivity_flag,
             stakers,
         }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MempoolInfo {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub _0: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub _1: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub _2: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub _5: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub _10: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub _20: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub _50: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub _100: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub _200: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub _500: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub _1000: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub _2000: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub _5000: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub _10000: Option<u32>,
+    pub total: u32,
+    pub buckets: Vec<u32>,
+}
+
+impl MempoolInfo {
+    pub fn from_txs(transactions: Vec<nimiq_transaction::Transaction>) -> Self {
+        let mut info = MempoolInfo {
+            _0: None,
+            _1: None,
+            _2: None,
+            _5: None,
+            _10: None,
+            _20: None,
+            _50: None,
+            _100: None,
+            _200: None,
+            _500: None,
+            _1000: None,
+            _2000: None,
+            _5000: None,
+            _10000: None,
+            total: 0,
+            buckets: vec![],
+        };
+
+        for tx in transactions {
+            match tx.fee_per_byte() {
+                x if x < 1.0 => {
+                    if let Some(n) = info._0 {
+                        info._0 = Some(n + 1);
+                    } else {
+                        info._0 = Some(1);
+                        info.buckets.push(0)
+                    }
+                }
+                x if x < 2.0 => {
+                    if let Some(n) = info._1 {
+                        info._1 = Some(n + 1);
+                    } else {
+                        info._1 = Some(1);
+                        info.buckets.push(1)
+                    }
+                }
+                x if x < 5.0 => {
+                    if let Some(n) = info._2 {
+                        info._2 = Some(n + 1);
+                    } else {
+                        info._2 = Some(1);
+                        info.buckets.push(2)
+                    }
+                }
+                x if x < 10.0 => {
+                    if let Some(n) = info._5 {
+                        info._5 = Some(n + 1);
+                    } else {
+                        info._5 = Some(1);
+                        info.buckets.push(5)
+                    }
+                }
+                x if x < 20.0 => {
+                    if let Some(n) = info._10 {
+                        info._10 = Some(n + 1);
+                    } else {
+                        info._10 = Some(1);
+                        info.buckets.push(10)
+                    }
+                }
+                x if x < 50.0 => {
+                    if let Some(n) = info._20 {
+                        info._20 = Some(n + 1);
+                    } else {
+                        info._20 = Some(1);
+                        info.buckets.push(20)
+                    }
+                }
+                x if x < 100.0 => {
+                    if let Some(n) = info._50 {
+                        info._50 = Some(n + 1);
+                    } else {
+                        info._50 = Some(1);
+                        info.buckets.push(50)
+                    }
+                }
+                x if x < 200.0 => {
+                    if let Some(n) = info._100 {
+                        info._100 = Some(n + 1);
+                    } else {
+                        info._100 = Some(1);
+                        info.buckets.push(100)
+                    }
+                }
+                x if x < 500.0 => {
+                    if let Some(n) = info._200 {
+                        info._200 = Some(n + 1);
+                    } else {
+                        info._200 = Some(1);
+                        info.buckets.push(200)
+                    }
+                }
+                x if x < 1000.0 => {
+                    if let Some(n) = info._500 {
+                        info._500 = Some(n + 1);
+                    } else {
+                        info._500 = Some(1);
+                        info.buckets.push(500)
+                    }
+                }
+                x if x < 2000.0 => {
+                    if let Some(n) = info._1000 {
+                        info._1000 = Some(n + 1);
+                    } else {
+                        info._1000 = Some(1);
+                        info.buckets.push(1000)
+                    }
+                }
+                x if x < 5000.0 => {
+                    if let Some(n) = info._2000 {
+                        info._2000 = Some(n + 1);
+                    } else {
+                        info._2000 = Some(1);
+                        info.buckets.push(2000)
+                    }
+                }
+                x if x < 10000.0 => {
+                    if let Some(n) = info._5000 {
+                        info._5000 = Some(n + 1);
+                    } else {
+                        info._5000 = Some(1);
+                        info.buckets.push(5000)
+                    }
+                }
+                _ => {
+                    if let Some(n) = info._10000 {
+                        info._10000 = Some(n + 1);
+                    } else {
+                        info._10000 = Some(1);
+                        info.buckets.push(10000)
+                    }
+                }
+            }
+
+            info.total += 1;
+        }
+
+        info
     }
 }

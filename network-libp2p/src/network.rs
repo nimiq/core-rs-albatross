@@ -187,16 +187,15 @@ impl Network {
     fn new_transport(keypair: &Keypair) -> std::io::Result<Boxed<(PeerId, StreamMuxerBox)>> {
         let transport = {
             // Websocket over TCP/DNS
-            let transport = websocket::WsConfig::new(dns::TokioDnsConfig::system(
-                tcp::TokioTcpConfig::new().nodelay(true),
-            )?);
 
             // Memory transport for testing
             // TODO: Use websocket over the memory transport
             #[cfg(test)]
             let transport = transport.or_transport(MemoryTransport::default());
 
-            transport
+            websocket::WsConfig::new(dns::TokioDnsConfig::system(
+                tcp::TokioTcpConfig::new().nodelay(true),
+            )?)
         };
 
         let noise_keys = noise::Keypair::<noise::X25519Spec>::new()

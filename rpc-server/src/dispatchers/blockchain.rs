@@ -128,50 +128,6 @@ impl BlockchainInterface for BlockchainDispatcher {
         Ok(Slot::from(blockchain.deref(), block_number, view_number))
     }
 
-    /// Tries to fetch a transaction (including reward transactions) given its hash. It has an option
-    /// to also search the mempool for the transaction, it defaults to false.
-    async fn get_transaction_by_hash(
-        &mut self,
-        hash: Blake2bHash,
-        // TODO: Check mempool for the transaction, too!
-        _check_mempool: Option<bool>,
-    ) -> Result<Transaction, Error> {
-        let blockchain = self.blockchain.read();
-
-        // Get all the extended transactions that correspond to this hash.
-        let mut extended_tx_vec = blockchain.history_store.get_ext_tx_by_hash(&hash, None);
-
-        // Unpack the transaction or raise an error.
-        let extended_tx = match extended_tx_vec.len() {
-            0 => {
-                return Err(Error::TransactionNotFound(hash));
-            }
-            1 => extended_tx_vec.pop().unwrap(),
-            _ => {
-                return Err(Error::MultipleTransactionsFound(hash));
-            }
-        };
-
-        // Convert the extended transaction into a regular transaction. This will also convert
-        // reward inherents.
-        let block_number = extended_tx.block_number;
-        let timestamp = extended_tx.block_time;
-
-        match extended_tx.into_transaction() {
-            Ok(tx) => {
-                return Ok(Transaction::from_blockchain(
-                    tx,
-                    block_number,
-                    timestamp,
-                    blockchain.block_number(),
-                ));
-            }
-            Err(_) => {
-                return Err(Error::TransactionNotFound(hash));
-            }
-        }
-    }
-
     /// Returns all the transactions (including reward transactions) for the given block number. Note
     /// that this only considers blocks in the main chain.
     async fn get_transactions_by_block_number(
