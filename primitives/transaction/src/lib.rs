@@ -292,7 +292,7 @@ impl Transaction {
             return Err(TransactionError::ForeignNetwork);
         }
 
-        // Check that value > 0 except if it is a signalling transaction..
+        // Check that value > 0 except if it is a signalling transaction.
         if self.flags.contains(TransactionFlags::SIGNALLING) {
             if self.value != Coin::ZERO {
                 return Err(TransactionError::InvalidForRecipient);

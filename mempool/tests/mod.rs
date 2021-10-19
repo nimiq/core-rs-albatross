@@ -1,11 +1,11 @@
+use std::sync::Arc;
+
 use futures::{channel::mpsc, sink::SinkExt};
 use log::LevelFilter::Debug;
-use nimiq_mempool::config::MempoolConfig;
 //use nimiq_mempool::filter::MempoolFilter;
 use parking_lot::RwLock;
 use rand::prelude::StdRng;
 use rand::SeedableRng;
-use std::sync::Arc;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_blockchain::Blockchain;
@@ -13,6 +13,7 @@ use nimiq_bls::KeyPair as BLSKeyPair;
 use nimiq_build_tools::genesis::GenesisBuilder;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
+use nimiq_mempool::config::MempoolConfig;
 use nimiq_mempool::mempool::Mempool;
 use nimiq_network_mock::{MockHub, MockId, MockNetwork};
 use nimiq_primitives::coin::Coin;

@@ -8,6 +8,7 @@
 //! transactions that should be included in a block.
 
 extern crate log;
+
 /// Mempool config module
 pub mod config;
 /// Mempool executor module
@@ -16,3 +17,5 @@ pub mod executor;
 pub mod filter;
 /// Main mempool module
 pub mod mempool;
+/// Verify transaction module
+mod verify;
