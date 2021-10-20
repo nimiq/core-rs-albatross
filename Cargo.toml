@@ -25,7 +25,6 @@ members = [
   "nano-primitives",
   "nano-zkp",
   "nano-blockchain",
-#   "network",
   "network-interface",
   "network-libp2p",
   "network-mock",
