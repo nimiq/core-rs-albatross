@@ -18,4 +18,4 @@ pub mod filter;
 /// Main mempool module
 pub mod mempool;
 /// Verify transaction module
-mod verify;
+pub mod verify;

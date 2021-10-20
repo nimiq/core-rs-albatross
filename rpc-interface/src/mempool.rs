@@ -11,6 +11,8 @@ use nimiq_hash::Blake2bHash;
 pub trait MempoolInterface {
     type Error;
 
+    async fn push_transaction(&mut self, raw_tx: String) -> Result<Blake2bHash, Self::Error>;
+
     async fn get_transaction_by_hash(
         &mut self,
         hash: Blake2bHash,

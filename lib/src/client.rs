@@ -10,6 +10,7 @@ use nimiq_consensus::{
 };
 use nimiq_database::Environment;
 use nimiq_genesis::NetworkInfo;
+use nimiq_mempool::mempool::Mempool;
 use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_libp2p::{
     discovery::peer_contacts::{PeerContact, Services},
@@ -18,6 +19,8 @@ use nimiq_network_libp2p::{
 use nimiq_utils::time::OffsetTime;
 #[cfg(feature = "validator")]
 use nimiq_validator::validator::Validator as AbstractValidator;
+#[cfg(feature = "validator")]
+use nimiq_validator::validator::ValidatorProxy as AbstractValidatorProxy;
 #[cfg(feature = "validator")]
 use nimiq_validator_network::network_impl::ValidatorNetworkImpl;
 #[cfg(feature = "wallet")]
@@ -31,6 +34,8 @@ pub type Consensus = AbstractConsensus<Network>;
 pub type ConsensusProxy = AbstractConsensusProxy<Network>;
 #[cfg(feature = "validator")]
 pub type Validator = AbstractValidator<Network, ValidatorNetworkImpl<Network>>;
+#[cfg(feature = "validator")]
+pub type ValidatorProxy = AbstractValidatorProxy;
 
 /// Holds references to the relevant structs. This is then Arc'd in `Client` and a nice API is
 /// exposed.
@@ -50,6 +55,9 @@ pub(crate) struct ClientInner {
     /// The consensus object, which maintains the blockchain, the network and other things to
     /// reach consensus.
     consensus: ConsensusProxy,
+
+    #[cfg(feature = "validator")]
+    validator: ValidatorProxy,
 
     /// Wallet that stores keypairs for transaction signing
     #[cfg(feature = "wallet")]
@@ -154,16 +162,15 @@ impl ClientInner {
         #[cfg(feature = "validator")]
         let validator = {
             let validator_network = Arc::new(ValidatorNetworkImpl::new(Arc::clone(&network)));
-            let validator = Validator::new(
+
+            Validator::new(
                 &consensus,
                 validator_network,
                 validator_key,
                 cold_key,
                 warm_key,
                 config.mempool,
-            );
-
-            Some(validator)
+            )
         };
 
         // Start network.
@@ -175,12 +182,14 @@ impl ClientInner {
                 environment,
                 network,
                 consensus: consensus.proxy(),
+                #[cfg(feature = "validator")]
+                validator: validator.proxy(),
                 #[cfg(feature = "wallet")]
                 wallet_store,
             }),
             consensus: Some(consensus),
             #[cfg(feature = "validator")]
-            validator,
+            validator: Some(validator),
         })
     }
 }
@@ -248,6 +257,17 @@ impl Client {
     #[cfg(feature = "validator")]
     pub fn validator(&mut self) -> Option<Validator> {
         self.validator.take()
+    }
+
+    #[cfg(feature = "validator")]
+    /// Returns a reference to the *Validator proxy*.
+    pub fn validator_proxy(&self) -> ValidatorProxy {
+        self.inner.validator.clone()
+    }
+
+    #[cfg(feature = "validator")]
+    pub fn mempool(&self) -> Arc<Mempool> {
+        Arc::clone(&self.validator.as_ref().unwrap().mempool)
     }
 
     /// Returns the database environment.

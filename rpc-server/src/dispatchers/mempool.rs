@@ -1,10 +1,12 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use beserial::Deserialize;
 
 use nimiq_blockchain::AbstractBlockchain;
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_mempool::mempool::Mempool;
+use nimiq_mempool::verify::ReturnCode;
 use nimiq_rpc_interface::mempool::MempoolInterface;
 use nimiq_rpc_interface::types::{HashOrTx, MempoolInfo, Transaction};
 
@@ -25,6 +27,18 @@ impl MempoolDispatcher {
 #[async_trait]
 impl MempoolInterface for MempoolDispatcher {
     type Error = Error;
+
+    /// Pushes the given serialized transaction to the local mempool.
+    async fn push_transaction(&mut self, raw_tx: String) -> Result<Blake2bHash, Self::Error> {
+        let tx: nimiq_transaction::Transaction =
+            Deserialize::deserialize_from_vec(&hex::decode(&raw_tx)?)?;
+        let txid = tx.hash::<Blake2bHash>();
+
+        match self.mempool.add_transaction(tx) {
+            ReturnCode::Accepted => Ok(txid),
+            rc => Err(Error::MempoolError(rc)),
+        }
+    }
 
     /// Tries to fetch a transaction (including reward transactions) given its hash. It has an option
     /// to also search the mempool for the transaction, it defaults to false.

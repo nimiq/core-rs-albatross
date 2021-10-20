@@ -593,6 +593,15 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
     pub fn warm_key(&self) -> KeyPair {
         self.warm_key.read().clone()
     }
+
+    pub fn proxy(&self) -> ValidatorProxy {
+        ValidatorProxy {
+            validator_address: Arc::clone(&self.validator_address),
+            cold_key: Arc::clone(&self.cold_key),
+            warm_key: Arc::clone(&self.warm_key),
+            signing_key: Arc::clone(&self.signing_key),
+        }
+    }
 }
 
 impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Future
