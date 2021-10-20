@@ -17,9 +17,9 @@ use nimiq_bls::{CompressedPublicKey, CompressedSignature};
 use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
+use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
 use nimiq_primitives::slots::Validators;
-use nimiq_primitives::coin::Coin;
 use nimiq_transaction::account::htlc_contract::AnyHash;
 use nimiq_vrf::VrfSeed;
 
