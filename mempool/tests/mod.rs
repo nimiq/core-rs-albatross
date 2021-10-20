@@ -47,10 +47,11 @@ async fn send_txn_to_mempool(
     let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
     let mut hub = MockHub::new();
     let mock_id = MockId::new(hub.new_address().into());
+    let mock_network = Arc::new(hub.new_network());
 
     // Subscribe mempool with the mpsc stream created
     mempool
-        .start_executor_with_txn_stream::<MockNetwork>(Box::pin(txn_stream_rx))
+        .start_executor_with_txn_stream::<MockNetwork>(Box::pin(txn_stream_rx), mock_network)
         .await;
 
     // Send the transactions

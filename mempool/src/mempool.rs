@@ -94,6 +94,7 @@ impl Mempool {
     pub async fn start_executor_with_txn_stream<N: Network>(
         &self,
         txn_stream: BoxStream<'static, (Transaction, <N as Network>::PubsubId)>,
+        network: Arc<N>,
     ) {
         if self.executor_handle.lock().unwrap().is_some() {
             // If we already have an executor running, don't do anything
@@ -104,6 +105,7 @@ impl Mempool {
             Arc::clone(&self.blockchain),
             Arc::clone(&self.state),
             Arc::clone(&self.filter),
+            network,
             txn_stream,
         );
 

@@ -8,7 +8,7 @@ use parking_lot::RwLock;
 
 use nimiq_blockchain::Blockchain;
 use nimiq_network_interface::network::{Network, Topic};
-
+use nimiq_network_interface::prelude::MsgAcceptance;
 use nimiq_transaction::Transaction;
 
 use crate::filter::MempoolFilter;
@@ -42,6 +42,9 @@ pub(crate) struct MempoolExecutor<N: Network> {
     // Ongoing verification tasks counter
     verification_tasks: Arc<AtomicU32>,
 
+    // Reference to the network, to alow for message validation
+    network: Arc<N>,
+
     // Transaction stream that is used to listen to transactions from the network
     txn_stream: BoxStream<'static, (Transaction, <N as Network>::PubsubId)>,
 }
@@ -58,6 +61,7 @@ impl<N: Network> MempoolExecutor<N> {
             blockchain,
             state,
             filter,
+            network,
             verification_tasks: Arc::new(AtomicU32::new(0)),
             txn_stream,
         }
@@ -67,12 +71,14 @@ impl<N: Network> MempoolExecutor<N> {
         blockchain: Arc<RwLock<Blockchain>>,
         state: Arc<RwLock<MempoolState>>,
         filter: Arc<RwLock<MempoolFilter>>,
+        network: Arc<N>,
         txn_stream: BoxStream<'static, (Transaction, <N as Network>::PubsubId)>,
     ) -> Self {
         Self {
             blockchain,
             state,
             filter,
+            network,
             verification_tasks: Arc::new(AtomicU32::new(0)),
             txn_stream,
         }
@@ -83,7 +89,7 @@ impl<N: Network> Future for MempoolExecutor<N> {
     type Output = ();
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        while let Poll::Ready(Some((tx, _pubsub_id))) = self.txn_stream.as_mut().poll_next_unpin(cx)
+        while let Poll::Ready(Some((tx, pubsub_id))) = self.txn_stream.as_mut().poll_next_unpin(cx)
         {
             log::debug!("Received new transaction");
 
@@ -101,6 +107,8 @@ impl<N: Network> Future for MempoolExecutor<N> {
 
             log::debug!("Spawning a new verification task");
 
+            let network = Arc::clone(&self.network);
+
             // Spawn the transaction verification task
             tokio::task::spawn(async move {
                 log::debug!("Starting execution of new verification task");
@@ -109,9 +117,16 @@ impl<N: Network> Future for MempoolExecutor<N> {
 
                 let rc = verify_tx(&tx, blockchain, Arc::clone(&mempool_state), filter);
 
-                if rc == ReturnCode::Accepted {
+                let acceptance = if rc == ReturnCode::Accepted {
                     mempool_state.write().put(&tx);
-                }
+                    MsgAcceptance::Accept
+                } else {
+                    MsgAcceptance::Ignore
+                };
+
+                if let Err(e) = network.validate_message(pubsub_id, acceptance).await {
+                    log::trace!("failed to validate_message for tx: {:?}", e);
+                };
 
                 tasks_count.fetch_sub(1, AtomicOrdering::SeqCst);
             });
