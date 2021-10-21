@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use futures::task::{Context, Poll};
 use futures::{stream::BoxStream, Future, StreamExt};
-use parking_lot::RwLock;
+use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 
 use nimiq_blockchain::Blockchain;
 use nimiq_network_interface::network::{Network, Topic};
@@ -13,7 +13,7 @@ use nimiq_transaction::Transaction;
 
 use crate::filter::MempoolFilter;
 use crate::mempool::MempoolState;
-use crate::verify::{verify_tx, ReturnCode};
+use crate::verify::verify_tx;
 
 const CONCURRENT_VERIF_TASKS: u32 = 1000;
 
@@ -109,13 +109,18 @@ impl<N: Network> Future for MempoolExecutor<N> {
             tokio::task::spawn(async move {
                 tasks_count.fetch_add(1, AtomicOrdering::SeqCst);
 
-                let rc = verify_tx(&tx, blockchain, Arc::clone(&mempool_state), filter);
+                // Verifying and pushing the TX in a separate scope to drop the lock that is returned by
+                // the verify_tx function immediately
+                let acceptance = {
+                    let verify_tx_ret = verify_tx(&tx, blockchain, &mempool_state, filter).await;
 
-                let acceptance = if rc == ReturnCode::Accepted {
-                    mempool_state.write().put(&tx);
-                    MsgAcceptance::Accept
-                } else {
-                    MsgAcceptance::Ignore
+                    match verify_tx_ret {
+                        Ok(mempool_state_lock) => {
+                            RwLockUpgradableReadGuard::upgrade(mempool_state_lock).put(&tx);
+                            MsgAcceptance::Accept
+                        }
+                        Err(_) => MsgAcceptance::Ignore,
+                    }
                 };
 
                 if let Err(e) = network.validate_message(pubsub_id, acceptance).await {

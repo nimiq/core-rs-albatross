@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use parking_lot::RwLock;
+use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 
 use nimiq_account::{Account, BasicAccount};
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
@@ -12,9 +12,18 @@ use nimiq_transaction::Transaction;
 use crate::filter::MempoolFilter;
 use crate::mempool::MempoolState;
 
-/// Return code for the Mempool executor future
+/// Return codes for transaction signature verification
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum ReturnCode {
+pub enum SignVerifReturnCode {
+    /// Transaction signature is invalid
+    Invalid,
+    /// Transaction signature is correct
+    SignOk,
+}
+
+/// Error codes for the transaction verification
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum VerifyErr {
     /// Sender doesn't have enough funds.
     NotEnoughFunds,
     /// Transaction is invalid
@@ -23,77 +32,106 @@ pub enum ReturnCode {
     Known,
     /// Transaction is filtered
     Filtered,
-    /// Transaction is accepted
-    Accepted,
 }
 
-pub(crate) fn verify_tx(
+/// Verifies a Transaction
+///
+/// This function takes a reference to a RW Lock of the mempool_state and
+/// returns a result of a RwLockUpgradableReadGuard of the mempool such that in
+/// case of an accepted transaction (`Ok(RwLockUpgradableReadGuard)`), the
+/// caller can upgrade the lock and add the transaction to the mempool.
+pub(crate) async fn verify_tx<'a>(
     transaction: &Transaction,
     blockchain: Arc<RwLock<Blockchain>>,
-    mempool_state: Arc<RwLock<MempoolState>>,
+    mempool_state: &'a Arc<RwLock<MempoolState>>,
     filter: Arc<RwLock<MempoolFilter>>,
-) -> ReturnCode {
-    // Check if we already know the transaction
-    let mempool_state = mempool_state.read();
+) -> Result<RwLockUpgradableReadGuard<'a, MempoolState>, VerifyErr> {
+    // 1. Verify transaction signature (and other stuff)
+    let network_id;
+    {
+        network_id = blockchain.read().network_id();
+    }
+    let mut tx = transaction.clone();
 
+    let sign_verification_handle = tokio::task::spawn_blocking(move || {
+        if let Err(err) = tx.verify_mut(network_id) {
+            log::debug!("Intrinsic tx verification Failed {:?}", err);
+            return SignVerifReturnCode::Invalid;
+        }
+        SignVerifReturnCode::SignOk
+    });
+
+    // Check the result of the sign verification for the tx
+    match sign_verification_handle.await {
+        Ok(rc) => {
+            if rc == SignVerifReturnCode::Invalid {
+                // If signature verification failed we just return
+                return Err(VerifyErr::Invalid);
+            }
+        }
+        Err(_err) => {
+            return Err(VerifyErr::Invalid);
+        }
+    };
+
+    // 2. Acquire the mempool state upgradable read lock
+    let mempool_state = mempool_state.upgradable_read();
+
+    // 3. Check if we already know the transaction
     if mempool_state.contains(&transaction.hash()) {
         // We already know this transaction, no need to process
         log::debug!("Transaction is already known ");
-        return ReturnCode::Known;
+        return Err(VerifyErr::Known);
     }
 
-    // Check if the transaction is going to be filtered.
-    let filter = filter.read();
-
-    if !filter.accepts_transaction(transaction) || filter.blacklisted(&transaction.hash()) {
-        log::debug!("Transaction filtered");
-        return ReturnCode::Filtered;
+    // 4. Check if the transaction is going to be filtered.
+    {
+        let filter = filter.read();
+        if !filter.accepts_transaction(transaction) || filter.blacklisted(&transaction.hash()) {
+            log::debug!("Transaction filtered");
+            return Err(VerifyErr::Invalid);
+        }
     }
 
-    // 1. Acquire Blockchain read lock
+    // 5. Acquire Blockchain read lock
     let blockchain = blockchain.read();
 
-    // 2. Verify transaction signature (and other stuff)
-    let network_id = blockchain.network_id();
-
-    if let Err(err) = transaction.verify(network_id) {
-        log::debug!("Intrinsic tx verification Failed {:?}", err);
-        return ReturnCode::Invalid;
-    }
-
-    // 3. Check Validity Window and already included
+    // 6. Check Validity Window and already included
     let block_height = blockchain.block_number() + 1;
 
     if !transaction.is_valid_at(block_height) {
         log::debug!("Transaction invalid at block {}", block_height);
-        return ReturnCode::Invalid;
+        return Err(VerifyErr::Invalid);
     }
 
     if blockchain.contains_tx_in_validity_window(&transaction.hash()) {
         log::debug!("Transaction has already been mined");
-        return ReturnCode::Invalid;
+        return Err(VerifyErr::Invalid);
     }
 
-    // 4. Sequentialize per Sender to Check Balances and acquire the upgradable from the blockchain.
-    // Perform all balances checks.
+    // 7. Sequentialize per Sender to Check Balances and acquire the upgradable from the blockchain.
+    //    Perform all balances checks.
     let sender_account = match blockchain.get_account(&transaction.sender) {
         None => {
             log::debug!(
                 "There is no account for this sender in the blockchain {}",
                 transaction.sender.to_user_friendly_address()
             );
-            return ReturnCode::Invalid;
+            return Err(VerifyErr::Invalid);
         }
         Some(account) => account,
     };
 
-    // Get recipient account to later check against filter rules.
+    // 8. Get recipient account to later check against filter rules.
     let recipient_account = match blockchain.get_account(&transaction.recipient) {
         None => Account::Basic(BasicAccount {
             balance: Coin::ZERO,
         }),
         Some(x) => x,
     };
+
+    // 9. Drop the blockchain lock since it is no longer needed
+    drop(blockchain);
 
     let blockchain_sender_balance = sender_account.balance();
     let blockchain_recipient_balance = recipient_account.balance();
@@ -115,6 +153,8 @@ pub(crate) fn verify_tx(
     let sender_in_fly_balance = transaction.total_value().unwrap() + sender_current_balance;
     let recipient_in_fly_balance = transaction.total_value().unwrap() + recipient_current_balance;
 
+    let filter = filter.read();
+
     // Check the balance against filters
     if !filter.accepts_sender_balance(
         transaction,
@@ -122,7 +162,7 @@ pub(crate) fn verify_tx(
         sender_in_fly_balance,
     ) {
         log::debug!("Transaction filtered: Not accepting transaction due to sender balance");
-        return ReturnCode::Filtered;
+        return Err(VerifyErr::Filtered);
     }
 
     if !filter.accepts_recipient_balance(
@@ -131,13 +171,13 @@ pub(crate) fn verify_tx(
         recipient_in_fly_balance,
     ) {
         log::debug!("Transaction filtered: Not accepting transaction due to recipient balance");
-        return ReturnCode::Filtered;
+        return Err(VerifyErr::Filtered);
     }
 
     if sender_in_fly_balance > blockchain_sender_balance {
         log::debug!("Dropped because sum of txs in mempool is larger than the account balance");
-        return ReturnCode::NotEnoughFunds;
+        return Err(VerifyErr::NotEnoughFunds);
     }
 
-    ReturnCode::Accepted
+    Ok(mempool_state)
 }
