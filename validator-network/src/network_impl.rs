@@ -210,9 +210,49 @@ where
             .iter()
             .copied()
             .map(|validator_id| async move {
-                self.get_validator_peer(validator_id)
-                    .await?
-                    .ok_or(NetworkError::UnknownValidator(validator_id))?
+                let peer = if let Ok(Some(peer)) = self.get_validator_peer(validator_id).await {
+                    // The peer was cached so the send is fast tracked
+                    peer
+                } else {
+                    // The peer could not be retrieved so we update the cache with a fresh lookup
+                    let mut state = self.state.lock().await;
+
+                    // get the public key for the validator_id, return NetworkError::UnknownValidator if it does not exist
+                    let public_key = state
+                        .validator_keys
+                        .get(validator_id)
+                        .ok_or(NetworkError::UnknownValidator(validator_id))?
+                        .clone();
+
+                    // resolve the public key to the peer_id using the DHT record
+                    if let Some(peer_id) = Self::resolve_peer_id(&self.network, &public_key).await? {
+                        // set the cache with he new peer_id for this public key
+                        state
+                            .validator_peer_id_cache
+                            .entry(public_key.clone())
+                            .and_modify(|id| *id = peer_id.clone())
+                            .or_insert_with(|| peer_id.clone());
+
+                        // try to get the peer for the peer_id. If it does not exist it should be dialed
+                        if let Some(peer) = self.network.get_peer(peer_id) {
+                            peer
+                        } else {
+                            // TODO dial the peer
+                            log::trace!(
+                                "send_to failed: Not connected to validator = {}",
+                                validator_id
+                            );
+                            return Err(NetworkError::UnknownValidator(validator_id));
+                        }
+                    } else {
+                        log::error!(
+                            "send_to failed; Could not find peer ID for validator in DHT: public_key = {:?}",
+                            public_key
+                        );
+                        return Err(NetworkError::UnknownValidator(validator_id));
+                    }
+                };
+                peer
                     .send(msg)
                     .await
                     .map_err(NetworkError::Send)?;
