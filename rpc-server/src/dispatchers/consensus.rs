@@ -71,7 +71,7 @@ impl ConsensusInterface for ConsensusDispatcher {
     type Error = Error;
 
     /// Returns a boolean specifying if we have established consensus with the network.
-    async fn is_established(&mut self) -> Result<bool, Self::Error> {
+    async fn is_consensus_established(&mut self) -> Result<bool, Self::Error> {
         Ok(self.consensus.is_established())
     }
 

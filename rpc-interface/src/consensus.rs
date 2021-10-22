@@ -14,7 +14,7 @@ use crate::types::{Transaction, ValidityStartHeight};
 pub trait ConsensusInterface {
     type Error;
 
-    async fn is_established(&mut self) -> Result<bool, Self::Error>;
+    async fn is_consensus_established(&mut self) -> Result<bool, Self::Error>;
 
     async fn get_raw_transaction_info(
         &mut self,

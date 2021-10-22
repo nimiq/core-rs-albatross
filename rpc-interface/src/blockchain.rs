@@ -58,12 +58,12 @@ pub trait BlockchainInterface {
         block_number: u32,
     ) -> Result<Vec<Inherent>, Self::Error>;
 
-    async fn get_batch_transactions(
+    async fn get_transactions_by_batch_number(
         &mut self,
         batch_number: u32,
     ) -> Result<Vec<Transaction>, Self::Error>;
 
-    async fn get_batch_inherents(
+    async fn get_inherents_by_batch_number(
         &mut self,
         batch_number: u32,
     ) -> Result<Vec<Inherent>, Self::Error>;
@@ -81,7 +81,7 @@ pub trait BlockchainInterface {
         max: Option<u16>,
     ) -> Result<Vec<Transaction>, Self::Error>;
 
-    async fn get_account(&mut self, address: Address) -> Result<Account, Self::Error>;
+    async fn get_account_by_address(&mut self, address: Address) -> Result<Account, Self::Error>;
 
     async fn get_active_validators(&mut self) -> Result<HashMap<Address, Coin>, Self::Error>;
 
