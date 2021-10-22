@@ -518,6 +518,7 @@ impl Transaction {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Inherent {
+    #[serde(rename = "type")]
     pub ty: u8,
     pub block_number: u32,
     pub timestamp: u64,

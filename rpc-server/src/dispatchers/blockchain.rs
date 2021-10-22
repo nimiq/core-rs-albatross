@@ -201,7 +201,7 @@ impl BlockchainInterface for BlockchainDispatcher {
 
     /// Returns all the transactions (including reward transactions) for the given batch number. Note
     /// that this only considers blocks in the main chain.
-    async fn get_batch_transactions(
+    async fn get_transactions_by_batch_number(
         &mut self,
         batch_number: u32,
     ) -> Result<Vec<Transaction>, Self::Error> {
@@ -243,7 +243,10 @@ impl BlockchainInterface for BlockchainDispatcher {
 
     /// Returns all the inherents (including reward inherents) for the given batch number. Note
     /// that this only considers blocks in the main chain.
-    async fn get_batch_inherents(&mut self, batch_number: u32) -> Result<Vec<Inherent>, Error> {
+    async fn get_inherents_by_batch_number(
+        &mut self,
+        batch_number: u32,
+    ) -> Result<Vec<Inherent>, Error> {
         let blockchain = self.blockchain.read();
 
         let macro_block_number = policy::macro_block_of(batch_number);
@@ -366,7 +369,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     }
 
     /// Tries to fetch the account at the given address.
-    async fn get_account(&mut self, address: Address) -> Result<Account, Error> {
+    async fn get_account_by_address(&mut self, address: Address) -> Result<Account, Error> {
         let result = self.blockchain.read().get_account(&address);
 
         match result {
