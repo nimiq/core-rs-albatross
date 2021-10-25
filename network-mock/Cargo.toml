@@ -32,4 +32,4 @@ nimiq-network-interface = { path = "../network-interface" }
 nimiq-utils = { path = "../utils", features = ["crc"] }
 
 [dev-dependencies]
-env_logger = "0.8"
+env_logger = "0.9"
