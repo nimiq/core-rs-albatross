@@ -238,6 +238,10 @@ impl FromStr for Network {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Network, ()> {
+        // Fixme: Introduced this to workaround false positives in clippy
+        // as documented here:
+        // https://github.com/rust-lang/rust-clippy/issues/7863
+        #[allow(clippy::match_str_case_mismatch)]
         Ok(match s.to_lowercase().as_str() {
             "main" => Network::Main,
             "test" => Network::Test,
