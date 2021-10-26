@@ -14,13 +14,17 @@ use crate::errors::{KeysError, ParseError};
 use crate::{PrivateKey, Signature};
 
 #[derive(Clone, Copy)]
-pub struct PublicKey(pub(super) ed25519_zebra::VerificationKey);
+pub struct PublicKey(pub(super) ed25519_zebra::VerificationKeyBytes);
 
 impl PublicKey {
     pub const SIZE: usize = 32;
 
     pub fn verify(&self, signature: &Signature, data: &[u8]) -> bool {
-        self.as_zebra().verify(signature.as_zebra(), data).is_ok()
+        if let Ok(vk) = ed25519_zebra::VerificationKey::try_from(*self.as_zebra()) {
+            vk.verify(signature.as_zebra(), data).is_ok()
+        } else {
+            false
+        }
     }
 
     #[inline]
@@ -32,13 +36,15 @@ impl PublicKey {
     }
 
     #[inline]
-    pub(crate) fn as_zebra(&self) -> &ed25519_zebra::VerificationKey {
+    pub(crate) fn as_zebra(&self) -> &ed25519_zebra::VerificationKeyBytes {
         &self.0
     }
 
     #[inline]
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, KeysError> {
-        Ok(PublicKey(ed25519_zebra::VerificationKey::try_from(bytes)?))
+        Ok(PublicKey(ed25519_zebra::VerificationKeyBytes::try_from(
+            bytes,
+        )?))
     }
 
     #[inline]
@@ -104,7 +110,7 @@ impl PartialOrd for PublicKey {
 
 impl<'a> From<&'a PrivateKey> for PublicKey {
     fn from(private_key: &'a PrivateKey) -> Self {
-        let public_key = ed25519_zebra::VerificationKey::from(private_key.as_zebra());
+        let public_key = ed25519_zebra::VerificationKeyBytes::from(private_key.as_zebra());
         PublicKey(public_key)
     }
 }
@@ -112,7 +118,7 @@ impl<'a> From<&'a PrivateKey> for PublicKey {
 impl<'a> From<&'a [u8; PublicKey::SIZE]> for PublicKey {
     fn from(bytes: &'a [u8; PublicKey::SIZE]) -> Self {
         let vk_bytes =
-            ed25519_zebra::VerificationKey::try_from(*bytes).expect("Unexpected size for");
+            ed25519_zebra::VerificationKeyBytes::try_from(*bytes).expect("Unexpected size for");
         PublicKey(vk_bytes)
     }
 }

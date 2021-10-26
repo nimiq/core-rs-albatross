@@ -311,9 +311,7 @@ fn it_can_verify_outgoing_transactions() {
     // Proof is not a valid point, so Deserialize will result in an error.
     assert_eq!(
         AccountType::verify_outgoing_transaction(&tx),
-        Err(TransactionError::InvalidSerialization(
-            SerializingError::InvalidValue
-        ))
+        Err(TransactionError::InvalidProof)
     );
 }
 

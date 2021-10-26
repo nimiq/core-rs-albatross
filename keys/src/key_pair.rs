@@ -1,5 +1,5 @@
 use beserial::{Deserialize, Serialize};
-use ed25519_zebra::{SigningKey, VerificationKey};
+use ed25519_zebra::{SigningKey, VerificationKeyBytes};
 use utils::key_rng::SecureGenerate;
 
 use rand_core::{CryptoRng, RngCore};
@@ -23,7 +23,7 @@ impl SecureGenerate for KeyPair {
     fn generate<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
         let zebra_priv_key = SigningKey::new(rng);
         let priv_key = PrivateKey(zebra_priv_key);
-        let pub_key = PublicKey(VerificationKey::from(&zebra_priv_key));
+        let pub_key = PublicKey(VerificationKeyBytes::from(&zebra_priv_key));
         KeyPair {
             private: priv_key,
             public: pub_key,

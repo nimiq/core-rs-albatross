@@ -357,9 +357,7 @@ fn it_can_verify_regular_transfer() {
     tx.proof[72] = tx.proof[72] % 250 + 1;
     assert_eq!(
         AccountType::verify_outgoing_transaction(&tx),
-        Err(TransactionError::InvalidSerialization(
-            SerializingError::InvalidValue
-        ))
+        Err(TransactionError::InvalidProof)
     );
 
     // regular: invalid signature
@@ -412,9 +410,7 @@ fn it_can_verify_early_resolve() {
     tx.proof[4] = tx.proof[4] % 250 + 1;
     assert_eq!(
         AccountType::verify_outgoing_transaction(&tx),
-        Err(TransactionError::InvalidSerialization(
-            SerializingError::InvalidValue
-        ))
+        Err(TransactionError::InvalidProof)
     );
     tx.proof[4] = bak;
 
