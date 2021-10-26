@@ -862,20 +862,27 @@ impl HistoryStore {
             }
         };
 
-        let leaf_last_block = match block_number.checked_sub(1) {
-            None => None,
-            Some(n) => txn.get::<u32, u32>(&self.last_leaf_db, &n),
+        // Seek to the last leaf index of the block, if it exists.
+        let mut cursor = txn.cursor(&self.last_leaf_db);
+
+        let end = match cursor.seek_key::<u32, u32>(&block_number) {
+            // If the block number doesn't exist in the database that's because it doesn't contain
+            // any transactions or inherents. So we terminate here.
+            None => return (0, 0),
+            // Otherwise, we simply get the last leaf index for the block. We increment by 1 because
+            // we want the range that we return to be non-inclusive, i.e. [a, b).
+            Some(i) => i + 1,
         };
 
-        let start = if policy::epoch_index_at(block_number) == 0 || leaf_last_block.is_none() {
+        let start = if policy::epoch_index_at(block_number) == 0 {
+            // If this is the first block of the epoch then it starts at zero by definition.
             0
         } else {
-            leaf_last_block.unwrap() + 1
-        };
-
-        let end = match txn.get::<u32, u32>(&self.last_leaf_db, &block_number) {
-            None => 0,
-            Some(i) => i + 1,
+            // Otherwise, seek to the last leaf index of the previous block, if it exists.
+            match cursor.prev::<u32, u32>() {
+                None => 0,
+                Some((_, i)) => i + 1,
+            }
         };
 
         (start, end)
@@ -1351,6 +1358,26 @@ mod tests {
         assert_eq!(proof.history.len(), 0);
 
         assert!(proof.verify(root).unwrap());
+    }
+
+    #[test]
+    fn get_indexes_for_block_works() {
+        // Initialize History Store.
+        let env = VolatileEnvironment::new(10).unwrap();
+        let history_store = HistoryStore::new(env.clone());
+
+        // Create extended transactions.
+        let ext_txs = gen_ext_txs();
+
+        // Add extended transactions to History Store.
+        let mut txn = WriteTransaction::new(&env);
+        history_store.add_to_history(&mut txn, 0, &ext_txs[..3]);
+        history_store.add_to_history(&mut txn, 1, &ext_txs[3..]);
+
+        // Verify method works.
+        assert_eq!(history_store.get_indexes_for_block(0, Some(&txn)), (0, 3));
+        assert_eq!(history_store.get_indexes_for_block(1, Some(&txn)), (0, 2));
+        assert_eq!(history_store.get_indexes_for_block(2, Some(&txn)), (2, 5));
     }
 
     fn create_inherent(block: u32, value: u64) -> ExtendedTransaction {
