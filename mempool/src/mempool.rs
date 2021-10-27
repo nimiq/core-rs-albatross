@@ -20,7 +20,7 @@ use nimiq_transaction::Transaction;
 use crate::config::MempoolConfig;
 use crate::executor::MempoolExecutor;
 use crate::filter::{MempoolFilter, MempoolRules};
-use crate::verify::{verify_tx, ReturnCode};
+use crate::verify::{verify_tx, VerifyErr};
 
 /// Struct defining the Mempool
 pub struct Mempool {
@@ -358,18 +358,20 @@ impl Mempool {
     }
 
     /// Adds a transaction to the Mempool.
-    pub fn add_transaction(&self, transaction: Transaction) -> ReturnCode {
+    pub async fn add_transaction(&self, transaction: Transaction) -> Result<(), VerifyErr> {
         let blockchain = Arc::clone(&self.blockchain);
         let mempool_state = Arc::clone(&self.state);
         let filter = Arc::clone(&self.filter);
 
-        let rc = verify_tx(&transaction, blockchain, Arc::clone(&mempool_state), filter);
+        let verify_tx_ret = verify_tx(&transaction, blockchain, &mempool_state, filter).await;
 
-        if rc == ReturnCode::Accepted {
-            mempool_state.write().put(&transaction);
-        };
-
-        rc
+        match verify_tx_ret {
+            Ok(mempool_state_lock) => {
+                RwLockUpgradableReadGuard::upgrade(mempool_state_lock).put(&transaction);
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
     }
 
     /// Checks whether a transaction has been filtered

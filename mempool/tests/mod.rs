@@ -358,9 +358,10 @@ async fn mempool_get_txn_ordered() {
     // Check transactions are sorted
     let mut prev_txn = txns.first().expect("Is vector empty?").clone();
     for txn in txns {
-        if prev_txn.fee < txn.fee {
-            assert!(false, "Transactions in mempool are not ordered by fee");
-        }
+        assert!(
+            prev_txn.fee >= txn.fee,
+            "Transactions in mempool are not ordered by fee"
+        );
         prev_txn = txn.clone();
     }
 }
@@ -544,14 +545,15 @@ async fn multiple_transactions_multiple_senders() {
     // Check transactions are sorted
     let mut prev_txn = txns.first().expect("Is vector empty?").clone();
     for txn in txns {
-        if prev_txn.fee < txn.fee {
-            assert!(false, "Transactions in mempool are not ordered by fee");
-        }
+        assert!(
+            prev_txn.fee >= txn.fee,
+            "Transactions in mempool are not ordered by fee"
+        );
         prev_txn = txn.clone();
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn mempool_tps() {
     if ENABLE_LOG {
         simple_logger::SimpleLogger::new()
@@ -651,9 +653,10 @@ async fn mempool_tps() {
     // Check transactions are sorted
     let mut prev_txn = txns.first().expect("Is vector empty?").clone();
     for txn in txns {
-        if prev_txn.fee < txn.fee {
-            assert!(false, "Transactions in mempool are not ordered by fee");
-        }
+        assert!(
+            prev_txn.fee >= txn.fee,
+            "Transactions in mempool are not ordered by fee"
+        );
         prev_txn = txn.clone();
     }
 }
