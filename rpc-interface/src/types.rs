@@ -131,14 +131,14 @@ impl FromStr for ValidityStartHeight {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Block {
-    pub number: u32,
     pub hash: Blake2bHash,
     pub size: u32,
     pub batch: u32,
     pub epoch: u32,
-    pub view: u32,
 
     pub version: u16,
+    pub number: u32,
+    pub view: u32,
     pub timestamp: u64,
     pub parent_hash: Blake2bHash,
     pub seed: VrfSeed,
@@ -161,7 +161,6 @@ pub enum BlockAdditionalFields {
     #[serde(rename_all = "camelCase")]
     Macro {
         is_election_block: bool,
-        proposer: Slot,
 
         parent_election_hash: Blake2bHash,
 
@@ -250,11 +249,6 @@ impl Block {
                     transactions: Some(transactions),
                     additional_fields: BlockAdditionalFields::Macro {
                         is_election_block: policy::is_election_block_at(block_number),
-                        proposer: Slot::from(
-                            blockchain,
-                            block_number,
-                            macro_block.header.view_number,
-                        ),
                         parent_election_hash: macro_block.header.parent_election_hash,
                         slots,
                         lost_reward_set,
@@ -494,8 +488,8 @@ impl Transaction {
     ) -> Self {
         Transaction {
             hash: transaction.hash(),
-            block_number: block_number,
-            timestamp: timestamp,
+            block_number,
+            timestamp,
             confirmations: match head_height {
                 Some(height) => match block_number {
                     Some(block) => Some(height.saturating_sub(block) + 1),

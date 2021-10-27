@@ -121,6 +121,11 @@ pub trait AbstractBlockchain {
         view_number: u32,
         txn_option: Option<&Transaction>,
     ) -> Option<(Validator, u16)> {
+        // The genesis block doesn't technically have a view slot list.
+        if block_number == 0 {
+            return None;
+        }
+
         // Get the disabled slots for the current batch.
         let disabled_slots = self
             .get_block_at(policy::macro_block_before(block_number), true, txn_option)?
