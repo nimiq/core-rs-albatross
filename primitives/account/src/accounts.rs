@@ -36,6 +36,7 @@ impl Accounts {
         for (key, account) in genesis_accounts {
             self.tree.put(txn, &key, account);
         }
+        self.tree.update_root(txn);
     }
 
     /// Returns the number of accounts in the Accounts Trie. It will traverse the entire tree.
@@ -79,6 +80,19 @@ impl Accounts {
     }
 
     pub fn commit(
+        &self,
+        txn: &mut WriteTransaction,
+        transactions: &[Transaction],
+        inherents: &[Inherent],
+        block_height: u32,
+        timestamp: u64,
+    ) -> Result<Receipts, AccountError> {
+        let result = self.commit_batch(txn, transactions, inherents, block_height, timestamp);
+        self.tree.update_root(txn);
+        result
+    }
+
+    pub fn commit_batch(
         &self,
         txn: &mut WriteTransaction,
         transactions: &[Transaction],
@@ -132,6 +146,27 @@ impl Accounts {
         timestamp: u64,
         receipts: &Receipts,
     ) -> Result<(), AccountError> {
+        self.revert_batch(
+            txn,
+            transactions,
+            inherents,
+            block_height,
+            timestamp,
+            receipts,
+        )?;
+        self.tree.update_root(txn);
+        Ok(())
+    }
+
+    pub fn revert_batch(
+        &self,
+        txn: &mut WriteTransaction,
+        transactions: &[Transaction],
+        inherents: &[Inherent],
+        block_height: u32,
+        timestamp: u64,
+        receipts: &Receipts,
+    ) -> Result<(), AccountError> {
         let (
             sender_receipts,
             recipient_receipts,
@@ -168,6 +203,10 @@ impl Accounts {
         )?;
 
         Ok(())
+    }
+
+    pub fn finalize_batch(&self, txn: &mut WriteTransaction) {
+        self.tree.update_root(txn);
     }
 
     fn commit_senders(

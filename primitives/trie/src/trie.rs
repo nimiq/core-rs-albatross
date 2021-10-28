@@ -38,7 +38,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
         let mut txn = WriteTransaction::new(&env);
 
         if tree.get_root(&txn).is_none() {
-            let root = KeyNibbles::empty();
+            let root = KeyNibbles::root();
 
             txn.put_reserve(&tree.db, &root, &TrieNode::<A>::new_branch(root.clone()));
         }
@@ -179,7 +179,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
         }
 
         // Update the keys and hashes of the nodes that we modified.
-        self.update_nodes(txn, root_path);
+        self.update_keys(txn, root_path);
     }
 
     /// Removes the value in the Merkle Radix Trie at the given key. If the key doesn't exist
@@ -241,7 +241,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
             parent_node = parent_node.remove_child(&child_key).unwrap();
 
             // Get the root address and the number of children of the node.
-            let root_address = KeyNibbles::empty();
+            let root_address = KeyNibbles::root();
             let num_children = parent_node.iter_children().count();
 
             // If the node has only a single child (and it isn't the root node), merge it with the
@@ -259,7 +259,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
                 root_path.push(only_child);
 
                 // Update the keys and hashes of the rest of the root path.
-                self.update_nodes(txn, root_path);
+                self.update_keys(txn, root_path);
 
                 return;
             }
@@ -271,7 +271,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
 
                 root_path.push(parent_node);
 
-                self.update_nodes(txn, root_path);
+                self.update_keys(txn, root_path);
 
                 return;
             }
@@ -417,27 +417,52 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
         self.get_proof(txn, chunk_keys)
     }
 
-    /// Returns the root node, if there is one.
-    fn get_root(&self, txn: &Transaction) -> Option<TrieNode<A>> {
-        txn.get(&self.db, &KeyNibbles::empty())
+    pub fn update_root(&self, txn: &mut WriteTransaction) {
+        self.update_hashes(txn, &KeyNibbles::root());
     }
 
-    /// Updates the keys and the hashes for a chain of nodes. It assumes that the path starts at the
-    /// root node and that each consecutive node is a child of the previous node.
-    fn update_nodes(&self, txn: &mut WriteTransaction, mut root_path: Vec<TrieNode<A>>) {
+    /// Returns the root node, if there is one.
+    fn get_root(&self, txn: &Transaction) -> Option<TrieNode<A>> {
+        txn.get(&self.db, &KeyNibbles::root())
+    }
+
+    /// Updates the keys for a chain of nodes and marks those nodes as dirty. It assumes that the
+    /// path starts at the root node and that each consecutive node is a child of the previous node.
+    fn update_keys(&self, txn: &mut WriteTransaction, mut root_path: Vec<TrieNode<A>>) {
         // Get the first node in the path.
         let mut child_node = root_path.pop().expect("Root path must not be empty!");
 
         // Go up the root path until you get to the root.
+        let default_hash = Blake2bHash::default();
         while let Some(mut parent_node) = root_path.pop() {
             // Update and store the parent node.
             parent_node = parent_node
-                .put_child(child_node.key(), child_node.hash())
+                // Mark this node as dirty by storing the default hash.
+                .put_child(child_node.key(), default_hash.clone())
                 .unwrap();
             txn.put_reserve(&self.db, parent_node.key(), &parent_node);
 
             child_node = parent_node;
         }
+    }
+
+    /// Updates the hashes of all dirty nodes in the subtree specified by `key`.
+    fn update_hashes(&self, txn: &mut WriteTransaction, key: &KeyNibbles) -> Blake2bHash {
+        let mut node: TrieNode<A> = txn.get(&self.db, key).unwrap();
+        if node.is_leaf() {
+            return node.hash();
+        }
+
+        // Compute sub hashes if necessary.
+        let default_hash = Blake2bHash::default();
+        for mut child in node.iter_children_mut() {
+            if child.hash == default_hash {
+                // TODO This could be parallelized.
+                child.hash = self.update_hashes(txn, &(key + &child.suffix));
+            }
+        }
+        txn.put_reserve(&self.db, key, &node);
+        node.hash()
     }
 
     /// Returns the nodes of the chunk of the Merkle Radix Trie that starts at the key `start` and
@@ -547,6 +572,7 @@ mod tests {
         trie.put(&mut txn, &key_1, 9);
         trie.put(&mut txn, &key_2, 8);
         trie.put(&mut txn, &key_3, 7);
+        trie.update_root(&mut txn);
 
         let proof = trie.get_proof(&txn, vec![&key_1, &key_2, &key_3]).unwrap();
         assert_eq!(proof.nodes.len(), 6);
@@ -593,18 +619,19 @@ mod tests {
         trie.put(&mut txn, &key_1, 9);
         trie.put(&mut txn, &key_2, 8);
         trie.put(&mut txn, &key_3, 7);
+        trie.update_root(&mut txn);
 
         let chunk = trie
-            .get_chunk_proof(&txn, &KeyNibbles::empty(), 100)
+            .get_chunk_proof(&txn, &KeyNibbles::root(), 100)
             .unwrap();
         assert_eq!(chunk.nodes.len(), 6);
         assert_eq!(chunk.verify(&trie.root_hash(&txn)), true);
 
-        let chunk = trie.get_chunk_proof(&txn, &KeyNibbles::empty(), 3).unwrap();
+        let chunk = trie.get_chunk_proof(&txn, &KeyNibbles::root(), 3).unwrap();
         assert_eq!(chunk.nodes.len(), 6);
         assert_eq!(chunk.verify(&trie.root_hash(&txn)), true);
 
-        let chunk = trie.get_chunk_proof(&txn, &KeyNibbles::empty(), 2).unwrap();
+        let chunk = trie.get_chunk_proof(&txn, &KeyNibbles::root(), 2).unwrap();
         assert_eq!(chunk.nodes.len(), 5);
         assert_eq!(chunk.verify(&trie.root_hash(&txn)), true);
 

@@ -261,7 +261,7 @@ impl Blockchain {
         // Update the accounts tree, one block at a time.
         for i in 0..block_numbers.len() {
             // Commit block to AccountsTree and create the receipts.
-            let receipts = this.state.accounts.commit(
+            let receipts = this.state.accounts.commit_batch(
                 &mut txn,
                 &block_transactions[i],
                 &block_inherents[i],
@@ -278,6 +278,7 @@ impl Blockchain {
                 return Err(PushError::AccountsError(e));
             }
         }
+        this.state.accounts.finalize_batch(&mut txn);
 
         // Macro blocks are final and receipts for the previous batch are no longer necessary
         // as rebranching across this block is not possible.

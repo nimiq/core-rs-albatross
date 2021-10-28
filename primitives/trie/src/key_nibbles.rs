@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::cmp;
 use std::fmt;
 use std::io;
+use std::io::{Read, Write};
 use std::ops;
 use std::str;
 use std::usize;
@@ -25,8 +26,8 @@ pub struct KeyNibbles {
 }
 
 impl KeyNibbles {
-    /// Create an empty key.
-    pub fn empty() -> KeyNibbles {
+    /// Create the root (empty) key.
+    pub fn root() -> KeyNibbles {
         KeyNibbles {
             bytes: Vec::new(),
             length: 0,
@@ -122,7 +123,7 @@ impl KeyNibbles {
                 start,
                 end
             );
-            return KeyNibbles::empty();
+            return KeyNibbles::root();
         }
 
         // Calculate the end nibble index (it can't exceed the key length).
@@ -281,35 +282,27 @@ impl AsDatabaseBytes for KeyNibbles {
 
 impl Serialize for KeyNibbles {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        let size = SerializeWithLength::serialize::<u8, W>(&self.to_string(), writer)?;
+        let mut size = 2;
+        writer.write_u8(self.length)?;
+        writer.write_u8(self.bytes.len() as u8)?;
+        size += writer.write(self.bytes.as_slice())?;
         Ok(size)
     }
 
     fn serialized_size(&self) -> usize {
-        1 + self.len()
+        2 + self.bytes.len()
     }
 }
 
 impl Deserialize for KeyNibbles {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let hex_repr: String = DeserializeWithLength::deserialize::<u8, R>(reader)?;
-        let pot_address: Result<KeyNibbles, hex::FromHexError> = hex_repr.parse();
-
-        match pot_address {
-            Err(e) => Err(io::Error::new(io::ErrorKind::InvalidData, e).into()),
-            Ok(address) => Ok(address),
-        }
+        let length = reader.read_u8()?;
+        let num_bytes = reader.read_u8()? as usize;
+        let mut bytes = vec![0; num_bytes];
+        reader.read_exact(bytes.as_mut_slice())?;
+        Ok(KeyNibbles { bytes, length })
     }
 }
-
-impl SerializeContent for KeyNibbles {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
-        let size = SerializeWithLength::serialize::<u8, W>(&self.to_string(), writer)?;
-        Ok(size)
-    }
-}
-
-impl Hash for KeyNibbles {}
 
 #[cfg(test)]
 mod tests {
