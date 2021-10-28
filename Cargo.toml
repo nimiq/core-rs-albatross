@@ -19,7 +19,6 @@ members = [
   "lib",
   "macros",
   "mempool",
-  "messages",
 #   "metrics-server",
   "mnemonic",
   "nano-primitives",
