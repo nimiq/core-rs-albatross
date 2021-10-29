@@ -1,20 +1,14 @@
 use std::borrow::Cow;
 use std::cmp;
 use std::fmt;
-use std::io;
-use std::io::{Read, Write};
 use std::ops;
 use std::str;
 use std::usize;
 
 use log::error;
 
-use beserial::{
-    Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
-    SerializingError, WriteBytesExt,
-};
+use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use nimiq_database::AsDatabaseBytes;
-use nimiq_hash::{Hash, SerializeContent};
 use nimiq_keys::Address;
 
 /// A compact representation of a node's key. It stores the key in big endian. Each byte
