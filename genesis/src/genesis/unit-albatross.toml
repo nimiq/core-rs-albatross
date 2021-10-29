@@ -22,9 +22,9 @@ reward_address = "NQ46 U66M JNLD 0DJ7 0E9P Q7XR V9KV H976 813A"
 [[stakers]]
 staker_address = "NQ39 VBTN P2HX Q3MF KHF1 CCLA G6FS 9B8S VY28"
 # secret_key = 12004e8b2114b4ec0848154a0209928ddd3199ccb706e41c2e72295c7574ce0b
-balance = 100000
+balance = 100_000
 delegation = "NQ20 TSB0 DFSM UH9C 15GQ GAGJ TTE4 D3MA 859E"
 
 [[accounts]]
 address = "NQ46 U66M JNLD 0DJ7 0E9P Q7XR V9KV H976 813A"
-balance = 1000000
+balance = 10_000_000_00000
