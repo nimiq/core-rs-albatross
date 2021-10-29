@@ -64,6 +64,12 @@ opt-level = 3
 [profile.test.package.nimiq-nano-zkp]
 opt-level = 3
 
+[profile.dev.package.beserial]
+opt-level = 3
+
+[profile.test.package.beserial]
+opt-level = 3
+
 # Optimize the release profile for speed.
 [profile.release]
 lto = "fat"
