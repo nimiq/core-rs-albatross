@@ -260,7 +260,7 @@ pub struct DatabaseConfig {
 impl Default for DatabaseConfig {
     fn default() -> Self {
         Self {
-            size: 50 * 1024 * 1024,
+            size: 1024 * 1024 * 1024,
             max_dbs: 12,
             flags: LmdbFlags::NOMETASYNC,
         }
