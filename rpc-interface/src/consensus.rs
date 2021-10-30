@@ -41,6 +41,26 @@ pub trait ConsensusInterface {
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Self::Error>;
 
+    async fn create_basic_transaction_with_data(
+        &mut self,
+        wallet: Address,
+        recipient: Address,
+        value: Coin,
+        data: Vec<u8>,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<String, Self::Error>;
+
+    async fn send_basic_transaction_with_data(
+        &mut self,
+        wallet: Address,
+        recipient: Address,
+        value: Coin,
+        data: Vec<u8>,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<Blake2bHash, Self::Error>;
+
     async fn create_new_staker_transaction(
         &mut self,
         sender_wallet: Address,
