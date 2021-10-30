@@ -478,8 +478,8 @@ impl TransactionBuilder {
 
 // Convenience functionality.
 impl TransactionBuilder {
-    /// Creates a simple transaction from the address of a given `key_pair` to a basic `recipient`.
-    pub fn new_simple(
+    /// Creates a basic transaction from the address of a given `key_pair` to a basic `recipient`.
+    pub fn new_basic(
         key_pair: &KeyPair,
         recipient: Address,
         value: Coin,
@@ -492,6 +492,36 @@ impl TransactionBuilder {
         builder
             .with_sender(sender)
             .with_recipient(Recipient::new_basic(recipient))
+            .with_value(value)
+            .with_fee(fee)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(network_id);
+
+        let proof_builder = builder.generate().unwrap();
+        match proof_builder {
+            TransactionProofBuilder::Basic(mut builder) => {
+                builder.sign_with_key_pair(key_pair);
+                builder.generate().unwrap()
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    /// Creates a basic transaction with an arbitrary data field.
+    pub fn new_basic_with_data(
+        key_pair: &KeyPair,
+        recipient: Address,
+        data: Vec<u8>,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Transaction {
+        let sender = Address::from(key_pair);
+        let mut builder = Self::new();
+        builder
+            .with_sender(sender)
+            .with_recipient(Recipient::new_basic_with_data(recipient, data))
             .with_value(value)
             .with_fee(fee)
             .with_validity_start_height(validity_start_height)

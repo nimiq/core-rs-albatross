@@ -424,7 +424,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     }
 
     /// Returns information about the currently parked validators.
-    async fn get_parked_set(&mut self) -> Result<ParkedSet, Self::Error> {
+    async fn get_parked_validators(&mut self) -> Result<ParkedSet, Self::Error> {
         let blockchain = self.blockchain.read();
 
         // FIXME: Race condition

@@ -101,7 +101,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Error> {
-        let transaction = TransactionBuilder::new_simple(
+        let transaction = TransactionBuilder::new_basic(
             &self.get_wallet_keypair(&wallet)?,
             recipient,
             value,
@@ -124,6 +124,50 @@ impl ConsensusInterface for ConsensusDispatcher {
     ) -> Result<Blake2bHash, Error> {
         let raw_tx = self
             .create_basic_transaction(wallet, recipient, value, fee, validity_start_height)
+            .await?;
+        self.send_raw_transaction(raw_tx).await
+    }
+
+    async fn create_basic_transaction_with_data(
+        &mut self,
+        wallet: Address,
+        recipient: Address,
+        value: Coin,
+        data: Vec<u8>,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<String, Self::Error> {
+        let transaction = TransactionBuilder::new_basic_with_data(
+            &self.get_wallet_keypair(&wallet)?,
+            recipient,
+            data,
+            value,
+            fee,
+            self.validity_start_height(validity_start_height),
+            self.get_network_id(),
+        );
+
+        Ok(transaction_to_hex_string(&transaction))
+    }
+
+    async fn send_basic_transaction_with_data(
+        &mut self,
+        wallet: Address,
+        recipient: Address,
+        value: Coin,
+        data: Vec<u8>,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<Blake2bHash, Self::Error> {
+        let raw_tx = self
+            .create_basic_transaction_with_data(
+                wallet,
+                recipient,
+                value,
+                data,
+                fee,
+                validity_start_height,
+            )
             .await?;
         self.send_raw_transaction(raw_tx).await
     }

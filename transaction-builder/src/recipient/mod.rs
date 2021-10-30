@@ -34,6 +34,7 @@ pub mod vesting_contract;
 pub enum Recipient {
     Basic {
         address: Address,
+        data: Vec<u8>,
     },
     HtlcCreation {
         data: HtlcCreationData,
@@ -61,7 +62,14 @@ impl Recipient {
     /// );
     /// ```
     pub fn new_basic(address: Address) -> Self {
-        Recipient::Basic { address }
+        Recipient::Basic {
+            address,
+            data: vec![],
+        }
+    }
+
+    pub fn new_basic_with_data(address: Address, data: Vec<u8>) -> Self {
+        Recipient::Basic { address, data }
     }
 
     /// Initiates a [`HtlcRecipientBuilder`] that can be used to create new HTLC contracts.
@@ -199,7 +207,7 @@ impl Recipient {
     /// Returns the recipient address if this is not a contract creation.
     pub fn address(&self) -> Option<Address> {
         match self {
-            Recipient::Basic { address } => Some(address.clone()),
+            Recipient::Basic { address, .. } => Some(address.clone()),
             Recipient::Staking { .. } => {
                 Some(Address::from_any_str(STAKING_CONTRACT_ADDRESS).unwrap())
             }
@@ -210,7 +218,7 @@ impl Recipient {
     /// Returns the data field for the transaction.
     pub fn data(&self) -> Vec<u8> {
         match self {
-            Recipient::Basic { .. } => Vec::new(),
+            Recipient::Basic { data, .. } => data.clone(),
             Recipient::HtlcCreation { data } => data.serialize_to_vec(),
             Recipient::VestingCreation { data } => data.serialize_to_vec(),
             Recipient::Staking { data } => data.serialize_to_vec(),
