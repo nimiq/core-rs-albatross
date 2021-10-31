@@ -14,12 +14,13 @@ use keys::{Address, KeyPair};
 use primitives::account::AccountType;
 use primitives::coin::Coin;
 use primitives::networks::NetworkId;
-use transaction::Transaction;
+use transaction::{SignatureProof, Transaction};
 
 pub use crate::proof::TransactionProofBuilder;
 pub use crate::recipient::Recipient;
 use hash::Blake2bHash;
 use primitives::policy::{STAKING_CONTRACT_ADDRESS, VALIDATOR_DEPOSIT};
+use transaction::account::htlc_contract::{AnyHash, HashAlgorithm};
 
 pub mod proof;
 pub mod recipient;
@@ -479,6 +480,22 @@ impl TransactionBuilder {
 // Convenience functionality.
 impl TransactionBuilder {
     /// Creates a basic transaction from the address of a given `key_pair` to a basic `recipient`.
+    ///
+    /// # Arguments
+    ///
+    ///  - `key_pair`:              The key pair used to sign the outgoing transaction. The
+    ///                             transaction value is sent from the basic account belonging to
+    ///                             this key pair.
+    ///  - `recipient`:             The address of the basic account that will receive the funds.
+    ///  - `value`:                 The value that will be sent to the recipient account.
+    ///  - `fee`:                   Transaction fee.
+    ///  - `validity_start_height`: Block height from which this transaction is valid.
+    ///  - `network_id`:            ID of network for which the transaction is meant.
+    ///
+    /// # Returns
+    ///
+    /// The finalized transaction.
+    ///
     pub fn new_basic(
         key_pair: &KeyPair,
         recipient: Address,
@@ -508,6 +525,23 @@ impl TransactionBuilder {
     }
 
     /// Creates a basic transaction with an arbitrary data field.
+    ///
+    /// # Arguments
+    ///
+    ///  - `key_pair`:              The key pair used to sign the outgoing transaction. The
+    ///                             transaction value is sent from the basic account belonging to
+    ///                             this key pair.
+    ///  - `recipient`:             The address of the basic account that will receive the funds.
+    ///  - `data`:                  The data that will be stored in the transaction data field.
+    ///  - `value`:                 The value that will be sent to the recipient account.
+    ///  - `fee`:                   Transaction fee.
+    ///  - `validity_start_height`: Block height from which this transaction is valid.
+    ///  - `network_id`:            ID of network for which the transaction is meant.
+    ///
+    /// # Returns
+    ///
+    /// The finalized transaction.
+    ///
     pub fn new_basic_with_data(
         key_pair: &KeyPair,
         recipient: Address,
@@ -518,6 +552,7 @@ impl TransactionBuilder {
         network_id: NetworkId,
     ) -> Transaction {
         let sender = Address::from(key_pair);
+
         let mut builder = Self::new();
         builder
             .with_sender(sender)
@@ -533,6 +568,379 @@ impl TransactionBuilder {
                 builder.sign_with_key_pair(key_pair);
                 builder.generate().unwrap()
             }
+            _ => unreachable!(),
+        }
+    }
+
+    /// Creates a transaction that creates a new vesting contract.
+    ///
+    /// # Arguments
+    ///
+    ///  - `key_pair`:              The key pair used to sign the outgoing transaction. The vesting
+    ///                             contract value is sent from the basic account belonging to this
+    ///                             key pair.
+    ///  - `owner`:                 The address of the owner of the vesting contract.
+    ///  - `start_time`,
+    ///    `time_step`,
+    ///    `num_steps`:             Create a release schedule of `num_steps` payouts of value
+    ///                             starting at `start_time + time_step`.
+    ///  - `value`:                 The value for the vesting contract. This is sent from the
+    ///                             account belonging to `key_pair`.
+    ///  - `fee`:                   Transaction fee.
+    ///  - `validity_start_height`: Block height from which this transaction is valid.
+    ///  - `network_id`:            ID of network for which the transaction is meant.
+    ///
+    /// # Returns
+    ///
+    /// The finalized transaction.
+    ///
+    pub fn new_create_vesting(
+        key_pair: &KeyPair,
+        owner: Address,
+        start_time: u64,
+        time_step: u64,
+        num_steps: u32,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Transaction {
+        let mut recipient = Recipient::new_vesting_builder(owner);
+        recipient.with_steps(value, start_time, time_step, num_steps);
+
+        let mut builder = Self::new();
+        builder
+            .with_sender(Address::from(key_pair))
+            .with_recipient(recipient.generate().unwrap())
+            .with_value(value)
+            .with_fee(fee)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(network_id);
+
+        let proof_builder = builder.generate().unwrap();
+        match proof_builder {
+            TransactionProofBuilder::Basic(mut builder) => {
+                builder.sign_with_key_pair(key_pair);
+                builder.generate().unwrap()
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    /// Creates a transaction that redeems funds from a vesting contract.
+    ///
+    /// # Arguments
+    ///
+    ///  - `key_pair`:              The key pair used to sign the transaction. This key pair
+    ///                             corresponds to the owner of the vesting contract
+    ///  - `contract_address`:      The address of the vesting contract.
+    ///  - `recipient`:             The address of the basic account that will receive the funds.
+    ///  - `value`:                 The value that will be sent to the recipient account.
+    ///  - `fee`:                   Transaction fee.
+    ///  - `validity_start_height`: Block height from which this transaction is valid.
+    ///  - `network_id`:            ID of network for which the transaction is meant.
+    ///
+    /// # Returns
+    ///
+    /// The finalized transaction.
+    ///
+    pub fn new_redeem_vesting(
+        key_pair: &KeyPair,
+        contract_address: Address,
+        recipient: Address,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Transaction {
+        let mut builder = Self::new();
+        builder
+            .with_sender(contract_address)
+            .with_sender_type(AccountType::Vesting)
+            .with_recipient(Recipient::new_basic(recipient))
+            .with_value(value)
+            .with_fee(fee)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(network_id);
+
+        let proof_builder = builder.generate().unwrap();
+        match proof_builder {
+            TransactionProofBuilder::Basic(mut builder) => {
+                builder.sign_with_key_pair(key_pair);
+                builder.generate().unwrap()
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    /// Creates a transaction that creates a new HTLC contract.
+    ///
+    /// # Arguments
+    ///
+    ///  - `key_pair`:              The key pair used to sign the outgoing transaction. The HTLC
+    ///                             contract value is sent from the basic account belonging to this
+    ///                             key pair.
+    ///  - `htlc_sender`:           The address of the sender in the HTLC contract.
+    ///  - `htlc_recipient`:        The address of the recipient in the HTLC contract.
+    ///  - `hash_root`,
+    ///    `hash_count`,
+    ///    `hash_algorithm`:        The `hash_root` is the result of hashing the pre-image
+    ///                             `hash_count` times using `hash_algorithm`.
+    ///  - `timeout`:               Sets the blockchain height at which the `htlc_sender`
+    ///                             automatically gains control over the funds.
+    ///  - `value`:                 The value for the vesting contract. This is sent from the
+    ///                             account belonging to `key_pair`.
+    ///  - `fee`:                   Transaction fee.
+    ///  - `validity_start_height`: Block height from which this transaction is valid.
+    ///  - `network_id`:            ID of network for which the transaction is meant.
+    ///
+    /// # Returns
+    ///
+    /// The finalized transaction.
+    ///
+    pub fn new_create_htlc(
+        key_pair: &KeyPair,
+        htlc_sender: Address,
+        htlc_recipient: Address,
+        hash_root: AnyHash,
+        hash_count: u8,
+        hash_algorithm: HashAlgorithm,
+        timeout: u64,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Transaction {
+        let mut recipient = Recipient::new_htlc_builder();
+        recipient
+            .with_sender(htlc_sender)
+            .with_recipient(htlc_recipient)
+            .with_hash(hash_root, hash_count, hash_algorithm)
+            .with_timeout(timeout);
+
+        let mut builder = Self::new();
+        builder
+            .with_sender(Address::from(key_pair))
+            .with_recipient(recipient.generate().unwrap())
+            .with_value(value)
+            .with_fee(fee)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(network_id);
+
+        let proof_builder = builder.generate().unwrap();
+        match proof_builder {
+            TransactionProofBuilder::Basic(mut builder) => {
+                builder.sign_with_key_pair(key_pair);
+                builder.generate().unwrap()
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    /// Creates a transaction that redeems funds from a HTLC contract using the `RegularTransfer`
+    /// method.
+    /// The contract stores a `hash_root`. The `htlc_recipient` can withdraw the funds before the
+    /// `timeout` has been reached by presenting a hash that will yield the `hash_root`
+    /// when re-hashing it `hash_count` times.
+    /// By presenting a hash that will yield the `hash_root` after re-hashing it k < `hash_count`
+    /// times, the `htlc_recipient` can retrieve 1/k of the funds.
+    ///
+    /// # Arguments
+    ///
+    ///  - `key_pair`:              The key pair used to sign the transaction. This key pair
+    ///                             corresponds to the `htlc_recipient` in the HTLC contract
+    ///  - `contract_address`:      The address of the HTLC contract.
+    ///  - `recipient`:             The address of the basic account that will receive the funds.
+    ///  - `pre_image`,
+    ///    `hash_root`,
+    ///    `hash_count`,
+    ///    `hash_algorithm`:        The `hash_root` is the result of hashing the `pre_image`
+    ///                             `hash_count` times using `hash_algorithm`.
+    ///  - `value`:                 The value that will be sent to the recipient account.
+    ///  - `fee`:                   Transaction fee.
+    ///  - `validity_start_height`: Block height from which this transaction is valid.
+    ///  - `network_id`:            ID of network for which the transaction is meant.
+    ///
+    /// # Returns
+    ///
+    /// The finalized transaction.
+    ///
+    pub fn new_redeem_htlc_regular(
+        key_pair: &KeyPair,
+        contract_address: Address,
+        recipient: Address,
+        pre_image: AnyHash,
+        hash_root: AnyHash,
+        hash_count: u8,
+        hash_algorithm: HashAlgorithm,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Transaction {
+        let mut builder = Self::new();
+        builder
+            .with_sender(contract_address)
+            .with_sender_type(AccountType::HTLC)
+            .with_recipient(Recipient::new_basic(recipient))
+            .with_value(value)
+            .with_fee(fee)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(network_id);
+
+        let proof_builder = builder.generate().unwrap();
+        match proof_builder {
+            TransactionProofBuilder::Htlc(mut builder) => {
+                let sig = builder.signature_with_key_pair(key_pair);
+                builder.regular_transfer(hash_algorithm, pre_image, hash_count, hash_root, sig);
+                builder.generate().unwrap()
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    /// Creates a transaction that redeems funds from a HTLC contract using the `TimeoutResolve`
+    /// method. After a blockchain height called `timeout` is reached, the `sender` can withdraw
+    /// the funds.
+    ///
+    /// # Arguments
+    ///
+    ///  - `key_pair`:              The key pair used to sign the transaction. This key pair
+    ///                             corresponds to the `htlc_sender` in the HTLC contract.
+    ///  - `contract_address`:      The address of the HTLC contract.
+    ///  - `recipient`:             The address of the basic account that will receive the funds.
+    ///  - `value`:                 The value that will be sent to the recipient account.
+    ///  - `fee`:                   Transaction fee.
+    ///  - `validity_start_height`: Block height from which this transaction is valid.
+    ///  - `network_id`:            ID of network for which the transaction is meant.
+    ///
+    /// # Returns
+    ///
+    /// The finalized transaction.
+    ///
+    pub fn new_redeem_htlc_timeout(
+        key_pair: &KeyPair,
+        contract_address: Address,
+        recipient: Address,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Transaction {
+        let mut builder = Self::new();
+        builder
+            .with_sender(contract_address)
+            .with_sender_type(AccountType::HTLC)
+            .with_recipient(Recipient::new_basic(recipient))
+            .with_value(value)
+            .with_fee(fee)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(network_id);
+
+        let proof_builder = builder.generate().unwrap();
+        match proof_builder {
+            TransactionProofBuilder::Htlc(mut builder) => {
+                let sig = builder.signature_with_key_pair(key_pair);
+                builder.timeout_resolve(sig);
+                builder.generate().unwrap()
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    /// Creates a transaction that redeems funds from a HTLC contract using the `EarlyResolve`
+    /// method. If both `sender` and `recipient` sign the transaction, the funds can be withdrawn
+    /// at any time.
+    ///
+    /// # Arguments
+    ///
+    ///  - `contract_address`:         The address of the HTLC contract.
+    ///  - `recipient`:                The address of the basic account that will receive the funds.
+    ///  - `htlc_sender_signature`:    The signature corresponding to the `htlc_sender` in the HTLC
+    ///                                contract.
+    ///  - `htlc_recipient_signature`: The signature corresponding to the `htlc_recipient` in the
+    ///                                HTLC contract.
+    ///  - `value`:                    The value that will be sent to the recipient account.
+    ///  - `fee`:                      Transaction fee.
+    ///  - `validity_start_height`:    Block height from which this transaction is valid.
+    ///  - `network_id`:               ID of network for which the transaction is meant.
+    ///
+    /// # Returns
+    ///
+    /// The finalized transaction.
+    ///
+    pub fn new_redeem_htlc_early(
+        contract_address: Address,
+        recipient: Address,
+        htlc_sender_signature: SignatureProof,
+        htlc_recipient_signature: SignatureProof,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Transaction {
+        let mut builder = Self::new();
+        builder
+            .with_sender(contract_address)
+            .with_sender_type(AccountType::HTLC)
+            .with_recipient(Recipient::new_basic(recipient))
+            .with_value(value)
+            .with_fee(fee)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(network_id);
+
+        let proof_builder = builder.generate().unwrap();
+        match proof_builder {
+            TransactionProofBuilder::Htlc(mut builder) => {
+                builder.early_resolve(htlc_sender_signature, htlc_recipient_signature);
+                builder.generate().unwrap()
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    /// Creates a signature that can be used to redeem funds from a HTLC contract using the
+    /// `EarlyResolve` method. This can be used with both the `htlc_sender` and `htlc_recipient`
+    ///  key pairs.
+    ///
+    /// # Arguments
+    ///
+    ///  - `key_pair`:              The key pair used to sign the transaction. This key pair
+    ///                             corresponds either to the `htlc_sender` or the `htlc_recipient`
+    ///                             in the HTLC contract.
+    ///  - `contract_address`:      The address of the HTLC contract.
+    ///  - `recipient`:             The address of the basic account that will receive the funds.
+    ///  - `value`:                 The value that will be sent to the recipient account.
+    ///  - `fee`:                   Transaction fee.
+    ///  - `validity_start_height`: Block height from which this transaction is valid.
+    ///  - `network_id`:            ID of network for which the transaction is meant.
+    ///
+    /// # Returns
+    ///
+    /// The signature proof.
+    ///
+    pub fn sign_htlc_early(
+        key_pair: &KeyPair,
+        contract_address: Address,
+        recipient: Address,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> SignatureProof {
+        let mut builder = Self::new();
+        builder
+            .with_sender(contract_address)
+            .with_sender_type(AccountType::HTLC)
+            .with_recipient(Recipient::new_basic(recipient))
+            .with_value(value)
+            .with_fee(fee)
+            .with_validity_start_height(validity_start_height)
+            .with_network_id(network_id);
+
+        let proof_builder = builder.generate().unwrap();
+        match proof_builder {
+            TransactionProofBuilder::Htlc(builder) => builder.signature_with_key_pair(key_pair),
             _ => unreachable!(),
         }
     }
@@ -554,7 +962,7 @@ impl TransactionBuilder {
     ///
     /// # Returns
     ///
-    /// The finalized transaction (signed using `key_pair`).
+    /// The finalized transaction.
     ///
     pub fn new_create_staker(
         key_pair: &KeyPair,
@@ -589,7 +997,8 @@ impl TransactionBuilder {
         }
     }
 
-    /// Creates a staking transaction from the address of a given `key_pair` to a specified `staker_address`.
+    /// Creates a staking transaction from the address of a given `key_pair` to a specified
+    /// `staker_address`.
     ///
     /// # Arguments
     ///
@@ -604,7 +1013,7 @@ impl TransactionBuilder {
     ///
     /// # Returns
     ///
-    /// The finalized transaction (signed using `key_pair`).
+    /// The finalized transaction.
     ///
     pub fn new_stake(
         key_pair: &KeyPair,
@@ -658,7 +1067,11 @@ impl TransactionBuilder {
     ///
     /// # Returns
     ///
-    /// The finalized transaction (signed using `key_pair`).
+    /// The finalized transaction.
+    ///
+    /// # Note
+    ///
+    /// This is a *signalling transaction*.
     ///
     pub fn new_update_staker(
         key_pair: Option<&KeyPair>,
@@ -733,7 +1146,11 @@ impl TransactionBuilder {
     ///
     /// # Returns
     ///
-    /// The finalized transaction (signed using `key_pair`).
+    /// The finalized transaction.
+    ///
+    /// # Note
+    ///
+    /// This is a *signalling transaction*.
     ///
     pub fn new_retire_staker(
         key_pair: Option<&KeyPair>,
@@ -808,7 +1225,11 @@ impl TransactionBuilder {
     ///
     /// # Returns
     ///
-    /// The finalized transaction (signed using `key_pair`).
+    /// The finalized transaction.
+    ///
+    /// # Note
+    ///
+    /// This is a *signalling transaction*.
     ///
     pub fn new_reactivate_staker(
         key_pair: Option<&KeyPair>,
@@ -881,7 +1302,7 @@ impl TransactionBuilder {
     ///
     /// # Returns
     ///
-    /// The finalized transaction (signed using `key_pair`).
+    /// The finalized transaction.
     ///
     pub fn new_unstake(
         key_pair: &KeyPair,
@@ -918,8 +1339,8 @@ impl TransactionBuilder {
     ///
     /// # Arguments
     ///
-    ///  - `key_pair`:              The key pair used to sign the transaction. The initial stake is sent from the
-    ///                             account belonging to this key pair.
+    ///  - `key_pair`:              The key pair used to sign the transaction. The initial stake is
+    ///                             sent from the account belonging to this key pair.
     ///  - `cold_key_pair`:         The key pair that will become the validator address. The data is
     ///                             signed using this key pair.
     ///  - `warm_address`:          The address corresponding to the warm key used by the validator.
@@ -932,7 +1353,7 @@ impl TransactionBuilder {
     ///
     /// # Returns
     ///
-    /// The finalized transaction (signed using `key_pair`).
+    /// The finalized transaction.
     ///
     pub fn new_create_validator(
         key_pair: &KeyPair,
@@ -978,11 +1399,12 @@ impl TransactionBuilder {
     ///
     /// # Arguments
     ///
-    ///  - `key_pair`:                 The key pair used to sign the transaction. The transaction fee is taken from the
-    ///                                account belonging to this key pair.
-    ///  - `cold_key_pair`:            The key pair that corresponds to the validator address. The data is
-    ///                                signed using this key pair.
-    ///  - `new_warm_address`:         The address corresponding to the new warm key used by the validator.
+    ///  - `key_pair`:                 The key pair used to sign the transaction. The transaction
+    ///                                fee is taken from the account belonging to this key pair.
+    ///  - `cold_key_pair`:            The key pair that corresponds to the validator address. The
+    ///                                data is signed using this key pair.
+    ///  - `new_warm_address`:         The address corresponding to the new warm key used by the
+    ///                                validator.
     ///  - `new_reward_address`:       The new address to which the staking reward is sent.
     ///  - `new_signal_data`:          The new signal data showed by the validator.
     ///  - `new_validator_key_pair`:   The new validator BLS key pair used by the validator.
@@ -992,7 +1414,7 @@ impl TransactionBuilder {
     ///
     /// # Returns
     ///
-    /// The finalized transaction (signed using `key_pair`).
+    /// The finalized transaction.
     ///
     /// # Note
     ///
@@ -1042,8 +1464,8 @@ impl TransactionBuilder {
     ///
     /// # Arguments
     ///
-    ///  - `key_pair`:              The key pair used to sign the transaction. The transaction fee is taken from the
-    ///                             account belonging to this key pair.
+    ///  - `key_pair`:              The key pair used to sign the transaction. The transaction fee
+    ///                             is taken from the account belonging to this key pair.
     ///  - `validator_address`:     The validator address.
     ///  - `warm_key_pair`:         The key pair that corresponds to the validator's warm address.
     ///                             The data is signed using this key pair.
@@ -1053,7 +1475,7 @@ impl TransactionBuilder {
     ///
     /// # Returns
     ///
-    /// The finalized transaction (signed using `key_pair`).
+    /// The finalized transaction.
     ///
     /// # Note
     ///
@@ -1095,8 +1517,8 @@ impl TransactionBuilder {
     ///
     /// # Arguments
     ///
-    ///  - `key_pair`:              The key pair used to sign the transaction. The transaction fee is taken from the
-    ///                             account belonging to this key pair.
+    ///  - `key_pair`:              The key pair used to sign the transaction. The transaction fee
+    ///                             is taken from the account belonging to this key pair.
     ///  - `validator_address`:     The validator address.
     ///  - `warm_key_pair`:         The key pair that corresponds to the validator's warm address.
     ///                             The data is signed using this key pair.
@@ -1106,7 +1528,7 @@ impl TransactionBuilder {
     ///
     /// # Returns
     ///
-    /// The finalized transaction (signed using `key_pair`).
+    /// The finalized transaction.
     ///
     /// # Note
     ///
@@ -1148,8 +1570,8 @@ impl TransactionBuilder {
     ///
     /// # Arguments
     ///
-    ///  - `key_pair`:              The key pair used to sign the transaction. The transaction fee is taken from the
-    ///                             account belonging to this key pair.
+    ///  - `key_pair`:              The key pair used to sign the transaction. The transaction fee
+    ///                             is taken from the account belonging to this key pair.
     ///  - `validator_address`:     The validator address.
     ///  - `warm_key_pair`:         The key pair that corresponds to the validator's warm address.
     ///                             The data is signed using this key pair.
@@ -1159,7 +1581,7 @@ impl TransactionBuilder {
     ///
     /// # Returns
     ///
-    /// The finalized transaction (signed using `key_pair`).
+    /// The finalized transaction.
     ///
     /// # Note
     ///
@@ -1197,8 +1619,8 @@ impl TransactionBuilder {
         }
     }
 
-    /// Creates a transaction that drops an *inactive* validator. The validator must have been *inactive* for the
-    /// minimum cool-down period.
+    /// Creates a transaction that drops an *inactive* validator. The validator must have been
+    /// *inactive* for the minimum cool-down period.
     ///
     /// # Arguments
     ///
@@ -1211,7 +1633,7 @@ impl TransactionBuilder {
     ///
     /// # Returns
     ///
-    /// The finalized transaction (signed using `cold_key_pair`).
+    /// The finalized transaction.
     ///
     pub fn new_drop_validator(
         recipient: Address,
