@@ -1,0 +1,40 @@
+name: Four validators scenario
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+
+jobs:
+
+  test:
+    runs-on: ubuntu-20.04
+
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/cache@v2
+      with:
+        path: 
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: cargo-${{ hashFiles('**/Cargo.toml') }}
+    - name: Set up Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: nightly
+        override: true
+    - uses: actions-rs/cargo@v1
+      with:
+        command: build        
+    - name: Executes the 4 validators reconnecting scenario
+      run: | 
+          cd test-scenarios
+          bash four_validators.sh 
+    - name: Archive test logs
+        uses: actions/upload-artifact@v2
+        with:
+          name: test-logs
+          path: |
+            temp-logs/
+            
