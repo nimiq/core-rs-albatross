@@ -211,11 +211,13 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
         &mut self,
         round: u32,
     ) -> Result<ProposalResult<Self::ProposalTy>, TendermintError> {
-        let (timeout, validator_id, validator_key) = {
+        let (timeout, validator_id, validator_key, expected_height) = {
             let blockchain = self.blockchain.read();
+
+            let expected_height = blockchain.block_number() + 1;
             // Get the proposer's slot and slot number for this round.
             let (slot, slot_number) = blockchain
-                .get_slot_owner_at(blockchain.block_number() + 1, round, None)
+                .get_slot_owner_at(expected_height, round, None)
                 .expect("Couldn't find slot owner!");
 
             // Calculate the validator slot band from the slot number.
@@ -242,13 +244,13 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
                 &timeout
             );
 
-            (timeout, validator_id, validator_key)
+            (timeout, validator_id, validator_key, expected_height)
         };
 
         // This waits for a proposal from the proposer until it timeouts.
         let await_res = tokio::time::timeout(
             timeout,
-            self.await_proposal_loop(validator_id, &validator_key),
+            self.await_proposal_loop(validator_id, &validator_key, expected_height),
         )
         .await;
 
@@ -385,22 +387,29 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintInterface<TValidat
         &mut self,
         validator_id: u16,
         validator_key: &PublicKey,
+        expected_height: u32,
     ) -> (TendermintProposal, TValidatorNetwork::PubsubId) {
         while let Some((msg, id)) = self.proposal_stream.as_mut().next().await {
-            // Check if the proposal comes from the correct validator and the signature of the
-            // proposal is valid. If not, keep awaiting.
-            debug!("Received Proposal from {}", &msg.signer_idx);
-            if validator_id == msg.signer_idx {
-                if msg.verify(validator_key) {
-                    return (msg.message, id);
-                } else {
-                    debug!("Tendermint - await_proposal: Invalid signature");
-                }
-            } else {
+            // most basic check first: only process current height proposals, discard old ones
+            if msg.message.value.block_number == expected_height {
+                // Check if the proposal comes from the correct validator and the signature of the
+                // proposal is valid. If not, keep awaiting.
                 debug!(
-                    "Tendermint - await_proposal: Invalid validator id. Expected {}, found {}",
-                    validator_id, msg.signer_idx
+                    "Received Proposal for block #{} from validator {} ",
+                    &msg.message.value.block_number, &msg.signer_idx,
                 );
+                if validator_id == msg.signer_idx {
+                    if msg.verify(validator_key) {
+                        return (msg.message, id);
+                    } else {
+                        debug!("Tendermint - await_proposal: Invalid signature");
+                    }
+                } else {
+                    debug!(
+                        "Tendermint - await_proposal: Invalid validator id. Expected {}, found {}",
+                        validator_id, msg.signer_idx
+                    );
+                }
             }
         }
 
