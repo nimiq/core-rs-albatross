@@ -491,7 +491,7 @@ impl Blockchain {
 
             if let Some(tx_vec) = transactions {
                 for transaction in tx_vec {
-                    if self.contains_tx_in_validity_window(&transaction.hash()) {
+                    if self.contains_tx_in_validity_window(&transaction.hash(), Some(txn)) {
                         warn!("Rejecting block - transaction already included");
                         return Err(PushError::DuplicateTransaction);
                     }

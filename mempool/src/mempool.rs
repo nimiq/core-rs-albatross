@@ -266,7 +266,7 @@ impl Mempool {
 
                     // Check if transaction is still valid.
                     if !tx.is_valid_at(block_height)
-                        || blockchain.contains_tx_in_validity_window(&tx_hash)
+                        || blockchain.contains_tx_in_validity_window(&tx_hash, None)
                     {
                         // Tx has expired or is already included in the new chain, so skip it
                         // (TX is lost...)

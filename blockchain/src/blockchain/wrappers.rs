@@ -1,5 +1,6 @@
 use nimiq_account::{Account, StakingContract};
 use nimiq_block::Block;
+use nimiq_database::Transaction;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::policy;
@@ -89,9 +90,13 @@ impl Blockchain {
 
     /// Checks if we have seen some transaction with this hash inside the validity window. This is
     /// used to prevent replay attacks.
-    pub fn contains_tx_in_validity_window(&self, tx_hash: &Blake2bHash) -> bool {
+    pub fn contains_tx_in_validity_window(
+        &self,
+        tx_hash: &Blake2bHash,
+        txn_opt: Option<&Transaction>,
+    ) -> bool {
         // Get a vector with all transactions corresponding to the given hash.
-        let ext_hash_vec = self.history_store.get_ext_tx_by_hash(tx_hash, None);
+        let ext_hash_vec = self.history_store.get_ext_tx_by_hash(tx_hash, txn_opt);
 
         // If the vector is empty then we have never seen a transaction with this hash.
         if ext_hash_vec.is_empty() {

@@ -104,7 +104,7 @@ pub(crate) async fn verify_tx<'a>(
         return Err(VerifyErr::Invalid);
     }
 
-    if blockchain.contains_tx_in_validity_window(&transaction.hash()) {
+    if blockchain.contains_tx_in_validity_window(&transaction.hash(), None) {
         log::debug!("Transaction has already been mined");
         return Err(VerifyErr::Invalid);
     }
