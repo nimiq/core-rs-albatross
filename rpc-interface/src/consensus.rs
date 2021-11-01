@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
+use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm};
 
 use crate::types::{Transaction, ValidityStartHeight};
 
@@ -45,8 +46,8 @@ pub trait ConsensusInterface {
         &mut self,
         wallet: Address,
         recipient: Address,
-        value: Coin,
         data: Vec<u8>,
+        value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Self::Error>;
@@ -55,11 +56,163 @@ pub trait ConsensusInterface {
         &mut self,
         wallet: Address,
         recipient: Address,
-        value: Coin,
         data: Vec<u8>,
+        value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Self::Error>;
+
+    async fn create_new_vesting_transaction(
+        &mut self,
+        wallet: Address,
+        owner: Address,
+        start_time: u64,
+        time_step: u64,
+        num_steps: u32,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<String, Self::Error>;
+
+    async fn send_new_vesting_transaction(
+        &mut self,
+        wallet: Address,
+        owner: Address,
+        start_time: u64,
+        time_step: u64,
+        num_steps: u32,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<Blake2bHash, Self::Error>;
+
+    async fn create_redeem_vesting_transaction(
+        &mut self,
+        wallet: Address,
+        contract_address: Address,
+        recipient: Address,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<String, Self::Error>;
+
+    async fn send_redeem_vesting_transaction(
+        &mut self,
+        wallet: Address,
+        contract_address: Address,
+        recipient: Address,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<Blake2bHash, Self::Error>;
+
+    async fn create_new_htlc_transaction(
+        &mut self,
+        wallet: Address,
+        htlc_sender: Address,
+        htlc_recipient: Address,
+        hash_root: AnyHash,
+        hash_count: u8,
+        hash_algorithm: HashAlgorithm,
+        timeout: u64,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<String, Self::Error>;
+
+    async fn send_new_htlc_transaction(
+        &mut self,
+        wallet: Address,
+        htlc_sender: Address,
+        htlc_recipient: Address,
+        hash_root: AnyHash,
+        hash_count: u8,
+        hash_algorithm: HashAlgorithm,
+        timeout: u64,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<Blake2bHash, Self::Error>;
+
+    async fn create_redeem_regular_htlc_transaction(
+        &mut self,
+        wallet: Address,
+        contract_address: Address,
+        recipient: Address,
+        pre_image: AnyHash,
+        hash_root: AnyHash,
+        hash_count: u8,
+        hash_algorithm: HashAlgorithm,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<String, Self::Error>;
+
+    async fn send_redeem_regular_htlc_transaction(
+        &mut self,
+        wallet: Address,
+        contract_address: Address,
+        recipient: Address,
+        pre_image: AnyHash,
+        hash_root: AnyHash,
+        hash_count: u8,
+        hash_algorithm: HashAlgorithm,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<Blake2bHash, Self::Error>;
+
+    async fn create_redeem_timeout_htlc_transaction(
+        &mut self,
+        wallet: Address,
+        contract_address: Address,
+        recipient: Address,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<String, Self::Error>;
+
+    async fn send_redeem_timeout_htlc_transaction(
+        &mut self,
+        wallet: Address,
+        contract_address: Address,
+        recipient: Address,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<Blake2bHash, Self::Error>;
+
+    async fn create_redeem_early_htlc_transaction(
+        &mut self,
+        contract_address: Address,
+        recipient: Address,
+        htlc_sender_signature: String,
+        htlc_recipient_signature: String,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<String, Self::Error>;
+
+    async fn send_redeem_early_htlc_transaction(
+        &mut self,
+        contract_address: Address,
+        recipient: Address,
+        htlc_sender_signature: String,
+        htlc_recipient_signature: String,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<Blake2bHash, Self::Error>;
+
+    async fn sign_redeem_early_htlc_transaction(
+        &mut self,
+        wallet: Address,
+        contract_address: Address,
+        recipient: Address,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<String, Self::Error>;
 
     async fn create_new_staker_transaction(
         &mut self,
