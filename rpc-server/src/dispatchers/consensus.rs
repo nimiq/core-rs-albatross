@@ -15,7 +15,8 @@ use nimiq_rpc_interface::{
     consensus::ConsensusInterface,
     types::{Transaction as RPCTransaction, ValidityStartHeight},
 };
-use nimiq_transaction::Transaction;
+use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm};
+use nimiq_transaction::{SignatureProof, Transaction};
 use nimiq_transaction_builder::TransactionBuilder;
 
 use crate::{error::Error, wallets::UnlockedWallets};
@@ -128,12 +129,13 @@ impl ConsensusInterface for ConsensusDispatcher {
         self.send_raw_transaction(raw_tx).await
     }
 
+    /// Returns a serialized basic transaction with an arbitrary data field.
     async fn create_basic_transaction_with_data(
         &mut self,
         wallet: Address,
         recipient: Address,
-        value: Coin,
         data: Vec<u8>,
+        value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Self::Error> {
@@ -150,12 +152,13 @@ impl ConsensusInterface for ConsensusDispatcher {
         Ok(transaction_to_hex_string(&transaction))
     }
 
+    /// Sends a basic transaction, with an arbitrary data field, to the network.
     async fn send_basic_transaction_with_data(
         &mut self,
         wallet: Address,
         recipient: Address,
-        value: Coin,
         data: Vec<u8>,
+        value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Self::Error> {
@@ -163,13 +166,370 @@ impl ConsensusInterface for ConsensusDispatcher {
             .create_basic_transaction_with_data(
                 wallet,
                 recipient,
-                value,
                 data,
+                value,
                 fee,
                 validity_start_height,
             )
             .await?;
         self.send_raw_transaction(raw_tx).await
+    }
+
+    /// Returns a serialized transaction creating a new vesting contract.
+    async fn create_new_vesting_transaction(
+        &mut self,
+        wallet: Address,
+        owner: Address,
+        start_time: u64,
+        time_step: u64,
+        num_steps: u32,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<String, Self::Error> {
+        let transaction = TransactionBuilder::new_create_vesting(
+            &self.get_wallet_keypair(&wallet)?,
+            owner,
+            start_time,
+            time_step,
+            num_steps,
+            value,
+            fee,
+            self.validity_start_height(validity_start_height),
+            self.get_network_id(),
+        );
+
+        Ok(transaction_to_hex_string(&transaction))
+    }
+
+    /// Sends a transaction creating a new vesting contract to the network.
+    async fn send_new_vesting_transaction(
+        &mut self,
+        wallet: Address,
+        owner: Address,
+        start_time: u64,
+        time_step: u64,
+        num_steps: u32,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<Blake2bHash, Self::Error> {
+        let raw_tx = self
+            .create_new_vesting_transaction(
+                wallet,
+                owner,
+                start_time,
+                time_step,
+                num_steps,
+                value,
+                fee,
+                validity_start_height,
+            )
+            .await?;
+        self.send_raw_transaction(raw_tx).await
+    }
+
+    /// Returns a serialized transaction redeeming a vesting contract.
+    async fn create_redeem_vesting_transaction(
+        &mut self,
+        wallet: Address,
+        contract_address: Address,
+        recipient: Address,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<String, Self::Error> {
+        let transaction = TransactionBuilder::new_redeem_vesting(
+            &self.get_wallet_keypair(&wallet)?,
+            contract_address,
+            recipient,
+            value,
+            fee,
+            self.validity_start_height(validity_start_height),
+            self.get_network_id(),
+        );
+
+        Ok(transaction_to_hex_string(&transaction))
+    }
+
+    /// Sends a transaction redeeming a vesting contract to the network.
+    async fn send_redeem_vesting_transaction(
+        &mut self,
+        wallet: Address,
+        contract_address: Address,
+        recipient: Address,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<Blake2bHash, Self::Error> {
+        let raw_tx = self
+            .create_redeem_vesting_transaction(
+                wallet,
+                contract_address,
+                recipient,
+                value,
+                fee,
+                validity_start_height,
+            )
+            .await?;
+        self.send_raw_transaction(raw_tx).await
+    }
+
+    /// Returns a serialized transaction creating a new HTLC contract.
+    async fn create_new_htlc_transaction(
+        &mut self,
+        wallet: Address,
+        htlc_sender: Address,
+        htlc_recipient: Address,
+        hash_root: AnyHash,
+        hash_count: u8,
+        hash_algorithm: HashAlgorithm,
+        timeout: u64,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<String, Self::Error> {
+        let transaction = TransactionBuilder::new_create_htlc(
+            &self.get_wallet_keypair(&wallet)?,
+            htlc_sender,
+            htlc_recipient,
+            hash_root,
+            hash_count,
+            hash_algorithm,
+            timeout,
+            value,
+            fee,
+            self.validity_start_height(validity_start_height),
+            self.get_network_id(),
+        );
+
+        Ok(transaction_to_hex_string(&transaction))
+    }
+
+    /// Sends a transaction creating a new HTLC contract to the network.
+    async fn send_new_htlc_transaction(
+        &mut self,
+        wallet: Address,
+        htlc_sender: Address,
+        htlc_recipient: Address,
+        hash_root: AnyHash,
+        hash_count: u8,
+        hash_algorithm: HashAlgorithm,
+        timeout: u64,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<Blake2bHash, Self::Error> {
+        let raw_tx = self
+            .create_new_htlc_transaction(
+                wallet,
+                htlc_sender,
+                htlc_recipient,
+                hash_root,
+                hash_count,
+                hash_algorithm,
+                timeout,
+                value,
+                fee,
+                validity_start_height,
+            )
+            .await?;
+        self.send_raw_transaction(raw_tx).await
+    }
+
+    /// Returns a serialized transaction redeeming a HTLC contract using the `RegularTransfer`
+    /// method.
+    async fn create_redeem_regular_htlc_transaction(
+        &mut self,
+        wallet: Address,
+        contract_address: Address,
+        recipient: Address,
+        pre_image: AnyHash,
+        hash_root: AnyHash,
+        hash_count: u8,
+        hash_algorithm: HashAlgorithm,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<String, Self::Error> {
+        let transaction = TransactionBuilder::new_redeem_htlc_regular(
+            &self.get_wallet_keypair(&wallet)?,
+            contract_address,
+            recipient,
+            pre_image,
+            hash_root,
+            hash_count,
+            hash_algorithm,
+            value,
+            fee,
+            self.validity_start_height(validity_start_height),
+            self.get_network_id(),
+        );
+
+        Ok(transaction_to_hex_string(&transaction))
+    }
+
+    /// Sends a transaction redeeming a HTLC contract, using the `RegularTransfer` method, to the
+    /// network.
+    async fn send_redeem_regular_htlc_transaction(
+        &mut self,
+        wallet: Address,
+        contract_address: Address,
+        recipient: Address,
+        pre_image: AnyHash,
+        hash_root: AnyHash,
+        hash_count: u8,
+        hash_algorithm: HashAlgorithm,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<Blake2bHash, Self::Error> {
+        let raw_tx = self
+            .create_redeem_regular_htlc_transaction(
+                wallet,
+                contract_address,
+                recipient,
+                pre_image,
+                hash_root,
+                hash_count,
+                hash_algorithm,
+                value,
+                fee,
+                validity_start_height,
+            )
+            .await?;
+        self.send_raw_transaction(raw_tx).await
+    }
+
+    /// Returns a serialized transaction redeeming a HTLC contract using the `TimeoutResolve`
+    /// method.
+    async fn create_redeem_timeout_htlc_transaction(
+        &mut self,
+        wallet: Address,
+        contract_address: Address,
+        recipient: Address,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<String, Self::Error> {
+        let transaction = TransactionBuilder::new_redeem_htlc_timeout(
+            &self.get_wallet_keypair(&wallet)?,
+            contract_address,
+            recipient,
+            value,
+            fee,
+            self.validity_start_height(validity_start_height),
+            self.get_network_id(),
+        );
+
+        Ok(transaction_to_hex_string(&transaction))
+    }
+
+    /// Sends a transaction redeeming a HTLC contract, using the `TimeoutResolve` method, to the
+    /// network.
+    async fn send_redeem_timeout_htlc_transaction(
+        &mut self,
+        wallet: Address,
+        contract_address: Address,
+        recipient: Address,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<Blake2bHash, Self::Error> {
+        let raw_tx = self
+            .create_redeem_timeout_htlc_transaction(
+                wallet,
+                contract_address,
+                recipient,
+                value,
+                fee,
+                validity_start_height,
+            )
+            .await?;
+        self.send_raw_transaction(raw_tx).await
+    }
+
+    /// Returns a serialized transaction redeeming a HTLC contract using the `EarlyResolve`
+    /// method.
+    async fn create_redeem_early_htlc_transaction(
+        &mut self,
+        contract_address: Address,
+        recipient: Address,
+        htlc_sender_signature: String,
+        htlc_recipient_signature: String,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<String, Self::Error> {
+        let sig_sender =
+            SignatureProof::deserialize_from_vec(&hex::decode(htlc_sender_signature).unwrap())
+                .unwrap();
+        let sig_recipient =
+            SignatureProof::deserialize_from_vec(&hex::decode(htlc_recipient_signature).unwrap())
+                .unwrap();
+
+        let transaction = TransactionBuilder::new_redeem_htlc_early(
+            contract_address,
+            recipient,
+            sig_sender,
+            sig_recipient,
+            value,
+            fee,
+            self.validity_start_height(validity_start_height),
+            self.get_network_id(),
+        );
+
+        Ok(transaction_to_hex_string(&transaction))
+    }
+
+    /// Sends a transaction redeeming a HTLC contract, using the `EarlyResolve` method, to the
+    /// network.
+    async fn send_redeem_early_htlc_transaction(
+        &mut self,
+        contract_address: Address,
+        recipient: Address,
+        htlc_sender_signature: String,
+        htlc_recipient_signature: String,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<Blake2bHash, Self::Error> {
+        let raw_tx = self
+            .create_redeem_early_htlc_transaction(
+                contract_address,
+                recipient,
+                htlc_sender_signature,
+                htlc_recipient_signature,
+                value,
+                fee,
+                validity_start_height,
+            )
+            .await?;
+        self.send_raw_transaction(raw_tx).await
+    }
+
+    /// Returns a serialized signature that can be used to redeem funds from a HTLC contract using
+    /// the `EarlyResolve` method.
+    async fn sign_redeem_early_htlc_transaction(
+        &mut self,
+        wallet: Address,
+        contract_address: Address,
+        recipient: Address,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: ValidityStartHeight,
+    ) -> Result<String, Self::Error> {
+        let sig = TransactionBuilder::sign_htlc_early(
+            &self.get_wallet_keypair(&wallet)?,
+            contract_address,
+            recipient,
+            value,
+            fee,
+            self.validity_start_height(validity_start_height),
+            self.get_network_id(),
+        );
+
+        Ok(hex::encode(&sig.serialize_to_vec()))
     }
 
     /// Returns a serialized `new_staker` transaction. You need to provide the address of a basic
