@@ -144,7 +144,7 @@ impl NetworkBehaviour for MessageBehaviour {
         self.events
             .push_back(NetworkBehaviourAction::NotifyHandler {
                 peer_id: *peer_id,
-                handler: NotifyHandler::Any,
+                handler: NotifyHandler::One(*connection_id),
                 event: HandlerInEvent::PeerConnected {
                     peer_id: *peer_id,
                     outbound: connected_point.is_dialer(),
