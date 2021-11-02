@@ -80,7 +80,7 @@ impl Mempool {
 
         // Start the executor and obtain its handle
         let (abort_handle, abort_registration) = AbortHandle::new_pair();
-        let _ = Abortable::new(tokio::spawn(mempool_executor), abort_registration);
+        tokio::spawn(Abortable::new(mempool_executor, abort_registration));
 
         // Set the executor handle
         *self.executor_handle.lock().unwrap() = Some(abort_handle);
@@ -111,7 +111,7 @@ impl Mempool {
 
         // Start the executor and obtain its handle
         let (abort_handle, abort_registration) = AbortHandle::new_pair();
-        let _ = Abortable::new(tokio::spawn(mempool_executor), abort_registration);
+        tokio::spawn(Abortable::new(mempool_executor, abort_registration));
 
         // Set the executor handle
         *self.executor_handle.lock().unwrap() = Some(abort_handle);
