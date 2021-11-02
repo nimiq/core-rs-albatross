@@ -3,17 +3,18 @@ use std::mem;
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
 
-use parking_lot::RwLock;
-
-use crate::consensus_agent::ConsensusAgent;
-use block::Block;
-use blockchain::{AbstractBlockchain, Blockchain};
 use futures::future::BoxFuture;
 use futures::stream::FuturesUnordered;
 use futures::task::{Context, Poll};
 use futures::{Future, FutureExt, StreamExt};
-use hash::Blake2bHash;
-use network_interface::{peer::Peer, request_response::RequestError};
+use parking_lot::RwLock;
+
+use nimiq_block::Block;
+use nimiq_blockchain::{AbstractBlockchain, Blockchain};
+use nimiq_hash::Blake2bHash;
+use nimiq_network_interface::{peer::Peer, request_response::RequestError};
+
+use crate::consensus_agent::ConsensusAgent;
 
 /// Requests the head blocks for a set of peers.
 /// Calculates the number of known/unknown blocks and a vector of unknown blocks.

@@ -12,7 +12,7 @@ use futures::stream::FuturesUnordered;
 use futures::task::{Context, Poll};
 use futures::{ready, Future, Stream, StreamExt};
 
-use network_interface::peer::Peer;
+use nimiq_network_interface::peer::Peer;
 
 use crate::consensus_agent::ConsensusAgent;
 

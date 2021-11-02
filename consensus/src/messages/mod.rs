@@ -1,9 +1,10 @@
-use beserial::{Deserialize, Serialize};
-use block::{Block, MacroBlock};
-use blockchain::HistoryTreeChunk;
-use hash::Blake2bHash;
-use network_interface::message::*;
 use std::fmt::{Debug, Formatter};
+
+use beserial::{Deserialize, Serialize};
+use nimiq_block::{Block, MacroBlock};
+use nimiq_blockchain::HistoryTreeChunk;
+use nimiq_hash::Blake2bHash;
+use nimiq_network_interface::message::*;
 
 use crate::request_response;
 

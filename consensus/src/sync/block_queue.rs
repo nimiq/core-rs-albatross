@@ -12,14 +12,14 @@ use parking_lot::RwLock;
 use pin_project::pin_project;
 use tokio::task::spawn_blocking;
 
-use blockchain::AbstractBlockchain;
-use network_interface::{
+use nimiq_block::Block;
+use nimiq_blockchain::AbstractBlockchain;
+use nimiq_blockchain::{Blockchain, PushError, PushResult};
+use nimiq_hash::Blake2bHash;
+use nimiq_network_interface::{
     network::{MsgAcceptance, Network, PubsubId, Topic},
     peer::Peer,
 };
-use nimiq_block::Block;
-use nimiq_blockchain::{Blockchain, PushError, PushResult};
-use nimiq_hash::Blake2bHash;
 use nimiq_primitives::policy;
 
 use crate::consensus_agent::ConsensusAgent;

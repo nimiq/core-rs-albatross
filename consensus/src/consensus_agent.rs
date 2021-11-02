@@ -4,10 +4,10 @@ use std::time::Duration;
 
 use parking_lot::RwLock;
 
-use block::Block;
-use hash::Blake2bHash;
-use network_interface::peer::Peer;
-use network_interface::request_response::{RequestError, RequestResponse};
+use nimiq_block::Block;
+use nimiq_hash::Blake2bHash;
+use nimiq_network_interface::peer::Peer;
+use nimiq_network_interface::request_response::{RequestError, RequestResponse};
 use nimiq_subscription::Subscription;
 
 use crate::messages::*;

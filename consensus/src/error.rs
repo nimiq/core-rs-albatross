@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use blockchain::BlockchainError;
+use nimiq_blockchain::BlockchainError;
 
 #[derive(Debug, Error)]
 pub enum Error {

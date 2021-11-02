@@ -1,4 +1,3 @@
-use rand::Rng;
 use std::{
     marker::PhantomData,
     pin::Pin,
@@ -14,6 +13,7 @@ use futures::{
 };
 use parking_lot::RwLock;
 use pin_project::pin_project;
+use rand::Rng;
 
 use beserial::Deserialize;
 use nimiq_block::Block;
@@ -21,9 +21,8 @@ use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_consensus::consensus_agent::ConsensusAgent;
-use nimiq_consensus::sync::block_queue::BlockQueueConfig;
-use nimiq_consensus::sync::request_component::RequestComponentEvent;
-use nimiq_consensus::sync::{block_queue::BlockQueue, request_component::RequestComponent};
+use nimiq_consensus::sync::block_queue::{BlockQueue, BlockQueueConfig};
+use nimiq_consensus::sync::request_component::{RequestComponent, RequestComponentEvent};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_hash::Blake2bHash;
 use nimiq_mempool::{config::MempoolConfig, mempool::Mempool};

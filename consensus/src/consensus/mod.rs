@@ -10,10 +10,10 @@ use tokio::sync::broadcast::{channel as broadcast, Sender as BroadcastSender};
 use tokio::time::Sleep;
 use tokio_stream::wrappers::BroadcastStream;
 
-use blockchain::{AbstractBlockchain, Blockchain};
-use database::Environment;
-use network_interface::network::{Network, Topic};
-use transaction::Transaction;
+use nimiq_blockchain::{AbstractBlockchain, Blockchain};
+use nimiq_database::Environment;
+use nimiq_network_interface::network::{Network, Topic};
+use nimiq_transaction::Transaction;
 
 use crate::consensus::head_requests::{HeadRequests, HeadRequestsResult};
 use crate::sync::block_queue::{BlockQueue, BlockQueueConfig, BlockQueueEvent};

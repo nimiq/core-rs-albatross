@@ -2,11 +2,12 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 
+use nimiq_block::Block;
+use nimiq_blockchain::{AbstractBlockchain, Blockchain, Direction, CHUNK_SIZE};
+use nimiq_network_interface::message::ResponseMessage;
+use nimiq_primitives::policy;
+
 use crate::messages::*;
-use block::Block;
-use blockchain::{AbstractBlockchain, Blockchain, Direction, CHUNK_SIZE};
-use network_interface::message::ResponseMessage;
-use primitives::policy;
 
 /// This trait defines the behaviour when receiving a message and how to generate the response.
 pub trait Handle<Response> {

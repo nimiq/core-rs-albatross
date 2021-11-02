@@ -1,14 +1,17 @@
-use crate::consensus_agent::ConsensusAgent;
-use crate::sync::sync_queue::SyncQueue;
-use block::Block;
-use futures::task::{Context, Poll};
-use futures::{FutureExt, Stream, StreamExt};
-use hash::Blake2bHash;
-use network_interface::{network::NetworkEvent, peer::Peer};
 use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
+
+use futures::task::{Context, Poll};
+use futures::{FutureExt, Stream, StreamExt};
 use tokio_stream::wrappers::BroadcastStream;
+
+use nimiq_block::Block;
+use nimiq_hash::Blake2bHash;
+use nimiq_network_interface::{network::NetworkEvent, peer::Peer};
+
+use crate::consensus_agent::ConsensusAgent;
+use crate::sync::sync_queue::SyncQueue;
 
 pub trait RequestComponent<P: Peer>: Stream<Item = RequestComponentEvent> + Unpin {
     fn request_missing_blocks(

@@ -3,15 +3,15 @@ use std::sync::Arc;
 use futures::StreamExt;
 use parking_lot::RwLock;
 
+use nimiq_blockchain::Blockchain;
+use nimiq_network_interface::prelude::{Network, Peer};
+
 use crate::messages::handlers::Handle;
 use crate::messages::{
     RequestBatchSet, RequestBlock, RequestBlockHashes, RequestHead, RequestHistoryChunk,
     RequestMissingBlocks,
 };
 use crate::Consensus;
-
-use blockchain::Blockchain;
-use network_interface::prelude::{Network, Peer};
 
 impl<N: Network> Consensus<N> {
     pub(super) fn init_network_requests(network: &Arc<N>, blockchain: &Arc<RwLock<Blockchain>>) {

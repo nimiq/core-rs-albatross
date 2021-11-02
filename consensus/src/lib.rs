@@ -10,17 +10,6 @@ extern crate beserial_derive;
 extern crate futures;
 #[macro_use]
 extern crate log;
-extern crate nimiq_block as block;
-extern crate nimiq_blockchain as blockchain;
-extern crate nimiq_collections as collections;
-extern crate nimiq_database as database;
-extern crate nimiq_hash as hash;
-extern crate nimiq_macros as macros;
-extern crate nimiq_mempool as mempool;
-extern crate nimiq_network_interface as network_interface;
-extern crate nimiq_primitives as primitives;
-extern crate nimiq_transaction as transaction;
-extern crate nimiq_utils as utils;
 #[macro_use]
 extern crate pin_project;
 
