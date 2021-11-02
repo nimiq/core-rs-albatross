@@ -121,7 +121,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
 
                 // Create and store the new parent node.
                 let new_parent = TrieNode::<A>::new_branch(cur_node.key().common_prefix(key))
-                    .put_child(cur_node.key(), cur_node.hash())
+                    .put_child(cur_node.key(), Blake2bHash::default())
                     .unwrap()
                     .put_child(new_node.key(), new_node.hash())
                     .unwrap();
@@ -433,12 +433,11 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
         let mut child_node = root_path.pop().expect("Root path must not be empty!");
 
         // Go up the root path until you get to the root.
-        let default_hash = Blake2bHash::default();
         while let Some(mut parent_node) = root_path.pop() {
             // Update and store the parent node.
             parent_node = parent_node
                 // Mark this node as dirty by storing the default hash.
-                .put_child(child_node.key(), default_hash.clone())
+                .put_child(child_node.key(), Blake2bHash::default())
                 .unwrap();
             txn.put_reserve(&self.db, parent_node.key(), &parent_node);
 
