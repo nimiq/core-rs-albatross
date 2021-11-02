@@ -280,6 +280,22 @@ impl Blockchain {
         }
         this.state.accounts.finalize_batch(&mut txn);
 
+        // Unwrap the block.
+        let macro_block = block.unwrap_macro_ref();
+
+        // Check the state_root hash against the one in the block.
+        let state_root = this.state.accounts.get_root(Some(&txn));
+        if macro_block.header.state_root != state_root {
+            warn!(
+                "Rejecting epoch - state root mismatch: computed={}, block={}",
+                state_root, macro_block.header.state_root
+            );
+            txn.abort();
+            #[cfg(feature = "metrics")]
+            this.metrics.note_invalid_block();
+            return Err(PushError::InvalidBlock(BlockError::AccountsHashMismatch));
+        }
+
         // Macro blocks are final and receipts for the previous batch are no longer necessary
         // as rebranching across this block is not possible.
         this.chain_store.clear_receipts(&mut txn);
@@ -290,9 +306,6 @@ impl Blockchain {
             policy::epoch_at(block.block_number()),
             &ext_txs[first_new_ext_tx..],
         );
-
-        // Unwrap the block.
-        let macro_block = block.unwrap_macro_ref();
 
         // Check if this block is an election block.
         let is_election_block = macro_block.is_election_block();
