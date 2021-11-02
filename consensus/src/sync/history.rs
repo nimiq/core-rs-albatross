@@ -898,6 +898,11 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                 let future = async move {
                     match cluster_res {
                         Some(Ok(batch)) => {
+                            debug!(
+                                "Processing partial epoch #{} ({} history items)",
+                                batch.block.epoch_number(),
+                                batch.history.len()
+                            );
                             let push_result = spawn_blocking(move || {
                                 Blockchain::push_history_sync(
                                     blockchain.upgradable_read(),
@@ -905,7 +910,8 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                                     &batch.history,
                                 )
                             })
-                            .await;
+                            .await
+                            .expect("blockchain.push_history_sync() should not panic");
                             SyncClusterResult::from(push_result)
                         }
                         Some(Err(e)) => e,
