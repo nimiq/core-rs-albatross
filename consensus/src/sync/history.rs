@@ -215,7 +215,7 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
                 epoch.epoch_number(),
                 epoch.history.len(),
                 epoch.history_len,
-                (epoch.history.len() as f64 / epoch.history_len as f64) * 100 as f64
+                (epoch.history.len() as f64 / epoch.history_len as f64) * 100f64
             );
         }
 
@@ -303,7 +303,7 @@ impl<TPeer: Peer + 'static> Stream for SyncCluster<TPeer> {
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         // TODO Wake when space in pending_batch_sets becomes available
         if self.pending_batch_sets.len() < Self::NUM_PENDING_BATCH_SETS {
-            if let Poll::Ready(Some(result)) = self.batch_set_queue.poll_next_unpin(cx) {
+            while let Poll::Ready(Some(result)) = self.batch_set_queue.poll_next_unpin(cx) {
                 match result {
                     Ok(epoch) => {
                         if let Err(e) = self.on_epoch_received(epoch) {
@@ -321,7 +321,7 @@ impl<TPeer: Peer + 'static> Stream for SyncCluster<TPeer> {
             }
         }
 
-        if let Poll::Ready(Some(result)) = self.history_queue.poll_next_unpin(cx) {
+        while let Poll::Ready(Some(result)) = self.history_queue.poll_next_unpin(cx) {
             match result {
                 Ok((epoch_number, history_chunk)) => {
                     if let Err(e) = self.on_history_chunk_received(epoch_number, history_chunk) {
