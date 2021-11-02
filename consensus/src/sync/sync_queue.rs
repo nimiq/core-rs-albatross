@@ -142,18 +142,6 @@ where
                 .saturating_sub(self.pending_futures.len() + self.queued_outputs.len()),
         );
 
-        if num_ids_to_request > 0 {
-            log::trace!(
-                "Requesting {} ids (ids_to_request = {}, remaining_until_limit = {}, pending_futures = {}, queued_outputs = {})",
-                num_ids_to_request,
-                self.ids_to_request.len(),
-                self.desired_pending_size
-                    .saturating_sub(self.pending_futures.len() + self.queued_outputs.len()),
-                self.pending_futures.len(),
-                self.queued_outputs.len(),
-            );
-        }
-
         // Drain ids and produce futures.
         for _ in 0..num_ids_to_request {
             // Get next peer in line. Abort if there are no more peers.
@@ -183,6 +171,22 @@ where
             self.current_peer_index = (self.current_peer_index + 1) % self.peers.len();
 
             self.pending_futures.push(wrapper);
+        }
+
+        if num_ids_to_request > 0 {
+            log::trace!(
+                "Requesting {} ids (ids_to_request = {}, remaining_until_limit = {}, pending_futures = {}, queued_outputs = {})",
+                num_ids_to_request,
+                self.ids_to_request.len(),
+                self.desired_pending_size
+                    .saturating_sub(self.pending_futures.len() + self.queued_outputs.len()),
+                self.pending_futures.len(),
+                self.queued_outputs.len(),
+            );
+
+            if let Some(waker) = &self.waker {
+                waker.wake_by_ref();
+            }
         }
     }
 
