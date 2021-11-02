@@ -138,11 +138,8 @@ impl NimiqBehaviour {
 
         let kademlia = Kademlia::with_config(peer_id, store, config.kademlia);
 
-        let mut gossipsub = Gossipsub::new(
-            MessageAuthenticity::Signed(config.keypair),
-            config.gossipsub,
-        )
-        .expect("Wrong configuration");
+        let mut gossipsub = Gossipsub::new(MessageAuthenticity::Author(peer_id), config.gossipsub)
+            .expect("Wrong configuration");
 
         let identify_config = IdentifyConfig::new("/albatross/2.0".to_string(), public_key);
         let identify = Identify::new(identify_config);

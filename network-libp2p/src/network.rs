@@ -1014,6 +1014,7 @@ mod tests {
         peer_contact.set_current_time();
 
         let gossipsub = GossipsubConfigBuilder::default()
+            .validation_mode(libp2p::gossipsub::ValidationMode::Permissive)
             .build()
             .expect("Invalid Gossipsub config");
 
