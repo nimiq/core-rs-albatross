@@ -29,31 +29,8 @@ jobs:
         command: fmt
         args: --all -- --check
 
-  check:
-    runs-on: ubuntu-20.04
-
-    steps:
-    - uses: actions/checkout@v2
-    - uses: actions/cache@v2
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: cargo-${{ hashFiles('**/Cargo.toml') }}
-    - uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: nightly
-        override: true
-    - uses: actions-rs/cargo@v1
-      with:
-        command: check
-        args: --release --all-features
-
   test:
     runs-on: ubuntu-20.04
-    needs: check
 
     steps:
     - uses: actions/checkout@v2
@@ -92,7 +69,6 @@ jobs:
 
   clippy:
     runs-on: ubuntu-20.04
-    needs: check
 
     steps:
     - uses: actions/checkout@v2
@@ -114,3 +90,36 @@ jobs:
         name: Clippy Report
         token: ${{ secrets.GITHUB_TOKEN }}
         args: --release --all-features
+
+  reconnect-test:
+    runs-on: ubuntu-20.04
+
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/cache@v2
+      with:
+        path:
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: cargo-${{ hashFiles('**/Cargo.toml') }}
+    - name: Set up Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: nightly
+        override: true
+    - uses: actions-rs/cargo@v1
+      with:
+        command: build
+    - name: Executes the 4 validators reconnecting scenario
+      run: |
+          cd test-scenarios
+          bash four_validators.sh -r 1
+    - name: Archive test results
+      if: always()
+      uses: actions/upload-artifact@v2
+      with:
+          name: reconnect-test-logs
+          path: |
+            test-scenarios/temp-logs/

@@ -128,6 +128,14 @@ do
     echo "  Producing blocks for $sleep_time seconds"
     sleep "$sleep_time"s
 
+    #Search for deadlocks
+    if grep -wrin "deadlock" temp-logs/$foldername/
+    then
+        echo "   !!!!   DEADLOCK   !!! "
+        fail=true
+        break
+    fi
+
     #Search for panics/crashes
     if grep -wrin "panic" temp-logs/$foldername/
     then
