@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use nimiq_account::{Account, Accounts};
 use nimiq_block::Block;
-use nimiq_database::{Environment, WriteTransaction};
+use nimiq_database::{Environment, ReadTransaction, WriteTransaction};
 use nimiq_genesis::NetworkInfo;
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::coin::Coin;
@@ -26,7 +26,7 @@ use nimiq_trie::key_nibbles::KeyNibbles;
 /// structure in this crate.
 pub struct Blockchain {
     // The environment of the blockchain.
-    pub env: Environment,
+    env: Environment,
     // The network ID. It determines if this is the mainnet or one of the testnets.
     pub network_id: NetworkId,
     // The OffsetTime struct. It allows us to query the current time.
@@ -261,5 +261,13 @@ impl Blockchain {
             genesis_supply,
             genesis_timestamp,
         })
+    }
+
+    pub fn read_transaction(&self) -> ReadTransaction {
+        ReadTransaction::new(&self.env)
+    }
+
+    pub fn write_transaction(&self) -> WriteTransaction {
+        WriteTransaction::new(&self.env)
     }
 }

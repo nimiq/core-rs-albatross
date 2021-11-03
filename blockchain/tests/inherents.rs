@@ -3,7 +3,6 @@ use nimiq_account::{Inherent, InherentType};
 use nimiq_block::MacroHeader;
 use nimiq_blockchain::Blockchain;
 use nimiq_database::volatile::VolatileEnvironment;
-use nimiq_database::WriteTransaction;
 use nimiq_hash::{Blake2bHasher, Hasher};
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
@@ -76,7 +75,7 @@ fn it_can_create_batch_finalization_inherents() {
         data: slot.serialize_to_vec(),
     };
 
-    let mut txn = WriteTransaction::new(&blockchain.env);
+    let mut txn = blockchain.write_transaction();
     // adds slot 0 to previous_lost_rewards -> slot won't get reward on next finalize_previous_batch
     assert!(blockchain
         .state()

@@ -1,7 +1,7 @@
 use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 
 use nimiq_block::{Block, BlockError};
-use nimiq_database::{ReadTransaction, WriteTransaction};
+use nimiq_database::WriteTransaction;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
@@ -39,7 +39,7 @@ impl Blockchain {
         );
 
         // Create a new database read transaction.
-        let read_txn = ReadTransaction::new(&this.env);
+        let read_txn = this.read_transaction();
 
         // Unwrap the block.
         let macro_block = block.unwrap_macro_ref();
@@ -148,10 +148,8 @@ impl Blockchain {
         // upgrade to Write before creating the Write Transaction
         let mut this = RwLockUpgradableReadGuard::upgrade(this);
 
-        let env = this.env.clone();
         // Create a new database write transaction.
-        let mut txn = WriteTransaction::new(&env);
-
+        let mut txn = this.write_transaction();
         this.revert_blocks(num_blocks, &mut txn)?;
 
         // Get the block hash.
@@ -310,6 +308,9 @@ impl Blockchain {
             &ext_txs[first_new_ext_tx..],
         );
 
+        // Give up database transactions and push lock before creating notifications.
+        txn.commit();
+
         // Check if this block is an election block.
         let is_election_block = macro_block.is_election_block();
 
@@ -325,9 +326,6 @@ impl Blockchain {
             this.state.previous_slots = this.state.current_slots.take();
             this.state.current_slots = macro_block.get_validators();
         }
-
-        // Give up database transactions and push lock before creating notifications.
-        txn.commit();
 
         let this = RwLockWriteGuard::downgrade(this);
 

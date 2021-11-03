@@ -1,6 +1,5 @@
 use nimiq_account::{Account, StakingContract};
 use nimiq_block::Block;
-use nimiq_database::{ReadTransaction, WriteTransaction};
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 use nimiq_primitives::policy;
@@ -62,14 +61,6 @@ impl Blockchain {
                 unreachable!()
             }
         }
-    }
-
-    pub fn read_transaction(&self) -> ReadTransaction {
-        ReadTransaction::new(&self.env)
-    }
-
-    pub fn write_transaction(&self) -> WriteTransaction {
-        WriteTransaction::new(&self.env)
     }
 
     pub fn register_listener<T: Listener<BlockchainEvent> + 'static>(

@@ -3,7 +3,7 @@ use std::ops::Deref;
 use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 
 use nimiq_block::{Block, BlockType, ForkProof};
-use nimiq_database::{ReadTransaction, WriteTransaction};
+use nimiq_database::WriteTransaction;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::policy;
 
@@ -40,7 +40,7 @@ impl Blockchain {
         }
 
         // TODO: We might want to pass this as argument to this method.
-        let read_txn = ReadTransaction::new(&this.env);
+        let read_txn = this.read_transaction();
 
         // Check if we already know this block.
         if this
@@ -155,6 +155,8 @@ impl Blockchain {
             }
         }
 
+        read_txn.close();
+
         let chain_info = match ChainInfo::from_block(block, &prev_info) {
             Ok(info) => info,
             Err(err) => {
@@ -162,9 +164,6 @@ impl Blockchain {
                 return Err(PushError::InvalidSuccessor);
             }
         };
-
-        // Drop read transaction before calling other functions.
-        drop(read_txn);
 
         // More chain ordering.
         match chain_order {
@@ -186,7 +185,7 @@ impl Blockchain {
             chain_info.head.view_number()
         );
 
-        let mut txn = WriteTransaction::new(&this.env);
+        let mut txn = this.write_transaction();
 
         this.chain_store
             .put_chain_info(&mut txn, &chain_info.head.hash(), &chain_info, true);
@@ -205,8 +204,8 @@ impl Blockchain {
     ) -> Result<PushResult, PushError> {
         // Upgrade the lock as late as possible but before creating the WriteTxn
         let mut this = RwLockUpgradableReadGuard::upgrade(this);
-        let env = this.env.clone();
-        let mut txn = WriteTransaction::new(&env);
+
+        let mut txn = this.write_transaction();
 
         if let Err(e) = this.check_and_commit(
             &this.state,
@@ -226,6 +225,8 @@ impl Blockchain {
         this.chain_store
             .put_chain_info(&mut txn, chain_info.head.parent_hash(), &prev_info, false);
         this.chain_store.set_head(&mut txn, &block_hash);
+
+        txn.commit();
 
         let is_election_block = policy::is_election_block_at(this.block_number() + 1);
 
@@ -250,7 +251,6 @@ impl Blockchain {
 
         this.state.main_chain = chain_info;
         this.state.head_hash = block_hash.clone();
-        txn.commit();
 
         // Downgrade the lock again as the nofity listeners might want to acquire read access themselves.
         let this = RwLockWriteGuard::downgrade(this);
@@ -285,8 +285,7 @@ impl Blockchain {
         // Find the common ancestor between our current main chain and the fork chain.
         // Walk up the fork chain until we find a block that is part of the main chain.
         // Store the chain along the way.
-        let env = this.env.clone();
-        let read_txn = ReadTransaction::new(&env);
+        let read_txn = this.read_transaction();
 
         let mut fork_chain: Vec<(Blake2bHash, ChainInfo)> = vec![];
 
@@ -328,7 +327,7 @@ impl Blockchain {
         // Upgrade the lock as late as possible but before creating the Write Transaction
         let mut this = RwLockUpgradableReadGuard::upgrade(this);
 
-        let mut write_txn = WriteTransaction::new(&env);
+        let mut write_txn = this.write_transaction();
 
         current = (this.state.head_hash.clone(), this.state.main_chain.clone());
 
@@ -392,7 +391,7 @@ impl Blockchain {
                         write_txn.abort();
 
                         // Delete invalid fork blocks from store.
-                        let mut write_txn = WriteTransaction::new(&env);
+                        let mut write_txn = this.write_transaction();
 
                         for block in vec![fork_block].into_iter().chain(fork_iter) {
                             this.chain_store.remove_chain_info(
@@ -451,11 +450,14 @@ impl Blockchain {
         // Commit transaction & update head.
         this.chain_store.set_head(&mut write_txn, &fork_chain[0].0);
 
+        write_txn.commit();
+
         this.state.main_chain = fork_chain[0].1.clone();
 
         this.state.head_hash = fork_chain[0].0.clone();
 
-        write_txn.commit();
+        // Downgrade the lock again as the nofity listeners might want to acquire read access themselves.
+        let this = RwLockWriteGuard::downgrade(this);
 
         let mut reverted_blocks = Vec::with_capacity(revert_chain.len());
 
@@ -470,9 +472,6 @@ impl Blockchain {
         }
 
         let event = BlockchainEvent::Rebranched(reverted_blocks, adopted_blocks);
-
-        // Downgrade the lock again as the nofity listeners might want to acquire read access themselves.
-        let this = RwLockWriteGuard::downgrade(this);
 
         this.notifier.notify(event);
 

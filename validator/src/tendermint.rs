@@ -16,7 +16,6 @@ use block::{
 use block_production::BlockProducer;
 use blockchain::{AbstractBlockchain, Blockchain};
 use bls::{KeyPair, PublicKey};
-use database::WriteTransaction;
 use hash::{Blake2bHash, Hash};
 use nimiq_network_interface::network::MsgAcceptance;
 use nimiq_primitives::slots::Validators;
@@ -288,7 +287,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
                 let mut acceptance = MsgAcceptance::Accept;
 
                 // Get a write transaction to the database.
-                let mut txn = WriteTransaction::new(&blockchain.env);
+                let mut txn = blockchain.write_transaction();
 
                 // Get the blockchain state.
                 let state = blockchain.state();
