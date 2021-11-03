@@ -36,28 +36,22 @@ use crate::{
 pub type NimiqNetworkBehaviourError = EitherError<
     EitherError<
         EitherError<
-            EitherError<EitherError<DiscoveryError, ConnectionPoolError>, MessageError>,
+            EitherError<EitherError<std::io::Error, DiscoveryError>, GossipsubHandlerError>,
             std::io::Error,
         >,
-        GossipsubHandlerError,
+        MessageError,
     >,
-    std::io::Error,
+    ConnectionPoolError,
 >;
 
 #[derive(Debug)]
 pub enum NimiqEvent {
-    Message(NetworkEvent<Peer>),
     Dht(KademliaEvent),
+    Discovery(DiscoveryEvent),
     Gossip(GossipsubEvent),
     Identify(IdentifyEvent),
-    Discovery(DiscoveryEvent),
-    Peers(ConnectionPoolEvent),
-}
-
-impl From<NetworkEvent<Peer>> for NimiqEvent {
-    fn from(event: NetworkEvent<Peer>) -> Self {
-        Self::Message(event)
-    }
+    Message(NetworkEvent<Peer>),
+    Pool(ConnectionPoolEvent),
 }
 
 impl From<KademliaEvent> for NimiqEvent {
@@ -66,9 +60,9 @@ impl From<KademliaEvent> for NimiqEvent {
     }
 }
 
-impl From<ConnectionPoolEvent> for NimiqEvent {
-    fn from(event: ConnectionPoolEvent) -> Self {
-        Self::Peers(event)
+impl From<DiscoveryEvent> for NimiqEvent {
+    fn from(event: DiscoveryEvent) -> Self {
+        Self::Discovery(event)
     }
 }
 
@@ -84,31 +78,36 @@ impl From<IdentifyEvent> for NimiqEvent {
     }
 }
 
-impl From<DiscoveryEvent> for NimiqEvent {
-    fn from(event: DiscoveryEvent) -> Self {
-        Self::Discovery(event)
+impl From<NetworkEvent<Peer>> for NimiqEvent {
+    fn from(event: NetworkEvent<Peer>) -> Self {
+        Self::Message(event)
+    }
+}
+
+impl From<ConnectionPoolEvent> for NimiqEvent {
+    fn from(event: ConnectionPoolEvent) -> Self {
+        Self::Pool(event)
     }
 }
 
 #[derive(NetworkBehaviour)]
 #[behaviour(out_event = "NimiqEvent", poll_method = "poll_event")]
 pub struct NimiqBehaviour {
+    pub dht: Kademlia<MemoryStore>,
     pub discovery: DiscoveryBehaviour,
-    pub peers: ConnectionPoolBehaviour,
-    pub message: MessageBehaviour,
-    //pub limit: LimitBehaviour,
-    pub kademlia: Kademlia<MemoryStore>,
     pub gossipsub: Gossipsub,
     pub identify: Identify,
+    pub message: MessageBehaviour,
+    pub pool: ConnectionPoolBehaviour,
+
+    #[behaviour(ignore)]
+    events: VecDeque<NimiqEvent>,
 
     #[behaviour(ignore)]
     peer_contact_book: Arc<RwLock<PeerContactBook>>,
 
     #[behaviour(ignore)]
     update_scores: Interval,
-
-    #[behaviour(ignore)]
-    events: VecDeque<NimiqEvent>,
 
     #[behaviour(ignore)]
     waker: Option<Waker>,
@@ -119,6 +118,11 @@ impl NimiqBehaviour {
         let public_key = config.keypair.public();
         let peer_id = public_key.clone().into_peer_id();
 
+        // DHT behaviour
+        let store = MemoryStore::new(peer_id);
+        let dht = Kademlia::with_config(peer_id, store, config.kademlia);
+
+        // Discovery behaviour
         // TODO: persist to disk
         let peer_contact_book = Arc::new(RwLock::new(PeerContactBook::new(
             Default::default(),
@@ -130,38 +134,37 @@ impl NimiqBehaviour {
             peer_contact_book.clone(),
             clock,
         );
-        let peers = ConnectionPoolBehaviour::new(peer_contact_book.clone(), config.seeds);
 
-        let message = MessageBehaviour::new(config.message);
-
-        let store = MemoryStore::new(peer_id);
-
-        let kademlia = Kademlia::with_config(peer_id, store, config.kademlia);
-
-        let mut gossipsub = Gossipsub::new(MessageAuthenticity::Author(peer_id), config.gossipsub)
-            .expect("Wrong configuration");
-
-        let identify_config = IdentifyConfig::new("/albatross/2.0".to_string(), public_key);
-        let identify = Identify::new(identify_config);
-
+        // Gossipsub behaviour
         let params = PeerScoreParams::default();
         let thresholds = PeerScoreThresholds::default();
         let update_scores = tokio::time::interval(params.decay_interval);
-
+        let mut gossipsub = Gossipsub::new(MessageAuthenticity::Author(peer_id), config.gossipsub)
+            .expect("Wrong configuration");
         gossipsub
             .with_peer_score(params, thresholds)
             .expect("Valid score params and thresholds");
 
+        // Identify behaviour
+        let identify_config = IdentifyConfig::new("/albatross/2.0".to_string(), public_key);
+        let identify = Identify::new(identify_config);
+
+        // Message behaviour
+        let message = MessageBehaviour::new();
+
+        // Connection pool behaviour
+        let pool = ConnectionPoolBehaviour::new(peer_contact_book.clone(), config.seeds);
+
         Self {
+            dht,
             discovery,
-            message,
-            peers,
-            kademlia,
             gossipsub,
             identify,
+            message,
+            pool,
+            events: VecDeque::new(),
             peer_contact_book,
             update_scores,
-            events: VecDeque::new(),
             waker: None,
         }
     }
@@ -202,21 +205,15 @@ impl NimiqBehaviour {
     }
 }
 
-impl NetworkBehaviourEventProcess<DiscoveryEvent> for NimiqBehaviour {
-    fn inject_event(&mut self, _event: DiscoveryEvent) {
-        self.peers.maintain_peers();
-    }
-}
-
-impl NetworkBehaviourEventProcess<NetworkEvent<Peer>> for NimiqBehaviour {
-    fn inject_event(&mut self, event: NetworkEvent<Peer>) {
-        self.emit_event(event);
-    }
-}
-
 impl NetworkBehaviourEventProcess<KademliaEvent> for NimiqBehaviour {
     fn inject_event(&mut self, event: KademliaEvent) {
         self.emit_event(event);
+    }
+}
+
+impl NetworkBehaviourEventProcess<DiscoveryEvent> for NimiqBehaviour {
+    fn inject_event(&mut self, _event: DiscoveryEvent) {
+        self.pool.maintain_peers();
     }
 }
 
@@ -228,6 +225,12 @@ impl NetworkBehaviourEventProcess<GossipsubEvent> for NimiqBehaviour {
 
 impl NetworkBehaviourEventProcess<IdentifyEvent> for NimiqBehaviour {
     fn inject_event(&mut self, event: IdentifyEvent) {
+        self.emit_event(event);
+    }
+}
+
+impl NetworkBehaviourEventProcess<NetworkEvent<Peer>> for NimiqBehaviour {
+    fn inject_event(&mut self, event: NetworkEvent<Peer>) {
         self.emit_event(event);
     }
 }

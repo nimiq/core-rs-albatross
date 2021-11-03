@@ -22,15 +22,8 @@ use super::{
     peer::Peer,
 };
 
-#[derive(Clone, Debug, Default)]
-pub struct MessageConfig {
-    // TODO
-}
-
 #[derive(Debug, Default)]
 pub struct MessageBehaviour {
-    config: MessageConfig,
-
     events: VecDeque<NetworkBehaviourAction<HandlerInEvent, NetworkEvent<Peer>>>,
 
     pub(crate) peers: ObservablePeerMap<Peer>,
@@ -41,9 +34,8 @@ pub struct MessageBehaviour {
 }
 
 impl MessageBehaviour {
-    pub fn new(config: MessageConfig) -> Self {
+    pub fn new() -> Self {
         Self {
-            config,
             ..Default::default()
         }
     }
@@ -112,7 +104,7 @@ impl NetworkBehaviour for MessageBehaviour {
     type OutEvent = NetworkEvent<Peer>;
 
     fn new_handler(&mut self) -> Self::ProtocolsHandler {
-        MessageHandler::new(self.config.clone())
+        MessageHandler::new()
     }
 
     fn addresses_of_peer(&mut self, _peer_id: &PeerId) -> Vec<Multiaddr> {
@@ -121,10 +113,7 @@ impl NetworkBehaviour for MessageBehaviour {
 
     fn inject_connected(&mut self, _peer_id: &PeerId) {}
 
-    fn inject_disconnected(&mut self, peer_id: &PeerId) {
-        // No handler exists anymore.
-        tracing::trace!("inject_disconnected: {:?}", peer_id);
-    }
+    fn inject_disconnected(&mut self, _peer_id: &PeerId) {}
 
     fn inject_connection_established(
         &mut self,
@@ -175,19 +164,17 @@ impl NetworkBehaviour for MessageBehaviour {
         }
     }
 
-    fn inject_event(&mut self, peer_id: PeerId, _connection: ConnectionId, event: HandlerOutEvent) {
+    fn inject_event(
+        &mut self,
+        _peer_id: PeerId,
+        _connection: ConnectionId,
+        event: HandlerOutEvent,
+    ) {
         match event {
             HandlerOutEvent::PeerJoined { peer } => {
                 self.peers.insert(Arc::clone(&peer));
                 self.push_event(NetworkBehaviourAction::GenerateEvent(
                     NetworkEvent::PeerJoined(peer),
-                ));
-            }
-            HandlerOutEvent::PeerClosed { peer, reason } => {
-                log::debug!("Peer closed: {:?}, reason={:?}", peer, reason);
-                self.peers.remove(&peer_id);
-                self.push_event(NetworkBehaviourAction::GenerateEvent(
-                    NetworkEvent::PeerLeft(peer),
                 ));
             }
         }

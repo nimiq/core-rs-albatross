@@ -21,9 +21,7 @@ use thiserror::Error;
 use beserial::SerializingError;
 use nimiq_network_interface::{message::MessageType, peer::CloseReason};
 
-use super::{
-    behaviour::MessageConfig, dispatch::MessageDispatch, peer::Peer, protocol::MessageProtocol,
-};
+use super::{dispatch::MessageDispatch, peer::Peer, protocol::MessageProtocol};
 
 #[derive(Clone, Debug)]
 pub enum HandlerInEvent {
@@ -36,13 +34,7 @@ pub enum HandlerInEvent {
 
 #[derive(Clone, Debug)]
 pub enum HandlerOutEvent {
-    PeerJoined {
-        peer: Arc<Peer>,
-    },
-    PeerClosed {
-        peer: Arc<Peer>,
-        reason: CloseReason,
-    },
+    PeerJoined { peer: Arc<Peer> },
 }
 
 #[derive(Debug, Error)]
@@ -56,10 +48,6 @@ pub enum HandlerError {
 
 // TODO: Refactor state into enum
 pub struct MessageHandler {
-    // NOTE: Will probably be used later.
-    #[allow(dead_code)]
-    config: MessageConfig,
-
     peer_id: Option<PeerId>,
 
     peer: Option<Arc<Peer>>,
@@ -82,9 +70,8 @@ pub struct MessageHandler {
 }
 
 impl MessageHandler {
-    pub fn new(config: MessageConfig) -> Self {
+    pub fn new() -> Self {
         Self {
-            config,
             peer_id: None,
             peer: None,
             close_rx: None,

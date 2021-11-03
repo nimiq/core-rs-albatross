@@ -17,7 +17,6 @@ mod error;
 pub mod message;
 pub mod message_codec;
 mod network;
-pub mod task;
 
 pub const MESSAGE_PROTOCOL: &[u8] = b"/nimiq/message/0.0.1";
 pub const DISCOVERY_PROTOCOL: &[u8] = b"/nimiq/discovery/0.0.1";

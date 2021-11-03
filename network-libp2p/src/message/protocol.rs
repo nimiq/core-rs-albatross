@@ -1,17 +1,15 @@
-use std::{iter, sync::Arc};
+use std::iter;
 
 use futures::{future, AsyncRead, AsyncWrite};
 use libp2p::{core::UpgradeInfo, InboundUpgrade, OutboundUpgrade};
 
 use beserial::SerializingError;
 
-use super::{dispatch::MessageDispatch, peer::Peer};
+use super::dispatch::MessageDispatch;
 use crate::MESSAGE_PROTOCOL;
 
 #[derive(Debug, Default)]
-pub struct MessageProtocol {
-    peer: Option<Arc<Peer>>,
-}
+pub struct MessageProtocol {}
 
 impl MessageProtocol {
     const BUFFER_SIZE: usize = 16;

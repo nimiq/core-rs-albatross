@@ -253,7 +253,6 @@ impl Network {
 
         async move {
             loop {
-
                 futures::select! {
                     event = swarm.next().fuse() => {
                         if let Some(event) = event {
@@ -303,7 +302,7 @@ impl Network {
                     tracing::debug!("Saving peer {} listen address: {:?}", peer_id, listen_addr);
                     swarm
                         .behaviour_mut()
-                        .kademlia
+                        .dht
                         .add_address(&peer_id, listen_addr.clone());
                 }
 
@@ -321,7 +320,7 @@ impl Network {
                     if num_established.get() as usize >= min_peers {
                         // Bootstrap Kademlia
                         tracing::debug!("Bootstrapping DHT");
-                        if swarm.behaviour_mut().kademlia.bootstrap().is_err() {
+                        if swarm.behaviour_mut().dht.bootstrap().is_err() {
                             tracing::error!("Bootstrapping DHT error: No known peers");
                         }
                     }
@@ -366,9 +365,6 @@ impl Network {
 
             SwarmEvent::Behaviour(event) => {
                 match event {
-                    NimiqEvent::Message(event) => {
-                        events_tx.send(event).ok();
-                    }
                     NimiqEvent::Dht(event) => {
                         if let KademliaEvent::OutboundQueryCompleted { id, result, .. } = event {
                             match result {
@@ -403,6 +399,7 @@ impl Network {
                             }
                         }
                     }
+                    NimiqEvent::Discovery(_e) => {}
                     NimiqEvent::Gossip(event) => match event {
                         GossipsubEvent::Message {
                             propagation_source,
@@ -467,7 +464,7 @@ impl Network {
                                     if Self::can_add_to_dht(&listen_addr) {
                                         swarm
                                             .behaviour_mut()
-                                            .kademlia
+                                            .dht
                                             .add_address(&peer_id, listen_addr);
                                     }
                                 }
@@ -496,8 +493,10 @@ impl Network {
                             }
                         }
                     }
-                    NimiqEvent::Discovery(_e) => {}
-                    NimiqEvent::Peers(event) => match event {
+                    NimiqEvent::Message(event) => {
+                        events_tx.send(event).ok();
+                    }
+                    NimiqEvent::Pool(event) => match event {
                         ConnectionPoolEvent::Disconnect { peer_id } => {
                             if let Err(e) = Swarm::disconnect_peer_id(swarm, peer_id) {
                                 tracing::error!("Couldn't disconnect peer {}: {:?}", peer_id, e);
@@ -528,7 +527,7 @@ impl Network {
             NetworkAction::DhtGet { key, output } => {
                 let query_id = swarm
                     .behaviour_mut()
-                    .kademlia
+                    .dht
                     .get_record(&key.into(), Quorum::One);
                 state.dht_gets.insert(query_id, output);
             }
@@ -542,11 +541,7 @@ impl Network {
                     expires: None, // TODO: Records should expire at some point in time
                 };
 
-                match swarm
-                    .behaviour_mut()
-                    .kademlia
-                    .put_record(record, Quorum::One)
-                {
+                match swarm.behaviour_mut().dht.put_record(record, Quorum::One) {
                     Ok(query_id) => {
                         // Remember put operation to resolve when we receive a `QueryResult::PutRecord`
                         state.dht_puts.insert(query_id, output);
@@ -670,7 +665,7 @@ impl Network {
                 }
             }
             NetworkAction::StartConnecting => {
-                swarm.behaviour_mut().peers.start_connecting();
+                swarm.behaviour_mut().pool.start_connecting();
             }
         }
     }
@@ -1024,7 +1019,6 @@ mod tests {
                 house_keeping_interval: Duration::from_secs(60),
                 keep_alive: KeepAlive::No,
             },
-            message: Default::default(),
             kademlia: Default::default(),
             gossipsub,
         }

@@ -7,10 +7,7 @@ use libp2p::{
 
 use nimiq_hash::Blake2bHash;
 
-use crate::{
-    discovery::{behaviour::DiscoveryConfig, peer_contacts::PeerContact},
-    message::behaviour::MessageConfig,
-};
+use crate::discovery::{behaviour::DiscoveryConfig, peer_contacts::PeerContact};
 
 pub struct Config {
     pub keypair: Keypair,
@@ -18,7 +15,6 @@ pub struct Config {
     pub min_peers: usize,
     pub seeds: Vec<Multiaddr>,
     pub discovery: DiscoveryConfig,
-    pub message: MessageConfig,
     pub kademlia: KademliaConfig,
     pub gossipsub: GossipsubConfig,
 }
@@ -49,7 +45,6 @@ impl Config {
             min_peers: 5,
             seeds,
             discovery: DiscoveryConfig::new(genesis_hash),
-            message: MessageConfig::default(),
             kademlia,
             gossipsub,
         }
