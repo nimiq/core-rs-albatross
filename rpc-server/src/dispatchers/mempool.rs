@@ -6,7 +6,7 @@ use beserial::Deserialize;
 use nimiq_blockchain::AbstractBlockchain;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_mempool::mempool::Mempool;
-use nimiq_mempool::verify::ReturnCode;
+
 use nimiq_rpc_interface::mempool::MempoolInterface;
 use nimiq_rpc_interface::types::{HashOrTx, MempoolInfo, Transaction};
 
@@ -34,9 +34,9 @@ impl MempoolInterface for MempoolDispatcher {
             Deserialize::deserialize_from_vec(&hex::decode(&raw_tx)?)?;
         let txid = tx.hash::<Blake2bHash>();
 
-        match self.mempool.add_transaction(tx) {
-            ReturnCode::Accepted => Ok(txid),
-            rc => Err(Error::MempoolError(rc)),
+        match self.mempool.add_transaction(tx).await {
+            Ok(_) => Ok(txid),
+            Err(e) => Err(Error::MempoolError(e)),
         }
     }
 

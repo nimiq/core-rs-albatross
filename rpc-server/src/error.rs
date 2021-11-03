@@ -3,7 +3,7 @@ use thiserror::Error;
 
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
-use nimiq_mempool::verify::ReturnCode;
+use nimiq_mempool::verify::VerifyErr;
 use nimiq_rpc_interface::types::BlockNumberOrHash;
 
 #[derive(Debug, Error)]
@@ -15,7 +15,7 @@ pub enum Error {
     NetworkError(#[from] nimiq_network_libp2p::NetworkError),
 
     #[error("Mempool rejected transaction: {0}")]
-    MempoolError(ReturnCode),
+    MempoolError(VerifyErr),
 
     #[error("Block not found: {0}")]
     BlockNotFound(BlockNumberOrHash),
