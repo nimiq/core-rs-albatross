@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+    fmt::{self, Display, Formatter},
+    sync::Arc,
+};
 
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 
@@ -32,6 +35,25 @@ pub enum VerifyErr {
     Known,
     /// Transaction is filtered
     Filtered,
+}
+
+impl Display for VerifyErr {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            VerifyErr::NotEnoughFunds => {
+                write!(f, "Not enough funds")
+            }
+            VerifyErr::Invalid => {
+                write!(f, "Invalid")
+            }
+            VerifyErr::Known => {
+                write!(f, "Known")
+            }
+            VerifyErr::Filtered => {
+                write!(f, "Filtered")
+            }
+        }
+    }
 }
 
 /// Verifies a Transaction
