@@ -30,8 +30,7 @@ jobs:
       with:
         command: build
     - name: Executes the 4 validators reconnecting scenario
-      run: |
-          mkdir -p /home/runner/.nimiq/dev/{1,2,3,4}
+      run: |          
           cd test-scenarios
           bash four_validators.sh
     - name: Archive test results
@@ -63,9 +62,8 @@ jobs:
     - uses: actions-rs/cargo@v1
       with:
         command: build
-    - name: Executes the 4 validators reconnecting scenario erasing their state
-      run: |
-          mkdir -p /home/runner/.nimiq/dev/{1,2,3,4}
+    - name: Executes the 4 validators reconnecting scenario erasing all their state
+      run: |          
           cd test-scenarios
           bash four_validators.sh -e
     - name: Archive test results
@@ -76,3 +74,35 @@ jobs:
           path: |
             test-scenarios/temp-logs/
 
+  erase-database-test:
+    runs-on: ubuntu-20.04
+
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/cache@v2
+      with:
+        path:
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: cargo-${{ hashFiles('**/Cargo.toml') }}
+    - name: Set up Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: nightly
+        override: true
+    - uses: actions-rs/cargo@v1
+      with:
+        command: build
+    - name: Executes the 4 validators reconnecting scenario eraseing their database
+      run: |          
+          cd test-scenarios
+          bash four_validators.sh -d
+    - name: Archive test results
+      if: always()
+      uses: actions/upload-artifact@v2
+      with:
+          name: erase-db-test
+          path: |
+            test-scenarios/temp-logs/

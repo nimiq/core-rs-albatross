@@ -1,5 +1,5 @@
 [network]
-peer_key_file = "/home/runner/.nimiq/dev/2/peer_key.dat"
+peer_key_file = "temp-state/dev/2/peer_key.dat"
 listen_addresses = [
 	"/ip4/127.0.0.1/tcp/9102/ws",
 ]
@@ -13,12 +13,14 @@ network = "dev-albatross"
 min_peers = 1
 
 [database]
-path = "/home/runner/.nimiq/dev/2"
+path = "temp-state/dev/2"
 
 [log]
 level = "trace"
 timestamps = true
 
 [validator]
-validator_key_file = "/home/runner/.nimiq/dev/2/validator_key.dat"
+validator_key_file = "temp-state/dev/2/validator_key.dat"
 validator_key = "bfbf1e23855190f03222bb2b19dc9d25843494d22bf8ccc1f7abfe6b3b185b3bf76537ee70e7ac5c7c6d7a0046e671bf610572e1cf89b407a7cd095ab9f0868da80003121a26d4d3be1e1abd10861f6c8601e94e0e448f4b86b7512764460100"
+cold_key_file = "temp-state/dev/2/cold_key.dat"
+warm_key_file = "temp-state/dev/2/warm_key.dat"
