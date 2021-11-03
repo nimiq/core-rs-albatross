@@ -9,7 +9,7 @@ use futures::{
 use linked_hash_map::LinkedHashMap;
 use mempool::{config::MempoolConfig, mempool::Mempool};
 use parking_lot::RwLock;
-use tokio_stream::wrappers::{BroadcastStream, UnboundedReceiverStream};
+use tokio_stream::wrappers::BroadcastStream;
 
 use account::StakingContract;
 use block::{Block, BlockType, SignedTendermintProposal, ViewChange, ViewChangeProof};
@@ -28,6 +28,7 @@ use primitives::coin::Coin;
 use primitives::policy;
 use tendermint_protocol::TendermintReturn;
 use transaction_builder::TransactionBuilder;
+use utils::observer::NotifierStream;
 use validator_network::ValidatorNetwork;
 
 use crate::micro::{ProduceMicroBlock, ProduceMicroBlockEvent};
@@ -103,8 +104,8 @@ pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork + 's
     proposal_receiver: ProposalReceiver<TValidatorNetwork>,
 
     consensus_event_rx: BroadcastStream<ConsensusEvent>,
-    blockchain_event_rx: UnboundedReceiverStream<BlockchainEvent>,
-    fork_event_rx: UnboundedReceiverStream<ForkEvent>,
+    blockchain_event_rx: NotifierStream<BlockchainEvent>,
+    fork_event_rx: NotifierStream<ForkEvent>,
 
     epoch_state: Option<ActiveEpochState>,
     blockchain_state: BlockchainState,

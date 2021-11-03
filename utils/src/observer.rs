@@ -1,7 +1,14 @@
+use std::pin::Pin;
 use std::sync::{Arc, Weak};
+use std::task::{Context, Poll};
 
+use futures::stream::Stream;
+use futures_lite::stream::StreamExt;
+use parking_lot::RwLock;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
+
+pub type ListenerHandle = usize;
 
 pub trait Listener<E>: Send + Sync {
     fn on_event(&self, event: &E);
@@ -16,15 +23,13 @@ where
     }
 }
 
-pub type ListenerHandle = usize;
-
 #[derive(Default)]
-pub struct Notifier<'l, E> {
-    listeners: Vec<(ListenerHandle, Box<dyn Listener<E> + 'l>)>,
+pub struct NotifierState<E> {
+    listeners: Vec<(ListenerHandle, Box<dyn Listener<E> + 'static>)>,
     next_handle: ListenerHandle,
 }
 
-impl<'l, E> Notifier<'l, E> {
+impl<E> NotifierState<E> {
     pub fn new() -> Self {
         Self {
             listeners: Vec::new(),
@@ -32,7 +37,7 @@ impl<'l, E> Notifier<'l, E> {
         }
     }
 
-    pub fn register<T: Listener<E> + 'l>(&mut self, listener: T) -> ListenerHandle {
+    pub fn register<T: Listener<E> + 'static>(&mut self, listener: T) -> ListenerHandle {
         let handle = self.next_handle;
         self.listeners.push((handle, Box::new(listener)));
         self.next_handle += 1;
@@ -55,15 +60,80 @@ impl<'l, E> Notifier<'l, E> {
     }
 }
 
-impl<'l, E: Clone + Send + 'static> Notifier<'l, E> {
-    pub fn as_stream(&mut self) -> UnboundedReceiverStream<E> {
-        // TODO how to deregister?
+pub struct NotifierStream<E> {
+    stream: UnboundedReceiverStream<E>,
+    handle: ListenerHandle,
+    state: Arc<RwLock<NotifierState<E>>>,
+}
+
+impl<E> NotifierStream<E> {
+    pub fn new(
+        stream: UnboundedReceiverStream<E>,
+        handle: ListenerHandle,
+        state: Arc<RwLock<NotifierState<E>>>,
+    ) -> Self {
+        Self {
+            stream,
+            handle,
+            state,
+        }
+    }
+
+    pub fn close(&mut self) {
+        self.stream.close()
+    }
+}
+
+impl<E> Stream for NotifierStream<E> {
+    type Item = E;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        self.stream.poll_next(cx)
+    }
+}
+
+impl<E> Drop for NotifierStream<E> {
+    fn drop(&mut self) {
+        self.state.write().deregister(self.handle);
+    }
+}
+
+#[derive(Default)]
+pub struct Notifier<E> {
+    state: Arc<RwLock<NotifierState<E>>>,
+}
+
+impl<E> Notifier<E> {
+    pub fn new() -> Self {
+        Self {
+            state: Arc::new(RwLock::new(NotifierState::new())),
+        }
+    }
+
+    pub fn register<T: Listener<E> + 'static>(&self, listener: T) -> ListenerHandle {
+        self.state.write().register(listener)
+    }
+
+    pub fn deregister(&self, handle: ListenerHandle) {
+        self.state.write().deregister(handle);
+    }
+
+    pub fn notify(&self, event: E) {
+        self.state.read().notify(event);
+    }
+}
+
+impl<E: Clone + Send + 'static> Notifier<E> {
+    pub fn as_stream(&mut self) -> NotifierStream<E> {
         let (tx, rx) = mpsc::unbounded_channel();
-        self.register(move |event: &E| {
-            tx.send(event.clone())
-                .unwrap_or_else(|e| log::error!("Failed to send event to channel: {}", e));
+        let handle = self.register(move |event: &E| {
+            if let Err(e) = tx.send(event.clone()) {
+                log::error!("Failed to send event to channel: {}", e);
+            }
         });
-        UnboundedReceiverStream::new(rx)
+
+        let state = Arc::clone(&self.state);
+        NotifierStream::new(UnboundedReceiverStream::new(rx), handle, state)
     }
 }
 

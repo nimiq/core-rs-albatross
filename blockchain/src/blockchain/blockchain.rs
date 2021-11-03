@@ -32,9 +32,9 @@ pub struct Blockchain {
     // The OffsetTime struct. It allows us to query the current time.
     pub time: Arc<OffsetTime>, // shared with network
     // The notifier processes events relative to the blockchain.
-    pub notifier: Notifier<'static, BlockchainEvent>,
+    pub notifier: Notifier<BlockchainEvent>,
     // The fork notifier processes fork events.
-    pub fork_notifier: Notifier<'static, ForkEvent>,
+    pub fork_notifier: Notifier<ForkEvent>,
     // The chain store is a database containing all of the chain infos, blocks and receipts.
     pub chain_store: ChainStore,
     // The history store is a database containing all of the history trees and transactions.

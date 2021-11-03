@@ -173,8 +173,10 @@ fn create_fork_proof() {
         .blockchain
         .write()
         .fork_notifier
-        .register(move |e: &ForkEvent| match e {
-            ForkEvent::Detected(_) => *event1_rc2.write().unwrap() = true,
+        .register(move |e: &ForkEvent| {
+            match e {
+                ForkEvent::Detected(_) => *event1_rc2.write().unwrap() = true,
+            };
         });
 
     // Easy rebranch
@@ -188,5 +190,5 @@ fn create_fork_proof() {
     producer1.push(fork).unwrap();
 
     // Verify that the fork proof was generated
-    assert_eq!(*event1_rc1.read().unwrap(), true);
+    assert!(*event1_rc1.read().unwrap());
 }
