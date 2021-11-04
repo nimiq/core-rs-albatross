@@ -30,7 +30,7 @@ impl PendingBatchSet {
     }
 
     fn epoch_number(&self) -> u32 {
-        policy::epoch_at(self.block.header.block_number)
+        self.block.epoch_number()
     }
 }
 
@@ -57,7 +57,6 @@ pub(crate) struct SyncCluster<TPeer: Peer> {
 
     pending_batch_sets: VecDeque<PendingBatchSet>,
 
-    pub adopted_batch_set: bool,
     blockchain: Arc<RwLock<Blockchain>>,
 }
 
@@ -107,7 +106,6 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
             batch_set_queue,
             history_queue,
             pending_batch_sets: VecDeque::with_capacity(Self::NUM_PENDING_BATCH_SETS),
-            adopted_batch_set: false,
             blockchain,
         }
     }
@@ -262,12 +260,11 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
 
     pub(crate) fn remove_front(&mut self, num_items: usize) {
         // TODO Refactor
-        let mut new_cluster = if self.ids.len() < num_items {
+        let new_cluster = if self.ids.len() < num_items {
             self.split_off(self.len())
         } else {
             self.split_off(num_items)
         };
-        new_cluster.adopted_batch_set = self.adopted_batch_set;
         *self = new_cluster;
     }
 
