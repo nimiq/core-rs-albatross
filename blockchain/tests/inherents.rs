@@ -49,7 +49,7 @@ fn it_can_create_batch_finalization_inherents() {
     for inherent in &inherents {
         match inherent.ty {
             InherentType::Reward => {
-                assert_eq!(inherent.value, Coin::from_u64_unchecked(8_74999));
+                assert_eq!(inherent.value, Coin::from_u64_unchecked(875));
                 got_reward = true;
             }
             InherentType::FinalizeBatch => {
@@ -92,7 +92,7 @@ fn it_can_create_batch_finalization_inherents() {
 
     let inherents = blockchain.finalize_previous_batch(&blockchain.state(), &macro_header);
     assert_eq!(inherents.len(), 3);
-    let one_slot_reward = 8_74999 / policy::SLOTS as u64;
+    let one_slot_reward = 875 / policy::SLOTS as u64;
     let mut got_reward = false;
     let mut got_slash = false;
     let mut got_finalize_batch = false;
@@ -106,7 +106,7 @@ fn it_can_create_batch_finalization_inherents() {
                 } else {
                     assert_eq!(
                         inherent.value,
-                        Coin::from_u64_unchecked(8_74999 - one_slot_reward as u64)
+                        Coin::from_u64_unchecked(875 - one_slot_reward as u64)
                     );
                     got_reward = true;
                 }

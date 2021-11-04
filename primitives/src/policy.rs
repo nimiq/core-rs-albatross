@@ -51,15 +51,15 @@ pub const VALIDATOR_DEPOSIT: u64 = 1_000_000_000;
 /// Total supply in units.
 pub const TOTAL_SUPPLY: u64 = 2_100_000_000_000_000;
 
-/// This is the number of Lunas (1 NIM = 100,000 Lunas) created by second at the genesis of the
+/// This is the number of Lunas (1 NIM = 100,000 Lunas) created by millisecond at the genesis of the
 /// Nimiq 2.0 chain. The velocity then decreases following the formula:
 /// Supply_velocity (t) = Initial_supply_velocity * e^(- Supply_decay * t)
-/// Where e is the exponential function and t is the time in seconds since the genesis block.
-pub const INITIAL_SUPPLY_VELOCITY: f64 = 875_000.0;
+/// Where e is the exponential function and t is the time in milliseconds since the genesis block.
+pub const INITIAL_SUPPLY_VELOCITY: f64 = 875.0;
 
 /// The supply decay is a constant that is calculated so that the supply velocity decreases at a
 /// steady 1.47% per year.
-pub const SUPPLY_DECAY: f64 = 4.692821935e-10;
+pub const SUPPLY_DECAY: f64 = 4.692821935e-13;
 
 /// Returns the epoch number at a given block number (height).
 #[inline]
@@ -198,7 +198,7 @@ pub fn first_batch_of_epoch(block_number: u32) -> bool {
 /// Returns the supply at a given time (as Unix time) in Lunas (1 NIM = 100,000 Lunas). It is
 /// calculated using the following formula:
 /// Supply (t) = Genesis_supply + Initial_supply_velocity / Supply_decay * (1 - e^(- Supply_decay * t))
-/// Where e is the exponential function, t is the time in seconds since the genesis block and
+/// Where e is the exponential function, t is the time in milliseconds since the genesis block and
 /// Genesis_supply is the supply at the genesis of the Nimiq 2.0 chain.
 pub fn supply_at(genesis_supply: u64, genesis_time: u64, current_time: u64) -> u64 {
     assert!(current_time >= genesis_time);
