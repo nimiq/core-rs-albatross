@@ -129,6 +129,11 @@ impl Blockchain {
         let accounts = Accounts::new(env.clone());
 
         if main_chain.head.state_root() != &accounts.get_root(None) {
+            log::error!(
+                "Main chain's head state root: {:?}, Account state root: {:?}",
+                main_chain.head.state_root(),
+                &accounts.get_root(None)
+            );
             return Err(BlockchainError::InconsistentState);
         }
 

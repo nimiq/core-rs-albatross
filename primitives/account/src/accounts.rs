@@ -33,7 +33,13 @@ impl Accounts {
 
     /// Initializes the Accounts struct with a given list of accounts.
     pub fn init(&self, txn: &mut WriteTransaction, genesis_accounts: Vec<(KeyNibbles, Account)>) {
+        log::debug!("Initializing Accounts");
         for (key, account) in genesis_accounts {
+            log::trace!(
+                "Adding new account: KeyNibbles: {:?}, Account: {:?}",
+                &key,
+                &account
+            );
             self.tree.put(txn, &key, account);
         }
         self.tree.update_root(txn);
