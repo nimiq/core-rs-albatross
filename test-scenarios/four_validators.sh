@@ -9,6 +9,7 @@ fail=false
 foldername=$(date +%Y%m%d_%H%M%S)
 ERASE=false
 DATABASE_CLEAN=false
+CONTINOUS=false
 
 trap cleanup_exit INT
 
@@ -32,10 +33,11 @@ usage: $0 [-r|--restarts COUNT] [-e|--erase] [-h|--help]
 This script launches 4 validators and restarts them
 
 OPTIONS:
-   -h|--help     Show this message
-   -e|--erase    Erases all of the validator state as part of restarting it
-   -d|--db       Erases only the database state of the validator as part of restarting it 
-   -r|--restarts The number of times you want to kill/restart validators (by default 10 times)
+   -h|--help      Show this message
+   -e|--erase     Erases all of the validator state as part of restarting it
+   -d|--db        Erases only the database state of the validator as part of restarting it 
+   -r|--restarts  The number of times you want to kill/restart validators (by default 10 times)(0 means no restarts)
+   -c|--continous In continous mode the script runs until it is killed (or it finds an error)
 EOF
 }
 
@@ -52,6 +54,9 @@ while [ ! $# -eq 0 ]; do
             ;;
         -e | --erase)
             ERASE=true
+            ;;
+        -c | --continous)
+            CONTINOUS=true
             ;;
         -d | --db)
             DATABASE_CLEAN=true
@@ -84,45 +89,51 @@ for validator in ${validators[@]}; do
 done
 echo "Done"
 
-#Let the validators produce blocks for 1 minute
-sleep 1m
+#Let the validators produce blocks for 30 seconds
+sleep 30s
 
 old_block_number=0
+restarts_count=0
 
-cycles=1
+cycles=0
 while [ $cycles -le $max_restarts ]
 do
-    #Select a random validator to restart
-    index=$((0 + $RANDOM % 3))
 
-    echo "  Killing validator: $(($index + 1 ))"
+    if [ $restarts_count -lt $max_restarts ] ; then
 
-    kill ${pids[$index]}
-    sleep 10s
+        #Select a random validator to restart
+        index=$((0 + $RANDOM % 3))
 
-    if [ "$ERASE" = true ] ; then
-        echo "  Erasing all validator state"
-        rm -rf temp-state/dev/$(($index + 1 ))/*
-        echo "################################## VALIDATOR STATE DELETED ###########################  " >> temp-logs/$foldername/Validator$(($index + 1 )).txt
+        echo "  Killing validator: $(($index + 1 ))"
+
+        kill ${pids[$index]}
+        sleep 10s
+
+        if [ "$ERASE" = true ] ; then
+            echo "  Erasing all validator state"
+            rm -rf temp-state/dev/$(($index + 1 ))/*
+            echo "################################## VALIDATOR STATE DELETED ###########################  " >> temp-logs/$foldername/Validator$(($index + 1 )).txt
+        fi
+
+        if [ "$DATABASE_CLEAN" = true ] ; then
+            echo "  Erasing validator database"
+            rm -rf temp-state/dev/$(($index + 1 ))/devalbatross-history-consensus
+            echo "################################## VALIDATOR DB DELETED ###########################  " >> temp-logs/$foldername/Validator$(($index + 1 )).txt
+        fi
+
+        echo "################################## RESTART ###########################  " >> temp-logs/$foldername/Validator$(($index + 1 )).txt
+
+        echo "  Restarting validator: $(($index + 1 ))"
+        cargo run --bin nimiq-client -- -c configs/dev/dev-$(($index + 1 )).toml &>> temp-logs/$foldername/Validator$(($index + 1 )).txt &
+        pids[$index]=$!
+        restarts_count+=1
     fi
 
-    if [ "$DATABASE_CLEAN" = true ] ; then
-        echo "  Erasing validator database"
-        rm -rf temp-state/dev/$(($index + 1 ))/devalbatross-history-consensus
-        echo "################################## VALIDATOR DB DELETED ###########################  " >> temp-logs/$foldername/Validator$(($index + 1 )).txt
+    if [ "$CONTINOUS" = false ] ; then
+        cycles=$(( $cycles + 1 ))
     fi
 
-    echo "################################## RESTART ###########################  " >> temp-logs/$foldername/Validator$(($index + 1 )).txt
-
-    echo "  Restarting validator: $(($index + 1 ))"
-    cargo run --bin nimiq-client -- -c configs/dev/dev-$(($index + 1 )).toml &>> temp-logs/$foldername/Validator$(($index + 1 )).txt &
-    pids[$index]=$!
-
-    echo "  Done"
-
-    cycles=$(( $cycles + 1 ))
-
-    sleep_time=$((30 + $RANDOM % 200))
+    sleep_time=$((30 + $RANDOM % 150))
 
     #Produce blocks for some minutes
     echo "  Producing blocks for $sleep_time seconds"
@@ -144,9 +155,27 @@ do
         break
     fi
     #Search if blocks are being produced
-    new_block_number=$(grep -rin "Now at block #" temp-logs/$foldername/ | tail -1 | awk '{print $10}' | awk -F# '{print $2}')
+    bns=()
 
-    if [ -z "$new_block_number" ] || [ $new_block_number -le $old_block_number ] ; then
+    #First collect the last block number from each validator
+    for log in temp-logs/$foldername/*; do
+        bn=$(grep "Now at block #" $log | tail -1 | awk -F# '{print $2}')
+        if [ -z "$bn" ]; then
+            bns+=(0)
+        else
+            bns+=($bn)
+        fi
+    done
+
+    # Obtain the greatest one
+    new_block_number=0
+    for n in "${bns[@]}" ; do
+        ((n > new_block_number)) && new_block_number=$n
+    done
+
+    echo "     Latest block number: $new_block_number "
+
+    if [ $new_block_number -le $old_block_number ] ; then
         echo "   !!!!   BLOCKS ARE NOT BEING PRODUCED AFTER $sleep_time seconds   !!! "
         fail=true
         break
