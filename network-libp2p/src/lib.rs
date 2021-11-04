@@ -5,6 +5,9 @@ extern crate beserial_derive;
 #[macro_use]
 extern crate log;
 
+#[macro_use]
+extern crate nimiq_macros;
+
 mod behaviour;
 pub mod codecs;
 mod config;

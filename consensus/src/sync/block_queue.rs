@@ -389,12 +389,7 @@ impl<N: Network> Stream for Inner<N> {
     type Item = BlockQueueEvent;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        // Store waker.
-        match &mut self.waker {
-            Some(waker) if !waker.will_wake(cx.waker()) => *waker = cx.waker().clone(),
-            None => self.waker = Some(cx.waker().clone()),
-            _ => {}
-        };
+        store_waker!(self, waker, cx);
 
         if let Some(op) = self.push_ops.front_mut() {
             let result = ready!(op.poll_unpin(cx));

@@ -502,12 +502,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
             self.housekeeping();
         }
 
-        // Store waker.
-        match &mut self.waker {
-            Some(waker) if !waker.will_wake(cx.waker()) => *waker = cx.waker().clone(),
-            None => self.waker = Some(cx.waker().clone()),
-            _ => {}
-        };
+        store_waker!(self, waker, cx);
 
         Poll::Pending
     }
