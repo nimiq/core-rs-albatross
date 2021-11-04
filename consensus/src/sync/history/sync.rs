@@ -1,6 +1,7 @@
 use std::collections::{HashMap, VecDeque};
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
+use std::task::Waker;
 
 use futures::future::BoxFuture;
 use futures::stream::FuturesUnordered;
@@ -50,18 +51,19 @@ impl<TPeer: Peer> EpochIds<TPeer> {
 pub struct HistorySync<TNetwork: Network> {
     blockchain: Arc<RwLock<Blockchain>>,
     network_event_rx: BroadcastStream<NetworkEvent<TNetwork::PeerType>>,
+    agents: HashMap<Arc<TNetwork::PeerType>, (Arc<ConsensusAgent<TNetwork::PeerType>>, usize)>,
     epoch_ids_stream: FuturesUnordered<BoxFuture<'static, Option<EpochIds<TNetwork::PeerType>>>>,
     epoch_clusters: VecDeque<SyncCluster<TNetwork::PeerType>>,
-    active_epoch_cluster: Option<SyncCluster<TNetwork::PeerType>>,
     checkpoint_clusters: VecDeque<SyncCluster<TNetwork::PeerType>>,
-    active_checkpoint_cluster: Option<SyncCluster<TNetwork::PeerType>>,
-    agents: HashMap<Arc<TNetwork::PeerType>, (Arc<ConsensusAgent<TNetwork::PeerType>>, usize)>,
-    push_epoch_future: Option<BoxFuture<'static, SyncClusterResult>>,
-    push_checkpoint_future: Option<BoxFuture<'static, SyncClusterResult>>,
+    active_cluster: Option<SyncCluster<TNetwork::PeerType>>,
+    queued_push_ops:
+        VecDeque<BoxFuture<'static, (SyncClusterResult, Option<SyncCluster<TNetwork::PeerType>>)>>,
+    waker: Option<Waker>,
 }
 
 impl<TNetwork: Network> HistorySync<TNetwork> {
     const MAX_CLUSTERS: usize = 100;
+    const MAX_QUEUED_PUSH_OPS: usize = 4;
 
     pub fn new(
         blockchain: Arc<RwLock<Blockchain>>,
@@ -70,14 +72,13 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         Self {
             blockchain,
             network_event_rx,
+            agents: HashMap::new(),
             epoch_ids_stream: FuturesUnordered::new(),
             epoch_clusters: VecDeque::new(),
-            active_epoch_cluster: None,
             checkpoint_clusters: VecDeque::new(),
-            active_checkpoint_cluster: None,
-            agents: HashMap::new(),
-            push_epoch_future: None,
-            push_checkpoint_future: None,
+            active_cluster: None,
+            queued_push_ops: VecDeque::new(),
+            waker: None,
         }
     }
 
@@ -133,22 +134,16 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                 let hashes = block_hashes.hashes.unwrap();
 
                 // Get checkpoint id if exists.
-                let checkpoint_id = hashes.last().and_then(|(ty, id)| {
-                    if *ty == BlockHashType::Checkpoint {
-                        Some(id.clone())
-                    } else {
-                        None
-                    }
+                let checkpoint_id = hashes.last().and_then(|(ty, id)| match *ty {
+                    BlockHashType::Checkpoint => Some(id.clone()),
+                    _ => None,
                 });
                 // Filter checkpoint from block hashes and map to hash.
                 let epoch_ids = hashes
                     .into_iter()
-                    .filter_map(|(ty, id)| {
-                        if ty == BlockHashType::Election {
-                            Some(id)
-                        } else {
-                            None
-                        }
+                    .filter_map(|(ty, id)| match ty {
+                        BlockHashType::Election => Some(id),
+                        _ => None,
                     })
                     .collect();
                 Some(EpochIds {
@@ -211,13 +206,13 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
             epoch_ids.first_epoch_number,
             epoch_ids.ids.len(),
             self.epoch_clusters.len(),
-            self.active_epoch_cluster.is_some(),
+            self.active_cluster.is_some(),
         );
 
         let epoch_clusters = self
             .epoch_clusters
             .iter_mut()
-            .chain(self.active_epoch_cluster.iter_mut());
+            .chain(self.active_cluster.iter_mut());
         for cluster in epoch_clusters {
             // Check if given epoch_ids and the current cluster potentially overlap.
             if cluster.first_epoch_number <= epoch_ids.first_epoch_number
@@ -296,7 +291,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
             let checkpoint_clusters = self
                 .checkpoint_clusters
                 .iter_mut()
-                .chain(self.active_checkpoint_cluster.iter_mut());
+                .chain(self.active_cluster.iter_mut());
             for cluster in checkpoint_clusters {
                 // Currently, we do not need to remove old checkpoint ids from the same peer.
                 // Since we only request new epoch ids (and checkpoints) once a peer has 0 clusters,
@@ -304,7 +299,9 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                 // When this invariant changes, we need to remove old checkpoints of that peer here!
 
                 // Look for clusters at the same epoch with the same hash.
-                if cluster.first_epoch_number == checkpoint_epoch && cluster.ids[0] == checkpoint_id
+                if cluster.first_epoch_number == checkpoint_epoch
+                    && cluster.ids[0] == checkpoint_id
+                    && cluster.ids.len() == 1
                 {
                     // The peer's checkpoint id matched this cluster,
                     // so we add the peer to this cluster. We also increment the peer's number of clusters.
@@ -349,8 +346,23 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         self.epoch_clusters.append(&mut new_clusters);
     }
 
+    fn find_next_cluster(&mut self) -> Option<SyncCluster<TNetwork::PeerType>> {
+        self.find_best_epoch_cluster()
+            .or_else(|| self.find_best_checkpoint_cluster())
+    }
+
     fn find_best_epoch_cluster(&mut self) -> Option<SyncCluster<TNetwork::PeerType>> {
-        HistorySync::<TNetwork>::find_best_cluster(&mut self.epoch_clusters, &self.blockchain)
+        let cluster =
+            HistorySync::<TNetwork>::find_best_cluster(&mut self.epoch_clusters, &self.blockchain);
+
+        // If we made space in epoch_clusters, wake the task.
+        if cluster.is_some() {
+            if let Some(waker) = self.waker.take() {
+                waker.wake();
+            }
+        }
+
+        cluster
     }
 
     fn find_best_checkpoint_cluster(&mut self) -> Option<SyncCluster<TNetwork::PeerType>> {
@@ -403,10 +415,14 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
     /// provide new epoch ids or emitted as synced peers if there are no new ids to sync.
     fn finish_cluster(
         &mut self,
-        cluster: &SyncCluster<<TNetwork as Network>::PeerType>,
-        request_more_epochs: bool,
-        cx: &mut Context<'_>,
+        cluster: &SyncCluster<TNetwork::PeerType>,
+        result: SyncClusterResult,
     ) {
+        if result != SyncClusterResult::NoMoreEpochs {
+            debug!("Failed to push epoch: {:?}", result);
+        }
+
+        // Decrement the cluster count for all peers in the cluster.
         for peer in cluster.peers() {
             if let Some(agent) = Weak::upgrade(peer) {
                 let cluster_count = {
@@ -425,11 +441,8 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                     // epoch_ids and dropped otherwise.
                     self.agents.remove(&agent.peer);
 
-                    if request_more_epochs {
+                    if result != SyncClusterResult::Error {
                         self.add_agent(agent);
-                        // Pushing the future to FuturesUnordered above does not wake the task that
-                        // polls `epoch_ids_stream`. Therefore, we need to wake the task manually.
-                        cx.waker().wake_by_ref();
                     } else {
                         // FIXME: Disconnect peer
                         // agent.peer.close()
@@ -439,156 +452,84 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         }
     }
 
-    fn sync_epochs(&mut self, cx: &mut Context<'_>) -> Poll<()> {
-        if self.push_epoch_future.is_none() {
-            // Initialize active_epoch_cluster if there is none.
-            if self.active_epoch_cluster.is_none() {
-                self.active_epoch_cluster = self.find_best_epoch_cluster();
-            }
-
-            // Poll the best epoch cluster.
-            if let Some(best_cluster) = self.active_epoch_cluster.as_mut() {
-                let cluster_res = ready!(best_cluster.poll_next_unpin(cx));
-                let blockchain = self.blockchain.clone();
-
-                let future = async move {
-                    match cluster_res {
-                        Some(Ok(epoch)) => {
-                            debug!(
-                                "Processing epoch #{} ({} history items)",
-                                epoch.block.epoch_number(),
-                                epoch.history.len()
-                            );
-                            let push_result = spawn_blocking(move || {
-                                Blockchain::push_history_sync(
-                                    blockchain.upgradable_read(),
-                                    Block::Macro(epoch.block),
-                                    &epoch.history,
-                                )
-                            })
-                            .await
-                            .expect("blockchain.push_history_sync() should not panic");
-                            SyncClusterResult::from(push_result)
-                        }
-                        Some(Err(e)) => {
-                            log::debug!("Polling the best SyncCluster returned an error: {:?}", e);
-                            SyncClusterResult::Error
-                        }
-                        None => SyncClusterResult::NoMoreEpochs,
-                    }
-                }
-                .boxed();
-
-                self.push_epoch_future = Some(future);
-            }
+    fn sync_cluster(&mut self, cx: &mut Context<'_>) {
+        // Initialize active_cluster if there is none.
+        if self.active_cluster.is_none() {
+            self.active_cluster = self.find_next_cluster();
         }
 
-        if let Some(op) = self.push_epoch_future.as_mut() {
-            let result = ready!(op.poll_unpin(cx));
-            self.push_epoch_future = None;
-
-            // If the epoch was successful, the cluster is not done yet
-            // and we update the remaining clusters.
-            if result == SyncClusterResult::EpochSuccessful {
-                let best_cluster = self
-                    .active_epoch_cluster
-                    .as_mut()
-                    .expect("active_epoch_cluster should be set");
-                best_cluster.adopted_batch_set = true;
-            } else {
-                if result != SyncClusterResult::NoMoreEpochs {
-                    debug!("Failed to push epoch: {:?}", result);
-                }
-
-                // TODO Do we really want to evict outdated clusters as well?
-                let best_cluster = self
-                    .active_epoch_cluster
-                    .take()
-                    .expect("active_epoch_cluster should be set");
-
-                // Decrement the cluster count for all peers in the evicted cluster.
-                self.finish_cluster(
-                    &best_cluster,
-                    result != SyncClusterResult::Error && best_cluster.adopted_batch_set,
-                    cx,
-                );
-
-                // Evict current best cluster and move to next one.
-                self.active_epoch_cluster = self.find_best_epoch_cluster();
-            }
-        }
-        Poll::Ready(())
-    }
-
-    fn sync_batches(&mut self, cx: &mut Context<'_>) -> Poll<()> {
-        if self.push_checkpoint_future.is_none() {
-            // When no more epochs are to be processed, we continue with checkpoint blocks.
-            // Poll the best checkpoint cluster.
-            let current_epoch = self.blockchain.read().epoch_number() as usize;
-
-            // Initialize active_checkpoint_cluster if there is none.
-            if self.active_checkpoint_cluster.is_none() {
-                self.active_checkpoint_cluster = self.find_best_checkpoint_cluster();
-            }
-
-            if let Some(best_cluster) = self.active_checkpoint_cluster.as_mut() {
-                let blockchain = self.blockchain.clone();
-                let cluster_res = if best_cluster.first_epoch_number > current_epoch {
-                    ready!(best_cluster.poll_next_unpin(cx))
-                } else {
-                    None
+        // Poll the active cluster.
+        if let Some(cluster) = self.active_cluster.as_mut() {
+            while self.queued_push_ops.len() < Self::MAX_QUEUED_PUSH_OPS {
+                let result = match cluster.poll_next_unpin(cx) {
+                    Poll::Ready(result) => result,
+                    Poll::Pending => break,
                 };
 
-                let future = async move {
-                    match cluster_res {
-                        Some(Ok(batch)) => {
+                log::debug!("Got result from active cluster: {:?}", result);
+
+                match result {
+                    Some(Ok(batch_set)) => {
+                        let blockchain = Arc::clone(&self.blockchain);
+                        let future = async move {
                             debug!(
-                                "Processing partial epoch #{} ({} history items)",
-                                batch.block.epoch_number(),
-                                batch.history.len()
+                                "Processing epoch #{} ({} history items)",
+                                batch_set.block.epoch_number(),
+                                batch_set.history.len()
                             );
                             let push_result = spawn_blocking(move || {
                                 Blockchain::push_history_sync(
                                     blockchain.upgradable_read(),
-                                    Block::Macro(batch.block),
-                                    &batch.history,
+                                    Block::Macro(batch_set.block),
+                                    &batch_set.history,
                                 )
                             })
                             .await
                             .expect("blockchain.push_history_sync() should not panic");
-                            SyncClusterResult::from(push_result)
+                            (SyncClusterResult::from(push_result), None)
                         }
-                        Some(Err(e)) => e,
-                        None => SyncClusterResult::NoMoreEpochs,
+                        .boxed();
+                        self.queued_push_ops.push_back(future);
+                    }
+                    Some(Err(_)) | None => {
+                        if let Some(waker) = self.waker.take() {
+                            waker.wake();
+                        }
+
+                        // Evict the active cluster if it error'd or finished.
+                        // TODO Evict Outdated clusters as well?
+                        let cluster = self.active_cluster.take().unwrap();
+                        let result = match &result {
+                            Some(_) => SyncClusterResult::Error,
+                            None => SyncClusterResult::NoMoreEpochs,
+                        };
+                        let future = async move { (result, Some(cluster)) }.boxed();
+                        self.queued_push_ops.push_back(future);
+
+                        break;
                     }
                 }
-                .boxed();
-
-                self.push_checkpoint_future = Some(future);
             }
         }
 
-        if let Some(op) = self.push_checkpoint_future.as_mut() {
-            let result = ready!(op.poll_unpin(cx));
-            self.push_checkpoint_future = None;
+        while let Some(op) = self.queued_push_ops.front_mut() {
+            let (result, evicted_cluster) = match op.poll_unpin(cx) {
+                Poll::Ready(result) => result,
+                Poll::Pending => return,
+            };
+            self.queued_push_ops.pop_front();
 
-            if result == SyncClusterResult::Error || result == SyncClusterResult::Outdated {
-                debug!("Failed to push checkpoint: {:?}", result);
+            log::debug!("Push op completed with result: {:?}", result);
+
+            if result != SyncClusterResult::EpochSuccessful {
+                let evicted_cluster = evicted_cluster.unwrap();
+                self.finish_cluster(&evicted_cluster, result);
             }
 
-            // Since checkpoint clusters are always of length 1, we can remove them immediately.
-            let best_cluster = self
-                .active_checkpoint_cluster
-                .take()
-                .expect("active_checkpoint_cluster should be set");
-
-            // Decrement the cluster count for all peers in the evicted cluster.
-            self.finish_cluster(&best_cluster, result != SyncClusterResult::Error, cx);
-
-            // Move to next cluster.
-            self.active_checkpoint_cluster = self.find_best_checkpoint_cluster();
+            if let Some(waker) = self.waker.take() {
+                waker.wake();
+            }
         }
-        Poll::Ready(())
     }
 }
 
@@ -596,12 +537,21 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
     type Item = Arc<ConsensusAgent<TNetwork::PeerType>>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        // Store waker.
+        match &mut self.waker {
+            Some(waker) if !waker.will_wake(cx.waker()) => *waker = cx.waker().clone(),
+            None => self.waker = Some(cx.waker().clone()),
+            _ => {}
+        }
+
         while let Poll::Ready(Some(result)) = self.network_event_rx.poll_next_unpin(cx) {
             match result {
                 Ok(NetworkEvent::PeerLeft(peer)) => {
                     // Delete the ConsensusAgent from the agents map, removing the only "persistent"
                     // strong reference to it. There might not be an entry for every peer (e.g. if
                     // it didn't send any epoch ids).
+
+                    // FIXME This doesn't work if we're currently requesting epoch_ids from this peer
                     self.agents.remove(&peer);
                 }
                 Ok(NetworkEvent::PeerJoined(peer)) => {
@@ -614,42 +564,37 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
         }
 
         // Stop pulling in new EpochIds if we hit a maximum a number of clusters to prevent DoS.
-        loop {
-            if self.epoch_clusters.len() >= Self::MAX_CLUSTERS {
-                // TODO: We still want to get the wakes for the epoch_ids_stream
-                //  even if we don't poll it now.
-                break;
-            }
+        while self.epoch_clusters.len() < Self::MAX_CLUSTERS {
+            let epoch_ids = match self.epoch_ids_stream.poll_next_unpin(cx) {
+                Poll::Ready(Some(epoch_ids)) => epoch_ids,
+                _ => break,
+            };
 
-            if let Poll::Ready(Some(epoch_ids)) = self.epoch_ids_stream.poll_next_unpin(cx) {
-                if let Some(epoch_ids) = epoch_ids {
-                    // The peer might have disconnected during the request.
-                    // FIXME Check if the peer is still connected
+            if let Some(epoch_ids) = epoch_ids {
+                // The peer might have disconnected during the request.
+                // FIXME Check if the peer is still connected
 
-                    if !epoch_ids.on_same_chain {
-                        debug!(
-                            "Peer is on different chain: {:?}",
-                            epoch_ids.sender.peer.id()
-                        );
-                        // TODO: Send further locators. Possibly find branching point of fork.
-                    } else if epoch_ids.ids.is_empty() && epoch_ids.checkpoint_id.is_none() {
-                        // We are synced with this peer.
-                        debug!(
-                            "Peer has finished syncing: {:?}",
-                            epoch_ids.sender.peer.id()
-                        );
-                        return Poll::Ready(Some(epoch_ids.sender));
-                    }
-                    self.cluster_epoch_ids(epoch_ids);
+                if !epoch_ids.on_same_chain {
+                    debug!(
+                        "Peer is on different chain: {:?}",
+                        epoch_ids.sender.peer.id()
+                    );
+                    // TODO: Send further locators. Possibly find branching point of fork.
+                } else if epoch_ids.ids.is_empty() && epoch_ids.checkpoint_id.is_none() {
+                    // We are synced with this peer.
+                    debug!(
+                        "Peer has finished syncing: {:?}",
+                        epoch_ids.sender.peer.id()
+                    );
+                    return Poll::Ready(Some(epoch_ids.sender));
                 }
+                self.cluster_epoch_ids(epoch_ids);
             } else {
-                break;
+                log::debug!("No epoch ids returned");
             }
         }
 
-        ready!(self.sync_epochs(cx));
-
-        ready!(self.sync_batches(cx));
+        self.sync_cluster(cx);
 
         Poll::Pending
     }
@@ -660,6 +605,12 @@ impl<TNetwork: Network> HistorySyncStream<TNetwork::PeerType> for HistorySync<TN
         trace!("Requesting more epoch ids for peer: {:?}", agent.peer.id());
         let future = Self::request_epoch_ids(Arc::clone(&self.blockchain), agent).boxed();
         self.epoch_ids_stream.push(future);
+
+        // Pushing the future to FuturesUnordered above does not wake the task that
+        // polls `epoch_ids_stream`. Therefore, we need to wake the task manually.
+        if let Some(waker) = &self.waker {
+            waker.wake_by_ref();
+        }
     }
 }
 

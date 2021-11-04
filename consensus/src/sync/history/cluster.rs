@@ -1,5 +1,6 @@
 use std::cmp::Ordering;
 use std::collections::VecDeque;
+use std::fmt::Formatter;
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
 
@@ -36,6 +37,15 @@ impl PendingBatchSet {
 pub(crate) struct BatchSet {
     pub block: MacroBlock,
     pub history: Vec<ExtendedTransaction>,
+}
+
+impl std::fmt::Debug for BatchSet {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut dbg = f.debug_struct("BatchSet");
+        dbg.field("epoch_number", &self.block.epoch_number());
+        dbg.field("history_len", &self.history.len());
+        dbg.finish()
+    }
 }
 
 pub(crate) struct SyncCluster<TPeer: Peer> {
