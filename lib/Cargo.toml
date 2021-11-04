@@ -38,7 +38,7 @@ serde_derive = "1.0"
 structopt = { version = "0.3", features = ["paw"] }
 strum_macros = "0.22"
 toml = "0.5"
-url = "1.7"
+url = "2.2"
 thiserror = "1.0"
 
 beserial = { path = "../beserial" }

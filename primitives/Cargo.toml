@@ -20,7 +20,7 @@ maintenance = { status = "experimental" }
 bitvec = "0.17"
 thiserror = { version = "1.0.20", optional = true }
 hex = { version = "0.4", optional = true }
-itertools = { version = "0.8", optional = true }
+itertools = { version = "0.10", optional = true }
 lazy_static = { version = "1.2", optional = true }
 log = "0.4"
 num-bigint = { version = "0.4.2", optional = true }

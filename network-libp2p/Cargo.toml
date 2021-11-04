@@ -56,7 +56,7 @@ nimiq-hash = { path = "../hash" }
 nimiq-utils = { path = "../utils", features = ["tagged-signing", "serde-derive", "libp2p", "time"] }
 
 [dev-dependencies]
-tracing-subscriber = "0.2"
+tracing-subscriber = "0.3"
 
 [features]
 default = ["peer-contact-book-persistence"]
