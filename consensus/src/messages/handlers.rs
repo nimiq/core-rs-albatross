@@ -89,12 +89,10 @@ impl Handle<BatchSetInfo> for RequestBatchSet {
     fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> BatchSetInfo {
         let blockchain = blockchain.read();
         if let Some(Block::Macro(block)) = blockchain.get_block(&self.hash, true, None) {
-            // Leaf indices are 0 based thus the + 1
             let history_len = blockchain
                 .history_store
-                .get_last_leaf_index_of_block(block.header.block_number, None)
-                .expect("Can't find block number in the History Store!")
-                + 1;
+                .length_at(block.header.block_number, None);
+
             BatchSetInfo {
                 block: Some(block),
                 history_len,

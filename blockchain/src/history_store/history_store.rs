@@ -75,6 +75,42 @@ impl HistoryStore {
         }
     }
 
+    /// Returns the length (i.e. the number of leaves) of the History Tree at a given block height.
+    /// Note that this returns the number of leaves for only the epoch of the given block height,
+    /// this is because we have separate History Trees for separate epochs.
+    pub fn length_at(&self, block_number: u32, txn_option: Option<&Transaction>) -> u32 {
+        let read_txn: ReadTransaction;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = ReadTransaction::new(&self.env);
+                &read_txn
+            }
+        };
+
+        let mut cursor = txn.cursor(&self.last_leaf_db);
+
+        // Seek to the last leaf index of the block, if it exists.
+        match cursor.seek_key::<u32, u32>(&block_number) {
+            // If it exists, we simply get the last leaf index for the block. We increment by 1
+            // because the leaf index is 0-based and we want the number of leaves.
+            Some(i) => i + 1,
+            // Otherwise, seek to the previous block, if it exists.
+            None => match cursor.prev::<u32, u32>() {
+                // If it exists, we also need to check if the previous block is in the same epoch.
+                Some((n, i)) => {
+                    if policy::epoch_at(n) == policy::epoch_at(block_number) {
+                        i + 1
+                    } else {
+                        0
+                    }
+                }
+                // If it doesn't exist, then the HistoryStore is empty at this block height.
+                None => 0,
+            },
+        }
+    }
+
     /// Add a list of extended transactions to an existing history tree. It returns the root of the
     /// resulting tree.
     /// This function assumes that:
@@ -487,15 +523,7 @@ impl HistoryStore {
         ));
 
         // Calculate number of nodes in the verifier's history tree.
-        // Leaf indices are 0 based thus the + 1.
-        let leaf_count = match self.get_last_leaf_index_of_block(verifier_block_number, Some(txn)) {
-            Some(index) => index as usize + 1,
-            None => {
-                error!("Cannot prove chunk for epoch #{} (size = {}, index = {}): reference block #{} unknown",
-                       epoch_number, chunk_size, chunk_index, verifier_block_number);
-                return None;
-            }
-        };
+        let leaf_count = self.length_at(verifier_block_number, Some(txn)) as usize;
         let number_of_nodes = leaf_number_to_index(leaf_count);
 
         // Calculate chunk boundaries
@@ -796,24 +824,6 @@ impl HistoryStore {
         }
     }
 
-    // Get the maximum leaf index for a given block-height within its epoch.
-    pub fn get_last_leaf_index_of_block(
-        &self,
-        block_number: u32,
-        txn_option: Option<&Transaction>,
-    ) -> Option<u32> {
-        let read_txn: ReadTransaction;
-        let txn = match txn_option {
-            Some(txn) => txn,
-            None => {
-                read_txn = ReadTransaction::new(&self.env);
-                &read_txn
-            }
-        };
-
-        txn.get(&self.last_leaf_db, &block_number)
-    }
-
     /// Returns a vector containing all leaf hashes and indexes corresponding to the given
     /// transaction hash.
     fn get_leaves_by_tx_hash(
@@ -929,6 +939,34 @@ mod tests {
     use crate::ExtTxData;
 
     use super::*;
+
+    #[test]
+    fn length_at_works() {
+        // Initialize History Store.
+        let env = VolatileEnvironment::new(10).unwrap();
+        let history_store = HistoryStore::new(env.clone());
+
+        // Create extended transactions.
+        let ext_0 = create_transaction(1, 0);
+        let ext_1 = create_transaction(3, 1);
+        let ext_2 = create_transaction(7, 2);
+        let ext_3 = create_transaction(8, 3);
+
+        let ext_txs = vec![ext_0, ext_1, ext_2, ext_3];
+
+        // Add extended transactions to History Store.
+        let mut txn = WriteTransaction::new(&env);
+        history_store.add_to_history(&mut txn, 1, &ext_txs);
+
+        // Verify method works.
+        assert_eq!(history_store.length_at(0, Some(&txn)), 0);
+        assert_eq!(history_store.length_at(1, Some(&txn)), 1);
+        assert_eq!(history_store.length_at(3, Some(&txn)), 2);
+        assert_eq!(history_store.length_at(5, Some(&txn)), 2);
+        assert_eq!(history_store.length_at(7, Some(&txn)), 3);
+        assert_eq!(history_store.length_at(8, Some(&txn)), 4);
+        assert_eq!(history_store.length_at(9, Some(&txn)), 4);
+    }
 
     #[test]
     fn get_root_from_ext_txs_works() {
