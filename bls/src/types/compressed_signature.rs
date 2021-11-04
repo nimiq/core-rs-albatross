@@ -3,13 +3,14 @@ use std::io::Error;
 use std::str::FromStr;
 use std::{cmp::Ordering, fmt};
 
-use ark_ec::AffineCurve;
-use ark_mnt6_753::G1Affine;
+use ark_ec::{AffineCurve, ProjectiveCurve};
+
+use ark_mnt6_753::{G1Affine, G1Projective};
 
 #[cfg(feature = "beserial")]
 use beserial::Deserialize;
 
-use crate::compression::BeDeserialize;
+use crate::compression::{BeDeserialize, BeSerialize};
 #[cfg(feature = "beserial")]
 use crate::ParseError;
 use crate::Signature;
@@ -29,8 +30,10 @@ impl CompressedSignature {
     /// Transforms the compressed form back into the projective form.
     pub fn uncompress(&self) -> Result<Signature, Error> {
         let affine_point: G1Affine = BeDeserialize::deserialize(&mut &self.signature[..])?;
+        let signature = affine_point.into_projective();
         Ok(Signature {
-            signature: affine_point.into_projective(),
+            signature,
+            compressed: CompressedSignature::from(signature),
         })
     }
 
@@ -90,6 +93,14 @@ impl FromStr for CompressedSignature {
             return Err(ParseError::IncorrectLength(raw.len()));
         }
         Ok(CompressedSignature::deserialize_from_vec(&raw).unwrap())
+    }
+}
+
+impl From<G1Projective> for CompressedSignature {
+    fn from(signature: G1Projective) -> Self {
+        let mut buffer = [0u8; CompressedSignature::SIZE];
+        BeSerialize::serialize(&signature.into_affine(), &mut &mut buffer[..]).unwrap();
+        CompressedSignature { signature: buffer }
     }
 }
 

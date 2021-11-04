@@ -5,23 +5,31 @@ use ark_mnt6_753::G1Projective;
 
 use nimiq_hash::HashOutput;
 
-use crate::compression::BeSerialize;
 use crate::pedersen::{pedersen_generators, pedersen_hash};
 use crate::utils::bytes_to_bits;
 use crate::{CompressedSignature, SigHash};
 
 #[derive(Clone, Copy)]
 pub struct Signature {
-    /// The projective form is the longer one, with three coordinates. The affine form is the shorter one, with only two coordinates. Calculation is faster with the projective form.
-    /// We can't use the affine form since the Algebra library doesn't support arithmetic with it.
+    /// The projective form is the longer one, with three coordinates. The
+    /// affine form is the shorter one, with only two coordinates. Calculation
+    /// is faster with the projective form.
+    /// We can't use the affine form since the Algebra library doesn't support
+    /// arithmetic with it.
     pub signature: G1Projective,
+    /// Cache for the compressed form of the signature. This is done in order
+    /// to optimize the serialization since it needs to be compressed for this
+    /// purpose.
+    pub compressed: CompressedSignature,
 }
 
 impl Signature {
-    /// Maps an hash to a elliptic curve point in the G1 group, it is known as "hash-to-curve". It
-    /// is required to create signatures. We use the Pedersen hash to create the EC point.
-    /// Note that the Pedersen hash does not provide pseudo-randomness, which is needed for the BLS
-    /// signature scheme to be secure. So, we assume that the input hash is already pseudo-random.
+    /// Maps an hash to a elliptic curve point in the G1 group, it is known as
+    /// "hash-to-curve". It is required to create signatures. We use the
+    /// Pedersen hash to create the EC point.
+    /// Note that the Pedersen hash does not provide pseudo-randomness, which
+    /// is needed for the BLS signature scheme to be secure. So, we assume that
+    /// the input hash is already pseudo-random.
     pub fn hash_to_g1(hash: SigHash) -> G1Projective {
         // Transform the hash into bits.
         let bits = bytes_to_bits(hash.as_bytes());
@@ -34,20 +42,20 @@ impl Signature {
     }
 
     /// Transforms a signature into a serialized compressed form.
-    /// This form consists of the x-coordinate of the point (in the affine form),
-    /// one bit indicating the sign of the y-coordinate
+    /// This form consists of the x-coordinate of the point (in the affine
+    /// form), one bit indicating the sign of the y-coordinate
     /// and one bit indicating if it is the "point-at-infinity".
     pub fn compress(&self) -> CompressedSignature {
-        let mut buffer = [0u8; CompressedSignature::SIZE];
-        BeSerialize::serialize(&self.signature.into_affine(), &mut &mut buffer[..]).unwrap();
-        CompressedSignature { signature: buffer }
+        CompressedSignature::from(self.signature)
     }
 
-    /// Multiplies a Signature by a u16. It's useful when you need to validator's signature by its
-    /// number of slots.
+    /// Multiplies a Signature by a u16. It's useful when you need to
+    /// validator's signature by its number of slots.
     pub fn multiply(&self, x: u16) -> Self {
+        let signature = self.signature.mul(&[x as u64]);
         Signature {
-            signature: self.signature.mul(&[x as u64]),
+            signature,
+            compressed: CompressedSignature::from(signature),
         }
     }
 }

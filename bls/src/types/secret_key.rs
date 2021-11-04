@@ -10,7 +10,7 @@ use nimiq_hash::Hash;
 use nimiq_utils::key_rng::SecureGenerate;
 use nimiq_utils::key_rng::{CryptoRng, RngCore};
 
-use crate::{SigHash, Signature};
+use crate::{CompressedSignature, SigHash, Signature};
 
 #[derive(Clone, Copy)]
 pub struct SecretKey {
@@ -36,7 +36,10 @@ impl SecretKey {
     pub fn sign_g1(&self, hash_curve: G1Projective) -> Signature {
         let mut sig = hash_curve;
         sig *= self.secret_key;
-        Signature { signature: sig }
+        Signature {
+            signature: sig,
+            compressed: CompressedSignature::from(sig),
+        }
     }
 }
 
