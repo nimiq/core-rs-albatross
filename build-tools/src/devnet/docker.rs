@@ -18,7 +18,7 @@ impl Docker {
         docker_cmd::build(self.directory.to_str().unwrap())
     }
 
-    pub fn up<'a>(&'a self) -> Result<impl Iterator<Item = Result<String, Error>> + 'a, Error> {
+    pub fn up(&self) -> Result<impl Iterator<Item = Result<String, Error>> + '_, Error> {
         info!("Starting docker containers: {}", self.directory.display());
         docker_cmd::up(self.directory.to_str().unwrap())
     }

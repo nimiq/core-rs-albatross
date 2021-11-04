@@ -187,10 +187,7 @@ impl GenesisBuilder {
         // TODO: Maybe turn this code into a StakingContract method?
         genesis_accounts.push((
             StakingContract::get_key_staking_contract(),
-            Account::Staking(StakingContract::get_staking_contract(
-                &accounts.tree,
-                &mut txn,
-            )),
+            Account::Staking(StakingContract::get_staking_contract(&accounts.tree, &txn)),
         ));
 
         for validator in &self.validators {
@@ -199,7 +196,7 @@ impl GenesisBuilder {
                 Account::StakingValidator(
                     StakingContract::get_validator(
                         &accounts.tree,
-                        &mut txn,
+                        &txn,
                         &validator.validator_address,
                     )
                     .unwrap(),
@@ -211,7 +208,7 @@ impl GenesisBuilder {
             genesis_accounts.push((
                 StakingContract::get_key_staker(&staker.staker_address),
                 Account::StakingStaker(
-                    StakingContract::get_staker(&accounts.tree, &mut txn, &staker.staker_address)
+                    StakingContract::get_staker(&accounts.tree, &txn, &staker.staker_address)
                         .unwrap(),
                 ),
             ));
@@ -248,7 +245,7 @@ impl GenesisBuilder {
         debug!("Genesis seed: {}", seed);
 
         // generate slot allocation from staking contract
-        let slots = StakingContract::select_validators(&accounts.tree, &mut txn, &seed);
+        let slots = StakingContract::select_validators(&accounts.tree, &txn, &seed);
         debug!("Slots: {:#?}", slots);
 
         // Body
@@ -356,5 +353,11 @@ impl GenesisBuilder {
         AccountsList(accounts).serialize(&mut file)?;
 
         Ok(hash)
+    }
+}
+
+impl Default for GenesisBuilder {
+    fn default() -> Self {
+        Self::new()
     }
 }
