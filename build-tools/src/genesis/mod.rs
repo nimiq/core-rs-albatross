@@ -177,8 +177,6 @@ impl GenesisBuilder {
             genesis_accounts.push((key, account));
         }
 
-        accounts.init(&mut txn, genesis_accounts.clone());
-
         debug!("Staking contract");
         // First generate the Staking contract in the Accounts.
         self.generate_staking_contract(&accounts, &mut txn)?;
@@ -221,6 +219,8 @@ impl GenesisBuilder {
                 Account::StakingValidatorsStaker(staker.staker_address.clone()),
             ));
         }
+
+        accounts.init(&mut txn, genesis_accounts.clone());
 
         // generate seeds
         let signing_key = self
