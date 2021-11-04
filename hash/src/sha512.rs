@@ -235,7 +235,7 @@ impl Default for Sha512Hasher {
 
 impl io::Write for Sha512Hasher {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.0.input(buf);
+        self.0.update(buf);
         Ok(buf.len())
     }
 
@@ -248,7 +248,7 @@ impl Hasher for Sha512Hasher {
     type Output = Sha512Hash;
 
     fn finish(self) -> Sha512Hash {
-        let result = self.0.result();
+        let result = self.0.finalize();
         Sha512Hash::from(result.as_slice())
     }
 }
