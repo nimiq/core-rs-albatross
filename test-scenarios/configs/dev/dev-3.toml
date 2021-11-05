@@ -24,4 +24,6 @@ timestamps = true
 validator_key_file = "temp-state/dev/3/validator_key.dat"
 validator_key = "eacdbf28aff34ca60f0b57c98d5b4bb32948710d4afa4b3567d21ef871845ada28bc6721b7720ce74242d45674cbc91e317c64f1109b547ef07d13f4e5e936ebd1e68a292f82c71dbb50f6ef68386b8066efa9e40aaa637f86922e90f73f0100"
 cold_key_file = "temp-state/dev/3/cold_key.dat"
+cold_key = "df965b6f123b81719d6f49ce3b47aee17c0514e7b4cc977c539e5876b7a44e41"
 warm_key_file = "temp-state/dev/3/warm_key.dat"
+warm_key = "fb9313e42037e9acd6105c5a5e1264c5d8df917f9076f26f266051e121c5611b"
