@@ -384,6 +384,7 @@ pub struct DatabaseSettings {
     pub path: Option<String>,
     pub size: Option<usize>,
     pub max_dbs: Option<u32>,
+    pub max_readers: Option<u32>,
     pub no_lmdb_sync: Option<bool>,
 }
 
@@ -393,6 +394,7 @@ impl Default for DatabaseSettings {
             path: None,
             size: Some(1024 * 1024 * 50),
             max_dbs: Some(12),
+            max_readers: Some(600),
             no_lmdb_sync: None,
         }
     }

@@ -30,7 +30,7 @@ struct Node {
 impl Node {
     pub async fn new(hub: &mut MockHub) -> Self {
         let time = Arc::new(OffsetTime::new());
-        let env = VolatileEnvironment::new(10).unwrap();
+        let env = VolatileEnvironment::new(10, None).unwrap();
 
         let blockchain = Arc::new(RwLock::new(
             Blockchain::new(env.clone(), NetworkId::UnitAlbatross, time).unwrap(),

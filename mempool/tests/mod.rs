@@ -214,7 +214,7 @@ async fn push_same_tx_twice() {
     let txn_len = txn.serialized_size();
 
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
 
     // Build a blockchain with a basic account and a validator
     let mut genesis_builder = GenesisBuilder::default();
@@ -277,7 +277,7 @@ async fn valid_tx_not_in_blockchain() {
     let txn_len = txn.serialized_size();
 
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
 
     // Create an empty blockchain
     let blockchain = Arc::new(RwLock::new(
@@ -295,7 +295,7 @@ async fn valid_tx_not_in_blockchain() {
 #[tokio::test]
 async fn push_tx_with_wrong_signature() {
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
 
     // Create an empty blockchain
     let blockchain = Arc::new(RwLock::new(
@@ -355,7 +355,7 @@ async fn mempool_get_txn_max_size() {
     }
 
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
 
     // Build a blockchain with a basic account (using the balance of the tx) and a validator
     let mut genesis_builder = GenesisBuilder::default();
@@ -434,7 +434,7 @@ async fn mempool_get_txn_ordered() {
     }
 
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
 
     // Build a blockchain with a basic account (using the balance of the tx) and a validator
     let mut genesis_builder = GenesisBuilder::default();
@@ -515,7 +515,7 @@ async fn push_tx_with_insufficient_balance() {
     }
 
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
 
     // Build a blockchain with a basic account (using the balance of the tx) and a validator
     let mut genesis_builder = GenesisBuilder::default();
@@ -610,7 +610,7 @@ async fn multiple_transactions_multiple_senders() {
     }
 
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
 
     // Build a blockchain with a basic account (using the balance of the tx) and a validator
     let mut genesis_builder = GenesisBuilder::default();
@@ -673,7 +673,7 @@ async fn mempool_tps() {
 
     let mut rng = StdRng::seed_from_u64(0);
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let mut genesis_builder = GenesisBuilder::default();
 
     // Generate and sign transaction from address_a using a balance that will be used to create the account later
@@ -781,7 +781,7 @@ async fn multiple_start_stop() {
 
     let mut rng = StdRng::seed_from_u64(0);
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let mut genesis_builder = GenesisBuilder::default();
 
     // Generate and sign transaction from address_a using a balance that will be used to create the account later

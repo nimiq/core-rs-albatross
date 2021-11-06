@@ -34,10 +34,11 @@ impl LmdbEnvironment {
         path: &str,
         size: usize,
         max_dbs: u32,
+        max_readers: Option<u32>,
         flags: open::Flags,
     ) -> Result<Environment, LmdbError> {
         Ok(Environment::Persistent(
-            LmdbEnvironment::new_lmdb_environment(path, size, max_dbs, flags)?,
+            LmdbEnvironment::new_lmdb_environment(path, size, max_dbs, max_readers, flags)?,
         ))
     }
 
@@ -45,12 +46,16 @@ impl LmdbEnvironment {
         path: &str,
         size: usize,
         max_dbs: u32,
+        max_readers: Option<u32>,
         flags: open::Flags,
     ) -> Result<Self, LmdbError> {
         fs::create_dir_all(path).unwrap();
 
         let mut env = lmdb_zero::EnvBuilder::new()?;
         env.set_maxdbs(max_dbs)?;
+        if let Some(max_readers) = max_readers {
+            env.set_maxreaders(max_readers)?;
+        }
         let env = unsafe { env.open(path, flags, 0o600)? };
 
         let info = env.info()?;
@@ -616,7 +621,7 @@ mod tests {
 
     #[test]
     fn it_can_save_basic_objects() {
-        let env = LmdbEnvironment::new("./test", 0, 1, open::Flags::empty()).unwrap();
+        let env = LmdbEnvironment::new("./test", 0, 1, None, open::Flags::empty()).unwrap();
         {
             let db = env.open_database("test".to_string());
 
@@ -670,7 +675,7 @@ mod tests {
 
     #[test]
     fn isolation_test() {
-        let env = LmdbEnvironment::new("./test2", 0, 1, open::NOTLS).unwrap();
+        let env = LmdbEnvironment::new("./test2", 0, 1, None, open::NOTLS).unwrap();
         {
             let db = env.open_database("test".to_string());
 
@@ -703,7 +708,7 @@ mod tests {
 
     #[test]
     fn duplicates_test() {
-        let env = LmdbEnvironment::new("./test3", 0, 1, open::NOTLS).unwrap();
+        let env = LmdbEnvironment::new("./test3", 0, 1, None, open::NOTLS).unwrap();
         {
             let db = env.open_database_with_flags(
                 "test".to_string(),
@@ -769,7 +774,7 @@ mod tests {
 
     #[test]
     fn cursor_test() {
-        let env = LmdbEnvironment::new("./test4", 0, 1, open::NOTLS).unwrap();
+        let env = LmdbEnvironment::new("./test4", 0, 1, None, open::NOTLS).unwrap();
         {
             let db = env.open_database_with_flags(
                 "test".to_string(),

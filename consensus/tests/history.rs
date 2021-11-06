@@ -51,7 +51,7 @@ async fn peers_can_sync() {
     let mut hub = MockHub::default();
 
     // Setup first peer.
-    let env1 = VolatileEnvironment::new(10).unwrap();
+    let env1 = VolatileEnvironment::new(10, None).unwrap();
     let time = Arc::new(OffsetTime::new());
     let blockchain1 = Arc::new(RwLock::new(
         Blockchain::new(env1.clone(), NetworkId::UnitAlbatross, time).unwrap(),
@@ -80,7 +80,7 @@ async fn peers_can_sync() {
 
     // Setup second peer (not synced yet).
     let time = Arc::new(OffsetTime::new());
-    let env2 = VolatileEnvironment::new(10).unwrap();
+    let env2 = VolatileEnvironment::new(10, None).unwrap();
     let blockchain2 = Arc::new(RwLock::new(
         Blockchain::new(env2.clone(), NetworkId::UnitAlbatross, time).unwrap(),
     ));
@@ -114,7 +114,7 @@ async fn peers_can_sync() {
 
     // FIXME: Add more tests
     //    // Setup third peer (not synced yet).
-    //    let env3 = VolatileEnvironment::new(10).unwrap();
+    //    let env3 = VolatileEnvironment::new(10, None).unwrap();
     //    let blockchain3 = Arc::new(Blockchain::new(env3.clone(), NetworkId::UnitAlbatross).unwrap());
     //    let mempool3 = Mempool::new(Arc::clone(&blockchain3), MempoolConfig::default());
     //
@@ -188,7 +188,7 @@ async fn sync_ingredients() {
 
     // Setup first peer.
     let time = Arc::new(OffsetTime::new());
-    let env1 = VolatileEnvironment::new(10).unwrap();
+    let env1 = VolatileEnvironment::new(10, None).unwrap();
     let blockchain1 = Arc::new(RwLock::new(
         Blockchain::new(env1.clone(), NetworkId::UnitAlbatross, time).unwrap(),
     ));
@@ -221,7 +221,7 @@ async fn sync_ingredients() {
     .await;
 
     // Setup second peer (not synced yet).
-    let env2 = VolatileEnvironment::new(10).unwrap();
+    let env2 = VolatileEnvironment::new(10, None).unwrap();
     let time = Arc::new(OffsetTime::new());
     let blockchain2 = Arc::new(RwLock::new(
         Blockchain::new(env2.clone(), NetworkId::UnitAlbatross, time).unwrap(),

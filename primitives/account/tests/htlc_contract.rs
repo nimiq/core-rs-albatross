@@ -150,7 +150,7 @@ fn it_can_verify_creation_transaction() {
 #[test]
 #[allow(unused_must_use)]
 fn it_can_create_contract_from_transaction() {
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTree");
     let mut db_txn = WriteTransaction::new(&env);
 
@@ -194,7 +194,7 @@ fn it_can_create_contract_from_transaction() {
 
 #[test]
 fn it_does_not_support_incoming_transactions() {
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTree");
     let mut db_txn = WriteTransaction::new(&env);
 
@@ -471,7 +471,7 @@ fn it_can_verify_timeout_resolve() {
 #[test]
 #[allow(unused_must_use)]
 fn it_can_apply_and_revert_valid_transaction() {
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTree");
     let mut db_txn = WriteTransaction::new(&env);
 
@@ -601,7 +601,7 @@ fn it_can_apply_and_revert_valid_transaction() {
 #[test]
 #[allow(unused_must_use)]
 fn it_refuses_invalid_transaction() {
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTree");
     let mut db_txn = WriteTransaction::new(&env);
 

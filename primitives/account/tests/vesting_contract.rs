@@ -141,7 +141,7 @@ fn it_can_verify_creation_transaction() {
 #[test]
 #[allow(unused_must_use)]
 fn it_can_create_contract_from_transaction() {
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTree");
     let mut db_txn = WriteTransaction::new(&env);
 
@@ -246,7 +246,7 @@ fn it_can_create_contract_from_transaction() {
 
 #[test]
 fn it_does_not_support_incoming_transactions() {
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTree");
     let mut db_txn = WriteTransaction::new(&env);
 
@@ -323,7 +323,7 @@ fn it_can_apply_and_revert_valid_transaction() {
     .unwrap();
     let key_pair = KeyPair::from(sender_priv_key);
 
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTree");
     let mut db_txn = WriteTransaction::new(&env);
 
@@ -420,7 +420,7 @@ fn it_refuses_invalid_transaction() {
     let key_pair = KeyPair::from(priv_key);
     let key_pair_alt = KeyPair::from(priv_key_alt);
 
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTree");
     let mut db_txn = WriteTransaction::new(&env);
 

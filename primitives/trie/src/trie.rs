@@ -516,7 +516,7 @@ mod tests {
         let key_3 = "413b397fa".parse().unwrap();
         let key_4 = "cfb986f5a".parse().unwrap();
 
-        let env = nimiq_database::volatile::VolatileEnvironment::new(10).unwrap();
+        let env = nimiq_database::volatile::VolatileEnvironment::new(10, None).unwrap();
         let trie = MerkleRadixTrie::new(env.clone(), "database");
         let mut txn = WriteTransaction::new(&env);
 
@@ -564,7 +564,7 @@ mod tests {
         let key_3 = "cfb98e0f6".parse().unwrap();
         let key_4 = "cfb98e0f5".parse().unwrap();
 
-        let env = nimiq_database::volatile::VolatileEnvironment::new(10).unwrap();
+        let env = nimiq_database::volatile::VolatileEnvironment::new(10, None).unwrap();
         let trie = MerkleRadixTrie::new(env.clone(), "database");
         let mut txn = WriteTransaction::new(&env);
 
@@ -611,7 +611,7 @@ mod tests {
         let key_3 = "cfb98e0f6".parse().unwrap();
         let key_4 = "cfb98e0f5".parse().unwrap();
 
-        let env = nimiq_database::volatile::VolatileEnvironment::new(10).unwrap();
+        let env = nimiq_database::volatile::VolatileEnvironment::new(10, None).unwrap();
         let trie = MerkleRadixTrie::new(env.clone(), "database");
         let mut txn = WriteTransaction::new(&env);
 

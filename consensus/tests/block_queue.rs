@@ -115,7 +115,7 @@ async fn send_single_micro_block_to_block_queue() {
     let keypair =
         KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let blockchain = Arc::new(RwLock::new(
         Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
     ));
@@ -159,9 +159,9 @@ async fn send_single_micro_block_to_block_queue() {
 async fn send_two_micro_blocks_out_of_order() {
     let keypair =
         KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
-    let env1 = VolatileEnvironment::new(10).unwrap();
+    let env1 = VolatileEnvironment::new(10, None).unwrap();
     let time1 = Arc::new(OffsetTime::new());
-    let env2 = VolatileEnvironment::new(10).unwrap();
+    let env2 = VolatileEnvironment::new(10, None).unwrap();
     let time2 = Arc::new(OffsetTime::new());
     let blockchain1 = Arc::new(RwLock::new(
         Blockchain::new(env1, NetworkId::UnitAlbatross, time1).unwrap(),
@@ -247,9 +247,9 @@ async fn send_two_micro_blocks_out_of_order() {
 async fn send_micro_blocks_out_of_order() {
     let keypair =
         KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
-    let env1 = VolatileEnvironment::new(10).unwrap();
+    let env1 = VolatileEnvironment::new(10, None).unwrap();
     let time1 = Arc::new(OffsetTime::new());
-    let env2 = VolatileEnvironment::new(10).unwrap();
+    let env2 = VolatileEnvironment::new(10, None).unwrap();
     let time2 = Arc::new(OffsetTime::new());
     let blockchain1 = Arc::new(RwLock::new(
         Blockchain::new(env1, NetworkId::UnitAlbatross, time1).unwrap(),
@@ -341,9 +341,9 @@ async fn send_micro_blocks_out_of_order() {
 async fn send_invalid_block() {
     let keypair =
         KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
-    let env1 = VolatileEnvironment::new(10).unwrap();
+    let env1 = VolatileEnvironment::new(10, None).unwrap();
     let time1 = Arc::new(OffsetTime::new());
-    let env2 = VolatileEnvironment::new(10).unwrap();
+    let env2 = VolatileEnvironment::new(10, None).unwrap();
     let time2 = Arc::new(OffsetTime::new());
     let blockchain1 = Arc::new(RwLock::new(
         Blockchain::new(env1, NetworkId::UnitAlbatross, time1).unwrap(),
@@ -431,9 +431,9 @@ async fn send_invalid_block() {
 async fn send_block_with_gap_and_respond_to_missing_request() {
     let keypair =
         KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
-    let env1 = VolatileEnvironment::new(10).unwrap();
+    let env1 = VolatileEnvironment::new(10, None).unwrap();
     let time1 = Arc::new(OffsetTime::new());
-    let env2 = VolatileEnvironment::new(10).unwrap();
+    let env2 = VolatileEnvironment::new(10, None).unwrap();
     let time2 = Arc::new(OffsetTime::new());
     let blockchain1 = Arc::new(RwLock::new(
         Blockchain::new(env1, NetworkId::UnitAlbatross, time1).unwrap(),
@@ -520,9 +520,9 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
 async fn put_peer_back_into_sync_mode() {
     let keypair =
         KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
-    let env1 = VolatileEnvironment::new(10).unwrap();
+    let env1 = VolatileEnvironment::new(10, None).unwrap();
     let time1 = Arc::new(OffsetTime::new());
-    let env2 = VolatileEnvironment::new(10).unwrap();
+    let env2 = VolatileEnvironment::new(10, None).unwrap();
     let time2 = Arc::new(OffsetTime::new());
     let blockchain1 = Arc::new(RwLock::new(
         Blockchain::new(env1, NetworkId::UnitAlbatross, time1).unwrap(),

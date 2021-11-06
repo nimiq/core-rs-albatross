@@ -20,7 +20,7 @@ use nimiq_vrf::VrfSeed;
 #[test]
 fn it_can_produce_micro_blocks() {
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let blockchain = Arc::new(RwLock::new(
         Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
     ));
@@ -106,7 +106,7 @@ fn it_can_produce_micro_blocks() {
 #[test]
 fn it_can_produce_macro_blocks() {
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let blockchain = Arc::new(RwLock::new(
         Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
     ));
@@ -141,7 +141,7 @@ fn it_can_produce_macro_blocks() {
 #[test]
 fn it_can_produce_election_blocks() {
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let blockchain = Arc::new(RwLock::new(
         Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
     ));

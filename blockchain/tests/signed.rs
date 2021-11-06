@@ -71,7 +71,7 @@ fn test_view_change_single_signature() {
 fn test_replay() {
     let time = Arc::new(OffsetTime::new());
     // Create a blockchain to have access to the validator slots.
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let blockchain = Arc::new(Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap());
 
     // load key pair

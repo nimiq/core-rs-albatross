@@ -1061,7 +1061,7 @@ mod tests {
         }
 
         let time = Arc::new(OffsetTime::new());
-        let env1 = VolatileEnvironment::new(10).unwrap();
+        let env1 = VolatileEnvironment::new(10, None).unwrap();
         let blockchain = Arc::new(RwLock::new(
             Blockchain::new(env1, NetworkId::UnitAlbatross, time).unwrap(),
         ));

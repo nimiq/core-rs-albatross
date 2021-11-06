@@ -16,7 +16,7 @@ use std::sync::Arc;
 #[test]
 fn it_can_create_batch_finalization_inherents() {
     let time = Arc::new(OffsetTime::new());
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let blockchain = Arc::new(Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap());
 
     let staking_contract_address = blockchain.staking_contract_address();

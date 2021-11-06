@@ -156,7 +156,7 @@ impl GenesisBuilder {
 
     pub fn generate(&self) -> Result<GenesisInfo, GenesisBuilderError> {
         // Initialize the environment.
-        let env = VolatileEnvironment::new(10)?;
+        let env = VolatileEnvironment::new(10, None)?;
         let timestamp = self.timestamp.unwrap_or_else(Utc::now);
 
         // Initialize the accounts.

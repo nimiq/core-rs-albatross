@@ -50,7 +50,10 @@ impl Error for VolatileDatabaseError {
 
 impl VolatileEnvironment {
     #[allow(clippy::new_ret_no_self)]
-    pub fn new(max_dbs: u32) -> Result<Environment, VolatileDatabaseError> {
+    pub fn new(
+        max_dbs: u32,
+        max_readers: Option<u32>,
+    ) -> Result<Environment, VolatileDatabaseError> {
         let temp_dir = TempDir::new().map_err(VolatileDatabaseError::IoError)?;
         let path = temp_dir
             .path()
@@ -68,6 +71,7 @@ impl VolatileEnvironment {
                 &path,
                 0,
                 max_dbs,
+                max_readers,
                 open::NOSYNC | open::WRITEMAP,
             )
             .map_err(VolatileDatabaseError::LmdbError)?,
@@ -76,6 +80,7 @@ impl VolatileEnvironment {
 
     pub fn new_with_lmdb_flags(
         max_dbs: u32,
+        max_readers: Option<u32>,
         flags: open::Flags,
     ) -> Result<Environment, VolatileDatabaseError> {
         let temp_dir = TempDir::new().map_err(VolatileDatabaseError::IoError)?;
@@ -95,6 +100,7 @@ impl VolatileEnvironment {
                 &path,
                 0,
                 max_dbs,
+                max_readers,
                 flags | open::NOSYNC | open::WRITEMAP,
             )
             .map_err(VolatileDatabaseError::LmdbError)?,
@@ -484,7 +490,7 @@ mod tests {
 
     #[test]
     fn it_can_save_basic_objects() {
-        let env = VolatileEnvironment::new(1).unwrap();
+        let env = VolatileEnvironment::new(1, None).unwrap();
         {
             let db = env.open_database("test".to_string());
 
@@ -538,7 +544,7 @@ mod tests {
 
     #[test]
     fn isolation_test() {
-        let env = VolatileEnvironment::new_with_lmdb_flags(1, open::NOTLS).unwrap();
+        let env = VolatileEnvironment::new_with_lmdb_flags(1, None, open::NOTLS).unwrap();
         {
             let db = env.open_database("test".to_string());
 
@@ -571,7 +577,7 @@ mod tests {
 
     #[test]
     fn duplicates_test() {
-        let env = VolatileEnvironment::new_with_lmdb_flags(1, open::NOTLS).unwrap();
+        let env = VolatileEnvironment::new_with_lmdb_flags(1, None, open::NOTLS).unwrap();
         {
             let db = env.open_database_with_flags(
                 "test".to_string(),
@@ -637,7 +643,7 @@ mod tests {
 
     #[test]
     fn cursor_test() {
-        let env = VolatileEnvironment::new_with_lmdb_flags(1, open::NOTLS).unwrap();
+        let env = VolatileEnvironment::new_with_lmdb_flags(1, None, open::NOTLS).unwrap();
         {
             let db = env.open_database_with_flags(
                 "test".to_string(),

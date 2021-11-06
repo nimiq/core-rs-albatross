@@ -12,7 +12,7 @@ use nimiq_trie::key_nibbles::KeyNibbles;
 
 #[test]
 fn it_can_commit_and_revert_a_block_body() {
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
 
     let accounts = Accounts::new(env.clone());
 
@@ -152,7 +152,7 @@ fn it_can_commit_and_revert_a_block_body() {
 
 #[test]
 fn it_correctly_rewards_validators() {
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
 
     let accounts = Accounts::new(env.clone());
 
@@ -274,7 +274,7 @@ fn it_correctly_rewards_validators() {
 
 #[test]
 fn it_checks_for_sufficient_funds() {
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
 
     let accounts = Accounts::new(env.clone());
 

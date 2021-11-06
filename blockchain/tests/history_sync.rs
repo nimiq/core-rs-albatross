@@ -26,7 +26,7 @@ fn history_sync_works() {
     let time = Arc::new(OffsetTime::new());
 
     // Create a blockchain to produce the macro blocks.
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
 
     let blockchain = Arc::new(RwLock::new(
         Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
@@ -96,7 +96,7 @@ fn history_sync_works() {
 
     let time = Arc::new(OffsetTime::new());
     // Create a second blockchain to push these blocks.
-    let env2 = VolatileEnvironment::new(10).unwrap();
+    let env2 = VolatileEnvironment::new(10, None).unwrap();
 
     let blockchain2 = Arc::new(RwLock::new(
         Blockchain::new(env2, NetworkId::UnitAlbatross, time).unwrap(),
@@ -160,7 +160,7 @@ fn history_sync_works_with_micro_blocks() {
     let time = Arc::new(OffsetTime::new());
 
     // Create a blockchain to produce the macro blocks.
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
 
     let blockchain = Arc::new(RwLock::new(
         Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
@@ -239,7 +239,7 @@ fn history_sync_works_with_micro_blocks() {
 
     let time = Arc::new(OffsetTime::new());
     // Create a second blockchain to push these blocks.
-    let env2 = VolatileEnvironment::new(10).unwrap();
+    let env2 = VolatileEnvironment::new(10, None).unwrap();
 
     let blockchain2 = Arc::new(RwLock::new(
         Blockchain::new(env2, NetworkId::UnitAlbatross, time).unwrap(),

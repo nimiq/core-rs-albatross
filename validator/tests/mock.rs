@@ -36,7 +36,7 @@ fn seeded_rng(seed: u64) -> StdRng {
 }
 
 async fn mock_consensus(hub: &mut MockHub, peer_id: u64, genesis_info: GenesisInfo) -> Consensus {
-    let env = VolatileEnvironment::new(12).unwrap();
+    let env = VolatileEnvironment::new(12, None).unwrap();
     let time = Arc::new(OffsetTime::new());
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(

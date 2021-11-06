@@ -133,7 +133,7 @@ fn it_can_de_serialize_a_staking_contract() {
 
 #[test]
 fn can_get_it() {
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
@@ -171,7 +171,7 @@ fn can_get_it() {
 
 #[test]
 fn create_validator_works() {
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
@@ -265,7 +265,7 @@ fn create_validator_works() {
 
 #[test]
 fn update_validator_works() {
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
@@ -364,7 +364,7 @@ fn update_validator_works() {
 
 #[test]
 fn retire_validator_works() {
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
@@ -501,7 +501,7 @@ fn retire_validator_works() {
 
 #[test]
 fn reactivate_validator_works() {
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
@@ -636,7 +636,7 @@ fn reactivate_validator_works() {
 
 #[test]
 fn unpark_validator_works() {
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
@@ -760,7 +760,7 @@ fn unpark_validator_works() {
 
 #[test]
 fn drop_validator_works() {
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
@@ -908,7 +908,7 @@ fn drop_validator_works() {
 
 #[test]
 fn create_staker_works() {
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
@@ -1023,7 +1023,7 @@ fn create_staker_works() {
 
 #[test]
 fn stake_works() {
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
@@ -1114,7 +1114,7 @@ fn stake_works() {
 
 #[test]
 fn update_staker_works() {
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
@@ -1316,7 +1316,7 @@ fn update_staker_works() {
 
 #[test]
 fn retire_staker_works() {
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
@@ -1416,7 +1416,7 @@ fn retire_staker_works() {
 
 #[test]
 fn reactivate_staker_works() {
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
@@ -1519,7 +1519,7 @@ fn reactivate_staker_works() {
 
 #[test]
 fn unstake_works() {
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
@@ -1781,7 +1781,7 @@ fn unstake_works() {
 
 #[test]
 fn deduct_fees_works() {
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
@@ -2107,7 +2107,7 @@ fn deduct_fees_works() {
 
 #[test]
 fn zero_value_inherents_not_allowed() {
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
@@ -2130,7 +2130,7 @@ fn zero_value_inherents_not_allowed() {
 
 #[test]
 fn reward_inherents_not_allowed() {
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
@@ -2153,7 +2153,7 @@ fn reward_inherents_not_allowed() {
 
 #[test]
 fn slash_inherents_work() {
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
@@ -2328,7 +2328,7 @@ fn slash_inherents_work() {
 
 #[test]
 fn finalize_batch_inherents_work() {
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
@@ -2391,7 +2391,7 @@ fn finalize_batch_inherents_work() {
 
 #[test]
 fn finalize_epoch_inherents_work() {
-    let env = VolatileEnvironment::new(10).unwrap();
+    let env = VolatileEnvironment::new(10, None).unwrap();
     let accounts_tree = AccountsTrie::new(env.clone(), "AccountsTrie");
     let mut db_txn = WriteTransaction::new(&env);
 
