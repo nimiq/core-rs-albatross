@@ -30,13 +30,15 @@ rand = { version = "0.8", optional = true }
 rand_core = { version = "0.6", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 thiserror = { version = "1.0", optional = true }
-tokio = { package = "tokio", version = "1.9", features = ["sync"], optional = true }
+tokio = { package = "tokio", version = "1.14", features = [
+    "sync",
+], optional = true }
 tokio-stream = "0.1"
 
 beserial = { path = "../beserial", optional = true }
 beserial_derive = { path = "../beserial/beserial_derive", optional = true }
 nimiq-collections = { path = "../collections", optional = true }
-nimiq-database = { path = "../database"}
+nimiq-database = { path = "../database" }
 nimiq-hash = { path = "../hash", optional = true }
 
 [dev-dependencies]
@@ -49,7 +51,13 @@ otp = ["beserial", "clear_on_drop", "nimiq-hash", "rand"]
 key-store = ["beserial", "log", "thiserror"]
 iterators = []
 # locking = ["futures", "parking_lot"]
-merkle = ["beserial", "beserial_derive", "math", "nimiq-collections/bitset", "nimiq-hash"]
+merkle = [
+    "beserial",
+    "beserial_derive",
+    "math",
+    "nimiq-collections/bitset",
+    "nimiq-hash",
+]
 mutable-once = []
 observer = ["log", "tokio"]
 time = ["atomic"]
@@ -60,9 +68,33 @@ throttled-queue = ["nimiq-collections"]
 rate-limit = []
 unique-id = []
 # Compiles this package with all features.
-all = ["crc", "iterators", "key-store", "math", "merkle", "mutable-once", "observer", "otp", "rate-limit", "throttled-queue", "time", "unique-id", "unique-ptr"]
+all = [
+    "crc",
+    "iterators",
+    "key-store",
+    "math",
+    "merkle",
+    "mutable-once",
+    "observer",
+    "otp",
+    "rate-limit",
+    "throttled-queue",
+    "time",
+    "unique-id",
+    "unique-ptr",
+]
 # Compiles this package with the features needed for the nimiq client.
-full-nimiq = ["log", "crc", "iterators", "key-store", "merkle", "mutable-once", "observer", "time", "unique-ptr"]
+full-nimiq = [
+    "log",
+    "crc",
+    "iterators",
+    "key-store",
+    "merkle",
+    "mutable-once",
+    "observer",
+    "time",
+    "unique-ptr",
+]
 math = []
 key-rng = ["rand", "rand_core"]
 hash-rng = ["nimiq-hash", "rand_core"]

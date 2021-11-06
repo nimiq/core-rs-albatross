@@ -23,7 +23,13 @@ futures = "0.3"
 log = "0.4"
 parking_lot = "0.11"
 thiserror = "1.0"
-tokio = { version = "1.9", features = [ "macros", "rt", "rt-multi-thread", "sync", "time"] }
+tokio = { version = "1.14", features = [
+    "macros",
+    "rt",
+    "rt-multi-thread",
+    "sync",
+    "time",
+] }
 tokio-stream = "0.1"
 
 beserial = { path = "../beserial" }

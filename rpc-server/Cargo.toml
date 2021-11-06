@@ -26,7 +26,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_with = "1.4"
 thiserror = "1.0"
-tokio = "1.9"
+tokio = "1.14"
 tokio-stream = "0.1"
 
 beserial = { path = "../beserial" }
@@ -34,7 +34,10 @@ nimiq-account = { path = "../primitives/account", features = ["serde-derive"] }
 nimiq-block = { path = "../primitives/block", features = ["serde-derive"] }
 nimiq-blockchain = { path = "../blockchain" }
 nimiq-bls = { path = "../bls", features = ["serde-derive"] }
-nimiq-collections = { path = "../collections", features = ["serde-derive", "bitset"] }
+nimiq-collections = { path = "../collections", features = [
+    "serde-derive",
+    "bitset",
+] }
 nimiq-consensus = { path = "../consensus" }
 nimiq-database = { path = "../database" }
 nimiq-hash = { path = "../hash", features = ["serde-derive"] }
@@ -45,10 +48,18 @@ nimiq-keys = { path = "../keys", features = ["serde-derive"] }
 nimiq-mempool = { path = "../mempool" }
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-network-libp2p = { path = "../network-libp2p" }
-nimiq-primitives = { path = "../primitives", features = ["coin", "account", "serde-derive"] }
+nimiq-primitives = { path = "../primitives", features = [
+    "coin",
+    "account",
+    "serde-derive",
+] }
 nimiq-rpc-interface = { path = "../rpc-interface", features = ["proxy"] }
-nimiq-transaction = { path = "../primitives/transaction", features = ["serde-derive"] }
-nimiq-transaction-builder = { path = "../transaction-builder", features = ["serde-derive"] }
+nimiq-transaction = { path = "../primitives/transaction", features = [
+    "serde-derive",
+] }
+nimiq-transaction-builder = { path = "../transaction-builder", features = [
+    "serde-derive",
+] }
 nimiq-utils = { path = "../utils", features = ["otp"] }
 nimiq-validator = { path = "../validator" }
 nimiq-validator-network = { path = "../validator-network" }

@@ -40,11 +40,23 @@ nimiq-primitives = { path = "../primitives", optional = true }
 nimiq-transaction = { path = "../primitives/transaction", optional = true }
 pretty_env_logger = { version = "0.4", optional = true }
 structopt = { version = "0.3.21", optional = true }
-tokio = { version = "1.9", features = ["macros", "rt-multi-thread"], optional = true }
+tokio = { version = "1.14", features = [
+    "macros",
+    "rt-multi-thread",
+], optional = true }
 
 [features]
 default = ["app"]
 app = [
-    "structopt", "tokio", "anyhow", "dotenv", "pretty_env_logger",
-    "nimiq-keys", "nimiq-primitives", "nimiq-transaction", "nimiq-account", "nimiq-bls", "nimiq-hash",
+    "structopt",
+    "tokio",
+    "anyhow",
+    "dotenv",
+    "pretty_env_logger",
+    "nimiq-keys",
+    "nimiq-primitives",
+    "nimiq-transaction",
+    "nimiq-account",
+    "nimiq-bls",
+    "nimiq-hash",
 ]

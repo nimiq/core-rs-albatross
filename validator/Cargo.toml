@@ -21,8 +21,8 @@ lmdb-zero = "0.4"
 log = "0.4"
 parking_lot = "0.11"
 rand = "0.8"
-tokio = { version = "1.9", features = ["rt", "time"] }
-tokio-stream ={ version = "0.1", features = ["sync"] }
+tokio = { version = "1.14", features = ["rt", "time"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
 
 beserial = { path = "../beserial" }
 beserial_derive = { path = "../beserial/beserial_derive" }
@@ -44,14 +44,20 @@ nimiq-network-interface = { path = "../network-interface" }
 nimiq-primitives = { path = "../primitives" }
 nimiq-tendermint = { path = "../tendermint" }
 nimiq-transaction-builder = { path = "../transaction-builder" }
-nimiq-utils = { path = "../utils", features = ["observer", "time", "mutable-once", "throttled-queue", "rate-limit"] }
+nimiq-utils = { path = "../utils", features = [
+    "observer",
+    "time",
+    "mutable-once",
+    "throttled-queue",
+    "rate-limit",
+] }
 nimiq-validator-network = { path = "../validator-network" }
 nimiq-vrf = { path = "../vrf" }
 
 [dev-dependencies]
 hex = "0.4"
 simple_logger = "1.9.0"
-tokio = { version = "1.9", features = ["rt", "test-util", "time"] }
+tokio = { version = "1.14", features = ["rt", "test-util", "time"] }
 
 nimiq-build-tools = { path = "../build-tools" }
 nimiq-network-libp2p = { path = "../network-libp2p" }
