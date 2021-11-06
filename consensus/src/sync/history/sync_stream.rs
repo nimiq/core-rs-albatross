@@ -65,7 +65,8 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                         epoch_ids.sender.peer.id()
                     );
                     // TODO Mark peer as useless.
-                    return Poll::Ready(Some(epoch_ids.sender));
+                    // FIXME Emit peer here once the consumer understands useless peers.
+                    //return Poll::Ready(Some(epoch_ids.sender));
                 } else if epoch_ids.ids.is_empty() && epoch_ids.checkpoint_id.is_none() {
                     // We are synced with this peer.
                     debug!(
