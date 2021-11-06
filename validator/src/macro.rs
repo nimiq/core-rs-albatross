@@ -11,7 +11,7 @@ use nimiq_block::{
     MacroBlock, MacroHeader, MultiSignature, SignedTendermintProposal, TendermintStep,
 };
 use nimiq_block_production::BlockProducer;
-use nimiq_blockchain::{AbstractBlockchain, Blockchain};
+use nimiq_blockchain::Blockchain;
 use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_tendermint::{
     Checkpoint, Step, TendermintOutsideDeps, TendermintReturn, TendermintState,
@@ -77,25 +77,14 @@ impl ProduceMacroBlock {
             ),
         >,
     ) -> Self {
-        // get validators for current epoch
-        let (active_validators, block_height) = {
-            let blockchain = blockchain.read();
-            (
-                blockchain.current_validators().unwrap(),
-                blockchain.head().block_number() + 1,
-            )
-        };
-
         // create the TendermintOutsideDeps instance
         // Replace here with the actual OutSide Deps instead of the Mocked ones.
         let deps = TendermintInterface::new(
             signing_key,
             validator_id,
             network,
-            active_validators,
             blockchain,
             block_producer,
-            block_height,
             proposal_stream,
         );
 

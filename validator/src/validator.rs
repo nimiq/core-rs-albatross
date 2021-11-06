@@ -236,8 +236,17 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             .unwrap();
 
         self.epoch_state = None;
+        log::trace!(
+            "This is our validator address: {}",
+            self.validator_address()
+        );
         for (i, validator) in validators.iter().enumerate() {
+            log::trace!(
+                "Matching against this current validator: {}",
+                &validator.validator_address
+            );
             if validator.validator_address == self.validator_address() {
+                log::debug!("We are active on this epoch");
                 self.epoch_state = Some(ActiveEpochState {
                     validator_id: i as u16,
                 });
@@ -271,6 +280,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             return;
         }
 
+        log::debug!("We are active for this epoch: initializing block producer");
         let blockchain = self.consensus.blockchain.read();
 
         self.macro_producer = None;
@@ -279,6 +289,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
 
         match blockchain.get_next_block_type(None) {
             BlockType::Macro => {
+                log::trace!("Producing a macro block");
                 let block_producer = BlockProducer::new(
                     Arc::clone(&self.consensus.blockchain),
                     Arc::clone(&mempool),
@@ -314,6 +325,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                 ));
             }
             BlockType::Micro => {
+                log::trace!("Producing a micro block");
                 self.micro_state = ProduceMicroBlockState {
                     view_number: blockchain.head().next_view_number(),
                     view_change_proof: None,
@@ -670,6 +682,9 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Future
 }
 
 struct ProposalBuffer<TValidatorNetwork: ValidatorNetwork + 'static> {
+    // Ignoring clippy warning because there wouldn't be much to be gained by refactoring this,
+    // except making clippy happy
+    #[allow(clippy::type_complexity)]
     buffer: LinkedHashMap<
         <TValidatorNetwork::PeerType as Peer>::Id,
         (<ProposalTopic as Topic>::Item, TValidatorNetwork::PubsubId),
@@ -677,6 +692,8 @@ struct ProposalBuffer<TValidatorNetwork: ValidatorNetwork + 'static> {
     waker: Option<Waker>,
 }
 impl<TValidatorNetwork: ValidatorNetwork + 'static> ProposalBuffer<TValidatorNetwork> {
+    // Ignoring clippy warning: this return type is on purpose
+    #[allow(clippy::new_ret_no_self)]
     pub fn new() -> (
         ProposalSender<TValidatorNetwork>,
         ProposalReceiver<TValidatorNetwork>,

@@ -18,6 +18,9 @@ use vrf::VrfSeed;
 
 use crate::aggregation::view_change::ViewChangeAggregation;
 
+// Ignoring this clippy warning since size difference is not that much (320
+// bytes) and we probably don't want the performance penalty of the allocation.
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum ProduceMicroBlockEvent {
     MicroBlock(MicroBlock),
     ViewChange(ViewChange, ViewChangeProof),
@@ -40,6 +43,9 @@ struct NextProduceMicroBlockEvent<TValidatorNetwork> {
 }
 
 impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<TValidatorNetwork> {
+    // Ignoring clippy warning because there wouldn't be much to be gained by refactoring this,
+    // except making clippy happy
+    #[allow(clippy::too_many_arguments)]
     fn new(
         blockchain: Arc<RwLock<Blockchain>>,
         mempool: Arc<Mempool>,
@@ -188,6 +194,9 @@ pub(crate) struct ProduceMicroBlock<TValidatorNetwork> {
 }
 
 impl<TValidatorNetwork: ValidatorNetwork + 'static> ProduceMicroBlock<TValidatorNetwork> {
+    // Ignoring clippy warning because there wouldn't be much to be gained by refactoring this,
+    // except making clippy happy
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         blockchain: Arc<RwLock<Blockchain>>,
         mempool: Arc<Mempool>,
