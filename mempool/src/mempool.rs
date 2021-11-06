@@ -261,9 +261,6 @@ impl Mempool {
                         continue;
                     }
 
-                    // Get the transaction.
-                    let tx = mempool_state.get(&tx_hash).unwrap().clone();
-
                     // Check if transaction is still valid.
                     if !tx.is_valid_at(block_height)
                         || blockchain.contains_tx_in_validity_window(&tx_hash, None)

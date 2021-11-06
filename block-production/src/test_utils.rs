@@ -75,7 +75,7 @@ impl TemporaryBlockProducer {
                 },
                 macro_block_proposal
                     .body
-                    .or(Some(MacroBody::new()))
+                    .or_else(|| Some(MacroBody::new()))
                     .unwrap(),
                 validator_merkle_root,
             ))
