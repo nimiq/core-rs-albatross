@@ -231,7 +231,7 @@ impl PeerContact {
 
     /// Derives the peer ID from the public key
     pub fn peer_id(&self) -> PeerId {
-        self.public_key.clone().into_peer_id()
+        self.public_key.clone().to_peer_id()
     }
 
     /// Signs this peer contact.

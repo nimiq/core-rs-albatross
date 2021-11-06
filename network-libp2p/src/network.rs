@@ -287,6 +287,7 @@ impl Network {
                 peer_id,
                 endpoint,
                 num_established,
+                concurrent_dial_errors,
             } => {
                 tracing::info!(
                     "Connection established with peer {}, {:?}, connections established: {:?}",
@@ -294,6 +295,17 @@ impl Network {
                     endpoint,
                     num_established
                 );
+
+                if let Some(dial_errors) = concurrent_dial_errors {
+                    for (addr, error) in dial_errors {
+                        log::debug!(
+                            "Failed to reach address: {}, peer_id={:?}, error={:?}",
+                            addr,
+                            peer_id,
+                            error
+                        );
+                    }
+                }
 
                 // Save dialed peer addresses
                 if endpoint.is_dialer() {
@@ -347,14 +359,6 @@ impl Network {
                     "Incoming connection error from address {:?} to listen address {:?}: {:?}",
                     send_back_addr,
                     local_addr,
-                    error
-                );
-            }
-
-            SwarmEvent::UnknownPeerUnreachableAddr { address, error } => {
-                tracing::trace!(
-                    "Dial to unknown peer at address {:?} failed: {:?}",
-                    address,
                     error
                 );
             }
@@ -439,6 +443,9 @@ impl Network {
                         }
                         GossipsubEvent::Unsubscribed { peer_id, topic } => {
                             tracing::debug!(peer_id = ?peer_id, topic = ?topic, "peer unsubscribed");
+                        }
+                        GossipsubEvent::GossipsubNotSupported { peer_id } => {
+                            tracing::debug!(peer_id = ?peer_id, "gossipsub not supported");
                         }
                     },
                     NimiqEvent::Identify(event) => {

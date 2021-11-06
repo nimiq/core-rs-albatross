@@ -3,7 +3,6 @@ use std::task::Waker;
 use std::time::{Duration, Instant};
 use std::{
     collections::{HashMap, HashSet, VecDeque},
-    error,
     sync::Arc,
     task::{Context, Poll},
 };
@@ -11,11 +10,9 @@ use std::{
 use ip_network::IpNetwork;
 use libp2p::swarm::DialPeerCondition;
 use libp2p::{
-    core::connection::ConnectionId,
-    core::multiaddr::Protocol,
-    core::ConnectedPoint,
+    core::{connection::ConnectionId, multiaddr::Protocol, ConnectedPoint},
     swarm::{
-        IntoProtocolsHandler, NetworkBehaviour, NetworkBehaviourAction, PollParameters,
+        DialError, IntoProtocolsHandler, NetworkBehaviour, NetworkBehaviourAction, PollParameters,
         ProtocolsHandler,
     },
     Multiaddr, PeerId,
@@ -27,7 +24,7 @@ use tokio::time::Interval;
 
 use crate::discovery::peer_contacts::{PeerContactBook, Services};
 
-use super::handler::{ConnectionPoolHandler, HandlerInEvent, HandlerOutEvent};
+use super::handler::{ConnectionPoolHandler, HandlerOutEvent};
 
 #[derive(Clone, Debug)]
 struct ConnectionPoolLimits {
@@ -161,6 +158,9 @@ impl<T> std::fmt::Display for ConnectionState<T> {
     }
 }
 
+type PoolNetworkBehaviourAction =
+    NetworkBehaviourAction<ConnectionPoolEvent, ConnectionPoolHandler>;
+
 pub struct ConnectionPoolBehaviour {
     contacts: Arc<RwLock<PeerContactBook>>,
     seeds: Vec<Multiaddr>,
@@ -168,7 +168,7 @@ pub struct ConnectionPoolBehaviour {
     peers: ConnectionState<PeerId>,
     addresses: ConnectionState<Multiaddr>,
 
-    actions: VecDeque<NetworkBehaviourAction<HandlerInEvent, ConnectionPoolEvent>>,
+    actions: VecDeque<PoolNetworkBehaviourAction>,
 
     active: bool,
 
@@ -225,9 +225,11 @@ impl ConnectionPoolBehaviour {
             for peer_id in self.choose_peers_to_dial() {
                 log::debug!("Dialing peer {}", peer_id);
                 self.peers.mark_dialing(peer_id);
+                let handler = self.new_handler();
                 self.actions.push_back(NetworkBehaviourAction::DialPeer {
                     peer_id,
                     condition: DialPeerCondition::Disconnected,
+                    handler,
                 });
             }
 
@@ -235,8 +237,9 @@ impl ConnectionPoolBehaviour {
             for address in self.choose_seeds_to_dial() {
                 log::debug!("Dialing seed {}", address);
                 self.addresses.mark_dialing(address.clone());
+                let handler = self.new_handler();
                 self.actions
-                    .push_back(NetworkBehaviourAction::DialAddress { address });
+                    .push_back(NetworkBehaviourAction::DialAddress { address, handler });
             }
         }
 
@@ -342,9 +345,16 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
     fn inject_connection_established(
         &mut self,
         peer_id: &PeerId,
-        _conn: &ConnectionId,
+        _connection_id: &ConnectionId,
         endpoint: &ConnectedPoint,
+        failed_addresses: Option<&Vec<Multiaddr>>,
     ) {
+        if let Some(addresses) = failed_addresses {
+            for address in addresses {
+                self.addresses.mark_failed(address.clone());
+            }
+        }
+
         let address = endpoint.get_remote_address();
         log::debug!(
             "Connection established: peer_id={}, address={}",
@@ -413,9 +423,10 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
         &mut self,
         _peer_id: &PeerId,
         _conn: &ConnectionId,
-        info: &ConnectedPoint,
+        endpoint: &ConnectedPoint,
+        _handler: <Self::ProtocolsHandler as IntoProtocolsHandler>::Handler,
     ) {
-        let address = info.get_remote_address();
+        let address = endpoint.get_remote_address();
 
         let ip = match address.iter().next() {
             Some(Protocol::Ip4(ip)) => {
@@ -465,25 +476,20 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
         }
     }
 
-    fn inject_addr_reach_failure(
+    fn inject_dial_failure(
         &mut self,
-        peer_id: Option<&PeerId>,
-        addr: &Multiaddr,
-        error: &dyn error::Error,
+        peer_id: Option<PeerId>,
+        _handler: Self::ProtocolsHandler,
+        _error: &DialError,
     ) {
-        log::debug!(
-            "Failed to reach address: {}, peer_id={:?}, error={:?}",
-            addr,
-            peer_id,
-            error
-        );
-        self.addresses.mark_failed(addr.clone());
-        self.maintain_peers();
-    }
+        let peer_id = match peer_id {
+            Some(id) => id,
+            // Not interested in dial failures to unknown peers right now.
+            None => return,
+        };
 
-    fn inject_dial_failure(&mut self, peer_id: &PeerId) {
         log::debug!("Failed to dial peer: {}", peer_id);
-        self.peers.mark_failed(*peer_id);
+        self.peers.mark_failed(peer_id);
         self.maintain_peers();
     }
 
@@ -491,7 +497,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
         &mut self,
         cx: &mut Context<'_>,
         _params: &mut impl PollParameters,
-    ) -> Poll<NetworkBehaviourAction<HandlerInEvent, ConnectionPoolEvent>> {
+    ) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ProtocolsHandler>> {
         // Dispatch pending actions.
         if let Some(action) = self.actions.pop_front() {
             return Poll::Ready(action);

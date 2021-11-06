@@ -10,7 +10,9 @@ use libp2p::{
     },
     identify::{Identify, IdentifyConfig, IdentifyEvent},
     kad::{store::MemoryStore, Kademlia, KademliaEvent},
-    swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters},
+    swarm::{
+        NetworkBehaviour, NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters,
+    },
     NetworkBehaviour,
 };
 use parking_lot::RwLock;
@@ -116,7 +118,7 @@ pub struct NimiqBehaviour {
 impl NimiqBehaviour {
     pub fn new(config: Config, clock: Arc<OffsetTime>) -> Self {
         let public_key = config.keypair.public();
-        let peer_id = public_key.clone().into_peer_id();
+        let peer_id = public_key.clone().to_peer_id();
 
         // DHT behaviour
         let store = MemoryStore::new(peer_id);
@@ -169,11 +171,16 @@ impl NimiqBehaviour {
         }
     }
 
-    fn poll_event<T>(
+    fn poll_event(
         &mut self,
         cx: &mut Context,
         _params: &mut impl PollParameters,
-    ) -> Poll<NetworkBehaviourAction<T, NimiqEvent>> {
+    ) -> Poll<
+        NetworkBehaviourAction<
+            <Self as NetworkBehaviour>::OutEvent,
+            <Self as NetworkBehaviour>::ProtocolsHandler,
+        >,
+    > {
         if self.update_scores.poll_tick(cx).is_ready() {
             self.peer_contact_book.read().update_scores(&self.gossipsub);
         }

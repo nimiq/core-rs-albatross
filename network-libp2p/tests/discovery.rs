@@ -124,7 +124,7 @@ fn test_peers_in_contact_book(
     peer_contacts: &[SignedPeerContact],
 ) {
     for peer_contact in peer_contacts {
-        let peer_id = peer_contact.public_key().clone().into_peer_id();
+        let peer_id = peer_contact.public_key().clone().to_peer_id();
         log::info!("Checking if peer ID is in peer contact book: {}", peer_id);
         let peer_contact_in_book = peer_contact_book.get(&peer_id).expect("Peer ID not found");
         assert_eq!(
@@ -257,14 +257,14 @@ fn test_housekeeping() {
     // Insert fresh contact and check that it was inserted
     peer_contact_book.insert(fresh_contact.clone());
     let peer_contact = peer_contact_book
-        .get(&fresh_contact.public_key().clone().into_peer_id())
+        .get(&fresh_contact.public_key().clone().to_peer_id())
         .unwrap();
     assert_eq!(peer_contact.contact(), &fresh_contact.inner);
 
     // Insert old contact and check that it was inserted
     peer_contact_book.insert(old_contact.clone());
     let peer_contact = peer_contact_book
-        .get(&old_contact.public_key().clone().into_peer_id())
+        .get(&old_contact.public_key().clone().to_peer_id())
         .unwrap();
     assert_eq!(peer_contact.contact(), &old_contact.inner);
 
@@ -273,12 +273,12 @@ fn test_housekeeping() {
 
     // Check that fresh contact is still in there
     let peer_contact = peer_contact_book
-        .get(&fresh_contact.public_key().clone().into_peer_id())
+        .get(&fresh_contact.public_key().clone().to_peer_id())
         .unwrap();
     assert_eq!(peer_contact.contact(), &fresh_contact.inner);
 
     // Check that old contact is not in there
     assert!(peer_contact_book
-        .get(&old_contact.public_key().clone().into_peer_id())
+        .get(&old_contact.public_key().clone().to_peer_id())
         .is_none());
 }

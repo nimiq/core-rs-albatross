@@ -10,7 +10,9 @@ use futures::{
 };
 use libp2p::core::connection::ConnectionId;
 use libp2p::core::Multiaddr;
-use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, PollParameters};
+use libp2p::swarm::{
+    IntoProtocolsHandler, NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, PollParameters,
+};
 use libp2p::{core::ConnectedPoint, PeerId};
 
 use nimiq_network_interface::{
@@ -22,9 +24,11 @@ use super::{
     peer::Peer,
 };
 
-#[derive(Debug, Default)]
+type MessageNetworkBehaviourAction = NetworkBehaviourAction<NetworkEvent<Peer>, MessageHandler>;
+
+#[derive(Default)]
 pub struct MessageBehaviour {
-    events: VecDeque<NetworkBehaviourAction<HandlerInEvent, NetworkEvent<Peer>>>,
+    events: VecDeque<MessageNetworkBehaviourAction>,
 
     pub(crate) peers: ObservablePeerMap<Peer>,
 
@@ -41,7 +45,7 @@ impl MessageBehaviour {
     }
 
     /// Buffers a `NetworkBehaviourAction` that should be emitted by the `poll` method on the next invocation.
-    fn push_event(&mut self, event: NetworkBehaviourAction<HandlerInEvent, NetworkEvent<Peer>>) {
+    fn push_event(&mut self, event: MessageNetworkBehaviourAction) {
         self.events.push_back(event);
         self.wake();
     }
@@ -119,13 +123,14 @@ impl NetworkBehaviour for MessageBehaviour {
         &mut self,
         peer_id: &PeerId,
         connection_id: &ConnectionId,
-        connected_point: &ConnectedPoint,
+        endpoint: &ConnectedPoint,
+        _failed_addresses: Option<&Vec<Multiaddr>>,
     ) {
         tracing::debug!(
-            "Connection established: peer_id={}, connection_id={:?}, connected_point={:?}",
+            "Connection established: peer_id={}, connection_id={:?}, endpoint={:?}",
             peer_id,
             connection_id,
-            connected_point
+            endpoint
         );
 
         // Send an event to the handler that tells it if this is an inbound or outbound connection, and the registered
@@ -136,7 +141,7 @@ impl NetworkBehaviour for MessageBehaviour {
                 handler: NotifyHandler::One(*connection_id),
                 event: HandlerInEvent::PeerConnected {
                     peer_id: *peer_id,
-                    outbound: connected_point.is_dialer(),
+                    outbound: endpoint.is_dialer(),
                     receive_from_all: self.message_receivers.clone(),
                 },
             });
@@ -146,13 +151,14 @@ impl NetworkBehaviour for MessageBehaviour {
         &mut self,
         peer_id: &PeerId,
         connection_id: &ConnectionId,
-        connected_point: &ConnectedPoint,
+        endpoint: &ConnectedPoint,
+        _handler: <Self::ProtocolsHandler as IntoProtocolsHandler>::Handler,
     ) {
         tracing::debug!(
-            "Connection closed: peer_id={}, connection_id={:?}, connected_point={:?}",
+            "Connection closed: peer_id={}, connection_id={:?}, endpoint={:?}",
             peer_id,
             connection_id,
-            connected_point
+            endpoint
         );
 
         // If we still know this peer, remove it and emit an `PeerLeft` event to the swarm.
@@ -184,7 +190,7 @@ impl NetworkBehaviour for MessageBehaviour {
         &mut self,
         cx: &mut Context<'_>,
         _params: &mut impl PollParameters,
-    ) -> Poll<NetworkBehaviourAction<HandlerInEvent, NetworkEvent<Peer>>> {
+    ) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ProtocolsHandler>> {
         // Emit custom events.
         if let Some(event) = self.events.pop_front() {
             // tracing::trace!("MessageBehaviour::poll: Emitting event: {:?}", event);

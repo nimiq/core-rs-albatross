@@ -81,6 +81,8 @@ pub enum DiscoveryEvent {
     Update,
 }
 
+type DiscoveryNetworkBehaviourAction = NetworkBehaviourAction<DiscoveryEvent, DiscoveryHandler>;
+
 /// Network behaviour for peer exchange.
 ///
 /// When a connection to a peer is established, a handshake is done to exchange protocols and services filters, and
@@ -107,7 +109,7 @@ pub struct DiscoveryBehaviour {
     clock: Arc<OffsetTime>,
 
     /// Queue with events to emit.
-    pub events: VecDeque<NetworkBehaviourAction<HandlerInEvent, DiscoveryEvent>>,
+    pub events: VecDeque<DiscoveryNetworkBehaviourAction>,
 
     /// Timer to do house-keeping in the peer address book.
     house_keeping_timer: Interval,
@@ -176,14 +178,15 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         &mut self,
         peer_id: &PeerId,
         connection_id: &ConnectionId,
-        connected_point: &ConnectedPoint,
+        endpoint: &ConnectedPoint,
+        _failed_addresses: Option<&Vec<Multiaddr>>,
     ) {
         log::trace!("DiscoveryBehaviour::inject_connection_established:");
         log::trace!("  - peer_id: {:?}", peer_id);
         log::trace!("  - connection_id: {:?}", connection_id);
-        log::trace!("  - connected_point: {:?}", connected_point);
+        log::trace!("  - endpoint: {:?}", endpoint);
 
-        let remote_address = connected_point.get_remote_address();
+        let remote_address = endpoint.get_remote_address();
 
         self.events
             .push_back(NetworkBehaviourAction::NotifyHandler {
@@ -200,7 +203,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
             HandlerOutEvent::PeerExchangeEstablished { peer_contact } => {
                 self.events.push_back(NetworkBehaviourAction::GenerateEvent(
                     DiscoveryEvent::Established {
-                        peer_id: peer_contact.public_key().clone().into_peer_id(),
+                        peer_id: peer_contact.public_key().clone().to_peer_id(),
                     },
                 ));
             }
@@ -221,7 +224,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         &mut self,
         cx: &mut Context,
         _params: &mut impl PollParameters,
-    ) -> Poll<NetworkBehaviourAction<HandlerInEvent, DiscoveryEvent>> {
+    ) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ProtocolsHandler>> {
         // Emit events
         if let Some(event) = self.events.pop_front() {
             return Poll::Ready(event);

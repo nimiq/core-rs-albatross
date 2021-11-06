@@ -83,7 +83,7 @@ impl ClientInner {
         log::info!("Identity public key: {:?}", identity_keypair.public());
         log::info!(
             "PeerId: {:}",
-            identity_keypair.public().into_peer_id().to_base58()
+            identity_keypair.public().to_peer_id().to_base58()
         );
 
         // Generate peer contact from identity keypair and services/protocols
