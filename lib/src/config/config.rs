@@ -248,9 +248,16 @@ pub struct DatabaseConfig {
     #[builder(default = "50 * 1024 * 1024")]
     size: usize,
 
-    /// Max number of DBs. Recommended: 10
+    /// Max number of DBs. Recommended: 12
     #[builder(default = "12")]
     max_dbs: u32,
+
+    /// Max number of threads that can open read transactions.
+    /// Tokio by default has a maximum of 1 + num cores + 512 (blocking) threads.
+    /// Our default value allows for up to 87 cores if tokio's defaults are not changed.
+    /// Recommended: 600
+    #[builder(default = "600")]
+    max_readers: u32,
 
     /// Additional LMDB flags
     #[builder(default = "LmdbFlags::NOMETASYNC")]
@@ -262,6 +269,7 @@ impl Default for DatabaseConfig {
         Self {
             size: 1024 * 1024 * 1024,
             max_dbs: 12,
+            max_readers: 600,
             flags: LmdbFlags::NOMETASYNC,
         }
     }
@@ -279,6 +287,7 @@ impl From<config_file::DatabaseSettings> for DatabaseConfig {
         Self {
             size: db_settings.size.unwrap_or(default.size),
             max_dbs: db_settings.max_dbs.unwrap_or(default.max_dbs),
+            max_readers: db_settings.max_readers.unwrap_or(default.max_readers),
             flags,
         }
     }
@@ -335,9 +344,11 @@ impl StorageConfig {
         log::info!("Opening database: {}", db_name);
 
         Ok(match self {
-            StorageConfig::Volatile => {
-                VolatileEnvironment::new_with_lmdb_flags(db_config.max_dbs, db_config.flags)?
-            }
+            StorageConfig::Volatile => VolatileEnvironment::new_with_lmdb_flags(
+                db_config.max_dbs,
+                db_config.max_readers,
+                db_config.flags,
+            )?,
             StorageConfig::Filesystem(file_storage) => {
                 let db_path = file_storage.database_parent.join(db_name);
                 let db_path = db_path
@@ -349,7 +360,13 @@ impl StorageConfig {
                         ))
                     })?
                     .to_string();
-                LmdbEnvironment::new(&db_path, db_config.size, db_config.max_dbs, db_config.flags)?
+                LmdbEnvironment::new_with_max_readers(
+                    &db_path,
+                    db_config.size,
+                    db_config.max_dbs,
+                    db_config.max_readers,
+                    db_config.flags,
+                )?
             }
             _ => return Err(self.not_available()),
         })

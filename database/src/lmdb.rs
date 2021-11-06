@@ -37,7 +37,20 @@ impl LmdbEnvironment {
         flags: open::Flags,
     ) -> Result<Environment, LmdbError> {
         Ok(Environment::Persistent(
-            LmdbEnvironment::new_lmdb_environment(path, size, max_dbs, flags)?,
+            LmdbEnvironment::new_lmdb_environment(path, size, max_dbs, None, flags)?,
+        ))
+    }
+
+    #[allow(clippy::new_ret_no_self)]
+    pub fn new_with_max_readers(
+        path: &str,
+        size: usize,
+        max_dbs: u32,
+        max_readers: u32,
+        flags: open::Flags,
+    ) -> Result<Environment, LmdbError> {
+        Ok(Environment::Persistent(
+            LmdbEnvironment::new_lmdb_environment(path, size, max_dbs, Some(max_readers), flags)?,
         ))
     }
 
@@ -45,12 +58,17 @@ impl LmdbEnvironment {
         path: &str,
         size: usize,
         max_dbs: u32,
+        max_readers: Option<u32>,
         flags: open::Flags,
     ) -> Result<Self, LmdbError> {
         fs::create_dir_all(path).unwrap();
 
         let mut env = lmdb_zero::EnvBuilder::new()?;
         env.set_maxdbs(max_dbs)?;
+        if let Some(max_readers) = max_readers {
+            env.set_maxreaders(max_readers)?;
+        }
+
         let env = unsafe { env.open(path, flags, 0o600)? };
 
         let info = env.info()?;
