@@ -11,12 +11,12 @@ use nimiq_blockchain::Blockchain;
 use nimiq_network_interface::prelude::{Network, NetworkEvent, Peer};
 
 use crate::consensus_agent::ConsensusAgent;
-use crate::sync::history::cluster::SyncClusterResult;
+use crate::sync::history::cluster::{SyncCluster, SyncClusterResult};
+use crate::sync::history::sync::Job;
 use crate::sync::history::HistorySync;
 use crate::sync::request_component::HistorySyncStream;
 
 impl<TNetwork: Network> HistorySync<TNetwork> {
-    /// Poll network events to add/remove peers.
     fn poll_network_events(
         &mut self,
         cx: &mut Context<'_>,
@@ -27,7 +27,6 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                     // Delete the ConsensusAgent from the agents map, removing the only "persistent"
                     // strong reference to it. There might not be an entry for every peer (e.g. if
                     // it didn't send any epoch ids).
-
                     // FIXME This doesn't work if we're currently requesting epoch_ids from this peer
                     self.agents.remove(&peer);
                 }
@@ -43,7 +42,6 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         Poll::Pending
     }
 
-    /// Poll ongoing epoch_id requests as long as we don't have too many clusters.
     fn poll_epoch_ids(
         &mut self,
         cx: &mut Context<'_>,
@@ -85,7 +83,6 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         Poll::Pending
     }
 
-    /// Poll the active sync cluster.
     fn poll_cluster(&mut self, cx: &mut Context<'_>) {
         // Initialize active_cluster if there is none.
         if self.active_cluster.is_none() {
@@ -94,13 +91,11 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
 
         // Poll the active cluster.
         if let Some(cluster) = self.active_cluster.as_mut() {
-            while self.queued_push_ops.len() < Self::MAX_QUEUED_PUSH_OPS {
+            while self.job_queue.len() < Self::MAX_QUEUED_JOBS {
                 let result = match cluster.poll_next_unpin(cx) {
                     Poll::Ready(result) => result,
                     Poll::Pending => break,
                 };
-
-                log::debug!("Got result from active cluster: {:?}", result);
 
                 match result {
                     Some(Ok(batch_set)) => {
@@ -111,7 +106,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                                 batch_set.block.epoch_number(),
                                 batch_set.history.len()
                             );
-                            let push_result = spawn_blocking(move || {
+                            spawn_blocking(move || {
                                 Blockchain::push_history_sync(
                                     blockchain.upgradable_read(),
                                     Block::Macro(batch_set.block),
@@ -119,27 +114,28 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                                 )
                             })
                             .await
-                            .expect("blockchain.push_history_sync() should not panic");
-                            (SyncClusterResult::from(push_result), None)
+                            .expect("blockchain.push_history_sync() should not panic")
+                            .into()
                         }
                         .boxed();
-                        self.queued_push_ops.push_back(future);
+
+                        self.job_queue
+                            .push_back(Job::PushBatchSet(cluster.id, future));
                     }
                     Some(Err(_)) | None => {
-                        if let Some(waker) = self.waker.take() {
-                            waker.wake();
-                        }
-
                         // Evict the active cluster if it error'd or finished.
-                        // TODO Evict Outdated clusters as well?
                         let cluster = self.active_cluster.take().unwrap();
                         let result = match &result {
                             Some(_) => SyncClusterResult::Error,
                             None => SyncClusterResult::NoMoreEpochs,
                         };
-                        let future = async move { (result, Some(cluster)) }.boxed();
-                        self.queued_push_ops.push_back(future);
 
+                        self.job_queue
+                            .push_back(Job::FinishCluster(cluster, result));
+
+                        if let Some(waker) = self.waker.take() {
+                            waker.wake();
+                        }
                         break;
                     }
                 }
@@ -147,26 +143,75 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         }
     }
 
-    /// Poll the current push operation.
-    fn poll_push_op(&mut self, cx: &mut Context<'_>) {
-        while let Some(op) = self.queued_push_ops.front_mut() {
-            let (result, evicted_cluster) = match op.poll_unpin(cx) {
-                Poll::Ready(result) => result,
-                Poll::Pending => break,
+    fn poll_job_queue(&mut self, cx: &mut Context<'_>) {
+        while let Some(job) = self.job_queue.front_mut() {
+            let result = match job {
+                Job::PushBatchSet(_, future) => match future.poll_unpin(cx) {
+                    Poll::Ready(result) => Some(result),
+                    Poll::Pending => break,
+                },
+                Job::FinishCluster(_, _) => None,
             };
-            self.queued_push_ops.pop_front();
 
-            log::debug!("Push op completed with result: {:?}", result);
+            let job = self.job_queue.pop_front().unwrap();
 
-            if result != SyncClusterResult::EpochSuccessful {
-                let evicted_cluster = evicted_cluster.unwrap();
-                self.finish_cluster(&evicted_cluster, result);
+            match job {
+                Job::PushBatchSet(cluster_id, _) => {
+                    let result = result.unwrap();
+
+                    log::debug!(
+                        "PushBatchSet from cluster_id {} completed with result: {:?}",
+                        cluster_id,
+                        result
+                    );
+
+                    if result != SyncClusterResult::EpochSuccessful {
+                        // The push operation failed, therefore the whole cluster is invalid.
+                        // Clean out any jobs originating from the failed cluster from the job_queue.
+                        // If the cluster isn't active anymore, get the cluster from the
+                        // FinishCluster job in the job_queue.
+                        let cluster = self.evict_jobs_by_cluster(cluster_id);
+
+                        // If the failed cluster is the still active, we remove it.
+                        let cluster = cluster.unwrap_or_else(|| {
+                            self.active_cluster
+                                .take()
+                                .expect("No cluster in job_queue, active_cluster should exist")
+                        });
+                        assert_eq!(cluster_id, cluster.id);
+
+                        self.finish_cluster(cluster, result);
+                    }
+                }
+                Job::FinishCluster(cluster, result) => {
+                    self.finish_cluster(cluster, result);
+                }
             }
 
             if let Some(waker) = self.waker.take() {
                 waker.wake();
             }
         }
+    }
+
+    fn evict_jobs_by_cluster(
+        &mut self,
+        cluster_id: usize,
+    ) -> Option<SyncCluster<TNetwork::PeerType>> {
+        while let Some(job) = self.job_queue.front() {
+            let id = match job {
+                Job::PushBatchSet(cluster_id, _) => *cluster_id,
+                Job::FinishCluster(cluster, _) => cluster.id,
+            };
+            if id != cluster_id {
+                return None;
+            }
+            let job = self.job_queue.pop_front().unwrap();
+            if let Job::FinishCluster(cluster, _) = job {
+                return Some(cluster);
+            }
+        }
+        None
     }
 }
 
@@ -186,7 +231,7 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
 
         self.poll_cluster(cx);
 
-        self.poll_push_op(cx);
+        self.poll_job_queue(cx);
 
         Poll::Pending
     }

@@ -16,7 +16,6 @@ use crate::consensus_agent::ConsensusAgent;
 use crate::sync::history::cluster::{SyncCluster, SyncClusterResult};
 use crate::sync::request_component::HistorySyncStream;
 
-#[derive(Clone)]
 pub(crate) struct EpochIds<TPeer: Peer> {
     pub locator_found: bool,
     pub ids: Vec<Blake2bHash>,
@@ -25,10 +24,27 @@ pub(crate) struct EpochIds<TPeer: Peer> {
     pub sender: Arc<ConsensusAgent<TPeer>>,
 }
 
+impl<TPeer: Peer> Clone for EpochIds<TPeer> {
+    fn clone(&self) -> Self {
+        EpochIds {
+            locator_found: self.locator_found,
+            ids: self.ids.clone(),
+            checkpoint_id: self.checkpoint_id.clone(),
+            first_epoch_number: self.first_epoch_number,
+            sender: Arc::clone(&self.sender),
+        }
+    }
+}
+
 impl<TPeer: Peer> EpochIds<TPeer> {
     pub(crate) fn get_checkpoint_epoch(&self) -> usize {
         self.first_epoch_number + self.ids.len()
     }
+}
+
+pub(crate) enum Job<TPeer: Peer> {
+    PushBatchSet(usize, BoxFuture<'static, SyncClusterResult>),
+    FinishCluster(SyncCluster<TPeer>, SyncClusterResult),
 }
 
 pub struct HistorySync<TNetwork: Network> {
@@ -41,14 +57,13 @@ pub struct HistorySync<TNetwork: Network> {
     pub(crate) epoch_clusters: VecDeque<SyncCluster<TNetwork::PeerType>>,
     pub(crate) checkpoint_clusters: VecDeque<SyncCluster<TNetwork::PeerType>>,
     pub(crate) active_cluster: Option<SyncCluster<TNetwork::PeerType>>,
-    pub(crate) queued_push_ops:
-        VecDeque<BoxFuture<'static, (SyncClusterResult, Option<SyncCluster<TNetwork::PeerType>>)>>,
+    pub(crate) job_queue: VecDeque<Job<TNetwork::PeerType>>,
     pub(crate) waker: Option<Waker>,
 }
 
 impl<TNetwork: Network> HistorySync<TNetwork> {
     pub(crate) const MAX_CLUSTERS: usize = 100;
-    pub(crate) const MAX_QUEUED_PUSH_OPS: usize = 4;
+    pub(crate) const MAX_QUEUED_JOBS: usize = 4;
 
     pub fn new(
         blockchain: Arc<RwLock<Blockchain>>,
@@ -62,7 +77,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
             epoch_clusters: VecDeque::new(),
             checkpoint_clusters: VecDeque::new(),
             active_cluster: None,
-            queued_push_ops: VecDeque::new(),
+            job_queue: VecDeque::new(),
             waker: None,
         }
     }
@@ -193,7 +208,7 @@ mod tests {
             epoch_ids2,
             |sync| {
                 assert_eq!(sync.epoch_clusters.len(), 1);
-                assert_eq!(sync.epoch_clusters[0].ids.len(), 10);
+                assert_eq!(sync.epoch_clusters[0].epoch_ids.len(), 10);
                 assert_eq!(sync.epoch_clusters[0].first_epoch_number, 1);
                 assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.len(), 2);
             },
@@ -210,8 +225,8 @@ mod tests {
             epoch_ids2,
             |sync| {
                 assert_eq!(sync.epoch_clusters.len(), 2);
-                assert_eq!(sync.epoch_clusters[0].ids.len(), 10);
-                assert_eq!(sync.epoch_clusters[1].ids.len(), 10);
+                assert_eq!(sync.epoch_clusters[0].epoch_ids.len(), 10);
+                assert_eq!(sync.epoch_clusters[1].epoch_ids.len(), 10);
                 assert_eq!(sync.epoch_clusters[0].first_epoch_number, 1);
                 assert_eq!(sync.epoch_clusters[1].first_epoch_number, 1);
                 assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.len(), 1);
@@ -230,10 +245,10 @@ mod tests {
             epoch_ids2,
             |sync| {
                 assert_eq!(sync.epoch_clusters.len(), 2);
-                assert_eq!(sync.epoch_clusters[0].ids.len(), 8);
+                assert_eq!(sync.epoch_clusters[0].epoch_ids.len(), 8);
                 assert_eq!(sync.epoch_clusters[0].first_epoch_number, 1);
                 assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.len(), 2);
-                assert_eq!(sync.epoch_clusters[1].ids.len(), 2);
+                assert_eq!(sync.epoch_clusters[1].epoch_ids.len(), 2);
                 assert_eq!(sync.epoch_clusters[1].first_epoch_number, 9);
                 assert_eq!(sync.epoch_clusters[1].batch_set_queue.peers.len(), 1);
             },
@@ -250,10 +265,10 @@ mod tests {
             epoch_ids2,
             |sync| {
                 assert_eq!(sync.epoch_clusters.len(), 2);
-                assert_eq!(sync.epoch_clusters[0].ids.len(), 10);
+                assert_eq!(sync.epoch_clusters[0].epoch_ids.len(), 10);
                 assert_eq!(sync.epoch_clusters[0].first_epoch_number, 1);
                 assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.len(), 2);
-                assert_eq!(sync.epoch_clusters[1].ids.len(), 2);
+                assert_eq!(sync.epoch_clusters[1].epoch_ids.len(), 2);
                 assert_eq!(sync.epoch_clusters[1].first_epoch_number, 11);
                 assert_eq!(sync.epoch_clusters[1].batch_set_queue.peers.len(), 1);
             },
@@ -284,10 +299,10 @@ mod tests {
             epoch_ids2,
             |sync| {
                 assert_eq!(sync.epoch_clusters.len(), 2);
-                assert_eq!(sync.epoch_clusters[0].ids.len(), 7);
+                assert_eq!(sync.epoch_clusters[0].epoch_ids.len(), 7);
                 assert_eq!(sync.epoch_clusters[0].first_epoch_number, 1);
                 assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.len(), 2);
-                assert_eq!(sync.epoch_clusters[1].ids.len(), 3);
+                assert_eq!(sync.epoch_clusters[1].epoch_ids.len(), 3);
                 assert_eq!(sync.epoch_clusters[1].first_epoch_number, 8);
                 assert_eq!(sync.epoch_clusters[1].batch_set_queue.peers.len(), 1);
             },
@@ -304,13 +319,13 @@ mod tests {
             epoch_ids2,
             |sync| {
                 assert_eq!(sync.epoch_clusters.len(), 3);
-                assert_eq!(sync.epoch_clusters[0].ids.len(), 9);
+                assert_eq!(sync.epoch_clusters[0].epoch_ids.len(), 9);
                 assert_eq!(sync.epoch_clusters[0].first_epoch_number, 1);
                 assert_eq!(sync.epoch_clusters[0].batch_set_queue.peers.len(), 2);
-                assert_eq!(sync.epoch_clusters[1].ids.len(), 1);
+                assert_eq!(sync.epoch_clusters[1].epoch_ids.len(), 1);
                 assert_eq!(sync.epoch_clusters[1].first_epoch_number, 10);
                 assert_eq!(sync.epoch_clusters[1].batch_set_queue.peers.len(), 1);
-                assert_eq!(sync.epoch_clusters[2].ids.len(), 2);
+                assert_eq!(sync.epoch_clusters[2].epoch_ids.len(), 2);
                 assert_eq!(sync.epoch_clusters[2].first_epoch_number, 10);
                 assert_eq!(sync.epoch_clusters[2].batch_set_queue.peers.len(), 1);
             },

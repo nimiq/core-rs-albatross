@@ -1,7 +1,7 @@
-use std::cmp::Ordering;
 use std::collections::VecDeque;
 use std::fmt::Formatter;
 use std::pin::Pin;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Weak};
 
 use futures::task::{Context, Poll};
@@ -48,8 +48,13 @@ impl std::fmt::Debug for BatchSet {
     }
 }
 
+lazy_static! {
+    static ref SYNC_CLUSTER_ID: AtomicUsize = AtomicUsize::default();
+}
+
 pub(crate) struct SyncCluster<TPeer: Peer> {
-    pub ids: Vec<Blake2bHash>,
+    pub id: usize,
+    pub epoch_ids: Vec<Blake2bHash>,
     pub first_epoch_number: usize,
 
     pub(crate) batch_set_queue: SyncQueue<TPeer, Blake2bHash, BatchSetInfo>,
@@ -65,13 +70,15 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
     const NUM_PENDING_CHUNKS: usize = 12;
 
     pub(crate) fn new(
-        ids: Vec<Blake2bHash>,
+        epoch_ids: Vec<Blake2bHash>,
         first_epoch_number: usize,
         peers: Vec<Weak<ConsensusAgent<TPeer>>>,
         blockchain: Arc<RwLock<Blockchain>>,
     ) -> Self {
+        let id = SYNC_CLUSTER_ID.fetch_add(1, Ordering::SeqCst);
+
         let batch_set_queue = SyncQueue::new(
-            ids.clone(),
+            epoch_ids.clone(),
             peers.clone(),
             Self::NUM_PENDING_BATCH_SETS,
             |id, peer| {
@@ -101,7 +108,8 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
             },
         );
         Self {
-            ids,
+            id,
+            epoch_ids,
             first_epoch_number,
             batch_set_queue,
             history_queue,
@@ -244,7 +252,7 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
     }
 
     pub(crate) fn split_off(&mut self, at: usize) -> Self {
-        let ids = self.ids.split_off(at);
+        let ids = self.epoch_ids.split_off(at);
         let first_epoch_number = self.first_epoch_number + at;
 
         // Remove the split-off ids from our epoch queue.
@@ -260,7 +268,7 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
 
     pub(crate) fn remove_front(&mut self, num_items: usize) {
         // TODO Refactor
-        let new_cluster = if self.ids.len() < num_items {
+        let new_cluster = if self.epoch_ids.len() < num_items {
             self.split_off(self.len())
         } else {
             self.split_off(num_items)
@@ -269,19 +277,19 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
     }
 
     pub(crate) fn len(&self) -> usize {
-        self.ids.len()
+        self.epoch_ids.len()
     }
 
-    pub(crate) fn compare(&self, other: &Self, current_epoch: usize) -> Ordering {
+    pub(crate) fn compare(&self, other: &Self, current_epoch: usize) -> std::cmp::Ordering {
         let this_epoch_number = self.first_epoch_number.max(current_epoch);
         let other_epoch_number = other.first_epoch_number.max(current_epoch);
 
         let this_ids_len = self
-            .ids
+            .epoch_ids
             .len()
             .saturating_sub(current_epoch.saturating_sub(self.first_epoch_number));
         let other_ids_len = other
-            .ids
+            .epoch_ids
             .len()
             .saturating_sub(current_epoch.saturating_sub(other.first_epoch_number));
 
@@ -294,7 +302,7 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
                     .cmp(&self.batch_set_queue.num_peers())
             }) // Higher peer count first
             .then_with(|| other_ids_len.cmp(&this_ids_len)) // More ids first
-            .then_with(|| self.ids.cmp(&other.ids)) //
+            .then_with(|| self.epoch_ids.cmp(&other.epoch_ids)) //
             .reverse() // We want the best cluster to be *last*
     }
 }

@@ -142,15 +142,16 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         for cluster in epoch_clusters {
             // Check if given epoch_ids and the current cluster potentially overlap.
             if cluster.first_epoch_number <= epoch_ids.first_epoch_number
-                && cluster.first_epoch_number + cluster.ids.len() > epoch_ids.first_epoch_number
+                && cluster.first_epoch_number + cluster.epoch_ids.len()
+                    > epoch_ids.first_epoch_number
             {
                 // Compare epoch ids in the overlapping region.
                 let start_offset = epoch_ids.first_epoch_number - cluster.first_epoch_number;
                 let len = usize::min(
-                    cluster.ids.len() - start_offset,
+                    cluster.epoch_ids.len() - start_offset,
                     epoch_ids.ids.len() - id_index,
                 );
-                let match_until = cluster.ids[start_offset..start_offset + len]
+                let match_until = cluster.epoch_ids[start_offset..start_offset + len]
                     .iter()
                     .zip(&epoch_ids.ids[id_index..id_index + len])
                     .position(|(first, second)| first != second)
@@ -159,7 +160,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                 trace!(
                     "Comparing with cluster: first_epoch_number={}, num_ids={}, match_until={}",
                     cluster.first_epoch_number,
-                    cluster.ids.len(),
+                    cluster.epoch_ids.len(),
                     match_until
                 );
 
@@ -169,10 +170,10 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                     // is truncated to the matching overlapping part and the removed ids are put in a new
                     // cluster. Buffer up the new clusters and insert them after we finish iterating over
                     // sync_clusters.
-                    if match_until < cluster.ids.len() - start_offset {
+                    if match_until < cluster.epoch_ids.len() - start_offset {
                         trace!(
                             "Splitting cluster: num_ids={}, start_offset={}, split_at={}",
-                            cluster.ids.len(),
+                            cluster.epoch_ids.len(),
                             start_offset,
                             start_offset + match_until
                         );
@@ -226,8 +227,8 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
 
                 // Look for clusters at the same epoch with the same hash.
                 if cluster.first_epoch_number == checkpoint_epoch
-                    && cluster.ids[0] == checkpoint_id
-                    && cluster.ids.len() == 1
+                    && cluster.epoch_ids[0] == checkpoint_id
+                    && cluster.epoch_ids.len() == 1
                 {
                     // The peer's checkpoint id matched this cluster,
                     // so we add the peer to this cluster. We also increment the peer's number of clusters.
@@ -313,8 +314,8 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
             .swap_remove_front(best_idx)
             .expect("best cluster should be there");
 
-        debug!("Syncing cluster at index {} out of {} clusters: current_epoch={}, first_epoch_number={}, num_ids={}, num_peers: {}",
-               best_idx, clusters.len() + 1, current_epoch, best_cluster.first_epoch_number, best_cluster.ids.len(), best_cluster.peers().len());
+        debug!("Syncing cluster {} at index {} out of {} clusters: current_epoch={}, first_epoch_number={}, num_ids={}, num_peers: {}",
+               best_cluster.id, best_idx, clusters.len() + 1, current_epoch, best_cluster.first_epoch_number, best_cluster.epoch_ids.len(), best_cluster.peers().len());
 
         if best_cluster.first_epoch_number <= current_epoch {
             best_cluster.remove_front(current_epoch - best_cluster.first_epoch_number + 1);
@@ -332,7 +333,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
     /// provide new epoch ids or emitted as synced peers if there are no new ids to sync.
     pub(crate) fn finish_cluster(
         &mut self,
-        cluster: &SyncCluster<TNetwork::PeerType>,
+        cluster: SyncCluster<TNetwork::PeerType>,
         result: SyncClusterResult,
     ) {
         if result != SyncClusterResult::NoMoreEpochs {
@@ -361,6 +362,11 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                     if result != SyncClusterResult::Error {
                         self.add_agent(agent);
                     } else {
+                        debug!(
+                            "Closing connection to peer {:?} after cluster {} failed",
+                            agent.peer.id(),
+                            cluster.id
+                        );
                         agent.peer.close(CloseReason::Other);
                     }
                 }
