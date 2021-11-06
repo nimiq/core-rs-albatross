@@ -38,14 +38,13 @@ use super::{
 /// Maintains various aggregations for different rounds and steps of Tendermint.
 ///
 /// Note that `TendermintAggregations::broadcast_and_aggregate` needs to have been called at least once before the stream can meaningfully be awaited.
+type RoundAndStep = (u32, TendermintStep);
+type RoundStepAndContribution = (RoundAndStep, TendermintContribution);
+
 pub(super) struct TendermintAggregations<N: ValidatorNetwork> {
     event_receiver: mpsc::Receiver<AggregationEvent<N>>,
-    // Ignoring clippy warning because there wouldn't be much to be gained by refactoring this,
-    // except making clippy happy
-    #[allow(clippy::type_complexity)]
-    combined_aggregation_streams:
-        Pin<Box<SelectAll<BoxStream<'static, ((u32, TendermintStep), TendermintContribution)>>>>,
-    aggregation_descriptors: BTreeMap<(u32, TendermintStep), AggregationDescriptor>,
+    combined_aggregation_streams: Pin<Box<SelectAll<BoxStream<'static, RoundStepAndContribution>>>>,
+    aggregation_descriptors: BTreeMap<RoundAndStep, AggregationDescriptor>,
     input: BoxStream<'static, LevelUpdateMessage<TendermintContribution, TendermintIdentifier>>,
     future_aggregations: BTreeMap<u32, BitSet>,
     validator_id: u16,

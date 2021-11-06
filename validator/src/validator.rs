@@ -687,13 +687,15 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Future
     }
 }
 
+type ProposalAndPubsubId<TValidatorNetwork> = (
+    <ProposalTopic as Topic>::Item,
+    <TValidatorNetwork as ValidatorNetwork>::PubsubId,
+);
+
 struct ProposalBuffer<TValidatorNetwork: ValidatorNetwork + 'static> {
-    // Ignoring clippy warning because there wouldn't be much to be gained by refactoring this,
-    // except making clippy happy
-    #[allow(clippy::type_complexity)]
     buffer: LinkedHashMap<
         <TValidatorNetwork::PeerType as Peer>::Id,
-        (<ProposalTopic as Topic>::Item, TValidatorNetwork::PubsubId),
+        ProposalAndPubsubId<TValidatorNetwork>,
     >,
     waker: Option<Waker>,
 }
@@ -721,7 +723,7 @@ struct ProposalSender<TValidatorNetwork: ValidatorNetwork + 'static> {
     shared: Arc<RwLock<ProposalBuffer<TValidatorNetwork>>>,
 }
 impl<TValidatorNetwork: ValidatorNetwork + 'static> ProposalSender<TValidatorNetwork> {
-    pub fn send(&self, proposal: (<ProposalTopic as Topic>::Item, TValidatorNetwork::PubsubId)) {
+    pub fn send(&self, proposal: ProposalAndPubsubId<TValidatorNetwork>) {
         let source = proposal.1.propagation_source();
         let mut shared = self.shared.write();
         shared.buffer.insert(source, proposal);
@@ -735,7 +737,7 @@ struct ProposalReceiver<TValidatorNetwork: ValidatorNetwork + 'static> {
     shared: Arc<RwLock<ProposalBuffer<TValidatorNetwork>>>,
 }
 impl<TValidatorNetwork: ValidatorNetwork + 'static> Stream for ProposalReceiver<TValidatorNetwork> {
-    type Item = (<ProposalTopic as Topic>::Item, TValidatorNetwork::PubsubId);
+    type Item = ProposalAndPubsubId<TValidatorNetwork>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let mut shared = self.shared.write();
