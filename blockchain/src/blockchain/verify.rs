@@ -335,10 +335,6 @@ impl Blockchain {
         // Verify accounts hash.
         let accounts_hash = accounts.get_root(txn_opt);
 
-        trace!("Block state root: {}", block.state_root());
-
-        trace!("Accounts hash:    {}", accounts_hash);
-
         if block.state_root() != &accounts_hash {
             error!(
                 "State: expected {:?}, found {:?}",
