@@ -35,6 +35,20 @@ const NUM_TXNS_START_STOP: usize = 400;
 // 4. Rebranch operation, multiple blocks are reverted and new blocks are added
 //
 
+#[derive(Clone)]
+struct MempoolAccount {
+    keypair: KeyPair,
+    address: Address,
+}
+
+#[derive(Clone)]
+struct MempoolTransaction {
+    fee: u64,
+    value: u64,
+    sender: MempoolAccount,
+    recipient: MempoolAccount,
+}
+
 async fn send_txn_to_mempool(
     blockchain: Arc<RwLock<Blockchain>>,
     transactions: Vec<Transaction>,
@@ -183,13 +197,67 @@ async fn multiple_start_stop_send(
     assert_eq!(obtained_txns.len(), NUM_TXNS_START_STOP);
 }
 
+fn generate_accounts(
+    balances: Vec<u64>,
+    genesis_builder: &mut GenesisBuilder,
+    add_to_genesis: bool,
+) -> Vec<MempoolAccount> {
+    let mut mempool_accounts = vec![];
+
+    for i in 0..balances.len() as usize {
+        // Generate the txns_sender and txns_rec vectors to later generate transactions
+        let keypair = KeyPair::generate_default_csprng();
+        let address = Address::from(&keypair.public);
+        let mempool_account = MempoolAccount {
+            keypair,
+            address: address.clone(),
+        };
+        mempool_accounts.push(mempool_account);
+
+        if add_to_genesis {
+            // Add accounts to the genesis builder
+            genesis_builder.with_basic_account(address, Coin::from_u64_unchecked(balances[i]));
+        }
+    }
+    mempool_accounts
+}
+
+fn generate_transactions(
+    mempool_transactions: Vec<MempoolTransaction>,
+) -> (Vec<Transaction>, usize) {
+    let mut txns_len = 0;
+    let mut txns: Vec<Transaction> = vec![];
+
+    log::debug!("Generating transactions and accounts");
+
+    for mempool_transaction in mempool_transactions {
+        // Generate transactions
+        let mut txn = Transaction::new_basic(
+            mempool_transaction.sender.address.clone(),
+            mempool_transaction.recipient.address.clone(),
+            Coin::from_u64_unchecked(mempool_transaction.value),
+            Coin::from_u64_unchecked(mempool_transaction.fee),
+            1,
+            NetworkId::UnitAlbatross,
+        );
+
+        let signature_proof = SignatureProof::from(
+            mempool_transaction.sender.keypair.public,
+            mempool_transaction
+                .sender
+                .keypair
+                .sign(&txn.serialize_content()),
+        );
+
+        txn.proof = signature_proof.serialize_to_vec();
+        txns.push(txn.clone());
+        txns_len += txn.serialized_size();
+    }
+    (txns, txns_len)
+}
+
 #[tokio::test]
 async fn push_same_tx_twice() {
-    let mut rng = StdRng::seed_from_u64(0);
-    let keypair_a = KeyPair::generate_default_csprng();
-    let address_a = Address::from(&keypair_a.public);
-    let address_b = Address::from([2u8; Address::SIZE]);
-
     if ENABLE_LOG {
         simple_logger::SimpleLogger::new()
             .with_level(Debug)
@@ -197,28 +265,36 @@ async fn push_same_tx_twice() {
             .ok();
     }
 
-    // Generate and sign transaction from address_a
-    let mut txn = Transaction::new_basic(
-        address_a.clone(),
-        address_b,
-        Coin::from_u64_unchecked(10),
-        Coin::from_u64_unchecked(0),
-        1,
-        NetworkId::UnitAlbatross,
-    );
+    // Generate and sign transaction from an address
+    let mut rng = StdRng::seed_from_u64(0);
+    let num_txns = 2;
+    let mut mempool_transactions = vec![];
+    let sender_balances = vec![10000; 1];
+    let recipient_balances = vec![0; 1];
+    let mut genesis_builder = GenesisBuilder::default();
 
-    let signature_proof =
-        SignatureProof::from(keypair_a.public, keypair_a.sign(&txn.serialize_content()));
+    // Generate recipient accounts
+    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    // Generate sender accounts
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
 
-    txn.proof = signature_proof.serialize_to_vec();
-    let txn_len = txn.serialized_size();
+    // Generate transactions
+    for _ in 0..num_txns {
+        let mempool_transaction = MempoolTransaction {
+            fee: 0,
+            value: 10,
+            recipient: recipient_accounts[0].clone(),
+            sender: sender_accounts[0].clone(),
+        };
+        mempool_transactions.push(mempool_transaction);
+    }
+    let (txns, txns_len) = generate_transactions(mempool_transactions);
+    log::debug!("Done generating transactions and accounts");
 
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
 
-    // Build a blockchain with a basic account and a validator
-    let mut genesis_builder = GenesisBuilder::default();
-    genesis_builder.with_basic_account(address_a, Coin::from_u64_unchecked(10000));
+    // Add a validator
     genesis_builder.with_genesis_validator(
         Address::from(&KeyPair::generate(&mut rng)),
         Address::from([0u8; 20]),
@@ -239,9 +315,7 @@ async fn push_same_tx_twice() {
         .unwrap(),
     ));
 
-    // Send twice the same transaction
-    let txns = vec![txn; 2];
-    let txns = send_txn_to_mempool(blockchain, txns, txn_len).await;
+    let txns = send_txn_to_mempool(blockchain, txns, txns_len).await;
 
     // Expect only 1 of the transactions in the mempool
     assert_eq!(txns.len(), 1);
@@ -249,10 +323,6 @@ async fn push_same_tx_twice() {
 
 #[tokio::test]
 async fn valid_tx_not_in_blockchain() {
-    let keypair_a = KeyPair::generate_default_csprng();
-    let address_a = Address::from(&keypair_a.public);
-    let address_b = Address::from([2u8; Address::SIZE]);
-
     if ENABLE_LOG {
         simple_logger::SimpleLogger::new()
             .with_level(Debug)
@@ -260,21 +330,31 @@ async fn valid_tx_not_in_blockchain() {
             .ok();
     }
 
-    // Generate and sign transaction from address_a
-    let mut txn = Transaction::new_basic(
-        address_a,
-        address_b,
-        Coin::from_u64_unchecked(10),
-        Coin::from_u64_unchecked(0),
-        1,
-        NetworkId::UnitAlbatross,
-    );
+    // Generate and sign transaction from an address
+    let balance = 40;
+    let num_txns = 2;
+    let mut mempool_transactions = vec![];
+    let sender_balances = vec![balance + 3; 1];
+    let recipient_balances = vec![0; num_txns as usize];
+    let mut genesis_builder = GenesisBuilder::default();
 
-    let signature_proof =
-        SignatureProof::from(keypair_a.public, keypair_a.sign(&txn.serialize_content()));
+    // Generate recipient accounts
+    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    // Generate sender accounts
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, false);
 
-    txn.proof = signature_proof.serialize_to_vec();
-    let txn_len = txn.serialized_size();
+    // Generate transactions
+    for i in 0..num_txns {
+        let mempool_transaction = MempoolTransaction {
+            fee: 0,
+            value: 10,
+            recipient: recipient_accounts[i as usize].clone(),
+            sender: sender_accounts[0].clone(),
+        };
+        mempool_transactions.push(mempool_transaction);
+    }
+    let (txns, txns_len) = generate_transactions(mempool_transactions);
+    log::debug!("Done generating transactions and accounts");
 
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
@@ -285,8 +365,7 @@ async fn valid_tx_not_in_blockchain() {
     ));
 
     // Send 2 transactions
-    let txns = vec![txn; 2];
-    let txns = send_txn_to_mempool(blockchain, txns, txn_len * 2).await;
+    let txns = send_txn_to_mempool(blockchain, txns, txns_len).await;
 
     // Expect no transactions in the mempool
     assert_eq!(txns.len(), 0);
@@ -317,11 +396,6 @@ async fn push_tx_with_wrong_signature() {
 
 #[tokio::test]
 async fn mempool_get_txn_max_size() {
-    let mut rng = StdRng::seed_from_u64(0);
-    let keypair_a = KeyPair::generate_default_csprng();
-    let address_a = Address::from(&keypair_a.public);
-    let address_b = Address::from([2u8; Address::SIZE]);
-
     if ENABLE_LOG {
         simple_logger::SimpleLogger::new()
             .with_level(Debug)
@@ -329,37 +403,37 @@ async fn mempool_get_txn_max_size() {
             .ok();
     }
 
-    // Generate and sign transaction from address_a using a balance that will be used to create the account later
+    // Generate and sign transaction from an address
+    let mut rng = StdRng::seed_from_u64(0);
     let balance = 40;
-    let mut txns_len = 0;
     let num_txns = 2;
-    let txns_value: Vec<u64> = vec![balance / num_txns, balance / num_txns];
-    let txns_fee: Vec<u64> = (1..num_txns + 1).collect();
-    let mut txns: Vec<Transaction> = vec![];
-    for i in 0..num_txns as usize {
-        let mut txn = Transaction::new_basic(
-            address_a.clone(),
-            address_b.clone(),
-            Coin::from_u64_unchecked(txns_value[i]),
-            Coin::from_u64_unchecked(txns_fee[i]),
-            1,
-            NetworkId::UnitAlbatross,
-        );
+    let mut mempool_transactions = vec![];
+    let sender_balances = vec![balance + 3; 1];
+    let recipient_balances = vec![0; num_txns as usize];
+    let mut genesis_builder = GenesisBuilder::default();
 
-        let signature_proof =
-            SignatureProof::from(keypair_a.public, keypair_a.sign(&txn.serialize_content()));
+    // Generate recipient accounts
+    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    // Generate sender accounts
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
 
-        txn.proof = signature_proof.serialize_to_vec();
-        txns.push(txn.clone());
-        txns_len += txn.serialized_size();
+    // Generate transactions
+    for i in 0..num_txns {
+        let mempool_transaction = MempoolTransaction {
+            fee: (i + 1) as u64,
+            value: balance / num_txns,
+            recipient: recipient_accounts[i as usize].clone(),
+            sender: sender_accounts[0].clone(),
+        };
+        mempool_transactions.push(mempool_transaction);
     }
+    let (txns, txns_len) = generate_transactions(mempool_transactions);
+    log::debug!("Done generating transactions and accounts");
 
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
 
-    // Build a blockchain with a basic account (using the balance of the tx) and a validator
-    let mut genesis_builder = GenesisBuilder::default();
-    genesis_builder.with_basic_account(address_a, Coin::from_u64_unchecked(balance + 3));
+    // Add a validator to genesis
     genesis_builder.with_genesis_validator(
         Address::from(&KeyPair::generate(&mut rng)),
         Address::from([0u8; 20]),
@@ -396,11 +470,6 @@ async fn mempool_get_txn_max_size() {
 
 #[tokio::test]
 async fn mempool_get_txn_ordered() {
-    let mut rng = StdRng::seed_from_u64(0);
-    let keypair_a = KeyPair::generate_default_csprng();
-    let address_a = Address::from(&keypair_a.public);
-    let address_b = Address::from([2u8; Address::SIZE]);
-
     if ENABLE_LOG {
         simple_logger::SimpleLogger::new()
             .with_level(Debug)
@@ -408,37 +477,37 @@ async fn mempool_get_txn_ordered() {
             .ok();
     }
 
-    // Generate and sign transaction from address_a using a balance that will be used to create the account later
+    // Generate and sign transaction from an address
+    let mut rng = StdRng::seed_from_u64(0);
     let balance = 40;
-    let mut txns_len = 0;
     let num_txns = 4;
-    let txns_value: Vec<u64> = vec![balance / num_txns; num_txns as usize];
-    let txns_fee: Vec<u64> = (1..num_txns + 1).collect();
-    let mut txns: Vec<Transaction> = vec![];
-    for i in 0..num_txns as usize {
-        let mut txn = Transaction::new_basic(
-            address_a.clone(),
-            address_b.clone(),
-            Coin::from_u64_unchecked(txns_value[i]),
-            Coin::from_u64_unchecked(txns_fee[i]),
-            1,
-            NetworkId::UnitAlbatross,
-        );
+    let mut mempool_transactions = vec![];
+    let sender_balances = vec![balance + num_txns * 3; 1];
+    let recipient_balances = vec![0; num_txns as usize];
+    let mut genesis_builder = GenesisBuilder::default();
 
-        let signature_proof =
-            SignatureProof::from(keypair_a.public, keypair_a.sign(&txn.serialize_content()));
+    // Generate recipient accounts
+    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    // Generate sender accounts
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
 
-        txn.proof = signature_proof.serialize_to_vec();
-        txns.push(txn.clone());
-        txns_len += txn.serialized_size();
+    // Generate transactions
+    for i in 0..num_txns {
+        let mempool_transaction = MempoolTransaction {
+            fee: (i + 1) as u64,
+            value: balance / num_txns,
+            recipient: recipient_accounts[i as usize].clone(),
+            sender: sender_accounts[0].clone(),
+        };
+        mempool_transactions.push(mempool_transaction);
     }
+    let (txns, txns_len) = generate_transactions(mempool_transactions);
+    log::debug!("Done generating transactions and accounts");
 
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
 
-    // Build a blockchain with a basic account (using the balance of the tx) and a validator
-    let mut genesis_builder = GenesisBuilder::default();
-    genesis_builder.with_basic_account(address_a, Coin::from_u64_unchecked(balance + num_txns * 3));
+    // Add a validator to genesis
     genesis_builder.with_genesis_validator(
         Address::from(&KeyPair::generate(&mut rng)),
         Address::from([0u8; 20]),
@@ -477,11 +546,6 @@ async fn mempool_get_txn_ordered() {
 
 #[tokio::test]
 async fn push_tx_with_insufficient_balance() {
-    let mut rng = StdRng::seed_from_u64(0);
-    let keypair_a = KeyPair::generate_default_csprng();
-    let address_a = Address::from(&keypair_a.public);
-    let address_b = Address::from([2u8; Address::SIZE]);
-
     if ENABLE_LOG {
         simple_logger::SimpleLogger::new()
             .with_level(Debug)
@@ -489,37 +553,38 @@ async fn push_tx_with_insufficient_balance() {
             .ok();
     }
 
-    // Generate and sign transaction from address_a using a balance that will be used to create the account later
+    // Generate and sign transaction from an address
+    let mut rng = StdRng::seed_from_u64(0);
     let balance = 25;
-    let mut txns_len = 0;
     let num_txns = 3;
     let txns_value: Vec<u64> = vec![balance, balance / (num_txns - 1), balance / (num_txns - 1)];
-    let txns_fee: Vec<u64> = (1..num_txns + 1).collect();
-    let mut txns: Vec<Transaction> = vec![];
-    for i in 0..num_txns as usize {
-        let mut txn = Transaction::new_basic(
-            address_a.clone(),
-            address_b.clone(),
-            Coin::from_u64_unchecked(txns_value[i]),
-            Coin::from_u64_unchecked(txns_fee[i]),
-            1,
-            NetworkId::UnitAlbatross,
-        );
+    let mut mempool_transactions = vec![];
+    let sender_balances = vec![balance; 1];
+    let recipient_balances = vec![0; num_txns as usize];
+    let mut genesis_builder = GenesisBuilder::default();
 
-        let signature_proof =
-            SignatureProof::from(keypair_a.public, keypair_a.sign(&txn.serialize_content()));
+    // Generate recipient accounts
+    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    // Generate sender accounts
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
 
-        txn.proof = signature_proof.serialize_to_vec();
-        txns.push(txn.clone());
-        txns_len += txn.serialized_size();
+    // Generate transactions
+    for i in 0..num_txns {
+        let mempool_transaction = MempoolTransaction {
+            fee: (i + 1) as u64,
+            value: txns_value[i as usize],
+            recipient: recipient_accounts[i as usize].clone(),
+            sender: sender_accounts[0].clone(),
+        };
+        mempool_transactions.push(mempool_transaction);
     }
+    let (txns, txns_len) = generate_transactions(mempool_transactions);
+    log::debug!("Done generating transactions and accounts");
 
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
 
-    // Build a blockchain with a basic account (using the balance of the tx) and a validator
-    let mut genesis_builder = GenesisBuilder::default();
-    genesis_builder.with_basic_account(address_a, Coin::from_u64_unchecked(balance));
+    // Add a validator to genesis
     genesis_builder.with_genesis_validator(
         Address::from(&KeyPair::generate(&mut rng)),
         Address::from([0u8; 20]),
@@ -550,14 +615,6 @@ async fn push_tx_with_insufficient_balance() {
 
 #[tokio::test]
 async fn multiple_transactions_multiple_senders() {
-    let mut rng = StdRng::seed_from_u64(0);
-    let keypair_a = KeyPair::generate_default_csprng();
-    let keypair_b = KeyPair::generate_default_csprng();
-    let keypair_c = KeyPair::generate_default_csprng();
-    let address_a = Address::from(&keypair_a.public);
-    let address_b = Address::from(&keypair_b.public);
-    let address_c = Address::from(&keypair_c.public);
-
     if ENABLE_LOG {
         simple_logger::SimpleLogger::new()
             .with_level(Debug)
@@ -565,67 +622,36 @@ async fn multiple_transactions_multiple_senders() {
             .ok();
     }
 
-    // Generate and sign transaction from address_a using a balance that will be used to create the account later
+    let mut rng = StdRng::seed_from_u64(0);
     let balance = 40;
-    let mut txns_len = 0;
     let num_txns = 9;
-    let txns_value: Vec<u64> = vec![balance / num_txns; num_txns as usize];
-    let txns_fee: Vec<u64> = (1..num_txns + 1).collect();
-    let mut txns: Vec<Transaction> = vec![];
-    let mut txns_sender: Vec<Address> = vec![];
-    let mut sender_keypair: Vec<KeyPair> = vec![];
-    let mut txns_rec: Vec<Address> = vec![];
+    let mut mempool_transactions = vec![];
+    let sender_balances = vec![balance + num_txns * num_txns / num_txns; num_txns as usize];
+    let recipient_balances = vec![0; num_txns as usize];
+    let mut genesis_builder = GenesisBuilder::default();
 
-    // Generate the txns_sender and txns_rec vectors to later generate transactions
-    for _ in 0..3 {
-        txns_sender.push(address_a.clone());
-        sender_keypair.push(keypair_a.clone());
-        txns_rec.push(address_b.clone());
-        txns_sender.push(address_b.clone());
-        sender_keypair.push(keypair_b.clone());
-        txns_rec.push(address_c.clone());
-        txns_sender.push(address_c.clone());
-        sender_keypair.push(keypair_c.clone());
-        txns_rec.push(address_a.clone());
-    }
+    // Generate recipient accounts
+    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    // Generate sender accounts
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
+
     // Generate transactions
-    for i in 0..num_txns as usize {
-        let mut txn = Transaction::new_basic(
-            txns_sender[i].clone(),
-            txns_rec[i].clone(),
-            Coin::from_u64_unchecked(txns_value[i]),
-            Coin::from_u64_unchecked(txns_fee[i]),
-            1,
-            NetworkId::UnitAlbatross,
-        );
-
-        let signature_proof = SignatureProof::from(
-            sender_keypair[i].public,
-            sender_keypair[i].sign(&txn.serialize_content()),
-        );
-
-        txn.proof = signature_proof.serialize_to_vec();
-        txns.push(txn.clone());
-        txns_len += txn.serialized_size();
+    for i in 0..num_txns {
+        let mempool_transaction = MempoolTransaction {
+            fee: (i + 1) as u64,
+            value: balance / num_txns,
+            recipient: recipient_accounts[i as usize].clone(),
+            sender: sender_accounts[i as usize].clone(),
+        };
+        mempool_transactions.push(mempool_transaction);
     }
+    let (txns, txns_len) = generate_transactions(mempool_transactions);
+    log::debug!("Done generating transactions and accounts");
 
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
 
-    // Build a blockchain with a basic account (using the balance of the tx) and a validator
-    let mut genesis_builder = GenesisBuilder::default();
-    genesis_builder.with_basic_account(
-        address_a,
-        Coin::from_u64_unchecked(balance + num_txns * num_txns),
-    );
-    genesis_builder.with_basic_account(
-        address_b,
-        Coin::from_u64_unchecked(balance + num_txns * num_txns),
-    );
-    genesis_builder.with_basic_account(
-        address_c,
-        Coin::from_u64_unchecked(balance + num_txns * num_txns),
-    );
+    // Add a validator to genesis
     genesis_builder.with_genesis_validator(
         Address::from(&KeyPair::generate(&mut rng)),
         Address::from([0u8; 20]),
@@ -678,53 +704,27 @@ async fn mempool_tps() {
 
     // Generate and sign transaction from address_a using a balance that will be used to create the account later
     let balance = 100;
-    let mut txns_len = 0;
     let num_txns = 3_200;
-    let txns_value: Vec<u64> = vec![balance; num_txns as usize];
-    let txns_fee: Vec<u64> = (1..num_txns + 1).collect();
-    let mut txns: Vec<Transaction> = vec![];
-    let mut sender_addresses: Vec<Address> = vec![];
-    let mut sender_keypairs: Vec<KeyPair> = vec![];
-    let mut reciver_addresses: Vec<Address> = vec![];
+    let mut mempool_transactions = vec![];
+    let sender_balances = vec![balance + num_txns * num_txns; num_txns as usize];
+    let recipient_balances = vec![0; num_txns as usize];
 
-    log::debug!("Generating transactions and accounts");
+    // Generate recipient accounts
+    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    // Generate sender accounts
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
 
-    for i in 0..num_txns as usize {
-        // Generate the txns_sender and txns_rec vectors to later generate transactions
-        let sender_keypair = KeyPair::generate_default_csprng();
-        let receiver_keypair = KeyPair::generate_default_csprng();
-        let sender_address = Address::from(&sender_keypair.public);
-        let receiver_address = Address::from(&receiver_keypair.public);
-        sender_keypairs.push(sender_keypair);
-        sender_addresses.push(sender_address);
-        reciver_addresses.push(receiver_address);
-
-        // Generate transactions
-        let mut txn = Transaction::new_basic(
-            sender_addresses[i].clone(),
-            reciver_addresses[i].clone(),
-            Coin::from_u64_unchecked(txns_value[i]),
-            Coin::from_u64_unchecked(txns_fee[i]),
-            1,
-            NetworkId::UnitAlbatross,
-        );
-
-        let signature_proof = SignatureProof::from(
-            sender_keypairs[i].public,
-            sender_keypairs[i].sign(&txn.serialize_content()),
-        );
-
-        txn.proof = signature_proof.serialize_to_vec();
-        txns.push(txn.clone());
-        txns_len += txn.serialized_size();
-
-        // Add accounts to the genesis builder
-        genesis_builder.with_basic_account(
-            sender_addresses[i].clone(),
-            Coin::from_u64_unchecked(balance + num_txns * num_txns),
-        );
+    // Generate transactions
+    for i in 0..num_txns {
+        let mempool_transaction = MempoolTransaction {
+            fee: (i + 1) as u64,
+            value: balance,
+            recipient: recipient_accounts[i as usize].clone(),
+            sender: sender_accounts[i as usize].clone(),
+        };
+        mempool_transactions.push(mempool_transaction);
     }
-
+    let (txns, txns_len) = generate_transactions(mempool_transactions);
     log::debug!("Done generating transactions and accounts");
 
     // Add validator to genesis
@@ -752,7 +752,7 @@ async fn mempool_tps() {
     // Send the transactions
     let txns = send_txn_to_mempool(blockchain, txns, txns_len).await;
 
-    // Expect at least 300 of the transactions in the mempool
+    // Expect at least 100 of the transactions in the mempool
     assert!(
         txns.len() > 100,
         "Min TPS of 100 wasn't achieved: TPS obtained {}",
@@ -784,53 +784,30 @@ async fn multiple_start_stop() {
     let env = VolatileEnvironment::new(10).unwrap();
     let mut genesis_builder = GenesisBuilder::default();
 
-    // Generate and sign transaction from address_a using a balance that will be used to create the account later
-    let balance = 100;
-    let num_txns = NUM_TXNS_START_STOP as u64;
-    let txns_value: Vec<u64> = vec![balance; num_txns as usize];
-    let txns_fee: Vec<u64> = (1..num_txns + 1).collect();
-    let mut txns: Vec<Transaction> = vec![];
-    let mut sender_addresses: Vec<Address> = vec![];
-    let mut sender_keypairs: Vec<KeyPair> = vec![];
-    let mut reciver_addresses: Vec<Address> = vec![];
-
     log::debug!("Generating transactions and accounts");
 
-    for i in 0..num_txns as usize {
-        // Generate the txns_sender and txns_rec vectors to later generate transactions
-        let sender_keypair = KeyPair::generate_default_csprng();
-        let receiver_keypair = KeyPair::generate_default_csprng();
-        let sender_address = Address::from(&sender_keypair.public);
-        let receiver_address = Address::from(&receiver_keypair.public);
-        sender_keypairs.push(sender_keypair);
-        sender_addresses.push(sender_address);
-        reciver_addresses.push(receiver_address);
+    let balance = 100;
+    let num_txns = NUM_TXNS_START_STOP as u64;
+    let mut mempool_transactions = vec![];
+    let sender_balances = vec![balance + num_txns * num_txns; num_txns as usize];
+    let recipient_balances = vec![0; num_txns as usize];
 
-        // Generate transactions
-        let mut txn = Transaction::new_basic(
-            sender_addresses[i].clone(),
-            reciver_addresses[i].clone(),
-            Coin::from_u64_unchecked(txns_value[i]),
-            Coin::from_u64_unchecked(txns_fee[i]),
-            1,
-            NetworkId::UnitAlbatross,
-        );
+    // Generate recipient accounts
+    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    // Generate sender accounts
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
 
-        let signature_proof = SignatureProof::from(
-            sender_keypairs[i].public,
-            sender_keypairs[i].sign(&txn.serialize_content()),
-        );
-
-        txn.proof = signature_proof.serialize_to_vec();
-        txns.push(txn.clone());
-
-        // Add accounts to the genesis builder
-        genesis_builder.with_basic_account(
-            sender_addresses[i].clone(),
-            Coin::from_u64_unchecked(balance + num_txns * num_txns),
-        );
+    // Generate transactions
+    for i in 0..num_txns {
+        let mempool_transaction = MempoolTransaction {
+            fee: (i + 1) as u64,
+            value: balance,
+            recipient: recipient_accounts[i as usize].clone(),
+            sender: sender_accounts[i as usize].clone(),
+        };
+        mempool_transactions.push(mempool_transaction);
     }
-
+    let (txns, _) = generate_transactions(mempool_transactions);
     log::debug!("Done generating transactions and accounts");
 
     // Add validator to genesis
