@@ -209,27 +209,33 @@ impl Block {
                 };
 
                 // Get the reward inherents and convert them to reward transactions.
-                let ext_txs = blockchain
-                    .history_store
-                    .get_block_transactions(block_number, None);
+                let transactions = if include_transactions {
+                    let ext_txs = blockchain
+                        .history_store
+                        .get_block_transactions(block_number, None);
 
-                let mut transactions = vec![];
+                    let mut txs = vec![];
 
-                for ext_tx in ext_txs {
-                    if ext_tx.is_inherent() {
-                        match ext_tx.into_transaction() {
-                            Ok(tx) => {
-                                transactions.push(Transaction::from_blockchain(
-                                    tx,
-                                    block_number,
-                                    timestamp,
-                                    blockchain.block_number(),
-                                ));
+                    for ext_tx in ext_txs {
+                        if ext_tx.is_inherent() {
+                            match ext_tx.into_transaction() {
+                                Ok(tx) => {
+                                    txs.push(Transaction::from_blockchain(
+                                        tx,
+                                        block_number,
+                                        timestamp,
+                                        blockchain.block_number(),
+                                    ));
+                                }
+                                Err(_) => {}
                             }
-                            Err(_) => {}
                         }
                     }
-                }
+
+                    Some(txs)
+                } else {
+                    None
+                };
 
                 Block {
                     hash: macro_block.hash(),
@@ -246,7 +252,7 @@ impl Block {
                     state_hash: macro_block.header.state_root,
                     body_hash: macro_block.header.body_root,
                     history_hash: macro_block.header.history_root,
-                    transactions: Some(transactions),
+                    transactions,
                     additional_fields: BlockAdditionalFields::Macro {
                         is_election_block: policy::is_election_block_at(block_number),
                         parent_election_hash: macro_block.header.parent_election_hash,

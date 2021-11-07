@@ -91,7 +91,7 @@ impl HistoryStore {
         let mut cursor = txn.cursor(&self.last_leaf_db);
 
         // Seek to the last leaf index of the block, if it exists.
-        match cursor.seek_key::<u32, u32>(&block_number) {
+        match cursor.seek_key::<u32, u32>(&block_number.to_be()) {
             // If it exists, we simply get the last leaf index for the block. We increment by 1
             // because the leaf index is 0-based and we want the number of leaves.
             Some(i) => i + 1,
@@ -99,7 +99,7 @@ impl HistoryStore {
             None => match cursor.prev::<u32, u32>() {
                 // If it exists, we also need to check if the previous block is in the same epoch.
                 Some((n, i)) => {
-                    if policy::epoch_at(n) == policy::epoch_at(block_number) {
+                    if policy::epoch_at(n.to_be()) == policy::epoch_at(block_number) {
                         i + 1
                     } else {
                         0
@@ -246,7 +246,7 @@ impl HistoryStore {
 
     /// Calculates the history tree root from a vector of extended transactions. It doesn't use the
     /// database, it is just used to check the correctness of the history root when syncing.
-    pub fn get_root_from_ext_txs(ext_txs: &[ExtendedTransaction]) -> Option<Blake2bHash> {
+    pub fn root_from_ext_txs(ext_txs: &[ExtendedTransaction]) -> Option<Blake2bHash> {
         // Create a new history tree.
         let mut tree = MerkleMountainRange::new(MemoryStore::new());
 
@@ -629,7 +629,13 @@ impl HistoryStore {
             },
         );
 
-        txn.put(&self.last_leaf_db, &ext_tx.block_number, &leaf_index);
+        // We need to convert the block number to big-endian since that's how the LMDB database
+        // orders the keys.
+        txn.put(
+            &self.last_leaf_db,
+            &ext_tx.block_number.to_be(),
+            &leaf_index,
+        );
 
         match &ext_tx.data {
             ExtTxData::Basic(tx) => {
@@ -690,8 +696,10 @@ impl HistoryStore {
             None => return,
         };
 
+        // Remove it from the extended transaction database.
         txn.remove(&self.ext_tx_db, leaf_hash);
 
+        // Remove it from the transaction hash database.
         let tx_hash = ext_tx.tx_hash();
 
         txn.remove_item(
@@ -703,31 +711,20 @@ impl HistoryStore {
             },
         );
 
-        // Check if you are removing the last extended transaction for this block. If yes, completely
-        // remove the block, if not just decrement the last leaf index.
+        // Remove it from the leaf index database.
+        // Check if you are removing the last extended transaction for this block. If yes,
+        // completely remove the block, if not just decrement the last leaf index.
         let block_number = ext_tx.block_number;
 
-        let leaf_last_block = match block_number.checked_sub(1) {
-            None => None,
-            Some(n) => txn.get::<u32, u32>(&self.last_leaf_db, &n),
-        };
+        let (start, end) = self.get_indexes_for_block(block_number, Some(txn));
 
-        if leaf_index == 0 {
-            // If the leaf index is already zero, always remove the block.
-            txn.remove(&self.last_leaf_db, &block_number);
-        } else if policy::epoch_index_at(block_number) == 0
-            || leaf_last_block.is_none()
-            || leaf_last_block.unwrap() < leaf_index - 1
-        {
-            // If there's no previous block in this epoch, or if there is but its last leaf is smaller
-            // than our resulting one would be, then we decrement the leaf index for the current block.
-            txn.put(&self.last_leaf_db, &block_number, &(leaf_index - 1));
+        if end - start == 1 {
+            txn.remove(&self.last_leaf_db, &block_number.to_be());
         } else {
-            // The remaining case is that there is a previous block in this epoch and its last leaf
-            // index would conflict with our new last leaf index. So we remove the block.
-            txn.remove(&self.last_leaf_db, &block_number);
+            txn.put(&self.last_leaf_db, &block_number.to_be(), &(leaf_index - 1));
         }
 
+        // Remove it from the sender and recipient addresses database.
         match &ext_tx.data {
             ExtTxData::Basic(tx) => {
                 let mut cursor = txn.cursor(&self.address_db);
@@ -875,7 +872,7 @@ impl HistoryStore {
         // Seek to the last leaf index of the block, if it exists.
         let mut cursor = txn.cursor(&self.last_leaf_db);
 
-        let end = match cursor.seek_key::<u32, u32>(&block_number) {
+        let end = match cursor.seek_key::<u32, u32>(&block_number.to_be()) {
             // If the block number doesn't exist in the database that's because it doesn't contain
             // any transactions or inherents. So we terminate here.
             None => return (0, 0),
@@ -888,10 +885,18 @@ impl HistoryStore {
             // If this is the first block of the epoch then it starts at zero by definition.
             0
         } else {
-            // Otherwise, seek to the last leaf index of the previous block, if it exists.
+            // Otherwise, seek to the last leaf index of the previous block in the database.
             match cursor.prev::<u32, u32>() {
+                // If it doesn't exist, then we have to start at zero.
                 None => 0,
-                Some((_, i)) => i + 1,
+                Some((n, i)) => {
+                    // If the previous block is from a different epoch, then we also have to start at zero.
+                    if policy::epoch_at(n.to_be()) != policy::epoch_at(block_number) {
+                        0
+                    } else {
+                        i + 1
+                    }
+                }
             }
         };
 
@@ -984,12 +989,12 @@ mod tests {
 
         // Verify method works.
         let real_root_0 = history_store.get_history_tree_root(0, Some(&txn));
-        let calc_root_0 = HistoryStore::get_root_from_ext_txs(&ext_txs[..3]);
+        let calc_root_0 = HistoryStore::root_from_ext_txs(&ext_txs[..3]);
 
         assert_eq!(real_root_0, calc_root_0);
 
         let real_root_1 = history_store.get_history_tree_root(1, Some(&txn));
-        let calc_root_1 = HistoryStore::get_root_from_ext_txs(&ext_txs[3..]);
+        let calc_root_1 = HistoryStore::root_from_ext_txs(&ext_txs[3..]);
 
         assert_eq!(real_root_1, calc_root_1);
     }
@@ -1094,7 +1099,7 @@ mod tests {
             Coin::from_u64_unchecked(7)
         );
 
-        // Remove extended transactions to History Store.
+        // Remove extended transactions from History Store.
         history_store.remove_partial_history(&mut txn, 0, 2);
         history_store.remove_partial_history(&mut txn, 1, 3);
 
@@ -1403,19 +1408,45 @@ mod tests {
         // Initialize History Store.
         let env = VolatileEnvironment::new(10).unwrap();
         let history_store = HistoryStore::new(env.clone());
-
-        // Create extended transactions.
-        let ext_txs = gen_ext_txs();
-
-        // Add extended transactions to History Store.
         let mut txn = WriteTransaction::new(&env);
-        history_store.add_to_history(&mut txn, 0, &ext_txs[..3]);
-        history_store.add_to_history(&mut txn, 1, &ext_txs[3..]);
 
-        // Verify method works.
-        assert_eq!(history_store.get_indexes_for_block(0, Some(&txn)), (0, 3));
-        assert_eq!(history_store.get_indexes_for_block(1, Some(&txn)), (0, 2));
-        assert_eq!(history_store.get_indexes_for_block(2, Some(&txn)), (2, 5));
+        for i in 0..=(16 * policy::BATCH_LENGTH) {
+            if policy::is_macro_block_at(i) {
+                let ext_txs = vec![
+                    create_inherent(i, 1),
+                    create_inherent(i, 2),
+                    create_inherent(i, 3),
+                    create_inherent(i, 4),
+                ];
+
+                history_store.add_to_history(&mut txn, policy::epoch_at(i), &ext_txs);
+            }
+        }
+
+        assert_eq!(history_store.get_indexes_for_block(0, Some(&txn)), (0, 4));
+
+        for i in 1..=16 {
+            assert_eq!(
+                history_store.get_indexes_for_block(32 * i, Some(&txn)),
+                ((i - 1) % 4 * 4, ((i - 1) % 4 + 1) * 4)
+            );
+        }
+
+        // Remove extended transactions from History Store.
+        for i in (1..=16).rev() {
+            history_store.remove_partial_history(
+                &mut txn,
+                policy::epoch_at(i * policy::BATCH_LENGTH),
+                4,
+            );
+
+            for j in 1..i {
+                assert_eq!(
+                    history_store.get_indexes_for_block(32 * j, Some(&txn)),
+                    ((j - 1) % 4 * 4, ((j - 1) % 4 + 1) * 4)
+                );
+            }
+        }
     }
 
     fn create_inherent(block: u32, value: u64) -> ExtendedTransaction {
