@@ -98,7 +98,6 @@ restarts_count=0
 cycles=0
 while [ $cycles -le $max_restarts ]
 do
-
     if [ $restarts_count -lt $max_restarts ] ; then
 
         #Select a random validator to restart
@@ -126,14 +125,14 @@ do
         echo "  Restarting validator: $(($index + 1 ))"
         cargo run --bin nimiq-client -- -c configs/dev/dev-$(($index + 1 )).toml &>> temp-logs/$foldername/Validator$(($index + 1 )).txt &
         pids[$index]=$!
-        restarts_count+=1
+        restarts_count=$(( $restarts_count + 1 ))
     fi
 
     if [ "$CONTINOUS" = false ] ; then
         cycles=$(( $cycles + 1 ))
     fi
 
-    sleep_time=$((30 + $RANDOM % 150))
+    sleep_time=$((45 + $RANDOM % 200))
 
     #Produce blocks for some minutes
     echo "  Producing blocks for $sleep_time seconds"
