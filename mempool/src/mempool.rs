@@ -290,7 +290,7 @@ impl Mempool {
 
                     if in_fly_balance <= sender_balance {
                         log::debug!(" Accepting new transaction from reverted blocks ");
-                        mempool_state.put(&tx);
+                        mempool_state.put(tx);
                     } else {
                         log::debug!(
                             "The Tx from reverted blocks was dropped because of not enough funds"
