@@ -31,7 +31,8 @@ use crate::{
         handler::HandlerError as DiscoveryError,
         peer_contacts::PeerContactBook,
     },
-    message::{behaviour::MessageBehaviour, handler::HandlerError as MessageError, peer::Peer},
+    message::{behaviour::MessageBehaviour, handler::HandlerError as MessageError},
+    peer::Peer,
     Config,
 };
 

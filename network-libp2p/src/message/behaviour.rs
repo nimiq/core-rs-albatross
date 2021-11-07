@@ -19,10 +19,9 @@ use nimiq_network_interface::{
     message::MessageType, network::NetworkEvent, peer_map::ObservablePeerMap,
 };
 
-use super::{
-    handler::{HandlerInEvent, HandlerOutEvent, MessageHandler},
-    peer::Peer,
-};
+use crate::peer::Peer;
+
+use super::handler::{HandlerInEvent, HandlerOutEvent, MessageHandler};
 
 type MessageNetworkBehaviourAction = NetworkBehaviourAction<NetworkEvent<Peer>, MessageHandler>;
 

@@ -49,7 +49,7 @@ use crate::{
     behaviour::{NimiqBehaviour, NimiqEvent, NimiqNetworkBehaviourError},
     connection_pool::behaviour::ConnectionPoolEvent,
     discovery::handler::HandlerInEvent,
-    message::peer::Peer,
+    peer::Peer,
     Config, NetworkError,
 };
 
@@ -970,7 +970,7 @@ mod tests {
             behaviour::DiscoveryConfig,
             peer_contacts::{PeerContact, Protocols, Services},
         },
-        message::peer::Peer,
+        peer::Peer,
     };
 
     use super::{Config, Network};

@@ -21,7 +21,9 @@ use thiserror::Error;
 use beserial::SerializingError;
 use nimiq_network_interface::{message::MessageType, peer::CloseReason};
 
-use super::{dispatch::MessageDispatch, peer::Peer, protocol::MessageProtocol};
+use crate::peer::Peer;
+
+use super::{dispatch::MessageDispatch, protocol::MessageProtocol};
 
 #[derive(Clone, Debug)]
 pub enum HandlerInEvent {

@@ -19,8 +19,7 @@ use crate::codecs::{
     tokio_adapter::TokioAdapter,
     typed::{Error, Message, MessageCodec, MessageType},
 };
-
-use super::peer::Peer;
+use crate::peer::Peer;
 
 type FramedStream<C> = Framed<TokioAdapter<C>, MessageCodec>;
 
