@@ -111,7 +111,7 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeLeafCircuit {
         let mut bits = vec![];
 
         for item in pks_var.iter().take(self.pks.len()) {
-            bits.extend(SerializeGadget::serialize_g2(cs.clone(), &item)?);
+            bits.extend(SerializeGadget::serialize_g2(cs.clone(), item)?);
         }
 
         MerkleTreeGadget::verify(
