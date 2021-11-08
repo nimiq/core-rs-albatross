@@ -39,6 +39,9 @@ pub enum Error {
 
     #[error("Failed to parse multiaddr: {0}")]
     Multiaddr(#[from] nimiq_network_libp2p::libp2p::core::multiaddr::Error),
+
+    #[error("Failed to parse Address: {0}")]
+    Address(#[from] nimiq_keys::AddressParseError),
 }
 
 impl Error {

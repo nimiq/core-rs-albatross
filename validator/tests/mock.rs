@@ -57,6 +57,7 @@ async fn mock_consensus(hub: &mut MockHub, peer_id: u64, genesis_info: GenesisIn
 async fn mock_validator(
     hub: &mut MockHub,
     peer_id: u64,
+    validator_address: Address,
     signing_key: BlsKeyPair,
     validator_key: KeyPair,
     warm_key: KeyPair,
@@ -68,6 +69,7 @@ async fn mock_validator(
         Validator::new(
             &consensus,
             validator_network,
+            validator_address,
             signing_key,
             validator_key,
             warm_key,
@@ -109,6 +111,7 @@ async fn mock_validators(hub: &mut MockHub, num_validators: usize) -> Vec<Valida
         let (v, c) = mock_validator(
             hub,
             id as u64,
+            Address::from(&validator_keys[id]),
             bls_keys[id].clone(),
             validator_keys[id].clone(),
             warm_keys[id].clone(),
@@ -186,6 +189,7 @@ async fn one_validator_can_create_micro_blocks() {
     let (validator, mut consensus1) = mock_validator(
         &mut hub,
         1,
+        Address::from(&validator_key),
         bls_key,
         validator_key,
         warm_key,

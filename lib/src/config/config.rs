@@ -16,7 +16,7 @@ use nimiq_database::{
     volatile::VolatileEnvironment,
     Environment,
 };
-use nimiq_keys::{KeyPair, PrivateKey};
+use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_mempool::{config::MempoolConfig, filter::MempoolRules};
 use nimiq_network_libp2p::{Keypair as IdentityKeypair, Multiaddr};
 use nimiq_primitives::networks::NetworkId;
@@ -511,6 +511,13 @@ impl Default for StorageConfig {
     }
 }
 
+#[cfg(feature = "validator")]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct ValidatorConfig {
+    /// The validator address.
+    pub validator_address: Address,
+}
+
 /// Credentials for JSON RPC server, metrics server or websocket RPC server
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Credentials {
@@ -650,6 +657,12 @@ pub struct ClientConfig {
 
     /// The optional validator configuration
     ///
+    #[cfg(feature = "validator")]
+    #[builder(default)]
+    pub validator: Option<ValidatorConfig>,
+
+    /// The optional rpc-server configuration
+    ///
     #[cfg(feature = "rpc-server")]
     #[builder(default)]
     pub rpc_server: Option<RpcServerConfig>,
@@ -741,12 +754,6 @@ impl ClientConfigBuilder {
         self
     }
 
-    /// Sets the validator config.
-    #[cfg(feature = "validator")]
-    pub fn validator(&mut self) -> &mut Self {
-        self
-    }
-
     /// Applies settings from a configuration file
     pub fn config_file(&mut self, config_file: &ConfigFile) -> Result<&mut Self, Error> {
         // TODO: if the config field of `listen_addresses` is empty, we should at least add `/ip4/127.0.0.1/...`
@@ -796,6 +803,10 @@ impl ClientConfigBuilder {
         }
         #[cfg(feature = "validator")]
         if let Some(validator_config) = config_file.validator.as_ref() {
+            self.validator(ValidatorConfig {
+                validator_address: Address::from_any_str(&validator_config.validator_address)?,
+            });
+
             if let Some(key_path) = &validator_config.validator_key_file {
                 file_storage.validator_key_path = Some(PathBuf::from(key_path));
             }

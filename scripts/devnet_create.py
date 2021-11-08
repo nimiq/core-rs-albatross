@@ -89,6 +89,8 @@ path = "{path}"
 level = "debug"
 timestamps = true
 
+[validator]
+validator_address="NQ07 0000 0000 0000 0000 0000 0000 0000 0000"
 """.format(
             path="temp-state/dev/seed",
         ))
@@ -162,17 +164,19 @@ level = "debug"
 timestamps = true
 
 [validator]
+validator_address = "{validator_address}"
 validator_key_file = "{path}/validator_key.dat"
 validator_key = "{validator_key}"
 cold_key_file = "{path}/cold_key.dat"
-cold_key = "{validator_address}"
+cold_key = "{cold_key}"
 warm_key_file = "{path}/warm_key.dat"
 warm_key = "{warm_address}"
     """.format(
             port=str(9101 + i),
             path="temp-state/dev/{}".format(i+1),  # str(path),
+            validator_address=validator_address["address"],
             validator_key=validator_key["private_key"],
-            validator_address=validator_address["private_key"],
+            cold_key=validator_address["private_key"],
             warm_address=warm_address["private_key"]
         ))
 

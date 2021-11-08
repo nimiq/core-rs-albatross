@@ -74,6 +74,7 @@ if [[ "$ROTATING_LOG_ENABLED" == "true" ]]; then
 fi
 
 echo '[validator]'
+required validator_address VALIDATOR_ADDRESS string
 optional validator_key_file VALIDATOR_KEY_FILE string
 optional validator_key VALIDATOR_KEY string
 optional cold_key_file COLD_KEY_FILE string

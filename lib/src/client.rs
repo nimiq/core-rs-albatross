@@ -121,6 +121,10 @@ impl ClientInner {
         // Start buffering network events as early as possible
         let network_events = network.subscribe_events();
 
+        // Load validator address
+        #[cfg(feature = "validator")]
+        let validator_address = config.validator.unwrap().validator_address;
+
         // Load validator key (before we give away ownership of the storage config)
         #[cfg(feature = "validator")]
         let validator_key = config.storage.validator_keypair()?;
@@ -166,6 +170,7 @@ impl ClientInner {
             Validator::new(
                 &consensus,
                 validator_network,
+                validator_address,
                 validator_key,
                 cold_key,
                 warm_key,

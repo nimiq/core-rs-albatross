@@ -479,6 +479,7 @@ impl From<MempoolFilterSettings> for MempoolRules {
 #[derive(Clone, Debug, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct ValidatorSettings {
+    pub validator_address: String,
     pub validator_key_file: Option<String>,
     pub validator_key: Option<String>,
     pub cold_key_file: Option<String>,

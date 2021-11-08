@@ -132,6 +132,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
     pub fn new(
         consensus: &Consensus<TNetwork>,
         network: Arc<TValidatorNetwork>,
+        validator_address: Address,
         signing_key: bls::KeyPair,
         cold_key: KeyPair,
         warm_key: KeyPair,
@@ -175,7 +176,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             database,
             env,
 
-            validator_address: Arc::new(RwLock::new(Address::from(&cold_key))),
+            validator_address: Arc::new(RwLock::new(validator_address)),
             cold_key: Arc::new(RwLock::new(cold_key)),
             warm_key: Arc::new(RwLock::new(warm_key)),
             signing_key: Arc::new(RwLock::new(signing_key)),

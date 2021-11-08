@@ -71,6 +71,7 @@ async fn consensus(peer_id: u64, genesis_info: GenesisInfo) -> Consensus {
 async fn validator(
     peer_id: u64,
     signing_key: BlsKeyPair,
+    validator_address: Address,
     validator_key: KeyPair,
     warm_key: KeyPair,
     genesis_info: GenesisInfo,
@@ -81,6 +82,7 @@ async fn validator(
         Validator::new(
             &consensus,
             validator_network,
+            validator_address,
             signing_key,
             validator_key,
             warm_key,
@@ -122,6 +124,7 @@ async fn validators(num_validators: usize) -> Vec<Validator> {
         let (v, c) = validator(
             (id + 1) as u64,
             bls_keys[id].clone(),
+            Address::from(&validator_keys[id]),
             validator_keys[id].clone(),
             warm_keys[id].clone(),
             genesis.clone(),
