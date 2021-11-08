@@ -48,6 +48,15 @@ impl std::fmt::Debug for BatchSet {
     }
 }
 
+impl From<PendingBatchSet> for BatchSet {
+    fn from(batch_set: PendingBatchSet) -> Self {
+        Self {
+            block: batch_set.block,
+            history: batch_set.history,
+        }
+    }
+}
+
 lazy_static! {
     static ref SYNC_CLUSTER_ID: AtomicUsize = AtomicUsize::default();
 }
@@ -311,22 +320,35 @@ impl<TPeer: Peer + 'static> Stream for SyncCluster<TPeer> {
     type Item = Result<BatchSet, SyncClusterResult>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        // TODO Wake when space in pending_batch_sets becomes available
-        if self.pending_batch_sets.len() < Self::NUM_PENDING_BATCH_SETS {
-            while let Poll::Ready(Some(result)) = self.batch_set_queue.poll_next_unpin(cx) {
-                match result {
-                    Ok(epoch) => {
-                        if let Err(e) = self.on_epoch_received(epoch) {
-                            return Poll::Ready(Some(Err(e)));
-                        }
+        while self.pending_batch_sets.len() < Self::NUM_PENDING_BATCH_SETS {
+            let result = match self.batch_set_queue.poll_next_unpin(cx) {
+                Poll::Ready(Some(result)) => result,
+                _ => break,
+            };
+
+            match result {
+                Ok(epoch) => {
+                    if let Err(e) = self.on_epoch_received(epoch) {
+                        return Poll::Ready(Some(Err(e)));
                     }
-                    Err(e) => {
-                        log::debug!(
-                            "Polling the batch set queue encountered error result: {:?}",
-                            e
-                        );
-                        return Poll::Ready(Some(Err(SyncClusterResult::Error)));
-                    } // TODO Error
+
+                    // Immediately emit the next epoch if it is already complete. This can only
+                    // happen for empty epochs. Currently, only the first epoch can be empty
+                    // as there are no rewards distributed in that epoch. Therefore, it is
+                    // sufficient to check for this condition here as opposed to in every call
+                    // to poll_next().
+                    if self.pending_batch_sets[0].is_complete() {
+                        let batch_set = self.pending_batch_sets.pop_front().unwrap();
+                        return Poll::Ready(Some(Ok(batch_set.into())));
+                    }
+                }
+                Err(e) => {
+                    log::debug!(
+                        "Polling the batch set queue encountered error result: {:?}",
+                        e
+                    );
+                    // TODO Improve error
+                    return Poll::Ready(Some(Err(SyncClusterResult::Error)));
                 }
             }
         }
@@ -340,12 +362,8 @@ impl<TPeer: Peer + 'static> Stream for SyncCluster<TPeer> {
 
                     // Emit finished epochs.
                     if self.pending_batch_sets[0].is_complete() {
-                        let epoch = self.pending_batch_sets.pop_front().unwrap();
-                        let epoch = BatchSet {
-                            block: epoch.block,
-                            history: epoch.history,
-                        };
-                        return Poll::Ready(Some(Ok(epoch)));
+                        let batch_set = self.pending_batch_sets.pop_front().unwrap();
+                        return Poll::Ready(Some(Ok(batch_set.into())));
                     }
                 }
                 Err(e) => {
