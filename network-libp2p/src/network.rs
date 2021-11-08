@@ -151,8 +151,8 @@ impl Network {
     pub async fn new(clock: Arc<OffsetTime>, config: Config) -> Self {
         let min_peers = config.min_peers;
 
-        let swarm = Self::new_swarm(clock, config);
-        let peers = swarm.behaviour().message.peers.clone();
+        let peers = ObservablePeerMap::new();
+        let swarm = Self::new_swarm(clock, config, peers.clone());
 
         let local_peer_id = *Swarm::local_peer_id(&swarm);
 
@@ -201,12 +201,16 @@ impl Network {
             .boxed())
     }
 
-    fn new_swarm(clock: Arc<OffsetTime>, config: Config) -> Swarm<NimiqBehaviour> {
+    fn new_swarm(
+        clock: Arc<OffsetTime>,
+        config: Config,
+        peers: ObservablePeerMap<Peer>,
+    ) -> Swarm<NimiqBehaviour> {
         let local_peer_id = PeerId::from(config.keypair.public());
 
         let transport = Self::new_transport(&config.keypair).unwrap();
 
-        let behaviour = NimiqBehaviour::new(config, clock);
+        let behaviour = NimiqBehaviour::new(config, clock, peers);
 
         let limits = ConnectionLimits::default()
             .with_max_pending_incoming(Some(5))
@@ -296,6 +300,12 @@ impl Network {
                     num_established
                 );
 
+                // Create Peer
+                swarm
+                    .behaviour_mut()
+                    .pool
+                    .create_peer(peer_id, endpoint.is_dialer());
+
                 if let Some(dial_errors) = concurrent_dial_errors {
                     for (addr, error) in dial_errors {
                         log::debug!(
@@ -336,6 +346,29 @@ impl Network {
                             tracing::error!("Bootstrapping DHT error: No known peers");
                         }
                     }
+                }
+            }
+
+            SwarmEvent::ConnectionClosed {
+                peer_id,
+                endpoint,
+                num_established,
+                cause,
+            } => {
+                tracing::info!(
+                    "Connection closed with peer {}, {:?}, connections established: {:?}",
+                    peer_id,
+                    endpoint,
+                    num_established
+                );
+
+                if let Some(cause) = cause {
+                    tracing::info!("Connection closed because: {:?}", cause);
+                }
+
+                // Remove Peer
+                if let Some(peer) = swarm.behaviour_mut().pool.peers.remove(&peer_id) {
+                    events_tx.send(NetworkEvent::<Peer>::PeerLeft(peer)).ok();
                 }
             }
 
@@ -500,16 +533,14 @@ impl Network {
                             }
                         }
                     }
-                    NimiqEvent::Message(event) => {
-                        events_tx.send(event).ok();
+                    NimiqEvent::Pool(event) => {
+                        match event {
+                            ConnectionPoolEvent::PeerJoined { peer } => {
+                                log::debug!("New peer: {:?}", peer);
+                                events_tx.send(NetworkEvent::<Peer>::PeerJoined(peer)).ok();
+                            }
+                        };
                     }
-                    NimiqEvent::Pool(event) => match event {
-                        ConnectionPoolEvent::Disconnect { peer_id } => {
-                            if let Err(e) = Swarm::disconnect_peer_id(swarm, peer_id) {
-                                tracing::error!("Couldn't disconnect peer {}: {:?}", peer_id, e);
-                            };
-                        }
-                    },
                 }
             }
             _ => {}
@@ -589,7 +620,6 @@ impl Network {
                     }
                 }
             }
-
             NetworkAction::Unsubscribe { topic_name, output } => {
                 let topic = IdentTopic::new(topic_name);
 
@@ -660,10 +690,7 @@ impl Network {
                     .ok();
             }
             NetworkAction::ReceiveFromAll { type_id, output } => {
-                swarm
-                    .behaviour_mut()
-                    .message
-                    .receive_from_all(type_id, output);
+                swarm.behaviour_mut().pool.receive_from_all(type_id, output);
             }
             NetworkAction::ListenOn { listen_addresses } => {
                 for listen_address in listen_addresses {

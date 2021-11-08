@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -303,15 +303,6 @@ impl SignedPeerContact {
 )]
 struct PeerContactMeta {
     score: f64,
-
-    /// The peers that sent us this contact. Used for scoring.
-    ///
-    /// # TODO
-    ///
-    ///  - Somehow serialize this
-    ///
-    #[cfg_attr(feature = "peer-contact-book-persistence", serde(skip))]
-    reported_by: HashSet<PeerId>,
 }
 
 /// This encapsulates a peer contact (signed), but also pre-computes frequently used values such as `peer_id` and
@@ -340,11 +331,7 @@ impl From<SignedPeerContact> for PeerContactInfo {
             peer_id,
             contact,
             protocols,
-            meta: RwLock::new(PeerContactMeta {
-                score: 0.,
-
-                reported_by: HashSet::new(),
-            }),
+            meta: RwLock::new(PeerContactMeta { score: 0. }),
         }
     }
 }

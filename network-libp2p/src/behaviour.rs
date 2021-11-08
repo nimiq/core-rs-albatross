@@ -18,7 +18,7 @@ use libp2p::{
 use parking_lot::RwLock;
 use tokio::time::Interval;
 
-use nimiq_network_interface::network::NetworkEvent;
+use nimiq_network_interface::peer_map::ObservablePeerMap;
 use nimiq_utils::time::OffsetTime;
 
 use crate::{
@@ -31,18 +31,14 @@ use crate::{
         handler::HandlerError as DiscoveryError,
         peer_contacts::PeerContactBook,
     },
-    message::{behaviour::MessageBehaviour, handler::HandlerError as MessageError},
     peer::Peer,
     Config,
 };
 
 pub type NimiqNetworkBehaviourError = EitherError<
     EitherError<
-        EitherError<
-            EitherError<EitherError<std::io::Error, DiscoveryError>, GossipsubHandlerError>,
-            std::io::Error,
-        >,
-        MessageError,
+        EitherError<EitherError<std::io::Error, DiscoveryError>, GossipsubHandlerError>,
+        std::io::Error,
     >,
     ConnectionPoolError,
 >;
@@ -53,7 +49,6 @@ pub enum NimiqEvent {
     Discovery(DiscoveryEvent),
     Gossip(GossipsubEvent),
     Identify(IdentifyEvent),
-    Message(NetworkEvent<Peer>),
     Pool(ConnectionPoolEvent),
 }
 
@@ -81,12 +76,6 @@ impl From<IdentifyEvent> for NimiqEvent {
     }
 }
 
-impl From<NetworkEvent<Peer>> for NimiqEvent {
-    fn from(event: NetworkEvent<Peer>) -> Self {
-        Self::Message(event)
-    }
-}
-
 impl From<ConnectionPoolEvent> for NimiqEvent {
     fn from(event: ConnectionPoolEvent) -> Self {
         Self::Pool(event)
@@ -100,7 +89,6 @@ pub struct NimiqBehaviour {
     pub discovery: DiscoveryBehaviour,
     pub gossipsub: Gossipsub,
     pub identify: Identify,
-    pub message: MessageBehaviour,
     pub pool: ConnectionPoolBehaviour,
 
     #[behaviour(ignore)]
@@ -117,7 +105,7 @@ pub struct NimiqBehaviour {
 }
 
 impl NimiqBehaviour {
-    pub fn new(config: Config, clock: Arc<OffsetTime>) -> Self {
+    pub fn new(config: Config, clock: Arc<OffsetTime>, peers: ObservablePeerMap<Peer>) -> Self {
         let public_key = config.keypair.public();
         let peer_id = public_key.clone().to_peer_id();
 
@@ -152,18 +140,14 @@ impl NimiqBehaviour {
         let identify_config = IdentifyConfig::new("/albatross/2.0".to_string(), public_key);
         let identify = Identify::new(identify_config);
 
-        // Message behaviour
-        let message = MessageBehaviour::new();
-
         // Connection pool behaviour
-        let pool = ConnectionPoolBehaviour::new(peer_contact_book.clone(), config.seeds);
+        let pool = ConnectionPoolBehaviour::new(peer_contact_book.clone(), config.seeds, peers);
 
         Self {
             dht,
             discovery,
             gossipsub,
             identify,
-            message,
             pool,
             events: VecDeque::new(),
             peer_contact_book,
@@ -233,12 +217,6 @@ impl NetworkBehaviourEventProcess<GossipsubEvent> for NimiqBehaviour {
 
 impl NetworkBehaviourEventProcess<IdentifyEvent> for NimiqBehaviour {
     fn inject_event(&mut self, event: IdentifyEvent) {
-        self.emit_event(event);
-    }
-}
-
-impl NetworkBehaviourEventProcess<NetworkEvent<Peer>> for NimiqBehaviour {
-    fn inject_event(&mut self, event: NetworkEvent<Peer>) {
         self.emit_event(event);
     }
 }

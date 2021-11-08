@@ -1,19 +1,21 @@
-use std::collections::{BTreeMap, BTreeSet};
-use std::task::Waker;
-use std::time::{Duration, Instant};
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
     sync::Arc,
-    task::{Context, Poll},
+    time::{Duration, Instant, SystemTime},
 };
 
+use bytes::Bytes;
+use futures::{
+    channel::mpsc,
+    task::{noop_waker_ref, Context, Poll, Waker},
+};
 use ip_network::IpNetwork;
 use libp2p::swarm::DialPeerCondition;
 use libp2p::{
     core::{connection::ConnectionId, multiaddr::Protocol, ConnectedPoint},
     swarm::{
-        DialError, IntoProtocolsHandler, NetworkBehaviour, NetworkBehaviourAction, PollParameters,
-        ProtocolsHandler,
+        DialError, IntoProtocolsHandler, NetworkBehaviour, NetworkBehaviourAction, NotifyHandler,
+        PollParameters, ProtocolsHandler,
     },
     Multiaddr, PeerId,
 };
@@ -22,9 +24,14 @@ use rand::seq::IteratorRandom;
 use rand::thread_rng;
 use tokio::time::Interval;
 
-use crate::discovery::peer_contacts::{PeerContactBook, Services};
+use nimiq_network_interface::{
+    message::MessageType, peer::CloseReason, peer_map::ObservablePeerMap,
+};
 
-use super::handler::{ConnectionPoolHandler, HandlerOutEvent};
+use crate::discovery::peer_contacts::{PeerContactBook, Services};
+use crate::peer::Peer;
+
+use super::handler::{ConnectionPoolHandler, HandlerInEvent, HandlerOutEvent};
 
 #[derive(Clone, Debug)]
 struct ConnectionPoolLimits {
@@ -62,11 +69,6 @@ impl Default for ConnectionPoolConfig {
             housekeeping_interval: Duration::from_secs(60 * 2), // 2 minutes
         }
     }
-}
-
-#[derive(Clone, Debug)]
-pub enum ConnectionPoolEvent {
-    Disconnect { peer_id: PeerId },
 }
 
 struct ConnectionState<T> {
@@ -158,6 +160,11 @@ impl<T> std::fmt::Display for ConnectionState<T> {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum ConnectionPoolEvent {
+    PeerJoined { peer: Arc<Peer> },
+}
+
 type PoolNetworkBehaviourAction =
     NetworkBehaviourAction<ConnectionPoolEvent, ConnectionPoolHandler>;
 
@@ -165,7 +172,8 @@ pub struct ConnectionPoolBehaviour {
     contacts: Arc<RwLock<PeerContactBook>>,
     seeds: Vec<Multiaddr>,
 
-    peers: ConnectionState<PeerId>,
+    pub peers: ObservablePeerMap<Peer>,
+    peer_ids: ConnectionState<PeerId>,
     addresses: ConnectionState<Multiaddr>,
 
     actions: VecDeque<PoolNetworkBehaviourAction>,
@@ -174,13 +182,19 @@ pub struct ConnectionPoolBehaviour {
 
     limits: ConnectionPoolLimits,
     config: ConnectionPoolConfig,
-    banned: HashSet<IpNetwork>,
+    banned: HashMap<IpNetwork, SystemTime>,
     waker: Option<Waker>,
     housekeeping_timer: Interval,
+
+    message_receivers: HashMap<MessageType, mpsc::Sender<(Bytes, Arc<Peer>)>>,
 }
 
 impl ConnectionPoolBehaviour {
-    pub fn new(contacts: Arc<RwLock<PeerContactBook>>, seeds: Vec<Multiaddr>) -> Self {
+    pub fn new(
+        contacts: Arc<RwLock<PeerContactBook>>,
+        seeds: Vec<Multiaddr>,
+        peers: ObservablePeerMap<Peer>,
+    ) -> Self {
         let limits = ConnectionPoolLimits {
             ip_count: HashMap::new(),
             ipv4_count: 0,
@@ -192,15 +206,17 @@ impl ConnectionPoolBehaviour {
         Self {
             contacts,
             seeds,
-            peers: ConnectionState::new(2, config.retry_down_after),
+            peers,
+            peer_ids: ConnectionState::new(2, config.retry_down_after),
             addresses: ConnectionState::new(4, config.retry_down_after),
             actions: VecDeque::new(),
             active: false,
             limits,
             config,
-            banned: HashSet::new(),
+            banned: HashMap::new(),
             waker: None,
             housekeeping_timer,
+            message_receivers: HashMap::new(),
         }
     }
 
@@ -212,19 +228,19 @@ impl ConnectionPoolBehaviour {
     pub fn maintain_peers(&mut self) {
         log::debug!(
             "Maintaining peers: {} | addresses: {}",
-            self.peers,
+            self.peer_ids,
             self.addresses
         );
 
         // Try to maintain at least `peer_count_desired` connections.
         if self.active
-            && self.peers.num_connected() < self.config.peer_count_desired
-            && self.peers.num_dialing() < self.config.dialing_count_max
+            && self.peer_ids.num_connected() < self.config.peer_count_desired
+            && self.peer_ids.num_dialing() < self.config.dialing_count_max
         {
             // Dial peers from the contact book.
             for peer_id in self.choose_peers_to_dial() {
                 log::debug!("Dialing peer {}", peer_id);
-                self.peers.mark_dialing(peer_id);
+                self.peer_ids.mark_dialing(peer_id);
                 let handler = self.new_handler();
                 self.actions.push_back(NetworkBehaviourAction::DialPeer {
                     peer_id,
@@ -250,8 +266,8 @@ impl ConnectionPoolBehaviour {
 
     fn choose_peers_to_dial(&self) -> Vec<PeerId> {
         let num_peers = usize::min(
-            self.config.peer_count_desired - self.peers.num_connected(),
-            self.config.dialing_count_max - self.peers.num_dialing(),
+            self.config.peer_count_desired - self.peer_ids.num_connected(),
+            self.config.dialing_count_max - self.peer_ids.num_dialing(),
         );
         let contacts = self.contacts.read();
         let own_contact = contacts.get_own_contact();
@@ -262,7 +278,7 @@ impl ConnectionPoolBehaviour {
             .query(own_contact.protocols(), Services::all()) // TODO Services
             .filter_map(|contact| {
                 let peer_id = contact.peer_id();
-                if peer_id != own_peer_id && self.peers.can_dial(peer_id) {
+                if peer_id != own_peer_id && self.peer_ids.can_dial(peer_id) {
                     Some(*peer_id)
                 } else {
                     None
@@ -274,7 +290,7 @@ impl ConnectionPoolBehaviour {
     fn choose_seeds_to_dial(&self) -> Vec<Multiaddr> {
         // We prefer to connect to non-seed peers. Thus, we only choose any seeds here if we're
         // not already dialing any peers and at most one seed at a time.
-        if self.peers.num_dialing() > 0 || self.addresses.num_dialing() > 0 {
+        if self.peer_ids.num_dialing() > 0 || self.addresses.num_dialing() > 0 {
             return vec![];
         }
 
@@ -293,23 +309,114 @@ impl ConnectionPoolBehaviour {
 
         // Disconnect peers that have negative scores.
         let contacts = self.contacts.read();
-        for peer_id in &self.peers.connected {
+        for peer_id in &self.peer_ids.connected {
             let peer_score = contacts.get(peer_id).map(|e| e.get_score());
             if let Some(score) = peer_score {
                 if score < 0.0 {
                     self.actions
-                        .push_back(NetworkBehaviourAction::GenerateEvent(
-                            ConnectionPoolEvent::Disconnect { peer_id: *peer_id },
-                        ));
+                        .push_back(NetworkBehaviourAction::NotifyHandler {
+                            peer_id: *peer_id,
+                            handler: NotifyHandler::Any,
+                            event: HandlerInEvent::Close {
+                                reason: CloseReason::Other,
+                            },
+                        });
                 }
             }
         }
         drop(contacts);
 
-        self.peers.housekeeping();
+        self.peer_ids.housekeeping();
         self.addresses.housekeeping();
 
+        for (ip, time) in self.banned.clone() {
+            if time < SystemTime::now() {
+                self.banned.remove(&ip);
+            }
+        }
+
         self.maintain_peers();
+    }
+
+    pub fn create_peer(&mut self, peer_id: PeerId, outbound: bool) {
+        // Send an event to the handler that tells it if this is an inbound or outbound connection, and the registered
+        // messages handlers, that receive from all peers.
+        self.actions
+            .push_back(NetworkBehaviourAction::NotifyHandler {
+                peer_id,
+                handler: NotifyHandler::Any,
+                event: HandlerInEvent::PeerConnected {
+                    peer_id,
+                    outbound,
+                    receive_from_all: self.message_receivers.clone(),
+                },
+            });
+    }
+
+    pub fn _ban_ip(&mut self, ip: IpNetwork) {
+        if self
+            .banned
+            .insert(ip, SystemTime::now() + Duration::from_secs(60 * 10)) // 10 minutes
+            .is_none()
+        {
+            log::debug!("{:?} added to banned set of peers", ip);
+        } else {
+            log::debug!("{:?} already part of banned set of peers", ip);
+        }
+    }
+
+    pub fn _unban_ip(&mut self, ip: IpNetwork) {
+        if self.banned.remove(&ip).is_some() {
+            log::debug!("{:?} removed from banned set of peers", ip);
+        } else {
+            log::debug!("{:?} was not part of banned set of peers", ip);
+        }
+    }
+
+    /// Registers a receiver to receive from all peers. This will also make sure that any newly connected peer already
+    /// has a receiver (a.k.a. message handler) registered before any messages can be received.
+    ///
+    /// # Note
+    ///
+    /// When a peer connects, this will be registered in its `MessageDispatch`. Thus you must not register a separate
+    /// receiver with the peer.
+    ///
+    /// # Arguments
+    ///
+    ///  - `type_id`: The message type (e.g. `MessageType::new(200)` for `RequestBlockHashes`)
+    ///  - `tx`: The sender through which the data of the messages is sent to the handler.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a receiver was already registered for this message type.
+    ///
+    pub fn receive_from_all(&mut self, type_id: MessageType, tx: mpsc::Sender<(Bytes, Arc<Peer>)>) {
+        if let Some(sender) = self.message_receivers.get_mut(&type_id) {
+            let mut cx = Context::from_waker(noop_waker_ref());
+            if let Poll::Ready(Ok(_)) = sender.poll_ready(&mut cx) {
+                panic!(
+                    "A receiver for message type {} is already registered",
+                    type_id
+                );
+            } else {
+                log::debug!(
+                    "Removing stale sender from global message_receivers: TYPE_ID: {}",
+                    &type_id
+                );
+                self.message_receivers.remove(&type_id);
+            }
+        }
+
+        // add the receiver to the pre existing peers
+        for peer in self.peers.get_peers() {
+            let mut dispatch = peer.dispatch.lock();
+
+            dispatch.remove_receiver_raw(type_id);
+            dispatch.receive_multiple_raw(vec![(type_id, tx.clone())]);
+        }
+
+        // add the receiver to the globally defined map
+        self.message_receivers.insert(type_id, tx);
     }
 }
 
@@ -330,15 +437,15 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
     }
 
     fn inject_connected(&mut self, peer_id: &PeerId) {
-        self.peers.mark_connected(*peer_id);
+        self.peer_ids.mark_connected(*peer_id);
         self.maintain_peers();
     }
 
     fn inject_disconnected(&mut self, peer_id: &PeerId) {
-        self.peers.mark_closed(*peer_id);
+        self.peer_ids.mark_closed(*peer_id);
         // If the connection was closed for any reason, don't dial the peer again.
         // FIXME We want to be more selective here and only mark peers as down for specific CloseReasons.
-        self.peers.mark_down(*peer_id);
+        self.peer_ids.mark_down(*peer_id);
         self.maintain_peers();
     }
 
@@ -404,9 +511,13 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
 
         if close_connection {
             self.actions
-                .push_back(NetworkBehaviourAction::GenerateEvent(
-                    ConnectionPoolEvent::Disconnect { peer_id: *peer_id },
-                ));
+                .push_back(NetworkBehaviourAction::NotifyHandler {
+                    peer_id: *peer_id,
+                    handler: NotifyHandler::Any,
+                    event: HandlerInEvent::Close {
+                        reason: CloseReason::Other,
+                    },
+                });
         } else {
             // Increment peer counts per IP
             *self.limits.ip_count.entry(ip).or_insert(0) += 1;
@@ -459,19 +570,12 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
         event: <<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::OutEvent,
     ) {
         match event {
-            HandlerOutEvent::Banned { ip } => {
-                if self.banned.insert(ip) {
-                    log::trace!("{:?} added to banned set of peers", ip);
-                } else {
-                    log::debug!("{:?} already part of banned set of peers", ip);
-                }
-            }
-            HandlerOutEvent::Unbanned { ip } => {
-                if self.banned.remove(&ip) {
-                    log::trace!("{:?} removed from banned set of peers", ip);
-                } else {
-                    log::debug!("{:?} was not part of banned set of peers", ip);
-                }
+            HandlerOutEvent::PeerJoined { peer } => {
+                self.peers.insert(Arc::clone(&peer));
+                self.actions
+                    .push_back(NetworkBehaviourAction::GenerateEvent(
+                        ConnectionPoolEvent::PeerJoined { peer },
+                    ));
             }
         }
     }
@@ -489,7 +593,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
         };
 
         log::debug!("Failed to dial peer: {}", peer_id);
-        self.peers.mark_failed(peer_id);
+        self.peer_ids.mark_failed(peer_id);
         self.maintain_peers();
     }
 

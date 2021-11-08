@@ -1,46 +1,51 @@
-use futures::{
-    future,
-    io::{AsyncRead, AsyncWrite},
-};
+use std::iter;
+
+use futures::{future, AsyncRead, AsyncWrite};
 use libp2p::{core::UpgradeInfo, InboundUpgrade, OutboundUpgrade};
 
-use crate::CONNECTION_POOL_PROTOCOL;
+use beserial::SerializingError;
 
-pub struct ConnectionPoolProtocol;
+use crate::dispatch::MessageDispatch;
+use crate::MESSAGE_PROTOCOL;
 
-impl UpgradeInfo for ConnectionPoolProtocol {
+#[derive(Debug, Default)]
+pub struct MessageProtocol {}
+
+impl MessageProtocol {
+    const BUFFER_SIZE: usize = 16;
+}
+
+impl UpgradeInfo for MessageProtocol {
     type Info = &'static [u8];
-    type InfoIter = std::iter::Once<Self::Info>;
+    type InfoIter = iter::Once<Self::Info>;
 
     fn protocol_info(&self) -> Self::InfoIter {
-        std::iter::once(CONNECTION_POOL_PROTOCOL)
+        iter::once(MESSAGE_PROTOCOL)
     }
 }
 
-impl<C> InboundUpgrade<C> for ConnectionPoolProtocol
+impl<C> InboundUpgrade<C> for MessageProtocol
 where
-    C: AsyncRead + AsyncWrite + Send + Unpin + 'static,
+    C: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static,
 {
-    type Output = ();
-    type Error = std::io::Error;
-    type Future = future::Ready<Result<Self::Output, Self::Error>>;
+    type Output = MessageDispatch<C>;
+    type Error = SerializingError;
+    type Future = future::Ready<Result<MessageDispatch<C>, SerializingError>>;
 
-    fn upgrade_inbound(self, _socket: C, info: Self::Info) -> Self::Future {
-        log::debug!("ConnectionPoolProtocol::upgrade_inbound: {:?}", info);
-        future::ok(())
+    fn upgrade_inbound(self, socket: C, _info: Self::Info) -> Self::Future {
+        future::ok(MessageDispatch::new(socket, Self::BUFFER_SIZE))
     }
 }
 
-impl<C> OutboundUpgrade<C> for ConnectionPoolProtocol
+impl<C> OutboundUpgrade<C> for MessageProtocol
 where
-    C: AsyncRead + AsyncWrite + Send + Unpin + 'static,
+    C: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static,
 {
-    type Output = ();
-    type Error = std::io::Error;
-    type Future = future::Ready<Result<Self::Output, Self::Error>>;
+    type Output = MessageDispatch<C>;
+    type Error = SerializingError;
+    type Future = future::Ready<Result<MessageDispatch<C>, SerializingError>>;
 
-    fn upgrade_outbound(self, _socket: C, info: Self::Info) -> Self::Future {
-        log::debug!("ConnectionPoolProtocol::upgrade_outbound: {:?}", info);
-        future::ok(())
+    fn upgrade_outbound(self, socket: C, _info: Self::Info) -> Self::Future {
+        future::ok(MessageDispatch::new(socket, Self::BUFFER_SIZE))
     }
 }
