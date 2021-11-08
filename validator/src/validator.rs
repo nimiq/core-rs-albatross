@@ -290,11 +290,8 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         match blockchain.get_next_block_type(None) {
             BlockType::Macro => {
                 log::trace!("Producing a macro block");
-                let block_producer = BlockProducer::new(
-                    Arc::clone(&self.consensus.blockchain),
-                    Arc::clone(&mempool),
-                    self.signing_key(),
-                );
+                let block_producer =
+                    BlockProducer::new(Arc::clone(&self.consensus.blockchain), self.signing_key());
 
                 // Take the current state and see if it is applicable to the current height.
                 // We do not need to keep it as it is persisted.

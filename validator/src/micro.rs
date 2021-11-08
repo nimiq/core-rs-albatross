@@ -124,22 +124,23 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
     }
 
     fn produce_micro_block(&self) -> MicroBlock {
-        let producer = BlockProducer::new(
-            Arc::clone(&self.blockchain),
-            Arc::clone(&self.mempool),
-            self.signing_key.clone(),
-        );
+        let producer = BlockProducer::new(Arc::clone(&self.blockchain), self.signing_key.clone());
 
         let blockchain = self.blockchain.read(); // might need to be upgradable_read()
         let timestamp = u64::max(
             blockchain.head().header().timestamp(),
             systemtime_to_timestamp(SystemTime::now()),
         );
+        let transactions = self
+            .mempool
+            .get_transactions_for_block(MicroBlock::get_available_bytes(self.fork_proofs.len()));
+
         producer.next_micro_block(
             timestamp,
             self.view_number,
             self.view_change_proof.clone(),
             self.fork_proofs.clone(),
+            transactions,
             vec![], // TODO
         )
     }

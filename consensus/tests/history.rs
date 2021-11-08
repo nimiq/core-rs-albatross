@@ -17,7 +17,6 @@ use nimiq_consensus::sync::history::HistorySync;
 use nimiq_consensus::sync::request_component::HistorySyncStream;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
-use nimiq_mempool::{config::MempoolConfig, mempool::Mempool};
 use nimiq_network_interface::network::Network;
 use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_primitives::policy;
@@ -56,15 +55,10 @@ async fn peers_can_sync() {
     let blockchain1 = Arc::new(RwLock::new(
         Blockchain::new(env1.clone(), NetworkId::UnitAlbatross, time).unwrap(),
     ));
-    let mempool1 = Mempool::new(Arc::clone(&blockchain1), MempoolConfig::default());
 
     let keypair =
         KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
-    let producer = BlockProducer::new(
-        Arc::clone(&blockchain1),
-        Arc::new(mempool1),
-        keypair.clone(),
-    );
+    let producer = BlockProducer::new(Arc::clone(&blockchain1), keypair.clone());
 
     // The minimum number of macro blocks necessary so that we have one election block and one
     // checkpoint block to push.
@@ -192,15 +186,10 @@ async fn sync_ingredients() {
     let blockchain1 = Arc::new(RwLock::new(
         Blockchain::new(env1.clone(), NetworkId::UnitAlbatross, time).unwrap(),
     ));
-    let mempool1 = Mempool::new(Arc::clone(&blockchain1), MempoolConfig::default());
 
     let keypair =
         KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
-    let producer = BlockProducer::new(
-        Arc::clone(&blockchain1),
-        Arc::new(mempool1),
-        keypair.clone(),
-    );
+    let producer = BlockProducer::new(Arc::clone(&blockchain1), keypair.clone());
 
     // The minimum number of macro blocks necessary so that we have one election block and one
     // checkpoint block to push.

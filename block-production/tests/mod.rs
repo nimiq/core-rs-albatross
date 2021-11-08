@@ -9,7 +9,6 @@ use nimiq_blockchain::{AbstractBlockchain, Blockchain, PushError, PushResult};
 use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
-use nimiq_mempool::{config::MempoolConfig, mempool::Mempool};
 use nimiq_primitives::policy;
 use nimiq_test_utils::blockchain::{
     fill_micro_blocks, sign_macro_block, sign_view_change, SECRET_KEY,
@@ -24,14 +23,19 @@ fn it_can_produce_micro_blocks() {
     let blockchain = Arc::new(RwLock::new(
         Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
     ));
-    let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
     let keypair =
         KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
-    let producer = BlockProducer::new(Arc::clone(&blockchain), Arc::new(mempool), keypair.clone());
+    let producer = BlockProducer::new(Arc::clone(&blockchain), keypair.clone());
 
     // #1.0: Empty standard micro block
-    let block =
-        producer.next_micro_block(blockchain.read().time.now(), 0, None, vec![], vec![0x41]);
+    let block = producer.next_micro_block(
+        blockchain.read().time.now(),
+        0,
+        None,
+        vec![],
+        vec![],
+        vec![0x41],
+    );
 
     assert_eq!(
         Blockchain::push(blockchain.upgradable_read(), Block::Micro(block.clone())),
@@ -61,6 +65,7 @@ fn it_can_produce_micro_blocks() {
         0,
         None,
         vec![fork_proof],
+        vec![],
         vec![0x41],
     );
     assert_eq!(
@@ -77,6 +82,7 @@ fn it_can_produce_micro_blocks() {
         1,
         Some(view_change),
         vec![],
+        vec![],
         vec![0x41],
     );
 
@@ -92,6 +98,7 @@ fn it_can_produce_micro_blocks() {
         blockchain.read().time.now() + 2000,
         1,
         Some(view_change),
+        vec![],
         vec![],
         vec![0x41],
     );
@@ -110,11 +117,10 @@ fn it_can_produce_macro_blocks() {
     let blockchain = Arc::new(RwLock::new(
         Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
     ));
-    let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
 
     let keypair =
         KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
-    let producer = BlockProducer::new(Arc::clone(&blockchain), Arc::new(mempool), keypair);
+    let producer = BlockProducer::new(Arc::clone(&blockchain), keypair);
 
     fill_micro_blocks(&producer, &blockchain);
 
@@ -145,12 +151,11 @@ fn it_can_produce_election_blocks() {
     let blockchain = Arc::new(RwLock::new(
         Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
     ));
-    let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
 
     let keypair =
         KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
 
-    let producer = BlockProducer::new(Arc::clone(&blockchain), Arc::new(mempool), keypair);
+    let producer = BlockProducer::new(Arc::clone(&blockchain), keypair);
 
     // push micro and macro blocks until the 3rd epoch is reached
     while policy::epoch_at(blockchain.read().block_number()) < 2 {

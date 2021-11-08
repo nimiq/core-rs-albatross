@@ -85,6 +85,10 @@ impl MicroBlock {
     pub fn hash(&self) -> Blake2bHash {
         self.header.hash()
     }
+
+    pub fn get_available_bytes(num_fork_proofs: usize) -> usize {
+        Self::MAX_SIZE - MicroHeader::SIZE - MicroBody::get_metadata_size(num_fork_proofs)
+    }
 }
 
 impl MicroHeader {
@@ -94,7 +98,7 @@ impl MicroHeader {
         /*version*/
         2 + /*block_number*/ 4 + /*view_number*/ 4 + /*timestamp*/ 8
             + /*parent_hash*/ 32 + /*seed*/ CompressedSignature::SIZE + /*extra_data*/ 32 +
-            /*state_root*/ 32 + /*body_root*/ 32;
+            /*state_root*/ 32 + /*body_root*/ 32 + /*history_root*/ 32;
 }
 
 impl MicroBody {

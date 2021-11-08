@@ -38,8 +38,7 @@ impl TemporaryBlockProducer {
         let keypair = KeyPair::from(
             SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap(),
         );
-        let producer: BlockProducer =
-            BlockProducer::new_without_mempool(Arc::clone(&blockchain), keypair);
+        let producer: BlockProducer = BlockProducer::new(Arc::clone(&blockchain), keypair);
         TemporaryBlockProducer {
             blockchain,
             producer,
@@ -90,6 +89,7 @@ impl TemporaryBlockProducer {
                 blockchain.time.now() + height as u64 * 1000,
                 view_number,
                 view_change_proof,
+                vec![],
                 vec![],
                 extra_data,
             ))

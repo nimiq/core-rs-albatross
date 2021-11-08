@@ -55,9 +55,7 @@ async fn send_get_mempool_txns(
     send_txn_to_mempool(&mempool, mock_network, mock_id, transactions).await;
 
     // Get the transactions from the mempool
-    mempool
-        .get_transactions_block(txn_len)
-        .expect("expected transaction vec")
+    mempool.get_transactions_for_block(txn_len)
 }
 
 async fn send_txn_to_mempool(
@@ -129,7 +127,7 @@ async fn multiple_start_stop_send(
     mempool.stop_executor();
 
     // Get the transactions from the mempool
-    let obtained_txns = mempool.get_transactions_block(usize::MAX).unwrap();
+    let obtained_txns = mempool.get_transactions_for_block(usize::MAX);
 
     // We should obtain the same amount of transactions
     assert_eq!(obtained_txns.len(), NUM_TXNS_START_STOP);
@@ -154,7 +152,7 @@ async fn multiple_start_stop_send(
     mempool.stop_executor();
 
     // We should not obtain any, since the executor should not be running.
-    let obtained_txns = mempool.get_transactions_block(usize::MAX).unwrap();
+    let obtained_txns = mempool.get_transactions_for_block(usize::MAX);
 
     // We should obtain 0 transactions
     assert_eq!(obtained_txns.len(), 0_usize);
@@ -192,7 +190,7 @@ async fn multiple_start_stop_send(
     mempool.stop_executor();
 
     // Get the transactions from the mempool
-    let obtained_txns = mempool.get_transactions_block(usize::MAX).unwrap();
+    let obtained_txns = mempool.get_transactions_for_block(usize::MAX);
 
     // We should obtain same number of txns
     assert_eq!(obtained_txns.len(), NUM_TXNS_START_STOP);
@@ -1017,9 +1015,7 @@ async fn mempool_update() {
     mempool.mempool_update(&adopted_micro_blocks[..], &reverted_micro_blocks[..]);
 
     // Get txns from mempool
-    let updated_txns = mempool
-        .get_transactions_block(10_000)
-        .expect("expected transaction vec");
+    let updated_txns = mempool.get_transactions_for_block(10_000);
 
     // Expect at least the original 30 transactions plus or minus:
     // - minus 5 from the adopted blocks since 5/10 transactions were in the mempool and they need to be dropped.
@@ -1031,8 +1027,9 @@ async fn mempool_update() {
     expected_txns.extend_from_slice(&rev_txns[..5]);
     expected_txns.reverse();
 
-    assert!(
-        updated_txns.len() == expected_txns.len(),
+    assert_eq!(
+        updated_txns.len(),
+        expected_txns.len(),
         "Number of txns is not what is expected"
     );
 
@@ -1044,8 +1041,8 @@ async fn mempool_update() {
             "Transactions in mempool are not ordered by fee"
         );
         prev_txn = updated_txns[i].clone();
-        assert!(
-            expected_txns[i] == updated_txns[i],
+        assert_eq!(
+            expected_txns[i], updated_txns[i],
             "Transaction at position {} is not expected",
             i
         );

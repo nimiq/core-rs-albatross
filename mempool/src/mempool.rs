@@ -1,6 +1,5 @@
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
-use std::io::Error;
 use std::sync::{Arc, Mutex};
 
 use futures::future::{AbortHandle, Abortable};
@@ -302,14 +301,14 @@ impl Mempool {
     /// Returns a vector with accepted transactions from the mempool.
     ///
     /// Returns the highest fee per byte up to max_bytes transactions and removes them from the mempool
-    pub fn get_transactions_block(&self, max_bytes: usize) -> Result<Vec<Transaction>, Error> {
+    pub fn get_transactions_for_block(&self, max_bytes: usize) -> Vec<Transaction> {
         let mut tx_vec = vec![];
 
         let state = self.state.upgradable_read();
 
         if state.transactions.is_empty() {
             log::debug!("Requesting txns and there are no txns in the mempool ");
-            return Ok(tx_vec);
+            return tx_vec;
         }
 
         let mut size = 0_usize;
@@ -349,7 +348,7 @@ impl Mempool {
             mempool_state_upgraded.transactions.len()
         );
 
-        Ok(tx_vec)
+        tx_vec
     }
 
     /// Adds a transaction to the Mempool.

@@ -66,6 +66,7 @@ pub fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<RwLock<Block
             0,
             None,
             vec![],
+            vec![],
             vec![0x42],
         );
 

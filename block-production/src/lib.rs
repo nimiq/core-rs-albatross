@@ -10,7 +10,6 @@ use nimiq_block::{
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, ExtendedTransaction};
 use nimiq_bls::KeyPair;
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_mempool::mempool::Mempool;
 use nimiq_primitives::policy;
 use nimiq_transaction::Transaction;
 
@@ -19,38 +18,19 @@ use nimiq_transaction::Transaction;
 /// this validator.
 pub struct BlockProducer {
     pub blockchain: Arc<RwLock<Blockchain>>,
-    pub mempool: Option<Arc<Mempool>>,
     pub validator_key: KeyPair,
 }
 
 impl BlockProducer {
-    /// Creates a new BlockProducer struct given a blockchain, a mempool and a validator key.
-    pub fn new(
-        blockchain: Arc<RwLock<Blockchain>>,
-        mempool: Arc<Mempool>,
-        validator_key: KeyPair,
-    ) -> Self {
+    /// Creates a new BlockProducer struct given a blockchain and a validator key.
+    pub fn new(blockchain: Arc<RwLock<Blockchain>>, validator_key: KeyPair) -> Self {
         BlockProducer {
             blockchain,
-            mempool: Some(Arc::clone(&mempool)),
             validator_key,
         }
     }
 
-    /// Creates a new BlockProducer struct without a mempool given a blockchain and a validator key.
-    pub fn new_without_mempool(
-        blockchain: Arc<RwLock<Blockchain>>,
-        validator_key: KeyPair,
-    ) -> Self {
-        BlockProducer {
-            blockchain,
-            mempool: None,
-            validator_key,
-        }
-    }
-
-    /// Creates the next micro block. By definition it is already finalized.
-    // Note: Needs to be called with the Blockchain lock held.
+    /// Creates the next micro block.
     pub fn next_micro_block(
         &self,
         // The timestamp for the block.
@@ -63,6 +43,8 @@ impl BlockProducer {
         // Proofs of any forks created by malicious validators. A fork proof may be submitted during
         // the batch when it happened or in the next one, but not after that.
         fork_proofs: Vec<ForkProof>,
+        // The transactions to be included in the block body.
+        mut transactions: Vec<Transaction>,
         // Extra data for this block. It has no a priori use.
         extra_data: Vec<u8>,
     ) -> MicroBlock {
@@ -83,22 +65,6 @@ impl BlockProducer {
             .head()
             .seed()
             .sign_next(&self.validator_key.secret_key);
-
-        // Calculate the maximum allowed size for the micro block body.
-        let max_size_bytes = MicroBlock::MAX_SIZE
-            - MicroHeader::SIZE
-            - MicroBody::get_metadata_size(fork_proofs.len());
-
-        // Get the transactions from the mempool.
-        let mut transactions: Vec<Transaction>;
-
-        if let Some(mempool) = &self.mempool {
-            transactions = mempool
-                .get_transactions_block(max_size_bytes)
-                .unwrap_or_default();
-        } else {
-            transactions = Vec::new();
-        }
 
         // Sort the transactions.
         transactions.sort_unstable();

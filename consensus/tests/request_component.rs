@@ -9,7 +9,6 @@ use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_consensus::sync::history::HistorySync;
 use nimiq_consensus::Consensus;
 use nimiq_database::volatile::VolatileEnvironment;
-use nimiq_mempool::{config::MempoolConfig, mempool::Mempool};
 use nimiq_network_interface::network::Network;
 use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_primitives::networks::NetworkId;
@@ -23,7 +22,6 @@ const SECRET_KEY: &str =
 struct Node {
     network: Arc<MockNetwork>,
     blockchain: Arc<RwLock<Blockchain>>,
-    mempool: Arc<Mempool>,
     consensus: Option<Consensus<MockNetwork>>,
 }
 
@@ -41,11 +39,6 @@ impl Node {
         let history_sync =
             HistorySync::<MockNetwork>::new(Arc::clone(&blockchain), network.subscribe_events());
 
-        let mempool = Arc::new(Mempool::new(
-            Arc::clone(&blockchain),
-            MempoolConfig::default(),
-        ));
-
         let consensus = Consensus::from_network(
             env,
             Arc::clone(&blockchain),
@@ -57,7 +50,6 @@ impl Node {
         Node {
             network,
             blockchain,
-            mempool,
             consensus: Some(consensus),
         }
     }
@@ -81,11 +73,7 @@ async fn test_request_component() {
 
     let keypair1 =
         KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
-    let producer1 = BlockProducer::new(
-        Arc::clone(&node1.blockchain),
-        Arc::clone(&node1.mempool),
-        keypair1,
-    );
+    let producer1 = BlockProducer::new(Arc::clone(&node1.blockchain), keypair1);
 
     //let num_macro_blocks = (policy::BATCHES_PER_EPOCH + 1) as usize;
     //produce_macro_blocks(num_macro_blocks, &producer1, &node1.blockchain);
