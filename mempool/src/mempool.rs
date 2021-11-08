@@ -182,12 +182,12 @@ impl Mempool {
 
         // Now iterate over the transactions in the adopted blocks:
         //  if transaction was known:
-        //      remove it from the mempool
+        //    remove it from the mempool
         //  else
-        //      if we know the sender
-        //          update the sender state (some transactions could become invalid )
-        //      else
-        //          we don't care, since it won't affect our senders balance
+        //    if we know the sender
+        //      update the sender state (some transactions could become invalid )
+        //    else
+        //      we don't care, since it won't affect our senders balance
         //
         for (_, block) in adopted_blocks {
             if let Some(transactions) = block.transactions() {
@@ -247,7 +247,6 @@ impl Mempool {
         // what we need to know is if we need to add back the transaction into the mempool
         // This is similar to an operation where we try to add a transaction,
         // the only difference is that we don't need to re-check signature
-        //
         for (_, block) in reverted_blocks {
             let block_height = blockchain.block_number() + 1;
 
@@ -257,7 +256,6 @@ impl Mempool {
 
                     // Check if we already know this transaction. If yes, skip ahead.
                     if mempool_state.contains(&tx_hash) {
-                        mempool_state.remove(&tx_hash);
                         continue;
                     }
 
@@ -289,7 +287,7 @@ impl Mempool {
                     let in_fly_balance = tx.total_value().unwrap() + sender_total;
 
                     if in_fly_balance <= sender_balance {
-                        log::debug!(" Accepting new transaction from reverted blocks ");
+                        log::debug!("Accepting new transaction from reverted blocks");
                         mempool_state.put(tx);
                     } else {
                         log::debug!(
