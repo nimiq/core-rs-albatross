@@ -2,22 +2,35 @@
 
 max_restarts=10
 # Initializing variables
-validators=(1 2 3 4)
-pids=()
-user="$USER"
+validators=()
+#Array with validators PIDs
+vpids=()
+#Array with seed/spammer pids
+spids=()
 fail=false
 foldername=$(date +%Y%m%d_%H%M%S)
 ERASE=false
 DATABASE_CLEAN=false
 CONTINOUS=false
-
+SPAMMER=false
+RELEASE=false
+MAX_VALIDATORS=4
+cargo="cargo run"
+cargo_build="cargo build"
+tps=150
+CONFIG_PATH="/tmp/nimiq-devnet"
 trap cleanup_exit INT
 
 function cleanup_exit() {
-    echo "Killing all validators and finishing...."
-    for pid in ${pids[@]}; do
+    echo "Killing all validators..."
+    for pid in ${vpids[@]}; do
         kill $pid
     done
+    echo "Killing seed/spammer...."
+    for pid in ${spids[@]}; do
+        kill $pid
+    done
+    echo "done.."
     if [ "$fail" = true ] ; then
         echo "...FAILED..."
         exit 1
@@ -30,14 +43,17 @@ usage()
 cat << EOF
 usage: $0 [-r|--restarts COUNT] [-e|--erase] [-h|--help]
 
-This script launches 4 validators and restarts them
+This script launches N validators and optionally restarts them while they are running
 
 OPTIONS:
-   -h|--help      Show this message
-   -e|--erase     Erases all of the validator state as part of restarting it
-   -d|--db        Erases only the database state of the validator as part of restarting it 
-   -r|--restarts  The number of times you want to kill/restart validators (by default 10 times)(0 means no restarts)
-   -c|--continous In continous mode the script runs until it is killed (or it finds an error)
+   -h|--help       Show this message
+   -e|--erase      Erases all of the validator state as part of restarting it
+   -d|--db         Erases only the database state of the validator as part of restarting it
+   -r|--restarts   The number of times you want to kill/restart validators (by default 10 times)(0 means no restarts)
+   -c|--continous  In continous mode the script runs until it is killed (or it finds an error)
+   -s|--spammer    Launch the spammer with the given amount of transactions per second
+   -R|--release    If you want to run in release mode
+   -v|--validators The number of validators, as a minimun 4 validators are created
 EOF
 }
 
@@ -52,6 +68,25 @@ while [ ! $# -eq 0 ]; do
                 exit 1
             fi
             ;;
+        -s | --spammer)
+            if [ "$2" ]; then
+                SPAMMER=true
+                tps=$2
+                shift
+            else
+                echo '--tps requires a value'
+                exit 1
+            fi
+            ;;
+        -v | --validators)
+            if [ "$2" ]; then
+                MAX_VALIDATORS=$2
+                shift
+            else
+                echo '--validators requires a value'
+                exit 1
+            fi
+            ;;
         -e | --erase)
             ERASE=true
             ;;
@@ -60,6 +95,12 @@ while [ ! $# -eq 0 ]; do
             ;;
         -d | --db)
             DATABASE_CLEAN=true
+            ;;
+        -s | --spammmer)
+            SPAMMER=true
+            ;;
+        -R | --release)
+            RELEASE=true
             ;;
         -h | --help)
             usage
@@ -78,19 +119,67 @@ mkdir -p  temp-logs/"$foldername"
 
 # Erase all previous state (if any) and start fresh
 rm -rf temp-state
-mkdir -p temp-state/dev/{1,2,3,4}
+
+if [ "$RELEASE" = true ] ; then
+    cargo+=" --release"
+    cargo_build+=" --release"
+fi
+
+echo "Number of validators: $MAX_VALIDATORS"
+
+if [ $MAX_VALIDATORS -lt 4 ] ; then
+    echo 'min number of validators is 4'
+    exit 1
+fi
+
+i=1
+while  [ $i -le $MAX_VALIDATORS ]
+do
+    validators+=($i)
+    i=$(( $i + 1 ))
+done
+
+echo "Building config files .."
+python3 scripts/devnet_create.py $MAX_VALIDATORS
+echo "Initializing genesis"
+cp -v /tmp/nimiq-devnet/dev-albatross.toml genesis/src/genesis/dev-albatross.toml
+echo "Compiling the code .."
+$cargo_build
+
+# Launch the seed node
+echo "Starting seed node.... "
+# Temporal workaround since spammer is not a validator
+rm -rf $HOME/.nimiq/
+mkdir -p $HOME/.nimiq/
+rm -rf temp-state/dev/seed
+mkdir -p temp-state/dev/seed
+$cargo --bin nimiq-client -- -c $CONFIG_PATH/seed/client.toml &>> temp-logs/$foldername/Seed.txt &
+spids+=($!)
+sleep 3s
 
 #Launch the validators and store their PID
 echo "Starting validators.... "
 for validator in ${validators[@]}; do
-    cargo run --bin nimiq-client -- -c configs/dev/dev-$validator.toml &>> temp-logs/$foldername/Validator$validator.txt &
-    pids+=($!)
+    echo "    Starting Validator: $validator"
+    mkdir -p temp-state/dev/$validator
+    $cargo --bin nimiq-client -- -c $CONFIG_PATH/validator$validator/client.toml &>> temp-logs/$foldername/Validator$validator.txt &
+    vpids+=($!)
     sleep 1s
 done
 echo "Done"
 
 #Let the validators produce blocks for 30 seconds
 sleep 30s
+
+#Launch the spammer
+if [ "$SPAMMER" = true ] ; then
+    echo "Starting spammer.... "
+
+    mkdir -p temp-state/dev/spammer
+    $cargo --bin nimiq-spammer -- -t $tps -c $CONFIG_PATH/spammer/client.toml &>> temp-logs/$foldername/Spammer.txt &
+    spids+=($!)
+    sleep 1s
+fi
 
 old_block_number=0
 restarts_count=0
@@ -105,7 +194,7 @@ do
 
         echo "  Killing validator: $(($index + 1 ))"
 
-        kill ${pids[$index]}
+        kill ${vpids[$index]}
         sleep 10s
 
         if [ "$ERASE" = true ] ; then
@@ -123,8 +212,8 @@ do
         echo "################################## RESTART ###########################  " >> temp-logs/$foldername/Validator$(($index + 1 )).txt
 
         echo "  Restarting validator: $(($index + 1 ))"
-        cargo run --bin nimiq-client -- -c configs/dev/dev-$(($index + 1 )).toml &>> temp-logs/$foldername/Validator$(($index + 1 )).txt &
-        pids[$index]=$!
+        $cargo --bin nimiq-client -- -c $CONFIG_PATH/validator$(($index + 1 ))/client.toml &>> temp-logs/$foldername/Validator$(($index + 1 )).txt &
+        vpids[$index]=$!
         restarts_count=$(( $restarts_count + 1 ))
     fi
 
@@ -132,7 +221,7 @@ do
         cycles=$(( $cycles + 1 ))
     fi
 
-    sleep_time=$((45 + $RANDOM % 200))
+    sleep_time=$((30 + $RANDOM % 100))
 
     #Produce blocks for some minutes
     echo "  Producing blocks for $sleep_time seconds"

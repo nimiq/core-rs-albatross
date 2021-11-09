@@ -393,6 +393,11 @@ impl Mempool {
         self.state.read().transactions.keys().cloned().collect()
     }
 
+    /// Returns the number of pending transactions in mempool.
+    pub fn num_transactions(&self) -> usize {
+        self.state.read().transactions.len()
+    }
+
     /// Gets all transactions in the mempool.
     pub fn get_transactions(&self) -> Vec<Transaction> {
         self.state.read().transactions.values().cloned().collect()
