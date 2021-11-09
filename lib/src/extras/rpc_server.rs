@@ -50,9 +50,13 @@ pub fn initialize_rpc_server(
         client.consensus_proxy(),
         Some(unlocked_wallets),
     ));
-    dispatcher.add(MempoolDispatcher::new(client.mempool()));
     dispatcher.add(NetworkDispatcher::new(client.network()));
-    dispatcher.add(ValidatorDispatcher::new(client.validator_proxy()));
+    if let Some(mempool) = client.mempool() {
+        dispatcher.add(MempoolDispatcher::new(mempool));
+    }
+    if let Some(validator_proxy) = client.validator_proxy() {
+        dispatcher.add(ValidatorDispatcher::new(validator_proxy));
+    }
     dispatcher.add(wallet_dispatcher);
 
     Ok(Server::new(

@@ -57,7 +57,7 @@ pub(crate) struct ClientInner {
     consensus: ConsensusProxy,
 
     #[cfg(feature = "validator")]
-    validator: ValidatorProxy,
+    validator: Option<ValidatorProxy>,
 
     /// Wallet that stores keypairs for transaction signing
     #[cfg(feature = "wallet")]
@@ -121,22 +121,6 @@ impl ClientInner {
         // Start buffering network events as early as possible
         let network_events = network.subscribe_events();
 
-        // Load validator address
-        #[cfg(feature = "validator")]
-        let validator_address = config.validator.unwrap().validator_address;
-
-        // Load validator key (before we give away ownership of the storage config)
-        #[cfg(feature = "validator")]
-        let validator_key = config.storage.validator_keypair()?;
-
-        // Load fee key (before we give away ownership of the storage config)
-        #[cfg(feature = "validator")]
-        let fee_key = config.storage.fee_keypair()?;
-
-        // Load warm key (before we give away ownership of the storage config)
-        #[cfg(feature = "validator")]
-        let warm_key = config.storage.warm_keypair()?;
-
         // Open database
         let environment = config.storage.database(
             config.network_id,
@@ -162,20 +146,38 @@ impl ClientInner {
         )
         .await;
 
-        // Initialize validator
         #[cfg(feature = "validator")]
-        let validator = {
-            let validator_network = Arc::new(ValidatorNetworkImpl::new(Arc::clone(&network)));
+        let (validator, validator_proxy) = match config.validator {
+            Some(validator_config) => {
+                // Load validator address
+                let validator_address = validator_config.validator_address;
 
-            Validator::new(
-                &consensus,
-                validator_network,
-                validator_address,
-                validator_key,
-                fee_key,
-                warm_key,
-                config.mempool,
-            )
+                // Load validator key (before we give away ownership of the storage config)
+                let validator_key = config.storage.validator_keypair()?;
+
+                // Load fee key (before we give away ownership of the storage config)
+                let fee_key = config.storage.fee_keypair()?;
+
+                // Load warm key (before we give away ownership of the storage config)
+                let warm_key = config.storage.warm_keypair()?;
+
+                let validator_network = Arc::new(ValidatorNetworkImpl::new(Arc::clone(&network)));
+
+                let validator = Validator::new(
+                    &consensus,
+                    validator_network,
+                    validator_address,
+                    validator_key,
+                    fee_key,
+                    warm_key,
+                    config.mempool,
+                );
+
+                let validator_proxy = validator.proxy();
+
+                (Some(validator), Some(validator_proxy))
+            }
+            None => (None, None),
         };
 
         // Start network.
@@ -188,13 +190,13 @@ impl ClientInner {
                 network,
                 consensus: consensus.proxy(),
                 #[cfg(feature = "validator")]
-                validator: validator.proxy(),
+                validator: validator_proxy,
                 #[cfg(feature = "wallet")]
                 wallet_store,
             }),
             consensus: Some(consensus),
             #[cfg(feature = "validator")]
-            validator: Some(validator),
+            validator,
         })
     }
 }
@@ -266,13 +268,15 @@ impl Client {
 
     #[cfg(feature = "validator")]
     /// Returns a reference to the *Validator proxy*.
-    pub fn validator_proxy(&self) -> ValidatorProxy {
+    pub fn validator_proxy(&self) -> Option<ValidatorProxy> {
         self.inner.validator.clone()
     }
 
     #[cfg(feature = "validator")]
-    pub fn mempool(&self) -> Arc<Mempool> {
-        Arc::clone(&self.validator.as_ref().unwrap().mempool)
+    pub fn mempool(&self) -> Option<Arc<Mempool>> {
+        self.validator
+            .as_ref()
+            .map(|validator| Arc::clone(&validator.mempool))
     }
 
     /// Returns the database environment.

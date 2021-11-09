@@ -88,9 +88,6 @@ path = "{path}"
 [log]
 level = "debug"
 timestamps = true
-
-[validator]
-validator_address="NQ07 0000 0000 0000 0000 0000 0000 0000 0000"
 """.format(
             path="temp-state/dev/seed",
         ))
