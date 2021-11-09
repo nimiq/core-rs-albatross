@@ -1,8 +1,8 @@
 use std::convert::TryFrom;
 
-use chrono::{DateTime, Utc};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer};
+use time::OffsetDateTime;
 
 use beserial::Deserialize as BDeserialize;
 use bls::{PublicKey as BlsPublicKey, SecretKey as BlsSecretKey};
@@ -17,7 +17,8 @@ pub struct GenesisConfig {
 
     pub seed_message: Option<String>,
 
-    pub timestamp: Option<DateTime<Utc>>,
+    #[serde(deserialize_with = "deserialize_timestamp")]
+    pub timestamp: Option<OffsetDateTime>,
 
     #[serde(default)]
     pub validators: Vec<GenesisValidator>,
@@ -117,6 +118,21 @@ where
         let skey_raw = hex::decode(skey_hex).map_err(Error::custom)?;
         Ok(Some(
             BlsSecretKey::deserialize_from_vec(&skey_raw).map_err(Error::custom)?,
+        ))
+    } else {
+        Ok(None)
+    }
+}
+
+pub fn deserialize_timestamp<'de, D>(deserializer: D) -> Result<Option<OffsetDateTime>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let opt: Option<String> = Deserialize::deserialize(deserializer)?;
+    if let Some(s) = opt {
+        Ok(Some(
+            OffsetDateTime::parse(&s, &time::format_description::well_known::Rfc3339)
+                .map_err(|e| Error::custom(format!("{:?}", e)))?,
         ))
     } else {
         Ok(None)

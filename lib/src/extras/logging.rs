@@ -1,12 +1,12 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use chrono::Local;
 use colored::Colorize;
 use fern::colors::{Color, ColoredLevelConfig};
 use fern::{log_file, Dispatch};
 use file_rotate::{FileRotate, RotationMode};
 use lazy_static::lazy_static;
 use log::{Level, LevelFilter};
+use time::OffsetDateTime;
 
 use crate::{
     config::{command_line::CommandLine, config_file::LogSettings},
@@ -134,11 +134,15 @@ fn pretty_logging_with_timestamps(
         let target_text = record.target().split("::").last().unwrap();
         let max_width = max_module_width(target_text);
         let target = format!("{: <width$}", target_text, width = max_width);
+        let ts_format = time::format_description::parse(
+            "[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:3]",
+        )
+        .unwrap();
 
         if formatted {
             out.finish(format_args!(
                 " {timestamp} {level: <5} {target} | {message}",
-                timestamp = Local::now().format("%Y-%m-%d %T.%3f"),
+                timestamp = OffsetDateTime::now_utc().format(&ts_format).unwrap(),
                 target = target.bold(),
                 level = colors_level.color(record.level()),
                 message = message,
@@ -146,7 +150,7 @@ fn pretty_logging_with_timestamps(
         } else {
             out.finish(format_args!(
                 " {timestamp} {level: <5} {target} | {message}",
-                timestamp = Local::now().format("%Y-%m-%d %T.%3f"),
+                timestamp = OffsetDateTime::now_utc().format(&ts_format).unwrap(),
                 target = target,
                 level = record.level(),
                 message = message,

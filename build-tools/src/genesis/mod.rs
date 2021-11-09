@@ -3,8 +3,8 @@ use std::fs::{read_to_string, OpenOptions};
 use std::io::Error as IoError;
 use std::path::Path;
 
-use chrono::{DateTime, Utc};
 use thiserror::Error;
+use time::OffsetDateTime;
 use toml::de::Error as TomlError;
 
 use account::{Account, AccountError, Accounts, AccountsList, BasicAccount, StakingContract};
@@ -28,7 +28,7 @@ pub enum GenesisBuilderError {
     #[error("No signing key to generate genesis seed.")]
     NoSigningKey,
     #[error("Invalid timestamp: {0}")]
-    InvalidTimestamp(DateTime<Utc>),
+    InvalidTimestamp(OffsetDateTime),
     #[error("Serialization failed")]
     SerializingError(#[from] SerializingError),
     #[error("I/O error")]
@@ -51,7 +51,7 @@ pub struct GenesisInfo {
 pub struct GenesisBuilder {
     pub signing_key: Option<BlsSecretKey>,
     pub seed_message: Option<String>,
-    pub timestamp: Option<DateTime<Utc>>,
+    pub timestamp: Option<OffsetDateTime>,
     pub validators: Vec<config::GenesisValidator>,
     pub stakers: Vec<config::GenesisStaker>,
     pub accounts: Vec<config::GenesisAccount>,
@@ -90,7 +90,7 @@ impl GenesisBuilder {
         self
     }
 
-    pub fn with_timestamp(&mut self, timestamp: DateTime<Utc>) -> &mut Self {
+    pub fn with_timestamp(&mut self, timestamp: OffsetDateTime) -> &mut Self {
         self.timestamp = Some(timestamp);
         self
     }
@@ -157,7 +157,7 @@ impl GenesisBuilder {
     pub fn generate(&self) -> Result<GenesisInfo, GenesisBuilderError> {
         // Initialize the environment.
         let env = VolatileEnvironment::new(10)?;
-        let timestamp = self.timestamp.unwrap_or_else(Utc::now);
+        let timestamp = self.timestamp.unwrap_or_else(OffsetDateTime::now_utc);
 
         // Initialize the accounts.
         let accounts = Accounts::new(env.clone());
@@ -264,7 +264,7 @@ impl GenesisBuilder {
             version: 1,
             block_number: 0,
             view_number: 0,
-            timestamp: u64::try_from(timestamp.timestamp_millis())
+            timestamp: u64::try_from(timestamp.unix_timestamp())
                 .map_err(|_| GenesisBuilderError::InvalidTimestamp(timestamp))?,
             parent_hash: [0u8; 32].into(),
             parent_election_hash: [0u8; 32].into(),
