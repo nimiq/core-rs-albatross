@@ -367,7 +367,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                             agent.peer.id(),
                             cluster.id
                         );
-                        agent.peer.close(CloseReason::Other);
+                        //agent.peer.close(CloseReason::Other);
                     }
                 }
             }
