@@ -13,6 +13,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+    - uses: actions/setup-python@v1
+    - uses: BSFishy/pip-action@v1
+      with:
+        packages: |
+          sh
     - uses: actions/cache@v2
       with:
         path:
@@ -31,21 +36,25 @@ jobs:
         command: build
     - name: Executes the 4 validators reconnecting scenario
       run: |          
-          cd test-scenarios
-          bash four_validators.sh
+          bash devnet.sh
     - name: Archive test results
       if: always()
       uses: actions/upload-artifact@v2
       with:
           name: reconnect-test-logs
           path: |
-            test-scenarios/temp-logs/
+            temp-logs/
 
   erase-state-test:
     runs-on: ubuntu-20.04
 
     steps:
     - uses: actions/checkout@v2
+    - uses: actions/setup-python@v1
+    - uses: BSFishy/pip-action@v1
+      with:
+        packages: |
+          sh
     - uses: actions/cache@v2
       with:
         path:
@@ -64,21 +73,25 @@ jobs:
         command: build
     - name: Executes the 4 validators reconnecting scenario erasing all their state
       run: |          
-          cd test-scenarios
-          bash four_validators.sh -e
+          bash devnet.sh -e
     - name: Archive test results
       if: always()
       uses: actions/upload-artifact@v2
       with:
           name: erase-state-test
           path: |
-            test-scenarios/temp-logs/
+            temp-logs/
 
   erase-database-test:
     runs-on: ubuntu-20.04
 
     steps:
     - uses: actions/checkout@v2
+    - uses: actions/setup-python@v1
+    - uses: BSFishy/pip-action@v1
+      with:
+        packages: |
+          sh
     - uses: actions/cache@v2
       with:
         path:
@@ -97,12 +110,11 @@ jobs:
         command: build
     - name: Executes the 4 validators reconnecting scenario eraseing their database
       run: |          
-          cd test-scenarios
-          bash four_validators.sh -d
+          bash devnet.sh -d
     - name: Archive test results
       if: always()
       uses: actions/upload-artifact@v2
       with:
           name: erase-db-test
           path: |
-            test-scenarios/temp-logs/
+            temp-logs/

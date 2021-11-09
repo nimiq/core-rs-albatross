@@ -38,6 +38,7 @@ members = [
   "rpc-client",
   "rpc-interface",
   "rpc-server",
+  "spammer",
   "tendermint",
   "test-utils",
   "tools",

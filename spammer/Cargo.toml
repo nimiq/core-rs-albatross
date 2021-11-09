@@ -1,0 +1,66 @@
+[package]
+name = "nimiq-spammer"
+version = "0.1.0"
+authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
+edition = "2018"
+description = "Nimiq's Rust client"
+homepage = "https://nimiq.com"
+repository = "https://github.com/nimiq/core-rs-albatross"
+license = "Apache-2.0"
+categories = ["cryptography::cryptocurrencies"]
+keywords = ["nimiq", "cryptocurrency", "blockchain"]
+exclude = ["db", "peer_key.dat"]
+
+[badges]
+travis-ci = { repository = "nimiq/core-rs", branch = "master" }
+is-it-maintained-issue-resolution = { repository = "nimiq/core-rs" }
+is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
+maintenance = { status = "experimental" }
+
+[dependencies]
+futures = "0.3"
+log = "0.4"
+rand = "0.8.4"
+tokio = { version = "1.9", features = ["rt-multi-thread", "time"] }
+structopt = { version = "0.3", features = ["paw"] }
+
+nimiq-block = { path = "../primitives/block" }
+nimiq-blockchain = { path = "../blockchain" }
+nimiq-keys = { path = "../keys" }
+nimiq-mempool = { path = "../mempool" }
+nimiq-primitives = { path = "../primitives", features = ["coin", "networks"] }
+nimiq-transaction = { path = "../primitives/transaction" }
+nimiq-transaction-builder = { path = "../transaction-builder" }
+
+[dependencies.nimiq]
+package = "nimiq-lib"
+path = "../lib"
+version = "0.1"
+features = [
+    "validator",
+    "rpc-server",
+    "deadlock",
+    "logging",
+    "wallet",
+    "panic"
+]
+
+# Force nimiq-bls and nimiq-nano-zkp to be built with the highest optimization level in the test profiles. This is
+# necessary in order to have decent tests performance.
+# We do the same with nimiq-bls dev profile because it is compiled for a lot of other crates's tests.
+[profile.dev.package.nimiq-bls]
+opt-level = 3
+
+[profile.test.package.nimiq-bls]
+opt-level = 3
+
+[profile.dev.package.nimiq-nano-primitives]
+opt-level = 3
+
+[profile.test.package.nimiq-nano-zkp]
+opt-level = 3
+
+# Optimize the release profile for speed.
+[profile.release]
+lto = "fat"
+codegen-units = 1
