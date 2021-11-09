@@ -43,9 +43,9 @@ use crate::{Account, AccountError, AccountsTrie, StakingContract};
 ///
 /// Create, Update, Retire, Re-activate and Unpark are incoming transactions to the staking contract.
 /// Drop is an outgoing transaction from the staking contract.
-/// To Create, Update or Drop, the validator must use the cold key (the one corresponding to the
-/// validator address). For the other transactions, the validator must use the warm key (the one
-/// corresponding to the warm address).
+/// To Create, Update or Drop, the cold key must be used (the one corresponding to the validator
+/// address). For the other transactions, the the warm key (the one corresponding to the warm address)
+/// must be used.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Validator {
     // The address of the validator. The corresponding key can be used to create, update or drop

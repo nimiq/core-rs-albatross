@@ -73,7 +73,7 @@ enum MempoolState {
 
 pub struct ValidatorProxy {
     pub validator_address: Arc<RwLock<Address>>,
-    pub cold_key: Arc<RwLock<KeyPair>>,
+    pub fee_key: Arc<RwLock<KeyPair>>,
     pub warm_key: Arc<RwLock<KeyPair>>,
     pub signing_key: Arc<RwLock<bls::KeyPair>>,
 }
@@ -82,7 +82,7 @@ impl Clone for ValidatorProxy {
     fn clone(&self) -> Self {
         Self {
             validator_address: Arc::clone(&self.validator_address),
-            cold_key: Arc::clone(&self.cold_key),
+            fee_key: Arc::clone(&self.fee_key),
             warm_key: Arc::clone(&self.warm_key),
             signing_key: Arc::clone(&self.signing_key),
         }
@@ -97,7 +97,7 @@ pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork + 's
     env: Environment,
 
     validator_address: Arc<RwLock<Address>>,
-    cold_key: Arc<RwLock<KeyPair>>,
+    fee_key: Arc<RwLock<KeyPair>>,
     warm_key: Arc<RwLock<KeyPair>>,
     signing_key: Arc<RwLock<bls::KeyPair>>,
 
@@ -134,7 +134,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         network: Arc<TValidatorNetwork>,
         validator_address: Address,
         signing_key: bls::KeyPair,
-        cold_key: KeyPair,
+        fee_key: KeyPair,
         warm_key: KeyPair,
         mempool_config: MempoolConfig,
     ) -> Self {
@@ -177,7 +177,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             env,
 
             validator_address: Arc::new(RwLock::new(validator_address)),
-            cold_key: Arc::new(RwLock::new(cold_key)),
+            fee_key: Arc::new(RwLock::new(fee_key)),
             warm_key: Arc::new(RwLock::new(warm_key)),
             signing_key: Arc::new(RwLock::new(signing_key)),
 
@@ -564,7 +564,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         let validity_start_height = policy::macro_block_before(blockchain.block_number());
 
         let unpark_transaction = TransactionBuilder::new_unpark_validator(
-            &self.cold_key(),
+            &self.fee_key(),
             self.validator_address(),
             &self.warm_key(),
             Coin::ZERO,
@@ -597,8 +597,8 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         self.validator_address.read().clone()
     }
 
-    pub fn cold_key(&self) -> KeyPair {
-        self.cold_key.read().clone()
+    pub fn fee_key(&self) -> KeyPair {
+        self.fee_key.read().clone()
     }
 
     pub fn warm_key(&self) -> KeyPair {
@@ -608,7 +608,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
     pub fn proxy(&self) -> ValidatorProxy {
         ValidatorProxy {
             validator_address: Arc::clone(&self.validator_address),
-            cold_key: Arc::clone(&self.cold_key),
+            fee_key: Arc::clone(&self.fee_key),
             warm_key: Arc::clone(&self.warm_key),
             signing_key: Arc::clone(&self.signing_key),
         }

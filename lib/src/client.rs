@@ -129,9 +129,9 @@ impl ClientInner {
         #[cfg(feature = "validator")]
         let validator_key = config.storage.validator_keypair()?;
 
-        // Load validator key (before we give away ownership of the storage config)
+        // Load fee key (before we give away ownership of the storage config)
         #[cfg(feature = "validator")]
-        let cold_key = config.storage.cold_keypair()?;
+        let fee_key = config.storage.fee_keypair()?;
 
         // Load warm key (before we give away ownership of the storage config)
         #[cfg(feature = "validator")]
@@ -172,7 +172,7 @@ impl ClientInner {
                 validator_network,
                 validator_address,
                 validator_key,
-                cold_key,
+                fee_key,
                 warm_key,
                 config.mempool,
             )

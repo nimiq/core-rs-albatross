@@ -59,7 +59,7 @@ async fn mock_validator(
     peer_id: u64,
     validator_address: Address,
     signing_key: BlsKeyPair,
-    validator_key: KeyPair,
+    fee_key: KeyPair,
     warm_key: KeyPair,
     genesis_info: GenesisInfo,
 ) -> (Validator, Consensus) {
@@ -71,7 +71,7 @@ async fn mock_validator(
             validator_network,
             validator_address,
             signing_key,
-            validator_key,
+            fee_key,
             warm_key,
             MempoolConfig::default(),
         ),
@@ -86,6 +86,9 @@ async fn mock_validators(hub: &mut MockHub, num_validators: usize) -> Vec<Valida
         .map(|_| BlsKeyPair::generate(&mut rng))
         .collect();
     let validator_keys: Vec<KeyPair> = (0..num_validators)
+        .map(|_| KeyPair::generate(&mut rng))
+        .collect();
+    let fee_keys: Vec<KeyPair> = (0..num_validators)
         .map(|_| KeyPair::generate(&mut rng))
         .collect();
     let warm_keys: Vec<KeyPair> = (0..num_validators)
@@ -113,7 +116,7 @@ async fn mock_validators(hub: &mut MockHub, num_validators: usize) -> Vec<Valida
             id as u64,
             Address::from(&validator_keys[id]),
             bls_keys[id].clone(),
-            validator_keys[id].clone(),
+            fee_keys[id].clone(),
             warm_keys[id].clone(),
             genesis.clone(),
         )
@@ -175,6 +178,7 @@ async fn one_validator_can_create_micro_blocks() {
 
     let bls_key = BlsKeyPair::generate(&mut seeded_rng(0));
     let validator_key = KeyPair::generate(&mut seeded_rng(0));
+    let fee_key = KeyPair::generate(&mut seeded_rng(0));
     let warm_key = KeyPair::generate(&mut seeded_rng(0));
     let genesis = GenesisBuilder::default()
         .with_genesis_validator(
@@ -191,7 +195,7 @@ async fn one_validator_can_create_micro_blocks() {
         1,
         Address::from(&validator_key),
         bls_key,
-        validator_key,
+        fee_key,
         warm_key,
         genesis.clone(),
     )

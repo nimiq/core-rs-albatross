@@ -482,8 +482,8 @@ pub struct ValidatorSettings {
     pub validator_address: String,
     pub validator_key_file: Option<String>,
     pub validator_key: Option<String>,
-    pub cold_key_file: Option<String>,
-    pub cold_key: Option<String>,
+    pub fee_key_file: Option<String>,
+    pub fee_key: Option<String>,
     pub warm_key_file: Option<String>,
     pub warm_key: Option<String>,
 }

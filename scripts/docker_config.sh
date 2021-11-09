@@ -77,8 +77,8 @@ echo '[validator]'
 required validator_address VALIDATOR_ADDRESS string
 optional validator_key_file VALIDATOR_KEY_FILE string
 optional validator_key VALIDATOR_KEY string
-optional cold_key_file COLD_KEY_FILE string
-optional cold_key COLD_KEY string
+optional fee_key_file FEE_KEY_FILE string
+optional fee_key FEE_KEY string
 optional warm_key_file WARM_KEY_FILE string
 optional warm_key WARM_KEY string
 

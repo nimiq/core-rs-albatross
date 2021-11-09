@@ -167,8 +167,8 @@ timestamps = true
 validator_address = "{validator_address}"
 validator_key_file = "{path}/validator_key.dat"
 validator_key = "{validator_key}"
-cold_key_file = "{path}/cold_key.dat"
-cold_key = "{cold_key}"
+fee_key_file = "{path}/fee_key.dat"
+fee_key = "{fee_key}"
 warm_key_file = "{path}/warm_key.dat"
 warm_key = "{warm_address}"
     """.format(
@@ -176,7 +176,7 @@ warm_key = "{warm_address}"
             path="temp-state/dev/{}".format(i+1),  # str(path),
             validator_address=validator_address["address"],
             validator_key=validator_key["private_key"],
-            cold_key=validator_address["private_key"],
+            fee_key=reward_address["private_key"],
             warm_address=warm_address["private_key"]
         ))
 

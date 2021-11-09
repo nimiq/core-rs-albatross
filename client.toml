@@ -14,6 +14,7 @@ port = 8648
 level = "debug"
 
 [validator]
+validator_address = "NQ07 0000 0000 0000 0000 0000 0000 0000 0000"
 validator_key_file = "validator_key.dat"
-cold_key_file = "cold_key.dat"
+fee_key_file = "fee_key.dat"
 warm_key_file = "warm_key.dat"

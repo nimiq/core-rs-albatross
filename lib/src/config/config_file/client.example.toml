@@ -251,5 +251,5 @@ level = "debug"
 
 [validator]
 validator_key_file = "validator_key.dat"
-cold_key_file = "cold_key.dat"
+fee_key_file = "fee_key.dat"
 warm_key_file = "warm_key.dat"

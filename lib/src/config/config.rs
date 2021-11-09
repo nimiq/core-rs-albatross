@@ -181,13 +181,13 @@ pub struct FileStorageConfig {
     #[cfg(feature = "validator")]
     validator_key: Option<String>,
 
-    /// Path to cold key.
+    /// Path to fee key.
     #[cfg(feature = "validator")]
-    cold_key_path: Option<PathBuf>,
+    fee_key_path: Option<PathBuf>,
 
-    /// The cold key used for the validator, if the file is not present.
+    /// The fee key used for the validator, if the file is not present.
     #[cfg(feature = "validator")]
-    cold_key: Option<String>,
+    fee_key: Option<String>,
 
     /// Path to warm key.
     #[cfg(feature = "validator")]
@@ -212,9 +212,9 @@ impl FileStorageConfig {
             #[cfg(feature = "validator")]
             validator_key: None,
             #[cfg(feature = "validator")]
-            cold_key_path: Some(path.join("cold_key.dat")),
+            fee_key_path: Some(path.join("fee_key.dat")),
             #[cfg(feature = "validator")]
-            cold_key: None,
+            fee_key: None,
             #[cfg(feature = "validator")]
             warm_key_path: Some(path.join("warm_key.dat")),
             #[cfg(feature = "validator")]
@@ -407,26 +407,26 @@ impl StorageConfig {
     }
 
     #[cfg(feature = "validator")]
-    pub(crate) fn cold_keypair(&self) -> Result<KeyPair, Error> {
+    pub(crate) fn fee_keypair(&self) -> Result<KeyPair, Error> {
         Ok(match self {
             StorageConfig::Volatile => KeyPair::generate_default_csprng(),
             StorageConfig::Filesystem(file_storage) => {
                 let key_path = file_storage
-                    .cold_key_path
+                    .fee_key_path
                     .as_ref()
-                    .ok_or_else(|| Error::config_error("No path for cold key specified"))?;
+                    .ok_or_else(|| Error::config_error("No path for fee key specified"))?;
                 let key_path = key_path
                     .to_str()
                     .ok_or_else(|| {
                         Error::config_error(format!(
-                            "Failed to convert path of cold key to string: {}",
+                            "Failed to convert path of fee key to string: {}",
                             key_path.display()
                         ))
                     })?
                     .to_string();
 
                 FileStore::new(key_path).load_or_store(|| {
-                    if let Some(key) = file_storage.cold_key.as_ref() {
+                    if let Some(key) = file_storage.fee_key.as_ref() {
                         // TODO: handle errors
                         KeyPair::from(
                             PrivateKey::deserialize_from_vec(&hex::decode(key).unwrap()).unwrap(),
@@ -813,11 +813,11 @@ impl ClientConfigBuilder {
             if let Some(key) = &validator_config.validator_key {
                 file_storage.validator_key = Some(key.to_owned());
             }
-            if let Some(key_path) = &validator_config.cold_key_file {
-                file_storage.cold_key_path = Some(PathBuf::from(key_path));
+            if let Some(key_path) = &validator_config.fee_key_file {
+                file_storage.fee_key_path = Some(PathBuf::from(key_path));
             }
-            if let Some(key) = &validator_config.cold_key {
-                file_storage.cold_key = Some(key.to_owned());
+            if let Some(key) = &validator_config.fee_key {
+                file_storage.fee_key = Some(key.to_owned());
             }
             if let Some(key_path) = &validator_config.warm_key_file {
                 file_storage.warm_key_path = Some(PathBuf::from(key_path));
