@@ -96,6 +96,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+    - uses: actions/setup-python@v1
+    - uses: BSFishy/pip-action@v1
+      with:
+        packages: |
+          sh
     - uses: actions/cache@v2
       with:
         path:
@@ -114,12 +119,11 @@ jobs:
         command: build
     - name: Executes the 4 validators reconnecting scenario
       run: |
-          cd test-scenarios
-          bash four_validators.sh -r 1
+          bash devnet.sh -r 1
     - name: Archive test results
       if: always()
       uses: actions/upload-artifact@v2
       with:
           name: reconnect-test-logs
           path: |
-            test-scenarios/temp-logs/
+            temp-logs/
