@@ -49,4 +49,3 @@ except KeyboardInterrupt:
             process.terminate()
         except ProcessLookupError:
             pass
-

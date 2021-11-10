@@ -22,7 +22,8 @@ def load_features(path):
 
 
 def get_pkg_path(pkgid):
-    result = subprocess.run(['cargo', 'pkgid', pkgid], check=True, capture_output=True)
+    result = subprocess.run(['cargo', 'pkgid', pkgid],
+                            check=True, capture_output=True)
     return result.stdout.decode().replace('file://', '').split('#')[0]
 
 
@@ -63,7 +64,8 @@ def test_features(path, mode):
         try:
             build_with_features(path, [feature], mode=mode)
         except subprocess.CalledProcessError as e:
-            print_err('Failed to build feature {} for package at {}'.format(feature, path))
+            print_err(
+                'Failed to build feature {} for package at {}'.format(feature, path))
             print_err(e.stderr)
             sys.exit(2)
 
@@ -71,7 +73,8 @@ def test_features(path, mode):
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         print('Usage is:')
-        print('{} pkgid [mode] - Tries building the package with name pkgid.'.format(sys.argv[0]))
+        print(
+            '{} pkgid [mode] - Tries building the package with name pkgid.'.format(sys.argv[0]))
         print('    Each feature of the package is build separately.')
         print('    The default mode is `check`.')
         print('    If pkgid is set to `--workspace`, it instead runs this script on all packages in the workspace.')

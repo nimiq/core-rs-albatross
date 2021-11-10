@@ -41,6 +41,7 @@ target = Path.cwd() / "target" / "debug"
 nimiq_address = sh.Command(str(target / "nimiq-address"))
 nimiq_bls = sh.Command(str(target / "nimiq-bls"))
 
+
 def create_bls_keypair():
     lines = []
     for l in nimiq_bls():
@@ -63,6 +64,7 @@ def create_nimiq_address():
         "public_key": lines[2],
         "private_key": lines[3]
     }
+
 
 def create_seed(path, i):
     path.mkdir(parents=True, exist_ok=True)
@@ -89,7 +91,8 @@ timestamps = true
 
 """.format(
             path="temp-state/dev/seed",
-           ))
+        ))
+
 
 def create_spammer(path, i):
     path.mkdir(parents=True, exist_ok=True)
@@ -119,20 +122,21 @@ level = "trace"
 timestamps = true
     """.format(
             path="temp-state/dev/spammer",
-    ))
+        ))
+
 
 def create_validator(path, i):
     path.mkdir(parents=True, exist_ok=True)
 
     # create BLS keypair
     validator_key = create_bls_keypair()
-    #with (path / "validator_key.dat").open("wb") as f:
+    # with (path / "validator_key.dat").open("wb") as f:
     #    f.write(unhexlify(validator_key["private_key"]))
 
     # create staking (and reward) address
     validator_address = create_nimiq_address()
-    warm_address      = create_nimiq_address()
-    reward_address    = create_nimiq_address()
+    warm_address = create_nimiq_address()
+    reward_address = create_nimiq_address()
 
     # write config
     with (path / "client.toml").open("wt") as f:
@@ -166,19 +170,20 @@ warm_key_file = "{path}/warm_key.dat"
 warm_key = "{warm_address}"
     """.format(
             port=str(9101 + i),
-            path="temp-state/dev/{}".format(i+1),#str(path),
+            path="temp-state/dev/{}".format(i+1),  # str(path),
             validator_key=validator_key["private_key"],
             validator_address=validator_address["private_key"],
             warm_address=warm_address["private_key"]
         ))
 
     return {
-        "validator_key"     : validator_key,
-        "validator_address" : validator_address,
-        "warm_address"      : warm_address,
-        "reward_address"    : reward_address,
+        "validator_key": validator_key,
+        "validator_address": validator_address,
+        "warm_address": warm_address,
+        "reward_address": reward_address,
         "path": str(path)
     }
+
 
 print("Writing devnet to: {}".format(output))
 print("Creating validators...")
@@ -186,7 +191,8 @@ validators = []
 for i in range(num_validators):
     validator = create_validator(output / "validator{:d}".format(i+1), i)
     validators.append(validator)
-    print("Created validator: {}..".format(validator["validator_key"]["public_key"][0:16]))
+    print("Created validator: {}..".format(
+        validator["validator_key"]["public_key"][0:16]))
 
 # Create seed node configuration
 create_seed(output / "seed", 1)
@@ -205,7 +211,7 @@ seed_message = "Albatross DevNet"
 signing_key = "9c4a1b36bf0a0a97b9d96713ee8cce211d321cdb368e06e53355c34a9733463f5b1897200f6af83fd3ea54f15bcbd9a5da772c79b0b06bd41fb95e06ebc4ba4174abe405c8339ac7540789b553d9454646649705cc5097e6643cbb0c0fb50000"
 timestamp="{timestamp}"
     """.format(
-        #timestamp=datetime.utcnow().isoformat()
+        # timestamp=datetime.utcnow().isoformat()
         timestamp="2021-07-15T00:00:00.000+00:00"
     ))
     for validator in validators:

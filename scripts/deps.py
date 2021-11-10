@@ -8,7 +8,8 @@ import sys
 
 dependency = re.compile(r'^\s*use\s*([^;\]]+)\s*;\s*$', re.MULTILINE)
 compressed_dependency = re.compile(r'([\w:]+)(\{(.*)\})?')
-extern_crate = re.compile(r'^\s*(#\[macro_use\])?\s*extern\s+crate\s+(\w+)(\s+as\s+(\w+))?\s*;\s*$', re.MULTILINE)
+extern_crate = re.compile(
+    r'^\s*(#\[macro_use\])?\s*extern\s+crate\s+(\w+)(\s+as\s+(\w+))?\s*;\s*$', re.MULTILINE)
 
 
 def load_cargo_toml(path):
@@ -45,8 +46,10 @@ def load_cargo_toml(path):
             return None
 
         name = config['package']['name']
-        dependencies = load_dependencies(config['dependencies']) if 'dependencies' in config else []
-        dev_dependencies = load_dependencies(config['dev-dependencies']) if 'dev-dependencies' in config else []
+        dependencies = load_dependencies(
+            config['dependencies']) if 'dependencies' in config else []
+        dev_dependencies = load_dependencies(
+            config['dev-dependencies']) if 'dev-dependencies' in config else []
 
         return {
             'name': name,
@@ -104,7 +107,8 @@ def uncompress_dependencies(dependency):
 
     main = m.group(1)
     if m.group(2):
-        dependencies = [uncompress_dependencies(main + sub.strip()) for sub in split_first_level(m.group(3))]
+        dependencies = [uncompress_dependencies(
+            main + sub.strip()) for sub in split_first_level(m.group(3))]
         return functools.reduce(operator.iconcat, dependencies, [])
     else:
         return [main]
@@ -228,7 +232,8 @@ def list_dependencies(filename, source):
     extern_crates = find_extern_crates(content)
 
     dependencies = map(uncompress_dependencies, dependency.findall(content))
-    dependencies = functools.reduce(operator.iconcat, dependencies, extern_crates['macro_use'])
+    dependencies = functools.reduce(
+        operator.iconcat, dependencies, extern_crates['macro_use'])
     dependencies = map(lambda x: absolute_path(x, current_path), dependencies)
     return {
         'dependencies': dependencies,
@@ -262,7 +267,8 @@ def list_dependencies_recursive(directory, source=None):
         if os.path.isdir(filename):
             dependencies.update(list_dependencies_recursive(filename, source))
         elif filename.endswith('.rs'):
-            dependencies[path_from_filename(filename, source)] = list_dependencies(filename, source)
+            dependencies[path_from_filename(
+                filename, source)] = list_dependencies(filename, source)
 
     return dependencies
 
@@ -292,7 +298,8 @@ def load_external_dependencies(path):
 
     for (filename, info) in dependency_tree.items():
         renames.update(info['renames'])
-        curated_dependencies = filter(lambda x: x is not None, map(external_crate_name, info['dependencies']))
+        curated_dependencies = filter(lambda x: x is not None, map(
+            external_crate_name, info['dependencies']))
         dependencies.update(curated_dependencies)
 
     return set([renames[name] if name in renames else name for name in dependencies])
@@ -324,7 +331,8 @@ assert split_first_level('sync::Arc, time::{Duration, Instant}, test::B') == ['s
 
 assert uncompress_dependencies('std::sync::C') == ['std::sync::C']
 assert uncompress_dependencies('std::sync::{a::B}') == ['std::sync::a::B']
-assert uncompress_dependencies('std::sync::{a::B, c::D}') == ['std::sync::a::B', 'std::sync::c::D']
+assert uncompress_dependencies('std::sync::{a::B, c::D}') == [
+    'std::sync::a::B', 'std::sync::c::D']
 assert uncompress_dependencies('std::sync::{a::B, c::D, e::F}') == ['std::sync::a::B', 'std::sync::c::D',
                                                                     'std::sync::e::F']
 assert uncompress_dependencies('std::sync::{a::B, c::{D, E}, e::F}') == ['std::sync::a::B', 'std::sync::c::D',
@@ -336,10 +344,13 @@ assert absolute_path('self::T', 'crate::test') == 'crate::test::T'
 assert absolute_path('super::T', 'crate::test::sub') == 'crate::test::T'
 assert absolute_path('super::super::T', 'crate::test::sub') == 'crate::T'
 
-assert path_from_filename('src/consensus/consensus.rs', 'src') == 'crate::consensus::consensus'
-assert path_from_filename('src/consensus/consensus.rs', 'src/') == 'crate::consensus::consensus'
+assert path_from_filename('src/consensus/consensus.rs',
+                          'src') == 'crate::consensus::consensus'
+assert path_from_filename('src/consensus/consensus.rs',
+                          'src/') == 'crate::consensus::consensus'
 assert path_from_filename('src/consensus/mod.rs', 'src') == 'crate::consensus'
-assert path_from_filename('src/consensus/test/mod.rs', 'src') == 'crate::consensus::test'
+assert path_from_filename('src/consensus/test/mod.rs',
+                          'src') == 'crate::consensus::test'
 
 
 # print(to_dot_graph(format_dependencies(list_dependencies_recursive('src'))))
@@ -379,24 +390,30 @@ def analyze_crate_dependencies(path, data=None):
 
     data = load_cargo_toml(os.path.join(path, 'Cargo.toml'))
     local_dependencies, renames = get_dependencies(data['dependencies'])
-    local_dev_dependencies, dev_renames = get_dependencies(data['dev-dependencies'])
+    local_dev_dependencies, dev_renames = get_dependencies(
+        data['dev-dependencies'])
     renames.update(dev_renames)
 
-    unused_dependencies = find_unused_externs(os.path.join(path, 'src'), local_dependencies)
+    unused_dependencies = find_unused_externs(
+        os.path.join(path, 'src'), local_dependencies)
     unused_dev_dependencies = unused_dependencies
     if os.path.isdir(os.path.join(path, 'tests')):
         unused_dev_dependencies = find_unused_externs(os.path.join(path, 'tests'),
                                                       local_dependencies + local_dev_dependencies)
     if os.path.isdir(os.path.join(path, 'benches')):
         unused_dev_dependencies = unused_dev_dependencies.intersection(find_unused_externs(os.path.join(path, 'benches'),
-                                                      local_dependencies + local_dev_dependencies))
+                                                                                           local_dependencies + local_dev_dependencies))
 
     # We should move those dependencies that are unused in src but used in the tests path
-    to_move = unused_dependencies.intersection(set(local_dependencies) - unused_dev_dependencies)
-    to_remove = (unused_dependencies - to_move) | unused_dev_dependencies.intersection(set(local_dev_dependencies) - set(local_dependencies))
+    to_move = unused_dependencies.intersection(
+        set(local_dependencies) - unused_dev_dependencies)
+    to_remove = (unused_dependencies - to_move) | unused_dev_dependencies.intersection(
+        set(local_dev_dependencies) - set(local_dependencies))
 
-    to_move = [renames[crate] if crate in renames else crate for crate in to_move]
-    to_remove = [renames[crate] if crate in renames else crate for crate in to_remove]
+    to_move = [renames[crate]
+               if crate in renames else crate for crate in to_move]
+    to_remove = [renames[crate]
+                 if crate in renames else crate for crate in to_remove]
     return {
         'name': data['name'],
         'remove': to_remove,
@@ -424,7 +441,8 @@ def analyze_versions(crate_data):
             if dependency['name'] not in dependencies:
                 dependencies[dependency['name']] = {}
                 versions[dependency['name']] = set()
-            dependencies[dependency['name']][data['name']] = dependency['version']
+            dependencies[dependency['name']
+                         ][data['name']] = dependency['version']
             versions[dependency['name']].add(dependency['version'])
 
     for (dependency, version_set) in versions.items():
@@ -466,14 +484,17 @@ def find_crates(path):
 if __name__ == '__main__':
     if len(sys.argv) < 2 or sys.argv[1] not in ('versions', 'unused'):
         print('Possible arguments are:')
-        print('    {} versions [path] - Finds inconsistent versions of dependencies for all crates in path'.format(sys.argv[0]))
-        print('    {} unused [path] - Finds unused dependencies for all crates in path'.format(sys.argv[0]))
+        print(
+            '    {} versions [path] - Finds inconsistent versions of dependencies for all crates in path'.format(sys.argv[0]))
+        print(
+            '    {} unused [path] - Finds unused dependencies for all crates in path'.format(sys.argv[0]))
 
     cmd = sys.argv[1] if len(sys.argv) > 1 else 'help'
     path = sys.argv[2] if len(sys.argv) > 2 else '.'
 
     if cmd == 'versions':
-        print('The following dependencies have inconsistent versions throughout the crates.')
+        print(
+            'The following dependencies have inconsistent versions throughout the crates.')
         crates = map(lambda x: x[1], find_crates(path))
         versions = analyze_versions(crates)
         for (dependency, versions) in versions.items():
@@ -491,5 +512,6 @@ if __name__ == '__main__':
                 if len(result['remove']) > 0:
                     print(' - remove: {}'.format(result['remove']))
                 if len(result['move-to-dev']) > 0:
-                    print(' - move to dev-dependencies: {}'.format(result['move-to-dev']))
+                    print(
+                        ' - move to dev-dependencies: {}'.format(result['move-to-dev']))
                 print()
