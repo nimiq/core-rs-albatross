@@ -13,7 +13,7 @@ use libp2p::{
     swarm::{
         NetworkBehaviour, NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters,
     },
-    NetworkBehaviour,
+    Multiaddr, NetworkBehaviour, PeerId,
 };
 use parking_lot::RwLock;
 use tokio::time::Interval;
@@ -92,10 +92,10 @@ pub struct NimiqBehaviour {
     pub pool: ConnectionPoolBehaviour,
 
     #[behaviour(ignore)]
-    events: VecDeque<NimiqEvent>,
+    contacts: Arc<RwLock<PeerContactBook>>,
 
     #[behaviour(ignore)]
-    peer_contact_book: Arc<RwLock<PeerContactBook>>,
+    events: VecDeque<NimiqEvent>,
 
     #[behaviour(ignore)]
     update_scores: Interval,
@@ -115,14 +115,14 @@ impl NimiqBehaviour {
 
         // Discovery behaviour
         // TODO: persist to disk
-        let peer_contact_book = Arc::new(RwLock::new(PeerContactBook::new(
+        let contacts = Arc::new(RwLock::new(PeerContactBook::new(
             Default::default(),
             config.peer_contact.sign(&config.keypair),
         )));
         let discovery = DiscoveryBehaviour::new(
             config.discovery,
             config.keypair.clone(),
-            peer_contact_book.clone(),
+            Arc::clone(&contacts),
             clock,
         );
 
@@ -141,7 +141,7 @@ impl NimiqBehaviour {
         let identify = Identify::new(identify_config);
 
         // Connection pool behaviour
-        let pool = ConnectionPoolBehaviour::new(peer_contact_book.clone(), config.seeds, peers);
+        let pool = ConnectionPoolBehaviour::new(Arc::clone(&contacts), config.seeds, peers);
 
         Self {
             dht,
@@ -150,7 +150,7 @@ impl NimiqBehaviour {
             identify,
             pool,
             events: VecDeque::new(),
-            peer_contact_book,
+            contacts,
             update_scores,
             waker: None,
         }
@@ -167,7 +167,7 @@ impl NimiqBehaviour {
         >,
     > {
         if self.update_scores.poll_tick(cx).is_ready() {
-            self.peer_contact_book.read().update_scores(&self.gossipsub);
+            self.contacts.read().update_scores(&self.gossipsub);
         }
 
         if let Some(event) = self.events.pop_front() {
@@ -180,6 +180,21 @@ impl NimiqBehaviour {
         }
 
         Poll::Pending
+    }
+
+    pub fn add_peer_address(&mut self, peer_id: PeerId, address: Multiaddr) {
+        // Add address to the DHT if it's reachable outside of local nodes
+        self.dht.add_address(&peer_id, address.clone());
+    }
+
+    pub fn remove_peer_address(&mut self, peer_id: PeerId, address: Multiaddr) {
+        // Remove address from the DHT
+        self.dht.remove_address(&peer_id, &address);
+    }
+
+    pub fn add_own_address(&mut self, address: Multiaddr) {
+        // Add own address to the peer contact book
+        self.contacts.write().add_own_addresses(vec![address]);
     }
 
     fn emit_event<E>(&mut self, event: E)

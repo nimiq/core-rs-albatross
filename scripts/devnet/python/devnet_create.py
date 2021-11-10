@@ -76,7 +76,6 @@ peer_key_file = "{path}/peer_key.dat"
 listen_addresses = [
 	"/ip4/127.0.0.1/tcp/9100/ws",
 ]
-min_peers = 1
 
 [consensus]
 network = "dev-albatross"
@@ -107,7 +106,6 @@ seed_nodes = [
 	{{ address = "/ip4/127.0.0.1/tcp/9101/ws" }} ,
     {{ address = "/ip4/127.0.0.1/tcp/9102/ws" }}
 ]
-min_peers = 1
 
 [consensus]
 network = "dev-albatross"
@@ -153,7 +151,6 @@ listen_addresses = [
 seed_nodes = [
 	{{ address = "/ip4/127.0.0.1/tcp/9100/ws" }}
 ]
-min_peers = 1
 
 [consensus]
 network = "dev-albatross"

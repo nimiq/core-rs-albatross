@@ -220,11 +220,6 @@ impl ConnectionPoolBehaviour {
         }
     }
 
-    pub fn start_connecting(&mut self) {
-        self.active = true;
-        self.maintain_peers();
-    }
-
     pub fn maintain_peers(&mut self) {
         log::debug!(
             "Maintaining peers: {} | addresses: {}",
@@ -262,6 +257,11 @@ impl ConnectionPoolBehaviour {
         if let Some(waker) = &self.waker {
             waker.wake_by_ref();
         }
+    }
+
+    pub fn start_connecting(&mut self) {
+        self.active = true;
+        self.maintain_peers();
     }
 
     fn choose_peers_to_dial(&self) -> Vec<PeerId> {
@@ -584,7 +584,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
         &mut self,
         peer_id: Option<PeerId>,
         _handler: Self::ProtocolsHandler,
-        _error: &DialError,
+        error: &DialError,
     ) {
         let peer_id = match peer_id {
             Some(id) => id,
@@ -592,7 +592,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
             None => return,
         };
 
-        log::debug!("Failed to dial peer: {}", peer_id);
+        log::debug!("Failed to dial peer {}: {:?}", peer_id, error);
         self.peer_ids.mark_failed(peer_id);
         self.maintain_peers();
     }

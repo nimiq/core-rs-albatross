@@ -186,14 +186,14 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         log::trace!("  - connection_id: {:?}", connection_id);
         log::trace!("  - endpoint: {:?}", endpoint);
 
-        let remote_address = endpoint.get_remote_address();
-
-        self.events
-            .push_back(NetworkBehaviourAction::NotifyHandler {
-                peer_id: *peer_id,
-                handler: NotifyHandler::One(*connection_id),
-                event: HandlerInEvent::ObservedAddress(vec![remote_address.clone()]),
-            });
+        if endpoint.is_dialer() {
+            self.events
+                .push_back(NetworkBehaviourAction::NotifyHandler {
+                    peer_id: *peer_id,
+                    handler: NotifyHandler::One(*connection_id),
+                    event: HandlerInEvent::ObservedAddress(endpoint.get_remote_address().clone()),
+                });
+        }
     }
 
     fn inject_event(&mut self, peer_id: PeerId, _connection: ConnectionId, event: HandlerOutEvent) {

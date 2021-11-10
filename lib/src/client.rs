@@ -104,15 +104,12 @@ impl ClientInner {
             .collect();
 
         // Setup libp2p network
-        let mut network_config = NetworkConfig::new(
+        let network_config = NetworkConfig::new(
             identity_keypair,
             peer_contact,
             seeds,
             network_info.genesis_hash().clone(),
         );
-        if let Some(min_peers) = config.network.min_peers {
-            network_config.min_peers = min_peers;
-        }
 
         log::debug!("listen_addresses = {:?}", config.network.listen_addresses);
 

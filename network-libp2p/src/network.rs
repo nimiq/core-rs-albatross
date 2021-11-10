@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use std::num::NonZeroU8;
 use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
@@ -11,7 +12,6 @@ use futures::{
     sink::SinkExt,
     stream::{BoxStream, StreamExt},
 };
-use ip_network::IpNetwork;
 #[cfg(test)]
 use libp2p::core::transport::MemoryTransport;
 use libp2p::{
@@ -27,9 +27,8 @@ use libp2p::{
     identify::IdentifyEvent,
     identity::Keypair,
     kad::{GetRecordOk, KademliaEvent, QueryId, QueryResult, Quorum, Record},
-    multiaddr::Protocol,
     noise,
-    swarm::{AddressScore, NetworkBehaviourAction, NotifyHandler, SwarmBuilder, SwarmEvent},
+    swarm::{AddressScore, SwarmBuilder, SwarmEvent},
     tcp, websocket, yamux, Multiaddr, PeerId, Swarm, Transport,
 };
 use tokio::sync::broadcast;
@@ -48,7 +47,6 @@ use nimiq_utils::time::OffsetTime;
 use crate::{
     behaviour::{NimiqBehaviour, NimiqEvent, NimiqNetworkBehaviourError},
     connection_pool::behaviour::ConnectionPoolEvent,
-    discovery::handler::HandlerInEvent,
     peer::Peer,
     Config, NetworkError,
 };
@@ -149,8 +147,6 @@ impl Network {
     ///  - `config`: The network configuration, containing key pair, and other behavior-specific configuration.
     ///
     pub async fn new(clock: Arc<OffsetTime>, config: Config) -> Self {
-        let min_peers = config.min_peers;
-
         let peers = ObservablePeerMap::new();
         let swarm = Self::new_swarm(clock, config, peers.clone());
 
@@ -159,12 +155,7 @@ impl Network {
         let (events_tx, _) = broadcast::channel(64);
         let (action_tx, action_rx) = mpsc::channel(64);
 
-        tokio::spawn(Self::swarm_task(
-            swarm,
-            events_tx.clone(),
-            action_rx,
-            min_peers,
-        ));
+        tokio::spawn(Self::swarm_task(swarm, events_tx.clone(), action_rx));
 
         Self {
             local_peer_id,
@@ -222,6 +213,7 @@ impl Network {
         // TODO add proper config
         SwarmBuilder::new(transport, behaviour, local_peer_id)
             .connection_limits(limits)
+            .dial_concurrency_factor(NonZeroU8::new(10).unwrap())
             .executor(Box::new(|fut| {
                 tokio::spawn(fut);
             }))
@@ -232,23 +224,10 @@ impl Network {
         &self.local_peer_id
     }
 
-    fn can_add_to_dht(addr: &Multiaddr) -> bool {
-        match addr.iter().next() {
-            Some(Protocol::Ip4(ip)) => IpNetwork::from(ip).is_global(),
-            Some(Protocol::Ip6(ip)) => IpNetwork::from(ip).is_global(),
-            Some(Protocol::Dns(_))
-            | Some(Protocol::Dns4(_))
-            | Some(Protocol::Dns6(_))
-            | Some(Protocol::Memory(_)) => true,
-            _ => false,
-        }
-    }
-
     async fn swarm_task(
         mut swarm: NimiqSwarm,
         events_tx: broadcast::Sender<NetworkEvent<Peer>>,
         mut action_rx: mpsc::Receiver<NetworkAction>,
-        min_peers: usize,
     ) {
         let mut task_state = TaskState::default();
 
@@ -260,7 +239,7 @@ impl Network {
                 futures::select! {
                     event = swarm.next().fuse() => {
                         if let Some(event) = event {
-                            Self::handle_event(event, &events_tx, &mut swarm, &mut task_state, min_peers);
+                            Self::handle_event(event, &events_tx, &mut swarm, &mut task_state);
                         }
                     },
                     action = action_rx.next().fuse() => {
@@ -275,8 +254,8 @@ impl Network {
                 };
             }
         }
-            .instrument(task_span)
-            .await
+        .instrument(task_span)
+        .await
     }
 
     fn handle_event(
@@ -284,7 +263,6 @@ impl Network {
         events_tx: &broadcast::Sender<NetworkEvent<Peer>>,
         swarm: &mut NimiqSwarm,
         state: &mut TaskState,
-        min_peers: usize,
     ) {
         match event {
             SwarmEvent::ConnectionEstablished {
@@ -314,6 +292,7 @@ impl Network {
                             peer_id,
                             error
                         );
+                        swarm.behaviour_mut().remove_peer_address(peer_id, addr);
                     }
                 }
 
@@ -324,27 +303,16 @@ impl Network {
                     tracing::debug!("Saving peer {} listen address: {:?}", peer_id, listen_addr);
                     swarm
                         .behaviour_mut()
-                        .dht
-                        .add_address(&peer_id, listen_addr.clone());
+                        .add_peer_address(peer_id, listen_addr.clone());
                 }
 
                 if !state.is_connected {
-                    tracing::debug!(
-                        num_established,
-                        min_peers,
-                        "connected to {} peers (waiting for {})",
-                        num_established,
-                        min_peers
-                    );
-
                     state.is_connected = true;
 
-                    if num_established.get() as usize >= min_peers {
-                        // Bootstrap Kademlia
-                        tracing::debug!("Bootstrapping DHT");
-                        if swarm.behaviour_mut().dht.bootstrap().is_err() {
-                            tracing::error!("Bootstrapping DHT error: No known peers");
-                        }
+                    // Bootstrap Kademlia
+                    tracing::debug!("Bootstrapping DHT");
+                    if swarm.behaviour_mut().dht.bootstrap().is_err() {
+                        tracing::error!("Bootstrapping DHT error: No known peers");
                     }
                 }
             }
@@ -388,7 +356,7 @@ impl Network {
                 send_back_addr,
                 error,
             } => {
-                tracing::warn!(
+                tracing::trace!(
                     "Incoming connection error from address {:?} to listen address {:?}: {:?}",
                     send_back_addr,
                     local_addr,
@@ -397,7 +365,7 @@ impl Network {
             }
 
             SwarmEvent::Dialing(peer_id) => {
-                tracing::trace!("Dialing peer {}", peer_id);
+                tracing::debug!("Dialing peer {}", peer_id);
             }
 
             SwarmEvent::Behaviour(event) => {
@@ -484,39 +452,25 @@ impl Network {
                     NimiqEvent::Identify(event) => {
                         match event {
                             IdentifyEvent::Received { peer_id, info } => {
-                                tracing::trace!(
+                                tracing::debug!(
                                     "Received identity from peer {} at address {:?}: {:?}",
                                     peer_id,
                                     info.observed_addr,
                                     info
                                 );
 
-                                if Self::can_add_to_dht(&info.observed_addr) {
-                                    Swarm::add_external_address(
-                                        swarm,
-                                        info.observed_addr,
-                                        AddressScore::Infinite,
-                                    );
-                                }
+                                // Add observed addresses to our own peer contact
+                                Swarm::add_external_address(
+                                    swarm,
+                                    info.observed_addr.clone(),
+                                    AddressScore::Infinite,
+                                );
+                                swarm.behaviour_mut().add_own_address(info.observed_addr);
 
                                 // Save identified peer listen addresses
-                                for listen_addr in info.listen_addrs.clone() {
-                                    if Self::can_add_to_dht(&listen_addr) {
-                                        swarm
-                                            .behaviour_mut()
-                                            .dht
-                                            .add_address(&peer_id, listen_addr);
-                                    }
+                                for listen_addr in info.listen_addrs {
+                                    swarm.behaviour_mut().add_peer_address(peer_id, listen_addr);
                                 }
-
-                                // TODO: Add public functions to the Discovery behaviour to add addresses from the network
-                                swarm.behaviour_mut().discovery.events.push_back(
-                                    NetworkBehaviourAction::NotifyHandler {
-                                        peer_id,
-                                        handler: NotifyHandler::Any,
-                                        event: HandlerInEvent::ObservedAddress(info.listen_addrs),
-                                    },
-                                );
                             }
                             IdentifyEvent::Pushed { peer_id } => {
                                 tracing::trace!("Pushed identity to peer {}", peer_id);
@@ -536,7 +490,6 @@ impl Network {
                     NimiqEvent::Pool(event) => {
                         match event {
                             ConnectionPoolEvent::PeerJoined { peer } => {
-                                log::debug!("New peer: {:?}", peer);
                                 events_tx.send(NetworkEvent::<Peer>::PeerJoined(peer)).ok();
                             }
                         };
@@ -549,7 +502,7 @@ impl Network {
 
     fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut TaskState) {
         // FIXME implement compact debug format for NetworkAction
-        //tracing::trace!(action = ?action, "performing action");
+        // tracing::trace!(action = ?action, "performing action");
 
         match action {
             NetworkAction::Dial { peer_id, output } => {
@@ -1040,7 +993,6 @@ mod tests {
         Config {
             keypair,
             peer_contact,
-            min_peers: 0,
             seeds: Vec::new(),
             discovery: DiscoveryConfig {
                 genesis_hash: Default::default(),
@@ -1272,7 +1224,8 @@ mod tests {
 
     #[tokio::test]
     async fn dht_put_and_get() {
-        tracing_subscriber::fmt::init();
+        // tracing_subscriber::fmt::init();
+
         let (net1, net2) = create_connected_networks().await;
 
         // FIXME: Add delay while networks share their addresses

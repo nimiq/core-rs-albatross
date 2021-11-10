@@ -129,7 +129,6 @@ pub struct NetworkSettings {
 
     pub tls: Option<TlsSettings>,
     pub instant_inbound: Option<bool>,
-    pub min_peers: Option<usize>,
 }
 
 #[derive(Clone, Debug, Deserialize)]

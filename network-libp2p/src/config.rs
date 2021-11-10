@@ -12,7 +12,6 @@ use crate::discovery::{behaviour::DiscoveryConfig, peer_contacts::PeerContact};
 pub struct Config {
     pub keypair: Keypair,
     pub peer_contact: PeerContact,
-    pub min_peers: usize,
     pub seeds: Vec<Multiaddr>,
     pub discovery: DiscoveryConfig,
     pub kademlia: KademliaConfig,
@@ -42,7 +41,6 @@ impl Config {
         Self {
             keypair,
             peer_contact,
-            min_peers: 5,
             seeds,
             discovery: DiscoveryConfig::new(genesis_hash),
             kademlia,
