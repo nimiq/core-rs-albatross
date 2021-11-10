@@ -25,7 +25,6 @@ use network_interface::{
     peer::Peer,
 };
 use primitives::coin::Coin;
-use primitives::policy;
 use tendermint_protocol::TendermintReturn;
 use transaction_builder::TransactionBuilder;
 use utils::observer::NotifierStream;
@@ -554,14 +553,10 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
     }
 
     fn unpark(&mut self) {
-        if self.unpark_sent {
-            trace!("Unpark transaction already sent for this epoch");
-            return;
-        }
-
         let blockchain = self.consensus.blockchain.read();
 
-        let validity_start_height = policy::macro_block_before(blockchain.block_number());
+        // TODO: Get the last view change height instead of the current height
+        let validity_start_height = blockchain.block_number();
 
         let unpark_transaction = TransactionBuilder::new_unpark_validator(
             &self.fee_key(),
@@ -574,7 +569,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
 
         let cn = self.consensus.clone();
         tokio::spawn(async move {
-            trace!("Sending unpark transaction");
+            debug!("Sending unpark transaction");
             if cn.send_transaction(unpark_transaction).await.is_err() {
                 error!("Failed to send unpark transatction");
             }
@@ -668,6 +663,10 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Future
             if self.micro_producer.is_some() {
                 self.poll_micro(cx);
             }
+        }
+
+        if !self.unpark_sent {
+            return Poll::Pending;
         }
 
         // Check the validator staking state.

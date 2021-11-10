@@ -110,6 +110,15 @@ impl AccountTransactionInteraction for BasicAccount {
 
         let account = accounts_tree
             .get(db_txn, &key)
+            .or_else(|| {
+                if transaction.total_value().expect("Transaction overflow") != Coin::ZERO {
+                    None
+                } else {
+                    Some(Account::Basic(BasicAccount {
+                        balance: Coin::ZERO,
+                    }))
+                }
+            })
             .ok_or(AccountError::NonExistentAddress {
                 address: transaction.sender.clone(),
             })?;

@@ -10,7 +10,7 @@ use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_hash::Hash;
 use nimiq_primitives::coin::Coin;
 
-use nimiq_transaction::Transaction;
+use nimiq_transaction::{Transaction, TransactionFlags};
 
 use crate::filter::MempoolFilter;
 use crate::mempool::MempoolState;
@@ -133,7 +133,15 @@ pub(crate) async fn verify_tx<'a>(
 
     // 7. Sequentialize per Sender to Check Balances and acquire the upgradable from the blockchain.
     //    Perform all balances checks.
-    let sender_account = match blockchain.get_account(&transaction.sender) {
+    let sender_account = match blockchain.get_account(&transaction.sender).or_else(|| {
+        if transaction.total_value().expect("Transaction overflow") != Coin::ZERO {
+            None
+        } else {
+            Some(Account::Basic(BasicAccount {
+                balance: Coin::ZERO,
+            }))
+        }
+    }) {
         None => {
             log::debug!(
                 "There is no account for this sender in the blockchain {}",
