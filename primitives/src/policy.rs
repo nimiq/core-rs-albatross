@@ -10,6 +10,9 @@ pub const COINBASE_ADDRESS: &str = "NQ81 C01N BASE 0000 0000 0000 0000 0000 0000
 /// Number of blocks a transaction is valid with Albatross consensus.
 pub const TRANSACTION_VALIDITY_WINDOW: u32 = 7200;
 
+/// The maximum allowed size, in bytes, for a micro block body.
+pub const MAX_SIZE_MICRO_BODY: usize = 100_000;
+
 /// The current version number of the protocol. Changing this always results in a hard fork.
 pub const VERSION: u16 = 1;
 

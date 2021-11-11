@@ -10,6 +10,7 @@ use nimiq_vrf::VrfSeed;
 
 use crate::fork_proof::ForkProof;
 use crate::ViewChangeProof;
+use nimiq_primitives::policy;
 use std::fmt::{Debug, Formatter};
 
 /// The struct representing a Micro block.
@@ -78,37 +79,27 @@ pub struct MicroBody {
 }
 
 impl MicroBlock {
-    /// The maximum allowed size, in bytes, for a micro block. Changing this requires a hard fork.
-    pub const MAX_SIZE: usize = 100_000;
-
     /// Returns the hash of the block header.
     pub fn hash(&self) -> Blake2bHash {
         self.header.hash()
     }
 
+    // Returns the available size, in bytes, in a micro block body for transactions.
     pub fn get_available_bytes(num_fork_proofs: usize) -> usize {
-        Self::MAX_SIZE - MicroHeader::SIZE - MicroBody::get_metadata_size(num_fork_proofs)
+        policy::MAX_SIZE_MICRO_BODY
+            - (/*fork_proofs vector length*/2 + num_fork_proofs * ForkProof::SIZE
+            + /*transactions vector length*/ 2)
     }
 }
 
 impl MicroHeader {
     /// Returns the size, in bytes, of a Micro block header. This represents the maximum possible
     /// size since we assume that the extra_data field is completely filled.
-    pub const SIZE: usize =
+    pub const MAX_SIZE: usize =
         /*version*/
         2 + /*block_number*/ 4 + /*view_number*/ 4 + /*timestamp*/ 8
             + /*parent_hash*/ 32 + /*seed*/ CompressedSignature::SIZE + /*extra_data*/ 32 +
             /*state_root*/ 32 + /*body_root*/ 32 + /*history_root*/ 32;
-}
-
-impl MicroBody {
-    /// Returns the metadata size, in bytes, of the body for a Micro block. Basically, the
-    /// size of everything in the body that isn't a transaction.
-    pub fn get_metadata_size(num_fork_proofs: usize) -> usize {
-        /*fork_proofs size*/
-        2 + num_fork_proofs * ForkProof::SIZE
-            + /*transactions size*/ 2
-    }
 }
 
 impl IntoDatabaseValue for MicroBlock {

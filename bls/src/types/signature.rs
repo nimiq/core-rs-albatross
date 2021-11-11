@@ -46,7 +46,7 @@ impl Signature {
     /// form), one bit indicating the sign of the y-coordinate
     /// and one bit indicating if it is the "point-at-infinity".
     pub fn compress(&self) -> CompressedSignature {
-        CompressedSignature::from(self.signature)
+        self.compressed
     }
 
     /// Multiplies a Signature by a u16. It's useful when you need to

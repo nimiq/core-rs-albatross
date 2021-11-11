@@ -1,3 +1,4 @@
+use beserial::Serialize;
 use std::cmp::Ordering;
 
 use nimiq_block::{
@@ -207,6 +208,12 @@ impl Blockchain {
 
         match body {
             BlockBody::Micro(body) => {
+                // Check the size of the body.
+                if body.serialized_size() > policy::MAX_SIZE_MICRO_BODY {
+                    warn!("Rejecting block - Body size exceeds maximum size");
+                    return Err(PushError::InvalidBlock(BlockError::SizeExceeded));
+                }
+
                 // Check the body root.
                 if &body.hash::<Blake2bHash>() != header.body_root() {
                     warn!("Rejecting block - Header body hash doesn't match real body hash");

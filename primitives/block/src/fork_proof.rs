@@ -27,7 +27,7 @@ impl ForkProof {
     /// The size of a single fork proof. This is the maximum possible size, since the Micro header
     /// has a variable size (because of the extra data field) and here we assume that the header
     /// has the maximum size.
-    pub const SIZE: usize = 2 * MicroHeader::SIZE + 2 * CompressedSignature::SIZE;
+    pub const SIZE: usize = 2 * MicroHeader::MAX_SIZE + 2 * CompressedSignature::SIZE;
 
     /// Verify the validity of a fork proof.
     pub fn verify(&self, public_key: &PublicKey) -> Result<(), ForkProofError> {
