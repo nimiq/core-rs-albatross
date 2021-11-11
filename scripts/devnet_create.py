@@ -122,6 +122,9 @@ timestamps = true
 
 [validator]
 validator_address = "NQ07 0000 0000 0000 0000 0000 0000 0000 0000"
+validator_key_file = "{path}/validator_key.dat"
+fee_key_file = "{path}/fee_key.dat"
+warm_key_file = "{path}/warm_key.dat"
     """.format(
             path="temp-state/dev/spammer",
         ))

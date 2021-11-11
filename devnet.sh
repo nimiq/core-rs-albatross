@@ -148,10 +148,6 @@ $cargo_build
 
 # Launch the seed node
 echo "Starting seed node.... "
-# Temporal workaround since spammer is not a validator
-rm -rf $HOME/.nimiq/
-mkdir -p $HOME/.nimiq/
-rm -rf temp-state/dev/seed
 mkdir -p temp-state/dev/seed
 $cargo --bin nimiq-client -- -c $CONFIG_PATH/seed/client.toml &>> temp-logs/$foldername/Seed.txt &
 spids+=($!)
@@ -174,7 +170,6 @@ sleep 30s
 #Launch the spammer
 if [ "$SPAMMER" = true ] ; then
     echo "Starting spammer.... "
-
     mkdir -p temp-state/dev/spammer
     $cargo --bin nimiq-spammer -- -t $tps -c $CONFIG_PATH/spammer/client.toml &>> temp-logs/$foldername/Spammer.txt &
     spids+=($!)
