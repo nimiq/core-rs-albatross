@@ -13,7 +13,7 @@ use pin_project::pin_project;
 use tokio::task::spawn_blocking;
 
 use nimiq_block::Block;
-use nimiq_blockchain::AbstractBlockchain;
+use nimiq_blockchain::{AbstractBlockchain, Direction};
 use nimiq_blockchain::{Blockchain, PushError, PushResult};
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{
@@ -197,11 +197,12 @@ impl<N: Network> Inner<N> {
             // Get block locators.
             let block_locators = blockchain
                 .chain_store
-                .get_blocks_backward(
+                .get_blocks(
                     &head_hash,
                     // FIXME We don't want to send the full batch as locators here.
                     block_height - prev_macro_block_height + 2,
                     false,
+                    Direction::Backward,
                     None,
                 )
                 .into_iter()

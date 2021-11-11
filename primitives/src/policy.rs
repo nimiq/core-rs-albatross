@@ -181,16 +181,6 @@ pub fn macro_block_of(batch: u32) -> u32 {
     batch * BATCH_LENGTH
 }
 
-/// First block in reward registry (first block of previous epoch).
-/// Returns `0u32` during epoch 0 (genesis) and 1.
-pub fn first_block_of_registry(epoch: u32) -> u32 {
-    if epoch <= 1 {
-        0u32
-    } else {
-        first_block_of(epoch - 1)
-    }
-}
-
 /// Returns a boolean expressing if the batch at a given block number (height) is the first batch
 /// of the epoch.
 #[inline]

@@ -9,6 +9,7 @@ use nimiq_primitives::policy;
 
 use crate::blockchain_state::BlockchainState;
 use crate::chain_info::ChainInfo;
+use crate::chain_store::MAX_EPOCHS_STORED;
 use crate::{
     AbstractBlockchain, Blockchain, BlockchainEvent, ChainOrdering, ForkEvent, PushError,
     PushResult,
@@ -207,6 +208,10 @@ impl Blockchain {
 
         let mut txn = this.write_transaction();
 
+        let block_number = this.block_number() + 1;
+        let is_macro_block = policy::is_macro_block_at(block_number);
+        let is_election_block = policy::is_election_block_at(block_number);
+
         if let Err(e) = this.check_and_commit(
             &this.state,
             &chain_info.head,
@@ -226,14 +231,16 @@ impl Blockchain {
             .put_chain_info(&mut txn, chain_info.head.parent_hash(), &prev_info, false);
         this.chain_store.set_head(&mut txn, &block_hash);
 
+        if is_election_block {
+            this.chain_store.prune_epoch(
+                policy::epoch_at(block_number).saturating_sub(MAX_EPOCHS_STORED),
+                &mut txn,
+            );
+        }
+
         txn.commit();
 
-        let is_election_block = policy::is_election_block_at(this.block_number() + 1);
-
-        let mut is_macro = false;
-
         if let Block::Macro(ref macro_block) = chain_info.head {
-            is_macro = true;
             this.state.macro_info = chain_info.clone();
             this.state.macro_head_hash = block_hash.clone();
 
@@ -255,13 +262,11 @@ impl Blockchain {
         // Downgrade the lock again as the nofity listeners might want to acquire read access themselves.
         let this = RwLockWriteGuard::downgrade(this);
 
-        if is_macro {
-            if is_election_block {
-                this.notifier
-                    .notify(BlockchainEvent::EpochFinalized(block_hash));
-            } else {
-                this.notifier.notify(BlockchainEvent::Finalized(block_hash));
-            }
+        if is_election_block {
+            this.notifier
+                .notify(BlockchainEvent::EpochFinalized(block_hash));
+        } else if is_macro_block {
+            this.notifier.notify(BlockchainEvent::Finalized(block_hash));
         } else {
             this.notifier.notify(BlockchainEvent::Extended(block_hash));
         }

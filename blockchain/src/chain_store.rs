@@ -10,6 +10,10 @@ use nimiq_primitives::policy;
 use crate::chain_info::ChainInfo;
 use crate::Direction;
 
+/// Maximum number of epochs (other than the current one) that the ChainStore will store fully.
+/// Epochs older than this number will be pruned. A minimum of 1 is recommended.
+pub const MAX_EPOCHS_STORED: u32 = 1;
+
 #[derive(Debug)]
 pub struct ChainStore {
     env: Environment,
@@ -91,33 +95,6 @@ impl ChainStore {
         Some(chain_info)
     }
 
-    pub fn put_chain_info(
-        &self,
-        txn: &mut WriteTransaction,
-        hash: &Blake2bHash,
-        chain_info: &ChainInfo,
-        include_body: bool,
-    ) {
-        // Store chain data. Block body will not be persisted because the serialization of ChainInfo
-        // ignores the block body.
-        txn.put_reserve(&self.chain_db, hash, chain_info);
-
-        // Store body if requested.
-        if include_body {
-            txn.put_reserve(&self.block_db, hash, &chain_info.head);
-        }
-
-        // Add to height index.
-        let height = chain_info.head.block_number();
-        txn.put(&self.height_idx, &height, hash);
-    }
-
-    pub fn remove_chain_info(&self, txn: &mut WriteTransaction, hash: &Blake2bHash, height: u32) {
-        txn.remove(&self.chain_db, hash);
-        txn.remove(&self.block_db, hash);
-        txn.remove_item(&self.height_idx, &height, hash);
-    }
-
     pub fn get_chain_info_at(
         &self,
         block_height: u32,
@@ -166,6 +143,33 @@ impl ChainStore {
         Some(chain_info)
     }
 
+    pub fn put_chain_info(
+        &self,
+        txn: &mut WriteTransaction,
+        hash: &Blake2bHash,
+        chain_info: &ChainInfo,
+        include_body: bool,
+    ) {
+        // Store chain data. Block body will not be persisted because the serialization of ChainInfo
+        // ignores the block body.
+        txn.put_reserve(&self.chain_db, hash, chain_info);
+
+        // Store body if requested.
+        if include_body {
+            txn.put_reserve(&self.block_db, hash, &chain_info.head);
+        }
+
+        // Add to height index.
+        let height = chain_info.head.block_number();
+        txn.put(&self.height_idx, &height, hash);
+    }
+
+    pub fn remove_chain_info(&self, txn: &mut WriteTransaction, hash: &Blake2bHash, height: u32) {
+        txn.remove(&self.chain_db, hash);
+        txn.remove(&self.block_db, hash);
+        txn.remove_item(&self.height_idx, &height, hash);
+    }
+
     pub fn get_block(
         &self,
         hash: &Blake2bHash,
@@ -197,6 +201,24 @@ impl ChainStore {
     ) -> Option<Block> {
         self.get_chain_info_at(block_height, include_body, txn_option)
             .map(|chain_info| chain_info.head)
+    }
+
+    pub fn get_blocks(
+        &self,
+        start_block_hash: &Blake2bHash,
+        count: u32,
+        include_body: bool,
+        direction: Direction,
+        txn_option: Option<&Transaction>,
+    ) -> Vec<Block> {
+        match direction {
+            Direction::Forward => {
+                self.get_blocks_forward(start_block_hash, count, include_body, txn_option)
+            }
+            Direction::Backward => {
+                self.get_blocks_backward(start_block_hash, count, include_body, txn_option)
+            }
+        }
     }
 
     pub fn get_blocks_at(
@@ -236,7 +258,7 @@ impl ChainStore {
         blocks
     }
 
-    pub fn get_blocks_backward(
+    fn get_blocks_backward(
         &self,
         start_block_hash: &Blake2bHash,
         count: u32,
@@ -271,7 +293,7 @@ impl ChainStore {
         blocks
     }
 
-    pub fn get_blocks_forward(
+    fn get_blocks_forward(
         &self,
         start_block_hash: &Blake2bHash,
         count: u32,
@@ -310,26 +332,36 @@ impl ChainStore {
         blocks
     }
 
-    pub fn get_blocks(
+    /// Returns None if given start_block_hash is not a macro block.
+    pub fn get_macro_blocks(
         &self,
         start_block_hash: &Blake2bHash,
         count: u32,
         include_body: bool,
         direction: Direction,
+        election_blocks_only: bool,
         txn_option: Option<&Transaction>,
-    ) -> Vec<Block> {
+    ) -> Option<Vec<Block>> {
         match direction {
-            Direction::Forward => {
-                self.get_blocks_forward(start_block_hash, count, include_body, txn_option)
-            }
-            Direction::Backward => {
-                self.get_blocks_backward(start_block_hash, count, include_body, txn_option)
-            }
+            Direction::Forward => self.get_macro_blocks_forward(
+                start_block_hash,
+                count,
+                election_blocks_only,
+                include_body,
+                txn_option,
+            ),
+            Direction::Backward => self.get_macro_blocks_backward(
+                start_block_hash,
+                count,
+                election_blocks_only,
+                include_body,
+                txn_option,
+            ),
         }
     }
 
     /// Returns None if given start_block_hash is not a macro block.
-    pub fn get_macro_blocks_backward(
+    fn get_macro_blocks_backward(
         &self,
         start_block_hash: &Blake2bHash,
         count: u32,
@@ -376,7 +408,7 @@ impl ChainStore {
     }
 
     /// Returns None if given start_block_hash is not a macro block.
-    pub fn get_macro_blocks_forward(
+    fn get_macro_blocks_forward(
         &self,
         start_block_hash: &Blake2bHash,
         count: u32,
@@ -422,31 +454,19 @@ impl ChainStore {
         Some(blocks)
     }
 
-    /// Returns None if given start_block_hash is not a macro block.
-    pub fn get_macro_blocks(
-        &self,
-        start_block_hash: &Blake2bHash,
-        count: u32,
-        include_body: bool,
-        direction: Direction,
-        election_blocks_only: bool,
-        txn_option: Option<&Transaction>,
-    ) -> Option<Vec<Block>> {
-        match direction {
-            Direction::Forward => self.get_macro_blocks_forward(
-                start_block_hash,
-                count,
-                election_blocks_only,
-                include_body,
-                txn_option,
-            ),
-            Direction::Backward => self.get_macro_blocks_backward(
-                start_block_hash,
-                count,
-                election_blocks_only,
-                include_body,
-                txn_option,
-            ),
+    pub fn prune_epoch(&self, epoch_number: u32, txn: &mut WriteTransaction) {
+        // The zero-th epoch is already pruned.
+        if epoch_number == 0 {
+            return;
+        }
+
+        for height in policy::first_block_of(epoch_number)..policy::election_block_of(epoch_number)
+        {
+            if let Some(hash) = txn.get::<u32, Blake2bHash>(&self.height_idx, &height) {
+                txn.remove(&self.chain_db, &hash);
+                txn.remove(&self.block_db, &hash);
+                txn.remove_item(&self.height_idx, &height, &hash);
+            }
         }
     }
 
