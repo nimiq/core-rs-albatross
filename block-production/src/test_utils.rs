@@ -38,7 +38,7 @@ impl TemporaryBlockProducer {
         let keypair = KeyPair::from(
             SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap(),
         );
-        let producer: BlockProducer = BlockProducer::new(Arc::clone(&blockchain), keypair);
+        let producer: BlockProducer = BlockProducer::new(keypair);
         TemporaryBlockProducer {
             blockchain,
             producer,
@@ -56,6 +56,7 @@ impl TemporaryBlockProducer {
 
         let block = if policy::is_macro_block_at(height) {
             let macro_block_proposal = self.producer.next_macro_block_proposal(
+                &blockchain,
                 blockchain.time.now() + height as u64 * 1000,
                 0u32,
                 extra_data,
@@ -86,6 +87,7 @@ impl TemporaryBlockProducer {
             };
 
             Block::Micro(self.producer.next_micro_block(
+                &blockchain,
                 blockchain.time.now() + height as u64 * 1000,
                 view_number,
                 view_change_proof,

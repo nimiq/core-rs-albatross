@@ -36,7 +36,7 @@ fn history_sync_works() {
     let keypair =
         KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
 
-    let producer = BlockProducer::new(Arc::clone(&blockchain), keypair);
+    let producer = BlockProducer::new(keypair);
 
     produce_macro_blocks(num_macro_blocks, &producer, &blockchain);
 
@@ -170,7 +170,7 @@ fn history_sync_works_with_micro_blocks() {
     let keypair =
         KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
 
-    let producer = BlockProducer::new(Arc::clone(&blockchain), keypair);
+    let producer = BlockProducer::new(keypair);
 
     produce_macro_blocks(num_macro_blocks, &producer, &blockchain);
 

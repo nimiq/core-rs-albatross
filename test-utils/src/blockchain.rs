@@ -33,6 +33,7 @@ pub fn produce_macro_blocks(
         let next_block_height = (blockchain.block_number() + 1) as u64;
 
         let macro_block_proposal = producer.next_macro_block_proposal(
+            &blockchain,
             blockchain.time.now() + next_block_height * 1000,
             0u32,
             vec![],
@@ -62,6 +63,7 @@ pub fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<RwLock<Block
     for i in (init_height + 1)..macro_block_number {
         let blockchain = blockchain.upgradable_read();
         let last_micro_block = producer.next_micro_block(
+            &blockchain,
             blockchain.time.now() + i as u64 * 1000,
             0,
             None,

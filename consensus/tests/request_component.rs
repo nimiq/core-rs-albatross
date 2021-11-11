@@ -73,7 +73,7 @@ async fn test_request_component() {
 
     let keypair1 =
         KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
-    let producer1 = BlockProducer::new(Arc::clone(&node1.blockchain), keypair1);
+    let producer1 = BlockProducer::new(keypair1);
 
     //let num_macro_blocks = (policy::BATCHES_PER_EPOCH + 1) as usize;
     //produce_macro_blocks(num_macro_blocks, &producer1, &node1.blockchain);

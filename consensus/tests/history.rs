@@ -58,7 +58,7 @@ async fn peers_can_sync() {
 
     let keypair =
         KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
-    let producer = BlockProducer::new(Arc::clone(&blockchain1), keypair.clone());
+    let producer = BlockProducer::new(keypair.clone());
 
     // The minimum number of macro blocks necessary so that we have one election block and one
     // checkpoint block to push.
@@ -189,7 +189,7 @@ async fn sync_ingredients() {
 
     let keypair =
         KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
-    let producer = BlockProducer::new(Arc::clone(&blockchain1), keypair.clone());
+    let producer = BlockProducer::new(keypair.clone());
 
     // The minimum number of macro blocks necessary so that we have one election block and one
     // checkpoint block to push.

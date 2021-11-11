@@ -1,6 +1,4 @@
-use std::sync::Arc;
-
-use parking_lot::RwLock;
+use std::ops::Deref;
 
 use nimiq_account::Inherent;
 use nimiq_block::{
@@ -13,26 +11,23 @@ use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::policy;
 use nimiq_transaction::Transaction;
 
-/// Struct that contains all necessary information to actually produce blocks. It has the current
-/// blockchain store and state, the current mempool for this validator and the validator key for
-/// this validator.
+/// Struct that contains all necessary information to actually produce blocks.
+/// It has the  validator key for this validator.
 pub struct BlockProducer {
-    pub blockchain: Arc<RwLock<Blockchain>>,
     pub validator_key: KeyPair,
 }
 
 impl BlockProducer {
     /// Creates a new BlockProducer struct given a blockchain and a validator key.
-    pub fn new(blockchain: Arc<RwLock<Blockchain>>, validator_key: KeyPair) -> Self {
-        BlockProducer {
-            blockchain,
-            validator_key,
-        }
+    pub fn new(validator_key: KeyPair) -> Self {
+        BlockProducer { validator_key }
     }
 
     /// Creates the next micro block.
     pub fn next_micro_block(
         &self,
+        // The (upgradable) read locked guard to the blockchain
+        blockchain: &dyn Deref<Target = Blockchain>,
         // The timestamp for the block.
         timestamp: u64,
         // The view number for the block.
@@ -48,7 +43,6 @@ impl BlockProducer {
         // Extra data for this block. It has no a priori use.
         extra_data: Vec<u8>,
     ) -> MicroBlock {
-        let blockchain = self.blockchain.read();
         // Calculate the block number. It is simply the previous block number incremented by one.
         let block_number = blockchain.block_number() + 1;
 
@@ -107,8 +101,6 @@ impl BlockProducer {
         // and there is no need to hold the lock after this point.
         // Abort txn so that blockchain is no longer borrowed.
         txn.abort();
-        // Drop the read lock as it is no longer necessary.
-        drop(blockchain);
 
         // Create the micro block body.
         let body = MicroBody {
@@ -150,6 +142,8 @@ impl BlockProducer {
     // Note: Needs to be called with the Blockchain lock held.
     pub fn next_macro_block_proposal(
         &self,
+        // The (upgradable) read locked guard to the blockchain
+        blockchain: &dyn Deref<Target = Blockchain>,
         // The timestamp for the block proposal.
         timestamp: u64,
         // The view number for the block proposal.
@@ -157,7 +151,6 @@ impl BlockProducer {
         // Extra data for this block. It has no a priori use.
         extra_data: Vec<u8>,
     ) -> MacroBlock {
-        let blockchain = self.blockchain.read();
         // Calculate the block number. It is simply the previous block number incremented by one.
         let block_number = blockchain.block_number() + 1;
 

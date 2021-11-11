@@ -119,7 +119,7 @@ async fn send_single_micro_block_to_block_queue() {
     ));
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
-    let producer = BlockProducer::new(Arc::clone(&blockchain), keypair);
+    let producer = BlockProducer::new(keypair);
     let request_component = MockRequestComponent::<MockPeer>::default();
     let (mut tx, rx) = mpsc::channel(32);
 
@@ -132,14 +132,19 @@ async fn send_single_micro_block_to_block_queue() {
     );
 
     // push one micro block to the queue
-    let block = Block::Micro(producer.next_micro_block(
-        blockchain.read().time.now(),
-        0,
-        None,
-        vec![],
-        vec![],
-        vec![0x42],
-    ));
+    let block = {
+        let bc = blockchain.read();
+        Block::Micro(producer.next_micro_block(
+            &bc,
+            bc.time.now(),
+            0,
+            None,
+            vec![],
+            vec![],
+            vec![0x42],
+        ))
+    };
+
     let mock_id = MockId::new(hub.new_address().into());
     tx.send((block, mock_id)).await.unwrap();
 
@@ -169,7 +174,7 @@ async fn send_two_micro_blocks_out_of_order() {
     ));
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
-    let producer = BlockProducer::new(Arc::clone(&blockchain2), keypair);
+    let producer = BlockProducer::new(keypair);
     let (request_component, mut mock_ptarc_rx, _mock_ptarc_tx) =
         MockRequestComponent::<MockPeer>::new();
     let (mut tx, rx) = mpsc::channel(32);
@@ -182,23 +187,32 @@ async fn send_two_micro_blocks_out_of_order() {
         rx.boxed(),
     );
 
+    let bc = blockchain2.upgradable_read();
     let block1 = Block::Micro(producer.next_micro_block(
-        blockchain2.read().time.now(),
+        &bc,
+        bc.time.now(),
         0,
         None,
         vec![],
         vec![],
         vec![0x42],
     ));
-    Blockchain::push(blockchain2.upgradable_read(), block1.clone()).unwrap(); // push it, so the producer actually produces a block at height 2
-    let block2 = Block::Micro(producer.next_micro_block(
-        blockchain2.read().time.now() + 1000,
-        0,
-        None,
-        vec![],
-        vec![],
-        vec![0x42],
-    ));
+    // push it, so the producer actually produces a block at height 2
+    // this also consumes bc
+    Blockchain::push(bc, block1.clone()).unwrap();
+
+    let block2 = {
+        let bc = blockchain2.read();
+        Block::Micro(producer.next_micro_block(
+            &bc,
+            bc.time.now() + 1000,
+            0,
+            None,
+            vec![],
+            vec![],
+            vec![0x42],
+        ))
+    };
 
     let mock_id = MockId::new(hub.new_address().into());
 
@@ -258,7 +272,7 @@ async fn send_micro_blocks_out_of_order() {
     ));
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
-    let producer = BlockProducer::new(Arc::clone(&blockchain2), keypair);
+    let producer = BlockProducer::new(keypair);
     let (request_component, _mock_ptarc_rx, _mock_ptarc_tx) =
         MockRequestComponent::<MockPeer>::new();
     let (mut tx, rx) = mpsc::channel(32);
@@ -279,8 +293,10 @@ async fn send_micro_blocks_out_of_order() {
     let n_blocks = rng.gen_range(2..15);
 
     for n in 0..n_blocks {
+        let bc = blockchain2.upgradable_read();
         let block = Block::Micro(producer.next_micro_block(
-            blockchain2.read().time.now() + n * 1000,
+            &bc,
+            bc.time.now() + n * 1000,
             0,
             None,
             vec![],
@@ -289,7 +305,7 @@ async fn send_micro_blocks_out_of_order() {
         ));
 
         // push it, so the producer actually produces a block
-        Blockchain::push(blockchain2.upgradable_read(), block.clone()).unwrap();
+        Blockchain::push(bc, block.clone()).unwrap();
 
         ordered_blocks.push(block);
     }
@@ -352,7 +368,7 @@ async fn send_invalid_block() {
     ));
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
-    let producer = BlockProducer::new(Arc::clone(&blockchain2), keypair);
+    let producer = BlockProducer::new(keypair);
     let (request_component, mut mock_ptarc_rx, _mock_ptarc_tx) =
         MockRequestComponent::<MockPeer>::new();
     let (mut tx, rx) = mpsc::channel(32);
@@ -365,25 +381,32 @@ async fn send_invalid_block() {
         rx.boxed(),
     );
 
+    let bc = blockchain2.upgradable_read();
     let block1 = Block::Micro(producer.next_micro_block(
-        blockchain2.read().time.now() + 100000,
+        &bc,
+        bc.time.now() + 100000,
         0,
         None,
         vec![],
         vec![],
         vec![0x42],
     ));
-    Blockchain::push(blockchain2.upgradable_read(), block1.clone()).unwrap();
+    // this also consumes bc
+    Blockchain::push(bc, block1.clone()).unwrap();
 
     // Block2's timestamp is less than Block1's timestamp, so Block 2 will be rejected by the blockchain
-    let block2 = Block::Micro(producer.next_micro_block(
-        blockchain2.read().time.now(),
-        0,
-        None,
-        vec![],
-        vec![],
-        vec![0x42],
-    ));
+    let block2 = {
+        let bc = blockchain2.read();
+        Block::Micro(producer.next_micro_block(
+            &bc,
+            bc.time.now(),
+            0,
+            None,
+            vec![],
+            vec![],
+            vec![0x42],
+        ))
+    };
 
     let mock_id = MockId::new(hub.new_address().into());
 
@@ -443,7 +466,7 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
     ));
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network_with_address(1));
-    let producer = BlockProducer::new(Arc::clone(&blockchain2), keypair);
+    let producer = BlockProducer::new(keypair);
     let (request_component, mut mock_ptarc_rx, mock_ptarc_tx) =
         MockRequestComponent::<MockPeer>::new();
     let (mut tx, rx) = mpsc::channel(32);
@@ -456,23 +479,32 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
         rx.boxed(),
     );
 
+    let bc = blockchain2.upgradable_read();
     let block1 = Block::Micro(producer.next_micro_block(
-        blockchain2.read().time.now(),
+        &bc,
+        bc.time.now(),
         0,
         None,
         vec![],
         vec![],
         vec![0x42],
     ));
-    Blockchain::push(blockchain2.upgradable_read(), block1.clone()).unwrap(); // push it, so the producer actually produces a block at height 2
-    let block2 = Block::Micro(producer.next_micro_block(
-        blockchain2.read().time.now() + 1000,
-        0,
-        None,
-        vec![],
-        vec![],
-        vec![0x42],
-    ));
+    // push it, so the producer actually produces a block at height 2
+    // also consumes bc
+    Blockchain::push(bc, block1.clone()).unwrap();
+
+    let block2 = {
+        let bc = blockchain2.read();
+        Block::Micro(producer.next_micro_block(
+            &bc,
+            bc.time.now() + 1000,
+            0,
+            None,
+            vec![],
+            vec![],
+            vec![0x42],
+        ))
+    };
 
     let mock_id = MockId::new(hub.new_address().into());
 
@@ -533,7 +565,7 @@ async fn put_peer_back_into_sync_mode() {
     ));
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network_with_address(1));
-    let producer = BlockProducer::new(Arc::clone(&blockchain2), keypair);
+    let producer = BlockProducer::new(keypair);
     let (request_component, _, _) = MockRequestComponent::<MockPeer>::new();
     let (mut tx, rx) = mpsc::channel(32);
 
@@ -553,25 +585,31 @@ async fn put_peer_back_into_sync_mode() {
     );
 
     for _ in 1..11 {
+        let bc = blockchain2.upgradable_read();
         let block = Block::Micro(producer.next_micro_block(
-            blockchain2.read().time.now(),
+            &bc,
+            bc.time.now(),
             0,
             None,
             vec![],
             vec![],
             vec![0x42],
         ));
-        Blockchain::push(blockchain2.upgradable_read(), block).unwrap();
+        Blockchain::push(bc, block).unwrap();
     }
 
-    let block = Block::Micro(producer.next_micro_block(
-        blockchain2.read().time.now(),
-        0,
-        None,
-        vec![],
-        vec![],
-        vec![0x42],
-    ));
+    let block = {
+        let bc = blockchain2.read();
+        Block::Micro(producer.next_micro_block(
+            &bc,
+            bc.time.now(),
+            0,
+            None,
+            vec![],
+            vec![],
+            vec![0x42],
+        ))
+    };
 
     tx.send((block, mock_id)).await.unwrap();
 

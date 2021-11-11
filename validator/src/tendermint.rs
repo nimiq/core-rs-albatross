@@ -102,10 +102,14 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
 
     /// Produces a proposal. Evidently, used when we are the proposer.
     fn get_value(&mut self, round: u32) -> Result<Self::ProposalTy, TendermintError> {
+        let blockchain = self.blockchain.read();
         // Call the block producer to produce the next macro block (minus the justification, of course).
-        let block =
-            self.block_producer
-                .next_macro_block_proposal(self.offset_time.now(), round, vec![]);
+        let block = self.block_producer.next_macro_block_proposal(
+            &blockchain,
+            self.offset_time.now(),
+            round,
+            vec![],
+        );
 
         // Cache the block body for future use.
         self.cache_body = block.body;
@@ -279,8 +283,6 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
             .is_err()
             {
                 debug!("Tendermint - await_proposal: Invalid block header");
-
-                drop(blockchain);
                 None
             } else {
                 let mut acceptance = MsgAcceptance::Accept;
