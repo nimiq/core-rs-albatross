@@ -126,14 +126,17 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
     fn produce_micro_block(&self) -> MicroBlock {
         let producer = BlockProducer::new(self.signing_key.clone());
 
-        let blockchain = self.blockchain.read(); // might need to be upgradable_read()
+        // get transactions before acquiring blockchain.read as it will take mempool state
+        // lock which we do not want to take with a blockchain lock held.
+        let transactions = self
+            .mempool
+            .get_transactions_for_block(MicroBlock::get_available_bytes(self.fork_proofs.len()));
+
+        let blockchain = self.blockchain.read(); // might need to be upgradable_read() for sequentialisation
         let timestamp = u64::max(
             blockchain.head().header().timestamp(),
             systemtime_to_timestamp(SystemTime::now()),
         );
-        let transactions = self
-            .mempool
-            .get_transactions_for_block(MicroBlock::get_available_bytes(self.fork_proofs.len()));
 
         producer.next_micro_block(
             &blockchain,
