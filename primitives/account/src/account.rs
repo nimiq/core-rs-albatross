@@ -282,7 +282,7 @@ impl AccountInherentInteraction for Account {
     ) -> Result<Option<Vec<u8>>, AccountError> {
         // If the inherent target is the staking contract then we forward it to the staking contract
         // right here.
-        if Address::from_any_str(STAKING_CONTRACT_ADDRESS).unwrap() == inherent.target {
+        if STAKING_CONTRACT_ADDRESS == inherent.target {
             return StakingContract::commit_inherent(
                 accounts_tree,
                 db_txn,
@@ -318,7 +318,7 @@ impl AccountInherentInteraction for Account {
     ) -> Result<(), AccountError> {
         // If the inherent target is the staking contract then we forward it to the staking contract
         // right here.
-        if Address::from_any_str(STAKING_CONTRACT_ADDRESS).unwrap() == inherent.target {
+        if STAKING_CONTRACT_ADDRESS == inherent.target {
             return StakingContract::revert_inherent(
                 accounts_tree,
                 db_txn,

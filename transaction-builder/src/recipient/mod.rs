@@ -208,9 +208,7 @@ impl Recipient {
     pub fn address(&self) -> Option<Address> {
         match self {
             Recipient::Basic { address, .. } => Some(address.clone()),
-            Recipient::Staking { .. } => {
-                Some(Address::from_any_str(STAKING_CONTRACT_ADDRESS).unwrap())
-            }
+            Recipient::Staking { .. } => Some(STAKING_CONTRACT_ADDRESS),
             _ => None,
         }
     }

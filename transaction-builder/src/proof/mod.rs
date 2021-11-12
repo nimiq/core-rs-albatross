@@ -276,10 +276,9 @@ impl TransactionProofBuilder {
     /// # let recipient_address = Address::from(&key_pair.public);
     ///
     /// let recipient = Recipient::new_basic(recipient_address);
-    /// let staking_contract_address = Address::from_any_str(STAKING_CONTRACT_ADDRESS).unwrap();
     ///
     /// let mut tx_builder = TransactionBuilder::with_required(
-    ///     staking_contract_address,
+    ///     STAKING_CONTRACT_ADDRESS,
     ///     recipient,
     ///     Coin::from_u64_unchecked(100),
     ///     1,

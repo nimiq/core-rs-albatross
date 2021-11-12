@@ -10,7 +10,7 @@ use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_hash::Hash;
 use nimiq_primitives::coin::Coin;
 
-use nimiq_transaction::{Transaction, TransactionFlags};
+use nimiq_transaction::Transaction;
 
 use crate::filter::MempoolFilter;
 use crate::mempool::MempoolState;

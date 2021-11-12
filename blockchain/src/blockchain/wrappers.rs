@@ -79,7 +79,7 @@ impl Blockchain {
 
     pub fn get_account(&self, address: &Address) -> Option<Account> {
         // TODO: Find a better place for this differentiation, it should be in a more general location
-        let key = if address.to_user_friendly_address() == policy::STAKING_CONTRACT_ADDRESS {
+        let key = if *address == policy::STAKING_CONTRACT_ADDRESS {
             StakingContract::get_key_staking_contract()
         } else {
             KeyNibbles::from(address)
@@ -121,8 +121,7 @@ impl Blockchain {
     }
 
     pub fn staking_contract_address(&self) -> Address {
-        Address::from_any_str(policy::STAKING_CONTRACT_ADDRESS)
-            .expect("Couldn't parse the Staking contract address from the policy file!")
+        policy::STAKING_CONTRACT_ADDRESS
     }
 
     #[cfg(feature = "metrics")]

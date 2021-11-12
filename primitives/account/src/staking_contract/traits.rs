@@ -3,7 +3,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use beserial::{Deserialize, Serialize};
 use nimiq_collections::BitSet;
 use nimiq_database::WriteTransaction;
-use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
 use nimiq_primitives::slots::SlashedSlot;
@@ -59,8 +58,7 @@ impl AccountTransactionInteraction for StakingContract {
         _block_time: u64,
     ) -> Result<Option<Vec<u8>>, AccountError> {
         // Check that the address is that of the Staking contract.
-        if transaction.recipient != Address::from_any_str(policy::STAKING_CONTRACT_ADDRESS).unwrap()
-        {
+        if transaction.recipient != policy::STAKING_CONTRACT_ADDRESS {
             return Err(AccountError::InvalidForRecipient);
         }
 
@@ -375,7 +373,7 @@ impl AccountTransactionInteraction for StakingContract {
         _block_time: u64,
     ) -> Result<Option<Vec<u8>>, AccountError> {
         // Check that the address is that of the Staking contract.
-        if transaction.sender != Address::from_any_str(policy::STAKING_CONTRACT_ADDRESS).unwrap() {
+        if transaction.sender != policy::STAKING_CONTRACT_ADDRESS {
             return Err(AccountError::InvalidForSender);
         }
 

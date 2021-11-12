@@ -1082,7 +1082,6 @@ impl TransactionBuilder {
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Transaction {
-        let staking_contract_address = Address::from_any_str(STAKING_CONTRACT_ADDRESS).unwrap();
         let mut recipient = Recipient::new_staking_builder();
         recipient.update_staker(new_delegation);
 
@@ -1097,7 +1096,7 @@ impl TransactionBuilder {
         match key_pair {
             None => {
                 builder
-                    .with_sender(staking_contract_address)
+                    .with_sender(STAKING_CONTRACT_ADDRESS)
                     .with_sender_type(AccountType::Staking);
             }
             Some(key) => {
@@ -1161,7 +1160,6 @@ impl TransactionBuilder {
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Transaction {
-        let staking_contract_address = Address::from_any_str(STAKING_CONTRACT_ADDRESS).unwrap();
         let mut recipient = Recipient::new_staking_builder();
         recipient.retire_stake(value);
 
@@ -1176,7 +1174,7 @@ impl TransactionBuilder {
         match key_pair {
             None => {
                 builder
-                    .with_sender(staking_contract_address)
+                    .with_sender(STAKING_CONTRACT_ADDRESS)
                     .with_sender_type(AccountType::Staking);
             }
             Some(key) => {
@@ -1240,7 +1238,6 @@ impl TransactionBuilder {
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Transaction {
-        let staking_contract_address = Address::from_any_str(STAKING_CONTRACT_ADDRESS).unwrap();
         let mut recipient = Recipient::new_staking_builder();
         recipient.reactivate_stake(value);
 
@@ -1255,7 +1252,7 @@ impl TransactionBuilder {
         match key_pair {
             None => {
                 builder
-                    .with_sender(staking_contract_address)
+                    .with_sender(STAKING_CONTRACT_ADDRESS)
                     .with_sender_type(AccountType::Staking);
             }
             Some(key) => {
@@ -1312,12 +1309,11 @@ impl TransactionBuilder {
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Transaction {
-        let staking_contract_address = Address::from_any_str(STAKING_CONTRACT_ADDRESS).unwrap();
         let recipient = Recipient::new_basic(recipient);
 
         let mut builder = Self::new();
         builder
-            .with_sender(staking_contract_address)
+            .with_sender(STAKING_CONTRACT_ADDRESS)
             .with_sender_type(AccountType::Staking)
             .with_recipient(recipient)
             .with_value(value)
@@ -1642,12 +1638,11 @@ impl TransactionBuilder {
         validity_start_height: u32,
         network_id: NetworkId,
     ) -> Transaction {
-        let staking_contract_address = Address::from_any_str(STAKING_CONTRACT_ADDRESS).unwrap();
         let recipient = Recipient::new_basic(recipient);
 
         let mut builder = Self::new();
         builder
-            .with_sender(staking_contract_address)
+            .with_sender(STAKING_CONTRACT_ADDRESS)
             .with_sender_type(AccountType::Staking)
             .with_recipient(recipient)
             .with_value(Coin::from_u64_unchecked(VALIDATOR_DEPOSIT) - fee)

@@ -4,7 +4,6 @@ use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteByte
 use nimiq_account::{Inherent, InherentType};
 use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_keys::Address;
 use nimiq_mmr::hash::Hash as MMRHash;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
@@ -128,8 +127,7 @@ impl ExtendedTransaction {
             ExtTxData::Inherent(x) => {
                 if x.ty == InherentType::Reward {
                     Ok(BlockchainTransaction::new_basic(
-                        Address::from_user_friendly_address(COINBASE_ADDRESS)
-                            .expect("Couldn't convert Coinbase address!"),
+                        COINBASE_ADDRESS,
                         x.target,
                         x.value,
                         Coin::ZERO,

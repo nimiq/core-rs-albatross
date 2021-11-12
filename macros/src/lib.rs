@@ -3,7 +3,7 @@ macro_rules! create_typed_array {
     ($name: ident, $t: ty, $len: expr) => {
         #[repr(C)]
         #[derive(Default, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-        pub struct $name([$t; $len]);
+        pub struct $name(pub [$t; $len]);
 
         impl<'a> From<&'a [$t]> for $name {
             fn from(slice: &'a [$t]) -> Self {

@@ -2534,7 +2534,7 @@ fn make_incoming_transaction(data: IncomingStakingTransactionData, value: u64) -
         | IncomingStakingTransactionData::Stake { .. } => Transaction::new_extended(
             Address::from_any_str(STAKER_ADDRESS).unwrap(),
             AccountType::Basic,
-            Address::from_any_str(STAKING_CONTRACT_ADDRESS).unwrap(),
+            STAKING_CONTRACT_ADDRESS,
             AccountType::Staking,
             value.try_into().unwrap(),
             100.try_into().unwrap(),
@@ -2545,7 +2545,7 @@ fn make_incoming_transaction(data: IncomingStakingTransactionData, value: u64) -
         _ => Transaction::new_signalling(
             Address::from_any_str(STAKER_ADDRESS).unwrap(),
             AccountType::Basic,
-            Address::from_any_str(STAKING_CONTRACT_ADDRESS).unwrap(),
+            STAKING_CONTRACT_ADDRESS,
             AccountType::Staking,
             value.try_into().unwrap(),
             100.try_into().unwrap(),
@@ -2588,7 +2588,7 @@ fn make_signed_incoming_transaction(
 
 fn make_drop_validator_transaction() -> Transaction {
     let mut tx = Transaction::new_extended(
-        Address::from_any_str(STAKING_CONTRACT_ADDRESS).unwrap(),
+        STAKING_CONTRACT_ADDRESS,
         AccountType::Staking,
         Address::from_any_str(STAKER_ADDRESS).unwrap(),
         AccountType::Basic,
@@ -2615,7 +2615,7 @@ fn make_drop_validator_transaction() -> Transaction {
 
 fn make_unstake_transaction(value: u64) -> Transaction {
     let mut tx = Transaction::new_extended(
-        Address::from_any_str(STAKING_CONTRACT_ADDRESS).unwrap(),
+        STAKING_CONTRACT_ADDRESS,
         AccountType::Staking,
         Address::from_any_str(STAKER_ADDRESS).unwrap(),
         AccountType::Basic,
@@ -2642,9 +2642,9 @@ fn make_unstake_transaction(value: u64) -> Transaction {
 
 fn make_deduct_fees_transaction(fee: u64, from_active_balance: bool) -> Transaction {
     let mut tx = Transaction::new_extended(
-        Address::from_any_str(STAKING_CONTRACT_ADDRESS).unwrap(),
+        STAKING_CONTRACT_ADDRESS,
         AccountType::Staking,
-        Address::from_any_str(STAKING_CONTRACT_ADDRESS).unwrap(),
+        STAKING_CONTRACT_ADDRESS,
         AccountType::Staking,
         0.try_into().unwrap(),
         fee.try_into().unwrap(),

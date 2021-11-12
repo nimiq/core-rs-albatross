@@ -93,11 +93,7 @@ impl StakingContract {
     /// Returns the key in the AccountsTrie for the Staking contract struct.
     pub fn get_key_staking_contract() -> KeyNibbles {
         let mut bytes = Vec::with_capacity(21);
-        bytes.extend(
-            Address::from_user_friendly_address(policy::STAKING_CONTRACT_ADDRESS)
-                .expect("Couldn't parse the staking contract address!")
-                .as_bytes(),
-        );
+        bytes.extend(policy::STAKING_CONTRACT_ADDRESS.as_bytes());
         bytes.push(StakingContract::PATH_CONTRACT_MAIN);
 
         KeyNibbles::from(bytes.as_slice())
@@ -106,11 +102,7 @@ impl StakingContract {
     /// Returns the key in the AccountsTrie for a Validator struct with a given validator address.
     pub fn get_key_validator(validator_address: &Address) -> KeyNibbles {
         let mut bytes = Vec::with_capacity(42);
-        bytes.extend(
-            Address::from_user_friendly_address(policy::STAKING_CONTRACT_ADDRESS)
-                .expect("Couldn't parse the staking contract address!")
-                .as_bytes(),
-        );
+        bytes.extend(policy::STAKING_CONTRACT_ADDRESS.as_bytes());
         bytes.push(StakingContract::PATH_VALIDATORS_LIST);
         bytes.extend(validator_address.as_slice());
         bytes.push(StakingContract::PATH_VALIDATOR_MAIN);
@@ -124,11 +116,7 @@ impl StakingContract {
         staker_address: &Address,
     ) -> KeyNibbles {
         let mut bytes = Vec::with_capacity(62);
-        bytes.extend(
-            Address::from_user_friendly_address(policy::STAKING_CONTRACT_ADDRESS)
-                .expect("Couldn't parse the staking contract address!")
-                .as_bytes(),
-        );
+        bytes.extend(policy::STAKING_CONTRACT_ADDRESS.as_bytes());
         bytes.push(StakingContract::PATH_VALIDATORS_LIST);
         bytes.extend(validator_address.as_slice());
         bytes.push(StakingContract::PATH_VALIDATOR_STAKERS_LIST);
@@ -140,11 +128,7 @@ impl StakingContract {
     /// Returns the key in the AccountsTrie for a Staker struct with a given staker address.
     pub fn get_key_staker(staker_address: &Address) -> KeyNibbles {
         let mut bytes = Vec::with_capacity(41);
-        bytes.extend(
-            Address::from_user_friendly_address(policy::STAKING_CONTRACT_ADDRESS)
-                .expect("Couldn't parse the staking contract address!")
-                .as_bytes(),
-        );
+        bytes.extend(policy::STAKING_CONTRACT_ADDRESS.as_bytes());
         bytes.push(StakingContract::PATH_STAKERS_LIST);
         bytes.extend(staker_address.as_bytes());
 
