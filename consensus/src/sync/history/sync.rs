@@ -43,7 +43,7 @@ impl<TPeer: Peer> EpochIds<TPeer> {
 }
 
 pub(crate) enum Job<TPeer: Peer> {
-    PushBatchSet(usize, BoxFuture<'static, SyncClusterResult>),
+    PushBatchSet(usize, Blake2bHash, BoxFuture<'static, SyncClusterResult>),
     FinishCluster(SyncCluster<TPeer>, SyncClusterResult),
 }
 
@@ -89,7 +89,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
 
 impl<TNetwork: Network> HistorySyncStream<TNetwork::PeerType> for HistorySync<TNetwork> {
     fn add_agent(&self, agent: Arc<ConsensusAgent<TNetwork::PeerType>>) {
-        trace!("Requesting more epoch ids for peer: {:?}", agent.peer.id());
+        trace!("Requesting epoch ids for peer: {:?}", agent.peer.id());
         let future = Self::request_epoch_ids(Arc::clone(&self.blockchain), agent).boxed();
         self.epoch_ids_stream.push(future);
 

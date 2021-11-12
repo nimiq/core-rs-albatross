@@ -9,7 +9,7 @@ use nimiq_network_interface::prelude::{CloseReason, Network, Peer};
 use crate::consensus_agent::ConsensusAgent;
 use crate::messages::{BlockHashType, RequestBlockHashesFilter};
 use crate::sync::history::cluster::{SyncCluster, SyncClusterResult};
-use crate::sync::history::sync::EpochIds;
+use crate::sync::history::sync::{EpochIds, Job};
 use crate::sync::history::HistorySync;
 use crate::sync::request_component::HistorySyncStream;
 
@@ -91,41 +91,84 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
     }
 
     pub(crate) fn cluster_epoch_ids(&mut self, mut epoch_ids: EpochIds<TNetwork::PeerType>) {
-        let checkpoint_epoch = epoch_ids.get_checkpoint_epoch();
-        let agent = epoch_ids.sender;
-
-        let (current_id, election_head) = {
-            let blockchain = self.blockchain.read();
-            (blockchain.election_head_hash(), blockchain.election_head())
-        };
-
-        // If `epoch_ids` includes known blocks, truncate (or discard on fork prior to our accepted state).
-        let current_epoch = election_head.epoch_number() as usize;
+        // Truncate epoch_ids by epoch_number: Discard all epoch_ids prior to our accepted state.
+        let current_epoch = self.blockchain.read().election_head().epoch_number() as usize;
         if !epoch_ids.ids.is_empty() && epoch_ids.first_epoch_number <= current_epoch {
-            // Check most recent id against our state.
-            // FIXME Also check upper epoch number to see if the last epoch id actually corresponds
-            //  to our state.
-            if current_id == epoch_ids.ids[current_epoch - epoch_ids.first_epoch_number] {
-                // Remove known blocks.
-                epoch_ids.ids = epoch_ids
-                    .ids
-                    .split_off(current_epoch - epoch_ids.first_epoch_number + 1);
-                epoch_ids.first_epoch_number = current_epoch;
+            epoch_ids.ids = epoch_ids
+                .ids
+                .split_off(current_epoch - epoch_ids.first_epoch_number + 1);
+            epoch_ids.first_epoch_number = current_epoch + 1;
+        }
 
-                // If there are no new election blocks left, return.
-                if epoch_ids.ids.is_empty() {
-                    return;
+        // TODO Sanity check: All of the remaining ids should be unknown
+
+        // Check if we have already downloaded the remaining epoch_ids but not applied them to the
+        // blockchain yet. Iterate over epoch_ids and job_queue in parallel, as we expect epochs
+        // to appear in the same order.
+        // TODO Currently, we don't remove known ids if they appear in a different order than in the
+        //  job queue. If we validated the macro block signature of each epoch as soon as we get the
+        //  macro block for an epoch (before downloading the history), we would avoid downloading
+        //  invalid epochs and could reject out-of-order ids here immediately.
+        let mut id_iter = epoch_ids.ids.iter().chain(epoch_ids.checkpoint_id.iter());
+        let mut job_iter = self.job_queue.iter_mut();
+
+        let mut num_ids_to_remove = 0;
+        let mut cluster_id = 0;
+        'outer: while let Some(id) = id_iter.next() {
+            loop {
+                let job = match job_iter.next() {
+                    Some(job) => job,
+                    None => break 'outer,
+                };
+
+                if let Job::PushBatchSet(cid, batch_set_id, _) = job {
+                    if id == batch_set_id {
+                        num_ids_to_remove += 1;
+                        cluster_id = *cid;
+                        break;
+                    }
                 }
-            } else {
-                // TODO: Improve debug output.
-                debug!("Got fork prior to our accepted state.");
-                return;
             }
         }
+
+        // Check if we removed all ids (including the checkpoint id if it existed).
+        if num_ids_to_remove > epoch_ids.ids.len()
+            || (num_ids_to_remove == epoch_ids.ids.len() && epoch_ids.checkpoint_id.is_none())
+        {
+            // No ids remain, nothing new to learn from this peer at this point.
+            //
+            let cluster = job_iter.find_map(|job| match job {
+                Job::FinishCluster(cluster, _) if cluster.id == cluster_id => Some(cluster),
+                _ => None,
+            });
+
+            // If a FinishCluster job exists, store the peer in the finished cluster so we request
+            // more epoch ids from it when the job is processed.
+            if let Some(cluster) = cluster {
+                let agent = epoch_ids.sender;
+                cluster.add_peer(Arc::downgrade(&agent));
+                self.agents.insert(Arc::clone(&agent.peer), (agent, 1));
+                return;
+            }
+
+            // No FinishCluster job exists, which means that the cluster is still active and thus
+            // contains more ids than this peer sent us. Assuming that the remaining ids will be
+            // accepted, we emit the peer as useless. The peer will eventually be upgraded to useful
+            // if the assumption doesn't hold.
+            // TODO Emit peer as useless
+        }
+
+        epoch_ids.ids = epoch_ids.ids.split_off(num_ids_to_remove);
+        epoch_ids.first_epoch_number += num_ids_to_remove;
+
+        // ----------
 
         let mut id_index = 0;
         let mut new_clusters = VecDeque::new();
         let mut num_clusters = 0;
+
+        let checkpoint_epoch = epoch_ids.get_checkpoint_epoch();
+        let agent = epoch_ids.sender;
 
         trace!(
             "Clustering ids: first_epoch_number={}, num_ids={}, num_clusters={}, active_cluster={}",

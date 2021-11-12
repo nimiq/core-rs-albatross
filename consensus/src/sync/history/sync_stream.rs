@@ -100,6 +100,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
 
                 match result {
                     Some(Ok(batch_set)) => {
+                        let hash = batch_set.block.hash();
                         let blockchain = Arc::clone(&self.blockchain);
                         let future = async move {
                             debug!(
@@ -121,7 +122,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                         .boxed();
 
                         self.job_queue
-                            .push_back(Job::PushBatchSet(cluster.id, future));
+                            .push_back(Job::PushBatchSet(cluster.id, hash, future));
                     }
                     Some(Err(_)) | None => {
                         // Evict the active cluster if it error'd or finished.
@@ -147,7 +148,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
     fn poll_job_queue(&mut self, cx: &mut Context<'_>) {
         while let Some(job) = self.job_queue.front_mut() {
             let result = match job {
-                Job::PushBatchSet(_, future) => match future.poll_unpin(cx) {
+                Job::PushBatchSet(_, _, future) => match future.poll_unpin(cx) {
                     Poll::Ready(result) => Some(result),
                     Poll::Pending => break,
                 },
@@ -157,7 +158,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
             let job = self.job_queue.pop_front().unwrap();
 
             match job {
-                Job::PushBatchSet(cluster_id, _) => {
+                Job::PushBatchSet(cluster_id, ..) => {
                     let result = result.unwrap();
 
                     log::debug!(
@@ -201,7 +202,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
     ) -> Option<SyncCluster<TNetwork::PeerType>> {
         while let Some(job) = self.job_queue.front() {
             let id = match job {
-                Job::PushBatchSet(cluster_id, _) => *cluster_id,
+                Job::PushBatchSet(cluster_id, ..) => *cluster_id,
                 Job::FinishCluster(cluster, _) => cluster.id,
             };
             if id != cluster_id {
