@@ -142,7 +142,7 @@ impl AccountTransactionInteraction for VestingContract {
             }
         };
 
-        let new_balance = Account::balance_sub(account.balance(), transaction.total_value()?)?;
+        let new_balance = Account::balance_sub(account.balance(), transaction.total_value())?;
 
         // Check vesting min cap.
         let min_cap = vesting.min_cap(block_time);
@@ -201,7 +201,7 @@ impl AccountTransactionInteraction for VestingContract {
             }
         };
 
-        let new_balance = Account::balance_add(account.balance(), transaction.total_value()?)?;
+        let new_balance = Account::balance_add(account.balance(), transaction.total_value())?;
 
         accounts_tree.put(
             db_txn,

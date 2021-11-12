@@ -357,10 +357,8 @@ impl Transaction {
         res
     }
 
-    pub fn total_value(&self) -> Result<Coin, TransactionError> {
-        self.value
-            .checked_add(self.fee)
-            .ok_or(TransactionError::Overflow)
+    pub fn total_value(&self) -> Coin {
+        self.value + self.fee
     }
 }
 

@@ -224,8 +224,8 @@ impl Mempool {
                                 .filter(|hash| {
                                     let old_tx = mempool_state.get(hash).unwrap();
 
-                                    if old_tx.total_value().unwrap() + new_total <= sender_balance {
-                                        new_total += old_tx.total_value().unwrap();
+                                    if old_tx.total_value() + new_total <= sender_balance {
+                                        new_total += old_tx.total_value();
                                         false
                                     } else {
                                         true
@@ -283,7 +283,7 @@ impl Mempool {
                     };
 
                     // Calculate the new balance assuming we add this transaction to the mempool
-                    let in_fly_balance = tx.total_value().unwrap() + sender_total;
+                    let in_fly_balance = tx.total_value() + sender_total;
 
                     if in_fly_balance <= sender_balance {
                         log::debug!("Accepting new transaction from reverted blocks");
@@ -450,13 +450,13 @@ impl MempoolState {
                 self.state_by_sender.insert(
                     tx.sender.clone(),
                     SenderPendingState {
-                        total: tx.total_value().unwrap(),
+                        total: tx.total_value(),
                         txns,
                     },
                 );
             }
             Some(sender_state) => {
-                sender_state.total += tx.total_value().unwrap();
+                sender_state.total += tx.total_value();
                 sender_state.txns.insert(tx_hash);
             }
         }
@@ -472,7 +472,7 @@ impl MempoolState {
 
         let sender_state = self.state_by_sender.get_mut(&tx.sender).unwrap();
 
-        sender_state.total -= tx.total_value().unwrap();
+        sender_state.total -= tx.total_value();
         sender_state.txns.remove(tx_hash);
 
         if sender_state.txns.is_empty() {

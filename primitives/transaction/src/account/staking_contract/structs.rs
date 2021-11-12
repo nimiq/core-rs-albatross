@@ -601,7 +601,7 @@ impl OutgoingStakingTransactionProof {
         match self {
             OutgoingStakingTransactionProof::DropValidator { proof } => {
                 // When dropping a validator you get exactly the validator deposit back.
-                if transaction.total_value()? != Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT)
+                if transaction.total_value() != Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT)
                 {
                     error!("Wrong value when dropping a validator. It must be VALIDATOR_DEPOSIT. The offending transaction is the following:\n{:?}", transaction);
                     return Err(TransactionError::InvalidValue);

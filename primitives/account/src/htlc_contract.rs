@@ -144,7 +144,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
             }
         };
 
-        let new_balance = Account::balance_sub(account.balance(), transaction.total_value()?)?;
+        let new_balance = Account::balance_sub(account.balance(), transaction.total_value())?;
 
         let proof_buf = &mut &transaction.proof[..];
 
@@ -267,7 +267,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
             }
         };
 
-        let new_balance = Account::balance_add(account.balance(), transaction.total_value()?)?;
+        let new_balance = Account::balance_add(account.balance(), transaction.total_value())?;
 
         accounts_tree.put(
             db_txn,

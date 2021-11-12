@@ -111,7 +111,7 @@ impl AccountTransactionInteraction for BasicAccount {
         let account = accounts_tree
             .get(db_txn, &key)
             .or_else(|| {
-                if transaction.total_value().expect("Transaction overflow") != Coin::ZERO {
+                if transaction.total_value() != Coin::ZERO {
                     None
                 } else {
                     Some(Account::Basic(BasicAccount {
@@ -130,7 +130,7 @@ impl AccountTransactionInteraction for BasicAccount {
             });
         }
 
-        let new_balance = Account::balance_sub(account.balance(), transaction.total_value()?)?;
+        let new_balance = Account::balance_sub(account.balance(), transaction.total_value())?;
 
         if new_balance.is_zero() {
             accounts_tree.remove(db_txn, &key);
@@ -168,7 +168,7 @@ impl AccountTransactionInteraction for BasicAccount {
             Some(account) => account.balance(),
         };
 
-        let new_balance = Account::balance_add(current_balance, transaction.total_value()?)?;
+        let new_balance = Account::balance_add(current_balance, transaction.total_value())?;
 
         accounts_tree.put(
             db_txn,

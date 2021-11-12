@@ -134,7 +134,7 @@ pub(crate) async fn verify_tx<'a>(
     // 7. Sequentialize per Sender to Check Balances and acquire the upgradable from the blockchain.
     //    Perform all balances checks.
     let sender_account = match blockchain.get_account(&transaction.sender).or_else(|| {
-        if transaction.total_value().expect("Transaction overflow") != Coin::ZERO {
+        if transaction.total_value() != Coin::ZERO {
             None
         } else {
             Some(Account::Basic(BasicAccount {
@@ -180,8 +180,8 @@ pub(crate) async fn verify_tx<'a>(
     }
 
     // Calculate the new balance assuming we add this transaction to the mempool
-    let sender_in_fly_balance = transaction.total_value().unwrap() + sender_current_balance;
-    let recipient_in_fly_balance = transaction.total_value().unwrap() + recipient_current_balance;
+    let sender_in_fly_balance = transaction.total_value() + sender_current_balance;
+    let recipient_in_fly_balance = transaction.total_value() + recipient_current_balance;
 
     let filter = filter.read();
 

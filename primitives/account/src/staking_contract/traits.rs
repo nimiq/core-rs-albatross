@@ -405,7 +405,7 @@ impl AccountTransactionInteraction for StakingContract {
                     accounts_tree,
                     db_txn,
                     &staker_address,
-                    transaction.total_value()?,
+                    transaction.total_value(),
                     block_height,
                 )?
                 .map(|r| r.serialize_to_vec());
@@ -472,7 +472,7 @@ impl AccountTransactionInteraction for StakingContract {
                     accounts_tree,
                     db_txn,
                     &staker_address,
-                    transaction.total_value()?,
+                    transaction.total_value(),
                     receipt,
                 )?;
             }
