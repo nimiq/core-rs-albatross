@@ -12,7 +12,8 @@ use tokio_stream::wrappers::BroadcastStream;
 
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_database::Environment;
-use nimiq_network_interface::network::{Network, Topic};
+use nimiq_mempool::executor::TransactionTopic;
+use nimiq_network_interface::network::Network;
 use nimiq_transaction::Transaction;
 
 use crate::consensus::head_requests::{HeadRequests, HeadRequestsResult};
@@ -21,17 +22,6 @@ use crate::sync::request_component::{BlockRequestComponent, HistorySyncStream};
 
 mod head_requests;
 mod request_response;
-
-#[derive(Clone, Debug, Default)]
-pub struct TransactionTopic;
-
-impl Topic for TransactionTopic {
-    type Item = Transaction;
-
-    const BUFFER_SIZE: usize = 1024;
-    const NAME: &'static str = "transactions";
-    const VALIDATE: bool = true;
-}
 
 pub struct ConsensusProxy<N: Network> {
     pub blockchain: Arc<RwLock<Blockchain>>,
