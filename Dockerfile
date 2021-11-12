@@ -21,7 +21,8 @@ VOLUME /home/nimiq/.nimiq
 COPY ./scripts/docker_*.sh /home/nimiq/
 
 ARG BUILD=debug
-COPY ./target/${BUILD}/nimiq-client /usr/local/bin/nimiq-client
+ARG APP=client
+COPY ./target/${BUILD}/nimiq-${APP} /usr/local/bin/nimiq-client
 
 EXPOSE 8443/tcp 8648/tcp
 

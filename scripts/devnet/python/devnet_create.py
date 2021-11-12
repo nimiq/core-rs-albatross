@@ -274,6 +274,123 @@ balance = 10_000_000_00000
 
     """)
 
+# Docker compose configuration
+print("Writing docker compose config")
+with (output / "docker-compose.yml").open("wt") as f:
+    f.write("""
+version: "3.5"
+
+networks:
+  devnet:
+    name: ${NETWORK_NAME:?err}
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 7.0.0.0/24
+        """)
+    # Seed node
+    f.write("""
+services:
+  seed0:
+    image: core:latest
+    environment:
+      - LISTEN_ADDRESSES=/ip4/7.0.0.99/tcp/8443/ws
+      - NIMIQ_HOST=seed0.${NETWORK_NAME:?err}
+      - NIMIQ_NETWORK=dev-albatross
+      - NIMIQ_PEER_KEY_FILE=/home/nimiq/.nimiq/peer_key.dat
+      - NIMIQ_INSTANT_INBOUND=true
+      - NIMIQ_NO_LMDB_SYNC=true
+      - NIMIQ_MIN_PEERS=1
+      - VALIDATOR_BLOCK_DELAY="0"
+      - RPC_ENABLED=true
+      - RUST_BACKTRACE="1"
+      - NIMIQ_LOG_LEVEL=debug
+      - NIMIQ_LOG_TIMESTAMPS=true
+    networks:
+      devnet:
+        ipv4_address: 7.0.0.99
+    volumes:
+      - "seed0:/home/nimiq/.nimiq:rw"
+        """)
+
+# Writing validator configuration
+    for idx, validator in enumerate(validators):
+        f.write("""
+  seed{validatorid}:
+    image: core:latest
+    depends_on:
+      - seed0
+    environment:
+      - LISTEN_ADDRESSES=/ip4/{ip}/tcp/8443/ws
+      - NIMIQ_HOST=seed{validatorid}.${{NETWORK_NAME:?err}}
+      - NIMIQ_NETWORK=dev-albatross
+      - NIMIQ_SEED_NODES=/ip4/7.0.0.99/tcp/8443/ws
+      - NIMIQ_PEER_KEY_FILE=/home/nimiq/.nimiq/peer_key.dat
+      - NIMIQ_INSTANT_INBOUND=true
+      - NIMIQ_VALIDATOR=validator
+      - NIMIQ_NO_LMDB_SYNC=true
+      - NIMIQ_MIN_PEERS=1
+      - VALIDATOR_BLOCK_DELAY="0"
+      - VALIDATOR_KEY={validator_key}
+      - VALIDATOR_ADDRESS={validator_address}
+      - FEE_KEY={fee_key}
+      - WARM_KEY={warm_address}
+      - RPC_ENABLED=false
+      - RUST_BACKTRACE="1"
+      - NIMIQ_LOG_LEVEL=debug
+      - NIMIQ_LOG_TIMESTAMPS=true
+    networks:
+      devnet:
+        ipv4_address: {ip}
+    volumes:
+      - "seed{validatorid}:/home/nimiq/.nimiq:rw"
+        """.format(validatorid=str(idx+1),
+                   ip=str("7.0.0.{}".format(idx+2)),
+                   validator_address=validator["validator_address"]["address"].replace(
+                       " ", ""),
+                   validator_key=validator["validator_key"]["private_key"],
+                   fee_key=validator["reward_address"]["private_key"],
+                   warm_address=validator["warm_address"]["private_key"]
+                   ))
+
+# Spammer node
+    f.write("""
+  spammer:
+    image: spammer:latest
+    depends_on:
+      - seed0
+    environment:
+      - LISTEN_ADDRESSES=/ip4/7.0.0.98/tcp/8443/ws
+      - NIMIQ_HOST=seed4.${NETWORK_NAME:?err}
+      - NIMIQ_NETWORK=dev-albatross
+      - NIMIQ_SEED_NODES=/ip4/7.0.0.99/tcp/8443/ws
+      - NIMIQ_PEER_KEY_FILE=/home/nimiq/.nimiq/peer_key.dat
+      - NIMIQ_INSTANT_INBOUND=true
+      - NIMIQ_VALIDATOR=validator
+      - NIMIQ_NO_LMDB_SYNC=true
+      - NIMIQ_MIN_PEERS=1
+      - VALIDATOR_BLOCK_DELAY="0"
+      - VALIDATOR_ADDRESS=NQ0700000000000000000000000000000000
+      - RPC_ENABLED=true
+      - RUST_BACKTRACE="1"
+      - NIMIQ_LOG_LEVEL=info
+      - NIMIQ_LOG_TIMESTAMPS=true
+    networks:
+      devnet:
+        ipv4_address: 7.0.0.98
+    volumes:
+      - "spammer:/home/nimiq/.nimiq:rw"
+        """)
+# Volumes
+    f.write("""
+volumes:
+  spammer:
+  seed0:\n""")
+    for idx, validator in enumerate(validators):
+        f.write("  seed{}:\n".format(idx+1))
+
+
 print("Writing configuration")
 with (output / "validators.json").open("wt") as f:
     json.dump(validators, f)

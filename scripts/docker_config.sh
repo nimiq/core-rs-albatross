@@ -72,6 +72,7 @@ if [[ "$ROTATING_LOG_ENABLED" == "true" ]]; then
     optional file_count ROTATING_LOG_FILE_COUNT number
 fi
 
+if [[ ! -z "${VALIDATOR_ADDRESS+x}" ]]; then
 echo '[validator]'
 required validator_address VALIDATOR_ADDRESS string
 optional validator_key_file VALIDATOR_KEY_FILE string
@@ -80,6 +81,7 @@ optional fee_key_file FEE_KEY_FILE string
 optional fee_key FEE_KEY string
 optional warm_key_file WARM_KEY_FILE string
 optional warm_key WARM_KEY string
+fi
 
 if [[ "$RPC_ENABLED" == "true" ]]; then
     echo '[rpc-server]'

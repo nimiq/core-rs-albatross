@@ -192,7 +192,7 @@ do
     if [ $restarts_count -lt $max_restarts ] ; then
 
         # Select a random validator to restart
-        index=$((0 + $RANDOM % 3))
+        index=$(($RANDOM % 4))
 
         echo "  Killing validator: $(($index + 1 ))"
 

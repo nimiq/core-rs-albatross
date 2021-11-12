@@ -1,4 +1,6 @@
 *
 !/target/debug/nimiq-client
 !/target/release/nimiq-client
+!/target/debug/nimiq-spammer
+!/target/release/nimiq-spammer
 !/scripts/docker_*.sh
