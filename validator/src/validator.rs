@@ -664,13 +664,23 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Future
             }
         }
 
-        if !self.unpark_sent {
-            return Poll::Pending;
-        }
-
-        // Check the validator staking state.
-        if let ValidatorStakingState::Parked = self.get_staking_state() {
-            self.unpark();
+        // Once consensus is established, check the validator staking state.
+        // TODO: this needs a more sophisticated mechanism. Re-sending the staking transaction should be
+        // triggered at some point even if still parked and tx was send before.
+        if self.consensus.is_established() {
+            match self.get_staking_state() {
+                ValidatorStakingState::Parked => {
+                    if !self.unpark_sent {
+                        self.unpark();
+                    }
+                }
+                ValidatorStakingState::Active => {
+                    if self.unpark_sent {
+                        self.unpark_sent = false;
+                    }
+                }
+                _ => {}
+            }
         }
 
         Poll::Pending
