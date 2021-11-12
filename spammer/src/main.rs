@@ -61,11 +61,7 @@ impl SpammerCommandLine {
 #[derive(Clone)]
 struct StatsExert {
     pub time: std::time::Duration,
-<<<<<<< HEAD
     pub is_micro: bool,
-=======
-    pub _height: u32,
->>>>>>> 1c8bc6da (Remove misc warnings)
     pub tx_count: usize,
 }
 
@@ -144,19 +140,6 @@ async fn main_inner() -> Result<(), Error> {
         panic!("Could not start spammer");
     };
 
-<<<<<<< HEAD
-=======
-    // Create the "monitor" future which never completes to keep the client alive.
-    // This closure is executed after the client has been initialized.
-    // TODO Get rid of this. Make the Client a future/stream instead.
-    let mut _statistics_interval = config_file.log.statistics;
-    let mut _show_statistics = true;
-    if _statistics_interval == 0 {
-        _show_statistics = false;
-    }
-    _statistics_interval = 1;
-
->>>>>>> 1c8bc6da (Remove misc warnings)
     let rolling_window = 32usize;
 
     let mut stat_exerts: VecDeque<StatsExert> = VecDeque::new();
@@ -206,15 +189,7 @@ async fn main_inner() -> Result<(), Error> {
                     log::info!("\t- mempool contains: {} tx", mempool_count);
                 }
 
-<<<<<<< HEAD
                 tx_count_total += tx_count;
-=======
-                    let se = StatsExert {
-                        time,
-                        _height: block.header().block_number(),
-                        tx_count,
-                    };
->>>>>>> 1c8bc6da (Remove misc warnings)
 
                 let is_micro = block.ty() == BlockType::Micro;
                 if is_micro {
@@ -285,27 +260,16 @@ async fn spam(mempool: std::sync::Arc<Mempool>, consensus: ConsensusProxy, count
             let mp = std::sync::Arc::clone(&mempool);
             tokio::spawn(async move {
                 if let Err(e) = mp.add_transaction(tx.clone()).await {
-<<<<<<< HEAD
                     log::warn!("Mempool rejected transaction: {:?} - {:#?}", e, tx);
                 }
                 if let Err(e) = consensus1.send_transaction(tx).await {
                     log::warn!("Failed to send transaction: {:?}", e);
-=======
-                    log::error!("Add transaction error: {:?}", e);
-                }
-                if let Err(e) = consensus1.send_transaction(tx).await {
-                    log::error!("Send transaction error: {:?}", e);
->>>>>>> 1c8bc6da (Remove misc warnings)
                 }
             });
         }
     })
     .await
-<<<<<<< HEAD
     .expect("spawn_blocking() panicked");
-=======
-    .expect("Failed to execute task to completion");
->>>>>>> 1c8bc6da (Remove misc warnings)
 }
 
 fn generate_transactions(

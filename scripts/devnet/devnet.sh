@@ -26,11 +26,11 @@ function cleanup_exit() {
     for pid in ${vpids[@]}; do
         kill $pid
     done
-    echo "Killing seed/spammer...."
+    echo "Killing seed/spammer..."
     for pid in ${spids[@]}; do
         kill $pid
     done
-    echo "done.."
+    echo "Done."
     if [ "$fail" = true ] ; then
         echo "...FAILED..."
         exit 1
@@ -118,7 +118,7 @@ done
 gitroot=`git rev-parse --show-toplevel`
 pushd $gitroot > /dev/null
 
-#Create directory for logs
+# Create directory for logs
 mkdir -p  temp-logs/"$foldername"
 
 # Erase all previous state (if any) and start fresh
@@ -143,42 +143,45 @@ do
     i=$(( $i + 1 ))
 done
 
-echo "Building config files .."
+echo "Building config files..."
 python3 scripts/devnet/python/devnet_create.py $MAX_VALIDATORS
-echo "Initializing genesis"
+echo "Initializing genesis..."
 cp -v /tmp/nimiq-devnet/dev-albatross.toml genesis/src/genesis/dev-albatross.toml
-echo "Compiling the code .."
+echo "Compiling the code..."
 $cargo_build
+echo "Done."
 
 # Launch the seed node
-echo "Starting seed node.... "
+echo "Starting seed node..."
 mkdir -p temp-state/dev/seed
 $cargo --bin nimiq-client -- -c $CONFIG_PATH/seed/client.toml &>> temp-logs/$foldername/Seed.txt &
 spids+=($!)
-sleep 3s
+sleep 3
+echo "Done."
 
-#Launch the validators and store their PID
-echo "Starting validators.... "
+# Launch the validators and store their PID
+echo "Starting validators..."
 for validator in ${validators[@]}; do
     echo "    Starting Validator: $validator"
     mkdir -p temp-state/dev/$validator
     $cargo --bin nimiq-client -- -c $CONFIG_PATH/validator$validator/client.toml &>> temp-logs/$foldername/Validator$validator.txt &
     vpids+=($!)
-    sleep 1s
+    sleep 1
 done
-echo "Done"
+echo "Done."
 
-#Let the validators produce blocks for 30 seconds
-sleep 30s
+# Let the validators produce blocks for 30 seconds
+sleep 30
 
-#Launch the spammer
+# Launch the spammer
 if [ "$SPAMMER" = true ] ; then
-    echo "Starting spammer.... "
+    echo "Starting spammer..."
     mkdir -p temp-state/dev/spammer
     $cargo --bin nimiq-spammer -- -t $tpb -c $CONFIG_PATH/spammer/client.toml &>> temp-logs/$foldername/Spammer.txt &
     spids+=($!)
-    sleep 1s
+    sleep 1
 fi
+echo "Done."
 
 old_block_number=0
 restarts_count=0
@@ -188,13 +191,13 @@ while [ $cycles -le $max_restarts ]
 do
     if [ $restarts_count -lt $max_restarts ] ; then
 
-        #Select a random validator to restart
+        # Select a random validator to restart
         index=$((0 + $RANDOM % 3))
 
         echo "  Killing validator: $(($index + 1 ))"
 
         kill ${vpids[$index]}
-        sleep 10s
+        sleep 10
 
         if [ "$ERASE" = true ] ; then
             echo "  Erasing all validator state"
@@ -222,29 +225,29 @@ do
 
     sleep_time=$((30 + $RANDOM % 100))
 
-    #Produce blocks for some minutes
+    # Produce blocks for some minutes
     echo "  Producing blocks for $sleep_time seconds"
-    sleep "$sleep_time"s
+    sleep "$sleep_time"
 
-    #Search for deadlocks
+    # Search for deadlocks
     if grep -wrin "deadlock" temp-logs/$foldername/
     then
-        echo "   !!!!   DEADLOCK   !!! "
+        echo "   !!!   DEADLOCK   !!!"
         fail=true
         break
     fi
 
-    #Search for panics/crashes
+    # Search for panics/crashes
     if grep -wrin "panic" temp-logs/$foldername/
     then
-        echo "   !!!!   PANIC   !!! "
+        echo "   !!!   PANIC   !!!"
         fail=true
         break
     fi
-    #Search if blocks are being produced
+    # Search if blocks are being produced
     bns=()
 
-    #First collect the last block number from each validator
+    # First collect the last block number from each validator
     for log in temp-logs/$foldername/*; do
         bn=$(grep "Now at block #" $log | tail -1 | awk -F# '{print $2}')
         if [ -z "$bn" ]; then
@@ -263,7 +266,7 @@ do
     echo "     Latest block number: $new_block_number "
 
     if [ $new_block_number -le $old_block_number ] ; then
-        echo "   !!!!   BLOCKS ARE NOT BEING PRODUCED AFTER $sleep_time seconds   !!! "
+        echo "   !!!   BLOCKS ARE NOT BEING PRODUCED AFTER $sleep_time SECONDS   !!!"
         fail=true
         break
     fi
@@ -271,7 +274,7 @@ do
 
 done
 
-sleep 30s
+sleep 30
 
 cleanup_exit
 
