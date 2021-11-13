@@ -58,7 +58,7 @@ pub struct MacroHeader {
 }
 
 /// The struct representing the body of a Macro block (can be either checkpoint or election).
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MacroBody {
     /// Contains all the information regarding the current validator set, i.e. their validator
     /// public key, their reward address and their assigned validator slots.
@@ -111,17 +111,6 @@ impl MacroBlock {
     /// Returns the epoch number of this macro block.
     pub fn epoch_number(&self) -> u32 {
         policy::epoch_at(self.header.block_number)
-    }
-}
-
-impl MacroBody {
-    /// Creates an empty body.
-    pub fn new() -> Self {
-        MacroBody {
-            validators: None,
-            lost_reward_set: BitSet::new(),
-            disabled_set: BitSet::new(),
-        }
     }
 }
 

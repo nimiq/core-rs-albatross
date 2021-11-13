@@ -150,16 +150,13 @@ impl BlockchainInterface for BlockchainDispatcher {
         let mut transactions = vec![];
 
         for ext_tx in extended_tx_vec {
-            match ext_tx.into_transaction() {
-                Ok(tx) => {
-                    transactions.push(Transaction::from_blockchain(
-                        tx,
-                        block_number,
-                        timestamp,
-                        blockchain.block_number(),
-                    ));
-                }
-                Err(_) => {}
+            if let Ok(tx) = ext_tx.into_transaction() {
+                transactions.push(Transaction::from_blockchain(
+                    tx,
+                    block_number,
+                    timestamp,
+                    blockchain.block_number(),
+                ));
             }
         }
 
@@ -224,16 +221,13 @@ impl BlockchainInterface for BlockchainDispatcher {
             // Convert the extended transactions into regular transactions. This will also convert
             // reward inherents.
             for ext_tx in ext_txs {
-                match ext_tx.into_transaction() {
-                    Ok(tx) => {
-                        transactions.push(Transaction::from_blockchain(
-                            tx,
-                            i,
-                            timestamp,
-                            blockchain.block_number(),
-                        ));
-                    }
-                    Err(_) => {}
+                if let Ok(tx) = ext_tx.into_transaction() {
+                    transactions.push(Transaction::from_blockchain(
+                        tx,
+                        i,
+                        timestamp,
+                        blockchain.block_number(),
+                    ));
                 }
             }
         }

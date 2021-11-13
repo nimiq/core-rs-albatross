@@ -339,7 +339,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
 
                 // If the key fully matches, we have found the requested node. We must check that
                 // it is a leaf node, we don't want to prove branch nodes.
-                if &pointer_node.key() == &cur_key {
+                if pointer_node.key() == cur_key {
                     if pointer_node.is_branch() {
                         error!(
                             "Pointer node with key {} is a branch node. We don't want to prove branch nodes.",

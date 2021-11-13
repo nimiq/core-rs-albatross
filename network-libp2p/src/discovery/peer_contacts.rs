@@ -490,14 +490,14 @@ impl PeerContactBook {
     }
 
     pub fn get(&self, peer_id: &PeerId) -> Option<Arc<PeerContactInfo>> {
-        self.peer_contacts.get(peer_id).map(|c| Arc::clone(c))
+        self.peer_contacts.get(peer_id).map(Arc::clone)
     }
 
     pub fn query<'a>(
         &'a self,
         protocols: Protocols,
         services: Services,
-    ) -> impl Iterator<Item = Arc<PeerContactInfo>> + 'a {
+    ) -> impl Iterator<Item = Arc<PeerContactInfo>> + '_ {
         // TODO: This is a naive implementation
         // TODO: Sort by score?
         self.peer_contacts.iter().filter_map(move |(_, contact)| {

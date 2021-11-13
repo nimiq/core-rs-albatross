@@ -61,7 +61,7 @@ impl From<[u8; PrivateKey::SIZE]> for PrivateKey {
 
 impl Clone for PrivateKey {
     fn clone(&self) -> Self {
-        PrivateKey(self.0.clone())
+        PrivateKey(self.0)
     }
 }
 

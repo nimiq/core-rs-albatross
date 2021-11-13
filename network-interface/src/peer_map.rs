@@ -140,26 +140,17 @@ where
     }
 
     pub fn get_peer(&self, peer_id: &P::Id) -> Option<Arc<P>> {
-        self.inner
-            .read()
-            .peers
-            .get(peer_id)
-            .map(|peer| Arc::clone(peer))
+        self.inner.read().peers.get(peer_id).map(Arc::clone)
     }
 
     pub fn get_peers(&self) -> Vec<Arc<P>> {
-        self.inner
-            .read()
-            .peers
-            .values()
-            .map(|peer| Arc::clone(peer))
-            .collect()
+        self.inner.read().peers.values().map(Arc::clone).collect()
     }
 
     pub fn subscribe(&self) -> (Vec<Arc<P>>, BroadcastStream<NetworkEvent<P>>) {
         let inner = self.inner.write();
 
-        let peers = inner.peers.values().map(|peer| Arc::clone(peer)).collect();
+        let peers = inner.peers.values().map(Arc::clone).collect();
 
         let rx = BroadcastStream::new(inner.tx.subscribe());
 

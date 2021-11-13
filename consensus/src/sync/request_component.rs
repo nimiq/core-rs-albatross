@@ -109,10 +109,7 @@ impl<TPeer: 'static + Peer> RequestComponent<TPeer> for BlockRequestComponent<TP
     }
 
     fn peers(&self) -> Vec<Weak<ConsensusAgent<TPeer>>> {
-        self.agents
-            .values()
-            .map(|agent| Arc::downgrade(agent))
-            .collect()
+        self.agents.values().map(Arc::downgrade).collect()
     }
 }
 

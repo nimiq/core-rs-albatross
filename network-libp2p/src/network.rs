@@ -112,22 +112,12 @@ pub(crate) enum NetworkAction {
     StartConnecting,
 }
 
+#[derive(Default)]
 struct TaskState {
     dht_puts: HashMap<QueryId, oneshot::Sender<Result<(), NetworkError>>>,
     dht_gets: HashMap<QueryId, oneshot::Sender<Result<Option<Vec<u8>>, NetworkError>>>,
     gossip_topics: HashMap<TopicHash, (mpsc::Sender<(GossipsubMessage, MessageId, PeerId)>, bool)>,
     is_connected: bool,
-}
-
-impl Default for TaskState {
-    fn default() -> Self {
-        Self {
-            dht_puts: HashMap::new(),
-            dht_gets: HashMap::new(),
-            gossip_topics: HashMap::new(),
-            is_connected: false,
-        }
-    }
 }
 
 #[derive(Debug)]

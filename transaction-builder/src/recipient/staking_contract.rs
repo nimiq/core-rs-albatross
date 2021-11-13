@@ -76,7 +76,7 @@ impl StakingRecipientBuilder {
             new_warm_key: new_warm_address,
             new_validator_key: new_key_pair.map(|key| key.public_key.compress()),
             new_proof_of_knowledge: new_key_pair
-                .map(|key| StakingRecipientBuilder::generate_proof_of_knowledge(key)),
+                .map(StakingRecipientBuilder::generate_proof_of_knowledge),
             new_reward_address,
             new_signal_data,
             proof: Default::default(),

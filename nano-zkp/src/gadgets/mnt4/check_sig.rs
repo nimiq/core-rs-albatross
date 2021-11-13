@@ -26,7 +26,7 @@ impl CheckSigGadget {
         let hash_p_var = PairingVar::prepare_g1(hash_point)?;
 
         // Prepare the aggregated signature elliptic curve point.
-        let sig_p_var = PairingVar::prepare_g1(&signature)?;
+        let sig_p_var = PairingVar::prepare_g1(signature)?;
 
         // Prepare the generator elliptic curve point.
         let generator = G2Var::new_constant(cs, G2Projective::prime_subgroup_generator())?;

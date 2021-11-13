@@ -6,7 +6,7 @@ use nimiq_hash::Blake2bHash;
 use nimiq_primitives::policy;
 
 /// A struct that stores the blocks for the blockchain.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ChainStore {
     // A store of chain infos indexed by their block hashes. Contains only headers.
     chain_db: HashMap<Blake2bHash, ChainInfo>,
@@ -17,15 +17,6 @@ pub struct ChainStore {
 }
 
 impl ChainStore {
-    /// Creates a new ChainStore.
-    pub fn new() -> Self {
-        ChainStore {
-            chain_db: HashMap::new(),
-            height_idx: HashMap::new(),
-            election_db: HashMap::new(),
-        }
-    }
-
     /// Gets a chain info by its hash. Returns None if the chain info doesn't exist.
     pub fn get_chain_info(&self, hash: &Blake2bHash) -> Option<&ChainInfo> {
         self.chain_db.get(hash)
@@ -180,7 +171,7 @@ mod tests {
         });
 
         // Create chain store.
-        let mut store = ChainStore::new();
+        let mut store = ChainStore::default();
 
         // First case.
         store.put_chain_info(ChainInfo::new(block_1.clone(), true));

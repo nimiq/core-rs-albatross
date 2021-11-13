@@ -120,8 +120,8 @@ impl FromStr for ValidityStartHeight {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s = s.trim();
-        if s.starts_with('+') {
-            Ok(Self::Relative(s[1..].parse()?))
+        if let Some(stripped) = s.strip_prefix('+') {
+            Ok(Self::Relative(stripped.parse()?))
         } else {
             Ok(Self::Absolute(s.parse()?))
         }
@@ -218,16 +218,13 @@ impl Block {
 
                     for ext_tx in ext_txs {
                         if ext_tx.is_inherent() {
-                            match ext_tx.into_transaction() {
-                                Ok(tx) => {
-                                    txs.push(Transaction::from_blockchain(
-                                        tx,
-                                        block_number,
-                                        timestamp,
-                                        blockchain.block_number(),
-                                    ));
-                                }
-                                Err(_) => {}
+                            if let Ok(tx) = ext_tx.into_transaction() {
+                                txs.push(Transaction::from_blockchain(
+                                    tx,
+                                    block_number,
+                                    timestamp,
+                                    blockchain.block_number(),
+                                ));
                             }
                         }
                     }
@@ -497,10 +494,7 @@ impl Transaction {
             block_number,
             timestamp,
             confirmations: match head_height {
-                Some(height) => match block_number {
-                    Some(block) => Some(height.saturating_sub(block) + 1),
-                    None => None,
-                },
+                Some(height) => block_number.map(|block| height.saturating_sub(block) + 1),
                 None => None,
             },
             from: transaction.sender,

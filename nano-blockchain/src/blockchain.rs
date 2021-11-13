@@ -45,7 +45,7 @@ impl NanoBlockchain {
 
         let chain_info = ChainInfo::new(genesis_block.clone(), true);
 
-        let mut chain_store = ChainStore::new();
+        let mut chain_store = ChainStore::default();
 
         chain_store.put_chain_info(chain_info);
 
