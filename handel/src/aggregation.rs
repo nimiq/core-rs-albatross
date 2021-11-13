@@ -258,11 +258,13 @@ impl<
             // Tag the LevelUpdate with the tag this aggregation runs over creating a LevelUpdateMessage.
             let update_msg = update.with_tag(self.tag.clone());
             for peer_id in peer_ids {
-                self.sender
-                    // `unbounded_send` is not a future and thus will not block execution.
-                    .unbounded_send((update_msg.clone(), peer_id))
-                    // If an error occured that means the receiver no longer exists or was closed which should never happen.
-                    .expect("Message could not be send to unbounded_channel sender");
+                if peer_id < self.protocol.partitioner().size() {
+                    self.sender
+                        // `unbounded_send` is not a future and thus will not block execution.
+                        .unbounded_send((update_msg.clone(), peer_id))
+                        // If an error occured that means the receiver no longer exists or was closed which should never happen.
+                        .expect("Message could not be send to unbounded_channel sender");
+                }
             }
         }
     }
