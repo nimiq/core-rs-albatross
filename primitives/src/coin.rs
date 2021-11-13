@@ -7,6 +7,7 @@ use std::str::FromStr;
 
 use lazy_static::lazy_static;
 use num_traits::identities::Zero;
+use num_traits::{SaturatingAdd, SaturatingSub};
 use regex::Regex;
 use thiserror::Error;
 
@@ -94,7 +95,7 @@ impl Add<Coin> for Coin {
     type Output = Coin;
 
     #[inline]
-    fn add(self, rhs: Coin) -> Coin {
+    fn add(self, rhs: Coin) -> Self {
         Coin(self.0 + rhs.0)
     }
 }
@@ -106,11 +107,17 @@ impl AddAssign<Coin> for Coin {
     }
 }
 
+impl SaturatingAdd for Coin {
+    fn saturating_add(&self, rhs: &Self) -> Self {
+        Coin(self.0.saturating_add(rhs.0))
+    }
+}
+
 impl Sub<Coin> for Coin {
     type Output = Coin;
 
     #[inline]
-    fn sub(self, rhs: Coin) -> Coin {
+    fn sub(self, rhs: Coin) -> Self {
         Coin(self.0 - rhs.0)
     }
 }
@@ -119,6 +126,12 @@ impl SubAssign<Coin> for Coin {
     #[inline]
     fn sub_assign(&mut self, rhs: Coin) {
         self.0 -= rhs.0;
+    }
+}
+
+impl SaturatingSub for Coin {
+    fn saturating_sub(&self, rhs: &Self) -> Self {
+        Coin(self.0.saturating_sub(rhs.0))
     }
 }
 

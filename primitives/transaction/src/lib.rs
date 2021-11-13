@@ -26,6 +26,7 @@ use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
 use nimiq_keys::Address;
 use nimiq_keys::{PublicKey, Signature};
 use nimiq_utils::merkle::{Blake2bMerklePath, Blake2bMerkleProof};
+use num_traits::SaturatingAdd;
 use primitives::account::AccountType;
 use primitives::coin::Coin;
 use primitives::networks::NetworkId;
@@ -358,7 +359,8 @@ impl Transaction {
     }
 
     pub fn total_value(&self) -> Coin {
-        self.value + self.fee
+        // Avoid wrapping in case this is called before verify().
+        self.value.saturating_add(&self.fee)
     }
 }
 
