@@ -185,7 +185,7 @@ impl<'env> WriteTransaction<'env> {
     }
 
     /// Puts a key/value pair into the database by copying it into a reserved space in the database.
-    /// This works best for values that need to be serialised into the reserved space.
+    /// This works best for values that need to be serialized into the reserved space.
     /// This method will panic when called on a database with duplicate keys!
     pub fn put_reserve<K, V>(&mut self, db: &Database, key: &K, value: &V)
     where
@@ -206,7 +206,7 @@ impl<'env> WriteTransaction<'env> {
     }
 
     /// Puts a key/value pair into the database by passing a reference to a byte slice.
-    /// This is more efficient than `put_reserve` if no serialisation is needed,
+    /// This is more efficient than `put_reserve` if no serialization is needed,
     /// and the existing value can be immediately written into the database.
     /// This also works with duplicate key databases.
     pub fn put<K, V>(&mut self, db: &Database, key: &K, value: &V)
