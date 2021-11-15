@@ -178,13 +178,16 @@ impl BeSerialize for MNT6Fq {
 impl BeDeserialize for MNT6Fq {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, Error> {
         let value: BigInteger768 = CustomLengthDeSerialize::deserialize(reader, 95)?;
-        Ok(MNT6Fq::from_repr(value).unwrap())
+        MNT6Fq::from_repr(value).ok_or_else(|| Error::from(std::io::ErrorKind::InvalidData))
     }
 
     fn deserialize_with_flags<R: ReadBytesExt>(reader: &mut R) -> Result<(Self, Flags), Error> {
         let (value, flags): (BigInteger768, _) =
             CustomLengthDeSerialize::deserialize_with_flags(reader, 95)?;
-        Ok((MNT6Fq::from_repr(value).unwrap(), flags))
+        Ok((
+            MNT6Fq::from_repr(value).ok_or_else(|| Error::from(std::io::ErrorKind::InvalidData))?,
+            flags,
+        ))
     }
 }
 
@@ -241,13 +244,16 @@ impl BeSerialize for MNT4Fq {
 impl BeDeserialize for MNT4Fq {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, Error> {
         let value: BigInteger768 = CustomLengthDeSerialize::deserialize(reader, 95)?;
-        Ok(MNT4Fq::from_repr(value).unwrap())
+        MNT4Fq::from_repr(value).ok_or_else(|| Error::from(std::io::ErrorKind::InvalidData))
     }
 
     fn deserialize_with_flags<R: ReadBytesExt>(reader: &mut R) -> Result<(Self, Flags), Error> {
         let (value, flags): (BigInteger768, _) =
             CustomLengthDeSerialize::deserialize_with_flags(reader, 95)?;
-        Ok((MNT4Fq::from_repr(value).unwrap(), flags))
+        Ok((
+            MNT4Fq::from_repr(value).ok_or_else(|| Error::from(std::io::ErrorKind::InvalidData))?,
+            flags,
+        ))
     }
 }
 
