@@ -244,8 +244,8 @@ impl Default for FileStorageConfig {
 #[derive(Debug, Clone, Builder)]
 #[builder(setter(into))]
 pub struct DatabaseConfig {
-    /// Initial database size. Default: 50 MB
-    #[builder(default = "50 * 1024 * 1024")]
+    /// Initial database size. Default: 1 TB
+    #[builder(default = "1024 * 1024 * 1024 * 1024")]
     size: usize,
 
     /// Max number of DBs. Recommended: 12
@@ -267,7 +267,8 @@ pub struct DatabaseConfig {
 impl Default for DatabaseConfig {
     fn default() -> Self {
         Self {
-            size: 1024 * 1024 * 1024,
+            // 1 TB
+            size: 1024 * 1024 * 1024 * 1024,
             max_dbs: 12,
             max_readers: 600,
             flags: LmdbFlags::NOMETASYNC,

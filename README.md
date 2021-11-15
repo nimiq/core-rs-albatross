@@ -27,6 +27,11 @@ The Nimiq Rust client comes without wallet and can currently not be used to send
 - [Nimiq Developer Reference](https://nimiq-network.github.io/developer-reference/): Details of the protocol architecture.
 
 
+## System requirements
+- 32-bit architectures are not supported.
+- File systems with sparse file support (most modern files systems support it).
+
+
 ## Install
 
 Besides [Rust nightly](https://www.rust-lang.org/learn/get-started#installing-rust) itself, the following packages are required to be able to compile this source code:

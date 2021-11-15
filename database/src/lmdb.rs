@@ -7,7 +7,6 @@ use std::sync::Arc;
 pub use lmdb_zero::open;
 use lmdb_zero::traits::LmdbResultExt;
 pub use lmdb_zero::Error as LmdbError;
-use rand::{thread_rng, Rng};
 
 use crate::cursor::{RawReadCursor, ReadCursor, WriteCursor as WriteCursorTrait};
 
@@ -188,8 +187,9 @@ impl LmdbEnvironment {
             return true;
         }
 
-        let mut rng = thread_rng();
-        let resize_percent: f64 = rng.gen_range(0.6..0.9);
+        // Resize is currently not supported. So don't let the resize happen
+        // if a specific percentage is reached.
+        let resize_percent: f64 = 1_f64;
 
         if (size_used as f64) / (info.mapsize as f64) > resize_percent {
             info!("DB resize (percent-based)");
@@ -297,7 +297,7 @@ impl<'env> LmdbWriteTransaction<'env> {
         let value_size = IntoDatabaseValue::database_byte_size(value);
         unsafe {
             let mut access = self.txn.access();
-            let mut bytes: &mut [u8] = access
+            let bytes: &mut [u8] = access
                 .put_reserve_unsized(
                     &db.db,
                     key.as_ref(),
@@ -305,7 +305,7 @@ impl<'env> LmdbWriteTransaction<'env> {
                     lmdb_zero::put::Flags::empty(),
                 )
                 .unwrap();
-            IntoDatabaseValue::copy_into_database(value, &mut bytes);
+            IntoDatabaseValue::copy_into_database(value, bytes);
         }
     }
 
