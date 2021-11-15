@@ -70,6 +70,7 @@ pub(crate) struct SyncCluster<TPeer: Peer> {
     history_queue: SyncQueue<TPeer, (u32, u32, usize), (u32, HistoryChunk)>,
 
     pending_batch_sets: VecDeque<PendingBatchSet>,
+    num_epochs_finished: usize,
 
     blockchain: Arc<RwLock<Blockchain>>,
 }
@@ -123,6 +124,7 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
             batch_set_queue,
             history_queue,
             pending_batch_sets: VecDeque::with_capacity(Self::NUM_PENDING_BATCH_SETS),
+            num_epochs_finished: 0,
             blockchain,
         }
     }
@@ -261,6 +263,14 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
     }
 
     pub(crate) fn split_off(&mut self, at: usize) -> Self {
+        assert!(
+            self.num_epochs_finished() <= at,
+            "Cannot split cluster #{} at {}, already {} ids processed",
+            self.id,
+            at,
+            self.num_epochs_finished()
+        );
+
         let ids = self.epoch_ids.split_off(at);
         let first_epoch_number = self.first_epoch_number + at;
 
@@ -277,16 +287,7 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
 
     pub(crate) fn remove_front(&mut self, num_items: usize) {
         // TODO Refactor
-        let new_cluster = if self.epoch_ids.len() < num_items {
-            self.split_off(self.len())
-        } else {
-            self.split_off(num_items)
-        };
-        *self = new_cluster;
-    }
-
-    pub(crate) fn len(&self) -> usize {
-        self.epoch_ids.len()
+        *self = self.split_off(usize::min(num_items, self.len()));
     }
 
     pub(crate) fn compare(&self, other: &Self, current_epoch: usize) -> std::cmp::Ordering {
@@ -314,6 +315,18 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
             .then_with(|| self.epoch_ids.cmp(&other.epoch_ids)) //
             .reverse() // We want the best cluster to be *last*
     }
+
+    pub(crate) fn len(&self) -> usize {
+        self.epoch_ids.len()
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.epoch_ids.is_empty()
+    }
+
+    pub(crate) fn num_epochs_finished(&self) -> usize {
+        self.num_epochs_finished
+    }
 }
 
 impl<TPeer: Peer + 'static> Stream for SyncCluster<TPeer> {
@@ -338,6 +351,7 @@ impl<TPeer: Peer + 'static> Stream for SyncCluster<TPeer> {
                     // sufficient to check for this condition here as opposed to in every call
                     // to poll_next().
                     if self.pending_batch_sets[0].is_complete() {
+                        self.num_epochs_finished += 1;
                         let batch_set = self.pending_batch_sets.pop_front().unwrap();
                         return Poll::Ready(Some(Ok(batch_set.into())));
                     }
@@ -362,6 +376,7 @@ impl<TPeer: Peer + 'static> Stream for SyncCluster<TPeer> {
 
                     // Emit finished epochs.
                     if self.pending_batch_sets[0].is_complete() {
+                        self.num_epochs_finished += 1;
                         let batch_set = self.pending_batch_sets.pop_front().unwrap();
                         return Poll::Ready(Some(Ok(batch_set.into())));
                     }
@@ -379,6 +394,19 @@ impl<TPeer: Peer + 'static> Stream for SyncCluster<TPeer> {
         }
 
         Poll::Pending
+    }
+}
+
+impl<TPeer: Peer + 'static> std::fmt::Debug for SyncCluster<TPeer> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut dbg = f.debug_struct("SyncCluster");
+        dbg.field("id", &self.id);
+        dbg.field("first_epoch_number", &self.first_epoch_number);
+        dbg.field("num_epoch_ids", &self.epoch_ids.len());
+        dbg.field("num_peers", &self.peers().len());
+        dbg.field("num_pending_batch_sets", &self.pending_batch_sets.len());
+        dbg.field("num_epochs_finished", &self.num_epochs_finished);
+        dbg.finish()
     }
 }
 

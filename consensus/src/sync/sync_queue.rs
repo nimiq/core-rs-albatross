@@ -175,17 +175,18 @@ where
 
         if num_ids_to_request > 0 {
             log::trace!(
-                "Requesting {} ids (ids_to_request = {}, remaining_until_limit = {}, pending_futures = {}, queued_outputs = {})",
+                "Requesting {} ids (ids_to_request={}, remaining_until_limit={}, pending_futures={}, queued_outputs={}, num_peers={})",
                 num_ids_to_request,
                 self.ids_to_request.len(),
                 self.desired_pending_size
                     .saturating_sub(self.pending_futures.len() + self.queued_outputs.len()),
                 self.pending_futures.len(),
                 self.queued_outputs.len(),
+                self.peers.len(),
             );
 
-            if let Some(waker) = &self.waker {
-                waker.wake_by_ref();
+            if let Some(waker) = self.waker.take() {
+                waker.wake();
             }
         }
     }
@@ -204,8 +205,8 @@ where
         }
 
         // Adding new ids needs to wake the task that is polling the SyncQueue.
-        if let Some(waker) = &self.waker {
-            waker.wake_by_ref();
+        if let Some(waker) = self.waker.take() {
+            waker.wake();
         }
     }
 
@@ -214,37 +215,6 @@ where
     pub fn truncate_ids(&mut self, len: usize) {
         self.ids_to_request
             .truncate(len.saturating_sub(self.next_incoming_index));
-    }
-
-    /// Elements are counted from the *original* start of the ids vector.
-    pub fn remove_front(&mut self, num_items: usize) {
-        self.ids_to_request
-            .drain(0..(num_items.saturating_sub(self.next_incoming_index)));
-
-        // TODO Handle pending futures.
-        if !self.pending_futures.is_empty() {
-            warn!(
-                "SyncQueue.remove_front({}) called with {} pending futures",
-                num_items,
-                self.pending_futures.len()
-            );
-        }
-
-        self.queued_outputs = self
-            .queued_outputs
-            .drain()
-            .filter_map(|mut output| {
-                if output.index >= num_items {
-                    output.index -= num_items;
-                    Some(output)
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        self.next_incoming_index = self.next_incoming_index.saturating_sub(num_items);
-        self.next_outgoing_index = self.next_outgoing_index.saturating_sub(num_items);
     }
 
     pub fn num_peers(&self) -> usize {
@@ -257,6 +227,14 @@ where
 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    pub fn num_items_started(&self) -> usize {
+        self.next_incoming_index
+    }
+
+    pub fn num_items_finished(&self) -> usize {
+        self.next_outgoing_index
     }
 }
 

@@ -4,6 +4,7 @@ use std::sync::{Arc, Weak};
 use parking_lot::RwLock;
 
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
+use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::prelude::{CloseReason, Network, Peer};
 
 use crate::consensus_agent::ConsensusAgent;
@@ -66,13 +67,21 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                 });
 
                 // Filter checkpoint from block hashes and map to hash.
-                let epoch_ids = hashes
+                let epoch_ids: Vec<Blake2bHash> = hashes
                     .into_iter()
                     .filter_map(|(ty, id)| match ty {
                         BlockHashType::Election => Some(id),
                         _ => None,
                     })
                     .collect();
+
+                log::debug!(
+                    "Received {} epoch_ids starting at #{} (checkpoint={}) from {:?}",
+                    epoch_ids.len(),
+                    epoch_number + 1,
+                    checkpoint_id.is_some(),
+                    agent.peer.id(),
+                );
 
                 Some(EpochIds {
                     locator_found: true,
@@ -90,7 +99,10 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         }
     }
 
-    pub(crate) fn cluster_epoch_ids(&mut self, mut epoch_ids: EpochIds<TNetwork::PeerType>) {
+    pub(crate) fn cluster_epoch_ids(
+        &mut self,
+        mut epoch_ids: EpochIds<TNetwork::PeerType>,
+    ) -> Option<Arc<ConsensusAgent<TNetwork::PeerType>>> {
         // Truncate epoch_ids by epoch_number: Discard all epoch_ids prior to our accepted state.
         let current_epoch = self.blockchain.read().election_head().epoch_number() as usize;
         if !epoch_ids.ids.is_empty() && epoch_ids.first_epoch_number <= current_epoch {
@@ -148,14 +160,14 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                 let agent = epoch_ids.sender;
                 cluster.add_peer(Arc::downgrade(&agent));
                 self.agents.insert(Arc::clone(&agent.peer), (agent, 1));
-                return;
+                return None;
             }
 
             // No FinishCluster job exists, which means that the cluster is still active and thus
             // contains more ids than this peer sent us. Assuming that the remaining ids will be
             // accepted, we emit the peer as useless. The peer will eventually be upgraded to useful
             // if the assumption doesn't hold.
-            // TODO Emit peer as useless
+            return Some(epoch_ids.sender);
         }
 
         epoch_ids.ids = epoch_ids.ids.split_off(num_ids_to_remove);
@@ -170,7 +182,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         let checkpoint_epoch = epoch_ids.get_checkpoint_epoch();
         let agent = epoch_ids.sender;
 
-        trace!(
+        debug!(
             "Clustering ids: first_epoch_number={}, num_ids={}, num_clusters={}, active_cluster={}",
             epoch_ids.first_epoch_number,
             epoch_ids.ids.len(),
@@ -200,8 +212,9 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                     .position(|(first, second)| first != second)
                     .unwrap_or(len);
 
-                trace!(
-                    "Comparing with cluster: first_epoch_number={}, num_ids={}, match_until={}",
+                debug!(
+                    "Comparing with cluster #{}: first_epoch_number={}, num_ids={}, match_until={}",
+                    cluster.id,
                     cluster.first_epoch_number,
                     cluster.epoch_ids.len(),
                     match_until
@@ -214,13 +227,30 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                     // cluster. Buffer up the new clusters and insert them after we finish iterating over
                     // sync_clusters.
                     if match_until < cluster.epoch_ids.len() - start_offset {
-                        trace!(
-                            "Splitting cluster: num_ids={}, start_offset={}, split_at={}",
-                            cluster.epoch_ids.len(),
-                            start_offset,
-                            start_offset + match_until
+                        // If the cluster to be split has already been processed past the splitting
+                        // point, skip the matched ids without adding the peer to the cluster.
+                        let split_at = start_offset + match_until;
+                        if cluster.num_epochs_finished() > split_at {
+                            debug!(
+                                "Ignoring {} ids already processed in cluster #{}, {} ids remaining",
+                                match_until,
+                                cluster.id,
+                                epoch_ids.ids.len().saturating_sub(id_index)
+                            );
+
+                            id_index += match_until;
+                            if id_index >= epoch_ids.ids.len() {
+                                break;
+                            } else {
+                                continue;
+                            }
+                        }
+
+                        debug!(
+                            "Splitting cluster #{}: start_offset={}, split_at={} {:#?}",
+                            cluster.id, start_offset, split_at, cluster,
                         );
-                        new_clusters.push_back(cluster.split_off(start_offset + match_until));
+                        new_clusters.push_back(cluster.split_off(split_at));
                     }
 
                     // The peer's epoch ids matched at least a part of this (now potentially truncated) cluster,
@@ -240,12 +270,6 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
 
         // Add remaining ids to a new cluster with only the sending peer in it.
         if id_index < epoch_ids.ids.len() {
-            trace!(
-                "Adding new cluster: id_index={}, first_epoch_number={}, num_ids={}",
-                id_index,
-                epoch_ids.first_epoch_number + id_index,
-                epoch_ids.ids.len() - id_index
-            );
             new_clusters.push_back(SyncCluster::new(
                 Vec::from(&epoch_ids.ids[id_index..]),
                 epoch_ids.first_epoch_number + id_index,
@@ -301,6 +325,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
 
         // Update cluster counts for all peers in new clusters.
         for cluster in &new_clusters {
+            debug!("Adding new cluster: {:#?}", cluster);
             for agent in cluster.peers() {
                 if let Some(agent) = Weak::upgrade(agent) {
                     let pair = self
@@ -314,6 +339,8 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
 
         // Add buffered clusters to sync_clusters.
         self.epoch_clusters.append(&mut new_clusters);
+
+        None
     }
 
     pub(crate) fn pop_next_cluster(&mut self) -> Option<SyncCluster<TNetwork::PeerType>> {
