@@ -15,15 +15,18 @@ use nimiq_keys::Address;
 /// stores up to 2 nibbles. Internally, we assume that a key is represented in hexadecimal form.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
 pub struct KeyNibbles {
-    bytes: Vec<u8>,
+    bytes: [u8; KeyNibbles::MAX_BYTES],
+    bytes_length: u8,
     length: u8,
 }
 
 impl KeyNibbles {
+    const MAX_BYTES: usize = 62;
     /// Create the root (empty) key.
     pub fn root() -> KeyNibbles {
         KeyNibbles {
-            bytes: Vec::new(),
+            bytes: [0; KeyNibbles::MAX_BYTES],
+            bytes_length: 0,
             length: 0,
         }
     }
@@ -31,6 +34,10 @@ impl KeyNibbles {
     /// Returns the length of the key in nibbles.
     pub fn len(&self) -> usize {
         self.length as usize
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.length == 0
     }
 
     /// Returns the nibble at the given index as an usize. The usize represents a hexadecimal
@@ -128,27 +135,31 @@ impl KeyNibbles {
         let byte_end = end / 2;
 
         // Get the nibbles for the slice.
-        let mut new_bytes = Vec::new();
+        let mut new_bytes = [0; KeyNibbles::MAX_BYTES];
+        let mut new_bytes_length = 0;
 
         // If the slice starts at the beginning of a byte, then it's an easy case.
         if start % 2 == 0 {
-            new_bytes = self.bytes[byte_start..byte_end].to_vec()
+            new_bytes_length = byte_end - byte_start;
+            new_bytes[0..new_bytes_length].copy_from_slice(&self.bytes[byte_start..byte_end]);
         }
         // Otherwise we need to shift everything by one nibble.
         else {
             let mut current_byte = (self.bytes[byte_start] & 0xf) << 4; // Right nibble.
 
-            for i in (byte_start + 1)..byte_end {
-                let tmp_byte = self.bytes[i];
+            for (count, byte) in self.bytes[(byte_start + 1)..byte_end].iter().enumerate() {
+                let tmp_byte = byte;
 
                 let left_nibble = (tmp_byte >> 4) & 0xf;
 
-                new_bytes.push(current_byte | left_nibble);
+                new_bytes[count] = current_byte | left_nibble;
+                new_bytes_length += 1;
 
                 current_byte = (tmp_byte & 0xf) << 4;
             }
 
-            new_bytes.push(current_byte);
+            new_bytes[new_bytes_length] = current_byte;
+            new_bytes_length += 1;
         };
 
         // If we have an odd number of nibbles we add the last nibble now.
@@ -156,16 +167,17 @@ impl KeyNibbles {
             let last_nibble = self.bytes[byte_end] & 0xf0;
 
             if start % 2 == 0 {
-                new_bytes.push(last_nibble);
+                new_bytes[new_bytes_length] = last_nibble;
+                new_bytes_length += 1;
             } else {
-                let last_byte = new_bytes.pop().unwrap();
-                new_bytes.push(last_byte | (last_nibble >> 4));
+                new_bytes[new_bytes_length - 1] |= last_nibble >> 4;
             }
         }
 
         // Return the slice as a new key.
         KeyNibbles {
             bytes: new_bytes,
+            bytes_length: new_bytes_length as u8,
             length: (end - start) as u8,
         }
     }
@@ -184,8 +196,19 @@ impl From<&Address> for KeyNibbles {
 
 impl From<&[u8]> for KeyNibbles {
     fn from(v: &[u8]) -> Self {
+        if v.len() > KeyNibbles::MAX_BYTES {
+            error!(
+                "Array of len {} exceeds the max length of KeyNibbles {}",
+                v.len(),
+                KeyNibbles::MAX_BYTES,
+            );
+            return KeyNibbles::root();
+        }
+        let mut new_bytes = [0; KeyNibbles::MAX_BYTES];
+        new_bytes[..v.len()].copy_from_slice(v);
         KeyNibbles {
-            bytes: v.to_vec(),
+            bytes: new_bytes,
+            bytes_length: v.len() as u8,
             length: (v.len() * 2) as u8,
         }
     }
@@ -195,12 +218,22 @@ impl str::FromStr for KeyNibbles {
     type Err = hex::FromHexError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut bytes: [u8; KeyNibbles::MAX_BYTES] = [0; KeyNibbles::MAX_BYTES];
         if s.len() % 2 == 0 {
-            let v: Vec<u8> = hex::decode(s)?;
+            hex::decode_to_slice(s, &mut bytes[..(s.len() / 2)])?;
 
-            Ok(KeyNibbles::from(v.as_slice()))
+            Ok(KeyNibbles {
+                bytes,
+                bytes_length: (s.len() / 2) as u8,
+                length: s.len() as u8,
+            })
         } else {
-            let mut v: Vec<u8> = hex::decode(&s[..s.len() - 1])?;
+            let last_complete_nibble_idx = s.len() - 2;
+            let last_complete_byte_idx = (last_complete_nibble_idx) / 2;
+            hex::decode_to_slice(
+                &s[..last_complete_nibble_idx + 1],
+                &mut bytes[..last_complete_byte_idx + 1],
+            )?;
 
             let last_nibble = s.chars().last().unwrap();
 
@@ -212,10 +245,11 @@ impl str::FromStr for KeyNibbles {
                         index: s.len() - 1,
                     })?;
 
-            v.push((last_nibble as u8) << 4);
+            bytes[last_complete_byte_idx + 1] = (last_nibble as u8) << 4;
 
             Ok(KeyNibbles {
-                bytes: v,
+                bytes,
+                bytes_length: (last_complete_byte_idx + 2) as u8,
                 length: s.len() as u8,
             })
         }
@@ -224,7 +258,7 @@ impl str::FromStr for KeyNibbles {
 
 impl fmt::Display for KeyNibbles {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut hex_representation = hex::encode(&self.bytes);
+        let mut hex_representation = hex::encode(&self.bytes[..self.bytes_length as usize]);
 
         // If prefix ends in the middle of a byte, remove last char.
         if self.length % 2 == 1 {
@@ -239,28 +273,39 @@ impl ops::Add<&KeyNibbles> for &KeyNibbles {
     type Output = KeyNibbles;
 
     fn add(self, other: &KeyNibbles) -> KeyNibbles {
-        let mut bytes = self.bytes.clone();
+        let mut bytes = self.bytes;
+        let mut bytes_length;
 
         if self.len() % 2 == 0 {
             // Easy case: the lhs ends with a full byte.
-            bytes.extend(&other.bytes);
+            bytes_length = self.bytes_length + other.bytes_length;
+            bytes[self.bytes_length as usize..bytes_length as usize]
+                .copy_from_slice(&other.bytes[..other.bytes_length as usize]);
         } else {
             // Complex case: the lhs ends in the middle of a byte.
-            let mut next_byte = bytes.pop().unwrap();
+            let mut next_byte = bytes[(self.bytes_length - 1) as usize];
+            bytes_length = self.bytes_length - 1;
 
-            for byte in other.bytes.iter() {
+            for (count, byte) in other.bytes[..other.bytes_length as usize]
+                .iter()
+                .enumerate()
+            {
                 let left_nibble = byte >> 4;
-                bytes.push(next_byte | left_nibble);
+                bytes[(self.bytes_length - 1) as usize + count] = next_byte | left_nibble;
+                bytes_length += 1;
                 next_byte = (byte & 0xf) << 4;
             }
 
             if other.length % 2 == 0 {
-                bytes.push(next_byte);
+                // Push next_byte
+                bytes[bytes_length as usize] = next_byte;
+                bytes_length += 1;
             }
         }
 
         KeyNibbles {
             bytes,
+            bytes_length,
             length: self.length + other.length,
         }
     }
@@ -278,23 +323,27 @@ impl Serialize for KeyNibbles {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size = 2;
         writer.write_u8(self.length)?;
-        writer.write_u8(self.bytes.len() as u8)?;
-        size += writer.write(self.bytes.as_slice())?;
+        writer.write_u8(self.bytes_length as u8)?;
+        size += writer.write(&self.bytes[..self.bytes_length as usize])?;
         Ok(size)
     }
 
     fn serialized_size(&self) -> usize {
-        2 + self.bytes.len()
+        2 + self.bytes_length as usize
     }
 }
 
 impl Deserialize for KeyNibbles {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let length = reader.read_u8()?;
-        let num_bytes = reader.read_u8()? as usize;
-        let mut bytes = vec![0; num_bytes];
-        reader.read_exact(bytes.as_mut_slice())?;
-        Ok(KeyNibbles { bytes, length })
+        let bytes_length = reader.read_u8()?;
+        let mut bytes = [0; KeyNibbles::MAX_BYTES];
+        reader.read_exact(&mut bytes[..bytes_length as usize])?;
+        Ok(KeyNibbles {
+            bytes,
+            length,
+            bytes_length,
+        })
     }
 }
 
