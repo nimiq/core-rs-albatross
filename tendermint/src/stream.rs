@@ -154,10 +154,13 @@ where
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> Poll<Option<Self::Item>> {
-        match self.tendermint_stream.poll_next_unpin(cx) {
-            Poll::Pending | Poll::Ready(Some(StreamResult::BackgroundTask)) => Poll::Pending,
-            Poll::Ready(None) => Poll::Ready(None),
-            Poll::Ready(Some(StreamResult::Tendermint(result))) => Poll::Ready(Some(result)),
+        while let Poll::Ready(result) = self.tendermint_stream.poll_next_unpin(cx) {
+            match result {
+                None => return Poll::Ready(None),
+                Some(StreamResult::Tendermint(result)) => return Poll::Ready(Some(result)),
+                Some(StreamResult::BackgroundTask) => {}
+            }
         }
+        Poll::Pending
     }
 }
