@@ -272,12 +272,25 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
             let header = proposal.value;
             let valid_round = proposal.valid_round;
 
+            // In case the proposal has a valid round, the original proposer signed the vrfseed,
+            // so the original slot owners key must be retrieved for header verification.
+            let key = if let Some(r) = valid_round {
+                let (valid_round_slot, _) = blockchain
+                    .get_slot_owner_at(expected_height, r, None)
+                    .expect("Couldn't find slot owner!");
+
+                let key = *valid_round_slot.public_key.uncompress_unchecked();
+                key
+            } else {
+                validator_key
+            };
+
             // Check the validity of the block header. If it is invalid, we return a proposal timeout
             // right here. This doesn't check anything that depends on the blockchain state.
             if Blockchain::verify_block_header(
                 blockchain.deref(),
                 &BlockHeader::Macro(header.clone()),
-                &validator_key,
+                &key,
                 None,
             )
             .is_err()
