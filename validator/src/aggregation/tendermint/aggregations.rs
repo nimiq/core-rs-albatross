@@ -166,25 +166,20 @@ impl<N: ValidatorNetwork + 'static> Stream for TendermintAggregations<N> {
         mut self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> Poll<Option<Self::Item>> {
-        match self.event_receiver.poll_recv(cx) {
-            Poll::Pending => {}
-            Poll::Ready(None) => {
-                error!("Event receiver created None value"); // <---
-                                                             // return Poll::Ready(None);
-            }
-            Poll::Ready(Some(AggregationEvent::Start(
-                id,
-                own_contribution,
-                validator_merkle_root,
-                output_sink,
-            ))) => self.broadcast_and_aggregate(
-                id,
-                own_contribution,
-                validator_merkle_root,
-                output_sink,
-            ),
-            Poll::Ready(Some(AggregationEvent::Cancel(round, step))) => {
-                self.cancel_aggregation(round, step)
+        while let Poll::Ready(Some(event)) = self.event_receiver.poll_recv(cx) {
+            match event {
+                AggregationEvent::Start(
+                    id,
+                    own_contribution,
+                    validator_merkle_root,
+                    output_sink,
+                ) => self.broadcast_and_aggregate(
+                    id,
+                    own_contribution,
+                    validator_merkle_root,
+                    output_sink,
+                ),
+                AggregationEvent::Cancel(round, step) => self.cancel_aggregation(round, step),
             }
         }
 
