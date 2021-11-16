@@ -37,6 +37,8 @@ nimiq-utils = { path = "../utils"}
 
 [dev-dependencies]
 nimiq-test-utils = { path = "../test-utils" }
+nimiq-transaction-builder = { path = "../transaction-builder" }
+nimiq-keys = { path = "../keys" }
 
 [features]
 default = []

@@ -170,6 +170,11 @@ impl AccountTransactionInteraction for BasicAccount {
 
         let new_balance = Account::balance_add(current_balance, transaction.total_value())?;
 
+        // If the new balance is zero, it means this account didnt exist before, so we don't need to create it.
+        if new_balance == Coin::ZERO {
+            return Ok(());
+        }
+
         accounts_tree.put(
             db_txn,
             &key,

@@ -259,7 +259,7 @@ async fn four_validators_can_view_change() {
     events.next().await;
 
     assert!(blockchain.read().block_number() >= 1);
-    assert_eq!(blockchain.read().view_number(), 1);
+    assert!(blockchain.read().view_number() >= 1);
 }
 
 fn create_view_change_update(

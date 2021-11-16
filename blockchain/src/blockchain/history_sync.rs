@@ -338,7 +338,7 @@ impl Blockchain {
     }
 
     /// Reverts a given number of micro blocks from the blockchain.
-    fn revert_blocks(
+    pub fn revert_blocks(
         &self,
         num_blocks: u32,
         write_txn: &mut WriteTransaction,
