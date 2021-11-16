@@ -15,6 +15,7 @@ extern crate log;
 extern crate nimiq_bls as bls;
 extern crate nimiq_collections as collections;
 extern crate nimiq_hash as hash;
+#[macro_use]
 extern crate nimiq_macros as macros;
 extern crate nimiq_utils as utils;
 extern crate parking_lot;

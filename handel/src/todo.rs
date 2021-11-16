@@ -2,6 +2,7 @@ use core::pin::Pin;
 use core::task::{Context, Poll};
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::task::Waker;
 
 use futures::stream::{BoxStream, Stream, StreamExt};
 
@@ -54,6 +55,8 @@ pub(crate) struct TodoList<C: AggregatableContribution, E: Evaluator<C>> {
     evaluator: Arc<E>,
     /// The Stream where LevelUpdates can be polled from, which are subsequently converted into TodoItems
     input_stream: BoxStream<'static, LevelUpdate<C>>,
+
+    waker: Option<Waker>,
 }
 
 impl<C: AggregatableContribution, E: Evaluator<C>> TodoList<C, E> {
@@ -65,6 +68,7 @@ impl<C: AggregatableContribution, E: Evaluator<C>> TodoList<C, E> {
             list: HashSet::new(),
             evaluator,
             input_stream,
+            waker: None,
         }
     }
 
@@ -73,6 +77,13 @@ impl<C: AggregatableContribution, E: Evaluator<C>> TodoList<C, E> {
             contribution,
             level,
         });
+        self.wake();
+    }
+
+    fn wake(&mut self) {
+        if let Some(waker) = self.waker.take() {
+            waker.wake();
+        }
     }
 }
 
@@ -144,13 +155,13 @@ impl<C: AggregatableContribution, E: Evaluator<C>> Stream for TodoList<C, E> {
                         best_score = score;
                         if let Some(best_todo) = best_todo {
                             self.list.insert(best_todo);
-                            // self.list.push(best_todo); // TODO: dedupe!
+                            self.wake();
                         }
                         best_todo = Some(aggregate_todo);
                     } else {
                         // If the score is not a new best put the TodoItem in the list.
                         self.list.insert(aggregate_todo);
-                        // self.list.push(aggregate_todo); // TODO: dedupe!
+                        self.wake();
                     }
                 }
                 // Some of the Level Updates also contain an individual Signature. In which case it is also converted into a TodoItem
@@ -168,11 +179,13 @@ impl<C: AggregatableContribution, E: Evaluator<C>> Stream for TodoList<C, E> {
                             best_score = score;
                             if let Some(best_todo) = best_todo {
                                 self.list.insert(best_todo);
+                                self.wake();
                             }
                             best_todo = Some(individual_todo);
                         } else {
                             // If the score is not a new best put the TodoItem in the list.
                             self.list.insert(individual_todo);
+                            self.wake();
                         }
                     }
                 }
@@ -195,6 +208,7 @@ impl<C: AggregatableContribution, E: Evaluator<C>> Stream for TodoList<C, E> {
                 unreachable!(" Score was higher than 0 but there was no best TodoItem.");
             }
         } else {
+            store_waker!(self, waker, cx);
             Poll::Pending
         }
     }
