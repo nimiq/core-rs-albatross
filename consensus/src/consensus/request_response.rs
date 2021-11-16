@@ -1,10 +1,12 @@
+use std::future::Future;
 use std::sync::Arc;
 
+use futures::stream::BoxStream;
 use futures::StreamExt;
 use parking_lot::RwLock;
 
 use nimiq_blockchain::Blockchain;
-use nimiq_network_interface::prelude::{Network, Peer};
+use nimiq_network_interface::prelude::{Message, Network, Peer, RequestMessage};
 
 use crate::messages::handlers::Handle;
 use crate::messages::{
@@ -14,106 +16,58 @@ use crate::messages::{
 use crate::Consensus;
 
 impl<N: Network> Consensus<N> {
+    const MAX_CONCURRENT_HANDLERS: usize = 64;
+
     pub(super) fn init_network_requests(network: &Arc<N>, blockchain: &Arc<RwLock<Blockchain>>) {
-        let blockchain_outer = blockchain;
-        let blockchain = Arc::clone(blockchain_outer);
-        let mut stream = network.receive_from_all::<RequestBlockHashes>();
-        tokio::spawn(async move {
-            while let Some((msg, peer)) = stream.next().await {
-                trace!(
-                    "[REQUEST_BLOCK_HASHES] {} block locators received from {:?}",
-                    msg.locators.len(),
-                    peer.id()
-                );
+        let stream = network.receive_from_all::<RequestBlockHashes>();
+        tokio::spawn(Self::request_handler(stream, blockchain));
 
-                // Try to send the response, logging to debug if it fails
-                if let Err(err) = peer.send(msg.handle(&blockchain)).await {
-                    log::debug!("Failed to send RequestBlockHashes Response: {:?}", err);
-                };
-            }
-        });
+        let stream = network.receive_from_all::<RequestBatchSet>();
+        tokio::spawn(Self::request_handler(stream, blockchain));
 
-        let blockchain = Arc::clone(blockchain_outer);
-        let mut stream = network.receive_from_all::<RequestBatchSet>();
-        tokio::spawn(async move {
-            while let Some((msg, peer)) = stream.next().await {
-                trace!(
-                    "[REQUEST_EPOCH] for block {:?} received from {:?}",
-                    msg.hash,
-                    peer.id()
-                );
+        let stream = network.receive_from_all::<RequestHistoryChunk>();
+        tokio::spawn(Self::request_handler(stream, blockchain));
 
-                // Try to send the response, logging to debug if it fails
-                if let Err(err) = peer.send(msg.handle(&blockchain)).await {
-                    log::debug!("Failed to send RequestEpoch Response: {:?}", err);
-                };
-            }
-        });
+        let stream = network.receive_from_all::<RequestBlock>();
+        tokio::spawn(Self::request_handler(stream, blockchain));
 
-        let blockchain = Arc::clone(blockchain_outer);
-        let mut stream = network.receive_from_all::<RequestHistoryChunk>();
-        tokio::spawn(async move {
-            while let Some((msg, peer)) = stream.next().await {
-                trace!(
-                    "[REQUEST_HISTORY_CHUNK] for epoch {}, chunk {} with respect to block_number: {} received from {:?}",
-                    msg.epoch_number,
-                    msg.chunk_index,
-                    msg.block_number,
-                    peer.id()
-                );
+        let stream = network.receive_from_all::<RequestMissingBlocks>();
+        tokio::spawn(Self::request_handler(stream, blockchain));
 
-                // Try to send the response, logging to debug if it fails
-                if let Err(err) = peer.send(msg.handle(&blockchain)).await {
-                    log::debug!("Failed to send RequestHistoryChunks Response: {:?}", err);
-                };
-            }
-        });
+        let stream = network.receive_from_all::<RequestHead>();
+        tokio::spawn(Self::request_handler(stream, blockchain));
+    }
 
-        let blockchain = Arc::clone(blockchain_outer);
-        let mut stream = network.receive_from_all::<RequestBlock>();
-        tokio::spawn(async move {
-            while let Some((msg, peer)) = stream.next().await {
-                trace!(
-                    "[REQUEST_BLOCK] for block hash {} received from {:?}",
-                    msg.hash,
-                    peer.id()
-                );
+    fn request_handler<Req: Handle<Res> + RequestMessage, Res: Message>(
+        stream: BoxStream<'static, (Req, Arc<N::PeerType>)>,
+        blockchain: &Arc<RwLock<Blockchain>>,
+    ) -> impl Future<Output = ()> {
+        let blockchain = Arc::clone(blockchain);
+        async move {
+            stream
+                .for_each_concurrent(Self::MAX_CONCURRENT_HANDLERS, |(msg, peer)| async {
+                    let blockchain = Arc::clone(&blockchain);
+                    tokio::spawn(async move {
+                        trace!(
+                            "[{}] from {:?}: {:#?}",
+                            std::any::type_name::<Req>(),
+                            peer.id(),
+                            msg
+                        );
 
-                // Try to send the response, logging to debug if it fails
-                if let Err(err) = peer.send(msg.handle(&blockchain)).await {
-                    log::debug!("Failed to send RequestBlocks Response: {:?}", err);
-                };
-            }
-        });
-
-        let blockchain = Arc::clone(blockchain_outer);
-        let mut stream = network.receive_from_all::<RequestMissingBlocks>();
-        tokio::spawn(async move {
-            while let Some((msg, peer)) = stream.next().await {
-                trace!(
-                    "[REQUEST_MISSING_BLOCKS] for target_hash {} received from {:?}",
-                    msg.target_hash,
-                    peer.id()
-                );
-
-                // Try to send the response, logging to debug if it fails
-                if let Err(err) = peer.send(msg.handle(&blockchain)).await {
-                    log::debug!("Failed to send RequestMissingBlocks Response: {:?}", err);
-                };
-            }
-        });
-
-        let blockchain = Arc::clone(blockchain_outer);
-        let mut stream = network.receive_from_all::<RequestHead>();
-        tokio::spawn(async move {
-            while let Some((msg, peer)) = stream.next().await {
-                trace!("[REQUEST_HEAD] received from {:?}", peer.id());
-
-                // Try to send the response, logging to debug if it fails
-                if let Err(err) = peer.send(msg.handle(&blockchain)).await {
-                    log::debug!("Failed to send RequestHead Response: {:?}", err);
-                };
-            }
-        });
+                        // Try to send the response, logging to debug if it fails
+                        if let Err(err) = peer.send(msg.handle(&blockchain)).await {
+                            log::debug!(
+                                "Failed to send {} response: {:?}",
+                                std::any::type_name::<Req>(),
+                                err
+                            );
+                        };
+                    })
+                    .await
+                    .expect("Request handler panicked")
+                })
+                .await
+        }
     }
 }
