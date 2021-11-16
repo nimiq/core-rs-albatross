@@ -97,13 +97,16 @@ impl<C: AggregatableContribution, E: Evaluator<C>> Stream for TodoList<C, E> {
         let mut new_set: HashSet<TodoItem<C>> = HashSet::new();
         // the current best TodoItem
         let mut best_todo: Option<Self::Item> = None;
+        // A local copy is needed so mut self is not borrowed
+        let ev = Arc::clone(&self.evaluator);
 
-        // scoring of items needs to be done every time a item is polled, as the scores might have
+        // Scoring of items needs to be done every time a item is polled, as the scores might have
         // changed with the last aggregated contribution
-        // score already available TodoItems first
-        for item in self.list.iter() {
+
+        // Score already available TodoItems first
+        for item in self.list.drain() {
             // Have the evaluator score each TodoItem.
-            let score = item.evaluate(Arc::clone(&self.evaluator));
+            let score = item.evaluate(Arc::clone(&ev));
             // if an item has a score greater than 0 it is retained. Otherwise it is discarded
             if score > 0 {
                 if score > best_score {
@@ -111,26 +114,29 @@ impl<C: AggregatableContribution, E: Evaluator<C>> Stream for TodoList<C, E> {
                     if let Some(todo) = best_todo {
                         new_set.insert(todo);
                     }
-                    best_todo = Some(item.clone()); // TODO get rid of clone()
-                                                    // remember the new best score
+                    best_todo = Some(item);
+                    // remember the new best score
                     best_score = score;
                 } else {
                     // in case the item is not the new best scoring item, push it into the retained set.
-                    new_set.insert(item.clone()); // TODO get rid of clone()
+                    new_set.insert(item);
                 }
             }
         }
 
-        // update the retained list of Todos
+        // The list must be empty now since it is going to be overwritten.
+        assert!(self.list.is_empty());
+
+        // Update todos with the the retained list of Todos
         self.list = new_set;
 
-        // Scan the input for better todos. loop exits once the input has run out of LevelUpdates for now.
-        // Note that computations are limited to the bare minimum. No Verification in particular.
-        // As Verification is very computationally expensive it should only be done for TodoItems with the highest score.
+        // Scan the input for better todos. The loop exits once the input has run out of LevelUpdates.
+        // Note that computations are limited to the bare minimum. No verification in particular.
+        // As Verification is very computationally expensive it should only be done for the TodoItem with the highest score.
         while let Poll::Ready(Some(msg)) = self.input_stream.poll_next_unpin(cx) {
-            //TODO the case where the msg is None is not being handled which could mean that:
+            // TODO the case where the msg is None is not being handled which could mean that:
             // The input has ended, i.e. there is no producer left.
-            // In testcases that could mean the other instances have completed their aggreagtions and droped their network instances.
+            // In testcases that could mean the other instances have completed their aggregations and droped their network instances.
             // In reality this should never happen as the network should not terminate those streams, but try to aquire new Peers in this situation.
             // Panic here is viable, but makes testing a bit harder.
             // TODO more robust handling of this case, as the aggregation might not be able to finish here (depending on what todos are left).
@@ -140,15 +146,15 @@ impl<C: AggregatableContribution, E: Evaluator<C>> Stream for TodoList<C, E> {
                 .evaluator
                 .level_contains_id(msg.level as usize, msg.origin as usize)
             {
-                // Every LevelUpdates contains an aggregate which can be turned into a TodoItem
+                // Every LevelUpdate contains an aggregate which can be turned into a TodoItem
                 let aggregate_todo = TodoItem {
                     contribution: msg.aggregate,
                     level: msg.level as usize,
                 };
-                // score the newly created TodoItem for the aggregate of the LevelUpdate
+                // Score the newly created TodoItem for the aggregate of the LevelUpdate
                 let score = aggregate_todo.evaluate(Arc::clone(&self.evaluator));
                 trace!("New todo with score: {}", &score);
-                // TodoItems with a score of 0 are discarded (meaning not added to the retained set of TodoItems).
+                // TodoItems with a score of 0 are discarded (meaning not added to the set of TodoItems).
                 if score > 0 {
                     if score > best_score {
                         // If the score is a new best remember the score and put the former best item into the list.
@@ -164,15 +170,15 @@ impl<C: AggregatableContribution, E: Evaluator<C>> Stream for TodoList<C, E> {
                         self.wake();
                     }
                 }
-                // Some of the Level Updates also contain an individual Signature. In which case it is also converted into a TodoItem
+                // Some of the LevelUpdates also contain an individual Signature in which case it is also converted into a TodoItem.
                 if let Some(individual) = msg.individual {
                     let individual_todo = TodoItem {
                         contribution: individual,
                         level: msg.level as usize,
                     };
-                    // Score the newly created TodoItem for the individual contribution of the LevelUpdate
+                    // Score the newly created TodoItem for the individual contribution of the LevelUpdate.
                     let score = individual_todo.evaluate(Arc::clone(&self.evaluator));
-                    // TodoItems with a score of 0 are discarded (meaning not added to the retained set of TodoItems).
+                    // TodoItems with a score of 0 are discarded (meaning not added to the set of TodoItems).
                     if score > 0 {
                         if score > best_score {
                             // If the score is a new best remember the score and put the former best item into the list.
