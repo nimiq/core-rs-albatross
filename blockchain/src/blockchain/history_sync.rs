@@ -145,9 +145,6 @@ impl Blockchain {
             .checked_sub(prev_macro_info.head.block_number())
             .expect("Head of the chain can't be before the macro head!");
 
-        // upgrade to Write before creating the Write Transaction
-        let mut this = RwLockUpgradableReadGuard::upgrade(this);
-
         // Create a new database write transaction.
         let mut txn = this.write_transaction();
         this.revert_blocks(num_blocks, &mut txn)?;
@@ -311,15 +308,15 @@ impl Blockchain {
         // Give up database transactions and push lock before creating notifications.
         txn.commit();
 
-        // Check if this block is an election block.
-        let is_election_block = macro_block.is_election_block();
-
         // Update the blockchain state.
+        let mut this = RwLockUpgradableReadGuard::upgrade(this);
         this.state.main_chain = chain_info.clone();
         this.state.head_hash = block_hash.clone();
         this.state.macro_info = chain_info;
         this.state.macro_head_hash = block_hash.clone();
 
+        // Check if this block is an election block.
+        let is_election_block = macro_block.is_election_block();
         if is_election_block {
             this.state.election_head = macro_block.clone();
             this.state.election_head_hash = block_hash.clone();

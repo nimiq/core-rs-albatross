@@ -203,9 +203,6 @@ impl Blockchain {
         mut chain_info: ChainInfo,
         mut prev_info: ChainInfo,
     ) -> Result<PushResult, PushError> {
-        // Upgrade the lock as late as possible but before creating the WriteTxn
-        let mut this = RwLockUpgradableReadGuard::upgrade(this);
-
         let mut txn = this.write_transaction();
 
         let block_number = this.block_number() + 1;
@@ -239,6 +236,9 @@ impl Blockchain {
         }
 
         txn.commit();
+
+        // Upgrade the lock as late as possible.
+        let mut this = RwLockUpgradableReadGuard::upgrade(this);
 
         if let Block::Macro(ref macro_block) = chain_info.head {
             this.state.macro_info = chain_info.clone();
@@ -334,9 +334,6 @@ impl Blockchain {
             info!("Ancestor is in finalized epoch");
             return Err(PushError::InvalidFork);
         }
-
-        // Upgrade the lock as late as possible but before creating the Write Transaction
-        let mut this = RwLockUpgradableReadGuard::upgrade(this);
 
         let mut write_txn = this.write_transaction();
 
@@ -454,30 +451,28 @@ impl Blockchain {
 
         // Commit transaction & update head.
         this.chain_store.set_head(&mut write_txn, &fork_chain[0].0);
-
         write_txn.commit();
 
-        this.state.main_chain = fork_chain[0].1.clone();
+        // Upgrade the lock as late as possible.
+        let mut this = RwLockUpgradableReadGuard::upgrade(this);
 
+        this.state.main_chain = fork_chain[0].1.clone();
         this.state.head_hash = fork_chain[0].0.clone();
 
-        // Downgrade the lock again as the nofity listeners might want to acquire read access themselves.
+        // Downgrade the lock again as the notified listeners might want to acquire read themselves.
         let this = RwLockWriteGuard::downgrade(this);
 
         let mut reverted_blocks = Vec::with_capacity(revert_chain.len());
-
         for (hash, chain_info) in revert_chain.into_iter().rev() {
             reverted_blocks.push((hash, chain_info.head));
         }
 
         let mut adopted_blocks = Vec::with_capacity(fork_chain.len());
-
         for (hash, chain_info) in fork_chain.into_iter().rev() {
             adopted_blocks.push((hash, chain_info.head));
         }
 
         let event = BlockchainEvent::Rebranched(reverted_blocks, adopted_blocks);
-
         this.notifier.notify(event);
 
         Ok(PushResult::Rebranched)
