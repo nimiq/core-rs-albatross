@@ -129,7 +129,16 @@ impl Level {
         false
     }
 
-    pub fn start(&self) {
-        self.state.write().send_started = true;
+    /// Starts the level if not already started.
+    ///
+    /// If the level was started before returns false, otherwise returns true.
+    pub fn start(&self) -> bool {
+        let mut state = self.state.write();
+        if state.send_started {
+            false
+        } else {
+            state.send_started = true;
+            true
+        }
     }
 }

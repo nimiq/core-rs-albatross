@@ -124,18 +124,22 @@ impl<
             .unwrap_or_else(|| panic!("Attempted to start invalid level {}", level));
         trace!("Starting level {}: Peers: {:?}", level.id, level.peer_ids);
 
-        level.start();
+        // Try to Start the level
+        if level.start() {
+            // In case the level was not started previously send the best contribution to peers on the level
 
-        if level.id > 0 {
-            // get the current best for the level. Freeing the lock as soon as possible to continue working on todos
-            let best = {
-                let store = self.protocol.store();
-                let store = store.read();
-                store.combined(level.id - 1)
-            };
+            // Don't do anything for level 0 as it only contains this node
+            if level.id > 0 {
+                // Get the current best for the level. Freeing the lock as soon as possible to continue working on todos
+                let best = {
+                    let store = self.protocol.store();
+                    let store = store.read();
+                    store.combined(level.id - 1)
+                };
 
-            if let Some(best) = best {
-                self.send_update(best, level, self.config.peer_count);
+                if let Some(best) = best {
+                    self.send_update(best, level, self.config.peer_count);
+                }
             }
         }
     }
