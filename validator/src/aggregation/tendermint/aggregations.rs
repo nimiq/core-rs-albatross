@@ -5,7 +5,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
-    task::Poll,
+    task::{Poll, Waker},
 };
 
 use futures::{
@@ -49,6 +49,9 @@ pub(super) struct TendermintAggregations<N: ValidatorNetwork> {
     future_aggregations: BTreeMap<u32, BitSet>,
     validator_id: u16,
     validator_registry: Arc<ValidatorRegistry>,
+    /// The waker used to wake in case a new Stream is pushed into `self.combined_aggregation_streams`
+    /// when there previously was none
+    waker: Option<Waker>,
 }
 
 impl<N: ValidatorNetwork> TendermintAggregations<N> {
@@ -67,6 +70,9 @@ impl<N: ValidatorNetwork> TendermintAggregations<N> {
             validator_id,
             validator_registry,
             event_receiver,
+            // The waker can be none even though the SelectAll `self.combined_aggregation_streams` is empty
+            // because the first poll to it will register the waker if it is still empty at that point.
+            waker: None,
         }
     }
 
@@ -148,6 +154,10 @@ impl<N: ValidatorNetwork> TendermintAggregations<N> {
 
             // Push the aggregation to the select_all streams.
             self.combined_aggregation_streams.push(aggregation);
+            // If a waker is registered, wake it up.
+            if let Some(waker) = self.waker.take() {
+                waker.wake();
+            }
         }
     }
 
@@ -227,24 +237,18 @@ impl<N: ValidatorNetwork + 'static> Stream for TendermintAggregations<N> {
                     );
                 }
             }
-            /*
-            The code inside the `else {}` was commented before, so the `else {}` case was not doing anything anymore,
-            which means it made sense to refactor this from a `match` to an `if let`. I'm leaving the code here in case
-            the person who originally commented the code inside the `else {}` may need it in the future.
-
-            ```
-            else {
-             Poll::Ready(None) means the stream has terminated, which is likelt the network having droped.
-             Try and reconnect but also log an error
-             error!("Networks receive from all returned Poll::Ready(None)");
-             return Poll::Ready(None);
-            }
-            ```
-            */
         }
+
         // after that return whatever combined_aggregation_streams returns
         match self.combined_aggregation_streams.poll_next_unpin(cx) {
-            Poll::Pending | Poll::Ready(None) => Poll::Pending,
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(None) => {
+                // In case the Selectisempty it will return Poll::Ready(None).
+                // Since the task will not be woken up by just adding a new stream to SelectAll
+                // a waker must be stored to trigger the wake.
+                store_waker!(self, waker, cx);
+                Poll::Pending
+            }
             Poll::Ready(Some(((round, step), aggregation))) => Poll::Ready(Some(
                 TendermintAggregationEvent::Aggregation(round, step, aggregation),
             )),

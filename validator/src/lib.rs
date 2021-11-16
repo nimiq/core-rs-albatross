@@ -17,6 +17,7 @@ extern crate nimiq_genesis as genesis;
 extern crate nimiq_handel as handel;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
+#[macro_use]
 extern crate nimiq_macros as macros;
 extern crate nimiq_mempool as mempool;
 extern crate nimiq_network_interface as network_interface;
