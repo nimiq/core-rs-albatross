@@ -95,7 +95,7 @@ impl<P: Peer, Req: RequestMessage, Res: ResponseMessage + 'static> RequestRespon
         // If sending fails, remove channel and return error.
         if let Err(e) = self
             .peer
-            .send_or_close(&request, |_| CloseReason::Other)
+            .send_or_close(request, |_| CloseReason::Other)
             .await
         {
             let mut state = self.state.lock();
@@ -117,12 +117,22 @@ impl<P: Peer, Req: RequestMessage, Res: ResponseMessage + 'static> RequestRespon
                 Ok(response)
             }
             Ok(Err(e)) => {
-                log::error!("Receive error: {}", e);
-
+                log::error!(
+                    "ReceiveError [{}] {:?} {} {}",
+                    request_identifier,
+                    start.elapsed(),
+                    std::any::type_name::<Req>(),
+                    e
+                );
                 Err(RequestError::ReceiveError)
             }
             Err(_) => {
-                log::error!("Timeout: {:?}", request);
+                log::error!(
+                    "Timeout [{}] {:?} {}",
+                    request_identifier,
+                    start.elapsed(),
+                    std::any::type_name::<Req>()
+                );
 
                 // Lock state and remove channel on timeout.
                 let mut state = self.state.lock();

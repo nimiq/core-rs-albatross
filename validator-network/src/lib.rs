@@ -40,10 +40,10 @@ pub trait ValidatorNetwork: Send + Sync {
 
     /// must make a reasonable effort to establish a connection to the peer denoted with `validator_address`
     /// before returning a connection not established error.
-    async fn send_to<M: Message>(
+    async fn send_to<M: Message + Clone>(
         &self,
         validator_ids: &[usize],
-        msg: &M,
+        msg: M,
     ) -> Vec<Result<(), Self::Error>>;
 
     /// Will receive from all connected peers

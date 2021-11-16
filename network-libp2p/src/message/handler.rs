@@ -272,6 +272,17 @@ impl ProtocolsHandler for MessageHandler {
 
                     Poll::Pending => {}
                 }
+
+                // Send queued messages.
+                if let Poll::Ready(Err(e)) = peer.poll_outbound(cx) {
+                    log::error!("Error processing outbound messages: {}", e);
+
+                    return Poll::Ready(ProtocolsHandlerEvent::Close(
+                        HandlerError::ConnectionClosed {
+                            reason: CloseReason::Error,
+                        },
+                    ));
+                }
             }
 
             // Wait for outbound and inbound to be established and the peer ID to be injected.
@@ -307,10 +318,7 @@ impl ProtocolsHandler for MessageHandler {
             }));
         }
 
-        // Remember the waker
-        if self.waker.is_none() {
-            self.waker = Some(cx.waker().clone());
-        }
+        store_waker!(self, waker, cx);
 
         Poll::Pending
     }

@@ -27,7 +27,7 @@ impl<N: Network> Consensus<N> {
                 );
 
                 // Try to send the response, logging to debug if it fails
-                if let Err(err) = peer.send(&msg.handle(&blockchain)).await {
+                if let Err(err) = peer.send(msg.handle(&blockchain)).await {
                     log::debug!("Failed to send RequestBlockHashes Response: {:?}", err);
                 };
             }
@@ -44,7 +44,7 @@ impl<N: Network> Consensus<N> {
                 );
 
                 // Try to send the response, logging to debug if it fails
-                if let Err(err) = peer.send(&msg.handle(&blockchain)).await {
+                if let Err(err) = peer.send(msg.handle(&blockchain)).await {
                     log::debug!("Failed to send RequestEpoch Response: {:?}", err);
                 };
             }
@@ -63,7 +63,7 @@ impl<N: Network> Consensus<N> {
                 );
 
                 // Try to send the response, logging to debug if it fails
-                if let Err(err) = peer.send(&msg.handle(&blockchain)).await {
+                if let Err(err) = peer.send(msg.handle(&blockchain)).await {
                     log::debug!("Failed to send RequestHistoryChunks Response: {:?}", err);
                 };
             }
@@ -80,7 +80,7 @@ impl<N: Network> Consensus<N> {
                 );
 
                 // Try to send the response, logging to debug if it fails
-                if let Err(err) = peer.send(&msg.handle(&blockchain)).await {
+                if let Err(err) = peer.send(msg.handle(&blockchain)).await {
                     log::debug!("Failed to send RequestBlocks Response: {:?}", err);
                 };
             }
@@ -97,7 +97,7 @@ impl<N: Network> Consensus<N> {
                 );
 
                 // Try to send the response, logging to debug if it fails
-                if let Err(err) = peer.send(&msg.handle(&blockchain)).await {
+                if let Err(err) = peer.send(msg.handle(&blockchain)).await {
                     log::debug!("Failed to send RequestMissingBlocks Response: {:?}", err);
                 };
             }
@@ -110,7 +110,7 @@ impl<N: Network> Consensus<N> {
                 trace!("[REQUEST_HEAD] received from {:?}", peer.id());
 
                 // Try to send the response, logging to debug if it fails
-                if let Err(err) = peer.send(&msg.handle(&blockchain)).await {
+                if let Err(err) = peer.send(msg.handle(&blockchain)).await {
                     log::debug!("Failed to send RequestHead Response: {:?}", err);
                 };
             }

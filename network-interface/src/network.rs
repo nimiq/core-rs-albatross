@@ -81,10 +81,10 @@ pub trait Network: Send + Sync + 'static {
 
     fn subscribe_events(&self) -> BroadcastStream<NetworkEvent<Self::PeerType>>;
 
-    async fn broadcast<T: Message>(&self, msg: &T) {
+    async fn broadcast<T: Message + Clone>(&self, msg: T) {
         future::join_all(self.get_peers().iter().map(|peer| {
             // TODO: Close reason
-            peer.send_or_close(msg, |_| CloseReason::Other)
+            peer.send_or_close(msg.clone(), |_| CloseReason::Other)
                 .unwrap_or_else(|_| ())
         }))
         .await;
@@ -144,7 +144,6 @@ pub struct ReceiveFromAll<T: Message, P> {
 impl<T: Message, P: Peer + 'static> ReceiveFromAll<T, P> {
     pub fn new<N: Network<PeerType = P> + ?Sized>(network: &N) -> Self {
         let (peers, updates) = network.get_peer_updates();
-        //log::trace!("peers = {:?}", peers.iter().map(|peer| peer.id()).collect::<Vec<_>>());
 
         ReceiveFromAll {
             inner: stream::select_all(peers.into_iter().map(|peer| {

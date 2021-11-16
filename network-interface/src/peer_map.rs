@@ -196,7 +196,7 @@ mod tests {
             self.id
         }
 
-        async fn send<T: Message>(&self, _msg: &T) -> Result<(), SendError> {
+        async fn send<T: Message>(&self, _msg: T) -> Result<(), SendError> {
             unreachable!();
         }
         fn receive<T: Message>(&self) -> Pin<Box<dyn Stream<Item = T> + Send>> {

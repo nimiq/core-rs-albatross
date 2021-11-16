@@ -1,15 +1,16 @@
+use std::collections::VecDeque;
+use std::task::Waker;
 use std::{collections::HashMap, pin::Pin, sync::Arc};
 
 use bytes::{Buf, Bytes};
 use futures::{
     channel::mpsc,
-    future::Future,
     io::{AsyncRead, AsyncWrite},
+    ready,
     sink::Sink,
     stream::{Stream, StreamExt},
     task::{Context, Poll},
 };
-use parking_lot::Mutex;
 use tokio_util::codec::Framed;
 
 use beserial::{Deserialize, Serialize};
@@ -20,6 +21,21 @@ use crate::codecs::{
 };
 
 use super::peer::Peer;
+
+type FramedStream<C> = Framed<TokioAdapter<C>, MessageCodec>;
+
+pub trait SendMessage<S>: Send + Sync {
+    fn send(self: Box<Self>, sink: Pin<&mut S>) -> Result<(), Error>;
+}
+
+impl<S, F: FnOnce(Pin<&mut S>) -> Result<(), Error>> SendMessage<S> for F
+where
+    F: Send + Sync,
+{
+    fn send(self: Box<F>, sink: Pin<&mut S>) -> Result<(), Error> {
+        self(sink)
+    }
+}
 
 /// Message dispatcher for a single socket.
 ///
@@ -42,7 +58,7 @@ pub struct MessageDispatch<C>
 where
     C: AsyncRead + AsyncWrite + Send + Sync,
 {
-    framed: Pin<Box<Framed<TokioAdapter<C>, MessageCodec>>>,
+    framed: Pin<Box<FramedStream<C>>>,
 
     /// Channels that receive raw messages for a specific message type.
     ///
@@ -53,8 +69,12 @@ where
     /// receiving it.
     buffer: Option<(MessageType, Bytes)>,
 
-    /// The size for new channels
+    /// The buffer size for new channels.
     channel_size: usize,
+
+    outbound_messages: VecDeque<Box<dyn SendMessage<FramedStream<C>>>>,
+
+    waker: Option<Waker>,
 }
 
 impl<C> MessageDispatch<C>
@@ -76,7 +96,20 @@ where
             channels: HashMap::new(),
             buffer: None,
             channel_size,
+            outbound_messages: VecDeque::new(),
+            waker: None,
         }
+    }
+
+    pub fn send<M: Message>(&mut self, message: M) -> Result<(), Error> {
+        self.outbound_messages
+            .push_back(Box::new(move |sink: Pin<&mut FramedStream<C>>| {
+                Sink::<&M>::start_send(sink, &message)
+            }));
+        if let Some(waker) = self.waker.take() {
+            waker.wake();
+        }
+        Ok(())
     }
 
     /// Polls the inbound socket and either pushes the message to the registered channel, or buffers it.
@@ -172,6 +205,34 @@ where
         }
     }
 
+    pub fn poll_outbound(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
+        store_waker!(self, waker, cx);
+
+        // We need to call poll_close for a specific Sink<T>, so...
+        #[derive(Debug, Serialize, Deserialize)]
+        struct CompilerShutUp;
+        impl Message for CompilerShutUp {
+            const TYPE_ID: u64 = 420;
+        }
+
+        while ready!(Sink::<&CompilerShutUp>::poll_ready(
+            self.framed.as_mut(),
+            cx
+        ))
+        .is_ok()
+        {
+            if let Some(send_message) = self.outbound_messages.pop_front() {
+                if let Err(e) = send_message.send(self.framed.as_mut()) {
+                    return Poll::Ready(Err(e));
+                }
+            } else {
+                break;
+            }
+        }
+
+        Sink::<&CompilerShutUp>::poll_flush(self.framed.as_mut(), cx)
+    }
+
     pub fn poll_close(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
         // We need to call poll_close for a specific Sink<T>, so...
         #[derive(Debug, Serialize, Deserialize)]
@@ -262,79 +323,5 @@ where
 {
     pub fn into_inner(self) -> C {
         Pin::into_inner(self.framed).into_inner().into_inner()
-    }
-}
-
-/// Future that sends a message over this socket.
-pub struct SendMessage<'m, C, M>
-where
-    C: AsyncRead + AsyncWrite + Send + Sync,
-{
-    dispatch: Arc<Mutex<MessageDispatch<C>>>,
-    message: Option<&'m M>,
-}
-
-impl<'m, C, M> SendMessage<'m, C, M>
-where
-    C: AsyncRead + AsyncWrite + Send + Sync,
-{
-    /// Creates a future that sends the message.
-    ///
-    /// # Arguments
-    ///
-    ///  - `dispatch`: An `Arc<Mutex<_>>` of the `MessageDispatch` that is used to send the message.
-    ///  - `message`: A borrow of the message.
-    pub fn new(dispatch: Arc<Mutex<MessageDispatch<C>>>, message: &'m M) -> Self {
-        SendMessage {
-            dispatch,
-            message: Some(message),
-        }
-    }
-}
-
-impl<'m, C, M> Future for SendMessage<'m, C, M>
-where
-    C: AsyncRead + AsyncWrite + Send + Sync + Unpin,
-    M: Message,
-{
-    type Output = Result<(), Error>;
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
-        // If we haven't already sent the message
-        if self.message.is_some() {
-            // First poll sink until it's ready
-            {
-                let mut dispatch = self.dispatch.lock();
-                let sink = Pin::new(&mut dispatch.framed);
-
-                match Sink::<&M>::poll_ready(sink, cx) {
-                    // Ready, so continue.
-                    Poll::Ready(Ok(())) => {}
-
-                    // Either pending or error, so just return that
-                    p => return p,
-                }
-            }
-
-            // Start sending
-            {
-                // This always gives us a message, since the outer if-block checks for it.
-                let message = self.message.take().unwrap();
-
-                let mut dispatch = self.dispatch.lock();
-                let sink = Pin::new(&mut dispatch.framed);
-
-                if let Err(e) = sink.start_send(message) {
-                    return Poll::Ready(Err(e));
-                }
-            }
-        }
-
-        // Flush
-        {
-            let mut dispatch = self.dispatch.lock();
-            let sink = Pin::new(&mut dispatch.framed);
-            Sink::<&M>::poll_flush(sink, cx)
-        }
     }
 }

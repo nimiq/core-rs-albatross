@@ -171,8 +171,8 @@ struct SendingFuture<N: Network> {
 }
 
 impl<N: Network> SendingFuture<N> {
-    pub async fn send<M: Message + Unpin + std::fmt::Debug>(self, msg: M) {
-        self.network.broadcast(&msg).await
+    pub async fn send<M: Message + Clone + Unpin + std::fmt::Debug>(self, msg: M) {
+        self.network.broadcast(msg).await
     }
 }
 
@@ -196,7 +196,9 @@ impl<M: Message + Unpin, N: Network> NetworkSink<M, N> {
     }
 }
 
-impl<M: Message + Unpin + std::fmt::Debug, N: Network> Sink<(M, usize)> for NetworkSink<M, N> {
+impl<M: Message + Clone + Unpin + std::fmt::Debug, N: Network> Sink<(M, usize)>
+    for NetworkSink<M, N>
+{
     type Error = ();
 
     fn poll_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -204,9 +206,22 @@ impl<M: Message + Unpin + std::fmt::Debug, N: Network> Sink<(M, usize)> for Netw
         self.poll_flush(cx)
     }
 
-    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        // As this Sink only bufferes a single message poll_close is the same as poll_flush
-        self.poll_flush(cx)
+    fn start_send(mut self: Pin<&mut Self>, item: (M, usize)) -> Result<(), Self::Error> {
+        // If there is future poll_ready didnot return Ready(Ok(())) or poll_ready was not called resulting in an error
+        if self.current_future.is_some() {
+            Err(())
+        } else {
+            // Otherwise, create the future and store it.
+            // Note: This future does not get polled. Only once poll_* is called it will actually be polled.
+            let fut = Box::pin(
+                SendingFuture {
+                    network: self.network.clone(),
+                }
+                .send(item.0),
+            ); //.boxed();
+            self.current_future = Some(fut);
+            Ok(())
+        }
     }
 
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -227,22 +242,9 @@ impl<M: Message + Unpin + std::fmt::Debug, N: Network> Sink<(M, usize)> for Netw
         }
     }
 
-    fn start_send(mut self: Pin<&mut Self>, item: (M, usize)) -> Result<(), Self::Error> {
-        // If there is future poll_ready didnot return Ready(Ok(())) or poll_ready was not called resulting in an error
-        if self.current_future.is_some() {
-            Err(())
-        } else {
-            // Otherwise, create the future and store it.
-            // Note: This future does not get polled. Only once poll_* is called it will actually be polled.
-            let fut = Box::pin(
-                SendingFuture {
-                    network: self.network.clone(),
-                }
-                .send(item.0),
-            ); //.boxed();
-            self.current_future = Some(fut);
-            Ok(())
-        }
+    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        // As this Sink only bufferes a single message poll_close is the same as poll_flush
+        self.poll_flush(cx)
     }
 }
 

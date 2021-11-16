@@ -18,8 +18,9 @@ use nimiq_network_interface::peer::{
     CloseReason, Peer as PeerInterface, RequestResponse, SendError,
 };
 
-use super::dispatch::{MessageDispatch, SendMessage};
 use crate::{codecs::typed::Error, NetworkError};
+
+use super::dispatch::MessageDispatch;
 
 pub struct Peer {
     pub id: PeerId,
@@ -47,6 +48,10 @@ impl Peer {
     /// this will return `Poll::Pending` and make sure that the task is woken up, once the mutex was released.
     pub fn poll_inbound(self: &Arc<Peer>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
         self.dispatch.lock().poll_inbound(cx, self)
+    }
+
+    pub fn poll_outbound(self: &Arc<Peer>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
+        self.dispatch.lock().poll_outbound(cx)
     }
 
     pub fn poll_close(&self, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
@@ -91,10 +96,8 @@ impl PeerInterface for Peer {
         self.id
     }
 
-    async fn send<M: Message>(&self, message: &M) -> Result<(), SendError> {
-        SendMessage::new(Arc::clone(&self.dispatch), message)
-            .await
-            .map_err(|e| e.into())
+    async fn send<M: Message>(&self, message: M) -> Result<(), SendError> {
+        self.dispatch.lock().send(message).map_err(|e| e.into())
     }
 
     // TODO: Make this a stream of Result<M, Error>

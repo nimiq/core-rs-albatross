@@ -44,7 +44,7 @@ impl Peer for MockPeer {
         self.peer_id
     }
 
-    async fn send<T: Message>(&self, msg: &T) -> Result<(), SendError> {
+    async fn send<T: Message>(&self, msg: T) -> Result<(), SendError> {
         let k = SenderKey {
             network_recipient: self.peer_id.into(),
             sender_peer: self.network_address.into(),

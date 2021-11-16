@@ -201,15 +201,16 @@ where
         Ok(self.network.get_peer(peer_id))
     }
 
-    async fn send_to<M: Message>(
+    async fn send_to<M: Message + Clone>(
         &self,
         validator_ids: &[usize],
-        msg: &M,
+        msg: M,
     ) -> Vec<Result<(), Self::Error>> {
         let futures = validator_ids
             .iter()
             .copied()
-            .map(|validator_id| async move {
+            .map(|validator_id| (validator_id, msg.clone()))
+            .map(|(validator_id, msg)| async move {
                 let peer = if let Ok(Some(peer)) = self.get_validator_peer(validator_id).await {
                     // The peer was cached so the send is fast tracked
                     peer
@@ -253,7 +254,7 @@ where
                     }
                 };
                 peer
-                    .send(msg)
+                    .send(msg.clone())
                     .await
                     .map_err(NetworkError::Send)?;
                 Ok(())

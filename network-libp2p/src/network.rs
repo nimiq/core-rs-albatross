@@ -1142,7 +1142,7 @@ mod tests {
 
         let mut msgs = peer1.receive::<TestMessage>();
 
-        peer2.send(&TestMessage { id: 4711 }).await.unwrap();
+        peer2.send(TestMessage { id: 4711 }).await.unwrap();
 
         tracing::debug!("send complete");
 
@@ -1163,9 +1163,9 @@ mod tests {
         let mut msgs1 = peer1.receive::<TestMessage>();
         let mut msgs2 = peer1.receive::<TestMessage2>();
 
-        peer2.send(&TestMessage { id: 4711 }).await.unwrap();
+        peer2.send(TestMessage { id: 4711 }).await.unwrap();
         peer2
-            .send(&TestMessage2 {
+            .send(TestMessage2 {
                 x: "foobar".to_string(),
             })
             .await
@@ -1190,8 +1190,8 @@ mod tests {
         let mut in1 = peer1.receive::<TestMessage>();
         let mut in2 = peer2.receive::<TestMessage>();
 
-        peer1.send(&TestMessage { id: 1337 }).await.unwrap();
-        peer2.send(&TestMessage { id: 420 }).await.unwrap();
+        peer1.send(TestMessage { id: 1337 }).await.unwrap();
+        peer2.send(TestMessage { id: 420 }).await.unwrap();
 
         let msg1 = in2.next().await.unwrap();
         let msg2 = in1.next().await.unwrap();

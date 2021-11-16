@@ -377,7 +377,7 @@ async fn validator_can_catch_up() {
     // At which point the prepared view_change message is broadcast
     // (only a subset of the validators will accept it as it send as level 1 message)
     for network in &networks {
-        network.broadcast(&vc).await;
+        network.broadcast(vc.clone()).await;
     }
 
     // wait enough time to complete the view change (it really does not matter how long, as long as the vc completes)
