@@ -89,7 +89,12 @@ impl<P: Peer, Req: RequestMessage, Res: ResponseMessage + 'static> RequestRespon
             (request_identifier, receiver)
         };
 
-        log::trace!("-> [{}] {:#?}", request_identifier, request);
+        log::trace!(
+            "-> [{}] {:?} {:#?}",
+            request_identifier,
+            self.peer.id(),
+            request
+        );
 
         // TODO: CloseType
         // If sending fails, remove channel and return error.
@@ -108,9 +113,10 @@ impl<P: Peer, Req: RequestMessage, Res: ResponseMessage + 'static> RequestRespon
         match timeout(self.timeout, receiver).await {
             Ok(Ok(response)) => {
                 log::trace!(
-                    "<- [{}] {:?} {:#?}",
+                    "<- [{}] {:?} {:?} {:#?}",
                     request_identifier,
                     start.elapsed(),
+                    self.peer.id(),
                     response
                 );
 
@@ -118,9 +124,10 @@ impl<P: Peer, Req: RequestMessage, Res: ResponseMessage + 'static> RequestRespon
             }
             Ok(Err(e)) => {
                 log::error!(
-                    "ReceiveError [{}] {:?} {} {}",
+                    "ReceiveError [{}] {:?} {:?} {} {}",
                     request_identifier,
                     start.elapsed(),
+                    self.peer.id(),
                     std::any::type_name::<Req>(),
                     e
                 );

@@ -6,7 +6,7 @@ use futures::StreamExt;
 use parking_lot::RwLock;
 
 use nimiq_blockchain::Blockchain;
-use nimiq_network_interface::prelude::{Message, Network, Peer, RequestMessage};
+use nimiq_network_interface::prelude::{Message, Network, Peer, ResponseMessage};
 
 use crate::messages::handlers::Handle;
 use crate::messages::{
@@ -38,7 +38,7 @@ impl<N: Network> Consensus<N> {
         tokio::spawn(Self::request_handler(stream, blockchain));
     }
 
-    fn request_handler<Req: Handle<Res> + RequestMessage, Res: Message>(
+    fn request_handler<Req: Handle<Res> + ResponseMessage, Res: Message>(
         stream: BoxStream<'static, (Req, Arc<N::PeerType>)>,
         blockchain: &Arc<RwLock<Blockchain>>,
     ) -> impl Future<Output = ()> {
@@ -49,8 +49,8 @@ impl<N: Network> Consensus<N> {
                     let blockchain = Arc::clone(&blockchain);
                     tokio::spawn(async move {
                         trace!(
-                            "[{}] from {:?}: {:#?}",
-                            std::any::type_name::<Req>(),
+                            "[{}] {:?} {:#?}",
+                            msg.get_request_identifier(),
                             peer.id(),
                             msg
                         );
@@ -58,7 +58,8 @@ impl<N: Network> Consensus<N> {
                         // Try to send the response, logging to debug if it fails
                         if let Err(err) = peer.send(msg.handle(&blockchain)).await {
                             log::debug!(
-                                "Failed to send {} response: {:?}",
+                                "[{}] Failed to send {} response: {:?}",
+                                msg.get_request_identifier(),
                                 std::any::type_name::<Req>(),
                                 err
                             );
