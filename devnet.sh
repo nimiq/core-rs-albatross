@@ -17,7 +17,7 @@ RELEASE=false
 MAX_VALIDATORS=4
 cargo="cargo run"
 cargo_build="cargo build"
-tps=150
+tpb=150
 CONFIG_PATH="/tmp/nimiq-devnet"
 trap cleanup_exit INT
 
@@ -71,10 +71,10 @@ while [ ! $# -eq 0 ]; do
         -s | --spammer)
             if [ "$2" ]; then
                 SPAMMER=true
-                tps=$2
+                tpb=$2
                 shift
             else
-                echo '--tps requires a value'
+                echo '--tpb requires a value'
                 exit 1
             fi
             ;;
@@ -171,7 +171,7 @@ sleep 30s
 if [ "$SPAMMER" = true ] ; then
     echo "Starting spammer.... "
     mkdir -p temp-state/dev/spammer
-    $cargo --bin nimiq-spammer -- -t $tps -c $CONFIG_PATH/spammer/client.toml &>> temp-logs/$foldername/Spammer.txt &
+    $cargo --bin nimiq-spammer -- -t $tpb -c $CONFIG_PATH/spammer/client.toml &>> temp-logs/$foldername/Spammer.txt &
     spids+=($!)
     sleep 1s
 fi

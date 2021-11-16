@@ -1,6 +1,11 @@
 use std::collections::VecDeque;
+use std::path::PathBuf;
+use std::str::FromStr;
 
 use futures::StreamExt;
+use rand::{thread_rng, RngCore};
+use structopt::StructOpt;
+
 use nimiq::client::ConsensusProxy;
 pub use nimiq::{
     client::{Client, Consensus},
@@ -14,7 +19,7 @@ pub use nimiq::{
         panic::initialize_panic_reporting,
     },
 };
-use nimiq_block::BlockBody;
+use nimiq_block::BlockType;
 use nimiq_blockchain::{AbstractBlockchain, BlockchainEvent};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_mempool::mempool::Mempool;
@@ -22,11 +27,6 @@ use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_transaction::Transaction;
 use nimiq_transaction_builder::TransactionBuilder;
-use rand::{thread_rng, RngCore};
-use std::str::FromStr;
-
-use std::path::PathBuf;
-use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 #[structopt(rename_all = "kebab")]
@@ -40,11 +40,11 @@ pub struct SpammerCommandLine {
     #[structopt(long, short = "c")]
     pub config: Option<PathBuf>,
 
-    /// Transactions per second to generate
+    /// Transactions per block to generate.
     ///
-    /// * `nimiq-spammer --tps 800`
+    /// * `nimiq-spammer --tpb 724`
     #[structopt(long, short = "t")]
-    pub tps: Option<u32>,
+    pub tpb: Option<u32>,
 }
 
 impl SpammerCommandLine {
@@ -61,7 +61,7 @@ impl SpammerCommandLine {
 #[derive(Clone)]
 struct StatsExert {
     pub time: std::time::Duration,
-    pub height: u32,
+    pub is_micro: bool,
     pub tx_count: usize,
 }
 
@@ -140,28 +140,18 @@ async fn main_inner() -> Result<(), Error> {
         panic!("Could not start spammer");
     };
 
-    // Create the "monitor" future which never completes to keep the client alive.
-    // This closure is executed after the client has been initialized.
-    // TODO Get rid of this. Make the Client a future/stream instead.
-    let mut statistics_interval = config_file.log.statistics;
-    let mut show_statistics = true;
-    if statistics_interval == 0 {
-        show_statistics = false;
-    }
-    statistics_interval = 1;
-
     let rolling_window = 32usize;
 
     let mut stat_exerts: VecDeque<StatsExert> = VecDeque::new();
     let mut tx_count_total = 0usize;
+    let mut micro_block_count = 0usize;
 
     let mut count = 150;
-
-    if let Some(tps) = spammer_command_line.tps {
-        count = tps as usize;
+    if let Some(tpb) = spammer_command_line.tpb {
+        count = tpb as usize;
     }
 
-    log::info!("Spammer configured to gerenerate {} tps", count);
+    log::info!("Spammer configured to generate {} tx/block", count);
 
     loop {
         while let Some(event) = bc_events.next().await {
@@ -174,53 +164,44 @@ async fn main_inner() -> Result<(), Error> {
             if let Some(hash) = hash {
                 let block = {
                     let blockchain = consensus.blockchain.read();
-                    blockchain.get_block(&hash, true, None)
+                    blockchain
+                        .get_block(&hash, true, None)
+                        .expect("Failed to get latest block")
                 };
 
-                let newest_block = if let Some(block) = block {
-                    log::info!("\n");
-                    if consensus.is_established() {
-                        spam(std::sync::Arc::clone(&mempool), consensus.clone(), count).await;
-                        log::info!(
-                            "\tCreated {} transactions and send to the network.\n",
-                            count
-                        );
-                    }
+                log::info!("\n");
+                if consensus.is_established() {
+                    spam(std::sync::Arc::clone(&mempool), consensus.clone(), count).await;
+                    log::info!("\tSent {} transactions to the network.\n", count);
+                }
 
-                    let time = std::time::Duration::from_millis(block.header().timestamp());
+                let time = std::time::Duration::from_millis(block.header().timestamp());
+                let tx_count = block.transactions().map(|txs| txs.len()).unwrap_or(0);
+                let mempool_count = mempool.num_transactions();
 
-                    let tx_count = if let Some(BlockBody::Micro(body)) = block.body() {
-                        body.transactions.len()
-                    } else {
-                        0
-                    };
+                log::info!(
+                    "Blockchain extended to #{}.{}",
+                    block.block_number(),
+                    block.view_number()
+                );
+                if consensus.is_established() {
+                    log::info!("\t- block contains: {} tx", tx_count);
+                    log::info!("\t- mempool contains: {} tx", mempool_count);
+                }
 
-                    let mempool_count = mempool.num_transactions();
+                tx_count_total += tx_count;
 
-                    log::info!(
-                        "Blockchain extended to #{}.{}",
-                        block.block_number(),
-                        block.view_number()
-                    );
-                    if consensus.is_established() {
-                        log::info!("\t- block contained {} tx", tx_count);
-                        log::info!("\t- mempool contains {} tx", mempool_count);
-                    }
+                let is_micro = block.ty() == BlockType::Micro;
+                if is_micro {
+                    micro_block_count += 1;
+                }
 
-                    tx_count_total += tx_count;
-
-                    let se = StatsExert {
-                        time,
-                        height: block.header().block_number(),
-                        tx_count,
-                    };
-
-                    stat_exerts.push_back(se.clone());
-
-                    se
-                } else {
-                    panic!("blab");
+                let newest_block = StatsExert {
+                    time,
+                    is_micro,
+                    tx_count,
                 };
+                stat_exerts.push_back(newest_block.clone());
 
                 if stat_exerts.len() == rolling_window {
                     let oldest_block = stat_exerts.pop_front().unwrap();
@@ -236,16 +217,19 @@ async fn main_inner() -> Result<(), Error> {
                         .expect("This should work, too");
 
                     // get average tx per block:
-                    let av_tx = tx_count_total / rolling_window;
+                    let av_tx = tx_count_total / micro_block_count;
 
                     let tps = tx_count_total as f32 / diff.as_secs_f32();
 
                     log::info!("Average over the last {} blocks:", rolling_window);
-                    log::info!("\tBlock time: {:?}", av_block_time);
-                    log::info!("\tTx per block: {:?}", av_tx);
-                    log::info!("\tTx per second: {:?}", tps);
+                    log::info!("\t- block time: {:?}", av_block_time);
+                    log::info!("\t- tx per block: {:?}", av_tx);
+                    log::info!("\t- tx per second: {:?}", tps);
 
                     tx_count_total -= oldest_block.tx_count;
+                    if oldest_block.is_micro {
+                        micro_block_count -= 1;
+                    }
                 }
             }
         }
@@ -275,12 +259,17 @@ async fn spam(mempool: std::sync::Arc<Mempool>, consensus: ConsensusProxy, count
             let consensus1 = consensus.clone();
             let mp = std::sync::Arc::clone(&mempool);
             tokio::spawn(async move {
-                mp.add_transaction(tx.clone()).await;
-                consensus1.send_transaction(tx).await;
+                if let Err(e) = mp.add_transaction(tx.clone()).await {
+                    log::warn!("Mempool rejected transaction: {:?} - {:#?}", e, tx);
+                }
+                if let Err(e) = consensus1.send_transaction(tx).await {
+                    log::warn!("Failed to send transaction: {:?}", e);
+                }
             });
         }
     })
-    .await;
+    .await
+    .expect("spawn_blocking() panicked");
 }
 
 fn generate_transactions(
