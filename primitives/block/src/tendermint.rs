@@ -17,10 +17,12 @@ use crate::{MacroHeader, MultiSignature};
 /// The proposal message sent by the Tendermint leader.
 #[derive(Clone, Debug, Serialize, Deserialize, SerializeContent, PartialEq, Eq)]
 pub struct TendermintProposal {
-    // The header of the macro block, which is effectively the proposal.
+    /// The header of the macro block, which is effectively the proposal.
     pub value: MacroHeader,
-    // The valid round of the proposer. See the Tendermint crate for more details.
+    /// The valid round of the proposer. See the Tendermint crate for more details.
     pub valid_round: Option<u32>,
+    /// the round this proposal was created for
+    pub round: u32,
 }
 
 impl Message for TendermintProposal {

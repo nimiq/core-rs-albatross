@@ -280,8 +280,13 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             return;
         }
 
-        log::debug!("We are active for this epoch: initializing block producer");
         let blockchain = self.consensus.blockchain.read();
+
+        log::debug!(
+            "We are active for this epoch: initializing block producer for {}.{}",
+            blockchain.head().block_number(),
+            blockchain.head().view_number(),
+        );
 
         self.macro_producer = None;
         self.micro_producer = None;

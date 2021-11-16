@@ -158,7 +158,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
     // One at the beginning and another at half of the timeout duration.
     async fn broadcast_proposal(
         &mut self,
-        _round: u32,
+        round: u32,
         proposal: Self::ProposalTy,
         valid_round: Option<u32>,
     ) -> Result<(), TendermintError> {
@@ -186,6 +186,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
         let proposal_message = TendermintProposal {
             value: proposal,
             valid_round,
+            round,
         };
 
         // Sign the message with our validator key.
@@ -252,7 +253,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
         // This waits for a proposal from the proposer until it timeouts.
         let await_res = tokio::time::timeout(
             timeout,
-            self.await_proposal_loop(validator_id, &validator_key, expected_height),
+            self.await_proposal_loop(validator_id, &validator_key, expected_height, round),
         )
         .await;
 
@@ -401,15 +402,19 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintInterface<TValidat
         validator_id: u16,
         validator_key: &PublicKey,
         expected_height: u32,
+        expected_round: u32,
     ) -> (TendermintProposal, TValidatorNetwork::PubsubId) {
         while let Some((msg, id)) = self.proposal_stream.as_mut().next().await {
             // most basic check first: only process current height proposals, discard old ones
-            if msg.message.value.block_number == expected_height {
+            if msg.message.value.block_number == expected_height
+                && msg.message.round == expected_round
+            {
+                // view number
                 // Check if the proposal comes from the correct validator and the signature of the
                 // proposal is valid. If not, keep awaiting.
                 debug!(
-                    "Received Proposal for block #{} from validator {} ",
-                    &msg.message.value.block_number, &msg.signer_idx,
+                    "Received Proposal for block #{}.{} from validator {} ",
+                    &msg.message.value.block_number, &msg.message.round, &msg.signer_idx,
                 );
                 if validator_id == msg.signer_idx {
                     if msg.verify(validator_key) {

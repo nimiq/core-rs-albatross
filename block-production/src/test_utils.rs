@@ -72,6 +72,7 @@ impl TemporaryBlockProducer {
                 TendermintProposal {
                     valid_round: None,
                     value: macro_block_proposal.header,
+                    round: 0u32,
                 },
                 macro_block_proposal
                     .body
