@@ -344,7 +344,7 @@ impl ViewChangeAggregation {
                                 let view_change_proof = ViewChangeProof {
                                     sig: vc.view_change,
                                 };
-                                warn!("View Change complete: {:?}", &view_change_proof);
+                                trace!("View Change complete: {:?}", &view_change_proof);
 
                                 // return the ViewChangeProof
                                 return (view_change, view_change_proof);
