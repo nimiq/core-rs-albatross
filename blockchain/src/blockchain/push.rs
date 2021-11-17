@@ -19,15 +19,13 @@ use crate::{
 /// and is just receiving newly produced blocks. It is also used for the final phase of syncing,
 /// when the node is just receiving micro blocks.
 impl Blockchain {
-    // To retain the option of having already taken a lock before this call the self was exchanged.
-    // This is a bit ugly but since push does only really need &mut self briefly at the end for the actual write
-    // while needing &self for the majority it made sense to use upgradable read instead of self.
-    // Note that there can always only ever be at most one RwLockUpgradableRead thus the push calls are also
-    // sequentialized by it.
-    /// Pushes a block into the chain.
-    pub fn push(
+    /// Private function to push a block.
+    /// Set the trusted flag to true to skip VRF and signature verifications: when the source of the
+    /// block can be trusted.
+    fn do_push(
         this: RwLockUpgradableReadGuard<Self>,
         block: Block,
+        trusted: bool,
     ) -> Result<PushResult, PushError> {
         // get_chain_info doesn't necessarily work with all blocks, even if we already synced their contents
         if block.block_number() < policy::last_macro_block(this.block_number()) {
@@ -85,6 +83,7 @@ impl Blockchain {
             &block.header(),
             &intended_slot_owner,
             Some(&read_txn),
+            !trusted,
         ) {
             warn!("Rejecting block - Bad header");
             return Err(e);
@@ -97,13 +96,16 @@ impl Blockchain {
             &block.justification(),
             &intended_slot_owner,
             Some(&read_txn),
+            !trusted,
         ) {
             warn!("Rejecting block - Bad justification");
             return Err(e);
         }
 
         // Check the body.
-        if let Err(e) = this.verify_block_body(&block.header(), &block.body(), Some(&read_txn)) {
+        if let Err(e) =
+            this.verify_block_body(&block.header(), &block.body(), Some(&read_txn), !trusted)
+        {
             warn!("Rejecting block - Bad body");
             return Err(e);
         }
@@ -194,6 +196,33 @@ impl Blockchain {
         txn.commit();
 
         Ok(PushResult::Forked)
+    }
+    // To retain the option of having already taken a lock before this call the self was exchanged.
+    // This is a bit ugly but since push does only really need &mut self briefly at the end for the actual write
+    // while needing &self for the majority it made sense to use upgradable read instead of self.
+    // Note that there can always only ever be at most one RwLockUpgradableRead thus the push calls are also
+    // sequentialized by it.
+    /// Pushes a block into the chain.
+    pub fn push(
+        this: RwLockUpgradableReadGuard<Self>,
+        block: Block,
+    ) -> Result<PushResult, PushError> {
+        Self::do_push(this, block, false)
+    }
+
+    // To retain the option of having already taken a lock before this call the self was exchanged.
+    // This is a bit ugly but since push does only really need &mut self briefly at the end for the actual write
+    // while needing &self for the majority it made sense to use upgradable read instead of self.
+    // Note that there can always only ever be at most one RwLockUpgradableRead thus the push calls are also
+    // sequentialized by it.
+    /// Pushes a block into the chain.
+    /// The trusted version of the push function will skip some verifications that can only be skipped if
+    /// the source is trusted. This is the case of a validator pushing its own blocks
+    pub fn trusted_push(
+        this: RwLockUpgradableReadGuard<Self>,
+        block: Block,
+    ) -> Result<PushResult, PushError> {
+        Self::do_push(this, block, true)
     }
 
     /// Extends the current main chain.

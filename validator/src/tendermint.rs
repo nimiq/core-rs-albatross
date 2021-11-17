@@ -293,6 +293,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
                 &BlockHeader::Macro(header.clone()),
                 &key,
                 None,
+                true,
             )
             .is_err()
             {
@@ -347,7 +348,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
             }
         };
 
-        // If the message was validated sucessfully, the network may now relay it to other peers.
+        // If the message was validated successfully, the network may now relay it to other peers.
         // Otherwise, reject or ignore the message.
         if let Some((MsgAcceptance::Accept, header, valid_round)) = acceptance {
             self.network
