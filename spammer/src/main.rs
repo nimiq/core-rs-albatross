@@ -217,7 +217,7 @@ async fn main_inner() -> Result<(), Error> {
                         .expect("This should work, too");
 
                     // get average tx per block:
-                    let av_tx = tx_count_total / micro_block_count;
+                    let av_tx = tx_count_total.checked_div(micro_block_count).unwrap_or(0);
 
                     let tps = tx_count_total as f32 / diff.as_secs_f32();
 
