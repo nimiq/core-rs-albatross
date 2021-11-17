@@ -346,16 +346,13 @@ impl BlockchainInterface for BlockchainDispatcher {
             let block_number = extended_tx.block_number;
             let timestamp = extended_tx.block_time;
 
-            match extended_tx.into_transaction() {
-                Ok(tx) => {
-                    txs.push(Transaction::from_blockchain(
-                        tx,
-                        block_number,
-                        timestamp,
-                        blockchain.block_number(),
-                    ));
-                }
-                Err(_) => {}
+            if let Ok(tx) = extended_tx.into_transaction() {
+                txs.push(Transaction::from_blockchain(
+                    tx,
+                    block_number,
+                    timestamp,
+                    blockchain.block_number(),
+                ));
             }
         }
 

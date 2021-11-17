@@ -236,6 +236,8 @@ impl<N: ValidatorNetwork + 'static> Stream for TendermintAggregations<N> {
                         &self.aggregation_descriptors
                     );
                 }
+            } else {
+                log::warn!("Input for Aggregations returned None");
             }
         }
 
