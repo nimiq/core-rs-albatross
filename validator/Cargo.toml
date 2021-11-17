@@ -59,3 +59,4 @@ nimiq-network-mock = { path = "../network-mock" }
 
 [features]
 metrics = []
+trusted_push = []

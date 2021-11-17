@@ -39,7 +39,7 @@ impl NanoBlockchain {
         let intended_slot_owner = validator.public_key.uncompress_unchecked();
 
         // Check the header.
-        Blockchain::verify_block_header(self, &block.header(), &intended_slot_owner, None)?;
+        Blockchain::verify_block_header(self, &block.header(), &intended_slot_owner, None, true)?;
 
         // If this is an election block, check the body.
         if block.is_election() {
@@ -61,6 +61,7 @@ impl NanoBlockchain {
             &block.justification(),
             &intended_slot_owner,
             None,
+            true,
         )?;
 
         // Create the chaininfo for the new block.

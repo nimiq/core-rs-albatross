@@ -29,6 +29,7 @@ impl Blockchain {
         header: &BlockHeader,
         intended_slot_owner: &PublicKey,
         txn_opt: Option<&DBtx>,
+        check_seed: bool,
     ) -> Result<(), PushError> {
         // Check the version
         if header.version() != policy::VERSION {
@@ -74,12 +75,14 @@ impl Blockchain {
         }
 
         // Check if the seed was signed by the intended producer.
-        if let Err(e) = header
-            .seed()
-            .verify(prev_info.head.seed(), intended_slot_owner)
-        {
-            warn!("Rejecting block - invalid seed ({:?})", e);
-            return Err(PushError::InvalidBlock(BlockError::InvalidSeed));
+        if check_seed {
+            if let Err(e) = header
+                .seed()
+                .verify(prev_info.head.seed(), intended_slot_owner)
+            {
+                warn!("Rejecting block - invalid seed ({:?})", e);
+                return Err(PushError::InvalidBlock(BlockError::InvalidSeed));
+            }
         }
 
         if header.ty() == BlockType::Macro {
@@ -102,6 +105,7 @@ impl Blockchain {
         justification_opt: &Option<BlockJustification>,
         intended_slot_owner: &PublicKey,
         txn_opt: Option<&DBtx>,
+        check_signature: bool,
     ) -> Result<(), PushError> {
         // Checks if the justification exists. If yes, unwrap it.
         let justification = justification_opt
@@ -110,22 +114,25 @@ impl Blockchain {
 
         match justification {
             BlockJustification::Micro(justification) => {
-                // If the block is a micro block, verify the signature and the view changes.
-                let signature = justification.signature.uncompress();
+                if check_signature {
+                    // If the block is a micro block, verify the signature and the view changes.
+                    let signature = justification.signature.uncompress();
 
-                if let Err(e) = signature {
-                    warn!("Rejecting block - invalid signature ({:?})", e);
-                    return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
-                }
+                    if let Err(e) = signature {
+                        warn!("Rejecting block - invalid signature ({:?})", e);
+                        return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
+                    }
 
-                // Verify the signature on the justification.
-                if !intended_slot_owner.verify_hash(header.hash_blake2s(), &signature.unwrap()) {
-                    warn!("Rejecting block - invalid signature for intended slot owner");
+                    // Verify the signature on the justification.
+                    if !intended_slot_owner.verify_hash(header.hash_blake2s(), &signature.unwrap())
+                    {
+                        warn!("Rejecting block - invalid signature for intended slot owner");
 
-                    debug!("Block hash: {}", header.hash());
+                        debug!("Block hash: {}", header.hash());
 
-                    debug!("Intended slot owner: {:?}", intended_slot_owner.compress());
-                    return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
+                        debug!("Intended slot owner: {:?}", intended_slot_owner.compress());
+                        return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
+                    }
                 }
 
                 // Check if a view change occurred - if so, validate the proof
@@ -179,11 +186,13 @@ impl Blockchain {
             }
             BlockJustification::Macro(justification) => {
                 // If the block is a macro block, verify the Tendermint proof.
-                if !justification.verify(
-                    header.hash(),
-                    header.block_number(),
-                    &blockchain.current_validators().unwrap(),
-                ) {
+                if check_signature
+                    && !justification.verify(
+                        header.hash(),
+                        header.block_number(),
+                        &blockchain.current_validators().unwrap(),
+                    )
+                {
                     warn!("Rejecting block - macro block with bad justification");
                     return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
                 }
@@ -202,6 +211,7 @@ impl Blockchain {
         header: &BlockHeader,
         body_opt: &Option<BlockBody>,
         txn_opt: Option<&DBtx>,
+        verify_txns: bool,
     ) -> Result<(), PushError> {
         // Checks if the body exists. If yes, unwrap it.
         let body = body_opt
@@ -295,9 +305,11 @@ impl Blockchain {
                         return Err(PushError::InvalidBlock(BlockError::ExpiredTransaction));
                     }
 
-                    // Check intrinsic transaction invariants.
-                    if let Err(e) = tx.verify(self.network_id) {
-                        return Err(PushError::InvalidBlock(BlockError::InvalidTransaction(e)));
+                    if verify_txns {
+                        // Check intrinsic transaction invariants.
+                        if let Err(e) = tx.verify(self.network_id) {
+                            return Err(PushError::InvalidBlock(BlockError::InvalidTransaction(e)));
+                        }
                     }
 
                     previous_tx = Some(tx);
