@@ -114,11 +114,23 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
     }
 
     fn is_our_turn(&self) -> bool {
-        let (slot, _) = self
-            .blockchain
-            .read()
-            .get_slot_owner_at(self.block_number, self.view_number, None)
-            .expect("Couldn't find slot owner!");
+        // TODO: This match() used to be an expect(), I changed it because there is a case where the block
+        // producer will continue running for a while in parallel to a rebranch operation that will
+        // eventually drop it; when this happens, we want to keep running (while also not producing anything)
+        // instead of panicking (it shouldn't matter since we will eventually drop this producer), but the
+        // correct fix for this would be dropping the validator (or somehow stop its operation) as soon as we
+        // know we're rebranching
+        let slot = match self.blockchain.read().get_slot_owner_at(
+            self.block_number,
+            self.view_number,
+            None,
+        ) {
+            Some((slot, _)) => slot,
+            None => {
+                warn!("Couldn't find who the next slot owner is, this should only happen if we rebranched while processing a view change");
+                return false;
+            }
+        };
 
         &self.signing_key.public_key.compress() == slot.public_key.compressed()
     }

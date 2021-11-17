@@ -136,7 +136,7 @@ pub trait AbstractBlockchain {
 
         // Get the slot number for the current block.
         let slot_number =
-            self.get_slot_owner_number_at(block_number, view_number, disabled_slots, txn_option);
+            self.get_slot_owner_number_at(block_number, view_number, disabled_slots, txn_option)?;
 
         // Get the current validators.
         // Note: We need to handle the case where `block_number()` is at an election block
@@ -175,11 +175,10 @@ pub trait AbstractBlockchain {
         view_number: u32,
         disabled_slots: BitSet,
         txn_option: Option<&Transaction>,
-    ) -> u16 {
+    ) -> Option<u16> {
         // Get the previous block's seed.
         let seed = self
-            .get_block_at(block_number - 1, false, txn_option)
-            .expect("Can't find previous block!")
+            .get_block_at(block_number - 1, false, txn_option)?
             .seed()
             .clone();
 
@@ -210,7 +209,7 @@ pub trait AbstractBlockchain {
 
         // Now simply take the view number modulo the number of viable slots and that will give us
         // the chosen slot.
-        slots[view_number as usize % slots.len()]
+        Some(slots[view_number as usize % slots.len()])
     }
 }
 
