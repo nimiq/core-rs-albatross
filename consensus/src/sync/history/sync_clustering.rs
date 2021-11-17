@@ -103,13 +103,29 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         &mut self,
         mut epoch_ids: EpochIds<TNetwork::PeerType>,
     ) -> Option<Arc<ConsensusAgent<TNetwork::PeerType>>> {
+        // Read our current blockchain state.
+        let (our_epoch_id, our_epoch_number) = {
+            let blockchain = self.blockchain.read();
+            (
+                blockchain.election_head_hash(),
+                blockchain.election_head().epoch_number() as usize,
+            )
+        };
+
         // Truncate epoch_ids by epoch_number: Discard all epoch_ids prior to our accepted state.
-        let current_epoch = self.blockchain.read().election_head().epoch_number() as usize;
-        if !epoch_ids.ids.is_empty() && epoch_ids.first_epoch_number <= current_epoch {
+        if !epoch_ids.ids.is_empty() && epoch_ids.first_epoch_number <= our_epoch_number {
+            // Check that the epoch_id sent by the peer at our current epoch number corresponds to
+            // out accepted state. If it doesn't, the peer is on a "permanent" fork, so we ban it.
+            let peers_epoch_id = &epoch_ids.ids[our_epoch_number - epoch_ids.first_epoch_number];
+            if our_epoch_id != *peers_epoch_id {
+                // TODO Actually ban the peer.
+                return Some(epoch_ids.sender);
+            }
+
             epoch_ids.ids = epoch_ids
                 .ids
-                .split_off(current_epoch - epoch_ids.first_epoch_number + 1);
-            epoch_ids.first_epoch_number = current_epoch + 1;
+                .split_off(our_epoch_number - epoch_ids.first_epoch_number + 1);
+            epoch_ids.first_epoch_number = our_epoch_number + 1;
         }
 
         // TODO Sanity check: All of the remaining ids should be unknown
