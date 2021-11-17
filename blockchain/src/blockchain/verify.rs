@@ -37,9 +37,11 @@ impl Blockchain {
         }
 
         // Check if the block's immediate predecessor is part of the chain.
+        // TODO: if we don't have the parent block, we should request it from the network instead of
+        // erroring out immediately
         let prev_info = blockchain
             .get_chain_info(header.parent_hash(), false, txn_opt)
-            .unwrap();
+            .ok_or(PushError::Orphan)?;
 
         // Check that the block is a valid successor of its predecessor.
         if blockchain.get_next_block_type(Some(prev_info.head.block_number())) != header.ty() {
