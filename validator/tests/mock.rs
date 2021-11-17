@@ -396,8 +396,8 @@ async fn validator_can_catch_up() {
             // the hash needs to be the one the extended event returned.
             // (the chain itself i.e blockchain.header_hash() might have already progressed further)
             assert_eq!(block.header().hash(), hash);
-            // the view of the block needs to be 2
-            assert_eq!(block.header().view_number(), 2);
+            // the view of the block needs to be 2 or higher.
+            assert!(block.header().view_number() >= 2);
             // now in that case the validator producing this block has progressed the 2nd view change to view 2 without having seen the view change to view 1.
             return;
         }
