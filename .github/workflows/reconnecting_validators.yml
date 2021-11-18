@@ -36,7 +36,7 @@ jobs:
         command: build
     - name: Executes the 4 validators reconnecting scenario
       run: |          
-          bash devnet.sh
+          bash scripts/devnet/devnet.sh
     - name: Archive test results
       if: always()
       uses: actions/upload-artifact@v2
@@ -73,7 +73,7 @@ jobs:
         command: build
     - name: Executes the 4 validators reconnecting scenario erasing all their state
       run: |          
-          bash devnet.sh -e
+          bash scripts/devnet/devnet.sh -e
     - name: Archive test results
       if: always()
       uses: actions/upload-artifact@v2
@@ -110,7 +110,7 @@ jobs:
         command: build
     - name: Executes the 4 validators reconnecting scenario eraseing their database
       run: |          
-          bash devnet.sh -d
+          bash scripts/devnet/devnet.sh -d
     - name: Archive test results
       if: always()
       uses: actions/upload-artifact@v2
@@ -147,7 +147,7 @@ jobs:
         command: build
     - name: Executes the 4 validators scenario with the spammer
       run: |
-          bash devnet.sh -s 500
+          bash scripts/devnet/devnet.sh -s 500
     - name: Archive test results
       if: always()
       uses: actions/upload-artifact@v2

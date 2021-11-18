@@ -119,7 +119,7 @@ jobs:
         command: build
     - name: Executes the 4 validators reconnecting scenario
       run: |
-          bash devnet.sh -r 1
+          bash scripts/devnet/devnet.sh -r 1
     - name: Archive test results
       if: always()
       uses: actions/upload-artifact@v2

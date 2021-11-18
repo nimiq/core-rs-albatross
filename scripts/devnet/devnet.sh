@@ -114,6 +114,10 @@ while [ ! $# -eq 0 ]; do
     shift
 done
 
+# Get git repository root and switch to it
+gitroot=`git rev-parse --show-toplevel`
+pushd $gitroot > /dev/null
+
 #Create directory for logs
 mkdir -p  temp-logs/"$foldername"
 
@@ -140,7 +144,7 @@ do
 done
 
 echo "Building config files .."
-python3 scripts/devnet_create.py $MAX_VALIDATORS
+python3 scripts/devnet/python/devnet_create.py $MAX_VALIDATORS
 echo "Initializing genesis"
 cp -v /tmp/nimiq-devnet/dev-albatross.toml genesis/src/genesis/dev-albatross.toml
 echo "Compiling the code .."
@@ -270,3 +274,6 @@ done
 sleep 30s
 
 cleanup_exit
+
+# Restore the original directory
+popd > /dev/null
