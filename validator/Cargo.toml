@@ -43,6 +43,7 @@ nimiq-mempool = { path = "../mempool" }
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-primitives = { path = "../primitives" }
 nimiq-tendermint = { path = "../tendermint" }
+nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-transaction-builder = { path = "../transaction-builder" }
 nimiq-utils = { path = "../utils", features = [
     "observer",

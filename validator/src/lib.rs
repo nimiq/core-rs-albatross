@@ -1,4 +1,4 @@
-#![feature(map_first_last, btree_drain_filter)]
+#![feature(btree_drain_filter, drain_filter, map_first_last)]
 #![allow(dead_code)]
 
 #[macro_use]
