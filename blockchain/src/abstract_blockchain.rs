@@ -5,7 +5,7 @@ use nimiq_hash::Blake2bHash;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::policy;
 use nimiq_primitives::slots::{Validator, Validators};
-use nimiq_vrf::{Rng, VrfUseCase};
+use nimiq_vrf::{Rng, VrfSeed, VrfUseCase};
 
 use crate::{Blockchain, ChainInfo};
 
@@ -114,11 +114,13 @@ pub trait AbstractBlockchain {
     ) -> Option<ChainInfo>;
 
     /// Calculates the slot owner (represented as the validator plus the slot number) at a given
-    /// block number and view number.
-    fn get_slot_owner_at(
+    /// block number and view number with an optional previous seed.
+    /// If the seed is none the previous block is retrieved to get the seed instead.
+    fn get_slot_owner_with_seed(
         &self,
         block_number: u32,
         view_number: u32,
+        prev_seed: Option<VrfSeed>,
         txn_option: Option<&Transaction>,
     ) -> Option<(Validator, u16)> {
         // The genesis block doesn't technically have a view slot list.
@@ -135,8 +137,13 @@ pub trait AbstractBlockchain {
             .disabled_set;
 
         // Get the slot number for the current block.
-        let slot_number =
-            self.get_slot_owner_number_at(block_number, view_number, disabled_slots, txn_option)?;
+        let slot_number = self.get_slot_owner_number_with_seed(
+            block_number,
+            view_number,
+            disabled_slots,
+            prev_seed,
+            txn_option,
+        )?;
 
         // Get the current validators.
         // Note: We need to handle the case where `block_number()` is at an election block
@@ -167,21 +174,36 @@ pub trait AbstractBlockchain {
         Some((validator, slot_number))
     }
 
-    /// Calculate the slot owner number at a given block and view number.
+    /// Calculates the slot owner (represented as the validator plus the slot number) at a given
+    /// block number and view number.
+    #[inline]
+    fn get_slot_owner_at(
+        &self,
+        block_number: u32,
+        view_number: u32,
+        txn_option: Option<&Transaction>,
+    ) -> Option<(Validator, u16)> {
+        self.get_slot_owner_with_seed(block_number, view_number, None, txn_option)
+    }
+
+    /// Calculates the slot owner number at a given block number and view number with an optional previous seed.
+    /// If the seed is none the previous block is retrieved to get the seed instead.
     /// In combination with the active Validators, this can be used to retrieve the validator info.
-    fn get_slot_owner_number_at(
+    fn get_slot_owner_number_with_seed(
         &self,
         block_number: u32,
         view_number: u32,
         disabled_slots: BitSet,
+        seed: Option<VrfSeed>,
         txn_option: Option<&Transaction>,
     ) -> Option<u16> {
-        // Get the previous block's seed.
-        let seed = self
-            .get_block_at(block_number - 1, false, txn_option)?
-            .seed()
-            .clone();
-
+        let seed = seed.or_else(|| {
+            Some(
+                self.get_block_at(block_number - 1, false, txn_option)?
+                    .seed()
+                    .clone(),
+            )
+        })?;
         // RNG for slot selection
         let mut rng = seed.rng(VrfUseCase::SlotSelection);
 
@@ -210,6 +232,25 @@ pub trait AbstractBlockchain {
         // Now simply take the view number modulo the number of viable slots and that will give us
         // the chosen slot.
         Some(slots[view_number as usize % slots.len()])
+    }
+
+    /// Calculate the slot owner number at a given block and view number.
+    /// In combination with the active Validators, this can be used to retrieve the validator info.
+    #[inline]
+    fn get_slot_owner_number_at(
+        &self,
+        block_number: u32,
+        view_number: u32,
+        disabled_slots: BitSet,
+        txn_option: Option<&Transaction>,
+    ) -> Option<u16> {
+        self.get_slot_owner_number_with_seed(
+            block_number,
+            view_number,
+            disabled_slots,
+            None,
+            txn_option,
+        )
     }
 }
 

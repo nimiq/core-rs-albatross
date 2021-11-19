@@ -136,9 +136,11 @@ impl Blockchain {
             let view_number = block.view_number();
 
             for micro_block in micro_blocks.drain(..).map(|block| block.unwrap_micro()) {
-                // If there's another micro block set to this view number, we
+                // If there's another micro block set to this view number, which also has the same VrfSeed we
                 // notify the fork event.
-                if view_number == micro_block.header.view_number {
+                if view_number == micro_block.header.view_number
+                    && block.seed() == &micro_block.header.seed
+                {
                     let micro_header2 = micro_block.header;
                     let justification2 = micro_block
                         .justification
@@ -151,6 +153,7 @@ impl Blockchain {
                         header2: micro_header2,
                         justification1: *justification1,
                         justification2,
+                        prev_vrf_seed: prev_info.head.seed().clone(),
                     };
 
                     this.fork_notifier.notify(ForkEvent::Detected(proof));

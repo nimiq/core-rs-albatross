@@ -44,6 +44,10 @@ fn it_can_produce_micro_blocks() {
     let producer = BlockProducer::new(keypair.clone());
 
     let bc = blockchain.upgradable_read();
+
+    // Store seed before pushing a block as it is needed for the fork proof.
+    let prev_vrf_seed = bc.head().seed().clone();
+
     // #1.0: Empty standard micro block
     let block = producer.next_micro_block(&bc, bc.time.now(), 0, None, vec![], vec![], vec![0x41]);
 
@@ -66,6 +70,7 @@ fn it_can_produce_micro_blocks() {
             header2,
             justification1,
             justification2,
+            prev_vrf_seed,
         }
     };
 

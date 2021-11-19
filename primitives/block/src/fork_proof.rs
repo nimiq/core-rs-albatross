@@ -5,6 +5,7 @@ use beserial::{Deserialize, Serialize};
 use nimiq_bls::{CompressedSignature, PublicKey};
 use nimiq_hash::{Blake2bHash, Hash, HashOutput, SerializeContent};
 use nimiq_primitives::policy;
+use nimiq_vrf::VrfSeed;
 
 use crate::MicroHeader;
 
@@ -21,13 +22,15 @@ pub struct ForkProof {
     pub justification1: CompressedSignature,
     /// Justification for header number 2.
     pub justification2: CompressedSignature,
+    /// Vrf seed of the previous block. Used to determine the slot.
+    pub prev_vrf_seed: VrfSeed,
 }
 
 impl ForkProof {
     /// The size of a single fork proof. This is the maximum possible size, since the Micro header
     /// has a variable size (because of the extra data field) and here we assume that the header
-    /// has the maximum size.
-    pub const SIZE: usize = 2 * MicroHeader::MAX_SIZE + 2 * CompressedSignature::SIZE;
+    /// has the maximum size. VrfSeed is a CompressedSignature.
+    pub const SIZE: usize = 2 * MicroHeader::MAX_SIZE + 3 * CompressedSignature::SIZE;
 
     /// Verify the validity of a fork proof.
     pub fn verify(&self, public_key: &PublicKey) -> Result<(), ForkProofError> {
@@ -36,11 +39,17 @@ impl ForkProof {
             return Err(ForkProofError::SameHeader);
         }
 
-        // Check that the headers have equal block numbers and view numbers.
+        // Check that the headers have equal block numbers and view numbers as well as seeds.
         if self.header1.block_number != self.header2.block_number
             || self.header1.view_number != self.header2.view_number
+            || self.header1.seed != self.header2.seed
         {
             return Err(ForkProofError::SlotMismatch);
+        }
+
+        if let Err(e) = self.header1.seed.verify(&self.prev_vrf_seed, public_key) {
+            error!("ForkProof: VrfSeed failed to verify: {:?}", e);
+            return Err(ForkProofError::InvalidJustification);
         }
 
         // Check that the justifications are valid.

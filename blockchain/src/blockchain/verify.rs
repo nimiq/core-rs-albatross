@@ -259,24 +259,25 @@ impl Blockchain {
                     }
 
                     // Get intended slot owner for that block.
-                    let (validator, _) = self
-                        .get_slot_owner_at(
-                            proof.header1.block_number,
-                            proof.header1.view_number,
-                            txn_opt,
-                        )
-                        .expect("Couldn't calculate the slot owner!");
+                    if let Some((validator, _)) = self.get_slot_owner_with_seed(
+                        proof.header1.block_number,
+                        proof.header1.view_number,
+                        Some(proof.prev_vrf_seed.clone()),
+                        txn_opt,
+                    ) {
+                        // Verify fork proof.
+                        if let Err(e) = proof.verify(&validator.public_key.uncompress_unchecked()) {
+                            warn!("Rejecting block - Bad fork proof: {:?}", e);
+                            return Err(PushError::InvalidBlock(BlockError::InvalidForkProof));
+                        }
 
-                    // Verify fork proof.
-                    if proof
-                        .verify(&validator.public_key.uncompress_unchecked())
-                        .is_err()
-                    {
-                        warn!("Rejecting block - Bad fork proof: invalid owner signature");
+                        previous_proof = Some(proof);
+                    } else {
+                        warn!(
+                            "Rejecting block - Bad fork proof: Couldn't calculate the slot owner"
+                        );
                         return Err(PushError::InvalidBlock(BlockError::InvalidForkProof));
                     }
-
-                    previous_proof = Some(proof);
                 }
 
                 // Verify transactions.
