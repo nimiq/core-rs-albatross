@@ -63,6 +63,7 @@ pub struct Consensus<N: Network> {
     block_queue: BlockQueue<N, BlockRequestComponent<N::PeerType>>,
 
     /// A Delay which exists purely for the waker on its poll to reactivate the task running Consensus::poll
+    /// FIXME Remove this
     next_execution_timer: Option<Pin<Box<Sleep>>>,
 
     events: BroadcastSender<ConsensusEvent>,
@@ -80,12 +81,14 @@ impl<N: Network> Consensus<N> {
     /// Minimum number of block announcements extending the chain for consensus to be established.
     const MIN_BLOCKS_ESTABLISHED: usize = 5;
 
-    /// Timeout after which head requests will be performed again to determine consensus established state.
-    const HEAD_REQUESTS_TIMEOUT: Duration = Duration::from_secs(10);
+    /// Timeout after which head requests will be performed (again) to determine consensus
+    /// established state and to advance the chain.
+    const HEAD_REQUESTS_TIMEOUT: Duration = Duration::from_secs(5);
 
     /// Timeout after which the consensus is polled after it ran last
     ///
     /// TODO: Set appropriate duration
+    /// FIXME Remove this
     const CONSENSUS_POLL_TIMER: Duration = Duration::from_secs(1);
 
     pub async fn from_network(
@@ -198,7 +201,7 @@ impl<N: Network> Consensus<N> {
     /// of the conditions above is true.
     /// Any unknown blocks resulting of the head check are handled similarly as block announcements
     /// via the block queue.
-    fn set_established(
+    fn check_established(
         &mut self,
         finished_head_request: Option<HeadRequestsResult<N::PeerType>>,
     ) -> Option<ConsensusEvent> {
@@ -247,19 +250,16 @@ impl<N: Network> Consensus<N> {
 
     /// Requests heads from connected peers in a predefined interval.
     fn request_heads(&mut self) {
-        // If we do not have consensus, there's no ongoing head request,
-        // and we have at least one peer, check whether we should start a new one.
-        if !self.is_established()
-            && self.head_requests.is_none()
-            && (self.num_agents() > 0 || self.min_peers == 0)
-        {
+        // If there's no ongoing head request and we have at least one peer, check whether we should
+        // start a new one.
+        if self.head_requests.is_none() && (self.num_agents() > 0 || self.min_peers == 0) {
             // This is the case if `head_requests_time` is unset or the timeout is hit.
             let should_start_request = self
                 .head_requests_time
                 .map(|time| time.elapsed() >= Self::HEAD_REQUESTS_TIMEOUT)
                 .unwrap_or(true);
             if should_start_request {
-                debug!("Trying to establish consensus, initiating head requests.");
+                debug!("Initiating head requests");
                 self.head_requests = Some(HeadRequests::new(
                     self.block_queue.peers(),
                     Arc::clone(&self.blockchain),
@@ -279,6 +279,9 @@ impl<N: Network> Future for Consensus<N> {
             match event {
                 BlockQueueEvent::AcceptedAnnouncedBlock(_) => {
                     debug!("Now at block #{}", self.blockchain.read().block_number());
+
+                    // Reset the head request timer when an announced block was accepted.
+                    self.head_requests_time = Some(Instant::now());
                 }
                 BlockQueueEvent::AcceptedBufferedBlock(_, remaining_in_buffer) => {
                     if !self.is_established() {
@@ -287,6 +290,10 @@ impl<N: Network> Future for Consensus<N> {
                             self.blockchain.read().block_number(),
                             remaining_in_buffer
                         );
+
+                        if remaining_in_buffer == 0 {
+                            self.head_requests_time = None;
+                        }
                     }
                 }
                 BlockQueueEvent::ReceivedMissingBlocks(_, _) => {
@@ -296,15 +303,14 @@ impl<N: Network> Future for Consensus<N> {
                         self.head_requests_time = None;
                     }
                 }
-
                 BlockQueueEvent::RejectedBlock(hash) => {
-                    debug!("rejected block hash{}", hash);
+                    warn!("Rejected block {}", hash);
                 }
             }
         }
 
         // Check consensus established state on changes.
-        if let Some(event) = self.set_established(None) {
+        if let Some(event) = self.check_established(None) {
             self.events.send(event).ok(); // Ignore result.
         }
 
@@ -320,7 +326,7 @@ impl<N: Network> Future for Consensus<N> {
                 }
 
                 // Update established state using the result.
-                if let Some(event) = self.set_established(Some(result)) {
+                if let Some(event) = self.check_established(Some(result)) {
                     self.events.send(event).ok(); // Ignore result.
                 }
             }
