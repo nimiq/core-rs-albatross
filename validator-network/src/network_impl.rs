@@ -5,11 +5,12 @@ use std::{
 };
 
 use async_trait::async_trait;
-use beserial::{Deserialize, Serialize};
 use futures::{future::join_all, lock::Mutex, stream::BoxStream, StreamExt};
 
+use beserial::{Deserialize, Serialize};
 use nimiq_bls::{CompressedPublicKey, PublicKey, SecretKey, Signature};
 use nimiq_network_interface::network::{MsgAcceptance, Network, Topic};
+use nimiq_network_interface::prelude::NetworkEvent;
 use nimiq_network_interface::{message::Message, peer::Peer};
 use nimiq_utils::tagged_signing::TaggedSignable;
 
@@ -85,7 +86,7 @@ pub struct State<TPeerId> {
 pub struct ValidatorNetworkImpl<N>
 where
     N: Network,
-    <<N as Network>::PeerType as Peer>::Id: Send + Sync + Serialize + Deserialize,
+    <N::PeerType as Peer>::Id: Send + Sync + Serialize + Deserialize,
 {
     network: Arc<N>,
     state: Mutex<State<PeerId<N>>>,
@@ -94,7 +95,7 @@ where
 impl<N> ValidatorNetworkImpl<N>
 where
     N: Network,
-    <<N as Network>::PeerType as Peer>::Id: Send + Sync + Serialize + Deserialize + Clone,
+    <N::PeerType as Peer>::Id: Send + Sync + Serialize + Deserialize + Clone,
 {
     pub fn new(network: Arc<N>) -> Self {
         Self {
@@ -104,6 +105,35 @@ where
                 validator_peer_id_cache: BTreeMap::new(),
             }),
         }
+    }
+
+    async fn dial_peer(
+        &self,
+        peer_id: PeerId<N>,
+    ) -> Result<Arc<N::PeerType>, NetworkError<N::Error>> {
+        let (peers, mut event_stream) = self.network.get_peer_updates();
+
+        if let Some(peer) = peers.into_iter().find(|peer| peer.id() == peer_id) {
+            return Ok(peer);
+        }
+
+        self.network.dial_peer(peer_id.clone()).await?;
+
+        let future = async move {
+            loop {
+                match event_stream.next().await {
+                    Some(Ok(NetworkEvent::PeerJoined(peer))) if peer.id() == peer_id => {
+                        break Ok(peer)
+                    }
+                    Some(Err(_)) | None => break Err(NetworkError::Offline), // TODO Error type?
+                    _ => {}
+                }
+            }
+        };
+
+        tokio::time::timeout(Duration::from_secs(5), future)
+            .await
+            .map_err(|_| NetworkError::Unreachable)?
     }
 
     /// Looks up the peer ID for a validator public key in the DHT.
@@ -165,12 +195,12 @@ where
 impl<N> ValidatorNetwork for ValidatorNetworkImpl<N>
 where
     N: Network,
-    <<N as Network>::PeerType as Peer>::Id: Send + Sync + Serialize + Deserialize + Clone,
-    <N as Network>::Error: Send,
+    <N::PeerType as Peer>::Id: Send + Sync + Serialize + Deserialize + Clone,
+    N::Error: Send,
 {
-    type Error = NetworkError<<N as Network>::Error>;
-    type PeerType = <N as Network>::PeerType;
-    type PubsubId = <N as Network>::PubsubId;
+    type Error = NetworkError<N::Error>;
+    type PeerType = N::PeerType;
+    type PubsubId = N::PubsubId;
 
     /// Tells the validator network the validator keys for the current set of active validators. The keys must be
     /// ordered, such that the k-th entry is the validator with ID k.
@@ -196,7 +226,7 @@ where
     async fn get_validator_peer(
         &self,
         validator_id: usize,
-    ) -> Result<Option<Arc<<N as Network>::PeerType>>, Self::Error> {
+    ) -> Result<Option<Arc<N::PeerType>>, Self::Error> {
         let peer_id = self.get_validator_peer_id(validator_id).await?;
         Ok(self.network.get_peer(peer_id))
     }
@@ -235,15 +265,11 @@ where
                             .or_insert_with(|| peer_id.clone());
 
                         // try to get the peer for the peer_id. If it does not exist it should be dialed
-                        if let Some(peer) = self.network.get_peer(peer_id) {
+                        if let Some(peer) = self.network.get_peer(peer_id.clone()) {
                             peer
                         } else {
-                            // TODO dial the peer
-                            log::trace!(
-                                "send_to failed: Not connected to validator = {}",
-                                validator_id
-                            );
-                            return Err(NetworkError::UnknownValidator(validator_id));
+                            log::debug!("Not connected to validator {} @ {:?}, dialing...", validator_id, peer_id);
+                            self.dial_peer(peer_id).await?
                         }
                     } else {
                         log::error!(
