@@ -59,7 +59,7 @@ impl Default for ConnectionPoolConfig {
             peer_count_desired: 12,
             peer_count_max: 4000,
             peer_count_per_ip_max: 20,
-            peer_count_per_subnet_max: 10,
+            peer_count_per_subnet_max: 20,
             ipv4_subnet_mask: 24,
             ipv6_subnet_mask: 96,
             dialing_count_max: 3,
@@ -478,7 +478,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
         let mut close_connection = false;
 
         if self.banned.get(&ip).is_some() {
-            debug!("IP is banned, {}", ip);
+            log::debug!("IP is banned, {}", ip);
             close_connection = true;
         }
         if self.config.peer_count_per_ip_max
@@ -489,19 +489,19 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
                 .unwrap_or(&0)
                 .saturating_add(1)
         {
-            debug!("Max peer connections per IP limit reached, {}", ip);
+            log::debug!("Max peer connections per IP limit reached, {}", ip);
             close_connection = true;
         }
         if ip.is_ipv4()
             && (self.config.peer_count_per_subnet_max < self.limits.ipv4_count.saturating_add(1))
         {
-            debug!("Max peer connections per IPv4 subnet limit reached");
+            log::debug!("Max peer connections per IPv4 subnet limit reached");
             close_connection = true;
         }
         if ip.is_ipv6()
             && (self.config.peer_count_per_subnet_max < self.limits.ipv6_count.saturating_add(1))
         {
-            debug!("Max peer connections per IPv6 subnet limit reached");
+            log::debug!("Max peer connections per IPv6 subnet limit reached");
             close_connection = true;
         }
         if self.config.peer_count_max
@@ -511,7 +511,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
                 .saturating_add(self.limits.ipv6_count)
                 .saturating_add(1)
         {
-            debug!("Max peer connections limit reached");
+            log::debug!("Max peer connections limit reached");
             close_connection = true;
         }
 

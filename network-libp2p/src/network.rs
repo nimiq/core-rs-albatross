@@ -28,7 +28,7 @@ use libp2p::{
     identity::Keypair,
     kad::{GetRecordOk, KademliaEvent, QueryId, QueryResult, Quorum, Record},
     noise,
-    swarm::{AddressScore, SwarmBuilder, SwarmEvent},
+    swarm::{SwarmBuilder, SwarmEvent},
     tcp, websocket, yamux, Multiaddr, PeerId, Swarm, Transport,
 };
 use tokio::sync::broadcast;
@@ -280,7 +280,7 @@ impl Network {
 
                 if let Some(dial_errors) = concurrent_dial_errors {
                     for (addr, error) in dial_errors {
-                        log::debug!(
+                        tracing::debug!(
                             "Failed to reach address: {}, peer_id={:?}, error={:?}",
                             addr,
                             peer_id,
@@ -452,14 +452,6 @@ impl Network {
                                     info.observed_addr,
                                     info
                                 );
-
-                                // Add observed addresses to our own peer contact
-                                Swarm::add_external_address(
-                                    swarm,
-                                    info.observed_addr.clone(),
-                                    AddressScore::Infinite,
-                                );
-                                swarm.behaviour_mut().add_own_address(info.observed_addr);
 
                                 // Save identified peer listen addresses
                                 for listen_addr in info.listen_addrs {
@@ -666,7 +658,7 @@ impl Network {
             .clone()
             .send(NetworkAction::ListenOn { listen_addresses })
             .await
-            .map_err(|e| log::error!("Failed to send NetworkAction::ListenOnAddress: {:?}", e))
+            .map_err(|e| tracing::error!("Failed to send NetworkAction::ListenOnAddress: {:?}", e))
             .ok();
     }
 
@@ -675,7 +667,7 @@ impl Network {
             .clone()
             .send(NetworkAction::StartConnecting)
             .await
-            .map_err(|e| log::error!("Failed to send NetworkAction::StartConnecting: {:?}", e))
+            .map_err(|e| tracing::error!("Failed to send NetworkAction::StartConnecting: {:?}", e))
             .ok();
     }
 }
@@ -1095,6 +1087,70 @@ mod tests {
         (net1, net2)
     }
 
+    async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
+        let mut networks = Vec::new();
+        let mut addresses = Vec::new();
+
+        // Create all the networks and addresses
+        for peer in 0..n_peers {
+            let addr: Multiaddr = format!("/ip4/127.0.0.1/tcp/{}/ws", 9000 + peer)
+                .parse()
+                .unwrap();
+
+            tracing::debug!("Creating network: {}", peer);
+
+            addresses.push(addr.clone());
+
+            let network =
+                Network::new(Arc::new(OffsetTime::new()), network_config(addr.clone())).await;
+            network.listen_on(vec![addr.clone()]).await;
+
+            tracing::debug!(address = ?addr, peer_id = ?network.local_peer_id, "Network {}",peer);
+            networks.push(network);
+        }
+
+        // Connect them
+        for peer in 1..n_peers {
+            // Dial the previous peer
+            tracing::debug!("Dialing Peer: {}", peer);
+            networks[peer as usize]
+                .dial_address(addresses[(peer - 1) as usize].clone())
+                .await
+                .unwrap();
+            let timeout = tokio::time::Duration::from_secs(1);
+            tokio::time::sleep(timeout).await;
+        }
+
+        // Wait for the connections to settle
+        let timeout = tokio::time::Duration::from_secs(1);
+        tokio::time::sleep(timeout).await;
+
+        // Verify that each network has all the other peers connected
+        for peer in 1..n_peers {
+            assert_eq!(
+                networks[peer as usize]
+                    .network_info()
+                    .await
+                    .unwrap()
+                    .num_peers(),
+                n_peers - 1
+            );
+        }
+
+        networks
+    }
+
+    #[tokio::test]
+    async fn connections_stress_and_reconnect() {
+        // pretty_env_logger::init();
+        // tracing_subscriber::fmt::init();
+
+        let peers: usize = 15;
+        let networks = create_network_with_n_peers(peers).await;
+
+        assert_eq!(peers, networks.len());
+    }
+
     #[tokio::test]
     async fn two_networks_can_connect() {
         let (net1, net2) = create_connected_networks().await;
@@ -1182,20 +1238,19 @@ mod tests {
         }
     }
 
-    #[ignore]
     #[tokio::test]
     async fn connections_are_properly_closed() {
         // tracing_subscriber::fmt::init();
 
         let (net1, net2) = create_connected_networks().await;
 
-        //let peer1 = net2.get_peer(net1.local_peer_id().clone()).unwrap();
+        let peer1 = net2.get_peer(*net1.local_peer_id()).unwrap();
         let peer2 = net1.get_peer(*net2.local_peer_id()).unwrap();
 
         let mut events1 = net1.subscribe_events();
         let mut events2 = net2.subscribe_events();
 
-        //peer1.close(CloseReason::Other);
+        peer1.close(CloseReason::Other);
         peer2.close(CloseReason::Other);
         tracing::debug!("closed peer");
 

@@ -127,7 +127,10 @@ impl NimiqBehaviour {
         );
 
         // Gossipsub behaviour
-        let params = PeerScoreParams::default();
+        let params = PeerScoreParams {
+            ip_colocation_factor_threshold: 20.0,
+            ..Default::default()
+        };
         let thresholds = PeerScoreThresholds::default();
         let update_scores = tokio::time::interval(params.decay_interval);
         let mut gossipsub = Gossipsub::new(MessageAuthenticity::Author(peer_id), config.gossipsub)
@@ -184,17 +187,12 @@ impl NimiqBehaviour {
 
     pub fn add_peer_address(&mut self, peer_id: PeerId, address: Multiaddr) {
         // Add address to the DHT if it's reachable outside of local nodes
-        self.dht.add_address(&peer_id, address.clone());
+        self.dht.add_address(&peer_id, address);
     }
 
     pub fn remove_peer_address(&mut self, peer_id: PeerId, address: Multiaddr) {
         // Remove address from the DHT
         self.dht.remove_address(&peer_id, &address);
-    }
-
-    pub fn add_own_address(&mut self, address: Multiaddr) {
-        // Add own address to the peer contact book
-        self.contacts.write().add_own_addresses(vec![address]);
     }
 
     fn emit_event<E>(&mut self, event: E)
