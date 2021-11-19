@@ -8,6 +8,7 @@ use keyed_priority_queue::KeyedPriorityQueue;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 
 use beserial::Serialize;
+use nimiq_account::{Account, BasicAccount};
 use nimiq_block::Block;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_hash::{Blake2bHash, Hash};
@@ -205,8 +206,28 @@ impl Mempool {
                         // This an unknown transaction from a known sender, we need to update our
                         // senders balance and some transactions could become invalid
 
-                        // Lets read the balance from the blockchain
-                        let sender_balance = blockchain.get_account(&tx.sender).unwrap().balance();
+                        //Obtain the sender account. Signaling txns from adopted blocks should be allowed
+                        let sender_account =
+                            match blockchain.get_account(&tx.sender).or_else(|| {
+                                if tx.total_value() != Coin::ZERO {
+                                    None
+                                } else {
+                                    Some(Account::Basic(BasicAccount {
+                                        balance: Coin::ZERO,
+                                    }))
+                                }
+                            }) {
+                                None => {
+                                    log::debug!(
+                                        "There is no account for this sender in the blockchain {}",
+                                        tx.sender.to_user_friendly_address()
+                                    );
+                                    continue;
+                                }
+                                Some(account) => account,
+                            };
+
+                        let sender_balance = sender_account.balance();
 
                         // Check if the sender still has enough funds to pay for all pending
                         // transactions.
