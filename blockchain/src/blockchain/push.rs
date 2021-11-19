@@ -292,7 +292,7 @@ impl Blockchain {
         this.state.head_hash = block_hash.clone();
 
         // Downgrade the lock again as the nofity listeners might want to acquire read access themselves.
-        let this = RwLockWriteGuard::downgrade(this);
+        let this = RwLockWriteGuard::downgrade_to_upgradable(this);
 
         if is_election_block {
             this.notifier
@@ -492,7 +492,7 @@ impl Blockchain {
         this.state.head_hash = fork_chain[0].0.clone();
 
         // Downgrade the lock again as the notified listeners might want to acquire read themselves.
-        let this = RwLockWriteGuard::downgrade(this);
+        let this = RwLockWriteGuard::downgrade_to_upgradable(this);
 
         let mut reverted_blocks = Vec::with_capacity(revert_chain.len());
         for (hash, chain_info) in revert_chain.into_iter().rev() {

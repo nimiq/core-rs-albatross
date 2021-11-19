@@ -324,7 +324,7 @@ impl Blockchain {
             this.state.current_slots = macro_block.get_validators();
         }
 
-        let this = RwLockWriteGuard::downgrade(this);
+        let this = RwLockWriteGuard::downgrade_to_upgradable(this);
 
         if is_election_block {
             this.notifier
