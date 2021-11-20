@@ -45,8 +45,7 @@ struct ConnectionPoolConfig {
     peer_count_desired: usize,
     peer_count_max: usize,
     peer_count_per_ip_max: usize,
-    outbound_peer_count_per_subnet_max: usize,
-    inbound_peer_count_per_subnet_max: usize,
+    peer_count_per_subnet_max: usize,
     ipv4_subnet_mask: u8,
     ipv6_subnet_mask: u8,
     dialing_count_max: usize,
@@ -60,8 +59,7 @@ impl Default for ConnectionPoolConfig {
             peer_count_desired: 12,
             peer_count_max: 4000,
             peer_count_per_ip_max: 20,
-            outbound_peer_count_per_subnet_max: 2,
-            inbound_peer_count_per_subnet_max: 10,
+            peer_count_per_subnet_max: 10,
             ipv4_subnet_mask: 24,
             ipv6_subnet_mask: 96,
             dialing_count_max: 3,
@@ -469,11 +467,6 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
             address
         );
 
-        let subnet_limit = match endpoint {
-            ConnectedPoint::Dialer { .. } => self.config.outbound_peer_count_per_subnet_max,
-            ConnectedPoint::Listener { .. } => self.config.inbound_peer_count_per_subnet_max,
-        };
-
         let ip = match address.iter().next() {
             Some(Protocol::Ip4(ip)) => {
                 IpNetwork::new_truncate(ip, self.config.ipv4_subnet_mask).unwrap()
@@ -490,21 +483,36 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
             debug!("IP is banned, {}", ip);
             close_connection = true;
         }
-        if self.limits.ip_count.get(&ip).is_some()
-            && self.config.peer_count_per_ip_max < *self.limits.ip_count.get(&ip).unwrap() + 1
+        if self.config.peer_count_per_ip_max
+            < self
+                .limits
+                .ip_count
+                .get(&ip)
+                .unwrap_or(&0)
+                .saturating_add(1)
         {
             debug!("Max peer connections per IP limit reached, {}", ip);
             close_connection = true;
         }
-        if ip.is_ipv4() && (subnet_limit < self.limits.ipv4_count + 1) {
+        if ip.is_ipv4()
+            && (self.config.peer_count_per_subnet_max < self.limits.ipv4_count.saturating_add(1))
+        {
             debug!("Max peer connections per IPv4 subnet limit reached");
             close_connection = true;
         }
-        if ip.is_ipv6() && (subnet_limit < self.limits.ipv6_count + 1) {
+        if ip.is_ipv6()
+            && (self.config.peer_count_per_subnet_max < self.limits.ipv6_count.saturating_add(1))
+        {
             debug!("Max peer connections per IPv6 subnet limit reached");
             close_connection = true;
         }
-        if self.config.peer_count_max < self.limits.ipv4_count + self.limits.ipv6_count + 1 {
+        if self.config.peer_count_max
+            < self
+                .limits
+                .ipv4_count
+                .saturating_add(self.limits.ipv6_count)
+                .saturating_add(1)
+        {
             debug!("Max peer connections limit reached");
             close_connection = true;
         }
@@ -520,10 +528,15 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
                 });
         } else {
             // Increment peer counts per IP
-            *self.limits.ip_count.entry(ip).or_insert(0) += 1;
+            let value = self.limits.ip_count.entry(ip).or_insert(0);
+            *value = value.saturating_add(1);
             match ip {
-                IpNetwork::V4(..) => self.limits.ipv4_count += 1,
-                IpNetwork::V6(..) => self.limits.ipv6_count += 1,
+                IpNetwork::V4(..) => {
+                    self.limits.ipv4_count = self.limits.ipv4_count.saturating_add(1)
+                }
+                IpNetwork::V6(..) => {
+                    self.limits.ipv6_count = self.limits.ipv6_count.saturating_add(1)
+                }
             };
 
             self.addresses.mark_connected(address.clone());
@@ -550,7 +563,8 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
         };
 
         // Decrement IP counters
-        *self.limits.ip_count.entry(ip).or_insert(1) -= 1;
+        let value = self.limits.ip_count.entry(ip).or_insert(1);
+        *value = value.saturating_sub(1);
         if *self.limits.ip_count.get(&ip).unwrap() == 0 {
             self.limits.ip_count.remove(&ip);
         }
