@@ -307,6 +307,7 @@ fn create_view_change_update(
     .with_tag(view_change)
 }
 
+#[ignore]
 #[tokio::test]
 async fn validator_can_catch_up() {
     // remove first block producer in order to trigger a view change. Never connect him again
