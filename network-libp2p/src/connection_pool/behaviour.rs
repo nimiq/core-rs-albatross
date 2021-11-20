@@ -336,21 +336,6 @@ impl ConnectionPoolBehaviour {
         self.maintain_peers();
     }
 
-    pub fn create_peer(&mut self, peer_id: PeerId, outbound: bool) {
-        // Send an event to the handler that tells it if this is an inbound or outbound connection, and the registered
-        // messages handlers, that receive from all peers.
-        self.actions
-            .push_back(NetworkBehaviourAction::NotifyHandler {
-                peer_id,
-                handler: NotifyHandler::Any,
-                event: HandlerInEvent::PeerConnected {
-                    peer_id,
-                    outbound,
-                    receive_from_all: self.message_receivers.clone(),
-                },
-            });
-    }
-
     pub fn _ban_ip(&mut self, ip: IpNetwork) {
         if self
             .banned
@@ -450,10 +435,23 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
     fn inject_connection_established(
         &mut self,
         peer_id: &PeerId,
-        _connection_id: &ConnectionId,
+        connection_id: &ConnectionId,
         endpoint: &ConnectedPoint,
         failed_addresses: Option<&Vec<Multiaddr>>,
     ) {
+        // Send an event to the handler that tells it if this is an inbound or outbound connection, and the registered
+        // messages handlers, that receive from all peers.
+        self.actions
+            .push_back(NetworkBehaviourAction::NotifyHandler {
+                peer_id: *peer_id,
+                handler: NotifyHandler::One(*connection_id),
+                event: HandlerInEvent::PeerConnected {
+                    peer_id: *peer_id,
+                    outbound: endpoint.is_dialer(),
+                    receive_from_all: self.message_receivers.clone(),
+                },
+            });
+
         if let Some(addresses) = failed_addresses {
             for address in addresses {
                 self.addresses.mark_failed(address.clone());

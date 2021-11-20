@@ -278,12 +278,6 @@ impl Network {
                     num_established
                 );
 
-                // Create Peer
-                swarm
-                    .behaviour_mut()
-                    .pool
-                    .create_peer(peer_id, endpoint.is_dialer());
-
                 if let Some(dial_errors) = concurrent_dial_errors {
                     for (addr, error) in dial_errors {
                         log::debug!(
