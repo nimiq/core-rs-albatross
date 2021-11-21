@@ -344,10 +344,13 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
             debug!("Adding new cluster: {:#?}", cluster);
             for agent in cluster.peers() {
                 if let Some(agent) = Weak::upgrade(agent) {
-                    let pair = self
-                        .agents
-                        .get_mut(&agent.peer)
-                        .expect("Agent should be present");
+                    let pair = self.agents.get_mut(&agent.peer).unwrap_or_else(|| {
+                        panic!(
+                            "Agent should be present {:?} cluster {}",
+                            agent.peer.id(),
+                            cluster.id
+                        )
+                    });
                     pair.1 += 1;
                 }
             }
@@ -423,17 +426,23 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         result: SyncClusterResult,
     ) {
         if result != SyncClusterResult::NoMoreEpochs {
-            debug!("Failed to push epoch: {:?}", result);
+            debug!(
+                "Failed to push epoch from cluster {}: {:?}",
+                cluster.id, result
+            );
         }
 
         // Decrement the cluster count for all peers in the cluster.
         for peer in cluster.peers() {
             if let Some(agent) = Weak::upgrade(peer) {
                 let cluster_count = {
-                    let pair = self
-                        .agents
-                        .get_mut(&agent.peer)
-                        .expect("Agent should be present");
+                    let pair = self.agents.get_mut(&agent.peer).unwrap_or_else(|| {
+                        panic!(
+                            "Agent should be present {:?} cluster {}",
+                            agent.peer.id(),
+                            cluster.id
+                        )
+                    });
                     pair.1 -= 1;
                     pair.1
                 };
