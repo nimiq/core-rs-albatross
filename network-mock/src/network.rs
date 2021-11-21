@@ -159,6 +159,13 @@ impl MockNetwork {
 
         self.is_connected.store(false, Ordering::SeqCst);
     }
+
+    /// Disconnects from all peers and deletes this peer from the hub to prevent future connections
+    /// to or from it.
+    pub fn shutdown(&self) {
+        self.disconnect();
+        self.hub.lock().peer_maps.remove(&self.address);
+    }
 }
 
 #[async_trait]

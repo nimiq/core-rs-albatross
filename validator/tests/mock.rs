@@ -243,7 +243,7 @@ async fn four_validators_can_view_change() {
 
     // Disconnect the next block producer.
     let validator = validator_for_slot(&validators, 1, 0);
-    validator.consensus.network.disconnect();
+    validator.consensus.network.shutdown();
 
     // Listen for blockchain events from the new block producer (after view change).
     let validator = validator_for_slot(&validators, 1, 1);
