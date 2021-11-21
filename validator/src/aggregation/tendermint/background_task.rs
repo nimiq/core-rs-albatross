@@ -2,9 +2,10 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
 use std::task::Poll;
 
-use futures::{Future, StreamExt};
+use futures::{ready, Future, StreamExt};
 
 use nimiq_block::TendermintStep;
+use nimiq_handel::contribution::AggregatableContribution;
 use nimiq_handel::identity::WeightRegistry;
 use nimiq_primitives::policy;
 use nimiq_tendermint::AggregationResult;
@@ -42,6 +43,153 @@ impl<N: ValidatorNetwork + 'static> BackgroundTask<N> {
             validator_registry,
         }
     }
+
+    fn on_new_round(&mut self, next_round: u32) {
+        // This needs to be forwarded to a waiting current_aggregate sink if there is one.
+        // If it exists, the highest round received in a TendermintAggregationEvent::NewRound(n)
+        // must be kept such that it can be send to the next current_aggregate sink if it by then is
+        // still relevant.
+        let current_aggregate = self
+            .current_aggregate
+            .write()
+            .expect("current_aggregate lock could not be acquired")
+            .take();
+
+        match current_aggregate {
+            // If there is a current ongoing aggregation it is retrieved.
+            Some(CurrentAggregation { sender, round, .. }) => {
+                // Check that the next_round is actually higher than the round which is awaiting a result.
+                if round < next_round {
+                    // Send the me NewRound event through the channel to the currently awaited
+                    // aggregation for it to resolve.
+                    if let Err(e) = sender.send(AggregationResult::NewRound(next_round)) {
+                        error!(
+                            "Sending of AggregationEvent::NewRound({}) failed: {:?}",
+                            round, e
+                        );
+                    }
+                } else {
+                    // Otherwise this event is meaningless and is dropped, which in reality should
+                    // never occur. Log it for debugging purposes.
+                    debug!(
+                        "Received NewRound({}), but current_aggregate is in round {}",
+                        next_round, round
+                    );
+                }
+            }
+            // If there is no caller awaiting a result
+            None => {
+                // Advance pending_new_round to next_round if next_round is higher.
+                let mut lock = self
+                    .pending_new_round
+                    .write()
+                    .expect("pending_new_round lock could not be acquired");
+                match lock.as_mut() {
+                    Some(current_round) => {
+                        *current_round = u32::max(*current_round, next_round);
+                    }
+                    None => *lock = Some(next_round),
+                }
+            }
+        }
+    }
+
+    fn on_aggregation(
+        &mut self,
+        round: u32,
+        step: TendermintStep,
+        contribution: TendermintContribution,
+    ) {
+        trace!("New Aggregate for {}-{:?}: {:?}", round, step, contribution);
+
+        // There is a new aggregate, check if it is a better aggregate for (round, step) than we
+        // currently have. If so, store it.
+        let contribution = self
+            .current_bests
+            .write()
+            .expect("current_bests lock could not be acquired")
+            .entry((round, step))
+            .and_modify(|contrib| {
+                // This test is not strictly necessary as the handel streams will only return a
+                // value if it is better than the previous one.
+                if self.signature_weight(contrib) < self.signature_weight(&contribution) {
+                    *contrib = contribution.clone();
+                }
+            })
+            .or_insert(contribution)
+            .clone();
+
+        // Better or not, we need to check if it is actionable for tendermint, and if it is and
+        // there is a current_aggregate sink present, we send it as well.
+        let mut lock = self
+            .current_aggregate
+            .write()
+            .expect("current_aggregate lock could not be acquired");
+
+        // If there is a current ongoing aggregation it is retrieved
+        let current_aggregation = match lock.as_ref() {
+            Some(aggregation) => aggregation,
+            None => {
+                // Do nothing, as there is no caller awaiting a response.
+                log::debug!(
+                    "There was no current_aggregation for {}-{:?}: {:?}",
+                    round,
+                    step,
+                    contribution
+                );
+                return;
+            }
+        };
+
+        // Only reply if it is the correct aggregation and the contribution is actionable.
+        // Actionable here means everything with voter_weight > 2f+1 is potentially actionable.
+        // On the receiving end of this channel is a timeout, which will wait (if necessary) for
+        // better results but will, if nothing better is made available also return this aggregate.
+        if current_aggregation.round == round
+            && current_aggregation.step == step
+            && self.signature_weight(&contribution) > policy::TWO_THIRD_SLOTS as usize
+        {
+            trace!(
+                "Completed round for {}-{:?}: {:?}",
+                round,
+                step,
+                contribution
+            );
+
+            // Transform to the appropriate result type adding the weight to each proposal's
+            // Contribution.
+            // TODO optimize
+            let result = contribution
+                .contributions
+                .iter()
+                .map(|(hash, contribution)| {
+                    (
+                        hash.clone(),
+                        (contribution.clone(), self.signature_weight(contribution)),
+                    )
+                })
+                .collect();
+
+            // Send the result.
+            let current_aggregation = lock.take().unwrap();
+            if let Err(err) = current_aggregation
+                .sender
+                .send(AggregationResult::Aggregation(result))
+            {
+                error!(
+                    "Failed to send message to broadcast_and_aggregate caller: {:?}",
+                    err
+                );
+                // recoverable?
+            }
+        }
+    }
+
+    fn signature_weight<C: AggregatableContribution>(&self, contribution: &C) -> usize {
+        self.validator_registry
+            .signature_weight(contribution)
+            .expect("Failed to compute signature weight")
+    }
 }
 
 impl<N: ValidatorNetwork + 'static> Future for BackgroundTask<N> {
@@ -51,179 +199,21 @@ impl<N: ValidatorNetwork + 'static> Future for BackgroundTask<N> {
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> Poll<Self::Output> {
-        match self.aggregations.poll_next_unpin(cx) {
-            Poll::Pending => Poll::Pending,
-            Poll::Ready(None) => {
-                debug!("BackgroundStream finished aggregating - Terminating");
-                Poll::Ready(())
-            }
-            Poll::Ready(Some(event)) => {
-                match event {
-                    TendermintAggregationEvent::NewRound(next_round) => {
-                        // This needs to be forwarded to a waiting current_aggregate sink if there is one.
-                        // if there is none, the highest round received in a TendermintAggregationEvent::NewRound(n) must be kept
-                        // such that it can be send to the next current_aggregate sink if it by then is still relevant.
-                        match self
-                            .current_aggregate
-                            .write()
-                            .expect("current_aggregate lock could not be aquired.")
-                            .take()
-                        {
-                            // if there is a current ongoing aggregation it is retrieved
-                            Some(CurrentAggregation {
-                                sender,
-                                round,
-                                step: _step,
-                            }) => {
-                                // check that the next_round is actually higher than the round which is awaiting a result.
-                                if round < next_round {
-                                    // Send the me NewRound event through the channel to the currently awaited aggregation for it to resolve.
-                                    if let Err(_err) =
-                                        sender.send(AggregationResult::NewRound(next_round))
-                                    {
-                                        error!(
-                                            "Sending of AggregationEvent::NewRound({}) failed",
-                                            round
-                                        );
-                                    }
-                                } else {
-                                    // Otheriwse this event is meaningless and is droped, which in reality should never occur.
-                                    // trace it for debugging purposes.
-                                    trace!("received NewRound({}), but curret_aggregate is in round {}", next_round, round);
-                                }
-                            }
-                            // if there is no caller awaiting a result
-                            None => {
-                                // see if the pending_new_round field is actually set already
-                                let mut lock = self
-                                    .pending_new_round
-                                    .write()
-                                    .expect("pending_new_round lock couuld not be aquired.");
+        loop {
+            let event = match ready!(self.aggregations.poll_next_unpin(cx)) {
+                Some(event) => event,
+                None => {
+                    debug!("BackgroundStream finished aggregating - Terminating");
+                    return Poll::Ready(());
+                }
+            };
 
-                                match lock.take() {
-                                    Some(current_round) => {
-                                        // if it is set the bigger of the existing value and the newly received one is maintained.
-                                        if current_round < next_round {
-                                            *lock = Some(next_round);
-                                        } else {
-                                            *lock = Some(current_round);
-                                        }
-                                    }
-                                    None => {
-                                        // since there is no new_round pending, the received value is set as such.
-                                        *lock = Some(next_round);
-                                    }
-                                };
-                            }
-                        };
-                    }
-                    TendermintAggregationEvent::Aggregation(r, s, c) => {
-                        trace!("New Aggregate for {}-{:?}: {:?}", &r, &s, &c);
-                        // There is a new aggregate, check if it is a better aggregate for (round, step) than we curretly have
-                        // if so, store it.
-                        let contribution = self
-                            .current_bests
-                            .write()
-                            .expect("current_bests lock could not be aquired.")
-                            .entry((r, s))
-                            .and_modify(|contribution| {
-                                // this test is not strictly necessary as the handel streams will only return a value if it is better  than the previous one.
-                                if self
-                                    .validator_registry
-                                    .signature_weight(contribution)
-                                    .expect("Failed to unwrap signature weight")
-                                    < self
-                                        .validator_registry
-                                        .signature_weight(&c)
-                                        .expect("Failed to unwrap signature weight")
-                                {
-                                    *contribution = c.clone();
-                                }
-                            })
-                            .or_insert(c)
-                            .clone();
-
-                        // better or not, we need to check if it is actionable for tendermint, and if it is and there is a
-                        // current_aggregate sink present, we send it as well.
-                        let mut lock = self
-                            .current_aggregate
-                            .write()
-                            .expect("current_aggregate lock could not be aquired.");
-
-                        match lock.take() {
-                            // if there is a current ongoing aggregation it is retrieved
-                            Some(CurrentAggregation {
-                                sender,
-                                round,
-                                step,
-                            }) => {
-                                // only reply if it is the correct aggregation
-                                if round == r && step == s {
-                                    // see if this is actionable
-                                    // Actionable here means everything with voter_weight > 2f+1 is potentially actionable.
-                                    // On the receiving end of this channel is a timeout, which will wait (if necessary) for better results
-                                    // but will, if nothing better is made available also return this aggregate.
-                                    if self
-                                        .validator_registry
-                                        .signature_weight(&contribution)
-                                        .expect("Failed to unwrap signature weight")
-                                        > policy::TWO_THIRD_SLOTS as usize
-                                    {
-                                        trace!(
-                                            "Completed Round for {}-{:?}: {:?}",
-                                            &r,
-                                            &s,
-                                            &contribution
-                                        );
-                                        // Transform to the appropiate result type adding the weight to each proposals Contribution
-                                        let result = contribution
-                                            .contributions
-                                            .iter()
-                                            .map(|(hash, contribution)| {
-                                                (
-                                                    hash.clone(),
-                                                    (
-                                                        contribution.clone(),
-                                                        self.validator_registry.signature_weight(contribution).expect("Cannot compute weight of signatories"),
-                                                    ),
-                                                )
-                                            })
-                                            .collect();
-
-                                        // send the result
-                                        if let Err(err) =
-                                            sender.send(AggregationResult::Aggregation(result))
-                                        {
-                                            error!("failed sending message to broadcast_and_aggregate caller: {:?}", err);
-                                            // recoverable?
-                                        }
-                                    } else {
-                                        // re-set the current_aggregate
-                                        *lock = Some(CurrentAggregation {
-                                            sender,
-                                            round,
-                                            step,
-                                        });
-                                    }
-                                } else {
-                                    // re-set the current_aggregate
-                                    *lock = Some(CurrentAggregation {
-                                        sender,
-                                        round,
-                                        step,
-                                    });
-                                }
-                            }
-                            None => {
-                                debug!("there was no receiver");
-                                // do nothing, as there is no caller awaiting a response.
-                            }
-                        };
-                    }
-                };
-
-                Poll::Pending
-            }
+            match event {
+                TendermintAggregationEvent::NewRound(next_round) => self.on_new_round(next_round),
+                TendermintAggregationEvent::Aggregation(round, step, contribution) => {
+                    self.on_aggregation(round, step, contribution)
+                }
+            };
         }
     }
 }
