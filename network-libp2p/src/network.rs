@@ -52,7 +52,7 @@ use crate::{
 };
 
 /// Maximum simultaneous libp2p connections per peer
-const MAX_CONNECTIONS_PER_PEER: u32 = 1;
+const MAX_CONNECTIONS_PER_PEER: u32 = 2;
 
 type NimiqSwarm = Swarm<NimiqBehaviour>;
 #[derive(Debug)]
@@ -204,7 +204,7 @@ impl Network {
         let behaviour = NimiqBehaviour::new(config, clock, peers);
 
         let limits = ConnectionLimits::default()
-            .with_max_pending_incoming(Some(5))
+            .with_max_pending_incoming(Some(16))
             .with_max_pending_outgoing(Some(16))
             .with_max_established_incoming(Some(4800))
             .with_max_established_outgoing(Some(4800))
