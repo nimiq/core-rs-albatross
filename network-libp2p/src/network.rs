@@ -338,7 +338,7 @@ impl Network {
                 local_addr,
                 send_back_addr,
             } => {
-                tracing::trace!(
+                tracing::debug!(
                     "Incoming connection from address {:?} to listen address {:?}",
                     send_back_addr,
                     local_addr
@@ -350,7 +350,7 @@ impl Network {
                 send_back_addr,
                 error,
             } => {
-                tracing::trace!(
+                tracing::debug!(
                     "Incoming connection error from address {:?} to listen address {:?}: {:?}",
                     send_back_addr,
                     local_addr,

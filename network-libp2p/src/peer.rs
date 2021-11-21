@@ -42,7 +42,7 @@ impl Peer {
         }
     }
 
-    /// Polls the underlying dispatch's inbound stream by first trying to acquire the mutex. If it's not availble,
+    /// Polls the underlying dispatch's inbound stream by first trying to acquire the mutex. If it's not available,
     /// this will return `Poll::Pending` and make sure that the task is woken up, once the mutex was released.
     pub fn poll_inbound(self: &Arc<Peer>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
         self.dispatch.lock().poll_inbound(cx, self)

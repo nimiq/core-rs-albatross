@@ -87,6 +87,9 @@ path = "{path}"
 [log]
 level = "debug"
 timestamps = true
+
+[log.tags]
+libp2p_swarm = "debug"
 """.format(
             path="temp-state/dev/seed",
         ))
@@ -117,6 +120,9 @@ path = "{path}"
 [log]
 level = "trace"
 timestamps = true
+
+[log.tags]
+libp2p_swarm = "debug"
 
 [validator]
 validator_address = "NQ07 0000 0000 0000 0000 0000 0000 0000 0000"
@@ -162,6 +168,9 @@ path = "{path}"
 [log]
 level = "debug"
 timestamps = true
+
+[log.tags]
+libp2p_swarm = "debug"
 
 [validator]
 validator_address = "{validator_address}"
