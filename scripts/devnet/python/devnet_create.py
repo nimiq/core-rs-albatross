@@ -85,7 +85,7 @@ min_peers = 1
 path = "{path}"
 
 [log]
-level = "debug"
+level = "trace"
 timestamps = true
 
 [log.tags]
@@ -166,7 +166,7 @@ min_peers = 1
 path = "{path}"
 
 [log]
-level = "debug"
+level = "trace"
 timestamps = true
 
 [log.tags]
