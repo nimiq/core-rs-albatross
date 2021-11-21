@@ -365,8 +365,6 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                 self.on_blockchain_rebranched(old_chain, new_chain)
             }
         }
-
-        self.init_block_producer();
     }
 
     fn on_blockchain_extended(&mut self, hash: &Blake2bHash) {
@@ -666,10 +664,15 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Future
         }
 
         // Process blockchain updates.
+        let mut received_event = false;
         while let Poll::Ready(Some(event)) = self.blockchain_event_rx.poll_next_unpin(cx) {
             if self.consensus.is_established() {
                 self.on_blockchain_event(event);
+                received_event = true;
             }
+        }
+        if received_event {
+            self.init_block_producer();
         }
 
         // Process fork events.
