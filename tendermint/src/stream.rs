@@ -4,7 +4,7 @@ use std::task::Poll;
 use crate::outside_deps::TendermintOutsideDeps;
 use crate::state::TendermintState;
 use crate::tendermint::Tendermint;
-use crate::utils::{Checkpoint, StreamResult, TendermintError, TendermintReturn};
+use crate::utils::{Checkpoint, StreamResult, TendermintReturn};
 use crate::{ProofTrait, ProposalTrait, ResultTrait};
 use async_stream::stream;
 use futures::{
@@ -39,15 +39,11 @@ where
         + 'static,
 {
     stream! {
-    // We check if a state was inputted. If yes (and it is valid), we initialize Tendermint with it.
+    // We check if a state was inputted. If yes (Its validity was checked in TendermintStreamWrapper::new),
+    // we initialize Tendermint with it.
     // If not, we create a new empty Tendermint.
     let mut tendermint = if let Some(state) = state_opt {
-        if deps.verify_state(&state) {
-            Tendermint { deps, state }
-        } else {
-            yield TendermintReturn::Error(TendermintError::BadInitState);
-            return;
-        }
+        Tendermint { deps, state }
     } else {
         Tendermint { state: TendermintState::new(deps.initial_round()), deps }
     };
@@ -114,7 +110,13 @@ where
         mut deps: DepsTy,
         // An optional input for the TendermintState.
         state_opt: Option<TendermintState<ProposalTy, ProofTy>>,
-    ) -> Self {
+    ) -> Result<Self, DepsTy> {
+        if let Some(state) = &state_opt {
+            if !deps.verify_state(state) {
+                return Err(deps);
+            }
+        }
+
         // get the background_stream fromthe outside deps.
         let background_task = deps
             .get_background_task()
@@ -132,10 +134,10 @@ where
         select.push(tendermint_stream);
         select.push(background_task);
 
-        Self {
+        Ok(Self {
             tendermint_stream: select,
             phantom: PhantomData,
-        }
+        })
     }
 }
 

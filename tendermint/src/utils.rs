@@ -102,8 +102,6 @@ pub enum TendermintReturn<ProposalTy: ProposalTrait, ProofTy: ProofTrait, Result
 /// An enum containing possible errors that can happen to Tendermint.
 #[derive(Error, Debug, Clone)]
 pub enum TendermintError {
-    #[error("Inconsistent initial state.")]
-    BadInitState,
     #[error("Handel aggregation failed.")]
     AggregationError,
     #[error("Handel aggregation does not exist.")]

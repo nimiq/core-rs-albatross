@@ -229,9 +229,9 @@ async fn tendermint_loop(
         >,
     >,
     reference_proposal: TestProposal,
-) {
+) -> Result<(), TestValidator> {
     // Get the stream.
-    let mut tendermint = Tendermint::new(deps, state_opt);
+    let mut tendermint = Tendermint::new(deps, state_opt)?;
 
     // Start running the stream. It runs until it returns a Result.
     while let Some(value) = tendermint.next().await {
@@ -252,6 +252,7 @@ async fn tendermint_loop(
             TendermintReturn::Error(_) => unreachable!(),
         }
     }
+    Ok(())
 }
 
 // Simple test where everything goes normally.
@@ -266,7 +267,9 @@ async fn everything_works() {
         get_agg_rounds: vec![],
     };
 
-    tendermint_loop(proposer, None, TestProposal('A', 0)).await;
+    assert!(tendermint_loop(proposer, None, TestProposal('A', 0))
+        .await
+        .is_ok());
 
     // From the perspective of another validator.
     let validator = TestValidator {
@@ -277,7 +280,9 @@ async fn everything_works() {
         get_agg_rounds: vec![],
     };
 
-    tendermint_loop(validator, None, TestProposal('A', 0)).await;
+    assert!(tendermint_loop(validator, None, TestProposal('A', 0))
+        .await
+        .is_ok());
 }
 
 // The first proposer does not send a proposal but the second one does.
@@ -294,7 +299,9 @@ async fn no_proposal() {
         get_agg_rounds: vec![],
     };
 
-    tendermint_loop(validator, None, TestProposal('A', 1)).await;
+    assert!(tendermint_loop(validator, None, TestProposal('A', 1))
+        .await
+        .is_ok());
 }
 
 // Our validator doesn't see any messages for the entire first round.
@@ -314,7 +321,9 @@ async fn all_timeouts() {
         get_agg_rounds: vec![],
     };
 
-    tendermint_loop(validator, None, TestProposal('A', 1)).await;
+    assert!(tendermint_loop(validator, None, TestProposal('A', 1))
+        .await
+        .is_ok());
 }
 
 // We don't have enough prevotes for the first proposal we received.
@@ -331,7 +340,9 @@ async fn not_enough_prevotes() {
         get_agg_rounds: vec![],
     };
 
-    tendermint_loop(validator, None, TestProposal('A', 1)).await;
+    assert!(tendermint_loop(validator, None, TestProposal('A', 1))
+        .await
+        .is_ok());
 }
 
 // We don't have enough precommits for the first proposal we received.
@@ -348,7 +359,9 @@ async fn not_enough_precommits() {
         get_agg_rounds: vec![],
     };
 
-    tendermint_loop(validator, None, TestProposal('A', 1)).await;
+    assert!(tendermint_loop(validator, None, TestProposal('A', 1))
+        .await
+        .is_ok());
 }
 
 // Our validator locks on the first round proposal, which doesn't complete, and then needs to
@@ -368,7 +381,9 @@ async fn locks_and_rebroadcasts() {
         get_agg_rounds: vec![],
     };
 
-    tendermint_loop(validator, None, TestProposal('A', 0)).await;
+    assert!(tendermint_loop(validator, None, TestProposal('A', 0))
+        .await
+        .is_ok());
 }
 
 // Our validator locks on the first round proposal, which doesn't complete, and then needs to unlock
@@ -386,7 +401,9 @@ async fn locks_and_unlocks() {
         get_agg_rounds: vec![],
     };
 
-    tendermint_loop(validator, None, TestProposal('B', 1)).await;
+    assert!(tendermint_loop(validator, None, TestProposal('B', 1))
+        .await
+        .is_ok());
 }
 
 // Our validator doesn't receive any prevotes for the proposal but then receives enough precommits
@@ -401,7 +418,9 @@ async fn forced_commit() {
         get_agg_rounds: vec![],
     };
 
-    tendermint_loop(validator, None, TestProposal('A', 0)).await;
+    assert!(tendermint_loop(validator, None, TestProposal('A', 0))
+        .await
+        .is_ok());
 }
 
 // The first and second proposals don't get enough prevotes or precommits, and the third proposal
@@ -420,5 +439,7 @@ async fn past_proposal() {
         get_agg_rounds: vec![(false, SLOTS, 0, 0)],
     };
 
-    tendermint_loop(validator, None, TestProposal('A', 2)).await;
+    assert!(tendermint_loop(validator, None, TestProposal('A', 2))
+        .await
+        .is_ok());
 }

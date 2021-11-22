@@ -106,10 +106,24 @@ impl ProduceMacroBlock {
         });
 
         // create the Tendermint instance, which implements Stream
-        let tendermint = Box::pin(nimiq_tendermint::Tendermint::new(deps, state_opt));
+
+        let tendermint = match nimiq_tendermint::Tendermint::new(deps, state_opt) {
+            Ok(tendermint) => tendermint,
+            Err(returned_deps) => {
+                log::debug!("TendermintState was invalid. Restarting Tendermint without state");
+                // new only returns None if the state failed to verify, which without a state is impossible.
+                // Thus unwrapping is safe.
+                match nimiq_tendermint::Tendermint::new(returned_deps, None) {
+                    Ok(tendermint) => tendermint,
+                    Err(_) => unreachable!(),
+                }
+            }
+        };
 
         // Create the instance and return it.
-        Self { tendermint }
+        Self {
+            tendermint: Box::pin(tendermint),
+        }
     }
 }
 
