@@ -278,6 +278,8 @@ impl<N: Network> Future for Consensus<N> {
         while let Poll::Ready(Some(event)) = self.block_queue.poll_next_unpin(cx) {
             match event {
                 BlockQueueEvent::AcceptedAnnouncedBlock(_) => {
+                    // Note: this output is parsed by our testing infrastructure (specifically devnet.sh),
+                    // so please test that nothing breaks in there if you change this.
                     debug!(
                         "Now at block #{}.{}",
                         self.blockchain.read().block_number(),
