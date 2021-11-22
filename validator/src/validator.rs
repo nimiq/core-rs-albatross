@@ -407,7 +407,9 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         let macro_producer = self.macro_producer.as_mut().unwrap();
         while let Poll::Ready(Some(event)) = macro_producer.poll_next_unpin(cx) {
             match event {
-                TendermintReturn::Error(_err) => {}
+                TendermintReturn::Error(err) => {
+                    log::error!("Tendermint Returned an Error: {:?}", err);
+                }
                 TendermintReturn::Result(block) => {
                     // If the event is a result meaning the next macro block was produced we push it onto our local chain
                     let block_copy = block.clone();
