@@ -111,8 +111,8 @@ impl<
                 // If we already know it for this level, score it as 0
                 trace!(
                     "Individual contribution from peer {} for level {} already known",
-                    level,
                     identity,
+                    level,
                 );
                 return 0;
             }

@@ -218,7 +218,6 @@ impl<P: Partitioner, C: AggregatableContribution> ContributionStore for ReplaceS
 
         let mut signatures = Vec::new();
         for (_, (signature, _)) in self.best_contribution.range(0..=level) {
-            trace!("collect: {:?}", signature);
             signatures.push(signature)
         }
 
