@@ -322,12 +322,25 @@ impl Deserialize for BitSet {
 impl fmt::Display for BitSet {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "[")?;
+        let mut last_value = None;
         let mut it = self.iter().peekable();
         while let Some(value) = it.next() {
-            write!(f, "{}", value)?;
-            if it.peek().is_some() {
-                write!(f, ", ")?;
+            let next_value = it.peek();
+            if let Some(next_value) = next_value {
+                let consecutive_last = last_value.map(|lv| lv + 1 == value).unwrap_or(false);
+                let consecutive_next = value + 1 == *next_value;
+                if !(consecutive_last && consecutive_next) {
+                    write!(f, "{}", value.to_string())?;
+                    if consecutive_next {
+                        write!(f, "-")?;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+                }
+            } else {
+                write!(f, "{}", value.to_string())?;
             }
+            last_value = Some(value);
         }
         write!(f, "]")?;
         Ok(())

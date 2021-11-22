@@ -156,7 +156,7 @@ impl<
         trace!(
             "Checking for completed level {}: signers={:?}",
             level.id,
-            contribution.contributors().iter().collect::<Vec<usize>>()
+            contribution.contributors()
         );
 
         // check if level already is completed
