@@ -558,7 +558,11 @@ impl<N: Network, TReq: RequestComponent<N::PeerType>> Stream for BlockQueue<N, T
                 Poll::Ready(Some((block, pubsub_id))) => {
                     // Ignore all block announcements until there is at least one synced peer.
                     if num_peers > 0 {
-                        log::debug!("Received block #{} via gossipsub", block.block_number());
+                        log::debug!(
+                            "Received block #{}.{} via gossipsub",
+                            block.block_number(),
+                            block.view_number()
+                        );
                         this.inner.on_block_announced(
                             block,
                             this.request_component.as_mut(),

@@ -46,10 +46,12 @@ impl Blockchain {
         let mut inherents = vec![];
 
         for fork_proof in fork_proofs {
+            trace!("Creating inherent from fork proof: {:?}", fork_proof);
             inherents.push(self.inherent_from_fork_proof(fork_proof, txn_option));
         }
 
         if let Some(view_changes) = view_changes {
+            trace!("Creating inherent from view changes: {:?}", view_changes);
             inherents.append(&mut self.inherents_from_view_changes(view_changes, txn_option));
         }
 

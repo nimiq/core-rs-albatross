@@ -278,7 +278,11 @@ impl<N: Network> Future for Consensus<N> {
         while let Poll::Ready(Some(event)) = self.block_queue.poll_next_unpin(cx) {
             match event {
                 BlockQueueEvent::AcceptedAnnouncedBlock(_) => {
-                    debug!("Now at block #{}", self.blockchain.read().block_number());
+                    debug!(
+                        "Now at block #{}.{}",
+                        self.blockchain.read().block_number(),
+                        self.blockchain.read().view_number()
+                    );
 
                     // Reset the head request timer when an announced block was accepted.
                     self.head_requests_time = Some(Instant::now());

@@ -343,6 +343,10 @@ impl Blockchain {
         num_blocks: u32,
         write_txn: &mut WriteTransaction,
     ) -> Result<(), PushError> {
+        debug!(
+            "Need to revert {} micro blocks from the current epoch",
+            &num_blocks
+        );
         // Get the chain info for the head of the chain.
         let mut current_info = self
             .get_chain_info(&self.head_hash(), true, Some(write_txn))

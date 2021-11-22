@@ -128,6 +128,11 @@ impl Blockchain {
             "Failed to revert - inconsistent state"
         );
 
+        debug!(
+            "Reverting block #{}.{}",
+            &micro_block.header.block_number, &micro_block.header.view_number
+        );
+
         // Get the body of the block.
         let body = micro_block.body.as_ref().unwrap();
 
