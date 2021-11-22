@@ -598,15 +598,35 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
         _handler: Self::ProtocolsHandler,
         error: &DialError,
     ) {
-        let peer_id = match peer_id {
-            Some(id) => id,
-            // Not interested in dial failures to unknown peers right now.
-            None => return,
-        };
+        match error {
+            DialError::Banned
+            | DialError::ConnectionLimit(_)
+            | DialError::LocalPeerId
+            | DialError::InvalidPeerId
+            | DialError::Aborted
+            | DialError::ConnectionIo(_)
+            | DialError::Transport(_)
+            | DialError::NoAddresses => {
+                let peer_id = match peer_id {
+                    Some(id) => id,
+                    // Not interested in dial failures to unknown peers right now.
+                    None => return,
+                };
 
-        log::debug!("Failed to dial peer {}: {:?}", peer_id, error);
-        self.peer_ids.mark_failed(peer_id);
-        self.maintain_peers();
+                log::debug!("Failed to dial peer {}: {:?}", peer_id, error);
+                self.peer_ids.mark_failed(peer_id);
+                self.maintain_peers();
+            }
+            DialError::DialPeerConditionFalse(
+                DialPeerCondition::Disconnected | DialPeerCondition::NotDialing,
+            ) => {
+                // We might (still) be connected, or about to be connected, thus do not report the
+                // failure.
+            }
+            DialError::DialPeerConditionFalse(DialPeerCondition::Always) => {
+                unreachable!("DialPeerCondition::Always can not trigger DialPeerConditionFalse.");
+            }
+        }
     }
 
     fn poll(
