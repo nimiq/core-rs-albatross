@@ -595,7 +595,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         tokio::spawn(async move {
             debug!("Sending unpark transaction");
             if cn.send_transaction(unpark_transaction).await.is_err() {
-                error!("Failed to send unpark transatction");
+                error!("Failed to send unpark transaction");
             }
         });
         self.unpark_sent = true;

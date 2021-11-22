@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 
-use std::num::NonZeroU8;
 use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
@@ -213,7 +212,6 @@ impl Network {
         // TODO add proper config
         SwarmBuilder::new(transport, behaviour, local_peer_id)
             .connection_limits(limits)
-            .dial_concurrency_factor(NonZeroU8::new(10).unwrap())
             .executor(Box::new(|fut| {
                 tokio::spawn(fut);
             }))
