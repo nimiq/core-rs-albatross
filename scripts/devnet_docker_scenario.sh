@@ -41,7 +41,7 @@ done
 
 # Create devnet configuration
 echo "Creating devnet configuration... "
-python3 scripts/devnet_create.py $MAX_VALIDATORS
+python3 scripts/devnet/python/devnet_create.py $MAX_VALIDATORS
 
 # Overwrite the docker compose and genesis
 echo "Copying the genesis and docker compose files... "

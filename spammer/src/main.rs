@@ -146,7 +146,7 @@ async fn main_inner() -> Result<(), Error> {
     let mut tx_count_total = 0usize;
     let mut micro_block_count = 0usize;
 
-    let mut count = 150;
+    let mut count = 500;
     if let Some(tpb) = spammer_command_line.tpb {
         count = tpb as usize;
     }
