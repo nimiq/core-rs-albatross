@@ -30,7 +30,7 @@ impl Config {
         let gossipsub = GossipsubConfigBuilder::default()
             .mesh_n_low(3)
             .validate_messages()
-            .max_transmit_size(131_072)
+            .max_transmit_size(200_000)
             .validation_mode(libp2p::gossipsub::ValidationMode::Permissive)
             .build()
             .expect("Invalid Gossipsub config");
