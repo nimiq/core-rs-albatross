@@ -392,7 +392,7 @@ impl<N: Network> Stream for Inner<N> {
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         store_waker!(self, waker, cx);
 
-        if let Some(op) = self.push_ops.front_mut() {
+        while let Some(op) = self.push_ops.front_mut() {
             let result = ready!(op.poll_unpin(cx));
             self.push_ops.pop_front().expect("PushOp should be present");
 

@@ -178,9 +178,7 @@ impl NimiqBehaviour {
         }
 
         // Register waker, if we're waiting for an event.
-        if self.waker.is_none() {
-            self.waker = Some(cx.waker().clone());
-        }
+        store_waker!(self, waker, cx);
 
         Poll::Pending
     }

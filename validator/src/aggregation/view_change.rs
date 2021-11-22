@@ -3,6 +3,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
+use futures::ready;
 use futures::stream::{BoxStream, Stream, StreamExt};
 use futures::task::{Context, Poll};
 use parking_lot::RwLock;
@@ -68,39 +69,31 @@ impl InputStreamSwitch {
 impl Stream for InputStreamSwitch {
     type Item = LevelUpdate<SignedViewChangeMessage>;
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        match self.input.poll_next_unpin(cx) {
-            Poll::Pending => Poll::Pending,
-            Poll::Ready(None) => Poll::Ready(None),
-            Poll::Ready(Some(message)) => {
-                if message.update.aggregate.previous_proof.is_some() {
-                    warn!("received past proof");
-                }
-                if message.tag.block_number == self.current_view_change.block_number
-                    && message.tag.prev_seed == self.current_view_change.prev_seed
-                {
-                    if message.tag.new_view_number == self.current_view_change.new_view_number {
-                        Poll::Ready(Some(message.update))
-                    } else {
-                        if message.tag.new_view_number > self.current_view_change.new_view_number {
-                            if let Err(err) =
-                                self.sender
-                                    .unbounded_send(ViewChangeResult::FutureViewChange(
-                                        message.update.aggregate,
-                                        message.tag,
-                                    ))
-                            {
-                                error!("Sending failed: {:?}", err);
-                            }
-                        }
-                        Poll::Pending
-                    }
-                } else {
-                    // The LevelUpdate is not for this view Change and thus irrelevant
-                    // TODO if it is for a future view change we might want to shortcut a HreadRequest here.
-                    Poll::Pending
+        while let Some(message) = ready!(self.input.poll_next_unpin(cx)) {
+            if message.tag.block_number != self.current_view_change.block_number
+                || message.tag.prev_seed != self.current_view_change.prev_seed
+            {
+                // The LevelUpdate is not for this view change and thus irrelevant.
+                // TODO If it is for a future view change we might want to shortcut a HeadRequest here.
+                continue;
+            }
+
+            if message.tag.new_view_number == self.current_view_change.new_view_number {
+                return Poll::Ready(Some(message.update));
+            }
+
+            if message.tag.new_view_number > self.current_view_change.new_view_number {
+                let result =
+                    ViewChangeResult::FutureViewChange(message.update.aggregate, message.tag);
+                if let Err(err) = self.sender.unbounded_send(result) {
+                    error!("Failed to send FutureViewChange result: {:?}", err);
                 }
             }
         }
+
+        // We have exited the loop, so poll_next() must have returned Poll::Ready(None).
+        // Thus, we terminate the stream.
+        Poll::Ready(None)
     }
 }
 

@@ -2,6 +2,7 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicU32, Ordering as AtomicOrdering};
 use std::sync::Arc;
 
+use futures::ready;
 use futures::task::{Context, Poll};
 use futures::{stream::BoxStream, Future, StreamExt};
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
@@ -89,8 +90,7 @@ impl<N: Network> Future for MempoolExecutor<N> {
     type Output = ();
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        while let Poll::Ready(Some((tx, pubsub_id))) = self.txn_stream.as_mut().poll_next_unpin(cx)
-        {
+        while let Some((tx, pubsub_id)) = ready!(self.txn_stream.as_mut().poll_next_unpin(cx)) {
             if self.verification_tasks.fetch_add(0, AtomicOrdering::SeqCst)
                 == CONCURRENT_VERIF_TASKS
             {
@@ -131,6 +131,8 @@ impl<N: Network> Future for MempoolExecutor<N> {
             });
         }
 
-        Poll::Pending
+        // We have exited the loop, so poll_next() must have returned Poll::Ready(None).
+        // Thus, we terminate the executor future.
+        Poll::Ready(())
     }
 }

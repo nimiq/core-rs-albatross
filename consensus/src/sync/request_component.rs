@@ -126,7 +126,7 @@ impl<TPeer: Peer + 'static> Stream for BlockRequestComponent<TPeer> {
         }
 
         // 2. Poll self.sync_method and add new peers to self.sync_queue.
-        if let Poll::Ready(Some(result)) = self.sync_method.poll_next_unpin(cx) {
+        while let Poll::Ready(Some(result)) = self.sync_method.poll_next_unpin(cx) {
             self.sync_queue.add_peer(Arc::downgrade(&result));
             self.agents.insert(Arc::clone(&result.peer), result);
         }

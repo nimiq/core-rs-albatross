@@ -770,7 +770,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> Stream for ProposalReceiver<
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let mut shared = self.shared.write();
         if shared.buffer.is_empty() {
-            shared.waker.replace(cx.waker().clone());
+            store_waker!(shared, waker, cx);
             Poll::Pending
         } else {
             let value = shared.buffer.pop_front().map(|entry| entry.1);
