@@ -131,8 +131,14 @@ where
                         Poll::Pending => return Poll::Pending,
 
                         // Send error - the receiver must have been closed.
-                        Poll::Ready(Err(_)) => {
+                        Poll::Ready(Err(e)) => {
                             self.buffer.take(); // Drop message
+                            log::debug!(
+                                "Receiver returned Err({:?}) for poll_ready() -> Dropping message: type_id={}, peer={}",
+                                e,
+                                type_id,
+                                peer.id,
+                            );
                             receiver_is_gone = true;
                         }
 
@@ -142,7 +148,13 @@ where
                             let (_, data) = self.buffer.take().unwrap();
 
                             // Not sure why this still can fail, but if it does, we consider the receiver to be gone.
-                            if tx.start_send((data, Arc::clone(peer))).is_err() {
+                            if let Err(e) = tx.start_send((data, Arc::clone(peer))) {
+                                log::debug!(
+                                    "poll_ready() was Ok(), but send is not: Err({:?}) -> Dropping message: type_id={}, peer={}",
+                                    e,
+                                    type_id,
+                                    peer.id,
+                                );
                                 receiver_is_gone = true
                             }
                         }
@@ -150,13 +162,7 @@ where
 
                     if receiver_is_gone {
                         // Send error, i.e. the receiver is closed. Remove it, but usually we expect receivers to stay around.
-                        log::warn!(
-                            "Receiver is gone. Dropping message: type_id={}, peer={}",
-                            type_id,
-                            peer.id
-                        );
                         self.channels.remove(&type_id);
-                        return Poll::Pending;
                     }
                 } else {
                     // Drop message
@@ -166,7 +172,6 @@ where
                         peer.id
                     );
                     self.buffer.take();
-                    return Poll::Pending;
                 }
             }
 
