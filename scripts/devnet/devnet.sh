@@ -249,7 +249,7 @@ do
 
     # First collect the last block number from each validator
     for log in temp-logs/$foldername/*; do
-        bn=$(grep "Now at block #" $log | tail -1 | awk -F# '{print $2}')
+        bn=$(grep "Now at block #" $log | tail -1 | awk -F# '{print $2}' | cut --delimiter=. --fields 1)
         if [ -z "$bn" ]; then
             bns+=(0)
         else
