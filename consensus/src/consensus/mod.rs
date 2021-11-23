@@ -280,11 +280,11 @@ impl<N: Network> Future for Consensus<N> {
                 BlockQueueEvent::AcceptedAnnouncedBlock(_) => {
                     // Note: this output is parsed by our testing infrastructure (specifically devnet.sh),
                     // so please test that nothing breaks in there if you change this.
-                    debug!(
-                        "Now at block #{}.{}",
-                        self.blockchain.read().block_number(),
-                        self.blockchain.read().view_number()
-                    );
+                    let (block_number, view_number) = {
+                        let blockchain = self.blockchain.read();
+                        (blockchain.block_number(), blockchain.view_number())
+                    };
+                    debug!("Now at block #{}.{}", block_number, view_number);
 
                     // Reset the head request timer when an announced block was accepted.
                     self.head_requests_time = Some(Instant::now());
