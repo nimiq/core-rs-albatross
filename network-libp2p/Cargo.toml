@@ -23,7 +23,7 @@ bytes = "1.0"
 derive_more = "0.99"
 futures = "0.3"
 hex = "0.4"
-ip_network = "0.3"
+ip_network = "0.4"
 libp2p = { version = "0.40", default-features = false, features = [
     "gossipsub",
     "kad",

@@ -17,7 +17,7 @@ hex = "0.4"
 log = "0.4"
 num-traits = "0.2"
 serde = { version = "1.0", optional = true }
-strum_macros = "0.22"
+strum_macros = "0.23"
 thiserror = "1.0"
 
 beserial = { path = "../../beserial" }
