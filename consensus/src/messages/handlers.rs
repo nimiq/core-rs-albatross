@@ -145,6 +145,10 @@ impl Handle<ResponseBlocks> for RequestMissingBlocks {
         // For now, we just ignore the case if we receive a block announcement which is more than 1-2 batches away from our current block.
         let target_block_opt = blockchain.get_block(&self.target_hash, false, None);
         if target_block_opt.is_none() {
+            debug!(
+                "ResponseBlocks [{}] - unknown target block",
+                self.request_identifier
+            );
             return ResponseBlocks {
                 blocks: None,
                 request_identifier: self.get_request_identifier(),
@@ -176,6 +180,10 @@ impl Handle<ResponseBlocks> for RequestMissingBlocks {
             ) {
                 block
             } else {
+                debug!(
+                    "ResponseBlocks [{}] - unknown locators and preceding macro block",
+                    self.request_identifier
+                );
                 return ResponseBlocks {
                     blocks: None,
                     request_identifier: self.get_request_identifier(),
