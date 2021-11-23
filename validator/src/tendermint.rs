@@ -19,7 +19,10 @@ use bls::{KeyPair, PublicKey};
 use hash::{Blake2bHash, Hash};
 use nimiq_network_interface::network::MsgAcceptance;
 use nimiq_validator_network::ValidatorNetwork;
-use primitives::policy::{TENDERMINT_TIMEOUT_DELTA, TENDERMINT_TIMEOUT_INIT};
+use primitives::{
+    policy::{TENDERMINT_TIMEOUT_DELTA, TENDERMINT_TIMEOUT_INIT},
+    slots::Validators,
+};
 use tendermint_protocol::{
     AggregationResult, ProposalResult, Step, TendermintError, TendermintOutsideDeps,
     TendermintState,
@@ -440,6 +443,8 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintInterface<TValidat
     pub fn new(
         validator_key: KeyPair,
         validator_id: u16,
+        active_validators: Validators,
+        block_height: u32,
         network: Arc<TValidatorNetwork>,
         blockchain: Arc<RwLock<Blockchain>>,
         block_producer: BlockProducer,
@@ -451,15 +456,6 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintInterface<TValidat
             ),
         >,
     ) -> Self {
-        // get validators for current epoch
-        let (active_validators, block_height) = {
-            let blockchain = blockchain.read();
-            (
-                blockchain.current_validators().unwrap(),
-                blockchain.head().block_number() + 1,
-            )
-        };
-
         // Create the aggregation object.
         let aggregation_adapter = HandelTendermintAdapter::new(
             validator_id,

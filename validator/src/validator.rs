@@ -321,6 +321,8 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                     block_producer,
                     self.signing_key(),
                     self.validator_id(),
+                    blockchain.current_validators().unwrap(),
+                    blockchain.head().block_number() + 1,
                     state,
                     proposal_stream,
                 ));
@@ -339,6 +341,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                     .get_fork_proofs_for_block(Self::FORK_PROOFS_MAX_SIZE);
                 self.micro_producer = Some(ProduceMicroBlock::new(
                     Arc::clone(&self.consensus.blockchain),
+                    blockchain.head(),
                     Arc::clone(&mempool),
                     Arc::clone(&self.network),
                     self.signing_key(),

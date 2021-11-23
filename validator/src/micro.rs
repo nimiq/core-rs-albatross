@@ -9,7 +9,7 @@ use parking_lot::RwLock;
 use tokio::time;
 
 use beserial::Serialize;
-use block::{ForkProof, MicroBlock, ViewChange, ViewChangeProof};
+use block::{Block, ForkProof, MicroBlock, ViewChange, ViewChangeProof};
 use block_production::BlockProducer;
 use blockchain::{AbstractBlockchain, Blockchain};
 use mempool::mempool::Mempool;
@@ -54,6 +54,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
     #[allow(clippy::too_many_arguments)]
     fn new(
         blockchain: Arc<RwLock<Blockchain>>,
+        current_head: Block,
         mempool: Arc<Mempool>,
         network: Arc<TValidatorNetwork>,
         signing_key: bls::KeyPair,
@@ -64,11 +65,6 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         view_change: Option<ViewChange>,
         view_change_delay: Duration,
     ) -> Self {
-        let (block_number, prev_seed) = {
-            let head = blockchain.read().head();
-            (head.block_number() + 1, head.seed().clone())
-        };
-
         Self {
             blockchain,
             mempool,
@@ -80,8 +76,8 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             view_change_proof,
             view_change,
             view_change_delay,
-            block_number,
-            prev_seed,
+            block_number: current_head.block_number() + 1,
+            prev_seed: current_head.seed().clone(),
         }
     }
 
@@ -375,6 +371,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProduceMicroBlock<TValidator
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         blockchain: Arc<RwLock<Blockchain>>,
+        current_head: Block,
         mempool: Arc<Mempool>,
         network: Arc<TValidatorNetwork>,
         signing_key: bls::KeyPair,
@@ -387,6 +384,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProduceMicroBlock<TValidator
     ) -> Self {
         let next_event = NextProduceMicroBlockEvent::new(
             blockchain,
+            current_head,
             mempool,
             network,
             signing_key,

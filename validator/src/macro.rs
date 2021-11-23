@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use futures::stream::{BoxStream, Stream, StreamExt};
 use futures::task::{Context, Poll};
+use nimiq_primitives::slots::Validators;
 use parking_lot::RwLock;
 
 use beserial::{Deserialize, Serialize};
@@ -68,6 +69,8 @@ impl ProduceMacroBlock {
         block_producer: BlockProducer,
         signing_key: bls::KeyPair, // probably SecretKey is enough (it is for the handel part of it).
         validator_id: u16,
+        active_validators: Validators,
+        block_height: u32,
         state: Option<PersistedMacroState<TValidatorNetwork>>,
         proposal_stream: BoxStream<
             'static,
@@ -82,6 +85,8 @@ impl ProduceMacroBlock {
         let deps = TendermintInterface::new(
             signing_key,
             validator_id,
+            active_validators,
+            block_height,
             network,
             blockchain,
             block_producer,
