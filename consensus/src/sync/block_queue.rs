@@ -209,7 +209,7 @@ impl<N: Network> Inner<N> {
                 .map(|block| block.hash())
                 .collect::<Vec<Blake2bHash>>();
 
-            request_component.request_missing_blocks(block_hash, block_locators);
+            request_component.request_missing_blocks(parent_hash, block_locators);
         }
     }
 

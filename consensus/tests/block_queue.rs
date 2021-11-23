@@ -234,7 +234,7 @@ async fn send_two_micro_blocks_out_of_order() {
 
     // Also we should've received a request to fill this gap
     let (target_block_hash, _locators) = mock_ptarc_rx.next().await.unwrap();
-    assert_eq!(target_block_hash, block2.hash());
+    assert_eq!(&target_block_hash, block2.parent_hash());
 
     // now send block1 to fill the gap
     tx.send((block1.clone(), mock_id)).await.unwrap();
@@ -427,7 +427,7 @@ async fn send_invalid_block() {
     assert_eq!(blocks[0], &block2);
 
     let (target_block_hash, _locators) = mock_ptarc_rx.next().await.unwrap();
-    assert_eq!(target_block_hash, block2.hash());
+    assert_eq!(&target_block_hash, block2.parent_hash());
 
     // now send block1 to fill the gap
     tx.send((block1.clone(), mock_id)).await.unwrap();
@@ -527,7 +527,7 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
     // Also we should've received a request to fill this gap
     // TODO: Check block locators
     let (target_block_hash, _locators) = mock_ptarc_rx.next().await.unwrap();
-    assert_eq!(target_block_hash, block2.hash());
+    assert_eq!(&target_block_hash, block2.parent_hash());
 
     // Instead of gossiping the block, we'll answer the missing blocks request
     mock_ptarc_tx.unbounded_send(vec![block1.clone()]).unwrap();
