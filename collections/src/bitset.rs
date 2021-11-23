@@ -330,7 +330,7 @@ impl fmt::Display for BitSet {
                 let consecutive_last = last_value.map(|lv| lv + 1 == value).unwrap_or(false);
                 let consecutive_next = value + 1 == *next_value;
                 if !(consecutive_last && consecutive_next) {
-                    write!(f, "{}", value.to_string())?;
+                    write!(f, "{}", value)?;
                     if consecutive_next {
                         write!(f, "-")?;
                     } else {
@@ -338,7 +338,7 @@ impl fmt::Display for BitSet {
                     }
                 }
             } else {
-                write!(f, "{}", value.to_string())?;
+                write!(f, "{}", value)?;
             }
             last_value = Some(value);
         }
