@@ -471,6 +471,18 @@ impl Network {
                             }
                         }
                     }
+                    NimiqEvent::Ping(event) => {
+                        if let Err(e) = event.result {
+                            tracing::error!("Ping failed with peer {}, {:?}", event.peer, e);
+                            // Remove the peer from the peer map
+                            if let Some(peer) = swarm.behaviour_mut().pool.peers.remove(&event.peer)
+                            {
+                                events_tx.send(NetworkEvent::<Peer>::PeerLeft(peer)).ok();
+                            }
+                        } else {
+                            tracing::trace!("Ping succeded with peer {}", event.peer);
+                        }
+                    }
                     NimiqEvent::Pool(event) => {
                         match event {
                             ConnectionPoolEvent::PeerJoined { peer } => {

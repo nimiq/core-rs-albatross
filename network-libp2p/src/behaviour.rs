@@ -10,6 +10,8 @@ use libp2p::{
     },
     identify::{Identify, IdentifyConfig, IdentifyEvent},
     kad::{store::MemoryStore, Kademlia, KademliaEvent},
+    ping,
+    ping::{Failure, PingEvent},
     swarm::{
         NetworkBehaviour, NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters,
     },
@@ -37,8 +39,11 @@ use crate::{
 
 pub type NimiqNetworkBehaviourError = EitherError<
     EitherError<
-        EitherError<EitherError<std::io::Error, DiscoveryError>, GossipsubHandlerError>,
-        std::io::Error,
+        EitherError<
+            EitherError<EitherError<std::io::Error, DiscoveryError>, GossipsubHandlerError>,
+            std::io::Error,
+        >,
+        Failure,
     >,
     ConnectionPoolError,
 >;
@@ -49,6 +54,7 @@ pub enum NimiqEvent {
     Discovery(DiscoveryEvent),
     Gossip(GossipsubEvent),
     Identify(IdentifyEvent),
+    Ping(PingEvent),
     Pool(ConnectionPoolEvent),
 }
 
@@ -76,6 +82,12 @@ impl From<IdentifyEvent> for NimiqEvent {
     }
 }
 
+impl From<PingEvent> for NimiqEvent {
+    fn from(event: PingEvent) -> Self {
+        Self::Ping(event)
+    }
+}
+
 impl From<ConnectionPoolEvent> for NimiqEvent {
     fn from(event: ConnectionPoolEvent) -> Self {
         Self::Pool(event)
@@ -89,6 +101,7 @@ pub struct NimiqBehaviour {
     pub discovery: DiscoveryBehaviour,
     pub gossipsub: Gossipsub,
     pub identify: Identify,
+    pub ping: ping::Behaviour,
     pub pool: ConnectionPoolBehaviour,
 
     #[behaviour(ignore)]
@@ -143,6 +156,15 @@ impl NimiqBehaviour {
         let identify_config = IdentifyConfig::new("/albatross/2.0".to_string(), public_key);
         let identify = Identify::new(identify_config);
 
+        // Ping behaviour
+        // Send a ping every 5 seconds and timeout at 5 seconds
+        let duration = tokio::time::Duration::from_secs(5);
+        let ping = ping::Behaviour::new(
+            ping::Config::new()
+                .with_interval(duration)
+                .with_timeout(duration),
+        );
+
         // Connection pool behaviour
         let pool = ConnectionPoolBehaviour::new(Arc::clone(&contacts), config.seeds, peers);
 
@@ -151,6 +173,7 @@ impl NimiqBehaviour {
             discovery,
             gossipsub,
             identify,
+            ping,
             pool,
             events: VecDeque::new(),
             contacts,
@@ -228,6 +251,12 @@ impl NetworkBehaviourEventProcess<GossipsubEvent> for NimiqBehaviour {
 
 impl NetworkBehaviourEventProcess<IdentifyEvent> for NimiqBehaviour {
     fn inject_event(&mut self, event: IdentifyEvent) {
+        self.emit_event(event);
+    }
+}
+
+impl NetworkBehaviourEventProcess<PingEvent> for NimiqBehaviour {
+    fn inject_event(&mut self, event: PingEvent) {
         self.emit_event(event);
     }
 }
