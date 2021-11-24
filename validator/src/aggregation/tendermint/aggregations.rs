@@ -201,8 +201,12 @@ impl<N: ValidatorNetwork + 'static> Stream for TendermintAggregations<N> {
                     .get(&(message.tag.round_number, message.tag.step))
                 {
                     trace!("New message for ongoing aggregation: {:?}", &message);
-                    if descriptor.input.send(message.update).is_err() {
-                        debug!("Failed to relay LevelUpdate to aggregation");
+                    let result = descriptor.input.send(message.update);
+                    match result {
+                        Ok(()) => trace!("Sent LevelUpdate message to aggregation"),
+                        Err(e) => {
+                            error!("Failed to relay LevelUpdate to aggregation, error {} ", e)
+                        }
                     }
                 } else if let Some(((highest_round, _), _)) =
                     self.aggregation_descriptors.last_key_value()
