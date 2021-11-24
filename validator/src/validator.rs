@@ -8,6 +8,7 @@ use futures::{
 };
 use linked_hash_map::LinkedHashMap;
 use mempool::{config::MempoolConfig, mempool::Mempool};
+use nimiq_primitives::policy;
 use parking_lot::RwLock;
 use tokio_stream::wrappers::BroadcastStream;
 
@@ -18,7 +19,7 @@ use blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent, ForkEvent, Pus
 use bls::CompressedPublicKey;
 use consensus::{sync::block_queue::BlockTopic, Consensus, ConsensusEvent, ConsensusProxy};
 use database::{Database, Environment, ReadTransaction, WriteTransaction};
-use hash::Blake2bHash;
+use hash::{Blake2bHash, Hash};
 use keys::{Address, KeyPair};
 use network_interface::{
     network::{Network, PubsubId, Topic},
@@ -44,6 +45,7 @@ impl Topic for ProposalTopic {
     const VALIDATE: bool = true;
 }
 
+#[derive(PartialEq)]
 enum ValidatorStakingState {
     Active,
     Parked,
@@ -63,6 +65,12 @@ struct ProduceMicroBlockState {
     view_number: u32,
     view_change_proof: Option<ViewChangeProof>,
     view_change: Option<ViewChange>,
+}
+
+/// Validator parking state
+struct ParkingState {
+    park_tx_hash: Blake2bHash,
+    park_tx_validity_window_start: u32,
 }
 
 enum MempoolState {
@@ -108,7 +116,7 @@ pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork + 's
 
     epoch_state: Option<ActiveEpochState>,
     blockchain_state: BlockchainState,
-    unpark_sent: bool,
+    parking_state: Option<ParkingState>,
 
     macro_producer: Option<ProduceMacroBlock>,
     macro_state: Option<PersistedMacroState<TValidatorNetwork>>,
@@ -188,7 +196,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
 
             epoch_state: None,
             blockchain_state,
-            unpark_sent: false,
+            parking_state: None,
 
             macro_producer: None,
             macro_state,
@@ -225,15 +233,29 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         self.macro_producer = None;
         self.micro_producer = None;
 
-        // Send a new unpark transaction in case a validator is still parked from last epoch.
-        self.unpark_sent = false;
+        let blockchain = self.consensus.blockchain.read();
 
-        let validators = self
-            .consensus
-            .blockchain
-            .read()
-            .current_validators()
-            .unwrap();
+        // Check if the transaction was sent
+        if let Some(parking_state) = &self.parking_state {
+            // Check that the transaction was sent in the validity window
+            let staking_state = self.get_staking_state();
+            if staking_state == ValidatorStakingState::Parked
+                && blockchain.block_number()
+                    >= parking_state.park_tx_validity_window_start + policy::EPOCH_LENGTH
+                && !blockchain.tx_in_validity_window(
+                    &parking_state.park_tx_hash,
+                    parking_state.park_tx_validity_window_start,
+                    None,
+                )
+            {
+                // If we are parked and no transaction has been seen in the expected validity window
+                // after an epoch, reset our parking state
+                log::debug!("Reseting state to re-send un-park transactions since we are parked and validity window doesn't contain the transaction sent");
+                self.parking_state = None;
+            }
+        }
+
+        let validators = blockchain.current_validators().unwrap();
 
         self.epoch_state = None;
         log::trace!(
@@ -573,6 +595,11 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             blockchain.network_id(),
         );
 
+        self.parking_state = Some(ParkingState {
+            park_tx_hash: unpark_transaction.hash(),
+            park_tx_validity_window_start: validity_start_height,
+        });
+
         let cn = self.consensus.clone();
         tokio::spawn(async move {
             debug!("Sending unpark transaction");
@@ -580,7 +607,6 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                 error!("Failed to send unpark transaction");
             }
         });
-        self.unpark_sent = true;
     }
 
     pub fn validator_id(&self) -> u16 {
@@ -677,18 +703,16 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Future
         }
 
         // Once consensus is established, check the validator staking state.
-        // TODO: this needs a more sophisticated mechanism. Re-sending the staking transaction should be
-        // triggered at some point even if still parked and tx was send before.
         if self.consensus.is_established() {
             match self.get_staking_state() {
                 ValidatorStakingState::Parked => {
-                    if !self.unpark_sent {
+                    if self.parking_state.is_none() {
                         self.unpark();
                     }
                 }
                 ValidatorStakingState::Active => {
-                    if self.unpark_sent {
-                        self.unpark_sent = false;
+                    if self.parking_state.is_some() {
+                        self.parking_state = None;
                     }
                 }
                 _ => {}

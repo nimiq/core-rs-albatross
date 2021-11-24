@@ -88,11 +88,11 @@ impl Blockchain {
         self.state.accounts.get(&key, None)
     }
 
-    /// Checks if we have seen some transaction with this hash inside the validity window. This is
-    /// used to prevent replay attacks.
-    pub fn contains_tx_in_validity_window(
+    /// Checks if we have seen some transaction with this hash inside the a validity window.
+    pub fn tx_in_validity_window(
         &self,
         tx_hash: &Blake2bHash,
+        validity_window_start: u32,
         txn_opt: Option<&Transaction>,
     ) -> bool {
         // Get a vector with all transactions corresponding to the given hash.
@@ -103,21 +103,28 @@ impl Blockchain {
             return false;
         }
 
-        // If we have transactions with this same hash then we must be sure that they are outside
-        // the validity window.
-        let max_block_number = self
-            .block_number()
-            .saturating_sub(policy::TRANSACTION_VALIDITY_WINDOW);
-
         for ext_tx in ext_hash_vec {
             // If the transaction is inside the validity window, return true.
-            if ext_tx.block_number >= max_block_number {
+            if ext_tx.block_number >= validity_window_start {
                 return true;
             }
         }
 
         // If we didn't see any transaction inside the validity window then we can return false.
         false
+    }
+
+    /// Checks if we have seen some transaction with this hash inside the validity window. This is
+    /// used to prevent replay attacks.
+    pub fn contains_tx_in_validity_window(
+        &self,
+        tx_hash: &Blake2bHash,
+        txn_opt: Option<&Transaction>,
+    ) -> bool {
+        let max_block_number = self
+            .block_number()
+            .saturating_sub(policy::TRANSACTION_VALIDITY_WINDOW);
+        self.tx_in_validity_window(tx_hash, max_block_number, txn_opt)
     }
 
     pub fn staking_contract_address(&self) -> Address {
