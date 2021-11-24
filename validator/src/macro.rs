@@ -71,6 +71,7 @@ impl ProduceMacroBlock {
         validator_id: u16,
         active_validators: Validators,
         block_height: u32,
+        initial_round: u32,
         state: Option<PersistedMacroState<TValidatorNetwork>>,
         proposal_stream: BoxStream<
             'static,
@@ -91,6 +92,7 @@ impl ProduceMacroBlock {
             blockchain,
             block_producer,
             proposal_stream,
+            initial_round,
         );
 
         let state_opt = state.map(|s| TendermintState {

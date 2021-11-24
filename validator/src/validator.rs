@@ -342,6 +342,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                     self.validator_id(),
                     active_validators,
                     next_block_number,
+                    next_view_number,
                     state,
                     proposal_stream,
                 ));

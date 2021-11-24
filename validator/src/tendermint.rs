@@ -61,6 +61,8 @@ pub struct TendermintInterface<TValidatorNetwork: ValidatorNetwork> {
             <TValidatorNetwork as ValidatorNetwork>::PubsubId,
         ),
     >,
+
+    initial_round: u32,
 }
 
 #[async_trait]
@@ -74,7 +76,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
     fn initial_round(&self) -> u32 {
         // Macro blocks follow the same rules as micro blocks when it comes to view_number/round.
         // Thus the round is offset by the predecessors view.
-        self.blockchain.read().view_number()
+        self.initial_round
     }
 
     /// This function is meant to verify the validity of a TendermintState. However, this function
@@ -462,6 +464,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintInterface<TValidat
                 <TValidatorNetwork as ValidatorNetwork>::PubsubId,
             ),
         >,
+        initial_round: u32,
     ) -> Self {
         // Create the aggregation object.
         let aggregation_adapter = HandelTendermintAdapter::new(
@@ -482,6 +485,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintInterface<TValidat
             blockchain,
             offset_time: OffsetTime::default(),
             proposal_stream,
+            initial_round,
         }
     }
 }
