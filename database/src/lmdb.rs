@@ -1,4 +1,3 @@
-use std::cmp;
 use std::fmt;
 use std::fs;
 use std::sync::Arc;
@@ -15,14 +14,12 @@ use super::*;
 #[derive(Debug)]
 pub struct LmdbEnvironment {
     env: Arc<lmdb_zero::Environment>,
-    creation_gate: Arc<parking_lot::RwLock<()>>,
 }
 
 impl Clone for LmdbEnvironment {
     fn clone(&self) -> Self {
         Self {
             env: Arc::clone(&self.env),
-            creation_gate: Arc::clone(&self.creation_gate),
         }
     }
 }
@@ -79,13 +76,9 @@ impl LmdbEnvironment {
             info!("LMDB memory map size: {}", cur_mapsize);
         }
 
-        let lmdb = LmdbEnvironment {
-            env: Arc::new(env),
-            creation_gate: Arc::new(parking_lot::RwLock::new(())),
-        };
+        let lmdb = LmdbEnvironment { env: Arc::new(env) };
         if lmdb.need_resize(0) {
             info!("LMDB memory needs to be resized.");
-            lmdb.do_resize(0);
         }
 
         Ok(lmdb)
@@ -93,7 +86,6 @@ impl LmdbEnvironment {
 
     pub(super) fn open_database(&self, name: String, flags: DatabaseFlags) -> LmdbDatabase {
         // This is an implicit transaction, so take the lock first.
-        let _guard = self.creation_gate.read();
         let mut db_flags = lmdb_zero::db::CREATE;
 
         // Translate flags.
@@ -128,48 +120,6 @@ impl LmdbEnvironment {
 
     fn path(&self) -> Cow<str> {
         self.env.path().unwrap().to_string_lossy()
-    }
-
-    pub fn do_resize(&self, increase_size: usize) {
-        // Lock creation of new transactions until resize is finished.
-        let _guard = self.creation_gate.write();
-        let add_size: usize = cmp::max(1 << 30, increase_size);
-
-        let available_space = fs2::available_space(self.path().as_ref());
-        match available_space {
-            Ok(available_space) => {
-                let available_space = available_space as usize;
-                // Check disk capacity.
-                if available_space < add_size {
-                    error!(
-                        "Insufficient free space to extend database: {} MB available, {} MB needed.",
-                        available_space >> 20,
-                        add_size >> 20
-                    );
-                    return;
-                }
-            }
-            Err(e) => {
-                warn!("Unable to query free disk space:\n{:?}", e);
-            }
-        }
-
-        let info = self.env.info().unwrap();
-        let stat = self.env.stat().unwrap();
-
-        let mut new_mapsize = info.mapsize + add_size;
-        new_mapsize += new_mapsize % (stat.psize as usize);
-
-        // TODO: Should we handle the error?
-        unsafe {
-            self.env.set_mapsize(new_mapsize).unwrap();
-        }
-
-        info!(
-            "LMDB Mapsize increased. Old: {} MiB, New: {} MiB",
-            info.mapsize / (1024 * 1024),
-            new_mapsize / (1024 * 1024)
-        );
     }
 
     pub fn need_resize(&self, threshold_size: usize) -> bool {
@@ -214,17 +164,13 @@ pub struct LmdbDatabase {
 
 pub struct LmdbReadTransaction<'env> {
     txn: lmdb_zero::ReadTransaction<'env>,
-    #[allow(dead_code)]
-    guard: parking_lot::RwLockReadGuard<'env, ()>,
 }
 
 impl<'env> LmdbReadTransaction<'env> {
     pub(super) fn new(env: &'env LmdbEnvironment) -> Self {
         // This is an implicit transaction, so take the lock first.
-        let guard = env.creation_gate.read();
         LmdbReadTransaction {
             txn: lmdb_zero::ReadTransaction::new(Arc::clone(&env.env)).unwrap(),
-            guard,
         }
     }
 
@@ -258,20 +204,16 @@ impl<'env> fmt::Debug for LmdbReadTransaction<'env> {
 
 pub struct LmdbWriteTransaction<'env> {
     txn: lmdb_zero::WriteTransaction<'env>,
-    #[allow(dead_code)]
-    guard: parking_lot::RwLockReadGuard<'env, ()>,
 }
 
 impl<'env> LmdbWriteTransaction<'env> {
     pub(super) fn new(env: &'env LmdbEnvironment) -> Self {
         // Check for enough space before every write transaction.
         if env.need_resize(0) {
-            env.do_resize(0);
+            log::error!("DB needs resize, resize not supported");
         }
-        let guard = env.creation_gate.read();
         LmdbWriteTransaction {
             txn: lmdb_zero::WriteTransaction::new(Arc::clone(&env.env)).unwrap(),
-            guard,
         }
     }
 
