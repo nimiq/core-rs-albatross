@@ -1014,6 +1014,14 @@ mod tests {
         }
     }
 
+    fn assert_peer_left(event: &NetworkEvent<Peer>, peer_id: &PeerId) {
+        if let NetworkEvent::PeerLeft(peer) = event {
+            assert_eq!(&peer.id, peer_id);
+        } else {
+            panic!("Event is not a NetworkEvent::PeerLeft: {:?}", event);
+        }
+    }
+
     #[derive(Clone, Debug)]
     struct TestNetwork {
         next_address: u64,
@@ -1100,6 +1108,7 @@ mod tests {
     async fn create_network_with_n_peers(n_peers: usize) -> Vec<Network> {
         let mut networks = Vec::new();
         let mut addresses = Vec::new();
+        let mut rng = rand::thread_rng();
 
         // Create all the networks and addresses
         for peer in 0..n_peers {
@@ -1131,18 +1140,96 @@ mod tests {
             tokio::time::sleep(timeout).await;
         }
 
-        // Wait for the connections to settle
-        let timeout = tokio::time::Duration::from_secs(1);
-        tokio::time::sleep(timeout).await;
-
         // Verify that each network has all the other peers connected
-        for peer in 1..n_peers {
+        for peer in 0..n_peers {
+            assert_eq!(networks[peer as usize].get_peers().len(), n_peers - 1);
             assert_eq!(
                 networks[peer as usize]
                     .network_info()
                     .await
                     .unwrap()
                     .num_peers(),
+                n_peers - 1
+            );
+        }
+
+        // Now disconnect and reconnect a random peer from all peeers
+        for peer in 0..n_peers {
+            let network1 = &networks[peer as usize];
+            let peer_id1 = network1.local_peer_id();
+            let mut events1 = network1.subscribe_events();
+
+            let mut close_peer = rng.gen_range(0..n_peers);
+            while peer == close_peer {
+                close_peer = rng.gen_range(0..n_peers);
+            }
+            let network2 = &networks[close_peer as usize];
+            let peer_id2 = network2.local_peer_id();
+            let mut events2 = network2.subscribe_events();
+
+            // Verify that both networks have all the other peers connected
+            assert_eq!(network1.get_peers().len(), n_peers - 1);
+            assert_eq!(network2.get_peers().len(), n_peers - 1);
+            assert_eq!(
+                network1.network_info().await.unwrap().num_peers(),
+                n_peers - 1
+            );
+            assert_eq!(
+                network2.network_info().await.unwrap().num_peers(),
+                n_peers - 1
+            );
+
+            // Disconnect a random peer
+            tracing::debug!("Disconnecting peer {} from peer {}", close_peer, peer);
+            let current_peer = network1.get_peer(*peer_id2).unwrap();
+            current_peer.close(CloseReason::Other);
+
+            // Assert the peer has left both networks
+            let close_event1 = events1.next().await.unwrap().unwrap();
+            assert_peer_left(&close_event1, peer_id2);
+            drop(events1);
+
+            let close_event2 = events2.next().await.unwrap().unwrap();
+            assert_peer_left(&close_event2, peer_id1);
+            drop(events2);
+
+            // Verify that the networks lost a connection
+            assert_eq!(network1.get_peers().len(), n_peers - 2);
+            assert_eq!(network2.get_peers().len(), n_peers - 2);
+            assert_eq!(
+                network1.network_info().await.unwrap().num_peers(),
+                n_peers - 2
+            );
+            assert_eq!(
+                network2.network_info().await.unwrap().num_peers(),
+                n_peers - 2
+            );
+
+            // Now reconnect the peer
+            events1 = network1.subscribe_events();
+            events2 = network2.subscribe_events();
+            tracing::debug!("Reconnecting peer: {}", close_peer);
+            network1
+                .dial_address(addresses[close_peer as usize].clone())
+                .await
+                .unwrap();
+
+            // Assert the peer rejoined the network
+            let join_event1 = events1.next().await.unwrap().unwrap();
+            assert_peer_joined(&join_event1, peer_id2);
+
+            let join_event2 = events2.next().await.unwrap().unwrap();
+            assert_peer_joined(&join_event2, peer_id1);
+
+            // Verify all peers are connected again
+            assert_eq!(network1.get_peers().len(), n_peers - 1);
+            assert_eq!(network2.get_peers().len(), n_peers - 1);
+            assert_eq!(
+                network1.network_info().await.unwrap().num_peers(),
+                n_peers - 1
+            );
+            assert_eq!(
+                network2.network_info().await.unwrap().num_peers(),
                 n_peers - 1
             );
         }
@@ -1155,7 +1242,7 @@ mod tests {
         // pretty_env_logger::init();
         // tracing_subscriber::fmt::init();
 
-        let peers: usize = 15;
+        let peers: usize = 5;
         let networks = create_network_with_n_peers(peers).await;
 
         assert_eq!(peers, networks.len());
@@ -1238,14 +1325,6 @@ mod tests {
 
         assert_eq!(msg1.id, 1337);
         assert_eq!(msg2.id, 420);
-    }
-
-    fn assert_peer_left(event: &NetworkEvent<Peer>, peer_id: &PeerId) {
-        if let NetworkEvent::PeerLeft(peer) = event {
-            assert_eq!(&peer.id, peer_id);
-        } else {
-            panic!("Event is not a NetworkEvent::PeerLeft: {:?}", event);
-        }
     }
 
     #[tokio::test]
