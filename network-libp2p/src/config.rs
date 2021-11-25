@@ -1,5 +1,4 @@
 use std::time::Duration;
-
 use libp2p::{
     gossipsub::{GossipsubConfig, GossipsubConfigBuilder},
     identity::Keypair,

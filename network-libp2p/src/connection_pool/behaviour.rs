@@ -543,7 +543,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
 
     fn inject_connection_closed(
         &mut self,
-        _peer_id: &PeerId,
+        peer_id: &PeerId,
         _conn: &ConnectionId,
         endpoint: &ConnectedPoint,
         _handler: <Self::ProtocolsHandler as IntoProtocolsHandler>::Handler,
@@ -573,6 +573,15 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
         };
 
         self.addresses.mark_closed(address.clone());
+        // Notify handler about the connection is going to be shut down
+        self.actions
+            .push_back(NetworkBehaviourAction::NotifyHandler {
+                peer_id: *peer_id,
+                handler: NotifyHandler::Any,
+                event: HandlerInEvent::Close {
+                    reason: CloseReason::RemoteClosed,
+                },
+            });
     }
 
     fn inject_event(
