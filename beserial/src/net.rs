@@ -129,5 +129,5 @@ impl Deserialize for SocketAddr {
     }
 }
 
-impl_serialize_sockaddr!(SocketAddrV4, |ip, port| Self::new(ip, port));
+impl_serialize_sockaddr!(SocketAddrV4, Self::new);
 impl_serialize_sockaddr!(SocketAddrV6, |ip, port| Self::new(ip, port, 0, 0));

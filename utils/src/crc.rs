@@ -88,14 +88,9 @@ impl io::Write for Crc32Computer {
     }
 }
 
+#[derive(Default)]
 pub struct Crc8Computer {
     value: u8,
-}
-
-impl Default for Crc8Computer {
-    fn default() -> Crc8Computer {
-        Crc8Computer { value: 0 }
-    }
 }
 
 #[allow(clippy::unreadable_literal)]

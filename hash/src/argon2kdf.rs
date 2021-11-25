@@ -11,12 +11,14 @@ pub fn compute_argon2_kdf(
     iterations: u32,
     derived_key_length: usize,
 ) -> Result<Vec<u8>, Argon2Error> {
-    let mut config = Config::default();
-    config.time_cost = iterations;
-    config.hash_length = derived_key_length as u32;
-    config.mem_cost = MEMORY_COST;
-    config.thread_mode = ThreadMode::from_threads(PARALELLISM);
-    config.variant = argon2::Variant::Argon2d;
+    let config = Config {
+        time_cost: iterations,
+        hash_length: derived_key_length as u32,
+        mem_cost: MEMORY_COST,
+        thread_mode: ThreadMode::from_threads(PARALELLISM),
+        variant: argon2::Variant::Argon2d,
+        ..Default::default()
+    };
 
     let mut hash = argon2::hash_raw(password, salt, &config)?;
     assert!(hash.len() >= derived_key_length);

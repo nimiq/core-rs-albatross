@@ -264,12 +264,14 @@ impl HashOutput for Argon2dHash {
 
 impl Argon2dHasher {
     pub fn new(passes: u32, lanes: u32, kib: u32) -> Self {
-        let mut config = argon2::Config::default();
-        config.time_cost = passes;
-        config.lanes = lanes;
-        config.mem_cost = kib;
-        config.hash_length = 32;
-        config.variant = argon2::Variant::Argon2d;
+        let config = argon2::Config {
+            time_cost: passes,
+            lanes,
+            mem_cost: kib,
+            hash_length: 32,
+            variant: argon2::Variant::Argon2d,
+            ..Default::default()
+        };
         Argon2dHasher {
             buf: Vec::new(),
             config,

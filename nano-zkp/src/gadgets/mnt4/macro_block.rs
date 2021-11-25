@@ -13,7 +13,6 @@ use ark_r1cs_std::alloc::AllocationMode;
 use ark_r1cs_std::prelude::{
     AllocVar, Boolean, CondSelectGadget, FieldVar, ToBitsGadget, UInt32, UInt8,
 };
-use ark_r1cs_std::R1CSVar;
 use ark_relations::r1cs::{ConstraintSystemRef, Namespace, SynthesisError};
 
 use nimiq_nano_primitives::MacroBlock;

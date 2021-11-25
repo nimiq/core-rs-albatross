@@ -1,6 +1,6 @@
 use ark_crypto_primitives::prf::blake2s::constraints::evaluate_blake2s_with_parameters;
 use ark_crypto_primitives::prf::Blake2sWithParameterBlock;
-use ark_ff::{One, PrimeField, Zero};
+use ark_ff::{One, PrimeField};
 use ark_mnt4_753::Fr as MNT4Fr;
 use ark_mnt6_753::constraints::G1Var;
 use ark_mnt6_753::G1Affine;
