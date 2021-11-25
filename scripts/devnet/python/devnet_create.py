@@ -90,6 +90,7 @@ timestamps = true
 
 [log.tags]
 libp2p_swarm = "debug"
+lock_api = "trace"
 """.format(
             path="temp-state/dev/seed",
         ))
@@ -123,6 +124,7 @@ timestamps = true
 
 [log.tags]
 libp2p_swarm = "debug"
+lock_api = "trace"
 
 [validator]
 validator_address = "NQ07 0000 0000 0000 0000 0000 0000 0000 0000"
@@ -171,6 +173,7 @@ timestamps = true
 
 [log.tags]
 libp2p_swarm = "debug"
+lock_api = "trace"
 
 [validator]
 validator_address = "{validator_address}"
