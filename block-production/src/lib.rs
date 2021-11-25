@@ -27,7 +27,7 @@ impl BlockProducer {
     pub fn next_micro_block(
         &self,
         // The (upgradable) read locked guard to the blockchain
-        blockchain: &dyn Deref<Target = Blockchain>,
+        blockchain: &Blockchain,
         // The timestamp for the block.
         timestamp: u64,
         // The view number for the block.

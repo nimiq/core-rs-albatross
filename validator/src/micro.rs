@@ -11,11 +11,12 @@ use tokio::time;
 use beserial::Serialize;
 use block::{Block, ForkProof, MicroBlock, ViewChange, ViewChangeProof};
 use block_production::BlockProducer;
-use blockchain::{AbstractBlockchain, Blockchain};
+use blockchain::{AbstractBlockchain, Blockchain, PushResult};
 use mempool::mempool::Mempool;
 use nimiq_account::{Account, AccountError, AccountTransactionInteraction, Accounts};
 use nimiq_database::WriteTransaction;
 use nimiq_primitives::policy;
+use nimiq_primitives::slots::Validators;
 use nimiq_transaction::Transaction;
 use nimiq_validator_network::ValidatorNetwork;
 use utils::time::systemtime_to_timestamp;
@@ -27,7 +28,7 @@ use crate::aggregation::view_change::ViewChangeAggregation;
 // bytes) and we probably don't want the performance penalty of the allocation.
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum ProduceMicroBlockEvent {
-    MicroBlock(MicroBlock),
+    MicroBlock(MicroBlock, PushResult),
     ViewChange(ViewChange, ViewChangeProof),
 }
 
@@ -39,12 +40,12 @@ struct NextProduceMicroBlockEvent<TValidatorNetwork> {
     signing_key: bls::KeyPair,
     validator_id: u16,
     fork_proofs: Vec<ForkProof>,
+    prev_seed: VrfSeed,
+    block_number: u32,
     view_number: u32,
     view_change_proof: Option<ViewChangeProof>,
     view_change: Option<ViewChange>,
     view_change_delay: Duration,
-    block_number: u32,
-    prev_seed: VrfSeed,
 }
 
 impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<TValidatorNetwork> {
@@ -54,12 +55,13 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
     #[allow(clippy::too_many_arguments)]
     fn new(
         blockchain: Arc<RwLock<Blockchain>>,
-        current_head: Block,
         mempool: Arc<Mempool>,
         network: Arc<TValidatorNetwork>,
         signing_key: bls::KeyPair,
         validator_id: u16,
         fork_proofs: Vec<ForkProof>,
+        prev_seed: VrfSeed,
+        block_number: u32,
         view_number: u32,
         view_change_proof: Option<ViewChangeProof>,
         view_change: Option<ViewChange>,
@@ -72,61 +74,117 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             signing_key,
             validator_id,
             fork_proofs,
+            prev_seed,
+            block_number,
             view_number,
             view_change_proof,
             view_change,
             view_change_delay,
-            block_number: current_head.block_number() + 1,
-            prev_seed: current_head.seed().clone(),
         }
     }
 
     async fn next(
         mut self,
     ) -> (
-        ProduceMicroBlockEvent,
+        Option<ProduceMicroBlockEvent>,
         NextProduceMicroBlockEvent<TValidatorNetwork>,
     ) {
-        let event = if self.is_our_turn() {
-            info!(
-                "[{}] Our turn at #{}:{}, producing micro block",
-                self.validator_id, self.block_number, self.view_number
-            );
-            ProduceMicroBlockEvent::MicroBlock(self.produce_micro_block())
-        } else {
-            debug!(
-                "[{}] Not our turn at #{}:{}, waiting for micro block",
-                self.validator_id, self.block_number, self.view_number
-            );
-            time::sleep(self.view_change_delay).await;
-            info!(
-                "No micro block received within timeout at #{}:{}, starting view change",
-                self.block_number, self.view_number
-            );
-            let (view_change, view_change_proof) = self.change_view().await;
-            info!(
-                "View change completed for #{}:{}, new view is {}",
-                self.block_number, self.view_number, view_change.new_view_number
-            );
-            self.view_number = view_change.new_view_number;
-            self.view_change_proof = Some(view_change_proof.clone());
-            ProduceMicroBlockEvent::ViewChange(view_change, view_change_proof)
+        let in_current_state = |block: &Block| {
+            self.prev_seed == *block.seed()
+                || self.block_number == block.block_number() + 1
+                || self.view_number >= block.view_number()
         };
-        (event, self)
+
+        // Acquire blockchain.upgradable_read() to prevent further changes to the blockchain while
+        // we're constructing the block. Check if we're still in the correct state, abort otherwise.
+        let return_value = {
+            let blockchain = self.blockchain.upgradable_read();
+            if !in_current_state(&blockchain.head()) {
+                Some(None)
+            } else if self.is_our_turn(&*blockchain) {
+                info!(
+                    "[{}] Our turn at #{}:{}, producing micro block",
+                    self.validator_id, self.block_number, self.view_number
+                );
+
+                let block = self.produce_micro_block(&*blockchain);
+
+                debug!(
+                    "Produced micro block #{}.{} with {} transactions",
+                    block.header.block_number,
+                    block.header.view_number,
+                    block
+                        .body
+                        .as_ref()
+                        .map(|body| body.transactions.len())
+                        .unwrap_or(0)
+                );
+
+                let block1 = block.clone();
+
+                // Use a trusted push since these blocks were generated by this validator
+                let result = if cfg!(feature = "trusted_push") {
+                    Blockchain::trusted_push(blockchain, Block::Micro(block))
+                } else {
+                    Blockchain::push(blockchain, Block::Micro(block))
+                };
+
+                if let Err(e) = &result {
+                    error!("Failed to push our own block onto the chain: {:?}", e);
+                }
+
+                let event = result
+                    .map(move |result| ProduceMicroBlockEvent::MicroBlock(block1, result))
+                    .ok();
+                Some(event)
+            } else {
+                None
+            }
+        };
+        if let Some(event) = return_value {
+            return (event, self);
+        }
+
+        debug!(
+            "[{}] Not our turn at #{}:{}, waiting for micro block",
+            self.validator_id, self.block_number, self.view_number
+        );
+        time::sleep(self.view_change_delay).await;
+        info!(
+            "No micro block received within timeout at #{}:{}, starting view change",
+            self.block_number, self.view_number
+        );
+
+        // Acquire a blockchain read lock and check if the state still matches to fetch active validators.
+        let active_validators = {
+            let blockchain = self.blockchain.read();
+            if in_current_state(&blockchain.head()) {
+                Some(blockchain.current_validators().unwrap())
+            } else {
+                None
+            }
+        };
+        if active_validators.is_none() {
+            return (None, self);
+        }
+
+        let (view_change, view_change_proof) = self.change_view(active_validators.unwrap()).await;
+        info!(
+            "View change completed for #{}:{}, new view is {}",
+            self.block_number, self.view_number, view_change.new_view_number
+        );
+        let event = ProduceMicroBlockEvent::ViewChange(view_change, view_change_proof);
+        (Some(event), self)
     }
 
-    fn is_our_turn(&self) -> bool {
+    fn is_our_turn(&self, blockchain: &Blockchain) -> bool {
         // TODO: This match() used to be an expect(), I changed it because there is a case where the block
         // producer will continue running for a while in parallel to a rebranch operation that will
         // eventually drop it; when this happens, we want to keep running (while also not producing anything)
         // instead of panicking (it shouldn't matter since we will eventually drop this producer), but the
         // correct fix for this would be dropping the validator (or somehow stop its operation) as soon as we
         // know we're rebranching
-        let slot = match self.blockchain.read().get_slot_owner_at(
-            self.block_number,
-            self.view_number,
-            None,
-        ) {
+        let slot = match blockchain.get_slot_owner_at(self.block_number, self.view_number, None) {
             Some((slot, _)) => slot,
             None => {
                 warn!("Couldn't find who the next slot owner is, this should only happen if we rebranched while processing a view change");
@@ -137,10 +195,152 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         &self.signing_key.public_key.compress() == slot.public_key.compressed()
     }
 
+    fn produce_micro_block(&self, blockchain: &Blockchain) -> MicroBlock {
+        let producer = BlockProducer::new(self.signing_key.clone());
+
+        let timestamp = u64::max(
+            blockchain.timestamp(),
+            systemtime_to_timestamp(SystemTime::now()),
+        );
+
+        let transactions = self.collect_transactions(blockchain, timestamp);
+
+        producer.next_micro_block(
+            blockchain,
+            timestamp,
+            self.view_number,
+            self.view_change_proof.clone(),
+            self.fork_proofs.clone(),
+            transactions,
+            vec![], // TODO
+        )
+    }
+
+    async fn change_view(
+        &mut self,
+        active_validators: Validators,
+    ) -> (ViewChange, ViewChangeProof) {
+        let new_view_number = self.view_number + 1;
+        let view_change = ViewChange {
+            block_number: self.block_number,
+            new_view_number,
+            prev_seed: self.prev_seed.clone(),
+        };
+
+        // Include the previous_view_change_proof only if it has not yet been persisted on chain.
+        let view_change_proof = self.view_change.as_ref().and_then(|vc| {
+            if vc.block_number == self.block_number {
+                Some(self.view_change_proof.as_ref().unwrap().sig.clone())
+            } else {
+                None
+            }
+        });
+
+        let (view_change, view_change_proof) = ViewChangeAggregation::start(
+            view_change.clone(),
+            view_change_proof,
+            self.signing_key.clone(),
+            self.validator_id,
+            active_validators,
+            Arc::clone(&self.network),
+        )
+        .await;
+
+        // Set the view change and view_change_proof properties so in case another view change happens they are available.
+        self.view_number = view_change.new_view_number;
+        self.view_change = Some(view_change.clone());
+        self.view_change_proof = Some(view_change_proof.clone());
+
+        (view_change, view_change_proof)
+    }
+}
+
+impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<TValidatorNetwork> {
+    fn collect_transactions(&self, blockchain: &Blockchain, timestamp: u64) -> Vec<Transaction> {
+        // Get transactions before acquiring blockchain.read as it will take mempool state
+        // lock which we do not want to take with a blockchain lock held.
+        // FIXME lock order
+        let mut transactions = self
+            .mempool
+            .get_transactions_for_block(MicroBlock::get_available_bytes(self.fork_proofs.len()));
+
+        let mut iterations = 0;
+        let mut final_transactions: Vec<Transaction> = vec![];
+        let env = blockchain.state().accounts.env.clone();
+        let mut txn = WriteTransaction::new(&env);
+
+        while iterations < Self::MAX_TXN_CHECK_ITERATIONS {
+            // If the transaction isn't valid we need to remove it
+            let removed_txns = Self::filter_invalid_staking_transactions(
+                &mut transactions,
+                &blockchain.state().accounts,
+                self.block_number,
+                timestamp,
+                &mut txn,
+            );
+
+            // Add the surviving transactions to the original transactions
+            final_transactions.extend(transactions);
+
+            let removed_txns_size = removed_txns
+                .iter()
+                .fold(0, |acc, transaction| acc + transaction.serialized_size());
+
+            if removed_txns_size != 0 {
+                log::debug!(
+                    "Dropped {} transactions doing staking verifications",
+                    removed_txns.len()
+                );
+
+                // Since we dropped some transactions, try to collect more transactions from the mempool
+                // FIXME Potential deadlock
+                let new_transactions = self.mempool.get_transactions_for_block(removed_txns_size);
+                if new_transactions.is_empty() {
+                    // Mempool is empty, build the block with the surviving transactions
+                    break;
+                } else {
+                    // There are transactions in the mempool to fill the block given that we just dropped sone
+                    iterations += 1;
+
+                    if iterations == Self::MAX_TXN_CHECK_ITERATIONS {
+                        // If we are in the last iteration, add available transactions. Final checks are going
+                        // to be done after this loop anyway.
+                        final_transactions.extend(new_transactions);
+                        break;
+                    } else {
+                        // Iterate again to filter the recently obtained transactions and see if we can use them
+                        transactions = new_transactions;
+                    }
+                }
+            } else {
+                // Stop the iterations since no transactions were removed
+                break;
+            }
+        }
+
+        // Abort the write transaction
+        txn.abort();
+
+        // Do one more check with all the final transactions ordered
+        final_transactions.sort_unstable();
+
+        let mut txn = WriteTransaction::new(&env);
+        Self::filter_invalid_staking_transactions(
+            &mut final_transactions,
+            &blockchain.state().accounts,
+            self.block_number,
+            timestamp,
+            &mut txn,
+        );
+        txn.abort();
+
+        final_transactions
+    }
+
     fn check_staking_incoming_txn(
         accounts: &Accounts,
         transaction: &mut Transaction,
-        block_height: u32,
+        block_number: u32,
         timestamp: u64,
         txn: &mut WriteTransaction,
     ) -> Result<(), AccountError> {
@@ -150,7 +350,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
                 &accounts.tree,
                 txn,
                 transaction,
-                block_height,
+                block_number,
                 timestamp,
             )?;
         }
@@ -182,7 +382,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
     fn filter_invalid_staking_transactions(
         transactions: &mut Vec<Transaction>,
         accounts: &Accounts,
-        block_height: u32,
+        block_number: u32,
         timestamp: u64,
         txn: &mut WriteTransaction,
     ) -> Vec<Transaction> {
@@ -196,7 +396,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
                 Self::check_staking_outgoing_txn(
                     accounts,
                     transaction,
-                    block_height,
+                    block_number,
                     timestamp,
                     txn,
                 )
@@ -209,7 +409,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
                 Self::check_staking_incoming_txn(
                     accounts,
                     transaction,
-                    block_height,
+                    block_number,
                     timestamp,
                     txn,
                 )
@@ -220,137 +420,6 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         removed_txns.extend(removed_incoming_txns);
         removed_txns
     }
-
-    fn produce_micro_block(&self) -> MicroBlock {
-        let producer = BlockProducer::new(self.signing_key.clone());
-
-        // Get transactions before acquiring blockchain.read as it will take mempool state
-        // lock which we do not want to take with a blockchain lock held.
-        let mut transactions = self
-            .mempool
-            .get_transactions_for_block(MicroBlock::get_available_bytes(self.fork_proofs.len()));
-
-        let blockchain = self.blockchain.read(); // might need to be upgradable_read() for sequentialization
-        let timestamp = u64::max(
-            blockchain.head().header().timestamp(),
-            systemtime_to_timestamp(SystemTime::now()),
-        );
-        let block_height = blockchain.block_number() + 1;
-
-        let mut iterations = 0;
-        let mut final_transactions: Vec<Transaction> = vec![];
-        let env = blockchain.state().accounts.env.clone();
-        let mut txn = WriteTransaction::new(&env);
-
-        while iterations < Self::MAX_TXN_CHECK_ITERATIONS {
-            // If the transaction isn't valid we need to remove it
-            let removed_txns = Self::filter_invalid_staking_transactions(
-                &mut transactions,
-                &blockchain.state().accounts,
-                block_height,
-                timestamp,
-                &mut txn,
-            );
-
-            // Add the surviving transactions to the original transactions
-            final_transactions.extend(transactions);
-
-            let removed_txns_size = removed_txns
-                .iter()
-                .fold(0, |acc, transaction| acc + transaction.serialized_size());
-
-            if removed_txns_size != 0 {
-                log::debug!(
-                    "Dropped {} transactions doing staking verifications",
-                    removed_txns.len()
-                );
-
-                // Since we dropped some transactions, try to collect more transactions from the mempool
-                let new_transactions = self.mempool.get_transactions_for_block(removed_txns_size);
-                if new_transactions.is_empty() {
-                    // Mempool is empty, build the block with the surviving transactions
-                    break;
-                } else {
-                    // There are transactions in the mempool to fill the block given that we just dropped sone
-                    iterations += 1;
-
-                    if iterations == Self::MAX_TXN_CHECK_ITERATIONS {
-                        // If we are in the last iteration, add available transactions. Final checks are going
-                        // to be done after this loop anyway.
-                        final_transactions.extend(new_transactions.clone());
-                        break;
-                    } else {
-                        // Iterate again to filter the recently obtained transactions and see if we can use them
-                        transactions = new_transactions;
-                    }
-                }
-            } else {
-                // Stop the iterations since no transactions were removed
-                break;
-            }
-        }
-
-        // Abort the write transaction
-        txn.abort();
-
-        // Do one more check with all the final transactions ordered
-        final_transactions.sort_unstable();
-        let mut txn = WriteTransaction::new(&env);
-        Self::filter_invalid_staking_transactions(
-            &mut final_transactions,
-            &blockchain.state().accounts,
-            block_height,
-            timestamp,
-            &mut txn,
-        );
-        txn.abort();
-
-        producer.next_micro_block(
-            &blockchain,
-            timestamp,
-            self.view_number,
-            self.view_change_proof.clone(),
-            self.fork_proofs.clone(),
-            final_transactions,
-            vec![], // TODO
-        )
-    }
-
-    async fn change_view(&mut self) -> (ViewChange, ViewChangeProof) {
-        let new_view_number = self.view_number + 1;
-        let view_change = ViewChange {
-            block_number: self.block_number,
-            new_view_number,
-            prev_seed: self.prev_seed.clone(),
-        };
-
-        // Include the previous_view_change_proof only if it has not yet been persisted on chain.
-        let view_change_proof = self.view_change.as_ref().and_then(|vc| {
-            if vc.block_number == self.block_number {
-                Some(self.view_change_proof.as_ref().unwrap().sig.clone())
-            } else {
-                None
-            }
-        });
-
-        // TODO get at init time?
-        let active_validators = self.blockchain.read().current_validators().unwrap();
-        let (view_change, view_change_proof) = ViewChangeAggregation::start(
-            view_change.clone(),
-            view_change_proof,
-            self.signing_key.clone(),
-            self.validator_id,
-            active_validators,
-            Arc::clone(&self.network),
-        )
-        .await;
-
-        // set the view change and view_change_proof properties so in case another view change happens they are available.
-        self.view_change = Some(view_change.clone());
-        self.view_change_proof = Some(view_change_proof.clone());
-
-        (view_change, view_change_proof)
-    }
 }
 
 pub(crate) struct ProduceMicroBlock<TValidatorNetwork> {
@@ -358,7 +427,7 @@ pub(crate) struct ProduceMicroBlock<TValidatorNetwork> {
         BoxFuture<
             'static,
             (
-                ProduceMicroBlockEvent,
+                Option<ProduceMicroBlockEvent>,
                 NextProduceMicroBlockEvent<TValidatorNetwork>,
             ),
         >,
@@ -371,12 +440,13 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProduceMicroBlock<TValidator
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         blockchain: Arc<RwLock<Blockchain>>,
-        current_head: Block,
         mempool: Arc<Mempool>,
         network: Arc<TValidatorNetwork>,
         signing_key: bls::KeyPair,
         validator_id: u16,
         fork_proofs: Vec<ForkProof>,
+        prev_seed: VrfSeed,
+        block_number: u32,
         view_number: u32,
         view_change_proof: Option<ViewChangeProof>,
         view_change: Option<ViewChange>,
@@ -384,12 +454,13 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProduceMicroBlock<TValidator
     ) -> Self {
         let next_event = NextProduceMicroBlockEvent::new(
             blockchain,
-            current_head,
             mempool,
             network,
             signing_key,
             validator_id,
             fork_proofs,
+            prev_seed,
+            block_number,
             view_number,
             view_change_proof,
             view_change,
@@ -415,9 +486,17 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> Stream
         };
 
         let (event, next_event) = ready!(next_event.poll_unpin(cx));
+        let event = match event {
+            Some(event) => event,
+            None => {
+                self.next_event.take();
+                return Poll::Ready(None);
+            }
+        };
+
         self.next_event = match &event {
-            ProduceMicroBlockEvent::MicroBlock(_) => None,
-            ProduceMicroBlockEvent::ViewChange(_, _) => Some(next_event.next().boxed()),
+            ProduceMicroBlockEvent::MicroBlock(..) => None,
+            ProduceMicroBlockEvent::ViewChange(..) => Some(next_event.next().boxed()),
         };
         Poll::Ready(Some(event))
     }
