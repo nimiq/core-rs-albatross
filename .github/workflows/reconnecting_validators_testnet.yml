@@ -1,0 +1,47 @@
+name: Four validators scenario(testnet)
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+    default: "default"
+
+jobs:
+
+  erase-state-test:
+    runs-on: ubuntu-20.04
+
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/setup-python@v1
+    - uses: BSFishy/pip-action@v1
+      with:
+        packages: |
+          sh
+    - uses: actions/cache@v2
+      with:
+        path:
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: cargo-${{ hashFiles('**/Cargo.toml') }}
+    - name: Set up Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: nightly
+        override: true
+    - uses: actions-rs/cargo@v1
+      with:
+        command: build
+    - name: Executes the 4 validators reconnecting scenario erasing all their state
+      run: |          
+          bash scripts/devnet/devnet.sh -e
+    - name: Archive test results
+      if: always()
+      uses: actions/upload-artifact@v2
+      with:
+          name: erase-state-test
+          path: |
+            temp-logs/
+
