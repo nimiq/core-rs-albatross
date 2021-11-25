@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use libp2p::{
     gossipsub::{GossipsubConfig, GossipsubConfigBuilder},
     identity::Keypair,
@@ -32,6 +34,7 @@ impl Config {
             .validate_messages()
             .max_transmit_size(200_000)
             .validation_mode(libp2p::gossipsub::ValidationMode::Permissive)
+            .heartbeat_interval(Duration::from_millis(700))
             .build()
             .expect("Invalid Gossipsub config");
 
