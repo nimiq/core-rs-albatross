@@ -2,7 +2,7 @@
 name = "nimiq-spammer"
 version = "0.1.0"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
-edition = "2018"
+edition = "2021"
 description = "Nimiq's Rust client"
 homepage = "https://nimiq.com"
 repository = "https://github.com/nimiq/core-rs-albatross"

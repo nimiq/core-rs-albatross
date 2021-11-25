@@ -2,7 +2,7 @@
 name = "nimiq-mmr"
 version = "0.1.0"
 authors = ["Pascal Berrang <contact@paberr.net>", "The Nimiq Core Development Team <info@nimiq.com>"]
-edition = "2018"
+edition = "2021"
 description = "Merkle Mountain Range primitive for Nimiq's Rust implementation"
 homepage = "https://nimiq.com"
 repository = "https://github.com/nimiq/core-rs-albatross"

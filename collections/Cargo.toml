@@ -2,7 +2,7 @@
 name = "nimiq-collections"
 version = "0.1.0"
 authors = ["Pascal B <git@paberr.net>"]
-edition = "2018"
+edition = "2021"
 description = "A set of advanced collections for use in the Nimiq Rust implementation"
 homepage = "https://nimiq.com"
 repository = "https://github.com/nimiq/core-rs-albatross"

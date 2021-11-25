@@ -7,7 +7,7 @@ license = "MIT/Apache-2.0"
 name = "nimiq-vrf"
 repository = "https://github.com/nimiq/core-rs-albatross"
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 byteorder = "1.3"

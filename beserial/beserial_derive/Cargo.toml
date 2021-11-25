@@ -2,7 +2,7 @@
 name = "beserial_derive"
 version = "0.1.0"
 authors = ["Marvin W <git@larma.de>"]
-edition = "2018"
+edition = "2021"
 description = "Derive macros for beserial"
 homepage = "https://nimiq.com"
 repository = "https://github.com/nimiq/core-rs-albatross"
