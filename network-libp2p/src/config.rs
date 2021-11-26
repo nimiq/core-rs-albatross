@@ -1,10 +1,10 @@
-use std::time::Duration;
 use libp2p::{
     gossipsub::{GossipsubConfig, GossipsubConfigBuilder},
     identity::Keypair,
     kad::{KademliaBucketInserts, KademliaConfig},
     Multiaddr,
 };
+use std::time::Duration;
 
 use nimiq_hash::Blake2bHash;
 
@@ -39,6 +39,9 @@ impl Config {
 
         let mut kademlia = KademliaConfig::default();
         kademlia.set_kbucket_inserts(KademliaBucketInserts::OnConnected);
+        kademlia.set_record_ttl(Some(Duration::from_secs(5 * 60)));
+        kademlia.set_publication_interval(Some(Duration::from_secs(60)));
+        kademlia.set_replication_interval(Some(Duration::from_secs(20)));
 
         Self {
             keypair,
