@@ -39,11 +39,15 @@ impl<
         let valid_round = self.state.valid_round;
 
         if self.deps.is_our_turn(round) {
-            debug!("Our turn at round {}, broadcasting proposal", round);
-
             let proposal = if self.state.valid_value.is_some() {
+                debug!(
+                    "Our turn at round {}, broadcasting former valid proposal of round {}",
+                    round,
+                    self.state.valid_round.unwrap()
+                );
                 self.state.valid_value.clone().unwrap()
             } else {
+                debug!("Our turn at round {}, broadcasting fresh proposal", round);
                 self.deps.get_value(round)?
             };
 
@@ -77,9 +81,19 @@ impl<
         if self.state.locked_round.is_none()
             || self.state.locked_value == self.state.current_proposal
         {
+            log::debug!(
+                "Received a valid proposal for round: {}, our locked_round: {:?} -> Voting Block",
+                round,
+                self.state.locked_round
+            );
             self.broadcast_and_aggregate_prevote(round, VoteDecision::Block)
                 .await?;
         } else {
+            log::debug!(
+                "Received a valid proposal for round: {}, our locked_round: {:?} -> Voting Nil",
+                round,
+                self.state.locked_round
+            );
             self.broadcast_and_aggregate_prevote(round, VoteDecision::Nil)
                 .await?;
         }
@@ -98,9 +112,11 @@ impl<
         if self.state.locked_round.unwrap_or(0) <= self.state.current_proposal_vr.unwrap()
             || self.state.locked_value == self.state.current_proposal
         {
+            log::debug!("Received a valid proposal with vr: {:?}, for round: {}, our locked round: {:?} -> Voting Block", self.state.current_proposal_vr, round, self.state.locked_round);
             self.broadcast_and_aggregate_prevote(round, VoteDecision::Block)
                 .await?;
         } else {
+            log::debug!("Received a valid proposal with vr: {:?}, for round: {}, our locked round: {:?} -> Voting Nil", self.state.current_proposal_vr, round, self.state.locked_round);
             self.broadcast_and_aggregate_prevote(round, VoteDecision::Nil)
                 .await?;
         }
@@ -128,6 +144,10 @@ impl<
         self.state.locked_round = Some(round);
 
         self.state.step = Step::Precommit;
+        log::debug!(
+            "Polka for round {}, setting valid/locked -> Voting Block",
+            round
+        );
 
         self.broadcast_and_aggregate_precommit(round, VoteDecision::Block)
             .await?;
@@ -143,6 +163,7 @@ impl<
 
         let round = self.state.round;
 
+        log::debug!("Nil-Polka for round {} -> Voting Nil", round);
         self.broadcast_and_aggregate_precommit(round, VoteDecision::Nil)
             .await?;
 
@@ -158,6 +179,10 @@ impl<
     /// function only handle precommits for our current round and current proposal. The purpose of
     /// this function is then just to assemble the block if we can.
     pub(crate) fn on_decision(&mut self) -> Result<ResultTy, TendermintError> {
+        log::debug!(
+            "Voting succeeded in round {}, assembling block.",
+            self.state.round
+        );
         self.deps.assemble_block(
             self.state.round,
             self.state.current_proposal.clone().unwrap(),
@@ -172,7 +197,10 @@ impl<
     /// Lines 57-60 of Tendermint consensus algorithm (Algorithm 1)
     pub(crate) async fn on_timeout_propose(&mut self) -> Result<(), TendermintError> {
         assert_eq!(self.state.step, Step::Propose);
-        log::debug!("Proposal for round {} timed out.", self.state.round);
+        log::debug!(
+            "Proposal for round {} timed out -> Voting Nil",
+            self.state.round
+        );
 
         self.state.step = Step::Prevote;
 
@@ -192,6 +220,7 @@ impl<
 
         let round = self.state.round;
 
+        log::debug!("PreVote for round {} timed out -> Voting Nil", round);
         self.broadcast_and_aggregate_precommit(round, VoteDecision::Nil)
             .await?;
 
@@ -200,8 +229,11 @@ impl<
 
     /// Lines 65-67 of Tendermint consensus algorithm (Algorithm 1)
     pub(crate) fn on_timeout_precommit(&mut self) -> Result<(), TendermintError> {
+        log::debug!(
+            "PreCommit for round {} timed out -> Starting next round",
+            self.state.round
+        );
         self.state.round += 1;
-
         self.state.current_checkpoint = Checkpoint::StartRound;
 
         Ok(())

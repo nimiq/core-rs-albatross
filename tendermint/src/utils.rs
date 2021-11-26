@@ -135,13 +135,25 @@ pub(crate) fn aggregation_to_vote<ProofTy: ProofTrait>(
             if proposal.is_some()
                 && agg.get(&proposal).map_or(0, |x| x.1) >= TWO_THIRD_SLOTS as usize
             {
+                log::debug!(
+                    "Aggregate: {:#?}\nCurrent proposal {:?} has {} votes",
+                    &agg,
+                    &proposal,
+                    agg.get(&proposal).map_or(0, |x| x.1),
+                );
                 // If we received 2f+1 votes for the current (assuming that it isn't None), then we
                 // must return Block.
                 VoteResult::Block(agg.get(&proposal).cloned().unwrap().0)
             } else if agg.get(&None).map_or(0, |x| x.1) >= TWO_THIRD_SLOTS as usize {
+                log::debug!(
+                    "Aggregate: {:#?}\nNil has {} votes",
+                    &agg,
+                    agg.get(&None).map_or(0, |x| x.1),
+                );
                 // If we received 2f+1 votes for Nil, then we must return Nil.
                 VoteResult::Nil(agg.get(&None).cloned().unwrap().0)
             } else {
+                log::debug!("Aggregate: {:#?}\nAggregation timed out", &agg);
                 // There are two cases when we must return Timeout:
                 // 1) When we receive 2f+1 votes for a proposal that we don't have.
                 // 2) When we don't have 2f+1 votes for a single proposal or for Nil.
@@ -149,7 +161,10 @@ pub(crate) fn aggregation_to_vote<ProofTy: ProofTrait>(
             }
         }
         // If we got f+1 votes for a round greater than our current one, we must return NewRound.
-        AggregationResult::NewRound(round) => VoteResult::NewRound(round),
+        AggregationResult::NewRound(round) => {
+            log::debug!("Aggregation resulted in NewRound({})", round);
+            VoteResult::NewRound(round)
+        }
     }
 }
 
@@ -161,8 +176,16 @@ pub(crate) fn has_2f1_votes<ProofTy: ProofTrait>(
 ) -> bool {
     let agg = match aggregation {
         AggregationResult::Aggregation(v) => v,
-        AggregationResult::NewRound(_) => return false,
+        AggregationResult::NewRound(_) => {
+            log::debug!("Checking proposal for vr returned NewRound (should be unreachable!())");
+            return false;
+        }
     };
-
-    agg.get(&Some(proposal)).map_or(0, |x| x.1) >= TWO_THIRD_SLOTS as usize
+    let prop_opt = Some(proposal);
+    log::debug!(
+        "Vr proposal {:?} has {} votes",
+        &prop_opt,
+        agg.get(&prop_opt).map_or(0, |x| x.1),
+    );
+    agg.get(&prop_opt).map_or(0, |x| x.1) >= TWO_THIRD_SLOTS as usize
 }

@@ -129,10 +129,13 @@ impl<N: ValidatorNetwork> TendermintAggregations<N> {
                 is_running: stream_closer.clone(),
             });
 
-            trace!(
-                "Aggregation_descriptors: {:?}",
-                &self.aggregation_descriptors
-            );
+            let tmp_desc: Vec<((&u32, &TendermintStep), bool)> = self
+                .aggregation_descriptors
+                .iter()
+                .map(|((r, s), v)| ((r, s), v.is_running.load(Ordering::Relaxed)))
+                .collect();
+
+            trace!("Aggregation_descriptors: {:?}", &tmp_desc,);
 
             // copy round_number for use in drain_filter couple of lines down so that id can be moved into closure.
             let round_number = id.round_number;
