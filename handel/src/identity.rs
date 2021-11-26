@@ -20,6 +20,14 @@ impl Identity {
         }
         bitset
     }
+
+    pub fn len(&self) -> usize {
+        match self {
+            Identity::None => 0,
+            Identity::Single(_) => 1,
+            Identity::Multiple(ids) => ids.len(),
+        }
+    }
 }
 
 pub trait IdentityRegistry: Send + Sync {

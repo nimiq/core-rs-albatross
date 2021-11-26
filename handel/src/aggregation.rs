@@ -174,16 +174,17 @@ impl<
         let num_contributors = {
             let store = self.protocol.store();
             let store = store.read();
-            match self.protocol.registry().signers_identity(
-                &store
-                    .best(level.id)
-                    .unwrap_or_else(|| panic!("Expected a best signature for level {}", level.id))
-                    .contributors(),
-            ) {
-                Identity::None => 0,
-                Identity::Single(_) => 1,
-                Identity::Multiple(ids) => ids.len(),
-            }
+            self.protocol
+                .registry()
+                .signers_identity(
+                    &store
+                        .best(level.id)
+                        .unwrap_or_else(|| {
+                            panic!("Expected a best signature for level {}", level.id)
+                        })
+                        .contributors(),
+                )
+                .len()
         };
 
         trace!(
@@ -341,7 +342,8 @@ impl<
                                 };
 
                                 if let Some(best) = best {
-                                    if best.num_contributors() == self.protocol.partitioner().size() {
+                                    if self.protocol.registry().signers_identity(&best.contributors()).len()
+                                        == self.protocol.partitioner().size() {
                                         // if there is a best aggregate and this aggregate can no longer be improved upon (all contributors are already present)
                                         // return the aggregate and None to signal no improvments can be made
                                         return (best, None);
