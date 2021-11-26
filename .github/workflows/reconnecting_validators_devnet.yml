@@ -45,6 +45,43 @@ jobs:
           path: |
             temp-logs/
  
+  multiple-validators-down-test:
+    runs-on: ubuntu-20.04
+
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/setup-python@v1
+    - uses: BSFishy/pip-action@v1
+      with:
+        packages: |
+          sh
+    - uses: actions/cache@v2
+      with:
+        path:
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: cargo-${{ hashFiles('**/Cargo.toml') }}
+    - name: Set up Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: nightly
+        override: true
+    - uses: actions-rs/cargo@v1
+      with:
+        command: build
+    - name: Executes the 4 validators scenario where 2 of them are simultaneously down
+      run: |
+          bash scripts/devnet/devnet.sh -k 2
+    - name: Archive test results
+      if: always()
+      uses: actions/upload-artifact@v2
+      with:
+          name: multiple-validators-down-test-logs
+          path: |
+            temp-logs/
+
   erase-database-test:
     runs-on: ubuntu-20.04
 
