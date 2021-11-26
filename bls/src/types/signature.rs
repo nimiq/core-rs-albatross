@@ -86,18 +86,16 @@ impl Signature {
 
         // This implements the try-and-increment method of converting an integer to an elliptic curve point.
         // See https://eprint.iacr.org/2009/226.pdf for more details.
-        let mut i = 0;
         loop {
             let point = G1Affine::get_point_from_x(x_coordinate, y_coordinate);
 
-            if point.is_some() {
+            if let Some(point) = point {
                 // We don't need to scale by the cofactor since MNT6-753 has a cofactor of one.
-                let g1 = point.unwrap().into_projective();
+                let g1 = point.into_projective();
                 return g1;
             }
 
             x_coordinate += &Fq::one();
-            i += 1;
         }
     }
 
