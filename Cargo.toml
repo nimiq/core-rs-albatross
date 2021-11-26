@@ -19,7 +19,6 @@ members = [
   "lib",
   "macros",
   "mempool",
-#   "metrics-server",
   "mnemonic",
   "nano-primitives",
   "nano-zkp",
