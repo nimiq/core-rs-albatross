@@ -270,14 +270,10 @@ fn create_dummy_micro_block(transactions: Option<Vec<Transaction>>) -> Block {
         history_root: Blake2bHash::default(),
     };
 
-    let micro_body = if let Some(txns) = transactions {
-        Some(MicroBody {
-            fork_proofs: vec![],
-            transactions: txns,
-        })
-    } else {
-        None
-    };
+    let micro_body = transactions.map(|txns| MicroBody {
+        fork_proofs: vec![],
+        transactions: txns,
+    });
 
     let micro_block = MicroBlock {
         header: micro_header,

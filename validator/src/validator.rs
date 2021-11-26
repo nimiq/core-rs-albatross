@@ -382,7 +382,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         // Update mempool and blockchain state
         self.blockchain_state.fork_proofs.apply_block(&block);
         self.mempool
-            .mempool_update(&vec![(hash.clone(), block.clone())], &[].to_vec());
+            .mempool_update(&vec![(hash.clone(), block)], &[].to_vec());
     }
 
     fn on_blockchain_rebranched(

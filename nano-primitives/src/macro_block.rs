@@ -1,10 +1,9 @@
-use ark_crypto_primitives::prf::Blake2sWithParameterBlock;
 use ark_ec::ProjectiveCurve;
 use ark_mnt6_753::{Fr, G1Projective};
 use num_traits::identities::Zero;
 
-use nimiq_bls::pedersen::{pedersen_generators, pedersen_hash};
-use nimiq_bls::utils::bytes_to_bits;
+use nimiq_bls::Signature;
+use nimiq_hash::{Blake2sHash, Hash};
 use nimiq_primitives::policy::SLOTS;
 
 /// A struct representing a macro block in Albatross.
@@ -56,10 +55,8 @@ impl MacroBlock {
     /// This should match exactly the signatures produced by the validators. Step and round number
     /// are fields needed for the Tendermint protocol, there is no reason to explain their meaning
     /// here.
-    /// First we hash the input with the Blake2s hash algorithm, getting an output of 256 bits. This
-    /// is necessary because the Pedersen commitment is not pseudo-random and we need pseudo-randomness
-    /// for the BLS signature scheme. Then we use the Pedersen hash algorithm on those 256 bits
-    /// to obtain a single EC point.
+    /// First we hash the input with the Blake2s hash algorithm, getting an output of 256 bits. Then
+    /// we use the try-and-increment method on those 256 bits to obtain a single EC point.
     pub fn hash(&self, pk_tree_root: Vec<u8>) -> G1Projective {
         // Serialize the input into bits.
         // TODO: This first byte is the prefix for the precommit messages, it is the
@@ -76,37 +73,11 @@ impl MacroBlock {
 
         bytes.extend(&pk_tree_root);
 
-        // Initialize Blake2s parameters.
-        let blake2s = Blake2sWithParameterBlock {
-            digest_length: 32,
-            key_length: 0,
-            fan_out: 1,
-            depth: 1,
-            leaf_length: 0,
-            node_offset: 0,
-            xof_digest_length: 0,
-            node_depth: 0,
-            inner_length: 0,
-            salt: [0; 8],
-            personalization: [0; 8],
-        };
+        // Blake2s hash.
+        let hash = bytes.hash::<Blake2sHash>();
 
-        // Calculate the Blake2s hash.
-        let first_hash = blake2s.evaluate(&bytes);
-
-        // Convert to bits.
-        let bits = bytes_to_bits(&first_hash);
-
-        // Calculate the Pedersen generators and the sum generator. The formula used for the ceiling
-        // division of x/y is (x+y-1)/y.
-        let capacity = 752;
-
-        let generators_needed = (bits.len() + capacity - 1) / capacity + 1;
-
-        let generators = pedersen_generators(generators_needed);
-
-        // Calculate the Pedersen hash.
-        pedersen_hash(bits, generators)
+        // Hash-to-curve.
+        Signature::hash_to_g1(hash)
     }
 }
 

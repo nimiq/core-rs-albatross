@@ -19,4 +19,5 @@ ark-mnt4-753 = "0.3"
 ark-mnt6-753 = "0.3"
 
 nimiq-bls = { path = "../bls", version = "0.1" }
+nimiq-hash = { path = "../hash", version = "0.1" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }

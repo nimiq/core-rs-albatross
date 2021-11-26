@@ -120,7 +120,7 @@ pub struct NimiqBehaviour {
 impl NimiqBehaviour {
     pub fn new(config: Config, clock: Arc<OffsetTime>, peers: ObservablePeerMap<Peer>) -> Self {
         let public_key = config.keypair.public();
-        let peer_id = public_key.clone().to_peer_id();
+        let peer_id = public_key.to_peer_id();
 
         // DHT behaviour
         let store = MemoryStore::new(peer_id);

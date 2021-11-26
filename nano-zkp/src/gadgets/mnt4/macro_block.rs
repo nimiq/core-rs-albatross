@@ -13,12 +13,13 @@ use ark_r1cs_std::alloc::AllocationMode;
 use ark_r1cs_std::prelude::{
     AllocVar, Boolean, CondSelectGadget, FieldVar, ToBitsGadget, UInt32, UInt8,
 };
+use ark_r1cs_std::R1CSVar;
 use ark_relations::r1cs::{ConstraintSystemRef, Namespace, SynthesisError};
 
 use nimiq_nano_primitives::MacroBlock;
 use nimiq_primitives::policy::{SLOTS, TWO_THIRD_SLOTS};
 
-use crate::gadgets::mnt4::{CheckSigGadget, PedersenHashGadget};
+use crate::gadgets::mnt4::{CheckSigGadget, HashToCurve};
 use crate::utils::reverse_inner_byte_order;
 
 /// A gadget that contains utilities to verify the validity of a macro block. Mainly it checks that:
@@ -51,7 +52,7 @@ impl MacroBlockGadget {
         let enough_signers = self.check_signers(cs.clone())?;
 
         // Get the hash point for the signature.
-        let hash = self.get_hash(pk_tree_root, pedersen_generators)?;
+        let hash = self.get_hash(cs.clone(), pk_tree_root, pedersen_generators)?;
 
         // Check the validity of the signature.
         let valid_sig = CheckSigGadget::check_signature(cs, agg_pk, &hash, &self.signature)?;
@@ -63,14 +64,13 @@ impl MacroBlockGadget {
     /// A function that calculates the hash for the block from:
     /// step || block number || round number || header_hash || pk_tree_root
     /// where || means concatenation.
-    /// First we hash the input with the Blake2s hash algorithm, getting an output of 256 bits. This
-    /// is necessary because the Pedersen commitment is not pseudo-random and we need pseudo-randomness
-    /// for the BLS signature scheme. Then we use the Pedersen hash algorithm on those 256 bits
-    /// to obtain a single EC point.
+    /// First we hash the input with the Blake2s hash algorithm, getting an output of 256 bits. Then
+    /// we use the try-and-increment method on those 256 bits to obtain a single EC point.
     pub fn get_hash(
         &self,
+        cs: ConstraintSystemRef<MNT4Fr>,
         pk_tree_root: &[Boolean<MNT4Fr>],
-        pedersen_generators: &[G1Var],
+        _pedersen_generators: &[G1Var],
     ) -> Result<G1Var, SynthesisError> {
         // Initialize Boolean vector.
         let mut bits = vec![];
@@ -121,24 +121,24 @@ impl MacroBlockGadget {
             personalization: [0; 8],
         };
 
-        // Calculate first hash using Blake2s.
-        let first_hash =
+        // Calculate hash using Blake2s.
+        let hash =
             evaluate_blake2s_with_parameters(&prepared_bits, &blake2s_parameters.parameters())?;
 
         // Convert to bits.
         let mut hash_bits = Vec::new();
 
-        for fh in &first_hash {
-            hash_bits.extend(fh.to_bits_le());
+        for int in &hash {
+            hash_bits.extend(int.to_bits_le());
         }
 
-        // Reverse inner byte order.
-        let hash_bits = reverse_inner_byte_order(&hash_bits);
+        // At this point the hash does not match the off-circuit one. It has the inner byte order
+        // reversed. However we need it like this for the next step.
 
-        // Feed the bits into the Pedersen hash to calculate the second hash.
-        let second_hash = PedersenHashGadget::evaluate(&hash_bits, pedersen_generators)?;
+        // Hash-to-curve.
+        let g1_point = HashToCurve::hash_to_g1(cs, &hash_bits)?;
 
-        Ok(second_hash)
+        Ok(g1_point)
     }
 
     /// A function that checks if there are enough signers.
@@ -302,14 +302,14 @@ mod tests {
         let rng = &mut test_rng();
 
         // Create block parameters.
-        let mut bytes = [0u8; 95];
+        let mut bytes = [1u8; 95];
         rng.fill_bytes(&mut bytes);
         let pk_tree_root = bytes.to_vec();
 
-        let mut header_hash = [0u8; 32];
+        let mut header_hash = [2u8; 32];
         rng.fill_bytes(&mut header_hash);
 
-        let mut bytes = [0u8; SLOTS as usize / 8];
+        let mut bytes = [3u8; SLOTS as usize / 8];
         rng.fill_bytes(&mut bytes);
         let signer_bitmap = bytes_to_bits(&bytes);
 
@@ -331,11 +331,12 @@ mod tests {
             Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(bytes_to_bits(&pk_tree_root)))
                 .unwrap();
 
-        let generators_var = Vec::<G1Var>::new_witness(cs, || Ok(pedersen_generators(3))).unwrap();
+        let generators_var =
+            Vec::<G1Var>::new_witness(cs.clone(), || Ok(pedersen_generators(3))).unwrap();
 
         // Calculate hash using the gadget version.
         let gadget_hash = block_var
-            .get_hash(&pk_tree_root_var, &generators_var)
+            .get_hash(cs, &pk_tree_root_var, &generators_var)
             .unwrap();
 
         assert_eq!(primitive_hash, gadget_hash.value().unwrap())

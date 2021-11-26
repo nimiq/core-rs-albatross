@@ -223,7 +223,7 @@ fn it_can_revert_unpark_transactions() {
     let keypair = BlsKeyPair::from(
         SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap(),
     );
-    let producer = BlockProducer::new(keypair.clone());
+    let producer = BlockProducer::new(keypair);
 
     // #1.0: Empty view-changed micro block
     let view_change = sign_view_change(blockchain.read().head().seed().clone(), 1, 1);
@@ -261,7 +261,7 @@ fn it_can_revert_unpark_transactions() {
     );
 
     assert_eq!(
-        Blockchain::push(bc, Block::Micro(block.clone())),
+        Blockchain::push(bc, Block::Micro(block)),
         Ok(PushResult::Extended)
     );
 
@@ -276,7 +276,7 @@ fn it_can_revert_unpark_transactions() {
 
     let tx = TransactionBuilder::new_unpark_validator(
         &key_pair,
-        address.clone(),
+        address,
         &key_pair,
         Coin::ZERO,
         1,
@@ -299,7 +299,7 @@ fn it_can_revert_unpark_transactions() {
     );
 
     assert_eq!(
-        Blockchain::push(bc, Block::Micro(block.clone())),
+        Blockchain::push(bc, Block::Micro(block)),
         Ok(PushResult::Extended)
     );
 
@@ -325,7 +325,7 @@ fn it_can_revert_create_stacker_transaction() {
     let keypair = BlsKeyPair::from(
         SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap(),
     );
-    let producer = BlockProducer::new(keypair.clone());
+    let producer = BlockProducer::new(keypair);
 
     // #1.0: Empty view-changed micro block
     let view_change = sign_view_change(blockchain.read().head().seed().clone(), 1, 1);
@@ -361,7 +361,7 @@ fn it_can_revert_create_stacker_transaction() {
     );
 
     assert_eq!(
-        Blockchain::push(bc, Block::Micro(block.clone())),
+        Blockchain::push(bc, Block::Micro(block)),
         Ok(PushResult::Extended)
     );
 
@@ -377,7 +377,7 @@ fn it_can_revert_create_stacker_transaction() {
     let tx = TransactionBuilder::new_create_staker(
         &key_pair,
         &key_pair,
-        Some(address.clone()),
+        Some(address),
         100_000_000.try_into().unwrap(),
         100.try_into().unwrap(),
         1,
@@ -400,7 +400,7 @@ fn it_can_revert_create_stacker_transaction() {
     );
 
     assert_eq!(
-        Blockchain::push(bc, Block::Micro(block.clone())),
+        Blockchain::push(bc, Block::Micro(block)),
         Ok(PushResult::Extended)
     );
 

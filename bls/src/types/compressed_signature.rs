@@ -4,7 +4,6 @@ use std::str::FromStr;
 use std::{cmp::Ordering, fmt};
 
 use ark_ec::{AffineCurve, ProjectiveCurve};
-
 use ark_mnt6_753::{G1Affine, G1Projective};
 
 #[cfg(feature = "beserial")]
