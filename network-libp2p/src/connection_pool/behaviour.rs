@@ -14,8 +14,8 @@ use libp2p::swarm::DialPeerCondition;
 use libp2p::{
     core::{connection::ConnectionId, multiaddr::Protocol, ConnectedPoint},
     swarm::{
-        DialError, IntoProtocolsHandler, NetworkBehaviour, NetworkBehaviourAction, NotifyHandler,
-        PollParameters, ProtocolsHandler,
+        CloseConnection, DialError, IntoProtocolsHandler, NetworkBehaviour, NetworkBehaviourAction,
+        NotifyHandler, PollParameters, ProtocolsHandler,
     },
     Multiaddr, PeerId,
 };
@@ -597,6 +597,13 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
                     .push_back(NetworkBehaviourAction::GenerateEvent(
                         ConnectionPoolEvent::PeerJoined { peer },
                     ));
+            }
+            HandlerOutEvent::PeerLeft { peer_id, .. } => {
+                self.actions
+                    .push_back(NetworkBehaviourAction::CloseConnection {
+                        peer_id,
+                        connection: CloseConnection::All,
+                    });
             }
         }
     }

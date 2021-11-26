@@ -40,7 +40,13 @@ pub enum HandlerInEvent {
 
 #[derive(Clone, Debug)]
 pub enum HandlerOutEvent {
-    PeerJoined { peer: Arc<Peer> },
+    PeerJoined {
+        peer: Arc<Peer>,
+    },
+    PeerLeft {
+        peer_id: PeerId,
+        reason: CloseReason,
+    },
 }
 
 #[derive(Debug, Error)]
@@ -226,11 +232,13 @@ impl ProtocolsHandler for ConnectionPoolHandler {
                             // Finished closing the socket
                             log::trace!("Finished closing socket");
 
+                            let peer_id = peer.id;
                             self.closing = None;
                             self.peer = None;
 
-                            return Poll::Ready(ProtocolsHandlerEvent::Close(
-                                HandlerError::ConnectionClosed { reason },
+                            // Gracefully close the connection
+                            return Poll::Ready(ProtocolsHandlerEvent::Custom(
+                                HandlerOutEvent::PeerLeft { peer_id, reason },
                             ));
                         }
                         Poll::Ready(Err(e)) => {
