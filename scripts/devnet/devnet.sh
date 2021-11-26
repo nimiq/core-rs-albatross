@@ -7,6 +7,8 @@ validators=()
 vpids=()
 #Array with seed/spammer pids
 spids=()
+#Array with validators indexes that are killed
+kindexes=()
 fail=false
 foldername=$(date +%Y%m%d_%H%M%S)
 ERASE=false
@@ -18,6 +20,7 @@ MAX_VALIDATORS=4
 cargo="cargo run"
 cargo_build="cargo build"
 tpb=150
+vkill=1
 CONFIG_PATH="/tmp/nimiq-devnet"
 trap cleanup_exit INT
 
@@ -51,6 +54,7 @@ OPTIONS:
    -d|--db         Erases only the database state of the validator as part of restarting it
    -r|--restarts   The number of times you want to kill/restart validators (by default 10 times)(0 means no restarts)
    -c|--continous  In continous mode the script runs until it is killed (or it finds an error)
+   -k|--kill       How many validators are killed each cycle, by default just 1
    -s|--spammer    Launch the spammer with the given amount of transactions per second
    -R|--release    If you want to run in release mode
    -v|--validators The number of validators, as a minimun 4 validators are created
@@ -84,6 +88,15 @@ while [ ! $# -eq 0 ]; do
                 shift
             else
                 echo '--validators requires a value'
+                exit 1
+            fi
+            ;;
+        -k | --kill)
+            if [ "$2" ]; then
+                vkill=$2
+                shift
+            else
+                echo '--kill requires a value'
                 exit 1
             fi
             ;;
@@ -130,6 +143,7 @@ if [ "$RELEASE" = true ] ; then
 fi
 
 echo "Number of validators: $MAX_VALIDATORS"
+echo "Number of simultanous restarts: $vkill"
 
 if [ $MAX_VALIDATORS -lt 4 ] ; then
     echo 'min number of validators is 4'
@@ -187,45 +201,65 @@ old_block_number=0
 restarts_count=0
 
 cycles=0
+sim_kills=0
 while [ $cycles -le $max_restarts ]
 do
     if [ $restarts_count -lt $max_restarts ] ; then
 
-        # Select a random validator to restart
-        index=$(($RANDOM % 4))
+        # Kill validators
+        while [ $sim_kills -lt $vkill ]
+        do
+            # Select a random validator to restart
+            index=$(($RANDOM % $MAX_VALIDATORS))
 
-        echo "  Killing validator: $(($index + 1 ))"
+            while [[ " ${kindexes[*]} " =~ " ${index} " ]]; do
+                index=$(($RANDOM % $MAX_VALIDATORS))
+            done
+            kindexes+=($index)
+            echo "  Killing validator: $(($index + 1 ))"
 
-        kill ${vpids[$index]}
-        sleep 10
+            kill ${vpids[$index]}
+            sleep 1
 
-        if [ "$ERASE" = true ] ; then
+            if [ "$ERASE" = true ] ; then
             echo "  Erasing all validator state"
             rm -rf temp-state/dev/$(($index + 1 ))/*
             echo "################################## VALIDATOR STATE DELETED ###########################  " >> temp-logs/$foldername/Validator$(($index + 1 )).txt
-        fi
+            fi
 
-        if [ "$DATABASE_CLEAN" = true ] ; then
+            if [ "$DATABASE_CLEAN" = true ] ; then
             echo "  Erasing validator database"
             rm -rf temp-state/dev/$(($index + 1 ))/devalbatross-history-consensus
             echo "################################## VALIDATOR DB DELETED ###########################  " >> temp-logs/$foldername/Validator$(($index + 1 )).txt
-        fi
+            fi
 
-        echo "################################## RESTART ###########################  " >> temp-logs/$foldername/Validator$(($index + 1 )).txt
+            echo "################################## RESTART ###########################  " >> temp-logs/$foldername/Validator$(($index + 1 )).txt
+            sim_kills=$(( $sim_kills + 1 ))
+        done
 
-        echo "  Restarting validator: $(($index + 1 ))"
-        $cargo --bin nimiq-client -- -c $CONFIG_PATH/validator$(($index + 1 ))/client.toml &>> temp-logs/$foldername/Validator$(($index + 1 )).txt &
-        vpids[$index]=$!
+        # Let it run for some seconds with validators down
+        sleep 10
+
+        # Restart the ones that were killed
+        for index in ${kindexes[@]}; do
+            echo "  Restarting validator: $(($index + 1 ))"
+            $cargo --bin nimiq-client -- -c $CONFIG_PATH/validator$(($index + 1 ))/client.toml &>> temp-logs/$foldername/Validator$(($index + 1 )).txt &
+            vpids[$index]=$!
+            sleep 2
+        done
         restarts_count=$(( $restarts_count + 1 ))
     fi
+    # Empty kill indexes for next cycle
+    kindexes=()
+    sim_kills=0
 
     if [ "$CONTINOUS" = false ] ; then
         cycles=$(( $cycles + 1 ))
     fi
 
-    sleep_time=$((30 + $RANDOM % 100))
+    sleep_time=$((40 + $RANDOM % 100))
 
-    # Produce blocks for some minutes
+    # Produce blocks for some time
     echo "  Producing blocks for $sleep_time seconds"
     sleep "$sleep_time"
 
