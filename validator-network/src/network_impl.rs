@@ -8,73 +8,16 @@ use async_trait::async_trait;
 use futures::{future::join_all, lock::Mutex, stream::BoxStream, StreamExt};
 
 use beserial::{Deserialize, Serialize};
-use nimiq_bls::{CompressedPublicKey, PublicKey, SecretKey, Signature};
+use nimiq_bls::{CompressedPublicKey, SecretKey};
 use nimiq_network_interface::network::{MsgAcceptance, Network, Topic};
 use nimiq_network_interface::prelude::NetworkEvent;
 use nimiq_network_interface::{message::Message, peer::Peer};
-use nimiq_utils::tagged_signing::TaggedSignable;
 
 use super::{MessageStream, NetworkError, ValidatorNetwork};
+use crate::validator_record::{SignedValidatorRecord, ValidatorRecord};
 
 // Helper to get PeerId type from a network
 type PeerId<N> = <<N as Network>::PeerType as Peer>::Id;
-
-//struct ValidatorPeerId<TPeerId: Serialize>(TPeerId);
-
-// TODO: Use a tagged signature for validator records
-impl<TPeerId> TaggedSignable for ValidatorRecord<TPeerId>
-where
-    TPeerId: Serialize + Deserialize,
-{
-    const TAG: u8 = 0x03;
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-struct ValidatorRecord<TPeerId>
-where
-    TPeerId: Serialize + Deserialize,
-{
-    pub peer_id: TPeerId,
-    //public_key: PublicKey,
-    // TODO: other info?
-}
-
-impl<TPeerId> ValidatorRecord<TPeerId>
-where
-    TPeerId: Serialize + Deserialize,
-{
-    pub fn new(peer_id: TPeerId) -> Self {
-        Self { peer_id }
-    }
-
-    pub fn sign(self, secret_key: &SecretKey) -> SignedValidatorRecord<TPeerId> {
-        let data = self.serialize_to_vec();
-        let signature = secret_key.sign(&data);
-
-        SignedValidatorRecord {
-            record: self,
-            signature,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-struct SignedValidatorRecord<TPeerId>
-where
-    TPeerId: Serialize + Deserialize,
-{
-    pub record: ValidatorRecord<TPeerId>,
-    pub signature: Signature,
-}
-
-impl<TPeerId> SignedValidatorRecord<TPeerId>
-where
-    TPeerId: Serialize + Deserialize,
-{
-    pub fn verify(&self, public_key: &PublicKey) -> bool {
-        public_key.verify(&self.record.serialize_to_vec(), &self.signature)
-    }
-}
 
 #[derive(Clone, Debug)]
 pub struct State<TPeerId> {

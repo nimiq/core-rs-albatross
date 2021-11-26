@@ -25,7 +25,7 @@ use libp2p::{
     },
     identify::IdentifyEvent,
     identity::Keypair,
-    kad::{GetRecordOk, KademliaEvent, QueryId, QueryResult, Quorum, Record},
+    kad::{store::RecordStore, GetRecordOk, KademliaEvent, QueryId, QueryResult, Quorum, Record},
     noise,
     swarm::{SwarmBuilder, SwarmEvent},
     tcp, websocket, yamux, Multiaddr, PeerId, Swarm, Transport,
@@ -35,6 +35,7 @@ use tokio_stream::wrappers::BroadcastStream;
 use tracing::Instrument;
 
 use beserial::{Deserialize, Serialize};
+use nimiq_bls::CompressedPublicKey;
 use nimiq_network_interface::{
     message::{Message, MessageType},
     network::{MsgAcceptance, Network as NetworkInterface, NetworkEvent, PubsubId, Topic},
@@ -42,6 +43,7 @@ use nimiq_network_interface::{
     peer_map::ObservablePeerMap,
 };
 use nimiq_utils::time::OffsetTime;
+use nimiq_validator_network::validator_record::SignedValidatorRecord;
 
 use crate::{
     behaviour::{NimiqBehaviour, NimiqEvent, NimiqNetworkBehaviourError},
@@ -378,37 +380,84 @@ impl Network {
             SwarmEvent::Behaviour(event) => {
                 match event {
                     NimiqEvent::Dht(event) => {
-                        if let KademliaEvent::OutboundQueryCompleted { id, result, .. } = event {
-                            match result {
-                                QueryResult::GetRecord(result) => {
-                                    if let Some(output) = state.dht_gets.remove(&id) {
-                                        let result = result.map_err(Into::into).map(
-                                            |GetRecordOk { mut records, .. }| {
-                                                // TODO: What do we do, if we get multiple records?
-                                                records.pop().map(|r| r.record.value)
-                                            },
-                                        );
-                                        output.send(result).ok();
-                                    } else {
-                                        tracing::warn!(query_id = ?id, "GetRecord query result for unknown query ID");
+                        match event {
+                            KademliaEvent::OutboundQueryCompleted { id, result, .. } => {
+                                match result {
+                                    QueryResult::GetRecord(result) => {
+                                        if let Some(output) = state.dht_gets.remove(&id) {
+                                            let result = result.map_err(Into::into).map(
+                                                |GetRecordOk { mut records, .. }| {
+                                                    // TODO: What do we do, if we get multiple records?
+                                                    records.pop().map(|r| r.record.value)
+                                                },
+                                            );
+                                            output.send(result).ok();
+                                        } else {
+                                            tracing::warn!(query_id = ?id, "GetRecord query result for unknown query ID");
+                                        }
                                     }
+                                    QueryResult::PutRecord(result) => {
+                                        // dht_put resolved
+                                        if let Some(output) = state.dht_puts.remove(&id) {
+                                            output
+                                                .send(result.map(|_| ()).map_err(Into::into))
+                                                .ok();
+                                        } else {
+                                            tracing::warn!(query_id = ?id, "PutRecord query result for unknown query ID");
+                                        }
+                                    }
+                                    QueryResult::Bootstrap(result) => match result {
+                                        Ok(result) => {
+                                            tracing::debug!(result = ?result, "DHT bootstrap successful")
+                                        }
+                                        Err(e) => tracing::error!("DHT bootstrap error: {:?}", e),
+                                    },
+                                    _ => {}
                                 }
-                                QueryResult::PutRecord(result) => {
-                                    // dht_put resolved
-                                    if let Some(output) = state.dht_puts.remove(&id) {
-                                        output.send(result.map(|_| ()).map_err(Into::into)).ok();
-                                    } else {
-                                        tracing::warn!(query_id = ?id, "PutRecord query result for unknown query ID");
-                                    }
-                                }
-                                QueryResult::Bootstrap(result) => match result {
-                                    Ok(result) => {
-                                        tracing::debug!(result = ?result, "DHT bootstrap successful")
-                                    }
-                                    Err(e) => tracing::error!("DHT bootstrap error: {:?}", e),
-                                },
-                                _ => {}
                             }
+                            KademliaEvent::InboundPutRecordRequest {
+                                source: _,
+                                connection: _,
+                                record,
+                            } => {
+                                if let Ok(compressed_pk) =
+                                    <[u8; 285]>::try_from(record.key.as_ref())
+                                {
+                                    if let Ok(pk) = (CompressedPublicKey {
+                                        public_key: compressed_pk,
+                                    })
+                                    .uncompress()
+                                    {
+                                        if let Ok(signed_record) =
+                                            SignedValidatorRecord::<PeerId>::deserialize_from_vec(
+                                                &record.value,
+                                            )
+                                        {
+                                            if signed_record.verify(&pk) {
+                                                if swarm
+                                                    .behaviour_mut()
+                                                    .dht
+                                                    .store_mut()
+                                                    .put(record)
+                                                    .is_ok()
+                                                {
+                                                    return;
+                                                } else {
+                                                    log::error!("Could not store record in DHT record store");
+                                                    return;
+                                                };
+                                            } else {
+                                                log::warn!("DHT record signature verification failed. Record public key: {:?}", pk);
+                                                return;
+                                            }
+                                        }
+                                    }
+                                }
+                                log::warn!(
+                                    "DHT record verification failed: Invalid public key received"
+                                );
+                            }
+                            _ => {}
                         }
                     }
                     NimiqEvent::Discovery(_e) => {}

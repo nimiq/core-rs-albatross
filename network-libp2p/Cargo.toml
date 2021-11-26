@@ -51,6 +51,7 @@ wasm-timer = "0.2"
 
 beserial = { path = "../beserial", features = ["libp2p"] }
 beserial_derive = { path = "../beserial/beserial_derive" }
+nimiq-bls = { path = "../bls" }
 nimiq-macros = { path = "../macros" }
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-hash = { path = "../hash" }
@@ -60,6 +61,7 @@ nimiq-utils = { path = "../utils", features = [
     "libp2p",
     "time",
 ] }
+nimiq-validator-network = { path = "../validator-network" }
 
 [dev-dependencies]
 tracing-subscriber = "0.3"

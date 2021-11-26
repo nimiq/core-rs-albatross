@@ -1,7 +1,7 @@
 use libp2p::{
     gossipsub::{GossipsubConfig, GossipsubConfigBuilder},
     identity::Keypair,
-    kad::{KademliaBucketInserts, KademliaConfig},
+    kad::{KademliaBucketInserts, KademliaConfig, KademliaStoreInserts},
     Multiaddr,
 };
 use std::time::Duration;
@@ -42,6 +42,7 @@ impl Config {
         kademlia.set_record_ttl(Some(Duration::from_secs(5 * 60)));
         kademlia.set_publication_interval(Some(Duration::from_secs(60)));
         kademlia.set_replication_interval(Some(Duration::from_secs(20)));
+        kademlia.set_record_filtering(KademliaStoreInserts::FilterBoth);
 
         Self {
             keypair,
