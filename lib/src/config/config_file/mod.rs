@@ -394,7 +394,7 @@ impl Default for DatabaseSettings {
             size: Some(1024 * 1024 * 50),
             max_dbs: Some(12),
             max_readers: Some(600),
-            no_lmdb_sync: None,
+            no_lmdb_sync: Some(true),
         }
     }
 }

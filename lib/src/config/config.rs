@@ -277,7 +277,7 @@ impl From<config_file::DatabaseSettings> for DatabaseConfig {
     fn from(db_settings: config_file::DatabaseSettings) -> Self {
         let default = DatabaseConfig::default();
 
-        let mut flags = LmdbFlags::NOMETASYNC;
+        let mut flags = default.flags;
         if db_settings.no_lmdb_sync.unwrap_or_default() {
             flags |= LmdbFlags::NOSYNC;
         }
