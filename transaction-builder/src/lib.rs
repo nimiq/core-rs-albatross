@@ -1653,7 +1653,7 @@ impl TransactionBuilder {
         let proof_builder = builder.generate().unwrap();
         match proof_builder {
             TransactionProofBuilder::OutStaking(mut builder) => {
-                builder.unstake(cold_key_pair);
+                builder.drop_validator(cold_key_pair);
                 builder.generate().unwrap()
             }
             _ => unreachable!(),
