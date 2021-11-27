@@ -1,9 +1,17 @@
+use parking_lot::RwLock;
 use std::sync::Arc;
-use std::sync::RwLock;
 
-use nimiq_block_production::test_utils::TemporaryBlockProducer;
+use beserial::Deserialize;
+use nimiq_block::Block;
+use nimiq_block_production::{test_utils::TemporaryBlockProducer, BlockProducer};
+use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_blockchain::{ForkEvent, PushError, PushResult};
+use nimiq_bls::{KeyPair, SecretKey};
+use nimiq_database::volatile::VolatileEnvironment;
+use nimiq_genesis::NetworkId;
 use nimiq_primitives::policy;
+use nimiq_test_utils::blockchain::{sign_view_change, SECRET_KEY};
+use nimiq_utils::time::OffsetTime;
 
 #[test]
 fn it_can_rebranch_view_changes() {
@@ -50,6 +58,90 @@ fn it_can_rebranch_view_changes() {
     // Check that producer 1 rebranches.
     assert_eq!(temp_producer1.push(fork1), Ok(PushResult::Rebranched));
     assert_eq!(temp_producer1.push(fork2), Ok(PushResult::Extended));
+}
+
+#[test]
+fn it_can_push_consecutive_view_changes() {
+    let time = Arc::new(OffsetTime::new());
+    let env = VolatileEnvironment::new(10).unwrap();
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+    ));
+    let keypair =
+        KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
+    let producer = BlockProducer::new(keypair);
+
+    // Produce a simple micro block and push it
+    let micro_block = {
+        let blockchain = blockchain.read();
+        producer.next_micro_block(
+            &blockchain,
+            blockchain.time.now() + 1 as u64 * 1000,
+            0,
+            None,
+            vec![],
+            vec![],
+            vec![0x42],
+        )
+    };
+    assert_eq!(
+        Blockchain::push(
+            blockchain.upgradable_read(),
+            Block::Micro(micro_block.clone())
+        ),
+        Ok(PushResult::Extended)
+    );
+    assert_eq!(blockchain.read().block_number(), 1);
+    assert_eq!(blockchain.read().view_number(), 0);
+
+    // Produce a micro block with multiple view changes and push it
+    let micro_block = {
+        let blockchain = blockchain.read();
+        let view_change_proof = sign_view_change(blockchain.head().seed().clone(), 2, 5);
+        producer.next_micro_block(
+            &blockchain,
+            blockchain.time.now() + 2 as u64 * 1000,
+            5,
+            Some(view_change_proof),
+            vec![],
+            vec![],
+            vec![0x42],
+        )
+    };
+    assert_eq!(
+        Blockchain::push(
+            blockchain.upgradable_read(),
+            Block::Micro(micro_block.clone())
+        ),
+        Ok(PushResult::Extended)
+    );
+
+    assert_eq!(blockchain.read().block_number(), 2);
+    assert_eq!(blockchain.read().view_number(), 5);
+
+    // Produce one more micro block with a view change
+    let micro_block = {
+        let blockchain = blockchain.read();
+
+        let view_change_proof = sign_view_change(Block::Micro(micro_block).seed().clone(), 3, 6);
+        producer.next_micro_block(
+            &blockchain,
+            blockchain.time.now() + 3 as u64 * 1000,
+            6,
+            Some(view_change_proof),
+            vec![],
+            vec![],
+            vec![0x42],
+        )
+    };
+
+    assert_eq!(
+        Blockchain::push(blockchain.upgradable_read(), Block::Micro(micro_block)),
+        Ok(PushResult::Extended)
+    );
+
+    assert_eq!(blockchain.read().block_number(), 3);
+    assert_eq!(blockchain.read().view_number(), 6);
 }
 
 #[test]
@@ -166,7 +258,7 @@ fn create_fork_proof() {
     let producer1 = TemporaryBlockProducer::new();
     let producer2 = TemporaryBlockProducer::new();
 
-    let event1_rc1 = Arc::new(RwLock::new(false));
+    let event1_rc1 = Arc::new(std::sync::RwLock::new(false));
     let event1_rc2 = event1_rc1.clone();
 
     producer1
