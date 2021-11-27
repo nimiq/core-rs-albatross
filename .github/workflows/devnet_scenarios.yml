@@ -1,4 +1,4 @@
-name: Four validators scenario(devnet)
+name: Devnet Scenarios
 
 on:
   schedule:
@@ -8,7 +8,7 @@ on:
 
 jobs:
 
-  reconnect-test:
+  FourValidatorsReconnectTest:
     runs-on: ubuntu-20.04
 
     steps:
@@ -41,11 +41,11 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v2
       with:
-          name: reconnect-test-logs
+          name: FourValidatorsReconnectTest-logs
           path: |
             temp-logs/
  
-  multiple-validators-down-test:
+  MultipleValidatorsDownTest:
     runs-on: ubuntu-20.04
 
     steps:
@@ -78,11 +78,11 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v2
       with:
-          name: multiple-validators-down-test-logs
+          name: MultipleValidatorsDownTest-logs
           path: |
             temp-logs/
 
-  erase-database-test:
+  FourValidatorsReconnectRMdatabaseTest:
     runs-on: ubuntu-20.04
 
     steps:
@@ -115,11 +115,11 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v2
       with:
-          name: erase-db-test
+          name: FourValidatorsReconnectRMdatabaseTest-logs
           path: |
             temp-logs/
 
-  reconnect-test-with-spammer:
+  FourValidatorsReconnectSpammer:
     runs-on: ubuntu-20.04
 
     steps:
@@ -152,6 +152,6 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v2
       with:
-          name: reconnect-test-logs-with-spammer
+          name: FourValidatorsReconnectSpammer-logs
           path: |
             temp-logs/

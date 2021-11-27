@@ -1,4 +1,4 @@
-name: Four validators scenario(testnet)
+name: Testnet Scenarios
 
 on:
   schedule:
