@@ -207,7 +207,7 @@ impl NimiqBehaviour {
     }
 
     pub fn add_peer_address(&mut self, peer_id: PeerId, address: Multiaddr) {
-        // Add address to the DHT if it's reachable outside of local nodes
+        // Add address to the DHT
         self.dht.add_address(&peer_id, address);
     }
 

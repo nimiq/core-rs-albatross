@@ -167,7 +167,7 @@ type PoolNetworkBehaviourAction =
     NetworkBehaviourAction<ConnectionPoolEvent, ConnectionPoolHandler>;
 
 pub struct ConnectionPoolBehaviour {
-    contacts: Arc<RwLock<PeerContactBook>>,
+    pub contacts: Arc<RwLock<PeerContactBook>>,
     seeds: Vec<Multiaddr>,
 
     pub peers: ObservablePeerMap<Peer>,

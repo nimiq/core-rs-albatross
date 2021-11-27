@@ -51,7 +51,7 @@ use crate::{
 };
 
 /// Maximum simultaneous libp2p connections per peer
-const MAX_CONNECTIONS_PER_PEER: u32 = 2;
+const MAX_CONNECTIONS_PER_PEER: u32 = 1;
 
 type NimiqSwarm = Swarm<NimiqBehaviour>;
 #[derive(Debug)]
@@ -114,7 +114,7 @@ struct TaskState {
     dht_puts: HashMap<QueryId, oneshot::Sender<Result<(), NetworkError>>>,
     dht_gets: HashMap<QueryId, oneshot::Sender<Result<Option<Vec<u8>>, NetworkError>>>,
     gossip_topics: HashMap<TopicHash, (mpsc::Sender<(GossipsubMessage, MessageId, PeerId)>, bool)>,
-    is_connected: bool,
+    is_bootstraped: bool,
 }
 
 #[derive(Debug)]
@@ -293,18 +293,18 @@ impl Network {
                     let listen_addr = endpoint.get_remote_address();
 
                     tracing::debug!("Saving peer {} listen address: {:?}", peer_id, listen_addr);
+
                     swarm
                         .behaviour_mut()
                         .add_peer_address(peer_id, listen_addr.clone());
-                }
 
-                if !state.is_connected {
-                    state.is_connected = true;
-
-                    // Bootstrap Kademlia
-                    tracing::debug!("Bootstrapping DHT");
-                    if swarm.behaviour_mut().dht.bootstrap().is_err() {
-                        tracing::error!("Bootstrapping DHT error: No known peers");
+                    // Bootstrap Kademlia if we're performing our first connection
+                    if !state.is_bootstraped {
+                        log::debug!("Bootstrapping DHT");
+                        if swarm.behaviour_mut().dht.bootstrap().is_err() {
+                            tracing::error!("Bootstrapping DHT error: No known peers");
+                        }
+                        state.is_bootstraped = true;
                     }
                 }
             }
@@ -328,6 +328,20 @@ impl Network {
 
                 // Remove Peer
                 if let Some(peer) = swarm.behaviour_mut().pool.peers.remove(&peer_id) {
+                    // Remove peer addresses from the DHT
+                    let addresses: Vec<Multiaddr> = swarm
+                        .behaviour_mut()
+                        .pool
+                        .contacts
+                        .read()
+                        .get(&peer_id)
+                        .expect("Peer is not present in the address book")
+                        .addresses()
+                        .cloned()
+                        .collect();
+                    for address in addresses {
+                        swarm.behaviour_mut().remove_peer_address(peer_id, address);
+                    }
                     events_tx.send(NetworkEvent::<Peer>::PeerLeft(peer)).ok();
                 }
             }
@@ -357,6 +371,7 @@ impl Network {
             }
 
             SwarmEvent::Dialing(peer_id) => {
+                // This event is only triggered if the network behaviour performs the dial
                 tracing::debug!("Dialing peer {}", peer_id);
             }
 
@@ -454,6 +469,17 @@ impl Network {
                                 // Save identified peer listen addresses
                                 for listen_addr in info.listen_addrs {
                                     swarm.behaviour_mut().add_peer_address(peer_id, listen_addr);
+
+                                    // Bootstrap Kademlia if we're adding our first address
+                                    if !state.is_bootstraped {
+                                        log::debug!("Bootstrapping DHT");
+                                        if swarm.behaviour_mut().dht.bootstrap().is_err() {
+                                            tracing::error!(
+                                                "Bootstrapping DHT error: No known peers"
+                                            );
+                                        }
+                                        state.is_bootstraped = true;
+                                    }
                                 }
                             }
                             IdentifyEvent::Pushed { peer_id } => {
@@ -1242,7 +1268,7 @@ mod tests {
         // pretty_env_logger::init();
         // tracing_subscriber::fmt::init();
 
-        let peers: usize = 5;
+        let peers: usize = 15;
         let networks = create_network_with_n_peers(peers).await;
 
         assert_eq!(peers, networks.len());
@@ -1334,13 +1360,11 @@ mod tests {
         let (net1, net2) = create_connected_networks().await;
 
         let peer1 = net2.get_peer(*net1.local_peer_id()).unwrap();
-        let peer2 = net1.get_peer(*net2.local_peer_id()).unwrap();
 
         let mut events1 = net1.subscribe_events();
         let mut events2 = net2.subscribe_events();
 
         peer1.close(CloseReason::Other);
-        peer2.close(CloseReason::Other);
         tracing::debug!("closed peer");
 
         let event1 = events1.next().await.unwrap().unwrap();
