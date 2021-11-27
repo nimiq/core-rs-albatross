@@ -7,16 +7,16 @@ use std::{
     str::FromStr,
 };
 
-use beserial::Serialize as BeSerialize;
 use serde::{Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
 
+use beserial::Serialize as BeSerialize;
 use nimiq_block::{MultiSignature, ViewChangeProof};
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
-use nimiq_bls::{CompressedPublicKey, CompressedSignature};
+use nimiq_bls::CompressedPublicKey;
 use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_keys::Address;
+use nimiq_keys::{Address, PublicKey, Signature};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
 use nimiq_primitives::slots::Validators;
@@ -344,7 +344,7 @@ impl From<nimiq_block::TendermintProof> for TendermintProof {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MicroJustification {
-    signature: CompressedSignature,
+    signature: Signature,
     #[serde(skip_serializing_if = "Option::is_none")]
     view_change_proof: Option<ViewChangeProof>,
 }
@@ -374,8 +374,8 @@ impl Slot {
 
         Slot {
             slot_number,
-            validator: validator.validator_address,
-            public_key: validator.public_key.compressed().clone(),
+            validator: validator.address,
+            public_key: validator.voting_key.compressed().clone(),
         }
     }
 }
@@ -397,8 +397,8 @@ impl Slots {
             slots.push(Slots {
                 first_slot_number: validator.slot_range.0,
                 num_slots: validator.num_slots(),
-                validator: validator.validator_address.clone(),
-                public_key: validator.public_key.compressed().clone(),
+                validator: validator.address.clone(),
+                public_key: validator.voting_key.compressed().clone(),
             })
         }
 
@@ -664,8 +664,8 @@ impl Staker {
 #[serde(rename_all = "camelCase")]
 pub struct Validator {
     pub address: Address,
-    pub warm_address: Address,
-    pub validator_key: CompressedPublicKey,
+    pub signing_key: PublicKey,
+    pub voting_key: CompressedPublicKey,
     pub reward_address: Address,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signal_data: Option<Blake2bHash>,
@@ -684,8 +684,8 @@ impl Validator {
     ) -> Self {
         Validator {
             address: validator.address.clone(),
-            warm_address: validator.warm_key.clone(),
-            validator_key: validator.validator_key.clone(),
+            signing_key: validator.signing_key.clone(),
+            voting_key: validator.voting_key.clone(),
             reward_address: validator.reward_address.clone(),
             signal_data: validator.signal_data.clone(),
             balance: validator.balance,

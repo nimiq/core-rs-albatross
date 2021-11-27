@@ -69,8 +69,8 @@ impl AccountTransactionInteraction for StakingContract {
 
         match data {
             IncomingStakingTransactionData::CreateValidator {
-                warm_key,
-                validator_key,
+                signing_key,
+                voting_key,
                 reward_address,
                 signal_data,
                 proof,
@@ -83,15 +83,15 @@ impl AccountTransactionInteraction for StakingContract {
                     accounts_tree,
                     db_txn,
                     &validator_address,
-                    warm_key,
-                    validator_key,
+                    signing_key,
+                    voting_key,
                     reward_address,
                     signal_data,
                 )?;
             }
             IncomingStakingTransactionData::UpdateValidator {
-                new_warm_key,
-                new_validator_key,
+                new_signing_key,
+                new_voting_key,
                 new_reward_address,
                 new_signal_data,
                 proof,
@@ -105,8 +105,8 @@ impl AccountTransactionInteraction for StakingContract {
                         accounts_tree,
                         db_txn,
                         &validator_address,
-                        new_warm_key,
-                        new_validator_key,
+                        new_signing_key,
+                        new_voting_key,
                         new_reward_address,
                         new_signal_data,
                     )?
@@ -117,15 +117,15 @@ impl AccountTransactionInteraction for StakingContract {
                 validator_address,
                 proof,
             } => {
-                // Get the warm address from the proof.
-                let warm_address = proof.compute_signer();
+                // Get the signer's address from the proof.
+                let signer = proof.compute_signer();
 
                 receipt = Some(
                     StakingContract::retire_validator(
                         accounts_tree,
                         db_txn,
                         &validator_address,
-                        warm_address,
+                        &signer,
                         block_height,
                     )?
                     .serialize_to_vec(),
@@ -135,15 +135,15 @@ impl AccountTransactionInteraction for StakingContract {
                 validator_address,
                 proof,
             } => {
-                // Get the warm address from the proof.
-                let warm_address = proof.compute_signer();
+                // Get the signer's address from the proof.
+                let signer = proof.compute_signer();
 
                 receipt = Some(
                     StakingContract::reactivate_validator(
                         accounts_tree,
                         db_txn,
                         &validator_address,
-                        warm_address,
+                        &signer,
                     )?
                     .serialize_to_vec(),
                 );
@@ -152,15 +152,15 @@ impl AccountTransactionInteraction for StakingContract {
                 validator_address,
                 proof,
             } => {
-                // Get the warm address from the proof.
-                let warm_address = proof.compute_signer();
+                // Get the signer's address from the proof.
+                let signer = proof.compute_signer();
 
                 receipt = Some(
                     StakingContract::unpark_validator(
                         accounts_tree,
                         db_txn,
                         &validator_address,
-                        warm_address,
+                        &signer,
                     )?
                     .serialize_to_vec(),
                 );

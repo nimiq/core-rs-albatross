@@ -12,7 +12,7 @@ pub trait ValidatorInterface {
 
     async fn get_address(&mut self) -> Result<Address, Self::Error>;
 
-    async fn get_warm_key(&mut self) -> Result<String, Self::Error>;
+    async fn get_signing_key(&mut self) -> Result<String, Self::Error>;
 
-    async fn get_hot_key(&mut self) -> Result<String, Self::Error>;
+    async fn get_voting_key(&mut self) -> Result<String, Self::Error>;
 }

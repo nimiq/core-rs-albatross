@@ -11,7 +11,7 @@ use nimiq_collections::bitset::BitSet;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_keys::Address;
+use nimiq_keys::{Address, PublicKey};
 use nimiq_nano_primitives::pk_tree_construct;
 use nimiq_primitives::policy;
 use nimiq_primitives::slots::{Validator, Validators};
@@ -59,6 +59,7 @@ fn test_view_change_single_signature() {
     let validators = Validators::new(vec![Validator::new(
         Address::default(),
         LazyPublicKey::from(key_pair.public_key),
+        PublicKey::from([0u8; 32]),
         (0, policy::SLOTS),
     )]);
 

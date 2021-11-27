@@ -21,6 +21,7 @@ nimiq-block-production = { path = "../block-production" }
 nimiq-bls = { path = "../bls" }
 nimiq-collections = { path = "../collections" }
 nimiq-hash = { path = "../hash" }
+nimiq-keys = { path = "../keys" }
 nimiq-nano-primitives = { path = "../nano-primitives" }
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-primitives = { path = "../primitives" }

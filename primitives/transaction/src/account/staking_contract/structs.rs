@@ -2,7 +2,7 @@ use log::error;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use bls::{CompressedPublicKey as BlsPublicKey, CompressedSignature as BlsSignature};
-use keys::Address;
+use keys::{Address, PublicKey as SchnorrPublicKey};
 use nimiq_hash::Blake2bHash;
 use primitives::coin::Coin;
 use primitives::policy;
@@ -69,8 +69,8 @@ impl IncomingStakingTransactionType {
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub enum IncomingStakingTransactionData {
     CreateValidator {
-        warm_key: Address,
-        validator_key: BlsPublicKey,
+        signing_key: SchnorrPublicKey,
+        voting_key: BlsPublicKey,
         reward_address: Address,
         signal_data: Option<Blake2bHash>,
         proof_of_knowledge: BlsSignature,
@@ -79,8 +79,8 @@ pub enum IncomingStakingTransactionData {
         proof: SignatureProof,
     },
     UpdateValidator {
-        new_warm_key: Option<Address>,
-        new_validator_key: Option<BlsPublicKey>,
+        new_signing_key: Option<SchnorrPublicKey>,
+        new_voting_key: Option<BlsPublicKey>,
         new_reward_address: Option<Address>,
         new_signal_data: Option<Option<Blake2bHash>>,
         new_proof_of_knowledge: Option<BlsSignature>,
@@ -152,7 +152,7 @@ impl IncomingStakingTransactionData {
     pub fn verify(&self, transaction: &Transaction) -> Result<(), TransactionError> {
         match self {
             IncomingStakingTransactionData::CreateValidator {
-                validator_key,
+                voting_key,
                 proof_of_knowledge,
                 proof,
                 ..
@@ -164,22 +164,22 @@ impl IncomingStakingTransactionData {
                 }
 
                 // Check proof of knowledge.
-                verify_proof_of_knowledge(validator_key, proof_of_knowledge)?;
+                verify_proof_of_knowledge(voting_key, proof_of_knowledge)?;
 
                 // Check that the signature is correct.
                 verify_transaction_signature(transaction, proof, true)?
             }
             IncomingStakingTransactionData::UpdateValidator {
-                new_warm_key,
-                new_validator_key,
+                new_signing_key,
+                new_voting_key,
                 new_reward_address,
                 new_signal_data,
                 new_proof_of_knowledge,
                 proof,
             } => {
                 // Do not allow updates without any effect.
-                if new_warm_key.is_none()
-                    && new_validator_key.is_none()
+                if new_signing_key.is_none()
+                    && new_voting_key.is_none()
                     && new_reward_address.is_none()
                     && new_signal_data.is_none()
                 {
@@ -188,10 +188,10 @@ impl IncomingStakingTransactionData {
                 }
 
                 // Check proof of knowledge, if necessary.
-                if let (Some(new_validator_key), Some(new_proof_of_knowledge)) =
-                    (new_validator_key, new_proof_of_knowledge)
+                if let (Some(new_voting_key), Some(new_proof_of_knowledge)) =
+                    (new_voting_key, new_proof_of_knowledge)
                 {
-                    verify_proof_of_knowledge(new_validator_key, new_proof_of_knowledge)?;
+                    verify_proof_of_knowledge(new_voting_key, new_proof_of_knowledge)?;
                 }
 
                 // Check that the signature is correct.
@@ -299,8 +299,8 @@ impl Serialize for IncomingStakingTransactionData {
         let mut size = 0;
         match self {
             IncomingStakingTransactionData::CreateValidator {
-                warm_key,
-                validator_key,
+                signing_key,
+                voting_key,
                 reward_address,
                 signal_data,
                 proof_of_knowledge,
@@ -308,16 +308,16 @@ impl Serialize for IncomingStakingTransactionData {
             } => {
                 size +=
                     Serialize::serialize(&IncomingStakingTransactionType::CreateValidator, writer)?;
-                size += Serialize::serialize(warm_key, writer)?;
-                size += Serialize::serialize(validator_key, writer)?;
+                size += Serialize::serialize(signing_key, writer)?;
+                size += Serialize::serialize(voting_key, writer)?;
                 size += Serialize::serialize(reward_address, writer)?;
                 size += Serialize::serialize(signal_data, writer)?;
                 size += Serialize::serialize(proof_of_knowledge, writer)?;
                 size += Serialize::serialize(proof, writer)?;
             }
             IncomingStakingTransactionData::UpdateValidator {
-                new_warm_key,
-                new_validator_key,
+                new_signing_key,
+                new_voting_key,
                 new_reward_address,
                 new_signal_data,
                 new_proof_of_knowledge,
@@ -325,8 +325,8 @@ impl Serialize for IncomingStakingTransactionData {
             } => {
                 size +=
                     Serialize::serialize(&IncomingStakingTransactionType::UpdateValidator, writer)?;
-                size += Serialize::serialize(&new_warm_key, writer)?;
-                size += Serialize::serialize(&new_validator_key, writer)?;
+                size += Serialize::serialize(&new_signing_key, writer)?;
+                size += Serialize::serialize(&new_voting_key, writer)?;
                 size += Serialize::serialize(&new_reward_address, writer)?;
                 size += Serialize::serialize(&new_signal_data, writer)?;
                 size += Serialize::serialize(&new_proof_of_knowledge, writer)?;
@@ -402,8 +402,8 @@ impl Serialize for IncomingStakingTransactionData {
         let mut size = 0;
         match self {
             IncomingStakingTransactionData::CreateValidator {
-                warm_key,
-                validator_key,
+                signing_key,
+                voting_key,
                 reward_address,
                 signal_data,
                 proof_of_knowledge,
@@ -411,16 +411,16 @@ impl Serialize for IncomingStakingTransactionData {
             } => {
                 size +=
                     Serialize::serialized_size(&IncomingStakingTransactionType::CreateValidator);
-                size += Serialize::serialized_size(warm_key);
-                size += Serialize::serialized_size(validator_key);
+                size += Serialize::serialized_size(signing_key);
+                size += Serialize::serialized_size(voting_key);
                 size += Serialize::serialized_size(reward_address);
                 size += Serialize::serialized_size(signal_data);
                 size += Serialize::serialized_size(proof_of_knowledge);
                 size += Serialize::serialized_size(proof);
             }
             IncomingStakingTransactionData::UpdateValidator {
-                new_warm_key,
-                new_validator_key,
+                new_signing_key,
+                new_voting_key,
                 new_reward_address,
                 new_signal_data,
                 new_proof_of_knowledge,
@@ -428,8 +428,8 @@ impl Serialize for IncomingStakingTransactionData {
             } => {
                 size +=
                     Serialize::serialized_size(&IncomingStakingTransactionType::UpdateValidator);
-                size += Serialize::serialized_size(new_warm_key);
-                size += Serialize::serialized_size(new_validator_key);
+                size += Serialize::serialized_size(new_signing_key);
+                size += Serialize::serialized_size(new_voting_key);
                 size += Serialize::serialized_size(new_reward_address);
                 size += Serialize::serialized_size(new_signal_data);
                 size += Serialize::serialized_size(new_proof_of_knowledge);
@@ -502,8 +502,8 @@ impl Deserialize for IncomingStakingTransactionData {
         match ty {
             IncomingStakingTransactionType::CreateValidator => {
                 Ok(IncomingStakingTransactionData::CreateValidator {
-                    warm_key: Deserialize::deserialize(reader)?,
-                    validator_key: Deserialize::deserialize(reader)?,
+                    signing_key: Deserialize::deserialize(reader)?,
+                    voting_key: Deserialize::deserialize(reader)?,
                     reward_address: Deserialize::deserialize(reader)?,
                     signal_data: Deserialize::deserialize(reader)?,
                     proof_of_knowledge: Deserialize::deserialize(reader)?,
@@ -512,8 +512,8 @@ impl Deserialize for IncomingStakingTransactionData {
             }
             IncomingStakingTransactionType::UpdateValidator => {
                 Ok(IncomingStakingTransactionData::UpdateValidator {
-                    new_warm_key: Deserialize::deserialize(reader)?,
-                    new_validator_key: Deserialize::deserialize(reader)?,
+                    new_signing_key: Deserialize::deserialize(reader)?,
+                    new_voting_key: Deserialize::deserialize(reader)?,
                     new_reward_address: Deserialize::deserialize(reader)?,
                     new_signal_data: Deserialize::deserialize(reader)?,
                     new_proof_of_knowledge: Deserialize::deserialize(reader)?,
@@ -752,21 +752,21 @@ pub fn verify_transaction_signature(
 /// public keys `pk_B + (pk_A - pk_B) = pk_B`.
 /// Alternatives would be to replace the proof of knowledge by a zero-knowledge proof.
 pub fn verify_proof_of_knowledge(
-    validator_key: &BlsPublicKey,
+    voting_key: &BlsPublicKey,
     proof_of_knowledge: &BlsSignature,
 ) -> Result<(), TransactionError> {
-    if !validator_key
+    if !voting_key
         .uncompress()
         .map_err(|_| TransactionError::InvalidData)?
         .verify(
-            validator_key,
+            voting_key,
             &proof_of_knowledge
                 .uncompress()
                 .map_err(|_| TransactionError::InvalidData)?,
         )
     {
         error!("Verification of the proof of knowledge for a BLS key failed! For the following BLS public key:\n{:?}",
-            validator_key);
+            voting_key);
         return Err(TransactionError::InvalidData);
     }
 

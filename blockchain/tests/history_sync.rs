@@ -1,18 +1,13 @@
 use std::sync::Arc;
 
-use beserial::Deserialize;
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, PushResult};
-use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
 use nimiq_primitives::policy::{BATCHES_PER_EPOCH, BATCH_LENGTH, EPOCH_LENGTH};
-use nimiq_test_utils::blockchain::produce_macro_blocks;
+use nimiq_test_utils::blockchain::{produce_macro_blocks, signing_key, voting_key};
 use nimiq_utils::time::OffsetTime;
 use parking_lot::RwLock;
-
-// Secret key of validator. Tests run with `genesis/src/genesis/unit-albatross.toml`
-const SECRET_KEY: &str = "196ffdb1a8acc7cbd76a251aeac0600a1d68b3aba1eba823b5e4dc5dbdcdc730afa752c05ab4f6ef8518384ad514f403c5a088a22b17bf1bc14f8ff8decc2a512c0a200f68d7bdf5a319b30356fe8d1d75ef510aed7a8660968c216c328a0000";
 
 // Tests if the basic history sync works. It will try to push a succession of election and checkpoint
 // blocks. It does test if election blocks can be pushed after checkpoint blocks and vice-versa. It
@@ -33,11 +28,7 @@ fn history_sync_works() {
     ));
 
     // Produce the blocks.
-    let keypair =
-        KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
-
-    let producer = BlockProducer::new(keypair);
-
+    let producer = BlockProducer::new(signing_key(), voting_key());
     produce_macro_blocks(num_macro_blocks, &producer, &blockchain);
 
     let blockchain = blockchain.read();
@@ -167,11 +158,7 @@ fn history_sync_works_with_micro_blocks() {
     ));
 
     // Produce the blocks.
-    let keypair =
-        KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
-
-    let producer = BlockProducer::new(keypair);
-
+    let producer = BlockProducer::new(signing_key(), voting_key());
     produce_macro_blocks(num_macro_blocks, &producer, &blockchain);
 
     let blockchain = blockchain.read();

@@ -223,8 +223,8 @@ fn it_can_create_validator_transactions() {
     // Create validator
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::CreateValidator {
-            warm_key: address.clone(),
-            validator_key: bls_pair.public_key.compress(),
+            signing_key: key_pair.public,
+            voting_key: bls_pair.public_key.compress(),
             proof_of_knowledge: bls_pair.sign(&bls_pair.public_key).compress(),
             reward_address: address.clone(),
             signal_data: Some(Blake2bHash::default()),
@@ -237,7 +237,7 @@ fn it_can_create_validator_transactions() {
     let tx2 = TransactionBuilder::new_create_validator(
         &key_pair,
         &key_pair,
-        address.clone(),
+        key_pair.public,
         &bls_pair,
         address.clone(),
         Some(Blake2bHash::default()),
@@ -251,8 +251,8 @@ fn it_can_create_validator_transactions() {
     // Update
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::UpdateValidator {
-            new_warm_key: Some(address.clone()),
-            new_validator_key: None,
+            new_signing_key: Some(key_pair.public),
+            new_voting_key: None,
             new_proof_of_knowledge: None,
             new_reward_address: Some(address.clone()),
             new_signal_data: None,
@@ -265,7 +265,7 @@ fn it_can_create_validator_transactions() {
     let tx2 = TransactionBuilder::new_update_validator(
         &key_pair,
         &key_pair,
-        Some(address.clone()),
+        Some(key_pair.public),
         None,
         Some(address.clone()),
         None,

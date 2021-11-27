@@ -8,7 +8,7 @@ use nimiq_blockchain::AbstractBlockchain;
 use nimiq_bls::{KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
 use nimiq_consensus::ConsensusProxy;
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_keys::{Address, KeyPair, PrivateKey};
+use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey};
 use nimiq_network_libp2p::Network;
 use nimiq_primitives::{coin::Coin, networks::NetworkId};
 use nimiq_rpc_interface::{
@@ -837,15 +837,15 @@ impl ConsensusInterface for ConsensusDispatcher {
         &mut self,
         sender_wallet: Address,
         validator_wallet: Address,
-        warm_address: Address,
-        hot_secret_key: String,
+        signing_key: PublicKey,
+        voting_secret_key: String,
         reward_address: Address,
         signal_data: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Error> {
         let secret_key =
-            BlsSecretKey::deserialize_from_vec(&hex::decode(hot_secret_key).unwrap()).unwrap();
+            BlsSecretKey::deserialize_from_vec(&hex::decode(voting_secret_key).unwrap()).unwrap();
         let hot_keypair = BlsKeyPair::from(secret_key);
 
         // Since JSON doesn't have a primitive for Option (it just has the null primitive), we can't
@@ -863,7 +863,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         let transaction = TransactionBuilder::new_create_validator(
             &self.get_wallet_keypair(&sender_wallet)?,
             &self.get_wallet_keypair(&validator_wallet)?,
-            warm_address,
+            signing_key,
             &hot_keypair,
             reward_address,
             signal_data,
@@ -885,8 +885,8 @@ impl ConsensusInterface for ConsensusDispatcher {
         &mut self,
         sender_wallet: Address,
         validator_wallet: Address,
-        warm_address: Address,
-        hot_secret_key: String,
+        signing_key: PublicKey,
+        voting_secret_key: String,
         reward_address: Address,
         signal_data: String,
         fee: Coin,
@@ -896,8 +896,8 @@ impl ConsensusInterface for ConsensusDispatcher {
             .create_new_validator_transaction(
                 sender_wallet,
                 validator_wallet,
-                warm_address,
-                hot_secret_key,
+                signing_key,
+                voting_secret_key,
                 reward_address,
                 signal_data,
                 fee,
@@ -918,14 +918,14 @@ impl ConsensusInterface for ConsensusDispatcher {
         &mut self,
         sender_wallet: Address,
         validator_wallet: Address,
-        new_warm_address: Option<Address>,
-        new_hot_secret_key: Option<String>,
+        new_signing_key: Option<PublicKey>,
+        new_voting_secret_key: Option<String>,
         new_reward_address: Option<Address>,
         new_signal_data: Option<String>,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Error> {
-        let new_hot_keypair = match new_hot_secret_key {
+        let new_voting_keypair = match new_voting_secret_key {
             Some(key) => {
                 let new_secret_key =
                     BlsSecretKey::deserialize_from_vec(&hex::decode(key).unwrap()).unwrap();
@@ -956,8 +956,8 @@ impl ConsensusInterface for ConsensusDispatcher {
         let transaction = TransactionBuilder::new_update_validator(
             &self.get_wallet_keypair(&sender_wallet)?,
             &self.get_wallet_keypair(&validator_wallet)?,
-            new_warm_address,
-            new_hot_keypair.as_ref(),
+            new_signing_key,
+            new_voting_keypair.as_ref(),
             new_reward_address,
             new_signal_data,
             fee,
@@ -979,8 +979,8 @@ impl ConsensusInterface for ConsensusDispatcher {
         &mut self,
         sender_wallet: Address,
         validator_wallet: Address,
-        new_warm_address: Option<Address>,
-        new_hot_secret_key: Option<String>,
+        new_signing_key: Option<PublicKey>,
+        new_voting_secret_key: Option<String>,
         new_reward_address: Option<Address>,
         new_signal_data: Option<String>,
         fee: Coin,
@@ -990,8 +990,8 @@ impl ConsensusInterface for ConsensusDispatcher {
             .create_update_validator_transaction(
                 sender_wallet,
                 validator_wallet,
-                new_warm_address,
-                new_hot_secret_key,
+                new_signing_key,
+                new_voting_secret_key,
                 new_reward_address,
                 new_signal_data,
                 fee,
@@ -1007,18 +1007,18 @@ impl ConsensusInterface for ConsensusDispatcher {
         &mut self,
         sender_wallet: Address,
         validator_address: Address,
-        warm_secret_key: String,
+        signing_secret_key: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Error> {
         let secret_key =
-            PrivateKey::deserialize_from_vec(&hex::decode(warm_secret_key).unwrap()).unwrap();
-        let warm_key_pair = KeyPair::from(secret_key);
+            PrivateKey::deserialize_from_vec(&hex::decode(signing_secret_key).unwrap()).unwrap();
+        let signing_key_pair = KeyPair::from(secret_key);
 
         let transaction = TransactionBuilder::new_retire_validator(
             &self.get_wallet_keypair(&sender_wallet)?,
             validator_address,
-            &warm_key_pair,
+            &signing_key_pair,
             fee,
             self.validity_start_height(validity_start_height),
             self.get_network_id(),
@@ -1033,7 +1033,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         &mut self,
         sender_wallet: Address,
         validator_address: Address,
-        warm_secret_key: String,
+        signing_secret_key: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Error> {
@@ -1041,7 +1041,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             .create_retire_validator_transaction(
                 sender_wallet,
                 validator_address,
-                warm_secret_key,
+                signing_secret_key,
                 fee,
                 validity_start_height,
             )
@@ -1055,18 +1055,18 @@ impl ConsensusInterface for ConsensusDispatcher {
         &mut self,
         sender_wallet: Address,
         validator_address: Address,
-        warm_secret_key: String,
+        signing_secret_key: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Error> {
         let secret_key =
-            PrivateKey::deserialize_from_vec(&hex::decode(warm_secret_key).unwrap()).unwrap();
-        let warm_key_pair = KeyPair::from(secret_key);
+            PrivateKey::deserialize_from_vec(&hex::decode(signing_secret_key).unwrap()).unwrap();
+        let signing_key_pair = KeyPair::from(secret_key);
 
         let transaction = TransactionBuilder::new_reactivate_validator(
             &self.get_wallet_keypair(&sender_wallet)?,
             validator_address,
-            &warm_key_pair,
+            &signing_key_pair,
             fee,
             self.validity_start_height(validity_start_height),
             self.get_network_id(),
@@ -1081,7 +1081,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         &mut self,
         sender_wallet: Address,
         validator_address: Address,
-        warm_secret_key: String,
+        signing_secret_key: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Error> {
@@ -1089,7 +1089,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             .create_reactivate_validator_transaction(
                 sender_wallet,
                 validator_address,
-                warm_secret_key,
+                signing_secret_key,
                 fee,
                 validity_start_height,
             )
@@ -1103,18 +1103,18 @@ impl ConsensusInterface for ConsensusDispatcher {
         &mut self,
         sender_wallet: Address,
         validator_address: Address,
-        warm_secret_key: String,
+        signing_secret_key: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Error> {
         let secret_key =
-            PrivateKey::deserialize_from_vec(&hex::decode(warm_secret_key).unwrap()).unwrap();
-        let warm_key_pair = KeyPair::from(secret_key);
+            PrivateKey::deserialize_from_vec(&hex::decode(signing_secret_key).unwrap()).unwrap();
+        let signing_key_pair = KeyPair::from(secret_key);
 
         let transaction = TransactionBuilder::new_unpark_validator(
             &self.get_wallet_keypair(&sender_wallet)?,
             validator_address,
-            &warm_key_pair,
+            &signing_key_pair,
             fee,
             self.validity_start_height(validity_start_height),
             self.get_network_id(),
@@ -1129,7 +1129,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         &mut self,
         sender_wallet: Address,
         validator_address: Address,
-        warm_secret_key: String,
+        signing_secret_key: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Error> {
@@ -1137,7 +1137,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             .create_unpark_validator_transaction(
                 sender_wallet,
                 validator_address,
-                warm_secret_key,
+                signing_secret_key,
                 fee,
                 validity_start_height,
             )

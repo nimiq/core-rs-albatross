@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 
 use nimiq_hash::Blake2bHash;
-use nimiq_keys::Address;
+use nimiq_keys::{Address, PublicKey};
 use nimiq_primitives::coin::Coin;
 use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm};
 
@@ -334,8 +334,8 @@ pub trait ConsensusInterface {
         &mut self,
         sender_wallet: Address,
         validator_wallet: Address,
-        warm_key: Address,
-        hot_secret_key: String,
+        signing_key: PublicKey,
+        voting_secret_key: String,
         reward_address: Address,
         signal_data: String,
         fee: Coin,
@@ -346,8 +346,8 @@ pub trait ConsensusInterface {
         &mut self,
         sender_wallet: Address,
         validator_wallet: Address,
-        warm_key: Address,
-        hot_secret_key: String,
+        signing_key: PublicKey,
+        voting_secret_key: String,
         reward_address: Address,
         signal_data: String,
         fee: Coin,
@@ -358,8 +358,8 @@ pub trait ConsensusInterface {
         &mut self,
         sender_wallet: Address,
         validator_wallet: Address,
-        new_warm_address: Option<Address>,
-        new_hot_secret_key: Option<String>,
+        new_signing_key: Option<PublicKey>,
+        new_voting_secret_key: Option<String>,
         new_reward_address: Option<Address>,
         new_signal_data: Option<String>,
         fee: Coin,
@@ -370,8 +370,8 @@ pub trait ConsensusInterface {
         &mut self,
         sender_wallet: Address,
         validator_wallet: Address,
-        new_warm_address: Option<Address>,
-        new_hot_secret_key: Option<String>,
+        new_signing_key: Option<PublicKey>,
+        new_voting_secret_key: Option<String>,
         new_reward_address: Option<Address>,
         new_signal_data: Option<String>,
         fee: Coin,
@@ -382,7 +382,7 @@ pub trait ConsensusInterface {
         &mut self,
         sender_wallet: Address,
         validator_address: Address,
-        warm_secret_key: String,
+        signing_secret_key: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Self::Error>;
@@ -391,7 +391,7 @@ pub trait ConsensusInterface {
         &mut self,
         sender_wallet: Address,
         validator_address: Address,
-        warm_secret_key: String,
+        signing_secret_key: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Self::Error>;
@@ -400,7 +400,7 @@ pub trait ConsensusInterface {
         &mut self,
         sender_wallet: Address,
         validator_address: Address,
-        warm_secret_key: String,
+        signing_secret_key: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Self::Error>;
@@ -409,7 +409,7 @@ pub trait ConsensusInterface {
         &mut self,
         sender_wallet: Address,
         validator_address: Address,
-        warm_secret_key: String,
+        signing_secret_key: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Self::Error>;
@@ -418,7 +418,7 @@ pub trait ConsensusInterface {
         &mut self,
         sender_wallet: Address,
         validator_address: Address,
-        warm_secret_key: String,
+        signing_secret_key: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Self::Error>;
@@ -427,7 +427,7 @@ pub trait ConsensusInterface {
         &mut self,
         sender_wallet: Address,
         validator_address: Address,
-        warm_secret_key: String,
+        signing_secret_key: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Self::Error>;

@@ -1,13 +1,14 @@
-use beserial::Serialize;
 use std::cmp::Ordering;
 
+use beserial::Serialize;
 use nimiq_block::{
     Block, BlockBody, BlockError, BlockHeader, BlockJustification, BlockType, ForkProof, MacroBody,
     ViewChange,
 };
-use nimiq_bls::PublicKey;
+use nimiq_bls::PublicKey as BlsPublicKey;
 use nimiq_database::Transaction as DBtx;
 use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_keys::PublicKey as SchnorrPublicKey;
 use nimiq_primitives::policy;
 use nimiq_transaction::Transaction;
 
@@ -27,7 +28,7 @@ impl Blockchain {
     pub fn verify_block_header<B: AbstractBlockchain>(
         blockchain: &B,
         header: &BlockHeader,
-        intended_slot_owner: &PublicKey,
+        voting_key: &BlsPublicKey,
         txn_opt: Option<&DBtx>,
         check_seed: bool,
     ) -> Result<(), PushError> {
@@ -76,10 +77,7 @@ impl Blockchain {
 
         // Check if the seed was signed by the intended producer.
         if check_seed {
-            if let Err(e) = header
-                .seed()
-                .verify(prev_info.head.seed(), intended_slot_owner)
-            {
+            if let Err(e) = header.seed().verify(prev_info.head.seed(), voting_key) {
                 warn!("Rejecting block - invalid seed ({:?})", e);
                 return Err(PushError::InvalidBlock(BlockError::InvalidSeed));
             }
@@ -103,7 +101,7 @@ impl Blockchain {
         blockchain: &B,
         header: &BlockHeader,
         justification_opt: &Option<BlockJustification>,
-        intended_slot_owner: &PublicKey,
+        signing_key: &SchnorrPublicKey,
         txn_opt: Option<&DBtx>,
         check_signature: bool,
     ) -> Result<(), PushError> {
@@ -114,23 +112,15 @@ impl Blockchain {
 
         match justification {
             BlockJustification::Micro(justification) => {
+                assert_eq!(header.ty(), BlockType::Micro);
+
                 if check_signature {
                     // If the block is a micro block, verify the signature and the view changes.
-                    let signature = justification.signature.uncompress();
-
-                    if let Err(e) = signature {
-                        warn!("Rejecting block - invalid signature ({:?})", e);
-                        return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
-                    }
-
                     // Verify the signature on the justification.
-                    if !intended_slot_owner.verify_hash(header.hash_blake2s(), &signature.unwrap())
-                    {
+                    let hash = header.hash();
+                    if !signing_key.verify(&justification.signature, hash.as_slice()) {
                         warn!("Rejecting block - invalid signature for intended slot owner");
-
-                        debug!("Block hash: {}", header.hash());
-
-                        debug!("Intended slot owner: {:?}", intended_slot_owner.compress());
+                        debug!("Intended slot owner: {:?}", signing_key);
                         return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
                     }
                 }
@@ -185,6 +175,8 @@ impl Blockchain {
                 }
             }
             BlockJustification::Macro(justification) => {
+                assert_eq!(header.ty(), BlockType::Macro);
+
                 // If the block is a macro block, verify the Tendermint proof.
                 if check_signature
                     && !justification.verify(
@@ -266,7 +258,10 @@ impl Blockchain {
                         txn_opt,
                     ) {
                         // Verify fork proof.
-                        if let Err(e) = proof.verify(&validator.public_key.uncompress_unchecked()) {
+                        if let Err(e) = proof.verify(
+                            &validator.signing_key,
+                            &validator.voting_key.uncompress_unchecked(),
+                        ) {
                             warn!("Rejecting block - Bad fork proof: {:?}", e);
                             return Err(PushError::InvalidBlock(BlockError::InvalidForkProof));
                         }

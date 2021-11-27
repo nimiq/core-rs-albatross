@@ -1,26 +1,29 @@
-use std::ops::Deref;
-
 use nimiq_account::Inherent;
 use nimiq_block::{
     ForkProof, MacroBlock, MacroBody, MacroHeader, MicroBlock, MicroBody, MicroHeader,
     MicroJustification, ViewChangeProof, ViewChanges,
 };
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, ExtendedTransaction};
-use nimiq_bls::KeyPair;
+use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_keys::KeyPair as SchnorrKeyPair;
 use nimiq_primitives::policy;
 use nimiq_transaction::Transaction;
 
 /// Struct that contains all necessary information to actually produce blocks.
 /// It has the  validator key for this validator.
 pub struct BlockProducer {
-    pub validator_key: KeyPair,
+    pub signing_key: SchnorrKeyPair,
+    pub voting_key: BlsKeyPair,
 }
 
 impl BlockProducer {
     /// Creates a new BlockProducer struct given a blockchain and a validator key.
-    pub fn new(validator_key: KeyPair) -> Self {
-        BlockProducer { validator_key }
+    pub fn new(signing_key: SchnorrKeyPair, voting_key: BlsKeyPair) -> Self {
+        BlockProducer {
+            signing_key,
+            voting_key,
+        }
     }
 
     /// Creates the next micro block.
@@ -58,7 +61,7 @@ impl BlockProducer {
         let seed = blockchain
             .head()
             .seed()
-            .sign_next(&self.validator_key.secret_key);
+            .sign_next(&self.voting_key.secret_key);
 
         // Sort the transactions.
         transactions.sort_unstable();
@@ -122,8 +125,9 @@ impl BlockProducer {
             history_root,
         };
 
-        // Signs the block header using the validator key.
-        let signature = self.validator_key.sign(&header).compress();
+        // Signs the block header using the signing key.
+        let hash = header.hash::<Blake2bHash>();
+        let signature = self.signing_key.sign(hash.as_slice());
 
         // Returns the micro block.
         MicroBlock {
@@ -143,7 +147,7 @@ impl BlockProducer {
     pub fn next_macro_block_proposal(
         &self,
         // The (upgradable) read locked guard to the blockchain
-        blockchain: &dyn Deref<Target = Blockchain>,
+        blockchain: &Blockchain,
         // The timestamp for the block proposal.
         timestamp: u64,
         // The view number for the block proposal.
@@ -169,7 +173,7 @@ impl BlockProducer {
         let seed = blockchain
             .head()
             .seed()
-            .sign_next(&self.validator_key.secret_key);
+            .sign_next(&self.voting_key.secret_key);
 
         // Create the header for the macro block without the state root and the transactions root.
         // We need several fields of this header in order to calculate the transactions and the

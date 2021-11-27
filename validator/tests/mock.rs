@@ -58,9 +58,9 @@ async fn mock_validator(
     hub: &mut MockHub,
     peer_id: u64,
     validator_address: Address,
-    signing_key: BlsKeyPair,
+    voting_key: BlsKeyPair,
     fee_key: KeyPair,
-    warm_key: KeyPair,
+    signing_key: KeyPair,
     genesis_info: GenesisInfo,
 ) -> (Validator, Consensus) {
     let consensus = mock_consensus(hub, peer_id, genesis_info).await;
@@ -71,8 +71,8 @@ async fn mock_validator(
             validator_network,
             validator_address,
             signing_key,
+            voting_key,
             fee_key,
-            warm_key,
             MempoolConfig::default(),
         ),
         consensus,
@@ -82,16 +82,16 @@ async fn mock_validator(
 async fn mock_validators(hub: &mut MockHub, num_validators: usize) -> Vec<Validator> {
     // Generate validator key pairs.
     let mut rng = seeded_rng(0);
-    let bls_keys: Vec<BlsKeyPair> = (0..num_validators)
+    let cold_keys: Vec<KeyPair> = (0..num_validators)
+        .map(|_| KeyPair::generate(&mut rng))
+        .collect();
+    let voting_keys: Vec<BlsKeyPair> = (0..num_validators)
         .map(|_| BlsKeyPair::generate(&mut rng))
         .collect();
-    let validator_keys: Vec<KeyPair> = (0..num_validators)
+    let signing_keys: Vec<KeyPair> = (0..num_validators)
         .map(|_| KeyPair::generate(&mut rng))
         .collect();
     let fee_keys: Vec<KeyPair> = (0..num_validators)
-        .map(|_| KeyPair::generate(&mut rng))
-        .collect();
-    let warm_keys: Vec<KeyPair> = (0..num_validators)
         .map(|_| KeyPair::generate(&mut rng))
         .collect();
 
@@ -99,9 +99,9 @@ async fn mock_validators(hub: &mut MockHub, num_validators: usize) -> Vec<Valida
     let mut genesis_builder = GenesisBuilder::default();
     for i in 0..num_validators {
         genesis_builder.with_genesis_validator(
-            Address::from(&validator_keys[i]),
-            Address::from([0u8; 20]),
-            bls_keys[i].public_key,
+            Address::from(&cold_keys[i]),
+            signing_keys[i].public,
+            voting_keys[i].public_key,
             Address::default(),
         );
     }
@@ -114,10 +114,10 @@ async fn mock_validators(hub: &mut MockHub, num_validators: usize) -> Vec<Valida
         let (v, c) = mock_validator(
             hub,
             id as u64,
-            Address::from(&validator_keys[id]),
-            bls_keys[id].clone(),
+            Address::from(&cold_keys[id]),
+            voting_keys[id].clone(),
             fee_keys[id].clone(),
-            warm_keys[id].clone(),
+            signing_keys[id].clone(),
             genesis.clone(),
         )
         .await;
@@ -167,7 +167,7 @@ fn validator_for_slot(
     validators
         .iter()
         .find(|validator| {
-            &validator.signing_key().public_key.compress() == slot.public_key.compressed()
+            &validator.voting_key().public_key.compress() == slot.voting_key.compressed()
         })
         .unwrap()
 }
@@ -177,13 +177,13 @@ async fn one_validator_can_create_micro_blocks() {
     let mut hub = MockHub::default();
 
     let bls_key = BlsKeyPair::generate(&mut seeded_rng(0));
-    let validator_key = KeyPair::generate(&mut seeded_rng(0));
+    let voting_key = KeyPair::generate(&mut seeded_rng(0));
     let fee_key = KeyPair::generate(&mut seeded_rng(0));
-    let warm_key = KeyPair::generate(&mut seeded_rng(0));
+    let signing_key = KeyPair::generate(&mut seeded_rng(0));
     let genesis = GenesisBuilder::default()
         .with_genesis_validator(
-            Address::from(&validator_key),
-            Address::from([0u8; 20]),
+            Address::from(&voting_key),
+            signing_key.public,
             bls_key.public_key,
             Address::default(),
         )
@@ -193,10 +193,10 @@ async fn one_validator_can_create_micro_blocks() {
     let (validator, mut consensus1) = mock_validator(
         &mut hub,
         1,
-        Address::from(&validator_key),
+        Address::from(&voting_key),
         bls_key,
         fee_key,
-        warm_key,
+        signing_key,
         genesis.clone(),
     )
     .await;
@@ -365,7 +365,7 @@ async fn validator_can_catch_up() {
         1,
         1,
         blockchain.read().head().seed().clone(),
-        validator.signing_key(),
+        validator.voting_key(),
         validator.validator_id(),
         &slots,
     );

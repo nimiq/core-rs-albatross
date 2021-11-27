@@ -6,7 +6,7 @@ use time::OffsetDateTime;
 
 use beserial::Deserialize as BDeserialize;
 use bls::{PublicKey as BlsPublicKey, SecretKey as BlsSecretKey};
-use keys::Address;
+use keys::{Address, PublicKey as SchnorrPublicKey};
 use primitives::coin::Coin;
 
 #[derive(Clone, Debug, Deserialize)]
@@ -35,11 +35,11 @@ pub struct GenesisValidator {
     #[serde(deserialize_with = "deserialize_nimiq_address")]
     pub validator_address: Address,
 
-    #[serde(deserialize_with = "deserialize_nimiq_address")]
-    pub warm_address: Address,
+    #[serde(deserialize_with = "deserialize_schnorr_public_key")]
+    pub signing_key: SchnorrPublicKey,
 
     #[serde(deserialize_with = "deserialize_bls_public_key")]
-    pub validator_key: BlsPublicKey,
+    pub voting_key: BlsPublicKey,
 
     #[serde(deserialize_with = "deserialize_nimiq_address")]
     pub reward_address: Address,
@@ -122,6 +122,17 @@ where
     } else {
         Ok(None)
     }
+}
+
+pub(crate) fn deserialize_schnorr_public_key<'de, D>(
+    deserializer: D,
+) -> Result<SchnorrPublicKey, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let pkey_hex: String = Deserialize::deserialize(deserializer)?;
+    let pkey_raw = hex::decode(pkey_hex).map_err(Error::custom)?;
+    SchnorrPublicKey::deserialize_from_vec(&pkey_raw).map_err(Error::custom)
 }
 
 pub fn deserialize_timestamp<'de, D>(deserializer: D) -> Result<Option<OffsetDateTime>, D::Error>

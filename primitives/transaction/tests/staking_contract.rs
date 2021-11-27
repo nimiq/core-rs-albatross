@@ -21,12 +21,13 @@ const VALIDATOR_ADDRESS: &str = "83fa05dbe31f85e719f4c4fd67ebdba2e444d9f8";
 const VALIDATOR_PRIVATE_KEY: &str =
     "d0fbb3690f5308f457e245a3cc65ae8d6945155eadcac60d489ffc5583a60b9b";
 
-const VALIDATOR_WARM_KEY: &str = "7182b1c2d0e2377d69413dc14c56cd923b67e41e";
-const VALIDATOR_WARM_SECRET_KEY: &str =
+const VALIDATOR_SIGNING_KEY: &str =
+    "b300481ddd7af6be3cf5c123b7af2c21f87f4ac808c8b0e622eb85826124a844";
+const VALIDATOR_SIGNING_SECRET_KEY: &str =
     "84c961b11b52a8244ffc5e9d0965bc2dfa6764970f8e4989d45901de401baf27";
 
-const VALIDATOR_HOT_KEY: &str = "003d4e4eb0fa2fee42501368dc41115f64741e9d9496bbc2fe4cfd407f10272eef87b839d6e25b0eb7338427d895e4209190b6c5aa580f134693623a30ebafdaf95a268b3b84a840fc45d06283d71fe4faa2c7d08cd431bbda165c53a50453015a49ca120626991ff9558be65a7958158387829d6e56e2861e80b85e8c795d93f907afb19e6e2e5aaed9a3158eac5a035189986ff5803dd18fa02bdf5535e5495ed96990665ec165b3ba86fc1a7f7dabeb0510e1823813bf5ab1a01b4fff00bcd0373bc265efa135f8755ebae72b645a890d27ce8af31417347bc3a1d9cf09db339b68d1c9a50bb9c00faeedbefe9bab5a63b580e5f79c4a30dc1bdacccec0fc6a08e0853518e88557001a612d4c30d2fbc2a126a066a94f299ac5ce61";
-const VALIDATOR_HOT_SECRET_KEY: &str =
+const VALIDATOR_VOTING_KEY: &str = "003d4e4eb0fa2fee42501368dc41115f64741e9d9496bbc2fe4cfd407f10272eef87b839d6e25b0eb7338427d895e4209190b6c5aa580f134693623a30ebafdaf95a268b3b84a840fc45d06283d71fe4faa2c7d08cd431bbda165c53a50453015a49ca120626991ff9558be65a7958158387829d6e56e2861e80b85e8c795d93f907afb19e6e2e5aaed9a3158eac5a035189986ff5803dd18fa02bdf5535e5495ed96990665ec165b3ba86fc1a7f7dabeb0510e1823813bf5ab1a01b4fff00bcd0373bc265efa135f8755ebae72b645a890d27ce8af31417347bc3a1d9cf09db339b68d1c9a50bb9c00faeedbefe9bab5a63b580e5f79c4a30dc1bdacccec0fc6a08e0853518e88557001a612d4c30d2fbc2a126a066a94f299ac5ce61";
+const VALIDATOR_VOTING_SECRET_KEY: &str =
     "b552baff2c2cc4937ec3531c833c3ffc08f92a95b3ba4a53cf7e8c99ef9db99b99559b8dbb8f3c44fa5671da42cc2633759aea71c1b696ea18df5451d0d43a225a882b29a1091ece16e82f664c2c6f2b360c7b6ce84e5d0995ae45290dbd0000";
 
 const STAKER_ADDRESS: &str = "8c551fabc6e6e00c609c3f0313257ad7e835643c";
@@ -59,20 +60,22 @@ fn it_does_not_support_contract_creation() {
 fn create_validator_transaction_verifies() {
     let cold_keypair = ed25519_key_pair(VALIDATOR_PRIVATE_KEY);
 
-    let warm_address =
-        Address::deserialize_from_vec(&hex::decode(VALIDATOR_WARM_KEY).unwrap()).unwrap();
+    let signing_key =
+        PublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_SIGNING_KEY).unwrap()).unwrap();
 
-    let hot_pk =
-        BlsPublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_HOT_KEY).unwrap()).unwrap();
+    let voting_key =
+        BlsPublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_VOTING_KEY).unwrap()).unwrap();
 
-    let hot_keypair = bls_key_pair(VALIDATOR_HOT_SECRET_KEY);
+    let voting_keypair = bls_key_pair(VALIDATOR_VOTING_SECRET_KEY);
 
     // Works in the valid case.
     let mut tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::CreateValidator {
-            warm_key: warm_address.clone(),
-            validator_key: hot_pk.clone(),
-            proof_of_knowledge: hot_keypair.sign(&hot_pk.serialize_to_vec()).compress(),
+            signing_key: signing_key.clone(),
+            voting_key: voting_key.clone(),
+            proof_of_knowledge: voting_keypair
+                .sign(&voting_key.serialize_to_vec())
+                .compress(),
             reward_address: Address::from([3u8; 20]),
             signal_data: None,
             proof: SignatureProof::default(),
@@ -101,12 +104,12 @@ fn create_validator_transaction_verifies() {
 
     // Invalid proof of knowledge.
     let other_pair = BlsKeyPair::generate_default_csprng();
-    let invalid_pok = other_pair.sign(&hot_pk);
+    let invalid_pok = other_pair.sign(&voting_key);
 
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::CreateValidator {
-            warm_key: warm_address.clone(),
-            validator_key: hot_pk.clone(),
+            signing_key: signing_key.clone(),
+            voting_key: voting_key.clone(),
             proof_of_knowledge: invalid_pok.compress(),
             reward_address: Address::from([3u8; 20]),
             signal_data: None,
@@ -127,9 +130,11 @@ fn create_validator_transaction_verifies() {
 
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::CreateValidator {
-            warm_key: warm_address,
-            validator_key: hot_pk.clone(),
-            proof_of_knowledge: hot_keypair.sign(&hot_pk.serialize_to_vec()).compress(),
+            signing_key,
+            voting_key: voting_key.clone(),
+            proof_of_knowledge: voting_keypair
+                .sign(&voting_key.serialize_to_vec())
+                .compress(),
             reward_address: Address::from([3u8; 20]),
             signal_data: None,
             proof: SignatureProof::default(),
@@ -149,20 +154,24 @@ fn create_validator_transaction_verifies() {
 fn update_validator_transaction_verifies() {
     let cold_keypair = ed25519_key_pair(VALIDATOR_PRIVATE_KEY);
 
-    let warm_address =
-        Address::deserialize_from_vec(&hex::decode(VALIDATOR_WARM_KEY).unwrap()).unwrap();
+    let signing_key =
+        PublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_SIGNING_KEY).unwrap()).unwrap();
 
-    let hot_pk =
-        BlsPublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_HOT_KEY).unwrap()).unwrap();
+    let voting_key =
+        BlsPublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_VOTING_KEY).unwrap()).unwrap();
 
-    let hot_keypair = bls_key_pair(VALIDATOR_HOT_SECRET_KEY);
+    let voting_keypair = bls_key_pair(VALIDATOR_VOTING_SECRET_KEY);
 
     // Works in the valid case.
     let mut tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::UpdateValidator {
-            new_warm_key: Some(warm_address.clone()),
-            new_validator_key: Some(hot_pk.clone()),
-            new_proof_of_knowledge: Some(hot_keypair.sign(&hot_pk.serialize_to_vec()).compress()),
+            new_signing_key: Some(signing_key.clone()),
+            new_voting_key: Some(voting_key.clone()),
+            new_proof_of_knowledge: Some(
+                voting_keypair
+                    .sign(&voting_key.serialize_to_vec())
+                    .compress(),
+            ),
             new_reward_address: Some(Address::from([3u8; 20])),
             new_signal_data: Some(Some(Blake2bHash::default())),
             proof: SignatureProof::default(),
@@ -185,8 +194,8 @@ fn update_validator_transaction_verifies() {
     // Doing no updates.
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::UpdateValidator {
-            new_warm_key: None,
-            new_validator_key: None,
+            new_signing_key: None,
+            new_voting_key: None,
             new_proof_of_knowledge: None,
             new_reward_address: None,
             new_signal_data: None,
@@ -204,12 +213,12 @@ fn update_validator_transaction_verifies() {
 
     // Invalid proof of knowledge.
     let other_pair = BlsKeyPair::generate_default_csprng();
-    let invalid_pok = other_pair.sign(&hot_pk);
+    let invalid_pok = other_pair.sign(&voting_key);
 
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::UpdateValidator {
-            new_warm_key: Some(warm_address.clone()),
-            new_validator_key: Some(hot_pk.clone()),
+            new_signing_key: Some(signing_key.clone()),
+            new_voting_key: Some(voting_key.clone()),
             new_proof_of_knowledge: Some(invalid_pok.compress()),
             new_reward_address: Some(Address::from([3u8; 20])),
             new_signal_data: Some(Some(Blake2bHash::default())),
@@ -230,9 +239,13 @@ fn update_validator_transaction_verifies() {
 
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::UpdateValidator {
-            new_warm_key: Some(warm_address),
-            new_validator_key: Some(hot_pk.clone()),
-            new_proof_of_knowledge: Some(hot_keypair.sign(&hot_pk.serialize_to_vec()).compress()),
+            new_signing_key: Some(signing_key),
+            new_voting_key: Some(voting_key.clone()),
+            new_proof_of_knowledge: Some(
+                voting_keypair
+                    .sign(&voting_key.serialize_to_vec())
+                    .compress(),
+            ),
             new_reward_address: Some(Address::from([3u8; 20])),
             new_signal_data: Some(Some(Blake2bHash::default())),
             proof: SignatureProof::default(),
@@ -250,7 +263,7 @@ fn update_validator_transaction_verifies() {
 
 #[test]
 fn retire_validator_transaction_verifies() {
-    let warm_keypair = ed25519_key_pair(VALIDATOR_WARM_SECRET_KEY);
+    let signing_keypair = ed25519_key_pair(VALIDATOR_SIGNING_SECRET_KEY);
 
     // Works in the valid case.
     let mut tx = make_signed_incoming_transaction(
@@ -259,7 +272,7 @@ fn retire_validator_transaction_verifies() {
             proof: SignatureProof::default(),
         },
         0,
-        &warm_keypair,
+        &signing_keypair,
         None,
     );
 
@@ -282,7 +295,7 @@ fn retire_validator_transaction_verifies() {
             proof: SignatureProof::default(),
         },
         0,
-        &warm_keypair,
+        &signing_keypair,
         Some(other_pair.public),
     );
 
@@ -294,7 +307,7 @@ fn retire_validator_transaction_verifies() {
 
 #[test]
 fn reactivate_validator_transaction_verifies() {
-    let warm_keypair = ed25519_key_pair(VALIDATOR_WARM_SECRET_KEY);
+    let signing_keypair = ed25519_key_pair(VALIDATOR_SIGNING_SECRET_KEY);
 
     // Works in the valid case.
     let mut tx = make_signed_incoming_transaction(
@@ -303,7 +316,7 @@ fn reactivate_validator_transaction_verifies() {
             proof: SignatureProof::default(),
         },
         0,
-        &warm_keypair,
+        &signing_keypair,
         None,
     );
 
@@ -326,7 +339,7 @@ fn reactivate_validator_transaction_verifies() {
             proof: SignatureProof::default(),
         },
         0,
-        &warm_keypair,
+        &signing_keypair,
         Some(other_pair.public),
     );
 
@@ -338,7 +351,7 @@ fn reactivate_validator_transaction_verifies() {
 
 #[test]
 fn unpark_validator_transaction_verifies() {
-    let warm_keypair = ed25519_key_pair(VALIDATOR_WARM_SECRET_KEY);
+    let signing_keypair = ed25519_key_pair(VALIDATOR_SIGNING_SECRET_KEY);
 
     // Works in the valid case.
     let mut tx = make_signed_incoming_transaction(
@@ -347,7 +360,7 @@ fn unpark_validator_transaction_verifies() {
             proof: SignatureProof::default(),
         },
         0,
-        &warm_keypair,
+        &signing_keypair,
         None,
     );
 
@@ -370,7 +383,7 @@ fn unpark_validator_transaction_verifies() {
             proof: SignatureProof::default(),
         },
         0,
-        &warm_keypair,
+        &signing_keypair,
         Some(other_pair.public),
     );
 

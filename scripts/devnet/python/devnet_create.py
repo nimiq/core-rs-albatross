@@ -128,9 +128,9 @@ lock_api = "trace"
 
 [validator]
 validator_address = "NQ07 0000 0000 0000 0000 0000 0000 0000 0000"
-validator_key_file = "{path}/validator_key.dat"
+signing_key_file = "{path}/signing_key.dat"
+voting_key_file = "{path}/voting_key.dat"
 fee_key_file = "{path}/fee_key.dat"
-warm_key_file = "{path}/warm_key.dat"
     """.format(
             path="temp-state/dev/spammer",
         ))
@@ -139,14 +139,14 @@ warm_key_file = "{path}/warm_key.dat"
 def create_validator(path, i):
     path.mkdir(parents=True, exist_ok=True)
 
-    # create BLS keypair
-    validator_key = create_bls_keypair()
-    # with (path / "validator_key.dat").open("wb") as f:
-    #    f.write(unhexlify(validator_key["private_key"]))
+    # create voting (BLS) keypair
+    voting_key = create_bls_keypair()
+
+    # create signing (Schnorr) keypair
+    signing_key = create_nimiq_address()
 
     # create staking (and reward) address
     validator_address = create_nimiq_address()
-    warm_address = create_nimiq_address()
     reward_address = create_nimiq_address()
 
     # write config
@@ -177,25 +177,25 @@ lock_api = "trace"
 
 [validator]
 validator_address = "{validator_address}"
-validator_key_file = "{path}/validator_key.dat"
-validator_key = "{validator_key}"
+signing_key_file = "{path}/signing_key.dat"
+signing_key = "{signing_key}"
+voting_key_file = "{path}/voting_key.dat"
+voting_key = "{voting_key}"
 fee_key_file = "{path}/fee_key.dat"
 fee_key = "{fee_key}"
-warm_key_file = "{path}/warm_key.dat"
-warm_key = "{warm_address}"
     """.format(
             port=str(9101 + i),
             path="temp-state/dev/{}".format(i+1),  # str(path),
             validator_address=validator_address["address"],
-            validator_key=validator_key["private_key"],
-            fee_key=reward_address["private_key"],
-            warm_address=warm_address["private_key"]
+            voting_key=voting_key["private_key"],
+            signing_key=signing_key["private_key"],
+            fee_key=reward_address["private_key"]
         ))
 
     return {
-        "validator_key": validator_key,
+        "voting_key": voting_key,
         "validator_address": validator_address,
-        "warm_address": warm_address,
+        "signing_key": signing_key,
         "reward_address": reward_address,
         "path": str(path)
     }
@@ -208,7 +208,7 @@ for i in range(num_validators):
     validator = create_validator(output / "validator{:d}".format(i+1), i)
     validators.append(validator)
     print("Created validator: {}..".format(
-        validator["validator_key"]["public_key"][0:16]))
+        validator["voting_key"]["public_key"][0:16]))
 
 # Create seed node configuration
 create_seed(output / "seed", 1)
@@ -234,14 +234,14 @@ timestamp="{timestamp}"
         f.write("""
 [[validators]]
 validator_address = "{validator_address}"
-warm_address      = "{warm_address}"
+signing_key      = "{signing_key}"
+voting_key     = "{voting_key}"
 reward_address    = "{reward_address}"
-validator_key     = "{validator_key}"
         """.format(
             validator_address=validator["validator_address"]["address"],
-            warm_address=validator["warm_address"]["address"],
-            reward_address=validator["reward_address"]["address"],
-            validator_key=validator["validator_key"]["public_key"]
+            signing_key=validator["signing_key"]["public_key"],
+            voting_key=validator["voting_key"]["public_key"],
+            reward_address=validator["reward_address"]["address"]
         ))
     f.write("""
 [[accounts]]
@@ -342,10 +342,10 @@ services:
       - NIMIQ_VALIDATOR=validator
       - NIMIQ_NO_LMDB_SYNC=true
       - VALIDATOR_BLOCK_DELAY="0"
-      - VALIDATOR_KEY={validator_key}
       - VALIDATOR_ADDRESS={validator_address}
+      - SIGNING_KEY={signing_key}
+      - VOTING_KEY={voting_key}
       - FEE_KEY={fee_key}
-      - WARM_KEY={warm_address}
       - RPC_ENABLED=false
       - RUST_BACKTRACE="1"
       - NIMIQ_LOG_LEVEL=debug
@@ -359,9 +359,9 @@ services:
                    ip=str("7.0.0.{}".format(idx+2)),
                    validator_address=validator["validator_address"]["address"].replace(
                        " ", ""),
-                   validator_key=validator["validator_key"]["private_key"],
-                   fee_key=validator["reward_address"]["private_key"],
-                   warm_address=validator["warm_address"]["private_key"]
+                   signing_key=validator["signing_key"]["private_key"],
+                   voting_key=validator["voting_key"]["private_key"],
+                   fee_key=validator["reward_address"]["private_key"]
                    ))
 
 # Spammer node

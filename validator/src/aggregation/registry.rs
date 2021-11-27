@@ -34,7 +34,7 @@ impl IdentityRegistry for ValidatorRegistry {
             // Get the validator for with id
             .get_validator(slot_number as u16)
             // Get the public key for this validator
-            .public_key
+            .voting_key
             // and uncompress it
             .uncompress()
             .map(|c| *c) // necessary?

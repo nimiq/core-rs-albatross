@@ -2,22 +2,16 @@ use std::{sync::Arc, time::Duration};
 
 use parking_lot::RwLock;
 
-use beserial::Deserialize;
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
-use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_consensus::sync::history::HistorySync;
 use nimiq_consensus::Consensus;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_network_interface::network::Network;
 use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_primitives::networks::NetworkId;
-use nimiq_test_utils::blockchain::produce_macro_blocks;
+use nimiq_test_utils::blockchain::{produce_macro_blocks, signing_key, voting_key};
 use nimiq_utils::time::OffsetTime;
-
-/// Secret key of validator. Tests run with `network-primitives/src/genesis/unit-albatross.toml`
-const SECRET_KEY: &str =
-    "196ffdb1a8acc7cbd76a251aeac0600a1d68b3aba1eba823b5e4dc5dbdcdc730afa752c05ab4f6ef8518384ad514f403c5a088a22b17bf1bc14f8ff8decc2a512c0a200f68d7bdf5a319b30356fe8d1d75ef510aed7a8660968c216c328a0000";
 
 struct Node {
     network: Arc<MockNetwork>,
@@ -71,9 +65,7 @@ async fn test_request_component() {
     let mut node1 = Node::new(&mut hub).await;
     let mut node2 = Node::new(&mut hub).await;
 
-    let keypair1 =
-        KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
-    let producer1 = BlockProducer::new(keypair1);
+    let producer1 = BlockProducer::new(signing_key(), voting_key());
 
     //let num_macro_blocks = (policy::BATCHES_PER_EPOCH + 1) as usize;
     //produce_macro_blocks(num_macro_blocks, &producer1, &node1.blockchain);

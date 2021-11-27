@@ -170,13 +170,21 @@ pub struct FileStorageConfig {
     /// The key used for the peer key, if the file is not present.
     peer_key: Option<String>,
 
-    /// Path to validator key.
+    /// Path to voting key.
     #[cfg(feature = "validator")]
-    validator_key_path: Option<PathBuf>,
+    voting_key_path: Option<PathBuf>,
 
-    /// The validator key used for the validator, if the file is not present.
+    /// The voting key used for the validator, if the file is not present.
     #[cfg(feature = "validator")]
-    validator_key: Option<String>,
+    voting_key: Option<String>,
+
+    /// Path to signing key.
+    #[cfg(feature = "validator")]
+    signing_key_path: Option<PathBuf>,
+
+    /// The signing key used for the validator, if the file is not present.
+    #[cfg(feature = "validator")]
+    signing_key: Option<String>,
 
     /// Path to fee key.
     #[cfg(feature = "validator")]
@@ -185,14 +193,6 @@ pub struct FileStorageConfig {
     /// The fee key used for the validator, if the file is not present.
     #[cfg(feature = "validator")]
     fee_key: Option<String>,
-
-    /// Path to warm key.
-    #[cfg(feature = "validator")]
-    warm_key_path: Option<PathBuf>,
-
-    /// The warm key used for the validator, if the file is not present.
-    #[cfg(feature = "validator")]
-    warm_key: Option<String>,
 }
 
 impl FileStorageConfig {
@@ -205,17 +205,17 @@ impl FileStorageConfig {
             peer_key_path: path.join("peer_key.dat"),
             peer_key: None,
             #[cfg(feature = "validator")]
-            validator_key_path: Some(path.join("validator_key.dat")),
+            voting_key_path: Some(path.join("voting_key.dat")),
             #[cfg(feature = "validator")]
-            validator_key: None,
+            voting_key: None,
             #[cfg(feature = "validator")]
             fee_key_path: Some(path.join("fee_key.dat")),
             #[cfg(feature = "validator")]
             fee_key: None,
             #[cfg(feature = "validator")]
-            warm_key_path: Some(path.join("warm_key.dat")),
+            signing_key_path: Some(path.join("signing_key.dat")),
             #[cfg(feature = "validator")]
-            warm_key: None,
+            signing_key: None,
         }
     }
 
@@ -371,12 +371,12 @@ impl StorageConfig {
     }
 
     #[cfg(feature = "validator")]
-    pub(crate) fn validator_keypair(&self) -> Result<BlsKeyPair, Error> {
+    pub(crate) fn voting_keypair(&self) -> Result<BlsKeyPair, Error> {
         Ok(match self {
             StorageConfig::Volatile => BlsKeyPair::generate_default_csprng(),
             StorageConfig::Filesystem(file_storage) => {
                 let key_path = file_storage
-                    .validator_key_path
+                    .voting_key_path
                     .as_ref()
                     .ok_or_else(|| Error::config_error("No path for validator key specified"))?;
                 let key_path = key_path
@@ -390,7 +390,7 @@ impl StorageConfig {
                     .to_string();
 
                 FileStore::new(key_path).load_or_store(|| {
-                    if let Some(key) = file_storage.validator_key.as_ref() {
+                    if let Some(key) = file_storage.voting_key.as_ref() {
                         // TODO: handle errors
                         let secret_key =
                             BlsSecretKey::deserialize_from_vec(&hex::decode(key).unwrap()).unwrap();
@@ -439,12 +439,12 @@ impl StorageConfig {
     }
 
     #[cfg(feature = "validator")]
-    pub(crate) fn warm_keypair(&self) -> Result<KeyPair, Error> {
+    pub(crate) fn signing_keypair(&self) -> Result<KeyPair, Error> {
         Ok(match self {
             StorageConfig::Volatile => KeyPair::generate_default_csprng(),
             StorageConfig::Filesystem(file_storage) => {
                 let key_path = file_storage
-                    .warm_key_path
+                    .signing_key_path
                     .as_ref()
                     .ok_or_else(|| Error::config_error("No path for warm key specified"))?;
                 let key_path = key_path
@@ -458,7 +458,7 @@ impl StorageConfig {
                     .to_string();
 
                 FileStore::new(key_path).load_or_store(|| {
-                    if let Some(key) = file_storage.warm_key.as_ref() {
+                    if let Some(key) = file_storage.signing_key.as_ref() {
                         // TODO: handle errors
                         KeyPair::from(
                             PrivateKey::deserialize_from_vec(&hex::decode(key).unwrap()).unwrap(),
@@ -803,11 +803,11 @@ impl ClientConfigBuilder {
                 validator_address: Address::from_any_str(&validator_config.validator_address)?,
             });
 
-            if let Some(key_path) = &validator_config.validator_key_file {
-                file_storage.validator_key_path = Some(PathBuf::from(key_path));
+            if let Some(key_path) = &validator_config.voting_key_file {
+                file_storage.voting_key_path = Some(PathBuf::from(key_path));
             }
-            if let Some(key) = &validator_config.validator_key {
-                file_storage.validator_key = Some(key.to_owned());
+            if let Some(key) = &validator_config.voting_key {
+                file_storage.voting_key = Some(key.to_owned());
             }
             if let Some(key_path) = &validator_config.fee_key_file {
                 file_storage.fee_key_path = Some(PathBuf::from(key_path));
@@ -815,11 +815,11 @@ impl ClientConfigBuilder {
             if let Some(key) = &validator_config.fee_key {
                 file_storage.fee_key = Some(key.to_owned());
             }
-            if let Some(key_path) = &validator_config.warm_key_file {
-                file_storage.warm_key_path = Some(PathBuf::from(key_path));
+            if let Some(key_path) = &validator_config.signing_key_file {
+                file_storage.signing_key_path = Some(PathBuf::from(key_path));
             }
-            if let Some(key) = &validator_config.warm_key {
-                file_storage.warm_key = Some(key.to_owned());
+            if let Some(key) = &validator_config.signing_key {
+                file_storage.signing_key = Some(key.to_owned());
             }
         }
         self.storage = Some(file_storage.into());

@@ -41,6 +41,8 @@ pub struct VrfSeed {
 }
 
 impl VrfSeed {
+    pub const SIZE: usize = CompressedSignature::SIZE;
+
     pub fn verify(&self, prev_seed: &VrfSeed, public_key: &PublicKey) -> Result<(), VrfError> {
         let signature = self
             .signature

@@ -30,6 +30,7 @@ nimiq-collections = { path = "../collections" }
 nimiq-database = { path = "../database" }
 nimiq-genesis = { path = "../genesis" }
 nimiq-hash = { path = "../hash" }
+nimiq-keys = { path = "../keys" }
 nimiq-primitives = { path = "../primitives" }
 nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-vrf = { path = "../vrf" }

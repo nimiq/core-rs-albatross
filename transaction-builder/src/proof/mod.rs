@@ -217,13 +217,13 @@ impl TransactionProofBuilder {
     /// # use nimiq_utils::key_rng::SecureGenerate;
     ///
     /// # let cold_key_pair = KeyPair::generate_default_csprng();
-    /// # let warm_key_pair = KeyPair::generate_default_csprng();
+    /// # let signing_key_pair = KeyPair::generate_default_csprng();
     /// # let bls_key_pair = BlsKeyPair::generate_default_csprng();
     /// # let validator_address = Address::from(&cold_key_pair.public);
     ///
     /// let sender_address = Address::from(&cold_key_pair.public);
     /// let mut recipient = Recipient::new_staking_builder();
-    /// recipient.update_validator(Some(Address::from(&warm_key_pair)), Some(&bls_key_pair), None, None);
+    /// recipient.update_validator(Some(signing_key_pair.public), Some(&bls_key_pair), None, None);
     ///
     /// let tx_builder = TransactionBuilder::with_required(
     ///     sender_address,

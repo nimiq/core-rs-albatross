@@ -70,10 +70,10 @@ async fn consensus(peer_id: u64, genesis_info: GenesisInfo) -> Consensus {
 
 async fn validator(
     peer_id: u64,
-    signing_key: BlsKeyPair,
+    voting_key: BlsKeyPair,
     validator_address: Address,
-    validator_key: KeyPair,
-    warm_key: KeyPair,
+    fee_key: KeyPair,
+    signing_key: KeyPair,
     genesis_info: GenesisInfo,
 ) -> (Validator, Consensus) {
     let consensus = consensus(peer_id, genesis_info).await;
@@ -84,8 +84,8 @@ async fn validator(
             validator_network,
             validator_address,
             signing_key,
-            validator_key,
-            warm_key,
+            voting_key,
+            fee_key,
             MempoolConfig::default(),
         ),
         consensus,
@@ -95,13 +95,16 @@ async fn validator(
 async fn validators(num_validators: usize) -> Vec<Validator> {
     // Generate validator key pairs.
     let mut rng = seeded_rng(0);
-    let bls_keys: Vec<BlsKeyPair> = (0..num_validators)
-        .map(|_| BlsKeyPair::generate(&mut rng))
-        .collect();
-    let validator_keys: Vec<KeyPair> = (0..num_validators)
+    let cold_keys: Vec<KeyPair> = (0..num_validators)
         .map(|_| KeyPair::generate(&mut rng))
         .collect();
-    let warm_keys: Vec<KeyPair> = (0..num_validators)
+    let voting_keys: Vec<BlsKeyPair> = (0..num_validators)
+        .map(|_| BlsKeyPair::generate(&mut rng))
+        .collect();
+    let signing_keys: Vec<KeyPair> = (0..num_validators)
+        .map(|_| KeyPair::generate(&mut rng))
+        .collect();
+    let fee_keys: Vec<KeyPair> = (0..num_validators)
         .map(|_| KeyPair::generate(&mut rng))
         .collect();
 
@@ -109,9 +112,9 @@ async fn validators(num_validators: usize) -> Vec<Validator> {
     let mut genesis_builder = GenesisBuilder::default();
     for i in 0..num_validators {
         genesis_builder.with_genesis_validator(
-            Address::from(&validator_keys[i]),
-            Address::from([0u8; 20]),
-            bls_keys[i].public_key,
+            Address::from(&cold_keys[i]),
+            signing_keys[i].public,
+            voting_keys[i].public_key,
             Address::default(),
         );
     }
@@ -123,10 +126,10 @@ async fn validators(num_validators: usize) -> Vec<Validator> {
     for id in 0..num_validators {
         let (v, c) = validator(
             (id + 1) as u64,
-            bls_keys[id].clone(),
-            Address::from(&validator_keys[id]),
-            validator_keys[id].clone(),
-            warm_keys[id].clone(),
+            voting_keys[id].clone(),
+            Address::from(&cold_keys[id]),
+            fee_keys[id].clone(),
+            signing_keys[id].clone(),
             genesis.clone(),
         )
         .await;

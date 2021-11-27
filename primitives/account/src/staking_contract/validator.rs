@@ -6,7 +6,7 @@ use beserial::{Deserialize, Serialize};
 use nimiq_bls::CompressedPublicKey as BlsPublicKey;
 use nimiq_database::WriteTransaction;
 use nimiq_hash::Blake2bHash;
-use nimiq_keys::Address;
+use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
 
@@ -44,17 +44,16 @@ use crate::{Account, AccountError, AccountsTrie, StakingContract};
 /// Create, Update, Retire, Re-activate and Unpark are incoming transactions to the staking contract.
 /// Drop is an outgoing transaction from the staking contract.
 /// To Create, Update or Drop, the cold key must be used (the one corresponding to the validator
-/// address). For the other transactions, the the warm key (the one corresponding to the warm address)
-/// must be used.
+/// address). For the other transactions, the the signing key must be used.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Validator {
     // The address of the validator. The corresponding key can be used to create, update or drop
     // the validator.
     pub address: Address,
-    // This key is used to retire, reactivate and unpark the validator.
-    pub warm_key: Address,
-    // The validator key, it is only used to sign blocks.
-    pub validator_key: BlsPublicKey,
+    // This key used to sign blocks. It is also used to retire, reactivate and unpark the validator.
+    pub signing_key: SchnorrPublicKey,
+    // The voting key, it is used to vote for view changes and macro blocks.
+    pub voting_key: BlsPublicKey,
     // The reward address of the validator. All the block rewards are paid to this address.
     pub reward_address: Address,
     // Signalling field. Can be used to do chain upgrades or for any other purpose that requires
@@ -78,8 +77,8 @@ impl StakingContract {
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
-        warm_key: Address,
-        validator_key: BlsPublicKey,
+        signing_key: SchnorrPublicKey,
+        voting_key: BlsPublicKey,
         reward_address: Address,
         signal_data: Option<Blake2bHash>,
     ) -> Result<(), AccountError> {
@@ -105,8 +104,8 @@ impl StakingContract {
         // Create validator struct.
         let validator = Validator {
             address: validator_address.clone(),
-            warm_key,
-            validator_key,
+            signing_key,
+            voting_key,
             reward_address,
             signal_data,
             balance: deposit,
@@ -168,13 +167,13 @@ impl StakingContract {
         Ok(())
     }
 
-    /// Updates some of the validator details (warm key, validator key, reward address and/or signal data).
+    /// Updates some of the validator details (signing key, voting key, reward address and/or signal data).
     pub(crate) fn update_validator(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
-        new_warm_key: Option<Address>,
-        new_validator_key: Option<BlsPublicKey>,
+        new_signing_key: Option<SchnorrPublicKey>,
+        new_voting_key: Option<BlsPublicKey>,
         new_reward_address: Option<Address>,
         new_signal_data: Option<Option<Blake2bHash>>,
     ) -> Result<UpdateValidatorReceipt, AccountError> {
@@ -191,19 +190,19 @@ impl StakingContract {
 
         // Create receipt now.
         let receipt = UpdateValidatorReceipt {
-            old_warm_key: validator.warm_key.clone(),
-            old_validator_key: validator.validator_key.clone(),
+            old_signing_key: validator.signing_key.clone(),
+            old_voting_key: validator.voting_key.clone(),
             old_reward_address: validator.reward_address.clone(),
             old_signal_data: validator.signal_data.clone(),
         };
 
         // Update validator info.
-        if let Some(value) = new_warm_key {
-            validator.warm_key = value;
+        if let Some(value) = new_signing_key {
+            validator.signing_key = value;
         }
 
-        if let Some(value) = new_validator_key {
-            validator.validator_key = value;
+        if let Some(value) = new_voting_key {
+            validator.voting_key = value;
         }
 
         if let Some(value) = new_reward_address {
@@ -243,8 +242,8 @@ impl StakingContract {
             };
 
         // Revert validator info.
-        validator.warm_key = receipt.old_warm_key;
-        validator.validator_key = receipt.old_validator_key;
+        validator.signing_key = receipt.old_signing_key;
+        validator.voting_key = receipt.old_voting_key;
         validator.reward_address = receipt.old_reward_address;
         validator.signal_data = receipt.old_signal_data;
 
@@ -264,7 +263,7 @@ impl StakingContract {
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
-        warm_address: Address,
+        signer: &Address,
         block_height: u32,
     ) -> Result<RetireValidatorReceipt, AccountError> {
         // Get the validator and update it.
@@ -278,9 +277,9 @@ impl StakingContract {
                 }
             };
 
-        if warm_address != validator.warm_key {
+        if *signer != Address::from(&validator.signing_key) {
             error!(
-                "The warm address that signed the transaction doesn't match the warm address of the validator."
+                "The key that signed the transaction doesn't match the signing key of the validator."
             );
             return Err(AccountError::InvalidSignature);
         }
@@ -374,7 +373,7 @@ impl StakingContract {
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
-        warm_address: Address,
+        signer: &Address,
     ) -> Result<ReactivateValidatorReceipt, AccountError> {
         // Get the validator and check that the signature is valid.
         let mut validator =
@@ -387,9 +386,9 @@ impl StakingContract {
                 }
             };
 
-        if warm_address != validator.warm_key {
+        if *signer != Address::from(&validator.signing_key) {
             error!(
-                "The warm address that signed the transaction doesn't match the warm address of the validator."
+                "The key that signed the transaction doesn't match the signing key of the validator."
             );
             return Err(AccountError::InvalidSignature);
         }
@@ -481,7 +480,7 @@ impl StakingContract {
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
-        warm_address: Address,
+        signer: &Address,
     ) -> Result<UnparkValidatorReceipt, AccountError> {
         // Get the validator and check that the signature is valid.
         let validator =
@@ -494,9 +493,9 @@ impl StakingContract {
                 }
             };
 
-        if warm_address != validator.warm_key {
+        if *signer != Address::from(&validator.signing_key) {
             error!(
-                "The warm address that signed the transaction doesn't match the warm address of the validator."
+                "The key that signed the transaction doesn't match the signing key of the validator."
             );
             return Err(AccountError::InvalidSignature);
         }
@@ -613,8 +612,8 @@ impl StakingContract {
 
         // Initialize the receipts.
         let mut receipt = DropValidatorReceipt {
-            warm_key: validator.warm_key,
-            validator_key: validator.validator_key,
+            signing_key: validator.signing_key,
+            voting_key: validator.voting_key,
             reward_address: validator.reward_address,
             signal_data: validator.signal_data,
             retire_time: validator.inactivity_flag.expect(
@@ -740,8 +739,8 @@ impl StakingContract {
         // Re-add the validator entry.
         let validator = Validator {
             address: validator_address.clone(),
-            warm_key: receipt.warm_key,
-            validator_key: receipt.validator_key,
+            signing_key: receipt.signing_key,
+            voting_key: receipt.voting_key,
             reward_address: receipt.reward_address,
             signal_data: receipt.signal_data,
             balance: Coin::from_u64_unchecked(balance + policy::VALIDATOR_DEPOSIT),

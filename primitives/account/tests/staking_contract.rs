@@ -10,7 +10,7 @@ use nimiq_collections::BitSet;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_database::WriteTransaction;
 use nimiq_hash::Blake2bHash;
-use nimiq_keys::{Address, KeyPair, PrivateKey};
+use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey};
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
@@ -33,12 +33,13 @@ const VALIDATOR_ADDRESS: &str = "83fa05dbe31f85e719f4c4fd67ebdba2e444d9f8";
 const VALIDATOR_PRIVATE_KEY: &str =
     "d0fbb3690f5308f457e245a3cc65ae8d6945155eadcac60d489ffc5583a60b9b";
 
-const VALIDATOR_WARM_KEY: &str = "7182b1c2d0e2377d69413dc14c56cd923b67e41e";
-const VALIDATOR_WARM_SECRET_KEY: &str =
+const VALIDATOR_SIGNING_KEY: &str =
+    "b300481ddd7af6be3cf5c123b7af2c21f87f4ac808c8b0e622eb85826124a844";
+const VALIDATOR_SIGNING_SECRET_KEY: &str =
     "84c961b11b52a8244ffc5e9d0965bc2dfa6764970f8e4989d45901de401baf27";
 
-const VALIDATOR_HOT_KEY: &str = "003d4e4eb0fa2fee42501368dc41115f64741e9d9496bbc2fe4cfd407f10272eef87b839d6e25b0eb7338427d895e4209190b6c5aa580f134693623a30ebafdaf95a268b3b84a840fc45d06283d71fe4faa2c7d08cd431bbda165c53a50453015a49ca120626991ff9558be65a7958158387829d6e56e2861e80b85e8c795d93f907afb19e6e2e5aaed9a3158eac5a035189986ff5803dd18fa02bdf5535e5495ed96990665ec165b3ba86fc1a7f7dabeb0510e1823813bf5ab1a01b4fff00bcd0373bc265efa135f8755ebae72b645a890d27ce8af31417347bc3a1d9cf09db339b68d1c9a50bb9c00faeedbefe9bab5a63b580e5f79c4a30dc1bdacccec0fc6a08e0853518e88557001a612d4c30d2fbc2a126a066a94f299ac5ce61";
-const VALIDATOR_HOT_SECRET_KEY: &str =
+const VALIDATOR_VOTING_KEY: &str = "003d4e4eb0fa2fee42501368dc41115f64741e9d9496bbc2fe4cfd407f10272eef87b839d6e25b0eb7338427d895e4209190b6c5aa580f134693623a30ebafdaf95a268b3b84a840fc45d06283d71fe4faa2c7d08cd431bbda165c53a50453015a49ca120626991ff9558be65a7958158387829d6e56e2861e80b85e8c795d93f907afb19e6e2e5aaed9a3158eac5a035189986ff5803dd18fa02bdf5535e5495ed96990665ec165b3ba86fc1a7f7dabeb0510e1823813bf5ab1a01b4fff00bcd0373bc265efa135f8755ebae72b645a890d27ce8af31417347bc3a1d9cf09db339b68d1c9a50bb9c00faeedbefe9bab5a63b580e5f79c4a30dc1bdacccec0fc6a08e0853518e88557001a612d4c30d2fbc2a126a066a94f299ac5ce61";
+const VALIDATOR_VOTING_SECRET_KEY: &str =
     "b552baff2c2cc4937ec3531c833c3ffc08f92a95b3ba4a53cf7e8c99ef9db99b99559b8dbb8f3c44fa5671da42cc2633759aea71c1b696ea18df5451d0d43a225a882b29a1091ece16e82f664c2c6f2b360c7b6ce84e5d0995ae45290dbd0000";
 
 const STAKER_ADDRESS: &str = "8c551fabc6e6e00c609c3f0313257ad7e835643c";
@@ -181,19 +182,22 @@ fn create_validator_works() {
 
     let validator_address = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
 
-    let warm_address = Address::from_any_str(VALIDATOR_WARM_KEY).unwrap();
+    let signing_key =
+        PublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_SIGNING_KEY).unwrap()).unwrap();
 
-    let hot_pk =
-        BlsPublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_HOT_KEY).unwrap()).unwrap();
+    let voting_key =
+        BlsPublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_VOTING_KEY).unwrap()).unwrap();
 
-    let hot_keypair = bls_key_pair(VALIDATOR_HOT_SECRET_KEY);
+    let voting_keypair = bls_key_pair(VALIDATOR_VOTING_SECRET_KEY);
 
     // Works in the valid case.
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::CreateValidator {
-            warm_key: warm_address.clone(),
-            validator_key: hot_pk.clone(),
-            proof_of_knowledge: hot_keypair.sign(&hot_pk.serialize_to_vec()).compress(),
+            signing_key: signing_key.clone(),
+            voting_key: voting_key.clone(),
+            proof_of_knowledge: voting_keypair
+                .sign(&voting_key.serialize_to_vec())
+                .compress(),
             reward_address: Address::from([3u8; 20]),
             signal_data: None,
             proof: SignatureProof::default(),
@@ -211,8 +215,8 @@ fn create_validator_works() {
         StakingContract::get_validator(&accounts_tree, &db_txn, &validator_address).unwrap();
 
     assert_eq!(validator.address, validator_address);
-    assert_eq!(validator.warm_key, warm_address);
-    assert_eq!(validator.validator_key, hot_pk);
+    assert_eq!(validator.signing_key, signing_key);
+    assert_eq!(validator.voting_key, voting_key);
     assert_eq!(validator.reward_address, Address::from([3u8; 20]));
     assert_eq!(validator.signal_data, None);
     assert_eq!(
@@ -275,18 +279,18 @@ fn update_validator_works() {
 
     let cold_keypair = ed25519_key_pair(VALIDATOR_PRIVATE_KEY);
 
-    let new_hot_keypair = BlsKeyPair::generate_default_csprng();
+    let new_voting_keypair = BlsKeyPair::generate_default_csprng();
 
     // Works in the valid case.
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::UpdateValidator {
-            new_warm_key: Some(Address::from([88u8; 20])),
-            new_validator_key: Some(new_hot_keypair.public_key.compress()),
+            new_signing_key: Some(PublicKey::from([88u8; 32])),
+            new_voting_key: Some(new_voting_keypair.public_key.compress()),
             new_reward_address: Some(Address::from([77u8; 20])),
             new_signal_data: Some(Some(Blake2bHash::default())),
             new_proof_of_knowledge: Some(
-                new_hot_keypair
-                    .sign(&new_hot_keypair.public_key.serialize_to_vec())
+                new_voting_keypair
+                    .sign(&new_voting_keypair.public_key.serialize_to_vec())
                     .compress(),
             ),
             proof: SignatureProof::default(),
@@ -295,16 +299,17 @@ fn update_validator_works() {
         &cold_keypair,
     );
 
-    let old_warm_key = Address::from_any_str(VALIDATOR_WARM_KEY).unwrap();
+    let old_signing_key =
+        PublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_SIGNING_KEY).unwrap()).unwrap();
 
-    let old_validator_key =
-        BlsPublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_HOT_KEY).unwrap()).unwrap();
+    let old_voting_key =
+        BlsPublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_VOTING_KEY).unwrap()).unwrap();
 
     let old_reward_address = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
 
     let receipt = UpdateValidatorReceipt {
-        old_warm_key: old_warm_key.clone(),
-        old_validator_key: old_validator_key.clone(),
+        old_signing_key: old_signing_key.clone(),
+        old_voting_key: old_voting_key.clone(),
         old_reward_address: old_reward_address.clone(),
         old_signal_data: None,
     }
@@ -319,10 +324,10 @@ fn update_validator_works() {
         StakingContract::get_validator(&accounts_tree, &db_txn, &validator_address).unwrap();
 
     assert_eq!(validator.address, validator_address);
-    assert_eq!(validator.warm_key, Address::from([88u8; 20]));
+    assert_eq!(validator.signing_key, PublicKey::from([88u8; 32]));
     assert_eq!(
-        validator.validator_key,
-        new_hot_keypair.public_key.compress()
+        validator.voting_key,
+        new_voting_keypair.public_key.compress()
     );
     assert_eq!(validator.reward_address, Address::from([77u8; 20]));
     assert_eq!(validator.signal_data, Some(Blake2bHash::default()));
@@ -350,8 +355,8 @@ fn update_validator_works() {
         StakingContract::get_validator(&accounts_tree, &db_txn, &validator_address).unwrap();
 
     assert_eq!(validator.address, validator_address);
-    assert_eq!(validator.warm_key, old_warm_key);
-    assert_eq!(validator.validator_key, old_validator_key);
+    assert_eq!(validator.signing_key, old_signing_key);
+    assert_eq!(validator.voting_key, old_voting_key);
     assert_eq!(validator.reward_address, old_reward_address);
     assert_eq!(validator.signal_data, None);
     assert_eq!(
@@ -374,12 +379,13 @@ fn retire_validator_works() {
 
     let cold_keypair = ed25519_key_pair(VALIDATOR_PRIVATE_KEY);
 
-    let warm_key = Address::from_any_str(VALIDATOR_WARM_KEY).unwrap();
+    let signing_key =
+        PublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_SIGNING_KEY).unwrap()).unwrap();
 
-    let warm_keypair = ed25519_key_pair(VALIDATOR_WARM_SECRET_KEY);
+    let signing_keypair = ed25519_key_pair(VALIDATOR_SIGNING_SECRET_KEY);
 
-    let hot_pk =
-        BlsPublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_HOT_KEY).unwrap()).unwrap();
+    let voting_key =
+        BlsPublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_VOTING_KEY).unwrap()).unwrap();
 
     // First, park the validator.
     let mut staking_contract = StakingContract::get_staking_contract(&accounts_tree, &db_txn);
@@ -401,7 +407,7 @@ fn retire_validator_works() {
             proof: SignatureProof::default(),
         },
         0,
-        &warm_keypair,
+        &signing_keypair,
     );
 
     let receipt = RetireValidatorReceipt { parked_set: true }.serialize_to_vec();
@@ -415,8 +421,8 @@ fn retire_validator_works() {
         StakingContract::get_validator(&accounts_tree, &db_txn, &validator_address).unwrap();
 
     assert_eq!(validator.address, validator_address);
-    assert_eq!(validator.warm_key, warm_key);
-    assert_eq!(validator.validator_key, hot_pk);
+    assert_eq!(validator.signing_key, signing_key);
+    assert_eq!(validator.voting_key, voting_key);
     assert_eq!(validator.reward_address, validator_address);
     assert_eq!(validator.signal_data, None);
     assert_eq!(
@@ -440,7 +446,7 @@ fn retire_validator_works() {
             proof: SignatureProof::default(),
         },
         0,
-        &warm_keypair,
+        &signing_keypair,
     );
 
     assert_eq!(
@@ -480,8 +486,8 @@ fn retire_validator_works() {
         StakingContract::get_validator(&accounts_tree, &db_txn, &validator_address).unwrap();
 
     assert_eq!(validator.address, validator_address);
-    assert_eq!(validator.warm_key, warm_key);
-    assert_eq!(validator.validator_key, hot_pk);
+    assert_eq!(validator.signing_key, signing_key);
+    assert_eq!(validator.voting_key, voting_key);
     assert_eq!(validator.reward_address, validator_address);
     assert_eq!(validator.signal_data, None);
     assert_eq!(
@@ -511,12 +517,13 @@ fn reactivate_validator_works() {
 
     let cold_keypair = ed25519_key_pair(VALIDATOR_PRIVATE_KEY);
 
-    let warm_key = Address::from_any_str(VALIDATOR_WARM_KEY).unwrap();
+    let signing_key =
+        PublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_SIGNING_KEY).unwrap()).unwrap();
 
-    let warm_keypair = ed25519_key_pair(VALIDATOR_WARM_SECRET_KEY);
+    let signing_keypair = ed25519_key_pair(VALIDATOR_SIGNING_SECRET_KEY);
 
-    let hot_pk =
-        BlsPublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_HOT_KEY).unwrap()).unwrap();
+    let voting_key =
+        BlsPublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_VOTING_KEY).unwrap()).unwrap();
 
     // To begin with, retire the validator.
     let tx = make_signed_incoming_transaction(
@@ -525,7 +532,7 @@ fn reactivate_validator_works() {
             proof: SignatureProof::default(),
         },
         0,
-        &warm_keypair,
+        &signing_keypair,
     );
 
     StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0).unwrap();
@@ -537,7 +544,7 @@ fn reactivate_validator_works() {
             proof: SignatureProof::default(),
         },
         0,
-        &warm_keypair,
+        &signing_keypair,
     );
 
     let receipt = ReactivateValidatorReceipt { retire_time: 2 }.serialize_to_vec();
@@ -551,8 +558,8 @@ fn reactivate_validator_works() {
         StakingContract::get_validator(&accounts_tree, &db_txn, &validator_address).unwrap();
 
     assert_eq!(validator.address, validator_address);
-    assert_eq!(validator.warm_key, warm_key);
-    assert_eq!(validator.validator_key, hot_pk);
+    assert_eq!(validator.signing_key, signing_key);
+    assert_eq!(validator.voting_key, voting_key);
     assert_eq!(validator.reward_address, validator_address);
     assert_eq!(validator.signal_data, None);
     assert_eq!(
@@ -576,7 +583,7 @@ fn reactivate_validator_works() {
             proof: SignatureProof::default(),
         },
         0,
-        &warm_keypair,
+        &signing_keypair,
     );
 
     assert_eq!(
@@ -616,8 +623,8 @@ fn reactivate_validator_works() {
         StakingContract::get_validator(&accounts_tree, &db_txn, &validator_address).unwrap();
 
     assert_eq!(validator.address, validator_address);
-    assert_eq!(validator.warm_key, warm_key);
-    assert_eq!(validator.validator_key, hot_pk);
+    assert_eq!(validator.signing_key, signing_key);
+    assert_eq!(validator.voting_key, voting_key);
     assert_eq!(validator.reward_address, validator_address);
     assert_eq!(validator.signal_data, None);
     assert_eq!(
@@ -646,7 +653,7 @@ fn unpark_validator_works() {
 
     let cold_keypair = ed25519_key_pair(VALIDATOR_PRIVATE_KEY);
 
-    let warm_keypair = ed25519_key_pair(VALIDATOR_WARM_SECRET_KEY);
+    let signing_keypair = ed25519_key_pair(VALIDATOR_SIGNING_SECRET_KEY);
 
     // To begin with, unpark and disable the validator.
     let mut staking_contract = StakingContract::get_staking_contract(&accounts_tree, &db_txn);
@@ -679,7 +686,7 @@ fn unpark_validator_works() {
             proof: SignatureProof::default(),
         },
         0,
-        &warm_keypair,
+        &signing_keypair,
     );
 
     let receipt = UnparkValidatorReceipt {
@@ -711,7 +718,7 @@ fn unpark_validator_works() {
             proof: SignatureProof::default(),
         },
         0,
-        &warm_keypair,
+        &signing_keypair,
     );
 
     assert_eq!(
@@ -781,7 +788,7 @@ fn drop_validator_works() {
             proof: SignatureProof::default(),
         },
         0,
-        &ed25519_key_pair(VALIDATOR_WARM_SECRET_KEY),
+        &ed25519_key_pair(VALIDATOR_SIGNING_SECRET_KEY),
     );
 
     StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &retire_tx, 2, 0)
@@ -800,18 +807,19 @@ fn drop_validator_works() {
     // Works in the valid case.
     let validator_address = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
 
-    let warm_key = Address::from_any_str(VALIDATOR_WARM_KEY).unwrap();
+    let signing_key =
+        PublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_SIGNING_KEY).unwrap()).unwrap();
 
-    let validator_key =
-        BlsPublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_HOT_KEY).unwrap()).unwrap();
+    let voting_key =
+        BlsPublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_VOTING_KEY).unwrap()).unwrap();
 
     let reward_address = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
 
     let staker_address = Address::from_any_str(STAKER_ADDRESS).unwrap();
 
     let receipt = DropValidatorReceipt {
-        warm_key: warm_key.clone(),
-        validator_key: validator_key.clone(),
+        signing_key: signing_key.clone(),
+        voting_key: voting_key.clone(),
         reward_address: reward_address.clone(),
         signal_data: None,
         retire_time: 2,
@@ -875,8 +883,8 @@ fn drop_validator_works() {
     .unwrap();
 
     assert_eq!(validator.address, validator_address);
-    assert_eq!(validator.warm_key, warm_key);
-    assert_eq!(validator.validator_key, validator_key);
+    assert_eq!(validator.signing_key, signing_key);
+    assert_eq!(validator.voting_key, voting_key);
     assert_eq!(validator.reward_address, reward_address);
     assert_eq!(validator.signal_data, None);
     assert_eq!(
@@ -1126,18 +1134,20 @@ fn update_staker_works() {
 
     let validator_address = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
 
-    let other_validator_address = Address::from_any_str(VALIDATOR_WARM_KEY).unwrap();
+    let other_validator_address = Address::from([69u8; 20]);
 
-    let hot_pk =
-        BlsPublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_HOT_KEY).unwrap()).unwrap();
+    let signing_key =
+        PublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_SIGNING_KEY).unwrap()).unwrap();
+    let voting_key =
+        BlsPublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_VOTING_KEY).unwrap()).unwrap();
 
     // To begin with, add another validator.
     StakingContract::create_validator(
         &accounts_tree,
         &mut db_txn,
         &other_validator_address,
-        validator_address.clone(),
-        hot_pk,
+        signing_key,
+        voting_key,
         other_validator_address.clone(),
         None,
     )
@@ -2497,10 +2507,11 @@ fn make_sample_contract(
 
     let cold_address = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
 
-    let warm_address = Address::from_any_str(VALIDATOR_WARM_KEY).unwrap();
+    let signing_key =
+        PublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_SIGNING_KEY).unwrap()).unwrap();
 
-    let hot_pk =
-        BlsPublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_HOT_KEY).unwrap()).unwrap();
+    let voting_key =
+        BlsPublicKey::deserialize_from_vec(&hex::decode(VALIDATOR_VOTING_KEY).unwrap()).unwrap();
 
     make_empty_contract(accounts_tree, db_txn);
 
@@ -2508,8 +2519,8 @@ fn make_sample_contract(
         accounts_tree,
         db_txn,
         &cold_address,
-        warm_address,
-        hot_pk,
+        signing_key,
+        voting_key,
         cold_address.clone(),
         None,
     )

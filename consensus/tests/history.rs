@@ -6,10 +6,8 @@ use futures::task::{Context, Poll};
 use futures::{Stream, StreamExt};
 use parking_lot::RwLock;
 
-use beserial::Deserialize;
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
-use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_consensus::consensus::Consensus;
 use nimiq_consensus::consensus_agent::ConsensusAgent;
 use nimiq_consensus::messages::RequestBlockHashesFilter;
@@ -20,7 +18,7 @@ use nimiq_genesis::NetworkId;
 use nimiq_network_interface::network::Network;
 use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_primitives::policy;
-use nimiq_test_utils::blockchain::produce_macro_blocks;
+use nimiq_test_utils::blockchain::{produce_macro_blocks, signing_key, voting_key};
 use nimiq_utils::time::OffsetTime;
 
 pub struct MockHistorySyncStream<TNetwork: Network> {
@@ -39,10 +37,6 @@ impl<TNetwork: Network> Stream for MockHistorySyncStream<TNetwork> {
     }
 }
 
-/// Secret key of validator. Tests run with `network-primitives/src/genesis/unit-albatross.toml`
-const SECRET_KEY: &str =
-    "196ffdb1a8acc7cbd76a251aeac0600a1d68b3aba1eba823b5e4dc5dbdcdc730afa752c05ab4f6ef8518384ad514f403c5a088a22b17bf1bc14f8ff8decc2a512c0a200f68d7bdf5a319b30356fe8d1d75ef510aed7a8660968c216c328a0000";
-
 #[tokio::test]
 async fn peers_can_sync() {
     //simple_logger::SimpleLogger::new().init().unwrap();
@@ -56,9 +50,7 @@ async fn peers_can_sync() {
         Blockchain::new(env1.clone(), NetworkId::UnitAlbatross, time).unwrap(),
     ));
 
-    let keypair =
-        KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
-    let producer = BlockProducer::new(keypair.clone());
+    let producer = BlockProducer::new(signing_key(), voting_key());
 
     // The minimum number of macro blocks necessary so that we have one election block and one
     // checkpoint block to push.
@@ -187,9 +179,7 @@ async fn sync_ingredients() {
         Blockchain::new(env1.clone(), NetworkId::UnitAlbatross, time).unwrap(),
     ));
 
-    let keypair =
-        KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
-    let producer = BlockProducer::new(keypair.clone());
+    let producer = BlockProducer::new(signing_key(), voting_key());
 
     // The minimum number of macro blocks necessary so that we have one election block and one
     // checkpoint block to push.

@@ -76,7 +76,7 @@ impl Blockchain {
         // Create the SlashedSlot struct.
         let slot = SlashedSlot {
             slot,
-            validator_address: producer.validator_address,
+            validator_address: producer.address,
             event_block: fork_proof.header1.block_number,
         };
 
@@ -103,12 +103,12 @@ impl Blockchain {
                     .get_slot_owner_at(view_changes.block_number, view_number, txn_option)
                     .expect("Couldn't calculate slot owner!");
 
-                debug!("Slash inherent: view change: {}", producer.public_key);
+                debug!("Slash inherent: view change: {}", producer.voting_key);
 
                 // Create the SlashedSlot struct.
                 let slot = SlashedSlot {
                     slot,
-                    validator_address: producer.validator_address,
+                    validator_address: producer.address,
                     event_block: view_changes.block_number,
                 };
 
@@ -232,7 +232,7 @@ impl Blockchain {
             let validator = StakingContract::get_validator(
                 &self.state().accounts.tree,
                 &self.read_transaction(),
-                &validator_slot.validator_address,
+                &validator_slot.address,
             )
             .expect("Couldn't find validator in the accounts trie when paying rewards!");
 

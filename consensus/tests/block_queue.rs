@@ -15,11 +15,9 @@ use parking_lot::RwLock;
 use pin_project::pin_project;
 use rand::Rng;
 
-use beserial::Deserialize;
 use nimiq_block::Block;
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
-use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_consensus::consensus_agent::ConsensusAgent;
 use nimiq_consensus::sync::block_queue::{BlockQueue, BlockQueueConfig};
 use nimiq_consensus::sync::request_component::{RequestComponent, RequestComponentEvent};
@@ -29,11 +27,8 @@ use nimiq_network_interface::network::Network;
 use nimiq_network_interface::peer::Peer;
 use nimiq_network_mock::{MockHub, MockId, MockPeer};
 use nimiq_primitives::networks::NetworkId;
+use nimiq_test_utils::blockchain::{signing_key, voting_key};
 use nimiq_utils::time::OffsetTime;
-
-/// Secret key of validator. Tests run with `network-primitives/src/genesis/unit-albatross.toml`
-const SECRET_KEY: &str =
-    "196ffdb1a8acc7cbd76a251aeac0600a1d68b3aba1eba823b5e4dc5dbdcdc730afa752c05ab4f6ef8518384ad514f403c5a088a22b17bf1bc14f8ff8decc2a512c0a200f68d7bdf5a319b30356fe8d1d75ef510aed7a8660968c216c328a0000";
 
 #[pin_project]
 #[derive(Debug)]
@@ -110,8 +105,6 @@ impl<P: Peer> Stream for MockRequestComponent<P> {
 
 #[tokio::test]
 async fn send_single_micro_block_to_block_queue() {
-    let keypair =
-        KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(RwLock::new(
@@ -119,7 +112,7 @@ async fn send_single_micro_block_to_block_queue() {
     ));
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
-    let producer = BlockProducer::new(keypair);
+    let producer = BlockProducer::new(signing_key(), voting_key());
     let request_component = MockRequestComponent::<MockPeer>::default();
     let (mut tx, rx) = mpsc::channel(32);
 
@@ -160,8 +153,6 @@ async fn send_single_micro_block_to_block_queue() {
 
 #[tokio::test]
 async fn send_two_micro_blocks_out_of_order() {
-    let keypair =
-        KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
     let env1 = VolatileEnvironment::new(10).unwrap();
     let time1 = Arc::new(OffsetTime::new());
     let env2 = VolatileEnvironment::new(10).unwrap();
@@ -174,7 +165,7 @@ async fn send_two_micro_blocks_out_of_order() {
     ));
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
-    let producer = BlockProducer::new(keypair);
+    let producer = BlockProducer::new(signing_key(), voting_key());
     let (request_component, mut mock_ptarc_rx, _mock_ptarc_tx) =
         MockRequestComponent::<MockPeer>::new();
     let (mut tx, rx) = mpsc::channel(32);
@@ -258,8 +249,6 @@ async fn send_two_micro_blocks_out_of_order() {
 
 #[tokio::test]
 async fn send_micro_blocks_out_of_order() {
-    let keypair =
-        KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
     let env1 = VolatileEnvironment::new(10).unwrap();
     let time1 = Arc::new(OffsetTime::new());
     let env2 = VolatileEnvironment::new(10).unwrap();
@@ -272,7 +261,7 @@ async fn send_micro_blocks_out_of_order() {
     ));
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
-    let producer = BlockProducer::new(keypair);
+    let producer = BlockProducer::new(signing_key(), voting_key());
     let (request_component, _mock_ptarc_rx, _mock_ptarc_tx) =
         MockRequestComponent::<MockPeer>::new();
     let (mut tx, rx) = mpsc::channel(32);
@@ -354,8 +343,6 @@ async fn send_micro_blocks_out_of_order() {
 
 #[tokio::test]
 async fn send_invalid_block() {
-    let keypair =
-        KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
     let env1 = VolatileEnvironment::new(10).unwrap();
     let time1 = Arc::new(OffsetTime::new());
     let env2 = VolatileEnvironment::new(10).unwrap();
@@ -368,7 +355,7 @@ async fn send_invalid_block() {
     ));
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
-    let producer = BlockProducer::new(keypair);
+    let producer = BlockProducer::new(signing_key(), voting_key());
     let (request_component, mut mock_ptarc_rx, _mock_ptarc_tx) =
         MockRequestComponent::<MockPeer>::new();
     let (mut tx, rx) = mpsc::channel(32);
@@ -452,8 +439,6 @@ async fn send_invalid_block() {
 
 #[tokio::test]
 async fn send_block_with_gap_and_respond_to_missing_request() {
-    let keypair =
-        KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
     let env1 = VolatileEnvironment::new(10).unwrap();
     let time1 = Arc::new(OffsetTime::new());
     let env2 = VolatileEnvironment::new(10).unwrap();
@@ -466,7 +451,7 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
     ));
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network_with_address(1));
-    let producer = BlockProducer::new(keypair);
+    let producer = BlockProducer::new(signing_key(), voting_key());
     let (request_component, mut mock_ptarc_rx, mock_ptarc_tx) =
         MockRequestComponent::<MockPeer>::new();
     let (mut tx, rx) = mpsc::channel(32);
@@ -551,8 +536,6 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
 
 #[tokio::test]
 async fn put_peer_back_into_sync_mode() {
-    let keypair =
-        KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
     let env1 = VolatileEnvironment::new(10).unwrap();
     let time1 = Arc::new(OffsetTime::new());
     let env2 = VolatileEnvironment::new(10).unwrap();
@@ -565,7 +548,7 @@ async fn put_peer_back_into_sync_mode() {
     ));
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network_with_address(1));
-    let producer = BlockProducer::new(keypair);
+    let producer = BlockProducer::new(signing_key(), voting_key());
     let (request_component, _, _) = MockRequestComponent::<MockPeer>::new();
     let (mut tx, rx) = mpsc::channel(32);
 

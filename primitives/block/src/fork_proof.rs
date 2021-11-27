@@ -2,8 +2,9 @@ use std::cmp::Ordering;
 use std::io;
 
 use beserial::{Deserialize, Serialize};
-use nimiq_bls::{CompressedSignature, PublicKey};
+use nimiq_bls::PublicKey as BlsPublicKey;
 use nimiq_hash::{Blake2bHash, Hash, HashOutput, SerializeContent};
+use nimiq_keys::{PublicKey as SchnorrPublicKey, Signature as SchnorrSignature};
 use nimiq_primitives::policy;
 use nimiq_vrf::VrfSeed;
 
@@ -19,9 +20,9 @@ pub struct ForkProof {
     /// Header number 2.
     pub header2: MicroHeader,
     /// Justification for header number 1.
-    pub justification1: CompressedSignature,
+    pub justification1: SchnorrSignature,
     /// Justification for header number 2.
-    pub justification2: CompressedSignature,
+    pub justification2: SchnorrSignature,
     /// Vrf seed of the previous block. Used to determine the slot.
     pub prev_vrf_seed: VrfSeed,
 }
@@ -30,10 +31,14 @@ impl ForkProof {
     /// The size of a single fork proof. This is the maximum possible size, since the Micro header
     /// has a variable size (because of the extra data field) and here we assume that the header
     /// has the maximum size. VrfSeed is a CompressedSignature.
-    pub const SIZE: usize = 2 * MicroHeader::MAX_SIZE + 3 * CompressedSignature::SIZE;
+    pub const SIZE: usize = 2 * MicroHeader::MAX_SIZE + 2 * SchnorrSignature::SIZE + VrfSeed::SIZE;
 
     /// Verify the validity of a fork proof.
-    pub fn verify(&self, public_key: &PublicKey) -> Result<(), ForkProofError> {
+    pub fn verify(
+        &self,
+        signing_key: &SchnorrPublicKey,
+        voting_key: &BlsPublicKey,
+    ) -> Result<(), ForkProofError> {
         // Check that the headers are not equal.
         if self.header1.hash::<Blake2bHash>() == self.header2.hash::<Blake2bHash>() {
             return Err(ForkProofError::SameHeader);
@@ -47,24 +52,16 @@ impl ForkProof {
             return Err(ForkProofError::SlotMismatch);
         }
 
-        if let Err(e) = self.header1.seed.verify(&self.prev_vrf_seed, public_key) {
+        if let Err(e) = self.header1.seed.verify(&self.prev_vrf_seed, voting_key) {
             error!("ForkProof: VrfSeed failed to verify: {:?}", e);
             return Err(ForkProofError::InvalidJustification);
         }
 
         // Check that the justifications are valid.
-        let justification1 = self
-            .justification1
-            .uncompress()
-            .map_err(|_| ForkProofError::InvalidJustification)?;
-
-        let justification2 = self
-            .justification2
-            .uncompress()
-            .map_err(|_| ForkProofError::InvalidJustification)?;
-
-        if !public_key.verify(&self.header1, &justification1)
-            || !public_key.verify(&self.header2, &justification2)
+        let hash1 = self.header1.hash::<Blake2bHash>();
+        let hash2 = self.header2.hash::<Blake2bHash>();
+        if !signing_key.verify(&self.justification1, hash1.as_slice())
+            || !signing_key.verify(&self.justification2, hash2.as_slice())
         {
             return Err(ForkProofError::InvalidJustification);
         }

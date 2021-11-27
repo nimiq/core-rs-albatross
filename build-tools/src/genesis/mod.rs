@@ -14,7 +14,7 @@ use bls::{PublicKey as BlsPublicKey, SecretKey as BlsSecretKey};
 use database::volatile::{VolatileDatabaseError, VolatileEnvironment};
 use database::WriteTransaction;
 use hash::{Blake2bHash, Blake2sHasher, Hash, Hasher};
-use keys::Address;
+use keys::{Address, PublicKey as SchnorrPublicKey};
 use nimiq_trie::key_nibbles::KeyNibbles;
 use primitives::coin::Coin;
 use vrf::VrfSeed;
@@ -98,14 +98,14 @@ impl GenesisBuilder {
     pub fn with_genesis_validator(
         &mut self,
         validator_address: Address,
-        warm_address: Address,
-        validator_key: BlsPublicKey,
+        signing_key: SchnorrPublicKey,
+        voting_key: BlsPublicKey,
         reward_address: Address,
     ) -> &mut Self {
         self.validators.push(config::GenesisValidator {
             validator_address,
-            warm_address,
-            validator_key,
+            signing_key,
+            voting_key,
             reward_address,
         });
         self
@@ -303,8 +303,8 @@ impl GenesisBuilder {
                 &accounts.tree,
                 txn,
                 &validator.validator_address,
-                validator.warm_address.clone(),
-                validator.validator_key.compress(),
+                validator.signing_key.clone(),
+                validator.voting_key.compress(),
                 validator.reward_address.clone(),
                 None,
             )?;

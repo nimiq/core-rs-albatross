@@ -1,30 +1,26 @@
-use nimiq_primitives::coin::Coin;
-use parking_lot::RwLock;
 use std::convert::TryInto;
 use std::sync::Arc;
+
+use parking_lot::RwLock;
 
 use beserial::Deserialize;
 use nimiq_block::{Block, BlockError, ForkProof};
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, PushError, PushResult};
-use nimiq_bls::KeyPair as BlsKeyPair;
-use nimiq_bls::SecretKey;
-
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
-use nimiq_keys::{Address, KeyPair, PrivateKey};
+use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_keys::{Address, KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey};
+use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
 use nimiq_test_utils::blockchain::{
-    fill_micro_blocks, sign_macro_block, sign_view_change, SECRET_KEY,
+    fill_micro_blocks, sign_macro_block, sign_view_change, signing_key, voting_key,
 };
+use nimiq_transaction_builder::TransactionBuilder;
 use nimiq_utils::time::OffsetTime;
 use nimiq_vrf::VrfSeed;
 
-use nimiq_transaction_builder::TransactionBuilder;
-
 const ADDRESS: &str = "NQ20TSB0DFSMUH9C15GQGAGJTTE4D3MA859E";
-pub const WARM_SECRET_KEY: &str =
-    "041580cc67e66e9e08b68fd9e4c9deb68737168fbe7488de2638c2e906c2f5ad";
 
 pub const ACCOUNT_SECRET_KEY: &str =
     "6c9320ac201caf1f8eaa5b05f5d67a9e77826f3f6be266a0ecccc20416dc6587";
@@ -38,10 +34,7 @@ fn it_can_produce_micro_blocks() {
     let blockchain = Arc::new(RwLock::new(
         Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
     ));
-    let keypair = BlsKeyPair::from(
-        SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap(),
-    );
-    let producer = BlockProducer::new(keypair.clone());
+    let producer = BlockProducer::new(signing_key(), voting_key());
 
     let bc = blockchain.upgradable_read();
 
@@ -64,7 +57,8 @@ fn it_can_produce_micro_blocks() {
         let justification1 = block.justification.unwrap().signature;
         let mut header2 = header1.clone();
         header2.timestamp += 1;
-        let justification2 = keypair.sign(&header2).compress();
+        let hash2 = header2.hash::<Blake2bHash>();
+        let justification2 = signing_key().sign(hash2.as_slice());
         ForkProof {
             header1,
             header2,
@@ -139,11 +133,7 @@ fn it_can_produce_macro_blocks() {
     let blockchain = Arc::new(RwLock::new(
         Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
     ));
-
-    let keypair = BlsKeyPair::from(
-        SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap(),
-    );
-    let producer = BlockProducer::new(keypair);
+    let producer = BlockProducer::new(signing_key(), voting_key());
 
     fill_micro_blocks(&producer, &blockchain);
 
@@ -157,13 +147,7 @@ fn it_can_produce_macro_blocks() {
         )
     };
 
-    let block = sign_macro_block(
-        &BlsKeyPair::from(
-            SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap(),
-        ),
-        macro_block.header,
-        macro_block.body,
-    );
+    let block = sign_macro_block(&voting_key(), macro_block.header, macro_block.body);
     assert_eq!(
         Blockchain::push(bc, Block::Macro(block)),
         Ok(PushResult::Extended)
@@ -177,12 +161,7 @@ fn it_can_produce_election_blocks() {
     let blockchain = Arc::new(RwLock::new(
         Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
     ));
-
-    let keypair = BlsKeyPair::from(
-        SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap(),
-    );
-
-    let producer = BlockProducer::new(keypair);
+    let producer = BlockProducer::new(signing_key(), voting_key());
 
     // push micro and macro blocks until the 3rd epoch is reached
     while policy::epoch_at(blockchain.read().block_number()) < 2 {
@@ -198,13 +177,7 @@ fn it_can_produce_election_blocks() {
             )
         };
 
-        let block = sign_macro_block(
-            &BlsKeyPair::from(
-                SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap(),
-            ),
-            macro_block.header,
-            macro_block.body,
-        );
+        let block = sign_macro_block(&voting_key(), macro_block.header, macro_block.body);
 
         assert_eq!(
             Blockchain::push(bc, Block::Macro(block)),
@@ -220,10 +193,7 @@ fn it_can_revert_unpark_transactions() {
     let blockchain = Arc::new(RwLock::new(
         Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
     ));
-    let keypair = BlsKeyPair::from(
-        SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap(),
-    );
-    let producer = BlockProducer::new(keypair);
+    let producer = BlockProducer::new(signing_key(), voting_key());
 
     // #1.0: Empty view-changed micro block
     let view_change = sign_view_change(blockchain.read().head().seed().clone(), 1, 1);
@@ -271,7 +241,7 @@ fn it_can_revert_unpark_transactions() {
     // One block with stacking transactions
 
     let mut transactions = vec![];
-    let key_pair = ed25519_key_pair(WARM_SECRET_KEY);
+    let key_pair = signing_key();
     let address = Address::from_any_str(ADDRESS).unwrap();
 
     let tx = TransactionBuilder::new_unpark_validator(
@@ -322,10 +292,7 @@ fn it_can_revert_create_stacker_transaction() {
     let blockchain = Arc::new(RwLock::new(
         Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
     ));
-    let keypair = BlsKeyPair::from(
-        SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap(),
-    );
-    let producer = BlockProducer::new(keypair);
+    let producer = BlockProducer::new(signing_key(), voting_key());
 
     // #1.0: Empty view-changed micro block
     let view_change = sign_view_change(blockchain.read().head().seed().clone(), 1, 1);
@@ -415,8 +382,8 @@ fn it_can_revert_create_stacker_transaction() {
     assert_eq!(result, Ok(()));
 }
 
-fn ed25519_key_pair(secret_key: &str) -> KeyPair {
-    let priv_key: PrivateKey =
+fn ed25519_key_pair(secret_key: &str) -> SchnorrKeyPair {
+    let priv_key: SchnorrPrivateKey =
         Deserialize::deserialize(&mut &hex::decode(secret_key).unwrap()[..]).unwrap();
     priv_key.into()
 }

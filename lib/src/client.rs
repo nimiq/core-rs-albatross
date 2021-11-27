@@ -149,14 +149,14 @@ impl ClientInner {
                 // Load validator address
                 let validator_address = validator_config.validator_address;
 
+                // Load warm key (before we give away ownership of the storage config)
+                let signing_key = config.storage.signing_keypair()?;
+
                 // Load validator key (before we give away ownership of the storage config)
-                let validator_key = config.storage.validator_keypair()?;
+                let voting_key = config.storage.voting_keypair()?;
 
                 // Load fee key (before we give away ownership of the storage config)
                 let fee_key = config.storage.fee_keypair()?;
-
-                // Load warm key (before we give away ownership of the storage config)
-                let warm_key = config.storage.warm_keypair()?;
 
                 let validator_network = Arc::new(ValidatorNetworkImpl::new(Arc::clone(&network)));
 
@@ -164,9 +164,9 @@ impl ClientInner {
                     &consensus,
                     validator_network,
                     validator_address,
-                    validator_key,
+                    signing_key,
+                    voting_key,
                     fee_key,
-                    warm_key,
                     config.mempool,
                 );
 

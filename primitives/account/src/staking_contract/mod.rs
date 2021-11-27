@@ -235,8 +235,6 @@ impl StakingContract {
         let mut validator_addresses = Vec::with_capacity(staking_contract.active_validators.len());
         let mut validator_stakes = Vec::with_capacity(staking_contract.active_validators.len());
 
-        debug!("Selecting validators: num_slots = {}", policy::SLOTS);
-
         for (address, coin) in &staking_contract.active_validators {
             validator_addresses.push(address);
             validator_stakes.push(u64::from(*coin));
@@ -255,8 +253,9 @@ impl StakingContract {
                 StakingContract::get_validator(accounts_tree, db_txn, validator_addresses[index]).expect("Couldn't find in the accounts tree a validator that was in the active validators list!");
 
             slots_builder.push(
-                chosen_validator.address.clone(),
-                chosen_validator.validator_key.clone(),
+                chosen_validator.address,
+                chosen_validator.voting_key,
+                chosen_validator.signing_key,
             );
         }
 

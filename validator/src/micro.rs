@@ -14,7 +14,9 @@ use block_production::BlockProducer;
 use blockchain::{AbstractBlockchain, Blockchain, PushResult};
 use mempool::mempool::Mempool;
 use nimiq_account::{Account, AccountError, AccountTransactionInteraction, Accounts};
+use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_database::WriteTransaction;
+use nimiq_keys::KeyPair as SchnorrKeyPair;
 use nimiq_primitives::policy;
 use nimiq_primitives::slots::Validators;
 use nimiq_transaction::Transaction;
@@ -37,7 +39,8 @@ struct NextProduceMicroBlockEvent<TValidatorNetwork> {
     blockchain: Arc<RwLock<Blockchain>>,
     mempool: Arc<Mempool>,
     network: Arc<TValidatorNetwork>,
-    signing_key: bls::KeyPair,
+    signing_key: SchnorrKeyPair,
+    voting_key: BlsKeyPair,
     validator_id: u16,
     fork_proofs: Vec<ForkProof>,
     prev_seed: VrfSeed,
@@ -57,7 +60,8 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         blockchain: Arc<RwLock<Blockchain>>,
         mempool: Arc<Mempool>,
         network: Arc<TValidatorNetwork>,
-        signing_key: bls::KeyPair,
+        signing_key: SchnorrKeyPair,
+        voting_key: BlsKeyPair,
         validator_id: u16,
         fork_proofs: Vec<ForkProof>,
         prev_seed: VrfSeed,
@@ -72,6 +76,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             mempool,
             network,
             signing_key,
+            voting_key,
             validator_id,
             fork_proofs,
             prev_seed,
@@ -192,11 +197,12 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             }
         };
 
-        &self.signing_key.public_key.compress() == slot.public_key.compressed()
+        self.signing_key.public == slot.signing_key
     }
 
     fn produce_micro_block(&self, blockchain: &Blockchain) -> MicroBlock {
-        let producer = BlockProducer::new(self.signing_key.clone());
+        // TODO pass keys by reference
+        let producer = BlockProducer::new(self.signing_key.clone(), self.voting_key.clone());
 
         let timestamp = u64::max(
             blockchain.timestamp(),
@@ -239,7 +245,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         let (view_change, view_change_proof) = ViewChangeAggregation::start(
             view_change.clone(),
             view_change_proof,
-            self.signing_key.clone(),
+            self.voting_key.clone(),
             self.validator_id,
             active_validators,
             Arc::clone(&self.network),
@@ -442,7 +448,8 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProduceMicroBlock<TValidator
         blockchain: Arc<RwLock<Blockchain>>,
         mempool: Arc<Mempool>,
         network: Arc<TValidatorNetwork>,
-        signing_key: bls::KeyPair,
+        signing_key: SchnorrKeyPair,
+        voting_key: BlsKeyPair,
         validator_id: u16,
         fork_proofs: Vec<ForkProof>,
         prev_seed: VrfSeed,
@@ -457,6 +464,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProduceMicroBlock<TValidator
             mempool,
             network,
             signing_key,
+            voting_key,
             validator_id,
             fork_proofs,
             prev_seed,

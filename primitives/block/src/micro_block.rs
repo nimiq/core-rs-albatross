@@ -1,17 +1,17 @@
+use std::fmt::{Debug, Formatter};
 use std::{fmt, io};
 
 use beserial::{Deserialize, Serialize};
-use nimiq_bls::CompressedSignature;
 use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
 use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
 use nimiq_hash_derive::SerializeContent;
+use nimiq_keys::Signature;
+use nimiq_primitives::policy;
 use nimiq_transaction::Transaction;
 use nimiq_vrf::VrfSeed;
 
 use crate::fork_proof::ForkProof;
 use crate::ViewChangeProof;
-use nimiq_primitives::policy;
-use std::fmt::{Debug, Formatter};
 
 /// The struct representing a Micro block.
 /// A Micro block, unlike a Macro block, doesn't contain any inherents (data that can be calculated
@@ -61,7 +61,7 @@ pub struct MicroHeader {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MicroJustification {
     /// The signature of the block producer.
-    pub signature: CompressedSignature,
+    pub signature: Signature,
     /// The view change proof. It consists of the aggregated signatures to a single view change
     /// message. It is an Option since a view change might not occur for any given block.
     pub view_change_proof: Option<ViewChangeProof>,
@@ -98,7 +98,7 @@ impl MicroHeader {
     pub const MAX_SIZE: usize =
         /*version*/
         2 + /*block_number*/ 4 + /*view_number*/ 4 + /*timestamp*/ 8
-            + /*parent_hash*/ 32 + /*seed*/ CompressedSignature::SIZE + /*extra_data*/ 32 +
+            + /*parent_hash*/ 32 + /*seed*/ VrfSeed::SIZE + /*extra_data*/ 32 +
             /*state_root*/ 32 + /*body_root*/ 32 + /*history_root*/ 32;
 }
 

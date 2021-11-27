@@ -21,18 +21,22 @@ use std::cmp::max;
 use std::collections::BTreeMap;
 use std::slice::Iter;
 
-use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
-use nimiq_bls::lazy::LazyPublicKey;
-use nimiq_bls::{CompressedPublicKey, PublicKey};
-use nimiq_keys::Address;
+use beserial::{
+    Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
+    SerializingError, WriteBytesExt,
+};
+use nimiq_bls::lazy::LazyPublicKey as LazyBlsPublicKey;
+use nimiq_bls::PublicKey as BlsPublicKey;
+use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
 
 use crate::policy::SLOTS;
 
 /// A validator that owns some slots.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Validator {
-    pub validator_address: Address,
-    pub public_key: LazyPublicKey,
+    pub address: Address,
+    pub voting_key: LazyBlsPublicKey,
+    pub signing_key: SchnorrPublicKey,
     // The start and end slots for this validator. For example, if the slot range is (10,25) then
     // this validator owns the slots from 10 (inclusive) to 25 (exclusive). So it owns 25-10=15 slots.
     pub slot_range: (u16, u16),
@@ -40,14 +44,16 @@ pub struct Validator {
 
 impl Validator {
     /// Creates a new Validator.
-    pub fn new<PK: Into<LazyPublicKey>>(
-        validator_address: Address,
-        public_key: PK,
+    pub fn new<TBlsKey: Into<LazyBlsPublicKey>, TSchnorrKey: Into<SchnorrPublicKey>>(
+        address: Address,
+        voting_key: TBlsKey,
+        signing_key: TSchnorrKey,
         slot_range: (u16, u16),
     ) -> Self {
         Self {
-            validator_address,
-            public_key: public_key.into(),
+            address,
+            voting_key: voting_key.into(),
+            signing_key: signing_key.into(),
             slot_range,
         }
     }
@@ -89,7 +95,7 @@ impl Validators {
         let mut validator_map = BTreeMap::new();
 
         for (i, validator) in validators.iter().enumerate() {
-            validator_map.insert(validator.validator_address.clone(), i as u16);
+            validator_map.insert(validator.address.clone(), i as u16);
         }
 
         Self {
@@ -138,13 +144,12 @@ impl Validators {
         Some(&self.validators[band as usize])
     }
 
-    /// Returns the public key associated with each slot, in order.
-    pub fn to_pks(&self) -> Vec<PublicKey> {
+    /// Returns the voting key associated with each slot, in order.
+    pub fn voting_keys(&self) -> Vec<BlsPublicKey> {
         let mut pks = vec![];
 
         for validator in self.iter() {
-            let pk = *validator.public_key.uncompress().unwrap();
-
+            let pk = *validator.voting_key.uncompress().unwrap();
             pks.append(&mut vec![pk; validator.num_slots() as usize]);
         }
 
@@ -160,38 +165,18 @@ impl Validators {
 impl Serialize for Validators {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size = 0;
-
-        size += Serialize::serialize(&(self.num_validators() as u16), writer)?;
-
-        for validator in self.iter() {
-            size += Serialize::serialize(&validator.validator_address, writer)?;
-            size += Serialize::serialize(&validator.public_key, writer)?;
-            size += Serialize::serialize(&validator.slot_range.0, writer)?;
-            size += Serialize::serialize(&validator.slot_range.1, writer)?;
-        }
-
+        size += SerializeWithLength::serialize::<u16, W>(&self.validators, writer)?;
         Ok(size)
     }
 
     fn serialized_size(&self) -> usize {
-        2 + (Address::SIZE + CompressedPublicKey::SIZE + 2 * 2) * self.num_validators()
+        SerializeWithLength::serialized_size::<u16>(&self.validators)
     }
 }
 
 impl Deserialize for Validators {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let num_validators: u16 = Deserialize::deserialize(reader)?;
-
-        let mut validators = Vec::with_capacity(num_validators as usize);
-
-        for _ in 0..num_validators {
-            let validator_address: Address = Deserialize::deserialize(reader)?;
-            let public_key: CompressedPublicKey = Deserialize::deserialize(reader)?;
-            let start: u16 = Deserialize::deserialize(reader)?;
-            let end: u16 = Deserialize::deserialize(reader)?;
-            validators.push(Validator::new(validator_address, public_key, (start, end)));
-        }
-
+        let validators = DeserializeWithLength::deserialize::<u16, R>(reader)?;
         Ok(Self::new(validators))
     }
 }
@@ -200,8 +185,8 @@ impl Deserialize for Validators {
 /// into a Validators struct.
 #[derive(Clone, Debug, Default)]
 pub struct ValidatorsBuilder {
-    /// Maps validator address -> (validator key, number of slots)
-    validators: BTreeMap<Address, (LazyPublicKey, u16)>,
+    /// Maps validator address -> (voting key, signing key, number of slots)
+    validators: BTreeMap<Address, (LazyBlsPublicKey, SchnorrPublicKey, u16)>,
 }
 
 impl ValidatorsBuilder {
@@ -213,28 +198,32 @@ impl ValidatorsBuilder {
     }
 
     /// Push a new validator slot. This will add one slot to the validator, if it already exists
-    pub fn push<PK: Into<LazyPublicKey>>(&mut self, validator_address: Address, public_key: PK) {
-        let (_, num_slots) = self
+    pub fn push<TBlsKey: Into<LazyBlsPublicKey>, TSchnorrKey: Into<SchnorrPublicKey>>(
+        &mut self,
+        validator_address: Address,
+        voting_key: TBlsKey,
+        signing_key: TSchnorrKey,
+    ) {
+        let (_, _, num_slots) = self
             .validators
             .entry(validator_address)
-            .or_insert_with(|| (public_key.into(), 0));
+            .or_insert_with(|| (voting_key.into(), signing_key.into(), 0));
         *num_slots += 1;
     }
 
     /// Builds a Validators struct.
     pub fn build(self) -> Validators {
         let mut validators = Vec::new();
+        let mut start_slot = 0;
 
-        let mut start = 0;
-
-        for (validator_address, (public_key, num_slots)) in self.validators {
+        for (validator_address, (voting_key, signing_key, num_slots)) in self.validators {
             validators.push(Validator::new(
                 validator_address,
-                public_key,
-                (start, start + num_slots),
+                voting_key,
+                signing_key,
+                (start_slot, start_slot + num_slots),
             ));
-
-            start += num_slots;
+            start_slot += num_slots;
         }
 
         Validators::new(validators)

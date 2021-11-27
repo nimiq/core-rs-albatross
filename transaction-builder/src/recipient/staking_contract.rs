@@ -1,6 +1,6 @@
-use bls::{CompressedSignature, KeyPair as BLSKeyPair};
+use bls::{CompressedSignature, KeyPair as BlsKeyPair};
 use hash::Blake2bHash;
-use keys::Address;
+use keys::{Address, PublicKey as SchnorrPublicKey};
 use primitives::coin::Coin;
 use transaction::account::staking_contract::IncomingStakingTransactionData;
 
@@ -47,15 +47,17 @@ impl StakingRecipientBuilder {
     /// validator address, and is not an input to this function.
     pub fn create_validator(
         &mut self,
-        warm_address: Address,
-        bls_key_pair: &BLSKeyPair,
+        signing_key: SchnorrPublicKey,
+        voting_key_pair: &BlsKeyPair,
         reward_address: Address,
         signal_data: Option<Blake2bHash>,
     ) -> &mut Self {
         self.data = Some(IncomingStakingTransactionData::CreateValidator {
-            warm_key: warm_address,
-            validator_key: bls_key_pair.public_key.compress(),
-            proof_of_knowledge: StakingRecipientBuilder::generate_proof_of_knowledge(bls_key_pair),
+            signing_key,
+            voting_key: voting_key_pair.public_key.compress(),
+            proof_of_knowledge: StakingRecipientBuilder::generate_proof_of_knowledge(
+                voting_key_pair,
+            ),
             reward_address,
             signal_data,
             proof: Default::default(),
@@ -67,14 +69,14 @@ impl StakingRecipientBuilder {
     /// signed by the key pair corresponding to the validator address.
     pub fn update_validator(
         &mut self,
-        new_warm_address: Option<Address>,
-        new_key_pair: Option<&BLSKeyPair>,
+        new_signing_key: Option<SchnorrPublicKey>,
+        new_key_pair: Option<&BlsKeyPair>,
         new_reward_address: Option<Address>,
         new_signal_data: Option<Option<Blake2bHash>>,
     ) -> &mut Self {
         self.data = Some(IncomingStakingTransactionData::UpdateValidator {
-            new_warm_key: new_warm_address,
-            new_validator_key: new_key_pair.map(|key| key.public_key.compress()),
+            new_signing_key,
+            new_voting_key: new_key_pair.map(|key| key.public_key.compress()),
             new_proof_of_knowledge: new_key_pair
                 .map(StakingRecipientBuilder::generate_proof_of_knowledge),
             new_reward_address,
@@ -87,7 +89,7 @@ impl StakingRecipientBuilder {
     /// This method allows to retire a validator entry. Inactive validators will not be considered
     /// for the validator selection. Retiring a validator is also necessary to drop it and retrieve
     /// back its initial stake.
-    /// It needs to be signed by the key pair corresponding to the warm address.
+    /// It needs to be signed by the key pair corresponding to the signing key.
     pub fn retire_validator(&mut self, validator_address: Address) -> &mut Self {
         self.data = Some(IncomingStakingTransactionData::RetireValidator {
             validator_address,
@@ -98,7 +100,7 @@ impl StakingRecipientBuilder {
 
     /// This method allows to re-activate a validator. This reverts the retirement of a validator
     /// and will result in the validator being considered for the validator selection again.
-    /// It needs to be signed by the key pair corresponding to the warm address.
+    /// It needs to be signed by the key pair corresponding to the signing key.
     pub fn reactivate_validator(&mut self, validator_address: Address) -> &mut Self {
         self.data = Some(IncomingStakingTransactionData::ReactivateValidator {
             validator_address,
@@ -112,7 +114,7 @@ impl StakingRecipientBuilder {
     /// This automatically moves a validator into a *parked* state. This means that
     /// this validator will be automatically retired on the next election block.
     /// This signalling transaction will prevent the automatic retirement.
-    /// It needs to be signed by the key pair corresponding to the warm address.
+    /// It needs to be signed by the key pair corresponding to the signing key.
     pub fn unpark_validator(&mut self, validator_address: Address) -> &mut Self {
         self.data = Some(IncomingStakingTransactionData::UnparkValidator {
             validator_address,
@@ -171,7 +173,7 @@ impl StakingRecipientBuilder {
     }
 
     /// A method to generate a proof of knowledge of the secret key by signing the public key.
-    pub fn generate_proof_of_knowledge(key_pair: &BLSKeyPair) -> CompressedSignature {
+    pub fn generate_proof_of_knowledge(key_pair: &BlsKeyPair) -> CompressedSignature {
         key_pair.sign(&key_pair.public_key).compress()
     }
 
@@ -184,16 +186,15 @@ impl StakingRecipientBuilder {
     /// ```
     /// use nimiq_transaction_builder::Recipient;
     /// use nimiq_keys::{Address, KeyPair};
-    /// use nimiq_bls::KeyPair as BLSKeyPair;
+    /// use nimiq_bls::KeyPair as BlsKeyPair;
     /// use nimiq_utils::key_rng::SecureGenerate;
     ///
-    /// let warm_key_pair = KeyPair::generate_default_csprng();
-    /// let warm_address = Address::from(&warm_key_pair);
-    /// let validator_key_pair = BLSKeyPair::generate_default_csprng();
+    /// let signing_key_pair = KeyPair::generate_default_csprng();
+    /// let voting_key_pair = BlsKeyPair::generate_default_csprng();
     /// let reward_address = Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap();
     ///
     /// let mut recipient_builder = Recipient::new_staking_builder();
-    /// recipient_builder.create_validator(warm_address, &validator_key_pair, reward_address, None);
+    /// recipient_builder.create_validator(signing_key_pair.public, &voting_key_pair, reward_address, None);
     /// let recipient = recipient_builder.generate();
     /// assert!(recipient.is_some());
     /// ```

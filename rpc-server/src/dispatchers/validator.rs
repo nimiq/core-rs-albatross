@@ -27,18 +27,18 @@ impl ValidatorInterface for ValidatorDispatcher {
         Ok(self.validator.validator_address.read().clone())
     }
 
-    /// Returns our validator warm key.
-    async fn get_warm_key(&mut self) -> Result<String, Self::Error> {
+    /// Returns our validator signing key.
+    async fn get_signing_key(&mut self) -> Result<String, Self::Error> {
         Ok(hex::encode(
-            self.validator.warm_key.read().private.serialize_to_vec(),
+            self.validator.signing_key.read().private.serialize_to_vec(),
         ))
     }
 
-    /// Returns our validator hot key (also called the signing key).
-    async fn get_hot_key(&mut self) -> Result<String, Self::Error> {
+    /// Returns our validator voting key.
+    async fn get_voting_key(&mut self) -> Result<String, Self::Error> {
         Ok(hex::encode(
             self.validator
-                .signing_key
+                .voting_key
                 .read()
                 .secret_key
                 .serialize_to_vec(),

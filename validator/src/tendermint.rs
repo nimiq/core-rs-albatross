@@ -100,7 +100,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
         let our_public_key = self.validator_key.public_key.compress();
 
         // Compare the two public keys.
-        slot.public_key.compressed() == &our_public_key
+        slot.voting_key.compressed() == &our_public_key
     }
 
     /// Produces a proposal. Evidently, used when we are the proposer.
@@ -178,7 +178,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
             .iter()
             .enumerate()
         {
-            if validator.public_key.compressed() == &self.validator_key.public_key.compress() {
+            if validator.voting_key.compressed() == &self.validator_key.public_key.compress() {
                 validator_index_opt = Some(i as u16);
                 break;
             }
@@ -235,7 +235,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
                 .get_band_from_slot(slot_number);
 
             // Get the validator key.
-            let validator_key = *slot.public_key.uncompress_unchecked();
+            let validator_key = *slot.voting_key.uncompress_unchecked();
 
             // Calculate the timeout duration.
             let timeout = Duration::from_millis(
@@ -283,7 +283,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
                     .get_slot_owner_at(expected_height, r, None)
                     .expect("Couldn't find slot owner!");
 
-                let key = *valid_round_slot.public_key.uncompress_unchecked();
+                let key = *valid_round_slot.voting_key.uncompress_unchecked();
                 key
             } else {
                 validator_key
@@ -441,7 +441,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintInterface<TValidat
     }
 
     pub fn new(
-        validator_key: KeyPair,
+        voting_key: KeyPair,
         validator_id: u16,
         active_validators: Validators,
         block_height: u32,
@@ -462,12 +462,12 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintInterface<TValidat
             active_validators,
             block_height,
             network.clone(),
-            validator_key.secret_key,
+            voting_key.secret_key,
         );
 
         // Create the instance and return it.
         Self {
-            validator_key,
+            validator_key: voting_key,
             network,
             aggregation_adapter,
             cache_body: None,

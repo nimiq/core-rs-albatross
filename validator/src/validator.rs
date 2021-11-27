@@ -7,8 +7,6 @@ use futures::{
     Future, Stream, StreamExt,
 };
 use linked_hash_map::LinkedHashMap;
-use mempool::{config::MempoolConfig, mempool::Mempool};
-use nimiq_primitives::policy;
 use parking_lot::RwLock;
 use tokio_stream::wrappers::BroadcastStream;
 
@@ -16,16 +14,18 @@ use account::StakingContract;
 use block::{Block, BlockType, SignedTendermintProposal, ViewChange, ViewChangeProof};
 use block_production::BlockProducer;
 use blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent, ForkEvent, PushResult};
-use bls::CompressedPublicKey;
+use bls::{CompressedPublicKey, KeyPair as BlsKeyPair};
 use consensus::{sync::block_queue::BlockTopic, Consensus, ConsensusEvent, ConsensusProxy};
 use database::{Database, Environment, ReadTransaction, WriteTransaction};
 use hash::{Blake2bHash, Hash};
-use keys::{Address, KeyPair};
+use keys::{Address, KeyPair as SchnorrKeyPair};
+use mempool::{config::MempoolConfig, mempool::Mempool};
 use network_interface::{
     network::{Network, PubsubId, Topic},
     peer::Peer,
 };
 use primitives::coin::Coin;
+use primitives::policy;
 use tendermint_protocol::TendermintReturn;
 use transaction_builder::TransactionBuilder;
 use utils::observer::NotifierStream;
@@ -80,18 +80,18 @@ enum MempoolState {
 
 pub struct ValidatorProxy {
     pub validator_address: Arc<RwLock<Address>>,
-    pub fee_key: Arc<RwLock<KeyPair>>,
-    pub warm_key: Arc<RwLock<KeyPair>>,
-    pub signing_key: Arc<RwLock<bls::KeyPair>>,
+    pub signing_key: Arc<RwLock<SchnorrKeyPair>>,
+    pub voting_key: Arc<RwLock<BlsKeyPair>>,
+    pub fee_key: Arc<RwLock<SchnorrKeyPair>>,
 }
 
 impl Clone for ValidatorProxy {
     fn clone(&self) -> Self {
         Self {
             validator_address: Arc::clone(&self.validator_address),
-            fee_key: Arc::clone(&self.fee_key),
-            warm_key: Arc::clone(&self.warm_key),
             signing_key: Arc::clone(&self.signing_key),
+            voting_key: Arc::clone(&self.voting_key),
+            fee_key: Arc::clone(&self.fee_key),
         }
     }
 }
@@ -104,9 +104,9 @@ pub struct Validator<TNetwork: Network, TValidatorNetwork: ValidatorNetwork + 's
     env: Environment,
 
     validator_address: Arc<RwLock<Address>>,
-    fee_key: Arc<RwLock<KeyPair>>,
-    warm_key: Arc<RwLock<KeyPair>>,
-    signing_key: Arc<RwLock<bls::KeyPair>>,
+    signing_key: Arc<RwLock<SchnorrKeyPair>>,
+    voting_key: Arc<RwLock<BlsKeyPair>>,
+    fee_key: Arc<RwLock<SchnorrKeyPair>>,
 
     proposal_receiver: ProposalReceiver<TValidatorNetwork>,
 
@@ -140,9 +140,9 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         consensus: &Consensus<TNetwork>,
         network: Arc<TValidatorNetwork>,
         validator_address: Address,
-        signing_key: bls::KeyPair,
-        fee_key: KeyPair,
-        warm_key: KeyPair,
+        signing_key: SchnorrKeyPair,
+        voting_key: BlsKeyPair,
+        fee_key: SchnorrKeyPair,
         mempool_config: MempoolConfig,
     ) -> Self {
         let consensus_event_rx = consensus.subscribe_events();
@@ -184,9 +184,9 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             env,
 
             validator_address: Arc::new(RwLock::new(validator_address)),
-            fee_key: Arc::new(RwLock::new(fee_key)),
-            warm_key: Arc::new(RwLock::new(warm_key)),
             signing_key: Arc::new(RwLock::new(signing_key)),
+            voting_key: Arc::new(RwLock::new(voting_key)),
+            fee_key: Arc::new(RwLock::new(fee_key)),
 
             proposal_receiver,
 
@@ -265,9 +265,9 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         for (i, validator) in validators.iter().enumerate() {
             log::trace!(
                 "Matching against this current validator: {}",
-                &validator.validator_address
+                &validator.address
             );
-            if validator.validator_address == self.validator_address() {
+            if validator.address == self.validator_address() {
                 log::debug!("We are active on this epoch");
                 self.epoch_state = Some(ActiveEpochState {
                     validator_id: i as u16,
@@ -276,11 +276,11 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             }
         }
 
-        let validator_keys: Vec<CompressedPublicKey> = validators
+        let voting_keys: Vec<CompressedPublicKey> = validators
             .iter()
-            .map(|validator| validator.public_key.compressed().clone())
+            .map(|validator| validator.voting_key.compressed().clone())
             .collect();
-        let key = self.signing_key();
+        let key = self.voting_key();
         let network = Arc::clone(&self.network);
 
         // TODO might better be done without the task.
@@ -293,7 +293,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             {
                 error!("could not set up DHT record: {:?}", err);
             }
-            network.set_validators(validator_keys).await;
+            network.set_validators(voting_keys).await;
         });
     }
 
@@ -318,7 +318,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
 
         match blockchain.get_next_block_type(None) {
             BlockType::Macro => {
-                let block_producer = BlockProducer::new(self.signing_key());
+                let block_producer = BlockProducer::new(self.signing_key(), self.voting_key());
                 let active_validators = blockchain.current_validators().unwrap();
 
                 // Take the current state and see if it is applicable to the current height.
@@ -338,7 +338,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                     Arc::clone(&self.consensus.blockchain),
                     Arc::clone(&self.network),
                     block_producer,
-                    self.signing_key(),
+                    self.voting_key(),
                     self.validator_id(),
                     active_validators,
                     next_block_number,
@@ -366,6 +366,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                     Arc::clone(&self.mempool),
                     Arc::clone(&self.network),
                     self.signing_key(),
+                    self.voting_key(),
                     self.validator_id(),
                     fork_proofs,
                     prev_seed,
@@ -589,7 +590,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         let unpark_transaction = TransactionBuilder::new_unpark_validator(
             &self.fee_key(),
             self.validator_address(),
-            &self.warm_key(),
+            &self.signing_key(),
             Coin::ZERO,
             validity_start_height,
             blockchain.network_id(),
@@ -616,28 +617,28 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             .validator_id
     }
 
-    pub fn signing_key(&self) -> bls::KeyPair {
-        self.signing_key.read().clone()
-    }
-
     pub fn validator_address(&self) -> Address {
         self.validator_address.read().clone()
     }
 
-    pub fn fee_key(&self) -> KeyPair {
-        self.fee_key.read().clone()
+    pub fn voting_key(&self) -> BlsKeyPair {
+        self.voting_key.read().clone()
     }
 
-    pub fn warm_key(&self) -> KeyPair {
-        self.warm_key.read().clone()
+    pub fn signing_key(&self) -> SchnorrKeyPair {
+        self.signing_key.read().clone()
+    }
+
+    pub fn fee_key(&self) -> SchnorrKeyPair {
+        self.fee_key.read().clone()
     }
 
     pub fn proxy(&self) -> ValidatorProxy {
         ValidatorProxy {
             validator_address: Arc::clone(&self.validator_address),
-            fee_key: Arc::clone(&self.fee_key),
-            warm_key: Arc::clone(&self.warm_key),
             signing_key: Arc::clone(&self.signing_key),
+            voting_key: Arc::clone(&self.voting_key),
+            fee_key: Arc::clone(&self.fee_key),
         }
     }
 }

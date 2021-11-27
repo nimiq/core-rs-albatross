@@ -208,7 +208,7 @@ impl ViewChangeAggregation {
     pub async fn start<N: ValidatorNetwork + 'static>(
         mut view_change: ViewChange,
         mut previous_proof: Option<MultiSignature>,
-        signing_key: bls::KeyPair,
+        voting_key: bls::KeyPair,
         // TODO: This seems to be a SlotBand. Change this to a proper Validator ID.
         validator_id: u16,
         active_validators: Validators,
@@ -232,7 +232,7 @@ impl ViewChangeAggregation {
             );
             let signed_view_change = SignedViewChange::from_message(
                 view_change.clone(),
-                &signing_key.secret_key,
+                &voting_key.secret_key,
                 validator_id,
             );
 
@@ -298,7 +298,7 @@ impl ViewChangeAggregation {
                                 aggregated_public_key.aggregate(
                                     &active_validators
                                         .get_validator(signer as u16)
-                                        .public_key
+                                        .voting_key
                                         .uncompress()
                                         .expect("Could not uncompress lazyPublicKey"),
                                 );

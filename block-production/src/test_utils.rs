@@ -9,18 +9,20 @@ use nimiq_block::{
     ViewChangeProof,
 };
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, PushError, PushResult};
-use nimiq_bls::{AggregateSignature, KeyPair, SecretKey};
+use nimiq_bls::{AggregateSignature, KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
 use nimiq_collections::BitSet;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
 use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_keys::{KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey};
 use nimiq_primitives::policy;
 use nimiq_utils::time::OffsetTime;
 
 use crate::BlockProducer;
 
-/// Secret key of validator. Tests run with `genesis/src/genesis/unit-albatross.toml`
-const SECRET_KEY: &str = "196ffdb1a8acc7cbd76a251aeac0600a1d68b3aba1eba823b5e4dc5dbdcdc730afa752c05ab4f6ef8518384ad514f403c5a088a22b17bf1bc14f8ff8decc2a512c0a200f68d7bdf5a319b30356fe8d1d75ef510aed7a8660968c216c328a0000";
+/// Secret keys of validator. Tests run with `genesis/src/genesis/unit-albatross.toml`
+const SIGNING_KEY: &str = "041580cc67e66e9e08b68fd9e4c9deb68737168fbe7488de2638c2e906c2f5ad";
+const VOTING_KEY: &str = "196ffdb1a8acc7cbd76a251aeac0600a1d68b3aba1eba823b5e4dc5dbdcdc730afa752c05ab4f6ef8518384ad514f403c5a088a22b17bf1bc14f8ff8decc2a512c0a200f68d7bdf5a319b30356fe8d1d75ef510aed7a8660968c216c328a0000";
 
 pub struct TemporaryBlockProducer {
     pub blockchain: Arc<RwLock<Blockchain>>,
@@ -35,10 +37,13 @@ impl TemporaryBlockProducer {
             Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
         ));
 
-        let keypair = KeyPair::from(
-            SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap(),
+        let signing_key = SchnorrKeyPair::from(
+            SchnorrPrivateKey::deserialize_from_vec(&hex::decode(SIGNING_KEY).unwrap()).unwrap(),
         );
-        let producer: BlockProducer = BlockProducer::new(keypair);
+        let voting_key = BlsKeyPair::from(
+            BlsSecretKey::deserialize_from_vec(&hex::decode(VOTING_KEY).unwrap()).unwrap(),
+        );
+        let producer: BlockProducer = BlockProducer::new(signing_key, voting_key);
         TemporaryBlockProducer {
             blockchain,
             producer,
@@ -110,8 +115,8 @@ impl TemporaryBlockProducer {
         extrinsics: MacroBody,
         validator_merkle_root: Vec<u8>,
     ) -> MacroBlock {
-        let keypair = KeyPair::from(
-            SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap(),
+        let keypair = BlsKeyPair::from(
+            BlsSecretKey::deserialize_from_vec(&hex::decode(VOTING_KEY).unwrap()).unwrap(),
         );
 
         // Create a TendemrintVote instance out of known properties.
@@ -153,8 +158,8 @@ impl TemporaryBlockProducer {
     }
 
     pub fn create_view_change_proof(&self, view_number: u32) -> ViewChangeProof {
-        let keypair = KeyPair::from(
-            SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap(),
+        let keypair = BlsKeyPair::from(
+            BlsSecretKey::deserialize_from_vec(&hex::decode(VOTING_KEY).unwrap()).unwrap(),
         );
 
         let view_change = {

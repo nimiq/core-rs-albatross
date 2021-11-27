@@ -9,11 +9,13 @@ use rand::SeedableRng;
 use beserial::{Deserialize, Serialize};
 use nimiq_block::{Block, MicroBlock, MicroBody, MicroHeader};
 use nimiq_blockchain::Blockchain;
-use nimiq_bls::KeyPair as BLSKeyPair;
+use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_build_tools::genesis::GenesisBuilder;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_hash::Blake2bHash;
-use nimiq_keys::{Address, KeyPair, SecureGenerate};
+use nimiq_keys::{
+    Address, KeyPair as SchnorrKeyPair, PublicKey as SchnorrPublicKey, SecureGenerate,
+};
 use nimiq_mempool::config::MempoolConfig;
 use nimiq_mempool::mempool::Mempool;
 use nimiq_network_mock::{MockHub, MockId, MockNetwork, MockPeerId};
@@ -29,7 +31,7 @@ const NUM_TXNS_START_STOP: usize = 100;
 
 #[derive(Clone)]
 struct MempoolAccount {
-    keypair: KeyPair,
+    keypair: SchnorrKeyPair,
     address: Address,
 }
 
@@ -205,7 +207,7 @@ fn generate_accounts(
 
     for i in 0..balances.len() as usize {
         // Generate the txns_sender and txns_rec vectors to later generate transactions
-        let keypair = KeyPair::generate_default_csprng();
+        let keypair = SchnorrKeyPair::generate_default_csprng();
         let address = Address::from(&keypair.public);
         let mempool_account = MempoolAccount {
             keypair,
@@ -323,9 +325,9 @@ async fn push_same_tx_twice() {
 
     // Add a validator
     genesis_builder.with_genesis_validator(
-        Address::from(&KeyPair::generate(&mut rng)),
-        Address::from([0u8; 20]),
-        BLSKeyPair::generate(&mut rng).public_key,
+        Address::from(&SchnorrKeyPair::generate(&mut rng)),
+        SchnorrPublicKey::from([0u8; 32]),
+        BlsKeyPair::generate(&mut rng).public_key,
         Address::default(),
     );
 
@@ -462,9 +464,9 @@ async fn mempool_get_txn_max_size() {
 
     // Add a validator to genesis
     genesis_builder.with_genesis_validator(
-        Address::from(&KeyPair::generate(&mut rng)),
-        Address::from([0u8; 20]),
-        BLSKeyPair::generate(&mut rng).public_key,
+        Address::from(&SchnorrKeyPair::generate(&mut rng)),
+        SchnorrPublicKey::from([0u8; 32]),
+        BlsKeyPair::generate(&mut rng).public_key,
         Address::default(),
     );
 
@@ -536,9 +538,9 @@ async fn mempool_get_txn_ordered() {
 
     // Add a validator to genesis
     genesis_builder.with_genesis_validator(
-        Address::from(&KeyPair::generate(&mut rng)),
-        Address::from([0u8; 20]),
-        BLSKeyPair::generate(&mut rng).public_key,
+        Address::from(&SchnorrKeyPair::generate(&mut rng)),
+        SchnorrPublicKey::from([0u8; 32]),
+        BlsKeyPair::generate(&mut rng).public_key,
         Address::default(),
     );
 
@@ -613,9 +615,9 @@ async fn push_tx_with_insufficient_balance() {
 
     // Add a validator to genesis
     genesis_builder.with_genesis_validator(
-        Address::from(&KeyPair::generate(&mut rng)),
-        Address::from([0u8; 20]),
-        BLSKeyPair::generate(&mut rng).public_key,
+        Address::from(&SchnorrKeyPair::generate(&mut rng)),
+        SchnorrPublicKey::from([0u8; 32]),
+        BlsKeyPair::generate(&mut rng).public_key,
         Address::default(),
     );
 
@@ -680,9 +682,9 @@ async fn multiple_transactions_multiple_senders() {
 
     // Add a validator to genesis
     genesis_builder.with_genesis_validator(
-        Address::from(&KeyPair::generate(&mut rng)),
-        Address::from([0u8; 20]),
-        BLSKeyPair::generate(&mut rng).public_key,
+        Address::from(&SchnorrKeyPair::generate(&mut rng)),
+        SchnorrPublicKey::from([0u8; 32]),
+        BlsKeyPair::generate(&mut rng).public_key,
         Address::default(),
     );
 
@@ -756,9 +758,9 @@ async fn mempool_tps() {
 
     // Add validator to genesis
     genesis_builder.with_genesis_validator(
-        Address::from(&KeyPair::generate(&mut rng)),
-        Address::from([0u8; 20]),
-        BLSKeyPair::generate(&mut rng).public_key,
+        Address::from(&SchnorrKeyPair::generate(&mut rng)),
+        SchnorrPublicKey::from([0u8; 32]),
+        BlsKeyPair::generate(&mut rng).public_key,
         Address::default(),
     );
 
@@ -839,9 +841,9 @@ async fn multiple_start_stop() {
 
     // Add validator to genesis
     genesis_builder.with_genesis_validator(
-        Address::from(&KeyPair::generate(&mut rng)),
-        Address::from([0u8; 20]),
-        BLSKeyPair::generate(&mut rng).public_key,
+        Address::from(&SchnorrKeyPair::generate(&mut rng)),
+        SchnorrPublicKey::from([0u8; 32]),
+        BlsKeyPair::generate(&mut rng).public_key,
         Address::default(),
     );
 
@@ -978,9 +980,9 @@ async fn mempool_update() {
 
     // Add validator to genesis
     genesis_builder.with_genesis_validator(
-        Address::from(&KeyPair::generate(&mut rng)),
-        Address::from([0u8; 20]),
-        BLSKeyPair::generate(&mut rng).public_key,
+        Address::from(&SchnorrKeyPair::generate(&mut rng)),
+        SchnorrPublicKey::from([0u8; 32]),
+        BlsKeyPair::generate(&mut rng).public_key,
         Address::default(),
     );
 

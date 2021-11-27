@@ -4,7 +4,6 @@ use std::sync::Arc;
 
 use futures::stream::{BoxStream, Stream, StreamExt};
 use futures::task::{Context, Poll};
-use nimiq_primitives::slots::Validators;
 use parking_lot::RwLock;
 
 use beserial::{Deserialize, Serialize};
@@ -14,6 +13,7 @@ use nimiq_block::{
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::Blockchain;
 use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
+use nimiq_primitives::slots::Validators;
 use nimiq_tendermint::{
     Checkpoint, Step, TendermintOutsideDeps, TendermintReturn, TendermintState,
 };
@@ -67,7 +67,7 @@ impl ProduceMacroBlock {
         blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<TValidatorNetwork>,
         block_producer: BlockProducer,
-        signing_key: bls::KeyPair, // probably SecretKey is enough (it is for the handel part of it).
+        voting_key: bls::KeyPair, // probably SecretKey is enough (it is for the handel part of it).
         validator_id: u16,
         active_validators: Validators,
         block_height: u32,
@@ -83,7 +83,7 @@ impl ProduceMacroBlock {
         // create the TendermintOutsideDeps instance
         // Replace here with the actual OutSide Deps instead of the Mocked ones.
         let deps = TendermintInterface::new(
-            signing_key,
+            voting_key,
             validator_id,
             active_validators,
             block_height,

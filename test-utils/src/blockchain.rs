@@ -10,17 +10,19 @@ use nimiq_block::{
 };
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, PushResult};
-use nimiq_bls::{AggregateSignature, KeyPair, SecretKey};
+use nimiq_bls::{AggregateSignature, KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
 use nimiq_collections::BitSet;
 use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_keys::{KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey};
 use nimiq_nano_primitives::pk_tree_construct;
 use nimiq_primitives::policy;
 use nimiq_vrf::VrfSeed;
 
-/// Secret key of validator. Tests run with `genesis/src/genesis/unit-albatross.toml`
-pub const SECRET_KEY: &str = "196ffdb1a8acc7cbd76a251aeac0600a1d68b3aba1eba823b5e4dc5dbdcdc730afa752c05ab4f6ef8518384ad514f403c5a088a22b17bf1bc14f8ff8decc2a512c0a200f68d7bdf5a319b30356fe8d1d75ef510aed7a8660968c216c328a0000";
+/// Secret keys of validator. Tests run with `genesis/src/genesis/unit-albatross.toml`
+pub const SIGNING_KEY: &str = "041580cc67e66e9e08b68fd9e4c9deb68737168fbe7488de2638c2e906c2f5ad";
+pub const VOTING_KEY: &str = "196ffdb1a8acc7cbd76a251aeac0600a1d68b3aba1eba823b5e4dc5dbdcdc730afa752c05ab4f6ef8518384ad514f403c5a088a22b17bf1bc14f8ff8decc2a512c0a200f68d7bdf5a319b30356fe8d1d75ef510aed7a8660968c216c328a0000";
 
-// Produces a series of macro blocks (and the corresponding batches).
+/// Produces a series of macro blocks (and the corresponding batches).
 pub fn produce_macro_blocks(
     num_macro: usize,
     producer: &BlockProducer,
@@ -40,7 +42,7 @@ pub fn produce_macro_blocks(
         );
 
         let block = sign_macro_block(
-            &producer.validator_key,
+            &producer.voting_key,
             macro_block_proposal.header,
             macro_block_proposal.body,
         );
@@ -52,7 +54,7 @@ pub fn produce_macro_blocks(
     }
 }
 
-// Fill batch with micro blocks.
+/// Fill batch with micro blocks.
 pub fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<RwLock<Blockchain>>) {
     let init_height = blockchain.read().block_number();
 
@@ -81,9 +83,9 @@ pub fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<RwLock<Block
     assert_eq!(blockchain.read().block_number(), macro_block_number - 1);
 }
 
-// Signs a macro block proposal.
+/// Signs a macro block proposal.
 pub fn sign_macro_block(
-    keypair: &KeyPair,
+    keypair: &BlsKeyPair,
     header: MacroHeader,
     body: Option<MacroBody>,
 ) -> MacroBlock {
@@ -142,8 +144,7 @@ pub fn sign_view_change(
     block_number: u32,
     new_view_number: u32,
 ) -> ViewChangeProof {
-    let keypair =
-        KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
+    let keypair = voting_key();
 
     // Create the view change.
     let view_change = ViewChange {
@@ -173,4 +174,14 @@ pub fn sign_view_change(
 
     // Create and return view change proof.
     ViewChangeProof { sig: multisig }
+}
+
+pub fn voting_key() -> BlsKeyPair {
+    BlsKeyPair::from(BlsSecretKey::deserialize_from_vec(&hex::decode(VOTING_KEY).unwrap()).unwrap())
+}
+
+pub fn signing_key() -> SchnorrKeyPair {
+    SchnorrKeyPair::from(
+        SchnorrPrivateKey::deserialize_from_vec(&hex::decode(SIGNING_KEY).unwrap()).unwrap(),
+    )
 }

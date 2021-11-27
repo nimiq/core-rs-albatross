@@ -97,7 +97,11 @@ impl MacroBlock {
     /// Calculates the PKTree root from the given validators.
     pub fn create_pk_tree_root(validators: &Validators) -> Vec<u8> {
         // Get the public keys.
-        let public_keys = validators.to_pks().iter().map(|pk| pk.public_key).collect();
+        let public_keys = validators
+            .voting_keys()
+            .iter()
+            .map(|pk| pk.public_key)
+            .collect();
 
         // Create the tree
         pk_tree_construct(public_keys)
@@ -163,7 +167,7 @@ pub fn create_pk_tree_root(slots: &Validators) -> Vec<u8> {
                 // to the validator with index index
                 .get_validator(index as u16)
                 // then get its public key
-                .public_key
+                .voting_key
                 // uncompress it
                 .uncompress()
                 // this as well must succeed for the validator to work at all.

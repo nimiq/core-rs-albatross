@@ -10,7 +10,7 @@ use thiserror::Error;
 
 use bls::KeyPair as BlsKeyPair;
 
-use keys::{Address, KeyPair};
+use keys::{Address, KeyPair, PublicKey};
 use primitives::account::AccountType;
 use primitives::coin::Coin;
 use primitives::networks::NetworkId;
@@ -1339,8 +1339,8 @@ impl TransactionBuilder {
     ///                             sent from the account belonging to this key pair.
     ///  - `cold_key_pair`:         The key pair that will become the validator address. The data is
     ///                             signed using this key pair.
-    ///  - `warm_address`:          The address corresponding to the warm key used by the validator.
-    ///  - `validator_key_pair`:    The BLS key pair used by the validator.
+    ///  - `signing_key` :          The Schnorr signing key used by the validator.
+    ///  - `voting_key_pair`:       The BLS key pair used by the validator.
     ///  - `reward_address`:        The address to which the staking rewards are sent.
     ///  - `signal_data`:           The signal data showed by the validator.
     ///  - `fee`:                   Transaction fee.
@@ -1354,8 +1354,8 @@ impl TransactionBuilder {
     pub fn new_create_validator(
         key_pair: &KeyPair,
         cold_key_pair: &KeyPair,
-        warm_address: Address,
-        validator_key_pair: &BlsKeyPair,
+        signing_key: PublicKey,
+        voting_key_pair: &BlsKeyPair,
         reward_address: Address,
         signal_data: Option<Blake2bHash>,
         fee: Coin,
@@ -1363,12 +1363,7 @@ impl TransactionBuilder {
         network_id: NetworkId,
     ) -> Transaction {
         let mut recipient = Recipient::new_staking_builder();
-        recipient.create_validator(
-            warm_address,
-            validator_key_pair,
-            reward_address,
-            signal_data,
-        );
+        recipient.create_validator(signing_key, voting_key_pair, reward_address, signal_data);
 
         let mut builder = Self::new();
         builder
@@ -1399,11 +1394,10 @@ impl TransactionBuilder {
     ///                                fee is taken from the account belonging to this key pair.
     ///  - `cold_key_pair`:            The key pair that corresponds to the validator address. The
     ///                                data is signed using this key pair.
-    ///  - `new_warm_address`:         The address corresponding to the new warm key used by the
-    ///                                validator.
+    ///  - `new_signing_key`:          The new Schnorr signing key used by the validator.
     ///  - `new_reward_address`:       The new address to which the staking reward is sent.
     ///  - `new_signal_data`:          The new signal data showed by the validator.
-    ///  - `new_validator_key_pair`:   The new validator BLS key pair used by the validator.
+    ///  - `new_voting_key_pair`:      The new validator BLS key pair used by the validator.
     ///  - `fee`:                      Transaction fee.
     ///  - `validity_start_height`:    Block height from which this transaction is valid.
     ///  - `network_id`:               ID of network for which the transaction is valid.
@@ -1419,8 +1413,8 @@ impl TransactionBuilder {
     pub fn new_update_validator(
         key_pair: &KeyPair,
         cold_key_pair: &KeyPair,
-        new_warm_address: Option<Address>,
-        new_validator_key_pair: Option<&BlsKeyPair>,
+        new_signing_key: Option<PublicKey>,
+        new_voting_key_pair: Option<&BlsKeyPair>,
         new_reward_address: Option<Address>,
         new_signal_data: Option<Option<Blake2bHash>>,
         fee: Coin,
@@ -1429,8 +1423,8 @@ impl TransactionBuilder {
     ) -> Transaction {
         let mut recipient = Recipient::new_staking_builder();
         recipient.update_validator(
-            new_warm_address,
-            new_validator_key_pair,
+            new_signing_key,
+            new_voting_key_pair,
             new_reward_address,
             new_signal_data,
         );
@@ -1463,7 +1457,7 @@ impl TransactionBuilder {
     ///  - `key_pair`:              The key pair used to sign the transaction. The transaction fee
     ///                             is taken from the account belonging to this key pair.
     ///  - `validator_address`:     The validator address.
-    ///  - `warm_key_pair`:         The key pair that corresponds to the validator's warm address.
+    ///  - `signing_key_pair`:      The key pair that corresponds to the validator's signing key.
     ///                             The data is signed using this key pair.
     ///  - `fee`:                   Transaction fee.
     ///  - `validity_start_height`: Block height from which this transaction is valid.
@@ -1480,7 +1474,7 @@ impl TransactionBuilder {
     pub fn new_retire_validator(
         key_pair: &KeyPair,
         validator_address: Address,
-        warm_key_pair: &KeyPair,
+        signing_key_pair: &KeyPair,
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
@@ -1500,7 +1494,7 @@ impl TransactionBuilder {
         let proof_builder = builder.generate().unwrap();
         match proof_builder {
             TransactionProofBuilder::InStaking(mut builder) => {
-                builder.sign_with_key_pair(warm_key_pair);
+                builder.sign_with_key_pair(signing_key_pair);
                 let mut builder = builder.generate().unwrap().unwrap_basic();
                 builder.sign_with_key_pair(key_pair);
                 builder.generate().unwrap()
@@ -1516,7 +1510,7 @@ impl TransactionBuilder {
     ///  - `key_pair`:              The key pair used to sign the transaction. The transaction fee
     ///                             is taken from the account belonging to this key pair.
     ///  - `validator_address`:     The validator address.
-    ///  - `warm_key_pair`:         The key pair that corresponds to the validator's warm address.
+    ///  - `signing_key_pair`:      The key pair that corresponds to the validator's signing key.
     ///                             The data is signed using this key pair.
     ///  - `fee`:                   Transaction fee.
     ///  - `validity_start_height`: Block height from which this transaction is valid.
@@ -1533,7 +1527,7 @@ impl TransactionBuilder {
     pub fn new_reactivate_validator(
         key_pair: &KeyPair,
         validator_address: Address,
-        warm_key_pair: &KeyPair,
+        signing_key_pair: &KeyPair,
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
@@ -1553,7 +1547,7 @@ impl TransactionBuilder {
         let proof_builder = builder.generate().unwrap();
         match proof_builder {
             TransactionProofBuilder::InStaking(mut builder) => {
-                builder.sign_with_key_pair(warm_key_pair);
+                builder.sign_with_key_pair(signing_key_pair);
                 let mut builder = builder.generate().unwrap().unwrap_basic();
                 builder.sign_with_key_pair(key_pair);
                 builder.generate().unwrap()
@@ -1569,7 +1563,7 @@ impl TransactionBuilder {
     ///  - `key_pair`:              The key pair used to sign the transaction. The transaction fee
     ///                             is taken from the account belonging to this key pair.
     ///  - `validator_address`:     The validator address.
-    ///  - `warm_key_pair`:         The key pair that corresponds to the validator's warm address.
+    ///  - `signing_key_pair`:      The key pair that corresponds to the validator's signing key.
     ///                             The data is signed using this key pair.
     ///  - `fee`:                   Transaction fee.
     ///  - `validity_start_height`: Block height from which this transaction is valid.
@@ -1586,7 +1580,7 @@ impl TransactionBuilder {
     pub fn new_unpark_validator(
         key_pair: &KeyPair,
         validator_address: Address,
-        warm_key_pair: &KeyPair,
+        signing_key_pair: &KeyPair,
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
@@ -1606,7 +1600,7 @@ impl TransactionBuilder {
         let proof_builder = builder.generate().unwrap();
         match proof_builder {
             TransactionProofBuilder::InStaking(mut builder) => {
-                builder.sign_with_key_pair(warm_key_pair);
+                builder.sign_with_key_pair(signing_key_pair);
                 let mut builder = builder.generate().unwrap().unwrap_basic();
                 builder.sign_with_key_pair(key_pair);
                 builder.generate().unwrap()

@@ -71,17 +71,16 @@ impl Blockchain {
         }
 
         // Get the intended slot owner.
-        let (validator, _) = this
+        let (slot_owner, _) = this
             .get_slot_owner_at(block.block_number(), block.view_number(), Some(&read_txn))
             .expect("Couldn't calculate slot owner!");
 
-        let intended_slot_owner = validator.public_key.uncompress_unchecked();
-
         // Check the header.
+        let voting_key = slot_owner.voting_key.uncompress_unchecked();
         if let Err(e) = Blockchain::verify_block_header(
             this.deref(),
             &block.header(),
-            &intended_slot_owner,
+            &voting_key,
             Some(&read_txn),
             !trusted,
         ) {
@@ -94,7 +93,7 @@ impl Blockchain {
             &*this,
             &block.header(),
             &block.justification(),
-            &intended_slot_owner,
+            &slot_owner.signing_key,
             Some(&read_txn),
             !trusted,
         ) {
@@ -111,7 +110,7 @@ impl Blockchain {
         }
 
         // Detect forks.
-        if let Block::Micro(ref micro_block) = block {
+        if let Block::Micro(micro_block) = &block {
             // Check if there are two blocks in the same slot and with the same height. Since we already
             // verified the validator for the current slot, this is enough to check for fork proofs.
             // Note: We don't verify the justifications for the other blocks here, since they had to
@@ -144,14 +143,13 @@ impl Blockchain {
                     let micro_header2 = micro_block.header;
                     let justification2 = micro_block
                         .justification
-                        .as_ref()
                         .expect("Missing justification!")
                         .signature;
 
                     let proof = ForkProof {
                         header1: micro_header1.clone(),
                         header2: micro_header2,
-                        justification1: *justification1,
+                        justification1: justification1.clone(),
                         justification2,
                         prev_vrf_seed: prev_info.head.seed().clone(),
                     };

@@ -39,7 +39,7 @@ impl NanoBlockchain {
             .genesis_block
             .validators()
             .unwrap()
-            .to_pks()
+            .voting_keys()
             .iter()
             .map(|pk| pk.public_key)
             .collect();
@@ -51,7 +51,7 @@ impl NanoBlockchain {
         let final_public_keys = block
             .validators()
             .unwrap()
-            .to_pks()
+            .voting_keys()
             .iter()
             .map(|pk| pk.public_key)
             .collect();

@@ -36,6 +36,12 @@ impl Signature {
 
 impl Eq for Signature {}
 
+impl Default for Signature {
+    fn default() -> Self {
+        Signature(ed25519_zebra::Signature::from([0u8; 64]))
+    }
+}
+
 impl PartialEq for Signature {
     fn eq(&self, other: &Self) -> bool {
         <[u8; 64]>::from(self.0) == <[u8; 64]>::from(other.0)
