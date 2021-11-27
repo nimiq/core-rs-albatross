@@ -48,7 +48,7 @@ big_array! { BigArray; }
 /// https://www.signal.org/docs/specifications/xeddsa/#vxeddsa
 pub struct VrfSeed {
     #[cfg_attr(feature = "serde-derive", serde(with = "BigArray"))]
-    signature: [u8; 96],
+    pub(crate) signature: [u8; 96],
 }
 
 impl VrfSeed {
@@ -150,6 +150,9 @@ impl VrfSeed {
     // Initializes a VRF RNG, for a given use case, from the current VRF Seed. We assume that the
     // VRF Seed is valid, if it is not this function might panic.
     pub fn rng(&self, use_case: VrfUseCase) -> VrfRng {
+        // The use case cannot be `Seed`. That one is reserved for the `sign_next` method.
+        assert_ne!(use_case, VrfUseCase::Seed);
+
         // We follow the specifications for VXEdDSA.
         // https://www.signal.org/docs/specifications/xeddsa/#vxeddsa
 
@@ -236,5 +239,83 @@ impl VrfRng {
 impl Rng for VrfRng {
     fn next_u64(&mut self) -> u64 {
         self.next_hash().as_bytes().read_u64::<BigEndian>().unwrap()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use nimiq_keys::SecureGenerate;
+
+    use super::*;
+
+    #[test]
+    fn vrf_works_fuzzy() {
+        let mut rng = rand::thread_rng();
+        let mut prev_seed = VrfSeed::default();
+
+        for _ in 0..1000 {
+            let key_pair = KeyPair::generate(&mut rng);
+
+            let next_seed = prev_seed.sign_next(&key_pair);
+
+            assert!(next_seed.verify(&prev_seed, &key_pair.public).is_ok());
+
+            next_seed.rng(VrfUseCase::ValidatorSlotSelection);
+
+            prev_seed = next_seed;
+        }
+    }
+
+    #[test]
+    fn wrong_key_pair_fuzzy() {
+        let mut rng = rand::thread_rng();
+        let key_pair = KeyPair::generate(&mut rng);
+        let prev_seed = VrfSeed::default();
+
+        let next_seed = prev_seed.sign_next(&key_pair);
+
+        for _ in 0..1000 {
+            let fake_pk = KeyPair::generate(&mut rng).public;
+
+            assert_eq!(
+                next_seed.verify(&prev_seed, &fake_pk),
+                Err(VrfError::Forged)
+            );
+        }
+    }
+
+    #[test]
+    fn wrong_prev_seed_fuzzy() {
+        let mut rng = rand::thread_rng();
+        let key_pair = KeyPair::generate(&mut rng);
+        let prev_seed = VrfSeed::default();
+
+        let next_seed = prev_seed.sign_next(&key_pair);
+
+        for _ in 0..1000 {
+            let mut bytes = [0u8; 96];
+            rng.fill_bytes(&mut bytes);
+            let fake_seed = VrfSeed { signature: bytes };
+
+            assert_eq!(
+                next_seed.verify(&fake_seed, &key_pair.public),
+                Err(VrfError::Forged)
+            );
+        }
+    }
+
+    #[test]
+    fn wrong_seed_fuzzy() {
+        let mut rng = rand::thread_rng();
+        let key_pair = KeyPair::generate(&mut rng);
+        let prev_seed = VrfSeed::default();
+
+        for _ in 0..1000 {
+            let mut bytes = [0u8; 96];
+            rng.fill_bytes(&mut bytes);
+            let fake_seed = VrfSeed { signature: bytes };
+
+            assert!(fake_seed.verify(&prev_seed, &key_pair.public).is_err());
+        }
     }
 }
