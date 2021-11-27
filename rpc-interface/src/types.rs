@@ -684,7 +684,7 @@ impl Validator {
     ) -> Self {
         Validator {
             address: validator.address.clone(),
-            signing_key: validator.signing_key.clone(),
+            signing_key: validator.signing_key,
             voting_key: validator.voting_key.clone(),
             reward_address: validator.reward_address.clone(),
             signal_data: validator.signal_data.clone(),

@@ -149,7 +149,7 @@ impl ClientInner {
                 // Load validator address
                 let validator_address = validator_config.validator_address;
 
-                // Load warm key (before we give away ownership of the storage config)
+                // Load signing key (before we give away ownership of the storage config)
                 let signing_key = config.storage.signing_keypair()?;
 
                 // Load validator key (before we give away ownership of the storage config)

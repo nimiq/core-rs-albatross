@@ -303,7 +303,7 @@ impl GenesisBuilder {
                 &accounts.tree,
                 txn,
                 &validator.validator_address,
-                validator.signing_key.clone(),
+                validator.signing_key,
                 validator.voting_key.compress(),
                 validator.reward_address.clone(),
                 None,

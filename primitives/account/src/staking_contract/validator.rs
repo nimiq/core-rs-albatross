@@ -190,7 +190,7 @@ impl StakingContract {
 
         // Create receipt now.
         let receipt = UpdateValidatorReceipt {
-            old_signing_key: validator.signing_key.clone(),
+            old_signing_key: validator.signing_key,
             old_voting_key: validator.voting_key.clone(),
             old_reward_address: validator.reward_address.clone(),
             old_signal_data: validator.signal_data.clone(),
