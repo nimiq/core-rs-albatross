@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
+use std::time::{Duration, Instant};
 
 use futures::task::{Context, Poll};
 use futures::{FutureExt, Stream, StreamExt};
@@ -11,6 +12,7 @@ use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::{network::NetworkEvent, peer::Peer};
 
 use crate::consensus_agent::ConsensusAgent;
+use crate::sync::history::HistorySyncReturn;
 use crate::sync::sync_queue::SyncQueue;
 
 pub trait RequestComponent<P: Peer>: Stream<Item = RequestComponentEvent> + Unpin {
@@ -33,7 +35,7 @@ pub enum RequestComponentEvent {
 }
 
 pub trait HistorySyncStream<TPeer: Peer>:
-    Stream<Item = Arc<ConsensusAgent<TPeer>>> + Unpin + Send
+    Stream<Item = HistorySyncReturn<TPeer>> + Unpin + Send
 {
     fn add_agent(&self, agent: Arc<ConsensusAgent<TPeer>>);
 }
@@ -47,15 +49,19 @@ pub trait HistorySyncStream<TPeer: Peer>:
 ///
 /// Outside has a request blocks method, which doesn’t return the blocks.
 /// The blocks instead are returned by polling the component.
-pub struct BlockRequestComponent<TPeer: Peer> {
+pub struct BlockRequestComponent<TPeer: Peer + 'static> {
     sync_queue: SyncQueue<TPeer, (Blake2bHash, Vec<Blake2bHash>), Vec<Block>>, // requesting missing blocks from peers
     sync_method: Pin<Box<dyn HistorySyncStream<TPeer>>>,
-    agents: HashMap<Arc<TPeer>, Arc<ConsensusAgent<TPeer>>>, // this map holds the strong references to connected peers
+    agents: HashMap<Arc<TPeer>, Arc<ConsensusAgent<TPeer>>>, // this map holds the strong references to up-to-date peers
+    outdated_agents: HashMap<Arc<TPeer>, Arc<ConsensusAgent<TPeer>>>, //
+    outdated_timeouts: Vec<(Arc<TPeer>, Instant)>,
     network_event_rx: BroadcastStream<NetworkEvent<TPeer>>,
 }
 
 impl<TPeer: Peer + 'static> BlockRequestComponent<TPeer> {
     const NUM_PENDING_BLOCKS: usize = 5;
+
+    const CHECK_OUTDATED_TIMEOUT: Duration = Duration::from_secs(20);
 
     pub fn new(
         sync_method: Pin<Box<dyn HistorySyncStream<TPeer>>>,
@@ -82,7 +88,21 @@ impl<TPeer: Peer + 'static> BlockRequestComponent<TPeer> {
                 },
             ),
             agents: Default::default(),
+            outdated_agents: Default::default(),
+            outdated_timeouts: Default::default(),
             network_event_rx,
+        }
+    }
+
+    /// Adds all outdated peers that were checked more than TIMEOUT ago to history sync. History sync will do a
+    fn check_peers_up_to_date(&mut self) {
+        let peers_todo = self.outdated_timeouts.drain_filter(|(_, last_checked)| {
+            last_checked.elapsed() >= Self::CHECK_OUTDATED_TIMEOUT
+        });
+        for (peer, _) in peers_todo {
+            debug!("Adding outdated peer {:?} to history sync", peer.id());
+            let agent = self.outdated_agents.remove(&peer).unwrap();
+            self.sync_method.add_agent(agent);
         }
     }
 }
@@ -126,9 +146,24 @@ impl<TPeer: Peer + 'static> Stream for BlockRequestComponent<TPeer> {
         }
 
         // 2. Poll self.sync_method and add new peers to self.sync_queue.
-        while let Poll::Ready(Some(result)) = self.sync_method.poll_next_unpin(cx) {
-            self.sync_queue.add_peer(Arc::downgrade(&result));
-            self.agents.insert(Arc::clone(&result.peer), result);
+        while let Poll::Ready(result) = self.sync_method.poll_next_unpin(cx) {
+            match result {
+                Some(HistorySyncReturn::Good(peer)) => {
+                    debug!("Adding peer {:?} into follow mode", peer.peer.id());
+                    self.sync_queue.add_peer(Arc::downgrade(&peer));
+                    self.agents.insert(Arc::clone(&peer.peer), peer);
+                }
+                Some(HistorySyncReturn::Outdated(peer)) => {
+                    debug!(
+                        "History sync returned outdated peer {:?}. Waiting.",
+                        peer.peer.id()
+                    );
+                    self.outdated_timeouts
+                        .push((Arc::clone(&peer.peer), Instant::now()));
+                    self.outdated_agents.insert(Arc::clone(&peer.peer), peer);
+                }
+                None => {}
+            }
         }
 
         // 3. Poll self.sync_queue, return results.
@@ -146,6 +181,8 @@ impl<TPeer: Peer + 'static> Stream for BlockRequestComponent<TPeer> {
                 }
             }
         }
+
+        self.check_peers_up_to_date();
 
         Poll::Pending
     }

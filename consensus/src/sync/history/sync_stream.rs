@@ -12,7 +12,7 @@ use nimiq_network_interface::prelude::{Network, NetworkEvent, Peer};
 
 use crate::consensus_agent::ConsensusAgent;
 use crate::sync::history::cluster::{SyncCluster, SyncClusterResult};
-use crate::sync::history::sync::Job;
+use crate::sync::history::sync::{HistorySyncReturn, Job};
 use crate::sync::history::HistorySync;
 use crate::sync::request_component::HistorySyncStream;
 
@@ -20,7 +20,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
     fn poll_network_events(
         &mut self,
         cx: &mut Context<'_>,
-    ) -> Poll<Option<Arc<ConsensusAgent<TNetwork::PeerType>>>> {
+    ) -> Poll<Option<HistorySyncReturn<TNetwork::PeerType>>> {
         while let Poll::Ready(Some(result)) = self.network_event_rx.poll_next_unpin(cx) {
             match result {
                 Ok(NetworkEvent::PeerLeft(peer)) => {
@@ -45,7 +45,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
     fn poll_epoch_ids(
         &mut self,
         cx: &mut Context<'_>,
-    ) -> Poll<Option<Arc<ConsensusAgent<TNetwork::PeerType>>>> {
+    ) -> Poll<Option<HistorySyncReturn<TNetwork::PeerType>>> {
         // TODO We might want to not send an epoch_id request in the first place if we're at the
         //  cluster limit.
         while self.epoch_clusters.len() < Self::MAX_CLUSTERS {
@@ -64,17 +64,14 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                         "Peer is behind or on different chain: {:?}",
                         epoch_ids.sender.peer.id()
                     );
-                    // TODO Mark peer as useless.
-                    // FIXME Emit peer here once the consumer understands useless peers.
-                    //return Poll::Ready(Some(epoch_ids.sender));
+                    return Poll::Ready(Some(HistorySyncReturn::Outdated(epoch_ids.sender)));
                 } else if epoch_ids.ids.is_empty() && epoch_ids.checkpoint_id.is_none() {
                     // We are synced with this peer.
                     debug!(
                         "Finished syncing with peer: {:?}",
                         epoch_ids.sender.peer.id()
                     );
-                    // TODO Mark peer as useful
-                    return Poll::Ready(Some(epoch_ids.sender));
+                    return Poll::Ready(Some(HistorySyncReturn::Good(epoch_ids.sender)));
                 }
 
                 self.cluster_epoch_ids(epoch_ids);
@@ -218,7 +215,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
 }
 
 impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
-    type Item = Arc<ConsensusAgent<TNetwork::PeerType>>;
+    type Item = HistorySyncReturn<TNetwork::PeerType>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         store_waker!(self, waker, cx);

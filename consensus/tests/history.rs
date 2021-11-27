@@ -11,7 +11,7 @@ use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_consensus::consensus::Consensus;
 use nimiq_consensus::consensus_agent::ConsensusAgent;
 use nimiq_consensus::messages::RequestBlockHashesFilter;
-use nimiq_consensus::sync::history::HistorySync;
+use nimiq_consensus::sync::history::{HistorySync, HistorySyncReturn};
 use nimiq_consensus::sync::request_component::HistorySyncStream;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
@@ -30,7 +30,7 @@ impl<TNetwork: Network> HistorySyncStream<TNetwork::PeerType> for MockHistorySyn
 }
 
 impl<TNetwork: Network> Stream for MockHistorySyncStream<TNetwork> {
-    type Item = Arc<ConsensusAgent<TNetwork::PeerType>>;
+    type Item = HistorySyncReturn<TNetwork::PeerType>;
 
     fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         Poll::Pending

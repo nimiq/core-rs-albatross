@@ -61,6 +61,11 @@ pub struct HistorySync<TNetwork: Network> {
     pub(crate) waker: Option<Waker>,
 }
 
+pub enum HistorySyncReturn<TPeer: Peer> {
+    Good(Arc<ConsensusAgent<TPeer>>),
+    Outdated(Arc<ConsensusAgent<TPeer>>),
+}
+
 impl<TNetwork: Network> HistorySync<TNetwork> {
     pub(crate) const MAX_CLUSTERS: usize = 100;
     pub(crate) const MAX_QUEUED_JOBS: usize = 4;
