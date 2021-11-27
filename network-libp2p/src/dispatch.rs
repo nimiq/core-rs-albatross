@@ -197,7 +197,7 @@ where
 
                 // End of stream. So we terminate the future
                 Poll::Ready(None) => {
-                    log::warn!("end of stream");
+                    log::debug!("end of stream");
                     return Poll::Ready(Ok(()));
                 }
 

@@ -270,10 +270,12 @@ impl ProtocolsHandler for ConnectionPoolHandler {
 
                     Poll::Ready(Ok(())) => {
                         // The message stream ended.
-                        log::warn!("Remote closed connection");
+                        log::debug!("Remote closed connection");
 
-                        return Poll::Ready(ProtocolsHandlerEvent::Close(
-                            HandlerError::ConnectionClosed {
+                        // Gracefully close the connection
+                        return Poll::Ready(ProtocolsHandlerEvent::Custom(
+                            HandlerOutEvent::PeerLeft {
+                                peer_id: peer.id,
                                 reason: CloseReason::RemoteClosed,
                             },
                         ));
