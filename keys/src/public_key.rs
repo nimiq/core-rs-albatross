@@ -14,7 +14,7 @@ use crate::errors::{KeysError, ParseError};
 use crate::{PrivateKey, Signature};
 
 #[derive(Clone, Copy)]
-pub struct PublicKey(pub(super) ed25519_zebra::VerificationKeyBytes);
+pub struct PublicKey(pub ed25519_zebra::VerificationKeyBytes);
 
 impl PublicKey {
     pub const SIZE: usize = 32;

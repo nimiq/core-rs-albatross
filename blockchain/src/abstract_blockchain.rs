@@ -205,7 +205,7 @@ pub trait AbstractBlockchain {
             )
         })?;
         // RNG for slot selection
-        let mut rng = seed.rng(VrfUseCase::SlotSelection);
+        let mut rng = seed.rng(VrfUseCase::ViewSlotSelection);
 
         // Create a list of viable slots.
         let mut slots = vec![];

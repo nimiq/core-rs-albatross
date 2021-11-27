@@ -1,6 +1,6 @@
 [package]
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
-description = "Verifiable Random functions based on BLS12-381 signatures"
+description = "Verifiable Random Function based on VXEdDSA"
 documentation = "https://github.com/nimiq/core-rs-albatross"
 homepage = "https://github.com/nimiq/core-rs-albatross"
 license = "MIT/Apache-2.0"
@@ -11,13 +11,16 @@ edition = "2021"
 
 [dependencies]
 byteorder = "1.3"
+curve25519-dalek = "3"
 num-traits = "0.2"
+rand = "0.8"
 serde = { version = "1.0", features = ["derive"], optional = true }
+serde-big-array = { version = "0.3.2", optional = true }
+sha2 = "0.9"
 
 beserial = { path = "../beserial" }
-beserial_derive = { path = "../beserial/beserial_derive" }
-nimiq-bls = { path = "../bls", features = ["beserial"]}
 nimiq-hash = { path = "../hash" }
+nimiq-keys = { path = "../keys" }
 
 [features]
-serde-derive = ["serde", "nimiq-bls/serde-derive"]
+serde-derive = ["serde", "serde-big-array"]

@@ -12,7 +12,7 @@ use utils::key_rng::SecureGenerate;
 
 use crate::errors::{KeysError, ParseError};
 
-pub struct PrivateKey(pub(super) ed25519_zebra::SigningKey);
+pub struct PrivateKey(pub ed25519_zebra::SigningKey);
 
 impl PrivateKey {
     pub const SIZE: usize = 32;

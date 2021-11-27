@@ -18,7 +18,7 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 curve25519-dalek = "3"
-ed25519-zebra = "3.0.0"
+ed25519-zebra = { git = "https://github.com/nimiq/ed25519-zebra" }
 data-encoding = "2.1"
 thiserror = "1.0"
 hex = "0.4"

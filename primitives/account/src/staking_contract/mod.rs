@@ -240,7 +240,7 @@ impl StakingContract {
             validator_stakes.push(u64::from(*coin));
         }
 
-        let mut rng = seed.rng(VrfUseCase::ValidatorSelection);
+        let mut rng = seed.rng(VrfUseCase::ValidatorSlotSelection);
 
         let lookup = AliasMethod::new(validator_stakes);
 
