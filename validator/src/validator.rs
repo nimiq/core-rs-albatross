@@ -238,7 +238,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         // Check if the transaction was sent
         if let Some(parking_state) = &self.parking_state {
             // Check that the transaction was sent in the validity window
-            let staking_state = self.get_staking_state();
+            let staking_state = self.get_staking_state(&*blockchain);
             if staking_state == ValidatorStakingState::Parked
                 && blockchain.block_number()
                     >= parking_state.park_tx_validity_window_start + policy::EPOCH_LENGTH
@@ -549,41 +549,38 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         self.epoch_state.is_some()
     }
 
-    fn get_staking_state(&self) -> ValidatorStakingState {
-        let blockchain = self.consensus.blockchain.read();
+    fn get_staking_state(&self, blockchain: &Blockchain) -> ValidatorStakingState {
         let accounts_tree = &blockchain.state().accounts.tree;
         let db_txn = blockchain.read_transaction();
 
         // First, check if the validator is parked.
+        let validator_address = self.validator_address();
         let staking_contract = StakingContract::get_staking_contract(accounts_tree, &db_txn);
-        if staking_contract
-            .parked_set
-            .contains(&self.validator_address())
+        if staking_contract.parked_set.contains(&validator_address)
             || staking_contract
                 .current_disabled_slots
-                .contains_key(&self.validator_address())
+                .contains_key(&validator_address)
             || staking_contract
                 .previous_disabled_slots
-                .contains_key(&self.validator_address())
+                .contains_key(&validator_address)
         {
             return ValidatorStakingState::Parked;
         }
 
         if let Some(validator) =
-            StakingContract::get_validator(accounts_tree, &db_txn, &self.validator_address())
+            StakingContract::get_validator(accounts_tree, &db_txn, &validator_address)
         {
             if validator.inactivity_flag.is_some() {
-                return ValidatorStakingState::Inactive;
+                ValidatorStakingState::Inactive
+            } else {
+                ValidatorStakingState::Active
             }
-            ValidatorStakingState::Active
         } else {
             ValidatorStakingState::NoStake
         }
     }
 
-    fn unpark(&mut self) {
-        let blockchain = self.consensus.blockchain.read();
-
+    fn unpark(&self, blockchain: &Blockchain) -> ParkingState {
         // TODO: Get the last view change height instead of the current height
         let validity_start_height = blockchain.block_number();
 
@@ -595,11 +592,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             validity_start_height,
             blockchain.network_id(),
         );
-
-        self.parking_state = Some(ParkingState {
-            park_tx_hash: unpark_transaction.hash(),
-            park_tx_validity_window_start: validity_start_height,
-        });
+        let tx_hash = unpark_transaction.hash();
 
         let cn = self.consensus.clone();
         tokio::spawn(async move {
@@ -608,6 +601,11 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                 error!("Failed to send unpark transaction");
             }
         });
+
+        ParkingState {
+            park_tx_hash: tx_hash,
+            park_tx_validity_window_start: validity_start_height,
+        }
     }
 
     pub fn validator_id(&self) -> u16 {
@@ -705,13 +703,17 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Future
 
         // Once consensus is established, check the validator staking state.
         if self.consensus.is_established() {
-            match self.get_staking_state() {
+            let blockchain = self.consensus.blockchain.read();
+            match self.get_staking_state(&*blockchain) {
                 ValidatorStakingState::Parked => {
                     if self.parking_state.is_none() {
-                        self.unpark();
+                        let parking_state = self.unpark(&*blockchain);
+                        drop(blockchain);
+                        self.parking_state = Some(parking_state);
                     }
                 }
                 ValidatorStakingState::Active => {
+                    drop(blockchain);
                     if self.parking_state.is_some() {
                         self.parking_state = None;
                     }
