@@ -34,7 +34,7 @@ jobs:
     - uses: actions-rs/cargo@v1
       with:
         command: build
-    - name: Executes the 4 validators reconnecting scenario
+    - name: Executes the test
       run: |          
           bash scripts/devnet/devnet.sh
     - name: Archive test results
@@ -71,7 +71,7 @@ jobs:
     - uses: actions-rs/cargo@v1
       with:
         command: build
-    - name: Executes the 4 validators scenario where 2 of them are simultaneously down
+    - name: Executes the test
       run: |
           bash scripts/devnet/devnet.sh -k 2
     - name: Archive test results
@@ -108,7 +108,7 @@ jobs:
     - uses: actions-rs/cargo@v1
       with:
         command: build
-    - name: Executes the 4 validators reconnecting scenario eraseing their database
+    - name: Executes the test
       run: |          
           bash scripts/devnet/devnet.sh -d
     - name: Archive test results
@@ -145,7 +145,7 @@ jobs:
     - uses: actions-rs/cargo@v1
       with:
         command: build
-    - name: Executes the 4 validators scenario with the spammer
+    - name: Executes the test
       run: |
           bash scripts/devnet/devnet.sh -s 500
     - name: Archive test results
