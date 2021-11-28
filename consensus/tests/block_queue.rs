@@ -369,9 +369,10 @@ async fn send_invalid_block() {
     );
 
     let bc = blockchain2.upgradable_read();
+    let timestamp = bc.time.now();
     let block1 = Block::Micro(producer.next_micro_block(
         &bc,
-        bc.time.now() + 100000,
+        timestamp + 100000,
         0,
         None,
         vec![],
@@ -384,15 +385,10 @@ async fn send_invalid_block() {
     // Block2's timestamp is less than Block1's timestamp, so Block 2 will be rejected by the blockchain
     let block2 = {
         let bc = blockchain2.read();
-        Block::Micro(producer.next_micro_block(
-            &bc,
-            bc.time.now(),
-            0,
-            None,
-            vec![],
-            vec![],
-            vec![0x42],
-        ))
+        let mut micro_block =
+            producer.next_micro_block(&bc, timestamp, 0, None, vec![], vec![], vec![0x42]);
+        micro_block.header.timestamp = timestamp;
+        Block::Micro(micro_block)
     };
 
     let mock_id = MockId::new(hub.new_address().into());

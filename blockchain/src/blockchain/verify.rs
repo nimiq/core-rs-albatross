@@ -61,7 +61,7 @@ impl Blockchain {
 
         // Check that the current block timestamp is equal or greater than the timestamp of the
         // previous block.
-        if prev_info.head.timestamp() >= header.timestamp() {
+        if prev_info.head.timestamp() > header.timestamp() {
             warn!("Rejecting block - block timestamp precedes parent timestamp");
             return Err(PushError::InvalidSuccessor);
         }
