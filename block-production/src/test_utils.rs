@@ -103,7 +103,7 @@ impl TemporaryBlockProducer {
             ))
         };
 
-        // drop the ock before pushing the block as that will acquire write eventually
+        // drop the lock before pushing the block as that will acquire write eventually
         drop(blockchain);
 
         assert_eq!(self.push(block.clone()), Ok(PushResult::Extended));
@@ -119,7 +119,7 @@ impl TemporaryBlockProducer {
             BlsSecretKey::deserialize_from_vec(&hex::decode(VOTING_KEY).unwrap()).unwrap(),
         );
 
-        // Create a TendemrintVote instance out of known properties.
+        // Create a TendermintVote instance out of known properties.
         // round_number is for now fixed at 0 for tests, but it could be anything,
         // as long as the TendermintProof further down this function does use the same round_number.
         let vote = TendermintVote {
@@ -167,7 +167,7 @@ impl TemporaryBlockProducer {
             ViewChange {
                 block_number: blockchain.block_number() + 1,
                 new_view_number: view_number,
-                prev_seed: blockchain.head().seed().clone(),
+                prev_seed: blockchain.head().seed().entropy(),
             }
         };
 

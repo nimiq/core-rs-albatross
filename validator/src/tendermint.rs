@@ -217,7 +217,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
         &mut self,
         round: u32,
     ) -> Result<ProposalResult<Self::ProposalTy>, TendermintError> {
-        let (timeout, validator_id, validator_key, expected_height) = {
+        let (timeout, validator_id, voting_key, signing_key, expected_height) = {
             let blockchain = self.blockchain.read();
 
             let expected_height = blockchain.block_number() + 1;
@@ -235,7 +235,8 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
                 .get_band_from_slot(slot_number);
 
             // Get the validator key.
-            let validator_key = *slot.voting_key.uncompress_unchecked();
+            let voting_key = slot.voting_key.uncompress_unchecked().clone();
+            let signing_key = slot.signing_key;
 
             // Calculate the timeout duration.
             let timeout = Duration::from_millis(
@@ -250,13 +251,19 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
                 &timeout
             );
 
-            (timeout, validator_id, validator_key, expected_height)
+            (
+                timeout,
+                validator_id,
+                voting_key,
+                signing_key,
+                expected_height,
+            )
         };
 
         // This waits for a proposal from the proposer until it timeouts.
         let await_res = tokio::time::timeout(
             timeout,
-            self.await_proposal_loop(validator_id, &validator_key, expected_height, round),
+            self.await_proposal_loop(validator_id, &voting_key, expected_height, round),
         )
         .await;
 
@@ -276,17 +283,16 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
             let header = proposal.value;
             let valid_round = proposal.valid_round;
 
-            // In case the proposal has a valid round, the original proposer signed the vrfseed,
+            // In case the proposal has a valid round, the original proposer signed the VRF Seed,
             // so the original slot owners key must be retrieved for header verification.
-            let key = if let Some(r) = valid_round {
+            let vrf_key = if let Some(r) = valid_round {
                 let (valid_round_slot, _) = blockchain
                     .get_slot_owner_at(expected_height, r, None)
                     .expect("Couldn't find slot owner!");
 
-                let key = *valid_round_slot.voting_key.uncompress_unchecked();
-                key
+                valid_round_slot.signing_key
             } else {
-                validator_key
+                signing_key
             };
 
             // Check the validity of the block header. If it is invalid, we return a proposal timeout
@@ -294,7 +300,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
             if Blockchain::verify_block_header(
                 blockchain.deref(),
                 &BlockHeader::Macro(header.clone()),
-                &key,
+                &vrf_key,
                 None,
                 true,
             )

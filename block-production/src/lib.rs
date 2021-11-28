@@ -58,10 +58,7 @@ impl BlockProducer {
 
         // Calculate the seed for this block by signing the previous block seed with the validator
         // key.
-        let seed = blockchain
-            .head()
-            .seed()
-            .sign_next(&self.voting_key.secret_key);
+        let seed = blockchain.head().seed().sign_next(&self.signing_key);
 
         // Sort the transactions.
         transactions.sort_unstable();
@@ -170,10 +167,7 @@ impl BlockProducer {
 
         // Calculate the seed for this block by signing the previous block seed with the validator
         // key.
-        let seed = blockchain
-            .head()
-            .seed()
-            .sign_next(&self.voting_key.secret_key);
+        let seed = blockchain.head().seed().sign_next(&self.signing_key);
 
         // Create the header for the macro block without the state root and the transactions root.
         // We need several fields of this header in order to calculate the transactions and the

@@ -8,20 +8,21 @@ use time::OffsetDateTime;
 use toml::de::Error as TomlError;
 
 use account::{Account, AccountError, Accounts, AccountsList, BasicAccount, StakingContract};
-use beserial::{Deserialize, Serialize, SerializingError};
+use beserial::{Serialize, SerializingError};
 use block::{Block, MacroBlock, MacroBody, MacroHeader};
-use bls::{PublicKey as BlsPublicKey, SecretKey as BlsSecretKey};
+use bls::PublicKey as BlsPublicKey;
 use database::volatile::{VolatileDatabaseError, VolatileEnvironment};
 use database::WriteTransaction;
-use hash::{Blake2bHash, Blake2sHasher, Hash, Hasher};
-use keys::{Address, PublicKey as SchnorrPublicKey};
+use hash::{Blake2bHash, Hash};
+use keys::{
+    Address, KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey,
+    PublicKey as SchnorrPublicKey,
+};
 use nimiq_trie::key_nibbles::KeyNibbles;
 use primitives::coin::Coin;
 use vrf::VrfSeed;
 
 mod config;
-
-const DEFAULT_SIGNING_KEY: [u8; 96] = [0u8; 96];
 
 #[derive(Debug, Error)]
 pub enum GenesisBuilderError {
@@ -49,7 +50,7 @@ pub struct GenesisInfo {
 }
 
 pub struct GenesisBuilder {
-    pub signing_key: Option<BlsSecretKey>,
+    pub signing_key: Option<SchnorrPrivateKey>,
     pub seed_message: Option<String>,
     pub timestamp: Option<OffsetDateTime>,
     pub validators: Vec<config::GenesisValidator>,
@@ -76,11 +77,11 @@ impl GenesisBuilder {
     }
 
     pub fn with_defaults(&mut self) -> &mut Self {
-        self.signing_key = Some(BlsSecretKey::deserialize_from_vec(&DEFAULT_SIGNING_KEY).unwrap());
+        self.signing_key = Some(SchnorrPrivateKey::default());
         self
     }
 
-    pub fn with_signing_key(&mut self, secret_key: BlsSecretKey) -> &mut Self {
+    pub fn with_signing_key(&mut self, secret_key: SchnorrPrivateKey) -> &mut Self {
         self.signing_key = Some(secret_key);
         self
     }
@@ -223,25 +224,18 @@ impl GenesisBuilder {
         accounts.init(&mut txn, genesis_accounts.clone());
 
         // generate seeds
-        let signing_key = self
-            .signing_key
-            .as_ref()
-            .ok_or(GenesisBuilderError::NoSigningKey)?;
+        let signing_key_pair = SchnorrKeyPair::from(
+            self.signing_key
+                .clone()
+                .ok_or(GenesisBuilderError::NoSigningKey)?,
+        );
 
-        // random message used as seed for VRF that generates pre-genesis seed
-        let seed_message = self.seed_message.clone().unwrap_or_else(|| {
-            "love ai amor mohabbat hubun cinta lyubov bhalabasa amour kauna pi'ara liebe eshq upendo prema amore katresnan sarang anpu prema yeu".to_string()
-        });
-
-        // pre-genesis seed (used for slot selection)
-        let pre_genesis_seed: VrfSeed = signing_key
-            .sign_hash(Blake2sHasher::new().digest(seed_message.as_bytes()))
-            .compress()
-            .into();
+        // pre-genesis seed (used for view slot selection)
+        let pre_genesis_seed = VrfSeed::default();
         debug!("Pre genesis seed: {}", pre_genesis_seed);
 
         // seed of genesis block = VRF(seed_0)
-        let seed = pre_genesis_seed.sign_next(signing_key);
+        let seed = pre_genesis_seed.sign_next(&signing_key_pair);
         debug!("Genesis seed: {}", seed);
 
         // generate slot allocation from staking contract

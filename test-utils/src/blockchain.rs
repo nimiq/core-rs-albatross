@@ -150,7 +150,7 @@ pub fn sign_view_change(
     let view_change = ViewChange {
         block_number,
         new_view_number,
-        prev_seed,
+        prev_seed: prev_seed.entropy(),
     };
 
     // Sign the view change.

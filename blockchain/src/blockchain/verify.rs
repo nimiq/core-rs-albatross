@@ -5,7 +5,6 @@ use nimiq_block::{
     Block, BlockBody, BlockError, BlockHeader, BlockJustification, BlockType, ForkProof, MacroBody,
     ViewChange,
 };
-use nimiq_bls::PublicKey as BlsPublicKey;
 use nimiq_database::Transaction as DBtx;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::PublicKey as SchnorrPublicKey;
@@ -28,7 +27,7 @@ impl Blockchain {
     pub fn verify_block_header<B: AbstractBlockchain>(
         blockchain: &B,
         header: &BlockHeader,
-        voting_key: &BlsPublicKey,
+        signing_key: &SchnorrPublicKey,
         txn_opt: Option<&DBtx>,
         check_seed: bool,
     ) -> Result<(), PushError> {
@@ -77,7 +76,7 @@ impl Blockchain {
 
         // Check if the seed was signed by the intended producer.
         if check_seed {
-            if let Err(e) = header.seed().verify(prev_info.head.seed(), voting_key) {
+            if let Err(e) = header.seed().verify(prev_info.head.seed(), signing_key) {
                 warn!("Rejecting block - invalid seed ({:?})", e);
                 return Err(PushError::InvalidBlock(BlockError::InvalidSeed));
             }
@@ -160,7 +159,7 @@ impl Blockchain {
                     let view_change = ViewChange {
                         block_number: header.block_number(),
                         new_view_number: header.view_number(),
-                        prev_seed: prev_info.head.seed().clone(),
+                        prev_seed: prev_info.head.seed().entropy(),
                     };
 
                     if !justification
@@ -258,10 +257,7 @@ impl Blockchain {
                         txn_opt,
                     ) {
                         // Verify fork proof.
-                        if let Err(e) = proof.verify(
-                            &validator.signing_key,
-                            &validator.voting_key.uncompress_unchecked(),
-                        ) {
+                        if let Err(e) = proof.verify(&validator.signing_key) {
                             warn!("Rejecting block - Bad fork proof: {:?}", e);
                             return Err(PushError::InvalidBlock(BlockError::InvalidForkProof));
                         }

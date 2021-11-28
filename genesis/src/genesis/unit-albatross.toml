@@ -1,7 +1,7 @@
 name = "unit-albatross"
 seed_message = "Albatross Genesis for Unit Tests"
-signing_key = """99e7fa3c24074386ff6331e2fc6812c9dc6699f7f95891b38ec48283c8a22835831ef6e35261f7374509f563424a4cd71d98ca\
-ae7d4cc2568aa43f8d9421dcb6084662aa9e2dd10aadde79998a1a100a6068b40a220cd93e6b319259b6cc0000"""
+signing_key = "da9424d44cf048c27838b66ba4a7922a8fd14a72bcae5ac052f8a68d29f318d2"
+# public_key = "c46e9da843fad9609463c71cf45a0bbf20755f3ebc18ff2dbeebcc48da922066"
 timestamp = "2021-10-30T02:04:20.999999999-06:00"
 
 [[validators]]

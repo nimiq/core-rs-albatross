@@ -37,8 +37,13 @@ impl NanoBlockchain {
             .expect("Failed to find slot owner!");
 
         // Check the header.
-        let voting_key = slot_owner.voting_key.uncompress_unchecked();
-        Blockchain::verify_block_header(self, &block.header(), &voting_key, None, true)?;
+        Blockchain::verify_block_header(
+            self,
+            &block.header(),
+            &slot_owner.signing_key,
+            None,
+            true,
+        )?;
 
         // If this is an election block, check the body.
         if block.is_election() {

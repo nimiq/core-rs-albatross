@@ -76,11 +76,10 @@ impl Blockchain {
             .expect("Couldn't calculate slot owner!");
 
         // Check the header.
-        let voting_key = slot_owner.voting_key.uncompress_unchecked();
         if let Err(e) = Blockchain::verify_block_header(
             this.deref(),
             &block.header(),
-            &voting_key,
+            &slot_owner.signing_key,
             Some(&read_txn),
             !trusted,
         ) {
@@ -135,10 +134,10 @@ impl Blockchain {
             let view_number = block.view_number();
 
             for micro_block in micro_blocks.drain(..).map(|block| block.unwrap_micro()) {
-                // If there's another micro block set to this view number, which also has the same VrfSeed we
-                // notify the fork event.
+                // If there's another micro block set to this view number, which also has the same
+                // VrfSeed entropy we notify the fork event.
                 if view_number == micro_block.header.view_number
-                    && block.seed() == &micro_block.header.seed
+                    && &block.seed().entropy() == &micro_block.header.seed.entropy()
                 {
                     let micro_header2 = micro_block.header;
                     let justification2 = micro_block

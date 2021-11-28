@@ -7,7 +7,7 @@ use ark_mnt6_753::G1Affine;
 use ark_r1cs_std::fields::fp::FpVar;
 use ark_r1cs_std::fields::FieldVar;
 use ark_r1cs_std::prelude::{AllocVar, Boolean, EqGadget};
-use ark_r1cs_std::{R1CSVar, ToBitsGadget, ToConstraintFieldGadget};
+use ark_r1cs_std::{R1CSVar, ToConstraintFieldGadget};
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 
 use nimiq_bls::utils::{big_int_from_bytes_be, byte_from_be_bits, byte_to_le_bits};

@@ -4,6 +4,8 @@ use std::fmt;
 use std::hash::Hash;
 use std::io::Write;
 
+use log::debug;
+
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use curve25519_dalek::constants;
 use curve25519_dalek::edwards::{CompressedEdwardsY, EdwardsPoint};
@@ -46,12 +48,21 @@ big_array! { BigArray; }
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 /// A struct containing a VRF Seed. It simply the serialized output of the VXEdDSA algorithm.
 /// https://www.signal.org/docs/specifications/xeddsa/#vxeddsa
+/// Note that this signature is NOT unique for a given message and public key. In fact, if a signer
+/// produces two VRF seeds for the same message they will be different (with overwhelmingly high
+/// probability). This is because the signing algorithm uses a random input, similar to a Schnorr
+/// signature. Furthermore, the signature is malleable, so it can be manipulated by anyone. So you
+/// CANNOT use the VRF seed directly as a uniqueness or randomness source.
+/// However, the entropy that we extract from the random seed is unique for a given message and
+/// public key.
 pub struct VrfSeed {
     #[cfg_attr(feature = "serde-derive", serde(with = "BigArray"))]
     pub(crate) signature: [u8; 96],
 }
 
 impl VrfSeed {
+    pub const SIZE: usize = 96;
+
     /// Verifies the current VRF Seed given the previous VRF Seed (which is part of the message)
     /// and the signer's public key.
     pub fn verify(&self, prev_seed: &VrfSeed, public_key: &PublicKey) -> Result<(), VrfError> {
@@ -73,10 +84,11 @@ impl VrfSeed {
             .decompress()
             .ok_or(VrfError::InvalidSignature)?;
 
-        // Concatenate use case prefix and previous signature to form message.
+        // Concatenate use case prefix and previous entropy to form message. Note that we use the
+        // entropy here and not the signature, that's because we need the message to be unique.
         let mut message = vec![];
         message.push(VrfUseCase::Seed as u8);
-        message.extend_from_slice(prev_seed.signature.as_ref());
+        message.extend_from_slice(&prev_seed.entropy());
 
         // Follow the verification algorithm for VXEdDSA.
         // https://www.signal.org/docs/specifications/xeddsa/#vxeddsa
@@ -98,7 +110,14 @@ impl VrfSeed {
         );
         match h == h_check {
             true => Ok(()),
-            false => Err(VrfError::Forged),
+            false => {
+                debug!(
+                    "VRF Seed doesn't verify.\nh: {}\nh_check: {}",
+                    hex::encode(h.as_bytes()),
+                    hex::encode(h_check.as_bytes())
+                );
+                Err(VrfError::Forged)
+            }
         }
     }
 
@@ -114,10 +133,11 @@ impl VrfSeed {
         let a = keypair.private.0.s;
         let A_bytes = keypair.public.as_bytes();
 
-        // Concatenate use case prefix and signature to form message.
+        // Concatenate use case prefix and entropy to form message. Note that we use the entropy
+        // here and not the signature, that's because we need the message to be unique.
         let mut message = vec![];
         message.push(VrfUseCase::Seed as u8);
-        message.extend_from_slice(self.signature.as_ref());
+        message.extend_from_slice(&self.entropy());
 
         // Follow the signing algorithm for VXEdDSA.
         // https://www.signal.org/docs/specifications/xeddsa/#vxeddsa
@@ -147,12 +167,12 @@ impl VrfSeed {
         }
     }
 
-    // Initializes a VRF RNG, for a given use case, from the current VRF Seed. We assume that the
-    // VRF Seed is valid, if it is not this function might panic.
-    pub fn rng(&self, use_case: VrfUseCase) -> VrfRng {
-        // The use case cannot be `Seed`. That one is reserved for the `sign_next` method.
-        assert_ne!(use_case, VrfUseCase::Seed);
-
+    // Extracts the entropy, which is 256 verifiably random bits, from the current VRF Seed. This
+    // entropy can then be used for any purpose for which we need randomness. Note that this entropy
+    // is what is unique for a given message and public key, not the signature (which can be
+    // different for the same message and public key). We assume that the VRF Seed is valid, if it
+    // is not then this function might panic.
+    pub fn entropy(&self) -> [u8; 32] {
         // We follow the specifications for VXEdDSA.
         // https://www.signal.org/docs/specifications/xeddsa/#vxeddsa
 
@@ -169,8 +189,20 @@ impl VrfSeed {
         let mut res = [0u8; 32];
         res.copy_from_slice(&h[..32]);
 
+        res
+    }
+
+    // Initializes a VRF RNG, for a given use case, from the current VRF Seed. We assume that the
+    // VRF Seed is valid, if it is not this function might panic.
+    pub fn rng(&self, use_case: VrfUseCase) -> VrfRng {
+        // The use case cannot be `Seed`. That one is reserved for the `sign_next` method.
+        assert_ne!(use_case, VrfUseCase::Seed);
+
+        // Get the entropy.
+        let entropy = self.entropy();
+
         // Pass the entropy to the VRF RNG.
-        VrfRng::new(res, use_case)
+        VrfRng::new(entropy, use_case)
     }
 }
 
@@ -260,7 +292,7 @@ mod tests {
 
             assert!(next_seed.verify(&prev_seed, &key_pair.public).is_ok());
 
-            next_seed.rng(VrfUseCase::ValidatorSlotSelection);
+            next_seed.entropy();
 
             prev_seed = next_seed;
         }
@@ -293,9 +325,8 @@ mod tests {
         let next_seed = prev_seed.sign_next(&key_pair);
 
         for _ in 0..1000 {
-            let mut bytes = [0u8; 96];
-            rng.fill_bytes(&mut bytes);
-            let fake_seed = VrfSeed { signature: bytes };
+            let fake_key_pair = KeyPair::generate(&mut rng);
+            let fake_seed = VrfSeed::default().sign_next(&fake_key_pair);
 
             assert_eq!(
                 next_seed.verify(&fake_seed, &key_pair.public),

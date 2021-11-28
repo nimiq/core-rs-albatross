@@ -5,15 +5,15 @@ use serde::{Deserialize, Deserializer};
 use time::OffsetDateTime;
 
 use beserial::Deserialize as BDeserialize;
-use bls::{PublicKey as BlsPublicKey, SecretKey as BlsSecretKey};
-use keys::{Address, PublicKey as SchnorrPublicKey};
+use bls::PublicKey as BlsPublicKey;
+use keys::{Address, PrivateKey as SchnorrPrivateKey, PublicKey as SchnorrPublicKey};
 use primitives::coin::Coin;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct GenesisConfig {
     #[serde(default)]
-    #[serde(deserialize_with = "deserialize_bls_secret_key_opt")]
-    pub signing_key: Option<BlsSecretKey>,
+    #[serde(deserialize_with = "deserialize_schnorr_secret_key_opt")]
+    pub signing_key: Option<SchnorrPrivateKey>,
 
     pub seed_message: Option<String>,
 
@@ -107,9 +107,9 @@ where
     BlsPublicKey::deserialize_from_vec(&pkey_raw).map_err(Error::custom)
 }
 
-pub(crate) fn deserialize_bls_secret_key_opt<'de, D>(
+pub(crate) fn deserialize_schnorr_secret_key_opt<'de, D>(
     deserializer: D,
-) -> Result<Option<BlsSecretKey>, D::Error>
+) -> Result<Option<SchnorrPrivateKey>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -117,7 +117,7 @@ where
     if let Some(skey_hex) = opt {
         let skey_raw = hex::decode(skey_hex).map_err(Error::custom)?;
         Ok(Some(
-            BlsSecretKey::deserialize_from_vec(&skey_raw).map_err(Error::custom)?,
+            SchnorrPrivateKey::deserialize_from_vec(&skey_raw).map_err(Error::custom)?,
         ))
     } else {
         Ok(None)

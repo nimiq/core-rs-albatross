@@ -2,24 +2,17 @@ use std::str::FromStr;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_block::{IndividualSignature, MacroBlock, MacroBody, MacroHeader, MultiSignature};
-use nimiq_bls::{CompressedPublicKey, KeyPair, Signature};
+use nimiq_bls::{CompressedPublicKey, KeyPair};
 use nimiq_collections::bitset::BitSet;
 use nimiq_handel::update::LevelUpdate;
 use nimiq_hash::{Blake2bHasher, Hasher};
 use nimiq_keys::{Address, PublicKey};
 use nimiq_primitives::slots::ValidatorsBuilder;
+use nimiq_vrf::VrfSeed;
 
 #[test]
 fn it_can_convert_macro_block_into_slots() {
     let hash = Blake2bHasher::default().digest(&[]);
-
-    let signature_bytes = hex::decode(
-        "8001733b6e6edf3e1c6feb8841d32abe26d05163fddf6d2\
-    2179b17c7b1ead82e8fcad81e9685da8102ae3ae8c3b80d098545cadfba0d5310b1aa48f97ee649ec58943ae68d68a9\
-    f8e9fff2830da42e18e6f9a58781f3f8757795605bcf5775",
-    )
-    .unwrap();
-    let signature = Signature::deserialize_from_vec(&signature_bytes).unwrap();
 
     // TODO: We no longer need the reward address in there, so we can delete it from the strings below.
     let slot_allocation = vec![
@@ -97,7 +90,7 @@ fn it_can_convert_macro_block_into_slots() {
             timestamp: 0,
             parent_hash: hash.clone(),
             parent_election_hash: hash.clone(),
-            seed: signature.compress().into(),
+            seed: VrfSeed::default(),
             extra_data: vec![],
             state_root: hash.clone(),
             body_root: hash,
