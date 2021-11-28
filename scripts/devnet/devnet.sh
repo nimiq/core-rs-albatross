@@ -272,7 +272,7 @@ do
     fi
 
     # Search for panics/crashes
-    if grep -wrin "panic" temp-logs/$foldername/
+    if grep -wrin " panic " temp-logs/$foldername/
     then
         echo "   !!!   PANIC   !!!"
         fail=true
