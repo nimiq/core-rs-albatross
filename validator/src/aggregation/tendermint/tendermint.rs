@@ -227,7 +227,7 @@ where
         // create timeout according to rules. For every consecutive round the timeout must increase by a constant factor.
         // TODO constants
         let deadline = time::Instant::now()
-            .checked_add(time::Duration::from_millis(100u64 + round as u64 * 10u64))
+            .checked_add(time::Duration::from_millis(300u64 + round as u64 * 100u64))
             .expect("Cannot create timeout Instant");
 
         loop {

@@ -346,6 +346,8 @@ impl<
                                         == self.protocol.partitioner().size() {
                                         // if there is a best aggregate and this aggregate can no longer be improved upon (all contributors are already present)
                                         // return the aggregate and None to signal no improvments can be made
+                                        // Send one last rounnd of Updates before we terminate to give other nodes the necessary messages.
+                                        self.automatic_update();
                                         return (best, None);
                                     } else {
                                         // if the best aggregate can still be improved return the aggregate and self to continue the aggregation
