@@ -9,8 +9,9 @@ use nimiq_blockchain::{ForkEvent, PushError, PushResult};
 use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
+use nimiq_keys::{KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey};
 use nimiq_primitives::policy;
-use nimiq_test_utils::blockchain::{sign_view_change, SECRET_KEY};
+use nimiq_test_utils::blockchain::{sign_view_change, SIGNING_KEY, VOTING_KEY};
 use nimiq_utils::time::OffsetTime;
 
 #[test]
@@ -67,9 +68,12 @@ fn it_can_push_consecutive_view_changes() {
     let blockchain = Arc::new(RwLock::new(
         Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
     ));
-    let keypair =
-        KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
-    let producer = BlockProducer::new(keypair);
+    let signing_key = SchnorrKeyPair::from(
+        SchnorrPrivateKey::deserialize_from_vec(&hex::decode(SIGNING_KEY).unwrap()).unwrap(),
+    );
+    let voting_key =
+        KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(VOTING_KEY).unwrap()).unwrap());
+    let producer = BlockProducer::new(signing_key, voting_key);
 
     // Produce a simple micro block and push it
     let micro_block = {
