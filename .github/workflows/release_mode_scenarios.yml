@@ -1,14 +1,14 @@
-name: Testnet Scenarios
+name: Release Mode Scenarios
 
 on:
   schedule:
-    - cron: '0 * * * *'
+    - cron: '0 */2 * * *'
   workflow_dispatch:
     default: "default"
 
 jobs:
 
-  erase-state-test:
+  TenValidatorsWithSpammer:
     runs-on: ubuntu-20.04
 
     steps:
@@ -35,13 +35,12 @@ jobs:
       with:
         command: build
     - name: Executes the test
-      run: |          
-          bash scripts/devnet/devnet.sh -e
+      run: |
+          bash scripts/devnet/devnet.sh --validators 10 -R -s 800 -k 0
     - name: Archive test results
       if: always()
       uses: actions/upload-artifact@v2
       with:
-          name: erase-state-test
+          name: TenValidatorsWithSpammer-logs
           path: |
             temp-logs/
-
