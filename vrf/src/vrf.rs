@@ -44,9 +44,19 @@ pub enum VrfUseCase {
 #[cfg(feature = "serde-derive")]
 big_array! { BigArray; }
 
+create_typed_array!(VrfEntropy, u8, 32);
+
+impl std::fmt::Debug for VrfEntropy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("VrfEntropy")
+            .field(&hex::encode(&self.0))
+            .finish()
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
-/// A struct containing a VRF Seed. It simply the serialized output of the VXEdDSA algorithm.
+/// A struct containing a VRF Seed. It is simply the serialized output of the VXEdDSA algorithm.
 /// https://www.signal.org/docs/specifications/xeddsa/#vxeddsa
 /// Note that this signature is NOT unique for a given message and public key. In fact, if a signer
 /// produces two VRF seeds for the same message they will be different (with overwhelmingly high
@@ -57,7 +67,7 @@ big_array! { BigArray; }
 /// public key.
 pub struct VrfSeed {
     #[cfg_attr(feature = "serde-derive", serde(with = "BigArray"))]
-    pub(crate) signature: [u8; 96],
+    pub(crate) signature: [u8; VrfSeed::SIZE],
 }
 
 impl VrfSeed {
@@ -86,9 +96,8 @@ impl VrfSeed {
 
         // Concatenate use case prefix and previous entropy to form message. Note that we use the
         // entropy here and not the signature, that's because we need the message to be unique.
-        let mut message = vec![];
-        message.push(VrfUseCase::Seed as u8);
-        message.extend_from_slice(&prev_seed.entropy());
+        let mut message = vec![VrfUseCase::Seed as u8];
+        message.extend_from_slice(prev_seed.entropy().as_slice());
 
         // Follow the verification algorithm for VXEdDSA.
         // https://www.signal.org/docs/specifications/xeddsa/#vxeddsa
@@ -96,8 +105,8 @@ impl VrfSeed {
         if A.is_small_order() || V.is_small_order() || B_v.is_identity() {
             return Err(VrfError::InvalidSignature);
         }
-        let R = &s * &constants::ED25519_BASEPOINT_TABLE - &h * &A;
-        let R_v = &s * &B_v - &h * &V;
+        let R = &s * &constants::ED25519_BASEPOINT_TABLE - h * A;
+        let R_v = s * B_v - h * V;
         let h_check = Scalar::hash_from_bytes::<Sha512>(
             &[
                 A_bytes,
@@ -135,17 +144,16 @@ impl VrfSeed {
 
         // Concatenate use case prefix and entropy to form message. Note that we use the entropy
         // here and not the signature, that's because we need the message to be unique.
-        let mut message = vec![];
-        message.push(VrfUseCase::Seed as u8);
-        message.extend_from_slice(&self.entropy());
+        let mut message = vec![VrfUseCase::Seed as u8];
+        message.extend_from_slice(self.entropy().as_slice());
 
         // Follow the signing algorithm for VXEdDSA.
         // https://www.signal.org/docs/specifications/xeddsa/#vxeddsa
         let B_v = EdwardsPoint::hash_from_bytes::<Sha512>(&[A_bytes, &message[..]].concat());
-        let V = (&a * &B_v).compress();
+        let V = (a * B_v).compress();
         let r = Scalar::hash_from_bytes::<Sha512>(&[a.as_bytes(), V.as_bytes(), &Z[..]].concat());
         let R = (&r * &constants::ED25519_BASEPOINT_TABLE).compress();
-        let R_v = (&r * &B_v).compress();
+        let R_v = (r * B_v).compress();
         let h = Scalar::hash_from_bytes::<Sha512>(
             &[
                 A_bytes,
@@ -172,7 +180,7 @@ impl VrfSeed {
     // is what is unique for a given message and public key, not the signature (which can be
     // different for the same message and public key). We assume that the VRF Seed is valid, if it
     // is not then this function might panic.
-    pub fn entropy(&self) -> [u8; 32] {
+    pub fn entropy(&self) -> VrfEntropy {
         // We follow the specifications for VXEdDSA.
         // https://www.signal.org/docs/specifications/xeddsa/#vxeddsa
 
@@ -189,7 +197,7 @@ impl VrfSeed {
         let mut res = [0u8; 32];
         res.copy_from_slice(&h[..32]);
 
-        res
+        VrfEntropy(res)
     }
 
     // Initializes a VRF RNG, for a given use case, from the current VRF Seed. We assume that the
@@ -209,7 +217,7 @@ impl VrfSeed {
 impl Default for VrfSeed {
     fn default() -> Self {
         VrfSeed {
-            signature: [0u8; 96],
+            signature: [0u8; VrfSeed::SIZE],
         }
     }
 }
@@ -222,31 +230,31 @@ impl fmt::Display for VrfSeed {
 
 impl Serialize for VrfSeed {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        writer.write(&self.signature)?;
-        Ok(96)
+        writer.write_all(&self.signature)?;
+        Ok(VrfSeed::SIZE)
     }
 
     fn serialized_size(&self) -> usize {
-        96
+        VrfSeed::SIZE
     }
 }
 
 impl Deserialize for VrfSeed {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let mut bytes = [0; 96];
-        reader.read_exact(&mut bytes[..96])?;
+        let mut bytes = [0; VrfSeed::SIZE];
+        reader.read_exact(&mut bytes[..VrfSeed::SIZE])?;
         Ok(VrfSeed { signature: bytes })
     }
 }
 
 pub struct VrfRng {
-    entropy: [u8; 32],
+    entropy: VrfEntropy,
     use_case: VrfUseCase,
     counter: u64,
 }
 
 impl VrfRng {
-    fn new(entropy: [u8; 32], use_case: VrfUseCase) -> Self {
+    fn new(entropy: VrfEntropy, use_case: VrfUseCase) -> Self {
         Self {
             entropy,
             use_case,
@@ -259,7 +267,7 @@ impl VrfRng {
         let mut hasher = Blake2bHasher::new();
         hasher.write_u8(self.use_case as u8).unwrap();
         hasher.write_u64::<BigEndian>(self.counter).unwrap();
-        hasher.write_all(&self.entropy).unwrap();
+        hasher.write_all(self.entropy.as_slice()).unwrap();
 
         // Increase counter
         self.counter += 1;
@@ -342,7 +350,7 @@ mod tests {
         let prev_seed = VrfSeed::default();
 
         for _ in 0..1000 {
-            let mut bytes = [0u8; 96];
+            let mut bytes = [0u8; VrfSeed::SIZE];
             rng.fill_bytes(&mut bytes);
             let fake_seed = VrfSeed { signature: bytes };
 

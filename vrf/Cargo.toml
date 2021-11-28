@@ -23,6 +23,7 @@ sha2 = "0.9"
 beserial = { path = "../beserial" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
+nimiq-macros = { path = "../macros" }
 
 [features]
 serde-derive = ["serde", "serde-big-array"]

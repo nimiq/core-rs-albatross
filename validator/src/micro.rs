@@ -230,7 +230,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         let view_change = ViewChange {
             block_number: self.block_number,
             new_view_number,
-            prev_seed: self.prev_seed.entropy(),
+            vrf_entropy: self.prev_seed.entropy(),
         };
 
         // Include the previous_view_change_proof only if it has not yet been persisted on chain.

@@ -1,18 +1,21 @@
 use std::fmt;
 
-use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use beserial::{Deserialize, Serialize};
 use nimiq_bls::AggregatePublicKey;
 use nimiq_hash::{Hash, SerializeContent};
 use nimiq_hash_derive::SerializeContent;
 use nimiq_primitives::policy::TWO_THIRD_SLOTS;
 use nimiq_primitives::slots::Validators;
+use nimiq_vrf::vrf::VrfEntropy;
 
 use crate::{Message, MultiSignature, SignedMessage, PREFIX_VIEW_CHANGE};
 
 /// The struct representing a view change. View changes happen when a given micro block is not
 /// produced in time by its intended producer. It allows the next slot owner to take over and
 /// produce the block. A proof is necessary but it exists as the ViewChangeProof struct.
-#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, SerializeContent)]
+#[derive(
+    Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Deserialize, Serialize, SerializeContent,
+)]
 pub struct ViewChange {
     /// The number of the block for which the view change is constructed (i.e. the block number
     /// the validator is at + 1, since it's for the next block).
@@ -26,7 +29,7 @@ pub struct ViewChange {
     /// branches. We chose the seed so that the view change applies to all branches of a malicious
     /// fork, but not to branching because of view changes.
     /// We use the seed entropy since that is what is actually unique, not the VRF seed itself.
-    pub prev_seed: [u8; 32],
+    pub vrf_entropy: VrfEntropy,
 }
 
 impl Message for ViewChange {
@@ -40,35 +43,8 @@ impl fmt::Display for ViewChange {
         write!(
             f,
             "#{}.{} ({:?})",
-            self.block_number, self.new_view_number, self.prev_seed
+            self.block_number, self.new_view_number, self.vrf_entropy
         )
-    }
-}
-
-impl Serialize for ViewChange {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        self.block_number.serialize(writer)?;
-        self.new_view_number.serialize(writer)?;
-        writer.write(&self.prev_seed)?;
-        Ok(40)
-    }
-
-    fn serialized_size(&self) -> usize {
-        40
-    }
-}
-
-impl Deserialize for ViewChange {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let block_number = Deserialize::deserialize(reader)?;
-        let new_view_number = Deserialize::deserialize(reader)?;
-        let mut prev_seed = [0u8; 32];
-        reader.read(&mut prev_seed)?;
-        Ok(ViewChange {
-            block_number,
-            new_view_number,
-            prev_seed,
-        })
     }
 }
 

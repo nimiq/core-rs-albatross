@@ -16,6 +16,7 @@ use nimiq_nano_primitives::pk_tree_construct;
 use nimiq_primitives::policy;
 use nimiq_primitives::slots::{Validator, Validators};
 use nimiq_utils::time::OffsetTime;
+use nimiq_vrf::vrf::VrfEntropy;
 
 // /// Still in for future reference, in case this key is needed again
 // const SECRET_KEY: &str = "8e44b45f308dae1e2d4390a0f96cea993960d4178550c62aeaba88e9e168d165\
@@ -33,7 +34,7 @@ fn test_view_change_single_signature() {
     let view_change = ViewChange {
         block_number: 1234,
         new_view_number: 42,
-        prev_seed: [0u8; 32],
+        vrf_entropy: VrfEntropy::default(),
     };
 
     // sign view change and build view change proof

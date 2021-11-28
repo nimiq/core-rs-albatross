@@ -71,7 +71,7 @@ impl Stream for InputStreamSwitch {
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         while let Some(message) = ready!(self.input.poll_next_unpin(cx)) {
             if message.tag.block_number != self.current_view_change.block_number
-                || message.tag.prev_seed != self.current_view_change.prev_seed
+                || message.tag.vrf_entropy != self.current_view_change.vrf_entropy
             {
                 // The LevelUpdate is not for this view change and thus irrelevant.
                 // TODO If it is for a future view change we might want to shortcut a HeadRequest here.
@@ -307,7 +307,7 @@ impl ViewChangeAggregation {
                             let past_view_change = ViewChange {
                                 block_number: tag.block_number,
                                 new_view_number: tag.new_view_number - 1,
-                                prev_seed: tag.prev_seed.clone(),
+                                vrf_entropy: tag.vrf_entropy.clone(),
                             };
 
                             // verify the ViewChange

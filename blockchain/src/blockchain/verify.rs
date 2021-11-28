@@ -159,7 +159,7 @@ impl Blockchain {
                     let view_change = ViewChange {
                         block_number: header.block_number(),
                         new_view_number: header.view_number(),
-                        prev_seed: prev_info.head.seed().entropy(),
+                        vrf_entropy: prev_info.head.seed().entropy(),
                     };
 
                     if !justification

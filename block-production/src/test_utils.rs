@@ -167,7 +167,7 @@ impl TemporaryBlockProducer {
             ViewChange {
                 block_number: blockchain.block_number() + 1,
                 new_view_number: view_number,
-                prev_seed: blockchain.head().seed().entropy(),
+                vrf_entropy: blockchain.head().seed().entropy(),
             }
         };
 
