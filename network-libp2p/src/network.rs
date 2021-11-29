@@ -328,21 +328,17 @@ impl Network {
                     tracing::info!("Connection closed because: {:?}", cause);
                 }
 
+                let behavior = swarm.behaviour_mut();
+
                 // Remove Peer
-                if let Some(peer) = swarm.behaviour_mut().pool.peers.remove(&peer_id) {
-                    // Remove peer addresses from the DHT
-                    let addresses: Vec<Multiaddr> = swarm
-                        .behaviour_mut()
-                        .pool
-                        .contacts
-                        .read()
-                        .get(&peer_id)
-                        .expect("Peer is not present in the address book")
-                        .addresses()
-                        .cloned()
-                        .collect();
+                if let Some(peer) = behavior.pool.peers.remove(&peer_id) {
+                    // Remove peer addresses from the DHT if they are present
+                    let mut addresses: Vec<Multiaddr> = vec![];
+                    if let Some(record) = behavior.pool.contacts.read().get(&peer_id) {
+                        addresses.extend::<Vec<Multiaddr>>(record.addresses().cloned().collect());
+                    }
                     for address in addresses {
-                        swarm.behaviour_mut().remove_peer_address(peer_id, address);
+                        behavior.remove_peer_address(peer_id, address);
                     }
                     events_tx.send(NetworkEvent::<Peer>::PeerLeft(peer)).ok();
                 }
