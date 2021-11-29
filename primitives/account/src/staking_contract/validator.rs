@@ -574,7 +574,10 @@ impl StakingContract {
     }
 
     /// Drops a validator and returns its deposit. This can only be used on inactive validators!
-    /// The validator must have been inactive for at least one election block.
+    /// After the validator gets inactivated, it needs to wait until the second batch of the next
+    /// epoch in order to be able to be dropped. This is necessary because if the validator was an
+    /// elected validator when it was inactivated then it might receive rewards until the end of the
+    /// first batch of the next epoch. So it needs to be available.
     pub(crate) fn drop_validator(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
@@ -602,7 +605,7 @@ impl StakingContract {
                 return Err(AccountError::InvalidForSender);
             }
             Some(time) => {
-                if block_height <= policy::election_block_after(time) {
+                if block_height <= policy::election_block_after(time) + policy::BATCH_LENGTH {
                     return Err(AccountError::InvalidForSender);
                 }
             }

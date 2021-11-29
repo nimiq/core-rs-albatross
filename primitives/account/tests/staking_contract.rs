@@ -832,7 +832,7 @@ fn drop_validator_works() {
             &accounts_tree,
             &mut db_txn,
             &tx,
-            next_election_block + 1,
+            next_election_block + BATCH_LENGTH + 1,
             0
         ),
         Ok(Some(receipt.clone()))
