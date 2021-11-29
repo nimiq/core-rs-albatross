@@ -321,16 +321,21 @@ impl<
 
                             if result.is_ok() {
                                 // if the contribution is valid push it to the store, creating a new aggregate
-                                {
+                                let level = {
                                     let store = self.protocol.store();
                                     let mut store = store.write();
 
                                     store.put(todo.contribution.clone(), todo.level, self.protocol.registry().signers_identity(&todo.contribution.contributors()));
-                                }
+                                    if todo.level == self.protocol.partitioner().levels() {
+                                        todo.level - 1
+                                    } else {
+                                        todo.level
+                                    }
+                                };
                                 // in case the level of this todo has not started, start it now as we have already contributions on it.
-                                self.start_level(todo.level);
+                                self.start_level(level);
                                 // check if a level was completed by the addition of the contribution
-                                self.check_completed_level(todo.contribution.clone(), todo.level);
+                                self.check_completed_level(todo.contribution.clone(), level);
 
                                 // get the best aggregate
                                 let last_level = self.levels.last().expect("No levels");

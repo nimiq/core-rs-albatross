@@ -101,6 +101,19 @@ impl<
         //let weight = self.weights.signature_weight(&signature)
         //    .unwrap_or_else(|| panic!("No weight for signature: {:?}", signature));
 
+        // Special case for final aggregations
+        if level == self.partitioner.levels() {
+            // Only available to full aggregations
+            if self
+                .weights
+                .signers_identity(&contribution.contributors())
+                .len()
+                == self.partitioner.size()
+            {
+                return usize::MAX;
+            }
+        }
+
         let store = self.store.read();
 
         // check if we already know this individual signature
@@ -244,6 +257,9 @@ impl<
     }
 
     fn level_contains_id(&self, level: usize, id: usize) -> bool {
+        if level == self.partitioner.levels() {
+            return true;
+        }
         self.partitioner.range(level).unwrap().contains(&id)
     }
 }

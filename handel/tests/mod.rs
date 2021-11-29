@@ -9,7 +9,7 @@ use std::{fmt::Formatter, time::Duration};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use futures::sink::Sink;
-use futures::stream::StreamExt;
+use futures::stream::{self, StreamExt};
 use futures::task::{Context, Poll};
 use parking_lot::RwLock;
 
@@ -22,10 +22,10 @@ use nimiq_handel::config::Config;
 use nimiq_handel::contribution::{AggregatableContribution, ContributionError};
 use nimiq_handel::evaluator;
 use nimiq_handel::identity;
-use nimiq_handel::partitioner::BinomialPartitioner;
+use nimiq_handel::partitioner::{BinomialPartitioner, Partitioner};
 use nimiq_handel::protocol;
 use nimiq_handel::store::ReplaceStore;
-use nimiq_handel::update::LevelUpdateMessage;
+use nimiq_handel::update::{LevelUpdate, LevelUpdateMessage};
 use nimiq_handel::verifier;
 use nimiq_network_interface::message::Message;
 use nimiq_network_interface::network::Network;
@@ -334,6 +334,60 @@ async fn it_can_aggregate() {
             net.receive_from_all::<LevelUpdateMessage<Contribution, u8>>()
                 .map(move |msg| msg.0.update),
         ),
+        Box::new(NetworkSink {
+            network: net.clone(),
+            current_future: None,
+            phantom: PhantomData,
+        }),
+    );
+
+    let mut last_aggregate: Option<Contribution> = None;
+
+    while let Some(aggregate) = aggregation.next().await {
+        last_aggregate = Some(aggregate);
+    }
+
+    // An aggregation needs to be present
+    assert!(last_aggregate.is_some(), "Nothing was aggregated!");
+
+    let last_aggregate = last_aggregate.unwrap();
+
+    // All nodes need to contribute
+    assert_eq!(
+        last_aggregate.num_contributors(),
+        contributor_num + 1,
+        "Not all contributions are present",
+    );
+
+    // the final value needs to be the sum of all contributions: 8 + 7 + 6 + 5 + 4 + 3 + 2 + 1 = 36
+    assert_eq!(last_aggregate.value, 36, "Wrong aggregation result",);
+
+    // after we have the final aggregate create a new instance and have it (without any other instances)
+    // retur a fully aggregated contribution and terminate.
+    let protocol = Protocol::new(1, contributor_num + 1, contributor_num);
+    let input = LevelUpdate::new(
+        last_aggregate,
+        None,
+        protocol.partitioner.levels(),
+        protocol.partitioner.size(),
+    );
+    let input_vec = vec![input];
+
+    let mut contributors = BitSet::new();
+    contributors.insert(1);
+
+    // create a contribution for this node with a value of `id + 1` (So no node has value 0 which doesn't show up in addition).
+    let contribution = Contribution {
+        value: 2u64, // node 1 has contributio 1 + 1
+        contributors,
+    };
+
+    let mut aggregation = Aggregation::new(
+        protocol,
+        1_u8, // serves as the tag or identifier for this aggregation
+        config.clone(),
+        contribution,
+        Box::pin(stream::iter(input_vec)),
         Box::new(NetworkSink {
             network: net.clone(),
             current_future: None,

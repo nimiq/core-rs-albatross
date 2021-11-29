@@ -152,6 +152,14 @@ impl<P: Partitioner, C: AggregatableContribution> ContributionStore for ReplaceS
     type Contribution = C;
 
     fn put(&mut self, contribution: Self::Contribution, level: usize, identity: Identity) {
+        if level == self.partitioner.levels() {
+            // Final level is full signatures only. We need to store it for the level one below though
+            // as this level only exist for special (full) LevelUpdates, which are not represented in the store.
+            self.best_contribution
+                .insert(level - 1, (contribution, identity));
+            self.best_level = level - 1;
+            return;
+        }
         trace!(
             "Putting signature into store (level {}): {:?} - #{:?}",
             level,
