@@ -149,6 +149,19 @@ def create_validator(path, i):
     validator_address = create_nimiq_address()
     reward_address = create_nimiq_address()
 
+    # write parameters for ansible
+    with (path / "validator{:d}.yml".format(i+1)).open("wt") as f:
+        f.write("""
+---
+validator_address: "{validator_address}"
+voting_key: "{voting_key}"
+signing_key: "{signing_key}"
+""".format(
+            validator_address=validator_address["address"],
+            voting_key=voting_key["private_key"],
+            signing_key=signing_key["private_key"],
+        ))
+
     # write config
     with (path / "client.toml").open("wt") as f:
         f.write("""[network]
