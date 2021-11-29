@@ -52,14 +52,13 @@ nimiq-jsonrpc-core = { git = "https://github.com/nimiq/jsonrpc.git" }
 nimiq-jsonrpc-server = { git = "https://github.com/nimiq/jsonrpc.git" }
 nimiq-keys = { path = "../keys" }
 nimiq-mempool = { path = "../mempool" }
-# nimiq-metrics-server = { path = "../metrics-server", optional = true }
 nimiq-network-libp2p = { path = "../network-libp2p" }
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-peer-address = { path = "../peer-address" }
 nimiq-primitives = { path = "../primitives", features = ["networks"] }
 nimiq-rpc-server = { path = "../rpc-server", optional = true }
 nimiq-utils = { path = "../utils", features = ["time", "key-store"] }
-nimiq-validator = { path = "../validator", optional = true }
+nimiq-validator = { path = "../validator", optional = true, features = ["trusted_push"] }
 nimiq-validator-network = { path = "../validator-network", optional = true }
 nimiq-wallet = { path = "../wallet", optional = true }
 
@@ -68,7 +67,6 @@ deadlock = []
 default = []
 launcher = []
 logging = ["fern", "colored"]
-# metrics-server = ["nimiq-metrics-server"]
 panic = ["log-panics"]
 rpc-server = ["validator", "nimiq-rpc-server", "nimiq-wallet"]
 validator = ["nimiq-validator", "nimiq-validator-network", "nimiq-bls", "nimiq-rpc-server"]
