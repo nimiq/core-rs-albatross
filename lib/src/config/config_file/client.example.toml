@@ -76,14 +76,6 @@ listen_addresses = [
 # Default: 10
 #max_dbs=10
 
-# Don't sync to disk after each database transaction
-# Default: false
-# WARNING: This can potentially corrupt the database if the program is not
-# properly terminated
-#no_lmdb_sync=true
-
-
-
 ##############################################################################
 #
 # Configure the JSON-RPC server.

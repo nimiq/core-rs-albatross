@@ -268,7 +268,7 @@ impl Default for DatabaseConfig {
             size: 1024 * 1024 * 1024 * 1024,
             max_dbs: 12,
             max_readers: 600,
-            flags: LmdbFlags::NOMETASYNC,
+            flags: LmdbFlags::NOMETASYNC | LmdbFlags::NOSYNC,
         }
     }
 }
@@ -277,16 +277,11 @@ impl From<config_file::DatabaseSettings> for DatabaseConfig {
     fn from(db_settings: config_file::DatabaseSettings) -> Self {
         let default = DatabaseConfig::default();
 
-        let mut flags = default.flags;
-        if db_settings.no_lmdb_sync.unwrap_or_default() {
-            flags |= LmdbFlags::NOSYNC;
-        }
-
         Self {
             size: db_settings.size.unwrap_or(default.size),
             max_dbs: db_settings.max_dbs.unwrap_or(default.max_dbs),
             max_readers: db_settings.max_readers.unwrap_or(default.max_readers),
-            flags,
+            flags: default.flags,
         }
     }
 }

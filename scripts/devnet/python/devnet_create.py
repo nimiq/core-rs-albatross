@@ -312,8 +312,6 @@ services:
       - NIMIQ_NETWORK=dev-albatross
       - NIMIQ_PEER_KEY_FILE=/home/nimiq/.nimiq/peer_key.dat
       - NIMIQ_INSTANT_INBOUND=true
-      - NIMIQ_NO_LMDB_SYNC=true
-      - VALIDATOR_BLOCK_DELAY="0"
       - RPC_ENABLED=true
       - RUST_BACKTRACE="1"
       - NIMIQ_LOG_LEVEL=debug
@@ -340,8 +338,6 @@ services:
       - NIMIQ_PEER_KEY_FILE=/home/nimiq/.nimiq/peer_key.dat
       - NIMIQ_INSTANT_INBOUND=true
       - NIMIQ_VALIDATOR=validator
-      - NIMIQ_NO_LMDB_SYNC=true
-      - VALIDATOR_BLOCK_DELAY="0"
       - VALIDATOR_ADDRESS={validator_address}
       - SIGNING_KEY={signing_key}
       - VOTING_KEY={voting_key}
@@ -378,8 +374,6 @@ services:
       - NIMIQ_PEER_KEY_FILE=/home/nimiq/.nimiq/peer_key.dat
       - NIMIQ_INSTANT_INBOUND=true
       - NIMIQ_VALIDATOR=validator
-      - NIMIQ_NO_LMDB_SYNC=true
-      - VALIDATOR_BLOCK_DELAY="0"
       - VALIDATOR_ADDRESS=NQ0700000000000000000000000000000000
       - RPC_ENABLED=true
       - RUST_BACKTRACE="1"
