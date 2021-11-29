@@ -208,7 +208,7 @@ impl<N: ValidatorNetwork + 'static> Stream for TendermintAggregations<N> {
                     match result {
                         Ok(()) => trace!("Sent LevelUpdate message to aggregation"),
                         Err(e) => {
-                            error!("Failed to relay LevelUpdate to aggregation, error {} ", e)
+                            trace!("Failed to relay LevelUpdate to aggregation, error {} ", e)
                         }
                     }
                 } else if let Some(((highest_round, _), _)) =
