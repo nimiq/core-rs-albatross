@@ -75,6 +75,8 @@ impl identity::IdentityRegistry for Registry {
     fn signers_identity(&self, signers: &BitSet) -> Identity {
         if signers.len() == 1 {
             Identity::Single(signers.iter().next().unwrap())
+        } else if signers.len() > 0 {
+            Identity::Multiple(signers.iter().collect())
         } else {
             Identity::None
         }
