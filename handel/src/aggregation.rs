@@ -14,7 +14,7 @@ use beserial::{Deserialize, Serialize};
 
 use crate::config::Config;
 use crate::contribution::AggregatableContribution;
-use crate::identity::{Identity, IdentityRegistry};
+use crate::identity::IdentityRegistry;
 use crate::level::Level;
 use crate::partitioner::Partitioner;
 use crate::protocol::Protocol;
