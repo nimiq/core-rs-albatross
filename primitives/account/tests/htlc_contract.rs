@@ -495,24 +495,30 @@ fn it_can_apply_and_revert_valid_transaction() {
         Account::HTLC(start_contract.clone()),
     );
 
-    HashedTimeLockedContract::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 1, 1)
-        .unwrap();
+    let receipt = HashedTimeLockedContract::commit_outgoing_transaction(
+        &accounts_tree,
+        &mut db_txn,
+        &tx,
+        1,
+        1,
+    )
+    .unwrap();
+
     assert_eq!(
-        accounts_tree
-            .get(&db_txn, &KeyNibbles::from(&[0u8; 20][..]))
-            .unwrap()
-            .balance(),
-        0.try_into().unwrap()
+        accounts_tree.get(&db_txn, &KeyNibbles::from(&[0u8; 20][..])),
+        None
     );
+
     HashedTimeLockedContract::revert_outgoing_transaction(
         &accounts_tree,
         &mut db_txn,
         &tx,
         1,
         1,
-        None,
+        receipt.as_ref(),
     )
     .unwrap();
+
     assert_eq!(
         accounts_tree
             .get(&db_txn, &KeyNibbles::from(&[0u8; 20][..]))
@@ -535,24 +541,30 @@ fn it_can_apply_and_revert_valid_transaction() {
         Account::HTLC(start_contract.clone()),
     );
 
-    HashedTimeLockedContract::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 1, 1)
-        .unwrap();
+    let receipt = HashedTimeLockedContract::commit_outgoing_transaction(
+        &accounts_tree,
+        &mut db_txn,
+        &tx,
+        1,
+        1,
+    )
+    .unwrap();
+
     assert_eq!(
-        accounts_tree
-            .get(&db_txn, &KeyNibbles::from(&[0u8; 20][..]))
-            .unwrap()
-            .balance(),
-        0.try_into().unwrap()
+        accounts_tree.get(&db_txn, &KeyNibbles::from(&[0u8; 20][..])),
+        None
     );
+
     HashedTimeLockedContract::revert_outgoing_transaction(
         &accounts_tree,
         &mut db_txn,
         &tx,
         1,
         1,
-        None,
+        receipt.as_ref(),
     )
     .unwrap();
+
     assert_eq!(
         accounts_tree
             .get(&db_txn, &KeyNibbles::from(&[0u8; 20][..]))
@@ -572,24 +584,30 @@ fn it_can_apply_and_revert_valid_transaction() {
         Account::HTLC(start_contract.clone()),
     );
 
-    HashedTimeLockedContract::commit_outgoing_transaction(&accounts_tree, &mut db_txn, &tx, 1, 101)
-        .unwrap();
+    let receipt = HashedTimeLockedContract::commit_outgoing_transaction(
+        &accounts_tree,
+        &mut db_txn,
+        &tx,
+        1,
+        101,
+    )
+    .unwrap();
+
     assert_eq!(
-        accounts_tree
-            .get(&db_txn, &KeyNibbles::from(&[0u8; 20][..]))
-            .unwrap()
-            .balance(),
-        0.try_into().unwrap()
+        accounts_tree.get(&db_txn, &KeyNibbles::from(&[0u8; 20][..])),
+        None
     );
+
     HashedTimeLockedContract::revert_outgoing_transaction(
         &accounts_tree,
         &mut db_txn,
         &tx,
         1,
         1,
-        None,
+        receipt.as_ref(),
     )
     .unwrap();
+
     assert_eq!(
         accounts_tree
             .get(&db_txn, &KeyNibbles::from(&[0u8; 20][..]))

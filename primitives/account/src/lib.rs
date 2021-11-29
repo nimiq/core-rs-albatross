@@ -8,12 +8,12 @@ pub use crate::accounts::{Accounts, AccountsTrie};
 pub use crate::accounts_list::AccountsList;
 pub use crate::basic_account::BasicAccount;
 pub use crate::error::AccountError;
-pub use crate::htlc_contract::HashedTimeLockedContract;
+pub use crate::htlc_contract::*;
 pub use crate::inherent::{Inherent, InherentType};
 pub use crate::interaction_traits::*;
 pub use crate::receipts::*;
 pub use crate::staking_contract::*;
-pub use crate::vesting_contract::VestingContract;
+pub use crate::vesting_contract::*;
 
 mod account;
 mod accounts;
