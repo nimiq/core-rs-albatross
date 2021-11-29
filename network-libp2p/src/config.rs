@@ -31,7 +31,7 @@ impl Config {
         let gossipsub = GossipsubConfigBuilder::default()
             .mesh_n_low(3)
             .validate_messages()
-            .max_transmit_size(200_000)
+            .max_transmit_size(1_000_000) // TODO find a reasonable value for this parameter
             .validation_mode(libp2p::gossipsub::ValidationMode::Permissive)
             .heartbeat_interval(Duration::from_millis(700))
             .build()
