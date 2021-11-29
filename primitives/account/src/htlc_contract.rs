@@ -228,13 +228,22 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
             }
         }
 
-        accounts_tree.put(
-            db_txn,
-            &key,
-            Account::HTLC(htlc.change_balance(new_balance)),
-        );
+        // Store the account or prune if necessary.
+        let receipt = if new_balance.is_zero() {
+            accounts_tree.remove(db_txn, &key);
 
-        Ok(None)
+            Some(HTLCReceipt::from(htlc.clone()).serialize_to_vec())
+        } else {
+            accounts_tree.put(
+                db_txn,
+                &key,
+                Account::HTLC(htlc.change_balance(new_balance)),
+            );
+
+            None
+        };
+
+        Ok(receipt)
     }
 
     fn revert_outgoing_transaction(
@@ -245,29 +254,34 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         _block_time: u64,
         receipt: Option<&Vec<u8>>,
     ) -> Result<(), AccountError> {
-        if receipt.is_some() {
-            return Err(AccountError::InvalidReceipt);
-        }
-
         let key = KeyNibbles::from(&transaction.sender);
 
-        let account = accounts_tree
-            .get(db_txn, &key)
-            .ok_or(AccountError::NonExistentAddress {
-                address: transaction.sender.clone(),
-            })?;
+        let htlc = match receipt {
+            None => {
+                let account =
+                    accounts_tree
+                        .get(db_txn, &key)
+                        .ok_or(AccountError::NonExistentAddress {
+                            address: transaction.sender.clone(),
+                        })?;
 
-        let htlc = match account {
-            Account::HTLC(ref value) => value,
-            _ => {
-                return Err(AccountError::TypeMismatch {
-                    expected: AccountType::HTLC,
-                    got: account.account_type(),
-                })
+                if let Account::HTLC(contract) = account {
+                    contract
+                } else {
+                    return Err(AccountError::TypeMismatch {
+                        expected: AccountType::HTLC,
+                        got: account.account_type(),
+                    });
+                }
+            }
+            Some(r) => {
+                let receipt: HTLCReceipt = Deserialize::deserialize_from_vec(r)?;
+
+                HashedTimeLockedContract::from(receipt)
             }
         };
 
-        let new_balance = Account::balance_add(account.balance(), transaction.total_value())?;
+        let new_balance = Account::balance_add(htlc.balance, transaction.total_value())?;
 
         accounts_tree.put(
             db_txn,
@@ -299,5 +313,45 @@ impl AccountInherentInteraction for HashedTimeLockedContract {
         _receipt: Option<&Vec<u8>>,
     ) -> Result<(), AccountError> {
         Err(AccountError::InvalidInherent)
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub struct HTLCReceipt {
+    pub sender: Address,
+    pub recipient: Address,
+    pub hash_algorithm: HashAlgorithm,
+    pub hash_root: AnyHash,
+    pub hash_count: u8,
+    pub timeout: u64,
+    pub total_amount: Coin,
+}
+
+impl From<HashedTimeLockedContract> for HTLCReceipt {
+    fn from(contract: HashedTimeLockedContract) -> Self {
+        HTLCReceipt {
+            sender: contract.sender,
+            recipient: contract.recipient,
+            hash_algorithm: contract.hash_algorithm,
+            hash_root: contract.hash_root,
+            hash_count: contract.hash_count,
+            timeout: contract.timeout,
+            total_amount: contract.total_amount,
+        }
+    }
+}
+
+impl From<HTLCReceipt> for HashedTimeLockedContract {
+    fn from(receipt: HTLCReceipt) -> Self {
+        HashedTimeLockedContract {
+            balance: Coin::ZERO,
+            sender: receipt.sender,
+            recipient: receipt.recipient,
+            hash_algorithm: receipt.hash_algorithm,
+            hash_root: receipt.hash_root,
+            hash_count: receipt.hash_count,
+            timeout: receipt.timeout,
+            total_amount: receipt.total_amount,
+        }
     }
 }

@@ -162,13 +162,22 @@ impl AccountTransactionInteraction for VestingContract {
             return Err(AccountError::InvalidSignature);
         }
 
-        accounts_tree.put(
-            db_txn,
-            &key,
-            Account::Vesting(vesting.change_balance(new_balance)),
-        );
+        // Store the account or prune if necessary.
+        let receipt = if new_balance.is_zero() {
+            accounts_tree.remove(db_txn, &key);
 
-        Ok(None)
+            Some(VestingReceipt::from(vesting.clone()).serialize_to_vec())
+        } else {
+            accounts_tree.put(
+                db_txn,
+                &key,
+                Account::Vesting(vesting.change_balance(new_balance)),
+            );
+
+            None
+        };
+
+        Ok(receipt)
     }
 
     fn revert_outgoing_transaction(
@@ -179,29 +188,34 @@ impl AccountTransactionInteraction for VestingContract {
         _block_time: u64,
         receipt: Option<&Vec<u8>>,
     ) -> Result<(), AccountError> {
-        if receipt.is_some() {
-            return Err(AccountError::InvalidReceipt);
-        }
-
         let key = KeyNibbles::from(&transaction.sender);
 
-        let account = accounts_tree
-            .get(db_txn, &key)
-            .ok_or(AccountError::NonExistentAddress {
-                address: transaction.sender.clone(),
-            })?;
+        let vesting = match receipt {
+            None => {
+                let account =
+                    accounts_tree
+                        .get(db_txn, &key)
+                        .ok_or(AccountError::NonExistentAddress {
+                            address: transaction.sender.clone(),
+                        })?;
 
-        let vesting = match account {
-            Account::Vesting(ref value) => value,
-            _ => {
-                return Err(AccountError::TypeMismatch {
-                    expected: AccountType::Vesting,
-                    got: account.account_type(),
-                })
+                if let Account::Vesting(contract) = account {
+                    contract
+                } else {
+                    return Err(AccountError::TypeMismatch {
+                        expected: AccountType::Vesting,
+                        got: account.account_type(),
+                    });
+                }
+            }
+            Some(r) => {
+                let receipt: VestingReceipt = Deserialize::deserialize_from_vec(r)?;
+
+                VestingContract::from(receipt)
             }
         };
 
-        let new_balance = Account::balance_add(account.balance(), transaction.total_value())?;
+        let new_balance = Account::balance_add(vesting.balance, transaction.total_value())?;
 
         accounts_tree.put(
             db_txn,
@@ -233,5 +247,39 @@ impl AccountInherentInteraction for VestingContract {
         _receipt: Option<&Vec<u8>>,
     ) -> Result<(), AccountError> {
         Err(AccountError::InvalidInherent)
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub struct VestingReceipt {
+    pub owner: Address,
+    pub start_time: u64,
+    pub time_step: u64,
+    pub step_amount: Coin,
+    pub total_amount: Coin,
+}
+
+impl From<VestingContract> for VestingReceipt {
+    fn from(contract: VestingContract) -> Self {
+        VestingReceipt {
+            owner: contract.owner,
+            start_time: contract.start_time,
+            time_step: contract.time_step,
+            step_amount: contract.step_amount,
+            total_amount: contract.total_amount,
+        }
+    }
+}
+
+impl From<VestingReceipt> for VestingContract {
+    fn from(receipt: VestingReceipt) -> Self {
+        VestingContract {
+            balance: Coin::ZERO,
+            owner: receipt.owner,
+            start_time: receipt.start_time,
+            time_step: receipt.time_step,
+            step_amount: receipt.step_amount,
+            total_amount: receipt.total_amount,
+        }
     }
 }
