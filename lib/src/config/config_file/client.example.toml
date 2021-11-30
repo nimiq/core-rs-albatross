@@ -25,6 +25,10 @@ listen_addresses = [
 	"/ip6/[::1]/tcp/8443",
 ]
 
+seed_nodes = [
+        { address = "/dns4/seed1.v2.nimiq-testnet.com/tcp/8443/ws" }
+]
+
 # User Agent
 #
 # String that describes what kind of node is running.
@@ -242,6 +246,10 @@ level = "debug"
 ###############################################################################
 
 [validator]
+validator_address = "NQ07 0000 0000 0000 0000 0000 0000 0000 0000"
+signing_key_file = "signing_key.dat"
 voting_key_file = "voting_key.dat"
 fee_key_file = "fee_key.dat"
-signing_key_file = "signing_key.dat"
+#signing_key = "Schnorr Private Key"
+#fee_key = "Schnorr Private Key"
+#voting_key = "BLS Private Key"
