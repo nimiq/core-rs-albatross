@@ -14,10 +14,7 @@ use bls::PublicKey as BlsPublicKey;
 use database::volatile::{VolatileDatabaseError, VolatileEnvironment};
 use database::WriteTransaction;
 use hash::{Blake2bHash, Hash};
-use keys::{
-    Address, KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey,
-    PublicKey as SchnorrPublicKey,
-};
+use keys::{Address, PublicKey as SchnorrPublicKey};
 use nimiq_trie::key_nibbles::KeyNibbles;
 use primitives::coin::Coin;
 use vrf::VrfSeed;
@@ -26,8 +23,8 @@ mod config;
 
 #[derive(Debug, Error)]
 pub enum GenesisBuilderError {
-    #[error("No signing key to generate genesis seed.")]
-    NoSigningKey,
+    #[error("No VRF seed to generate genesis block")]
+    NoVrfSeed,
     #[error("Invalid timestamp: {0}")]
     InvalidTimestamp(OffsetDateTime),
     #[error("Serialization failed")]
@@ -50,9 +47,9 @@ pub struct GenesisInfo {
 }
 
 pub struct GenesisBuilder {
-    pub signing_key: Option<SchnorrPrivateKey>,
     pub seed_message: Option<String>,
     pub timestamp: Option<OffsetDateTime>,
+    pub vrf_seed: Option<VrfSeed>,
     pub validators: Vec<config::GenesisValidator>,
     pub stakers: Vec<config::GenesisStaker>,
     pub accounts: Vec<config::GenesisAccount>,
@@ -61,9 +58,9 @@ pub struct GenesisBuilder {
 impl GenesisBuilder {
     pub fn new() -> Self {
         GenesisBuilder {
-            signing_key: None,
             seed_message: None,
             timestamp: None,
+            vrf_seed: None,
             validators: vec![],
             stakers: vec![],
             accounts: vec![],
@@ -77,12 +74,7 @@ impl GenesisBuilder {
     }
 
     pub fn with_defaults(&mut self) -> &mut Self {
-        self.signing_key = Some(SchnorrPrivateKey::default());
-        self
-    }
-
-    pub fn with_signing_key(&mut self, secret_key: SchnorrPrivateKey) -> &mut Self {
-        self.signing_key = Some(secret_key);
+        self.vrf_seed = Some(VrfSeed::default());
         self
     }
 
@@ -93,6 +85,11 @@ impl GenesisBuilder {
 
     pub fn with_timestamp(&mut self, timestamp: OffsetDateTime) -> &mut Self {
         self.timestamp = Some(timestamp);
+        self
+    }
+
+    pub fn with_vrf_seed(&mut self, vrf_seed: VrfSeed) -> &mut Self {
+        self.vrf_seed = Some(vrf_seed);
         self
     }
 
@@ -137,15 +134,14 @@ impl GenesisBuilder {
         path: P,
     ) -> Result<&mut Self, GenesisBuilderError> {
         let config::GenesisConfig {
-            signing_key,
             seed_message,
             timestamp,
+            vrf_seed,
             mut validators,
             mut stakers,
             mut accounts,
         } = toml::from_str(&read_to_string(path)?)?;
-
-        signing_key.map(|skey| self.with_signing_key(skey));
+        vrf_seed.map(|vrf_seed| self.with_vrf_seed(vrf_seed));
         seed_message.map(|msg| self.with_seed_message(msg));
         timestamp.map(|t| self.with_timestamp(t));
         self.validators.append(&mut validators);
@@ -224,18 +220,11 @@ impl GenesisBuilder {
         accounts.init(&mut txn, genesis_accounts.clone());
 
         // generate seeds
-        let signing_key_pair = SchnorrKeyPair::from(
-            self.signing_key
-                .clone()
-                .ok_or(GenesisBuilderError::NoSigningKey)?,
-        );
-
-        // pre-genesis seed (used for view slot selection)
-        let pre_genesis_seed = VrfSeed::default();
-        debug!("Pre genesis seed: {}", pre_genesis_seed);
-
         // seed of genesis block = VRF(seed_0)
-        let seed = pre_genesis_seed.sign_next(&signing_key_pair);
+        let seed = self
+            .vrf_seed
+            .clone()
+            .ok_or(GenesisBuilderError::NoVrfSeed)?;
         debug!("Genesis seed: {}", seed);
 
         // generate slot allocation from staking contract

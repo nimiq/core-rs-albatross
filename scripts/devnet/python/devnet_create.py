@@ -237,8 +237,8 @@ with (output / "dev-albatross.toml").open("wt") as f:
     f.write("""
 name = "dev-albatross"
 seed_message = "Albatross DevNet"
-signing_key = "9c4a1b36bf0a0a97b9d96713ee8cce211d321cdb368e06e53355c34a9733463f5b1897200f6af83fd3ea54f15bcbd9a5da772c79b0b06bd41fb95e06ebc4ba4174abe405c8339ac7540789b553d9454646649705cc5097e6643cbb0c0fb50000"
-timestamp="{timestamp}"
+timestamp = "{timestamp}"
+vrf_seed = "e8c7f2f3935da9ca39419aa7d2cc90817245f75e58cc543f2b9478766308e8a50fffccb09e2df3546f5a0c0059d73a506c48fa2b546f15b511d0f7a63f0ee20cd510a87f520e26478bb687ca31a08db8b02921f9a22e32a790c07f16dbdf4501"
     """.format(
         # timestamp=datetime.utcnow().isoformat()
         timestamp="2021-07-15T00:00:00.000+00:00"

@@ -6,16 +6,17 @@ use time::OffsetDateTime;
 
 use beserial::Deserialize as BDeserialize;
 use bls::PublicKey as BlsPublicKey;
-use keys::{Address, PrivateKey as SchnorrPrivateKey, PublicKey as SchnorrPublicKey};
+use keys::{Address, PublicKey as SchnorrPublicKey};
 use primitives::coin::Coin;
+use vrf::VrfSeed;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct GenesisConfig {
     #[serde(default)]
-    #[serde(deserialize_with = "deserialize_schnorr_secret_key_opt")]
-    pub signing_key: Option<SchnorrPrivateKey>,
-
     pub seed_message: Option<String>,
+
+    #[serde(deserialize_with = "deserialize_vrf_seed_opt")]
+    pub vrf_seed: Option<VrfSeed>,
 
     #[serde(deserialize_with = "deserialize_timestamp")]
     pub timestamp: Option<OffsetDateTime>,
@@ -107,23 +108,6 @@ where
     BlsPublicKey::deserialize_from_vec(&pkey_raw).map_err(Error::custom)
 }
 
-pub(crate) fn deserialize_schnorr_secret_key_opt<'de, D>(
-    deserializer: D,
-) -> Result<Option<SchnorrPrivateKey>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let opt: Option<String> = Deserialize::deserialize(deserializer)?;
-    if let Some(skey_hex) = opt {
-        let skey_raw = hex::decode(skey_hex).map_err(Error::custom)?;
-        Ok(Some(
-            SchnorrPrivateKey::deserialize_from_vec(&skey_raw).map_err(Error::custom)?,
-        ))
-    } else {
-        Ok(None)
-    }
-}
-
 pub(crate) fn deserialize_schnorr_public_key<'de, D>(
     deserializer: D,
 ) -> Result<SchnorrPublicKey, D::Error>
@@ -144,6 +128,21 @@ where
         Ok(Some(
             OffsetDateTime::parse(&s, &time::format_description::well_known::Rfc3339)
                 .map_err(|e| Error::custom(format!("{:?}", e)))?,
+        ))
+    } else {
+        Ok(None)
+    }
+}
+
+pub(crate) fn deserialize_vrf_seed_opt<'de, D>(deserializer: D) -> Result<Option<VrfSeed>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let vrf_seed_hex: Option<String> = Deserialize::deserialize(deserializer)?;
+    if let Some(vrf_seed_hex) = vrf_seed_hex {
+        let vrf_seed_raw = hex::decode(vrf_seed_hex).map_err(Error::custom)?;
+        Ok(Some(
+            VrfSeed::deserialize_from_vec(&vrf_seed_raw).map_err(Error::custom)?,
         ))
     } else {
         Ok(None)
