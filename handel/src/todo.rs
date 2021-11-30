@@ -85,6 +85,10 @@ impl<C: AggregatableContribution, E: Evaluator<C>> TodoList<C, E> {
             waker.wake();
         }
     }
+
+    pub fn into_stream(self) -> BoxStream<'static, LevelUpdate<C>> {
+        self.input_stream
+    }
 }
 
 impl<C: AggregatableContribution, E: Evaluator<C>> Stream for TodoList<C, E> {

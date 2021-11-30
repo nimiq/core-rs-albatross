@@ -5,7 +5,7 @@ use futures::channel::mpsc::{unbounded, UnboundedSender};
 use futures::future::BoxFuture;
 use futures::stream::BoxStream;
 use futures::task::{Context, Poll};
-use futures::{ready, select, FutureExt, Sink, Stream, StreamExt};
+use futures::{ready, select, Future, FutureExt, Sink, Stream, StreamExt};
 use tokio::task::JoinHandle;
 use tokio::time::{interval_at, Instant};
 use tokio_stream::wrappers::IntervalStream;
@@ -28,6 +28,10 @@ use crate::update::{LevelUpdate, LevelUpdateMessage};
 // * SinkError.
 // * Evaluator::new -> threshold (now covered outside of this crate)
 
+type LevelUpdateStream<P> = BoxStream<'static, LevelUpdate<<P as Protocol>::Contribution>>;
+type LevelUpdateSender<P, T> =
+    UnboundedSender<(LevelUpdateMessage<<P as Protocol>::Contribution, T>, usize)>;
+
 #[derive(std::fmt::Debug)]
 pub struct SinkError {} // TODO
 
@@ -43,7 +47,7 @@ struct NextAggregation<
     levels: Vec<Level>,
 
     /// Remaining Todos
-    todos: Pin<Box<TodoList<P::Contribution, P::Evaluator>>>,
+    todos: TodoList<P::Contribution, P::Evaluator>,
 
     /// The protocol specifying how this aggregation works.
     protocol: P,
@@ -55,7 +59,7 @@ struct NextAggregation<
     tag: T,
 
     /// Sink used to relay messages
-    sender: UnboundedSender<(LevelUpdateMessage<P::Contribution, T>, usize)>,
+    sender: LevelUpdateSender<P, T>,
 
     /// Interval for starting the next level regarless of previous levels completion
     start_level_interval: IntervalStream,
@@ -77,14 +81,14 @@ impl<
         tag: T,
         config: Config,
         own_contribution: P::Contribution,
-        input_stream: BoxStream<'static, LevelUpdate<P::Contribution>>,
-        sender: UnboundedSender<(LevelUpdateMessage<P::Contribution, T>, usize)>,
+        input_stream: LevelUpdateStream<P>,
+        sender: LevelUpdateSender<P, T>,
     ) -> Self {
         // Invoke the partitioner to create the level structure of peers.
         let levels: Vec<Level> = Level::create_levels(protocol.partitioner());
 
         // Create an empty todo list which can later be polled for the best available todo.
-        let mut todos = Box::pin(TodoList::new(protocol.evaluator(), input_stream));
+        let mut todos = TodoList::new(protocol.evaluator(), input_stream);
 
         // Add our own contribution to the todo list.
         todos.add_contribution(own_contribution.clone(), 0);
@@ -144,6 +148,17 @@ impl<
         }
     }
 
+    fn num_contributors(&self, aggregate: &P::Contribution) -> usize {
+        self.protocol
+            .registry()
+            .signers_identity(&aggregate.contributors())
+            .len()
+    }
+
+    fn is_complete_aggregate(&self, aggregate: &P::Contribution) -> bool {
+        self.num_contributors(aggregate) == self.protocol.partitioner().size()
+    }
+
     /// Check if a level was completed TODO: remove contribution parameter as it is not used at all.
     fn check_completed_level(&self, contribution: P::Contribution, level: usize) {
         let level = self.levels.get(level).unwrap_or_else(|| {
@@ -174,17 +189,10 @@ impl<
         let num_contributors = {
             let store = self.protocol.store();
             let store = store.read();
-            self.protocol
-                .registry()
-                .signers_identity(
-                    &store
-                        .best(level.id)
-                        .unwrap_or_else(|| {
-                            panic!("Expected a best signature for level {}", level.id)
-                        })
-                        .contributors(),
-                )
-                .len()
+            let best = store
+                .best(level.id)
+                .unwrap_or_else(|| panic!("Expected a best signature for level {}", level.id));
+            self.num_contributors(&best)
         };
 
         trace!(
@@ -320,44 +328,32 @@ impl<
                             let result = self.protocol.verify(&todo.contribution).await;
 
                             if result.is_ok() {
+                                if todo.level == self.protocol.partitioner().levels() {
+                                    return (todo.contribution, Some(self));
+                                }
+
                                 // if the contribution is valid push it to the store, creating a new aggregate
-                                let level = {
+                                {
                                     let store = self.protocol.store();
                                     let mut store = store.write();
-
                                     store.put(todo.contribution.clone(), todo.level, self.protocol.registry().signers_identity(&todo.contribution.contributors()));
-                                    if todo.level == self.protocol.partitioner().levels() {
-                                        todo.level - 1
-                                    } else {
-                                        todo.level
-                                    }
-                                };
+                                }
+
                                 // in case the level of this todo has not started, start it now as we have already contributions on it.
-                                self.start_level(level);
+                                self.start_level(todo.level);
                                 // check if a level was completed by the addition of the contribution
-                                self.check_completed_level(todo.contribution.clone(), level);
+                                self.check_completed_level(todo.contribution.clone(), todo.level);
 
                                 // get the best aggregate
                                 let last_level = self.levels.last().expect("No levels");
-                                let best =  {
+                                let best = {
                                     let store = self.protocol.store();
                                     let store = store.read();
-
                                     store.combined(last_level.id)
                                 };
 
                                 if let Some(best) = best {
-                                    if self.protocol.registry().signers_identity(&best.contributors()).len()
-                                        == self.protocol.partitioner().size() {
-                                        // if there is a best aggregate and this aggregate can no longer be improved upon (all contributors are already present)
-                                        // return the aggregate and None to signal no improvments can be made
-                                        // Send one last rounnd of Updates before we terminate to give other nodes the necessary messages.
-                                        self.automatic_update();
-                                        return (best, None);
-                                    } else {
-                                        // if the best aggregate can still be improved return the aggregate and self to continue the aggregation
-                                        return (best, Some(self));
-                                    }
+                                    return (best, Some(self));
                                 }
                             } else {
                                 // Invalid contributions create a warning, but do not terminate. -> Continue with the next best todo item.
@@ -372,6 +368,71 @@ impl<
                 },
             }
         }
+    }
+
+    fn into_inner(self) -> (LevelUpdateStream<P>, LevelUpdateSender<P, T>) {
+        (self.todos.into_stream(), self.sender)
+    }
+}
+
+struct FinishedAggregation<
+    P: Protocol,
+    T: Clone + Debug + Serialize + Deserialize + Send + Sync + Unpin,
+> {
+    level_update: LevelUpdateMessage<P::Contribution, T>,
+    input_stream: LevelUpdateStream<P>,
+    sender: LevelUpdateSender<P, T>,
+}
+
+impl<
+        P: Protocol,
+        T: Clone + Debug + Eq + Serialize + Deserialize + Sized + Send + Sync + Unpin,
+    > FinishedAggregation<P, T>
+{
+    fn from(aggregation: NextAggregation<P, T>, aggregate: P::Contribution) -> Self {
+        let level_update = LevelUpdate::<P::Contribution>::new(
+            aggregate,
+            None,
+            aggregation.protocol.partitioner().levels(),
+            aggregation.protocol.node_id(),
+        )
+        .with_tag(aggregation.tag.clone());
+
+        let (input_stream, sender) = aggregation.into_inner();
+
+        Self {
+            level_update,
+            input_stream,
+            sender,
+        }
+    }
+}
+
+impl<
+        P: Protocol,
+        T: Clone + Debug + Eq + Serialize + Deserialize + Send + Sync + Unpin + 'static,
+    > Future for FinishedAggregation<P, T>
+{
+    type Output = (P::Contribution, Option<NextAggregation<P, T>>);
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        while let Some(msg) = ready!(self.input_stream.poll_next_unpin(cx)) {
+            // Don't respond to final level updates.
+            if msg.level == self.level_update.update.level {
+                continue;
+            }
+
+            let response = (self.level_update.clone(), msg.origin());
+            if let Err(e) = self.sender.unbounded_send(response) {
+                log::warn!(
+                    "Failed to send final LevelUpdate to {}: {:?}",
+                    msg.origin(),
+                    e
+                );
+            }
+        }
+
+        Poll::Ready((self.level_update.update.aggregate.clone(), None))
     }
 }
 
@@ -394,7 +455,7 @@ impl<
         tag: T,
         config: Config,
         own_contribution: P::Contribution,
-        input_stream: BoxStream<'static, LevelUpdate<P::Contribution>>,
+        input_stream: LevelUpdateStream<P>,
         output_sink: Box<
             (dyn Sink<(LevelUpdateMessage<P::Contribution, T>, usize), Error = E> + Unpin + Send),
         >,
@@ -461,8 +522,14 @@ impl<
         // Poll the next_aggregate future. If it is still Poll::Pending return Poll::Pending as well. (hidden within ready!)
         let (aggregate, next_aggregation) = ready!(next_aggregation.poll_unpin(cx));
 
-        self.next_aggregation =
-            next_aggregation.map(|next_aggregation| next_aggregation.next().boxed());
+        self.next_aggregation = next_aggregation.map(|next_aggregation| {
+            if next_aggregation.is_complete_aggregate(&aggregate) {
+                FinishedAggregation::from(next_aggregation, aggregate.clone()).boxed()
+            } else {
+                next_aggregation.next().boxed()
+            }
+        });
+
         // At this point a new aggregate was returned so the Stream returns it as well.
         Poll::Ready(Some(aggregate))
     }

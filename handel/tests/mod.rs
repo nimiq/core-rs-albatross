@@ -9,7 +9,7 @@ use std::{fmt::Formatter, time::Duration};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use futures::sink::Sink;
-use futures::stream::{self, StreamExt};
+use futures::stream::StreamExt;
 use futures::task::{Context, Poll};
 use parking_lot::RwLock;
 
@@ -22,10 +22,10 @@ use nimiq_handel::config::Config;
 use nimiq_handel::contribution::{AggregatableContribution, ContributionError};
 use nimiq_handel::evaluator;
 use nimiq_handel::identity;
-use nimiq_handel::partitioner::{BinomialPartitioner, Partitioner};
+use nimiq_handel::partitioner::BinomialPartitioner;
 use nimiq_handel::protocol;
 use nimiq_handel::store::ReplaceStore;
-use nimiq_handel::update::{LevelUpdate, LevelUpdateMessage};
+use nimiq_handel::update::LevelUpdateMessage;
 use nimiq_handel::verifier;
 use nimiq_network_interface::message::Message;
 use nimiq_network_interface::network::Network;
@@ -259,6 +259,8 @@ async fn it_can_aggregate() {
         peer_count: 1,
     };
 
+    let stopped = Arc::new(RwLock::new(false));
+
     let mut hub = MockHub::default();
 
     let contributor_num: usize = 7;
@@ -304,9 +306,14 @@ async fn it_can_aggregate() {
             }),
         );
 
+        let r = stopped.clone();
         tokio::spawn(async move {
             // have them just run until the aggregation is finished
-            while let Some(_contribution) = aggregation.next().await {}
+            while let Some(_contribution) = aggregation.next().await {
+                if *r.read() {
+                    return;
+                }
+            }
         });
     }
 
@@ -322,7 +329,6 @@ async fn it_can_aggregate() {
     for network in &networks {
         net.dial_mock(network);
     }
-    networks.push(net.clone());
 
     // instead of spawning the aggregation task await its result here.
     let mut aggregation = Aggregation::new(
@@ -341,53 +347,53 @@ async fn it_can_aggregate() {
         }),
     );
 
-    let mut last_aggregate: Option<Contribution> = None;
+    // aggregating should not take more than 300 ms
+    let deadline = tokio::time::Instant::now()
+        .checked_add(tokio::time::Duration::from_millis(300))
+        .unwrap();
 
-    while let Some(aggregate) = aggregation.next().await {
-        last_aggregate = Some(aggregate);
+    loop {
+        match tokio::time::timeout_at(deadline, aggregation.next()).await {
+            Ok(Some(aggregate)) => {
+                // The final value needs to be the sum of all contributions: 8 + 7 + 6 + 5 + 4 + 3 + 2 + 1 = 36
+                if aggregate.num_contributors() == contributor_num + 1 && aggregate.value == 36 {
+                    // fully aggregated the result. breack the loop here
+                    break;
+                }
+            }
+            Ok(None) => panic!("Aggregate returned a None value, which should be unreachable!()"),
+            Err(_) => panic!("Aggregatig took too long"),
+        }
     }
 
-    // An aggregation needs to be present
-    assert!(last_aggregate.is_some(), "Nothing was aggregated!");
-
-    let last_aggregate = last_aggregate.unwrap();
-
-    // All nodes need to contribute
-    assert_eq!(
-        last_aggregate.num_contributors(),
-        contributor_num + 1,
-        "Not all contributions are present",
-    );
-
-    // the final value needs to be the sum of all contributions: 8 + 7 + 6 + 5 + 4 + 3 + 2 + 1 = 36
-    assert_eq!(last_aggregate.value, 36, "Wrong aggregation result",);
+    drop(aggregation);
+    net.disconnect();
 
     // after we have the final aggregate create a new instance and have it (without any other instances)
-    // retur a fully aggregated contribution and terminate.
-    let protocol = Protocol::new(1, contributor_num + 1, contributor_num);
-    let input = LevelUpdate::new(
-        last_aggregate,
-        None,
-        protocol.partitioner.levels(),
-        protocol.partitioner.size(),
-    );
-    let input_vec = vec![input];
-
+    // return a fully aggregated contribution and terminate.
+    // Same as before
+    // let net = Arc::new(hub.new_network_with_address(contributor_num as u64));
+    let protocol = Protocol::new(contributor_num, contributor_num + 1, contributor_num + 1);
     let mut contributors = BitSet::new();
-    contributors.insert(1);
-
-    // create a contribution for this node with a value of `id + 1` (So no node has value 0 which doesn't show up in addition).
+    contributors.insert(contributor_num);
     let contribution = Contribution {
-        value: 2u64, // node 1 has contributio 1 + 1
+        value: contributor_num as u64 + 1u64,
         contributors,
     };
+    for network in &networks {
+        net.dial_mock(network);
+    }
 
+    // instead of spawning the aggregation task await its result here.
     let mut aggregation = Aggregation::new(
         protocol,
         1_u8, // serves as the tag or identifier for this aggregation
         config.clone(),
         contribution,
-        Box::pin(stream::iter(input_vec)),
+        Box::pin(
+            net.receive_from_all::<LevelUpdateMessage<Contribution, u8>>()
+                .map(move |msg| msg.0.update),
+        ),
         Box::new(NetworkSink {
             network: net.clone(),
             current_future: None,
@@ -395,11 +401,11 @@ async fn it_can_aggregate() {
         }),
     );
 
-    let mut last_aggregate: Option<Contribution> = None;
-
-    while let Some(aggregate) = aggregation.next().await {
-        last_aggregate = Some(aggregate);
-    }
+    // first poll will add the nodes individual contribution and send its LevelUpdate
+    // which should be responded to with a full aggregation
+    let _ = aggregation.next().await;
+    // Second poll must return a full contribution
+    let last_aggregate = aggregation.next().await;
 
     // An aggregation needs to be present
     assert!(last_aggregate.is_some(), "Nothing was aggregated!");
@@ -415,6 +421,8 @@ async fn it_can_aggregate() {
 
     // the final value needs to be the sum of all contributions: 8 + 7 + 6 + 5 + 4 + 3 + 2 + 1 = 36
     assert_eq!(last_aggregate.value, 36, "Wrong aggregation result",);
+
+    *stopped.write() = true;
 }
 
 // additional tests:

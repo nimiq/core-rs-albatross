@@ -111,6 +111,8 @@ impl<
                 == self.partitioner.size()
             {
                 return usize::MAX;
+            } else {
+                return 0;
             }
         }
 
