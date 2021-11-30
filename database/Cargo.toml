@@ -18,11 +18,7 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 bitflags = "1.0"
-fs2 = "0.4"
 lmdb-zero = "0.4"
 log = "0.4"
-parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
 rand = "0.8"
 tempfile = "3"
-
-beserial = { path = "../beserial" }

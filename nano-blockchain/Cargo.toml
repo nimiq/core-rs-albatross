@@ -24,5 +24,3 @@ nimiq-utils = { path = "../utils", features = ["time"] }
 
 [dev-dependencies]
 rand = "^0.8"
-
-nimiq-block-production = { path = "../block-production", features = ["test-utils"] }

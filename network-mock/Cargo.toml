@@ -36,6 +36,3 @@ beserial = { path = "../beserial" }
 beserial_derive = { path = "../beserial/beserial_derive" }
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-utils = { path = "../utils", features = ["crc"] }
-
-[dev-dependencies]
-env_logger = "0.9"

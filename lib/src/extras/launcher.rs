@@ -28,10 +28,10 @@ pub fn go() -> Launcher {
 #[derive(Debug, Default)]
 pub struct PanicMode {
     /// Write panics into log
-    logging: bool,
+    _logging: bool,
 
     /// Prints panic message with instruction to report and provides a dump file with stack trace.
-    human_panic: bool,
+    _human_panic: bool,
 
     /// This is only supposed to be used by Team Nimiq for automatically collecting panics.
     ///
@@ -39,14 +39,14 @@ pub struct PanicMode {
     ///
     /// * Have this behind a separate feature. Never enable this by default! Read the report URL
     ///   from an environment variable
-    report_url: Option<Url>,
+    _report_url: Option<Url>,
 }
 
 #[derive(Debug, Default)]
 pub struct Launcher {
     deadlock_detection: bool,
     logging: bool,
-    panic: PanicMode,
+    _panic: PanicMode,
 }
 
 impl Launcher {

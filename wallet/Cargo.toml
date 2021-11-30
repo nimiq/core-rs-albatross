@@ -17,7 +17,6 @@ hex = "0.4"
 
 beserial = { path = "../beserial" }
 beserial_derive = { path = "../beserial/beserial_derive" }
-nimiq-account = { path = "../primitives/account" }
 nimiq-database = { path = "../database" }
 nimiq-hash = { path = "../hash" }
 nimiq-key-derivation = { path = "../key-derivation" }

@@ -28,6 +28,3 @@ tokio = "1.14"
 nimiq-network-interface = { path = "../network-interface" }
 nimiq-bls = { path = "../bls" }
 nimiq-utils = { path = "../utils", features = ["tagged-signing"] }
-
-[dev-dependencies]
-nimiq-network-mock = { path = "../network-mock" }

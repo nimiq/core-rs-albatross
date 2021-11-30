@@ -25,8 +25,6 @@ thiserror = "1.0"
 tokio = { version = "1.14", features = ["macros", "rt", "sync", "time"] }
 tokio-stream = { version = "0.1", features = ["default", "sync"] }
 
-# Used during debugging
-pretty-hex = "0.2"
 log = "0.4"
 
 beserial = { path = "../beserial" }
