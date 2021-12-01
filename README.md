@@ -110,7 +110,10 @@ Please take a look at the [`client.example.toml`](lib/src/config/config_file/cli
 
 The development network is currently in release-candidate phase [rc0](https://github.com/nimiq/core-rs-albatross/releases/tag/v0.1.0-rc.0). Its main purpose is to invite all developers to exercise and test the Nimiq 2.0 client, filing and reporting any [issues](https://github.com/nimiq/core-rs-albatross/issues/new) through our GitHub repository.
 
-Clients can connect to the Devnet via the seed node located at `/dns4/seed1.v2.nimiq-testnet.com/tcp/8443/ws`.
+Clients can connect to the Devnet via the seed node located at
+```
+/dns4/seed1.v2.nimiq-testnet.com/tcp/8443/ws
+```
 
 For a full list of supported and non-supported functionality, please refer to the [Nimiq 2.0 Devnet project](https://github.com/nimiq/core-rs-albatross/projects).
 
