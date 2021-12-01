@@ -131,7 +131,7 @@ validator_address = "NQ07 0000 0000 0000 0000 0000 0000 0000 0000"
 signing_key_file = "{path}/signing_key.dat"
 voting_key_file = "{path}/voting_key.dat"
 fee_key_file = "{path}/fee_key.dat"
-    """.format(
+""".format(
             path="temp-state/dev/spammer",
         ))
 
@@ -196,7 +196,7 @@ voting_key_file = "{path}/voting_key.dat"
 voting_key = "{voting_key}"
 fee_key_file = "{path}/fee_key.dat"
 fee_key = "{fee_key}"
-    """.format(
+""".format(
             port=str(9101 + i),
             path="temp-state/dev/{}".format(i+1),  # str(path),
             validator_address=validator_address["address"],
@@ -239,7 +239,7 @@ name = "dev-albatross"
 seed_message = "Albatross DevNet"
 timestamp = "{timestamp}"
 vrf_seed = "e8c7f2f3935da9ca39419aa7d2cc90817245f75e58cc543f2b9478766308e8a50fffccb09e2df3546f5a0c0059d73a506c48fa2b546f15b511d0f7a63f0ee20cd510a87f520e26478bb687ca31a08db8b02921f9a22e32a790c07f16dbdf4501"
-    """.format(
+""".format(
         # timestamp=datetime.utcnow().isoformat()
         timestamp="2021-07-15T00:00:00.000+00:00"
     ))
@@ -247,10 +247,10 @@ vrf_seed = "e8c7f2f3935da9ca39419aa7d2cc90817245f75e58cc543f2b9478766308e8a50fff
         f.write("""
 [[validators]]
 validator_address = "{validator_address}"
-signing_key      = "{signing_key}"
-voting_key     = "{voting_key}"
-reward_address    = "{reward_address}"
-        """.format(
+signing_key = "{signing_key}"
+voting_key = "{voting_key}"
+reward_address = "{reward_address}"
+""".format(
             validator_address=validator["validator_address"]["address"],
             signing_key=validator["signing_key"]["public_key"],
             voting_key=validator["voting_key"]["public_key"],
@@ -313,7 +313,7 @@ networks:
       driver: default
       config:
         - subnet: 7.0.0.0/24
-        """)
+""")
     # Seed node
     f.write("""
 services:
@@ -334,7 +334,7 @@ services:
         ipv4_address: 7.0.0.99
     volumes:
       - "seed0:/home/nimiq/.nimiq:rw"
-        """)
+""")
 
 # Writing validator configuration
     for idx, validator in enumerate(validators):
@@ -364,14 +364,14 @@ services:
         ipv4_address: {ip}
     volumes:
       - "seed{validatorid}:/home/nimiq/.nimiq:rw"
-        """.format(validatorid=str(idx+1),
-                   ip=str("7.0.0.{}".format(idx+2)),
-                   validator_address=validator["validator_address"]["address"].replace(
-                       " ", ""),
-                   signing_key=validator["signing_key"]["private_key"],
-                   voting_key=validator["voting_key"]["private_key"],
-                   fee_key=validator["reward_address"]["private_key"]
-                   ))
+""".format(validatorid=str(idx+1),
+           ip=str("7.0.0.{}".format(idx+2)),
+           validator_address=validator["validator_address"]["address"].replace(
+            " ", ""),
+           signing_key=validator["signing_key"]["private_key"],
+           voting_key=validator["voting_key"]["private_key"],
+           fee_key=validator["reward_address"]["private_key"]
+           ))
 
 # Spammer node
     f.write("""
@@ -397,7 +397,7 @@ services:
         ipv4_address: 7.0.0.98
     volumes:
       - "spammer:/home/nimiq/.nimiq:rw"
-        """)
+""")
 # Volumes
     f.write("""
 volumes:
