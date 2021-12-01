@@ -2,28 +2,26 @@
 
 ![nimiq](https://raw.githubusercontent.com/nimiq/designs/master/logo/RGB/colored/png/nimiq_logo_rgb_horizontal.png)
 
-> Rust implementation of the Nimiq 2.0 Blockchain node
+> Rust implementation of the Nimiq 2.0 blockchain node
 
 [![Build Status](https://github.com/nimiq/core-rs-albatross/actions/workflows/build+test.yml/badge.svg?branch=albatross)](https://github.com/nimiq/core-rs-albatross/actions/workflows/build+test.yml?query=branch%3Aalbatross)
 [![dependency status](https://deps.rs/repo/github/nimiq/core-rs-albatross/status.svg)](https://deps.rs/repo/github/nimiq/core-rs-albatross)
 
 **[Nimiq](https://nimiq.com/)**  is a frictionless payment protocol for the web.
 
-This repository is currently under development. It contains the implementation of the Nimiq 2.0 blockchain:
-a proof of stake blockchain based in the [Albatross](https://arxiv.org/abs/1903.01589) consensus algorithm.
+This repository is currently under development. It contains the implementation of the Nimiq 2.0 protocol:
+a Proof-of-stake blockchain based on the [Albatross](https://arxiv.org/abs/1903.01589) consensus algorithm.
 
 Nimiq 2.0 was conceived with performance in mind without sacrificing security.
 
 Currently, the protocol can be exercised in an environment aimed for developers where bugs are expected to happen.
 For more detailed information about how to connect and use the development network, please refer to the [Devnet](#devnet) section.
 
-The Nimiq Rust client comes without wallet and transactions can be sent to the network, via the Nimiq 2.0 client, using a RPC interface.
-
 ## Table of Contents
 
 - [Background](#background)
-- [System Requirements](#systemrequirements)
-- [Install](#install)
+- [System requirements](#system-requirements)
+- [Installation](#installation)
 - [Usage](#usage)
 - [Configuration](#configuration)
 - [Devnet](#devnet)
@@ -44,7 +42,7 @@ The Nimiq Rust client comes without wallet and transactions can be sent to the n
 - File systems with sparse file support.
 
 
-## Install
+## Installation
 
 Besides [Rust nightly](https://www.rust-lang.org/learn/get-started#installing-rust) itself,
 the following packages are required to be able to compile the source code:
@@ -110,22 +108,19 @@ Please take a look at the [`client.example.toml`](lib/src/config/config_file/cli
 
 ### Devnet
 
-The development network is currently in release-candidate phase [rc0](https://github.com/nimiq/core-rs-albatross/releases/tag/v0.1.0-rc.0).
+The development network is currently in release-candidate phase [rc0](https://github.com/nimiq/core-rs-albatross/releases/tag/v0.1.0-rc.0). Its main purpose is to invite all developers to exercise and test the Nimiq 2.0 client, filing and reporting any [issues](https://github.com/nimiq/core-rs-albatross/issues/new) through our GitHub repository.
 
-Clients can connect to the Devnet via a seed node located in [DevnetSeed](http://seed1.v2.nimiq-testnet.com/) port 8443.
+Clients can connect to the Devnet via the seed node located at `/dns4/seed1.v2.nimiq-testnet.com/tcp/8443/ws`.
 
-The main purpose of the development network is to invite all developers to exercise and test the Nimiq 2.0 client,
-filling and reporting any [issue](https://github.com/nimiq/core-rs-albatross/issues/new) through our github repository.
-
-For a full list of supported and non-supported functionality in the devnet, refer to [Nimiq 2.0 Devnet Project](https://github.com/nimiq/core-rs-albatross/projects)
+For a full list of supported and non-supported functionality, please refer to the [Nimiq 2.0 Devnet project](https://github.com/nimiq/core-rs-albatross/projects).
 
 ## Contributing
 
 If you'd like to contribute to the development of Nimiq please follow our [Code of Conduct](/.github/CODE_OF_CONDUCT.md)
 and [Contributing Guidelines](/.github/CONTRIBUTING.md).
 
-Small note: If editing the README, please conform to the [standard-readme](https://github.com/RichardLitt/standard-readme) specification.
+Small note: When editing the README, please conform to the [standard-readme](https://github.com/RichardLitt/standard-readme) specification.
 
 ## License
 
-This project is under the [Apache License 2.0](./LICENSE.md).
+This project is licensed under the [Apache License 2.0](./LICENSE.md).
