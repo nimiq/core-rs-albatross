@@ -32,7 +32,7 @@ except (IndexError, ValueError):
     exit(1)
 
 try:
-    output = Path(argv[3])
+    output = Path(argv[2])
 except IndexError:
     output = Path("/tmp/nimiq-devnet")
 
