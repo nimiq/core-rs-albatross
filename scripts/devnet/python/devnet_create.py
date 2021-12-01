@@ -156,10 +156,12 @@ def create_validator(path, i):
 validator_address: "{validator_address}"
 voting_key: "{voting_key}"
 signing_key: "{signing_key}"
+fee_key: "{fee_key}"
 """.format(
             validator_address=validator_address["address"],
             voting_key=voting_key["private_key"],
             signing_key=signing_key["private_key"],
+            fee_key=reward_address["private_key"]
         ))
 
     # write config
