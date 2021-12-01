@@ -258,48 +258,6 @@ reward_address = "{reward_address}"
             voting_key=validator["voting_key"]["public_key"],
             reward_address=validator["reward_address"]["address"]
         ))
-    f.write("""
-[[accounts]]
-address = "NQ55 X103 EJXG 3S2U 3JNE L779 560T 3LNE 7S60"
-# private_key = "a24591648e20642fe5107d0285c1cc35d67e2033a92566f1217fbd3a14e07abc"
-balance = 10_000_000_00000
-
-[[accounts]]
-address = "NQ87 HKRC JYGR PJN5 KQYQ 5TM1 26XX 7TNG YT27"
-# private_key = "3336f25f5b4272a280c8eb8c1288b39bd064dfb32ebc799459f707a0e88c4e5f"
-balance = 10_000_000_00000
-
-[[accounts]]
-address = "NQ24 M1E1 YYY1 C280 GAEQ ULL4 U31R QH04 HCM7"
-# private_key = "6ca225de8c2a091a31ae48645453641069ae8a9d3158e9d6e004b417661af500"
-balance = 10_000_000_00000
-
-[[accounts]]
-address = "NQ08 6R71 Y0GB GSXM YQFH X3P3 A53E 3G6K RBVR"
-# private_key = "5899a573451f72a4a1e58c7de3e091a1846d14bd82c98e4bfdaf1857986de7d8"
-balance = 10_000_000_00000
-
-[[accounts]]
-address = "NQ62 GH6J A1CK MKQT Q4A1 2NCB KLVF R4K9 2BA1"
-# private_key = "652be07036bf791644260eaa388534d7dbecb579c69bf3b70c0714ae7d5fdcc2"
-balance = 10_000_000_00000
-
-[[accounts]]
-address = "NQ98 H463 YTJQ M717 MQ7L NPVR UJKJ VQ9C RYNF"
-# private_key = "e3e552194e1e56fb47ccc6eb8becea1c1b813ec23ae7613edff12be152a2e812"
-balance = 10_000_000_00000
-
-[[accounts]]
-address = "NQ41 EBPT ME3M TMUP SMCB 4V44 QQTL N7Q0 MU9R"
-# private_key = "c88cb69af940cc58a1f5aa8f1d943b53893a913af48d873c2e83169644b30edc"
-balance = 10_000_000_00000
-
-[[accounts]]
-address = "NQ40 GCAA U3UX 8BKD GUN0 PG3T 17HA 4X5H TXVE"
-# private_key = "1ef7aad365c195462ed04c275d47189d5362bbfe36b5e93ce7ba2f3add5f439b"
-balance = 10_000_000_00000
-
-    """)
 
 # Docker compose configuration
 print("Writing docker compose config")
