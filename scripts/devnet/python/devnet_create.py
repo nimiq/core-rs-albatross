@@ -258,6 +258,16 @@ reward_address = "{reward_address}"
             voting_key=validator["voting_key"]["public_key"],
             reward_address=validator["reward_address"]["address"]
         ))
+    for validator in validators:
+        f.write("""
+[[stakers]]
+staker_address = "{reward_address}"
+balance = 1_000_000
+delegation = "{validator_address}"
+""".format(
+            reward_address=validator["reward_address"]["address"],
+            validator_address=validator["validator_address"]["address"]
+        ))
 
 # Docker compose configuration
 print("Writing docker compose config")
