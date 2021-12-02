@@ -2,15 +2,15 @@
 
     # Albatross DevNet scripts
 
-    ## Usage
+    # Usage
 
-    1. Run `devnet_create.py NUM_VALIDATORS`. This will create keys and configurations for multiple validator nodes.
+    1. Run `devnet_create.py NUM_VALIDATORS [-o, --output output_dir] [-s, --spammer]`. This will create keys and configurations for multiple validator nodes.
     2. Copy genesis config from `/tmp/nimiq-devnet-RANDOM/dev-albatross.toml` to `core-rs/genesis/src/genesis/dev-albatross.toml`.
     3. Build core-rs: `cargo build`
     4. Run seed node. Run a node (not as validator) at `127.0.0.1:8443`
     5. Run `devnet_run.py PATH` (with `PATH=/tmp/nimiq-devnet-RANDOM`). This will start the validators.
 
-    ## Notes
+    # Notes
 
     - The path to the `core-rs/target/debug` source code must be set in `devnet_create.py` and `devnet_run.py` in the `TARGET` variable.
     - Logs files of the validators are in in `/tmp/nimiq-devnet-RANDOM/validatorNUM/nimiq-client.log`
@@ -20,22 +20,24 @@
 
 from binascii import unhexlify
 from pathlib import Path
-import sh
+
+import argparse
 import json
-from sys import argv
+import sh
+import sys
 
+parser = argparse.ArgumentParser()
+parser.add_argument('num_validators', metavar='N', type=int,
+                    help="number of validators to generate")
+parser.add_argument('-o', "--output", metavar='DIR', type=str,
+                    help="output directory", default="/tmp/nimiq-devnet")
+parser.add_argument('-s', "--spammer", action="store_true",
+                    help="generate configuration files for a spammer")
+args = parser.parse_args()
 
-try:
-    num_validators = int(argv[1])
-except (IndexError, ValueError):
-    print("Usage: {} NUM_VALIDATORS [OUTPUT]".format(argv[0]))
-    exit(1)
+output = Path(args.output)
 
-try:
-    output = Path(argv[2])
-except IndexError:
-    output = Path("/tmp/nimiq-devnet")
-
+num_validators = args.num_validators
 target = Path.cwd() / "target" / "debug"
 
 nimiq_address = sh.Command(str(target / "nimiq-address"))
@@ -96,7 +98,7 @@ lock_api = "trace"
         ))
 
 
-def create_spammer(path, i):
+def create_spammer(path):
     path.mkdir(parents=True, exist_ok=True)
 
     # write config
@@ -134,6 +136,9 @@ fee_key_file = "{path}/fee_key.dat"
 """.format(
             path="temp-state/dev/spammer",
         ))
+    return {
+        'address': "NQ40 GCAA U3UX 8BKD GUN0 PG3T 17HA 4X5H TXVE",
+    }
 
 
 def create_validator(path, i):
@@ -228,9 +233,11 @@ for i in range(num_validators):
 create_seed(output / "seed", 1)
 print("Created seed node configuration")
 
-# Create spammer node configuration
-create_spammer(output / "spammer", 1)
-print("Created spammer configuration")
+spammers = []
+if args.spammer:
+    # Create spammer node configuration
+    spammers.append(create_spammer(output / "spammer"))
+    print("Created spammer configuration")
 
 # Genesis configuration
 print("Writing genesis config")
@@ -271,6 +278,14 @@ delegation = "{validator_address}"
 address = "NQ37 7C3V VMN8 FRPN FXS9 PLAG JMRE 8SC6 KUSQ"
 balance = 10_000_000_00000
 """)
+    for spammer in spammers:
+        f.write("""
+[[accounts]]
+address = "{address}"
+balance = 10_000_000_000_000
+""".format(
+            address=spammer["address"],
+        ))
 
 # Docker compose configuration
 print("Writing docker compose config")
@@ -345,8 +360,9 @@ services:
            fee_key=validator["reward_address"]["private_key"]
            ))
 
-# Spammer node
-    f.write("""
+    if args.spammer:
+        # Spammer node
+        f.write("""
   spammer:
     image: spammer:latest
     depends_on:
@@ -368,13 +384,13 @@ services:
       devnet:
         ipv4_address: 7.0.0.98
     volumes:
-      - "spammer:/home/nimiq/.nimiq:rw"
-""")
-# Volumes
-    f.write("""
-volumes:
-  spammer:
-  seed0:\n""")
+      - "spammer:/home/nimiq/.nimiq:rw"\n""")
+
+    # Volumes
+    f.write("volumes:\n")
+    if args.spammer:
+        f.write("  spammer:\n")
+    f.write("  seed0:\n")
     for idx, validator in enumerate(validators):
         f.write("  seed{}:\n".format(idx+1))
 

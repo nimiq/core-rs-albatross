@@ -43,7 +43,7 @@ tmp_dir=`mktemp -d -t docker_devnet.XXXXXXXXXX`
 
 # Create devnet configuration
 echo "Creating devnet configuration... "
-python3 scripts/devnet/python/devnet_create.py $MAX_VALIDATORS $tmp_dir
+python3 scripts/devnet/python/devnet_create.py $MAX_VALIDATORS -o $tmp_dir -s
 
 # Overwrite the docker compose and genesis
 echo "Copying the genesis and docker compose files... "
