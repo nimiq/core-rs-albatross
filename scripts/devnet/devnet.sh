@@ -21,7 +21,6 @@ cargo="cargo run"
 cargo_build="cargo build"
 tpb=150
 vkill=1
-CONFIG_PATH="/tmp/nimiq-devnet"
 trap cleanup_exit INT
 
 function cleanup_exit() {
@@ -132,7 +131,10 @@ gitroot=`git rev-parse --show-toplevel`
 pushd $gitroot > /dev/null
 
 # Create directory for logs
-mkdir -p  temp-logs/"$foldername"
+logsdir="temp-logs/$foldername"
+configdir="$logsdir/conf"
+mkdir -p $logsdir
+mkdir -p $configdir
 
 # Erase all previous state (if any) and start fresh
 rm -rf temp-state
@@ -158,17 +160,19 @@ do
 done
 
 echo "Building config files..."
-python3 scripts/devnet/python/devnet_create.py $MAX_VALIDATORS
+python3 scripts/devnet/python/devnet_create.py $MAX_VALIDATORS $configdir
+echo "Config files generated in '$configdir'"
 echo "Initializing genesis..."
-cp -v /tmp/nimiq-devnet/dev-albatross.toml genesis/src/genesis/dev-albatross.toml
-echo "Compiling the code..."
+export NIMIQ_OVERRIDE_DEVNET_CONFIG="$PWD/$configdir/dev-albatross.toml"
+echo "Compiling the code using genesis from '$NIMIQ_OVERRIDE_DEVNET_CONFIG' ..."
+cargo clean -p nimiq-genesis
 $cargo_build
 echo "Done."
 
 # Launch the seed node
 echo "Starting seed node..."
 mkdir -p temp-state/dev/seed
-$cargo --bin nimiq-client -- -c $CONFIG_PATH/seed/client.toml &>> temp-logs/$foldername/Seed.txt &
+$cargo --bin nimiq-client -- -c $configdir/seed/client.toml &>> $logsdir/Seed.log &
 spids+=($!)
 sleep 3
 echo "Done."
@@ -178,7 +182,7 @@ echo "Starting validators..."
 for validator in ${validators[@]}; do
     echo "    Starting Validator: $validator"
     mkdir -p temp-state/dev/$validator
-    $cargo --bin nimiq-client -- -c $CONFIG_PATH/validator$validator/client.toml &>> temp-logs/$foldername/Validator$validator.txt &
+    $cargo --bin nimiq-client -- -c $configdir/validator$validator/client.toml &>> $logsdir/Validator$validator.log &
     vpids+=($!)
     sleep 1
 done
@@ -191,7 +195,7 @@ sleep 30
 if [ "$SPAMMER" = true ] ; then
     echo "Starting spammer..."
     mkdir -p temp-state/dev/spammer
-    $cargo --bin nimiq-spammer -- -t $tpb -c $CONFIG_PATH/spammer/client.toml &>> temp-logs/$foldername/Spammer.txt &
+    $cargo --bin nimiq-spammer -- -t $tpb -c $configdir/spammer/client.toml &>> $logsdir/Spammer.log &
     spids+=($!)
     sleep 1
 fi
@@ -224,16 +228,16 @@ do
             if [ "$ERASE" = true ] ; then
             echo "  Erasing all validator state"
             rm -rf temp-state/dev/$(($index + 1 ))/*
-            echo "################################## VALIDATOR STATE DELETED ###########################  " >> temp-logs/$foldername/Validator$(($index + 1 )).txt
+            echo "################################## VALIDATOR STATE DELETED ###########################  " >> $logsdir/Validator$(($index + 1 )).log
             fi
 
             if [ "$DATABASE_CLEAN" = true ] ; then
             echo "  Erasing validator database"
             rm -rf temp-state/dev/$(($index + 1 ))/devalbatross-history-consensus
-            echo "################################## VALIDATOR DB DELETED ###########################  " >> temp-logs/$foldername/Validator$(($index + 1 )).txt
+            echo "################################## VALIDATOR DB DELETED ###########################  " >> $logsdir/Validator$(($index + 1 )).log
             fi
 
-            echo "################################## RESTART ###########################  " >> temp-logs/$foldername/Validator$(($index + 1 )).txt
+            echo "################################## RESTART ###########################  " >> $logsdir/Validator$(($index + 1 )).log
             sim_kills=$(( $sim_kills + 1 ))
         done
 
@@ -243,7 +247,7 @@ do
         # Restart the ones that were killed
         for index in ${kindexes[@]}; do
             echo "  Restarting validator: $(($index + 1 ))"
-            $cargo --bin nimiq-client -- -c $CONFIG_PATH/validator$(($index + 1 ))/client.toml &>> temp-logs/$foldername/Validator$(($index + 1 )).txt &
+            $cargo --bin nimiq-client -- -c $configdir/validator$(($index + 1 ))/client.toml &>> $logsdir/Validator$(($index + 1 )).log &
             vpids[$index]=$!
             sleep 2
         done
@@ -264,7 +268,7 @@ do
     sleep "$sleep_time"
 
     # Search for deadlocks
-    if grep -wrin "deadlock" temp-logs/$foldername/
+    if grep -wrin "deadlock" $logsdir/*.log
     then
         echo "   !!!   DEADLOCK   !!!"
         fail=true
@@ -272,7 +276,7 @@ do
     fi
 
     # Search for panics/crashes
-    if grep -wrin " panic " temp-logs/$foldername/
+    if grep -wrin " panic " $logsdir/*.log
     then
         echo "   !!!   PANIC   !!!"
         fail=true
@@ -281,8 +285,8 @@ do
     # Search if blocks are being produced
     bns=()
 
-    # First collect the last block number from each validator
-    for log in temp-logs/$foldername/*; do
+    # First collect the last blolognumber from each validator
+    for log in $logsdir/*.log; do
         bn=$(grep "Now at block #" $log | tail -1 | awk -F# '{print $2}' | cut --delimiter=. --fields 1)
         if [ -z "$bn" ]; then
             bns+=(0)

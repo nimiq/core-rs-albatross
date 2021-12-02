@@ -108,7 +108,9 @@ Please take a look at the [`client.example.toml`](lib/src/config/config_file/cli
 
 ### Devnet
 
-The development network is currently in release-candidate phase [rc1](https://github.com/nimiq/core-rs-albatross/releases/tag/v0.1.0-rc.1). Its main purpose is to invite all developers to exercise and test the Nimiq 2.0 client, filing and reporting any [issues](https://github.com/nimiq/core-rs-albatross/issues/new) through our GitHub repository.
+The development network is currently in release-candidate phase [rc1](https://github.com/nimiq/core-rs-albatross/releases/tag/v0.1.0-rc.1).
+Its main purpose is to invite all developers to exercise and test the Nimiq 2.0 client, filing and reporting any
+[issues](https://github.com/nimiq/core-rs-albatross/issues/new) through our GitHub repository.
 
 Clients can connect to the Devnet via the seed node located at
 ```
