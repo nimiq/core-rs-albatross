@@ -151,8 +151,7 @@ def create_validator(path, i):
 
     # write parameters for ansible
     with (path / "validator{:d}.yml".format(i+1)).open("wt") as f:
-        f.write("""
----
+        f.write("""---
 validator_address: "{validator_address}"
 voting_key: "{voting_key}"
 signing_key: "{signing_key}"
@@ -236,8 +235,7 @@ print("Created spammer configuration")
 # Genesis configuration
 print("Writing genesis config")
 with (output / "dev-albatross.toml").open("wt") as f:
-    f.write("""
-name = "dev-albatross"
+    f.write("""name = "dev-albatross"
 seed_message = "Albatross DevNet"
 timestamp = "{timestamp}"
 vrf_seed = "e8c7f2f3935da9ca39419aa7d2cc90817245f75e58cc543f2b9478766308e8a50fffccb09e2df3546f5a0c0059d73a506c48fa2b546f15b511d0f7a63f0ee20cd510a87f520e26478bb687ca31a08db8b02921f9a22e32a790c07f16dbdf4501"
@@ -272,8 +270,7 @@ delegation = "{validator_address}"
 # Docker compose configuration
 print("Writing docker compose config")
 with (output / "docker-compose.yml").open("wt") as f:
-    f.write("""
-version: "3.5"
+    f.write("""version: "3.5"
 
 networks:
   devnet:
