@@ -160,7 +160,11 @@ do
 done
 
 echo "Building config files..."
-python3 scripts/devnet/python/devnet_create.py $MAX_VALIDATORS $configdir
+if [ "$SPAMMER" = true ] ; then
+    python3 scripts/devnet/python/devnet_create.py $MAX_VALIDATORS -o $configdir -s
+else
+    python3 scripts/devnet/python/devnet_create.py $MAX_VALIDATORS -o $configdir
+fi
 echo "Config files generated in '$configdir'"
 echo "Initializing genesis..."
 export NIMIQ_OVERRIDE_DEVNET_CONFIG="$PWD/$configdir/dev-albatross.toml"
