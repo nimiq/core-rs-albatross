@@ -54,7 +54,7 @@ pub struct BlockRequestComponent<TPeer: Peer + 'static> {
     sync_method: Pin<Box<dyn HistorySyncStream<TPeer>>>,
     agents: HashMap<Arc<TPeer>, Arc<ConsensusAgent<TPeer>>>, // this map holds the strong references to up-to-date peers
     outdated_agents: HashMap<Arc<TPeer>, Arc<ConsensusAgent<TPeer>>>, //
-    outdated_timeouts: Vec<(Arc<TPeer>, Instant)>,
+    outdated_timeouts: HashMap<Arc<TPeer>, Instant>,
     network_event_rx: BroadcastStream<NetworkEvent<TPeer>>,
 }
 
@@ -94,11 +94,11 @@ impl<TPeer: Peer + 'static> BlockRequestComponent<TPeer> {
         }
     }
 
-    /// Adds all outdated peers that were checked more than TIMEOUT ago to history sync. History sync will do a
+    /// Adds all outdated peers that were checked more than TIMEOUT ago to history sync
     fn check_peers_up_to_date(&mut self) {
-        let peers_todo = self.outdated_timeouts.drain_filter(|(_, last_checked)| {
-            last_checked.elapsed() >= Self::CHECK_OUTDATED_TIMEOUT
-        });
+        let peers_todo = self
+            .outdated_timeouts
+            .drain_filter(|_, last_checked| last_checked.elapsed() >= Self::CHECK_OUTDATED_TIMEOUT);
         for (peer, _) in peers_todo {
             debug!("Adding outdated peer {:?} to history sync", peer.id());
             let agent = self.outdated_agents.remove(&peer).unwrap();
@@ -159,7 +159,7 @@ impl<TPeer: Peer + 'static> Stream for BlockRequestComponent<TPeer> {
                         peer.peer.id()
                     );
                     self.outdated_timeouts
-                        .push((Arc::clone(&peer.peer), Instant::now()));
+                        .insert(Arc::clone(&peer.peer), Instant::now());
                     self.outdated_agents.insert(Arc::clone(&peer.peer), peer);
                 }
                 None => {}
