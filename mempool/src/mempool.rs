@@ -1,11 +1,11 @@
-use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex};
-
 use futures::future::{AbortHandle, Abortable};
+use futures::lock::Mutex;
 use futures::stream::BoxStream;
 use keyed_priority_queue::KeyedPriorityQueue;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
+use std::cmp::Ordering;
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 use beserial::Serialize;
 use nimiq_account::{Account, BasicAccount};
@@ -65,7 +65,9 @@ impl Mempool {
     /// Once this function is called, the mempool executor is spawned.
     /// The executor will subscribe to the transaction topic from the the network.
     pub async fn start_executor<N: Network>(&self, network: Arc<N>) {
-        if self.executor_handle.lock().unwrap().is_some() {
+        let mut executor_handle = self.executor_handle.lock().await;
+
+        if executor_handle.is_some() {
             // If we already have an executor running, don't do anything
             return;
         }
@@ -83,7 +85,7 @@ impl Mempool {
         tokio::spawn(Abortable::new(mempool_executor, abort_registration));
 
         // Set the executor handle
-        *self.executor_handle.lock().unwrap() = Some(abort_handle);
+        *executor_handle = Some(abort_handle);
     }
 
     /// Starts the mempool executor with a custom transaction stream
@@ -96,7 +98,9 @@ impl Mempool {
         txn_stream: BoxStream<'static, (Transaction, <N as Network>::PubsubId)>,
         network: Arc<N>,
     ) {
-        if self.executor_handle.lock().unwrap().is_some() {
+        let mut executor_handle = self.executor_handle.lock().await;
+
+        if executor_handle.is_some() {
             // If we already have an executor running, don't do anything
             return;
         }
@@ -114,14 +118,14 @@ impl Mempool {
         tokio::spawn(Abortable::new(mempool_executor, abort_registration));
 
         // Set the executor handle
-        *self.executor_handle.lock().unwrap() = Some(abort_handle);
+        *executor_handle = Some(abort_handle);
     }
 
     /// Stops the mempool executor
     ///
     /// This functions should only be called only after one of the functions to start the executor is called.
-    pub fn stop_executor(&self) {
-        let mut handle = self.executor_handle.lock().unwrap();
+    pub async fn stop_executor(&self) {
+        let mut handle = self.executor_handle.lock().await;
 
         if handle.is_none() {
             // If there isn't any executor running we return
