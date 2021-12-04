@@ -17,10 +17,7 @@ pub struct ReturnAccount {
     pub private_key: PrivateKey,
 }
 
-#[cfg_attr(
-    feature = "proxy",
-    nimiq_jsonrpc_derive::proxy(name = "WalletProxy", rename_all = "camelCase")
-)]
+#[nimiq_jsonrpc_derive::proxy(name = "WalletProxy", rename_all = "camelCase")]
 #[async_trait]
 pub trait WalletInterface {
     type Error;

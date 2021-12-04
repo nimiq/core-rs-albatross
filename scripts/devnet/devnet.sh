@@ -56,7 +56,7 @@ OPTIONS:
    -k|--kill       How many validators are killed each cycle, by default just 1
    -s|--spammer    Launch the spammer with the given amount of transactions per second
    -R|--release    If you want to run in release mode
-   -v|--validators The number of validators, as a minimun 4 validators are created
+   -v|--validators The number of validators, as a minimum 4 validators are created
 EOF
 }
 
@@ -145,7 +145,7 @@ if [ "$RELEASE" = true ] ; then
 fi
 
 echo "Number of validators: $MAX_VALIDATORS"
-echo "Number of simultanous restarts: $vkill"
+echo "Number of simultaneous restarts: $vkill"
 
 if [ $MAX_VALIDATORS -lt 4 ] ; then
     echo 'min number of validators is 4'

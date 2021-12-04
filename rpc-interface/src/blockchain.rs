@@ -11,10 +11,7 @@ use crate::types::{
     Account, Block, Inherent, ParkedSet, SlashedSlots, Slot, Staker, Transaction, Validator,
 };
 
-#[cfg_attr(
-    feature = "proxy",
-    nimiq_jsonrpc_derive::proxy(name = "BlockchainProxy", rename_all = "camelCase")
-)]
+#[nimiq_jsonrpc_derive::proxy(name = "BlockchainProxy", rename_all = "camelCase")]
 #[async_trait]
 pub trait BlockchainInterface {
     type Error;

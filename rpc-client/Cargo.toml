@@ -27,7 +27,7 @@ futures = "0.3"
 
 nimiq-jsonrpc-core = { git = "https://github.com/nimiq/jsonrpc.git" }
 nimiq-jsonrpc-client = { git = "https://github.com/nimiq/jsonrpc.git" }
-nimiq-rpc-interface = { path = "../rpc-interface", features = ["proxy"] }
+nimiq-rpc-interface = { path = "../rpc-interface" }
 
 # Needed for the command line app
 anyhow = { version = "1.0", optional = true }

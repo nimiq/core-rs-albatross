@@ -1,9 +1,6 @@
 use async_trait::async_trait;
 
-#[cfg_attr(
-    feature = "proxy",
-    nimiq_jsonrpc_derive::proxy(name = "NetworkProxy", rename_all = "camelCase")
-)]
+#[nimiq_jsonrpc_derive::proxy(name = "NetworkProxy", rename_all = "camelCase")]
 #[async_trait]
 pub trait NetworkInterface {
     type Error;

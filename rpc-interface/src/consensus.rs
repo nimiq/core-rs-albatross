@@ -7,10 +7,7 @@ use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm};
 
 use crate::types::{Transaction, ValidityStartHeight};
 
-#[cfg_attr(
-    feature = "proxy",
-    nimiq_jsonrpc_derive::proxy(name = "ConsensusProxy", rename_all = "camelCase")
-)]
+#[nimiq_jsonrpc_derive::proxy(name = "ConsensusProxy", rename_all = "camelCase")]
 #[async_trait]
 pub trait ConsensusInterface {
     type Error;
