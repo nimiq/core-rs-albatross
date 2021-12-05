@@ -837,16 +837,20 @@ impl ConsensusInterface for ConsensusDispatcher {
         &mut self,
         sender_wallet: Address,
         validator_wallet: Address,
-        signing_key: PublicKey,
+        signing_secret_key: String,
         voting_secret_key: String,
         reward_address: Address,
         signal_data: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Error> {
-        let secret_key =
+        let voting_secret_key =
             BlsSecretKey::deserialize_from_vec(&hex::decode(voting_secret_key).unwrap()).unwrap();
-        let hot_keypair = BlsKeyPair::from(secret_key);
+        let hot_keypair = BlsKeyPair::from(voting_secret_key);
+
+        let signing_secret_key =
+            PrivateKey::deserialize_from_vec(&hex::decode(signing_secret_key).unwrap()).unwrap();
+        let signing_key = PublicKey::from(&signing_secret_key);
 
         // Since JSON doesn't have a primitive for Option (it just has the null primitive), we can't
         // have a double Option. This becomes an issue when creating an update_validator transaction.
@@ -885,7 +889,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         &mut self,
         sender_wallet: Address,
         validator_wallet: Address,
-        signing_key: PublicKey,
+        signing_secret_key: String,
         voting_secret_key: String,
         reward_address: Address,
         signal_data: String,
@@ -896,7 +900,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             .create_new_validator_transaction(
                 sender_wallet,
                 validator_wallet,
-                signing_key,
+                signing_secret_key,
                 voting_secret_key,
                 reward_address,
                 signal_data,
@@ -918,7 +922,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         &mut self,
         sender_wallet: Address,
         validator_wallet: Address,
-        new_signing_key: Option<PublicKey>,
+        new_signing_secret_key: Option<String>,
         new_voting_secret_key: Option<String>,
         new_reward_address: Option<Address>,
         new_signal_data: Option<String>,
@@ -930,6 +934,15 @@ impl ConsensusInterface for ConsensusDispatcher {
                 let new_secret_key =
                     BlsSecretKey::deserialize_from_vec(&hex::decode(key).unwrap()).unwrap();
                 Some(BlsKeyPair::from(new_secret_key))
+            }
+            _ => None,
+        };
+
+        let new_signing_key = match new_signing_secret_key {
+            Some(key) => {
+                let secret_key =
+                    PrivateKey::deserialize_from_vec(&hex::decode(key).unwrap()).unwrap();
+                Some(PublicKey::from(&secret_key))
             }
             _ => None,
         };
@@ -979,7 +992,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         &mut self,
         sender_wallet: Address,
         validator_wallet: Address,
-        new_signing_key: Option<PublicKey>,
+        new_signing_secret_key: Option<String>,
         new_voting_secret_key: Option<String>,
         new_reward_address: Option<Address>,
         new_signal_data: Option<String>,
@@ -990,7 +1003,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             .create_update_validator_transaction(
                 sender_wallet,
                 validator_wallet,
-                new_signing_key,
+                new_signing_secret_key,
                 new_voting_secret_key,
                 new_reward_address,
                 new_signal_data,

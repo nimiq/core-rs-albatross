@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 
 use nimiq_hash::Blake2bHash;
-use nimiq_keys::{Address, PublicKey};
+use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
 use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm};
 
@@ -331,7 +331,7 @@ pub trait ConsensusInterface {
         &mut self,
         sender_wallet: Address,
         validator_wallet: Address,
-        signing_key: PublicKey,
+        signing_key: String,
         voting_secret_key: String,
         reward_address: Address,
         signal_data: String,
@@ -343,7 +343,7 @@ pub trait ConsensusInterface {
         &mut self,
         sender_wallet: Address,
         validator_wallet: Address,
-        signing_key: PublicKey,
+        signing_key: String,
         voting_secret_key: String,
         reward_address: Address,
         signal_data: String,
@@ -355,7 +355,7 @@ pub trait ConsensusInterface {
         &mut self,
         sender_wallet: Address,
         validator_wallet: Address,
-        new_signing_key: Option<PublicKey>,
+        new_signing_secret_key: Option<String>,
         new_voting_secret_key: Option<String>,
         new_reward_address: Option<Address>,
         new_signal_data: Option<String>,
@@ -367,7 +367,7 @@ pub trait ConsensusInterface {
         &mut self,
         sender_wallet: Address,
         validator_wallet: Address,
-        new_signing_key: Option<PublicKey>,
+        new_signing_secret_key: Option<String>,
         new_voting_secret_key: Option<String>,
         new_reward_address: Option<Address>,
         new_signal_data: Option<String>,
