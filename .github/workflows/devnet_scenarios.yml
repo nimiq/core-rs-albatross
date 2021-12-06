@@ -155,3 +155,43 @@ jobs:
           name: FourValidatorsReconnectSpammer-logs
           path: |
             temp-logs/
+
+  MacroBlockProduction:
+    runs-on: ubuntu-20.04
+
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/setup-python@v1
+    - uses: BSFishy/pip-action@v1
+      with:
+        packages: |
+          sh
+    - uses: actions/cache@v2
+      with:
+        path:
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: cargo-${{ hashFiles('**/Cargo.toml') }}
+    - name: Set up Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: nightly
+        override: true
+    - name: Configure micro block per epoch
+      run: |
+          sed -i 's/BATCH_LENGTH: u32 = 32;/BATCH_LENGTH: u32 = 5;/g' primitives/src/policy.rs
+    - uses: actions-rs/cargo@v1
+      with:
+        command: build
+    - name: Executes the test
+      run: |
+          bash scripts/devnet/devnet.sh -k 0 -s 150
+    - name: Archive test results
+      if: always()
+      uses: actions/upload-artifact@v2
+      with:
+          name: MacroBlockProduction-logs
+          path: |
+            temp-logs/
