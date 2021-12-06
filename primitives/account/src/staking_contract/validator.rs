@@ -11,7 +11,7 @@ use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
 
 use crate::staking_contract::receipts::{
-    DropValidatorReceipt, ReactivateValidatorReceipt, RetireValidatorReceipt,
+    DeleteValidatorReceipt, ReactivateValidatorReceipt, RetireValidatorReceipt,
     UnparkValidatorReceipt, UpdateValidatorReceipt,
 };
 use crate::{Account, AccountError, AccountsTrie, StakingContract};
@@ -20,10 +20,10 @@ use crate::{Account, AccountError, AccountsTrie, StakingContract};
 /// Actions concerning a validator are:
 /// 1. Create: Creates a validator.
 /// 2. Update: Updates the validator.
-/// 3. Retire: Inactivates a validator (also starts a cooldown period used for Drop).
+/// 3. Inactivate: Inactivates a validator (also starts a cooldown period used for Delete).
 /// 4. Reactivate: Reactivates a validator.
 /// 5. Unpark: Prevents a validator from being automatically inactivated.
-/// 6. Drop: Drops a validator (validator must have been inactive for the cooldown period).
+/// 6. Delete: Deletes a validator (validator must have been inactive for the cooldown period).
 ///
 /// The actions can be summarized by the following state diagram:
 ///        +--------+   retire    +----------+
@@ -259,7 +259,7 @@ impl StakingContract {
 
     /// Inactivates a validator. It is necessary to retire a validator before dropping it. This also
     /// removes the validator from the parking set.
-    pub(crate) fn retire_validator(
+    pub(crate) fn inactivate_validator(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
@@ -320,7 +320,7 @@ impl StakingContract {
     }
 
     /// Reverts inactivating a validator.
-    pub(crate) fn revert_retire_validator(
+    pub(crate) fn revert_inactivate_validator(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
@@ -573,17 +573,17 @@ impl StakingContract {
         Ok(())
     }
 
-    /// Drops a validator and returns its deposit. This can only be used on inactive validators!
+    /// Delete a validator and returns its deposit. This can only be used on inactive validators!
     /// After the validator gets inactivated, it needs to wait until the second batch of the next
-    /// epoch in order to be able to be dropped. This is necessary because if the validator was an
+    /// epoch in order to be able to be deleted. This is necessary because if the validator was an
     /// elected validator when it was inactivated then it might receive rewards until the end of the
     /// first batch of the next epoch. So it needs to be available.
-    pub(crate) fn drop_validator(
+    pub(crate) fn delete_validator(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
         block_height: u32,
-    ) -> Result<DropValidatorReceipt, AccountError> {
+    ) -> Result<DeleteValidatorReceipt, AccountError> {
         // Get the validator.
         let validator =
             match StakingContract::get_validator(accounts_tree, db_txn, validator_address) {
@@ -614,7 +614,7 @@ impl StakingContract {
         // All checks passed, not allowed to fail from here on!
 
         // Initialize the receipts.
-        let mut receipt = DropValidatorReceipt {
+        let mut receipt = DeleteValidatorReceipt {
             signing_key: validator.signing_key,
             voting_key: validator.voting_key,
             reward_address: validator.reward_address,
@@ -699,12 +699,12 @@ impl StakingContract {
         Ok(receipt)
     }
 
-    /// Reverts dropping a validator.
-    pub(crate) fn revert_drop_validator(
+    /// Reverts deleting a validator.
+    pub(crate) fn revert_delete_validator(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         validator_address: &Address,
-        receipt: DropValidatorReceipt,
+        receipt: DeleteValidatorReceipt,
     ) -> Result<(), AccountError> {
         // Re-add the validator to all its stakers. Also create all the validator's stakers entries.
         let mut num_stakers = 0;
@@ -720,7 +720,7 @@ impl StakingContract {
 
             // Update the counters.
             num_stakers += 1;
-            balance += u64::from(staker.active_stake);
+            balance += u64::from(staker.balance);
 
             // Update the staker.
             staker.delegation = Some(validator_address.clone());

@@ -625,12 +625,11 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     /// Returns a serialized `update_staker` transaction. You can pay the transaction fee from a basic
-    /// account (by providing the sender wallet) or from the staker account's active/inactive balance
-    /// (by not providing the sender wallet and correctly setting the `from_active_balance` flag).
+    /// account (by providing the sender wallet) or from the staker account's balance (by not
+    /// providing a sender wallet).
     async fn create_update_transaction(
         &mut self,
         sender_wallet: Option<Address>,
-        from_active_balance: Option<bool>,
         staker_wallet: Address,
         new_delegation: Option<Address>,
         fee: Coin,
@@ -643,7 +642,6 @@ impl ConsensusInterface for ConsensusDispatcher {
 
         let transaction = TransactionBuilder::new_update_staker(
             sender_key.as_ref(),
-            from_active_balance.unwrap_or(true),
             &self.get_wallet_keypair(&staker_wallet)?,
             new_delegation,
             fee,
@@ -655,12 +653,11 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     /// Sends a `update_staker` transaction to the network. You can pay the transaction fee from a basic
-    /// account (by providing the sender wallet) or from the staker account's active/inactive balance
-    /// (by not providing the sender wallet and correctly setting the `from_active_balance` flag).
+    /// account (by providing the sender wallet) or from the staker account's balance (by not
+    /// providing a sender wallet).
     async fn send_update_transaction(
         &mut self,
         sender_wallet: Option<Address>,
-        from_active_balance: Option<bool>,
         staker_wallet: Address,
         new_delegation: Option<Address>,
         fee: Coin,
@@ -669,119 +666,8 @@ impl ConsensusInterface for ConsensusDispatcher {
         let raw_tx = self
             .create_update_transaction(
                 sender_wallet,
-                from_active_balance,
                 staker_wallet,
                 new_delegation,
-                fee,
-                validity_start_height,
-            )
-            .await?;
-        self.send_raw_transaction(raw_tx).await
-    }
-
-    /// Returns a serialized `retire_staker` transaction. You can pay the transaction fee from a basic
-    /// account (by providing the sender wallet) or from the staker account's active/inactive balance
-    /// (by not providing the sender wallet and correctly setting the `from_active_balance` flag).
-    async fn create_retire_transaction(
-        &mut self,
-        sender_wallet: Option<Address>,
-        from_active_balance: Option<bool>,
-        staker_wallet: Address,
-        value: Coin,
-        fee: Coin,
-        validity_start_height: ValidityStartHeight,
-    ) -> Result<String, Error> {
-        let sender_key = match sender_wallet {
-            None => None,
-            Some(address) => Some(self.get_wallet_keypair(&address)?),
-        };
-
-        let transaction = TransactionBuilder::new_retire_staker(
-            sender_key.as_ref(),
-            from_active_balance.unwrap_or(true),
-            &self.get_wallet_keypair(&staker_wallet)?,
-            value,
-            fee,
-            self.validity_start_height(validity_start_height),
-            self.get_network_id(),
-        );
-
-        Ok(transaction_to_hex_string(&transaction))
-    }
-
-    /// Sends a `retire_staker` transaction to the network. You can pay the transaction fee from a basic
-    /// account (by providing the sender wallet) or from the staker account's active/inactive balance
-    /// (by not providing the sender wallet and correctly setting the `from_active_balance` flag).
-    async fn send_retire_transaction(
-        &mut self,
-        sender_wallet: Option<Address>,
-        from_active_balance: Option<bool>,
-        staker_wallet: Address,
-        value: Coin,
-        fee: Coin,
-        validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Error> {
-        let raw_tx = self
-            .create_retire_transaction(
-                sender_wallet,
-                from_active_balance,
-                staker_wallet,
-                value,
-                fee,
-                validity_start_height,
-            )
-            .await?;
-        self.send_raw_transaction(raw_tx).await
-    }
-
-    /// Returns a serialized `reactivate_staker` transaction. You can pay the transaction fee from a basic
-    /// account (by providing the sender wallet) or from the staker account's active/inactive balance
-    /// (by not providing the sender wallet and correctly setting the `from_active_balance` flag).
-    async fn create_reactivate_transaction(
-        &mut self,
-        sender_wallet: Option<Address>,
-        from_active_balance: Option<bool>,
-        staker_wallet: Address,
-        value: Coin,
-        fee: Coin,
-        validity_start_height: ValidityStartHeight,
-    ) -> Result<String, Error> {
-        let sender_key = match sender_wallet {
-            None => None,
-            Some(address) => Some(self.get_wallet_keypair(&address)?),
-        };
-
-        let transaction = TransactionBuilder::new_reactivate_staker(
-            sender_key.as_ref(),
-            from_active_balance.unwrap_or(true),
-            &self.get_wallet_keypair(&staker_wallet)?,
-            value,
-            fee,
-            self.validity_start_height(validity_start_height),
-            self.get_network_id(),
-        );
-
-        Ok(transaction_to_hex_string(&transaction))
-    }
-
-    /// Sends a `reactivate_staker` transaction to the network. You can pay the transaction fee from a basic
-    /// account (by providing the sender wallet) or from the staker account's active/inactive balance
-    /// (by not providing the sender wallet and correctly setting the `from_active_balance` flag).
-    async fn send_reactivate_transaction(
-        &mut self,
-        sender_wallet: Option<Address>,
-        from_active_balance: Option<bool>,
-        staker_wallet: Address,
-        value: Coin,
-        fee: Coin,
-        validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Error> {
-        let raw_tx = self
-            .create_reactivate_transaction(
-                sender_wallet,
-                from_active_balance,
-                staker_wallet,
-                value,
                 fee,
                 validity_start_height,
             )
@@ -1001,9 +887,9 @@ impl ConsensusInterface for ConsensusDispatcher {
         self.send_raw_transaction(raw_tx).await
     }
 
-    /// Returns a serialized `retire_validator` transaction. You need to provide the address of a basic
+    /// Returns a serialized `inactivate_validator` transaction. You need to provide the address of a basic
     /// account (the sender wallet) to pay the transaction fee.
-    async fn create_retire_validator_transaction(
+    async fn create_inactivate_validator_transaction(
         &mut self,
         sender_wallet: Address,
         validator_address: Address,
@@ -1015,7 +901,7 @@ impl ConsensusInterface for ConsensusDispatcher {
             PrivateKey::deserialize_from_vec(&hex::decode(signing_secret_key).unwrap()).unwrap();
         let signing_key_pair = KeyPair::from(secret_key);
 
-        let transaction = TransactionBuilder::new_retire_validator(
+        let transaction = TransactionBuilder::new_inactivate_validator(
             &self.get_wallet_keypair(&sender_wallet)?,
             validator_address,
             &signing_key_pair,
@@ -1027,9 +913,9 @@ impl ConsensusInterface for ConsensusDispatcher {
         Ok(transaction_to_hex_string(&transaction))
     }
 
-    /// Sends a `retire_validator` transaction to the network. You need to provide the address of a basic
+    /// Sends a `inactivate_validator` transaction to the network. You need to provide the address of a basic
     /// account (the sender wallet) to pay the transaction fee.
-    async fn send_retire_validator_transaction(
+    async fn send_inactivate_validator_transaction(
         &mut self,
         sender_wallet: Address,
         validator_address: Address,
@@ -1038,7 +924,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Error> {
         let raw_tx = self
-            .create_retire_validator_transaction(
+            .create_reactivate_validator_transaction(
                 sender_wallet,
                 validator_address,
                 signing_secret_key,
@@ -1145,16 +1031,16 @@ impl ConsensusInterface for ConsensusDispatcher {
         self.send_raw_transaction(raw_tx).await
     }
 
-    /// Returns a serialized `drop_validator` transaction. The transaction fee will be paid from the
+    /// Returns a serialized `delete_validator` transaction. The transaction fee will be paid from the
     /// validator deposit that is being returned.
-    async fn create_drop_validator_transaction(
+    async fn create_delete_validator_transaction(
         &mut self,
         validator_wallet: Address,
         recipient: Address,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Error> {
-        let transaction = TransactionBuilder::new_drop_validator(
+        let transaction = TransactionBuilder::new_delete_validator(
             recipient,
             &self.get_wallet_keypair(&validator_wallet)?,
             fee,
@@ -1165,9 +1051,9 @@ impl ConsensusInterface for ConsensusDispatcher {
         Ok(transaction_to_hex_string(&transaction))
     }
 
-    /// Sends a `drop_validator` transaction to the network. The transaction fee will be paid from the
+    /// Sends a `delete_validator` transaction to the network. The transaction fee will be paid from the
     /// validator deposit that is being returned.
-    async fn send_drop_validator_transaction(
+    async fn send_delete_validator_transaction(
         &mut self,
         validator_wallet: Address,
         recipient: Address,
@@ -1175,7 +1061,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Error> {
         let raw_tx = self
-            .create_drop_validator_transaction(
+            .create_delete_validator_transaction(
                 validator_wallet,
                 recipient,
                 fee,

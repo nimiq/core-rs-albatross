@@ -53,7 +53,7 @@ impl Account {
             Account::StakingValidatorsStaker(_) => {
                 unimplemented!()
             }
-            Account::StakingStaker(ref account) => account.active_stake + account.inactive_stake,
+            Account::StakingStaker(ref account) => account.balance,
         }
     }
 

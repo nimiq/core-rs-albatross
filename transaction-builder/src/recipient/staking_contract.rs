@@ -1,7 +1,6 @@
 use bls::{CompressedSignature, KeyPair as BlsKeyPair};
 use hash::Blake2bHash;
 use keys::{Address, PublicKey as SchnorrPublicKey};
-use primitives::coin::Coin;
 use transaction::account::staking_contract::IncomingStakingTransactionData;
 
 use crate::recipient::Recipient;
@@ -13,15 +12,13 @@ use crate::recipient::Recipient;
 ///     - Validator
 ///         * Create
 ///         * Update (signalling)
-///         * Retire (signalling)
-///         * Re-activate (signalling)
+///         * Inactivate (signalling)
+///         * Reactivate (signalling)
 ///         * Unpark (signalling)
 ///     - Staker
 ///         * Create
 ///         * Stake
 ///         * Update (signalling)
-///         * Retire (signalling)
-///         * Re-activate (signalling)
 ///
 /// Signalling transactions have a special status as they require a zero value
 /// as well as an additional step during the proof generation.
@@ -86,19 +83,19 @@ impl StakingRecipientBuilder {
         self
     }
 
-    /// This method allows to retire a validator entry. Inactive validators will not be considered
-    /// for the validator selection. Retiring a validator is also necessary to drop it and retrieve
-    /// back its initial stake.
+    /// This method allows to inactivate a validator entry. Inactive validators will not be considered
+    /// for the validator selection. Inactivating a validator is also necessary to delete it and retrieve
+    /// back its initial deposit.
     /// It needs to be signed by the key pair corresponding to the signing key.
-    pub fn retire_validator(&mut self, validator_address: Address) -> &mut Self {
-        self.data = Some(IncomingStakingTransactionData::RetireValidator {
+    pub fn inactivate_validator(&mut self, validator_address: Address) -> &mut Self {
+        self.data = Some(IncomingStakingTransactionData::InactivateValidator {
             validator_address,
             proof: Default::default(),
         });
         self
     }
 
-    /// This method allows to re-activate a validator. This reverts the retirement of a validator
+    /// This method allows to reactivate a validator. This reverts the inactivation of a validator
     /// and will result in the validator being considered for the validator selection again.
     /// It needs to be signed by the key pair corresponding to the signing key.
     pub fn reactivate_validator(&mut self, validator_address: Address) -> &mut Self {
@@ -133,7 +130,7 @@ impl StakingRecipientBuilder {
         self
     }
 
-    /// This method allows to add to a staker's active balance.
+    /// This method allows to add to a staker's balance.
     pub fn stake(&mut self, staker_address: Address) -> &mut Self {
         self.data = Some(IncomingStakingTransactionData::Stake { staker_address });
         self
@@ -144,29 +141,6 @@ impl StakingRecipientBuilder {
     pub fn update_staker(&mut self, new_delegation: Option<Address>) -> &mut Self {
         self.data = Some(IncomingStakingTransactionData::UpdateStaker {
             new_delegation,
-            proof: Default::default(),
-        });
-        self
-    }
-
-    /// This method allows to inactivate part, or all, of a staker's active balance.
-    /// This has the effect of removing the funds from the validator that the staker is delegating to.
-    /// It is a necessary precondition to unstake funds.
-    /// It needs to be signed by the key pair corresponding to the staker address.
-    pub fn retire_stake(&mut self, value: Coin) -> &mut Self {
-        self.data = Some(IncomingStakingTransactionData::RetireStaker {
-            value,
-            proof: Default::default(),
-        });
-        self
-    }
-
-    /// This method allows to reactivate part, or all, of a staker's inactive balance.
-    /// This has the effect of adding the funds to the validator that the staker is delegating to.
-    /// It needs to be signed by the key pair corresponding to the staker address.
-    pub fn reactivate_stake(&mut self, value: Coin) -> &mut Self {
-        self.data = Some(IncomingStakingTransactionData::ReactivateStaker {
-            value,
             proof: Default::default(),
         });
         self

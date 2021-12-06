@@ -455,8 +455,8 @@ impl BlockchainInterface for BlockchainDispatcher {
 
             for address in staker_addresses {
                 let staker = StakingContract::get_staker(accounts_tree, &db_txn, &address).unwrap();
-                if !staker.active_stake.is_zero() {
-                    stakers_map.insert(address, staker.active_stake);
+                if !staker.balance.is_zero() {
+                    stakers_map.insert(address, staker.balance);
                 }
             }
 

@@ -5,7 +5,6 @@ use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::account::AccountType;
-use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::policy::{STAKING_CONTRACT_ADDRESS, VALIDATOR_DEPOSIT};
 use nimiq_transaction::account::staking_contract::{
@@ -67,7 +66,7 @@ fn it_can_create_staker_transactions() {
 
     assert_eq!(tx, tx2);
 
-    // Update
+    // Update (fees from basic account)
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::UpdateStaker {
             new_delegation: None,
@@ -79,7 +78,6 @@ fn it_can_create_staker_transactions() {
 
     let tx2 = TransactionBuilder::new_update_staker(
         Some(&key_pair),
-        true,
         &key_pair,
         None,
         100.try_into().unwrap(),
@@ -89,109 +87,19 @@ fn it_can_create_staker_transactions() {
 
     assert_eq!(tx, tx2);
 
-    // Update with deduct fees
+    // Update (fees from staker account)
     let tx = make_self_transaction(
         IncomingStakingTransactionData::UpdateStaker {
             new_delegation: None,
             proof: Default::default(),
         },
         &key_pair,
-        true,
     );
 
     let tx2 = TransactionBuilder::new_update_staker(
         None,
-        true,
         &key_pair,
         None,
-        100.try_into().unwrap(),
-        1,
-        NetworkId::Dummy,
-    );
-
-    assert_eq!(tx, tx2);
-
-    // Retire
-    let tx = make_signed_incoming_transaction(
-        IncomingStakingTransactionData::RetireStaker {
-            value: Coin::from_u64_unchecked(1000),
-            proof: Default::default(),
-        },
-        0,
-        &key_pair,
-    );
-
-    let tx2 = TransactionBuilder::new_retire_staker(
-        Some(&key_pair),
-        true,
-        &key_pair,
-        1000.try_into().unwrap(),
-        100.try_into().unwrap(),
-        1,
-        NetworkId::Dummy,
-    );
-
-    assert_eq!(tx, tx2);
-
-    // Retire with deduct fees.
-    let tx = make_self_transaction(
-        IncomingStakingTransactionData::RetireStaker {
-            value: Coin::from_u64_unchecked(1000),
-            proof: Default::default(),
-        },
-        &key_pair,
-        true,
-    );
-
-    let tx2 = TransactionBuilder::new_retire_staker(
-        None,
-        true,
-        &key_pair,
-        1000.try_into().unwrap(),
-        100.try_into().unwrap(),
-        1,
-        NetworkId::Dummy,
-    );
-
-    assert_eq!(tx, tx2);
-
-    // Reactivate
-    let tx = make_signed_incoming_transaction(
-        IncomingStakingTransactionData::ReactivateStaker {
-            value: Coin::from_u64_unchecked(1000),
-            proof: Default::default(),
-        },
-        0,
-        &key_pair,
-    );
-
-    let tx2 = TransactionBuilder::new_reactivate_staker(
-        Some(&key_pair),
-        true,
-        &key_pair,
-        1000.try_into().unwrap(),
-        100.try_into().unwrap(),
-        1,
-        NetworkId::Dummy,
-    );
-
-    assert_eq!(tx, tx2);
-
-    // Reactivate with deduct fees
-    let tx = make_self_transaction(
-        IncomingStakingTransactionData::ReactivateStaker {
-            value: Coin::from_u64_unchecked(1000),
-            proof: Default::default(),
-        },
-        &key_pair,
-        true,
-    );
-
-    let tx2 = TransactionBuilder::new_reactivate_staker(
-        None,
-        true,
-        &key_pair,
-        1000.try_into().unwrap(),
         100.try_into().unwrap(),
         1,
         NetworkId::Dummy,
@@ -276,9 +184,9 @@ fn it_can_create_validator_transactions() {
 
     assert_eq!(tx, tx2);
 
-    // Retire
+    // Inactivate
     let tx = make_signed_incoming_transaction(
-        IncomingStakingTransactionData::RetireValidator {
+        IncomingStakingTransactionData::InactivateValidator {
             validator_address: address.clone(),
             proof: Default::default(),
         },
@@ -286,7 +194,7 @@ fn it_can_create_validator_transactions() {
         &key_pair,
     );
 
-    let tx2 = TransactionBuilder::new_retire_validator(
+    let tx2 = TransactionBuilder::new_inactivate_validator(
         &key_pair,
         address.clone(),
         &key_pair,
@@ -339,10 +247,10 @@ fn it_can_create_validator_transactions() {
 
     assert_eq!(tx, tx2);
 
-    // Drop
-    let tx = make_drop_transaction(&key_pair, VALIDATOR_DEPOSIT - 100);
+    // Delete
+    let tx = make_delete_transaction(&key_pair, VALIDATOR_DEPOSIT - 100);
 
-    let tx2 = TransactionBuilder::new_drop_validator(
+    let tx2 = TransactionBuilder::new_delete_validator(
         address,
         &key_pair,
         100.try_into().unwrap(),
@@ -418,7 +326,7 @@ fn make_unstake_transaction(key_pair: &KeyPair, value: u64) -> Transaction {
     tx
 }
 
-fn make_drop_transaction(key_pair: &KeyPair, value: u64) -> Transaction {
+fn make_delete_transaction(key_pair: &KeyPair, value: u64) -> Transaction {
     let mut tx = Transaction::new_extended(
         STAKING_CONTRACT_ADDRESS,
         AccountType::Staking,
@@ -430,18 +338,14 @@ fn make_drop_transaction(key_pair: &KeyPair, value: u64) -> Transaction {
         1,
         NetworkId::Dummy,
     );
-    let proof = OutgoingStakingTransactionProof::DropValidator {
+    let proof = OutgoingStakingTransactionProof::DeleteValidator {
         proof: SignatureProof::from(key_pair.public, key_pair.sign(&tx.serialize_content())),
     };
     tx.proof = proof.serialize_to_vec();
     tx
 }
 
-fn make_self_transaction(
-    data: IncomingStakingTransactionData,
-    key_pair: &KeyPair,
-    from_active_balance: bool,
-) -> Transaction {
+fn make_self_transaction(data: IncomingStakingTransactionData, key_pair: &KeyPair) -> Transaction {
     let mut tx = Transaction::new_signalling(
         STAKING_CONTRACT_ADDRESS,
         AccountType::Staking,
@@ -458,8 +362,7 @@ fn make_self_transaction(
         SignatureProof::from(key_pair.public, key_pair.sign(&tx.serialize_content())),
     )
     .unwrap();
-    let proof = OutgoingStakingTransactionProof::DeductFees {
-        from_active_balance,
+    let proof = OutgoingStakingTransactionProof::Unstake {
         proof: SignatureProof::from(key_pair.public, key_pair.sign(&tx.serialize_content())),
     };
     tx.proof = proof.serialize_to_vec();

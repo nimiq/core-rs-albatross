@@ -1047,17 +1047,15 @@ impl TransactionBuilder {
         }
     }
 
-    /// Creates a update staker transaction for a given staker that changes the delegation. It pays
-    /// fees from the staker's active or inactive balance.
+    /// Creates an update staker transaction for a given staker that changes the delegation. It can
+    /// pay fees from the staker's balance.
     ///
     /// # Arguments
     ///
     ///  - `key_pair`:              The optional key pair used to sign the outgoing transaction. If
     ///                             it is given, the fee will be paid from the basic account
     ///                             belonging to this key pair. Otherwise, it will be deducted from
-    ///                             the staker's active/inactive balance.
-    ///  - `from_active_balance`:   A flag determining if the fee is to be deducting from the
-    ///                             staker's active or inactive balance.
+    ///                             the staker's balance.
     ///  - `staker_key_pair`:       The key pair used to sign the incoming transaction. The staker
     ///                             address will be derived from this key pair.
     ///  - `delegation`:            The new delegation.
@@ -1075,7 +1073,6 @@ impl TransactionBuilder {
     ///
     pub fn new_update_staker(
         key_pair: Option<&KeyPair>,
-        from_active_balance: bool,
         staker_key_pair: &KeyPair,
         new_delegation: Option<Address>,
         fee: Coin,
@@ -1111,7 +1108,7 @@ impl TransactionBuilder {
                 match key_pair {
                     None => {
                         let mut builder = builder.generate().unwrap().unwrap_out_staking();
-                        builder.deduct_fees(from_active_balance, staker_key_pair);
+                        builder.unstake(staker_key_pair);
                         builder.generate().unwrap()
                     }
                     Some(key) => {
@@ -1125,174 +1122,15 @@ impl TransactionBuilder {
         }
     }
 
-    /// Retires the stake of a given staker.
-    ///
-    /// # Arguments
-    ///
-    ///  - `key_pair`:              The optional key pair used to sign the outgoing transaction. If
-    ///                             it is given, the fee will be paid from the basic account
-    ///                             belonging to this key pair. Otherwise, it will be deducted from
-    ///                             the staker's active/inactive balance.
-    ///  - `from_active_balance`:   A flag determining if the fee is to be deducting from the
-    ///                             staker's active or inactive balance.
-    ///  - `staker_key_pair`:       The key pair used to sign the incoming transaction. The staker
-    ///                             address will be derived from this key pair.
-    ///  - `value`:                 The value to be moved from the active balance to the inactive
-    ///                             balance.
-    ///  - `fee`:                   Transaction fee.
-    ///  - `validity_start_height`: Block height from which this transaction is valid.
-    ///  - `network_id`:            ID of network for which the transaction is meant.
-    ///
-    /// # Returns
-    ///
-    /// The finalized transaction.
-    ///
-    /// # Note
-    ///
-    /// This is a *signalling transaction*.
-    ///
-    pub fn new_retire_staker(
-        key_pair: Option<&KeyPair>,
-        from_active_balance: bool,
-        staker_key_pair: &KeyPair,
-        value: Coin,
-        fee: Coin,
-        validity_start_height: u32,
-        network_id: NetworkId,
-    ) -> Transaction {
-        let mut recipient = Recipient::new_staking_builder();
-        recipient.retire_stake(value);
-
-        let mut builder = Self::new();
-        builder
-            .with_recipient(recipient.generate().unwrap())
-            .with_value(Coin::ZERO)
-            .with_fee(fee)
-            .with_validity_start_height(validity_start_height)
-            .with_network_id(network_id);
-
-        match key_pair {
-            None => {
-                builder
-                    .with_sender(STAKING_CONTRACT_ADDRESS)
-                    .with_sender_type(AccountType::Staking);
-            }
-            Some(key) => {
-                builder.with_sender(Address::from(key));
-            }
-        }
-
-        let proof_builder = builder.generate().unwrap();
-        match proof_builder {
-            TransactionProofBuilder::InStaking(mut builder) => {
-                builder.sign_with_key_pair(staker_key_pair);
-                match key_pair {
-                    None => {
-                        let mut builder = builder.generate().unwrap().unwrap_out_staking();
-                        builder.deduct_fees(from_active_balance, staker_key_pair);
-                        builder.generate().unwrap()
-                    }
-                    Some(key) => {
-                        let mut builder = builder.generate().unwrap().unwrap_basic();
-                        builder.sign_with_key_pair(key);
-                        builder.generate().unwrap()
-                    }
-                }
-            }
-            _ => unreachable!(),
-        }
-    }
-
-    /// Re-activates the stake from a given staker.
-    ///
-    /// # Arguments
-    ///
-    ///  - `key_pair`:              The optional key pair used to sign the outgoing transaction. If
-    ///                             it is given, the fee will be paid from the basic account
-    ///                             belonging to this key pair. Otherwise, it will be deducted from
-    ///                             the staker's active/inactive balance.
-    ///  - `from_active_balance`:   A flag determining if the fee is to be deducting from the
-    ///                             staker's active or inactive balance.
-    ///  - `staker_key_pair`:       The key pair used to sign the incoming transaction. The staker
-    ///                             address will be derived from this key pair.
-    ///  - `value`:                 The value to be moved from the inactive balance to the active
-    ///                             balance.
-    ///  - `fee`:                   Transaction fee.
-    ///  - `validity_start_height`: Block height from which this transaction is valid.
-    ///  - `network_id`:            ID of network for which the transaction is meant.
-    ///
-    /// # Returns
-    ///
-    /// The finalized transaction.
-    ///
-    /// # Note
-    ///
-    /// This is a *signalling transaction*.
-    ///
-    pub fn new_reactivate_staker(
-        key_pair: Option<&KeyPair>,
-        from_active_balance: bool,
-        staker_key_pair: &KeyPair,
-        value: Coin,
-        fee: Coin,
-        validity_start_height: u32,
-        network_id: NetworkId,
-    ) -> Transaction {
-        let mut recipient = Recipient::new_staking_builder();
-        recipient.reactivate_stake(value);
-
-        let mut builder = Self::new();
-        builder
-            .with_recipient(recipient.generate().unwrap())
-            .with_value(Coin::ZERO)
-            .with_fee(fee)
-            .with_validity_start_height(validity_start_height)
-            .with_network_id(network_id);
-
-        match key_pair {
-            None => {
-                builder
-                    .with_sender(STAKING_CONTRACT_ADDRESS)
-                    .with_sender_type(AccountType::Staking);
-            }
-            Some(key) => {
-                builder.with_sender(Address::from(key));
-            }
-        }
-
-        let proof_builder = builder.generate().unwrap();
-        match proof_builder {
-            TransactionProofBuilder::InStaking(mut builder) => {
-                builder.sign_with_key_pair(staker_key_pair);
-                match key_pair {
-                    None => {
-                        let mut builder = builder.generate().unwrap().unwrap_out_staking();
-                        builder.deduct_fees(from_active_balance, staker_key_pair);
-                        builder.generate().unwrap()
-                    }
-                    Some(key) => {
-                        let mut builder = builder.generate().unwrap().unwrap_basic();
-                        builder.sign_with_key_pair(key);
-                        builder.generate().unwrap()
-                    }
-                }
-            }
-            _ => unreachable!(),
-        }
-    }
-
-    /// Creates a transaction to move inactive/retired stake of a given staker
-    /// from the staking contract to a new basic `recipient` address.
-    ///
-    /// Note that unstaking transactions can only be executed after the cooldown period has passed.
+    /// Creates a transaction to move stake of a given staker from the staking contract to a
+    /// basic `recipient` address.
     ///
     /// # Arguments
     ///
     ///  - `key_pair`:              The key pair used to sign the outgoing transaction. The staker
     ///                             address will be derived from this key pair.
     ///  - `recipient`:             The basic address that will receive the unstaked funds.
-    ///  - `value`:                 The value to be moved from the inactive balance to the active
-    ///                             balance.
+    ///  - `value`:                 The value to be moved from the staker.
     ///  - `fee`:                   Transaction fee.
     ///  - `validity_start_height`: Block height from which this transaction is valid.
     ///  - `network_id`:            ID of network for which the transaction is meant.
@@ -1450,7 +1288,7 @@ impl TransactionBuilder {
         }
     }
 
-    /// Creates a transaction that retires a validator, i.e. making it *inactive*.
+    /// Creates a transaction that inactivates a validator.
     ///
     /// # Arguments
     ///
@@ -1471,7 +1309,7 @@ impl TransactionBuilder {
     ///
     /// This is a *signalling transaction*.
     ///
-    pub fn new_retire_validator(
+    pub fn new_inactivate_validator(
         key_pair: &KeyPair,
         validator_address: Address,
         signing_key_pair: &KeyPair,
@@ -1480,7 +1318,7 @@ impl TransactionBuilder {
         network_id: NetworkId,
     ) -> Transaction {
         let mut recipient = Recipient::new_staking_builder();
-        recipient.retire_validator(validator_address);
+        recipient.inactivate_validator(validator_address);
 
         let mut builder = Self::new();
         builder
@@ -1609,7 +1447,7 @@ impl TransactionBuilder {
         }
     }
 
-    /// Creates a transaction that drops an *inactive* validator. The validator must have been
+    /// Creates a transaction that deletes an *inactive* validator. The validator must have been
     /// *inactive* for the minimum cool-down period.
     ///
     /// # Arguments
@@ -1625,7 +1463,7 @@ impl TransactionBuilder {
     ///
     /// The finalized transaction.
     ///
-    pub fn new_drop_validator(
+    pub fn new_delete_validator(
         recipient: Address,
         cold_key_pair: &KeyPair,
         fee: Coin,
@@ -1647,7 +1485,7 @@ impl TransactionBuilder {
         let proof_builder = builder.generate().unwrap();
         match proof_builder {
             TransactionProofBuilder::OutStaking(mut builder) => {
-                builder.drop_validator(cold_key_pair);
+                builder.delete_validator(cold_key_pair);
                 builder.generate().unwrap()
             }
             _ => unreachable!(),

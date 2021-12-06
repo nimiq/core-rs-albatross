@@ -61,10 +61,9 @@ impl StakingDataBuilder {
 /// The `StakingProofBuilder` can be used to build proofs for transactions
 /// to move funds out of the staking contract. These are:
 ///     - Validator
-///         * Drop
+///         * Delete
 ///     - Staker
 ///         * Unstake
-///         * Deduct fees
 #[derive(Clone, Debug)]
 pub struct StakingProofBuilder {
     pub transaction: Transaction,
@@ -80,12 +79,12 @@ impl StakingProofBuilder {
         }
     }
 
-    /// This methods sets the action to drop a validator and builds the corresponding proof
+    /// This methods sets the action to delete a validator and builds the corresponding proof
     /// from a validator's `key_pair`.
-    pub fn drop_validator(&mut self, key_pair: &KeyPair) -> &mut Self {
+    pub fn delete_validator(&mut self, key_pair: &KeyPair) -> &mut Self {
         let signature = key_pair.sign(self.transaction.serialize_content().as_slice());
         let proof = SignatureProof::from(key_pair.public, signature);
-        self.proof = Some(OutgoingStakingTransactionProof::DropValidator { proof });
+        self.proof = Some(OutgoingStakingTransactionProof::DeleteValidator { proof });
         self
     }
 
@@ -95,18 +94,6 @@ impl StakingProofBuilder {
         let signature = key_pair.sign(self.transaction.serialize_content().as_slice());
         let proof = SignatureProof::from(key_pair.public, signature);
         self.proof = Some(OutgoingStakingTransactionProof::Unstake { proof });
-        self
-    }
-
-    /// This methods sets the action to deduct fees and builds the corresponding proof
-    /// from a staker's `key_pair`.
-    pub fn deduct_fees(&mut self, from_active_balance: bool, key_pair: &KeyPair) -> &mut Self {
-        let signature = key_pair.sign(self.transaction.serialize_content().as_slice());
-        let proof = SignatureProof::from(key_pair.public, signature);
-        self.proof = Some(OutgoingStakingTransactionProof::DeductFees {
-            from_active_balance,
-            proof,
-        });
         self
     }
 
