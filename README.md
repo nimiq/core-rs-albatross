@@ -113,8 +113,15 @@ Its main purpose is to invite all developers to exercise and test the Nimiq 2.0 
 [issues](https://github.com/nimiq/core-rs-albatross/issues/new) through our GitHub repository.
 
 Clients can connect to the Devnet via the seed node located at
+
 ```
 /dns4/seed1.v2.nimiq-testnet.com/tcp/8443/ws
+```
+
+And get funds to experiment with it (for example, by becoming a validator) using the [Devnet Faucet](http://faucet.v2.nimiq-testnet.com/):
+
+```
+curl -X POST -H "Content-Type: application/x-www-form-urlencoded" -d "address=NQXX XXXX XXXX XXXX XXXX XXXX XXXX XXXX XXXX"  http://faucet.v2.nimiq-testnet.com/tapit
 ```
 
 For a full list of supported and non-supported functionality, please refer to the [Nimiq 2.0 Devnet project](https://github.com/nimiq/core-rs-albatross/projects).
