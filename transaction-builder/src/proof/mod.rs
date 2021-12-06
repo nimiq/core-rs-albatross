@@ -289,7 +289,7 @@ impl TransactionProofBuilder {
     /// let proof_builder = tx_builder.generate().unwrap();
     /// // Unwrap staking proof builder.
     /// let mut staking_proof_builder = proof_builder.unwrap_out_staking();
-    /// staking_proof_builder.drop_validator(&key_pair);
+    /// staking_proof_builder.delete_validator(&key_pair);
     ///
     /// let final_transaction = staking_proof_builder.generate();
     /// assert!(final_transaction.is_some());

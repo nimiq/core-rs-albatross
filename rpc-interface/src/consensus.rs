@@ -252,7 +252,6 @@ pub trait ConsensusInterface {
     async fn create_update_transaction(
         &mut self,
         sender_wallet: Option<Address>,
-        from_active_balance: Option<bool>,
         staker_wallet: Address,
         new_delegation: Option<Address>,
         fee: Coin,
@@ -262,49 +261,8 @@ pub trait ConsensusInterface {
     async fn send_update_transaction(
         &mut self,
         sender_wallet: Option<Address>,
-        from_active_balance: Option<bool>,
         staker_wallet: Address,
         new_delegation: Option<Address>,
-        fee: Coin,
-        validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Self::Error>;
-
-    async fn create_retire_transaction(
-        &mut self,
-        sender_wallet: Option<Address>,
-        from_active_balance: Option<bool>,
-        staker_wallet: Address,
-        value: Coin,
-        fee: Coin,
-        validity_start_height: ValidityStartHeight,
-    ) -> Result<String, Self::Error>;
-
-    async fn send_retire_transaction(
-        &mut self,
-        sender_wallet: Option<Address>,
-        from_active_balance: Option<bool>,
-        staker_wallet: Address,
-        value: Coin,
-        fee: Coin,
-        validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Self::Error>;
-
-    async fn create_reactivate_transaction(
-        &mut self,
-        sender_wallet: Option<Address>,
-        from_active_balance: Option<bool>,
-        staker_wallet: Address,
-        value: Coin,
-        fee: Coin,
-        validity_start_height: ValidityStartHeight,
-    ) -> Result<String, Self::Error>;
-
-    async fn send_reactivate_transaction(
-        &mut self,
-        sender_wallet: Option<Address>,
-        from_active_balance: Option<bool>,
-        staker_wallet: Address,
-        value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Self::Error>;
@@ -375,7 +333,7 @@ pub trait ConsensusInterface {
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Self::Error>;
 
-    async fn create_retire_validator_transaction(
+    async fn create_inactivate_validator_transaction(
         &mut self,
         sender_wallet: Address,
         validator_address: Address,
@@ -384,7 +342,7 @@ pub trait ConsensusInterface {
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Self::Error>;
 
-    async fn send_retire_validator_transaction(
+    async fn send_inactivate_validator_transaction(
         &mut self,
         sender_wallet: Address,
         validator_address: Address,
@@ -429,7 +387,7 @@ pub trait ConsensusInterface {
         validity_start_height: ValidityStartHeight,
     ) -> Result<Blake2bHash, Self::Error>;
 
-    async fn create_drop_validator_transaction(
+    async fn create_delete_validator_transaction(
         &mut self,
         validator_wallet: Address,
         recipient: Address,
@@ -437,7 +395,7 @@ pub trait ConsensusInterface {
         validity_start_height: ValidityStartHeight,
     ) -> Result<String, Self::Error>;
 
-    async fn send_drop_validator_transaction(
+    async fn send_delete_validator_transaction(
         &mut self,
         validator_wallet: Address,
         recipient: Address,

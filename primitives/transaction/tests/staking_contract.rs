@@ -291,7 +291,7 @@ fn retire_validator() {
 
     // Test serialization and deserialization.
     let mut tx = make_signed_incoming_tx(
-        IncomingStakingTransactionData::RetireValidator {
+        IncomingStakingTransactionData::InactivateValidator {
             validator_address: VALIDATOR_ADDRESS.parse().unwrap(),
             proof: SignatureProof::default(),
         },
@@ -326,7 +326,7 @@ fn retire_validator() {
     let other_pair = KeyPair::generate_default_csprng();
 
     let tx = make_signed_incoming_tx(
-        IncomingStakingTransactionData::RetireValidator {
+        IncomingStakingTransactionData::InactivateValidator {
             validator_address: VALIDATOR_ADDRESS.parse().unwrap(),
             proof: SignatureProof::default(),
         },
@@ -595,153 +595,9 @@ fn update_staker() {
 }
 
 #[test]
-fn retire_staker() {
-    let keypair = ed25519_key_pair(STAKER_PRIVATE_KEY);
-
+fn delete_validator() {
     // Test serialization and deserialization.
-    let mut tx = make_signed_incoming_tx(
-        IncomingStakingTransactionData::RetireStaker {
-            value: Coin::from_u64_unchecked(10),
-            proof: SignatureProof::default(),
-        },
-        0,
-        &keypair,
-        None,
-    );
-
-    let tx_hex = "01006a08000000000000000ab3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd910500e1750e6e97c2f314c15aec215d0c6003dd412b99ed0f845c925771e9c54864b82db562fa1231b3d7d1658b4b6f1485a3b3fb74dfd7cb8b71bbda869a0b8aa80c8c551fabc6e6e00c609c3f0313257ad7e835643c00d6d530da000000000000602dbca99b000000000003000000000000000000000000000000640000000104020061b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd9105001030aac58d1749d5b336edc9d85e35cee4e94dd5b5aa88d879bcaded7120af8e4c8aacead0ec90c382790dfa46ab38711e53fe35912830dfe8975871cb2fbb0a";
-    let tx_size = 272;
-
-    let mut ser_tx: Vec<u8> = Vec::with_capacity(tx_size);
-    assert_eq!(tx_size, tx.serialized_size());
-    assert_eq!(tx_size, tx.serialize(&mut ser_tx).unwrap());
-    assert_eq!(tx_hex, hex::encode(ser_tx));
-
-    let deser_tx = Deserialize::deserialize(&mut &hex::decode(tx_hex).unwrap()[..]).unwrap();
-    assert_eq!(tx, deser_tx);
-
-    // Works in the valid case.
-    assert_eq!(AccountType::verify_incoming_transaction(&tx), Ok(()));
-
-    // Signalling transaction with a non-zero value.
-    tx.value = Coin::from_u64_unchecked(1);
-
-    assert_eq!(
-        AccountType::verify_incoming_transaction(&tx),
-        Err(TransactionError::InvalidValue)
-    );
-
-    // Retiring zero stake.
-    let tx = make_signed_incoming_tx(
-        IncomingStakingTransactionData::RetireStaker {
-            value: Coin::ZERO,
-            proof: SignatureProof::default(),
-        },
-        0,
-        &keypair,
-        None,
-    );
-
-    assert_eq!(
-        AccountType::verify_incoming_transaction(&tx),
-        Err(TransactionError::InvalidData)
-    );
-
-    // Invalid signature.
-    let other_pair = KeyPair::generate_default_csprng();
-
-    let tx = make_signed_incoming_tx(
-        IncomingStakingTransactionData::RetireStaker {
-            value: Coin::from_u64_unchecked(10),
-            proof: SignatureProof::default(),
-        },
-        0,
-        &keypair,
-        Some(other_pair.public),
-    );
-
-    assert_eq!(
-        AccountType::verify_incoming_transaction(&tx),
-        Err(TransactionError::InvalidProof)
-    );
-}
-
-#[test]
-fn reactivate_staker() {
-    let keypair = ed25519_key_pair(STAKER_PRIVATE_KEY);
-
-    // Test serialization and deserialization.
-    let mut tx = make_signed_incoming_tx(
-        IncomingStakingTransactionData::ReactivateStaker {
-            value: Coin::from_u64_unchecked(10),
-            proof: SignatureProof::default(),
-        },
-        0,
-        &keypair,
-        None,
-    );
-
-    let tx_hex = "01006a09000000000000000ab3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd9105001df828abac1cebcf399189764bd37d06d9e691b7ba87a58363076898bd2b26aec1e79532eef2e233224ec424381b7df3b36f9ba4477cf89a52e4af37c93fd5088c551fabc6e6e00c609c3f0313257ad7e835643c00d6d530da000000000000602dbca99b000000000003000000000000000000000000000000640000000104020061b3adb13fe6887f6cdcb8c82c429f718fcdbbb27b2a19df7c1ea9814f19cd9105007601e2f7359d8be6cf0ac726d02be594a8407072462379eb1f2fcdc51b416ee09b07fa97f3dd6ae510df1e0ecc052aca6e8b6fc0be6355aeddc04b576f788c02";
-    let tx_size = 272;
-
-    let mut ser_tx: Vec<u8> = Vec::with_capacity(tx_size);
-    assert_eq!(tx_size, tx.serialized_size());
-    assert_eq!(tx_size, tx.serialize(&mut ser_tx).unwrap());
-    assert_eq!(tx_hex, hex::encode(ser_tx));
-
-    let deser_tx = Deserialize::deserialize(&mut &hex::decode(tx_hex).unwrap()[..]).unwrap();
-    assert_eq!(tx, deser_tx);
-
-    // Works in the valid case.
-    assert_eq!(AccountType::verify_incoming_transaction(&tx), Ok(()));
-
-    // Signalling transaction with a non-zero value.
-    tx.value = Coin::from_u64_unchecked(1);
-
-    assert_eq!(
-        AccountType::verify_incoming_transaction(&tx),
-        Err(TransactionError::InvalidValue)
-    );
-
-    // Retiring zero stake.
-    let tx = make_signed_incoming_tx(
-        IncomingStakingTransactionData::ReactivateStaker {
-            value: Coin::ZERO,
-            proof: SignatureProof::default(),
-        },
-        0,
-        &keypair,
-        None,
-    );
-
-    assert_eq!(
-        AccountType::verify_incoming_transaction(&tx),
-        Err(TransactionError::InvalidData)
-    );
-
-    // Invalid signature.
-    let other_pair = KeyPair::generate_default_csprng();
-
-    let tx = make_signed_incoming_tx(
-        IncomingStakingTransactionData::ReactivateStaker {
-            value: Coin::from_u64_unchecked(10),
-            proof: SignatureProof::default(),
-        },
-        0,
-        &keypair,
-        Some(other_pair.public),
-    );
-
-    assert_eq!(
-        AccountType::verify_incoming_transaction(&tx),
-        Err(TransactionError::InvalidProof)
-    );
-}
-
-#[test]
-fn drop_validator() {
-    // Test serialization and deserialization.
-    let tx = make_drop_validator_tx(VALIDATOR_DEPOSIT - 100, false);
+    let tx = make_delete_validator_tx(VALIDATOR_DEPOSIT - 100, false);
 
     let tx_hex = "010000d6d530da000000000000602dbca99b0000000000038c551fabc6e6e00c609c3f0313257ad7e835643c00000000003b9ac99c00000000000000640000000104000062007451b039e2f3fcafc3be7c6bd9e01fbc072c956a2b95a335cfb3cd3702335b5300f59b9c7c01cd154de300f0106650b7f3a7d79af892ddb69c96f4010e9f5fe78160a371e8d801da9f55e079687474601898857d02168f160d47041dade476280a";
     let tx_size = 167;
@@ -758,14 +614,14 @@ fn drop_validator() {
     assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
 
     // Wrong values.
-    let tx = make_drop_validator_tx(VALIDATOR_DEPOSIT - 200, false);
+    let tx = make_delete_validator_tx(VALIDATOR_DEPOSIT - 200, false);
 
     assert_eq!(
         AccountType::verify_outgoing_transaction(&tx),
         Err(TransactionError::InvalidValue)
     );
 
-    let tx = make_drop_validator_tx(VALIDATOR_DEPOSIT, false);
+    let tx = make_delete_validator_tx(VALIDATOR_DEPOSIT, false);
 
     assert_eq!(
         AccountType::verify_outgoing_transaction(&tx),
@@ -773,7 +629,7 @@ fn drop_validator() {
     );
 
     // Wrong signature.
-    let tx = make_drop_validator_tx(VALIDATOR_DEPOSIT - 100, true);
+    let tx = make_delete_validator_tx(VALIDATOR_DEPOSIT - 100, true);
 
     assert_eq!(
         AccountType::verify_outgoing_transaction(&tx),
@@ -802,42 +658,6 @@ fn unstake() {
 
     // Wrong signature.
     let tx = make_unstake_tx(true);
-
-    assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
-        Err(TransactionError::InvalidProof)
-    );
-}
-
-#[test]
-fn deduct_fees() {
-    // Test serialization and deserialization.
-    let tx = make_deduct_fees_tx(0, false);
-
-    let tx_hex = "010000d6d530da000000000000602dbca99b0000000000038c551fabc6e6e00c609c3f0313257ad7e835643c0000000000000000000000000000000064000000010400006302017451b039e2f3fcafc3be7c6bd9e01fbc072c956a2b95a335cfb3cd3702335b530039e052ac741ab14e1aab1b8c9e0ebd289ed5c8b70271f82c0cb0421a5e7ec6a8c030f37c7db0193f76c755843b7bcb3e735a69875c833893640b4b7cf5b8240d";
-    let tx_size = 168;
-
-    let mut ser_tx: Vec<u8> = Vec::with_capacity(tx_size);
-    assert_eq!(tx_size, tx.serialized_size());
-    assert_eq!(tx_size, tx.serialize(&mut ser_tx).unwrap());
-    assert_eq!(tx_hex, hex::encode(ser_tx));
-
-    let deser_tx = Deserialize::deserialize(&mut &hex::decode(tx_hex).unwrap()[..]).unwrap();
-    assert_eq!(tx, deser_tx);
-
-    // Works in the valid case.
-    assert_eq!(AccountType::verify_outgoing_transaction(&tx), Ok(()));
-
-    // Wrong value.
-    let tx = make_deduct_fees_tx(1, false);
-
-    assert_eq!(
-        AccountType::verify_outgoing_transaction(&tx),
-        Err(TransactionError::InvalidValue)
-    );
-
-    // Wrong signature.
-    let tx = make_deduct_fees_tx(0, true);
 
     assert_eq!(
         AccountType::verify_outgoing_transaction(&tx),
@@ -908,7 +728,7 @@ fn make_signed_incoming_tx(
     tx
 }
 
-fn make_drop_validator_tx(value: u64, wrong_sig: bool) -> Transaction {
+fn make_delete_validator_tx(value: u64, wrong_sig: bool) -> Transaction {
     let mut tx = Transaction::new_extended(
         STAKING_CONTRACT_ADDRESS,
         AccountType::Staking,
@@ -939,7 +759,7 @@ fn make_drop_validator_tx(value: u64, wrong_sig: bool) -> Transaction {
         key_pair.sign(&tx.serialize_content()),
     );
 
-    let proof = OutgoingStakingTransactionProof::DropValidator { proof: sig };
+    let proof = OutgoingStakingTransactionProof::DeleteValidator { proof: sig };
 
     tx.proof = proof.serialize_to_vec();
 
@@ -978,47 +798,6 @@ fn make_unstake_tx(wrong_sig: bool) -> Transaction {
     );
 
     let proof = OutgoingStakingTransactionProof::Unstake { proof: sig };
-
-    tx.proof = proof.serialize_to_vec();
-
-    tx
-}
-
-fn make_deduct_fees_tx(value: u64, wrong_sig: bool) -> Transaction {
-    let mut tx = Transaction::new_extended(
-        STAKING_CONTRACT_ADDRESS,
-        AccountType::Staking,
-        Address::from_any_str(STAKER_ADDRESS).unwrap(),
-        AccountType::Basic,
-        value.try_into().unwrap(),
-        100.try_into().unwrap(),
-        vec![],
-        1,
-        NetworkId::Dummy,
-    );
-
-    let private_key =
-        PrivateKey::deserialize_from_vec(&hex::decode(VALIDATOR_PRIVATE_KEY).unwrap()).unwrap();
-
-    let key_pair = KeyPair::from(private_key);
-
-    let wrong_pk = KeyPair::from(
-        PrivateKey::deserialize_from_vec(&hex::decode(STAKER_PRIVATE_KEY).unwrap()).unwrap(),
-    )
-    .public;
-
-    let sig = SignatureProof::from(
-        match wrong_sig {
-            false => key_pair.public,
-            true => wrong_pk,
-        },
-        key_pair.sign(&tx.serialize_content()),
-    );
-
-    let proof = OutgoingStakingTransactionProof::DeductFees {
-        from_active_balance: true,
-        proof: sig,
-    };
 
     tx.proof = proof.serialize_to_vec();
 

@@ -641,21 +641,17 @@ impl Account {
 #[serde(rename_all = "camelCase")]
 pub struct Staker {
     pub address: Address,
-    pub active_stake: Coin,
-    pub inactive_stake: Coin,
+    pub balance: Coin,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub delegation: Option<Address>,
-    pub retire_time: u32,
 }
 
 impl Staker {
     pub fn from_staker(staker: &nimiq_account::Staker) -> Self {
         Staker {
             address: staker.address.clone(),
-            active_stake: staker.active_stake,
-            inactive_stake: staker.inactive_stake,
+            balance: staker.balance,
             delegation: staker.delegation.clone(),
-            retire_time: staker.retire_time,
         }
     }
 }

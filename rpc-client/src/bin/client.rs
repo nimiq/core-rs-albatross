@@ -134,42 +134,6 @@ enum TransactionCommand {
         dry: bool,
     },
 
-    /// Retires the stake from the address of a given `key_pair`.
-    Retire {
-        /// The stake will be retired from this wallet.
-        wallet: Address,
-
-        value: Coin,
-
-        #[structopt(short, long, default_value = "0")]
-        fee: Coin,
-
-        #[structopt(short, long, default_value)]
-        validity_start_height: ValidityStartHeight,
-
-        /// Don't actually send the transaction, but output the transaction as hex string.
-        #[structopt(long = "dry")]
-        dry: bool,
-    },
-
-    /// Reactivates the stake from the address of a given `key_pair`.
-    Reactivate {
-        /// The stake will be reactivated from this wallet.
-        wallet: Address,
-
-        value: Coin,
-
-        #[structopt(short, long, default_value = "0")]
-        fee: Coin,
-
-        #[structopt(short, long, default_value)]
-        validity_start_height: ValidityStartHeight,
-
-        /// Don't actually send the transaction, but output the transaction as hex string.
-        #[structopt(long = "dry")]
-        dry: bool,
-    },
-
     Unstake {
         /// The stake will be sent from this wallet.
         wallet: Address,
@@ -353,78 +317,6 @@ impl Command {
                             .send_stake_transaction(
                                 wallet,
                                 staker_address,
-                                value,
-                                fee,
-                                validity_start_height,
-                            )
-                            .await?;
-                        println!("{}", txid);
-                    }
-                }
-
-                TransactionCommand::Retire {
-                    wallet,
-                    value,
-                    fee,
-                    validity_start_height,
-                    dry,
-                } => {
-                    if dry {
-                        let tx = client
-                            .consensus
-                            .create_retire_transaction(
-                                None,
-                                None,
-                                wallet,
-                                value,
-                                fee,
-                                validity_start_height,
-                            )
-                            .await?;
-                        println!("{}", tx);
-                    } else {
-                        let txid = client
-                            .consensus
-                            .send_retire_transaction(
-                                None,
-                                None,
-                                wallet,
-                                value,
-                                fee,
-                                validity_start_height,
-                            )
-                            .await?;
-                        println!("{}", txid);
-                    }
-                }
-
-                TransactionCommand::Reactivate {
-                    wallet,
-                    value,
-                    fee,
-                    validity_start_height,
-                    dry,
-                } => {
-                    if dry {
-                        let tx = client
-                            .consensus
-                            .create_reactivate_transaction(
-                                None,
-                                None,
-                                wallet,
-                                value,
-                                fee,
-                                validity_start_height,
-                            )
-                            .await?;
-                        println!("{}", tx);
-                    } else {
-                        let txid = client
-                            .consensus
-                            .send_reactivate_transaction(
-                                None,
-                                None,
-                                wallet,
                                 value,
                                 fee,
                                 validity_start_height,

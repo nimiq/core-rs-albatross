@@ -43,7 +43,7 @@ pub struct UnparkValidatorReceipt {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct DropValidatorReceipt {
+pub struct DeleteValidatorReceipt {
     pub signing_key: SchnorrPublicKey,
     pub voting_key: BlsPublicKey,
     pub reward_address: Address,
@@ -54,17 +54,6 @@ pub struct DropValidatorReceipt {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct UpdateStakerReceipt {
-    pub old_delegation: Option<Address>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct RetireStakerReceipt {
-    pub old_retire_time: u32,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct DropStakerReceipt {
+pub struct StakerReceipt {
     pub delegation: Option<Address>,
-    pub retire_time: u32,
 }

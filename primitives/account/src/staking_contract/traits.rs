@@ -12,7 +12,7 @@ use nimiq_transaction::account::staking_contract::{
 use nimiq_transaction::Transaction;
 
 use crate::interaction_traits::{AccountInherentInteraction, AccountTransactionInteraction};
-use crate::staking_contract::receipts::DropValidatorReceipt;
+use crate::staking_contract::receipts::DeleteValidatorReceipt;
 use crate::staking_contract::SlashReceipt;
 use crate::{Account, AccountError, AccountsTrie, Inherent, InherentType, StakingContract};
 
@@ -113,7 +113,7 @@ impl AccountTransactionInteraction for StakingContract {
                     .serialize_to_vec(),
                 )
             }
-            IncomingStakingTransactionData::RetireValidator {
+            IncomingStakingTransactionData::InactivateValidator {
                 validator_address,
                 proof,
             } => {
@@ -121,7 +121,7 @@ impl AccountTransactionInteraction for StakingContract {
                 let signer = proof.compute_signer();
 
                 receipt = Some(
-                    StakingContract::retire_validator(
+                    StakingContract::inactivate_validator(
                         accounts_tree,
                         db_txn,
                         &validator_address,
@@ -197,27 +197,6 @@ impl AccountTransactionInteraction for StakingContract {
                     .serialize_to_vec(),
                 );
             }
-            IncomingStakingTransactionData::RetireStaker { value, proof } => {
-                // Get the staker address from the proof.
-                let staker_address = proof.compute_signer();
-
-                receipt = Some(
-                    StakingContract::retire_staker(
-                        accounts_tree,
-                        db_txn,
-                        &staker_address,
-                        value,
-                        block_height,
-                    )?
-                    .serialize_to_vec(),
-                );
-            }
-            IncomingStakingTransactionData::ReactivateStaker { value, proof } => {
-                // Get the staker address from the proof.
-                let staker_address = proof.compute_signer();
-
-                StakingContract::reactivate_staker(accounts_tree, db_txn, &staker_address, value)?;
-            }
         }
 
         Ok(receipt)
@@ -261,14 +240,14 @@ impl AccountTransactionInteraction for StakingContract {
                     receipt,
                 )?;
             }
-            IncomingStakingTransactionData::RetireValidator {
+            IncomingStakingTransactionData::InactivateValidator {
                 validator_address, ..
             } => {
                 let receipt = Deserialize::deserialize_from_vec(
                     receipt.ok_or(AccountError::InvalidReceipt)?,
                 )?;
 
-                StakingContract::revert_retire_validator(
+                StakingContract::revert_inactivate_validator(
                     accounts_tree,
                     db_txn,
                     &validator_address,
@@ -332,33 +311,6 @@ impl AccountTransactionInteraction for StakingContract {
                     receipt,
                 )?;
             }
-            IncomingStakingTransactionData::RetireStaker { value, proof } => {
-                // Get the staker address from the proof.
-                let staker_address = proof.compute_signer();
-
-                let receipt = Deserialize::deserialize_from_vec(
-                    receipt.ok_or(AccountError::InvalidReceipt)?,
-                )?;
-
-                StakingContract::revert_retire_staker(
-                    accounts_tree,
-                    db_txn,
-                    &staker_address,
-                    value,
-                    receipt,
-                )?;
-            }
-            IncomingStakingTransactionData::ReactivateStaker { value, proof } => {
-                // Get the staker address from the proof.
-                let staker_address = proof.compute_signer();
-
-                StakingContract::revert_reactivate_staker(
-                    accounts_tree,
-                    db_txn,
-                    &staker_address,
-                    value,
-                )?;
-            }
         }
 
         Ok(())
@@ -383,12 +335,12 @@ impl AccountTransactionInteraction for StakingContract {
         let data = OutgoingStakingTransactionProof::parse(transaction)?;
 
         match data {
-            OutgoingStakingTransactionProof::DropValidator { proof } => {
+            OutgoingStakingTransactionProof::DeleteValidator { proof } => {
                 // Get the validator address from the proof.
                 let validator_address = proof.compute_signer();
 
                 receipt = Some(
-                    StakingContract::drop_validator(
+                    StakingContract::delete_validator(
                         accounts_tree,
                         db_txn,
                         &validator_address,
@@ -406,23 +358,6 @@ impl AccountTransactionInteraction for StakingContract {
                     db_txn,
                     &staker_address,
                     transaction.total_value(),
-                    block_height,
-                )?
-                .map(|r| r.serialize_to_vec());
-            }
-            OutgoingStakingTransactionProof::DeductFees {
-                from_active_balance,
-                proof,
-            } => {
-                // Get the staker address from the proof.
-                let staker_address = proof.compute_signer();
-
-                receipt = StakingContract::deduct_fees(
-                    accounts_tree,
-                    db_txn,
-                    &staker_address,
-                    from_active_balance,
-                    transaction.fee,
                 )?
                 .map(|r| r.serialize_to_vec());
             }
@@ -444,15 +379,15 @@ impl AccountTransactionInteraction for StakingContract {
         let data = OutgoingStakingTransactionProof::parse(transaction)?;
 
         match data {
-            OutgoingStakingTransactionProof::DropValidator { proof } => {
+            OutgoingStakingTransactionProof::DeleteValidator { proof } => {
                 // Get the validator address from the proof.
                 let validator_address = proof.compute_signer();
 
-                let receipt: DropValidatorReceipt = Deserialize::deserialize_from_vec(
+                let receipt: DeleteValidatorReceipt = Deserialize::deserialize_from_vec(
                     receipt.ok_or(AccountError::InvalidReceipt)?,
                 )?;
 
-                StakingContract::revert_drop_validator(
+                StakingContract::revert_delete_validator(
                     accounts_tree,
                     db_txn,
                     &validator_address,
@@ -473,27 +408,6 @@ impl AccountTransactionInteraction for StakingContract {
                     db_txn,
                     &staker_address,
                     transaction.total_value(),
-                    receipt,
-                )?;
-            }
-            OutgoingStakingTransactionProof::DeductFees {
-                from_active_balance,
-                proof,
-            } => {
-                // Get the staker address from the proof.
-                let staker_address = proof.compute_signer();
-
-                let receipt = match receipt {
-                    Some(v) => Some(Deserialize::deserialize_from_vec(v)?),
-                    None => None,
-                };
-
-                StakingContract::revert_deduct_fees(
-                    accounts_tree,
-                    db_txn,
-                    &staker_address,
-                    from_active_balance,
-                    transaction.fee,
                     receipt,
                 )?;
             }
