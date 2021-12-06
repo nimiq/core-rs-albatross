@@ -24,7 +24,7 @@ RUN \
   # See https://doc.rust-lang.org/cargo/guide/cargo-home.html
   --mount=type=cache,target=/usr/local/cargo/registry \
   --mount=type=cache,target=/usr/local/cargo/git \
-  cargo build --bin nimiq-client && cp /build/target/debug/nimiq-client /build/
+  NIMIQ_OVERRIDE_DEVNET_CONFIG=$PWD/genesis/src/genesis/dev-albatross-4-validators.toml cargo build --bin nimiq-client && cp /build/target/debug/nimiq-client /build/
 
 # This is where the final image is created
 FROM ubuntu:20.04
