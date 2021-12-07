@@ -125,7 +125,6 @@ services:
     volumes:
       - "seed3:/home/nimiq/.nimiq:rw"
 
-
   seed4:
     image: core:latest
     labels:
@@ -156,6 +155,40 @@ services:
         ipv4_address: 7.0.0.5
     volumes:
       - "seed4:/home/nimiq/.nimiq:rw"
+
+  seed5:
+    image: core:latest
+    labels:
+      # Accept outside Nimiq protocol connections
+      - traefik.http.routers.seed5.rule=Host(`seed5.${NETWORK_NAME:?err}`)
+
+      # Accept outside RPC connections
+      - traefik.http.routers.seed5-rpc.rule=Host(`seed5.${NETWORK_NAME:?err}`)
+      - traefik.http.routers.seed5-rpc.entrypoints=rpc
+      - traefik.http.routers.seed5-rpc.service=seed5-rpc
+      - traefik.http.services.seed5-rpc.loadbalancer.server.port=8648
+
+    depends_on:
+      - seed4
+    environment:
+      - LISTEN_ADDRESSES=/ip4/7.0.0.6/tcp/8443/ws
+      - NIMIQ_HOST=seed4.${NETWORK_NAME:?err}
+      - NIMIQ_NETWORK=dev-albatross
+      - NIMIQ_SEED_NODES=/ip4/7.0.0.2/tcp/8443/ws
+      - NIMIQ_PEER_KEY_FILE=/home/nimiq/.nimiq/peer_key.dat
+      - NIMIQ_INSTANT_INBOUND=true
+      - NIMIQ_VALIDATOR=validator
+      - NIMIQ_MIN_PEERS=1
+      - VALIDATOR_ADDRESS=NQ98RXTFQFRJVJP3CV5EGU8XKKQ6CM6CNF9F #private key: 375f6ba7cae26cccacbe6a75a5ac3f94858426dcb855cfd6536fdcb7fc9206b4
+      - RPC_ENABLED=true
+      - RUST_BACKTRACE="1"
+      - NIMIQ_LOG_LEVEL=info
+      - NIMIQ_LOG_TIMESTAMPS=true
+    networks:
+      devnet:
+        ipv4_address: 7.0.0.6
+    volumes:
+      - "seed5:/home/nimiq/.nimiq:rw"
 
   # validator1:
   #   image: core
@@ -236,3 +269,4 @@ volumes:
   seed2:
   seed3:
   seed4:
+  seed5:
