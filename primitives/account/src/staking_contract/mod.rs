@@ -10,6 +10,7 @@ use nimiq_database::{Transaction as DBTransaction, WriteTransaction};
 use nimiq_keys::Address;
 use nimiq_primitives::slots::{Validators, ValidatorsBuilder};
 use nimiq_primitives::{coin::Coin, policy};
+use nimiq_transaction::account::staking_contract::OutgoingStakingTransactionProof;
 use nimiq_trie::key_nibbles::KeyNibbles;
 use nimiq_vrf::{AliasMethod, VrfSeed, VrfUseCase};
 pub use receipts::*;
@@ -297,6 +298,84 @@ impl StakingContract {
     /// Returns a Vector with the addresses of all the currently parked Validators.
     pub fn parked_set(&self) -> Vec<Address> {
         self.parked_set.iter().cloned().collect()
+    }
+
+    /// Checks if a given sender can pay the transaction.
+    pub fn can_pay_tx(
+        accounts_tree: &AccountsTrie,
+        db_txn: &DBTransaction,
+        tx_proof: OutgoingStakingTransactionProof,
+        tx_value: Coin,
+        block_height: u32,
+    ) -> bool {
+        match tx_proof {
+            OutgoingStakingTransactionProof::DeleteValidator { proof } => {
+                // If the fee is larger than the validator deposit then this won't work.
+                if tx_value > Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT) {
+                    warn!(
+                    "Cannot pay fees for transaction because fee is larger than validator deposit.",
+                );
+                    return false;
+                }
+
+                // Get the validator address from the proof.
+                let validator_address = proof.compute_signer();
+
+                // Get the validator.
+                let validator =
+                    match StakingContract::get_validator(accounts_tree, db_txn, &validator_address)
+                    {
+                        Some(v) => v,
+                        None => {
+                            warn!(
+                                "Cannot pay fees for transaction because validator doesn't exist.",
+                            );
+                            return false;
+                        }
+                    };
+
+                // Check that the validator has been inactive for long enough.
+                match validator.inactivity_flag {
+                    None => {
+                        warn!("Cannot pay fees for transaction because validator is still active.",);
+                        return false;
+                    }
+                    Some(time) => {
+                        if block_height <= policy::election_block_after(time) + policy::BATCH_LENGTH
+                        {
+                            warn!(
+                    "Cannot pay fees for transaction because validator hasn't been inactive for long enough.",
+                );
+                            return false;
+                        }
+                    }
+                }
+            }
+            OutgoingStakingTransactionProof::Unstake { proof } => {
+                // Get the staker address from the proof.
+                let staker_address = proof.compute_signer();
+
+                // Get the staker.
+                let staker =
+                    match StakingContract::get_staker(accounts_tree, db_txn, &staker_address) {
+                        Some(v) => v,
+                        None => {
+                            warn!("Cannot pay fees for transaction because staker doesn't exist.",);
+                            return false;
+                        }
+                    };
+
+                // Check that the balance is enough to pay the fee.
+                if tx_value > staker.balance {
+                    warn!(
+                    "Cannot pay fees for transaction because fee is larger than staker balance.",
+                );
+                    return false;
+                }
+            }
+        }
+
+        true
     }
 }
 

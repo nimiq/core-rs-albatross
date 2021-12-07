@@ -78,7 +78,7 @@ impl Blockchain {
     }
 
     pub fn get_account(&self, address: &Address) -> Option<Account> {
-        // TODO: Find a better place for this differentiation, it should be in a more general location
+        // TODO: Find a better place for this differentiation, it should be in a more general location.
         let key = if *address == policy::STAKING_CONTRACT_ADDRESS {
             StakingContract::get_key_staking_contract()
         } else {

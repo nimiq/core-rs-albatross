@@ -599,7 +599,7 @@ impl StakingContract {
         match validator.inactivity_flag {
             None => {
                 error!(
-                    "Tried to drop a validator which was still active! Validator address {}",
+                    "Tried to delete a validator which was still active! Validator address {}",
                     validator_address
                 );
                 return Err(AccountError::InvalidForSender);
