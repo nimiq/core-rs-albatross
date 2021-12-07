@@ -64,7 +64,7 @@ impl MempoolFilter {
          )
     }
 
-    /// Checks wether a transaction is accepted according to the Mempool filter rules for the recipient balance
+    /// Checks whether a transaction is accepted according to the Mempool filter rules for the recipient balance
     pub fn accepts_recipient_balance(
         &self,
         tx: &Transaction,
@@ -82,7 +82,7 @@ impl MempoolFilter {
             )
     }
 
-    /// Checks wether a transaction is accepted according to the Mempool filter rules for the sender balance
+    /// Checks whether a transaction is accepted according to the Mempool filter rules for the sender balance
     pub fn accepts_sender_balance(
         &self,
         _tx: &Transaction,

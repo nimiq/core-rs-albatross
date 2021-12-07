@@ -5,10 +5,12 @@ use std::{
 
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 
-use nimiq_account::{Account, BasicAccount};
+use nimiq_account::{Account, BasicAccount, StakingContract};
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_hash::Hash;
+use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
+use nimiq_transaction::account::staking_contract::OutgoingStakingTransactionProof;
 
 use nimiq_transaction::Transaction;
 
@@ -159,6 +161,44 @@ pub(crate) async fn verify_tx<'a>(
         }),
         Some(x) => x,
     };
+
+    // If it is an outgoing staking transaction then we have additional checks.
+    if transaction.sender_type == AccountType::Staking {
+        let accounts_tree = &blockchain.state().accounts.tree;
+        let db_txn = blockchain.read_transaction();
+
+        // Parse transaction data.
+        let data = OutgoingStakingTransactionProof::parse(transaction)
+            .expect("The proof should have already been parsed before, so this cannot panic!");
+
+        // If the sender is already in the mempool then we don't accept another transaction.
+        let duplicate = match data.clone() {
+            OutgoingStakingTransactionProof::DeleteValidator { proof } => mempool_state
+                .out_staking_validators
+                .contains(&proof.compute_signer()),
+            OutgoingStakingTransactionProof::Unstake { proof } => mempool_state
+                .out_staking_stakers
+                .contains(&proof.compute_signer()),
+        };
+
+        if duplicate {
+            log::debug!("Outgoing staking transaction sender is already in mempool.");
+            return Err(VerifyErr::Filtered);
+        }
+
+        // If the sender is not already in the mempool, then we need to check if it can pay the
+        // transaction.
+        if !StakingContract::can_pay_tx(
+            accounts_tree,
+            &db_txn,
+            data,
+            transaction.total_value(),
+            block_height,
+        ) {
+            log::debug!("Outgoing staking transaction cannot pay fee.");
+            return Err(VerifyErr::NotEnoughFunds);
+        }
+    }
 
     // 9. Drop the blockchain lock since it is no longer needed
     drop(blockchain);

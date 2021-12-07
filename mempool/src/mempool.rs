@@ -14,7 +14,9 @@ use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
 use nimiq_network_interface::network::Network;
+use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
+use nimiq_transaction::account::staking_contract::OutgoingStakingTransactionProof;
 use nimiq_transaction::Transaction;
 
 use crate::config::MempoolConfig;
@@ -45,6 +47,8 @@ impl Mempool {
             transactions_by_fee: KeyedPriorityQueue::new(),
             transactions_by_age: KeyedPriorityQueue::new(),
             state_by_sender: HashMap::new(),
+            out_staking_validators: HashSet::new(),
+            out_staking_stakers: HashSet::new(),
         };
 
         let state = Arc::new(RwLock::new(state));
@@ -441,6 +445,12 @@ pub(crate) struct MempoolState {
 
     // The in-fly balance per sender
     pub(crate) state_by_sender: HashMap<Address, SenderPendingState>,
+
+    // The sets of all senders of staking transactions. For simplicity, each validator/staker can
+    // only have one outgoing staking transaction in the mempool. This makes sure that the outgoing
+    // staking transaction can actually pay its fee.
+    pub(crate) out_staking_validators: HashSet<Address>,
+    pub(crate) out_staking_stakers: HashSet<Address>,
 }
 
 impl MempoolState {
@@ -486,6 +496,23 @@ impl MempoolState {
             }
         }
 
+        // If it is an outgoing staking transaction then we have additional work.
+        if tx.sender_type == AccountType::Staking {
+            // Parse transaction data.
+            let data = OutgoingStakingTransactionProof::parse(tx)
+                .expect("The proof should have already been parsed before, so this cannot panic!");
+
+            // Insert the sender address in the correct set.
+            match data {
+                OutgoingStakingTransactionProof::DeleteValidator { proof } => {
+                    assert!(self.out_staking_validators.insert(proof.compute_signer()));
+                }
+                OutgoingStakingTransactionProof::Unstake { proof } => {
+                    assert!(self.out_staking_stakers.insert(proof.compute_signer()));
+                }
+            }
+        }
+
         true
     }
 
@@ -502,6 +529,23 @@ impl MempoolState {
 
         if sender_state.txns.is_empty() {
             self.state_by_sender.remove(&tx.sender);
+        }
+
+        // If it is an outgoing staking transaction then we have additional work.
+        if tx.sender_type == AccountType::Staking {
+            // Parse transaction data.
+            let data = OutgoingStakingTransactionProof::parse(&tx)
+                .expect("The proof should have already been parsed before, so this cannot panic!");
+
+            // Remove the sender address from the correct set.
+            match data {
+                OutgoingStakingTransactionProof::DeleteValidator { proof } => {
+                    assert!(self.out_staking_validators.remove(&proof.compute_signer()));
+                }
+                OutgoingStakingTransactionProof::Unstake { proof } => {
+                    assert!(self.out_staking_stakers.remove(&proof.compute_signer()));
+                }
+            }
         }
 
         Some(tx)
