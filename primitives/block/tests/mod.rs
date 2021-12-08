@@ -76,7 +76,7 @@ fn it_can_convert_macro_block_into_slots() {
         let address = Address::from(validator_address);
 
         for _ in 0..num_slots {
-            builder.push(address.clone(), voting_key.clone(), signing_key.clone());
+            builder.push(address.clone(), voting_key.clone(), signing_key);
         }
     }
 

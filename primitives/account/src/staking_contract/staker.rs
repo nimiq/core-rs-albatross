@@ -685,7 +685,7 @@ impl StakingContract {
 
             Ok(Some(StakerReceipt {
                 no_op: false,
-                delegation: staker.delegation.clone(),
+                delegation: staker.delegation,
             }))
         } else {
             accounts_tree.put(

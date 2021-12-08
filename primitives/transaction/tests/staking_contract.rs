@@ -71,7 +71,7 @@ fn create_validator() {
     // Test serialization and deserialization.
     let mut tx = make_signed_incoming_tx(
         IncomingStakingTransactionData::CreateValidator {
-            signing_key: signing_key.clone(),
+            signing_key,
             voting_key: voting_key.clone(),
             proof_of_knowledge: voting_keypair
                 .sign(&voting_key.serialize_to_vec())
@@ -120,7 +120,7 @@ fn create_validator() {
 
     let tx = make_signed_incoming_tx(
         IncomingStakingTransactionData::CreateValidator {
-            signing_key: signing_key.clone(),
+            signing_key,
             voting_key: voting_key.clone(),
             proof_of_knowledge: invalid_pok.compress(),
             reward_address: Address::from([3u8; 20]),
@@ -177,7 +177,7 @@ fn update_validator() {
     // Test serialization and deserialization.
     let mut tx = make_signed_incoming_tx(
         IncomingStakingTransactionData::UpdateValidator {
-            new_signing_key: Some(signing_key.clone()),
+            new_signing_key: Some(signing_key),
             new_voting_key: Some(voting_key.clone()),
             new_proof_of_knowledge: Some(
                 voting_keypair
@@ -241,7 +241,7 @@ fn update_validator() {
 
     let tx = make_signed_incoming_tx(
         IncomingStakingTransactionData::UpdateValidator {
-            new_signing_key: Some(signing_key.clone()),
+            new_signing_key: Some(signing_key),
             new_voting_key: Some(voting_key.clone()),
             new_proof_of_knowledge: Some(invalid_pok.compress()),
             new_reward_address: Some(Address::from([3u8; 20])),

@@ -192,7 +192,7 @@ impl<
             let best = store
                 .best(level.id)
                 .unwrap_or_else(|| panic!("Expected a best signature for level {}", level.id));
-            self.num_contributors(&best)
+            self.num_contributors(best)
         };
 
         trace!(

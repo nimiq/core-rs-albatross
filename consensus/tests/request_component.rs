@@ -25,8 +25,8 @@ async fn test_request_component() {
     let genesis = GenesisBuilder::default()
         .with_genesis_validator(
             Address::from(&key),
-            sgn_key.public.clone(),
-            vtn_key.public_key.clone(),
+            sgn_key.public,
+            vtn_key.public_key,
             Address::default(),
         )
         .generate()
