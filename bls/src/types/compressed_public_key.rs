@@ -122,3 +122,11 @@ mod serde_derive {
         }
     }
 }
+
+impl Default for CompressedPublicKey {
+    fn default() -> Self {
+        CompressedPublicKey {
+            public_key: [0u8; CompressedPublicKey::SIZE],
+        }
+    }
+}

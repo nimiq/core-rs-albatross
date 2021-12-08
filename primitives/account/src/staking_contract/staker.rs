@@ -29,29 +29,30 @@ pub struct Staker {
 
 impl StakingContract {
     /// Creates a new staker. This function is public to fill the genesis staking contract.
+    /// If a staker already exists at this address, we simply stake the value at the existing staker.
     pub fn create_staker(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         staker_address: &Address,
-        balance: Coin,
+        value: Coin,
         delegation: Option<Address>,
     ) -> Result<(), AccountError> {
         // See if the staker already exists.
         if StakingContract::get_staker(accounts_tree, db_txn, staker_address).is_some() {
-            return Err(AccountError::AlreadyExistentAddress {
-                address: staker_address.clone(),
-            });
+            error!("There's already a staker at the address where we are trying to create a new staker. Plan B: Stake the transaction value on the the existing staker!");
+
+            return StakingContract::stake(accounts_tree, db_txn, staker_address, value);
         }
 
         // Get the staking contract and update it.
         let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
 
-        staking_contract.balance = Account::balance_add(staking_contract.balance, balance)?;
+        staking_contract.balance = Account::balance_add(staking_contract.balance, value)?;
 
-        // Create the staker struct. We create it with the stake already active.
+        // Create the staker struct.
         let staker = Staker {
             address: staker_address.clone(),
-            balance,
+            balance: value,
             delegation: delegation.clone(),
         };
 
@@ -69,7 +70,7 @@ impl StakingContract {
                 };
 
             // Update it.
-            validator.balance = Account::balance_add(validator.balance, balance)?;
+            validator.balance = Account::balance_add(validator.balance, value)?;
 
             if validator.inactivity_flag.is_none() {
                 staking_contract
@@ -117,6 +118,7 @@ impl StakingContract {
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         staker_address: &Address,
+        value: Coin,
     ) -> Result<(), AccountError> {
         // Get the staker and check if it exists.
         let staker = match StakingContract::get_staker(accounts_tree, db_txn, staker_address) {
@@ -127,6 +129,14 @@ impl StakingContract {
             }
             Some(x) => x,
         };
+
+        // If the transaction value is less than the staker's balance, this means that the original
+        // `create_staker` transaction failed and got downgraded to a `stake` transaction.
+        // In this case we simply revert the `stake` transaction.
+        debug_assert!(value <= staker.balance);
+        if value < staker.balance {
+            return StakingContract::revert_stake(accounts_tree, db_txn, staker_address, value);
+        }
 
         // Get the staking contract main and update it.
         let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
@@ -188,22 +198,28 @@ impl StakingContract {
 
     /// Adds stake to a staker. It will be directly added to the staker's balance. Anyone can
     /// stake for a staker.
+    /// If a staker at the address doesn't exist, one will be created.
     pub(crate) fn stake(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
         staker_address: &Address,
         value: Coin,
     ) -> Result<(), AccountError> {
-        // Get the staker, check if it exists and update it.
+        // Get the staker and check if it exists.
         let mut staker = match StakingContract::get_staker(accounts_tree, db_txn, staker_address) {
             None => {
-                return Err(AccountError::NonExistentAddress {
+                error!("Couldn't find the staker to which a stake transaction was destined. Plan B: Create a new staker at this address!");
+
+                Staker {
                     address: staker_address.clone(),
-                });
+                    balance: Coin::ZERO,
+                    delegation: None,
+                }
             }
             Some(x) => x,
         };
 
+        // Update the balance.
         staker.balance = Account::balance_add(staker.balance, value)?;
 
         // Get the staking contract main and update it.
@@ -315,18 +331,23 @@ impl StakingContract {
             );
         }
 
-        // Add the staking contract and the staker entries.
+        // Add the staking contract entries.
         accounts_tree.put(
             db_txn,
             &StakingContract::get_key_staking_contract(),
             Account::Staking(staking_contract),
         );
 
-        accounts_tree.put(
-            db_txn,
-            &StakingContract::get_key_staker(staker_address),
-            Account::StakingStaker(staker),
-        );
+        // Add or remove the staker entry, depending on remaining balance.
+        if staker.balance.is_zero() {
+            accounts_tree.remove(db_txn, &StakingContract::get_key_staker(staker_address));
+        } else {
+            accounts_tree.put(
+                db_txn,
+                &StakingContract::get_key_staker(staker_address),
+                Account::StakingStaker(staker),
+            );
+        }
 
         Ok(())
     }
@@ -338,26 +359,32 @@ impl StakingContract {
         staker_address: &Address,
         delegation: Option<Address>,
     ) -> Result<StakerReceipt, AccountError> {
-        // Get the staking contract main.
-        let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
-
         // Get the staker and check if it exists.
         let mut staker = match StakingContract::get_staker(accounts_tree, db_txn, staker_address) {
             None => {
-                return Err(AccountError::NonExistentAddress {
-                    address: staker_address.clone(),
+                error!("Tried to update a staker that doesn't exist!");
+
+                return Ok(StakerReceipt {
+                    no_op: true,
+                    delegation: None,
                 });
             }
             Some(x) => x,
         };
+
+        // Get the staking contract main.
+        let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
 
         // Check that the validator from the new delegation exists.
         if let Some(new_validator_address) = &delegation {
             if StakingContract::get_validator(accounts_tree, db_txn, new_validator_address)
                 .is_none()
             {
-                return Err(AccountError::NonExistentAddress {
-                    address: new_validator_address.clone(),
+                error!("Tried to delegate to a validator that doesn't exist!");
+
+                return Ok(StakerReceipt {
+                    no_op: true,
+                    delegation: None,
                 });
             }
         }
@@ -366,6 +393,7 @@ impl StakingContract {
 
         // Create the receipt.
         let receipt = StakerReceipt {
+            no_op: false,
             delegation: staker.delegation.clone(),
         };
 
@@ -460,6 +488,11 @@ impl StakingContract {
         staker_address: &Address,
         receipt: StakerReceipt,
     ) -> Result<(), AccountError> {
+        // If it was a no-op, we end right here.
+        if receipt.no_op {
+            return Ok(());
+        }
+
         // Get the staking contract main.
         let mut staking_contract = StakingContract::get_staking_contract(accounts_tree, db_txn);
 
@@ -652,6 +685,7 @@ impl StakingContract {
             accounts_tree.remove(db_txn, &StakingContract::get_key_staker(&staker.address));
 
             Ok(Some(StakerReceipt {
+                no_op: false,
                 delegation: staker.delegation.clone(),
             }))
         } else {

@@ -3,9 +3,9 @@ use std::convert::TryInto;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_account::*;
-use nimiq_bls::CompressedPublicKey as BlsPublicKey;
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_bls::SecretKey as BlsSecretKey;
+use nimiq_bls::{CompressedPublicKey as BlsPublicKey, CompressedPublicKey};
 use nimiq_collections::BitSet;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_database::WriteTransaction;
@@ -307,6 +307,7 @@ fn update_validator_works() {
     let old_reward_address = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
 
     let receipt = UpdateValidatorReceipt {
+        no_op: false,
         old_signing_key: old_signing_key.clone(),
         old_voting_key: old_voting_key.clone(),
         old_reward_address: old_reward_address.clone(),
@@ -364,6 +365,40 @@ fn update_validator_works() {
     );
     assert_eq!(validator.num_stakers, 1);
     assert_eq!(validator.inactivity_flag, None);
+
+    // Works when the validator doesn't exist.
+    let keypair = ed25519_key_pair(STAKER_PRIVATE_KEY);
+
+    let tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::UpdateValidator {
+            new_signing_key: Some(PublicKey::from([88u8; 32])),
+            new_voting_key: Some(new_voting_keypair.public_key.compress()),
+            new_reward_address: Some(Address::from([77u8; 20])),
+            new_signal_data: Some(Some(Blake2bHash::default())),
+            new_proof_of_knowledge: Some(
+                new_voting_keypair
+                    .sign(&new_voting_keypair.public_key.serialize_to_vec())
+                    .compress(),
+            ),
+            proof: SignatureProof::default(),
+        },
+        0,
+        &keypair,
+    );
+
+    let no_op_receipt = UpdateValidatorReceipt {
+        no_op: true,
+        old_signing_key: Default::default(),
+        old_voting_key: CompressedPublicKey::default(),
+        old_reward_address: Default::default(),
+        old_signal_data: None,
+    }
+    .serialize_to_vec();
+
+    assert_eq!(
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
+        Ok(Some(no_op_receipt.clone()))
+    );
 }
 
 #[test]
@@ -409,7 +444,11 @@ fn inactivate_validator_works() {
         &signing_keypair,
     );
 
-    let receipt = RetireValidatorReceipt { parked_set: true }.serialize_to_vec();
+    let receipt = InactivateValidatorReceipt {
+        no_op: false,
+        parked_set: true,
+    }
+    .serialize_to_vec();
 
     assert_eq!(
         StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
@@ -448,9 +487,15 @@ fn inactivate_validator_works() {
         &signing_keypair,
     );
 
+    let no_op_receipt = InactivateValidatorReceipt {
+        no_op: true,
+        parked_set: false,
+    }
+    .serialize_to_vec();
+
     assert_eq!(
         StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Err(AccountError::InvalidForRecipient)
+        Ok(Some(no_op_receipt.clone()))
     );
 
     // Try with a wrong signature.
@@ -465,7 +510,7 @@ fn inactivate_validator_works() {
 
     assert_eq!(
         StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Err(AccountError::InvalidSignature)
+        Ok(Some(no_op_receipt.clone()))
     );
 
     // Can revert the transaction.
@@ -502,6 +547,23 @@ fn inactivate_validator_works() {
         .active_validators
         .contains_key(&validator_address));
     assert!(staking_contract.parked_set.contains(&validator_address));
+
+    // Works when the validator doesn't exist.
+    let fake_address = Address::from_any_str(STAKER_ADDRESS).unwrap();
+
+    let tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::InactivateValidator {
+            validator_address: fake_address.clone(),
+            proof: SignatureProof::default(),
+        },
+        0,
+        &signing_keypair,
+    );
+
+    assert_eq!(
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
+        Ok(Some(no_op_receipt.clone()))
+    );
 }
 
 #[test]
@@ -546,7 +608,11 @@ fn reactivate_validator_works() {
         &signing_keypair,
     );
 
-    let receipt = ReactivateValidatorReceipt { retire_time: 2 }.serialize_to_vec();
+    let receipt = ReactivateValidatorReceipt {
+        no_op: false,
+        retire_time: 2,
+    }
+    .serialize_to_vec();
 
     assert_eq!(
         StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
@@ -585,9 +651,15 @@ fn reactivate_validator_works() {
         &signing_keypair,
     );
 
+    let no_op_receipt = ReactivateValidatorReceipt {
+        no_op: true,
+        retire_time: 0,
+    }
+    .serialize_to_vec();
+
     assert_eq!(
         StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Err(AccountError::InvalidForRecipient)
+        Ok(Some(no_op_receipt.clone()))
     );
 
     // Try with a wrong signature.
@@ -602,7 +674,7 @@ fn reactivate_validator_works() {
 
     assert_eq!(
         StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Err(AccountError::InvalidSignature)
+        Ok(Some(no_op_receipt.clone()))
     );
 
     // Can revert the transaction.
@@ -638,6 +710,23 @@ fn reactivate_validator_works() {
     assert!(!staking_contract
         .active_validators
         .contains_key(&validator_address));
+
+    // Works when the validator doesn't exist.
+    let fake_address = Address::from_any_str(STAKER_ADDRESS).unwrap();
+
+    let tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::ReactivateValidator {
+            validator_address: fake_address.clone(),
+            proof: SignatureProof::default(),
+        },
+        0,
+        &cold_keypair,
+    );
+
+    assert_eq!(
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
+        Ok(Some(no_op_receipt.clone()))
+    );
 }
 
 #[test]
@@ -689,6 +778,7 @@ fn unpark_validator_works() {
     );
 
     let receipt = UnparkValidatorReceipt {
+        no_op: false,
         parked_set: true,
         current_disabled_slots: Some(slots.clone()),
         previous_disabled_slots: Some(slots),
@@ -720,9 +810,17 @@ fn unpark_validator_works() {
         &signing_keypair,
     );
 
+    let no_op_receipt = UnparkValidatorReceipt {
+        no_op: true,
+        parked_set: false,
+        current_disabled_slots: None,
+        previous_disabled_slots: None,
+    }
+    .serialize_to_vec();
+
     assert_eq!(
         StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Err(AccountError::InvalidForRecipient)
+        Ok(Some(no_op_receipt.clone()))
     );
 
     // Try with a wrong signature.
@@ -737,7 +835,7 @@ fn unpark_validator_works() {
 
     assert_eq!(
         StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Err(AccountError::InvalidSignature)
+        Ok(Some(no_op_receipt.clone()))
     );
 
     // Can revert the transaction.
@@ -762,6 +860,23 @@ fn unpark_validator_works() {
     assert!(staking_contract
         .previous_disabled_slots
         .contains_key(&validator_address));
+
+    // Works when the validator doesn't exist.
+    let fake_address = Address::from_any_str(STAKER_ADDRESS).unwrap();
+
+    let tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::UnparkValidator {
+            validator_address: fake_address.clone(),
+            proof: SignatureProof::default(),
+        },
+        0,
+        &cold_keypair,
+    );
+
+    assert_eq!(
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
+        Ok(Some(no_op_receipt.clone()))
+    );
 }
 
 #[test]
@@ -977,14 +1092,6 @@ fn create_staker_works() {
         Some(&Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 150_000_000))
     );
 
-    // Doesn't work when the staker already exists.
-    assert_eq!(
-        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Err(AccountError::AlreadyExistentAddress {
-            address: staker_address.clone()
-        })
-    );
-
     // Can revert the transaction.
     assert_eq!(
         StakingContract::revert_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0, None),
@@ -1023,6 +1130,49 @@ fn create_staker_works() {
     assert_eq!(
         staking_contract.active_validators.get(&validator_address),
         Some(&Coin::from_u64_unchecked(VALIDATOR_DEPOSIT))
+    );
+
+    // Works when the staker already exists.
+    let tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::CreateStaker {
+            delegation: Some(validator_address.clone()),
+            proof: SignatureProof::default(),
+        },
+        150_000_000,
+        &staker_keypair,
+    );
+
+    StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 1, 0).unwrap();
+
+    assert_eq!(
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
+        Ok(None)
+    );
+
+    let staker = StakingContract::get_staker(&accounts_tree, &db_txn, &staker_address).unwrap();
+
+    assert_eq!(staker.address, staker_address);
+    assert_eq!(staker.balance, Coin::from_u64_unchecked(300_000_000));
+    assert_eq!(staker.delegation, Some(validator_address.clone()));
+
+    let validator =
+        StakingContract::get_validator(&accounts_tree, &db_txn, &validator_address).unwrap();
+
+    assert_eq!(
+        validator.balance,
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 300_000_000)
+    );
+
+    let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &db_txn);
+
+    assert_eq!(
+        staking_contract.balance,
+        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 300_000_000)
+    );
+
+    assert_eq!(
+        staking_contract.active_validators.get(&validator_address),
+        Some(&Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 300_000_000))
     );
 }
 
@@ -1157,6 +1307,7 @@ fn update_staker_works() {
     );
 
     let receipt = StakerReceipt {
+        no_op: false,
         delegation: Some(validator_address.clone()),
     }
     .serialize_to_vec();
@@ -1222,11 +1373,15 @@ fn update_staker_works() {
         &staker_keypair,
     );
 
+    let no_op_receipt = StakerReceipt {
+        no_op: true,
+        delegation: None,
+    }
+    .serialize_to_vec();
+
     assert_eq!(
         StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Err(AccountError::NonExistentAddress {
-            address: staker_address.clone()
-        })
+        Ok(Some(no_op_receipt.clone()))
     );
 
     // Works when changing to no validator.
@@ -1240,6 +1395,7 @@ fn update_staker_works() {
     );
 
     let receipt = StakerReceipt {
+        no_op: false,
         delegation: Some(other_validator_address.clone()),
     }
     .serialize_to_vec();
@@ -1310,6 +1466,23 @@ fn update_staker_works() {
             .active_validators
             .get(&other_validator_address),
         Some(&Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 150_000_000))
+    );
+
+    // Works when the staker doesn't exist.
+    let keypair = ed25519_key_pair(VALIDATOR_PRIVATE_KEY);
+
+    let tx = make_signed_incoming_transaction(
+        IncomingStakingTransactionData::UpdateStaker {
+            new_delegation: None,
+            proof: SignatureProof::default(),
+        },
+        0,
+        &keypair,
+    );
+
+    assert_eq!(
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
+        Ok(Some(no_op_receipt.clone()))
     );
 }
 
@@ -1386,6 +1559,7 @@ fn unstake_works() {
     let validator_address = Address::from_any_str(VALIDATOR_ADDRESS).unwrap();
 
     let receipt = StakerReceipt {
+        no_op: false,
         delegation: Some(validator_address.clone()),
     }
     .serialize_to_vec();
