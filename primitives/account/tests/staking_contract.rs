@@ -1092,6 +1092,14 @@ fn create_staker_works() {
         Some(&Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 150_000_000))
     );
 
+    // Doesn't work when the staker already exists.
+    assert_eq!(
+        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
+        Err(AccountError::AlreadyExistentAddress {
+            address: staker_address.clone()
+        })
+    );
+
     // Can revert the transaction.
     assert_eq!(
         StakingContract::revert_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0, None),
@@ -1130,49 +1138,6 @@ fn create_staker_works() {
     assert_eq!(
         staking_contract.active_validators.get(&validator_address),
         Some(&Coin::from_u64_unchecked(VALIDATOR_DEPOSIT))
-    );
-
-    // Works when the staker already exists.
-    let tx = make_signed_incoming_transaction(
-        IncomingStakingTransactionData::CreateStaker {
-            delegation: Some(validator_address.clone()),
-            proof: SignatureProof::default(),
-        },
-        150_000_000,
-        &staker_keypair,
-    );
-
-    StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 1, 0).unwrap();
-
-    assert_eq!(
-        StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Ok(None)
-    );
-
-    let staker = StakingContract::get_staker(&accounts_tree, &db_txn, &staker_address).unwrap();
-
-    assert_eq!(staker.address, staker_address);
-    assert_eq!(staker.balance, Coin::from_u64_unchecked(300_000_000));
-    assert_eq!(staker.delegation, Some(validator_address.clone()));
-
-    let validator =
-        StakingContract::get_validator(&accounts_tree, &db_txn, &validator_address).unwrap();
-
-    assert_eq!(
-        validator.balance,
-        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 300_000_000)
-    );
-
-    let staking_contract = StakingContract::get_staking_contract(&accounts_tree, &db_txn);
-
-    assert_eq!(
-        staking_contract.balance,
-        Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 300_000_000)
-    );
-
-    assert_eq!(
-        staking_contract.active_validators.get(&validator_address),
-        Some(&Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 300_000_000))
     );
 }
 

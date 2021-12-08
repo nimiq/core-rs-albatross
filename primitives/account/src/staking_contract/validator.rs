@@ -71,7 +71,7 @@ pub struct Validator {
 
 impl StakingContract {
     /// Creates a new validator. The initial stake is always equal to the validator deposit
-    /// and can only be retrieved by dropping the validator.
+    /// and can only be retrieved by deleting the validator.
     /// This function is public to fill the genesis staking contract.
     pub fn create_validator(
         accounts_tree: &AccountsTrie,

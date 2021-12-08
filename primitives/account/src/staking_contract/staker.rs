@@ -29,7 +29,6 @@ pub struct Staker {
 
 impl StakingContract {
     /// Creates a new staker. This function is public to fill the genesis staking contract.
-    /// If a staker already exists at this address, we simply stake the value at the existing staker.
     pub fn create_staker(
         accounts_tree: &AccountsTrie,
         db_txn: &mut WriteTransaction,
@@ -39,9 +38,9 @@ impl StakingContract {
     ) -> Result<(), AccountError> {
         // See if the staker already exists.
         if StakingContract::get_staker(accounts_tree, db_txn, staker_address).is_some() {
-            error!("There's already a staker at the address where we are trying to create a new staker. Plan B: Stake the transaction value on the the existing staker!");
-
-            return StakingContract::stake(accounts_tree, db_txn, staker_address, value);
+            return Err(AccountError::AlreadyExistentAddress {
+                address: staker_address.clone(),
+            });
         }
 
         // Get the staking contract and update it.

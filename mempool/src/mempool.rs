@@ -16,7 +16,9 @@ use nimiq_keys::Address;
 use nimiq_network_interface::network::Network;
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
-use nimiq_transaction::account::staking_contract::OutgoingStakingTransactionProof;
+use nimiq_transaction::account::staking_contract::{
+    IncomingStakingTransactionData, OutgoingStakingTransactionProof,
+};
 use nimiq_transaction::Transaction;
 
 use crate::config::MempoolConfig;
@@ -47,8 +49,10 @@ impl Mempool {
             transactions_by_fee: KeyedPriorityQueue::new(),
             transactions_by_age: KeyedPriorityQueue::new(),
             state_by_sender: HashMap::new(),
-            out_staking_validators: HashSet::new(),
-            out_staking_stakers: HashSet::new(),
+            outgoing_validators: HashSet::new(),
+            outgoing_stakers: HashSet::new(),
+            creating_validators: HashSet::new(),
+            creating_stakers: HashSet::new(),
         };
 
         let state = Arc::new(RwLock::new(state));
@@ -449,8 +453,14 @@ pub(crate) struct MempoolState {
     // The sets of all senders of staking transactions. For simplicity, each validator/staker can
     // only have one outgoing staking transaction in the mempool. This makes sure that the outgoing
     // staking transaction can actually pay its fee.
-    pub(crate) out_staking_validators: HashSet<Address>,
-    pub(crate) out_staking_stakers: HashSet<Address>,
+    pub(crate) outgoing_validators: HashSet<Address>,
+    pub(crate) outgoing_stakers: HashSet<Address>,
+
+    // The sets of all recipients of creation staking transactions. For simplicity, each
+    // validator/staker can only have one creation staking transaction in the mempool. This makes
+    // sure that the creation staking transactions do not interfere with one another.
+    pub(crate) creating_validators: HashSet<Address>,
+    pub(crate) creating_stakers: HashSet<Address>,
 }
 
 impl MempoolState {
@@ -505,11 +515,29 @@ impl MempoolState {
             // Insert the sender address in the correct set.
             match data {
                 OutgoingStakingTransactionProof::DeleteValidator { proof } => {
-                    assert!(self.out_staking_validators.insert(proof.compute_signer()));
+                    assert!(self.outgoing_validators.insert(proof.compute_signer()));
                 }
                 OutgoingStakingTransactionProof::Unstake { proof } => {
-                    assert!(self.out_staking_stakers.insert(proof.compute_signer()));
+                    assert!(self.outgoing_stakers.insert(proof.compute_signer()));
                 }
+            }
+        }
+
+        // If it is an incoming staking transaction then we have additional work.
+        if tx.recipient_type == AccountType::Staking {
+            // Parse transaction data.
+            let data = IncomingStakingTransactionData::parse(tx)
+                .expect("The data should have already been parsed before, so this cannot panic!");
+
+            // Insert the recipient address in the correct set, if it is a creation transaction.
+            match data {
+                IncomingStakingTransactionData::CreateValidator { proof, .. } => {
+                    assert!(self.creating_validators.insert(proof.compute_signer()));
+                }
+                IncomingStakingTransactionData::CreateStaker { proof, .. } => {
+                    assert!(self.creating_stakers.insert(proof.compute_signer()));
+                }
+                _ => {}
             }
         }
 
@@ -540,11 +568,29 @@ impl MempoolState {
             // Remove the sender address from the correct set.
             match data {
                 OutgoingStakingTransactionProof::DeleteValidator { proof } => {
-                    assert!(self.out_staking_validators.remove(&proof.compute_signer()));
+                    assert!(self.outgoing_validators.remove(&proof.compute_signer()));
                 }
                 OutgoingStakingTransactionProof::Unstake { proof } => {
-                    assert!(self.out_staking_stakers.remove(&proof.compute_signer()));
+                    assert!(self.outgoing_stakers.remove(&proof.compute_signer()));
                 }
+            }
+        }
+
+        // If it is an incoming staking transaction then we have additional work.
+        if tx.recipient_type == AccountType::Staking {
+            // Parse transaction data.
+            let data = IncomingStakingTransactionData::parse(&tx)
+                .expect("The data should have already been parsed before, so this cannot panic!");
+
+            // Remove the recipient address from the correct set, if it is a creation transaction.
+            match data {
+                IncomingStakingTransactionData::CreateValidator { proof, .. } => {
+                    assert!(self.creating_validators.remove(&proof.compute_signer()));
+                }
+                IncomingStakingTransactionData::CreateStaker { proof, .. } => {
+                    assert!(self.creating_stakers.remove(&proof.compute_signer()));
+                }
+                _ => {}
             }
         }
 
