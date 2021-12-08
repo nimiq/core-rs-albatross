@@ -10,7 +10,9 @@ use nimiq_database::{Transaction as DBTransaction, WriteTransaction};
 use nimiq_keys::Address;
 use nimiq_primitives::slots::{Validators, ValidatorsBuilder};
 use nimiq_primitives::{coin::Coin, policy};
-use nimiq_transaction::account::staking_contract::OutgoingStakingTransactionProof;
+use nimiq_transaction::account::staking_contract::{
+    IncomingStakingTransactionData, OutgoingStakingTransactionProof,
+};
 use nimiq_trie::key_nibbles::KeyNibbles;
 use nimiq_vrf::{AliasMethod, VrfSeed, VrfUseCase};
 pub use receipts::*;
@@ -313,7 +315,7 @@ impl StakingContract {
                 // If the fee is larger than the validator deposit then this won't work.
                 if tx_value > Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT) {
                     warn!(
-                    "Cannot pay fees for transaction because fee is larger than validator deposit.",
+                    "Cannot pay fees for transaction because fee is larger than validator deposit."
                 );
                     return false;
                 }
@@ -328,7 +330,7 @@ impl StakingContract {
                         Some(v) => v,
                         None => {
                             warn!(
-                                "Cannot pay fees for transaction because validator doesn't exist.",
+                                "Cannot pay fees for transaction because validator doesn't exist."
                             );
                             return false;
                         }
@@ -337,14 +339,14 @@ impl StakingContract {
                 // Check that the validator has been inactive for long enough.
                 match validator.inactivity_flag {
                     None => {
-                        warn!("Cannot pay fees for transaction because validator is still active.",);
+                        warn!("Cannot pay fees for transaction because validator is still active.");
                         return false;
                     }
                     Some(time) => {
                         if block_height <= policy::election_block_after(time) + policy::BATCH_LENGTH
                         {
                             warn!(
-                    "Cannot pay fees for transaction because validator hasn't been inactive for long enough.",
+                    "Cannot pay fees for transaction because validator hasn't been inactive for long enough."
                 );
                             return false;
                         }
@@ -360,7 +362,7 @@ impl StakingContract {
                     match StakingContract::get_staker(accounts_tree, db_txn, &staker_address) {
                         Some(v) => v,
                         None => {
-                            warn!("Cannot pay fees for transaction because staker doesn't exist.",);
+                            warn!("Cannot pay fees for transaction because staker doesn't exist.");
                             return false;
                         }
                     };
@@ -368,11 +370,46 @@ impl StakingContract {
                 // Check that the balance is enough to pay the fee.
                 if tx_value > staker.balance {
                     warn!(
-                    "Cannot pay fees for transaction because fee is larger than staker balance.",
+                    "Cannot pay fees for transaction because fee is larger than staker balance."
                 );
                     return false;
                 }
             }
+        }
+
+        true
+    }
+
+    /// Checks if a given creation transaction will succeed.
+    pub fn can_create(
+        accounts_tree: &AccountsTrie,
+        db_txn: &DBTransaction,
+        tx_data: IncomingStakingTransactionData,
+    ) -> bool {
+        match tx_data {
+            IncomingStakingTransactionData::CreateValidator { proof, .. } => {
+                // Get the validator address from the proof.
+                let validator_address = proof.compute_signer();
+
+                // If the validator already exists then the transaction would fail.
+                if StakingContract::get_validator(accounts_tree, db_txn, &validator_address)
+                    .is_some()
+                {
+                    warn!("Cannot create validator because validator already exists.");
+                    return false;
+                };
+            }
+            IncomingStakingTransactionData::CreateStaker { proof, .. } => {
+                // Get the staker address from the proof.
+                let staker_address = proof.compute_signer();
+
+                // If the staker already exists then the transaction would fail.
+                if StakingContract::get_staker(accounts_tree, db_txn, &staker_address).is_some() {
+                    warn!("Cannot create staker because staker already exists.");
+                    return false;
+                };
+            }
+            _ => {}
         }
 
         true

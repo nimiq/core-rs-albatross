@@ -10,7 +10,9 @@ use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_hash::Hash;
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
-use nimiq_transaction::account::staking_contract::OutgoingStakingTransactionProof;
+use nimiq_transaction::account::staking_contract::{
+    IncomingStakingTransactionData, OutgoingStakingTransactionProof,
+};
 
 use nimiq_transaction::Transaction;
 
@@ -174,10 +176,10 @@ pub(crate) async fn verify_tx<'a>(
         // If the sender is already in the mempool then we don't accept another transaction.
         let duplicate = match data.clone() {
             OutgoingStakingTransactionProof::DeleteValidator { proof } => mempool_state
-                .out_staking_validators
+                .outgoing_validators
                 .contains(&proof.compute_signer()),
             OutgoingStakingTransactionProof::Unstake { proof } => mempool_state
-                .out_staking_stakers
+                .outgoing_stakers
                 .contains(&proof.compute_signer()),
         };
 
@@ -195,6 +197,39 @@ pub(crate) async fn verify_tx<'a>(
             transaction.total_value(),
             block_height,
         ) {
+            log::debug!("Outgoing staking transaction cannot pay fee.");
+            return Err(VerifyErr::NotEnoughFunds);
+        }
+    }
+
+    // If it is an incoming staking transaction then we have additional checks.
+    if transaction.recipient_type == AccountType::Staking {
+        let accounts_tree = &blockchain.state().accounts.tree;
+        let db_txn = blockchain.read_transaction();
+
+        // Parse transaction data.
+        let data = IncomingStakingTransactionData::parse(transaction)
+            .expect("The data should have already been parsed before, so this cannot panic!");
+
+        // If the recipient is already in the mempool then we don't accept another transaction.
+        let duplicate = match data.clone() {
+            IncomingStakingTransactionData::CreateValidator { proof, .. } => mempool_state
+                .creating_validators
+                .contains(&proof.compute_signer()),
+            IncomingStakingTransactionData::CreateStaker { proof, .. } => mempool_state
+                .creating_stakers
+                .contains(&proof.compute_signer()),
+            _ => false,
+        };
+
+        if duplicate {
+            log::debug!("Creation staking transaction recipient is already in mempool.");
+            return Err(VerifyErr::Filtered);
+        }
+
+        // If the recipient is not already in the mempool, then we need to check if the transaction
+        // can succeed.
+        if !StakingContract::can_create(accounts_tree, &db_txn, data) {
             log::debug!("Outgoing staking transaction cannot pay fee.");
             return Err(VerifyErr::NotEnoughFunds);
         }
