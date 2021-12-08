@@ -19,6 +19,7 @@ RELEASE=false
 MAX_VALIDATORS=4
 cargo="cargo run"
 cargo_build="cargo build"
+cargo_clean="cargo clean"
 tpb=150
 vkill=1
 trap cleanup_exit INT
@@ -142,6 +143,7 @@ rm -rf temp-state
 if [ "$RELEASE" = true ] ; then
     cargo+=" --release"
     cargo_build+=" --release"
+    cargo_clean+=" --release"
 fi
 
 echo "Number of validators: $MAX_VALIDATORS"
@@ -169,7 +171,7 @@ echo "Config files generated in '$configdir'"
 echo "Initializing genesis..."
 export NIMIQ_OVERRIDE_DEVNET_CONFIG="$PWD/$configdir/dev-albatross.toml"
 echo "Compiling the code using genesis from '$NIMIQ_OVERRIDE_DEVNET_CONFIG' ..."
-cargo clean -p nimiq-genesis
+$cargo_clean -p nimiq-genesis
 $cargo_build
 echo "Done."
 
