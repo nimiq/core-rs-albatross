@@ -167,7 +167,7 @@ fn it_can_handle_enums_with_data() {
         v: vec![1, 2, 3],
     });
     assert_eq!(
-        TestWithData::deserialize_from_vec(&mut &v[..]),
+        TestWithData::deserialize_from_vec(&v[..]),
         Err(SerializingError::LimitExceeded)
     );
 }

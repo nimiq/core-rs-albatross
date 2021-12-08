@@ -237,7 +237,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
                 .get_band_from_slot(slot_number);
 
             // Get the validator key.
-            let voting_key = slot.voting_key.uncompress_unchecked().clone();
+            let voting_key = *slot.voting_key.uncompress_unchecked();
             let signing_key = slot.signing_key;
 
             // Calculate the timeout duration.
@@ -288,7 +288,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
             // In case the proposal has a valid round, the original proposer signed the VRF Seed,
             // so the original slot owners key must be retrieved for header verification.
             // View numbers in macro blocks denote the original proposers round.
-            let vrf_key = if let Some(_) = valid_round {
+            let vrf_key = if valid_round.is_some() {
                 let (valid_round_slot, _) = blockchain
                     .get_slot_owner_at(expected_height, header.view_number, None)
                     .expect("Couldn't find slot owner!");

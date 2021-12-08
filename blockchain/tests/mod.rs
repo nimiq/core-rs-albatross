@@ -80,7 +80,7 @@ fn it_can_push_consecutive_view_changes() {
         let blockchain = blockchain.read();
         producer.next_micro_block(
             &blockchain,
-            blockchain.time.now() + 1 as u64 * 1000,
+            blockchain.time.now() + 1_u64 * 1000,
             0,
             None,
             vec![],
@@ -89,10 +89,7 @@ fn it_can_push_consecutive_view_changes() {
         )
     };
     assert_eq!(
-        Blockchain::push(
-            blockchain.upgradable_read(),
-            Block::Micro(micro_block.clone())
-        ),
+        Blockchain::push(blockchain.upgradable_read(), Block::Micro(micro_block)),
         Ok(PushResult::Extended)
     );
     assert_eq!(blockchain.read().block_number(), 1);
@@ -104,7 +101,7 @@ fn it_can_push_consecutive_view_changes() {
         let view_change_proof = sign_view_change(blockchain.head().seed().clone(), 2, 5);
         producer.next_micro_block(
             &blockchain,
-            blockchain.time.now() + 2 as u64 * 1000,
+            blockchain.time.now() + 2_u64 * 1000,
             5,
             Some(view_change_proof),
             vec![],
@@ -130,7 +127,7 @@ fn it_can_push_consecutive_view_changes() {
         let view_change_proof = sign_view_change(Block::Micro(micro_block).seed().clone(), 3, 6);
         producer.next_micro_block(
             &blockchain,
-            blockchain.time.now() + 3 as u64 * 1000,
+            blockchain.time.now() + 3_u64 * 1000,
             6,
             Some(view_change_proof),
             vec![],

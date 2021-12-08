@@ -192,7 +192,7 @@ fn create_validator_works() {
     // Works in the valid case.
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::CreateValidator {
-            signing_key: signing_key.clone(),
+            signing_key,
             voting_key: voting_key.clone(),
             proof_of_knowledge: voting_keypair
                 .sign(&voting_key.serialize_to_vec())
@@ -308,7 +308,7 @@ fn update_validator_works() {
 
     let receipt = UpdateValidatorReceipt {
         no_op: false,
-        old_signing_key: old_signing_key.clone(),
+        old_signing_key,
         old_voting_key: old_voting_key.clone(),
         old_reward_address: old_reward_address.clone(),
         old_signal_data: None,
@@ -397,7 +397,7 @@ fn update_validator_works() {
 
     assert_eq!(
         StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Ok(Some(no_op_receipt.clone()))
+        Ok(Some(no_op_receipt))
     );
 }
 
@@ -553,7 +553,7 @@ fn inactivate_validator_works() {
 
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::InactivateValidator {
-            validator_address: fake_address.clone(),
+            validator_address: fake_address,
             proof: SignatureProof::default(),
         },
         0,
@@ -562,7 +562,7 @@ fn inactivate_validator_works() {
 
     assert_eq!(
         StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Ok(Some(no_op_receipt.clone()))
+        Ok(Some(no_op_receipt))
     );
 }
 
@@ -716,7 +716,7 @@ fn reactivate_validator_works() {
 
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::ReactivateValidator {
-            validator_address: fake_address.clone(),
+            validator_address: fake_address,
             proof: SignatureProof::default(),
         },
         0,
@@ -725,7 +725,7 @@ fn reactivate_validator_works() {
 
     assert_eq!(
         StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Ok(Some(no_op_receipt.clone()))
+        Ok(Some(no_op_receipt))
     );
 }
 
@@ -866,7 +866,7 @@ fn unpark_validator_works() {
 
     let tx = make_signed_incoming_transaction(
         IncomingStakingTransactionData::UnparkValidator {
-            validator_address: fake_address.clone(),
+            validator_address: fake_address,
             proof: SignatureProof::default(),
         },
         0,
@@ -875,7 +875,7 @@ fn unpark_validator_works() {
 
     assert_eq!(
         StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Ok(Some(no_op_receipt.clone()))
+        Ok(Some(no_op_receipt))
     );
 }
 
@@ -932,7 +932,7 @@ fn delete_validator_works() {
     let staker_address = Address::from_any_str(STAKER_ADDRESS).unwrap();
 
     let receipt = DeleteValidatorReceipt {
-        signing_key: signing_key.clone(),
+        signing_key,
         voting_key: voting_key.clone(),
         reward_address: reward_address.clone(),
         signal_data: None,
@@ -1447,7 +1447,7 @@ fn update_staker_works() {
 
     assert_eq!(
         StakingContract::commit_incoming_transaction(&accounts_tree, &mut db_txn, &tx, 2, 0),
-        Ok(Some(no_op_receipt.clone()))
+        Ok(Some(no_op_receipt))
     );
 }
 

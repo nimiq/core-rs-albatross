@@ -8,18 +8,17 @@ use futures::{ready, FutureExt, Stream};
 use parking_lot::RwLock;
 use tokio::time;
 
-use beserial::Serialize;
 use block::{Block, ForkProof, MicroBlock, ViewChange, ViewChangeProof};
 use block_production::BlockProducer;
 use blockchain::{AbstractBlockchain, Blockchain, PushResult};
 use mempool::mempool::Mempool;
-use nimiq_account::{Account, AccountError, AccountTransactionInteraction, Accounts};
+
 use nimiq_bls::KeyPair as BlsKeyPair;
-use nimiq_database::WriteTransaction;
+
 use nimiq_keys::KeyPair as SchnorrKeyPair;
-use nimiq_primitives::policy;
+
 use nimiq_primitives::slots::Validators;
-use nimiq_transaction::Transaction;
+
 use nimiq_validator_network::ValidatorNetwork;
 use utils::time::systemtime_to_timestamp;
 use vrf::VrfSeed;
@@ -52,7 +51,6 @@ struct NextProduceMicroBlockEvent<TValidatorNetwork> {
 }
 
 impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<TValidatorNetwork> {
-    const MAX_TXN_CHECK_ITERATIONS: u32 = 3;
     // Ignoring clippy warning because there wouldn't be much to be gained by refactoring this,
     // except making clippy happy
     #[allow(clippy::too_many_arguments)]
@@ -201,7 +199,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
     }
 
     fn produce_micro_block(&self, blockchain: &Blockchain) -> MicroBlock {
-        // TODO pass keys by reference
+        // TODO: Pass keys by reference
         let producer = BlockProducer::new(self.signing_key.clone(), self.voting_key.clone());
 
         let timestamp = u64::max(
@@ -209,7 +207,9 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             systemtime_to_timestamp(SystemTime::now()),
         );
 
-        let transactions = self.collect_transactions(blockchain, timestamp);
+        let transactions = self
+            .mempool
+            .get_transactions_for_block(MicroBlock::get_available_bytes(self.fork_proofs.len()));
 
         producer.next_micro_block(
             blockchain,
@@ -218,7 +218,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             self.view_change_proof.clone(),
             self.fork_proofs.clone(),
             transactions,
-            vec![], // TODO
+            vec![], // TODO: Allow validators to set extra data field.
         )
     }
 
@@ -258,173 +258,6 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         self.view_change_proof = Some(view_change_proof.clone());
 
         (view_change, view_change_proof)
-    }
-}
-
-impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<TValidatorNetwork> {
-    fn collect_transactions(&self, blockchain: &Blockchain, timestamp: u64) -> Vec<Transaction> {
-        // Get transactions before acquiring blockchain.read as it will take mempool state
-        // lock which we do not want to take with a blockchain lock held.
-        // FIXME lock order
-        let mut transactions = self
-            .mempool
-            .get_transactions_for_block(MicroBlock::get_available_bytes(self.fork_proofs.len()));
-
-        let mut iterations = 0;
-        let mut final_transactions: Vec<Transaction> = vec![];
-        let env = blockchain.state().accounts.env.clone();
-        let mut txn = WriteTransaction::new(&env);
-
-        while iterations < Self::MAX_TXN_CHECK_ITERATIONS {
-            // If the transaction isn't valid we need to remove it
-            let removed_txns = Self::filter_invalid_staking_transactions(
-                &mut transactions,
-                &blockchain.state().accounts,
-                self.block_number,
-                timestamp,
-                &mut txn,
-            );
-
-            // Add the surviving transactions to the original transactions
-            final_transactions.extend(transactions);
-
-            let removed_txns_size = removed_txns
-                .iter()
-                .fold(0, |acc, transaction| acc + transaction.serialized_size());
-
-            if removed_txns_size != 0 {
-                log::debug!(
-                    "Dropped {} transactions doing staking verifications",
-                    removed_txns.len()
-                );
-
-                // Since we dropped some transactions, try to collect more transactions from the mempool
-                // FIXME Potential deadlock
-                let new_transactions = self.mempool.get_transactions_for_block(removed_txns_size);
-                if new_transactions.is_empty() {
-                    // Mempool is empty, build the block with the surviving transactions
-                    break;
-                } else {
-                    // There are transactions in the mempool to fill the block given that we just dropped sone
-                    iterations += 1;
-
-                    if iterations == Self::MAX_TXN_CHECK_ITERATIONS {
-                        // If we are in the last iteration, add available transactions. Final checks are going
-                        // to be done after this loop anyway.
-                        final_transactions.extend(new_transactions);
-                        break;
-                    } else {
-                        // Iterate again to filter the recently obtained transactions and see if we can use them
-                        transactions = new_transactions;
-                    }
-                }
-            } else {
-                // Stop the iterations since no transactions were removed
-                break;
-            }
-        }
-
-        // Abort the write transaction
-        txn.abort();
-
-        // Do one more check with all the final transactions ordered
-        final_transactions.sort_unstable();
-
-        let mut txn = WriteTransaction::new(&env);
-        Self::filter_invalid_staking_transactions(
-            &mut final_transactions,
-            &blockchain.state().accounts,
-            self.block_number,
-            timestamp,
-            &mut txn,
-        );
-        txn.abort();
-
-        final_transactions
-    }
-
-    fn check_staking_incoming_txn(
-        accounts: &Accounts,
-        transaction: &mut Transaction,
-        block_number: u32,
-        timestamp: u64,
-        txn: &mut WriteTransaction,
-    ) -> Result<(), AccountError> {
-        if transaction.recipient == policy::STAKING_CONTRACT_ADDRESS {
-            // Incoming staking transaction
-            Account::commit_incoming_transaction(
-                &accounts.tree,
-                txn,
-                transaction,
-                block_number,
-                timestamp,
-            )?;
-        }
-        // Not a staking contract transaction or all checks passed, return ok
-        Ok(())
-    }
-
-    fn check_staking_outgoing_txn(
-        accounts: &Accounts,
-        transaction: &mut Transaction,
-        block_height: u32,
-        timestamp: u64,
-        txn: &mut WriteTransaction,
-    ) -> Result<(), AccountError> {
-        if transaction.sender == policy::STAKING_CONTRACT_ADDRESS {
-            // Outgoing staking transaction
-            Account::commit_outgoing_transaction(
-                &accounts.tree,
-                txn,
-                transaction,
-                block_height,
-                timestamp,
-            )?;
-        }
-        // Not a staking contract transaction or all checks passed, return ok
-        Ok(())
-    }
-
-    fn filter_invalid_staking_transactions(
-        transactions: &mut Vec<Transaction>,
-        accounts: &Accounts,
-        block_number: u32,
-        timestamp: u64,
-        txn: &mut WriteTransaction,
-    ) -> Vec<Transaction> {
-        // First check outgoing staking transactions then check incoming
-        // staking transactions.
-        // This is to be consistent with the way that the accounts are added to
-        // the accounts tree: first commits outgoing transactions and then the
-        // incoming ones.
-        let mut removed_txns: Vec<Transaction> = transactions
-            .drain_filter(|transaction| {
-                Self::check_staking_outgoing_txn(
-                    accounts,
-                    transaction,
-                    block_number,
-                    timestamp,
-                    txn,
-                )
-                .is_err()
-            })
-            .collect();
-
-        let removed_incoming_txns: Vec<Transaction> = transactions
-            .drain_filter(|transaction| {
-                Self::check_staking_incoming_txn(
-                    accounts,
-                    transaction,
-                    block_number,
-                    timestamp,
-                    txn,
-                )
-                .is_err()
-            })
-            .collect();
-
-        removed_txns.extend(removed_incoming_txns);
-        removed_txns
     }
 }
 
