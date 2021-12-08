@@ -17,6 +17,7 @@ pub struct SlashReceipt {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct UpdateValidatorReceipt {
+    pub no_op: bool,
     pub old_signing_key: SchnorrPublicKey,
     pub old_voting_key: BlsPublicKey,
     pub old_reward_address: Address,
@@ -24,17 +25,20 @@ pub struct UpdateValidatorReceipt {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct RetireValidatorReceipt {
+pub struct InactivateValidatorReceipt {
+    pub no_op: bool,
     pub parked_set: bool,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct ReactivateValidatorReceipt {
+    pub no_op: bool,
     pub retire_time: u32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct UnparkValidatorReceipt {
+    pub no_op: bool,
     pub parked_set: bool,
     #[beserial(len_type(u16))]
     pub current_disabled_slots: Option<BTreeSet<u16>>,
@@ -55,5 +59,6 @@ pub struct DeleteValidatorReceipt {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct StakerReceipt {
+    pub no_op: bool,
     pub delegation: Option<Address>,
 }

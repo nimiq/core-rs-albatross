@@ -286,7 +286,12 @@ impl AccountTransactionInteraction for StakingContract {
                 // Get the staker address from the proof.
                 let staker_address = proof.compute_signer();
 
-                StakingContract::revert_create_staker(accounts_tree, db_txn, &staker_address)?;
+                StakingContract::revert_create_staker(
+                    accounts_tree,
+                    db_txn,
+                    &staker_address,
+                    transaction.value,
+                )?;
             }
             IncomingStakingTransactionData::Stake { staker_address } => {
                 StakingContract::revert_stake(
