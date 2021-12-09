@@ -358,7 +358,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                             cluster.id
                         )
                     });
-                    pair.1 += 1;
+                    pair.1 = pair.1.saturating_add(1);
                 }
             }
         }
@@ -450,7 +450,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                             cluster.id
                         )
                     });
-                    pair.1 -= 1;
+                    pair.1 = pair.1.saturating_sub(1);
                     pair.1
                 };
 

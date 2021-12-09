@@ -93,9 +93,11 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
             Self::NUM_PENDING_BATCH_SETS,
             |id, peer| {
                 async move {
-                    if let Ok(batch) = peer.request_epoch(id).await {
-                        if batch.block.is_some() {
-                            return Some(batch);
+                    if let Some(peer) = Weak::upgrade(&peer) {
+                        if let Ok(batch) = peer.request_epoch(id).await {
+                            if batch.block.is_some() {
+                                return Some(batch);
+                            }
                         }
                     }
                     None
@@ -109,10 +111,14 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
             Self::NUM_PENDING_CHUNKS,
             move |(epoch_number, block_number, chunk_index), peer| {
                 async move {
-                    peer.request_history_chunk(epoch_number, block_number, chunk_index)
-                        .await
-                        .ok()
-                        .map(|chunk| (epoch_number, chunk))
+                    if let Some(peer) = Weak::upgrade(&peer) {
+                        return peer
+                            .request_history_chunk(epoch_number, block_number, chunk_index)
+                            .await
+                            .ok()
+                            .map(|chunk| (epoch_number, chunk));
+                    }
+                    None
                 }
                 .boxed()
             },

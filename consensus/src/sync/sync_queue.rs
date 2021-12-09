@@ -80,7 +80,7 @@ pub struct SyncQueue<TPeer: Peer, TId, TOutput> {
     next_incoming_index: usize,
     next_outgoing_index: usize,
     current_peer_index: usize,
-    request_fn: fn(TId, Arc<ConsensusAgent<TPeer>>) -> BoxFuture<'static, Option<TOutput>>,
+    request_fn: fn(TId, Weak<ConsensusAgent<TPeer>>) -> BoxFuture<'static, Option<TOutput>>,
     waker: Option<Waker>,
 }
 
@@ -94,7 +94,7 @@ where
         ids: Vec<TId>,
         peers: Vec<Weak<ConsensusAgent<TPeer>>>,
         desired_pending_size: usize,
-        request_fn: fn(TId, Arc<ConsensusAgent<TPeer>>) -> BoxFuture<'static, Option<TOutput>>,
+        request_fn: fn(TId, Weak<ConsensusAgent<TPeer>>) -> BoxFuture<'static, Option<TOutput>>,
     ) -> Self {
         log::trace!(
             "Creating SyncQueue for {} with {} ids and {} peers",
@@ -117,12 +117,12 @@ where
         }
     }
 
-    fn get_next_peer(&mut self, start_index: usize) -> Option<Arc<ConsensusAgent<TPeer>>> {
+    fn get_next_peer(&mut self, start_index: usize) -> Option<Weak<ConsensusAgent<TPeer>>> {
         while !self.peers.is_empty() {
             let index = start_index % self.peers.len();
             match Weak::upgrade(&self.peers[index]) {
                 Some(peer) => {
-                    return Some(peer);
+                    return Some(Arc::downgrade(&peer));
                 }
                 None => {
                     self.peers.remove(index);
