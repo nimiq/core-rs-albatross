@@ -68,11 +68,25 @@ impl<TOutput> Ord for QueuedOutput<TOutput> {
     }
 }
 
+pub struct SyncQueuePeer<TPeer: Peer> {
+    pub(crate) peer_id: TPeer::Id,
+    pub(crate) agent: Weak<ConsensusAgent<TPeer>>,
+}
+
+impl<TPeer: Peer> Clone for SyncQueuePeer<TPeer> {
+    fn clone(&self) -> Self {
+        Self {
+            peer_id: self.peer_id.clone(),
+            agent: self.agent.clone(),
+        }
+    }
+}
+
 /// The SyncQueue will request a list of ids from a set of peers
 /// and implements an ordered stream over the resulting objects.
 /// The stream returns an error if an id could not be resolved.
 pub struct SyncQueue<TPeer: Peer, TId, TOutput> {
-    pub(crate) peers: Vec<Weak<ConsensusAgent<TPeer>>>,
+    pub(crate) peers: Vec<SyncQueuePeer<TPeer>>,
     desired_pending_size: usize,
     ids_to_request: VecDeque<TId>,
     pending_futures: FuturesUnordered<OrderWrapper<TId, BoxFuture<'static, Option<TOutput>>>>,
@@ -92,7 +106,7 @@ where
 {
     pub fn new(
         ids: Vec<TId>,
-        peers: Vec<Weak<ConsensusAgent<TPeer>>>,
+        peers: Vec<SyncQueuePeer<TPeer>>,
         desired_pending_size: usize,
         request_fn: fn(TId, Weak<ConsensusAgent<TPeer>>) -> BoxFuture<'static, Option<TOutput>>,
     ) -> Self {
@@ -120,7 +134,7 @@ where
     fn get_next_peer(&mut self, start_index: usize) -> Option<Weak<ConsensusAgent<TPeer>>> {
         while !self.peers.is_empty() {
             let index = start_index % self.peers.len();
-            match Weak::upgrade(&self.peers[index]) {
+            match Weak::upgrade(&self.peers[index].agent) {
                 Some(peer) => {
                     return Some(Arc::downgrade(&peer));
                 }
@@ -191,12 +205,19 @@ where
         }
     }
 
-    pub fn add_peer(&mut self, peer: Weak<ConsensusAgent<TPeer>>) {
-        self.peers.push(peer);
+    pub fn add_peer(&mut self, peer_id: TPeer::Id, peer: Weak<ConsensusAgent<TPeer>>) {
+        self.peers.push(SyncQueuePeer {
+            peer_id,
+            agent: peer,
+        });
     }
 
-    pub fn has_peer(&self, peer: &Weak<ConsensusAgent<TPeer>>) -> bool {
-        self.peers.iter().any(|o_peer| o_peer.ptr_eq(peer))
+    pub fn remove_peer(&mut self, peer_id: &TPeer::Id) {
+        self.peers.retain(|element| element.peer_id != *peer_id)
+    }
+
+    pub fn has_peer(&self, peer_id: TPeer::Id) -> bool {
+        self.peers.iter().any(|o_peer| o_peer.peer_id == peer_id)
     }
 
     pub fn add_ids(&mut self, ids: Vec<TId>) {

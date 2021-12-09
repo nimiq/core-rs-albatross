@@ -13,6 +13,7 @@ use crate::sync::history::cluster::{SyncCluster, SyncClusterResult};
 use crate::sync::history::sync::{EpochIds, Job};
 use crate::sync::history::HistorySync;
 use crate::sync::request_component::HistorySyncStream;
+use crate::sync::sync_queue::SyncQueuePeer;
 
 impl<TNetwork: Network> HistorySync<TNetwork> {
     pub(crate) async fn request_epoch_ids(
@@ -181,7 +182,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
             // more epoch ids from it when the job is processed.
             if let Some(cluster) = cluster {
                 let agent = epoch_ids.sender;
-                cluster.add_peer(Arc::downgrade(&agent));
+                cluster.add_peer(agent.peer.id(), Arc::downgrade(&agent));
                 self.agents.insert(Arc::clone(&agent.peer), (agent, 1));
                 return None;
             }
@@ -278,7 +279,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
 
                     // The peer's epoch ids matched at least a part of this (now potentially truncated) cluster,
                     // so we add the peer to this cluster. We also increment the peer's number of clusters.
-                    cluster.add_peer(Arc::downgrade(&agent));
+                    cluster.add_peer(agent.peer.id(), Arc::downgrade(&agent));
                     num_clusters += 1;
 
                     // Advance the id_index by the number of matched ids.
@@ -296,7 +297,10 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
             new_clusters.push_back(SyncCluster::new(
                 Vec::from(&epoch_ids.ids[id_index..]),
                 epoch_ids.first_epoch_number + id_index,
-                vec![Arc::downgrade(&agent)],
+                vec![SyncQueuePeer {
+                    peer_id: agent.peer.id(),
+                    agent: Arc::downgrade(&agent),
+                }],
                 Arc::clone(&self.blockchain),
             ));
             // Don't increment the num_clusters here, as this is done in the loop later on.
@@ -322,7 +326,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                 {
                     // The peer's checkpoint id matched this cluster,
                     // so we add the peer to this cluster. We also increment the peer's number of clusters.
-                    cluster.add_peer(Arc::downgrade(&agent));
+                    cluster.add_peer(agent.peer.id(), Arc::downgrade(&agent));
                     num_clusters += 1;
                     found_cluster = true;
                     break;
@@ -334,7 +338,10 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                 let cluster = SyncCluster::new(
                     vec![checkpoint_id],
                     checkpoint_epoch,
-                    vec![Arc::downgrade(&agent)],
+                    vec![SyncQueuePeer {
+                        peer_id: agent.peer.id(),
+                        agent: Arc::downgrade(&agent),
+                    }],
                     Arc::clone(&self.blockchain),
                 );
                 self.checkpoint_clusters.push_back(cluster);
@@ -350,7 +357,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         for cluster in &new_clusters {
             debug!("Adding new cluster: {:#?}", cluster);
             for agent in cluster.peers() {
-                if let Some(agent) = Weak::upgrade(agent) {
+                if let Some(agent) = Weak::upgrade(&agent.agent) {
                     let pair = self.agents.get_mut(&agent.peer).unwrap_or_else(|| {
                         panic!(
                             "Agent should be present {:?} cluster {}",
@@ -441,7 +448,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
 
         // Decrement the cluster count for all peers in the cluster.
         for peer in cluster.peers() {
-            if let Some(agent) = Weak::upgrade(peer) {
+            if let Some(agent) = Weak::upgrade(&peer.agent) {
                 let cluster_count = {
                     let pair = self.agents.get_mut(&agent.peer).unwrap_or_else(|| {
                         panic!(

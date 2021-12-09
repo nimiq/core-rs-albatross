@@ -154,7 +154,8 @@ impl<TPeer: Peer + 'static> Stream for BlockRequestComponent<TPeer> {
             match result {
                 Some(HistorySyncReturn::Good(peer)) => {
                     debug!("Adding peer {:?} into follow mode", peer.peer.id());
-                    self.sync_queue.add_peer(Arc::downgrade(&peer));
+                    self.sync_queue
+                        .add_peer(peer.peer.id(), Arc::downgrade(&peer));
                     self.agents.insert(Arc::clone(&peer.peer), peer);
                 }
                 Some(HistorySyncReturn::Outdated(peer)) => {

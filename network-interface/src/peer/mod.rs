@@ -35,7 +35,7 @@ pub trait RequestResponse {
 #[async_trait]
 // TODO: Use Peer::Error for returned error for send, etc.
 pub trait Peer: Send + Sync + Hash + Eq {
-    type Id: Debug + Send + Sync + Hash + Eq + Unpin;
+    type Id: Clone + Debug + Send + Sync + Hash + Eq + Unpin;
     type Error: std::error::Error;
 
     fn id(&self) -> Self::Id;

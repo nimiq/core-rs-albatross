@@ -90,6 +90,18 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
     pub fn agents(&self) -> impl Iterator<Item = &Arc<ConsensusAgent<TNetwork::PeerType>>> {
         self.agents.values().map(|(agent, _)| agent)
     }
+
+    pub fn remove_agent(&mut self, peer_id: <<TNetwork as Network>::PeerType as Peer>::Id) {
+        for cluster in self.epoch_clusters.iter_mut() {
+            cluster.remove_peer(&peer_id);
+        }
+        for cluster in self.checkpoint_clusters.iter_mut() {
+            cluster.remove_peer(&peer_id);
+        }
+        if let Some(cluster) = self.active_cluster.as_mut() {
+            cluster.remove_peer(&peer_id);
+        }
+    }
 }
 
 impl<TNetwork: Network> HistorySyncStream<TNetwork::PeerType> for HistorySync<TNetwork> {

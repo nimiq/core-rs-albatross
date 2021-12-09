@@ -27,7 +27,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                     // Delete the ConsensusAgent from the agents map, removing the only "persistent"
                     // strong reference to it. There might not be an entry for every peer (e.g. if
                     // it didn't send any epoch ids).
-                    // FIXME This doesn't work if we're currently requesting epoch_ids from this peer
+                    self.remove_agent(peer.id());
                     self.agents.remove(&peer);
                 }
                 Ok(NetworkEvent::PeerJoined(peer)) => {

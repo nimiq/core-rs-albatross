@@ -17,7 +17,7 @@ use nimiq_utils::math::CeilingDiv;
 
 use crate::consensus_agent::ConsensusAgent;
 use crate::messages::{BatchSetInfo, HistoryChunk};
-use crate::sync::sync_queue::SyncQueue;
+use crate::sync::sync_queue::{SyncQueue, SyncQueuePeer};
 
 struct PendingBatchSet {
     block: MacroBlock,
@@ -82,7 +82,7 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
     pub(crate) fn new(
         epoch_ids: Vec<Blake2bHash>,
         first_epoch_number: usize,
-        peers: Vec<Weak<ConsensusAgent<TPeer>>>,
+        peers: Vec<SyncQueuePeer<TPeer>>,
         blockchain: Arc<RwLock<Blockchain>>,
     ) -> Self {
         let id = SYNC_CLUSTER_ID.fetch_add(1, Ordering::SeqCst);
@@ -250,21 +250,32 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
         Ok(())
     }
 
-    pub(crate) fn add_peer(&mut self, peer: Weak<ConsensusAgent<TPeer>>) -> bool {
+    pub(crate) fn add_peer(
+        &mut self,
+        peer_id: TPeer::Id,
+        peer: Weak<ConsensusAgent<TPeer>>,
+    ) -> bool {
         // TODO keep only one list of peers
-        if !self.batch_set_queue.has_peer(&peer) {
-            self.batch_set_queue.add_peer(Weak::clone(&peer));
-            self.history_queue.add_peer(peer);
+        if !self.batch_set_queue.has_peer(peer_id.clone()) {
+            self.batch_set_queue
+                .add_peer(peer_id.clone(), Weak::clone(&peer));
+            self.history_queue.add_peer(peer_id, peer);
+
             return true;
         }
         false
     }
 
-    pub(crate) fn has_peer(&self, peer: &Weak<ConsensusAgent<TPeer>>) -> bool {
-        self.batch_set_queue.has_peer(peer)
+    pub(crate) fn remove_peer(&mut self, peer_id: &TPeer::Id) {
+        self.batch_set_queue.remove_peer(peer_id);
+        self.history_queue.remove_peer(peer_id);
     }
 
-    pub(crate) fn peers(&self) -> &Vec<Weak<ConsensusAgent<TPeer>>> {
+    pub(crate) fn has_peer(&self, peer_id: TPeer::Id) -> bool {
+        self.batch_set_queue.has_peer(peer_id)
+    }
+
+    pub(crate) fn peers(&self) -> &Vec<SyncQueuePeer<TPeer>> {
         &self.batch_set_queue.peers
     }
 
