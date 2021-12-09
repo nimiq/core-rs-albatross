@@ -47,7 +47,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         cx: &mut Context<'_>,
     ) -> Poll<Option<HistorySyncReturn<TNetwork::PeerType>>> {
         // TODO We might want to not send an epoch_id request in the first place if we're at the
-        //  cluster limit.
+        // cluster limit.
         while self.epoch_clusters.len() < Self::MAX_CLUSTERS {
             let epoch_ids = match self.epoch_ids_stream.poll_next_unpin(cx) {
                 Poll::Ready(Some(epoch_ids)) => epoch_ids,
