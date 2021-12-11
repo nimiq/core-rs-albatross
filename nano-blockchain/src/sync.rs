@@ -1,4 +1,4 @@
-use nimiq_block::{Block, BlockError};
+use nimiq_block::{Block, BlockError, TendermintProof};
 use nimiq_blockchain::{AbstractBlockchain, ChainInfo, PushError, PushResult};
 use nimiq_nano_zkp::{NanoProof, NanoZKP};
 use nimiq_primitives::policy;
@@ -149,17 +149,9 @@ impl NanoBlockchain {
             }
         }
 
-        // Checks if the justification exists.
-        let justification = block
-            .unwrap_macro_ref()
-            .justification
-            .as_ref()
-            .ok_or(PushError::InvalidBlock(BlockError::NoJustification))?;
-
         // Verify the justification.
-        if !justification.verify(
-            block.hash(),
-            block.block_number(),
+        if !TendermintProof::verify(
+            block.unwrap_macro_ref(),
             &self.current_validators().unwrap(),
         ) {
             return Err(PushError::InvalidBlock(BlockError::InvalidJustification));

@@ -61,7 +61,6 @@ impl<I: IdentityRegistry + Sync + Send + 'static> Verifier for TendermintVerifie
             let vote = TendermintVote {
                 id: self.id.clone(),
                 proposal_hash: hash.clone(),
-                validator_merkle_root: self.validator_merkle_root.clone(),
             };
 
             results.push(task::spawn_blocking(move || {

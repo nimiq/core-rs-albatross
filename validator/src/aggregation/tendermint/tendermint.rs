@@ -55,7 +55,7 @@ where
     ) -> Self {
         let validator_merkle_root = MacroBlock::create_pk_tree_root(&active_validators);
 
-        // the input stream is all levelUpdateMessages concerning a TendemrintContribution and TendemrintIdentifier.
+        // the input stream is all levelUpdateMessages concerning a TendermintContribution and TendermintIdentifier.
         // We get rid of the sender, but while processing these messages they need to be dispatched to the appropriate Aggregation.
         let input = Box::pin(
             network
@@ -153,7 +153,7 @@ where
             }
         };
 
-        // Assemble identifier from availablle information
+        // Assemble identifier from available information
         let id = TendermintIdentifier {
             block_number: self.block_height,
             round_number: round,
@@ -164,7 +164,6 @@ where
         let vote = TendermintVote {
             proposal_hash: proposal_hash.clone(),
             id: id.clone(),
-            validator_merkle_root: self.validator_merkle_root.clone(),
         };
 
         // Create the signed contribution of this validator

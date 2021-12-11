@@ -104,7 +104,6 @@ pub fn sign_macro_block(
             round_number: 0,
             step: TendermintStep::PreCommit,
         },
-        validator_merkle_root,
     };
 
     // Create signed precommit.

@@ -1,6 +1,6 @@
 use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 
-use nimiq_block::{Block, BlockError};
+use nimiq_block::{Block, BlockError, TendermintProof};
 use nimiq_database::WriteTransaction;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::coin::Coin;
@@ -109,18 +109,8 @@ impl Blockchain {
             return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
         }
 
-        // Checks if the justification exists.
-        let justification = macro_block
-            .justification
-            .as_ref()
-            .ok_or(PushError::InvalidBlock(BlockError::NoJustification))?;
-
         // Check the justification.
-        if !justification.verify(
-            macro_block.hash(),
-            macro_block.header.block_number,
-            &this.current_validators().unwrap(),
-        ) {
+        if !TendermintProof::verify(macro_block, &this.current_validators().unwrap()) {
             warn!("Rejecting block - macro block with bad justification");
             return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
         }

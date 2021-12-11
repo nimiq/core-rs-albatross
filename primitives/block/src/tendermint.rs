@@ -1,3 +1,4 @@
+use log::error;
 use std::io;
 
 use beserial::{Deserialize, Serialize};
@@ -12,7 +13,7 @@ use crate::signed::{
     Message, SignedMessage, PREFIX_TENDERMINT_COMMIT, PREFIX_TENDERMINT_PREPARE,
     PREFIX_TENDERMINT_PROPOSAL,
 };
-use crate::{MacroHeader, MultiSignature};
+use crate::{MacroBlock, MacroHeader, MultiSignature};
 
 /// The proposal message sent by the Tendermint leader.
 #[derive(Clone, Debug, Serialize, Deserialize, SerializeContent, PartialEq, Eq)]
@@ -49,50 +50,48 @@ impl TendermintProof {
 
     /// Verifies the proof. This only checks that the proof is valid for this block, not that the
     /// block itself is valid.
-    pub fn verify(
-        &self,
-        block_hash: Blake2bHash,
-        block_number: u32,
-        validators: &Validators,
-    ) -> bool {
+    pub fn verify(block: &MacroBlock, current_validators: &Validators) -> bool {
+        // If there's no justification then the proof is false evidently.
+        let justification = match &block.justification {
+            None => {
+                error!("Invalid justification - macro block has no justification!");
+                return false;
+            }
+            Some(x) => x,
+        };
+
         // Check if there are enough votes.
-        if self.votes() < TWO_THIRD_SLOTS {
+        if justification.votes() < TWO_THIRD_SLOTS {
+            error!("Invalid justification - not enough votes!");
             return false;
         }
 
-        // Get the public key for each SLOT and:
-        // 1) add them together to get the aggregated public key (if they are part of the
-        //    Multisignature Bitset),
-        // 2) get the raw elliptic curve point for each one and push them to a vector.
-        let pks = validators.voting_keys();
-
-        let mut agg_pk = AggregatePublicKey::new();
-        let mut raw_pks = Vec::new();
-
-        for (i, pk) in pks.iter().enumerate() {
-            if self.sig.signers.contains(i as usize) {
-                agg_pk.aggregate(pk);
-            }
-
-            raw_pks.push(pk.public_key);
-        }
-
-        // Calculate the validator Merkle root (used in the nano sync).
-        let validator_merkle_root = pk_tree_construct(raw_pks);
+        // Calculate the `nano_zkp_hash`. This a special hash that is calculated using the validators
+        // field of the block body. It is necessary for the ZKP proofs used in the nano sync.
+        let block_hash = block.nano_zkp_hash();
 
         // Calculate the message that was actually signed by the validators.
         let message = TendermintVote {
             proposal_hash: Some(block_hash),
             id: TendermintIdentifier {
-                block_number,
-                round_number: self.round,
+                block_number: block.block_number(),
+                round_number: justification.round,
                 step: TendermintStep::PreCommit,
             },
-            validator_merkle_root,
         };
 
+        // Get the public key for each SLOT and add them together to get the aggregated public key
+        // (if they are part of the Multisignature Bitset).
+        let mut agg_pk = AggregatePublicKey::new();
+
+        for (i, pk) in current_validators.voting_keys().iter().enumerate() {
+            if justification.sig.signers.contains(i as usize) {
+                agg_pk.aggregate(pk);
+            }
+        }
+
         // Verify the aggregated signature against our aggregated public key.
-        agg_pk.verify(&message, &self.sig.signature)
+        agg_pk.verify(&message, &justification.sig.signature)
     }
 }
 
@@ -121,8 +120,7 @@ pub struct TendermintIdentifier {
 // First of all to be able to create a block proof the signatures must be over a hash which includes:
 // * block-height
 // * tendermint round
-// * proposal header hash
-// * the merkle root of the validator set.
+// * proposal hash (calculated using the `nano_zkp_hash` function)
 // * implicit: TendermintStep which also works as the prefix for the specific message which is signed (read purpose byte)
 //
 // In addition to that the correct assignment of specific contributions to their aggregations also needs part of this information.
@@ -142,12 +140,10 @@ pub struct TendermintIdentifier {
 // that can be included plain text as the proof alongside it also contains it.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TendermintVote {
-    /// MacroHeader hash of the proposed macro block
+    /// Hash of the proposed macro block
     pub proposal_hash: Option<Blake2bHash>,
     /// Identifier to this votes aggregation
     pub id: TendermintIdentifier,
-    /// The merkle root of validators is required for consensus.
-    pub validator_merkle_root: Vec<u8>,
 }
 
 /// Custom Serialize Content, to make sure that
@@ -179,12 +175,6 @@ impl SerializeContent for TendermintVote {
                 writer.write_all(zero_bytes.as_slice())?;
                 size += Blake2bHash::SIZE;
             }
-        };
-
-        // serialize the validator_merkle_root
-        size += {
-            writer.write_all(self.validator_merkle_root.as_slice())?;
-            self.validator_merkle_root.len()
         };
 
         // Finally attempt to flush
