@@ -27,12 +27,12 @@ use super::{
     utils::{AggregationEvent, CurrentAggregation},
 };
 
-/// Adaption for tendermint not using the handel stream directly. Ideally all of what this Adapter does would be done callerside just using the stream
+/// Adaption for tendermint not using the handel stream directly. Ideally all of what this Adapter
+/// does would be done callerside just using the stream
 pub struct HandelTendermintAdapter<N: ValidatorNetwork> {
     current_bests: Arc<RwLock<BTreeMap<(u32, TendermintStep), TendermintContribution>>>,
     current_aggregate: Arc<RwLock<Option<CurrentAggregation>>>,
     pending_new_round: Arc<RwLock<Option<u32>>>,
-    validator_merkle_root: Vec<u8>,
     block_height: u32,
     secret_key: SecretKey,
     validator_id: u16,
@@ -53,8 +53,6 @@ where
         network: Arc<N>,
         secret_key: SecretKey,
     ) -> Self {
-        let validator_merkle_root = MacroBlock::create_pk_tree_root(&active_validators);
-
         // the input stream is all levelUpdateMessages concerning a TendermintContribution and TendermintIdentifier.
         // We get rid of the sender, but while processing these messages they need to be dispatched to the appropriate Aggregation.
         let input = Box::pin(
@@ -100,7 +98,6 @@ where
             current_bests,
             current_aggregate,
             pending_new_round,
-            validator_merkle_root,
             block_height,
             secret_key,
             validator_id,
@@ -114,7 +111,8 @@ where
     /// starts an aggregation for given `round` and `step`.
     /// * `round` is the number indicating in which round Tendermint is
     /// * `step` is either `TendermintStep::PreVote` or `Tendermint::PreCommit`.
-    /// * `proposal` is the hash of the proposed macro block header this node wants to vote for or `None`, if this node wishes to not vote for any block.
+    /// * `proposal` is the hash of the proposed macro block header this node wants to vote for or
+    ///     `None`, if this node wishes to not vote for any block.
     pub async fn broadcast_and_aggregate(
         &mut self,
         round: u32,
@@ -183,7 +181,6 @@ where
             .send(AggregationEvent::Start(
                 id.clone(),
                 own_contribution,
-                self.validator_merkle_root.clone(),
                 output_sink,
             ))
             .await

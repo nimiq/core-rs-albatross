@@ -49,7 +49,6 @@ pub enum AggregationEvent<N: ValidatorNetwork> {
     Start(
         TendermintIdentifier,
         TendermintContribution,
-        Vec<u8>,
         Box<NetworkSink<LevelUpdateMessage<TendermintContribution, TendermintIdentifier>, N>>,
     ),
     Cancel(u32, TendermintStep),
@@ -58,7 +57,7 @@ pub enum AggregationEvent<N: ValidatorNetwork> {
 impl<N: ValidatorNetwork> std::fmt::Debug for AggregationEvent<N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AggregationEvent::Start(i, _, _, _) => f.debug_struct("Start").field("id", i).finish(),
+            AggregationEvent::Start(i, _, _) => f.debug_struct("Start").field("id", i).finish(),
             AggregationEvent::Cancel(r, s) => f.debug_struct("Start").field("id", &(r, s)).finish(),
         }
     }

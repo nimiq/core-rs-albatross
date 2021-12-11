@@ -66,7 +66,7 @@ impl TendermintProof {
             return false;
         }
 
-        // Calculate the `nano_zkp_hash`. This a special hash that is calculated using the validators
+        // Calculate the `nano_zkp_hash`. This a special hash that is calculated using the `validators`
         // field of the block body. It is necessary for the ZKP proofs used in the nano sync.
         let block_hash = block.nano_zkp_hash();
 
