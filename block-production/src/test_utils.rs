@@ -129,7 +129,6 @@ impl TemporaryBlockProducer {
                 step: TendermintStep::PreCommit,
                 round_number: 0,
             },
-            validator_merkle_root,
         };
 
         // sign the hash

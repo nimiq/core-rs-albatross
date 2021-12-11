@@ -59,14 +59,7 @@ impl NanoBlockchain {
         }
 
         // Check the justification.
-        Blockchain::verify_block_justification(
-            self,
-            &block.header(),
-            &block.justification(),
-            &slot_owner.signing_key,
-            None,
-            true,
-        )?;
+        Blockchain::verify_block_justification(self, &block, &slot_owner.signing_key, None, true)?;
 
         // Create the chaininfo for the new block.
         let chain_info = match ChainInfo::from_block(block, &prev_info) {

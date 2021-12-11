@@ -3,7 +3,7 @@ use std::cmp::Ordering;
 use beserial::Serialize;
 use nimiq_block::{
     Block, BlockBody, BlockError, BlockHeader, BlockJustification, BlockType, ForkProof, MacroBody,
-    ViewChange,
+    TendermintProof, ViewChange,
 };
 use nimiq_database::Transaction as DBtx;
 use nimiq_hash::{Blake2bHash, Hash};
@@ -98,25 +98,22 @@ impl Blockchain {
     //       might be a better way to do this though.
     pub fn verify_block_justification<B: AbstractBlockchain>(
         blockchain: &B,
-        header: &BlockHeader,
-        justification_opt: &Option<BlockJustification>,
+        block: &Block,
         signing_key: &SchnorrPublicKey,
         txn_opt: Option<&DBtx>,
         check_signature: bool,
     ) -> Result<(), PushError> {
-        // Checks if the justification exists. If yes, unwrap it.
-        let justification = justification_opt
-            .as_ref()
-            .ok_or(PushError::InvalidBlock(BlockError::NoJustification))?;
-
-        match justification {
-            BlockJustification::Micro(justification) => {
-                assert_eq!(header.ty(), BlockType::Micro);
+        match block {
+            Block::Micro(micro_block) => {
+                // Checks if the justification exists. If yes, unwrap it.
+                let justification = micro_block
+                    .justification
+                    .as_ref()
+                    .ok_or(PushError::InvalidBlock(BlockError::NoJustification))?;
 
                 if check_signature {
-                    // If the block is a micro block, verify the signature and the view changes.
                     // Verify the signature on the justification.
-                    let hash = header.hash();
+                    let hash = block.hash();
                     if !signing_key.verify(&justification.signature, hash.as_slice()) {
                         warn!("Rejecting block - invalid signature for intended slot owner");
                         debug!("Intended slot owner: {:?}", signing_key);
@@ -126,22 +123,22 @@ impl Blockchain {
 
                 // Check if a view change occurred - if so, validate the proof
                 let prev_info = blockchain
-                    .get_chain_info(header.parent_hash(), false, txn_opt)
+                    .get_chain_info(block.parent_hash(), false, txn_opt)
                     .unwrap();
 
-                let view_number = if policy::is_macro_block_at(header.block_number() - 1) {
+                let view_number = if policy::is_macro_block_at(block.block_number() - 1) {
                     // Reset view number in new batch
                     0
                 } else {
                     prev_info.head.view_number()
                 };
 
-                let new_view_number = header.view_number();
+                let new_view_number = block.view_number();
 
                 if new_view_number < view_number {
                     warn!(
                         "Rejecting block - lower view number {:?} < {:?}",
-                        header.view_number(),
+                        block.view_number(),
                         view_number
                     );
                     return Err(PushError::InvalidBlock(BlockError::InvalidViewNumber));
@@ -157,8 +154,8 @@ impl Blockchain {
                 } else if new_view_number > view_number && justification.view_change_proof.is_some()
                 {
                     let view_change = ViewChange {
-                        block_number: header.block_number(),
-                        new_view_number: header.view_number(),
+                        block_number: block.block_number(),
+                        new_view_number: block.view_number(),
                         vrf_entropy: prev_info.head.seed().entropy(),
                     };
 
@@ -173,14 +170,11 @@ impl Blockchain {
                     }
                 }
             }
-            BlockJustification::Macro(justification) => {
-                assert_eq!(header.ty(), BlockType::Macro);
-
-                // If the block is a macro block, verify the Tendermint proof.
+            Block::Macro(macro_block) => {
+                // Verify the Tendermint proof.
                 if check_signature
-                    && !justification.verify(
-                        header.hash(),
-                        header.block_number(),
+                    && !TendermintProof::verify(
+                        macro_block,
                         &blockchain.current_validators().unwrap(),
                     )
                 {
