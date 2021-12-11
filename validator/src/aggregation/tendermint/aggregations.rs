@@ -80,7 +80,6 @@ impl<N: ValidatorNetwork> TendermintAggregations<N> {
         &mut self,
         id: TendermintIdentifier,
         own_contribution: TendermintContribution,
-        validator_merkle_root: Vec<u8>,
         output_sink: Box<
             (dyn Sink<
                 (
@@ -104,7 +103,6 @@ impl<N: ValidatorNetwork> TendermintAggregations<N> {
                 self.validator_id as usize,
                 1, // To be removed
                 id.clone(),
-                validator_merkle_root,
             );
 
             let (sender, receiver) =
@@ -181,17 +179,9 @@ impl<N: ValidatorNetwork + 'static> Stream for TendermintAggregations<N> {
     ) -> Poll<Option<Self::Item>> {
         while let Poll::Ready(Some(event)) = self.event_receiver.poll_recv(cx) {
             match event {
-                AggregationEvent::Start(
-                    id,
-                    own_contribution,
-                    validator_merkle_root,
-                    output_sink,
-                ) => self.broadcast_and_aggregate(
-                    id,
-                    own_contribution,
-                    validator_merkle_root,
-                    output_sink,
-                ),
+                AggregationEvent::Start(id, own_contribution, output_sink) => {
+                    self.broadcast_and_aggregate(id, own_contribution, output_sink)
+                }
                 AggregationEvent::Cancel(round, step) => self.cancel_aggregation(round, step),
             }
         }

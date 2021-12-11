@@ -82,7 +82,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
     /// This function is meant to verify the validity of a TendermintState. However, this function
     /// is only used when Tendermint is starting from a saved state. There is no reasonable
     /// situation where anyone would need to edit the saved TendermintState, so there's no situation
-    /// where the TendermintState feed into this function would be invalid (unless it gets corrupted
+    /// where the TendermintState fed into this function would be invalid (unless it gets corrupted
     /// in memory, but then we have bigger problems).
     /// So, we leave this function simply returning true and not doing any checks. Mostly likely we
     /// will get rid of it in the future.
@@ -392,7 +392,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
             .await
     }
 
-    /// Returns the vote aggregation for a given proposal and round. It simply calls the aggregation
+    /// Returns the vote aggregation for a given round and step. It simply calls the aggregation
     /// adapter, which does all the work.
     async fn get_aggregation(
         &mut self,
