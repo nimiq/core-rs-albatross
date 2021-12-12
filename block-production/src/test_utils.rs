@@ -13,7 +13,7 @@ use nimiq_bls::{AggregateSignature, KeyPair as BlsKeyPair, SecretKey as BlsSecre
 use nimiq_collections::BitSet;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::Blake2bHash;
 use nimiq_keys::{KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey};
 use nimiq_primitives::policy;
 use nimiq_utils::time::OffsetTime;
@@ -66,12 +66,14 @@ impl TemporaryBlockProducer {
                 0u32,
                 extra_data,
             );
+
+            // Calculate the block hash.
+            let block_hash = macro_block_proposal.nano_zkp_hash();
+
             // Get validator set and make sure it exists.
             let validators = blockchain
                 .get_validators_for_epoch(policy::epoch_at(blockchain.block_number() + 1));
             assert!(validators.is_some());
-
-            let validator_merkle_root = MacroBlock::create_pk_tree_root(&validators.unwrap());
 
             Block::Macro(TemporaryBlockProducer::finalize_macro_block(
                 TendermintProposal {
@@ -83,7 +85,7 @@ impl TemporaryBlockProducer {
                     .body
                     .or_else(|| Some(MacroBody::default()))
                     .unwrap(),
-                validator_merkle_root,
+                block_hash,
             ))
         } else {
             let view_change_proof = if blockchain.next_view_number() == view_number {
@@ -112,8 +114,8 @@ impl TemporaryBlockProducer {
 
     pub fn finalize_macro_block(
         proposal: TendermintProposal,
-        extrinsics: MacroBody,
-        validator_merkle_root: Vec<u8>,
+        body: MacroBody,
+        block_hash: Blake2bHash,
     ) -> MacroBlock {
         let keypair = BlsKeyPair::from(
             BlsSecretKey::deserialize_from_vec(&hex::decode(VOTING_KEY).unwrap()).unwrap(),
@@ -123,7 +125,7 @@ impl TemporaryBlockProducer {
         // round_number is for now fixed at 0 for tests, but it could be anything,
         // as long as the TendermintProof further down this function does use the same round_number.
         let vote = TendermintVote {
-            proposal_hash: Some(proposal.value.hash::<Blake2bHash>()),
+            proposal_hash: Some(block_hash),
             id: TendermintIdentifier {
                 block_number: proposal.value.block_number,
                 step: TendermintStep::PreCommit,
@@ -152,7 +154,7 @@ impl TemporaryBlockProducer {
         MacroBlock {
             header: proposal.value,
             justification,
-            body: Some(extrinsics),
+            body: Some(body),
         }
     }
 

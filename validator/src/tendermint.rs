@@ -402,6 +402,11 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
         self.aggregation_adapter.get_aggregate(round, step)
     }
 
+    // TODO
+    fn hash_proposal(&self, proposal: Self::ProposalTy) -> Blake2bHash {
+        proposal.hash()
+    }
+
     fn get_background_task(&mut self) -> BoxFuture<'static, ()> {
         self.aggregation_adapter.create_background_task().boxed()
     }

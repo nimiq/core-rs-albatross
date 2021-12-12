@@ -3,7 +3,6 @@
 #[macro_use]
 extern crate log;
 
-use nimiq_hash::Hash;
 use std::fmt::Debug;
 
 pub(crate) mod network;
@@ -21,6 +20,8 @@ pub use utils::*;
 
 // These are trait aliases. We use them instead of repeating these trait bounds all throughout the
 // code. It results in code that is cleaner and easier to understand.
-pub trait ProposalTrait = Clone + Debug + PartialEq + Hash + Unpin + Send + Sync + 'static;
+pub trait ProposalTrait = Clone + Debug + PartialEq + Unpin + Send + Sync + 'static;
+
 pub trait ProofTrait = Clone + Debug + Unpin + Send + 'static;
+
 pub trait ResultTrait = Clone + Debug + Unpin + Send + 'static;

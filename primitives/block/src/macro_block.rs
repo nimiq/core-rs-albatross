@@ -15,7 +15,7 @@ use crate::signed::{Message, PREFIX_TENDERMINT_PROPOSAL};
 use crate::tendermint::TendermintProof;
 
 /// The struct representing a Macro block (can be either checkpoint or election).
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MacroBlock {
     /// The header, contains some basic information and commitments to the body and the state.
     pub header: MacroHeader,
@@ -27,7 +27,7 @@ pub struct MacroBlock {
 }
 
 /// The struct representing the header of a Macro block (can be either checkpoint or election).
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MacroHeader {
     /// The version number of the block. Changing this always results in a hard fork.
     pub version: u16,
