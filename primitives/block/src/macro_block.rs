@@ -84,9 +84,38 @@ impl MacroBlock {
         self.header.hash()
     }
 
-    /// TODO
-    pub fn nano_zkp_hash(&self) -> Blake2bHash {
-        self.header.hash()
+    /// Calculates the following function:
+    ///     nano_zkp_hash = Blake2s( Blake2b(header) || pk_tree_root )
+    /// Where `pk_tree_root` is the root of a special Merkle tree containing the BLS public keys of
+    /// the validators for the next epoch.
+    /// The `pk_tree_root` is necessary for the Nano ZK proofs and needs to be inserted into the
+    /// signature for the macro blocks. The easiest way is to calculate this modified hash and then
+    /// use it as the signature message.
+    /// Also, the final hash is done with Blake2s because the ZKP circuits can only handle Blake2s.
+    /// Only election blocks have the `validators` field, which contain the validators for the next
+    /// epoch, so for checkpoint blocks the `pk_tree_root` doesn't exist. Then, for checkpoint blocks
+    /// this function simply returns:
+    ///     nano_zkp_hash = Blake2s( Blake2b(header) )
+    pub fn nano_zkp_hash(&self) -> Blake2sHash {
+        let mut message = self.hash().serialize_to_vec();
+
+        if let Some(validators) = self.get_validators() {
+            // Get the public keys.
+            let public_keys = validators
+                .voting_keys()
+                .iter()
+                .map(|pk| pk.public_key)
+                .collect();
+
+            // Create the tree.
+            let mut pk_tree_root = pk_tree_construct(public_keys);
+
+            // Add it to the message.
+            message.append(&mut pk_tree_root);
+        }
+
+        // Return the final hash.
+        message.hash()
     }
 
     /// Returns whether or not this macro block is an election block.
@@ -97,19 +126,6 @@ impl MacroBlock {
     /// Returns a copy of the validator slots. Only returns Some if it is an election block.
     pub fn get_validators(&self) -> Option<Validators> {
         self.body.as_ref()?.validators.clone()
-    }
-
-    /// Calculates the PKTree root from the given validators.
-    pub fn create_pk_tree_root(validators: &Validators) -> Vec<u8> {
-        // Get the public keys.
-        let public_keys = validators
-            .voting_keys()
-            .iter()
-            .map(|pk| pk.public_key)
-            .collect();
-
-        // Create the tree
-        pk_tree_construct(public_keys)
     }
 
     /// Returns the block number of this macro block.

@@ -3,7 +3,7 @@ use crate::utils::{AggregationResult, ProposalResult, Step, TendermintError};
 use crate::{ProofTrait, ProposalTrait, ResultTrait};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake2sHash;
 
 /// The (async) trait that we need for all of Tendermint's low-level functions. The functions are
 /// mostly about producing proposals and networking.
@@ -62,7 +62,7 @@ pub trait TendermintOutsideDeps: Send + Unpin {
         &mut self,
         round: u32,
         step: Step,
-        proposal: Option<Blake2bHash>,
+        proposal: Option<Blake2sHash>,
     ) -> Result<AggregationResult<Self::ProofTy>, TendermintError>;
 
     /// Returns the current aggregation for a given round and step. The returned aggregation might
@@ -77,7 +77,7 @@ pub trait TendermintOutsideDeps: Send + Unpin {
 
     // Calculates the hash of a given proposal. We have it into a separate function so that
     // we can support arbitrary hashing schemes.
-    fn hash_proposal(&self, proposal: Self::ProposalTy) -> Blake2bHash;
+    fn hash_proposal(&self, proposal: Self::ProposalTy) -> Blake2sHash;
 
     fn get_background_task(&mut self) -> BoxFuture<'static, ()>;
 }
