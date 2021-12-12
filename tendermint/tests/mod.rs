@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use beserial::Serialize;
 use futures::{FutureExt, StreamExt};
-use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
+use nimiq_hash::{Blake2sHash, Hash, SerializeContent};
 use nimiq_primitives::policy::{SLOTS, TWO_THIRD_SLOTS};
 use nimiq_tendermint::*;
 use std::collections::BTreeMap;
@@ -127,7 +127,7 @@ impl TendermintOutsideDeps for TestValidator {
         &mut self,
         round: u32,
         step: Step,
-        _proposal: Option<Blake2bHash>,
+        _proposal: Option<Blake2sHash>,
     ) -> Result<AggregationResult<Self::ProofTy>, TendermintError> {
         // Calculate the hashes for the proposals 'A' and 'B'.
         let a_hash = TestProposal('A', 0).hash();
@@ -211,7 +211,7 @@ impl TendermintOutsideDeps for TestValidator {
         }
     }
 
-    fn hash_proposal(&self, proposal: Self::ProposalTy) -> Blake2bHash {
+    fn hash_proposal(&self, proposal: Self::ProposalTy) -> Blake2sHash {
         proposal.hash()
     }
 

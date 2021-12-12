@@ -13,7 +13,7 @@ use nimiq_bls::{AggregateSignature, KeyPair as BlsKeyPair, SecretKey as BlsSecre
 use nimiq_collections::BitSet;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake2sHash;
 use nimiq_keys::{KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey};
 use nimiq_primitives::policy;
 use nimiq_utils::time::OffsetTime;
@@ -115,7 +115,7 @@ impl TemporaryBlockProducer {
     pub fn finalize_macro_block(
         proposal: TendermintProposal,
         body: MacroBody,
-        block_hash: Blake2bHash,
+        block_hash: Blake2sHash,
     ) -> MacroBlock {
         let keypair = BlsKeyPair::from(
             BlsSecretKey::deserialize_from_vec(&hex::decode(VOTING_KEY).unwrap()).unwrap(),

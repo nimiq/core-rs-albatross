@@ -3,7 +3,7 @@ use std::io;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_bls::AggregatePublicKey;
-use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
+use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, SerializeContent};
 use nimiq_hash_derive::SerializeContent;
 use nimiq_primitives::policy::TWO_THIRD_SLOTS;
 use nimiq_primitives::slots::Validators;
@@ -140,7 +140,7 @@ pub struct TendermintIdentifier {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TendermintVote {
     /// Hash of the proposed macro block
-    pub proposal_hash: Option<Blake2bHash>,
+    pub proposal_hash: Option<Blake2sHash>,
     /// Identifier to this votes aggregation
     pub id: TendermintIdentifier,
 }

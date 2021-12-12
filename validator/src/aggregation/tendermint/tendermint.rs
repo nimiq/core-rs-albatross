@@ -7,9 +7,10 @@ use futures::{future, StreamExt};
 use tokio::{sync::mpsc, time};
 
 use bls::SecretKey;
+use hash::Blake2sHash;
 use nimiq_block::{MultiSignature, TendermintIdentifier, TendermintStep, TendermintVote};
 use nimiq_handel::{identity::WeightRegistry, update::LevelUpdateMessage};
-use nimiq_hash::Blake2bHash;
+
 use nimiq_primitives::{policy, slots::Validators};
 use nimiq_tendermint::{AggregationResult, TendermintError};
 use nimiq_validator_network::ValidatorNetwork;
@@ -115,7 +116,7 @@ where
         &mut self,
         round: u32,
         step: impl Into<TendermintStep>,
-        proposal_hash: Option<Blake2bHash>,
+        proposal_hash: Option<Blake2sHash>,
     ) -> Result<AggregationResult<MultiSignature>, TendermintError> {
         let step = step.into();
         // make sure that there is no currently ongoing aggregation from a previous call to `broadcast_and_aggregate` which has not yet been awaited.

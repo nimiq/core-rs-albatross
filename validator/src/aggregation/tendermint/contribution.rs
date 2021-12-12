@@ -1,17 +1,17 @@
 use std::collections::BTreeMap;
 
 use beserial::{Deserialize, Serialize};
+use hash::Blake2sHash;
 use nimiq_block::{MultiSignature, TendermintVote};
 use nimiq_bls::{AggregateSignature, SecretKey};
 use nimiq_collections::bitset::BitSet;
-use nimiq_hash::Blake2bHash;
 
 use nimiq_handel::contribution::{AggregatableContribution, ContributionError};
 
 #[derive(Serialize, Deserialize, std::fmt::Debug, Clone)]
 pub struct TendermintContribution {
     #[beserial(len_type(u16))]
-    pub contributions: BTreeMap<Option<Blake2bHash>, MultiSignature>,
+    pub contributions: BTreeMap<Option<Blake2sHash>, MultiSignature>,
 }
 
 impl TendermintContribution {
