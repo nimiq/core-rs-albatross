@@ -2,6 +2,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use handel::update::LevelUpdateMessage;
+use hash::Blake2sHash;
 use nimiq_validator_network::ValidatorNetwork;
 use tokio::sync::mpsc;
 
@@ -16,7 +17,7 @@ use super::contribution::TendermintContribution;
 /// Struct intended to track the currently awaited round and step of Aggregation.
 pub(super) struct CurrentAggregation {
     /// Channel which results are send to
-    pub(super) sender: mpsc::UnboundedSender<AggregationResult<MultiSignature>>,
+    pub(super) sender: mpsc::UnboundedSender<AggregationResult<Blake2sHash, MultiSignature>>,
     /// The round of the current aggregation
     pub(super) round: u32,
     /// The Step of the current aggregation

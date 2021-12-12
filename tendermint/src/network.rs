@@ -4,17 +4,22 @@ use crate::utils::{
     aggregation_to_vote, has_2f1_votes, Checkpoint, ProposalResult, Step, VoteDecision, VoteResult,
 };
 use crate::TendermintError;
-use crate::{ProofTrait, ProposalTrait, ResultTrait};
+use crate::{ProofTrait, ProposalHashTrait, ProposalTrait, ResultTrait};
 
 /// This section implements methods to interface with TendermintOutsideDeps. All of them get or
 /// broadcast some information from/to the network, processes it and then updates Tendermint's state.
 impl<
         ProposalTy: ProposalTrait,
+        ProposalHashTy: ProposalHashTrait,
         ProofTy: ProofTrait,
         ResultTy: ResultTrait,
-        DepsTy: TendermintOutsideDeps<ProposalTy = ProposalTy, ResultTy = ResultTy, ProofTy = ProofTy>
-            + 'static,
-    > Tendermint<ProposalTy, ProofTy, ResultTy, DepsTy>
+        DepsTy: TendermintOutsideDeps<
+                ProposalTy = ProposalTy,
+                ProposalHashTy = ProposalHashTy,
+                ResultTy = ResultTy,
+                ProofTy = ProofTy,
+            > + 'static,
+    > Tendermint<ProposalTy, ProposalHashTy, ProofTy, ResultTy, DepsTy>
 {
     /// Wait for a proposal for a given round from that round's proposer. The proposal that we
     /// is guaranteed to be valid.
