@@ -117,7 +117,7 @@ where
         round: u32,
         step: impl Into<TendermintStep>,
         proposal_hash: Option<Blake2sHash>,
-    ) -> Result<AggregationResult<MultiSignature>, TendermintError> {
+    ) -> Result<AggregationResult<Blake2sHash, MultiSignature>, TendermintError> {
         let step = step.into();
         // make sure that there is no currently ongoing aggregation from a previous call to `broadcast_and_aggregate` which has not yet been awaited.
         // if there is none make sure to set this one with the same lock to prevent a race condition
@@ -137,7 +137,7 @@ where
                 None => {
                     // create channel foor result propagation
                     let (sender, aggregate_receiver) =
-                        mpsc::unbounded_channel::<AggregationResult<MultiSignature>>();
+                        mpsc::unbounded_channel::<AggregationResult<Blake2sHash, MultiSignature>>();
                     // set the current aggregate
                     *current_aggregate = Some(CurrentAggregation {
                         sender: sender.clone(),
@@ -347,7 +347,7 @@ where
         &self,
         round: u32,
         step: impl Into<TendermintStep>,
-    ) -> Result<AggregationResult<MultiSignature>, TendermintError> {
+    ) -> Result<AggregationResult<Blake2sHash, MultiSignature>, TendermintError> {
         if let Some(current_best) = self
             .current_bests
             .read()

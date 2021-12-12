@@ -2,7 +2,7 @@ use crate::outside_deps::TendermintOutsideDeps;
 use crate::tendermint::Tendermint;
 use crate::utils::{Checkpoint, Step, VoteDecision};
 use crate::TendermintError;
-use crate::{ProofTrait, ProposalTrait, ResultTrait};
+use crate::{ProofTrait, ProposalHashTrait, ProposalTrait, ResultTrait};
 
 /// This section has methods that implement the Tendermint protocol as described in the original
 /// paper (https://arxiv.org/abs/1807.04938v3).
@@ -21,11 +21,16 @@ use crate::{ProofTrait, ProposalTrait, ResultTrait};
 /// passing form into the state machine form that we use.
 impl<
         ProposalTy: ProposalTrait,
+        ProposalHashTy: ProposalHashTrait,
         ProofTy: ProofTrait,
         ResultTy: ResultTrait,
-        DepsTy: TendermintOutsideDeps<ProposalTy = ProposalTy, ResultTy = ResultTy, ProofTy = ProofTy>
-            + 'static,
-    > Tendermint<ProposalTy, ProofTy, ResultTy, DepsTy>
+        DepsTy: TendermintOutsideDeps<
+                ProposalTy = ProposalTy,
+                ProposalHashTy = ProposalHashTy,
+                ResultTy = ResultTy,
+                ProofTy = ProofTy,
+            > + 'static,
+    > Tendermint<ProposalTy, ProposalHashTy, ProofTy, ResultTy, DepsTy>
 {
     /// Lines 11-21 of Tendermint consensus algorithm (Algorithm 1)
     pub(crate) async fn start_round(&mut self) -> Result<(), TendermintError> {

@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use beserial::Serialize;
 use futures::{FutureExt, StreamExt};
-use nimiq_hash::{Blake2sHash, Hash, SerializeContent};
+use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
 use nimiq_primitives::policy::{SLOTS, TWO_THIRD_SLOTS};
 use nimiq_tendermint::*;
 use std::collections::BTreeMap;
@@ -62,6 +62,8 @@ pub struct TestValidator {
 impl TendermintOutsideDeps for TestValidator {
     // The proposal type is obviously our TestProposal type.
     type ProposalTy = TestProposal;
+    // Any hash function, doesn't matter which.
+    type ProposalHashTy = Blake2bHash;
     // We never verify the proofs inside Tendermint so we can just use the empty type.
     type ProofTy = ();
     // The result would normally be a combination of the proposal and the proof. But since our proof
@@ -127,8 +129,8 @@ impl TendermintOutsideDeps for TestValidator {
         &mut self,
         round: u32,
         step: Step,
-        _proposal: Option<Blake2sHash>,
-    ) -> Result<AggregationResult<Self::ProofTy>, TendermintError> {
+        _proposal_hash: Option<Self::ProposalHashTy>,
+    ) -> Result<AggregationResult<Self::ProposalHashTy, Self::ProofTy>, TendermintError> {
         // Calculate the hashes for the proposals 'A' and 'B'.
         let a_hash = TestProposal('A', 0).hash();
         let b_hash = TestProposal('B', 0).hash();
@@ -187,7 +189,7 @@ impl TendermintOutsideDeps for TestValidator {
         &mut self,
         round: u32,
         _step: Step,
-    ) -> Result<AggregationResult<Self::ProofTy>, TendermintError> {
+    ) -> Result<AggregationResult<Self::ProposalHashTy, Self::ProofTy>, TendermintError> {
         // Calculate the hashes for the proposals 'A' and 'B'.
         let a_hash = TestProposal('A', 0).hash();
         let b_hash = TestProposal('B', 0).hash();
@@ -211,7 +213,7 @@ impl TendermintOutsideDeps for TestValidator {
         }
     }
 
-    fn hash_proposal(&self, proposal: Self::ProposalTy) -> Blake2sHash {
+    fn hash_proposal(&self, proposal: Self::ProposalTy) -> Self::ProposalHashTy {
         proposal.hash()
     }
 

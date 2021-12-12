@@ -73,6 +73,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
     for TendermintInterface<TValidatorNetwork>
 {
     type ProposalTy = MacroHeader;
+    type ProposalHashTy = Blake2sHash;
     type ProofTy = MultiSignature;
     type ResultTy = MacroBlock;
 
@@ -400,10 +401,10 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
         &mut self,
         round: u32,
         step: Step,
-        proposal: Option<Blake2sHash>,
-    ) -> Result<AggregationResult<Self::ProofTy>, TendermintError> {
+        proposal_hash: Option<Self::ProposalHashTy>,
+    ) -> Result<AggregationResult<Self::ProposalHashTy, Self::ProofTy>, TendermintError> {
         self.aggregation_adapter
-            .broadcast_and_aggregate(round, step, proposal)
+            .broadcast_and_aggregate(round, step, proposal_hash)
             .await
     }
 
@@ -413,12 +414,12 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
         &mut self,
         round: u32,
         step: Step,
-    ) -> Result<AggregationResult<Self::ProofTy>, TendermintError> {
+    ) -> Result<AggregationResult<Self::ProposalHashTy, Self::ProofTy>, TendermintError> {
         self.aggregation_adapter.get_aggregate(round, step)
     }
 
     /// Simply fetches the cached proposal hash.
-    fn hash_proposal(&self, _proposal: Self::ProposalTy) -> Blake2sHash {
+    fn hash_proposal(&self, _proposal: Self::ProposalTy) -> Self::ProposalHashTy {
         self.cache_hash
             .clone()
             .expect("Tried to fetch a non-existing proposal hash. This shouldn't happen!")
