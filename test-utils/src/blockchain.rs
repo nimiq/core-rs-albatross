@@ -12,9 +12,9 @@ use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, PushResult};
 use nimiq_bls::{AggregateSignature, KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
 use nimiq_collections::BitSet;
-use nimiq_hash::{Blake2bHash, Hash};
+
 use nimiq_keys::{KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey};
-use nimiq_nano_primitives::pk_tree_construct;
+
 use nimiq_primitives::policy;
 use nimiq_vrf::VrfSeed;
 
@@ -89,18 +89,21 @@ pub fn sign_macro_block(
     header: MacroHeader,
     body: Option<MacroBody>,
 ) -> MacroBlock {
-    // Calculate block hash.
-    let block_hash = header.hash::<Blake2bHash>();
+    // Create the block.
+    let mut block = MacroBlock {
+        header,
+        body,
+        justification: None,
+    };
 
-    // Calculate the validator Merkle root (used in the nano sync).
-    let validator_merkle_root =
-        pk_tree_construct(vec![keypair.public_key.public_key; policy::SLOTS as usize]);
+    // Calculate block hash.
+    let block_hash = block.nano_zkp_hash();
 
     // Create the precommit tendermint vote.
     let precommit = TendermintVote {
         proposal_hash: Some(block_hash),
         id: TendermintIdentifier {
-            block_number: header.block_number,
+            block_number: block.block_number(),
             round_number: 0,
             step: TendermintStep::PreCommit,
         },
@@ -130,12 +133,10 @@ pub fn sign_macro_block(
         sig: multisig,
     };
 
-    // Create and return the macro block.
-    MacroBlock {
-        header,
-        body,
-        justification: Some(tendermint_proof),
-    }
+    // Add the justification and return the macro block.
+    block.justification = Some(tendermint_proof);
+
+    block
 }
 
 pub fn sign_view_change(

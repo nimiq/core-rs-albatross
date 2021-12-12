@@ -211,6 +211,10 @@ impl TendermintOutsideDeps for TestValidator {
         }
     }
 
+    fn hash_proposal(&self, proposal: Self::ProposalTy) -> Blake2bHash {
+        proposal.hash()
+    }
+
     fn get_background_task(&mut self) -> futures::future::BoxFuture<'static, ()> {
         futures::future::pending().boxed()
     }

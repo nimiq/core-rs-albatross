@@ -2,8 +2,8 @@ use std::cmp::Ordering;
 
 use beserial::Serialize;
 use nimiq_block::{
-    Block, BlockBody, BlockError, BlockHeader, BlockJustification, BlockType, ForkProof, MacroBody,
-    TendermintProof, ViewChange,
+    Block, BlockBody, BlockError, BlockHeader, BlockType, ForkProof, MacroBody, TendermintProof,
+    ViewChange,
 };
 use nimiq_database::Transaction as DBtx;
 use nimiq_hash::{Blake2bHash, Hash};

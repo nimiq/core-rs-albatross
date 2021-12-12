@@ -75,5 +75,9 @@ pub trait TendermintOutsideDeps: Send + Unpin {
         step: Step,
     ) -> Result<AggregationResult<Self::ProofTy>, TendermintError>;
 
+    // Calculates the hash of a given proposal. We have it into a separate function so that
+    // we can support arbitrary hashing schemes.
+    fn hash_proposal(&self, proposal: Self::ProposalTy) -> Blake2bHash;
+
     fn get_background_task(&mut self) -> BoxFuture<'static, ()>;
 }

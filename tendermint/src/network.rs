@@ -25,18 +25,20 @@ impl<
         match proposal_res {
             // If you received a proposal...
             ProposalResult::Proposal(proposal, valid_round) => {
+                let proposal_hash = self.deps.hash_proposal(proposal.clone());
+
                 // ...and the valid round sent in the proposal is None (equal to -1 in the protocol),
                 // save the proposal and set the state to OnProposal.
                 if valid_round.is_none() {
                     self.state.current_proposal = Some(proposal);
                     self.state.current_checkpoint = Checkpoint::OnProposal;
-                // ...and the valid round sent in the proposal is equal or greater than zero but
-                // smaller than the current round, and we have 2f+1 prevotes for this proposal from
-                // that valid round, save the proposal (including valid round) and set
-                // the state to OnPastProposal.
+                    // ...and the valid round sent in the proposal is equal or greater than zero but
+                    // smaller than the current round, and we have 2f+1 prevotes for this proposal from
+                    // that valid round, save the proposal (including valid round) and set
+                    // the state to OnPastProposal.
                 } else if valid_round.unwrap() < round
                     && has_2f1_votes(
-                        proposal.hash(),
+                        proposal_hash,
                         self.deps
                             .get_aggregation(valid_round.unwrap(), Step::Prevote)
                             .await?,
@@ -77,7 +79,10 @@ impl<
         };
 
         // ...then we hash it...
-        let proposal_hash = proposal.map(|p| p.hash());
+        let proposal_hash = match proposal {
+            None => None,
+            Some(p) => Some(self.deps.hash_proposal(p)),
+        };
 
         // ... and we broadcast it. The function will wait for 2f+1 prevotes, aggregate them and
         // return.
@@ -87,7 +92,12 @@ impl<
             .await?;
 
         // We also get the current proposal and hash it. We need it for the next step.
-        let current_proposal_hash = self.state.current_proposal.clone().map(|p| p.hash());
+        let current_proposal = self.state.current_proposal.clone();
+
+        let current_proposal_hash = match current_proposal {
+            None => None,
+            Some(p) => Some(self.deps.hash_proposal(p)),
+        };
 
         // We transform the aggregation we got into an actual vote result. See the function for more
         // details.
@@ -140,7 +150,10 @@ impl<
         };
 
         // ...then we hash it...
-        let proposal_hash = proposal.map(|p| p.hash());
+        let proposal_hash = match proposal {
+            None => None,
+            Some(p) => Some(self.deps.hash_proposal(p)),
+        };
 
         // ... and we broadcast it. The function will wait for 2f+1 precommits, aggregate them and
         // return.
@@ -150,7 +163,12 @@ impl<
             .await?;
 
         // We also get the current proposal and hash it. We need it for the next step.
-        let current_proposal_hash = self.state.current_proposal.clone().map(|p| p.hash());
+        let current_proposal = self.state.current_proposal.clone();
+
+        let current_proposal_hash = match current_proposal {
+            None => None,
+            Some(p) => Some(self.deps.hash_proposal(p)),
+        };
 
         // We transform the aggregation we got into an actual vote result. See the function for more
         // details.

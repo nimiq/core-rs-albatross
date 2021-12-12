@@ -2,17 +2,17 @@ use std::sync::Arc;
 
 use beserial::Deserialize;
 use nimiq_block::{
-    MultiSignature, SignedViewChange, TendermintIdentifier, TendermintProof, TendermintStep,
-    TendermintVote, ViewChange, ViewChangeProof,
+    MacroBlock, MultiSignature, SignedViewChange, TendermintIdentifier, TendermintProof,
+    TendermintStep, TendermintVote, ViewChange, ViewChangeProof,
 };
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_bls::{lazy::LazyPublicKey, AggregateSignature, KeyPair};
 use nimiq_collections::bitset::BitSet;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
-use nimiq_hash::{Blake2bHash, Hash};
+
 use nimiq_keys::{Address, PublicKey};
-use nimiq_nano_primitives::pk_tree_construct;
+
 use nimiq_primitives::policy;
 use nimiq_primitives::slots::{Validator, Validators};
 use nimiq_utils::time::OffsetTime;
@@ -78,14 +78,14 @@ fn test_replay() {
     // load key pair
     let key_pair = KeyPair::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap();
 
-    // create dummy hash and prepare message
-    let block_hash = "foobar".hash::<Blake2bHash>();
+    // create dummy block
+    let mut block = MacroBlock::default();
+    block.header.block_number = 1;
+
+    // create hash and prepare message
+    let block_hash = block.nano_zkp_hash();
 
     let validators = blockchain.current_validators().unwrap();
-
-    // Calculate the validator Merkle root (used in the nano sync).
-    let validator_merkle_root =
-        pk_tree_construct(vec![key_pair.public_key.public_key; policy::SLOTS as usize]);
 
     // create a TendermintVote for the PreVote round
     let vote = TendermintVote {
@@ -95,7 +95,6 @@ fn test_replay() {
             step: TendermintStep::PreVote,
             round_number: 0,
         },
-        validator_merkle_root: validator_merkle_root.clone(),
     };
 
     let signature = AggregateSignature::from_signatures(&[key_pair
@@ -110,22 +109,22 @@ fn test_replay() {
     }
 
     // create the TendermintProof
-    let justification = TendermintProof {
+    block.justification = Some(TendermintProof {
         round: 0,
         sig: MultiSignature::new(signature, signers),
-    };
+    });
+
     // verify commit - this should fail
-    assert!(!justification.verify(block_hash.clone(), 1u32, &validators));
+    assert!(!TendermintProof::verify(&block, &validators));
 
     // create the same thing again but for the PreCommit round
     let vote = TendermintVote {
-        proposal_hash: Some(block_hash.clone()),
+        proposal_hash: Some(block_hash),
         id: TendermintIdentifier {
             block_number: 1u32,
             step: TendermintStep::PreCommit,
             round_number: 0,
         },
-        validator_merkle_root,
     };
 
     let signature = AggregateSignature::from_signatures(&[key_pair
@@ -140,11 +139,11 @@ fn test_replay() {
     }
 
     // create the TendermintProof
-    let justification = TendermintProof {
+    block.justification = Some(TendermintProof {
         round: 0,
         sig: MultiSignature::new(signature, signers),
-    };
+    });
+
     // verify commit - this should not fail as this time it is the correct round
-    // assert exists to make sure this is in fact the deciding factor (not i.e wrong validator slots or something else)
-    assert!(justification.verify(block_hash, 1u32, &validators));
+    assert!(TendermintProof::verify(&block, &validators));
 }
