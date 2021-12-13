@@ -138,6 +138,17 @@ impl fmt::Debug for Signature {
     }
 }
 
+impl From<G1Projective> for Signature {
+    fn from(signature: G1Projective) -> Self {
+        let compressed = CompressedSignature::from(signature);
+
+        Signature {
+            signature,
+            compressed,
+        }
+    }
+}
+
 #[cfg(feature = "serde-derive")]
 mod serde_derive {
     // TODO: Replace this with a generic serialization using `ToHex` and `FromHex`.

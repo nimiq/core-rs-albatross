@@ -44,14 +44,12 @@ impl MacroBlockGadget {
         pk_tree_root: &[Boolean<MNT4Fr>],
         // This is the aggregated public key.
         agg_pk: &G2Var,
-        // These are just the generators for the Pedersen hash gadget.
-        pedersen_generators: &[G1Var],
     ) -> Result<Boolean<MNT4Fr>, SynthesisError> {
         // Verify that there are enough signers.
         let enough_signers = self.check_signers(cs.clone())?;
 
         // Get the hash point for the signature.
-        let hash = self.get_hash(cs.clone(), pk_tree_root, pedersen_generators)?;
+        let hash = self.get_hash(cs.clone(), pk_tree_root)?;
 
         // Check the validity of the signature.
         let valid_sig = CheckSigGadget::check_signature(cs, agg_pk, &hash, &self.signature)?;
@@ -60,51 +58,23 @@ impl MacroBlockGadget {
         enough_signers.and(&valid_sig)
     }
 
-    /// A function that calculates the hash for the block from:
-    /// step || block number || round number || header_hash || pk_tree_root
-    /// where || means concatenation.
-    /// First we hash the input with the Blake2s hash algorithm, getting an output of 256 bits. Then
-    /// we use the try-and-increment method on those 256 bits to obtain a single EC point.
+    /// A function that calculates the hash point for the block. This should match exactly the hash
+    /// point used in validator's signatures. It works like this:
+    ///     1. Get the header hash and the pk_tree_root.
+    ///     2. Calculate the first hash like so:
+    ///             first_hash = Blake2s( header_hash || pk_tree_root )
+    ///     3. Calculate the second (and final) hash like so:
+    ///             second_hash = Blake2s( 0x04 || round number || block number || 0x01 || first_hash )
+    ///        The first four fields (0x04, round number, block number, 0x01) are needed for the
+    ///        Tendermint protocol and there is no reason to explain their meaning here.
+    ///     4. Finally, we take the second hash and map it to an elliptic curve point using the
+    ///        "try-and-increment" method.
+    /// The function || means concatenation.
     pub fn get_hash(
         &self,
         cs: ConstraintSystemRef<MNT4Fr>,
         pk_tree_root: &[Boolean<MNT4Fr>],
-        _pedersen_generators: &[G1Var],
     ) -> Result<G1Var, SynthesisError> {
-        // Initialize Boolean vector.
-        let mut bits = vec![];
-
-        // TODO: This first byte is the prefix for the precommit messages, it is the
-        //       PREFIX_TENDERMINT_COMMIT constant in the nimiq_block crate. We can't
-        //       import nimiq_block because of cyclic dependencies. When those constants
-        //       get moved to the policy crate, we should import them here.
-        let step = UInt8::constant(0x04);
-        let mut step_bits = step.to_bits_be()?;
-        bits.append(&mut step_bits);
-
-        // The block number comes in little endian all the way. A reverse will put it into big endian.
-        let mut block_number_bits = self.block_number.clone().to_bits_le();
-
-        block_number_bits.reverse();
-
-        bits.append(&mut block_number_bits);
-
-        // The round number comes in little endian all the way. A reverse will put it into big endian.
-        let mut round_number_bits = self.round_number.clone().to_bits_le();
-
-        round_number_bits.reverse();
-
-        bits.append(&mut round_number_bits);
-
-        // Append the header hash.
-        bits.extend_from_slice(&self.header_hash);
-
-        // Append the public key tree root.
-        bits.extend_from_slice(pk_tree_root);
-
-        // Prepare order of booleans for blake2s (it doesn't expect Big-Endian)!
-        let prepared_bits = reverse_inner_byte_order(&bits);
-
         // Initialize Blake2s parameters.
         let blake2s_parameters = Blake2sWithParameterBlock {
             digest_length: 32,
@@ -120,22 +90,89 @@ impl MacroBlockGadget {
             personalization: [0; 8],
         };
 
+        // Initialize Boolean vector.
+        let mut first_bits = vec![];
+
+        // Append the header hash.
+        first_bits.extend_from_slice(&self.header_hash);
+
+        // Append the public key tree root.
+        first_bits.extend_from_slice(pk_tree_root);
+
+        // Prepare order of booleans for blake2s (it doesn't expect Big-Endian)!
+        let prepared_first_bits = reverse_inner_byte_order(&first_bits);
+
         // Calculate hash using Blake2s.
-        let hash =
-            evaluate_blake2s_with_parameters(&prepared_bits, &blake2s_parameters.parameters())?;
+        let first_hash = evaluate_blake2s_with_parameters(
+            &prepared_first_bits,
+            &blake2s_parameters.parameters(),
+        )?;
 
         // Convert to bits.
-        let mut hash_bits = Vec::new();
+        let mut first_hash_bits = Vec::new();
 
-        for int in &hash {
-            hash_bits.extend(int.to_bits_le());
+        for int in &first_hash {
+            first_hash_bits.extend(int.to_bits_le());
+        }
+
+        // Reverse inner-byte order again.
+        let mut first_hash_bits = reverse_inner_byte_order(&first_hash_bits);
+
+        // Initialize Boolean vector.
+        let mut second_bits = vec![];
+
+        // Add the first byte.
+        let byte = UInt8::constant(0x04);
+
+        let mut bits = byte.to_bits_be()?;
+
+        second_bits.append(&mut bits);
+
+        // The round number comes in little endian all the way. A reverse will put it into big endian.
+        let mut round_number_bits = self.round_number.clone().to_bits_le();
+
+        round_number_bits.reverse();
+
+        second_bits.append(&mut round_number_bits);
+
+        // The block number comes in little endian all the way. A reverse will put it into big endian.
+        let mut block_number_bits = self.block_number.clone().to_bits_le();
+
+        block_number_bits.reverse();
+
+        second_bits.append(&mut block_number_bits);
+
+        // Add another byte.
+        let byte = UInt8::constant(0x01);
+
+        let mut bits = byte.to_bits_be()?;
+
+        second_bits.append(&mut bits);
+
+        // Append the first hash.
+        second_bits.append(&mut first_hash_bits);
+
+        // Prepare order of booleans for blake2s (it doesn't expect Big-Endian)!
+        let prepared_second_bits = reverse_inner_byte_order(&second_bits);
+
+        // Calculate hash using Blake2s.
+        let second_hash = evaluate_blake2s_with_parameters(
+            &prepared_second_bits,
+            &blake2s_parameters.parameters(),
+        )?;
+
+        // Convert to bits.
+        let mut second_hash_bits = Vec::new();
+
+        for int in &second_hash {
+            second_hash_bits.extend(int.to_bits_le());
         }
 
         // At this point the hash does not match the off-circuit one. It has the inner byte order
         // reversed. However we need it like this for the next step.
 
         // Hash-to-curve.
-        let g1_point = HashToCurve::hash_to_g1(cs, &hash_bits)?;
+        let g1_point = HashToCurve::hash_to_g1(cs, &second_hash_bits)?;
 
         Ok(g1_point)
     }
@@ -276,7 +313,7 @@ mod tests {
     use ark_ec::ProjectiveCurve;
     use ark_ff::Zero;
     use ark_mnt4_753::Fr as MNT4Fr;
-    use ark_mnt6_753::constraints::{G1Var, G2Var};
+    use ark_mnt6_753::constraints::G2Var;
     use ark_mnt6_753::{Fr, G1Projective, G2Projective};
     use ark_r1cs_std::prelude::{AllocVar, Boolean};
     use ark_r1cs_std::R1CSVar;
@@ -285,7 +322,6 @@ mod tests {
     use ark_std::{test_rng, UniformRand};
     use rand::RngCore;
 
-    use nimiq_bls::pedersen::pedersen_generators;
     use nimiq_bls::utils::bytes_to_bits;
     use nimiq_nano_primitives::MacroBlock;
     use nimiq_primitives::policy::{SLOTS, TWO_THIRD_SLOTS};
@@ -321,7 +357,7 @@ mod tests {
         };
 
         // Calculate hash using the primitive version.
-        let primitive_hash = block.hash(pk_tree_root.clone());
+        let primitive_hash = block.hash(&pk_tree_root);
 
         // Allocate parameters in the circuit.
         let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
@@ -330,13 +366,8 @@ mod tests {
             Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(bytes_to_bits(&pk_tree_root)))
                 .unwrap();
 
-        let generators_var =
-            Vec::<G1Var>::new_witness(cs.clone(), || Ok(pedersen_generators(3))).unwrap();
-
         // Calculate hash using the gadget version.
-        let gadget_hash = block_var
-            .get_hash(cs, &pk_tree_root_var, &generators_var)
-            .unwrap();
+        let gadget_hash = block_var.get_hash(cs, &pk_tree_root_var).unwrap();
 
         assert_eq!(primitive_hash, gadget_hash.value().unwrap())
     }
@@ -372,7 +403,7 @@ mod tests {
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
         for i in 0..TWO_THIRD_SLOTS as usize {
-            block.sign(sk, i, pk_tree_root.clone());
+            block.sign(&sk, i, &pk_tree_root);
             agg_pk += &pk;
         }
 
@@ -385,12 +416,9 @@ mod tests {
 
         let agg_pk_var = G2Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
 
-        let generators_var =
-            Vec::<G1Var>::new_witness(cs.clone(), || Ok(pedersen_generators(3))).unwrap();
-
         // Verify block.
         assert!(block_var
-            .verify(cs, &pk_tree_root_var, &agg_pk_var, &generators_var)
+            .verify(cs, &pk_tree_root_var, &agg_pk_var)
             .unwrap()
             .value()
             .unwrap());
@@ -427,7 +455,7 @@ mod tests {
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
         for i in 0..TWO_THIRD_SLOTS as usize {
-            block.sign(sk, i, pk_tree_root.clone());
+            block.sign(&sk, i, &pk_tree_root);
             agg_pk += &pk;
         }
 
@@ -443,12 +471,9 @@ mod tests {
 
         let agg_pk_var = G2Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
 
-        let generators_var =
-            Vec::<G1Var>::new_witness(cs.clone(), || Ok(pedersen_generators(3))).unwrap();
-
         // Verify block.
         assert!(!block_var
-            .verify(cs, &pk_tree_root_var, &agg_pk_var, &generators_var)
+            .verify(cs, &pk_tree_root_var, &agg_pk_var)
             .unwrap()
             .value()
             .unwrap());
@@ -485,7 +510,7 @@ mod tests {
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
         for i in 0..TWO_THIRD_SLOTS as usize {
-            block.sign(sk, i, pk_tree_root.clone());
+            block.sign(&sk, i, &pk_tree_root);
             agg_pk += &pk;
         }
 
@@ -501,12 +526,9 @@ mod tests {
 
         let agg_pk_var = G2Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
 
-        let generators_var =
-            Vec::<G1Var>::new_witness(cs.clone(), || Ok(pedersen_generators(3))).unwrap();
-
         // Verify block.
         assert!(!block_var
-            .verify(cs, &pk_tree_root_var, &agg_pk_var, &generators_var)
+            .verify(cs, &pk_tree_root_var, &agg_pk_var)
             .unwrap()
             .value()
             .unwrap());
@@ -543,7 +565,7 @@ mod tests {
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
         for i in 0..TWO_THIRD_SLOTS as usize {
-            block.sign(sk, i, pk_tree_root.clone());
+            block.sign(&sk, i, &pk_tree_root);
             agg_pk += &pk;
         }
 
@@ -561,12 +583,9 @@ mod tests {
 
         let agg_pk_var = G2Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
 
-        let generators_var =
-            Vec::<G1Var>::new_witness(cs.clone(), || Ok(pedersen_generators(3))).unwrap();
-
         // Verify block.
         assert!(!block_var
-            .verify(cs, &pk_tree_root_var, &agg_pk_var, &generators_var)
+            .verify(cs, &pk_tree_root_var, &agg_pk_var)
             .unwrap()
             .value()
             .unwrap());
@@ -603,7 +622,7 @@ mod tests {
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
         for i in 0..TWO_THIRD_SLOTS as usize {
-            block.sign(sk, i, pk_tree_root.clone());
+            block.sign(&sk, i, &pk_tree_root);
             agg_pk += &pk;
         }
 
@@ -619,12 +638,9 @@ mod tests {
 
         let agg_pk_var = G2Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
 
-        let generators_var =
-            Vec::<G1Var>::new_witness(cs.clone(), || Ok(pedersen_generators(3))).unwrap();
-
         // Verify block.
         assert!(!block_var
-            .verify(cs, &pk_tree_root_var, &agg_pk_var, &generators_var)
+            .verify(cs, &pk_tree_root_var, &agg_pk_var)
             .unwrap()
             .value()
             .unwrap());
@@ -661,7 +677,7 @@ mod tests {
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
         for i in 0..TWO_THIRD_SLOTS as usize {
-            block.sign(sk, i, pk_tree_root.clone());
+            block.sign(&sk, i, &pk_tree_root);
             agg_pk += &pk;
         }
 
@@ -679,12 +695,9 @@ mod tests {
 
         let agg_pk_var = G2Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
 
-        let generators_var =
-            Vec::<G1Var>::new_witness(cs.clone(), || Ok(pedersen_generators(3))).unwrap();
-
         // Verify block.
         assert!(!block_var
-            .verify(cs, &pk_tree_root_var, &agg_pk_var, &generators_var)
+            .verify(cs, &pk_tree_root_var, &agg_pk_var)
             .unwrap()
             .value()
             .unwrap());
@@ -721,7 +734,7 @@ mod tests {
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
         for i in 0..TWO_THIRD_SLOTS as usize {
-            block.sign(sk, i, pk_tree_root.clone());
+            block.sign(&sk, i, &pk_tree_root);
             agg_pk += &pk;
         }
 
@@ -737,12 +750,9 @@ mod tests {
 
         let agg_pk_var = G2Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
 
-        let generators_var =
-            Vec::<G1Var>::new_witness(cs.clone(), || Ok(pedersen_generators(3))).unwrap();
-
         // Verify block.
         assert!(!block_var
-            .verify(cs, &pk_tree_root_var, &agg_pk_var, &generators_var)
+            .verify(cs, &pk_tree_root_var, &agg_pk_var)
             .unwrap()
             .value()
             .unwrap());
@@ -779,7 +789,7 @@ mod tests {
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
         for i in 0..TWO_THIRD_SLOTS as usize - 1 {
-            block.sign(sk, i, pk_tree_root.clone());
+            block.sign(&sk, i, &pk_tree_root);
             agg_pk += &pk;
         }
 
@@ -792,12 +802,9 @@ mod tests {
 
         let agg_pk_var = G2Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
 
-        let generators_var =
-            Vec::<G1Var>::new_witness(cs.clone(), || Ok(pedersen_generators(3))).unwrap();
-
         // Verify block.
         assert!(!block_var
-            .verify(cs, &pk_tree_root_var, &agg_pk_var, &generators_var)
+            .verify(cs, &pk_tree_root_var, &agg_pk_var)
             .unwrap()
             .value()
             .unwrap());

@@ -209,12 +209,7 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
 
         // Verifying that the block is valid.
         block_var
-            .verify(
-                cs,
-                &final_pk_tree_root_var,
-                &agg_pk_var,
-                &pedersen_generators_var,
-            )?
+            .verify(cs, &final_pk_tree_root_var, &agg_pk_var)?
             .enforce_equal(&Boolean::constant(true))?;
 
         Ok(())
