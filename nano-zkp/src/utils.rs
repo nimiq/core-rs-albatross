@@ -226,7 +226,7 @@ pub fn create_test_blocks(
 
     for i in 0..SLOTS as usize {
         if signer_bitmap[i] {
-            block.sign(initial_sks[i], i, final_pk_tree_root.clone());
+            block.sign(&initial_sks[i], i, &final_pk_tree_root);
         }
     }
 
