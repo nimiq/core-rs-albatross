@@ -106,7 +106,10 @@ where
         let mut inner = self.inner.write();
 
         match inner.peers.entry(peer.id()) {
-            Entry::Occupied(_) => false,
+            Entry::Occupied(_) => {
+                log::debug!("Entry is already occupied");
+                false
+            }
             Entry::Vacant(vacant) => {
                 vacant.insert(Arc::clone(&peer));
                 inner.notify(NetworkEvent::PeerJoined(peer));
