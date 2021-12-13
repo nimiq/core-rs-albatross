@@ -592,7 +592,9 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
     ) {
         match event {
             HandlerOutEvent::PeerJoined { peer } => {
-                self.peers.insert(Arc::clone(&peer));
+                if !self.peers.insert(Arc::clone(&peer)) {
+                    log::error!("Peer joined but it already exists ");
+                }
                 self.actions
                     .push_back(NetworkBehaviourAction::GenerateEvent(
                         ConnectionPoolEvent::PeerJoined { peer },
