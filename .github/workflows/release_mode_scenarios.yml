@@ -36,7 +36,7 @@ jobs:
         command: build
     - name: Executes the test
       run: |
-          bash scripts/devnet/devnet.sh --validators 10 -R -s 800 -k 0
+          bash scripts/devnet/devnet.sh --validators 5 -R -s 500 -k 0
     - name: Archive test results
       if: always()
       uses: actions/upload-artifact@v2
