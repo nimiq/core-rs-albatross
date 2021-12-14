@@ -592,7 +592,12 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
     ) {
         match event {
             HandlerOutEvent::PeerJoined { peer } => {
-                log::debug!("Peer {:?} joined, inserting it into our map", peer_id);
+                log::trace!("Peer {:?} joined, inserting it into our map", peer_id);
+                {
+                    let mut dispatch = peer.dispatch.lock();
+                    dispatch.remove_all_raw();
+                    dispatch.receive_multiple_raw(self.message_receivers.clone());
+                }
 
                 if !self.peers.insert(Arc::clone(&peer)) {
                     log::error!("Peer joined but it already exists ");
