@@ -104,7 +104,7 @@ impl ViewChangeProof {
                 .iter()
                 .fold(AggregatePublicKey::new(), |mut aggregate, slot| {
                     let pk = validators
-                        .get_validator(slot as u16)
+                        .get_validator_by_slot_number(slot as u16)
                         .voting_key
                         .uncompress()
                         .expect("Failed to uncompress CompressedPublicKey");

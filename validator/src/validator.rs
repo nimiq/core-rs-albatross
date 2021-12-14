@@ -54,7 +54,7 @@ enum ValidatorStakingState {
 }
 
 struct ActiveEpochState {
-    validator_id: u16,
+    validator_slot_band: u16,
 }
 
 struct BlockchainState {
@@ -270,7 +270,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             if validator.address == self.validator_address() {
                 log::debug!("We are active on this epoch");
                 self.epoch_state = Some(ActiveEpochState {
-                    validator_id: i as u16,
+                    validator_slot_band: i as u16,
                 });
                 break;
             }
@@ -338,8 +338,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                     Arc::clone(&self.consensus.blockchain),
                     Arc::clone(&self.network),
                     block_producer,
-                    self.voting_key(),
-                    self.validator_id(),
+                    self.validator_slot_band(),
                     active_validators,
                     next_block_number,
                     next_view_number,
@@ -368,7 +367,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                     Arc::clone(&self.network),
                     self.signing_key(),
                     self.voting_key(),
-                    self.validator_id(),
+                    self.validator_slot_band(),
                     fork_proofs,
                     prev_seed,
                     next_block_number,
@@ -609,11 +608,11 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         }
     }
 
-    pub fn validator_id(&self) -> u16 {
+    pub fn validator_slot_band(&self) -> u16 {
         self.epoch_state
             .as_ref()
             .expect("Validator not active")
-            .validator_id
+            .validator_slot_band
     }
 
     pub fn validator_address(&self) -> Address {

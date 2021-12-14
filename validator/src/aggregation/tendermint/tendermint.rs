@@ -34,7 +34,7 @@ pub struct HandelTendermintAdapter<N: ValidatorNetwork> {
     pending_new_round: Arc<RwLock<Option<u32>>>,
     block_height: u32,
     secret_key: SecretKey,
-    validator_id: u16,
+    validator_slot_band: u16,
     validator_registry: Arc<ValidatorRegistry>,
     network: Arc<N>,
     event_sender: mpsc::Sender<AggregationEvent<N>>,
@@ -46,7 +46,7 @@ where
     <<N as ValidatorNetwork>::PeerType as network_interface::peer::Peer>::Id: 'static,
 {
     pub fn new(
-        validator_id: u16,
+        validator_slot_band: u16,
         active_validators: Validators,
         block_height: u32,
         network: Arc<N>,
@@ -76,7 +76,7 @@ where
         let (event_sender, event_receiver) = mpsc::channel::<AggregationEvent<N>>(1);
 
         let aggregations = TendermintAggregations::new(
-            validator_id,
+            validator_slot_band,
             validator_registry.clone(),
             input,
             event_receiver,
@@ -99,7 +99,7 @@ where
             pending_new_round,
             block_height,
             secret_key,
-            validator_id,
+            validator_slot_band,
             validator_registry,
             network,
             event_sender,
@@ -167,7 +167,7 @@ where
         let own_contribution = TendermintContribution::from_vote(
             vote,
             &self.secret_key,
-            self.validator_registry.get_slots(self.validator_id),
+            self.validator_registry.get_slots(self.validator_slot_band),
         );
 
         let output_sink = Box::new(NetworkSink::<

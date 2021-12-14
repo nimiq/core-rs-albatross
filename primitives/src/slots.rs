@@ -134,8 +134,13 @@ impl Validators {
     }
 
     /// Returns the validator given the slot number.
-    pub fn get_validator(&self, slot: u16) -> &Validator {
-        &self.validators[self.get_band_from_slot(slot) as usize]
+    pub fn get_validator_by_slot_number(&self, slot_number: u16) -> &Validator {
+        &self.validators[self.get_band_from_slot(slot_number) as usize]
+    }
+
+    /// Returns the validator given the slot band.
+    pub fn get_validator_by_slot_band(&self, slot_band: u16) -> &Validator {
+        &self.validators[slot_band as usize]
     }
 
     /// Returns the validator given its address, if it exists.

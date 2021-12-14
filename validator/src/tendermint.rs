@@ -16,7 +16,7 @@ use block::{
 };
 use block_production::BlockProducer;
 use blockchain::{AbstractBlockchain, Blockchain};
-use bls::{KeyPair, PublicKey};
+use bls::PublicKey;
 use hash::{Blake2bHash, Blake2sHash, Hash};
 use nimiq_network_interface::network::MsgAcceptance;
 use nimiq_validator_network::ValidatorNetwork;
@@ -40,14 +40,16 @@ pub struct TendermintInterface<TValidatorNetwork: ValidatorNetwork> {
     pub network: Arc<TValidatorNetwork>,
     // This is used to maintain a network-wide time.
     pub offset_time: OffsetTime,
-    // Necessary to produce blocks.
+    // The slot band for our validator.
+    pub validator_slot_band: u16,
+    // Information relative to our validator that is necessary to produce blocks.
     pub block_producer: BlockProducer,
+    // The validators for the current epoch.
+    pub current_validators: Validators,
     // The main blockchain struct. Contains all of this validator information about the current chain.
     pub blockchain: Arc<RwLock<Blockchain>>,
     // The aggregation adapter allows Tendermint to use Handel functions and networking.
     pub aggregation_adapter: HandelTendermintAdapter<TValidatorNetwork>,
-    // This is the validator's voting key pair.
-    pub validator_key: KeyPair,
     // Just a field to temporarily store a block body. Since the body of a macro block is completely
     // deterministic, our Tendermint proposal only contains the block header. If the validator needs
     // the body, it is supposed for him to calculate it from the header and his current state.
@@ -95,21 +97,25 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
     /// States if it is our turn to be the Tendermint proposer or not.
     fn is_our_turn(&self, round: u32) -> bool {
         let blockchain = self.blockchain.read();
-        // Get the validator slot for this round.
-        let (slot, _) = blockchain
+
+        // Get the validator for this round.
+        let (validator, _) = blockchain
             .get_slot_owner_at(blockchain.block_number() + 1, round, None)
             .expect("Couldn't find slot owner!");
 
-        // Get our public key.
-        let our_public_key = self.validator_key.public_key.compress();
+        // Get our validator.
+        let our_validator = self
+            .current_validators
+            .get_validator_by_slot_band(self.validator_slot_band);
 
-        // Compare the two public keys.
-        slot.voting_key.compressed() == &our_public_key
+        // Check if the addresses match.
+        validator.address == our_validator.address
     }
 
     /// Produces a proposal. Evidently, used when we are the proposer.
     fn get_value(&mut self, round: u32) -> Result<Self::ProposalTy, TendermintError> {
         let blockchain = self.blockchain.read();
+
         // Call the block producer to produce the next macro block (minus the justification, of course).
         let block = self.block_producer.next_macro_block_proposal(
             &blockchain,
@@ -169,26 +175,6 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
         proposal: Self::ProposalTy,
         valid_round: Option<u32>,
     ) -> Result<(), TendermintError> {
-        // Get our validator index.
-        // TODO: This code block gets this validators position in the validators struct by searching it
-        //  with its public key. This is an insane way of doing this. Just start saving the validator
-        //  id somewhere here.
-        let mut validator_index_opt = None;
-        for (i, validator) in self
-            .blockchain
-            .read()
-            .current_validators()
-            .unwrap()
-            .iter()
-            .enumerate()
-        {
-            if validator.voting_key.compressed() == &self.validator_key.public_key.compress() {
-                validator_index_opt = Some(i as u16);
-                break;
-            }
-        }
-        let validator_index = validator_index_opt.ok_or(TendermintError::ProposalBroadcastError)?;
-
         // Create the Tendermint proposal message.
         let proposal_message = TendermintProposal {
             value: proposal,
@@ -199,8 +185,8 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
         // Sign the message with our validator key.
         let signed_proposal = SignedTendermintProposal::from_message(
             proposal_message,
-            &self.validator_key.secret_key,
-            validator_index,
+            &self.block_producer.voting_key.secret_key,
+            self.validator_slot_band,
         );
 
         // Broadcast the signed proposal to the network.
@@ -221,28 +207,32 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
         &mut self,
         round: u32,
     ) -> Result<ProposalResult<Self::ProposalTy>, TendermintError> {
-        let (timeout, validator_id, voting_key, signing_key, expected_height) = {
+        let (
+            timeout,
+            proposer_slot_band,
+            proposer_voting_key,
+            proposer_signing_key,
+            expected_height,
+        ) = {
             let blockchain = self.blockchain.read();
 
             // Get the blockchain height.
             let expected_height = blockchain.block_number() + 1;
 
             // Get the proposer's slot and slot number for this round.
-            let (slot, slot_number) = blockchain
+            let (proposer, proposer_slot_number) = blockchain
                 .get_slot_owner_at(expected_height, round, None)
                 .expect("Couldn't find slot owner!");
 
-            // Calculate the validator slot band from the slot number.
-            // TODO: Again, just redo this. We shouldn't be using slot bands. Validator ID is a much better
-            //  field.
-            let validator_id = blockchain
+            // Calculate the proposer's slot band from the slot number.
+            let proposer_slot_band = blockchain
                 .current_validators()
                 .unwrap()
-                .get_band_from_slot(slot_number);
+                .get_band_from_slot(proposer_slot_number);
 
             // Get the validator keys.
-            let voting_key = *slot.voting_key.uncompress_unchecked();
-            let signing_key = slot.signing_key;
+            let proposer_voting_key = *proposer.voting_key.uncompress_unchecked();
+            let proposer_signing_key = proposer.signing_key;
 
             // Calculate the timeout duration.
             let timeout = Duration::from_millis(
@@ -253,15 +243,15 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
                 "Awaiting proposal for {}.{}, expected producer: {}, timeout: {:?}",
                 blockchain.block_number() + 1,
                 &round,
-                &validator_id,
+                &proposer_slot_band,
                 &timeout
             );
 
             (
                 timeout,
-                validator_id,
-                voting_key,
-                signing_key,
+                proposer_slot_band,
+                proposer_voting_key,
+                proposer_signing_key,
                 expected_height,
             )
         };
@@ -269,7 +259,12 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
         // This waits for a proposal from the proposer until it timeouts.
         let await_res = tokio::time::timeout(
             timeout,
-            self.await_proposal_loop(validator_id, &voting_key, expected_height, round),
+            self.await_proposal_loop(
+                proposer_slot_band,
+                &proposer_voting_key,
+                expected_height,
+                round,
+            ),
         )
         .await;
 
@@ -299,7 +294,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
 
                 valid_round_slot.signing_key
             } else {
-                signing_key
+                proposer_signing_key
             };
 
             // Check the validity of the block header. If it is invalid, we return a proposal timeout
@@ -434,7 +429,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintInterface<TValidat
     /// valid signature. It is just a helper function for the await_proposal function in this file.
     async fn await_proposal_loop(
         &mut self,
-        validator_id: u16,
+        validator_slot_band: u16,
         validator_key: &PublicKey,
         expected_height: u32,
         expected_round: u32,
@@ -451,7 +446,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintInterface<TValidat
                     "Received Proposal for block #{}.{} from validator {} ",
                     &msg.message.value.block_number, &msg.message.round, &msg.signer_idx,
                 );
-                if validator_id == msg.signer_idx {
+                if validator_slot_band == msg.signer_idx {
                     if msg.verify(validator_key) {
                         return (msg.message, id);
                     } else {
@@ -460,7 +455,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintInterface<TValidat
                 } else {
                     debug!(
                         "Tendermint - await_proposal: Invalid validator id. Expected {}, found {}",
-                        validator_id, msg.signer_idx
+                        validator_slot_band, msg.signer_idx
                     );
                 }
             }
@@ -472,8 +467,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintInterface<TValidat
     }
 
     pub fn new(
-        voting_key: KeyPair,
-        validator_id: u16,
+        validator_slot_band: u16,
         active_validators: Validators,
         block_height: u32,
         network: Arc<TValidatorNetwork>,
@@ -490,21 +484,22 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintInterface<TValidat
     ) -> Self {
         // Create the aggregation object.
         let aggregation_adapter = HandelTendermintAdapter::new(
-            validator_id,
-            active_validators,
+            validator_slot_band,
+            active_validators.clone(),
             block_height,
             network.clone(),
-            voting_key.secret_key,
+            block_producer.voting_key.secret_key,
         );
 
         // Create the instance and return it.
         Self {
             network,
             offset_time: OffsetTime::default(),
+            validator_slot_band,
             block_producer,
+            current_validators: active_validators,
             blockchain,
             aggregation_adapter,
-            validator_key: voting_key,
             cache_body: None,
             proposal_stream,
             initial_round,

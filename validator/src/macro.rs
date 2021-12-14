@@ -67,8 +67,7 @@ impl ProduceMacroBlock {
         blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<TValidatorNetwork>,
         block_producer: BlockProducer,
-        voting_key: bls::KeyPair, // probably SecretKey is enough (it is for the handel part of it).
-        validator_id: u16,
+        validator_slot_band: u16,
         active_validators: Validators,
         block_height: u32,
         initial_round: u32,
@@ -84,8 +83,7 @@ impl ProduceMacroBlock {
         // create the TendermintOutsideDeps instance
         // Replace here with the actual OutSide Deps instead of the Mocked ones.
         let deps = TendermintInterface::new(
-            voting_key,
-            validator_id,
+            validator_slot_band,
             active_validators,
             block_height,
             network,
