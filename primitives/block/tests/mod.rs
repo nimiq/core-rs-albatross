@@ -99,6 +99,7 @@ fn it_can_convert_macro_block_into_slots() {
         justification: None,
         body: Some(MacroBody {
             validators: Some(validator_slots.clone()),
+            pk_tree_root: None,
             lost_reward_set: BitSet::new(),
             disabled_set: BitSet::new(),
         }),

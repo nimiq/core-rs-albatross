@@ -60,10 +60,15 @@ pub struct MacroHeader {
 /// The struct representing the body of a Macro block (can be either checkpoint or election).
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MacroBody {
-    /// Contains all the information regarding the current validator set, i.e. their validator
+    /// Contains all the information regarding the next validator set, i.e. their validator
     /// public key, their reward address and their assigned validator slots.
     /// Is only Some when the macro block is an election block.
     pub validators: Option<Validators>,
+    /// The root of a special Merkle tree over the next validator's voting keys. It is necessary to
+    /// verify the zero-knowledge proofs used in the nano-sync.
+    /// Is only Some when the macro block is an election block.
+    #[beserial(len_type(u8, limit = 96))]
+    pub pk_tree_root: Option<Vec<u8>>,
     /// A bitset representing which validator slots had their reward slashed at the time when this
     /// block was produced. It is used later on for reward distribution.
     pub lost_reward_set: BitSet,
@@ -100,15 +105,8 @@ impl MacroBlock {
         let mut message = self.hash().serialize_to_vec();
 
         if let Some(validators) = self.get_validators() {
-            // Get the public keys.
-            let public_keys = validators
-                .voting_keys()
-                .iter()
-                .map(|pk| pk.public_key)
-                .collect();
-
             // Create the tree.
-            let mut pk_tree_root = pk_tree_construct(public_keys);
+            let mut pk_tree_root = MacroBlock::pk_tree_root(&validators);
 
             // Add it to the message.
             message.append(&mut pk_tree_root);
@@ -116,6 +114,19 @@ impl MacroBlock {
 
         // Return the final hash.
         message.hash()
+    }
+
+    /// Calculates the PKTree root from the given validators.
+    pub fn pk_tree_root(validators: &Validators) -> Vec<u8> {
+        // Get the public keys.
+        let public_keys = validators
+            .voting_keys()
+            .iter()
+            .map(|pk| pk.public_key)
+            .collect();
+
+        // Create the tree
+        pk_tree_construct(public_keys)
     }
 
     /// Returns whether or not this macro block is an election block.
