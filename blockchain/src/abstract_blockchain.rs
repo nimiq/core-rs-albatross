@@ -169,7 +169,7 @@ pub trait AbstractBlockchain {
         };
 
         // Finally get the correct validator.
-        let validator = validators.get_validator(slot_number).clone();
+        let validator = validators.get_validator_by_slot_number(slot_number).clone();
 
         Some((validator, slot_number))
     }

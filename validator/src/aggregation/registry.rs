@@ -32,7 +32,7 @@ impl IdentityRegistry for ValidatorRegistry {
     fn public_key(&self, slot_number: usize) -> Option<PublicKey> {
         self.validators
             // Get the validator for with id
-            .get_validator(slot_number as u16)
+            .get_validator_by_slot_number(slot_number as u16)
             // Get the public key for this validator
             .voting_key
             // and uncompress it

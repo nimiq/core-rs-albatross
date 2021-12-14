@@ -297,7 +297,7 @@ impl ViewChangeAggregation {
                             for signer in sig.signers.iter() {
                                 aggregated_public_key.aggregate(
                                     &active_validators
-                                        .get_validator(signer as u16)
+                                        .get_validator_by_slot_number(signer as u16)
                                         .voting_key
                                         .uncompress()
                                         .expect("Could not uncompress lazyPublicKey"),

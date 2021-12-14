@@ -175,10 +175,10 @@ async fn validator_can_catch_up() {
     let (validator, nw) = {
         let validator = validator_for_slot(&mut validators, 1, 0);
         validator.consensus.network.disconnect();
-        let id1 = validator.validator_id();
+        let id1 = validator.validator_slot_band();
         let validator = validator_for_slot(&mut validators, 1, 1);
         validator.consensus.network.disconnect();
-        let id2 = validator.validator_id();
+        let id2 = validator.validator_slot_band();
         assert_ne!(id2, id1);
 
         // ideally we would remove the validators from the vec for them to not even execute.
@@ -190,8 +190,8 @@ async fn validator_can_catch_up() {
 
         let validator = validator_for_slot(&validators, 1, 2);
         validator.consensus.network.disconnect();
-        assert_ne!(id1, validator.validator_id());
-        assert_ne!(id2, validator.validator_id());
+        assert_ne!(id1, validator.validator_slot_band());
+        assert_ne!(id2, validator.validator_slot_band());
         (validator, validator.consensus.network.clone())
     };
     // assert_eq!(validators.len(), 7);
@@ -201,7 +201,7 @@ async fn validator_can_catch_up() {
     let mut events = blockchain.write().notifier.as_stream();
 
     let (start, end) = blockchain.read().current_validators().unwrap().validators
-        [validator.validator_id() as usize]
+        [validator.validator_slot_band() as usize]
         .slot_range;
 
     let slots = (start..end).collect();
@@ -212,7 +212,7 @@ async fn validator_can_catch_up() {
         1,
         blockchain.read().head().seed().clone(),
         validator.voting_key(),
-        validator.validator_id(),
+        validator.validator_slot_band(),
         &slots,
     );
 
