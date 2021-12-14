@@ -586,12 +586,14 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
 
     fn inject_event(
         &mut self,
-        _peer_id: PeerId,
+        peer_id: PeerId,
         _connection: ConnectionId,
         event: <<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::OutEvent,
     ) {
         match event {
             HandlerOutEvent::PeerJoined { peer } => {
+                log::debug!("Peer {:?} joined, inserting it into our map", peer_id);
+
                 if !self.peers.insert(Arc::clone(&peer)) {
                     log::error!("Peer joined but it already exists ");
                 }
