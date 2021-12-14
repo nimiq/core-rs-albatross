@@ -315,6 +315,11 @@ where
         self.channels.extend(receive_from_all);
     }
 
+    pub fn remove_all_raw(&mut self) {
+        // Clear the channel hash map
+        self.channels.clear();
+    }
+
     /// remove a receiver for the peer
     pub fn remove_receiver_raw(&mut self, type_id: MessageType) {
         self.channels.remove(&type_id);
