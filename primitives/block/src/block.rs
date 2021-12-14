@@ -482,6 +482,42 @@ impl BlockHeader {
             BlockHeader::Micro(ref header) => header.hash(),
         }
     }
+
+    /// Unwraps the header and returns a reference to the underlying Macro header.
+    pub fn unwrap_macro_ref(&self) -> &MacroHeader {
+        if let BlockHeader::Macro(ref header) = self {
+            header
+        } else {
+            unreachable!()
+        }
+    }
+
+    /// Unwraps the header and returns a reference to the underlying Micro header.
+    pub fn unwrap_micro_ref(&self) -> &MicroHeader {
+        if let BlockHeader::Micro(ref header) = self {
+            header
+        } else {
+            unreachable!()
+        }
+    }
+
+    /// Unwraps the header and returns the underlying Macro header.
+    pub fn unwrap_macro(self) -> MacroHeader {
+        if let BlockHeader::Macro(header) = self {
+            header
+        } else {
+            unreachable!()
+        }
+    }
+
+    /// Unwraps the header and returns the underlying Micro header.
+    pub fn unwrap_micro(self) -> MicroHeader {
+        if let BlockHeader::Micro(header) = self {
+            header
+        } else {
+            unreachable!()
+        }
+    }
 }
 
 impl Hash for BlockHeader {}

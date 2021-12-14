@@ -2,13 +2,14 @@ use std::cmp::Ordering;
 
 use beserial::Serialize;
 use nimiq_block::{
-    Block, BlockBody, BlockError, BlockHeader, BlockType, ForkProof, MacroBody, TendermintProof,
-    ViewChange,
+    Block, BlockBody, BlockError, BlockHeader, BlockType, ForkProof, MacroBlock, MacroBody,
+    TendermintProof, ViewChange,
 };
 use nimiq_database::Transaction as DBtx;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::PublicKey as SchnorrPublicKey;
 use nimiq_primitives::policy;
+
 use nimiq_transaction::Transaction;
 
 use crate::blockchain_state::BlockchainState;
@@ -308,11 +309,25 @@ impl Blockchain {
                     return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
                 }
 
-                // In case of an election block make sure it contains validators, if it is not an
-                // election block make sure it doesn't.
-                if policy::is_election_block_at(header.block_number()) != body.validators.is_some()
-                {
+                // In case of an election block make sure it contains validators and pk_tree_root,
+                // if it is not an election block make sure it doesn't contain either.
+                let is_election = policy::is_election_block_at(header.block_number());
+
+                if is_election != body.validators.is_some() {
                     return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
+                }
+
+                if is_election != body.pk_tree_root.is_some() {
+                    return Err(PushError::InvalidBlock(BlockError::InvalidPkTreeRoot));
+                }
+
+                // If this is an election block, check if the pk_tree_root matches the validators.
+                if is_election {
+                    let pk_tree_root = MacroBlock::pk_tree_root(body.validators.as_ref().unwrap());
+
+                    if &pk_tree_root != body.pk_tree_root.as_ref().unwrap() {
+                        return Err(PushError::InvalidBlock(BlockError::InvalidPkTreeRoot));
+                    }
                 }
             }
         }
@@ -397,11 +412,19 @@ impl Blockchain {
                     warn!("Rejecting block - Validators don't match real validators");
                     return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
                 }
+
+                // We don't need to check the nano_zkp_hash here since it was already checked in the
+                // `verify_block_body` method.
             } else {
                 // If we were not given a body, then we construct a body from our values and check
                 // its hash against the block header.
+                let real_pk_tree_root = real_validators
+                    .as_ref()
+                    .map(|v| MacroBlock::pk_tree_root(v));
+
                 let real_body = MacroBody {
                     validators: real_validators,
+                    pk_tree_root: real_pk_tree_root,
                     lost_reward_set: real_lost_rewards,
                     disabled_set: real_disabled_slots,
                 };

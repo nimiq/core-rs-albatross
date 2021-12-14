@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use beserial::Serialize;
 use futures::{
     future::{BoxFuture, FutureExt},
     stream::{BoxStream, StreamExt},
@@ -53,9 +54,6 @@ pub struct TendermintInterface<TValidatorNetwork: ValidatorNetwork> {
     // However, calculating the body is an expensive operation. To avoid having to calculate the
     // body several times, we can cache it here.
     pub cache_body: Option<MacroBody>,
-    // Just like above, calculating the block hash (at least the `nano_zkp_hash`) is an expensive
-    // operation. So we cache it here to avoid recalculation.
-    pub cache_hash: Option<Blake2sHash>,
 
     proposal_stream: BoxStream<
         'static,
@@ -121,7 +119,6 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
         );
 
         // Cache the block body and hash for future use.
-        self.cache_hash = Some(block.nano_zkp_hash());
         self.cache_body = block.body;
 
         // Return the block header as the proposal.
@@ -349,15 +346,6 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
                     let block_state = blockchain.verify_block_state(state, &block, Some(&txn));
 
                     if let Ok(body) = block_state {
-                        // Calculate and cache the block hash.
-                        let macro_block = MacroBlock {
-                            header: header.clone(),
-                            body: body.clone(),
-                            justification: None,
-                        };
-
-                        self.cache_hash = Some(macro_block.nano_zkp_hash());
-
                         // Cache the body that we calculated.
                         self.cache_body = body;
                     } else if let Err(err) = block_state {
@@ -418,11 +406,22 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
         self.aggregation_adapter.get_aggregate(round, step)
     }
 
-    /// Simply fetches the cached proposal hash.
-    fn hash_proposal(&self, _proposal: Self::ProposalTy) -> Self::ProposalHashTy {
-        self.cache_hash
-            .clone()
-            .expect("Tried to fetch a non-existing proposal hash. This shouldn't happen!")
+    /// Calculates the nano_zkp_hash used as the proposal hash, but for performance reasons we fetch
+    /// the pk_tree_root from the already cached block body.
+    fn hash_proposal(&self, proposal: Self::ProposalTy) -> Self::ProposalHashTy {
+        // Calculate the header hash.
+        let mut message = proposal.hash::<Blake2bHash>().serialize_to_vec();
+
+        // Fetch the pk_tree_root.
+        let pk_tree_root = self.cache_body.as_ref().unwrap().pk_tree_root.clone();
+
+        // If it is Some, add its contents to the message.
+        if let Some(mut bytes) = pk_tree_root {
+            message.append(&mut bytes);
+        }
+
+        // Return the final hash.
+        message.hash::<Blake2sHash>()
     }
 
     fn get_background_task(&mut self) -> BoxFuture<'static, ()> {
@@ -507,7 +506,6 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintInterface<TValidat
             aggregation_adapter,
             validator_key: voting_key,
             cache_body: None,
-            cache_hash: None,
             proposal_stream,
             initial_round,
         }
