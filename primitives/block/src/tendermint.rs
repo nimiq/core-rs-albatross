@@ -3,7 +3,7 @@ use std::io;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_bls::AggregatePublicKey;
-use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, SerializeContent};
+use nimiq_hash::{Blake2sHash, Hash, SerializeContent};
 use nimiq_hash_derive::SerializeContent;
 use nimiq_primitives::policy::TWO_THIRD_SLOTS;
 use nimiq_primitives::slots::Validators;
@@ -159,25 +159,8 @@ impl SerializeContent for TendermintVote {
         // serialize the block number
         size += self.id.block_number.serialize(writer)?;
 
-        // For the hash, make sure that if the Option is None the byte length stays the same, just filled with 0s.
-        // Also have a byte to indicate if it is a None or a Some.
-        match &self.proposal_hash {
-            Some(hash) => {
-                size += true.serialize(writer)?;
-
-                size += hash.serialize(writer)?;
-            }
-            None => {
-                size += false.serialize(writer)?;
-
-                let zero_bytes: Vec<u8> = vec![0u8, Blake2bHash::SIZE as u8];
-                writer.write_all(zero_bytes.as_slice())?;
-                size += Blake2bHash::SIZE;
-            }
-        };
-
-        // Finally attempt to flush
-        writer.flush()?;
+        // serialize the proposal hash
+        size += self.proposal_hash.serialize(writer)?;
 
         // And return the size
         Ok(size)
