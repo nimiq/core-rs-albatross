@@ -306,6 +306,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         let head = blockchain.head();
         let next_block_number = head.block_number() + 1;
         let next_view_number = head.next_view_number();
+        let block_producer = BlockProducer::new(self.signing_key(), self.voting_key());
 
         log::debug!(
             "Initializing block producer for #{}.{}",
@@ -318,7 +319,6 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
 
         match blockchain.get_next_block_type(None) {
             BlockType::Macro => {
-                let block_producer = BlockProducer::new(self.signing_key(), self.voting_key());
                 let active_validators = blockchain.current_validators().unwrap();
 
                 // Take the current state and see if it is applicable to the current height.
@@ -365,8 +365,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                     Arc::clone(&self.consensus.blockchain),
                     Arc::clone(&self.mempool),
                     Arc::clone(&self.network),
-                    self.signing_key(),
-                    self.voting_key(),
+                    block_producer,
                     self.validator_slot_band(),
                     fork_proofs,
                     prev_seed,

@@ -13,10 +13,6 @@ use block_production::BlockProducer;
 use blockchain::{AbstractBlockchain, Blockchain, PushResult};
 use mempool::mempool::Mempool;
 
-use nimiq_bls::KeyPair as BlsKeyPair;
-
-use nimiq_keys::KeyPair as SchnorrKeyPair;
-
 use nimiq_primitives::slots::Validators;
 
 use nimiq_validator_network::ValidatorNetwork;
@@ -38,9 +34,8 @@ struct NextProduceMicroBlockEvent<TValidatorNetwork> {
     blockchain: Arc<RwLock<Blockchain>>,
     mempool: Arc<Mempool>,
     network: Arc<TValidatorNetwork>,
-    signing_key: SchnorrKeyPair,
-    voting_key: BlsKeyPair,
-    validator_id: u16,
+    block_producer: BlockProducer,
+    validator_slot_band: u16,
     fork_proofs: Vec<ForkProof>,
     prev_seed: VrfSeed,
     block_number: u32,
@@ -58,9 +53,8 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         blockchain: Arc<RwLock<Blockchain>>,
         mempool: Arc<Mempool>,
         network: Arc<TValidatorNetwork>,
-        signing_key: SchnorrKeyPair,
-        voting_key: BlsKeyPair,
-        validator_id: u16,
+        block_producer: BlockProducer,
+        validator_slot_band: u16,
         fork_proofs: Vec<ForkProof>,
         prev_seed: VrfSeed,
         block_number: u32,
@@ -73,9 +67,8 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             blockchain,
             mempool,
             network,
-            signing_key,
-            voting_key,
-            validator_id,
+            block_producer,
+            validator_slot_band,
             fork_proofs,
             prev_seed,
             block_number,
@@ -107,7 +100,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             } else if self.is_our_turn(&*blockchain) {
                 info!(
                     "[{}] Our turn at #{}:{}, producing micro block",
-                    self.validator_id, self.block_number, self.view_number
+                    self.validator_slot_band, self.block_number, self.view_number
                 );
 
                 let block = self.produce_micro_block(&*blockchain);
@@ -150,7 +143,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
 
         debug!(
             "[{}] Not our turn at #{}:{}, waiting for micro block",
-            self.validator_id, self.block_number, self.view_number
+            self.validator_slot_band, self.block_number, self.view_number
         );
         time::sleep(self.view_change_delay).await;
         info!(
@@ -195,13 +188,10 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             }
         };
 
-        self.signing_key.public == slot.signing_key
+        self.block_producer.signing_key.public == slot.signing_key
     }
 
     fn produce_micro_block(&self, blockchain: &Blockchain) -> MicroBlock {
-        // TODO: Pass keys by reference
-        let producer = BlockProducer::new(self.signing_key.clone(), self.voting_key.clone());
-
         let timestamp = u64::max(
             blockchain.timestamp(),
             systemtime_to_timestamp(SystemTime::now()),
@@ -211,7 +201,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             .mempool
             .get_transactions_for_block(MicroBlock::get_available_bytes(self.fork_proofs.len()));
 
-        producer.next_micro_block(
+        self.block_producer.next_micro_block(
             blockchain,
             timestamp,
             self.view_number,
@@ -245,8 +235,8 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         let (view_change, view_change_proof) = ViewChangeAggregation::start(
             view_change.clone(),
             view_change_proof,
-            self.voting_key.clone(),
-            self.validator_id,
+            self.block_producer.voting_key.clone(),
+            self.validator_slot_band,
             active_validators,
             Arc::clone(&self.network),
         )
@@ -281,9 +271,8 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProduceMicroBlock<TValidator
         blockchain: Arc<RwLock<Blockchain>>,
         mempool: Arc<Mempool>,
         network: Arc<TValidatorNetwork>,
-        signing_key: SchnorrKeyPair,
-        voting_key: BlsKeyPair,
-        validator_id: u16,
+        block_producer: BlockProducer,
+        validator_slot_band: u16,
         fork_proofs: Vec<ForkProof>,
         prev_seed: VrfSeed,
         block_number: u32,
@@ -296,9 +285,8 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> ProduceMicroBlock<TValidator
             blockchain,
             mempool,
             network,
-            signing_key,
-            voting_key,
-            validator_id,
+            block_producer,
+            validator_slot_band,
             fork_proofs,
             prev_seed,
             block_number,

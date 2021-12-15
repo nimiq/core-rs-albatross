@@ -12,6 +12,7 @@ use nimiq_transaction::Transaction;
 
 /// Struct that contains all necessary information to actually produce blocks.
 /// It has the validator keys for this validator.
+#[derive(Clone)]
 pub struct BlockProducer {
     pub signing_key: SchnorrKeyPair,
     pub voting_key: BlsKeyPair,
