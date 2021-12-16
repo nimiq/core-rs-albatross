@@ -142,12 +142,12 @@ impl<N: ValidatorNetwork + 'static> BackgroundTask<N> {
         };
 
         // Only reply if it is the correct aggregation and the contribution is actionable.
-        // Actionable here means everything with voter_weight > 2f+1 is potentially actionable.
+        // Actionable here means everything with voter_weight >= 2f+1 is potentially actionable.
         // On the receiving end of this channel is a timeout, which will wait (if necessary) for
         // better results but will, if nothing better is made available also return this aggregate.
         if current_aggregation.round == round
             && current_aggregation.step == step
-            && self.signature_weight(&contribution) > policy::TWO_THIRD_SLOTS as usize
+            && self.signature_weight(&contribution) >= policy::TWO_F_PLUS_ONE as usize
         {
             trace!(
                 "Completed round for {}-{:?}: {:?}",

@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use beserial::Serialize;
 use futures::{FutureExt, StreamExt};
 use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
-use nimiq_primitives::policy::{SLOTS, TWO_THIRD_SLOTS};
+use nimiq_primitives::policy::{SLOTS, TWO_F_PLUS_ONE};
 use nimiq_tendermint::*;
 use std::collections::BTreeMap;
 use std::io;
@@ -341,7 +341,7 @@ async fn not_enough_prevotes() {
             (false, TestProposal('A', 0), None),
             (false, TestProposal('A', 1), None),
         ],
-        agg_prevote_rounds: vec![(false, TWO_THIRD_SLOTS - 1, 0, 0), (false, SLOTS, 0, 0)],
+        agg_prevote_rounds: vec![(false, TWO_F_PLUS_ONE - 1, 0, 0), (false, SLOTS, 0, 0)],
         agg_precommit_rounds: vec![(false, 0, 0, SLOTS), (false, SLOTS, 0, 0)],
         get_agg_rounds: vec![],
     };
@@ -361,7 +361,7 @@ async fn not_enough_precommits() {
             (false, TestProposal('A', 1), None),
         ],
         agg_prevote_rounds: vec![(false, SLOTS, 0, 0), (false, SLOTS, 0, 0)],
-        agg_precommit_rounds: vec![(false, TWO_THIRD_SLOTS - 1, 0, 0), (false, SLOTS, 0, 0)],
+        agg_precommit_rounds: vec![(false, TWO_F_PLUS_ONE - 1, 0, 0), (false, SLOTS, 0, 0)],
         get_agg_rounds: vec![],
     };
 

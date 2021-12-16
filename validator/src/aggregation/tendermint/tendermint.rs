@@ -259,7 +259,7 @@ where
 
                     // iterate all proposals present in this contribution
                     for (proposal, (_, weight)) in map.iter() {
-                        if *weight > policy::TWO_THIRD_SLOTS as usize {
+                        if *weight >= policy::TWO_F_PLUS_ONE as usize {
                             if step == TendermintStep::PreCommit {
                                 // PreCommit Aggreations are never requested again, so the aggregation can be canceled.
                                 self.event_sender
@@ -283,7 +283,7 @@ where
                     }
 
                     // combined weight of all proposals excluding the one this node signed reached 2f+1
-                    if combined_weight > policy::TWO_THIRD_SLOTS as usize {
+                    if combined_weight >= policy::TWO_F_PLUS_ONE as usize {
                         if step == TendermintStep::PreCommit {
                             // PreCommit Aggreations are never requested again, so the aggregation can be canceled.
                             self.event_sender

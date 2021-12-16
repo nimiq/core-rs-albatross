@@ -1,7 +1,7 @@
 use crate::state::TendermintState;
 use crate::{ProofTrait, ProposalHashTrait, ProposalTrait, ResultTrait};
 use nimiq_block::TendermintStep;
-use nimiq_primitives::policy::TWO_THIRD_SLOTS;
+use nimiq_primitives::policy::TWO_F_PLUS_ONE;
 use std::collections::BTreeMap;
 use thiserror::Error;
 
@@ -132,7 +132,7 @@ pub(crate) fn aggregation_to_vote<ProposalHashTy: ProposalHashTrait, ProofTy: Pr
         // If we got an aggregation we need to handle it.
         AggregationResult::Aggregation(agg) => {
             if proposal_hash.is_some()
-                && agg.get(&proposal_hash).map_or(0, |x| x.1) >= TWO_THIRD_SLOTS as usize
+                && agg.get(&proposal_hash).map_or(0, |x| x.1) >= TWO_F_PLUS_ONE as usize
             {
                 log::debug!(
                     "Aggregate: {:#?}\nCurrent proposal {:?} has {} votes",
@@ -143,7 +143,7 @@ pub(crate) fn aggregation_to_vote<ProposalHashTy: ProposalHashTrait, ProofTy: Pr
                 // If we received 2f+1 votes for the current (assuming that it isn't None), then we
                 // must return Block.
                 VoteResult::Block(agg.get(&proposal_hash).cloned().unwrap().0)
-            } else if agg.get(&None).map_or(0, |x| x.1) >= TWO_THIRD_SLOTS as usize {
+            } else if agg.get(&None).map_or(0, |x| x.1) >= TWO_F_PLUS_ONE as usize {
                 log::debug!(
                     "Aggregate: {:#?}\nNil has {} votes",
                     &agg,
@@ -186,5 +186,5 @@ pub(crate) fn has_2f1_votes<ProposalHashTy: ProposalHashTrait, ProofTy: ProofTra
         &prop_opt,
         agg.get(&prop_opt).map_or(0, |x| x.1),
     );
-    agg.get(&prop_opt).map_or(0, |x| x.1) >= TWO_THIRD_SLOTS as usize
+    agg.get(&prop_opt).map_or(0, |x| x.1) >= TWO_F_PLUS_ONE as usize
 }

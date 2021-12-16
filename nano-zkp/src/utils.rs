@@ -13,7 +13,7 @@ use rand::rngs::SmallRng;
 use rand::{RngCore, SeedableRng};
 
 use nimiq_nano_primitives::{pk_tree_construct, state_commitment, MacroBlock};
-use nimiq_primitives::policy::{EPOCH_LENGTH, SLOTS, TWO_THIRD_SLOTS};
+use nimiq_primitives::policy::{EPOCH_LENGTH, SLOTS, TWO_F_PLUS_ONE};
 
 /// Takes a vector of booleans and converts it into a vector of field elements, which is the way we
 /// represent inputs to circuits (natively).
@@ -190,9 +190,9 @@ pub fn create_test_blocks(
     rng.fill_bytes(&mut initial_header_hash);
 
     // Create a random signer bitmap.
-    let mut signer_bitmap = vec![true; TWO_THIRD_SLOTS as usize];
+    let mut signer_bitmap = vec![true; TWO_F_PLUS_ONE as usize];
 
-    signer_bitmap.append(&mut vec![false; (SLOTS - TWO_THIRD_SLOTS) as usize]);
+    signer_bitmap.append(&mut vec![false; (SLOTS - TWO_F_PLUS_ONE) as usize]);
 
     signer_bitmap.shuffle(&mut rng);
 

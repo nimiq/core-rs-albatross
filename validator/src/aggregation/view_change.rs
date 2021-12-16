@@ -258,7 +258,7 @@ impl ViewChangeAggregation {
             let protocol = ViewChangeAggregationProtocol::new(
                 active_validators.clone(),
                 validator_id as usize,
-                policy::TWO_THIRD_SLOTS as usize,
+                policy::TWO_F_PLUS_ONE as usize,
                 message_hash,
             );
 
@@ -327,12 +327,12 @@ impl ViewChangeAggregation {
                             trace!(
                                 "New View Change Aggregate weight: {} / {} Signers: {:?}",
                                 aggregate_weight,
-                                policy::TWO_THIRD_SLOTS,
+                                policy::TWO_F_PLUS_ONE,
                                 &vc.view_change.contributors(),
                             );
 
-                            // Check if the combined weight of the aggregation is above the Two_THIRD_SLOTS threshold.
-                            if aggregate_weight > policy::TWO_THIRD_SLOTS as usize {
+                            // Check if the combined weight of the aggregation is at least 2f+1.
+                            if aggregate_weight >= policy::TWO_F_PLUS_ONE as usize {
                                 // Create ViewChangeProof out of the aggregate
                                 let view_change_proof = ViewChangeProof {
                                     sig: vc.view_change,

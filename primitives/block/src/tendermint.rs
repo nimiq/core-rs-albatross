@@ -5,7 +5,7 @@ use beserial::{Deserialize, Serialize};
 use nimiq_bls::AggregatePublicKey;
 use nimiq_hash::{Blake2sHash, Hash, SerializeContent};
 use nimiq_hash_derive::SerializeContent;
-use nimiq_primitives::policy::TWO_THIRD_SLOTS;
+use nimiq_primitives::policy::TWO_F_PLUS_ONE;
 use nimiq_primitives::slots::Validators;
 
 use crate::signed::{
@@ -60,7 +60,7 @@ impl TendermintProof {
         };
 
         // Check if there are enough votes.
-        if justification.votes() < TWO_THIRD_SLOTS {
+        if justification.votes() < TWO_F_PLUS_ONE {
             error!("Invalid justification - not enough votes!");
             return false;
         }

@@ -114,7 +114,7 @@ pub fn sign_macro_block(
 
     // Create signers Bitset.
     let mut signers = BitSet::new();
-    for i in 0..policy::TWO_THIRD_SLOTS {
+    for i in 0..policy::TWO_F_PLUS_ONE {
         signers.insert(i as usize);
     }
 
@@ -122,7 +122,7 @@ pub fn sign_macro_block(
     let multisig = MultiSignature {
         signature: AggregateSignature::from_signatures(&*vec![
             signed_precommit;
-            policy::TWO_THIRD_SLOTS as usize
+            policy::TWO_F_PLUS_ONE as usize
         ]),
         signers,
     };
@@ -159,7 +159,7 @@ pub fn sign_view_change(
 
     // Create signers Bitset.
     let mut signers = BitSet::new();
-    for i in 0..policy::TWO_THIRD_SLOTS {
+    for i in 0..policy::TWO_F_PLUS_ONE {
         signers.insert(i as usize);
     }
 
@@ -167,7 +167,7 @@ pub fn sign_view_change(
     let multisig = MultiSignature {
         signature: AggregateSignature::from_signatures(&*vec![
             signed_view_change;
-            policy::TWO_THIRD_SLOTS as usize
+            policy::TWO_F_PLUS_ONE as usize
         ]),
         signers,
     };

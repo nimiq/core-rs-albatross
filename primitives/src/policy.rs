@@ -31,11 +31,22 @@ pub const VERSION: u16 = 1;
 /// Number of available validator slots. Note that a single validator may own several validator slots.
 pub const SLOTS: u16 = 512;
 
-/// Calculates ceil(SLOTS*2/3) which is the minimum number of validators necessary to produce a
-/// macro block, a view change and other actions.
-/// We use the following formula for the ceiling division:
-/// ceil(x/y) = (x+y-1)/y
-pub const TWO_THIRD_SLOTS: u16 = (2 * SLOTS + 3 - 1) / 3;
+/// Calculates 2f+1 slots which is the minimum number of slots necessary to produce a macro block,
+/// a view change and other actions.
+/// It is also the minimum number of slots necessary to be guaranteed to have a majority of honest
+/// slots. That's because from a total of 3f+1 slots at most f will be malicious. If in a group of
+/// 2f+1 slots we have f malicious ones (which is the worst case scenario), that still leaves us
+/// with f+1 honest slots. Which is more than the f slots that are not in this group (which must all
+/// be honest).
+/// It is calculated as `ceil(SLOTS*2/3)` and we use the formula `ceil(x/y) = (x+y-1)/y` for the
+/// ceiling division.
+pub const TWO_F_PLUS_ONE: u16 = (2 * SLOTS + 3 - 1) / 3;
+
+/// Calculates f+1 slots which is the minimum number of slots necessary to be guaranteed to have at
+/// least one honest slots. That's because from a total of 3f+1 slots at most f will be malicious.
+/// It is calculated as `ceil(SLOTS/3)` and we use the formula `ceil(x/y) = (x+y-1)/y` for the
+/// ceiling division.
+pub const F_PLUS_ONE: u16 = (SLOTS + 3 - 1) / 3;
 
 /// Length of a batch including the macro block
 pub const BATCH_LENGTH: u32 = 32; // TODO Set

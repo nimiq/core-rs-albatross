@@ -204,7 +204,7 @@ impl<N: ValidatorNetwork + 'static> Stream for TendermintAggregations<N> {
                 } else if let Some(((highest_round, _), _)) =
                     self.aggregation_descriptors.last_key_value()
                 {
-                    // messages of future rounds need to be tracked in terrms of contributors only (without verifying them).
+                    // messages of future rounds need to be tracked in terms of contributors only (without verifying them).
                     // Also note that PreVote and PreCommit are tracked in the same bitset as the protocol requires.
                     if highest_round < &message.tag.round_number {
                         trace!("New contribution for future round: {:?}", &message);
@@ -218,7 +218,7 @@ impl<N: ValidatorNetwork + 'static> Stream for TendermintAggregations<N> {
                         if let Some(weight) =
                             self.validator_registry.signers_weight(&future_contributors)
                         {
-                            if weight > policy::SLOTS as usize - policy::TWO_THIRD_SLOTS as usize {
+                            if weight >= policy::F_PLUS_ONE as usize {
                                 return Poll::Ready(Some(TendermintAggregationEvent::NewRound(
                                     message.tag.round_number,
                                 )));

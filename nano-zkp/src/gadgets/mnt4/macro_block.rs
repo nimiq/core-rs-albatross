@@ -16,7 +16,7 @@ use ark_r1cs_std::prelude::{
 use ark_relations::r1cs::{ConstraintSystemRef, Namespace, SynthesisError};
 
 use nimiq_nano_primitives::MacroBlock;
-use nimiq_primitives::policy::{SLOTS, TWO_THIRD_SLOTS};
+use nimiq_primitives::policy::{SLOTS, TWO_F_PLUS_ONE};
 
 use crate::gadgets::mnt4::{CheckSigGadget, HashToCurve};
 use crate::utils::reverse_inner_byte_order;
@@ -183,7 +183,7 @@ impl MacroBlockGadget {
         cs: ConstraintSystemRef<MNT4Fr>,
     ) -> Result<Boolean<MNT4Fr>, SynthesisError> {
         // Get the minimum number of signers.
-        let min_signers = FqVar::new_constant(cs, &Fq::from(TWO_THIRD_SLOTS as u64))?;
+        let min_signers = FqVar::new_constant(cs, &Fq::from(TWO_F_PLUS_ONE as u64))?;
 
         // Initialize the running sum.
         let mut num_signers = FqVar::zero();
@@ -324,7 +324,7 @@ mod tests {
 
     use nimiq_bls::utils::bytes_to_bits;
     use nimiq_nano_primitives::MacroBlock;
-    use nimiq_primitives::policy::{SLOTS, TWO_THIRD_SLOTS};
+    use nimiq_primitives::policy::{SLOTS, TWO_F_PLUS_ONE};
 
     use super::*;
 
@@ -402,7 +402,7 @@ mod tests {
         // Create macro block with correct signers set.
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
-        for i in 0..TWO_THIRD_SLOTS as usize {
+        for i in 0..TWO_F_PLUS_ONE as usize {
             block.sign(&sk, i, &pk_tree_root);
             agg_pk += &pk;
         }
@@ -454,7 +454,7 @@ mod tests {
         // Create macro block with correct signers set.
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
-        for i in 0..TWO_THIRD_SLOTS as usize {
+        for i in 0..TWO_F_PLUS_ONE as usize {
             block.sign(&sk, i, &pk_tree_root);
             agg_pk += &pk;
         }
@@ -509,7 +509,7 @@ mod tests {
         // Create macro block with correct signers set.
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
-        for i in 0..TWO_THIRD_SLOTS as usize {
+        for i in 0..TWO_F_PLUS_ONE as usize {
             block.sign(&sk, i, &pk_tree_root);
             agg_pk += &pk;
         }
@@ -564,7 +564,7 @@ mod tests {
         // Create macro block with correct signers set.
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
-        for i in 0..TWO_THIRD_SLOTS as usize {
+        for i in 0..TWO_F_PLUS_ONE as usize {
             block.sign(&sk, i, &pk_tree_root);
             agg_pk += &pk;
         }
@@ -621,7 +621,7 @@ mod tests {
         // Create macro block with correct signers set.
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
-        for i in 0..TWO_THIRD_SLOTS as usize {
+        for i in 0..TWO_F_PLUS_ONE as usize {
             block.sign(&sk, i, &pk_tree_root);
             agg_pk += &pk;
         }
@@ -676,7 +676,7 @@ mod tests {
         // Create macro block with correct signers set.
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
-        for i in 0..TWO_THIRD_SLOTS as usize {
+        for i in 0..TWO_F_PLUS_ONE as usize {
             block.sign(&sk, i, &pk_tree_root);
             agg_pk += &pk;
         }
@@ -733,7 +733,7 @@ mod tests {
         // Create macro block with correct signers set.
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
-        for i in 0..TWO_THIRD_SLOTS as usize {
+        for i in 0..TWO_F_PLUS_ONE as usize {
             block.sign(&sk, i, &pk_tree_root);
             agg_pk += &pk;
         }
@@ -788,7 +788,7 @@ mod tests {
         // Create macro block with too few signers.
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
 
-        for i in 0..TWO_THIRD_SLOTS as usize - 1 {
+        for i in 0..TWO_F_PLUS_ONE as usize - 1 {
             block.sign(&sk, i, &pk_tree_root);
             agg_pk += &pk;
         }
