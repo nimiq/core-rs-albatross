@@ -47,7 +47,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         cx: &mut Context<'_>,
     ) -> Poll<Option<HistorySyncReturn<TNetwork::PeerType>>> {
         // TODO We might want to not send an epoch_id request in the first place if we're at the
-        // cluster limit.
+        //  cluster limit.
         while self.epoch_clusters.len() < Self::MAX_CLUSTERS {
             let epoch_ids = match self.epoch_ids_stream.poll_next_unpin(cx) {
                 Poll::Ready(Some(epoch_ids)) => epoch_ids,
@@ -58,7 +58,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                 // The peer might have disconnected during the request.
                 // FIXME Check if the peer is still connected
 
-                // If the peer didn't send any locator, we are done with it and emit it.
+                // If the peer didn't find any of our locators, we are done with it and emit it.
                 if !epoch_ids.locator_found {
                     debug!(
                         "Peer is behind or on different chain: {:?}",
@@ -74,7 +74,10 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                     return Poll::Ready(Some(HistorySyncReturn::Good(epoch_ids.sender)));
                 }
 
-                self.cluster_epoch_ids(epoch_ids);
+                // If the clustering deems a peer useless, it is returned here and we emit it.
+                if let Some(agent) = self.cluster_epoch_ids(epoch_ids) {
+                    return Poll::Ready(Some(HistorySyncReturn::Outdated(agent)));
+                }
             }
         }
 

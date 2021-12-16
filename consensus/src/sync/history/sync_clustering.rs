@@ -115,13 +115,12 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
 
         // Truncate epoch_ids by epoch_number: Discard all epoch_ids prior to our accepted state.
         if !epoch_ids.ids.is_empty() && epoch_ids.first_epoch_number <= our_epoch_number {
-            // Check that the epoch_id sent by the peer at our current epoch number corresponds to
-            // our accepted state. If it doesn't, the peer is on a "permanent" fork, so we ban it.
             if epoch_ids.first_epoch_number + epoch_ids.ids.len() < our_epoch_number {
-                // Peer is behind our accepted state
-                // TODO Actually ban the peer.
+                // Peer is behind, emit it as useless.
                 return Some(epoch_ids.sender);
             } else {
+                // Check that the epoch_id sent by the peer at our current epoch number corresponds to
+                // our accepted state. If it doesn't, the peer is on a "permanent" fork, so we ban it.
                 let peers_epoch_id =
                     &epoch_ids.ids[our_epoch_number - epoch_ids.first_epoch_number];
                 if our_epoch_id != *peers_epoch_id {
@@ -172,7 +171,6 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
             || (num_ids_to_remove == epoch_ids.ids.len() && epoch_ids.checkpoint_id.is_none())
         {
             // No ids remain, nothing new to learn from this peer at this point.
-            //
             let cluster = job_iter.find_map(|job| match job {
                 Job::FinishCluster(cluster, _) if cluster.id == cluster_id => Some(cluster),
                 _ => None,
