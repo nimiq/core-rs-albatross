@@ -11,21 +11,6 @@ pub enum ForkEvent {
     Detected(ForkProof),
 }
 
-/// An enum representing different types of errors associated with slashing.
-#[derive(Error, Debug)]
-pub enum SlashPushError {
-    #[error("Redundant fork proofs in block")]
-    DuplicateForkProof,
-    #[error("Block contains fork proof targeting a slot that was already slashed")]
-    SlotAlreadySlashed,
-    #[error("Fork proof is from a wrong epoch")]
-    InvalidEpochTarget,
-    #[error("Fork proof infos don't match fork proofs")]
-    InvalidForkProofInfos,
-    #[error("Fork proof infos cannot be fetched (predecessor does not exist)")]
-    InvalidForkProofPredecessor,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BlockchainEvent {
     Extended(Blake2bHash),

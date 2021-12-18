@@ -13,7 +13,7 @@ pub enum ChainOrdering {
     // This chain is an extension of the main chain.
     Extend,
     // This chain is better than the main chain.
-    Better,
+    Superior,
     // This chain is worse than the main chain.
     Inferior,
     // The ordering of this chain is unknown.
@@ -34,6 +34,8 @@ impl ChainOrdering {
 
         if block.parent_hash() == &blockchain.head_hash() {
             chain_order = ChainOrdering::Extend;
+        } else if block.is_macro() && block.block_number() > blockchain.block_number() {
+            chain_order = ChainOrdering::Superior;
         } else {
             // To compare two blocks, we need to compare the view number at the intersection.
             //   [2] - [2] - [3] - [4]
@@ -93,7 +95,7 @@ impl ChainOrdering {
                 // Choose better one as early as possible.
                 match current_on_main_chain.view_number().cmp(&branch_view_number) {
                     Ordering::Less => {
-                        chain_order = ChainOrdering::Better;
+                        chain_order = ChainOrdering::Superior;
                         break;
                     }
                     Ordering::Greater => {
@@ -108,7 +110,7 @@ impl ChainOrdering {
             if chain_order == ChainOrdering::Unknown
                 && blockchain.block_number() < block.block_number()
             {
-                chain_order = ChainOrdering::Better;
+                chain_order = ChainOrdering::Superior;
             }
 
             info!(

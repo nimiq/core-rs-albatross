@@ -2,7 +2,7 @@ use std::ops::Deref;
 
 use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 
-use nimiq_block::{Block, BlockType, ForkProof};
+use nimiq_block::{Block, ForkProof};
 use nimiq_database::WriteTransaction;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::policy;
@@ -27,11 +27,13 @@ impl Blockchain {
         block: Block,
         trusted: bool,
     ) -> Result<PushResult, PushError> {
-        // get_chain_info doesn't necessarily work with all blocks, even if we already synced their contents
-        if block.block_number() < policy::last_macro_block(this.block_number()) {
+        // Ignore all blocks that precede (or are at the same height) as the most recent accepted
+        // macro block.
+        if block.block_number() <= policy::last_macro_block(this.block_number()) {
             info!(
-                "Ignoring block (#{}, {})- we already know a later macro block (we're at {})",
+                "Ignoring block (#{}.{}, {})- we already know a later macro block (we're at {})",
                 block.block_number(),
+                block.view_number(),
                 block.hash(),
                 this.block_number()
             );
@@ -55,20 +57,6 @@ impl Blockchain {
             .chain_store
             .get_chain_info(block.parent_hash(), false, Some(&read_txn))
             .ok_or(PushError::Orphan)?;
-
-        // Calculate chain ordering.
-        let chain_order =
-            ChainOrdering::order_chains(this.deref(), &block, &prev_info, Some(&read_txn));
-
-        // If it is an inferior chain, we ignore it as it cannot become better at any point in time.
-        if chain_order == ChainOrdering::Inferior {
-            info!(
-                "Ignoring block - inferior chain (#{}, {})",
-                block.block_number(),
-                block.hash()
-            );
-            return Ok(PushResult::Ignored);
-        }
 
         // Get the intended slot owner.
         let (slot_owner, _) = this
@@ -157,45 +145,50 @@ impl Blockchain {
             }
         }
 
+        // Calculate chain ordering.
+        let chain_order =
+            ChainOrdering::order_chains(this.deref(), &block, &prev_info, Some(&read_txn));
+
         read_txn.close();
 
-        let chain_info = match ChainInfo::from_block(block, &prev_info) {
-            Ok(info) => info,
-            Err(err) => {
-                warn!("Rejecting block - slash commit failed: {:?}", err);
-                return Err(PushError::InvalidSuccessor);
-            }
-        };
+        let chain_info = ChainInfo::from_block(block, &prev_info);
 
-        // More chain ordering.
-        match chain_order {
+        // Extend, rebranch or just store the block depending on the chain ordering.
+        let result = match chain_order {
             ChainOrdering::Extend => {
                 return Blockchain::extend(this, chain_info.head.hash(), chain_info, prev_info);
             }
-            ChainOrdering::Better => {
+            ChainOrdering::Superior => {
                 return Blockchain::rebranch(this, chain_info.head.hash(), chain_info);
             }
-            ChainOrdering::Inferior => unreachable!(),
-            ChainOrdering::Unknown => {}
-        }
-
-        // Otherwise, we are creating/extending a fork. Store ChainInfo.
-        debug!(
-            "Creating/extending fork with block {}, block number #{}, view number {}",
-            chain_info.head.hash(),
-            chain_info.head.block_number(),
-            chain_info.head.view_number()
-        );
+            ChainOrdering::Inferior => {
+                debug!(
+                    "Ignoring inferior block #{}.{} {}",
+                    chain_info.head.block_number(),
+                    chain_info.head.view_number(),
+                    chain_info.head.hash(),
+                );
+                PushResult::Ignored
+            }
+            ChainOrdering::Unknown => {
+                debug!(
+                    "Creating/extending fork with block #{}.{} {}",
+                    chain_info.head.block_number(),
+                    chain_info.head.view_number(),
+                    chain_info.head.hash(),
+                );
+                PushResult::Forked
+            }
+        };
 
         let mut txn = this.write_transaction();
-
         this.chain_store
             .put_chain_info(&mut txn, &chain_info.head.hash(), &chain_info, true);
-
         txn.commit();
 
-        Ok(PushResult::Forked)
+        Ok(result)
     }
+
     // To retain the option of having already taken a lock before this call the self was exchanged.
     // This is a bit ugly but since push does only really need &mut self briefly at the end for the actual write
     // while needing &self for the majority it made sense to use upgradable read instead of self.
@@ -325,14 +318,6 @@ impl Blockchain {
         let mut current: (Blake2bHash, ChainInfo) = (block_hash, chain_info);
 
         while !current.1.on_main_chain {
-            // A fork can't contain a macro block. We already received that macro block, thus it must be on our
-            // main chain.
-            assert_eq!(
-                current.1.head.ty(),
-                BlockType::Micro,
-                "Fork contains macro block"
-            );
-
             let prev_hash = current.1.head.parent_hash().clone();
 
             let prev_info = this
@@ -408,43 +393,35 @@ impl Blockchain {
         let mut fork_iter = fork_chain.iter().rev();
 
         while let Some(fork_block) = fork_iter.next() {
-            match fork_block.1.head {
-                Block::Macro(_) => unreachable!(),
-                Block::Micro(ref micro_block) => {
-                    if let Err(e) = this.check_and_commit(
-                        &this.state,
-                        &fork_block.1.head,
-                        prev_view_number,
+            if let Err(e) = this.check_and_commit(
+                &this.state,
+                &fork_block.1.head,
+                prev_view_number,
+                &mut write_txn,
+            ) {
+                warn!("Failed to apply fork block while rebranching - {:?}", e);
+                write_txn.abort();
+
+                // Delete invalid fork blocks from store.
+                let mut write_txn = this.write_transaction();
+                for block in vec![fork_block].into_iter().chain(fork_iter) {
+                    this.chain_store.remove_chain_info(
                         &mut write_txn,
-                    ) {
-                        warn!("Failed to apply fork block while rebranching - {:?}", e);
-                        write_txn.abort();
-
-                        // Delete invalid fork blocks from store.
-                        let mut write_txn = this.write_transaction();
-
-                        for block in vec![fork_block].into_iter().chain(fork_iter) {
-                            this.chain_store.remove_chain_info(
-                                &mut write_txn,
-                                &block.0,
-                                micro_block.header.block_number,
-                            )
-                        }
-
-                        write_txn.commit();
-
-                        return Err(PushError::InvalidFork);
-                    }
-
-                    prev_view_number = fork_block.1.head.next_view_number();
+                        &block.0,
+                        fork_block.1.head.block_number(),
+                    )
                 }
+                write_txn.commit();
+
+                return Err(PushError::InvalidFork);
             }
+
+            prev_view_number = fork_block.1.head.next_view_number();
         }
 
         // Unset onMainChain flag / mainChainSuccessor on the current main chain up to (excluding) the common ancestor.
         for reverted_block in revert_chain.iter_mut() {
             reverted_block.1.on_main_chain = false;
-
             reverted_block.1.main_chain_successor = None;
 
             this.chain_store.put_chain_info(
@@ -478,14 +455,32 @@ impl Blockchain {
         }
 
         // Commit transaction & update head.
-        this.chain_store.set_head(&mut write_txn, &fork_chain[0].0);
+        let new_head_hash = &fork_chain[0].0;
+        let new_head_info = &fork_chain[0].1;
+        this.chain_store.set_head(&mut write_txn, new_head_hash);
         write_txn.commit();
 
         // Upgrade the lock as late as possible.
         let mut this = RwLockUpgradableReadGuard::upgrade(this);
 
-        this.state.main_chain = fork_chain[0].1.clone();
-        this.state.head_hash = fork_chain[0].0.clone();
+        if let Block::Macro(ref macro_block) = new_head_info.head {
+            this.state.macro_info = new_head_info.clone();
+            this.state.macro_head_hash = new_head_hash.clone();
+
+            if policy::is_election_block_at(new_head_info.head.block_number()) {
+                this.state.election_head = macro_block.clone();
+                this.state.election_head_hash = new_head_hash.clone();
+
+                let old_slots = this.state.current_slots.take().unwrap();
+                this.state.previous_slots.replace(old_slots);
+
+                let new_slots = macro_block.get_validators().unwrap();
+                this.state.current_slots.replace(new_slots);
+            }
+        }
+
+        this.state.main_chain = new_head_info.clone();
+        this.state.head_hash = new_head_hash.clone();
 
         // Downgrade the lock again as the notified listeners might want to acquire read themselves.
         let this = RwLockWriteGuard::downgrade_to_upgradable(this);

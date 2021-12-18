@@ -5,7 +5,7 @@ use beserial::Deserialize;
 use nimiq_block::Block;
 use nimiq_block_production::{test_utils::TemporaryBlockProducer, BlockProducer};
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
-use nimiq_blockchain::{ForkEvent, PushError, PushResult};
+use nimiq_blockchain::{ForkEvent, PushResult};
 use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
@@ -34,7 +34,7 @@ fn it_can_rebranch_view_changes() {
 
     // Check that producer 2 ignores inferior chain.
     assert_eq!(temp_producer2.push(inferior1), Ok(PushResult::Ignored));
-    assert_eq!(temp_producer2.push(inferior2), Err(PushError::Orphan));
+    assert_eq!(temp_producer2.push(inferior2), Ok(PushResult::Ignored));
 
     // Check that producer 1 rebranches.
     assert_eq!(temp_producer1.push(fork1), Ok(PushResult::Rebranched));
@@ -54,7 +54,7 @@ fn it_can_rebranch_view_changes() {
 
     // Check that producer 2 ignores inferior chain.
     assert_eq!(temp_producer2.push(inferior1), Ok(PushResult::Ignored));
-    assert_eq!(temp_producer2.push(inferior2), Err(PushError::Orphan));
+    assert_eq!(temp_producer2.push(inferior2), Ok(PushResult::Ignored));
 
     // Check that producer 1 rebranches.
     assert_eq!(temp_producer1.push(fork1), Ok(PushResult::Rebranched));
@@ -199,7 +199,7 @@ fn it_can_rebranch_forks() {
     assert_eq!(temp_producer2.push(fork1c), Ok(PushResult::Ignored));
 
     assert_eq!(temp_producer1.push(fork2d), Ok(PushResult::Extended));
-    assert_eq!(temp_producer2.push(fork1d), Err(PushError::Orphan));
+    assert_eq!(temp_producer2.push(fork1d), Ok(PushResult::Ignored));
 }
 
 #[test]
@@ -251,6 +251,52 @@ fn it_can_rebranch_at_macro_block() {
 
     assert_eq!(temp_producer1.push(fork2), Ok(PushResult::Rebranched));
     assert_eq!(temp_producer2.push(fork1), Ok(PushResult::Ignored));
+}
+
+#[test]
+fn it_can_rebranch_to_inferior_macro_block() {
+    // Build forks using two producers.
+    let producer1 = TemporaryBlockProducer::new();
+    let producer2 = TemporaryBlockProducer::new();
+
+    // [0] - [0] - ... - [0] - [macro 0]
+    //    \- [1] - ... - [1]
+    for _ in 0..policy::BATCH_LENGTH - 1 {
+        let inferior = producer1.next_block(0, vec![]);
+        producer2.next_block(1, vec![]);
+        assert_eq!(producer2.push(inferior), Ok(PushResult::Ignored));
+    }
+
+    let macro_block = producer1.next_block(0, vec![]);
+    assert!(macro_block.is_macro());
+
+    // Check that producer 2 rebranches.
+    assert_eq!(producer2.push(macro_block), Ok(PushResult::Rebranched));
+
+    // Push one additional block and check that producer 2 accepts it.
+    let block = producer1.next_block(0, vec![]);
+    assert_eq!(producer2.push(block), Ok(PushResult::Extended));
+
+    // Check that both chains are in an identical state.
+    let blockchain1 = producer1.blockchain.read();
+    let blockchain2 = producer2.blockchain.read();
+    assert_eq!(blockchain1.state.head_hash, blockchain2.state.head_hash);
+    assert_eq!(
+        blockchain1.state.macro_head_hash,
+        blockchain2.state.macro_head_hash
+    );
+    assert_eq!(
+        blockchain1.state.election_head_hash,
+        blockchain2.state.election_head_hash
+    );
+    assert_eq!(
+        blockchain1.state.current_slots,
+        blockchain2.state.current_slots
+    );
+    assert_eq!(
+        blockchain1.state.previous_slots,
+        blockchain2.state.previous_slots
+    );
 }
 
 #[test]

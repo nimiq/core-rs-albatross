@@ -11,8 +11,6 @@ use nimiq_hash::Blake2bHash;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
 
-use crate::SlashPushError;
-
 /// Struct that, for each block, keeps information relative to the chain the block is on.
 #[derive(Clone, Debug)]
 pub struct ChainInfo {
@@ -38,7 +36,7 @@ impl ChainInfo {
     }
 
     /// Creates a new ChainInfo for a block given its predecessor.
-    pub fn from_block(block: Block, prev_info: &ChainInfo) -> Result<Self, SlashPushError> {
+    pub fn from_block(block: Block, prev_info: &ChainInfo) -> Self {
         assert_eq!(prev_info.head.block_number(), block.block_number() - 1);
 
         // Reset the transaction fee accumulator if this is the first block of a batch. Otherwise,
@@ -49,12 +47,12 @@ impl ChainInfo {
             prev_info.cum_tx_fees + block.sum_transaction_fees()
         };
 
-        Ok(ChainInfo {
+        ChainInfo {
             on_main_chain: false,
             main_chain_successor: None,
             head: block,
             cum_tx_fees,
-        })
+        }
     }
 }
 

@@ -62,19 +62,14 @@ impl NanoBlockchain {
         Blockchain::verify_block_justification(self, &block, &slot_owner.signing_key, None, true)?;
 
         // Create the chaininfo for the new block.
-        let chain_info = match ChainInfo::from_block(block, &prev_info) {
-            Ok(v) => v,
-            Err(_) => {
-                return Err(PushError::InvalidSuccessor);
-            }
-        };
+        let chain_info = ChainInfo::from_block(block, &prev_info);
 
         // More chain ordering.
         match chain_order {
             ChainOrdering::Extend => {
                 return self.extend(chain_info, prev_info);
             }
-            ChainOrdering::Better => {
+            ChainOrdering::Superior => {
                 return self.rebranch(chain_info, prev_info);
             }
             ChainOrdering::Inferior => unreachable!(),
