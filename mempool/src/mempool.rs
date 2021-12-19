@@ -10,7 +10,7 @@ use std::sync::Arc;
 use beserial::Serialize;
 use nimiq_account::{Account, BasicAccount};
 use nimiq_block::Block;
-use nimiq_blockchain::{AbstractBlockchain, Blockchain};
+use nimiq_blockchain::{AbstractBlockchain, Blockchain, TransactionVerificationCache};
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
 use nimiq_network_interface::network::Network;
@@ -434,6 +434,12 @@ impl Mempool {
     /// Gets all transactions in the mempool.
     pub fn get_transactions(&self) -> Vec<Transaction> {
         self.state.read().transactions.values().cloned().collect()
+    }
+}
+
+impl TransactionVerificationCache for Mempool {
+    fn is_known(&self, tx_hash: &Blake2bHash) -> bool {
+        self.contains_transaction_by_hash(tx_hash)
     }
 }
 

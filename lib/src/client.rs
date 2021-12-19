@@ -170,8 +170,11 @@ impl ClientInner {
                     config.mempool,
                 );
 
-                let validator_proxy = validator.proxy();
+                // Use the validator's mempool as TransactionVerificationCache in the blockchain.
+                consensus.blockchain.write().tx_verification_cache =
+                    Arc::<Mempool>::clone(&validator.mempool);
 
+                let validator_proxy = validator.proxy();
                 (Some(validator), Some(validator_proxy))
             }
             None => (None, None),

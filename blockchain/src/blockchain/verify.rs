@@ -292,7 +292,7 @@ impl Blockchain {
                         return Err(PushError::InvalidBlock(BlockError::ExpiredTransaction));
                     }
 
-                    if verify_txns {
+                    if verify_txns && !self.tx_verification_cache.is_known(&tx.hash()) {
                         // Check intrinsic transaction invariants.
                         if let Err(e) = tx.verify(self.network_id) {
                             return Err(PushError::InvalidBlock(BlockError::InvalidTransaction(e)));

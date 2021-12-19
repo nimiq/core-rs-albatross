@@ -41,6 +41,8 @@ pub struct Blockchain {
     pub history_store: HistoryStore,
     // The current state of the blockchain.
     pub state: BlockchainState,
+    // A reference to a "function" to test whether a given transaction is known and valid.
+    pub tx_verification_cache: Arc<dyn TransactionVerificationCache>,
     // The metrics for the blockchain. Needed for analysis.
     #[cfg(feature = "metrics")]
     pub(crate) metrics: BlockchainMetrics,
@@ -205,6 +207,7 @@ impl Blockchain {
                 current_slots: Some(current_slots),
                 previous_slots: last_slots,
             },
+            tx_verification_cache: Arc::new(DEFAULT_TX_VERIFICATION_CACHE),
             #[cfg(feature = "metrics")]
             metrics: BlockchainMetrics::default(),
             genesis_supply,
@@ -260,7 +263,7 @@ impl Blockchain {
                 current_slots: Some(current_slots),
                 previous_slots: Some(Validators::default()),
             },
-
+            tx_verification_cache: Arc::new(DEFAULT_TX_VERIFICATION_CACHE),
             #[cfg(feature = "metrics")]
             metrics: BlockchainMetrics::default(),
             genesis_supply,
@@ -276,3 +279,18 @@ impl Blockchain {
         WriteTransaction::new(&self.env)
     }
 }
+
+pub trait TransactionVerificationCache: Send + Sync {
+    fn is_known(&self, tx_hash: &Blake2bHash) -> bool;
+}
+
+struct DefaultTransactionVerificationCache {}
+
+impl TransactionVerificationCache for DefaultTransactionVerificationCache {
+    fn is_known(&self, _: &Blake2bHash) -> bool {
+        false
+    }
+}
+
+const DEFAULT_TX_VERIFICATION_CACHE: DefaultTransactionVerificationCache =
+    DefaultTransactionVerificationCache {};
