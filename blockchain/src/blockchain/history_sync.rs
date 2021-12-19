@@ -128,16 +128,8 @@ impl Blockchain {
         ext_txs: &[ExtendedTransaction],
         mut prev_macro_info: ChainInfo,
     ) -> Result<PushResult, PushError> {
-        // If there are micro blocks already in the blockchain, then we need to revert the
-        // blockchain to the last macro block.
-        let num_blocks = this
-            .block_number()
-            .checked_sub(prev_macro_info.head.block_number())
-            .expect("Head of the chain can't be before the macro head!");
-
         // Create a new database write transaction.
         let mut txn = this.write_transaction();
-        this.revert_blocks(num_blocks, &mut txn)?;
 
         // Get the block hash.
         let block_hash = block.hash();
@@ -182,17 +174,13 @@ impl Blockchain {
         // Set the head of the chain store to the current block.
         this.chain_store.set_head(&mut txn, &block_hash);
 
-        // Get the index for the first extended transaction that was not already added in past macro
-        // blocks.
-        let mut first_new_ext_tx = 0;
-
-        for ext_tx in ext_txs {
-            if ext_tx.block_number <= prev_macro_info.head.block_number() {
-                first_new_ext_tx += 1;
-            } else {
-                break;
-            }
-        }
+        // Get the index for the first extended transaction that was not already added in past
+        // blocks. This includes left-over micro blocks for the current batch.
+        let current_block_number = this.block_number();
+        let first_new_ext_tx = ext_txs
+            .iter()
+            .position(|ext_tx| ext_tx.block_number > current_block_number)
+            .unwrap_or(ext_txs.len());
 
         // Separate the extended transactions by block number and type.
         // We know it comes sorted because we already checked it against the history root and
