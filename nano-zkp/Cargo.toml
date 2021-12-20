@@ -26,8 +26,18 @@ ark-serialize = "0.3"
 ark-std = "0.3"
 
 nimiq-bls = { path = "../bls" }
-nimiq-nano-primitives = { path = "../nano-primitives"}
+nimiq-nano-primitives = { path = "../nano-primitives" }
 nimiq-primitives = { path = "../primitives", features = ["policy"] }
 
 [features]
 prover = ["ark-crypto-primitives/r1cs", "ark-mnt4-753/r1cs", "ark-mnt6-753/r1cs", "ark-groth16/r1cs"]
+
+[[example]]
+name = "setup"
+path = "examples/prover/setup.rs"
+required-features = ["prover"]
+
+[[example]]
+name = "prove"
+path = "examples/prover/prove.rs"
+required-features = ["prover"]
