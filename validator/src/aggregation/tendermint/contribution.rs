@@ -61,7 +61,7 @@ impl AggregatableContribution for TendermintContribution {
                         sig
                             .combine(other_sig)
                             .expect("Non Overlapping TendermintContribution encountered overlapping MultiSignatures"))
-                    // if that entry does not exist, creatte it with the MultiSignature from other_contribution.
+                    // if that entry does not exist, create it with the MultiSignature from other_contribution.
                     .or_insert_with(|| other_sig.clone());
             });
             Ok(())

@@ -91,7 +91,7 @@ impl<
         P: Partitioner,
     > Evaluator<C> for WeightedVote<S, I, P>
 {
-    /// takes an unverified contribution and scroes it in terms of usefulness with
+    /// takes an unverified contribution and scores it in terms of usefulness with
     ///
     /// `0` being not useful at all, can be discarded.
     ///

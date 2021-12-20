@@ -36,7 +36,7 @@ enum ViewChangeResult {
 }
 
 /// Switch for incoming ViewChanges.
-/// Keeps track of viewChanges for future Aggreagtions in order to be able to sync the state of this node with others
+/// Keeps track of viewChanges for future Aggregations in order to be able to sync the state of this node with others
 /// in case it recognizes it is behind.
 struct InputStreamSwitch {
     input: BoxStream<'static, LevelUpdateMessage<SignedViewChangeMessage, ViewChange>>,

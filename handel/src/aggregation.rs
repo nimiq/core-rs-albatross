@@ -61,7 +61,7 @@ struct NextAggregation<
     /// Sink used to relay messages
     sender: LevelUpdateSender<P, T>,
 
-    /// Interval for starting the next level regarless of previous levels completion
+    /// Interval for starting the next level regardless of previous levels completion
     start_level_interval: IntervalStream,
 
     /// Interval for sending level updates to the corresponding peers regardless of progression
@@ -93,7 +93,7 @@ impl<
         // Add our own contribution to the todo list.
         todos.add_contribution(own_contribution.clone(), 0);
 
-        // Regarless of level completion consecutive levels need to be activated at some point. Activate Levels every time this interval ticks,
+        // Regardless of level completion consecutive levels need to be activated at some point. Activate Levels every time this interval ticks,
         // if the level has not already been activated due to level completion
         let start_level_interval =
             IntervalStream::new(interval_at(Instant::now() + config.timeout, config.timeout));
@@ -206,7 +206,7 @@ impl<
         if num_contributors == level.num_peers() {
             trace!("Level {} complete", level.id);
             {
-                // aquire write lock and set the level state for this level to completed.
+                // Acquire write lock and set the level state for this level to completed.
                 let mut level_state = level.state.write();
                 level_state.receive_completed = true;
             }
@@ -221,7 +221,7 @@ impl<
         let level_count = self.levels.len();
         for i in level.id + 1..level_count {
             let combined = {
-                // aquire read lock to retrieve the current commbined contribution for the next lower level
+                // Acquire read lock to retrieve the current combined contribution for the next lower level
                 let store = self.protocol.store();
                 let store = store.read();
                 store.combined(i - 1)
@@ -243,13 +243,13 @@ impl<
 
     /// Send updated `contribution` for `level` to `count` peers
     ///
-    /// for incomplete levels the contribution containing soley this nodes contribution is send alongside the aggregate
+    /// for incomplete levels the contribution containing solely this nodes contribution is sent alongside the aggregate
     fn send_update(&self, contribution: P::Contribution, level: &Level, count: usize) {
         let peer_ids = level.select_next_peers(count);
 
         // if there are peers to send the update to send them
         if !peer_ids.is_empty() {
-            // incomplete levels will always also continue to send their own contribution, alongside the aggreagte.
+            // incomplete levels will always also continue to send their own contribution, alongside the aggregate.
             let individual = if level.receive_complete() {
                 None
             } else {
@@ -271,7 +271,7 @@ impl<
                     self.sender
                         // `unbounded_send` is not a future and thus will not block execution.
                         .unbounded_send((update_msg.clone(), peer_id))
-                        // If an error occured that means the receiver no longer exists or was closed which should never happen.
+                        // If an error occurred that means the receiver no longer exists or was closed which should never happen.
                         .expect("Message could not be send to unbounded_channel sender");
                 }
             }
@@ -513,7 +513,7 @@ impl<
         // check if there is a next_aggregation
         let next_aggregation = match self.next_aggregation.as_mut() {
             // If there is Some(next_aggregation) proceed with it
-            Some(next_aggreagtion) => next_aggreagtion,
+            Some(next_aggregation) => next_aggregation,
             // If there is None that means all signatories have signed the payload so there is nothing more to aggregate after the last returned value.
             // Thus return Poll::Ready(None) as the previous value can no longer be improved.
             None => return Poll::Ready(None),
