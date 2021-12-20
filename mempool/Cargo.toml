@@ -24,7 +24,6 @@ futures-lite = "1.12.0"
 keyed_priority_queue = "0.4"
 tokio = { version = "1.14", features = ["full"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
-simple_logger = "1.0"
 beserial = { path = "../beserial" }
 nimiq-account = { path = "../primitives/account" }
 nimiq-block = { path = "../primitives/block" }
