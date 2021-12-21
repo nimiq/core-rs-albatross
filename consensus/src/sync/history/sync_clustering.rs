@@ -144,12 +144,12 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         //  job queue. If we validated the macro block signature of each epoch as soon as we get the
         //  macro block for an epoch (before downloading the history), we would avoid downloading
         //  invalid epochs and could reject out-of-order ids here immediately.
-        let mut id_iter = epoch_ids.ids.iter().chain(epoch_ids.checkpoint_id.iter());
+        let id_iter = epoch_ids.ids.iter().chain(epoch_ids.checkpoint_id.iter());
         let mut job_iter = self.job_queue.iter_mut();
 
         let mut num_ids_to_remove = 0;
         let mut cluster_id = 0;
-        'outer: while let Some(id) = id_iter.next() {
+        'outer: for id in id_iter {
             loop {
                 let job = match job_iter.next() {
                     Some(job) => job,
