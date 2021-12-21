@@ -83,17 +83,16 @@ impl<H: HashOutput> IncrementalMerkleProofBuilder<H> {
             // Borrow on level for convenience.
             let level = &self.tree[current_level];
 
-            let hash;
             // If the current position is uneven, we can hash two elements together.
-            if current_pos % 2 == 1 {
-                hash = H::Builder::default()
+            let hash = if current_pos % 2 == 1 {
+                H::Builder::default()
                     .chain(&level[current_pos - 1])
                     .chain(&level[current_pos])
-                    .finish();
+                    .finish()
             } else {
                 // Otherwise, we only have one element.
-                hash = level[current_pos].clone();
-            }
+                level[current_pos].clone()
+            };
 
             // Push hash to next level.
             current_level += 1;

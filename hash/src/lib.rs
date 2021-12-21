@@ -65,6 +65,7 @@ pub trait Hasher: Default + io::Write {
         self
     }
 
+    #[must_use]
     fn chain<T: SerializeContent>(mut self, h: &T) -> Self {
         self.hash(h);
         self

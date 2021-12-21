@@ -51,6 +51,7 @@ pub struct Launcher {
 
 impl Launcher {
     #[cfg(feature = "deadlock")]
+    #[must_use]
     pub fn deadlock_detection(mut self) -> Self {
         self.deadlock_detection = true;
         initialize_deadlock_detection();
@@ -58,6 +59,7 @@ impl Launcher {
     }
 
     #[cfg(feature = "logging")]
+    #[must_use]
     pub fn logging(mut self) -> Self {
         self.logging = true;
         initialize_logging(None, None).unwrap();
@@ -65,6 +67,7 @@ impl Launcher {
     }
 
     #[cfg(fature = "panic")]
+    #[must_use]
     pub fn panic_reporting(mut self) -> Self {
         self.panic = PanicMode::default();
         self.panic.logging = true;

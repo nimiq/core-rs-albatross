@@ -124,7 +124,7 @@ impl Blockchain {
                 // If there's another micro block set to this view number, which also has the same
                 // VrfSeed entropy we notify the fork event.
                 if view_number == micro_block.header.view_number
-                    && &block.seed().entropy() == &micro_block.header.seed.entropy()
+                    && block.seed().entropy() == micro_block.header.seed.entropy()
                 {
                     let micro_header2 = micro_block.header;
                     let justification2 = micro_block

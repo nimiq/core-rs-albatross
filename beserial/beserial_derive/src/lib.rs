@@ -158,13 +158,14 @@ fn parse_field_attribs(attrs: &[syn::Attribute]) -> Option<FieldAttribute> {
                                 }
                                 if cmp_ident(&meta_list.path, "skip") {
                                     for nested in meta_list.nested.iter() {
-                                        if let syn::NestedMeta::Meta(ref item) = nested {
-                                            if let Meta::NameValue(meta_name_value) = item {
-                                                if cmp_ident(&meta_name_value.path, "default") {
-                                                    return Some(FieldAttribute::Skip(Some(
-                                                        meta_name_value.lit.clone(),
-                                                    )));
-                                                }
+                                        if let syn::NestedMeta::Meta(Meta::NameValue(
+                                            meta_name_value,
+                                        )) = nested
+                                        {
+                                            if cmp_ident(&meta_name_value.path, "default") {
+                                                return Some(FieldAttribute::Skip(Some(
+                                                    meta_name_value.lit.clone(),
+                                                )));
                                             }
                                         }
                                     }
@@ -224,13 +225,11 @@ fn parse_enum_attribs(ast: &syn::DeriveInput) -> (Option<syn::Ident>, bool) {
                 })
             } else if cmp_ident(&meta_list.path, "beserial") {
                 for nested in meta_list.nested.iter() {
-                    if let syn::NestedMeta::Meta(ref item) = nested {
-                        if let Meta::Path(ref attr_ident) = item {
-                            if cmp_ident(attr_ident, "uvar") {
-                                uvar = true;
-                            } else {
-                                panic!("unknown flag for beserial: {:?}", attr_ident)
-                            }
+                    if let syn::NestedMeta::Meta(Meta::Path(ref attr_ident)) = nested {
+                        if cmp_ident(attr_ident, "uvar") {
+                            uvar = true;
+                        } else {
+                            panic!("unknown flag for beserial: {:?}", attr_ident)
                         }
                     }
                 }

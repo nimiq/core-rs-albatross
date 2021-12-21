@@ -51,6 +51,7 @@ impl HashedTimeLockedContract {
         }
     }
 
+    #[must_use]
     pub fn change_balance(&self, balance: Coin) -> Self {
         HashedTimeLockedContract {
             balance,

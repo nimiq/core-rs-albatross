@@ -132,6 +132,7 @@ impl VrfSeed {
 
     /// Produces the next VRF Seed given the current VRF Seed (which is part of the message) and a
     /// key pair.
+    #[must_use]
     pub fn sign_next(&self, keypair: &KeyPair) -> Self {
         // Get random bytes.
         let mut rng = rand::thread_rng();

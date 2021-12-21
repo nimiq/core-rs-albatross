@@ -10,6 +10,7 @@ pub fn log2(x: usize) -> usize {
 }
 
 pub trait CeilingDiv {
+    #[must_use]
     fn ceiling_div(self, rhs: Self) -> Self;
 }
 

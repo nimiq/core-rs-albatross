@@ -55,7 +55,7 @@ impl NetworkInfo {
 
     #[inline]
     pub fn genesis_block<B: Deserialize>(&self) -> B {
-        let block: B = Deserialize::deserialize_from_vec(&self.genesis.block.to_vec())
+        let block: B = Deserialize::deserialize_from_vec(self.genesis.block)
             .expect("Failed to deserialize genesis block.");
         block
     }
@@ -67,9 +67,8 @@ impl NetworkInfo {
 
     #[inline]
     pub fn genesis_accounts(&self) -> Vec<(KeyNibbles, Account)> {
-        let accounts: AccountsList =
-            Deserialize::deserialize_from_vec(&self.genesis.accounts.to_vec())
-                .expect("Failed to deserialize genesis accounts.");
+        let accounts: AccountsList = Deserialize::deserialize_from_vec(self.genesis.accounts)
+            .expect("Failed to deserialize genesis accounts.");
         accounts.0
     }
 

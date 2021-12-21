@@ -14,6 +14,12 @@ impl<H: Clone> MemoryStore<H> {
     }
 }
 
+impl<H: Clone> Default for MemoryStore<H> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<H: Clone> Store<H> for MemoryStore<H> {
     fn push(&mut self, elem: H) {
         self.inner.push(elem);

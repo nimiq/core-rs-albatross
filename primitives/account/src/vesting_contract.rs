@@ -41,6 +41,7 @@ impl VestingContract {
         }
     }
 
+    #[must_use]
     pub fn change_balance(&self, balance: Coin) -> Self {
         VestingContract {
             balance,

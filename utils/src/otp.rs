@@ -171,12 +171,11 @@ impl<T: Clear + Deserialize + Serialize> Locked<T> {
     /// The integrity of the output value is not checked.
     pub fn unlock_unchecked(self, password: &[u8]) -> Result<Unlocked<T>, Locked<T>> {
         let key_opt = Self::otp(&self.lock, password, self.iterations, &self.salt).ok();
-        let mut key;
-        if let Some(key_content) = key_opt {
-            key = key_content;
+        let mut key = if let Some(key_content) = key_opt {
+            key_content
         } else {
             return Err(self);
-        }
+        };
 
         let result = Deserialize::deserialize_from_vec(&key).ok();
 
@@ -392,6 +391,7 @@ impl<T: Clear + Deserialize + Serialize> OtpLock<T> {
     }
 
     #[inline]
+    #[must_use]
     pub fn lock(self) -> Self {
         match self {
             OtpLock::Unlocked(unlocked) => OtpLock::Locked(Unlocked::lock(unlocked)),

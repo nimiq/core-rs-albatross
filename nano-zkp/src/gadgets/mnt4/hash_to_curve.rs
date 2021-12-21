@@ -21,7 +21,7 @@ pub struct HashToCurve;
 impl HashToCurve {
     pub fn hash_to_g1(
         cs: ConstraintSystemRef<MNT4Fr>,
-        hash: &Vec<Boolean<MNT4Fr>>,
+        hash: &[Boolean<MNT4Fr>],
     ) -> Result<G1Var, SynthesisError> {
         // Extend the hash to 96 bytes using Blake2X.
         let mut hash_out = Vec::new();
@@ -131,20 +131,16 @@ impl HashToCurve {
 
         // This implements the try-and-increment method of converting an integer to an elliptic curve point.
         // See https://eprint.iacr.org/2009/226.pdf for more details.
-        let mut i: u8 = 0;
-
-        for _ in 0..256 {
+        for i in 0..=255 {
             let point = G1Affine::get_point_from_x(x, y);
 
-            if point.is_some() {
+            if let Some(g1) = point {
                 let i_bits = byte_to_le_bits(i);
                 // Note that we don't scale by the cofactor here. We do it later.
-                let g1 = point.unwrap();
                 return (i_bits, g1);
             }
 
             x += &MNT4Fr::one();
-            i += 1;
         }
 
         unreachable!()

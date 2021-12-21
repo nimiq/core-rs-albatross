@@ -87,13 +87,16 @@ fn max_module_width(target: &str) -> usize {
 /// Trait that implements Nimiq specific behavior for fern's Dispatch.
 pub trait NimiqDispatch {
     /// Setup logging in pretty_env_logger style.
+    #[must_use]
     fn pretty_logging(self, show_timestamps: bool, formatted: bool) -> Self;
 
     /// Setup nimiq modules log level.
+    #[must_use]
     fn level_for_nimiq(self, level: LevelFilter) -> Self;
 
     /// Filters out every target not starting with "nimiq".
     /// Note that this excludes beserial and libargon2_sys!
+    #[must_use]
     fn only_nimiq(self) -> Self;
 }
 

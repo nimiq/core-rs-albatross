@@ -26,6 +26,7 @@ impl NetAddress {
         }
     }
 
+    #[must_use]
     pub fn subnet(&self, bit_count: u8) -> Self {
         match self {
             NetAddress::IPv4(ref ip) => {

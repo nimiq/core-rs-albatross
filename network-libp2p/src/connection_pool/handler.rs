@@ -312,7 +312,7 @@ impl ProtocolsHandler for ConnectionPoolHandler {
             // Create a channel that is used to receive the close signal from the `Peer` struct (when `Peer::close` is called).
             let (close_tx, close_rx) = oneshot::channel();
 
-            // Register the global mesasge receivers with this message dispatch.
+            // Register the global message receivers with this message dispatch.
             let receive_from_all = self.receive_from_all.take().expect("global receivers");
             socket.receive_multiple_raw(receive_from_all);
 

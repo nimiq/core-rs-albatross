@@ -77,8 +77,12 @@ impl PartialMerkleProofBuilder {
                 // require the right hash in their proof.
                 // The order is as expected, since we process bottom up.
                 let right_chunk = mid / chunk_size;
-                for i in (current_range.start / chunk_size)..right_chunk {
-                    proofs[i].nodes.push(right_hash.clone());
+                for proof in proofs
+                    .iter_mut()
+                    .take(right_chunk)
+                    .skip(current_range.start / chunk_size)
+                {
+                    proof.nodes.push(right_hash.clone());
                 }
 
                 hasher.finish()

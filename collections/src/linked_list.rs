@@ -674,6 +674,7 @@ impl<T> LinkedList<T> {
     /// assert_eq!(splitted.pop_front(), Some(1));
     /// assert_eq!(splitted.pop_front(), None);
     /// ```
+    #[must_use]
     pub fn split_off(&mut self, at: usize) -> LinkedList<T> {
         let len = self.len();
         assert!(at <= len, "Cannot split off at a nonexistent index");

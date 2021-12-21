@@ -36,7 +36,7 @@ impl MacroBlock {
 
     /// This function signs a macro block given a validator's secret key and signer id (which is
     /// simply the position in the signer bitmap).
-    pub fn sign(&mut self, sk: &Fr, signer_id: usize, pk_tree_root: &Vec<u8>) {
+    pub fn sign(&mut self, sk: &Fr, signer_id: usize, pk_tree_root: &[u8]) {
         // Generate the hash point for the signature.
         let hash_point = self.hash(pk_tree_root);
 
@@ -62,7 +62,7 @@ impl MacroBlock {
     ///     4. Finally, we take the second hash and map it to an elliptic curve point using the
     ///        "try-and-increment" method.
     /// The function || means concatenation.
-    pub fn hash(&self, pk_tree_root: &Vec<u8>) -> G1Projective {
+    pub fn hash(&self, pk_tree_root: &[u8]) -> G1Projective {
         let mut first_bytes = self.header_hash.to_vec();
 
         first_bytes.extend(pk_tree_root);

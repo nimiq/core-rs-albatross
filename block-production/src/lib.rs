@@ -235,7 +235,7 @@ impl BlockProducer {
         };
 
         // Calculate the pk_tree_root.
-        let pk_tree_root = validators.as_ref().map(|v| MacroBlock::pk_tree_root(v));
+        let pk_tree_root = validators.as_ref().map(MacroBlock::pk_tree_root);
 
         // Create the body for the macro block.
         let body = MacroBody {

@@ -37,7 +37,7 @@ impl NanoZKP {
         proof: Proof<MNT6_753>,
     ) -> Result<bool, NanoZKPError> {
         // Load the verifying key from file.
-        let mut file = File::open("verifying_keys/merger_wrapper.bin".to_string())?;
+        let mut file = File::open("verifying_keys/merger_wrapper.bin")?;
 
         let vk = VerifyingKey::deserialize_unchecked(&mut file)?;
 

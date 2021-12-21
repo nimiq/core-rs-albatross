@@ -4,5 +4,7 @@ pub trait Hash<H: Merge> {
 
 pub trait Merge {
     fn empty(prefix: u64) -> Self;
+
+    #[must_use]
     fn merge(&self, other: &Self, prefix: u64) -> Self;
 }

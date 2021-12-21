@@ -418,9 +418,7 @@ impl Blockchain {
             } else {
                 // If we were not given a body, then we construct a body from our values and check
                 // its hash against the block header.
-                let real_pk_tree_root = real_validators
-                    .as_ref()
-                    .map(|v| MacroBlock::pk_tree_root(v));
+                let real_pk_tree_root = real_validators.as_ref().map(MacroBlock::pk_tree_root);
 
                 let real_body = MacroBody {
                     validators: real_validators,

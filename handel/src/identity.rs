@@ -28,6 +28,10 @@ impl Identity {
             Identity::Multiple(ids) => ids.len(),
         }
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 pub trait IdentityRegistry: Send + Sync {

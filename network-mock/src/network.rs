@@ -209,13 +209,12 @@ impl Network for MockNetwork {
         );
 
         // Add this peer to the topic list
-        let sender: &Sender<(Arc<Vec<u8>>, MockPeerId)>;
-
-        if let Some(topic) = hub.subscribe(topic_name, self.address) {
-            sender = &topic.sender;
-        } else {
-            return Err(MockNetworkError::AlreadySubscribed(topic_name));
-        }
+        let sender: &Sender<(Arc<Vec<u8>>, MockPeerId)> =
+            if let Some(topic) = hub.subscribe(topic_name, self.address) {
+                &topic.sender
+            } else {
+                return Err(MockNetworkError::AlreadySubscribed(topic_name));
+            };
 
         let stream = BroadcastStream::new(sender.subscribe()).filter_map(move |r| {
             let is_connected = Arc::clone(&is_connected);

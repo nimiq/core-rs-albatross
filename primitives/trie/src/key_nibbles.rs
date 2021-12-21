@@ -88,7 +88,8 @@ impl KeyNibbles {
     }
 
     /// Returns the common prefix between the current key and a given key.
-    pub fn common_prefix(&self, other: &KeyNibbles) -> KeyNibbles {
+    #[must_use]
+    pub fn common_prefix(&self, other: &KeyNibbles) -> Self {
         // Get the smaller length (in nibbles) of the two keys.
         let min_len = cmp::min(self.len(), other.len());
 
@@ -115,7 +116,8 @@ impl KeyNibbles {
 
     /// Returns a slice of the current key. Starting at the given start (inclusive) nibble index and
     /// ending at the given end (exclusive) nibble index.
-    pub fn slice(&self, start: usize, end: usize) -> KeyNibbles {
+    #[must_use]
+    pub fn slice(&self, start: usize, end: usize) -> Self {
         // Do some basic sanity checks.
         if start >= self.len() || end <= start {
             error!(
@@ -183,7 +185,8 @@ impl KeyNibbles {
     }
 
     /// Returns the suffix of the current key starting at the given nibble index.
-    pub fn suffix(&self, start: u8) -> KeyNibbles {
+    #[must_use]
+    pub fn suffix(&self, start: u8) -> Self {
         self.slice(start as usize, self.len())
     }
 }
@@ -240,7 +243,7 @@ impl str::FromStr for KeyNibbles {
             let last_nibble =
                 last_nibble
                     .to_digit(16)
-                    .ok_or_else(|| hex::FromHexError::InvalidHexCharacter {
+                    .ok_or(hex::FromHexError::InvalidHexCharacter {
                         c: last_nibble,
                         index: s.len() - 1,
                     })?;

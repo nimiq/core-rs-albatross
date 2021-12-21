@@ -11,16 +11,14 @@ pub fn genesis_parameters(genesis_block: &MacroHeader) -> (Coin, u64) {
 
     let extra_data = &genesis_block.extra_data;
 
-    let supply;
-
     // Try reading supply from genesis block.
-    if extra_data.len() < 8 {
+    let supply = if extra_data.len() < 8 {
         warn!("Genesis block does not encode initial supply, assuming zero.");
-        supply = Coin::ZERO;
+        Coin::ZERO
     } else {
         let bytes = extra_data[..8].try_into().expect("slice has wrong size");
-        supply = Coin::from_u64_unchecked(u64::from_be_bytes(bytes));
-    }
+        Coin::from_u64_unchecked(u64::from_be_bytes(bytes))
+    };
 
     (supply, genesis_block.timestamp)
 }

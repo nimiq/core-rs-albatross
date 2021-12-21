@@ -109,6 +109,7 @@ impl Signature {
 
     /// Multiplies a Signature by a u16. It's useful when you need to
     /// validator's signature by its number of slots.
+    #[must_use]
     pub fn multiply(&self, x: u16) -> Self {
         let signature = self.signature.mul(&[x as u64]);
         Signature {

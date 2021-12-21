@@ -334,17 +334,15 @@ impl AccountTransactionInteraction for StakingContract {
             return Err(AccountError::InvalidForSender);
         }
 
-        let receipt;
-
         // Parse transaction data.
         let data = OutgoingStakingTransactionProof::parse(transaction)?;
 
-        match data {
+        let receipt = match data {
             OutgoingStakingTransactionProof::DeleteValidator { proof } => {
                 // Get the validator address from the proof.
                 let validator_address = proof.compute_signer();
 
-                receipt = Some(
+                Some(
                     StakingContract::delete_validator(
                         accounts_tree,
                         db_txn,
@@ -352,21 +350,21 @@ impl AccountTransactionInteraction for StakingContract {
                         block_height,
                     )?
                     .serialize_to_vec(),
-                );
+                )
             }
             OutgoingStakingTransactionProof::Unstake { proof } => {
                 // Get the staker address from the proof.
                 let staker_address = proof.compute_signer();
 
-                receipt = StakingContract::unstake(
+                StakingContract::unstake(
                     accounts_tree,
                     db_txn,
                     &staker_address,
                     transaction.total_value(),
                 )?
-                .map(|r| r.serialize_to_vec());
+                .map(|r| r.serialize_to_vec())
             }
-        }
+        };
 
         Ok(receipt)
     }

@@ -29,6 +29,12 @@ pub struct TemporaryBlockProducer {
     pub producer: BlockProducer,
 }
 
+impl Default for TemporaryBlockProducer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TemporaryBlockProducer {
     pub fn new() -> Self {
         let time = Arc::new(OffsetTime::new());

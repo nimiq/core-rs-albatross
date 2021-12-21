@@ -172,7 +172,9 @@ impl Handle<ResponseBlocks> for RequestMissingBlocks {
         }
 
         // if no start_block can be found, assume the last macro block before target_block
-        let start_block = if start_block.is_none() {
+        let start_block = if let Some(block) = start_block {
+            block
+        } else {
             if let Some(block) = blockchain.get_block_at(
                 policy::macro_block_before(target_block.block_number()),
                 false,
@@ -189,8 +191,6 @@ impl Handle<ResponseBlocks> for RequestMissingBlocks {
                     request_identifier: self.get_request_identifier(),
                 };
             }
-        } else {
-            start_block.unwrap()
         };
 
         // Check that the distance is sensible.
