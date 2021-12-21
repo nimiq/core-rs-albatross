@@ -236,7 +236,7 @@ impl<N: Network> Inner<N> {
             // It is always overwritten in the first loop iteration.
             let mut push_result = Err(PushError::Orphan);
 
-            // Try to push blocks, until we encounter an inferior or invalid block
+            // Try to push blocks, until we encounter an invalid block.
             #[allow(clippy::while_let_on_iterator)]
             while let Some(block) = block_iter.next() {
                 let block_hash = block.hash();
@@ -252,11 +252,6 @@ impl<N: Network> Inner<N> {
                         .await
                         .expect("blockchain.push() should not panic");
                 match &push_result {
-                    Ok(PushResult::Ignored) => {
-                        log::warn!("Inferior chain - Aborting");
-                        invalid_blocks.insert(block_hash);
-                        break;
-                    }
                     Err(e) => {
                         log::warn!("Failed to push missing block: {}", e);
                         invalid_blocks.insert(block_hash);
@@ -270,9 +265,9 @@ impl<N: Network> Inner<N> {
             }
 
             // If there are remaining blocks in the iterator, those are invalid.
-            block_iter.for_each(|block| {
+            for block in block_iter {
                 invalid_blocks.insert(block.hash());
-            });
+            }
 
             PushOpResult::Missing(push_result, adopted_blocks, invalid_blocks)
         };
