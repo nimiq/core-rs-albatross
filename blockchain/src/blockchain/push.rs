@@ -233,7 +233,7 @@ impl Blockchain {
         if let Err(e) = this.check_and_commit(
             &this.state,
             &chain_info.head,
-            prev_info.head.view_number(),
+            prev_info.head.next_view_number(),
             &mut txn,
         ) {
             txn.abort();
