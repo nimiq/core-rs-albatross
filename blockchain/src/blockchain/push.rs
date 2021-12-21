@@ -371,7 +371,7 @@ impl Blockchain {
                         &this.state.accounts,
                         &mut write_txn,
                         micro_block,
-                        prev_info.head.view_number(),
+                        prev_info.head.next_view_number(),
                     )?;
 
                     assert_eq!(
