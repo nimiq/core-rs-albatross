@@ -171,7 +171,7 @@ echo "Config files generated in '$configdir'"
 echo "Initializing genesis..."
 export NIMIQ_OVERRIDE_DEVNET_CONFIG="$PWD/$configdir/dev-albatross.toml"
 echo "Compiling the code using genesis from '$NIMIQ_OVERRIDE_DEVNET_CONFIG' ..."
-$cargo_clean -p nimiq-genesis
+$cargo_clean
 $cargo_build
 echo "Done."
 

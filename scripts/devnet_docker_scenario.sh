@@ -51,7 +51,7 @@ echo "Copying the genesis and docker compose files... "
 #Compile the code
 echo "Compiling the code using '$tmp_dir/dev-albatross.toml' ..."
 export NIMIQ_OVERRIDE_DEVNET_CONFIG=$tmp_dir/dev-albatross.toml
-cargo clean -p nimiq-genesis --release
+cargo clean --release
 cargo build --release
 
 echo "Create docker images... "
