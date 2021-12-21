@@ -146,6 +146,72 @@ fn it_can_push_consecutive_view_changes() {
 }
 
 #[test]
+fn micro_block_works_after_macro_block() {
+    let temp_producer = TemporaryBlockProducer::new();
+
+    // apply an entire batch including macro block on view_number/round_number zero
+    for _ in 0..policy::BATCH_LENGTH {
+        let _ = temp_producer.next_block(0, vec![]);
+    }
+    // make sure we are at the beginning of the batch and all block were applied
+    assert_eq!(
+        temp_producer.blockchain.read().block_number(),
+        policy::BATCH_LENGTH
+    );
+    assert_eq!(temp_producer.blockchain.read().view_number(), 0);
+
+    // Test if a micro block can be view changed as well as rebranched immediately after
+    // a round_number 0 macro block
+
+    // create blocks for view 0 and 1
+    let block = temp_producer.next_block_no_push(1, vec![]);
+    let rebranch = temp_producer.next_block_no_push(2, vec![]);
+    // push view 0 block
+    temp_producer.push(block).unwrap();
+    // make sure this was an extend
+    assert_eq!(
+        temp_producer.blockchain.read().block_number(),
+        policy::BATCH_LENGTH + 1
+    );
+    // and rebranch it to block view number 1
+    temp_producer.push(rebranch).unwrap();
+    // make sure this was a rebranch
+    assert_eq!(
+        temp_producer.blockchain.read().block_number(),
+        policy::BATCH_LENGTH + 1
+    );
+
+    // apply the rest of the batch including macro block on view_number/round_number one
+    for _ in 0..policy::BATCH_LENGTH - 1 {
+        let _ = temp_producer.next_block(2, vec![]);
+    }
+    // make sure we are at the beginning of the batch
+    assert_eq!(
+        temp_producer.blockchain.read().block_number(),
+        policy::BATCH_LENGTH * 2
+    );
+    assert_eq!(temp_producer.blockchain.read().view_number(), 2);
+
+    // Test if a micro block can be view changed as well as rebranched immediately after
+    // a round_number non 0 macro block
+
+    // create blocks for view 0, 1 and 2
+    let block = temp_producer.next_block_no_push(1, vec![]);
+    let rebranch1 = temp_producer.next_block_no_push(2, vec![]);
+    // let rebranch2 = temp_producer.next_block_no_push(2, vec![]);
+    // apply them each rebranching the previous one
+    temp_producer.push(block).unwrap();
+    temp_producer.push(rebranch1).unwrap();
+    // temp_producer.push(rebranch2).unwrap();
+
+    assert_eq!(
+        temp_producer.blockchain.read().block_number(),
+        policy::BATCH_LENGTH * 2 + 1
+    );
+    assert_eq!(temp_producer.blockchain.read().view_number(), 2);
+}
+
+#[test]
 fn it_can_rebranch_forks() {
     // Build forks using two producers.
     let temp_producer1 = TemporaryBlockProducer::new();

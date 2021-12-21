@@ -55,6 +55,12 @@ impl TemporaryBlockProducer {
     }
 
     pub fn next_block(&self, view_number: u32, extra_data: Vec<u8>) -> Block {
+        let block = self.next_block_no_push(view_number, extra_data);
+        assert_eq!(self.push(block.clone()), Ok(PushResult::Extended));
+        block
+    }
+
+    pub fn next_block_no_push(&self, view_number: u32, extra_data: Vec<u8>) -> Block {
         let blockchain = self.blockchain.read();
 
         let height = blockchain.block_number() + 1;
@@ -63,7 +69,7 @@ impl TemporaryBlockProducer {
             let macro_block_proposal = self.producer.next_macro_block_proposal(
                 &blockchain,
                 blockchain.time.now() + height as u64 * 1000,
-                0u32,
+                view_number,
                 extra_data,
             );
 
@@ -108,7 +114,6 @@ impl TemporaryBlockProducer {
         // drop the lock before pushing the block as that will acquire write eventually
         drop(blockchain);
 
-        assert_eq!(self.push(block.clone()), Ok(PushResult::Extended));
         block
     }
 
