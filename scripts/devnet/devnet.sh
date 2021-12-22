@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 max_restarts=10
 # Initializing variables
@@ -271,23 +271,36 @@ do
 
     # Produce blocks for some time
     echo "  Producing blocks for $sleep_time seconds"
-    sleep "$sleep_time"
 
-    # Search for deadlocks
-    if grep -wrin "deadlock" $logsdir/*.log
-    then
-        echo "   !!!   DEADLOCK   !!!"
-        fail=true
-        break
+    # Periodically check for deadlocks/panic/crashes
+    secs=0
+    while [ $secs -le $sleep_time ]
+    do
+        # Search for deadlocks
+        if grep -wrin "deadlock" $logsdir/*.log
+        then
+            echo "   !!!   DEADLOCK   !!!"
+            fail=true
+            break
+        fi
+
+        # Search for panics/crashes
+        if grep -wrin " panic " $logsdir/*.log
+        then
+            echo "   !!!   PANIC   !!!"
+            fail=true
+            break
+        fi
+
+        sleep 1
+        secs=$(( $secs + 1 ))
+    done
+
+    if [ "$fail" = true ] ; then
+        echo " Execution failed..."
+        cleanup_exit
     fi
 
-    # Search for panics/crashes
-    if grep -wrin " panic " $logsdir/*.log
-    then
-        echo "   !!!   PANIC   !!!"
-        fail=true
-        break
-    fi
     # Search if blocks are being produced
     bns=()
 
