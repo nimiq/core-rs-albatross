@@ -44,6 +44,16 @@ jobs:
           name: FourValidatorsReconnectTest-logs
           path: |
             temp-logs/
+    - name: Report Status to Slack
+      if: always()
+      uses: ravsamhq/notify-slack-action@v1
+      with:
+          status: ${{ job.status }}
+          notify_when: 'failure'
+          notification_title: 'FourValidatorsReconnectTest has {status_message}'
+          footer: '<{run_url}|View Run>'
+      env:
+          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
  
   MultipleValidatorsDownTest:
     runs-on: ubuntu-20.04
@@ -81,6 +91,16 @@ jobs:
           name: MultipleValidatorsDownTest-logs
           path: |
             temp-logs/
+    - name: Report Status to Slack
+      if: always()
+      uses: ravsamhq/notify-slack-action@v1
+      with:
+          status: ${{ job.status }}
+          notify_when: 'failure'
+          notification_title: 'MultipleValidatorsDownTest has {status_message}'
+          footer: '<{run_url}|View Run>'
+      env:
+          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
 
   FourValidatorsReconnectRMdatabaseTest:
     runs-on: ubuntu-20.04
@@ -118,6 +138,16 @@ jobs:
           name: FourValidatorsReconnectRMdatabaseTest-logs
           path: |
             temp-logs/
+    - name: Report Status to Slack
+      if: always()
+      uses: ravsamhq/notify-slack-action@v1
+      with:
+          status: ${{ job.status }}
+          notify_when: 'failure'
+          notification_title: 'FourValidatorsReconnectRMdatabaseTest has {status_message}'
+          footer: '<{run_url}|View Run>'
+      env:
+          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
 
   FourValidatorsReconnectSpammer:
     runs-on: ubuntu-20.04
@@ -155,6 +185,16 @@ jobs:
           name: FourValidatorsReconnectSpammer-logs
           path: |
             temp-logs/
+    - name: Report Status to Slack
+      if: always()
+      uses: ravsamhq/notify-slack-action@v1
+      with:
+          status: ${{ job.status }}
+          notify_when: 'failure'
+          notification_title: 'FourValidatorsReconnectSpammer has {status_message}'
+          footer: '<{run_url}|View Run>'
+      env:
+          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
 
   MacroBlockProduction:
     runs-on: ubuntu-20.04
@@ -195,3 +235,13 @@ jobs:
           name: MacroBlockProduction-logs
           path: |
             temp-logs/
+    - name: Report Status to Slack
+      if: always()
+      uses: ravsamhq/notify-slack-action@v1
+      with:
+          status: ${{ job.status }}
+          notify_when: 'failure'
+          notification_title: 'MacroBlockProduction has {status_message}'
+          footer: '<{run_url}|View Run>'
+      env:
+          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}

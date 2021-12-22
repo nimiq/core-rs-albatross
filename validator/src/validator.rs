@@ -419,8 +419,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         for (_hash, block) in new_chain.iter() {
             self.blockchain_state.fork_proofs.apply_block(block);
         }
-        self.mempool
-            .mempool_update(&new_chain.to_vec(), &old_chain.to_vec());
+        self.mempool.mempool_update(new_chain, old_chain);
     }
 
     fn on_fork_event(&mut self, event: ForkEvent) {
