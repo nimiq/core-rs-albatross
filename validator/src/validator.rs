@@ -662,8 +662,9 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Future
                 Ok(ConsensusEvent::Lost) => {
                     if let MempoolState::Active = self.mempool_state {
                         let mempool = Arc::clone(&self.mempool);
+                        let network = Arc::clone(&self.consensus.network);
                         tokio::spawn(async move {
-                            mempool.stop_executor().await;
+                            mempool.stop_executor(network).await;
                         });
                         self.mempool_state = MempoolState::Inactive;
                     }
