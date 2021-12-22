@@ -38,6 +38,7 @@ function cleanup_exit() {
         echo "...FAILED..."
         exit 1
     fi
+    echo "SUCCESS" >> temp-state/RESULT.TXT
     exit 0
 }
 
@@ -280,6 +281,7 @@ do
         if grep -wrin "deadlock" $logsdir/*.log
         then
             echo "   !!!   DEADLOCK   !!!"
+            echo "DEADLOCK" >> temp-state/RESULT.TXT
             fail=true
             break
         fi
@@ -288,6 +290,7 @@ do
         if grep -wrin " panic " $logsdir/*.log
         then
             echo "   !!!   PANIC   !!!"
+            echo "PANIC" >> temp-state/RESULT.TXT
             fail=true
             break
         fi
@@ -324,6 +327,7 @@ do
 
     if [ $new_block_number -le $old_block_number ] ; then
         echo "   !!!   BLOCKS ARE NOT BEING PRODUCED AFTER $sleep_time SECONDS   !!!"
+        echo "CHAIN-STALL" >> temp-state/RESULT.TXT
         fail=true
         break
     fi
