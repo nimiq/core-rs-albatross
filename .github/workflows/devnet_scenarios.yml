@@ -44,13 +44,22 @@ jobs:
           name: FourValidatorsReconnectTest-logs
           path: |
             temp-logs/
+    - name: Retrieve failure reason
+      if: always()
+      run: |
+          if [ -f temp-state/RESULT.TXT ]; then
+            echo "::set-output name=FAIL_REASON::$(cat temp-state/RESULT.TXT)"
+          else
+            echo "::set-output name=FAIL_REASON::other"
+          fi
+      id: reason
     - name: Report Status to Slack
       if: always()
       uses: ravsamhq/notify-slack-action@v1
       with:
           status: ${{ job.status }}
           notify_when: 'failure'
-          notification_title: 'FourValidatorsReconnectTest has {status_message}'
+          notification_title: 'FourValidatorsReconnectTest failed because of ${{ steps.reason.outputs.FAIL_REASON }}'
           footer: '<{run_url}|View Run>'
       env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
@@ -91,13 +100,22 @@ jobs:
           name: MultipleValidatorsDownTest-logs
           path: |
             temp-logs/
+    - name: Retrieve failure reason
+      if: always()
+      run: |
+          if [ -f temp-state/RESULT.TXT ]; then
+            echo "::set-output name=FAIL_REASON::$(cat temp-state/RESULT.TXT)"
+          else
+            echo "::set-output name=FAIL_REASON::other"
+          fi
+      id: reason
     - name: Report Status to Slack
       if: always()
       uses: ravsamhq/notify-slack-action@v1
       with:
           status: ${{ job.status }}
           notify_when: 'failure'
-          notification_title: 'MultipleValidatorsDownTest has {status_message}'
+          notification_title: 'MultipleValidatorsDownTest failed because of ${{ steps.reason.outputs.FAIL_REASON }}'
           footer: '<{run_url}|View Run>'
       env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
@@ -138,13 +156,22 @@ jobs:
           name: FourValidatorsReconnectRMdatabaseTest-logs
           path: |
             temp-logs/
+    - name: Retrieve failure reason
+      if: always()
+      run: |
+          if [ -f temp-state/RESULT.TXT ]; then
+            echo "::set-output name=FAIL_REASON::$(cat temp-state/RESULT.TXT)"
+          else
+            echo "::set-output name=FAIL_REASON::other"
+          fi
+      id: reason
     - name: Report Status to Slack
       if: always()
       uses: ravsamhq/notify-slack-action@v1
       with:
           status: ${{ job.status }}
           notify_when: 'failure'
-          notification_title: 'FourValidatorsReconnectRMdatabaseTest has {status_message}'
+          notification_title: 'FourValidatorsReconnectRMdatabaseTest failed because of ${{ steps.reason.outputs.FAIL_REASON }}'
           footer: '<{run_url}|View Run>'
       env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
@@ -185,13 +212,22 @@ jobs:
           name: FourValidatorsReconnectSpammer-logs
           path: |
             temp-logs/
+    - name: Retrieve failure reason
+      if: always()
+      run: |
+          if [ -f temp-state/RESULT.TXT ]; then
+            echo "::set-output name=FAIL_REASON::$(cat temp-state/RESULT.TXT)"
+          else
+            echo "::set-output name=FAIL_REASON::other"
+          fi
+      id: reason
     - name: Report Status to Slack
       if: always()
       uses: ravsamhq/notify-slack-action@v1
       with:
           status: ${{ job.status }}
           notify_when: 'failure'
-          notification_title: 'FourValidatorsReconnectSpammer has {status_message}'
+          notification_title: 'FourValidatorsReconnectSpammer failed because of ${{ steps.reason.outputs.FAIL_REASON }}'
           footer: '<{run_url}|View Run>'
       env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
@@ -235,13 +271,22 @@ jobs:
           name: MacroBlockProduction-logs
           path: |
             temp-logs/
+    - name: Retrieve failure reason
+      if: always()
+      run: |
+          if [ -f temp-state/RESULT.TXT ]; then
+            echo "::set-output name=FAIL_REASON::$(cat temp-state/RESULT.TXT)"
+          else
+            echo "::set-output name=FAIL_REASON::other"
+          fi
+      id: reason
     - name: Report Status to Slack
       if: always()
       uses: ravsamhq/notify-slack-action@v1
       with:
           status: ${{ job.status }}
           notify_when: 'failure'
-          notification_title: 'MacroBlockProduction has {status_message}'
+          notification_title: 'MacroBlockProduction failed because of ${{ steps.reason.outputs.FAIL_REASON }}'
           footer: '<{run_url}|View Run>'
       env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
