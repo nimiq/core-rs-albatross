@@ -8,13 +8,13 @@ use crate::math::CeilingDiv;
 
 /// A PartialMerkleProofBuilder can construct sequentially verifiable merkle proofs for a large list of data.
 /// The data can then be split into chunks and each chunk has its own (small) proof.
-/// Each proof can be verified by taking the previous proof's result into account (to minimise the amount of work required).
+/// Each proof can be verified by taking the previous proof's result into account (to minimize the amount of work required).
 /// This way, the large list of data can be transmitted in smaller chunks and one can incrementally verify
 /// the correctness of these chunks.
 pub struct PartialMerkleProofBuilder {}
 
 impl PartialMerkleProofBuilder {
-    pub fn new<H: HashOutput>(
+    pub fn get_proofs<H: HashOutput>(
         hashes: &[H],
         chunk_size: usize,
     ) -> Result<Vec<PartialMerkleProof<H>>, PartialMerkleProofError> {
@@ -35,7 +35,7 @@ impl PartialMerkleProofBuilder {
             .iter()
             .map(|v| H::Builder::default().chain(v).finish())
             .collect();
-        PartialMerkleProofBuilder::new::<H>(&hashes, chunk_size)
+        PartialMerkleProofBuilder::get_proofs::<H>(&hashes, chunk_size)
     }
 
     fn compute<H: HashOutput>(

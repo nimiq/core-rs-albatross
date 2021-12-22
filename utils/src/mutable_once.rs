@@ -15,7 +15,10 @@ impl<T> MutableOnce<T> {
     }
 
     /// This mutates the content of the cell
-    /// and should only be called once, before any other reference can exist.
+    ///
+    /// # Safety
+    ///
+    /// This function should only be called once, before any other reference can exist.
     /// This condition is not checked, thus this call is unsafe.
     pub unsafe fn replace(&self, value: T) {
         let _ = mem::replace(&mut *self.inner.get(), value);

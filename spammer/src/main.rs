@@ -51,9 +51,11 @@ impl SpammerCommandLine {
     pub fn from_args() -> Self {
         <Self as StructOpt>::from_args()
     }
+}
 
+impl FromIterator<String> for SpammerCommandLine {
     /// Load command line from command line arguments (std::env::args)
-    pub fn from_iter<I: IntoIterator<Item = String>>(args: I) -> Self {
+    fn from_iter<I: IntoIterator<Item = String>>(args: I) -> Self {
         <Self as StructOpt>::from_iter(args)
     }
 }

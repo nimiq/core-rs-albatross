@@ -54,19 +54,14 @@ impl ConfigFile {
     ///
     const EXAMPLE_CONFIG: &'static str = include_str!("client.example.toml");
 
-    /// Parse config file from string
-    pub fn from_str<S: AsRef<str>>(config: S) -> Result<ConfigFile, Error> {
-        Ok(toml::from_str(config.as_ref())?)
-    }
-
     /// Parse config file from file
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<ConfigFile, Error> {
-        Self::from_str(read_to_string(path)?)
+        Self::from_str(&read_to_string(path)?)
     }
 
     /// Find config file.
     ///
-    /// If the config file location was overwritte by the optional command line argument, it will
+    /// If the config file location was overwritten by the optional command line argument, it will
     /// try this and possibly fail.
     ///
     /// Otherwise it will look into the default location, which is ~/.nimiq
@@ -110,6 +105,15 @@ impl ConfigFile {
 
         // Load config.
         Self::from_file(&path)
+    }
+}
+
+impl FromStr for ConfigFile {
+    type Err = Error;
+
+    /// Parse config file from string
+    fn from_str(s: &str) -> Result<ConfigFile, Self::Err> {
+        Ok(toml::from_str(s)?)
     }
 }
 
