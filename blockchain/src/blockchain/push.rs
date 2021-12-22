@@ -280,7 +280,7 @@ impl Blockchain {
         this.state.main_chain = chain_info;
         this.state.head_hash = block_hash.clone();
 
-        // Downgrade the lock again as the nofity listeners might want to acquire read access themselves.
+        // Downgrade the lock again as the notify listeners might want to acquire read access themselves.
         let this = RwLockWriteGuard::downgrade_to_upgradable(this);
 
         if is_election_block {

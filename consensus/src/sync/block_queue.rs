@@ -116,7 +116,7 @@ impl<N: Network> Inner<N> {
 
         // Ideally we would acquire upgradable read here. And provide it to push_block. RwLockUpgradableRead however is not
         // Send and cannot be moved into the future that is created.
-        // Howoever the push_block does not push the block but creates a future which pushes the block.
+        // However the push_block does not push the block but creates a future which pushes the block.
         // Hence every future would only be created when an RwLockUpgradableReadGuard can be acquired, requiring
         // to wait for the previous future to have been polled and concluded.
         // Therefore the read here needs to suffice even though the condition (block_height <= head_height) might

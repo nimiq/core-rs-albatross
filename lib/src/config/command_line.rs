@@ -76,16 +76,18 @@ impl CommandLine {
     pub fn from_args() -> Self {
         <Self as StructOpt>::from_args()
     }
+}
 
+impl FromIterator<String> for CommandLine {
     /// Load command line from command line arguments (std::env::args)
-    pub fn from_iter<I: IntoIterator<Item = String>>(args: I) -> Self {
+    fn from_iter<I: IntoIterator<Item = String>>(args: I) -> Self {
         <Self as StructOpt>::from_iter(args)
     }
 }
 
 #[derive(Debug, Error)]
 pub enum LogTagParseError {
-    #[error("Log tag is missing seperator: {0}")]
+    #[error("Log tag is missing separator: {0}")]
     MissingColon(String),
     #[error("Invalid log level: {0}")]
     InvalidLogLevel(#[from] ParseLevelError),
