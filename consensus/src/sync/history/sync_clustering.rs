@@ -115,7 +115,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
 
         // Truncate epoch_ids by epoch_number: Discard all epoch_ids prior to our accepted state.
         if !epoch_ids.ids.is_empty() && epoch_ids.first_epoch_number <= our_epoch_number {
-            if epoch_ids.first_epoch_number + epoch_ids.ids.len() < our_epoch_number {
+            if our_epoch_number - epoch_ids.first_epoch_number <= epoch_ids.ids.len() {
                 // Peer is behind, emit it as useless.
                 return Some(epoch_ids.sender);
             } else {
