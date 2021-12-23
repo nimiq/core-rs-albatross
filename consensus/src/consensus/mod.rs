@@ -12,7 +12,7 @@ use tokio_stream::wrappers::BroadcastStream;
 
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_database::Environment;
-use nimiq_mempool::executor::TransactionTopic;
+use nimiq_mempool::mempool::TransactionTopic;
 use nimiq_network_interface::network::Network;
 use nimiq_transaction::Transaction;
 

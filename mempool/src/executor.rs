@@ -8,7 +8,7 @@ use futures::{stream::BoxStream, Future, StreamExt};
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 
 use nimiq_blockchain::Blockchain;
-use nimiq_network_interface::network::{Network, Topic};
+use nimiq_network_interface::network::Network;
 use nimiq_network_interface::prelude::MsgAcceptance;
 use nimiq_transaction::Transaction;
 
@@ -17,18 +17,6 @@ use crate::mempool::MempoolState;
 use crate::verify::verify_tx;
 
 const CONCURRENT_VERIF_TASKS: u32 = 1000;
-
-/// Transaction topic for the MempoolExecutor to request transactions from the network
-#[derive(Clone, Debug, Default)]
-pub struct TransactionTopic;
-
-impl Topic for TransactionTopic {
-    type Item = Transaction;
-
-    const BUFFER_SIZE: usize = 1024;
-    const NAME: &'static str = "transactions";
-    const VALIDATE: bool = true;
-}
 
 pub(crate) struct MempoolExecutor<N: Network> {
     // Blockchain reference
@@ -51,24 +39,7 @@ pub(crate) struct MempoolExecutor<N: Network> {
 }
 
 impl<N: Network> MempoolExecutor<N> {
-    pub async fn new(
-        blockchain: Arc<RwLock<Blockchain>>,
-        state: Arc<RwLock<MempoolState>>,
-        filter: Arc<RwLock<MempoolFilter>>,
-        network: Arc<N>,
-    ) -> Self {
-        let txn_stream = network.subscribe::<TransactionTopic>().await.unwrap();
-        Self {
-            blockchain,
-            state,
-            filter,
-            network,
-            verification_tasks: Arc::new(AtomicU32::new(0)),
-            txn_stream,
-        }
-    }
-
-    pub fn with_txn_stream(
+    pub fn new(
         blockchain: Arc<RwLock<Blockchain>>,
         state: Arc<RwLock<MempoolState>>,
         filter: Arc<RwLock<MempoolFilter>>,

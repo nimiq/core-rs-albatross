@@ -13,7 +13,7 @@ use nimiq_block::Block;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, TransactionVerificationCache};
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
-use nimiq_network_interface::network::Network;
+use nimiq_network_interface::network::{Network, Topic};
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
 use nimiq_transaction::account::staking_contract::{
@@ -25,6 +25,18 @@ use crate::config::MempoolConfig;
 use crate::executor::MempoolExecutor;
 use crate::filter::{MempoolFilter, MempoolRules};
 use crate::verify::{verify_tx, VerifyErr};
+
+/// Transaction topic for the Mempool to request transactions from the network
+#[derive(Clone, Debug, Default)]
+pub struct TransactionTopic;
+
+impl Topic for TransactionTopic {
+    type Item = Transaction;
+
+    const BUFFER_SIZE: usize = 1024;
+    const NAME: &'static str = "transactions";
+    const VALIDATE: bool = true;
+}
 
 /// Struct defining the Mempool
 pub struct Mempool {
@@ -80,13 +92,16 @@ impl Mempool {
             return;
         }
 
+        // Suscribe to the network TX topic
+        let txn_stream = network.subscribe::<TransactionTopic>().await.unwrap();
+
         let mempool_executor = MempoolExecutor::new(
             Arc::clone(&self.blockchain),
             Arc::clone(&self.state),
             Arc::clone(&self.filter),
             Arc::clone(&network),
-        )
-        .await;
+            txn_stream,
+        );
 
         // Start the executor and obtain its handle
         let (abort_handle, abort_registration) = AbortHandle::new_pair();
@@ -113,11 +128,11 @@ impl Mempool {
             return;
         }
 
-        let mempool_executor = MempoolExecutor::<N>::with_txn_stream(
+        let mempool_executor = MempoolExecutor::<N>::new(
             Arc::clone(&self.blockchain),
             Arc::clone(&self.state),
             Arc::clone(&self.filter),
-            network,
+            Arc::clone(&network),
             txn_stream,
         );
 
@@ -132,7 +147,28 @@ impl Mempool {
     /// Stops the mempool executor
     ///
     /// This functions should only be called only after one of the functions to start the executor is called.
-    pub async fn stop_executor(&self) {
+    pub async fn stop_executor<N: Network>(&self, network: Arc<N>) {
+        let mut handle = self.executor_handle.lock().await;
+
+        if handle.is_none() {
+            // If there isn't any executor running we return
+            return;
+        }
+
+        // Unsuscribe to the network TX topic before killing the executor
+        network.unsubscribe::<TransactionTopic>().await.unwrap();
+
+        // Stop the executor
+        handle.take().expect("Expected an executor handle").abort();
+    }
+
+    /// Stops the mempool executor without TX stream
+    ///
+    /// This function is used for testing purposes (along with the start_executor_with_txn_stream function)
+    /// it is the responsability of the caller to suscribe and unsuscribe from the topic accordingly
+    ///
+    /// This functions should only be called only after one of the functions to start the executor is called.
+    pub async fn stop_executor_without_unsuscribe(&self) {
         let mut handle = self.executor_handle.lock().await;
 
         if handle.is_none() {
