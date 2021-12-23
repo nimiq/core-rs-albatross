@@ -24,7 +24,7 @@ thiserror = "1.0"
 hex = "0.4"
 rand_core = "0.6"
 rand = "0.8"
-sha2 = "0.9"
+sha2 = "0.10"
 serde = { version = "1.0", optional = true }
 
 beserial = { path = "../beserial" }
