@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use colored::Colorize;
 use fern::colors::{Color, ColoredLevelConfig};
 use fern::{log_file, Dispatch};
-use file_rotate::{FileRotate, RotationMode};
+use file_rotate::{compression::Compression, suffix::CountSuffix, ContentLimit, FileRotate};
 use lazy_static::lazy_static;
 use log::{Level, LevelFilter};
 use time::OffsetDateTime;
@@ -260,8 +260,9 @@ pub fn initialize_logging(
         // Create rotating log file according to settings
         let log = FileRotate::new(
             rotating_file_settings.path.join("log.log"),
-            RotationMode::BytesSurpassed(rotating_file_settings.size),
-            rotating_file_settings.file_count,
+            CountSuffix::new(rotating_file_settings.file_count),
+            ContentLimit::Bytes(rotating_file_settings.size),
+            Compression::None,
         );
 
         dispatch = Dispatch::new().chain(dispatch);
