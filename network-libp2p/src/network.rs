@@ -813,7 +813,12 @@ impl NetworkInterface for Network {
                 match <T as Deserialize>::deserialize(&mut data.reader()) {
                     Ok(message) => Some((message, peer)),
                     Err(e) => {
-                        tracing::error!("Failed to deserialize message: {}", e);
+                        tracing::error!(
+                            "Failed to deserialize {} message from {}: {}",
+                            std::any::type_name::<T>(),
+                            peer.id(),
+                            e
+                        );
                         None
                     }
                 }
