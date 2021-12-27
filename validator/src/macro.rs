@@ -18,6 +18,7 @@ use nimiq_tendermint::{
     Checkpoint, Step, TendermintOutsideDeps, TendermintReturn, TendermintState,
 };
 use nimiq_validator_network::ValidatorNetwork;
+use nimiq_vrf::VrfSeed;
 
 use crate::tendermint::TendermintInterface;
 
@@ -69,6 +70,7 @@ impl ProduceMacroBlock {
         block_producer: BlockProducer,
         validator_slot_band: u16,
         active_validators: Validators,
+        prev_seed: VrfSeed,
         block_height: u32,
         initial_round: u32,
         state: Option<PersistedMacroState<TValidatorNetwork>>,
@@ -81,10 +83,10 @@ impl ProduceMacroBlock {
         >,
     ) -> Self {
         // create the TendermintOutsideDeps instance
-        // Replace here with the actual OutSide Deps instead of the Mocked ones.
         let deps = TendermintInterface::new(
             validator_slot_band,
             active_validators,
+            prev_seed,
             block_height,
             network,
             blockchain,

@@ -46,6 +46,12 @@ big_array! { BigArray; }
 
 create_typed_array!(VrfEntropy, u8, 32);
 
+impl VrfEntropy {
+    pub fn rng(self, use_case: VrfUseCase) -> VrfRng {
+        VrfRng::new(self, use_case)
+    }
+}
+
 impl std::fmt::Debug for VrfEntropy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("VrfEntropy")

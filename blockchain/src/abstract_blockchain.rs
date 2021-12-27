@@ -1,11 +1,9 @@
 use nimiq_block::{Block, BlockType, MacroBlock};
-use nimiq_collections::BitSet;
 use nimiq_database::Transaction;
 use nimiq_hash::Blake2bHash;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::policy;
 use nimiq_primitives::slots::{Validator, Validators};
-use nimiq_vrf::{Rng, VrfSeed, VrfUseCase};
 
 use crate::{Blockchain, ChainInfo};
 
@@ -114,144 +112,13 @@ pub trait AbstractBlockchain {
     ) -> Option<ChainInfo>;
 
     /// Calculates the slot owner (represented as the validator plus the slot number) at a given
-    /// block number and view number with an optional previous seed.
-    /// If the seed is none the previous block is retrieved to get the seed instead.
-    fn get_slot_owner_with_seed(
-        &self,
-        block_number: u32,
-        view_number: u32,
-        prev_seed: Option<VrfSeed>,
-        txn_option: Option<&Transaction>,
-    ) -> Option<(Validator, u16)> {
-        // The genesis block doesn't technically have a view slot list.
-        if block_number == 0 {
-            return None;
-        }
-
-        // Get the disabled slots for the current batch.
-        let disabled_slots = self
-            .get_block_at(policy::macro_block_before(block_number), true, txn_option)?
-            .unwrap_macro()
-            .body
-            .unwrap()
-            .disabled_set;
-
-        // Get the slot number for the current block.
-        let slot_number = self.get_slot_owner_number_with_seed(
-            block_number,
-            view_number,
-            disabled_slots,
-            prev_seed,
-            txn_option,
-        )?;
-
-        // Get the current validators.
-        // Note: We need to handle the case where `block_number()` is at an election block
-        // (so `current_slots()` was already updated by it, pushing this epoch's slots to
-        // `state.previous_slots` and deleting previous epoch's slots).
-        let validators = if policy::epoch_at(self.block_number()) == policy::epoch_at(block_number)
-            && !policy::is_election_block_at(self.block_number())
-        {
-            self.current_validators()?
-        } else if (policy::epoch_at(self.block_number()) == policy::epoch_at(block_number)
-            && policy::is_election_block_at(self.block_number()))
-            || (policy::epoch_at(self.block_number()) == policy::epoch_at(block_number) + 1
-                && !policy::is_election_block_at(self.block_number()))
-        {
-            self.previous_validators()?
-        } else {
-            self.get_block_at(
-                policy::election_block_before(block_number),
-                true,
-                txn_option,
-            )?
-            .validators()?
-        };
-
-        // Finally get the correct validator.
-        let validator = validators.get_validator_by_slot_number(slot_number).clone();
-
-        Some((validator, slot_number))
-    }
-
-    /// Calculates the slot owner (represented as the validator plus the slot number) at a given
     /// block number and view number.
-    #[inline]
     fn get_slot_owner_at(
         &self,
         block_number: u32,
         view_number: u32,
         txn_option: Option<&Transaction>,
-    ) -> Option<(Validator, u16)> {
-        self.get_slot_owner_with_seed(block_number, view_number, None, txn_option)
-    }
-
-    /// Calculates the slot owner number at a given block number and view number with an optional previous seed.
-    /// If the seed is none the previous block is retrieved to get the seed instead.
-    /// In combination with the active Validators, this can be used to retrieve the validator info.
-    fn get_slot_owner_number_with_seed(
-        &self,
-        block_number: u32,
-        view_number: u32,
-        disabled_slots: BitSet,
-        seed: Option<VrfSeed>,
-        txn_option: Option<&Transaction>,
-    ) -> Option<u16> {
-        let seed = seed.or_else(|| {
-            Some(
-                self.get_block_at(block_number - 1, false, txn_option)?
-                    .seed()
-                    .clone(),
-            )
-        })?;
-        // RNG for slot selection
-        let mut rng = seed.rng(VrfUseCase::ViewSlotSelection);
-
-        // Create a list of viable slots.
-        let mut slots = vec![];
-
-        if disabled_slots.len() == policy::SLOTS as usize {
-            // If all slots are disabled, we will accept any slot, since we want the
-            // chain to progress.
-            slots = (0..policy::SLOTS).collect();
-        } else {
-            // Otherwise, we will only accept slots that are not disabled.
-            for i in 0..policy::SLOTS {
-                if !disabled_slots.contains(i as usize) {
-                    slots.push(i);
-                }
-            }
-        }
-
-        // Shuffle the slots vector using the Fisher–Yates shuffle.
-        for i in (1..slots.len()).rev() {
-            let r = rng.next_u64_max((i + 1) as u64) as usize;
-            slots.swap(r, i);
-        }
-
-        // Now simply take the view number modulo the number of viable slots and that will give us
-        // the chosen slot.
-        Some(slots[view_number as usize % slots.len()])
-    }
-
-    /// Calculate the slot owner number at a given block and view number.
-    /// In combination with the active Validators, this can be used to retrieve the validator info.
-    #[inline]
-    fn get_slot_owner_number_at(
-        &self,
-        block_number: u32,
-        view_number: u32,
-        disabled_slots: BitSet,
-        txn_option: Option<&Transaction>,
-    ) -> Option<u16> {
-        self.get_slot_owner_number_with_seed(
-            block_number,
-            view_number,
-            disabled_slots,
-            None,
-            txn_option,
-        )
-    }
+    ) -> Option<(Validator, u16)>;
 }
 
 impl AbstractBlockchain for Blockchain {
@@ -325,5 +192,19 @@ impl AbstractBlockchain for Blockchain {
     ) -> Option<ChainInfo> {
         self.chain_store
             .get_chain_info(hash, include_body, txn_option)
+    }
+
+    fn get_slot_owner_at(
+        &self,
+        block_number: u32,
+        view_number: u32,
+        txn_option: Option<&Transaction>,
+    ) -> Option<(Validator, u16)> {
+        let vrf_entropy = self
+            .get_block_at(block_number - 1, false, txn_option)?
+            .seed()
+            .entropy();
+        self.get_proposer_at(block_number, view_number, vrf_entropy, txn_option)
+            .map(|slot| (slot.validator, slot.number))
     }
 }

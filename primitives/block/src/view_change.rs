@@ -6,7 +6,7 @@ use nimiq_hash::{Hash, SerializeContent};
 use nimiq_hash_derive::SerializeContent;
 use nimiq_primitives::policy::TWO_F_PLUS_ONE;
 use nimiq_primitives::slots::Validators;
-use nimiq_vrf::vrf::VrfEntropy;
+use nimiq_vrf::VrfEntropy;
 
 use crate::{Message, MultiSignature, SignedMessage, PREFIX_VIEW_CHANGE};
 
@@ -59,6 +59,8 @@ pub struct ViewChanges {
     pub first_view_number: u32,
     /// The last view number - i.e. the first one that wasn't changed
     pub last_view_number: u32,
+    /// The VRF entropy of the parent block.
+    pub vrf_entropy: VrfEntropy,
 }
 
 impl ViewChanges {
@@ -66,12 +68,14 @@ impl ViewChanges {
         block_number: u32,
         first_view_number: u32,
         last_view_number: u32,
+        vrf_entropy: VrfEntropy,
     ) -> Option<ViewChanges> {
         if first_view_number < last_view_number {
             Some(ViewChanges {
                 block_number,
                 first_view_number,
                 last_view_number,
+                vrf_entropy,
             })
         } else {
             None

@@ -245,14 +245,14 @@ impl Blockchain {
                     }
 
                     // Get intended slot owner for that block.
-                    if let Some((validator, _)) = self.get_slot_owner_with_seed(
+                    if let Some(slot) = self.get_proposer_at(
                         proof.header1.block_number,
                         proof.header1.view_number,
-                        Some(proof.prev_vrf_seed.clone()),
+                        proof.prev_vrf_seed.entropy(),
                         txn_opt,
                     ) {
                         // Verify fork proof.
-                        if let Err(e) = proof.verify(&validator.signing_key) {
+                        if let Err(e) = proof.verify(&slot.validator.signing_key) {
                             warn!("Rejecting block - Bad fork proof: {:?}", e);
                             return Err(PushError::InvalidBlock(BlockError::InvalidForkProof));
                         }

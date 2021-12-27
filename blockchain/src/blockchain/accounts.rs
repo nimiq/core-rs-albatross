@@ -2,6 +2,7 @@ use nimiq_account::Accounts;
 use nimiq_block::{Block, MicroBlock, ViewChanges};
 use nimiq_database::WriteTransaction;
 use nimiq_primitives::policy;
+use nimiq_vrf::VrfEntropy;
 
 use crate::blockchain_state::BlockchainState;
 use crate::history_store::ExtendedTransaction;
@@ -14,6 +15,7 @@ impl Blockchain {
         &self,
         state: &BlockchainState,
         block: &Block,
+        prev_entropy: VrfEntropy,
         first_view_number: u32,
         txn: &mut WriteTransaction,
     ) -> Result<(), PushError> {
@@ -68,6 +70,7 @@ impl Blockchain {
                     micro_block.header.block_number,
                     first_view_number,
                     micro_block.header.view_number,
+                    prev_entropy,
                 );
 
                 // Create the inherents from any forks and view changes.
@@ -120,6 +123,7 @@ impl Blockchain {
         accounts: &Accounts,
         txn: &mut WriteTransaction,
         micro_block: &MicroBlock,
+        prev_entropy: VrfEntropy,
         prev_view_number: u32,
     ) -> Result<(), PushError> {
         assert_eq!(
@@ -141,6 +145,7 @@ impl Blockchain {
             micro_block.header.block_number,
             prev_view_number,
             micro_block.header.view_number,
+            prev_entropy,
         );
 
         // Create the inherents from any forks and view changes.

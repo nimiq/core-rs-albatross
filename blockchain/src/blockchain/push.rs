@@ -6,6 +6,7 @@ use nimiq_block::{Block, ForkProof};
 use nimiq_database::WriteTransaction;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::policy;
+use nimiq_vrf::VrfEntropy;
 
 use crate::blockchain_state::BlockchainState;
 use crate::chain_info::ChainInfo;
@@ -58,16 +59,21 @@ impl Blockchain {
             .get_chain_info(block.parent_hash(), false, Some(&read_txn))
             .ok_or(PushError::Orphan)?;
 
-        // Get the intended slot owner.
-        let (slot_owner, _) = this
-            .get_slot_owner_at(block.block_number(), block.view_number(), Some(&read_txn))
-            .expect("Couldn't calculate slot owner!");
+        // Get the intended block proposer.
+        let proposer_slot = this
+            .get_proposer_at(
+                block.block_number(),
+                block.view_number(),
+                prev_info.head.seed().entropy(),
+                Some(&read_txn),
+            )
+            .ok_or(PushError::Orphan)?;
 
         // Check the header.
         if let Err(e) = Blockchain::verify_block_header(
             this.deref(),
             &block.header(),
-            &slot_owner.signing_key,
+            &proposer_slot.validator.signing_key,
             Some(&read_txn),
             !trusted,
         ) {
@@ -79,7 +85,7 @@ impl Blockchain {
         if let Err(e) = Blockchain::verify_block_justification(
             &*this,
             &block,
-            &slot_owner.signing_key,
+            &proposer_slot.validator.signing_key,
             Some(&read_txn),
             !trusted,
         ) {
@@ -233,6 +239,7 @@ impl Blockchain {
         if let Err(e) = this.check_and_commit(
             &this.state,
             &chain_info.head,
+            prev_info.head.seed().entropy(),
             prev_info.head.next_view_number(),
             &mut txn,
         ) {
@@ -371,6 +378,7 @@ impl Blockchain {
                         &this.state.accounts,
                         &mut write_txn,
                         micro_block,
+                        prev_info.head.seed().entropy(),
                         prev_info.head.next_view_number(),
                     )?;
 
@@ -388,6 +396,7 @@ impl Blockchain {
         }
 
         // Push each fork block.
+        let mut prev_entropy = ancestor.1.head.seed().entropy();
         let mut prev_view_number = ancestor.1.head.next_view_number();
 
         let mut fork_iter = fork_chain.iter().rev();
@@ -396,6 +405,7 @@ impl Blockchain {
             if let Err(e) = this.check_and_commit(
                 &this.state,
                 &fork_block.1.head,
+                prev_entropy,
                 prev_view_number,
                 &mut write_txn,
             ) {
@@ -416,6 +426,7 @@ impl Blockchain {
                 return Err(PushError::InvalidFork);
             }
 
+            prev_entropy = fork_block.1.head.seed().entropy();
             prev_view_number = fork_block.1.head.next_view_number();
         }
 
@@ -505,6 +516,7 @@ impl Blockchain {
         &self,
         state: &BlockchainState,
         block: &Block,
+        prev_entropy: VrfEntropy,
         first_view_number: u32,
         txn: &mut WriteTransaction,
     ) -> Result<(), PushError> {
@@ -523,7 +535,7 @@ impl Blockchain {
         }
 
         // Commit block to AccountsTree.
-        if let Err(e) = self.commit_accounts(state, block, first_view_number, txn) {
+        if let Err(e) = self.commit_accounts(state, block, prev_entropy, first_view_number, txn) {
             warn!("Rejecting block - commit failed: {:?}", e);
             #[cfg(feature = "metrics")]
             self.metrics.note_invalid_block();

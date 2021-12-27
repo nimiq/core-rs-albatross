@@ -59,7 +59,8 @@ impl BlockProducer {
 
         // Calculate the seed for this block by signing the previous block seed with the validator
         // key.
-        let seed = blockchain.head().seed().sign_next(&self.signing_key);
+        let prev_seed = blockchain.head().seed().clone();
+        let seed = prev_seed.sign_next(&self.signing_key);
 
         // Sort the transactions.
         transactions.sort_unstable();
@@ -69,6 +70,7 @@ impl BlockProducer {
             blockchain.block_number() + 1,
             blockchain.next_view_number(),
             view_number,
+            prev_seed.entropy(),
         );
 
         // Create the inherents from the fork proofs and the view changes.
@@ -214,6 +216,8 @@ impl BlockProducer {
             .history_store
             .add_to_history(&mut txn, policy::epoch_at(block_number), &ext_txs)
             .expect("Failed to compute history root during block production.");
+
+        txn.abort();
 
         // Calculate the disabled set for the current validator set.
         // Note: We are fetching the previous disabled set here because we have already updated the

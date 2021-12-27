@@ -10,7 +10,7 @@ use nimiq_vrf::{AliasMethod, VrfUseCase};
 
 use crate::blockchain_state::BlockchainState;
 use crate::reward::block_reward_for_batch;
-use crate::{AbstractBlockchain, Blockchain};
+use crate::Blockchain;
 use nimiq_primitives::account::AccountType;
 use nimiq_trie::key_nibbles::KeyNibbles;
 
@@ -65,18 +65,19 @@ impl Blockchain {
         txn_option: Option<&db::Transaction>,
     ) -> Inherent {
         // Get the slot owner and slot number for this block number and view number.
-        let (producer, slot) = self
-            .get_slot_owner_at(
+        let proposer_slot = self
+            .get_proposer_at(
                 fork_proof.header1.block_number,
                 fork_proof.header1.view_number,
+                fork_proof.prev_vrf_seed.entropy(),
                 txn_option,
             )
             .expect("Couldn't calculate slot owner!");
 
         // Create the SlashedSlot struct.
         let slot = SlashedSlot {
-            slot,
-            validator_address: producer.address,
+            slot: proposer_slot.number,
+            validator_address: proposer_slot.validator.address,
             event_block: fork_proof.header1.block_number,
         };
 
@@ -99,16 +100,24 @@ impl Blockchain {
         (view_changes.first_view_number..view_changes.last_view_number)
             .map(|view_number| {
                 // Get the slot owner and slot number for this block number and view number.
-                let (producer, slot) = self
-                    .get_slot_owner_at(view_changes.block_number, view_number, txn_option)
+                let proposer_slot = self
+                    .get_proposer_at(
+                        view_changes.block_number,
+                        view_number,
+                        view_changes.vrf_entropy.clone(),
+                        txn_option,
+                    )
                     .expect("Couldn't calculate slot owner!");
 
-                debug!("Slash inherent: view change: {}", producer.voting_key);
+                debug!(
+                    "Slash inherent: view change: {}",
+                    proposer_slot.validator.address
+                );
 
                 // Create the SlashedSlot struct.
                 let slot = SlashedSlot {
-                    slot,
-                    validator_address: producer.address,
+                    slot: proposer_slot.number,
+                    validator_address: proposer_slot.validator.address,
                     event_block: view_changes.block_number,
                 };
 

@@ -29,6 +29,7 @@ use tendermint_protocol::{
     TendermintState,
 };
 use utils::time::OffsetTime;
+use vrf::VrfSeed;
 
 use crate::aggregation::tendermint::HandelTendermintAdapter;
 use crate::validator::ProposalTopic;
@@ -42,6 +43,10 @@ pub struct TendermintInterface<TValidatorNetwork: ValidatorNetwork> {
     pub offset_time: OffsetTime,
     // The slot band for our validator.
     pub validator_slot_band: u16,
+    // The VRF seed of the parent block.
+    pub prev_seed: VrfSeed,
+    // The block number of the macro block to produce.
+    pub block_height: u32,
     // Information relative to our validator that is necessary to produce blocks.
     pub block_producer: BlockProducer,
     // The validators for the current epoch.
@@ -99,17 +104,14 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
         let blockchain = self.blockchain.read();
 
         // Get the validator for this round.
-        let (validator, _) = blockchain
-            .get_slot_owner_at(blockchain.block_number() + 1, round, None)
+        let proposer_slot = blockchain
+            .get_proposer_at(self.block_height, round, self.prev_seed.entropy(), None)
             .expect("Couldn't find slot owner!");
 
-        // Get our validator.
-        let our_validator = self
-            .current_validators
-            .get_validator_by_slot_band(self.validator_slot_band);
-
-        // Check if the addresses match.
-        validator.address == our_validator.address
+        // Check if the slot bands match.
+        // TODO Instead of identifying the validator by its slot_band, we should identify it by its
+        //  address instead.
+        proposer_slot.band == self.validator_slot_band
     }
 
     /// Produces a proposal. Evidently, used when we are the proposer.
@@ -207,32 +209,18 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
         &mut self,
         round: u32,
     ) -> Result<ProposalResult<Self::ProposalTy>, TendermintError> {
-        let (
-            timeout,
-            proposer_slot_band,
-            proposer_voting_key,
-            proposer_signing_key,
-            expected_height,
-        ) = {
+        let (timeout, proposer_slot_band, proposer_voting_key, proposer_signing_key) = {
             let blockchain = self.blockchain.read();
 
-            // Get the blockchain height.
-            let expected_height = blockchain.block_number() + 1;
-
             // Get the proposer's slot and slot number for this round.
-            let (proposer, proposer_slot_number) = blockchain
-                .get_slot_owner_at(expected_height, round, None)
+            let proposer_slot = blockchain
+                .get_proposer_at(self.block_height, round, self.prev_seed.entropy(), None)
                 .expect("Couldn't find slot owner!");
-
-            // Calculate the proposer's slot band from the slot number.
-            let proposer_slot_band = blockchain
-                .current_validators()
-                .unwrap()
-                .get_band_from_slot(proposer_slot_number);
+            let proposer_slot_band = proposer_slot.band;
 
             // Get the validator keys.
-            let proposer_voting_key = *proposer.voting_key.uncompress_unchecked();
-            let proposer_signing_key = proposer.signing_key;
+            let proposer_voting_key = *proposer_slot.validator.voting_key.uncompress_unchecked();
+            let proposer_signing_key = proposer_slot.validator.signing_key;
 
             // Calculate the timeout duration.
             let timeout = Duration::from_millis(
@@ -252,7 +240,6 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
                 proposer_slot_band,
                 proposer_voting_key,
                 proposer_signing_key,
-                expected_height,
             )
         };
 
@@ -262,7 +249,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
             self.await_proposal_loop(
                 proposer_slot_band,
                 &proposer_voting_key,
-                expected_height,
+                self.block_height,
                 round,
             ),
         )
@@ -288,11 +275,16 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
             // so the original slot owners key must be retrieved for header verification.
             // View numbers in macro blocks denote the original proposers round.
             let vrf_key = if valid_round.is_some() {
-                let (valid_round_slot, _) = blockchain
-                    .get_slot_owner_at(expected_height, header.view_number, None)
+                let proposer_slot = blockchain
+                    .get_proposer_at(
+                        self.block_height,
+                        header.view_number,
+                        self.prev_seed.entropy(),
+                        None,
+                    )
                     .expect("Couldn't find slot owner!");
 
-                valid_round_slot.signing_key
+                proposer_slot.validator.signing_key
             } else {
                 proposer_signing_key
             };
@@ -328,8 +320,9 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
 
                 // Update our blockchain state using the received proposal. If we can't update the state, we
                 // return a proposal timeout.
+                // FIXME Is first_view_number = 0 correct here? Does it matter?
                 if blockchain
-                    .commit_accounts(state, &block, 0, &mut txn)
+                    .commit_accounts(state, &block, self.prev_seed.entropy(), 0, &mut txn)
                     .is_err()
                 {
                     debug!("Tendermint - await_proposal: Can't update state");
@@ -469,6 +462,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintInterface<TValidat
     pub fn new(
         validator_slot_band: u16,
         active_validators: Validators,
+        prev_seed: VrfSeed,
         block_height: u32,
         network: Arc<TValidatorNetwork>,
         blockchain: Arc<RwLock<Blockchain>>,
@@ -496,6 +490,8 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintInterface<TValidat
             network,
             offset_time: OffsetTime::default(),
             validator_slot_band,
+            prev_seed,
+            block_height,
             block_producer,
             current_validators: active_validators,
             blockchain,

@@ -3,7 +3,7 @@ use nimiq_blockchain::{AbstractBlockchain, ChainInfo};
 use nimiq_database::Transaction;
 use nimiq_genesis::NetworkId;
 use nimiq_hash::Blake2bHash;
-use nimiq_primitives::slots::Validators;
+use nimiq_primitives::slots::{Validator, Validators};
 
 use crate::blockchain::NanoBlockchain;
 
@@ -81,5 +81,14 @@ impl AbstractBlockchain for NanoBlockchain {
             .unwrap()
             .get_chain_info(hash)
             .cloned()
+    }
+
+    fn get_slot_owner_at(
+        &self,
+        _block_number: u32,
+        _view_number: u32,
+        _txn_option: Option<&Transaction>,
+    ) -> Option<(Validator, u16)> {
+        todo!()
     }
 }

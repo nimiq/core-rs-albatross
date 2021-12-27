@@ -85,10 +85,10 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         Option<ProduceMicroBlockEvent>,
         NextProduceMicroBlockEvent<TValidatorNetwork>,
     ) {
-        let in_current_state = |block: &Block| {
-            self.prev_seed == *block.seed()
-                || self.block_number == block.block_number() + 1
-                || self.view_number >= block.view_number()
+        let in_current_state = |head: &Block| {
+            self.prev_seed == *head.seed()
+                && self.block_number == head.block_number() + 1
+                && self.view_number >= head.next_view_number()
         };
 
         // Acquire blockchain.upgradable_read() to prevent further changes to the blockchain while
@@ -96,6 +96,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         let return_value = {
             let blockchain = self.blockchain.upgradable_read();
             if !in_current_state(&blockchain.head()) {
+                warn!("Blockchain state has changed - aborting");
                 Some(None)
             } else if self.is_our_turn(&*blockchain) {
                 info!(
@@ -157,6 +158,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             if in_current_state(&blockchain.head()) {
                 Some(blockchain.current_validators().unwrap())
             } else {
+                warn!("Blockchain state has changed - aborting");
                 None
             }
         };
@@ -174,21 +176,22 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
     }
 
     fn is_our_turn(&self, blockchain: &Blockchain) -> bool {
-        // TODO: This match() used to be an expect(), I changed it because there is a case where the block
-        // producer will continue running for a while in parallel to a rebranch operation that will
-        // eventually drop it; when this happens, we want to keep running (while also not producing anything)
-        // instead of panicking (it shouldn't matter since we will eventually drop this producer), but the
-        // correct fix for this would be dropping the validator (or somehow stop its operation) as soon as we
-        // know we're rebranching
-        let slot = match blockchain.get_slot_owner_at(self.block_number, self.view_number, None) {
-            Some((slot, _)) => slot,
-            None => {
-                warn!("Couldn't find who the next slot owner is, this should only happen if we rebranched while processing a view change");
-                return false;
-            }
-        };
+        let proposer_slot = blockchain.get_proposer_at(
+            self.block_number,
+            self.view_number,
+            self.prev_seed.entropy(),
+            None,
+        );
 
-        self.block_producer.signing_key.public == slot.signing_key
+        match proposer_slot {
+            Some(slot) => slot.band == self.validator_slot_band,
+            None => {
+                // The only scenario where this could potentially fail is if the macro block that
+                // precedes self.block_number is pruned while we're initializing ProduceMicroBlock.
+                warn!("Failed to find next proposer");
+                false
+            }
+        }
     }
 
     fn produce_micro_block(&self, blockchain: &Blockchain) -> MicroBlock {

@@ -340,6 +340,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                     block_producer,
                     self.validator_slot_band(),
                     active_validators,
+                    head.seed().clone(),
                     next_block_number,
                     next_view_number,
                     state,

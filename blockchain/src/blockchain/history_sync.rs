@@ -344,6 +344,7 @@ impl Blockchain {
                         &self.state.accounts,
                         write_txn,
                         micro_block,
+                        prev_info.head.seed().entropy(),
                         prev_info.head.view_number(),
                     )?;
 

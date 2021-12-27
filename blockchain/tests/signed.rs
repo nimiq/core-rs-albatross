@@ -16,7 +16,7 @@ use nimiq_keys::{Address, PublicKey};
 use nimiq_primitives::policy;
 use nimiq_primitives::slots::{Validator, Validators};
 use nimiq_utils::time::OffsetTime;
-use nimiq_vrf::vrf::VrfEntropy;
+use nimiq_vrf::VrfEntropy;
 
 // /// Still in for future reference, in case this key is needed again
 // const SECRET_KEY: &str = "8e44b45f308dae1e2d4390a0f96cea993960d4178550c62aeaba88e9e168d165\
