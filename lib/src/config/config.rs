@@ -689,7 +689,8 @@ impl ClientConfigBuilder {
         // `String` to an actual Error.
         // We could also put some validation here.
 
-        self.build_internal().map_err(Error::config_error)
+        self.build_internal()
+            .map_err(|e| Error::config_error(e.to_string()))
     }
 
     /// Short cut to build the config and instantiate the client
