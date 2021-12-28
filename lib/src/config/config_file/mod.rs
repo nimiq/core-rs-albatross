@@ -38,7 +38,6 @@ pub struct ConfigFile {
     //pub reverse_proxy: Option<ReverseProxySettings>,
     #[serde(default)]
     pub log: LogSettings,
-    #[serde(default)]
     pub database: DatabaseSettings,
     pub mempool: Option<MempoolSettings>,
     #[serde(default)]
@@ -381,24 +380,13 @@ impl Default for LogSettings {
     }
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DatabaseSettings {
     pub path: Option<String>,
     pub size: Option<usize>,
     pub max_dbs: Option<u32>,
     pub max_readers: Option<u32>,
-}
-
-impl Default for DatabaseSettings {
-    fn default() -> Self {
-        DatabaseSettings {
-            path: None,
-            size: Some(1024 * 1024 * 50),
-            max_dbs: Some(12),
-            max_readers: Some(600),
-        }
-    }
 }
 
 #[derive(Clone, Debug, Deserialize)]
