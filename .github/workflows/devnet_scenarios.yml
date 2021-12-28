@@ -54,7 +54,7 @@ jobs:
           fi
       id: reason
     - name: Report Status to Slack
-      if: github.ref == 'refs/heads/albatross'
+      if: always() && github.ref == 'refs/heads/albatross'
       uses: ravsamhq/notify-slack-action@v1
       with:
           status: ${{ job.status }}
@@ -110,7 +110,7 @@ jobs:
           fi
       id: reason
     - name: Report Status to Slack
-      if: github.ref == 'refs/heads/albatross'
+      if: always() && github.ref == 'refs/heads/albatross'
       uses: ravsamhq/notify-slack-action@v1
       with:
           status: ${{ job.status }}
@@ -166,7 +166,7 @@ jobs:
           fi
       id: reason
     - name: Report Status to Slack
-      if: github.ref == 'refs/heads/albatross'
+      if: always() && github.ref == 'refs/heads/albatross'
       uses: ravsamhq/notify-slack-action@v1
       with:
           status: ${{ job.status }}
@@ -222,7 +222,7 @@ jobs:
           fi
       id: reason
     - name: Report Status to Slack
-      if: github.ref == 'refs/heads/albatross'
+      if: always() && github.ref == 'refs/heads/albatross'
       uses: ravsamhq/notify-slack-action@v1
       with:
           status: ${{ job.status }}
@@ -281,7 +281,7 @@ jobs:
           fi
       id: reason
     - name: Report Status to Slack
-      if: github.ref == 'refs/heads/albatross'
+      if: always() && github.ref == 'refs/heads/albatross'
       uses: ravsamhq/notify-slack-action@v1
       with:
           status: ${{ job.status }}
