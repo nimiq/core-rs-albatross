@@ -41,6 +41,26 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v2
       with:
-          name: TenValidatorsWithSpammer-logs
+          name: FiveValidatorsWithSpammer-logs
           path: |
             temp-logs/
+    - name: Retrieve failure reason
+      if: always()
+      run: |
+          if [ -f temp-state/RESULT.TXT ]; then
+            echo "::set-output name=FAIL_REASON::$(cat temp-state/RESULT.TXT)"
+          else
+            echo "::set-output name=FAIL_REASON::other"
+          fi
+      id: reason
+    - name: Report Status to Slack
+      if: always() && github.ref == 'refs/heads/albatross'
+      uses: ravsamhq/notify-slack-action@v1
+      with:
+          status: ${{ job.status }}
+          notify_when: 'failure'
+          notification_title: 'FiveValidatorsWithSpammer failed because of ${{ steps.reason.outputs.FAIL_REASON }}'
+          footer: '<{run_url}|View Run>'
+      env:
+          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
+
