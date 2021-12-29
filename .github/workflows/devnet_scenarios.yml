@@ -290,3 +290,59 @@ jobs:
           footer: '<{run_url}|View Run>'
       env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
+
+  ViewChangeTest:
+    runs-on: ubuntu-20.04
+
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/setup-python@v2.3.1
+    - uses: BSFishy/pip-action@v1
+      with:
+        packages: |
+          sh
+    - uses: actions/cache@v2
+      with:
+        path:
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: cargo-${{ hashFiles('**/Cargo.toml') }}
+    - name: Set up Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: nightly
+        override: true
+    - uses: actions-rs/cargo@v1
+      with:
+        command: build
+    - name: Executes the test
+      run: |
+          bash scripts/devnet/devnet.sh -s 500 -t 90
+    - name: Archive test results
+      if: always()
+      uses: actions/upload-artifact@v2
+      with:
+          name: ViewChangeTest-logs
+          path: |
+            temp-logs/
+    - name: Retrieve failure reason
+      if: always()
+      run: |
+          if [ -f temp-state/RESULT.TXT ]; then
+            echo "::set-output name=FAIL_REASON::$(cat temp-state/RESULT.TXT)"
+          else
+            echo "::set-output name=FAIL_REASON::other"
+          fi
+      id: reason
+    - name: Report Status to Slack
+      if: always() && github.ref == 'refs/heads/albatross'
+      uses: ravsamhq/notify-slack-action@v1
+      with:
+          status: ${{ job.status }}
+          notify_when: 'failure'
+          notification_title: 'ViewChangeTest failed because of ${{ steps.reason.outputs.FAIL_REASON }}'
+          footer: '<{run_url}|View Run>'
+      env:
+          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}

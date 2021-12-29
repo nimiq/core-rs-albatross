@@ -22,6 +22,7 @@ cargo_build="cargo build"
 cargo_clean="cargo clean"
 tpb=150
 vkill=1
+down_time=10
 trap cleanup_exit INT
 
 function cleanup_exit() {
@@ -42,6 +43,40 @@ function cleanup_exit() {
     exit 0
 }
 
+function check_failures() {
+
+    # Periodically check for deadlocks/panic/crashes
+    secs=0
+    while [ $secs -le $sleep_time ]
+    do
+        # Search for deadlocks
+        if grep -wrin "deadlock" $logsdir/*.log
+        then
+            echo "   !!!   DEADLOCK   !!!"
+            echo "DEADLOCK" >> temp-state/RESULT.TXT
+            fail=true
+            break
+        fi
+
+        # Search for panics/crashes
+        if grep -wrin " panic " $logsdir/*.log
+        then
+            echo "   !!!   PANIC   !!!"
+            echo "PANIC" >> temp-state/RESULT.TXT
+            fail=true
+            break
+        fi
+
+        sleep 1
+        secs=$(( $secs + 1 ))
+    done
+
+    if [ "$fail" = true ] ; then
+        echo " Execution failed..."
+        cleanup_exit
+    fi
+}
+
 usage()
 {
 cat << EOF
@@ -59,6 +94,7 @@ OPTIONS:
    -s|--spammer    Launch the spammer with the given amount of transactions per second
    -R|--release    If you want to run in release mode
    -v|--validators The number of validators, as a minimum 4 validators are created
+   -t|--time       Time in seconds that validators are taken down, by default 10s
 EOF
 }
 
@@ -89,6 +125,15 @@ while [ ! $# -eq 0 ]; do
                 shift
             else
                 echo '--validators requires a value'
+                exit 1
+            fi
+            ;;
+        -t | --time)
+            if [ "$2" ]; then
+                down_time=$2
+                shift
+            else
+                echo '--time requires a value'
                 exit 1
             fi
             ;;
@@ -249,7 +294,10 @@ do
         done
 
         # Let it run for some seconds with validators down
-        sleep 10
+        sleep_time=$down_time
+        echo "  Running with validator(s) down for $sleep_time seconds"
+
+        check_failures
 
         # Restart the ones that were killed
         for index in ${kindexes[@]}; do
@@ -271,43 +319,14 @@ do
     sleep_time=$((40 + $RANDOM % 100))
 
     # Produce blocks for some time
-    echo "  Producing blocks for $sleep_time seconds"
+    echo "  Producing blocks for $sleep_time seconds with all validators up"
 
-    # Periodically check for deadlocks/panic/crashes
-    secs=0
-    while [ $secs -le $sleep_time ]
-    do
-        # Search for deadlocks
-        if grep -wrin "deadlock" $logsdir/*.log
-        then
-            echo "   !!!   DEADLOCK   !!!"
-            echo "DEADLOCK" >> temp-state/RESULT.TXT
-            fail=true
-            break
-        fi
-
-        # Search for panics/crashes
-        if grep -wrin " panic " $logsdir/*.log
-        then
-            echo "   !!!   PANIC   !!!"
-            echo "PANIC" >> temp-state/RESULT.TXT
-            fail=true
-            break
-        fi
-
-        sleep 1
-        secs=$(( $secs + 1 ))
-    done
-
-    if [ "$fail" = true ] ; then
-        echo " Execution failed..."
-        cleanup_exit
-    fi
+    check_failures
 
     # Search if blocks are being produced
     bns=()
 
-    # First collect the last blolognumber from each validator
+    # First collect the last block number from each validator
     for log in $logsdir/*.log; do
         bn=$(grep "Now at block #" $log | tail -1 | awk -F# '{print $2}' | cut --delimiter=. --fields 1)
         if [ -z "$bn" ]; then
