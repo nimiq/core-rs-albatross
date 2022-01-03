@@ -32,7 +32,7 @@ impl CompressedSignature {
         let signature = affine_point.into_projective();
         Ok(Signature {
             signature,
-            compressed: CompressedSignature::from(signature),
+            compressed: *self,
         })
     }
 

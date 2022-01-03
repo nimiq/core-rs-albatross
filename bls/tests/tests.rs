@@ -1,7 +1,7 @@
 use ark_ec::ProjectiveCurve;
 use rand::thread_rng;
 
-use beserial::Deserialize;
+use beserial::{Deserialize, Serialize};
 use nimiq_bls::*;
 use nimiq_utils::key_rng::SecureGenerate;
 
@@ -39,6 +39,69 @@ fn compress_uncompress() {
         );
 
         assert_eq!(sig.compress().uncompress().unwrap(), sig);
+    }
+}
+
+#[test]
+fn serialize_deserialize() {
+    let rng = &mut thread_rng();
+
+    for i in 0..100 {
+        let keypair = KeyPair::generate(rng);
+        let ser_pub_key = keypair.public_key.serialize_to_vec();
+        let compress_pub_key = keypair.public_key.compress();
+        let ser_comp_pub_key = compress_pub_key.serialize_to_vec();
+        let message = format!("Message {}", i);
+
+        let sig = keypair.sign(&message);
+        let ser_signature = sig.serialize_to_vec();
+        let ser_comp_signature = sig.compress().serialize_to_vec();
+
+        // Check that we can deserialize a serialized public key
+        assert_eq!(
+            PublicKey::deserialize_from_vec(&ser_pub_key).unwrap(),
+            keypair.public_key
+        );
+
+        // Check that we can deserialize a serialized compressed public key
+        assert_eq!(
+            CompressedPublicKey::deserialize_from_vec(&ser_comp_pub_key)
+                .unwrap()
+                .uncompress()
+                .unwrap(),
+            keypair.public_key
+        );
+
+        // Check that we can deserialize a serialized signature
+        assert_eq!(
+            Signature::deserialize_from_vec(&ser_signature).unwrap(),
+            sig
+        );
+
+        assert_eq!(
+            Signature::deserialize_from_vec(&ser_signature)
+                .unwrap()
+                .compressed,
+            sig.compressed
+        );
+
+        // Check that we can deserialize a serialized compressed signature
+        assert_eq!(
+            CompressedSignature::deserialize_from_vec(&ser_comp_signature)
+                .unwrap()
+                .uncompress()
+                .unwrap(),
+            sig
+        );
+
+        assert_eq!(
+            sig.compressed,
+            CompressedSignature::deserialize_from_vec(&ser_comp_signature)
+                .unwrap()
+                .uncompress()
+                .unwrap()
+                .compressed
+        );
     }
 }
 
@@ -89,4 +152,40 @@ fn aggregate_signatures_same_message() {
     let agg_sig = AggregateSignature::from_signatures(&signatures);
 
     assert!(agg_key.verify(&message, &agg_sig));
+}
+
+#[test]
+fn aggregate_signatures_serialization() {
+    let rng = &mut thread_rng();
+
+    let message = "Same message";
+
+    let mut public_keys = Vec::new();
+
+    let mut signatures = Vec::new();
+
+    for _ in 0..100 {
+        let keypair = KeyPair::generate(rng);
+
+        let signature = keypair.sign(&message);
+
+        public_keys.push(keypair.public_key);
+
+        signatures.push(signature);
+    }
+
+    let agg_key = AggregatePublicKey::from_public_keys(&public_keys);
+
+    let agg_sig = AggregateSignature::from_signatures(&signatures);
+    let ser_agg_sig = agg_sig.serialize_to_vec();
+
+    assert_eq!(
+        AggregateSignature::deserialize_from_vec(&ser_agg_sig).unwrap(),
+        agg_sig
+    );
+
+    assert!(agg_key.verify(
+        &message,
+        &AggregateSignature::deserialize_from_vec(&ser_agg_sig).unwrap()
+    ));
 }
