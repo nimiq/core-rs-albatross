@@ -319,8 +319,8 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
 
                 // Look for clusters at the same epoch with the same hash.
                 if cluster.first_epoch_number == checkpoint_epoch
-                    && cluster.epoch_ids[0] == checkpoint_id
                     && cluster.epoch_ids.len() == 1
+                    && cluster.epoch_ids[0] == checkpoint_id
                 {
                     // The peer's checkpoint id matched this cluster,
                     // so we add the peer to this cluster. We also increment the peer's number of clusters.
