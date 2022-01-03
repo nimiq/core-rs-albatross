@@ -22,62 +22,62 @@ fn run_app() -> Result<(), Error> {
         .author(crate_authors!())
         .about(crate_description!())
         .arg(
-            Arg::with_name("secret_key")
-                .short("k")
+            Arg::new("secret_key")
+                .short('k')
                 .long("secret-key")
                 .value_name("SECRET_KEY")
                 .help("Specify the secret key to be used to sign the transaction.")
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("tx_from_stdin")
+            Arg::new("tx_from_stdin")
                 .long("stdin")
                 .help("Read transaction as hex from STDIN")
                 .takes_value(false),
         )
         .arg(
-            Arg::with_name("from_address")
-                .short("f")
+            Arg::new("from_address")
+                .short('f')
                 .long("from")
                 .value_name("ADDRESS")
                 .help("Send transaction from ADDRESS.")
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("to_address")
-                .short("t")
+            Arg::new("to_address")
+                .short('t')
                 .long("to")
                 .value_name("ADDRESS")
                 .help("Send transaction to ADDRESS.")
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("value")
-                .short("v")
+            Arg::new("value")
+                .short('v')
                 .long("value")
                 .value_name("VALUE")
                 .help("Send transaction with VALUE amount.")
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("fee")
-                .short("F")
+            Arg::new("fee")
+                .short('F')
                 .long("fee")
                 .value_name("VALUE")
                 .help("Send transaction with VALUE fee.")
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("validity_start_height")
-                .short("V")
+            Arg::new("validity_start_height")
+                .short('V')
                 .long("validity-start-height")
                 .value_name("HEIGHT")
                 .help("Set validity start height")
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("network_id")
-                .short("N")
+            Arg::new("network_id")
+                .short('N')
                 .long("network")
                 .value_name("NETWORK")
                 .help("Set network ID")
