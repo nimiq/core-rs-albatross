@@ -355,11 +355,13 @@ impl Mempool {
                     let in_fly_balance = tx.total_value() + sender_total;
 
                     if in_fly_balance <= sender_balance {
-                        log::debug!("Accepting new transaction from reverted blocks");
                         mempool_state.put(tx);
                     } else {
                         log::debug!(
-                            "The Tx from reverted blocks was dropped because of not enough funds"
+                            "Tx {} from reverted block #{}.{} was dropped because of insufficient funds",
+                            tx_hash,
+                            block.block_number(),
+                            block.view_number()
                         );
                     }
                 }

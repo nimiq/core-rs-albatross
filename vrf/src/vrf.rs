@@ -60,7 +60,7 @@ impl std::fmt::Debug for VrfEntropy {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 /// A struct containing a VRF Seed. It is simply the serialized output of the VXEdDSA algorithm.
 /// https://www.signal.org/docs/specifications/xeddsa/#vxeddsa
@@ -229,9 +229,17 @@ impl Default for VrfSeed {
     }
 }
 
+impl fmt::Debug for VrfSeed {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("VrfSeed")
+            .field(&hex::encode(&self.signature))
+            .finish()
+    }
+}
+
 impl fmt::Display for VrfSeed {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "{:?}", self.signature)
+        write!(f, "{}", hex::encode(&self.signature))
     }
 }
 

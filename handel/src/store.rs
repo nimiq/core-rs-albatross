@@ -226,8 +226,6 @@ impl<P: Partitioner, C: AggregatableContribution> ContributionStore for ReplaceS
             level += 1;
         }
 
-        let combined = self.partitioner.combine(signatures, level);
-        trace!("Combined signature for level {}: {:?}", level, combined);
-        combined
+        self.partitioner.combine(signatures, level)
     }
 }

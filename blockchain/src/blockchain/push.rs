@@ -57,7 +57,13 @@ impl Blockchain {
         let prev_info = this
             .chain_store
             .get_chain_info(block.parent_hash(), false, Some(&read_txn))
-            .ok_or(PushError::Orphan)?;
+            .ok_or_else(|| {
+                warn!(
+                    "Rejecting block - parent block {} unknown",
+                    block.parent_hash()
+                );
+                PushError::Orphan
+            })?;
 
         // Get the intended block proposer.
         let proposer_slot = this
@@ -67,7 +73,14 @@ impl Blockchain {
                 prev_info.head.seed().entropy(),
                 Some(&read_txn),
             )
-            .ok_or(PushError::Orphan)?;
+            .ok_or_else(|| {
+                warn!(
+                    "Rejecting block - failed to determine block proposer at #{}.{}",
+                    block.block_number(),
+                    block.view_number(),
+                );
+                PushError::Orphan
+            })?;
 
         // Check the header.
         if let Err(e) = Blockchain::verify_block_header(

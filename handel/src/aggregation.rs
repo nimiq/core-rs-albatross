@@ -280,7 +280,6 @@ impl<
 
     /// Send updates for every level to every peer accordingly.
     fn automatic_update(&mut self) {
-        trace!("resending Updates");
         for level in self.levels.iter().skip(1) {
             // Get the current best aggregate from store (no clone() needed as that already happens within the store)
             // freeing the lock as soon as possible for the todo aggregating to continue.
