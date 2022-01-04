@@ -112,10 +112,11 @@ impl<N: Network> Inner<N> {
         peer_id: <N::PeerType as Peer>::Id,
         pubsub_id: Option<<N as Network>::PubsubId>,
     ) {
-        let block_height = block.block_number();
+        let block_number = block.block_number();
+        let view_number = block.view_number();
 
-        // Ideally we would acquire upgradable read here. And provide it to push_block. RwLockUpgradableRead however is not
-        // Send and cannot be moved into the future that is created.
+        // Ideally we would acquire upgradable read here. And provide it to push_block.
+        // RwLockUpgradableRead however is not Send and cannot be moved into the future that is created.
         // However the push_block does not push the block but creates a future which pushes the block.
         // Hence every future would only be created when an RwLockUpgradableReadGuard can be acquired, requiring
         // to wait for the previous future to have been polled and concluded.
@@ -124,15 +125,16 @@ impl<N: Network> Inner<N> {
         let blockchain = self.blockchain.read();
         let head_height = blockchain.block_number();
 
-        if block_height <= head_height + 1 {
-            drop(blockchain);
+        if blockchain.contains(block.parent_hash(), true) {
             // New head or fork block.
             // TODO We should limit the number of push operations we queue here.
+            drop(blockchain);
             self.push_block(block, pubsub_id, PushOpResult::Head);
-        } else if block_height > head_height + self.config.window_max {
+        } else if block_number > head_height + self.config.window_max {
             log::warn!(
-                "Discarding block #{} outside of buffer window (max {}).",
-                block_height,
+                "Discarding block #{}.{} outside of buffer window (max {})",
+                block_number,
+                view_number,
                 head_height + self.config.window_max,
             );
 
@@ -141,14 +143,14 @@ impl<N: Network> Inner<N> {
             }
         } else if self.buffer.len() >= self.config.buffer_max {
             log::warn!(
-                "Discarding block #{}, buffer full (max {})",
-                block_height,
+                "Discarding block #{}.{}, buffer full (max {})",
+                block_number,
+                view_number,
                 self.buffer.len(),
             )
         } else {
             // Block is inside the buffer window, put it in the buffer.
             let block_hash = block.hash();
-            let block_number = block.block_number();
             let parent_hash = block.parent_hash().clone();
 
             // Insert block into buffer. If we already know the block, we're done.
@@ -158,7 +160,12 @@ impl<N: Network> Inner<N> {
                 .or_default()
                 .insert(block_hash.clone(), block)
                 .is_some();
-            log::trace!("Buffering block #{}, known={}", block_number, block_known);
+            log::trace!(
+                "Buffering block #{}.{}, known={}",
+                block_number,
+                view_number,
+                block_known
+            );
             if block_known {
                 return;
             }
@@ -169,8 +176,9 @@ impl<N: Network> Inner<N> {
                 .get(&(block_number - 1))
                 .map_or(false, |blocks| blocks.contains_key(&parent_hash));
             log::trace!(
-                "Parent of block #{} buffered={}",
+                "Parent of block #{}.{} buffered={}",
                 block_number,
+                view_number,
                 parent_buffered
             );
             if parent_buffered {
@@ -180,8 +188,9 @@ impl<N: Network> Inner<N> {
             // If the parent of this block is already being pushed, we're done.
             let parent_pending = self.pending_blocks.contains(&parent_hash);
             log::trace!(
-                "Parent of block #{} pending={}",
+                "Parent of block #{}.{} pending={}",
                 block_number,
+                view_number,
                 parent_pending
             );
             if parent_pending {
@@ -200,7 +209,7 @@ impl<N: Network> Inner<N> {
                 .get_blocks(
                     &head_hash,
                     // FIXME We don't want to send the full batch as locators here.
-                    block_height - prev_macro_block_height + 2,
+                    block_number - prev_macro_block_height + 2,
                     false,
                     Direction::Backward,
                     None,
@@ -333,29 +342,23 @@ impl<N: Network> Inner<N> {
     }
 
     fn push_buffered(&mut self) {
-        let head_height = self.blockchain.read().block_number();
+        let mut blocks_to_push = vec![];
+        {
+            let blockchain = self.blockchain.read();
+            self.buffer.drain_filter(|_, blocks| {
+                // Push all blocks with a known parent to the chain.
+                let blocks_with_known_parent = blocks
+                    .drain_filter(|_, block| blockchain.contains(block.parent_hash(), true))
+                    .map(|(_, block)| block);
+                blocks_to_push.extend(blocks_with_known_parent);
 
-        // Check if queued block can be pushed to block chain
-        if let Some(entry) = self.buffer.first_entry() {
-            if *entry.key() > head_height + 1 {
-                return;
-            }
+                // Remove buffer entry if there are no blocks left.
+                blocks.is_empty()
+            });
+        }
 
-            // Pop block from queue
-            let (_, blocks) = entry.remove_entry();
-
-            // If we get a Vec from the BTree, it must not be empty
-            assert!(!blocks.is_empty());
-
-            for block in blocks.into_values() {
-                log::debug!(
-                    "Pushing buffered block #{} (currently at #{}, {} blocks left)",
-                    block.block_number(),
-                    head_height,
-                    self.buffer.len(),
-                );
-                self.push_block(block, None, PushOpResult::Buffered);
-            }
+        for block in blocks_to_push {
+            self.push_block(block, None, PushOpResult::Buffered);
         }
     }
 
