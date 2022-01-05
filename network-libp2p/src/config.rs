@@ -41,7 +41,9 @@ impl Config {
         kademlia.set_kbucket_inserts(KademliaBucketInserts::OnConnected);
         kademlia.set_record_ttl(Some(Duration::from_secs(5 * 60)));
         kademlia.set_publication_interval(Some(Duration::from_secs(60)));
-        kademlia.set_replication_interval(Some(Duration::from_secs(20)));
+
+        // Since we have a record TTL of 5 minutes, record replication is not needed right now
+        kademlia.set_replication_interval(None);
         kademlia.set_record_filtering(KademliaStoreInserts::FilterBoth);
 
         Self {
