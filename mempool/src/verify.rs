@@ -66,7 +66,7 @@ impl Display for VerifyErr {
 /// returns a result of a RwLockUpgradableReadGuard of the mempool such that in
 /// case of an accepted transaction (`Ok(RwLockUpgradableReadGuard)`), the
 /// caller can upgrade the lock and add the transaction to the mempool.
-pub(crate) async fn verify_tx<'a>(
+pub(crate) fn verify_tx<'a>(
     transaction: &Transaction,
     blockchain: Arc<RwLock<Blockchain>>,
     mempool_state: &'a Arc<RwLock<MempoolState>>,
@@ -79,26 +79,10 @@ pub(crate) async fn verify_tx<'a>(
     }
     let mut tx = transaction.clone();
 
-    let sign_verification_handle = tokio::task::spawn_blocking(move || {
-        if let Err(err) = tx.verify_mut(network_id) {
-            log::debug!("Intrinsic tx verification Failed {:?}", err);
-            return SignVerifReturnCode::Invalid;
-        }
-        SignVerifReturnCode::SignOk
-    });
-
-    // Check the result of the sign verification for the tx
-    match sign_verification_handle.await {
-        Ok(rc) => {
-            if rc == SignVerifReturnCode::Invalid {
-                // If signature verification failed we just return
-                return Err(VerifyErr::Invalid);
-            }
-        }
-        Err(_err) => {
-            return Err(VerifyErr::Invalid);
-        }
-    };
+    if let Err(err) = tx.verify_mut(network_id) {
+        log::debug!("Intrinsic tx verification Failed {:?}", err);
+        return Err(VerifyErr::Invalid);
+    }
 
     // 2. Acquire the mempool state upgradable read lock
     let mempool_state = mempool_state.upgradable_read();

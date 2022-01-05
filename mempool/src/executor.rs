@@ -77,13 +77,13 @@ impl<N: Network> Future for MempoolExecutor<N> {
             let network = Arc::clone(&self.network);
 
             // Spawn the transaction verification task
-            tokio::task::spawn(async move {
+            let res = tokio::task::spawn_blocking(move || {
                 tasks_count.fetch_add(1, AtomicOrdering::SeqCst);
 
                 // Verifying and pushing the TX in a separate scope to drop the lock that is returned by
                 // the verify_tx function immediately
                 let acceptance = {
-                    let verify_tx_ret = verify_tx(&tx, blockchain, &mempool_state, filter).await;
+                    let verify_tx_ret = verify_tx(&tx, blockchain, &mempool_state, filter);
 
                     match verify_tx_ret {
                         Ok(mempool_state_lock) => {
@@ -94,12 +94,18 @@ impl<N: Network> Future for MempoolExecutor<N> {
                     }
                 };
 
-                if let Err(e) = network.validate_message(pubsub_id, acceptance).await {
-                    log::trace!("failed to validate_message for tx: {:?}", e);
-                };
-
-                tasks_count.fetch_sub(1, AtomicOrdering::SeqCst);
+                acceptance
             });
+
+            tokio::task::spawn(async move {
+                if let Ok(accceptance) = res.await {
+                    if let Err(e) = network.validate_message(pubsub_id, accceptance).await {
+                        log::trace!("failed to validate_message for tx: {:?}", e);
+                    };
+                }
+            });
+
+            self.verification_tasks.fetch_sub(1, AtomicOrdering::SeqCst);
         }
 
         // We have exited the loop, so poll_next() must have returned Poll::Ready(None).
