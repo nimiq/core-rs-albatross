@@ -27,10 +27,10 @@ use nimiq_utils::tagged_signing::TaggedKeypair;
 
 use super::{
     behaviour::DiscoveryConfig,
+    message_codec::{MessageReader, MessageWriter},
     peer_contacts::{PeerContactBook, Protocols, Services, SignedPeerContact},
     protocol::{ChallengeNonce, DiscoveryMessage, DiscoveryProtocol},
 };
-use crate::message_codec::{MessageReader, MessageWriter};
 
 #[derive(Clone, Debug)]
 pub enum HandlerInEvent {

@@ -1,3 +1,9 @@
+//! This module contains a `Reader` and a `Writer` for the NIMIQ discovery
+//! messages. This messages have a fixed header, defined in `Header` with a
+//! magic number and some auxiliary information. The body of the message can
+//! be arbitrary bytes which are later serialized/deserialized.
+//!
+
 mod header;
 mod reader;
 mod writer;

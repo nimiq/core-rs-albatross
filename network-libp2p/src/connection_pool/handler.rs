@@ -21,7 +21,7 @@ use thiserror::Error;
 use beserial::SerializingError;
 use nimiq_network_interface::{message::MessageType, peer::CloseReason};
 
-use crate::dispatch::MessageDispatch;
+use crate::dispatch::message_dispatch::MessageDispatch;
 use crate::peer::Peer;
 
 use super::protocol::MessageProtocol;

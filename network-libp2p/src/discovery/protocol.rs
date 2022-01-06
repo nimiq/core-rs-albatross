@@ -10,11 +10,11 @@ use nimiq_hash::Blake2bHash;
 use nimiq_macros::{add_hex_io_fns_typed_arr, create_typed_array};
 use nimiq_utils::tagged_signing::{TaggedSignable, TaggedSignature};
 
-use super::peer_contacts::{Protocols, Services, SignedPeerContact};
-use crate::{
+use super::{
     message_codec::{MessageReader, MessageWriter},
-    DISCOVERY_PROTOCOL,
+    peer_contacts::{Protocols, Services, SignedPeerContact},
 };
+use crate::DISCOVERY_PROTOCOL;
 
 create_typed_array!(ChallengeNonce, u8, 32);
 add_hex_io_fns_typed_arr!(ChallengeNonce, ChallengeNonce::SIZE);

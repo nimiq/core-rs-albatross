@@ -7,13 +7,11 @@ extern crate beserial_derive;
 extern crate nimiq_macros;
 
 mod behaviour;
-pub mod codecs;
 mod config;
 mod connection_pool;
 pub mod discovery;
 pub mod dispatch;
 mod error;
-pub mod message_codec;
 mod network;
 pub mod peer;
 

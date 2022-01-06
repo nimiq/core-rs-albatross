@@ -5,7 +5,7 @@ use libp2p::{core::UpgradeInfo, InboundUpgrade, OutboundUpgrade};
 
 use beserial::SerializingError;
 
-use crate::dispatch::MessageDispatch;
+use crate::dispatch::message_dispatch::MessageDispatch;
 use crate::MESSAGE_PROTOCOL;
 
 #[derive(Debug, Default)]

@@ -15,7 +15,7 @@ use tokio_util::codec::Framed;
 
 use beserial::{Deserialize, Serialize};
 
-use crate::codecs::{
+use super::codecs::{
     tokio_adapter::TokioAdapter,
     typed::{Error, Message, MessageCodec, MessageType},
 };

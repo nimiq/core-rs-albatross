@@ -18,7 +18,10 @@ use nimiq_network_interface::peer::{
     CloseReason, Peer as PeerInterface, RequestResponse, SendError,
 };
 
-use crate::{codecs::typed::Error, dispatch::MessageDispatch, NetworkError};
+use crate::{
+    dispatch::{codecs::typed::Error, message_dispatch::MessageDispatch},
+    NetworkError,
+};
 
 pub struct Peer {
     pub id: PeerId,

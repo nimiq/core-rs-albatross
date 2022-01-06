@@ -153,8 +153,7 @@ mod tests {
 
     use beserial::{Deserialize, Serialize};
 
-    use super::MessageWriter;
-    use crate::message_codec::header::Header;
+    use super::{Header, MessageWriter};
 
     #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
     struct TestMessage {

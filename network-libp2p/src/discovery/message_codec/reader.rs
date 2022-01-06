@@ -233,7 +233,7 @@ mod tests {
 
     use beserial::{Deserialize, Serialize};
 
-    use crate::message_codec::header::Header;
+    use super::Header;
 
     use super::MessageReader;
 

@@ -1,5 +1,5 @@
 //! This module contains an `Encoder` and `Decoder` for the NIMIQ message type. This message type has a fixed header,
-//! containing a message type and other auxilary information. The body of the message can be arbitrary bytes which are
+//! containing a message type and other auxiliary information. The body of the message can be arbitrary bytes which are
 //! later serialized/deserialized to the Message trait.
 //!
 //! Note that this doesn't actually serialize/deserialize the message content, but only handles reading/writing the
