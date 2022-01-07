@@ -200,8 +200,8 @@ impl Mempool {
         reverted_blocks: &[(Blake2bHash, Block)],
     ) {
         // Acquire the mempool and blockchain locks
-        let mut mempool_state = self.state.write();
         let blockchain = self.blockchain.read();
+        let mut mempool_state = self.state.write();
 
         let block_height = blockchain.block_number() + 1;
 

@@ -98,6 +98,7 @@ pub(crate) async fn verify_tx<'a>(
     };
 
     // 2. Acquire the mempool state upgradable read lock
+    let blockchain = blockchain.read();
     let mempool_state = mempool_state.upgradable_read();
 
     // 3. Check if we already know the transaction
@@ -117,7 +118,6 @@ pub(crate) async fn verify_tx<'a>(
     }
 
     // 5. Acquire Blockchain read lock
-    let blockchain = blockchain.read();
 
     // 6. Check Validity Window and already included
     let block_height = blockchain.block_number() + 1;
