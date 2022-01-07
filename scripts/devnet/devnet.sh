@@ -250,8 +250,8 @@ if [ "$SPAMMER" = true ] ; then
     $cargo --bin nimiq-spammer -- -t $tpb -c $configdir/spammer/client.toml &>> $logsdir/Spammer.log &
     spids+=($!)
     sleep 1
+    echo "Done."
 fi
-echo "Done."
 
 old_block_number=0
 restarts_count=0
@@ -294,10 +294,11 @@ do
         done
 
         # Let it run for some seconds with validators down
-        sleep_time=$down_time
-        echo "  Running with validator(s) down for $sleep_time seconds"
-
-        check_failures
+        if [ $vkill -gt 0 ]; then
+            sleep_time=$down_time
+            echo "  Running with validator(s) down for $sleep_time seconds"
+            check_failures
+        fi
 
         # Restart the ones that were killed
         for index in ${kindexes[@]}; do
