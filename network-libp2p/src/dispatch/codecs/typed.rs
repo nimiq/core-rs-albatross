@@ -18,6 +18,7 @@ use tokio_util::codec::{Decoder, Encoder};
 use beserial::{Deserialize, Serialize, SerializingError};
 pub use nimiq_network_interface::message::{Message, MessageType};
 use nimiq_network_interface::peer::SendError;
+use nimiq_utils::crc::Crc32Computer;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -32,6 +33,9 @@ pub enum Error {
 
     #[error("Invalid length: {0}")]
     InvalidLength(u32),
+
+    #[error("Checksum mismatch. Expected: {0}, obtained: {1}")]
+    ChecksumMismatch(u32, u32),
 }
 
 impl Error {
@@ -56,6 +60,9 @@ impl From<Error> for SendError {
             Error::Serialize(e) => SendError::Serialization(e),
             Error::InvalidMagic(_) => SendError::Serialization(SerializingError::InvalidValue),
             Error::InvalidLength(_) => SendError::Serialization(SerializingError::InvalidValue),
+            Error::ChecksumMismatch(_, _) => {
+                SendError::Serialization(SerializingError::InvalidValue)
+            }
         }
     }
 }
@@ -86,7 +93,7 @@ impl Header {
     fn new(type_id: u64) -> Self {
         Self {
             magic: Self::MAGIC,
-            type_id: type_id,
+            type_id,
             length: 0,
             checksum: 0,
         }
@@ -125,8 +132,19 @@ pub struct MessageCodec {
 }
 
 impl MessageCodec {
-    fn verify(&self, _data: &BytesMut) -> Result<(), Error> {
-        // TODO Verify CRC32 checksum
+    fn verify(&self, declared_crc: u32, data: &mut BytesMut) -> Result<(), Error> {
+        let mut crc_comp = Crc32Computer::default();
+
+        // Re-calculate CRC skipping the CRC field (last 4B of the header)
+        crc_comp.update(&data.as_ref()[..(Header::SIZE - 4)]);
+        crc_comp.update(&[0u8; 4]);
+        crc_comp.update(&data.as_ref()[Header::SIZE..]);
+        let crc = crc_comp.result();
+
+        if crc != declared_crc {
+            return Err(Error::ChecksumMismatch(declared_crc, crc));
+        }
+
         Ok(())
     }
 }
@@ -188,7 +206,14 @@ impl Decoder for MessageCodec {
                         let mut data = src.split_to(frame_size);
 
                         // Verify the message (i.e. checksum)
-                        self.verify(&data)?;
+                        self.verify(header.checksum, &mut data).map_err(|e| {
+                            log::warn!(
+                                "CRC checksum mismatch for message type {}, error: {}",
+                                message_type,
+                                e
+                            );
+                            e
+                        })?;
 
                         // Skip the header to have only the data
                         data.advance(*header_length);
@@ -235,6 +260,15 @@ impl<M: Message> Encoder<&M> for MessageCodec {
 
         // Serialize message
         message.serialize(&mut c)?;
+
+        // Calculate the CRC
+        let crc = Crc32Computer::default()
+            .update(&c.get_ref()[existing_length..])
+            .result();
+
+        // Write the CRC in the respective field in the header
+        c.set_position((existing_length + Header::SIZE - 4) as u64);
+        crc.serialize(&mut c)?;
 
         Ok(())
     }
