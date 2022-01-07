@@ -15,7 +15,7 @@ use bytes::{Buf, BytesMut};
 use thiserror::Error;
 use tokio_util::codec::{Decoder, Encoder};
 
-use beserial::{uvar, Deserialize, Serialize, SerializingError};
+use beserial::{Deserialize, Serialize, SerializingError};
 pub use nimiq_network_interface::message::{Message, MessageType};
 use nimiq_network_interface::peer::SendError;
 
@@ -60,22 +60,33 @@ impl From<Error> for SendError {
     }
 }
 
+/// Header for the typed messages
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Header {
-    pub magic: u32, // 0x4204_2042
-    pub type_id: uvar,
+    /// Magic number: It should always be 0x4204_2042
+    pub magic: u32,
+    /// Type ID of the message
+    pub type_id: u64,
+    /// Length of the message including the header
     pub length: u32,
+    /// Checksum of the frame
     pub checksum: u32,
-    // data follows from here
 }
 
 impl Header {
+    /// Magic value for the Typed messages (0x4204_2042)
     pub const MAGIC: u32 = 0x4204_2042;
+    /// Total size of the header:
+    /// - magic: 4B
+    /// - type_ud: 8B
+    /// - length: 4B
+    /// - checksum: 4B
+    pub const SIZE: usize = 20;
 
     fn new(type_id: u64) -> Self {
         Self {
             magic: Self::MAGIC,
-            type_id: type_id.into(),
+            type_id: type_id,
             length: 0,
             checksum: 0,
         }
@@ -84,8 +95,7 @@ impl Header {
     fn preliminary_check(&self) -> Result<(), Error> {
         if self.magic != Self::MAGIC {
             Err(Error::InvalidMagic(self.magic))
-        } else if self.length < 13 || self.length > 10_000_000 {
-            // TODO: I think we should verify that the length is longer than the actual header size (i.e. header.serialized_length())
+        } else if (self.length as usize) < Self::SIZE {
             Err(Error::InvalidLength(self.length))
         } else {
             Ok(())
@@ -117,8 +127,6 @@ pub struct MessageCodec {
 impl MessageCodec {
     fn verify(&self, _data: &BytesMut) -> Result<(), Error> {
         // TODO Verify CRC32 checksum
-        // Seriously, who had the idea to make the header variable-length with a variable-length field first!
-        // We need to skip over the CRC sum when verifying...
         Ok(())
     }
 }
@@ -133,11 +141,6 @@ impl Decoder for MessageCodec {
         loop {
             match &self.state {
                 DecodeState::Head => {
-                    // Reserve enough space for the header
-                    //
-                    // TODO: What's the max size of a header though? I think the max length of the header is 21 bytes.
-                    src.reserve(32);
-
                     // Make a cursor, so we later know how many bytes we read
                     let mut c = Cursor::new(&src);
 
@@ -151,9 +154,6 @@ impl Decoder for MessageCodec {
 
                             // Preliminary header check (we can't verify the checksum yet)
                             header.preliminary_check()?;
-
-                            // Reserve enough space
-                            src.reserve(header.length as usize);
 
                             // Set decode state to reading the remaining data
                             self.state = DecodeState::Data {
@@ -170,7 +170,7 @@ impl Decoder for MessageCodec {
                             return Ok(None);
                         }
                         Err(e) => {
-                            tracing::warn!("Error decoding message header: {}", e);
+                            log::warn!("Error decoding message header: {}", e);
                             return Err(e.into());
                         }
                     }
@@ -181,20 +181,21 @@ impl Decoder for MessageCodec {
                 } => {
                     if src.len() >= header.length as usize {
                         // We have read enough bytes to read the full message
-                        let message_type = header.type_id.into();
+                        let message_type = header.type_id;
 
-                        // Get buffer of full message
-                        let mut data = src.split_to(header.length as usize);
+                        // Get buffer for whole message
+                        let frame_size = header.length as usize;
+                        let mut data = src.split_to(frame_size);
 
                         // Verify the message (i.e. checksum)
                         self.verify(&data)?;
 
-                        // Skip the header
+                        // Skip the header to have only the data
                         data.advance(*header_length);
 
                         self.state = DecodeState::Head;
 
-                        return Ok(Some((message_type, data)));
+                        return Ok(Some((MessageType::new(message_type), data)));
                     } else {
                         // We still need to read more of the message body
                         return Ok(None);
@@ -218,13 +219,14 @@ impl<M: Message> Encoder<&M> for MessageCodec {
 
     fn encode(&mut self, message: &M, dst: &mut BytesMut) -> Result<(), Error> {
         let mut header = Header::new(M::TYPE_ID);
-        let message_length = header.serialized_size() + message.serialized_size();
+        let message_length = Header::SIZE + message.serialized_size();
         header.length = message_length as u32;
 
         let existing_length = dst.len();
         dst.reserve(message_length);
         dst.resize(existing_length + message_length, 0);
 
+        // Go to the bottom of the buffer to write the data
         let mut c = Cursor::new(dst.as_mut());
         c.set_position(existing_length as u64);
 
