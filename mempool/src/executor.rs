@@ -10,6 +10,7 @@ use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use nimiq_blockchain::Blockchain;
 use nimiq_network_interface::network::Network;
 use nimiq_network_interface::prelude::MsgAcceptance;
+use nimiq_primitives::networks::NetworkId;
 use nimiq_transaction::Transaction;
 
 use crate::filter::MempoolFilter;
@@ -34,6 +35,9 @@ pub(crate) struct MempoolExecutor<N: Network> {
     // Reference to the network, to alow for message validation
     network: Arc<N>,
 
+    // Network ID, used for tx verification
+    network_id: Arc<NetworkId>,
+
     // Transaction stream that is used to listen to transactions from the network
     txn_stream: BoxStream<'static, (Transaction, <N as Network>::PubsubId)>,
 }
@@ -47,10 +51,11 @@ impl<N: Network> MempoolExecutor<N> {
         txn_stream: BoxStream<'static, (Transaction, <N as Network>::PubsubId)>,
     ) -> Self {
         Self {
-            blockchain,
+            blockchain: blockchain.clone(),
             state,
             filter,
             network,
+            network_id: Arc::new(blockchain.read().network_id),
             verification_tasks: Arc::new(AtomicU32::new(0)),
             txn_stream,
         }
@@ -63,7 +68,7 @@ impl<N: Network> Future for MempoolExecutor<N> {
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         while let Some((tx, pubsub_id)) = ready!(self.txn_stream.as_mut().poll_next_unpin(cx)) {
             if self.verification_tasks.fetch_add(0, AtomicOrdering::SeqCst)
-                == CONCURRENT_VERIF_TASKS
+                >= CONCURRENT_VERIF_TASKS
             {
                 log::debug!("Reached the max number of verification tasks");
                 continue;
@@ -73,7 +78,7 @@ impl<N: Network> Future for MempoolExecutor<N> {
             let mempool_state = Arc::clone(&self.state);
             let filter = Arc::clone(&self.filter);
             let tasks_count = Arc::clone(&self.verification_tasks);
-
+            let network_id = Arc::clone(&self.network_id);
             let network = Arc::clone(&self.network);
 
             // Spawn the transaction verification task
@@ -83,7 +88,8 @@ impl<N: Network> Future for MempoolExecutor<N> {
                 // Verifying and pushing the TX in a separate scope to drop the lock that is returned by
                 // the verify_tx function immediately
                 let acceptance = {
-                    let verify_tx_ret = verify_tx(&tx, blockchain, &mempool_state, filter).await;
+                    let verify_tx_ret =
+                        verify_tx(&tx, blockchain, network_id, &mempool_state, filter).await;
 
                     match verify_tx_ret {
                         Ok(mempool_state_lock) => {

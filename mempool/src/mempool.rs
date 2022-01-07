@@ -427,8 +427,9 @@ impl Mempool {
         let blockchain = Arc::clone(&self.blockchain);
         let mempool_state = Arc::clone(&self.state);
         let filter = Arc::clone(&self.filter);
-
-        let verify_tx_ret = verify_tx(&transaction, blockchain, &mempool_state, filter).await;
+        let network_id = Arc::new(blockchain.read().network_id);
+        let verify_tx_ret =
+            verify_tx(&transaction, blockchain, network_id, &mempool_state, filter).await;
 
         match verify_tx_ret {
             Ok(mempool_state_lock) => {

@@ -1,9 +1,9 @@
+use nimiq_primitives::networks::NetworkId;
+use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use std::{
     fmt::{self, Display, Formatter},
     sync::Arc,
 };
-
-use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 
 use nimiq_account::{Account, BasicAccount, StakingContract};
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
@@ -69,18 +69,15 @@ impl Display for VerifyErr {
 pub(crate) async fn verify_tx<'a>(
     transaction: &Transaction,
     blockchain: Arc<RwLock<Blockchain>>,
+    network_id: Arc<NetworkId>,
     mempool_state: &'a Arc<RwLock<MempoolState>>,
     filter: Arc<RwLock<MempoolFilter>>,
 ) -> Result<RwLockUpgradableReadGuard<'a, MempoolState>, VerifyErr> {
     // 1. Verify transaction signature (and other stuff)
-    let network_id;
-    {
-        network_id = blockchain.read().network_id();
-    }
     let mut tx = transaction.clone();
 
     let sign_verification_handle = tokio::task::spawn_blocking(move || {
-        if let Err(err) = tx.verify_mut(network_id) {
+        if let Err(err) = tx.verify_mut(*network_id) {
             log::debug!("Intrinsic tx verification Failed {:?}", err);
             return SignVerifReturnCode::Invalid;
         }
