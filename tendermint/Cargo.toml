@@ -21,4 +21,8 @@ nimiq-primitives = { path = "../primitives", features = ["policy"] }
 
 [dev-dependencies]
 beserial = { path = "../beserial" }
-tokio = { version = "1.14", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.15", features = [
+    "macros",
+    "rt-multi-thread",
+    "tracing",
+] }

@@ -22,7 +22,13 @@ derive_more = "0.99"
 futures = "0.3"
 parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
 thiserror = "1.0"
-tokio = { version = "1.14", features = ["macros", "rt", "sync", "time"] }
+tokio = { version = "1.15", features = [
+    "macros",
+    "rt",
+    "sync",
+    "time",
+    "tracing",
+] }
 tokio-stream = { version = "0.1", features = ["default", "sync"] }
 
 log = "0.4"

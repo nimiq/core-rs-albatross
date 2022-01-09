@@ -14,7 +14,7 @@ log = "0.4"
 parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
 rand = "0.8"
 thiserror = "1.0"
-tokio = { version = "1.14", features = ["rt", "time"] }
+tokio = { version = "1.15", features = ["rt", "time", "tracing"] }
 tokio-stream = "0.1"
 
 beserial = { path = "../beserial" }

@@ -23,12 +23,13 @@ futures = "0.3"
 log = "0.4"
 parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
 thiserror = "1.0"
-tokio = { version = "1.14", features = [
+tokio = { version = "1.15", features = [
     "macros",
     "rt",
     "rt-multi-thread",
     "sync",
     "time",
+    "tracing",
 ] }
 tokio-stream = "0.1"
 

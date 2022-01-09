@@ -21,7 +21,7 @@ maintenance = { status = "experimental" }
 futures = "0.3"
 log = "0.4"
 rand = "0.8.4"
-tokio = { version = "1.14", features = ["rt-multi-thread", "time"] }
+tokio = { version = "1.15", features = ["rt-multi-thread", "time", "tracing"] }
 structopt = { version = "0.3", features = ["paw"] }
 
 nimiq-block = { path = "../primitives/block" }
@@ -36,11 +36,4 @@ nimiq-transaction-builder = { path = "../transaction-builder" }
 package = "nimiq-lib"
 path = "../lib"
 version = "0.1"
-features = [
-    "validator",
-    "rpc-server",
-    "deadlock",
-    "logging",
-    "wallet",
-    "panic"
-]
+features = ["validator", "rpc-server", "deadlock", "logging", "wallet", "panic"]
