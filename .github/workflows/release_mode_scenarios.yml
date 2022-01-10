@@ -54,7 +54,7 @@ jobs:
           fi
       id: reason
     - name: Report potential deadlocks to slack
-      if: always() && contains(${{ steps.reason.outputs.FAIL_REASON }}, 'DEADLOCK')
+      if: always() && contains(steps.reason.outputs.FAIL_REASON, 'DEADLOCK')
       uses: ravsamhq/notify-slack-action@v1
       with:
           status: ${{ job.status }}
