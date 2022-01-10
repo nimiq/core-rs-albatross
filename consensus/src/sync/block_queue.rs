@@ -124,6 +124,7 @@ impl<N: Network> Inner<N> {
         //  no longer be met once the future executes.
         let blockchain = self.blockchain.read();
         let head_height = blockchain.block_number();
+        let macro_height = policy::last_macro_block(head_height);
 
         if blockchain.contains(block.parent_hash(), true) {
             // New head or fork block.
@@ -148,6 +149,14 @@ impl<N: Network> Inner<N> {
                 view_number,
                 self.buffer.len(),
             )
+        } else if block.block_number() <= macro_height {
+            // Block is from a previous batch/epoch, discard it.
+            log::warn!(
+                "Discarding block #{}.{}, we're already at macro block #{}",
+                block_number,
+                view_number,
+                macro_height
+            );
         } else {
             // Block is inside the buffer window, put it in the buffer.
             let block_hash = block.hash();
@@ -199,9 +208,13 @@ impl<N: Network> Inner<N> {
 
             // We don't know the predecessor of this block, request it.
             let head_hash = blockchain.head_hash();
-            let prev_macro_block_height = policy::last_macro_block(head_height);
 
-            log::debug!("Requesting missing blocks: target_hash = {}, head_hash = {}, prev_macro_block_height = {}", block_hash, head_hash, prev_macro_block_height);
+            log::debug!(
+                "Requesting missing blocks: target_hash = {}, head_hash = {}, macro_height = {}",
+                block_hash,
+                head_hash,
+                macro_height
+            );
 
             // Get block locators.
             let block_locators = blockchain
@@ -209,7 +222,7 @@ impl<N: Network> Inner<N> {
                 .get_blocks(
                     &head_hash,
                     // FIXME We don't want to send the full batch as locators here.
-                    block_number - prev_macro_block_height + 2,
+                    block_number - macro_height + 2,
                     false,
                     Direction::Backward,
                     None,
