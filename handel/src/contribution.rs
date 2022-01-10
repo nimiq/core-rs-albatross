@@ -17,6 +17,12 @@ pub trait AggregatableContribution:
     + beserial::Deserialize
     + Unpin
 {
+    /// Type ID to use when registering a receiver for the network
+    ///
+    /// This value must be unique not only within this trait but within all
+    /// implementations of the `Message` trait.
+    const TYPE_ID: u64;
+
     /// A BitSet signaling which contributors have contributed in this Contribution
     fn contributors(&self) -> BitSet;
 

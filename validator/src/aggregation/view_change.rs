@@ -110,6 +110,8 @@ pub struct SignedViewChangeMessage {
 }
 
 impl AggregatableContribution for SignedViewChangeMessage {
+    const TYPE_ID: u64 = 123;
+
     fn contributors(&self) -> BitSet {
         self.view_change.contributors()
     }

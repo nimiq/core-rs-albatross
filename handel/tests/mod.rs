@@ -39,6 +39,8 @@ pub struct Contribution {
 }
 
 impl AggregatableContribution for Contribution {
+    const TYPE_ID: u64 = 44;
+
     fn contributors(&self) -> BitSet {
         self.contributors.clone()
     }

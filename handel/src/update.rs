@@ -38,7 +38,7 @@ impl<C: AggregatableContribution> LevelUpdate<C> {
         }
     }
 
-    /// Add a tag to the Update, resulting in a LeveelUpdateMessage which can be send over wire.
+    /// Add a tag to the Update, resulting in a LevelUpdateMessage which can be send over wire.
     /// * `tag` The message this aggregation runs over
     pub fn with_tag<T: Clone + Debug + Serialize + Deserialize + Send + Unpin>(
         self,
@@ -76,5 +76,9 @@ impl<
         T: Clone + Debug + Serialize + Deserialize + Send + Sync + Unpin + 'static,
     > Message for LevelUpdateMessage<C, T>
 {
-    const TYPE_ID: u64 = 121;
+    // The Type ID to use will come from the AggregatableContribution implementation
+    // since having a fixed value here would imply that there could be different
+    // types using the same type ID which would confuse the network at decoding
+    // messages upon receiving them.
+    const TYPE_ID: u64 = C::TYPE_ID;
 }

@@ -65,6 +65,8 @@ impl MultiSignature {
 }
 
 impl AggregatableContribution for MultiSignature {
+    const TYPE_ID: u64 = 128;
+
     fn contributors(&self) -> BitSet {
         self.signers.clone()
     }

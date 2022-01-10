@@ -42,6 +42,8 @@ impl TendermintContribution {
 }
 
 impl AggregatableContribution for TendermintContribution {
+    const TYPE_ID: u64 = 124;
+
     /// Combines two TendermintContributions Every different proposal is represented as its own multisignature.
     /// When combining non existing keys must be inserted while the mutlisignatures of existing keys are combined.
     fn combine(&mut self, other_contribution: &Self) -> Result<(), ContributionError> {
