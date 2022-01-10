@@ -58,8 +58,10 @@ jobs:
       uses: ravsamhq/notify-slack-action@v1
       with:
           status: ${{ job.status }}
-          notification_title: 'Potential deadlock detected in FourValidatorsReconnectTest'
+          notification_title: 'Potential deadlock detected in FiveValidatorsWithSpammer'
           footer: '<{run_url}|View Run>'
+      env:
+          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
     - name: Report Status to Slack
       if: always() && github.ref == 'refs/heads/albatross'
       uses: ravsamhq/notify-slack-action@v1
