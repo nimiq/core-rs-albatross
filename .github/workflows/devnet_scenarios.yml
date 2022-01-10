@@ -53,6 +53,13 @@ jobs:
             echo "::set-output name=FAIL_REASON::other"
           fi
       id: reason
+    - name: Report potential deadlocks to slack
+      if: always() && contains(${{ steps.reason.outputs.FAIL_REASON }}, 'DEADLOCK')
+      uses: ravsamhq/notify-slack-action@v1
+      with:
+          status: ${{ job.status }}
+          notification_title: 'Potential deadlock detected in FourValidatorsReconnectTest'
+          footer: '<{run_url}|View Run>'
     - name: Report Status to Slack
       if: always() && github.ref == 'refs/heads/albatross'
       uses: ravsamhq/notify-slack-action@v1
@@ -109,6 +116,13 @@ jobs:
             echo "::set-output name=FAIL_REASON::other"
           fi
       id: reason
+    - name: Report potential deadlocks to slack
+      if: always() && contains(${{ steps.reason.outputs.FAIL_REASON }}, 'DEADLOCK')
+      uses: ravsamhq/notify-slack-action@v1
+      with:
+          status: ${{ job.status }}
+          notification_title: 'Potential deadlock detected in MultipleValidatorsDownTest'
+          footer: '<{run_url}|View Run>'
     - name: Report Status to Slack
       if: always() && github.ref == 'refs/heads/albatross'
       uses: ravsamhq/notify-slack-action@v1
@@ -165,6 +179,13 @@ jobs:
             echo "::set-output name=FAIL_REASON::other"
           fi
       id: reason
+    - name: Report potential deadlocks to slack
+      if: always() && contains(steps.reason.outputs.FAIL_REASON, 'DEADLOCK')
+      uses: ravsamhq/notify-slack-action@v1
+      with:
+          status: ${{ job.status }}
+          notification_title: 'Potential deadlock detected in FourValidatorsReconnectRMdatabaseTest'
+          footer: '<{run_url}|View Run>'
     - name: Report Status to Slack
       if: always() && github.ref == 'refs/heads/albatross'
       uses: ravsamhq/notify-slack-action@v1
@@ -221,6 +242,13 @@ jobs:
             echo "::set-output name=FAIL_REASON::other"
           fi
       id: reason
+    - name: Report potential deadlocks to slack
+      if: always() && contains(${{ steps.reason.outputs.FAIL_REASON }}, 'DEADLOCK')
+      uses: ravsamhq/notify-slack-action@v1
+      with:
+          status: ${{ job.status }}
+          notification_title: 'Potential deadlock detected in FourValidatorsReconnectSpammer'
+          footer: '<{run_url}|View Run>'
     - name: Report Status to Slack
       if: always() && github.ref == 'refs/heads/albatross'
       uses: ravsamhq/notify-slack-action@v1
@@ -280,6 +308,15 @@ jobs:
             echo "::set-output name=FAIL_REASON::other"
           fi
       id: reason
+    - name: Report potential deadlocks to slack
+      if: always() && contains(${{ steps.reason.outputs.FAIL_REASON }}, 'DEADLOCK')
+      uses: ravsamhq/notify-slack-action@v1
+      with:
+          status: ${{ job.status }}
+          notification_title: 'Potential deadlock detected in MacroProductionTest'
+          footer: '<{run_url}|View Run>'
+      env:
+          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
     - name: Report Status to Slack
       if: always() && github.ref == 'refs/heads/albatross'
       uses: ravsamhq/notify-slack-action@v1
@@ -336,6 +373,15 @@ jobs:
             echo "::set-output name=FAIL_REASON::other"
           fi
       id: reason
+    - name: Report potential deadlocks to slack
+      if: always() && contains(${{ steps.reason.outputs.FAIL_REASON }}, 'DEADLOCK')
+      uses: ravsamhq/notify-slack-action@v1
+      with:
+          status: ${{ job.status }}
+          notification_title: 'Potential deadlock detected in ViewChangeTest'
+          footer: '<{run_url}|View Run>'
+      env:
+          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
     - name: Report Status to Slack
       if: always() && github.ref == 'refs/heads/albatross'
       uses: ravsamhq/notify-slack-action@v1

@@ -49,15 +49,6 @@ function check_failures() {
     secs=0
     while [ $secs -le $sleep_time ]
     do
-        # Search for deadlocks
-        if grep -wrin "deadlock" $logsdir/*.log
-        then
-            echo "   !!!   DEADLOCK   !!!"
-            echo "DEADLOCK" >> temp-state/RESULT.TXT
-            fail=true
-            break
-        fi
-
         # Search for panics/crashes
         if grep -wrin " panic " $logsdir/*.log
         then
@@ -65,6 +56,20 @@ function check_failures() {
             echo "PANIC" >> temp-state/RESULT.TXT
             fail=true
             break
+        fi
+        # Search for deadlocks
+        if grep -wrin "deadlock" $logsdir/*.log
+        then
+            # Only report deadlock once
+            if [ -f "temp-state/RESULT.TXT" ] && [ $(grep "DEADLOCK" temp-state/RESULT.TXT) ]
+            then
+                :
+            else
+                echo "   !!!   POTENTIAL DEADLOCK DETECTED  !!!"
+                echo "DEADLOCK" >> temp-state/RESULT.TXT
+                #  Do not mark the test as failed if a potential deadlock is detected
+                #    fail=true
+            fi
         fi
 
         sleep 1

@@ -53,6 +53,13 @@ jobs:
             echo "::set-output name=FAIL_REASON::other"
           fi
       id: reason
+    - name: Report potential deadlocks to slack
+      if: always() && contains(${{ steps.reason.outputs.FAIL_REASON }}, 'DEADLOCK')
+      uses: ravsamhq/notify-slack-action@v1
+      with:
+          status: ${{ job.status }}
+          notification_title: 'Potential deadlock detected in FourValidatorsReconnectTest'
+          footer: '<{run_url}|View Run>'
     - name: Report Status to Slack
       if: always() && github.ref == 'refs/heads/albatross'
       uses: ravsamhq/notify-slack-action@v1
