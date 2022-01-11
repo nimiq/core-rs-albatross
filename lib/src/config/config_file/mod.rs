@@ -38,7 +38,7 @@ pub struct ConfigFile {
     //pub reverse_proxy: Option<ReverseProxySettings>,
     #[serde(default)]
     pub log: LogSettings,
-    pub database: DatabaseSettings,
+    pub database: Option<DatabaseSettings>,
     pub mempool: Option<MempoolSettings>,
     #[serde(default)]
     pub validator: Option<ValidatorSettings>,

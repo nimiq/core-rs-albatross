@@ -162,37 +162,37 @@ pub struct FileStorageConfig {
     /// The parent directory where the database will be stored. The database directory name
     /// is determined by the network ID and consensus type using the `database_name` static
     /// method.
-    database_parent: PathBuf,
+    pub database_parent: PathBuf,
 
     /// Path to peer key.
-    peer_key_path: PathBuf,
+    pub peer_key_path: PathBuf,
 
     /// The key used for the peer key, if the file is not present.
-    peer_key: Option<String>,
+    pub peer_key: Option<String>,
 
     /// Path to voting key.
     #[cfg(feature = "validator")]
-    voting_key_path: Option<PathBuf>,
+    pub voting_key_path: Option<PathBuf>,
 
     /// The voting key used for the validator, if the file is not present.
     #[cfg(feature = "validator")]
-    voting_key: Option<String>,
+    pub voting_key: Option<String>,
 
     /// Path to signing key.
     #[cfg(feature = "validator")]
-    signing_key_path: Option<PathBuf>,
+    pub signing_key_path: Option<PathBuf>,
 
     /// The signing key used for the validator, if the file is not present.
     #[cfg(feature = "validator")]
-    signing_key: Option<String>,
+    pub signing_key: Option<String>,
 
     /// Path to fee key.
     #[cfg(feature = "validator")]
-    fee_key_path: Option<PathBuf>,
+    pub fee_key_path: Option<PathBuf>,
 
     /// The fee key used for the validator, if the file is not present.
     #[cfg(feature = "validator")]
-    fee_key: Option<String>,
+    pub fee_key: Option<String>,
 }
 
 impl FileStorageConfig {
@@ -238,7 +238,7 @@ impl Default for FileStorageConfig {
 }
 
 /// Configuration options for the database
-#[derive(Debug, Clone, Builder)]
+#[derive(Debug, Clone, Builder, PartialEq)]
 #[builder(setter(into))]
 pub struct DatabaseConfig {
     /// Initial database size. Default: 1 TB
@@ -257,7 +257,7 @@ pub struct DatabaseConfig {
     max_readers: u32,
 
     /// Additional LMDB flags
-    #[builder(default = "LmdbFlags::NOMETASYNC")]
+    #[builder(default = "LmdbFlags::NOMETASYNC | LmdbFlags::NOSYNC")]
     flags: LmdbFlags::Flags,
 }
 
@@ -273,15 +273,19 @@ impl Default for DatabaseConfig {
     }
 }
 
-impl From<config_file::DatabaseSettings> for DatabaseConfig {
-    fn from(db_settings: config_file::DatabaseSettings) -> Self {
+impl From<Option<config_file::DatabaseSettings>> for DatabaseConfig {
+    fn from(db_settings: Option<config_file::DatabaseSettings>) -> Self {
         let default = DatabaseConfig::default();
 
-        Self {
-            size: db_settings.size.unwrap_or(default.size),
-            max_dbs: db_settings.max_dbs.unwrap_or(default.max_dbs),
-            max_readers: db_settings.max_readers.unwrap_or(default.max_readers),
-            flags: default.flags,
+        if let Some(db_settings) = db_settings {
+            Self {
+                size: db_settings.size.unwrap_or(default.size),
+                max_dbs: db_settings.max_dbs.unwrap_or(default.max_dbs),
+                max_readers: db_settings.max_readers.unwrap_or(default.max_readers),
+                flags: default.flags,
+            }
+        } else {
+            default
         }
     }
 }
@@ -784,8 +788,10 @@ impl ClientConfigBuilder {
 
         // Configure storage config.
         let mut file_storage = FileStorageConfig::default();
-        if let Some(path) = config_file.database.path.as_ref() {
-            file_storage.database_parent = PathBuf::from(path);
+        if let Some(db_config_file) = &config_file.database {
+            if let Some(path) = db_config_file.path.as_ref() {
+                file_storage.database_parent = PathBuf::from(path);
+            }
         }
         if let Some(key_path) = config_file.network.peer_key_file.as_ref() {
             file_storage.peer_key_path = PathBuf::from(key_path);
