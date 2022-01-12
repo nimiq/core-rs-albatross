@@ -73,6 +73,8 @@ impl BlockProducer {
             prev_seed.entropy(),
         );
 
+        log::debug!("Creating inherents");
+
         // Create the inherents from the fork proofs and the view changes.
         let inherents = blockchain.create_slash_inherents(&fork_proofs, &view_changes, None);
 
@@ -94,6 +96,8 @@ impl BlockProducer {
 
         // Store the extended transactions into the history tree and calculate the history root.
         let mut txn = blockchain.write_transaction();
+
+        log::debug!("Computing history root");
 
         let history_root = blockchain
             .history_store
@@ -128,6 +132,8 @@ impl BlockProducer {
         // Signs the block header using the signing key.
         let hash = header.hash::<Blake2bHash>();
         let signature = self.signing_key.sign(hash.as_slice());
+
+        log::debug!("Returning micro block");
 
         // Returns the micro block.
         MicroBlock {
