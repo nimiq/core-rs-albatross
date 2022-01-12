@@ -1,6 +1,7 @@
 use thiserror::Error;
 
 use crate::behaviour::NimiqNetworkBehaviourError;
+use crate::dispatch::codecs::typed::MessageCodec;
 
 #[derive(Debug, Error)]
 pub enum NetworkError {
@@ -45,6 +46,10 @@ pub enum NetworkError {
         topic_name: &'static str,
         error: &'static str,
     },
+    #[error("Response channel closed: {0:?}")]
+    ResponseChannelClosed(
+        <MessageCodec as libp2p::request_response::RequestResponseCodec>::Response,
+    ),
 }
 
 impl From<libp2p::kad::store::Error> for NetworkError {

@@ -27,7 +27,7 @@ use libp2p::{
         Quorum, Record,
     },
     noise,
-    ping::Success,
+    request_response::{RequestId, RequestResponseMessage, ResponseChannel},
     swarm::{dial_opts::DialOpts, ConnectionLimits, NetworkInfo, SwarmBuilder, SwarmEvent},
     tcp, websocket, yamux, Multiaddr, PeerId, Swarm, Transport,
 };
@@ -47,8 +47,9 @@ use nimiq_utils::time::OffsetTime;
 use nimiq_validator_network::validator_record::SignedValidatorRecord;
 
 use crate::{
-    behaviour::{NimiqBehaviour, NimiqEvent, NimiqNetworkBehaviourError},
+    behaviour::{NimiqBehaviour, NimiqEvent, NimiqNetworkBehaviourError, RequestResponseEvent},
     connection_pool::behaviour::ConnectionPoolEvent,
+    dispatch::codecs::typed::{IncomingRequest, OutgoingResponse},
     peer::Peer,
     Config, NetworkError,
 };
@@ -110,6 +111,16 @@ pub(crate) enum NetworkAction {
         listen_addresses: Vec<Multiaddr>,
     },
     StartConnecting,
+    SendRequest {
+        peer_id: PeerId,
+        request: IncomingRequest,
+        output: oneshot::Sender<RequestId>,
+    },
+    SendResponse {
+        response_channel: ResponseChannel<OutgoingResponse>,
+        response: OutgoingResponse,
+        output: oneshot::Sender<Result<(), NetworkError>>,
+    },
 }
 
 struct ValidateMessage<P: Clone> {
@@ -141,6 +152,7 @@ struct TaskState {
     dht_gets: HashMap<QueryId, oneshot::Sender<Result<Option<Vec<u8>>, NetworkError>>>,
     gossip_topics: HashMap<TopicHash, (mpsc::Sender<(GossipsubMessage, MessageId, PeerId)>, bool)>,
     is_bootstraped: bool,
+    requests: HashMap<RequestId, ResponseChannel<OutgoingResponse>>,
 }
 
 #[derive(Clone, Debug)]
@@ -598,29 +610,6 @@ impl Network {
                             }
                         }
                     }
-                    NimiqEvent::Ping(event) => {
-                        match event.result {
-                            Err(e) => {
-                                log::error!("Ping failed with peer {}, {:?}", event.peer, e);
-                                // Remove the peer from the peer map
-                                if let Some(peer) =
-                                    swarm.behaviour_mut().pool.peers.remove(&event.peer)
-                                {
-                                    events_tx.send(NetworkEvent::<Peer>::PeerLeft(peer)).ok();
-                                }
-                            }
-                            Ok(Success::Pong) => {
-                                log::trace!("Responded Ping from peer {}", event.peer);
-                            }
-                            Ok(Success::Ping { rtt }) => {
-                                log::trace!(
-                                    "Sent Ping and received response to/from peer {}, round trip time {:?}",
-                                    event.peer,
-                                    rtt
-                                );
-                            }
-                        };
-                    }
                     NimiqEvent::Pool(event) => {
                         match event {
                             ConnectionPoolEvent::PeerJoined { peer } => {
@@ -628,6 +617,72 @@ impl Network {
                             }
                         };
                     }
+                    NimiqEvent::RequestResponse(event) => match event {
+                        RequestResponseEvent::Message { peer, message } => match message {
+                            RequestResponseMessage::Request {
+                                request_id,
+                                request,
+                                channel,
+                            } => {
+                                tracing::debug!(
+                                    "Incoming request {} from peer {}: {:?}",
+                                    request_id,
+                                    peer,
+                                    request,
+                                );
+                                state.requests.insert(request_id, channel);
+                                // TODO
+                                // Inform the peer about the request
+                                // event_tx maybe?
+                            }
+                            RequestResponseMessage::Response {
+                                request_id,
+                                response,
+                            } => {
+                                tracing::trace!(
+                                    "Incoming response {} from peer {}: {:?}",
+                                    request_id,
+                                    peer,
+                                    response,
+                                );
+                                // TODO
+                                // Inform the peer about the response
+                            }
+                        },
+                        RequestResponseEvent::OutboundFailure {
+                            peer,
+                            request_id,
+                            error,
+                        } => {
+                            tracing::error!(
+                                "Request {} sent to peer {} failed, error: {:?}",
+                                request_id,
+                                peer,
+                                error,
+                            );
+                            state.requests.remove(&request_id);
+                        }
+                        RequestResponseEvent::InboundFailure {
+                            peer,
+                            request_id,
+                            error,
+                        } => {
+                            tracing::error!(
+                                "Response to {} from peer {} failed, error: {:?}",
+                                request_id,
+                                peer,
+                                error,
+                            );
+                        }
+                        RequestResponseEvent::ResponseSent { peer, request_id } => {
+                            tracing::trace!(
+                                "Response to request {} sent to peer: {}",
+                                request_id,
+                                peer
+                            );
+                            state.requests.remove(&request_id);
+                        }
+                    },
                 }
             }
             _ => {}
@@ -804,6 +859,42 @@ impl Network {
             }
             NetworkAction::StartConnecting => {
                 swarm.behaviour_mut().pool.start_connecting();
+            }
+            NetworkAction::SendRequest {
+                peer_id,
+                request,
+                output,
+            } => {
+                if let Err(e) = output.send(
+                    swarm
+                        .behaviour_mut()
+                        .request_response
+                        .send_request(&peer_id, request),
+                ) {
+                    tracing::error!(
+                        "Request {} was sent to peer {} but the action channel was dropped",
+                        e,
+                        peer_id
+                    );
+                };
+            }
+            NetworkAction::SendResponse {
+                response_channel,
+                response,
+                output,
+            } => {
+                if let Err(e) = output.send(
+                    swarm
+                        .behaviour_mut()
+                        .request_response
+                        .send_response(response_channel, response)
+                        .map_err(NetworkError::ResponseChannelClosed),
+                ) {
+                    tracing::error!(
+                        "Response was sent but the action channel was dropped: {:?}",
+                        e
+                    );
+                };
             }
         }
     }

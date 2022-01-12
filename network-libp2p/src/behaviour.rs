@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::iter;
 use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
 
@@ -10,10 +11,13 @@ use libp2p::{
     },
     identify::{Identify, IdentifyConfig, IdentifyEvent},
     kad::{store::MemoryStore, Kademlia, KademliaEvent},
-    ping,
-    ping::{Failure, PingEvent},
+    request_response::{
+        ProtocolSupport, RequestResponse, RequestResponseConfig,
+        RequestResponseEvent as ReqResEvent,
+    },
     swarm::{
-        NetworkBehaviour, NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters,
+        ConnectionHandlerUpgrErr, NetworkBehaviour, NetworkBehaviourAction,
+        NetworkBehaviourEventProcess, PollParameters,
     },
     Multiaddr, NetworkBehaviour, PeerId,
 };
@@ -33,6 +37,7 @@ use crate::{
         handler::HandlerError as DiscoveryError,
         peer_contacts::PeerContactBook,
     },
+    dispatch::codecs::typed::{IncomingRequest, MessageCodec, MessageProtocol, OutgoingResponse},
     peer::Peer,
     Config,
 };
@@ -43,10 +48,12 @@ pub type NimiqNetworkBehaviourError = EitherError<
             EitherError<EitherError<std::io::Error, DiscoveryError>, GossipsubHandlerError>,
             std::io::Error,
         >,
-        Failure,
+        ConnectionPoolError,
     >,
-    ConnectionPoolError,
+    ConnectionHandlerUpgrErr<std::io::Error>,
 >;
+
+pub type RequestResponseEvent = ReqResEvent<IncomingRequest, OutgoingResponse>;
 
 #[derive(Debug)]
 pub enum NimiqEvent {
@@ -54,8 +61,8 @@ pub enum NimiqEvent {
     Discovery(DiscoveryEvent),
     Gossip(GossipsubEvent),
     Identify(IdentifyEvent),
-    Ping(PingEvent),
     Pool(ConnectionPoolEvent),
+    RequestResponse(RequestResponseEvent),
 }
 
 impl From<KademliaEvent> for NimiqEvent {
@@ -82,15 +89,15 @@ impl From<IdentifyEvent> for NimiqEvent {
     }
 }
 
-impl From<PingEvent> for NimiqEvent {
-    fn from(event: PingEvent) -> Self {
-        Self::Ping(event)
-    }
-}
-
 impl From<ConnectionPoolEvent> for NimiqEvent {
     fn from(event: ConnectionPoolEvent) -> Self {
         Self::Pool(event)
+    }
+}
+
+impl From<RequestResponseEvent> for NimiqEvent {
+    fn from(event: RequestResponseEvent) -> Self {
+        Self::RequestResponse(event)
     }
 }
 
@@ -101,8 +108,8 @@ pub struct NimiqBehaviour {
     pub discovery: DiscoveryBehaviour,
     pub gossipsub: Gossipsub,
     pub identify: Identify,
-    pub ping: ping::Behaviour,
     pub pool: ConnectionPoolBehaviour,
+    pub request_response: RequestResponse<MessageCodec>,
 
     #[behaviour(ignore)]
     contacts: Arc<RwLock<PeerContactBook>>,
@@ -156,25 +163,23 @@ impl NimiqBehaviour {
         let identify_config = IdentifyConfig::new("/albatross/2.0".to_string(), public_key);
         let identify = Identify::new(identify_config);
 
-        // Ping behaviour
-        // Send a ping every 5 seconds and timeout at 5 seconds
-        let duration = tokio::time::Duration::from_secs(5);
-        let ping = ping::Behaviour::new(
-            ping::Config::new()
-                .with_interval(duration)
-                .with_timeout(duration),
-        );
-
         // Connection pool behaviour
         let pool = ConnectionPoolBehaviour::new(Arc::clone(&contacts), config.seeds, peers);
+
+        // Request Response behaviour
+        let codec = MessageCodec::default();
+        let protocol = MessageProtocol::Version1;
+        let config = RequestResponseConfig::default();
+        let request_response =
+            RequestResponse::new(codec, iter::once((protocol, ProtocolSupport::Full)), config);
 
         Self {
             dht,
             discovery,
             gossipsub,
             identify,
-            ping,
             pool,
+            request_response,
             events: VecDeque::new(),
             contacts,
             update_scores,
@@ -255,14 +260,14 @@ impl NetworkBehaviourEventProcess<IdentifyEvent> for NimiqBehaviour {
     }
 }
 
-impl NetworkBehaviourEventProcess<PingEvent> for NimiqBehaviour {
-    fn inject_event(&mut self, event: PingEvent) {
+impl NetworkBehaviourEventProcess<ConnectionPoolEvent> for NimiqBehaviour {
+    fn inject_event(&mut self, event: ConnectionPoolEvent) {
         self.emit_event(event);
     }
 }
 
-impl NetworkBehaviourEventProcess<ConnectionPoolEvent> for NimiqBehaviour {
-    fn inject_event(&mut self, event: ConnectionPoolEvent) {
+impl NetworkBehaviourEventProcess<RequestResponseEvent> for NimiqBehaviour {
+    fn inject_event(&mut self, event: RequestResponseEvent) {
         self.emit_event(event);
     }
 }

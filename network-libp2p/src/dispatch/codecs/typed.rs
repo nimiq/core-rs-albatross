@@ -12,6 +12,9 @@ use std::{
 };
 
 use bytes::{Buf, BytesMut};
+use futures::prelude::*;
+use libp2p::core::ProtocolName;
+use libp2p::request_response::RequestResponseCodec;
 use thiserror::Error;
 use tokio_util::codec::{Decoder, Encoder};
 
@@ -19,6 +22,8 @@ use beserial::{Deserialize, Serialize, SerializingError};
 pub use nimiq_network_interface::message::{Message, MessageType};
 use nimiq_network_interface::peer::SendError;
 use nimiq_utils::crc::Crc32Computer;
+
+use crate::MESSAGE_PROTOCOL;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -271,5 +276,74 @@ impl<M: Message> Encoder<&M> for MessageCodec {
         crc.serialize(&mut c)?;
 
         Ok(())
+    }
+}
+
+pub type IncomingRequest = Vec<u8>;
+pub type OutgoingResponse = Result<Vec<u8>, ()>;
+
+#[derive(Debug, Clone)]
+pub enum MessageProtocol {
+    Version1,
+}
+
+impl ProtocolName for MessageProtocol {
+    fn protocol_name(&self) -> &[u8] {
+        match *self {
+            MessageProtocol::Version1 => MESSAGE_PROTOCOL,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl RequestResponseCodec for MessageCodec {
+    type Protocol = MessageProtocol;
+    type Request = IncomingRequest;
+    type Response = OutgoingResponse;
+
+    async fn read_request<T>(
+        &mut self,
+        _: &Self::Protocol,
+        mut _io: &mut T,
+    ) -> io::Result<Self::Request>
+    where
+        T: AsyncRead + Unpin + Send,
+    {
+        unimplemented!()
+    }
+
+    async fn read_response<T>(
+        &mut self,
+        _: &Self::Protocol,
+        mut _io: &mut T,
+    ) -> io::Result<Self::Response>
+    where
+        T: AsyncRead + Unpin + Send,
+    {
+        unimplemented!()
+    }
+
+    async fn write_request<T>(
+        &mut self,
+        _: &Self::Protocol,
+        _io: &mut T,
+        _req: Self::Request,
+    ) -> io::Result<()>
+    where
+        T: AsyncWrite + Send + Unpin,
+    {
+        unimplemented!()
+    }
+
+    async fn write_response<T>(
+        &mut self,
+        _: &Self::Protocol,
+        _io: &mut T,
+        _res: Self::Response,
+    ) -> io::Result<()>
+    where
+        T: AsyncWrite + Unpin + Send,
+    {
+        unimplemented!()
     }
 }
