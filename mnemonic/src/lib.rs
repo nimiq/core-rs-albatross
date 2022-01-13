@@ -6,7 +6,11 @@ use std::fmt;
 use std::str;
 use std::str::FromStr;
 
-use bitvec::prelude::{AsBits, BitSlice, BitVec, Msb0};
+use bitvec::{
+    field::BitField,
+    prelude::{BitSlice, BitVec, Msb0},
+    view::BitView,
+};
 use unicode_normalization::UnicodeNormalization;
 
 use hash::pbkdf2::{compute_pbkdf2_sha512, Pbkdf2Error};
@@ -48,8 +52,8 @@ impl Entropy {
     /// Creates a Mnemonic out of this entropy (BIP39 compatible).
     pub fn to_mnemonic(&self, wordlist: Wordlist) -> Mnemonic {
         let mut bits = BitVec::with_capacity(Self::SIZE + Self::CHECKSUM_SIZE);
-        bits.extend_from_slice(self.as_bytes().bits::<Msb0>());
-        bits.extend_from_slice(self.sha256_checksum().bits::<Msb0>());
+        bits.extend_from_bitslice(self.as_bytes().view_bits::<Msb0>());
+        bits.extend_from_bitslice(self.sha256_checksum().view_bits::<Msb0>());
         Mnemonic::from_bits(&bits, wordlist)
     }
 
@@ -57,8 +61,8 @@ impl Entropy {
     #[deprecated(since = "0.0.1", note = "please use `to_mnemonic` instead")]
     pub fn to_legacy_mnemonic(&self, wordlist: Wordlist) -> Mnemonic {
         let mut bits = BitVec::with_capacity(Self::SIZE + Self::CHECKSUM_SIZE);
-        bits.extend_from_slice(self.as_bytes().bits::<Msb0>());
-        bits.extend_from_slice(self.crc8_checksum().bits::<Msb0>());
+        bits.extend_from_bitslice(self.as_bytes().view_bits::<Msb0>());
+        bits.extend_from_bitslice(self.crc8_checksum().view_bits::<Msb0>());
         Mnemonic::from_bits(&bits, wordlist)
     }
 }
@@ -284,7 +288,7 @@ pub struct Mnemonic {
     mnemonic: Vec<String>,
 }
 
-fn push_usize(bit_vec: &mut BitVec<Msb0, u8>, value: usize, nbits: usize) {
+fn push_usize(bit_vec: &mut BitVec<u8, Msb0>, value: usize, nbits: usize) {
     for i in (0..nbits).rev() {
         bit_vec.push((value >> i) & 1 == 1);
     }
@@ -294,14 +298,14 @@ impl Mnemonic {
     const NUM_BITS_PER_WORD: usize = 11;
 
     /// Creates a Mnemonic out of a BitVec.
-    fn from_bits(bits: &BitSlice<Msb0, u8>, wordlist: Wordlist) -> Self {
+    fn from_bits(bits: &BitSlice<u8, Msb0>, wordlist: Wordlist) -> Self {
         let mnemonic = bits
             .chunks(Self::NUM_BITS_PER_WORD)
             .map(|chunk| {
                 let mut index = 0u16;
                 // Copy bits into index variable
-                let index_bits = index.bits_mut::<Msb0>();
-                index_bits[16 - Self::NUM_BITS_PER_WORD..].clone_from_slice(chunk);
+                let index_bits = index.view_bits_mut::<Msb0>();
+                index_bits[16 - Self::NUM_BITS_PER_WORD..].clone_from_bitslice(chunk);
                 wordlist[index as usize].to_string()
             })
             .collect::<Vec<String>>();
@@ -309,7 +313,7 @@ impl Mnemonic {
     }
 
     /// Tries to convert a Mnemonic into a BitVec. This may fail if the Mnemonic doesn't match the wordlist.
-    fn to_bits(&self, wordlist: Wordlist) -> Option<BitVec<Msb0, u8>> {
+    fn to_bits(&self, wordlist: Wordlist) -> Option<BitVec<u8, Msb0>> {
         let mut bit_vec = BitVec::with_capacity(self.mnemonic.len() * Self::NUM_BITS_PER_WORD);
         for index in self
             .mnemonic
@@ -325,7 +329,7 @@ impl Mnemonic {
     }
 
     /// Creates an entropy out of this mnemonic.
-    fn bits_to_entropy_generic(bits: &BitSlice<Msb0, u8>, legacy: bool) -> Option<Entropy> {
+    fn bits_to_entropy_generic(bits: &BitSlice<u8, Msb0>, legacy: bool) -> Option<Entropy> {
         // Split up bits into entropy and checksum.
         let mut checksum_len = bits.len() % 8;
         if checksum_len == 0 {
@@ -337,9 +341,19 @@ impl Mnemonic {
         let entropy_bits = &bits[..divider_index];
         let mut checksum = 0u8;
         checksum
-            .bits_mut()
-            .copy_from_slice(&bits[divider_index..divider_index + checksum_len]);
-        let entropy = entropy_bits.as_slice();
+            .view_bits_mut()
+            .copy_from_bitslice(&bits[divider_index..divider_index + checksum_len]);
+
+        // Convert the bitslice to a vector of u8
+        let chunks = entropy_bits.chunks_exact(8);
+        let remainder = chunks.remainder();
+        let mut entropy: Vec<u8> = chunks.map(|chunk| chunk.load_be::<u8>()).collect();
+        if !remainder.is_empty() {
+            let mut byte = 0u8;
+            let bits = &mut byte.view_bits_mut::<Msb0>()[..remainder.len()];
+            bits.copy_from_bitslice(remainder);
+            entropy.push(byte);
+        }
 
         // Check length of entropy.
         if entropy.len() != Entropy::SIZE {
