@@ -133,12 +133,16 @@ impl HistoryStore {
         // Append the extended transactions to the history tree and keep the respective leaf indexes.
         let mut leaf_idx = vec![];
 
+        log::debug!("   Appending the extended transactions");
+
         for tx in ext_txs {
             let i = tree.push(tx).ok()?;
             leaf_idx.push(i as u32);
         }
 
         let root = tree.get_root().ok()?;
+
+        log::debug!("   Adding extending transactions into database");
 
         // Add the extended transactions into the respective database.
         // We need to do this separately due to the borrowing rules of Rust.

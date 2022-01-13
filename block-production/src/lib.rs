@@ -78,12 +78,16 @@ impl BlockProducer {
         // Create the inherents from the fork proofs and the view changes.
         let inherents = blockchain.create_slash_inherents(&fork_proofs, &view_changes, None);
 
+        log::debug!("Updating the state");
+
         // Update the state and calculate the state root.
         let state_root = blockchain
             .state()
             .accounts
             .get_root_with(&transactions, &inherents, block_number, timestamp)
             .expect("Failed to compute accounts hash during block production");
+
+        log::debug!("Calculating the extended transactions");
 
         // Calculate the extended transactions from the transactions and the inherents.
         let ext_txs = ExtendedTransaction::from(
@@ -93,6 +97,8 @@ impl BlockProducer {
             transactions.clone(),
             inherents,
         );
+
+        log::debug!("Storing extended transactions into history tree");
 
         // Store the extended transactions into the history tree and calculate the history root.
         let mut txn = blockchain.write_transaction();
@@ -108,6 +114,8 @@ impl BlockProducer {
         // and there is no need to hold the lock after this point.
         // Abort txn so that blockchain is no longer borrowed.
         txn.abort();
+
+        log::debug!("Creating micro block body");
 
         // Create the micro block body.
         let body = MicroBody {
