@@ -149,7 +149,7 @@ impl<N: Network> Inner<N> {
                 view_number,
                 self.buffer.len(),
             )
-        } else if block.block_number() <= macro_height {
+        } else if block_number <= macro_height {
             // Block is from a previous batch/epoch, discard it.
             log::warn!(
                 "Discarding block #{}.{}, we're already at macro block #{}",
@@ -319,17 +319,13 @@ impl<N: Network> Inner<N> {
                     .await
                     .expect("blockchain.push() should not panic");
             let acceptance = match &push_result {
-                Ok(result) => {
-                    log::trace!("Block pushed: {:?}", result);
-                    match result {
-                        PushResult::Known | PushResult::Extended | PushResult::Rebranched => {
-                            MsgAcceptance::Accept
-                        }
-                        PushResult::Forked | PushResult::Ignored => MsgAcceptance::Ignore,
+                Ok(result) => match result {
+                    PushResult::Known | PushResult::Extended | PushResult::Rebranched => {
+                        MsgAcceptance::Accept
                     }
-                }
-                Err(e) => {
-                    log::warn!("Failed to push block: {}", e);
+                    PushResult::Forked | PushResult::Ignored => MsgAcceptance::Ignore,
+                },
+                Err(_) => {
                     // TODO Ban peer
                     MsgAcceptance::Reject
                 }

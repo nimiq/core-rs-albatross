@@ -163,24 +163,32 @@ impl SerializeContent for MacroHeader {
 #[allow(clippy::derive_hash_xor_eq)] // TODO: Shouldn't be necessary
 impl Hash for MacroHeader {}
 
+impl fmt::Display for MacroHeader {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(
+            f,
+            "#{}.{}:MA:{}",
+            self.block_number,
+            self.view_number,
+            self.hash::<Blake2bHash>().to_short_str(),
+        )
+    }
+}
+
 impl SerializeContent for MacroBody {
     fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
         Ok(self.serialize(writer)?)
     }
 }
 
-#[allow(clippy::derive_hash_xor_eq)] // TODO: Shouldn't be necessary
-impl Hash for MacroBody {}
-
 impl fmt::Display for MacroBlock {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(
-            f,
-            "[#{}, view {}, type Macro]",
-            self.header.block_number, self.header.view_number
-        )
+        fmt::Display::fmt(&self.header, f)
     }
 }
+
+#[allow(clippy::derive_hash_xor_eq)] // TODO: Shouldn't be necessary
+impl Hash for MacroBody {}
 
 #[derive(Error, Debug)]
 pub enum IntoSlotsError {

@@ -46,7 +46,12 @@ impl Blockchain {
 
         // Check the version
         if macro_block.header.version != policy::VERSION {
-            warn!("Rejecting block - block with wrong version");
+            warn!(
+                "Rejecting block {} - wrong version ({} != {})",
+                block,
+                macro_block.header.version,
+                policy::VERSION
+            );
             return Err(PushError::InvalidBlock(BlockError::UnsupportedVersion));
         }
 
@@ -56,35 +61,46 @@ impl Blockchain {
             .get_chain_info(&macro_block.hash(), false, Some(&read_txn))
             .is_some()
         {
-            warn!("Rejecting block - block already known");
             return Ok(PushResult::Known);
         }
 
-        // Get the chain info of the current macro head.
-        let prev_macro_hash = this.macro_head_hash();
-
-        let prev_macro_info = this
-            .get_chain_info(&prev_macro_hash, false, Some(&read_txn))
-            .expect("Couldn't fetch chain info for the macro head of the chain!");
+        // Get the current macro head.
+        let macro_head = &this.state.macro_info.head;
 
         // Check if we have this block's parent. The checks change depending if the last macro block
         // that we pushed was an election block or not.
-        if policy::is_election_block_at(prev_macro_info.head.block_number()) {
+        if macro_head.is_election() {
             // We only need to check that the parent election block of this block is the same as our
             // head block.
-            if macro_block.header.parent_election_hash != prev_macro_info.head.hash() {
-                warn!("Rejecting block - macro block without correct parent");
+            if macro_block.header.parent_election_hash != this.state.macro_head_hash {
+                warn!(
+                    "Rejecting block {} - wrong parent election hash ({} != {})",
+                    macro_block,
+                    macro_block.header.parent_election_hash,
+                    this.state.macro_head_hash,
+                );
                 return Err(PushError::Orphan);
             }
         } else {
             // We need to check that this block and our head block have the same parent election
             // block and are in the correct order.
-            if &macro_block.header.parent_election_hash
-                != prev_macro_info.head.parent_election_hash().unwrap()
-                || macro_block.header.block_number <= prev_macro_info.head.block_number()
-            {
-                warn!("Rejecting block - macro block without correct parent");
+            let parent_election_hash = macro_head.parent_election_hash().unwrap();
+            if macro_block.header.parent_election_hash != *parent_election_hash {
+                warn!(
+                    "Rejecting block {} - wrong parent election hash ({} != {})",
+                    macro_block, macro_block.header.parent_election_hash, parent_election_hash
+                );
                 return Err(PushError::Orphan);
+            }
+
+            // FIXME Compute the expected block number and compare it to the given one.
+            if macro_block.header.block_number <= macro_head.block_number() {
+                warn!(
+                    "Rejecting block {} - decreasing block number ({} < {})",
+                    macro_block,
+                    macro_block.header.block_number,
+                    macro_head.block_number()
+                );
             }
         }
 
@@ -92,32 +108,42 @@ impl Blockchain {
         let history_root = HistoryStore::root_from_ext_txs(ext_txs)
             .ok_or(PushError::InvalidBlock(BlockError::InvalidHistoryRoot))?;
 
-        if block.history_root() != &history_root {
-            warn!("Rejecting block - wrong history root");
+        if *block.history_root() != history_root {
+            warn!(
+                "Rejecting block {} - wrong history root ({} != {})",
+                macro_block,
+                block.history_root(),
+                history_root
+            );
             return Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot));
         }
 
         // Checks if the body exists.
-        let body = macro_block
-            .body
-            .as_ref()
-            .ok_or(PushError::InvalidBlock(BlockError::MissingBody))?;
+        let body = macro_block.body.as_ref().ok_or_else(|| {
+            warn!("Rejecting block {} - body missing", macro_block);
+            PushError::InvalidBlock(BlockError::MissingBody)
+        })?;
 
         // Check the body root.
-        if body.hash::<Blake2bHash>() != macro_block.header.body_root {
-            warn!("Rejecting block - Header body hash doesn't match real body hash");
+        let body_hash = body.hash::<Blake2bHash>();
+        if macro_block.header.body_root != body_hash {
+            warn!(
+                "Rejecting block {} - header body hash doesn't match real body hash ({} != {})",
+                macro_block, macro_block.header.body_root, body_hash
+            );
             return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
         }
 
         // Check the justification.
         if !TendermintProof::verify(macro_block, &this.current_validators().unwrap()) {
-            warn!("Rejecting block - macro block with bad justification");
+            warn!("Rejecting block {} - bad justification", macro_block);
             return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
         }
 
         drop(read_txn);
 
         // Extend the chain with this block.
+        let prev_macro_info = this.state.macro_info.clone();
         Blockchain::extend_history_sync(this, block, ext_txs, prev_macro_info)
     }
 
@@ -247,7 +273,15 @@ impl Blockchain {
 
             // Check if the receipts contain an error.
             if let Err(e) = receipts {
-                warn!("Rejecting block - commit failed: {:?}", e);
+                warn!(
+                    "Rejecting block {} - commit of block #{} ({} transactions, {} inherents) failed: {:?}",
+                    block,
+                    block_numbers[i],
+                    block_transactions[i].len(),
+                    block_inherents[i].len(),
+                    e
+                );
+
                 txn.abort();
                 #[cfg(feature = "metrics")]
                 this.metrics.note_invalid_block();
@@ -263,8 +297,10 @@ impl Blockchain {
         let state_root = this.state.accounts.get_root(Some(&txn));
         if macro_block.header.state_root != state_root {
             warn!(
-                "Rejecting epoch - state root mismatch: computed={}, block={}",
-                state_root, macro_block.header.state_root
+                "Rejecting block {} - header accounts hash doesn't match real accounts hash ({} != {})",
+                macro_block,
+                macro_block.header.state_root,
+                state_root,
             );
             txn.abort();
             #[cfg(feature = "metrics")]
@@ -303,6 +339,18 @@ impl Blockchain {
         }
 
         let this = RwLockWriteGuard::downgrade_to_upgradable(this);
+
+        debug!(
+            "Accepted block {} with {} transactions (history_sync)",
+            block,
+            block.num_transactions()
+        );
+
+        debug!(
+            "Accepted epoch #{} with {} items (history_sync)",
+            block.epoch_number(),
+            ext_txs.len()
+        );
 
         if is_election_block {
             this.notifier

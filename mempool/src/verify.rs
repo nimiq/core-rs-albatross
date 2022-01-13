@@ -104,7 +104,6 @@ pub(crate) async fn verify_tx<'a>(
     // 3. Check if we already know the transaction
     if mempool_state.contains(&transaction.hash()) {
         // We already know this transaction, no need to process
-        log::debug!("Transaction is already known ");
         return Err(VerifyErr::Known);
     }
 

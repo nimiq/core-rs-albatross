@@ -217,6 +217,12 @@ impl Block {
         }
     }
 
+    /// Return the number of transactions in the block. If the block is a Macro
+    /// block it just returns zero, since Macro blocks don't contain any transactions.
+    pub fn num_transactions(&self) -> usize {
+        self.transactions().map_or(0, |txs| txs.len())
+    }
+
     /// Returns the sum of the fees of all of the transactions in the block. If the block is a Macro
     /// block it just returns zero, since Macro blocks don't contain any transactions.
     pub fn sum_transaction_fees(&self) -> Coin {
@@ -325,13 +331,10 @@ impl Deserialize for Block {
 
 impl fmt::Display for Block {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(
-            f,
-            "[#{}, view {}, type {:?}]",
-            self.block_number(),
-            self.view_number(),
-            self.ty()
-        )
+        match self {
+            Block::Macro(block) => fmt::Display::fmt(block, f),
+            Block::Micro(block) => fmt::Display::fmt(block, f),
+        }
     }
 }
 
@@ -552,6 +555,15 @@ impl Deserialize for BlockHeader {
             BlockType::Micro => BlockHeader::Micro(Deserialize::deserialize(reader)?),
         };
         Ok(header)
+    }
+}
+
+impl fmt::Display for BlockHeader {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match self {
+            BlockHeader::Macro(header) => fmt::Display::fmt(header, f),
+            BlockHeader::Micro(header) => fmt::Display::fmt(header, f),
+        }
     }
 }
 

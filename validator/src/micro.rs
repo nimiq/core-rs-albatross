@@ -96,7 +96,6 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
         let return_value = {
             let blockchain = self.blockchain.upgradable_read();
             if !in_current_state(&blockchain.head()) {
-                warn!("Blockchain state has changed - aborting");
                 Some(None)
             } else if self.is_our_turn(&*blockchain) {
                 info!(
@@ -158,7 +157,6 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> NextProduceMicroBlockEvent<T
             if in_current_state(&blockchain.head()) {
                 Some(blockchain.current_validators().unwrap())
             } else {
-                warn!("Blockchain state has changed - aborting");
                 None
             }
         };

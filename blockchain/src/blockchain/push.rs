@@ -30,13 +30,11 @@ impl Blockchain {
     ) -> Result<PushResult, PushError> {
         // Ignore all blocks that precede (or are at the same height) as the most recent accepted
         // macro block.
-        if block.block_number() <= policy::last_macro_block(this.block_number()) {
-            info!(
-                "Ignoring block (#{}.{}, {})- we already know a later macro block (we're at {})",
-                block.block_number(),
-                block.view_number(),
-                block.hash(),
-                this.block_number()
+        let last_macro_block = policy::last_macro_block(this.block_number());
+        if block.block_number() <= last_macro_block {
+            debug!(
+                "Ignoring block {} - we have already finalized macro block #{}",
+                block, last_macro_block,
             );
             return Ok(PushResult::Ignored);
         }
@@ -59,7 +57,8 @@ impl Blockchain {
             .get_chain_info(block.parent_hash(), false, Some(&read_txn))
             .ok_or_else(|| {
                 warn!(
-                    "Rejecting block - parent block {} unknown",
+                    "Rejecting block {} - parent block {} is unknown",
+                    block,
                     block.parent_hash()
                 );
                 PushError::Orphan
@@ -75,9 +74,8 @@ impl Blockchain {
             )
             .ok_or_else(|| {
                 warn!(
-                    "Rejecting block - failed to determine block proposer at #{}.{}",
-                    block.block_number(),
-                    block.view_number(),
+                    "Rejecting block {} - failed to determine block proposer",
+                    block,
                 );
                 PushError::Orphan
             })?;
@@ -90,7 +88,7 @@ impl Blockchain {
             Some(&read_txn),
             !trusted,
         ) {
-            warn!("Rejecting block - Bad header");
+            warn!("Rejecting block {} - bad header", block);
             return Err(e);
         }
 
@@ -102,7 +100,7 @@ impl Blockchain {
             Some(&read_txn),
             !trusted,
         ) {
-            warn!("Rejecting block - Bad justification");
+            warn!("Rejecting block {} - bad justification", block);
             return Err(e);
         }
 
@@ -110,7 +108,7 @@ impl Blockchain {
         if let Err(e) =
             this.verify_block_body(&block.header(), &block.body(), Some(&read_txn), !trusted)
         {
-            warn!("Rejecting block - Bad body");
+            warn!("Rejecting block {} - bad body", block);
             return Err(e);
         }
 
@@ -181,21 +179,11 @@ impl Blockchain {
                 return Blockchain::rebranch(this, chain_info.head.hash(), chain_info);
             }
             ChainOrdering::Inferior => {
-                debug!(
-                    "Ignoring inferior block #{}.{} {}",
-                    chain_info.head.block_number(),
-                    chain_info.head.view_number(),
-                    chain_info.head.hash(),
-                );
+                debug!("Storing block {} - on inferior chain", chain_info.head);
                 PushResult::Ignored
             }
             ChainOrdering::Unknown => {
-                debug!(
-                    "Creating/extending fork with block #{}.{} {}",
-                    chain_info.head.block_number(),
-                    chain_info.head.view_number(),
-                    chain_info.head.hash(),
-                );
+                debug!("Storing block {} - on fork", chain_info.head);
                 PushResult::Forked
             }
         };
@@ -303,6 +291,12 @@ impl Blockchain {
         // Downgrade the lock again as the notify listeners might want to acquire read access themselves.
         let this = RwLockWriteGuard::downgrade_to_upgradable(this);
 
+        log::debug!(
+            "Accepted block {} with {} transactions (extend)",
+            this.state.main_chain.head,
+            this.state.main_chain.head.num_transactions()
+        );
+
         if is_election_block {
             this.notifier
                 .notify(BlockchainEvent::EpochFinalized(block_hash));
@@ -321,12 +315,8 @@ impl Blockchain {
         block_hash: Blake2bHash,
         chain_info: ChainInfo,
     ) -> Result<PushResult, PushError> {
-        debug!(
-            "Rebranching to fork {}, height #{}, view number {}",
-            block_hash,
-            chain_info.head.block_number(),
-            chain_info.head.view_number()
-        );
+        let target_block = chain_info.head.header();
+        debug!("Rebranching to {}", target_block);
 
         // Find the common ancestor between our current main chain and the fork chain.
         // Walk up the fork chain until we find a block that is part of the main chain.
@@ -334,7 +324,6 @@ impl Blockchain {
         let read_txn = this.read_transaction();
 
         let mut fork_chain: Vec<(Blake2bHash, ChainInfo)> = vec![];
-
         let mut current: (Blake2bHash, ChainInfo) = (block_hash, chain_info);
 
         while !current.1.on_main_chain {
@@ -352,9 +341,8 @@ impl Blockchain {
         read_txn.close();
 
         debug!(
-            "Found common ancestor {} at height #{}, {} blocks up",
-            current.0,
-            current.1.head.block_number(),
+            "Found common ancestor {} at {} blocks up",
+            current.1.head,
             fork_chain.len()
         );
 
@@ -364,7 +352,10 @@ impl Blockchain {
 
         // Check if ancestor is in current batch.
         if ancestor.1.head.block_number() < this.state.macro_info.head.block_number() {
-            info!("Ancestor is in finalized epoch");
+            warn!(
+                "Rejecting block {} - ancestor block {} already finalized",
+                target_block, ancestor.1.head
+            );
             return Err(PushError::InvalidFork);
         }
 
@@ -422,7 +413,10 @@ impl Blockchain {
                 prev_view_number,
                 &mut write_txn,
             ) {
-                warn!("Failed to apply fork block while rebranching - {:?}", e);
+                warn!(
+                    "Rejecting block {} - failed to apply fork block {} while rebranching: {:?}",
+                    target_block, fork_block.1.head, e
+                );
                 write_txn.abort();
 
                 // Delete invalid fork blocks from store.
@@ -511,13 +505,30 @@ impl Blockchain {
 
         let mut reverted_blocks = Vec::with_capacity(revert_chain.len());
         for (hash, chain_info) in revert_chain.into_iter().rev() {
+            debug!(
+                "Reverted block {} with {} transactions",
+                chain_info.head,
+                chain_info.head.num_transactions()
+            );
             reverted_blocks.push((hash, chain_info.head));
         }
 
         let mut adopted_blocks = Vec::with_capacity(fork_chain.len());
         for (hash, chain_info) in fork_chain.into_iter().rev() {
+            debug!(
+                "Accepted block {} with {} transactions (rebranch)",
+                chain_info.head,
+                chain_info.head.num_transactions()
+            );
             adopted_blocks.push((hash, chain_info.head));
         }
+
+        debug!(
+            "Rebranched to block {} - {} blocks reverted, {} blocks adopted",
+            this.state.main_chain.head,
+            reverted_blocks.len(),
+            adopted_blocks.len(),
+        );
 
         let event = BlockchainEvent::Rebranched(reverted_blocks, adopted_blocks);
         this.notifier.notify(event);
@@ -539,8 +550,12 @@ impl Blockchain {
 
             if let Some(tx_vec) = transactions {
                 for transaction in tx_vec {
-                    if self.contains_tx_in_validity_window(&transaction.hash(), Some(txn)) {
-                        warn!("Rejecting block - transaction already included");
+                    let tx_hash = transaction.hash();
+                    if self.contains_tx_in_validity_window(&tx_hash, Some(txn)) {
+                        warn!(
+                            "Rejecting block {} - transaction {} already included",
+                            block, tx_hash,
+                        );
                         return Err(PushError::DuplicateTransaction);
                     }
                 }
@@ -549,7 +564,7 @@ impl Blockchain {
 
         // Commit block to AccountsTree.
         if let Err(e) = self.commit_accounts(state, block, prev_entropy, first_view_number, txn) {
-            warn!("Rejecting block - commit failed: {:?}", e);
+            warn!("Rejecting block {} - commit failed: {:?}", block, e);
             #[cfg(feature = "metrics")]
             self.metrics.note_invalid_block();
             return Err(e);
@@ -557,7 +572,7 @@ impl Blockchain {
 
         // Verify the state against the block.
         if let Err(e) = self.verify_block_state(state, block, Some(txn)) {
-            warn!("Rejecting block - Bad state");
+            warn!("Rejecting block {} - bad state", block);
             return Err(e);
         }
 

@@ -334,7 +334,7 @@ do
 
     # First collect the last block number from each validator
     for log in $logsdir/*.log; do
-        bn=$(grep "Now at block #" $log | tail -1 | awk -F# '{print $2}' | cut --delimiter=. --fields 1)
+        bn=$(grep "Accepted block #" $log | tail -1 | awk -F# '{print $2}' | cut --delimiter=. --fields 1)
         if [ -z "$bn" ]; then
             bns+=(0)
         else

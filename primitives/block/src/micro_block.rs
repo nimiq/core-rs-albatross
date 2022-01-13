@@ -1,4 +1,4 @@
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
 use std::{fmt, io};
 
 use beserial::{Deserialize, Serialize};
@@ -122,14 +122,22 @@ impl FromDatabaseValue for MicroBlock {
     }
 }
 
+impl fmt::Display for MicroBlock {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.header, f)
+    }
+}
+
 impl Hash for MicroHeader {}
 
 impl fmt::Display for MicroHeader {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(
             f,
-            "[#{} view {}, type Micro]",
-            self.block_number, self.view_number
+            "#{}.{}:MI:{}",
+            self.block_number,
+            self.view_number,
+            self.hash::<Blake2bHash>().to_short_str(),
         )
     }
 }
@@ -137,7 +145,7 @@ impl fmt::Display for MicroHeader {
 impl Hash for MicroBody {}
 
 impl Debug for MicroBody {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
         let mut dbg = f.debug_struct("MicroBody");
         dbg.field("num_fork_proofs", &self.fork_proofs.len());
         dbg.field("num_transactions", &self.transactions.len());

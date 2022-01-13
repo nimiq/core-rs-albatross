@@ -93,6 +93,10 @@ macro_rules! add_hex_io_fns_typed_arr {
             pub fn to_hex(&self) -> String {
                 ::hex::encode(&self.0)
             }
+
+            pub fn to_short_str(&self) -> String {
+                ::hex::encode(&self.0[0..5])
+            }
         }
 
         impl ::std::str::FromStr for $name {

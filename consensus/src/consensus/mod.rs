@@ -278,23 +278,21 @@ impl<N: Network> Future for Consensus<N> {
         while let Poll::Ready(Some(event)) = self.block_queue.poll_next_unpin(cx) {
             match event {
                 BlockQueueEvent::AcceptedAnnouncedBlock(_) => {
-                    // Note: this output is parsed by our testing infrastructure (specifically devnet.sh),
-                    // so please test that nothing breaks in there if you change this.
-                    let (block_number, view_number) = {
-                        let blockchain = self.blockchain.read();
-                        (blockchain.block_number(), blockchain.view_number())
-                    };
-                    debug!("Now at block #{}.{}", block_number, view_number);
-
                     // Reset the head request timer when an announced block was accepted.
                     self.head_requests_time = Some(Instant::now());
                 }
                 BlockQueueEvent::AcceptedBufferedBlock(_, remaining_in_buffer) => {
                     if !self.is_established() {
+                        // Note: this output is parsed by our testing infrastructure (specifically devnet.sh),
+                        // so please test that nothing breaks in there if you change this.
+                        let (block_number, view_number) = {
+                            let blockchain = self.blockchain.read();
+                            (blockchain.block_number(), blockchain.view_number())
+                        };
+
                         info!(
-                            "Catching up to tip of the chain (now at #{}, {} blocks remaining)",
-                            self.blockchain.read().block_number(),
-                            remaining_in_buffer
+                            "Catching up to tip of the chain (now at #{}.{}, {} blocks remaining)",
+                            block_number, view_number, remaining_in_buffer
                         );
 
                         if remaining_in_buffer == 0 {

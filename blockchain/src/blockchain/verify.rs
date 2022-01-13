@@ -34,59 +34,89 @@ impl Blockchain {
     ) -> Result<(), PushError> {
         // Check the version
         if header.version() != policy::VERSION {
-            warn!("Rejecting block - wrong version");
+            warn!(
+                "Rejecting block {} - wrong version ({} != {})",
+                header,
+                header.version(),
+                policy::VERSION
+            );
             return Err(PushError::InvalidBlock(BlockError::UnsupportedVersion));
         }
 
         // Check if the block's immediate predecessor is part of the chain.
-        // TODO: if we don't have the parent block, we should request it from the network instead of
-        // erroring out immediately
         let prev_info = blockchain
             .get_chain_info(header.parent_hash(), false, txn_opt)
             .ok_or(PushError::Orphan)?;
 
         // Check that the block is a valid successor of its predecessor.
-        if blockchain.get_next_block_type(Some(prev_info.head.block_number())) != header.ty() {
-            warn!("Rejecting block - wrong block type ({:?})", header.ty());
+        let next_block_type = blockchain.get_next_block_type(Some(prev_info.head.block_number()));
+        if header.ty() != next_block_type {
+            warn!(
+                "Rejecting block {} - wrong block type ({:?} != {:?})",
+                header,
+                header.ty(),
+                next_block_type,
+            );
             return Err(PushError::InvalidSuccessor);
         }
 
-        // Check the block number
-        if prev_info.head.block_number() + 1 != header.block_number() {
+        // Check the block number.
+        let next_block_number = prev_info.head.block_number() + 1;
+        if header.block_number() != next_block_number {
             warn!(
-                "Rejecting block - wrong block number ({:?})",
-                header.block_number()
+                "Rejecting block {} - wrong block number ({} != {})",
+                header,
+                header.block_number(),
+                next_block_number,
             );
             return Err(PushError::InvalidSuccessor);
         }
 
         // Check that the current block timestamp is equal or greater than the timestamp of the
         // previous block.
-        if prev_info.head.timestamp() > header.timestamp() {
-            warn!("Rejecting block - block timestamp precedes parent timestamp");
+        if header.timestamp() < prev_info.head.timestamp() {
+            warn!(
+                "Rejecting block {} - block timestamp precedes parent timestamp ({} < {})",
+                header,
+                header.timestamp(),
+                prev_info.head.timestamp(),
+            );
             return Err(PushError::InvalidSuccessor);
         }
 
         // Check that the current block timestamp less the node's current time is less than or equal
         // to the allowed maximum drift. Basically, we check that the block isn't from the future.
         // Both times are given in Unix time standard in millisecond precision.
-        if header.timestamp().saturating_sub(blockchain.now()) > policy::TIMESTAMP_MAX_DRIFT {
-            warn!("Rejecting block - block timestamp exceeds allowed maximum drift");
+        let timestamp_diff = header.timestamp().saturating_sub(blockchain.now());
+        if timestamp_diff > policy::TIMESTAMP_MAX_DRIFT {
+            warn!(
+                "Rejecting block {} - block timestamp {} exceeds allowed maximum drift ({} > {})",
+                header,
+                header.timestamp(),
+                timestamp_diff,
+                policy::TIMESTAMP_MAX_DRIFT
+            );
             return Err(PushError::InvalidBlock(BlockError::FromTheFuture));
         }
 
         // Check if the seed was signed by the intended producer.
         if check_seed {
             if let Err(e) = header.seed().verify(prev_info.head.seed(), signing_key) {
-                warn!("Rejecting block - invalid seed ({:?})", e);
+                warn!("Rejecting block {} - invalid seed ({:?})", header, e);
                 return Err(PushError::InvalidBlock(BlockError::InvalidSeed));
             }
         }
 
         if header.ty() == BlockType::Macro {
             // Check if the parent election hash matches the current election head hash
-            if header.parent_election_hash().unwrap() != &blockchain.election_head_hash() {
-                warn!("Rejecting block - wrong parent election hash");
+            let parent_election_hash = header.parent_election_hash().unwrap();
+            if parent_election_hash != &blockchain.election_head_hash() {
+                warn!(
+                    "Rejecting block {} - wrong parent election hash ({} != {})",
+                    header,
+                    parent_election_hash,
+                    blockchain.election_head_hash()
+                );
                 return Err(PushError::InvalidSuccessor);
             }
         }
@@ -116,8 +146,10 @@ impl Blockchain {
                     // Verify the signature on the justification.
                     let hash = block.hash();
                     if !signing_key.verify(&justification.signature, hash.as_slice()) {
-                        warn!("Rejecting block - invalid signature for intended slot owner");
-                        debug!("Intended slot owner: {:?}", signing_key);
+                        warn!(
+                            "Rejecting block {} - invalid signature for slot owner {:?}",
+                            block, signing_key
+                        );
                         return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
                     }
                 }
@@ -127,32 +159,33 @@ impl Blockchain {
                     .get_chain_info(block.parent_hash(), false, txn_opt)
                     .unwrap();
 
-                let view_number = if policy::is_macro_block_at(block.block_number() - 1) {
-                    // Reset view number in new batch
-                    0
-                } else {
-                    prev_info.head.view_number()
-                };
+                let next_view_number = prev_info.head.next_view_number();
+                let view_number = block.view_number();
 
-                let new_view_number = block.view_number();
-
-                if new_view_number < view_number {
+                if view_number < next_view_number {
                     warn!(
-                        "Rejecting block - lower view number {:?} < {:?}",
-                        block.view_number(),
-                        view_number
+                        "Rejecting block {} - decreasing view number {} < {}",
+                        block, view_number, next_view_number
                     );
                     return Err(PushError::InvalidBlock(BlockError::InvalidViewNumber));
-                } else if new_view_number == view_number
+                } else if view_number == next_view_number
                     && justification.view_change_proof.is_some()
                 {
-                    warn!("Rejecting block - must not contain view change proof");
+                    warn!(
+                        "Rejecting block {} - must not contain view change proof",
+                        block
+                    );
                     return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
-                } else if new_view_number > view_number && justification.view_change_proof.is_none()
+                } else if view_number > next_view_number
+                    && justification.view_change_proof.is_none()
                 {
-                    warn!("Rejecting block - missing view change proof");
+                    warn!(
+                        "Rejecting block {} - missing view change proof ({} > {})",
+                        block, view_number, next_view_number
+                    );
                     return Err(PushError::InvalidBlock(BlockError::NoViewChangeProof));
-                } else if new_view_number > view_number && justification.view_change_proof.is_some()
+                } else if view_number > next_view_number
+                    && justification.view_change_proof.is_some()
                 {
                     let view_change = ViewChange {
                         block_number: block.block_number(),
@@ -166,7 +199,7 @@ impl Blockchain {
                         .unwrap()
                         .verify(&view_change, &blockchain.current_validators().unwrap())
                     {
-                        warn!("Rejecting block - bad view change proof");
+                        warn!("Rejecting block {} - bad view change proof", block);
                         return Err(PushError::InvalidBlock(BlockError::InvalidViewChangeProof));
                     }
                 }
@@ -179,7 +212,10 @@ impl Blockchain {
                         &blockchain.current_validators().unwrap(),
                     )
                 {
-                    warn!("Rejecting block - macro block with bad justification");
+                    warn!(
+                        "Rejecting block {} - macro block with bad justification",
+                        block
+                    );
                     return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
                 }
             }
@@ -207,14 +243,26 @@ impl Blockchain {
         match body {
             BlockBody::Micro(body) => {
                 // Check the size of the body.
-                if body.serialized_size() > policy::MAX_SIZE_MICRO_BODY {
-                    warn!("Rejecting block - Body size exceeds maximum size");
+                let body_size = body.serialized_size();
+                if body_size > policy::MAX_SIZE_MICRO_BODY {
+                    warn!(
+                        "Rejecting block {} - body size exceeds maximum size ({} > {})",
+                        header,
+                        body_size,
+                        policy::MAX_SIZE_MICRO_BODY
+                    );
                     return Err(PushError::InvalidBlock(BlockError::SizeExceeded));
                 }
 
                 // Check the body root.
-                if &body.hash::<Blake2bHash>() != header.body_root() {
-                    warn!("Rejecting block - Header body hash doesn't match real body hash");
+                let body_hash = body.hash::<Blake2bHash>();
+                if *header.body_root() != body_hash {
+                    warn!(
+                        "Rejecting block {} - header body hash doesn't match real body hash ({} != {})",
+                        header,
+                        header.body_root(),
+                        body_hash
+                    );
                     return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
                 }
 
@@ -253,14 +301,15 @@ impl Blockchain {
                     ) {
                         // Verify fork proof.
                         if let Err(e) = proof.verify(&slot.validator.signing_key) {
-                            warn!("Rejecting block - Bad fork proof: {:?}", e);
+                            warn!("Rejecting block {} - bad fork proof: {:?}", header, e);
                             return Err(PushError::InvalidBlock(BlockError::InvalidForkProof));
                         }
 
                         previous_proof = Some(proof);
                     } else {
                         warn!(
-                            "Rejecting block - Bad fork proof: Couldn't calculate the slot owner"
+                            "Rejecting block {} - bad fork proof: Couldn't calculate slot owner",
+                            header
                         );
                         return Err(PushError::InvalidBlock(BlockError::InvalidForkProof));
                     }
@@ -304,8 +353,14 @@ impl Blockchain {
             }
             BlockBody::Macro(body) => {
                 // Check the body root.
-                if &body.hash::<Blake2bHash>() != header.body_root() {
-                    warn!("Rejecting block - Header body hash doesn't match real body hash");
+                let body_hash = body.hash::<Blake2bHash>();
+                if *header.body_root() != body_hash {
+                    warn!(
+                        "Rejecting block {} - header body hash doesn't match real body hash ({} != {})",
+                        header,
+                        header.body_root(),
+                        body_hash
+                    );
                     return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
                 }
 
@@ -324,8 +379,7 @@ impl Blockchain {
                 // If this is an election block, check if the pk_tree_root matches the validators.
                 if is_election {
                     let pk_tree_root = MacroBlock::pk_tree_root(body.validators.as_ref().unwrap());
-
-                    if &pk_tree_root != body.pk_tree_root.as_ref().unwrap() {
+                    if pk_tree_root != *body.pk_tree_root.as_ref().unwrap() {
                         return Err(PushError::InvalidBlock(BlockError::InvalidPkTreeRoot));
                     }
                 }
@@ -357,11 +411,12 @@ impl Blockchain {
         // Verify accounts hash.
         let accounts_hash = accounts.get_root(txn_opt);
 
-        if block.state_root() != &accounts_hash {
-            error!(
-                "State: expected {:?}, found {:?}",
+        if *block.state_root() != accounts_hash {
+            warn!(
+                "Rejecting block {} - header accounts hash doesn't match real accounts hash ({} != {})",
+                block,
                 block.state_root(),
-                accounts_hash
+                accounts_hash,
             );
             return Err(PushError::InvalidBlock(BlockError::AccountsHashMismatch));
         }
@@ -369,11 +424,23 @@ impl Blockchain {
         // Verify the history root.
         let real_history_root = self
             .history_store
-            .get_history_tree_root(policy::epoch_at(block.block_number()), txn_opt)
-            .ok_or(PushError::InvalidBlock(BlockError::InvalidHistoryRoot))?;
+            .get_history_tree_root(block.epoch_number(), txn_opt)
+            .ok_or_else(|| {
+                error!(
+                    "Rejecting block {} - failed to fetch history tree root for epoch {} from store",
+                    block,
+                    block.epoch_number(),
+                );
+                PushError::InvalidBlock(BlockError::InvalidHistoryRoot)
+            })?;
 
-        if &real_history_root != block.history_root() {
-            warn!("Rejecting block - History root doesn't match real history root");
+        if *block.history_root() != real_history_root {
+            warn!(
+                "Rejecting block {} - history root doesn't match real history root ({} != {})",
+                block,
+                block.history_root(),
+                real_history_root,
+            );
             return Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot));
         }
 
@@ -399,17 +466,26 @@ impl Blockchain {
                 // If we were given a body, then check each value against the corresponding value in
                 // the body.
                 if real_lost_rewards != body.lost_reward_set {
-                    warn!("Rejecting block - Lost rewards set doesn't match real lost rewards set");
+                    warn!(
+                        "Rejecting block {} - lost rewards set doesn't match real lost rewards set",
+                        block
+                    );
                     return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
                 }
 
                 if real_disabled_slots != body.disabled_set {
-                    warn!("Rejecting block - Disabled set doesn't match real disabled set");
+                    warn!(
+                        "Rejecting block {} - disabled set doesn't match real disabled set",
+                        block
+                    );
                     return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
                 }
 
                 if real_validators != body.validators {
-                    warn!("Rejecting block - Validators don't match real validators");
+                    warn!(
+                        "Rejecting block {} - validators don't match real validators",
+                        block
+                    );
                     return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
                 }
 
@@ -427,8 +503,14 @@ impl Blockchain {
                     disabled_set: real_disabled_slots,
                 };
 
-                if real_body.hash::<Blake2bHash>() != macro_block.header.body_root {
-                    warn!("Rejecting block - Header body hash doesn't match real body hash");
+                let real_body_hash = real_body.hash::<Blake2bHash>();
+                if macro_block.header.body_root != real_body_hash {
+                    warn!(
+                        "Rejecting block {} - header body hash doesn't match real body hash ({} != {})",
+                        block,
+                        macro_block.header.body_root,
+                        real_body_hash
+                    );
                     return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
                 }
 
