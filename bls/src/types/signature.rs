@@ -1,9 +1,9 @@
 use std::fmt;
 
 use ark_crypto_primitives::prf::Blake2sWithParameterBlock;
-use ark_ec::{AffineCurve, ProjectiveCurve};
+use ark_ec::ProjectiveCurve;
 use ark_ff::{One, PrimeField};
-use ark_mnt6_753::{Fq, G1Affine, G1Projective};
+use ark_mnt6_753::{Fq, Fq3, G2Affine, G2Projective};
 use blake2_rfc::blake2s::Blake2s;
 
 use nimiq_hash::HashOutput;
@@ -18,7 +18,7 @@ pub struct Signature {
     /// is faster with the projective form.
     /// We can't use the affine form since the Algebra library doesn't support
     /// arithmetic with it.
-    pub signature: G1Projective,
+    pub signature: G2Projective,
     /// Cache for the compressed form of the signature. This is done in order
     /// to optimize the serialization since it needs to be compressed for this
     /// purpose.
@@ -26,16 +26,16 @@ pub struct Signature {
 }
 
 impl Signature {
-    /// Maps an hash to a elliptic curve point in the G1 group, it is known as
+    /// Maps an hash to a elliptic curve point, it is known as
     /// "hash-to-curve". It is required to create signatures. We use the
     /// try-and-increment method to create the EC point.
-    pub fn hash_to_g1(hash: SigHash) -> G1Projective {
+    pub fn hash_to_point(hash: SigHash) -> G2Projective {
         // This extends the seed using the Blake2X algorithm.
         // See https://blake2.net/blake2x.pdf for more details.
-        // We need 96 bytes of output for the generator that we are going to create.
+        // We need 288 bytes of output for the generator that we are going to create.
         let mut bytes = vec![];
 
-        for i in 0..3 {
+        for i in 0..9 {
             let blake2x = Blake2sWithParameterBlock {
                 digest_length: 32,
                 key_length: 0,
@@ -79,23 +79,30 @@ impl Signature {
         // In order to easily read the BigInt from the bytes, we use the first 16 bits as padding.
         // However, because of the previous explanation, we need to nullify the whole first two bytes.
         bytes[0] = 0;
-
         bytes[1] = 0;
 
-        let mut x_coordinate = Fq::from_repr(big_int_from_bytes_be(&mut &bytes[..])).unwrap();
+        bytes[96] = 0;
+        bytes[97] = 0;
+
+        bytes[192] = 0;
+        bytes[193] = 0;
+
+        let c0 = Fq::from_repr(big_int_from_bytes_be(&mut &bytes[..96])).unwrap();
+        let c1 = Fq::from_repr(big_int_from_bytes_be(&mut &bytes[96..192])).unwrap();
+        let c2 = Fq::from_repr(big_int_from_bytes_be(&mut &bytes[192..])).unwrap();
+        let mut x_coordinate = Fq3::new(c0, c1, c2);
 
         // This implements the try-and-increment method of converting an integer to an elliptic curve point.
         // See https://eprint.iacr.org/2009/226.pdf for more details.
         loop {
-            let point = G1Affine::get_point_from_x(x_coordinate, y_coordinate);
+            let point = G2Affine::get_point_from_x(x_coordinate, y_coordinate);
 
             if let Some(point) = point {
-                // We don't need to scale by the cofactor since MNT6-753 has a cofactor of one.
-                let g1 = point.into_projective();
-                return g1;
+                // Scale the point by the cofactor of MNT6-753 before returning.
+                return point.scale_by_cofactor();
             }
 
-            x_coordinate += &Fq::one();
+            x_coordinate += &Fq3::one();
         }
     }
 
@@ -139,8 +146,8 @@ impl fmt::Debug for Signature {
     }
 }
 
-impl From<G1Projective> for Signature {
-    fn from(signature: G1Projective) -> Self {
+impl From<G2Projective> for Signature {
+    fn from(signature: G2Projective) -> Self {
         let compressed = CompressedSignature::from(signature);
 
         Signature {

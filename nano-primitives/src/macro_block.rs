@@ -81,7 +81,7 @@ impl MacroBlock {
 
         let second_hash = second_bytes.hash::<Blake2sHash>();
 
-        Signature::hash_to_g1(second_hash)
+        Signature::hash_to_point(second_hash)
     }
 }
 

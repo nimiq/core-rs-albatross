@@ -3,7 +3,7 @@ use std::str::FromStr;
 use std::{cmp::Ordering, fmt, io::Error};
 
 use ark_ec::AffineCurve;
-use ark_mnt6_753::G2Affine;
+use ark_mnt6_753::G1Affine;
 
 #[cfg(feature = "beserial")]
 use beserial::Deserialize;
@@ -19,15 +19,15 @@ use crate::PublicKey;
 /// and one bit indicating if it is the "point-at-infinity".
 #[derive(Clone)]
 pub struct CompressedPublicKey {
-    pub public_key: [u8; 285],
+    pub public_key: [u8; 95],
 }
 
 impl CompressedPublicKey {
-    pub const SIZE: usize = 285;
+    pub const SIZE: usize = 95;
 
     /// Transforms the compressed form back into the projective form.
     pub fn uncompress(&self) -> Result<PublicKey, Error> {
-        let affine_point: G2Affine = BeDeserialize::deserialize(&mut &self.public_key[..])?;
+        let affine_point: G1Affine = BeDeserialize::deserialize(&mut &self.public_key[..])?;
         Ok(PublicKey {
             public_key: affine_point.into_projective(),
         })

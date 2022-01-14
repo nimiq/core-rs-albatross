@@ -2,7 +2,7 @@
 use std::fmt;
 
 use ark_ff::{UniformRand, Zero};
-use ark_mnt6_753::{Fr, G1Projective};
+use ark_mnt6_753::{Fr, G2Projective};
 
 #[cfg(feature = "beserial")]
 use beserial::Serialize;
@@ -29,11 +29,11 @@ impl SecretKey {
 
     /// Creates a signature given a hash.
     pub fn sign_hash(&self, hash: SigHash) -> Signature {
-        self.sign_g1(Signature::hash_to_g1(hash))
+        self.sign_point(Signature::hash_to_point(hash))
     }
 
-    /// Creates a signature given a G1 point.
-    pub fn sign_g1(&self, hash_curve: G1Projective) -> Signature {
+    /// Creates a signature given a G2 point.
+    pub fn sign_point(&self, hash_curve: G2Projective) -> Signature {
         let mut sig = hash_curve;
         sig *= self.secret_key;
         Signature {
