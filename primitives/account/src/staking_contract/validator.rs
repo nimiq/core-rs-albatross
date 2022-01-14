@@ -26,8 +26,8 @@ use crate::{Account, AccountError, AccountsTrie, StakingContract};
 /// 6. Delete: Deletes a validator (validator must have been inactive for the cooldown period).
 ///
 /// The actions can be summarized by the following state diagram:
-///        +--------+   retire    +----------+
-/// create |        +------------>+          | drop
+///        +--------+  inactivate +----------+
+/// create |        +------------>+          | delete
 ///+------>+ active |             | inactive +------>
 ///        |        +<------------+          |
 ///        +-+--+---+  reactivate +-----+----+
@@ -41,9 +41,9 @@ use crate::{Account, AccountError, AccountsTrie, StakingContract};
 ///          +------->+        |
 ///                   +--------+
 ///
-/// Create, Update, Retire, Re-activate and Unpark are incoming transactions to the staking contract.
-/// Drop is an outgoing transaction from the staking contract.
-/// To Create, Update or Drop, the cold key must be used (the one corresponding to the validator
+/// Create, Update, Inactivate, Reactivate and Unpark are incoming transactions to the staking contract.
+/// Delete is an outgoing transaction from the staking contract.
+/// To Create, Update or Delete, the cold key must be used (the one corresponding to the validator
 /// address). For the other transactions, the the signing key must be used.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Validator {

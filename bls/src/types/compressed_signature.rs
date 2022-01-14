@@ -4,7 +4,7 @@ use std::str::FromStr;
 use std::{cmp::Ordering, fmt};
 
 use ark_ec::{AffineCurve, ProjectiveCurve};
-use ark_mnt6_753::{G1Affine, G1Projective};
+use ark_mnt6_753::{G2Affine, G2Projective};
 
 #[cfg(feature = "beserial")]
 use beserial::Deserialize;
@@ -20,15 +20,15 @@ use crate::Signature;
 /// and one bit indicating if it is the "point-at-infinity".
 #[derive(Clone, Copy)]
 pub struct CompressedSignature {
-    pub signature: [u8; 95],
+    pub signature: [u8; 285],
 }
 
 impl CompressedSignature {
-    pub const SIZE: usize = 95;
+    pub const SIZE: usize = 285;
 
     /// Transforms the compressed form back into the projective form.
     pub fn uncompress(&self) -> Result<Signature, Error> {
-        let affine_point: G1Affine = BeDeserialize::deserialize(&mut &self.signature[..])?;
+        let affine_point: G2Affine = BeDeserialize::deserialize(&mut &self.signature[..])?;
         let signature = affine_point.into_projective();
         Ok(Signature {
             signature,
@@ -95,8 +95,8 @@ impl FromStr for CompressedSignature {
     }
 }
 
-impl From<G1Projective> for CompressedSignature {
-    fn from(signature: G1Projective) -> Self {
+impl From<G2Projective> for CompressedSignature {
+    fn from(signature: G2Projective) -> Self {
         let mut buffer = [0u8; CompressedSignature::SIZE];
         BeSerialize::serialize(&signature.into_affine(), &mut &mut buffer[..]).unwrap();
         CompressedSignature { signature: buffer }

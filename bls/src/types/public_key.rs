@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, fmt, ops::MulAssign};
+use std::{cmp::Ordering, fmt};
 
 use ark_ec::{PairingEngine, ProjectiveCurve};
 use ark_ff::Zero;
@@ -12,24 +12,27 @@ use crate::{CompressedPublicKey, SecretKey, SigHash, Signature};
 
 #[derive(Clone, Copy)]
 pub struct PublicKey {
-    /// The projective form is the longer one, with three coordinates. The affine form is the shorter one, with only two coordinates. Calculation is faster with the projective form.
+    /// The projective form is the longer one, with three coordinates. The affine form is the
+    /// shorter one, with only two coordinates. Calculation is faster with the projective form.
     /// We can't use the affine form since the Algebra library doesn't support arithmetic with it.
-    pub public_key: G2Projective,
+    pub public_key: G1Projective,
 }
 
 impl PublicKey {
-    /// Generates a public key from a given point in G2. This function will produce an error if it is given the point at infinity.
-    pub fn new(public_key: G2Projective) -> Self {
+    /// Generates a public key from a given point in G1. This function will produce an error if it
+    /// is given the point at infinity.
+    pub fn new(public_key: G1Projective) -> Self {
         if public_key.is_zero() {
             error!("Public key cannot be the point at infinity!");
         }
         PublicKey { public_key }
     }
 
-    /// Derives a public key from a secret key. This function will produce an error if it is given zero as an input.
+    /// Derives a public key from a secret key. This function will produce an error if it is given
+    /// zero as an input.
     pub fn from_secret(x: &SecretKey) -> Self {
-        let mut pk = G2Projective::prime_subgroup_generator();
-        pk.mul_assign(x.secret_key);
+        let mut pk = G1Projective::prime_subgroup_generator();
+        pk *= x.secret_key;
         Self::new(pk)
     }
 
@@ -40,19 +43,23 @@ impl PublicKey {
 
     /// Verifies a signature given the signature and the hash.
     pub fn verify_hash(&self, hash: SigHash, signature: &Signature) -> bool {
-        self.verify_g1(Signature::hash_to_g1(hash), signature)
+        self.verify_point(Signature::hash_to_point(hash), signature)
     }
 
-    /// Verifies a signature given the signature and the G1 point. This function will always return false if the public key is the point at infinity.
-    pub fn verify_g1(&self, hash_curve: G1Projective, signature: &Signature) -> bool {
+    /// Verifies a signature given the signature and the elliptic curve point. This function will
+    /// always return false if the public key is the point at infinity.
+    pub fn verify_point(&self, hash_point: G2Projective, signature: &Signature) -> bool {
         if self.public_key.is_zero() {
             return false;
         }
+
         let lhs = MNT6_753::pairing(
+            G1Projective::prime_subgroup_generator(),
             signature.signature,
-            G2Projective::prime_subgroup_generator(),
         );
-        let rhs = MNT6_753::pairing(hash_curve, self.public_key);
+
+        let rhs = MNT6_753::pairing(self.public_key, hash_point);
+
         lhs == rhs
     }
 

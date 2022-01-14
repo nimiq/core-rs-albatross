@@ -1,7 +1,7 @@
 use std::fmt;
 
 use ark_ff::Zero;
-use ark_mnt6_753::G1Projective;
+use ark_mnt6_753::G2Projective;
 
 use crate::{CompressedSignature, Signature};
 
@@ -15,9 +15,10 @@ use crate::{CompressedSignature, Signature};
 pub struct AggregateSignature(pub Signature);
 
 impl AggregateSignature {
-    /// Creates a new "empty" aggregate signature. It is simply the identity element of the elliptic curve, also known as the point at infinity.
+    /// Creates a new "empty" aggregate signature. It is simply the identity element of the elliptic
+    /// curve, also known as the point at infinity.
     pub fn new() -> Self {
-        let signature = G1Projective::zero();
+        let signature = G2Projective::zero();
         AggregateSignature(Signature {
             signature,
             compressed: CompressedSignature::from(signature),
@@ -26,7 +27,7 @@ impl AggregateSignature {
 
     /// Creates an aggregated signature from an array of regular signatures.
     pub fn from_signatures(sigs: &[Signature]) -> Self {
-        let mut agg_sig = G1Projective::zero();
+        let mut agg_sig = G2Projective::zero();
         for x in sigs {
             agg_sig += &x.signature;
         }
