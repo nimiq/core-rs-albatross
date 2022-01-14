@@ -9,7 +9,7 @@ use libp2p::{
     },
     identity::Keypair,
     noise::{self, NoiseConfig},
-    swarm::{KeepAlive, Swarm, SwarmEvent},
+    swarm::{dial_opts::DialOpts, KeepAlive, Swarm, SwarmEvent},
     yamux::YamuxConfig,
     PeerId, Transport,
 };
@@ -96,11 +96,15 @@ impl TestNode {
     }
 
     pub fn dial(&mut self, address: Multiaddr) {
-        Swarm::dial_addr(&mut self.swarm, address).unwrap();
+        Swarm::dial(
+            &mut self.swarm,
+            DialOpts::unknown_peer_id().address(address).build(),
+        )
+        .unwrap();
     }
 
     pub fn dial_peer_id(&mut self, peer_id: &PeerId) {
-        Swarm::dial(&mut self.swarm, peer_id).unwrap();
+        Swarm::dial(&mut self.swarm, DialOpts::peer_id(*peer_id).build()).unwrap();
     }
 }
 

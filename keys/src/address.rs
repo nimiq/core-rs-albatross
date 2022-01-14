@@ -78,14 +78,17 @@ impl Address {
         let encoding = spec.encoding().unwrap();
 
         let base32 = encoding.encode(&self.0);
+        // Fixme: Because of https://github.com/rust-lang/rust/issues/92178 we need to specify `as &str`
         let check_string = "00".to_string()
-            + &(98 - Address::iban_check(&(base32.clone() + Address::CCODE + "00"))).to_string();
+            + &(98 - Address::iban_check(&(base32.clone() + Address::CCODE + "00"))).to_string()
+                as &str;
         let check = check_string
             .chars()
             .skip(check_string.len() - 2)
             .take(2)
             .collect::<String>();
-        let friendly_addr = Address::CCODE.to_string() + &check + &base32;
+        // Fixme: Because of https://github.com/rust-lang/rust/issues/92178 we need to specify `as &str`
+        let friendly_addr = Address::CCODE.to_string() + (&check as &str) + (&base32 as &str);
         let mut friendly_spaces = String::with_capacity(36 + 8);
         for i in 0..9 {
             friendly_spaces.push_str(
@@ -115,7 +118,8 @@ impl Address {
         let mut tmp: String = "".to_string();
         for i in 0..(f32::ceil(num.len() as f32 / 6.0) as usize) {
             let num_substr = num.chars().skip(i * 6).take(6).collect::<String>();
-            let num_tmp_sub = tmp.clone() + &num_substr;
+            // Fixme: Because of https://github.com/rust-lang/rust/issues/92178 we need to specify `as &str`
+            let num_tmp_sub = tmp.clone() + &num_substr as &str;
             tmp = (num_tmp_sub.parse::<u32>().unwrap() % 97).to_string();
         }
 

@@ -25,9 +25,12 @@ use libp2p::{
     },
     identify::IdentifyEvent,
     identity::Keypair,
-    kad::{store::RecordStore, GetRecordOk, KademliaEvent, QueryId, QueryResult, Quorum, Record},
+    kad::{
+        store::RecordStore, GetRecordOk, InboundRequest, KademliaEvent, QueryId, QueryResult,
+        Quorum, Record,
+    },
     noise,
-    swarm::{SwarmBuilder, SwarmEvent},
+    swarm::{dial_opts::DialOpts, SwarmBuilder, SwarmEvent},
     tcp, websocket, yamux, Multiaddr, PeerId, Swarm, Transport,
 };
 use tokio::sync::broadcast;
@@ -411,10 +414,13 @@ impl Network {
                                     _ => {}
                                 }
                             }
-                            KademliaEvent::InboundPutRecordRequest {
-                                source: _,
-                                connection: _,
-                                record,
+                            KademliaEvent::InboundRequest {
+                                request:
+                                    InboundRequest::PutRecord {
+                                        source: _,
+                                        connection: _,
+                                        record: Some(record),
+                                    },
                             } => {
                                 if let Ok(compressed_pk) =
                                     <[u8; 285]>::try_from(record.key.as_ref())
@@ -574,12 +580,17 @@ impl Network {
         match action {
             NetworkAction::Dial { peer_id, output } => {
                 output
-                    .send(Swarm::dial(swarm, &peer_id).map_err(Into::into))
+                    .send(
+                        Swarm::dial(swarm, DialOpts::peer_id(peer_id).build()).map_err(Into::into),
+                    )
                     .ok();
             }
             NetworkAction::DialAddress { address, output } => {
                 output
-                    .send(Swarm::dial_addr(swarm, address).map_err(Into::into))
+                    .send(
+                        Swarm::dial(swarm, DialOpts::unknown_peer_id().address(address).build())
+                            .map_err(Into::into),
+                    )
                     .ok();
             }
             NetworkAction::DhtGet { key, output } => {

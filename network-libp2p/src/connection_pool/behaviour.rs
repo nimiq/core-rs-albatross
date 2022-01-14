@@ -10,12 +10,12 @@ use futures::{
     task::{noop_waker_ref, Context, Poll, Waker},
 };
 use ip_network::IpNetwork;
-use libp2p::swarm::DialPeerCondition;
+use libp2p::swarm::dial_opts::PeerCondition;
 use libp2p::{
     core::{connection::ConnectionId, multiaddr::Protocol, ConnectedPoint},
     swarm::{
-        CloseConnection, DialError, IntoProtocolsHandler, NetworkBehaviour, NetworkBehaviourAction,
-        NotifyHandler, PollParameters, ProtocolsHandler,
+        dial_opts::DialOpts, CloseConnection, DialError, IntoProtocolsHandler, NetworkBehaviour,
+        NetworkBehaviourAction, NotifyHandler, PollParameters, ProtocolsHandler,
     },
     Multiaddr, PeerId,
 };
@@ -235,9 +235,10 @@ impl ConnectionPoolBehaviour {
                 log::debug!("Dialing peer {}", peer_id);
                 self.peer_ids.mark_dialing(peer_id);
                 let handler = self.new_handler();
-                self.actions.push_back(NetworkBehaviourAction::DialPeer {
-                    peer_id,
-                    condition: DialPeerCondition::Disconnected,
+                self.actions.push_back(NetworkBehaviourAction::Dial {
+                    opts: DialOpts::peer_id(peer_id)
+                        .condition(PeerCondition::Disconnected)
+                        .build(),
                     handler,
                 });
             }
@@ -247,8 +248,10 @@ impl ConnectionPoolBehaviour {
                 log::debug!("Dialing seed {}", address);
                 self.addresses.mark_dialing(address.clone());
                 let handler = self.new_handler();
-                self.actions
-                    .push_back(NetworkBehaviourAction::DialAddress { address, handler });
+                self.actions.push_back(NetworkBehaviourAction::Dial {
+                    opts: DialOpts::unknown_peer_id().address(address).build(),
+                    handler,
+                });
             }
         }
 
@@ -643,12 +646,12 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
                 self.maintain_peers();
             }
             DialError::DialPeerConditionFalse(
-                DialPeerCondition::Disconnected | DialPeerCondition::NotDialing,
+                PeerCondition::Disconnected | PeerCondition::NotDialing,
             ) => {
                 // We might (still) be connected, or about to be connected, thus do not report the
                 // failure.
             }
-            DialError::DialPeerConditionFalse(DialPeerCondition::Always) => {
+            DialError::DialPeerConditionFalse(PeerCondition::Always) => {
                 unreachable!("DialPeerCondition::Always can not trigger DialPeerConditionFalse.");
             }
         }
