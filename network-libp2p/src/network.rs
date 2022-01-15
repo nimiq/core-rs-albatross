@@ -188,10 +188,13 @@ impl Network {
             .into_authentic(keypair)
             .unwrap();
 
+        let mut yamux = yamux::YamuxConfig::default();
+        yamux.set_window_update_mode(yamux::WindowUpdateMode::on_read());
+
         Ok(transport
             .upgrade(core::upgrade::Version::V1)
             .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
-            .multiplex(yamux::YamuxConfig::default())
+            .multiplex(yamux)
             .timeout(std::time::Duration::from_secs(20))
             .boxed())
     }
