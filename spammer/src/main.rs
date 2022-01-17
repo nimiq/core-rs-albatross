@@ -67,6 +67,9 @@ struct StatsExert {
     pub tx_count: usize,
 }
 
+const UNIT_KEY: &str = "6c9320ac201caf1f8eaa5b05f5d67a9e77826f3f6be266a0ecccc20416dc6587";
+const DEV_KEY: &str = "1ef7aad365c195462ed04c275d47189d5362bbfe36b5e93ce7ba2f3add5f439b";
+
 async fn main_inner() -> Result<(), Error> {
     // Initialize deadlock detection
     initialize_deadlock_detection();
@@ -106,6 +109,18 @@ async fn main_inner() -> Result<(), Error> {
 
     // Clone config for RPC and metrics server
     let rpc_config = config.rpc_server.clone();
+
+    // Get the private key used to sign the transactions (the associated address must have funds).
+    let validator_settings = &config_file.validator.expect("A spammer is always a validator (it needs a mempool)");
+    let private_key = match config.network_id {
+        NetworkId::UnitAlbatross => UNIT_KEY,
+        // First try to get it from the "fee_key" field in the config file, if that's not set, then use the hardcoded default.
+        NetworkId::DevAlbatross => validator_settings.fee_key.as_deref().unwrap_or(DEV_KEY),
+        _ => panic!("Unsupported network"),
+    };
+
+    let key_pair = KeyPair::from(PrivateKey::from_str(private_key).unwrap());
+    log::info!("Funds for txs will come from this address: {}", Address::from(&key_pair));
 
     // Create client from config.
     log::info!("Initializing client");
@@ -173,7 +188,7 @@ async fn main_inner() -> Result<(), Error> {
 
                 log::info!("\n");
                 if consensus.is_established() {
-                    spam(std::sync::Arc::clone(&mempool), consensus.clone(), count).await;
+                    spam(std::sync::Arc::clone(&mempool), consensus.clone(), key_pair.clone(), count).await;
                     log::info!("\tSent {} transactions to the network.\n", count);
                 }
 
@@ -238,23 +253,12 @@ async fn main_inner() -> Result<(), Error> {
     }
 }
 
-const UNIT_KEY: &str = "6c9320ac201caf1f8eaa5b05f5d67a9e77826f3f6be266a0ecccc20416dc6587";
-const DEV_KEY: &str = "1ef7aad365c195462ed04c275d47189d5362bbfe36b5e93ce7ba2f3add5f439b";
-
-async fn spam(mempool: std::sync::Arc<Mempool>, consensus: ConsensusProxy, count: usize) {
+async fn spam(mempool: std::sync::Arc<Mempool>, consensus: ConsensusProxy, key_pair: KeyPair, count: usize) {
     let (number, net_id) = {
         let blockchain = consensus.blockchain.read();
         (blockchain.block_number(), blockchain.network_id)
     };
     tokio::task::spawn_blocking(move || {
-        let private_key = match net_id {
-            NetworkId::UnitAlbatross => UNIT_KEY,
-            NetworkId::DevAlbatross => DEV_KEY,
-            _ => panic!("Unsupported network"),
-        };
-
-        let key_pair = KeyPair::from(PrivateKey::from_str(private_key).unwrap());
-
         let txs = generate_transactions(&key_pair, number, net_id, count);
 
         for tx in txs {
