@@ -111,7 +111,9 @@ async fn main_inner() -> Result<(), Error> {
     let rpc_config = config.rpc_server.clone();
 
     // Get the private key used to sign the transactions (the associated address must have funds).
-    let validator_settings = &config_file.validator.expect("A spammer is always a validator (it needs a mempool)");
+    let validator_settings = &config_file
+        .validator
+        .expect("A spammer is always a validator (it needs a mempool)");
     let private_key = match config.network_id {
         NetworkId::UnitAlbatross => UNIT_KEY,
         // First try to get it from the "fee_key" field in the config file, if that's not set, then use the hardcoded default.
@@ -120,7 +122,10 @@ async fn main_inner() -> Result<(), Error> {
     };
 
     let key_pair = KeyPair::from(PrivateKey::from_str(private_key).unwrap());
-    log::info!("Funds for txs will come from this address: {}", Address::from(&key_pair));
+    log::info!(
+        "Funds for txs will come from this address: {}",
+        Address::from(&key_pair)
+    );
 
     // Create client from config.
     log::info!("Initializing client");
@@ -188,7 +193,13 @@ async fn main_inner() -> Result<(), Error> {
 
                 log::info!("\n");
                 if consensus.is_established() {
-                    spam(std::sync::Arc::clone(&mempool), consensus.clone(), key_pair.clone(), count).await;
+                    spam(
+                        std::sync::Arc::clone(&mempool),
+                        consensus.clone(),
+                        key_pair.clone(),
+                        count,
+                    )
+                    .await;
                     log::info!("\tSent {} transactions to the network.\n", count);
                 }
 
@@ -253,7 +264,12 @@ async fn main_inner() -> Result<(), Error> {
     }
 }
 
-async fn spam(mempool: std::sync::Arc<Mempool>, consensus: ConsensusProxy, key_pair: KeyPair, count: usize) {
+async fn spam(
+    mempool: std::sync::Arc<Mempool>,
+    consensus: ConsensusProxy,
+    key_pair: KeyPair,
+    count: usize,
+) {
     let (number, net_id) = {
         let blockchain = consensus.blockchain.read();
         (blockchain.block_number(), blockchain.network_id)
