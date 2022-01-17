@@ -9,3 +9,5 @@ pub(crate) mod gadgets;
 
 pub(crate) mod nano_zkp;
 pub mod utils;
+
+mod poseidon;

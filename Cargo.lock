@@ -302,6 +302,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "ark-sponge"
+version = "0.3.0"
+source = "git+https://github.com/arkworks-rs/sponge#51d6fc9aac1fa69f44a04839202b5de828584ed8"
+dependencies = [
+ "ark-ec",
+ "ark-ff",
+ "ark-nonnative-field",
+ "ark-r1cs-std",
+ "ark-relations",
+ "ark-serialize",
+ "ark-std",
+ "derivative",
+ "digest",
+ "rand_chacha 0.3.1",
+ "tracing",
+]
+
+[[package]]
 name = "ark-std"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3384,6 +3402,7 @@ dependencies = [
  "ark-r1cs-std",
  "ark-relations",
  "ark-serialize",
+ "ark-sponge",
  "ark-std",
  "nimiq-bls",
  "nimiq-nano-primitives",
