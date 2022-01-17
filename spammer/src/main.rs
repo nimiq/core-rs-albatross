@@ -274,6 +274,8 @@ async fn spam(mempool: std::sync::Arc<Mempool>, consensus: ConsensusProxy, count
     .expect("spawn_blocking() panicked");
 }
 
+const ADDRESS: &str = "NQ20TSB0DFSMUH9C15GQGAGJTTE4D3MA859E";
+
 fn generate_transactions(
     key_pair: &KeyPair,
     start_height: u32,
@@ -286,11 +288,12 @@ fn generate_transactions(
     for _ in 0..count {
         let mut bytes = [0u8; 20];
         rng.fill_bytes(&mut bytes);
-        let recipient = Address::from(bytes);
+        let recipient = Address::from_any_str(ADDRESS).unwrap();
 
-        let tx = TransactionBuilder::new_basic(
+        let tx = TransactionBuilder::new_basic_with_data(
             key_pair,
             recipient,
+            bytes.to_vec(),
             Coin::from_u64_unchecked(1),
             Coin::from_u64_unchecked(200),
             start_height,
