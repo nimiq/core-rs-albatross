@@ -39,7 +39,7 @@ nimiq-keys = { path = "../keys", optional = true }
 nimiq-primitives = { path = "../primitives", optional = true }
 nimiq-transaction = { path = "../primitives/transaction", optional = true }
 pretty_env_logger = { version = "0.4", optional = true }
-structopt = { version = "0.3.21", optional = true }
+structopt = { version = "0.3.26", optional = true }
 tokio = { version = "1.15", features = [
     "macros",
     "rt-multi-thread",
