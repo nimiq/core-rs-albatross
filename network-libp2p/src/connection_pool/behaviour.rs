@@ -314,14 +314,7 @@ impl ConnectionPoolBehaviour {
             let peer_score = contacts.get(peer_id).map(|e| e.get_score());
             if let Some(score) = peer_score {
                 if score < 0.0 {
-                    self.actions
-                        .push_back(NetworkBehaviourAction::NotifyHandler {
-                            peer_id: *peer_id,
-                            handler: NotifyHandler::Any,
-                            event: HandlerInEvent::Close {
-                                reason: CloseReason::Other,
-                            },
-                        });
+                    log::info!("Peer {:?} has a negative score: {}", peer_id, score);
                 }
             }
         }

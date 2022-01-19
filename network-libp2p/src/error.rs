@@ -39,6 +39,12 @@ pub enum NetworkError {
 
     #[error("Already unsubscribed to topic: {topic_name}")]
     AlreadyUnsubscribed { topic_name: &'static str },
+
+    #[error("Couldn't set topic score parameters")]
+    TopicScoreParams {
+        topic_name: &'static str,
+        error: &'static str,
+    },
 }
 
 impl From<libp2p::kad::store::Error> for NetworkError {
