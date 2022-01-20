@@ -37,7 +37,7 @@ nimiq-utils = { path = "../utils", features = ["observer", "crc", "time"] }
 [build-dependencies]
 human-panic = { version = "1.0" }
 log = "0.4"
-simple_logger = "1.0"
+simple_logger = "2.1"
 
 nimiq-build-tools = { path = "../build-tools" }
 nimiq-hash = { path = "../hash" }

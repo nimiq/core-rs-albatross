@@ -40,7 +40,7 @@ nimiq-utils = { path = "../utils", features = ["observer", "mutable-once"] }
 [dev-dependencies]
 hex = "0.4"
 rand = "0.8"
-simple_logger = "1.0"
+simple_logger = "2.1"
 
 nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain = { path = "../blockchain" }
