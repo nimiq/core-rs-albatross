@@ -1,4 +1,5 @@
 use std::cmp;
+use std::collections::VecDeque;
 
 use nimiq_account::InherentType;
 use nimiq_database::cursor::ReadCursor;
@@ -359,7 +360,7 @@ impl HistoryStore {
     }
 
     /// Returns the number of extended transactions for a given epoch.
-    pub fn get_num_extended_transactions(
+    pub fn num_epoch_transactions(
         &self,
         epoch_number: u32,
         txn_option: Option<&Transaction>,
@@ -381,6 +382,102 @@ impl HistoryStore {
         ));
 
         tree.num_leaves()
+    }
+
+    /// Gets the number of all finalized extended transactions for a given epoch.
+    pub fn num_final_epoch_transactions(
+        &self,
+        epoch_number: u32,
+        txn_option: Option<&Transaction>,
+    ) -> usize {
+        let read_txn: ReadTransaction;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = ReadTransaction::new(&self.env);
+                &read_txn
+            }
+        };
+
+        // Get history tree for given epoch.
+        let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
+            &self.hist_tree_db,
+            txn,
+            epoch_number,
+        ));
+
+        // Return early if there are no leaves in the HistoryTree for the given epoch.
+        let num_leaves = tree.num_leaves();
+        if num_leaves == 0 {
+            return 0;
+        }
+
+        // Find the number of the last macro stored for the given epoch.
+        let last_leaf = tree.get_leaf(num_leaves - 1).unwrap();
+        let last_tx = self.get_extended_tx(&last_leaf, Some(txn)).unwrap();
+        let last_macro_block = policy::last_macro_block(last_tx.block_number);
+
+        // Count the extended transactions up to the last macro block.
+        let mut num_txs = 0;
+
+        for i in 0..tree.num_leaves() {
+            let leaf_hash = tree.get_leaf(i).unwrap();
+            let ext_tx = self.get_extended_tx(&leaf_hash, Some(txn)).unwrap();
+            if ext_tx.block_number > last_macro_block {
+                break;
+            }
+            num_txs += 1;
+        }
+
+        num_txs
+    }
+
+    /// Gets all non-finalized extended transactions for a given epoch.
+    pub fn get_nonfinal_epoch_transactions(
+        &self,
+        epoch_number: u32,
+        txn_option: Option<&Transaction>,
+    ) -> Vec<ExtendedTransaction> {
+        let read_txn: ReadTransaction;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = ReadTransaction::new(&self.env);
+                &read_txn
+            }
+        };
+
+        // Get history tree for given epoch.
+        let tree = MerkleMountainRange::new(MMRStore::with_read_transaction(
+            &self.hist_tree_db,
+            txn,
+            epoch_number,
+        ));
+
+        // Return early if there are no leaves in the HistoryTree for the given epoch.
+        let num_leaves = tree.num_leaves();
+        if num_leaves == 0 {
+            return vec![];
+        }
+
+        // Find the block number of the last macro stored for the given epoch.
+        let last_leaf = tree.get_leaf(num_leaves - 1).unwrap();
+        let last_tx = self.get_extended_tx(&last_leaf, Some(txn)).unwrap();
+        let last_macro_block = policy::last_macro_block(last_tx.block_number);
+
+        // Get each extended transaction after the last macro block from the tree.
+        let mut ext_txs = VecDeque::new();
+
+        for i in (num_leaves - 1)..0 {
+            let leaf_hash = tree.get_leaf(i).unwrap();
+            let ext_tx = self.get_extended_tx(&leaf_hash, Some(txn)).unwrap();
+            if ext_tx.block_number <= last_macro_block {
+                break;
+            }
+            ext_txs.push_front(ext_tx);
+        }
+
+        ext_txs.into()
     }
 
     /// Returns a vector containing all transaction (and reward inherents) hashes corresponding to the given
@@ -1239,29 +1336,17 @@ mod tests {
         history_store.add_to_history(&mut txn, 1, &ext_txs[3..]);
 
         // Verify method works.
-        assert_eq!(
-            history_store.get_num_extended_transactions(0, Some(&txn)),
-            3
-        );
+        assert_eq!(history_store.num_epoch_transactions(0, Some(&txn)), 3);
 
-        assert_eq!(
-            history_store.get_num_extended_transactions(1, Some(&txn)),
-            5
-        );
+        assert_eq!(history_store.num_epoch_transactions(1, Some(&txn)), 5);
 
         // Remove extended transactions to History Store.
         history_store.remove_partial_history(&mut txn, 1, 3);
 
         // Verify method works.
-        assert_eq!(
-            history_store.get_num_extended_transactions(0, Some(&txn)),
-            3
-        );
+        assert_eq!(history_store.num_epoch_transactions(0, Some(&txn)), 3);
 
-        assert_eq!(
-            history_store.get_num_extended_transactions(1, Some(&txn)),
-            2
-        );
+        assert_eq!(history_store.num_epoch_transactions(1, Some(&txn)), 2);
     }
 
     #[test]

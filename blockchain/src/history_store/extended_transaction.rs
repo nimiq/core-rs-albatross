@@ -12,7 +12,7 @@ use nimiq_transaction::Transaction as BlockchainTransaction;
 
 /// A single struct that stores information that represents any possible transaction (basic
 /// transaction or inherent) on the blockchain.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExtendedTransaction {
     // The ID of the network where the transaction happened.
     pub network_id: NetworkId,
@@ -211,7 +211,7 @@ impl FromDatabaseValue for ExtendedTransaction {
 /// transaction.
 // TODO: The transactions include a lot of unnecessary information (ex: the signature). Don't
 //       include all of it here.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ExtTxData {
     // A basic transaction. It simply contains the transaction as contained in the block.
     Basic(BlockchainTransaction),

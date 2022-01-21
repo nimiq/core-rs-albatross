@@ -12,7 +12,6 @@ use nimiq_block::MacroBlock;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, ExtendedTransaction, CHUNK_SIZE};
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::prelude::Peer;
-use nimiq_primitives::policy;
 use nimiq_utils::math::CeilingDiv;
 
 use crate::consensus_agent::ConsensusAgent;
@@ -22,11 +21,12 @@ use crate::sync::sync_queue::{SyncQueue, SyncQueuePeer};
 struct PendingBatchSet {
     block: MacroBlock,
     history_len: usize,
+    history_offset: usize,
     history: Vec<ExtendedTransaction>,
 }
 impl PendingBatchSet {
     fn is_complete(&self) -> bool {
-        self.history_len == self.history.len()
+        self.history_len == self.history.len() + self.history_offset
     }
 
     fn epoch_number(&self) -> u32 {
@@ -138,7 +138,6 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
     fn on_epoch_received(&mut self, epoch: BatchSetInfo) -> Result<(), SyncClusterResult> {
         // `epoch.block` is Some, since we filtered it accordingly in the `request_fn`
         let block = epoch.block.expect("epoch.block should exist");
-        let blockchain = self.blockchain.read();
 
         info!(
             "Syncing epoch #{}/{} ({} history items)",
@@ -147,9 +146,9 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
             epoch.history_len
         );
 
-        // this might be a checkpoint
         // TODO Verify macro blocks and their ordering
         // Currently we only do a very basic check here
+        let blockchain = self.blockchain.read();
         let current_block_number = blockchain.block_number();
         if block.header.block_number <= current_block_number {
             debug!("Received outdated epoch at block {}", current_block_number);
@@ -160,6 +159,7 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
         let mut pending_batch_set = PendingBatchSet {
             block,
             history_len: epoch.history_len as usize,
+            history_offset: 0,
             history: Vec::new(),
         };
 
@@ -167,29 +167,12 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
         let epoch_number = pending_batch_set.block.epoch_number();
 
         let mut start_index = 0;
-        if policy::epoch_at(current_block_number) == epoch_number {
-            let num_known = blockchain
+        if blockchain.epoch_number() == epoch_number {
+            let num_known_txs = blockchain
                 .history_store
-                .get_num_extended_transactions(epoch_number, None);
-
-            let num_full_chunks = num_known / CHUNK_SIZE;
-            start_index = num_full_chunks;
-
-            // Only if there are full chunks they need to be proven.
-            if num_full_chunks > 0 {
-                // TODO: Can probably be done more efficiently.
-                let known_chunk = blockchain
-                    .history_store
-                    .prove_chunk(
-                        epoch_number,
-                        current_block_number,
-                        num_full_chunks * CHUNK_SIZE,
-                        0,
-                        None,
-                    )
-                    .expect("History chunk missing");
-                pending_batch_set.history = known_chunk.history;
-            }
+                .num_final_epoch_transactions(epoch_number, None);
+            start_index = num_known_txs / CHUNK_SIZE;
+            pending_batch_set.history_offset = start_index * CHUNK_SIZE;
         }
 
         // Queue history chunks for the given epoch for download.

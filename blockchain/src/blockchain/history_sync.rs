@@ -30,7 +30,7 @@ impl Blockchain {
     pub fn push_history_sync(
         this: RwLockUpgradableReadGuard<Self>,
         block: Block,
-        ext_txs: &[ExtendedTransaction],
+        history: &[ExtendedTransaction],
     ) -> Result<PushResult, PushError> {
         // Check that it is a macro block. We can't push micro blocks with this function.
         assert!(
@@ -105,7 +105,7 @@ impl Blockchain {
         }
 
         // Check the history root.
-        let history_root = HistoryStore::root_from_ext_txs(ext_txs)
+        let history_root = HistoryStore::root_from_ext_txs(history)
             .ok_or(PushError::InvalidBlock(BlockError::InvalidHistoryRoot))?;
 
         if *block.history_root() != history_root {
@@ -144,14 +144,14 @@ impl Blockchain {
 
         // Extend the chain with this block.
         let prev_macro_info = this.state.macro_info.clone();
-        Blockchain::extend_history_sync(this, block, ext_txs, prev_macro_info)
+        Blockchain::extend_history_sync(this, block, history, prev_macro_info)
     }
 
     /// Extends the current chain with a macro block (election or checkpoint) during history sync.
     fn extend_history_sync(
         this: RwLockUpgradableReadGuard<Blockchain>,
         block: Block,
-        ext_txs: &[ExtendedTransaction],
+        history: &[ExtendedTransaction],
         mut prev_macro_info: ChainInfo,
     ) -> Result<PushResult, PushError> {
         // Create a new database write transaction.
@@ -166,12 +166,12 @@ impl Blockchain {
 
         let current_batch = policy::batch_at(block.block_number());
 
-        for i in (0..ext_txs.len()).rev() {
-            if policy::batch_at(ext_txs[i].block_number) != current_batch {
+        for i in (0..history.len()).rev() {
+            if policy::batch_at(history[i].block_number) != current_batch {
                 break;
             }
 
-            if let ExtTxData::Basic(tx) = &ext_txs[i].data {
+            if let ExtTxData::Basic(tx) = &history[i].data {
                 cum_tx_fees += tx.fee;
             }
         }
@@ -200,13 +200,10 @@ impl Blockchain {
         // Set the head of the chain store to the current block.
         this.chain_store.set_head(&mut txn, &block_hash);
 
-        // Get the index for the first extended transaction that was not already added in past
-        // blocks. This includes left-over micro blocks for the current batch.
-        let current_block_number = this.block_number();
-        let first_new_ext_tx = ext_txs
-            .iter()
-            .position(|ext_tx| ext_tx.block_number > current_block_number)
-            .unwrap_or(ext_txs.len());
+        // We might already know the given epoch partially.
+        // Revert our chain to a common ancestor state in case we have adopted a different history.
+        // Also skip over any transactions that we already know.
+        let first_new_ext_tx = this.revert_to_common_state(&block, history, &mut txn);
 
         // Separate the extended transactions by block number and type.
         // We know it comes sorted because we already checked it against the history root and
@@ -218,7 +215,7 @@ impl Blockchain {
         let mut block_inherents = vec![];
         let mut prev = 0;
 
-        for ext_tx in ext_txs.iter().skip(first_new_ext_tx) {
+        for ext_tx in history.iter().skip(first_new_ext_tx) {
             if ext_tx.block_number > prev {
                 block_numbers.push(ext_tx.block_number);
                 block_timestamps.push(ext_tx.block_time);
@@ -315,8 +312,8 @@ impl Blockchain {
         // Store the new extended transactions into the History tree.
         this.history_store.add_to_history(
             &mut txn,
-            policy::epoch_at(block.block_number()),
-            &ext_txs[first_new_ext_tx..],
+            block.epoch_number(),
+            &history[first_new_ext_tx..],
         );
 
         // Give up database transactions and push lock before creating notifications.
@@ -349,7 +346,7 @@ impl Blockchain {
         debug!(
             "Accepted epoch #{} with {} items (history_sync)",
             block.epoch_number(),
-            ext_txs.len()
+            history.len()
         );
 
         if is_election_block {
@@ -361,6 +358,82 @@ impl Blockchain {
 
         // Return result.
         Ok(PushResult::Extended)
+    }
+
+    fn revert_to_common_state(
+        &self,
+        block: &Block,
+        history: &[ExtendedTransaction],
+        txn: &mut WriteTransaction,
+    ) -> usize {
+        // Find the index of the first extended transaction in the current batch.
+        let last_macro_block = policy::last_macro_block(self.block_number());
+        let mut first_new_ext_tx = history
+            .iter()
+            .position(|ext_tx| ext_tx.block_number > last_macro_block)
+            .unwrap_or(history.len());
+
+        // Check if our adopted non-final history matches the given history.
+        // Revert any blocks that don't match.
+        let known_history = self
+            .history_store
+            .get_nonfinal_epoch_transactions(block.epoch_number(), Some(txn));
+        if !known_history.is_empty() {
+            // Iterate over the known history and the given history in parallel to find the block
+            // where the histories diverge (if they do).
+            let mut known = known_history.iter();
+            let mut given = history.iter().skip(first_new_ext_tx);
+            let mut last_known_block = None;
+            let diverging_block = loop {
+                match (known.next(), given.next()) {
+                    (Some(known_tx), Some(given_tx)) => {
+                        last_known_block = Some(known_tx.block_number);
+                        if *known_tx != *given_tx {
+                            break Some(known_tx.block_number);
+                        }
+                    }
+                    (None, Some(given_tx)) => {
+                        break match last_known_block {
+                            Some(block_number) if block_number == given_tx.block_number => {
+                                Some(block_number)
+                            }
+                            _ => None,
+                        };
+                    }
+                    (Some(known_tx), None) => break Some(known_tx.block_number),
+                    (None, None) => break None,
+                }
+            };
+
+            if let Some(diverging_block) = diverging_block {
+                // The histories diverge, so revert our state to the block before the divergence.
+                let num_blocks_to_revert = self.block_number() - diverging_block + 1;
+                self.revert_blocks(num_blocks_to_revert, txn)
+                    .expect("Failed to revert chain");
+
+                // TODO We could incorporate this into the parallel iteration loop above.
+                first_new_ext_tx += history
+                    .iter()
+                    .skip(first_new_ext_tx)
+                    .position(|ext_tx| ext_tx.block_number >= diverging_block)
+                    .unwrap_or(history.len() - first_new_ext_tx);
+            } else {
+                // The histories match, so we can skip over all known transactions.
+                first_new_ext_tx += known_history.len();
+            }
+        } else if self.state.main_chain.head.is_micro() {
+            // We have micro blocks for the current batch but the history is empty.
+            // Check if the given history contains any items before our current block; if so, we
+            // need to revert.
+            let first_block_number = history[first_new_ext_tx].block_number;
+            if first_block_number <= self.block_number() {
+                let num_blocks_to_revert = self.block_number() - first_block_number + 1;
+                self.revert_blocks(num_blocks_to_revert, txn)
+                    .expect("Failed to revert chain");
+            }
+        };
+
+        first_new_ext_tx
     }
 
     /// Reverts a given number of micro blocks from the blockchain.
