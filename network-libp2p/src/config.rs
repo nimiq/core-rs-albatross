@@ -1,10 +1,14 @@
 use libp2p::{
-    gossipsub::{GossipsubConfig, GossipsubConfigBuilder},
+    gossipsub::{GossipsubConfig, GossipsubConfigBuilder, MessageId},
     identity::Keypair,
     kad::{KademliaBucketInserts, KademliaConfig, KademliaStoreInserts},
     Multiaddr,
 };
-use std::time::Duration;
+use std::{
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher},
+    time::Duration,
+};
 
 use nimiq_hash::Blake2bHash;
 
@@ -34,6 +38,13 @@ impl Config {
             .max_transmit_size(1_000_000) // TODO find a reasonable value for this parameter
             .validation_mode(libp2p::gossipsub::ValidationMode::Permissive)
             .heartbeat_interval(Duration::from_millis(700))
+            // Use the message hash as the message ID instead of the default PeerId + sequence_number
+            // to avoid duplicated messages
+            .message_id_fn(|message| {
+                let mut s = DefaultHasher::new();
+                message.data.hash(&mut s);
+                MessageId::from(s.finish().to_string())
+            })
             .build()
             .expect("Invalid Gossipsub config");
 
