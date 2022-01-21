@@ -2,6 +2,7 @@ use std::env;
 use std::process::exit;
 
 use nimiq_build_tools::genesis::{GenesisBuilder, GenesisInfo};
+use nimiq_database::volatile::VolatileEnvironment;
 
 fn usage(args: Vec<String>) -> ! {
     eprintln!(
@@ -14,6 +15,7 @@ fn usage(args: Vec<String>) -> ! {
 fn main() {
     pretty_env_logger::init();
 
+    let env = VolatileEnvironment::new(10).expect("Could not open a volatile database");
     let args = env::args().collect::<Vec<String>>();
 
     if let Some(file) = args.get(1) {
@@ -24,7 +26,7 @@ fn main() {
         } = GenesisBuilder::new()
             .with_config_file(file)
             .unwrap()
-            .generate()
+            .generate(env)
             .unwrap();
 
         println!("Genesis Block: {}", hash);

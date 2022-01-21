@@ -19,29 +19,17 @@ use nimiq_keys::{
 use nimiq_mempool::config::MempoolConfig;
 use nimiq_mempool::mempool::Mempool;
 use nimiq_network_mock::{MockHub, MockId, MockNetwork, MockPeerId};
-use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
-use nimiq_transaction::{SignatureProof, Transaction};
+use nimiq_test_utils::test_transaction::{
+    generate_accounts, generate_transactions, TestTransaction,
+};
+use nimiq_transaction::Transaction;
 use nimiq_utils::time::OffsetTime;
 use nimiq_vrf::VrfSeed;
 
 const BASIC_TRANSACTION: &str = "000222666efadc937148a6d61589ce6d4aeecca97fda4c32348d294eab582f14a0754d1260f15bea0e8fb07ab18f45301483599e34000000000000c350000000000000008a00019640023fecb82d3aef4be76853d5c5b263754b7d495d9838f6ae5df60cf3addd3512a82988db0056059c7a52ae15285983ef0db8229ae446c004559147686d28f0a30a";
 const ENABLE_LOG: bool = false;
 const NUM_TXNS_START_STOP: usize = 100;
-
-#[derive(Clone)]
-struct MempoolAccount {
-    keypair: SchnorrKeyPair,
-    address: Address,
-}
-
-#[derive(Clone)]
-struct MempoolTransaction {
-    fee: u64,
-    value: u64,
-    sender: MempoolAccount,
-    recipient: MempoolAccount,
-}
 
 async fn send_get_mempool_txns(
     blockchain: Arc<RwLock<Blockchain>>,
@@ -198,65 +186,6 @@ async fn multiple_start_stop_send(
     assert_eq!(obtained_txns.len(), NUM_TXNS_START_STOP);
 }
 
-fn generate_accounts(
-    balances: Vec<u64>,
-    genesis_builder: &mut GenesisBuilder,
-    add_to_genesis: bool,
-) -> Vec<MempoolAccount> {
-    let mut mempool_accounts = vec![];
-
-    for i in 0..balances.len() as usize {
-        // Generate the txns_sender and txns_rec vectors to later generate transactions
-        let keypair = SchnorrKeyPair::generate_default_csprng();
-        let address = Address::from(&keypair.public);
-        let mempool_account = MempoolAccount {
-            keypair,
-            address: address.clone(),
-        };
-        mempool_accounts.push(mempool_account);
-
-        if add_to_genesis {
-            // Add accounts to the genesis builder
-            genesis_builder.with_basic_account(address, Coin::from_u64_unchecked(balances[i]));
-        }
-    }
-    mempool_accounts
-}
-
-fn generate_transactions(
-    mempool_transactions: Vec<MempoolTransaction>,
-) -> (Vec<Transaction>, usize) {
-    let mut txns_len = 0;
-    let mut txns: Vec<Transaction> = vec![];
-
-    log::debug!("Generating transactions and accounts");
-
-    for mempool_transaction in mempool_transactions {
-        // Generate transactions
-        let mut txn = Transaction::new_basic(
-            mempool_transaction.sender.address.clone(),
-            mempool_transaction.recipient.address.clone(),
-            Coin::from_u64_unchecked(mempool_transaction.value),
-            Coin::from_u64_unchecked(mempool_transaction.fee),
-            1,
-            NetworkId::UnitAlbatross,
-        );
-
-        let signature_proof = SignatureProof::from(
-            mempool_transaction.sender.keypair.public,
-            mempool_transaction
-                .sender
-                .keypair
-                .sign(&txn.serialize_content()),
-        );
-
-        txn.proof = signature_proof.serialize_to_vec();
-        txns.push(txn.clone());
-        txns_len += txn.serialized_size();
-    }
-    (txns, txns_len)
-}
-
 fn create_dummy_micro_block(transactions: Option<Vec<Transaction>>) -> Block {
     // Build a dummy MicroHeader
     let micro_header = MicroHeader {
@@ -309,7 +238,7 @@ async fn push_same_tx_twice() {
 
     // Generate transactions
     for _ in 0..num_txns {
-        let mempool_transaction = MempoolTransaction {
+        let mempool_transaction = TestTransaction {
             fee: 0,
             value: 10,
             recipient: recipient_accounts[0].clone(),
@@ -317,7 +246,7 @@ async fn push_same_tx_twice() {
         };
         mempool_transactions.push(mempool_transaction);
     }
-    let (txns, txns_len) = generate_transactions(mempool_transactions);
+    let (txns, txns_len) = generate_transactions(mempool_transactions, true);
     log::debug!("Done generating transactions and accounts");
 
     let time = Arc::new(OffsetTime::new());
@@ -331,7 +260,7 @@ async fn push_same_tx_twice() {
         Address::default(),
     );
 
-    let genesis_info = genesis_builder.generate().unwrap();
+    let genesis_info = genesis_builder.generate(env.clone()).unwrap();
 
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
@@ -374,7 +303,7 @@ async fn valid_tx_not_in_blockchain() {
 
     // Generate transactions
     for i in 0..num_txns {
-        let mempool_transaction = MempoolTransaction {
+        let mempool_transaction = TestTransaction {
             fee: 0,
             value: 10,
             recipient: recipient_accounts[i as usize].clone(),
@@ -382,7 +311,7 @@ async fn valid_tx_not_in_blockchain() {
         };
         mempool_transactions.push(mempool_transaction);
     }
-    let (txns, txns_len) = generate_transactions(mempool_transactions);
+    let (txns, txns_len) = generate_transactions(mempool_transactions, true);
     log::debug!("Done generating transactions and accounts");
 
     let time = Arc::new(OffsetTime::new());
@@ -448,7 +377,7 @@ async fn mempool_get_txn_max_size() {
 
     // Generate transactions
     for i in 0..num_txns {
-        let mempool_transaction = MempoolTransaction {
+        let mempool_transaction = TestTransaction {
             fee: (i + 1) as u64,
             value: balance / num_txns,
             recipient: recipient_accounts[i as usize].clone(),
@@ -456,7 +385,7 @@ async fn mempool_get_txn_max_size() {
         };
         mempool_transactions.push(mempool_transaction);
     }
-    let (txns, txns_len) = generate_transactions(mempool_transactions);
+    let (txns, txns_len) = generate_transactions(mempool_transactions, true);
     log::debug!("Done generating transactions and accounts");
 
     let time = Arc::new(OffsetTime::new());
@@ -470,7 +399,7 @@ async fn mempool_get_txn_max_size() {
         Address::default(),
     );
 
-    let genesis_info = genesis_builder.generate().unwrap();
+    let genesis_info = genesis_builder.generate(env.clone()).unwrap();
 
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
@@ -522,7 +451,7 @@ async fn mempool_get_txn_ordered() {
 
     // Generate transactions
     for i in 0..num_txns {
-        let mempool_transaction = MempoolTransaction {
+        let mempool_transaction = TestTransaction {
             fee: (i + 1) as u64,
             value: balance / num_txns,
             recipient: recipient_accounts[i as usize].clone(),
@@ -530,7 +459,7 @@ async fn mempool_get_txn_ordered() {
         };
         mempool_transactions.push(mempool_transaction);
     }
-    let (txns, txns_len) = generate_transactions(mempool_transactions);
+    let (txns, txns_len) = generate_transactions(mempool_transactions, true);
     log::debug!("Done generating transactions and accounts");
 
     let time = Arc::new(OffsetTime::new());
@@ -544,7 +473,7 @@ async fn mempool_get_txn_ordered() {
         Address::default(),
     );
 
-    let genesis_info = genesis_builder.generate().unwrap();
+    let genesis_info = genesis_builder.generate(env.clone()).unwrap();
 
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
@@ -599,7 +528,7 @@ async fn push_tx_with_insufficient_balance() {
 
     // Generate transactions
     for i in 0..num_txns {
-        let mempool_transaction = MempoolTransaction {
+        let mempool_transaction = TestTransaction {
             fee: (i + 1) as u64,
             value: txns_value[i as usize],
             recipient: recipient_accounts[i as usize].clone(),
@@ -607,7 +536,7 @@ async fn push_tx_with_insufficient_balance() {
         };
         mempool_transactions.push(mempool_transaction);
     }
-    let (txns, txns_len) = generate_transactions(mempool_transactions);
+    let (txns, txns_len) = generate_transactions(mempool_transactions, true);
     log::debug!("Done generating transactions and accounts");
 
     let time = Arc::new(OffsetTime::new());
@@ -621,7 +550,7 @@ async fn push_tx_with_insufficient_balance() {
         Address::default(),
     );
 
-    let genesis_info = genesis_builder.generate().unwrap();
+    let genesis_info = genesis_builder.generate(env.clone()).unwrap();
 
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
@@ -666,7 +595,7 @@ async fn multiple_transactions_multiple_senders() {
 
     // Generate transactions
     for i in 0..num_txns {
-        let mempool_transaction = MempoolTransaction {
+        let mempool_transaction = TestTransaction {
             fee: (i + 1) as u64,
             value: balance / num_txns,
             recipient: recipient_accounts[i as usize].clone(),
@@ -674,7 +603,7 @@ async fn multiple_transactions_multiple_senders() {
         };
         mempool_transactions.push(mempool_transaction);
     }
-    let (txns, txns_len) = generate_transactions(mempool_transactions);
+    let (txns, txns_len) = generate_transactions(mempool_transactions, true);
     log::debug!("Done generating transactions and accounts");
 
     let time = Arc::new(OffsetTime::new());
@@ -688,7 +617,7 @@ async fn multiple_transactions_multiple_senders() {
         Address::default(),
     );
 
-    let genesis_info = genesis_builder.generate().unwrap();
+    let genesis_info = genesis_builder.generate(env.clone()).unwrap();
 
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
@@ -745,7 +674,7 @@ async fn mempool_tps() {
 
     // Generate transactions
     for i in 0..num_txns {
-        let mempool_transaction = MempoolTransaction {
+        let mempool_transaction = TestTransaction {
             fee: (i + 1) as u64,
             value: balance,
             recipient: recipient_accounts[i as usize].clone(),
@@ -753,7 +682,7 @@ async fn mempool_tps() {
         };
         mempool_transactions.push(mempool_transaction);
     }
-    let (txns, txns_len) = generate_transactions(mempool_transactions);
+    let (txns, txns_len) = generate_transactions(mempool_transactions, true);
     log::debug!("Done generating transactions and accounts");
 
     // Add validator to genesis
@@ -765,7 +694,7 @@ async fn mempool_tps() {
     );
 
     // Generate the genesis and blockchain
-    let genesis_info = genesis_builder.generate().unwrap();
+    let genesis_info = genesis_builder.generate(env.clone()).unwrap();
 
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
@@ -828,7 +757,7 @@ async fn multiple_start_stop() {
 
     // Generate transactions
     for i in 0..num_txns {
-        let mempool_transaction = MempoolTransaction {
+        let mempool_transaction = TestTransaction {
             fee: (i + 1) as u64,
             value: balance,
             recipient: recipient_accounts[i as usize].clone(),
@@ -836,7 +765,7 @@ async fn multiple_start_stop() {
         };
         mempool_transactions.push(mempool_transaction);
     }
-    let (txns, _) = generate_transactions(mempool_transactions);
+    let (txns, _) = generate_transactions(mempool_transactions, true);
     log::debug!("Done generating transactions and accounts");
 
     // Add validator to genesis
@@ -848,7 +777,7 @@ async fn multiple_start_stop() {
     );
 
     // Generate the genesis and blockchain
-    let genesis_info = genesis_builder.generate().unwrap();
+    let genesis_info = genesis_builder.generate(env.clone()).unwrap();
 
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(
@@ -893,7 +822,7 @@ async fn mempool_update() {
 
     // Generate transactions
     for i in 0..num_txns {
-        let mempool_transaction = MempoolTransaction {
+        let mempool_transaction = TestTransaction {
             fee: (i + 1) as u64,
             value: balance,
             recipient: recipient_accounts[i as usize].clone(),
@@ -901,7 +830,7 @@ async fn mempool_update() {
         };
         mempool_transactions.push(mempool_transaction);
     }
-    let (txns, _) = generate_transactions(mempool_transactions);
+    let (txns, _) = generate_transactions(mempool_transactions, true);
     let transactions = txns.clone();
     log::debug!("Done generating transactions and accounts");
 
@@ -919,7 +848,7 @@ async fn mempool_update() {
 
     // Generate transactions
     for i in 0..num_txns {
-        let mempool_transaction = MempoolTransaction {
+        let mempool_transaction = TestTransaction {
             fee: (i + 100) as u64,
             value: balance,
             recipient: recipient_accounts[i as usize].clone(),
@@ -927,7 +856,7 @@ async fn mempool_update() {
         };
         reverted_transactions.push(mempool_transaction);
     }
-    let (mut rev_txns, _) = generate_transactions(reverted_transactions);
+    let (mut rev_txns, _) = generate_transactions(reverted_transactions, true);
     rev_txns.extend_from_slice(&transactions[3..8]);
     let mut reverted_micro_blocks = vec![];
     reverted_micro_blocks.push((Blake2bHash::default(), create_dummy_micro_block(None)));
@@ -955,7 +884,7 @@ async fn mempool_update() {
 
     // Generate transactions
     for i in 0..num_txns {
-        let mempool_transaction = MempoolTransaction {
+        let mempool_transaction = TestTransaction {
             fee: (i + 200) as u64,
             value: balance,
             recipient: recipient_accounts[i as usize].clone(),
@@ -963,7 +892,7 @@ async fn mempool_update() {
         };
         adopted_transactions.push(mempool_transaction);
     }
-    let (mut adopted_txns, _) = generate_transactions(adopted_transactions);
+    let (mut adopted_txns, _) = generate_transactions(adopted_transactions, true);
     adopted_txns.extend_from_slice(&transactions[13..18]);
     let mut adopted_micro_blocks = vec![];
     adopted_micro_blocks.push((Blake2bHash::default(), create_dummy_micro_block(None)));
@@ -987,7 +916,7 @@ async fn mempool_update() {
     );
 
     // Generate the genesis and blockchain
-    let genesis_info = genesis_builder.generate().unwrap();
+    let genesis_info = genesis_builder.generate(env.clone()).unwrap();
 
     let blockchain = Arc::new(RwLock::new(
         Blockchain::with_genesis(

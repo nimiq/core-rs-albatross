@@ -6,6 +6,7 @@ use nimiq_blockchain::{AbstractBlockchain, BlockchainEvent};
 use nimiq_bls::{AggregateSignature, KeyPair as BlsKeyPair};
 use nimiq_build_tools::genesis::GenesisBuilder;
 use nimiq_collections::BitSet;
+use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_handel::update::{LevelUpdate, LevelUpdateMessage};
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
 use nimiq_network_interface::network::Network;
@@ -21,6 +22,7 @@ use std::time::Duration;
 #[tokio::test]
 async fn one_validator_can_create_micro_blocks() {
     let hub = MockHub::default();
+    let env = VolatileEnvironment::new(10).expect("Could not open a volatile database");
 
     let voting_key = BlsKeyPair::generate(&mut seeded_rng(0));
     let validator_key = KeyPair::generate(&mut seeded_rng(0));
@@ -33,7 +35,7 @@ async fn one_validator_can_create_micro_blocks() {
             voting_key.public_key,
             Address::default(),
         )
-        .generate()
+        .generate(env)
         .unwrap();
 
     let (validator, mut consensus1) = build_validator::<MockNetwork>(
@@ -63,8 +65,9 @@ async fn one_validator_can_create_micro_blocks() {
 #[tokio::test]
 async fn four_validators_can_create_micro_blocks() {
     let hub = MockHub::default();
+    let env = VolatileEnvironment::new(10).expect("Could not open a volatile database");
 
-    let validators = build_validators::<MockNetwork>(4, &mut Some(hub)).await;
+    let validators = build_validators::<MockNetwork>(env, 4, &mut Some(hub)).await;
 
     let blockchain = Arc::clone(&validators.first().unwrap().consensus.blockchain);
 
@@ -84,8 +87,9 @@ async fn four_validators_can_create_micro_blocks() {
 #[tokio::test]
 async fn four_validators_can_view_change() {
     let hub = MockHub::default();
+    let env = VolatileEnvironment::new(10).expect("Could not open a volatile database");
 
-    let validators = build_validators::<MockNetwork>(4, &mut Some(hub)).await;
+    let validators = build_validators::<MockNetwork>(env, 4, &mut Some(hub)).await;
 
     // Disconnect the next block producer.
     let validator = validator_for_slot(&validators, 1, 0);
@@ -161,9 +165,10 @@ async fn validator_can_catch_up() {
     // third block producer needs to be disconnected as well and then reconnected to catch up to the seconds view change while not having seen the first one,
     // resulting in him producing the first block.
     let hub = MockHub::default();
+    let env = VolatileEnvironment::new(10).expect("Could not open a volatile database");
 
     // In total 8 validator are registered. after 3 validators are taken offline the remaining 5 should not be able to progress on their own
-    let mut validators = build_validators::<MockNetwork>(8, &mut Some(hub)).await;
+    let mut validators = build_validators::<MockNetwork>(env, 8, &mut Some(hub)).await;
     // Maintain a collection of the corresponding networks.
 
     let networks: Vec<Arc<MockNetwork>> = validators

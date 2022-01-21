@@ -11,7 +11,7 @@ use account::{Account, AccountError, Accounts, AccountsList, BasicAccount, Staki
 use beserial::{Serialize, SerializingError};
 use block::{Block, MacroBlock, MacroBody, MacroHeader};
 use bls::PublicKey as BlsPublicKey;
-use database::volatile::{VolatileDatabaseError, VolatileEnvironment};
+use database::Environment;
 use database::WriteTransaction;
 use hash::{Blake2bHash, Hash};
 use keys::{Address, PublicKey as SchnorrPublicKey};
@@ -35,8 +35,6 @@ pub enum GenesisBuilderError {
     TomlError(#[from] TomlError),
     #[error("Failed to stake")]
     StakingError(#[from] AccountError),
-    #[error("Database error")]
-    DatabaseError(#[from] VolatileDatabaseError),
 }
 
 #[derive(Clone)]
@@ -151,9 +149,8 @@ impl GenesisBuilder {
         Ok(self)
     }
 
-    pub fn generate(&self) -> Result<GenesisInfo, GenesisBuilderError> {
+    pub fn generate(&self, env: Environment) -> Result<GenesisInfo, GenesisBuilderError> {
         // Initialize the environment.
-        let env = VolatileEnvironment::new(10)?;
         let timestamp = self.timestamp.unwrap_or_else(OffsetDateTime::now_utc);
 
         // Initialize the accounts.
@@ -243,6 +240,7 @@ impl GenesisBuilder {
         // State root
         let state_root = accounts.get_root(Some(&txn));
         debug!("State root: {}", &state_root);
+        txn.abort();
 
         // the header
         let header = MacroHeader {
@@ -308,13 +306,14 @@ impl GenesisBuilder {
 
     pub fn write_to_files<P: AsRef<Path>>(
         &self,
+        env: Environment,
         directory: P,
     ) -> Result<Blake2bHash, GenesisBuilderError> {
         let GenesisInfo {
             block,
             hash,
             accounts,
-        } = self.generate()?;
+        } = self.generate(env)?;
 
         debug!("Genesis block: {}", &hash);
         debug!("{:#?}", &block);

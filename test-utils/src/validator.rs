@@ -13,6 +13,7 @@ use nimiq_blockchain::AbstractBlockchain;
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_build_tools::genesis::{GenesisBuilder, GenesisInfo};
 use nimiq_consensus::{Consensus as AbstractConsensus, ConsensusEvent};
+use nimiq_database::Environment;
 use nimiq_keys::{Address, KeyPair as SchnorrKeyPair, SecureGenerate};
 use nimiq_mempool::config::MempoolConfig;
 use nimiq_network_interface::{network::Network as NetworkInterface, peer::Peer as PeerInterface};
@@ -57,6 +58,7 @@ where
 }
 
 pub async fn build_validators<N: TestNetwork + NetworkInterface>(
+    env: Environment,
     num_validators: usize,
     hub: &mut Option<MockHub>,
 ) -> Vec<AbstractValidator<N, ValidatorNetworkImpl<N>>>
@@ -89,7 +91,7 @@ where
             Address::default(),
         );
     }
-    let genesis = genesis_builder.generate().unwrap();
+    let genesis = genesis_builder.generate(env).unwrap();
 
     // Instantiate validators.
     let mut validators = vec![];

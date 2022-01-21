@@ -37,6 +37,7 @@ nimiq-network-interface = { path = "../network-interface" }
 nimiq-network-libp2p = { path = "../network-libp2p" }
 nimiq-network-mock = { path = "../network-mock" }
 nimiq-primitives = { path = "../primitives" }
+nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-validator = { path = "../validator" }
 nimiq-validator-network = { path = "../validator-network" }
 nimiq-utils = { path = "../utils" }

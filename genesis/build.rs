@@ -3,6 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use nimiq_build_tools::genesis::GenesisBuilder;
+use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_hash::Blake2bHash;
 
 fn write_genesis_rs(directory: &Path, name: &str, genesis_hash: &Blake2bHash) {
@@ -37,8 +38,9 @@ fn generate_albatross(
     log::info!("genesis source file: {}", genesis_config.display());
 
     let mut builder = GenesisBuilder::new();
+    let env = VolatileEnvironment::new(10).expect("Could not open a volatile database");
     builder.with_config_file(genesis_config).unwrap();
-    let genesis_hash = builder.write_to_files(&directory).unwrap();
+    let genesis_hash = builder.write_to_files(env, &directory).unwrap();
     write_genesis_rs(&directory, name, &genesis_hash);
 }
 

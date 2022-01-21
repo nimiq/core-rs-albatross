@@ -1,14 +1,28 @@
+use rand::prelude::StdRng;
+use rand::SeedableRng;
 use std::convert::TryFrom;
+use std::time::Instant;
+use tempdir::TempDir;
 
 use nimiq_account::{Accounts, Inherent, InherentType};
 use nimiq_account::{Receipt, Receipts};
-use nimiq_database::volatile::VolatileEnvironment;
+use nimiq_bls::KeyPair as BLSKeyPair;
+use nimiq_build_tools::genesis::GenesisBuilder;
 use nimiq_database::WriteTransaction;
-use nimiq_keys::Address;
+use nimiq_database::{
+    lmdb::{open as LmdbFlags, LmdbEnvironment},
+    volatile::VolatileEnvironment,
+};
+use nimiq_keys::{Address, KeyPair, PublicKey, SecureGenerate};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
+use nimiq_test_utils::test_transaction::{
+    generate_accounts, generate_transactions, TestTransaction,
+};
 use nimiq_transaction::Transaction;
 use nimiq_trie::key_nibbles::KeyNibbles;
+
+const VOLATILE_ENV: bool = true;
 
 #[test]
 fn it_can_commit_and_revert_a_block_body() {
@@ -409,4 +423,115 @@ fn it_checks_for_sufficient_funds() {
     );
 
     assert_eq!(hash2, accounts.get_root(None));
+}
+
+#[test]
+fn accounts_performance() {
+    let (env, num_txns) = if VOLATILE_ENV {
+        let num_txns = 1_000;
+        let env = VolatileEnvironment::new(10).unwrap();
+
+        (env, num_txns)
+    } else {
+        let num_txns = 10_000;
+        let tmp_dir =
+            TempDir::new("accounts_performance_test").expect("Could not create temporal directory");
+        let tmp_dir = tmp_dir.path().to_str().unwrap();
+        log::debug!("Creating a non volatile environment in {}", tmp_dir);
+        let env = LmdbEnvironment::new(
+            tmp_dir,
+            1024 * 1024 * 1024 * 1024,
+            21,
+            LmdbFlags::NOMETASYNC,
+        )
+        .unwrap();
+        (env, num_txns)
+    };
+
+    // Generate and sign transaction from an address
+    let mut rng = StdRng::seed_from_u64(0);
+    let balance = 100;
+    let mut mempool_transactions = vec![];
+    let sender_balances = vec![num_txns as u64 * 10; num_txns];
+    let recipient_balances = vec![0; num_txns];
+    let mut genesis_builder = GenesisBuilder::default();
+    let address_validator = Address::from([1u8; Address::SIZE]);
+    let reward = Inherent {
+        ty: InherentType::Reward,
+        target: address_validator.clone(),
+        value: Coin::from_u64_unchecked(10000),
+        data: vec![],
+    };
+    let rewards = vec![reward; num_txns];
+
+    // Generate recipient accounts
+    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    // Generate sender accounts
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
+
+    // Generate transactions
+    for i in 0..num_txns {
+        let mempool_transaction = TestTransaction {
+            fee: (i + 1) as u64,
+            value: balance,
+            recipient: recipient_accounts[i as usize].clone(),
+            sender: sender_accounts[i as usize].clone(),
+        };
+        mempool_transactions.push(mempool_transaction);
+    }
+    let (txns, _) = generate_transactions(mempool_transactions, false);
+    log::debug!("Done generating {} transactions and accounts", txns.len());
+
+    // Add validator to genesis
+    genesis_builder.with_genesis_validator(
+        Address::from(&KeyPair::generate(&mut rng)),
+        PublicKey::from([0u8; 32]),
+        BLSKeyPair::generate(&mut rng).public_key,
+        Address::default(),
+    );
+
+    let genesis_info = genesis_builder.generate(env.clone()).unwrap();
+    let length = genesis_info.accounts.len();
+    let accounts = Accounts::new(env.clone());
+    let mut txn = WriteTransaction::new(&env);
+    let start = Instant::now();
+    accounts.init(&mut txn, genesis_info.accounts);
+    let duration = start.elapsed();
+    println!(
+        "Time elapsed after account init: {} ms, Accounts per second {}",
+        duration.as_millis(),
+        length as f64 / (duration.as_millis() as f64 / 1000_f64),
+    );
+    let start = Instant::now();
+    txn.commit();
+    let duration = start.elapsed();
+    println!(
+        "Time elapsed after account init's txn commit: {} ms, Accounts per second {}",
+        duration.as_millis(),
+        num_txns as f64 / (duration.as_millis() as f64 / 1000_f64),
+    );
+
+    println!("Done adding accounts to genesis {}", txns.len());
+
+    let mut txn = WriteTransaction::new(&env);
+    let start = Instant::now();
+    let result = accounts.commit(&mut txn, &txns[..], &rewards[..], 1, 1);
+    match result {
+        Ok(_) => assert!(true),
+        Err(err) => assert!(false, "Received {}", err),
+    };
+    let duration = start.elapsed();
+    println!(
+        "Time elapsed after account commit: {} ms, Accounts per second {}",
+        duration.as_millis(),
+        num_txns as f64 / (duration.as_millis() as f64 / 1000_f64),
+    );
+    let start = Instant::now();
+    txn.commit();
+    let duration = start.elapsed();
+    println!(
+        "Time ellapsed after txn commit: {} ms, Accounts per second {}",
+        duration.as_millis(),
+        num_txns as f64 / (duration.as_millis() as f64 / 1000_f64),
+    );
 }

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use futures::{future, StreamExt};
 use log::LevelFilter::{Debug, Info};
 use nimiq_blockchain::AbstractBlockchain;
+use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_network_libp2p::Network;
 use nimiq_test_utils::validator::build_validators;
 
@@ -20,7 +21,9 @@ async fn four_validators_can_create_an_epoch() {
         .init()
         .ok();
 
-    let validators = build_validators::<Network>(4, &mut None).await;
+    let env = VolatileEnvironment::new(10).expect("Could not open a volatile database");
+
+    let validators = build_validators::<Network>(env, 4, &mut None).await;
 
     let blockchain = Arc::clone(&validators.first().unwrap().consensus.blockchain);
 

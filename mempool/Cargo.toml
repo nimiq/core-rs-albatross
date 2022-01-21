@@ -49,4 +49,5 @@ nimiq-build-tools = { path = "../build-tools" }
 nimiq-database = { path = "../database" }
 nimiq-genesis = { path = "../genesis" }
 nimiq-network-mock = { path = "../network-mock" }
+nimiq-test-utils = { path = "../test-utils" }
 nimiq-vrf = { path = "../vrf" }

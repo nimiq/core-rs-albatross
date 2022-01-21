@@ -4,6 +4,7 @@ use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::AbstractBlockchain;
 use nimiq_bls::KeyPair as BLSKeyPair;
 use nimiq_build_tools::genesis::GenesisBuilder;
+use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
 use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_test_utils::blockchain::{produce_macro_blocks, signing_key, voting_key};
@@ -16,6 +17,7 @@ async fn test_request_component() {
     //simple_logger::init_by_env();
 
     let mut hub = Some(MockHub::default());
+    let env = VolatileEnvironment::new(10).expect("Could not open a volatile database");
 
     // Generate genesis block.
     let key = KeyPair::generate(&mut seeded_rng(0));
@@ -29,7 +31,7 @@ async fn test_request_component() {
             vtn_key.public_key,
             Address::default(),
         )
-        .generate()
+        .generate(env)
         .unwrap();
 
     let mut node1 = Node::<MockNetwork>::new(1, genesis.clone(), &mut hub).await;
