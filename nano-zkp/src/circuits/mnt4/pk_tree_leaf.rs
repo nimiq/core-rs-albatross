@@ -1,6 +1,6 @@
 use ark_mnt4_753::Fr as MNT4Fr;
-use ark_mnt6_753::constraints::{FqVar, G1Var, G2Var};
-use ark_mnt6_753::{Fq, G1Projective, G2Projective};
+use ark_mnt6_753::constraints::{FqVar, G1Var};
+use ark_mnt6_753::{Fq, G1Projective};
 use ark_r1cs_std::prelude::{AllocVar, Boolean, CondSelectGadget, CurveVar, EqGadget};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
@@ -33,7 +33,7 @@ use crate::utils::unpack_inputs;
 #[derive(Clone)]
 pub struct PKTreeLeafCircuit {
     // Witnesses (private)
-    pks: Vec<G2Projective>,
+    pks: Vec<G1Projective>,
     pk_tree_nodes: Vec<G1Projective>,
 
     // Inputs (public)
@@ -50,7 +50,7 @@ pub struct PKTreeLeafCircuit {
 
 impl PKTreeLeafCircuit {
     pub fn new(
-        pks: Vec<G2Projective>,
+        pks: Vec<G1Projective>,
         pk_tree_nodes: Vec<G1Projective>,
         pk_tree_root: Vec<Fq>,
         agg_pk_commitment: Vec<Fq>,
@@ -76,7 +76,7 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeLeafCircuit {
             Vec::<G1Var>::new_constant(cs.clone(), pedersen_generators(195))?;
 
         // Allocate all the witnesses.
-        let pks_var = Vec::<G2Var>::new_witness(cs.clone(), || Ok(&self.pks[..]))?;
+        let pks_var = Vec::<G1Var>::new_witness(cs.clone(), || Ok(&self.pks[..]))?;
 
         let pk_tree_nodes_var =
             Vec::<G1Var>::new_witness(cs.clone(), || Ok(&self.pk_tree_nodes[..]))?;
@@ -111,7 +111,7 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeLeafCircuit {
         let mut bits = vec![];
 
         for item in pks_var.iter().take(self.pks.len()) {
-            bits.extend(SerializeGadget::serialize_g2(cs.clone(), item)?);
+            bits.extend(SerializeGadget::serialize_g1(cs.clone(), item)?);
         }
 
         MerkleTreeGadget::verify(
@@ -125,7 +125,7 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeLeafCircuit {
         .enforce_equal(&Boolean::constant(true))?;
 
         // Calculate the aggregate public key.
-        let mut calculated_agg_pk = G2Var::zero();
+        let mut calculated_agg_pk = G1Var::zero();
 
         for (pk, included) in pks_var.iter().zip(signer_bitmap_chunk_bits.iter()) {
             // Calculate a new sum that includes the next public key.
@@ -141,7 +141,7 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeLeafCircuit {
 
         // Verifying aggregate public key. It checks that the calculated aggregate public key
         // is correct by comparing it with the aggregate public key commitment given as an input.
-        let agg_pk_bits = SerializeGadget::serialize_g2(cs.clone(), &calculated_agg_pk)?;
+        let agg_pk_bits = SerializeGadget::serialize_g1(cs.clone(), &calculated_agg_pk)?;
 
         let pedersen_hash = PedersenHashGadget::evaluate(&agg_pk_bits, &pedersen_generators_var)?;
 

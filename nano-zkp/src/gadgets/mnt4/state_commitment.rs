@@ -53,7 +53,7 @@ impl StateCommitmentGadget {
 mod tests {
     use ark_mnt4_753::Fr as MNT4Fr;
     use ark_mnt6_753::constraints::G1Var;
-    use ark_mnt6_753::G2Projective;
+    use ark_mnt6_753::G1Projective;
     use ark_r1cs_std::prelude::{AllocVar, Boolean, UInt32};
     use ark_r1cs_std::R1CSVar;
     use ark_relations::r1cs::ConstraintSystem;
@@ -76,7 +76,7 @@ mod tests {
         let rng = &mut test_rng();
 
         // Create random keys.
-        let g2_point = G2Projective::rand(rng);
+        let g2_point = G1Projective::rand(rng);
         let public_keys = vec![g2_point; SLOTS as usize];
 
         // Create random block number.

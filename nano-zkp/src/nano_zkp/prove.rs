@@ -14,7 +14,7 @@ use rand::{thread_rng, CryptoRng, Rng};
 
 use nimiq_bls::pedersen::{pedersen_generators, pedersen_hash};
 use nimiq_bls::utils::{byte_to_le_bits, bytes_to_bits};
-use nimiq_nano_primitives::{merkle_tree_prove, serialize_g1_mnt6, serialize_g2_mnt6};
+use nimiq_nano_primitives::{merkle_tree_prove, serialize_g1_mnt6};
 use nimiq_nano_primitives::{
     pk_tree_construct, state_commitment, vk_commitment, MacroBlock, PK_TREE_BREADTH, PK_TREE_DEPTH,
 };
@@ -36,13 +36,13 @@ impl NanoZKP {
         // The public keys of the validators of the initial state. So, the validators that were
         // selected in the previous election macro block and that are now signing this election
         // macro block.
-        initial_pks: Vec<G2MNT6>,
+        initial_pks: Vec<G1MNT6>,
         // The hash of the block header of the initial state. So, the hash of the block when the
         // initial validators were selected.
         initial_header_hash: [u8; 32],
         // The public keys of the validators of the final state. To be clear, they are the validators
         // that are selected in this election macro block.
-        final_pks: Vec<G2MNT6>,
+        final_pks: Vec<G1MNT6>,
         // The current election macro block.
         block: MacroBlock,
         // If this is not the first epoch, you need to provide the SNARK proof for the previous
@@ -62,7 +62,7 @@ impl NanoZKP {
         let mut bytes = Vec::new();
 
         for initial_pk in &initial_pks {
-            bytes.extend_from_slice(&serialize_g2_mnt6(initial_pk));
+            bytes.extend_from_slice(&serialize_g1_mnt6(initial_pk));
         }
 
         let bits = bytes_to_bits(&bytes);
@@ -284,7 +284,7 @@ impl NanoZKP {
         rng: &mut R,
         name: &str,
         position: usize,
-        pks: &[G2MNT6],
+        pks: &[G1MNT6],
         pk_tree_nodes: &[G1MNT6],
         pk_tree_root: &[u8],
         signer_bitmap: &[bool],
@@ -296,7 +296,7 @@ impl NanoZKP {
         let proving_key = ProvingKey::deserialize_unchecked(&mut file)?;
 
         // Calculate the aggregate public key commitment.
-        let mut agg_pk = G2MNT6::zero();
+        let mut agg_pk = G1MNT6::zero();
 
         for i in position * SLOTS as usize / PK_TREE_BREADTH
             ..(position + 1) * SLOTS as usize / PK_TREE_BREADTH
@@ -306,7 +306,7 @@ impl NanoZKP {
             }
         }
 
-        let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(&agg_pk));
+        let agg_pk_bits = bytes_to_bits(&serialize_g1_mnt6(&agg_pk));
 
         let hash = pedersen_hash(agg_pk_bits, pedersen_generators(5));
 
@@ -376,7 +376,7 @@ impl NanoZKP {
         position: usize,
         tree_level: usize,
         vk_file: &str,
-        pks: &[G2MNT6],
+        pks: &[G1MNT6],
         pk_tree_root: &[u8],
         signer_bitmap: &[bool],
         debug_mode: bool,
@@ -406,7 +406,7 @@ impl NanoZKP {
         let right_proof = Proof::deserialize_unchecked(&mut file)?;
 
         // Calculate the left aggregate public key commitment.
-        let mut agg_pk = G2MNT6::zero();
+        let mut agg_pk = G1MNT6::zero();
 
         for i in left_position * SLOTS as usize / 2_usize.pow((tree_level + 1) as u32)
             ..(left_position + 1) * SLOTS as usize / 2_usize.pow((tree_level + 1) as u32)
@@ -416,14 +416,14 @@ impl NanoZKP {
             }
         }
 
-        let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(&agg_pk));
+        let agg_pk_bits = bytes_to_bits(&serialize_g1_mnt6(&agg_pk));
 
         let hash = pedersen_hash(agg_pk_bits, pedersen_generators(5));
 
         let left_agg_pk_comm = bytes_to_bits(&serialize_g1_mnt6(&hash));
 
         // Calculate the right aggregate public key commitment.
-        let mut agg_pk = G2MNT6::zero();
+        let mut agg_pk = G1MNT6::zero();
 
         for i in right_position * SLOTS as usize / 2_usize.pow((tree_level + 1) as u32)
             ..(right_position + 1) * SLOTS as usize / 2_usize.pow((tree_level + 1) as u32)
@@ -433,7 +433,7 @@ impl NanoZKP {
             }
         }
 
-        let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(&agg_pk));
+        let agg_pk_bits = bytes_to_bits(&serialize_g1_mnt6(&agg_pk));
 
         let hash = pedersen_hash(agg_pk_bits, pedersen_generators(5));
 
@@ -509,7 +509,7 @@ impl NanoZKP {
         position: usize,
         tree_level: usize,
         vk_file: &str,
-        pks: &[G2MNT6],
+        pks: &[G1MNT6],
         pk_tree_root: &[u8],
         signer_bitmap: &[bool],
         debug_mode: bool,
@@ -542,7 +542,7 @@ impl NanoZKP {
         let mut agg_pk_chunks = vec![];
 
         for i in position * 4..(position + 1) * 4 {
-            let mut agg_pk = G2MNT6::zero();
+            let mut agg_pk = G1MNT6::zero();
 
             for j in i * SLOTS as usize / 2_usize.pow((tree_level + 2) as u32)
                 ..(i + 1) * SLOTS as usize / 2_usize.pow((tree_level + 2) as u32)
@@ -556,13 +556,13 @@ impl NanoZKP {
         }
 
         // Calculate the aggregate public key commitment.
-        let mut agg_pk = G2MNT6::zero();
+        let mut agg_pk = G1MNT6::zero();
 
         for chunk in &agg_pk_chunks {
             agg_pk += chunk;
         }
 
-        let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(&agg_pk));
+        let agg_pk_bits = bytes_to_bits(&serialize_g1_mnt6(&agg_pk));
 
         let hash = pedersen_hash(agg_pk_bits, pedersen_generators(5));
 
@@ -630,10 +630,10 @@ impl NanoZKP {
 
     fn prove_macro_block<R: CryptoRng + Rng>(
         rng: &mut R,
-        initial_pks: &[G2MNT6],
+        initial_pks: &[G1MNT6],
         initial_pk_tree_root: &[u8],
         initial_header_hash: [u8; 32],
-        final_pks: &[G2MNT6],
+        final_pks: &[G1MNT6],
         final_pk_tree_root: &[u8],
         block: &MacroBlock,
         debug_mode: bool,
@@ -657,7 +657,7 @@ impl NanoZKP {
         let mut agg_pk_chunks = vec![];
 
         for i in 0..2 {
-            let mut agg_pk = G2MNT6::zero();
+            let mut agg_pk = G1MNT6::zero();
 
             #[allow(clippy::needless_range_loop)]
             for j in i * SLOTS as usize / 2..(i + 1) * SLOTS as usize / 2 {
@@ -726,9 +726,9 @@ impl NanoZKP {
 
     fn prove_macro_block_wrapper<R: CryptoRng + Rng>(
         rng: &mut R,
-        initial_pks: &[G2MNT6],
+        initial_pks: &[G1MNT6],
         initial_header_hash: [u8; 32],
-        final_pks: &[G2MNT6],
+        final_pks: &[G1MNT6],
         block: &MacroBlock,
         debug_mode: bool,
     ) -> Result<(), NanoZKPError> {
@@ -799,9 +799,9 @@ impl NanoZKP {
 
     fn prove_merger<R: CryptoRng + Rng>(
         rng: &mut R,
-        initial_pks: &[G2MNT6],
+        initial_pks: &[G1MNT6],
         initial_header_hash: [u8; 32],
-        final_pks: &[G2MNT6],
+        final_pks: &[G1MNT6],
         block: &MacroBlock,
         genesis_data: Option<(Proof<MNT6_753>, Vec<u8>)>,
         debug_mode: bool,
@@ -906,9 +906,9 @@ impl NanoZKP {
 
     fn prove_merger_wrapper<R: CryptoRng + Rng>(
         rng: &mut R,
-        initial_pks: &[G2MNT6],
+        initial_pks: &[G1MNT6],
         initial_header_hash: [u8; 32],
-        final_pks: &[G2MNT6],
+        final_pks: &[G1MNT6],
         block: &MacroBlock,
         genesis_data: Option<(Proof<MNT6_753>, Vec<u8>)>,
         debug_mode: bool,

@@ -426,7 +426,7 @@ impl Network {
                                     },
                             } => {
                                 if let Ok(compressed_pk) =
-                                    <[u8; 285]>::try_from(record.key.as_ref())
+                                    <[u8; CompressedPublicKey::SIZE]>::try_from(record.key.as_ref())
                                 {
                                     if let Ok(pk) = (CompressedPublicKey {
                                         public_key: compressed_pk,

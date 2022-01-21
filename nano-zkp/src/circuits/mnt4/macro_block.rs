@@ -3,8 +3,8 @@ use ark_crypto_primitives::SNARKGadget;
 use ark_groth16::constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar};
 use ark_groth16::{Proof, VerifyingKey};
 use ark_mnt4_753::Fr as MNT4Fr;
-use ark_mnt6_753::constraints::{FqVar, G1Var, G2Var, PairingVar};
-use ark_mnt6_753::{Fq, G2Projective, MNT6_753};
+use ark_mnt6_753::constraints::{FqVar, G1Var, PairingVar};
+use ark_mnt6_753::{Fq, G1Projective, MNT6_753};
 use ark_r1cs_std::prelude::{
     AllocVar, Boolean, CurveVar, EqGadget, FieldVar, ToBitsGadget, UInt32,
 };
@@ -31,7 +31,7 @@ pub struct MacroBlockCircuit {
     vk_pk_tree: VerifyingKey<MNT6_753>,
 
     // Witnesses (private)
-    agg_pk_chunks: Vec<G2Projective>,
+    agg_pk_chunks: Vec<G1Projective>,
     proof: Proof<MNT6_753>,
     initial_pk_tree_root: Vec<bool>,
     initial_header_hash: Vec<bool>,
@@ -51,7 +51,7 @@ pub struct MacroBlockCircuit {
 impl MacroBlockCircuit {
     pub fn new(
         vk_pk_tree: VerifyingKey<MNT6_753>,
-        agg_pk_chunks: Vec<G2Projective>,
+        agg_pk_chunks: Vec<G1Projective>,
         proof: Proof<MNT6_753>,
         initial_pk_tree_root: Vec<bool>,
         initial_header_hash: Vec<bool>,
@@ -88,7 +88,7 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
 
         // Allocate all the witnesses.
         let agg_pk_chunks_var =
-            Vec::<G2Var>::new_witness(cs.clone(), || Ok(&self.agg_pk_chunks[..]))?;
+            Vec::<G1Var>::new_witness(cs.clone(), || Ok(&self.agg_pk_chunks[..]))?;
 
         let proof_var =
             ProofVar::<MNT6_753, PairingVar>::new_witness(cs.clone(), || Ok(&self.proof))?;
@@ -158,7 +158,7 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         let mut agg_pk_chunks_commitments = Vec::new();
 
         for chunk in &agg_pk_chunks_var {
-            let chunk_bits = SerializeGadget::serialize_g2(cs.clone(), chunk)?;
+            let chunk_bits = SerializeGadget::serialize_g1(cs.clone(), chunk)?;
 
             let pedersen_hash =
                 PedersenHashGadget::evaluate(&chunk_bits, &pedersen_generators_var)?;
@@ -201,7 +201,7 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         .enforce_equal(&Boolean::constant(true))?;
 
         // Calculating the aggregate public key.
-        let mut agg_pk_var = G2Var::zero();
+        let mut agg_pk_var = G1Var::zero();
 
         for pk in &agg_pk_chunks_var {
             agg_pk_var += pk;

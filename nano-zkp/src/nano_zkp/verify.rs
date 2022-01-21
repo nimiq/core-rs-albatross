@@ -2,7 +2,7 @@ use std::fs::File;
 
 use ark_crypto_primitives::SNARK;
 use ark_groth16::{Groth16, Proof, VerifyingKey};
-use ark_mnt6_753::{G2Projective as G2MNT6, MNT6_753};
+use ark_mnt6_753::{G1Projective as G1MNT6, MNT6_753};
 use ark_serialize::CanonicalDeserialize;
 
 use nimiq_bls::utils::bytes_to_bits;
@@ -24,7 +24,7 @@ impl NanoZKP {
         // block.
         // Note that we are referring to the validators that are selected in the initial block, not
         // the validators that signed the initial block.
-        initial_pks: Vec<G2MNT6>,
+        initial_pks: Vec<G1MNT6>,
         // The block number of the final block.
         final_block_number: u32,
         // The header hash of the final block.
@@ -32,7 +32,7 @@ impl NanoZKP {
         // The public keys of the validators of the final block.
         // Note that we are referring to the validators that are selected in the final block, not
         // the validators that signed the final block.
-        final_pks: Vec<G2MNT6>,
+        final_pks: Vec<G1MNT6>,
         // The SNARK proof for this circuit.
         proof: Proof<MNT6_753>,
     ) -> Result<bool, NanoZKPError> {

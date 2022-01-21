@@ -2,7 +2,7 @@ use std::cmp::min;
 
 use ark_ec::ProjectiveCurve;
 use ark_ff::{Field, PrimeField};
-use ark_mnt6_753::{Fr as MNT6Fr, G2Projective as G2MNT6};
+use ark_mnt6_753::{Fr as MNT6Fr, G1Projective as G1MNT6};
 use ark_r1cs_std::fields::fp::FpVar;
 use ark_r1cs_std::prelude::{Boolean, ToBitsGadget};
 use ark_relations::r1cs::SynthesisError;
@@ -161,9 +161,9 @@ pub fn reverse_inner_byte_order<F: Field>(data: &[Boolean<F>]) -> Vec<Boolean<F>
 pub fn create_test_blocks(
     index: u64,
 ) -> (
-    Vec<G2MNT6>,
+    Vec<G1MNT6>,
     [u8; 32],
-    Vec<G2MNT6>,
+    Vec<G1MNT6>,
     MacroBlock,
     Option<Vec<u8>>,
 ) {
@@ -179,7 +179,7 @@ pub fn create_test_blocks(
 
     for _ in 0..SLOTS {
         let sk = MNT6Fr::rand(&mut rng);
-        let mut pk = G2MNT6::prime_subgroup_generator();
+        let mut pk = G1MNT6::prime_subgroup_generator();
         pk.mul_assign(sk);
         initial_sks.push(sk);
         initial_pks.push(pk);
@@ -205,7 +205,7 @@ pub fn create_test_blocks(
 
     for _ in 0..SLOTS {
         let sk = MNT6Fr::rand(&mut rng);
-        let mut pk = G2MNT6::prime_subgroup_generator();
+        let mut pk = G1MNT6::prime_subgroup_generator();
         pk.mul_assign(sk);
         final_sks.push(sk);
         final_pks.push(pk);
