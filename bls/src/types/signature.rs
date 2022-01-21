@@ -77,7 +77,8 @@ impl Signature {
         let y_coordinate = (bytes[0] >> 7) & 1 == 1;
 
         // In order to easily read the BigInt from the bytes, we use the first 16 bits as padding.
-        // However, because of the previous explanation, we need to nullify the whole first two bytes.
+        // However, because of the previous explanation, we need to nullify the whole first two
+        // bytes for each coordinate.
         bytes[0] = 0;
         bytes[1] = 0;
 

@@ -1,4 +1,4 @@
-use ark_mnt6_753::G2Projective;
+use ark_mnt6_753::G1Projective;
 
 use nimiq_bls::pedersen::{pedersen_generators, pedersen_hash};
 use nimiq_bls::utils::bytes_to_bits;
@@ -15,7 +15,7 @@ use crate::{pk_tree_construct, serialize_g1_mnt6};
 pub fn state_commitment(
     block_number: u32,
     header_hash: [u8; 32],
-    public_keys: Vec<G2Projective>,
+    public_keys: Vec<G1Projective>,
 ) -> Vec<u8> {
     // Construct the Merkle tree over the public keys.
     let root = pk_tree_construct(public_keys);
