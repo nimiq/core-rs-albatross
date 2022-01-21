@@ -2997,7 +2997,7 @@ dependencies = [
  "shellfn",
  "structopt",
  "thiserror",
- "time 0.3.5",
+ "time 0.3.6",
  "toml",
 ]
 
@@ -3289,7 +3289,7 @@ dependencies = [
  "structopt",
  "strum_macros",
  "thiserror",
- "time 0.3.5",
+ "time 0.3.6",
  "toml",
  "url",
 ]
@@ -4020,6 +4020,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19e64526ebdee182341572e50e9ad03965aa510cd94427a4549448f285e957a1"
 dependencies = [
  "hermit-abi",
+ "libc",
+]
+
+[[package]]
+name = "num_threads"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "71a1eb3a36534514077c1e079ada2fb170ef30c47d203aa6916138cf882ecd52"
+dependencies = [
  "libc",
 ]
 
@@ -5084,7 +5093,7 @@ dependencies = [
  "atty",
  "colored 2.0.0",
  "log",
- "time 0.3.5",
+ "time 0.3.6",
  "winapi",
 ]
 
@@ -5371,12 +5380,13 @@ dependencies = [
 
 [[package]]
 name = "time"
-version = "0.3.5"
+version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41effe7cfa8af36f439fac33861b66b049edc6f9a32331e2312660529c1c24ad"
+checksum = "c8d54b9298e05179c335de2b9645d061255bcd5155f843b3e328d2cfe0a5b413"
 dependencies = [
- "itoa 0.4.8",
+ "itoa 1.0.1",
  "libc",
+ "num_threads",
  "time-macros",
 ]
 
