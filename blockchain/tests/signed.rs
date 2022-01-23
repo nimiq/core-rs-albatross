@@ -18,12 +18,8 @@ use nimiq_primitives::slots::{Validator, Validators};
 use nimiq_utils::time::OffsetTime;
 use nimiq_vrf::VrfEntropy;
 
-// /// Still in for future reference, in case this key is needed again
-// const SECRET_KEY: &str = "8e44b45f308dae1e2d4390a0f96cea993960d4178550c62aeaba88e9e168d165\
-// a8dadd6e1c553412d5c0f191e83ffc5a4b71bf45df6b5a125ec2c4a9a40643597cb6b5c3b588d55a363f1b56ac839eee4a6\
-// ff848180500f2fc29d1c0595f0000";
-///  works with NetworkId::UnitAlbatross
-const SECRET_KEY: &str = "196ffdb1a8acc7cbd76a251aeac0600a1d68b3aba1eba823b5e4dc5dbdcdc730afa752c05ab4f6ef8518384ad514f403c5a088a22b17bf1bc14f8ff8decc2a512c0a200f68d7bdf5a319b30356fe8d1d75ef510aed7a8660968c216c328a0000";
+/// Secret keys of validator. Tests run with `genesis/src/genesis/unit-albatross.toml`
+const SECRET_KEY: &str = "689bf3a52a07af0c7a0901a17e5d285496bb4b60626f4ebd9365ab05a093998edf28b3bf2cf25bdeb5458a14c2ade928ada0215de265ace57616c5ce4f76991d2f350fb8df796dbb2da4c492817d27a1578e5006b43be2f05b938fb5134f0000";
 
 #[test]
 fn test_view_change_single_signature() {

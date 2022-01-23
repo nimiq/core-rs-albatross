@@ -2056,7 +2056,7 @@ dependencies = [
  "bytes",
  "futures",
  "futures-timer",
- "getrandom 0.2.3",
+ "getrandom 0.2.4",
  "instant",
  "lazy_static",
  "libp2p-core",
