@@ -45,7 +45,7 @@ fn it_can_convert_macro_block_into_slots() {
 
     for (validator_address, num_slots, signing_key, voting_key) in slot_allocation {
         let signing_key = PublicKey::from_str(signing_key).unwrap();
-        let voting_key = CompressedPublicKey::from_str(&voting_key).unwrap();
+        let voting_key = CompressedPublicKey::from_str(voting_key).unwrap();
         let address = Address::from(validator_address);
 
         for _ in 0..num_slots {

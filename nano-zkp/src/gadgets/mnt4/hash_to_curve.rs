@@ -139,9 +139,10 @@ impl HashToCurve {
         y_coordinate.enforce_equal(y_bit)?;
         inf_coordinate.enforce_equal(&Boolean::constant(false))?;
 
+        // TODO! The hash point still needs to be scaled by the cofactor of the curve. Otherwise the
+        //  signature won't verify.
         // We now scale by the cofactor.
-        // TODO!!!!!!
-        //hash_var_affine.fixed_scalar_mul_le()?;
+        //let scaled_hash_var = hash_var_affine.fixed_scalar_mul_le()?;
 
         // Return the hash point.
         Ok(hash_var)
