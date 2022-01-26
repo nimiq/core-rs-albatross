@@ -100,8 +100,10 @@ impl<N: Network> Future for MempoolExecutor<N> {
                     }
                 };
 
-                if let Err(e) = network.validate_message(pubsub_id, acceptance).await {
-                    log::trace!("failed to validate_message for tx: {:?}", e);
+                match network.validate_message(pubsub_id, acceptance).await {
+                    Ok(true) => {}, // success
+                    Ok(false) => log::debug!("Validation took too long: the transaction message was no longer in the message cache"),
+                    Err(e) => log::error!("Network error while relaying transaction message: {}", e),
                 };
 
                 tasks_count.fetch_sub(1, AtomicOrdering::SeqCst);

@@ -335,7 +335,7 @@ impl<N: Network> Inner<N> {
             if let Some(pubsub_id) = pubsub_id {
                 match network.validate_message(pubsub_id, acceptance).await {
                     Ok(true) => {}, // success
-                    Ok(false) => log::warn!("Validation took too long: the block message was no longer in the message cache"),
+                    Ok(false) => log::debug!("Validation took too long: the block message is no longer in the message cache"),
                     Err(e) => log::error!("Network error while relaying block message: {}", e),
                 };
             };
