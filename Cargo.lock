@@ -3006,7 +3006,7 @@ dependencies = [
  "shellfn",
  "structopt",
  "thiserror",
- "time 0.3.6",
+ "time 0.3.7",
  "toml",
 ]
 
@@ -3299,7 +3299,7 @@ dependencies = [
  "structopt",
  "strum_macros",
  "thiserror",
- "time 0.3.6",
+ "time 0.3.7",
  "toml",
  "url",
 ]
@@ -5143,7 +5143,7 @@ dependencies = [
  "atty",
  "colored 2.0.0",
  "log",
- "time 0.3.6",
+ "time 0.3.7",
  "winapi",
 ]
 
@@ -5440,9 +5440,9 @@ dependencies = [
 
 [[package]]
 name = "time"
-version = "0.3.6"
+version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8d54b9298e05179c335de2b9645d061255bcd5155f843b3e328d2cfe0a5b413"
+checksum = "004cbc98f30fa233c61a38bc77e96a9106e65c88f2d3bef182ae952027e5753d"
 dependencies = [
  "itoa 1.0.1",
  "libc",
