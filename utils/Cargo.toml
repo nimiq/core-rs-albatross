@@ -30,7 +30,7 @@ rand = { version = "0.8", optional = true }
 rand_core = { version = "0.6", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 thiserror = { version = "1.0", optional = true }
-tokio = { package = "tokio", version = "1.15", features = [
+tokio = { package = "tokio", version = "1.16", features = [
     "sync",
     "tracing",
 ], optional = true }

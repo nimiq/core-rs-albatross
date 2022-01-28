@@ -21,7 +21,7 @@ lmdb-zero = "0.4"
 log = "0.4"
 parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
 rand = "0.8"
-tokio = { version = "1.15", features = ["rt", "time", "tracing"] }
+tokio = { version = "1.16", features = ["rt", "time", "tracing"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 
 beserial = { path = "../beserial" }
@@ -57,7 +57,7 @@ nimiq-vrf = { path = "../vrf" }
 [dev-dependencies]
 hex = "0.4"
 simple_logger = "2.1.0"
-tokio = { version = "1.15", features = ["rt", "test-util", "time", "tracing"] }
+tokio = { version = "1.16", features = ["rt", "test-util", "time", "tracing"] }
 
 nimiq-build-tools = { path = "../build-tools" }
 nimiq-network-libp2p = { path = "../network-libp2p" }
