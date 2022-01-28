@@ -2922,6 +2922,8 @@ dependencies = [
  "nimiq-utils",
  "nimiq-vrf",
  "parking_lot 0.11.2 (git+https://github.com/styppo/parking_lot.git)",
+ "rand 0.8.4",
+ "tempdir",
 ]
 
 [[package]]
@@ -3700,6 +3702,7 @@ dependencies = [
  "nimiq-collections",
  "nimiq-consensus",
  "nimiq-database",
+ "nimiq-genesis",
  "nimiq-hash",
  "nimiq-keys",
  "nimiq-mempool",
@@ -3709,6 +3712,7 @@ dependencies = [
  "nimiq-network-mock",
  "nimiq-primitives",
  "nimiq-transaction",
+ "nimiq-transaction-builder",
  "nimiq-utils",
  "nimiq-validator",
  "nimiq-validator-network",
