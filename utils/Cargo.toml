@@ -23,7 +23,7 @@ clear_on_drop = { version = "0.2", optional = true }
 futures = { version = "0.3" }
 futures-lite = { version = "1.12.0" }
 hex = { version = "0.4", optional = true }
-libp2p = { version = "0.41", optional = true }
+libp2p = { version = "0.42", optional = true }
 log = { version = "0.4", optional = true }
 parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
 rand = { version = "0.8", optional = true }

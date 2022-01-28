@@ -623,7 +623,8 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
             DialError::Banned
             | DialError::ConnectionLimit(_)
             | DialError::LocalPeerId
-            | DialError::InvalidPeerId
+            | DialError::InvalidPeerId(_)
+            | DialError::WrongPeerId { .. }
             | DialError::Aborted
             | DialError::ConnectionIo(_)
             | DialError::Transport(_)
