@@ -1,20 +1,24 @@
+use parking_lot::RwLock;
 use std::convert::TryInto;
 use std::sync::Arc;
-
-use parking_lot::RwLock;
+use tempdir::TempDir;
 
 use beserial::Deserialize;
 use nimiq_block::{Block, BlockError, ForkProof};
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, PushError, PushResult};
-use nimiq_database::volatile::VolatileEnvironment;
+use nimiq_database::{
+    lmdb::{open as LmdbFlags, LmdbEnvironment},
+    volatile::VolatileEnvironment,
+};
 use nimiq_genesis::NetworkId;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{Address, KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
 use nimiq_test_utils::blockchain::{
-    fill_micro_blocks, sign_macro_block, sign_view_change, signing_key, voting_key,
+    fill_micro_blocks, fill_micro_blocks_with_txns, sign_macro_block, sign_view_change,
+    signing_key, voting_key,
 };
 use nimiq_transaction_builder::TransactionBuilder;
 use nimiq_utils::time::OffsetTime;
@@ -26,6 +30,8 @@ pub const ACCOUNT_SECRET_KEY: &str =
     "6c9320ac201caf1f8eaa5b05f5d67a9e77826f3f6be266a0ecccc20416dc6587";
 
 const STAKER_ADDRESS: &str = "NQ20TSB0DFSMUH9C15GQGAGJTTE4D3MA859E";
+
+const VOLATILE_ENV: bool = true;
 
 #[test]
 fn it_can_produce_micro_blocks() {
@@ -181,6 +187,55 @@ fn it_can_produce_election_blocks() {
 
         assert_eq!(
             Blockchain::push(bc, Block::Macro(block)),
+            Ok(PushResult::Extended)
+        );
+    }
+}
+
+#[test]
+fn it_can_produce_a_chain_with_txns() {
+    let time = Arc::new(OffsetTime::new());
+    let env = if VOLATILE_ENV {
+        VolatileEnvironment::new(10).unwrap()
+    } else {
+        let tmp_dir = TempDir::new("chain_with_txns").expect("Could not create temporal directory");
+        let tmp_dir = tmp_dir.path().to_str().unwrap();
+        LmdbEnvironment::new(
+            tmp_dir,
+            1024 * 1024 * 1024 * 1024,
+            21,
+            LmdbFlags::NOMETASYNC | LmdbFlags::NOSYNC,
+        )
+        .unwrap()
+    };
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+    ));
+    let producer = BlockProducer::new(signing_key(), voting_key());
+
+    // Small chain, otherwise test takes too long, use a small number of txns when running in volatile env
+    // This test was intended to be used with an infinite loop and a high number of transactions per block though
+    for _ in 0..1 {
+        fill_micro_blocks_with_txns(&producer, &blockchain, 5 as usize);
+
+        let blockchain = blockchain.upgradable_read();
+        let next_block_height = (blockchain.block_number() + 1) as u64;
+
+        let macro_block_proposal = producer.next_macro_block_proposal(
+            &blockchain,
+            blockchain.time.now() + next_block_height as u64 * 100,
+            0u32,
+            vec![],
+        );
+
+        let block = sign_macro_block(
+            &producer.voting_key,
+            macro_block_proposal.header,
+            macro_block_proposal.body,
+        );
+
+        assert_eq!(
+            Blockchain::push(blockchain, Block::Macro(block)),
             Ok(PushResult::Extended)
         );
     }

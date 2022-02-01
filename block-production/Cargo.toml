@@ -42,7 +42,8 @@ nimiq-utils = { path = "../utils"}
 nimiq-test-utils = { path = "../test-utils" }
 nimiq-transaction-builder = { path = "../transaction-builder" }
 nimiq-keys = { path = "../keys" }
-
+tempdir = "0.3"
+rand = "0.8"
 [features]
 default = []
 test-utils = []

@@ -1,4 +1,6 @@
+use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Instant;
 
 use parking_lot::RwLock;
 
@@ -12,15 +14,48 @@ use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, PushResult};
 use nimiq_bls::{AggregateSignature, KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
 use nimiq_collections::BitSet;
-
-use nimiq_keys::{KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey};
-
+use nimiq_genesis::NetworkId;
+use nimiq_keys::{Address, KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey};
+use nimiq_keys::{KeyPair, PrivateKey};
+use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
+use nimiq_transaction::Transaction;
+use nimiq_transaction_builder::TransactionBuilder;
 use nimiq_vrf::VrfSeed;
+use rand::{thread_rng, RngCore};
 
 /// Secret keys of validator. Tests run with `genesis/src/genesis/unit-albatross.toml`
 pub const SIGNING_KEY: &str = "041580cc67e66e9e08b68fd9e4c9deb68737168fbe7488de2638c2e906c2f5ad";
 pub const VOTING_KEY: &str = "689bf3a52a07af0c7a0901a17e5d285496bb4b60626f4ebd9365ab05a093998edf28b3bf2cf25bdeb5458a14c2ade928ada0215de265ace57616c5ce4f76991d2f350fb8df796dbb2da4c492817d27a1578e5006b43be2f05b938fb5134f0000";
+pub const UNIT_KEY: &str = "6c9320ac201caf1f8eaa5b05f5d67a9e77826f3f6be266a0ecccc20416dc6587";
+
+pub fn generate_transactions(
+    key_pair: &KeyPair,
+    start_height: u32,
+    network_id: NetworkId,
+    count: usize,
+) -> Vec<Transaction> {
+    let mut txs = Vec::new();
+
+    let mut rng = thread_rng();
+    for _ in 0..count {
+        let mut bytes = [0u8; 20];
+        rng.fill_bytes(&mut bytes);
+        let recipient = Address::from(bytes);
+
+        let tx = TransactionBuilder::new_basic(
+            key_pair,
+            recipient,
+            Coin::from_u64_unchecked(1),
+            Coin::from_u64_unchecked(2),
+            start_height,
+            network_id,
+        );
+        txs.push(tx);
+    }
+
+    txs
+}
 
 /// Produces a series of macro blocks (and the corresponding batches).
 pub fn produce_macro_blocks(
@@ -77,6 +112,55 @@ pub fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<RwLock<Block
         assert_eq!(
             Blockchain::push(blockchain, Block::Micro(last_micro_block)),
             Ok(PushResult::Extended)
+        );
+    }
+
+    assert_eq!(blockchain.read().block_number(), macro_block_number - 1);
+}
+
+/// Fill batch with simple transactions to random recipients
+pub fn fill_micro_blocks_with_txns(
+    producer: &BlockProducer,
+    blockchain: &Arc<RwLock<Blockchain>>,
+    num_transactions: usize,
+) {
+    let init_height = blockchain.read().block_number();
+    let key_pair = KeyPair::from(PrivateKey::from_str(UNIT_KEY).unwrap());
+    assert!(policy::is_macro_block_at(init_height));
+
+    let macro_block_number = init_height + policy::BATCH_LENGTH;
+
+    for i in (init_height + 1)..macro_block_number {
+        log::debug!(" Current Height: {}", i);
+        let blockchain = blockchain.upgradable_read();
+
+        //Generate the transactions
+        let txns = generate_transactions(&key_pair, i, NetworkId::UnitAlbatross, num_transactions);
+        let start = Instant::now();
+        let last_micro_block = producer.next_micro_block(
+            &blockchain,
+            blockchain.time.now() + i as u64 * 100,
+            0,
+            None,
+            vec![],
+            txns,
+            vec![0x42],
+        );
+        let duration = start.elapsed();
+        log::debug!(
+            "   Time elapsed producing micro: {} ms, ",
+            duration.as_millis(),
+        );
+
+        let start = Instant::now();
+        assert_eq!(
+            Blockchain::push(blockchain, Block::Micro(last_micro_block)),
+            Ok(PushResult::Extended)
+        );
+        let duration = start.elapsed();
+        log::debug!(
+            "   Time elapsed pushing micro: {} ms, ",
+            duration.as_millis(),
         );
     }
 
