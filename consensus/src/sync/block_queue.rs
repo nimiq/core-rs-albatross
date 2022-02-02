@@ -91,6 +91,9 @@ struct Inner<N: Network> {
     pending_blocks: BTreeSet<Blake2bHash>,
 
     waker: Option<Waker>,
+
+    /// stores the current macro hieght. When the macroheight changes the buffer must be pruned.
+    current_macro_height: u32,
 }
 
 enum PushOpResult {
@@ -122,15 +125,22 @@ impl<N: Network> Inner<N> {
         // to wait for the previous future to have been polled and concluded.
         // Therefore the read here needs to suffice even though the condition (block_height <= head_height) might
         //  no longer be met once the future executes.
-        let blockchain = self.blockchain.read();
+        let blockchain_arc = Arc::clone(&self.blockchain);
+        let blockchain = blockchain_arc.read();
         let head_height = blockchain.block_number();
         let macro_height = policy::last_macro_block(head_height);
+
+        // Check if a macro block boundary was passed. If so update the value and prune the buffer.
+        if macro_height > self.current_macro_height {
+            self.current_macro_height = macro_height;
+            self.prune_buffer();
+        }
 
         if blockchain.contains(block.parent_hash(), true) {
             // New head or fork block.
             // TODO We should limit the number of push operations we queue here.
             drop(blockchain);
-            self.push_block(block, pubsub_id, PushOpResult::Head);
+            self.push_block(blockchain_arc, block, pubsub_id, PushOpResult::Head);
         } else if block_number > head_height + self.config.window_max {
             log::warn!(
                 "Discarding block #{}.{} outside of buffer window (max {})",
@@ -301,7 +311,7 @@ impl<N: Network> Inner<N> {
     }
 
     /// Pushes a single block to the blockchain.
-    fn push_block<F>(&mut self, block: Block, pubsub_id: Option<<N as Network>::PubsubId>, op: F)
+    fn push_block<F>(&mut self, blockchain: Arc<RwLock<Blockchain>>, block: Block, pubsub_id: Option<<N as Network>::PubsubId>, op: F)
     where
         F: Fn(Result<PushResult, PushError>, Blake2bHash) -> PushOpResult + Send + 'static,
     {
@@ -311,7 +321,6 @@ impl<N: Network> Inner<N> {
             return;
         }
 
-        let blockchain = Arc::clone(&self.blockchain);
         let network = Arc::clone(&self.network);
         let future = async move {
             let push_result =
@@ -367,7 +376,7 @@ impl<N: Network> Inner<N> {
         }
 
         for block in blocks_to_push {
-            self.push_block(block, None, PushOpResult::Buffered);
+            self.push_block(Arc::clone(&self.blockchain), block, None, PushOpResult::Buffered);
         }
     }
 
@@ -390,6 +399,14 @@ impl<N: Network> Inner<N> {
             });
             blocks.is_empty()
         });
+    }
+
+    fn prune_buffer(&mut self) {
+        // Split off at the current height to retain only buffered blocks from the current batch.
+        let retained_buffer = self.buffer.split_off(&self.current_macro_height);
+        // swap out the two buffers
+        let _dropped_buffer = std::mem::replace(&mut self.buffer, retained_buffer);
+        // TODO report validation result.
     }
 }
 
@@ -497,6 +514,7 @@ impl<N: Network, TReq: RequestComponent<N::PeerType>> BlockQueue<N, TReq> {
         request_component: TReq,
         block_stream: BlockStream<N>,
     ) -> Self {
+        let current_macro_height = policy::last_macro_block(blockchain.read().block_number());
         Self {
             request_component,
             block_stream,
@@ -508,6 +526,7 @@ impl<N: Network, TReq: RequestComponent<N::PeerType>> BlockQueue<N, TReq> {
                 push_ops: VecDeque::new(),
                 pending_blocks: BTreeSet::new(),
                 waker: None,
+                current_macro_height,
             },
             accepted_announcements: 0,
         }
