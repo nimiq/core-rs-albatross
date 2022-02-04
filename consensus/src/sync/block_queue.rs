@@ -39,6 +39,7 @@ impl Topic for BlockTopic {
 }
 
 pub type BlockStream<N> = BoxStream<'static, (Block, <N as Network>::PubsubId)>;
+type BlockAndId<N> = (Block, Option<<N as Network>::PubsubId>);
 
 #[derive(Clone, Debug)]
 pub enum BlockQueueEvent {
@@ -82,7 +83,7 @@ struct Inner<N: Network> {
     ///
     ///  - The inner `Vec` should really be a `SmallVec<[Block; 1]>` or similar.
     ///
-    buffer: BTreeMap<u32, HashMap<Blake2bHash, Block>>,
+    buffer: BTreeMap<u32, HashMap<Blake2bHash, BlockAndId<N>>>,
 
     /// Vector of pending `blockchain.push()` operations.
     push_ops: VecDeque<BoxFuture<'static, PushOpResult>>,
@@ -149,6 +150,15 @@ impl<N: Network> Inner<N> {
                 head_height + self.config.window_max,
             );
 
+            if let Some(id) = pubsub_id {
+                if let Err(e) = self
+                    .network
+                    .validate_message::<BlockTopic>(id, MsgAcceptance::Ignore)
+                {
+                    log::error!("Failed to send validate message to swarm task: {:?}", e);
+                }
+            }
+
             if let Some(peer) = self.network.get_peer(peer_id) {
                 request_component.put_peer_into_sync_mode(peer);
             }
@@ -158,7 +168,16 @@ impl<N: Network> Inner<N> {
                 block_number,
                 view_number,
                 self.buffer.len(),
-            )
+            );
+
+            if let Some(id) = pubsub_id {
+                if let Err(e) = self
+                    .network
+                    .validate_message::<BlockTopic>(id, MsgAcceptance::Ignore)
+                {
+                    log::error!("Failed to send validate message to swarm task: {:?}", e);
+                }
+            }
         } else if block_number <= macro_height {
             // Block is from a previous batch/epoch, discard it.
             log::warn!(
@@ -167,6 +186,15 @@ impl<N: Network> Inner<N> {
                 view_number,
                 macro_height
             );
+
+            if let Some(id) = pubsub_id {
+                if let Err(e) = self
+                    .network
+                    .validate_message::<BlockTopic>(id, MsgAcceptance::Ignore)
+                {
+                    log::error!("Failed to send validate message to swarm task: {:?}", e);
+                }
+            }
         } else {
             // Block is inside the buffer window, put it in the buffer.
             let block_hash = block.hash();
@@ -177,7 +205,7 @@ impl<N: Network> Inner<N> {
                 .buffer
                 .entry(block_number)
                 .or_default()
-                .insert(block_hash.clone(), block)
+                .insert(block_hash.clone(), (block, pubsub_id))
                 .is_some();
             log::trace!(
                 "Buffering block #{}.{}, known={}",
@@ -369,8 +397,8 @@ impl<N: Network> Inner<N> {
             self.buffer.drain_filter(|_, blocks| {
                 // Push all blocks with a known parent to the chain.
                 let blocks_with_known_parent = blocks
-                    .drain_filter(|_, block| blockchain.contains(block.parent_hash(), true))
-                    .map(|(_, block)| block);
+                    .drain_filter(|_, (block, _)| blockchain.contains(block.parent_hash(), true))
+                    .map(|(_, block_and_id)| block_and_id);
                 blocks_to_push.extend(blocks_with_known_parent);
 
                 // Remove buffer entry if there are no blocks left.
@@ -378,11 +406,11 @@ impl<N: Network> Inner<N> {
             });
         }
 
-        for block in blocks_to_push {
+        for (block, pubsub_id) in blocks_to_push {
             self.push_block(
                 Arc::clone(&self.blockchain),
                 block,
-                None,
+                pubsub_id,
                 PushOpResult::Buffered,
             );
         }
@@ -396,10 +424,18 @@ impl<N: Network> Inner<N> {
         // Iterate over all offsets, remove element if no blocks remain at that offset.
         self.buffer.drain_filter(|_block_number, blocks| {
             // Iterate over all blocks at an offset, remove block, if parent is invalid
-            blocks.drain_filter(|hash, block| {
+            blocks.drain_filter(|hash, (block, pubsub_id)| {
                 if invalid_blocks.contains(block.parent_hash()) {
                     log::trace!("Removing block because parent is invalid: {}", hash);
                     invalid_blocks.insert(hash.clone());
+                    if let Some(id) = pubsub_id {
+                        if let Err(e) = self
+                            .network
+                            .validate_message::<BlockTopic>(id.clone(), MsgAcceptance::Ignore)
+                        {
+                            log::error!("Failed to send validate message to swarm task: {:?}", e);
+                        }
+                    }
                     true
                 } else {
                     false
@@ -410,11 +446,26 @@ impl<N: Network> Inner<N> {
     }
 
     fn prune_buffer(&mut self) {
-        // Split off at the current height to retain only buffered blocks from the current batch.
-        let retained_buffer = self.buffer.split_off(&self.current_macro_height);
+        // Split off at the current macro height + 1 to retain only buffered blocks from the current batch,
+        // excluding the macro block itself.
+        let retained_buffer = self.buffer.split_off(&(self.current_macro_height + 1));
         // swap out the two buffers
-        let _dropped_buffer = std::mem::replace(&mut self.buffer, retained_buffer);
-        // TODO report validation result.
+        let mut dropped_buffer = std::mem::replace(&mut self.buffer, retained_buffer);
+
+        // Report validation result.
+        while let Some(map) = dropped_buffer.first_entry() {
+            let (_, map) = map.remove_entry();
+            for (_, (_, pubsub_id)) in map.into_iter() {
+                if let Some(id) = pubsub_id {
+                    if let Err(e) = self
+                        .network
+                        .validate_message::<BlockTopic>(id, MsgAcceptance::Ignore)
+                    {
+                        log::error!("Failed to send validate message to swarm task: {:?}", e);
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -542,10 +593,12 @@ impl<N: Network, TReq: RequestComponent<N::PeerType>> BlockQueue<N, TReq> {
 
     /// Returns an iterator over the buffered blocks
     pub fn buffered_blocks(&self) -> impl Iterator<Item = (u32, Vec<&Block>)> {
-        self.inner
-            .buffer
-            .iter()
-            .map(|(block_number, blocks)| (*block_number, blocks.values().collect()))
+        self.inner.buffer.iter().map(|(block_number, blocks)| {
+            (
+                *block_number,
+                blocks.values().map(|(block, _pubsub_id)| block).collect(),
+            )
+        })
     }
 
     pub fn num_peers(&self) -> usize {

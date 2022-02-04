@@ -115,14 +115,14 @@ pub(crate) enum NetworkAction {
     StartConnecting,
 }
 
-struct ValidateMessage<PeerId> {
-    pubsub_id: GossipsubId<PeerId>,
+struct ValidateMessage<P: Clone> {
+    pubsub_id: GossipsubId<P>,
     acceptance: MessageAcceptance,
     topic: &'static str,
 }
 
-impl<PeerId> ValidateMessage<PeerId> {
-    pub fn new<T>(pubsub_id: GossipsubId<PeerId>, acceptance: MsgAcceptance) -> Self
+impl<P: Clone> ValidateMessage<P> {
+    pub fn new<T>(pubsub_id: GossipsubId<P>, acceptance: MsgAcceptance) -> Self
     where
         T: Topic + Sync,
     {
@@ -146,8 +146,8 @@ struct TaskState {
     is_bootstraped: bool,
 }
 
-#[derive(Debug)]
-pub struct GossipsubId<P> {
+#[derive(Clone, Debug)]
+pub struct GossipsubId<P: Clone> {
     message_id: MessageId,
     propagation_source: P,
 }
