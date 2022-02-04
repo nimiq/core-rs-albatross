@@ -3,8 +3,8 @@ use ark_crypto_primitives::SNARKGadget;
 use ark_groth16::constraints::{Groth16VerifierGadget, ProofVar, VerifyingKeyVar};
 use ark_groth16::{Proof, VerifyingKey};
 use ark_mnt4_753::Fr as MNT4Fr;
-use ark_mnt6_753::constraints::{FqVar, G1Var, PairingVar};
-use ark_mnt6_753::{Fq, G1Projective, MNT6_753};
+use ark_mnt6_753::constraints::{FqVar, G1Var, G2Var, PairingVar};
+use ark_mnt6_753::{Fq, G2Projective, MNT6_753};
 use ark_r1cs_std::prelude::{AllocVar, Boolean, CurveVar, EqGadget};
 use ark_r1cs_std::ToBitsGadget;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
@@ -31,7 +31,7 @@ pub struct PKTreeNodeCircuit {
     // Witnesses (private)
     left_proof: Proof<MNT6_753>,
     right_proof: Proof<MNT6_753>,
-    agg_pk_chunks: Vec<G1Projective>,
+    agg_pk_chunks: Vec<G2Projective>,
 
     // Inputs (public)
     // Our inputs are always vectors of booleans (semantically), so that they are consistent across
@@ -51,7 +51,7 @@ impl PKTreeNodeCircuit {
         vk_child: VerifyingKey<MNT6_753>,
         left_proof: Proof<MNT6_753>,
         right_proof: Proof<MNT6_753>,
-        agg_pk_chunks: Vec<G1Projective>,
+        agg_pk_chunks: Vec<G2Projective>,
         pk_tree_root: Vec<Fq>,
         agg_pk_commitment: Vec<Fq>,
         signer_bitmap_chunk: Fq,
@@ -89,7 +89,7 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeNodeCircuit {
             ProofVar::<MNT6_753, PairingVar>::new_witness(cs.clone(), || Ok(&self.right_proof))?;
 
         let agg_pk_chunks_var =
-            Vec::<G1Var>::new_witness(cs.clone(), || Ok(&self.agg_pk_chunks[..]))?;
+            Vec::<G2Var>::new_witness(cs.clone(), || Ok(&self.agg_pk_chunks[..]))?;
 
         // Allocate all the inputs.
         let pk_tree_root_var = Vec::<FqVar>::new_input(cs.clone(), || Ok(&self.pk_tree_root[..]))?;
@@ -114,7 +114,7 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeNodeCircuit {
         let mut path_bits = unpack_inputs(vec![path_var])?[..PK_TREE_DEPTH].to_vec();
 
         // Calculating the aggregate public key.
-        let mut agg_pk = G1Var::zero();
+        let mut agg_pk = G2Var::zero();
 
         for pk in &agg_pk_chunks_var {
             agg_pk += pk;
@@ -123,7 +123,7 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeNodeCircuit {
         // Verifying aggregate public key commitment. It just checks that the calculated aggregate
         // public key is correct by comparing it with the aggregate public key commitment given as
         // an input.
-        let agg_pk_bits = SerializeGadget::serialize_g1(cs.clone(), &agg_pk)?;
+        let agg_pk_bits = SerializeGadget::serialize_g2(cs.clone(), &agg_pk)?;
 
         let pedersen_hash = PedersenHashGadget::evaluate(&agg_pk_bits, &pedersen_generators_var)?;
 
@@ -136,7 +136,7 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTreeNodeCircuit {
         let mut agg_pk_chunks_commitments = Vec::new();
 
         for chunk in &agg_pk_chunks_var {
-            let chunk_bits = SerializeGadget::serialize_g1(cs.clone(), chunk)?;
+            let chunk_bits = SerializeGadget::serialize_g2(cs.clone(), chunk)?;
 
             let pedersen_hash =
                 PedersenHashGadget::evaluate(&chunk_bits, &pedersen_generators_var)?;

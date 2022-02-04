@@ -55,7 +55,7 @@ impl NanoZKP {
 
     fn setup_pk_tree_leaf<R: CryptoRng + Rng>(rng: &mut R, name: &str) -> Result<(), NanoZKPError> {
         // Create dummy inputs.
-        let pks = vec![G1MNT6::rand(rng); SLOTS as usize / PK_TREE_BREADTH];
+        let pks = vec![G2MNT6::rand(rng); SLOTS as usize / PK_TREE_BREADTH];
 
         let pk_tree_nodes = vec![G1MNT6::rand(rng); PK_TREE_DEPTH];
 
@@ -160,7 +160,7 @@ impl NanoZKP {
             c: G1MNT6::rand(rng).into_affine(),
         };
 
-        let agg_pk_chunks = vec![G1MNT6::rand(rng); 4];
+        let agg_pk_chunks = vec![G2MNT6::rand(rng); 4];
 
         let pk_tree_root = vec![MNT4Fr::rand(rng); 2];
 
@@ -196,7 +196,7 @@ impl NanoZKP {
         let vk_pk_tree = VerifyingKey::deserialize_unchecked(&mut file)?;
 
         // Create dummy inputs.
-        let agg_pk_chunks = vec![G1MNT6::rand(rng); 2];
+        let agg_pk_chunks = vec![G2MNT6::rand(rng); 2];
 
         let proof = Proof {
             a: G1MNT6::rand(rng).into_affine(),
@@ -227,7 +227,7 @@ impl NanoZKP {
         let mut header_hash = [0u8; 32];
         rng.fill_bytes(&mut header_hash);
 
-        let signature = G2MNT6::rand(rng);
+        let signature = G1MNT6::rand(rng);
 
         let mut bytes = [0u8; SLOTS as usize / 8];
         rng.fill_bytes(&mut bytes);

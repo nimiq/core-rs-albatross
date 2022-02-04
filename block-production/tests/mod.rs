@@ -341,7 +341,7 @@ fn it_can_revert_unpark_transactions() {
 }
 
 #[test]
-fn it_can_revert_create_staker_transaction() {
+fn it_can_revert_create_stacker_transaction() {
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(RwLock::new(
@@ -390,7 +390,7 @@ fn it_can_revert_create_staker_transaction() {
     assert_eq!(blockchain.read().block_number(), 2);
     assert_eq!(blockchain.read().next_view_number(), 1);
 
-    // One block with staking transactions
+    // One block with stacking transactions
 
     let mut transactions = vec![];
     let key_pair = ed25519_key_pair(ACCOUNT_SECRET_KEY);
@@ -410,7 +410,7 @@ fn it_can_revert_create_staker_transaction() {
 
     let bc = blockchain.upgradable_read();
 
-    // Block with staking transactions
+    // Block with stacking transactions
     let block = producer.next_micro_block(
         &bc,
         bc.time.now() + 2000,

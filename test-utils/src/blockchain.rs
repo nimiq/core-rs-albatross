@@ -26,7 +26,7 @@ use rand::{thread_rng, RngCore};
 
 /// Secret keys of validator. Tests run with `genesis/src/genesis/unit-albatross.toml`
 pub const SIGNING_KEY: &str = "041580cc67e66e9e08b68fd9e4c9deb68737168fbe7488de2638c2e906c2f5ad";
-pub const VOTING_KEY: &str = "689bf3a52a07af0c7a0901a17e5d285496bb4b60626f4ebd9365ab05a093998edf28b3bf2cf25bdeb5458a14c2ade928ada0215de265ace57616c5ce4f76991d2f350fb8df796dbb2da4c492817d27a1578e5006b43be2f05b938fb5134f0000";
+pub const VOTING_KEY: &str = "196ffdb1a8acc7cbd76a251aeac0600a1d68b3aba1eba823b5e4dc5dbdcdc730afa752c05ab4f6ef8518384ad514f403c5a088a22b17bf1bc14f8ff8decc2a512c0a200f68d7bdf5a319b30356fe8d1d75ef510aed7a8660968c216c328a0000";
 pub const UNIT_KEY: &str = "6c9320ac201caf1f8eaa5b05f5d67a9e77826f3f6be266a0ecccc20416dc6587";
 
 pub fn generate_transactions(

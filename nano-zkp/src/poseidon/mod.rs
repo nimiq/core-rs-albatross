@@ -19,7 +19,7 @@ pub fn create_parameters<F: PrimeField>(
         param.skip_matrices as u64,
     );
 
-    PoseidonParameters {
+    return PoseidonParameters {
         full_rounds: param.full_rounds,
         partial_rounds: param.partial_rounds,
         alpha: param.alpha as u64,
@@ -27,7 +27,7 @@ pub fn create_parameters<F: PrimeField>(
         mds,
         rate: param.rate,
         capacity: 1,
-    }
+    };
 }
 
 mod mnt4;

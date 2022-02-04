@@ -2,12 +2,12 @@ use ark_crypto_primitives::prf::blake2s::constraints::evaluate_blake2s_with_para
 use ark_crypto_primitives::prf::Blake2sWithParameterBlock;
 use ark_ff::{One, PrimeField};
 use ark_mnt4_753::Fr as MNT4Fr;
-use ark_mnt6_753::constraints::{Fq3Var, G2Var};
-use ark_mnt6_753::{Fq, Fq3, G2Affine};
-
+use ark_mnt6_753::constraints::G1Var;
+use ark_mnt6_753::G1Affine;
+use ark_r1cs_std::fields::fp::FpVar;
 use ark_r1cs_std::fields::FieldVar;
-use ark_r1cs_std::prelude::{AllocVar, Boolean, CondSelectGadget, EqGadget};
-use ark_r1cs_std::R1CSVar;
+use ark_r1cs_std::prelude::{AllocVar, Boolean, EqGadget};
+use ark_r1cs_std::{R1CSVar, ToConstraintFieldGadget};
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
 
 use nimiq_bls::utils::{big_int_from_bytes_be, byte_from_be_bits, byte_to_le_bits};
@@ -19,14 +19,14 @@ use crate::utils::reverse_inner_byte_order;
 pub struct HashToCurve;
 
 impl HashToCurve {
-    pub fn hash_to_g2(
+    pub fn hash_to_g1(
         cs: ConstraintSystemRef<MNT4Fr>,
         hash: &[Boolean<MNT4Fr>],
-    ) -> Result<G2Var, SynthesisError> {
-        // Extend the hash to 288 bytes using Blake2X.
+    ) -> Result<G1Var, SynthesisError> {
+        // Extend the hash to 96 bytes using Blake2X.
         let mut hash_out = Vec::new();
 
-        for i in 0..9 {
+        for i in 0..3 {
             // Initialize Blake2s parameters.
             let blake2s_parameters = Blake2sWithParameterBlock {
                 digest_length: 32,
@@ -78,112 +78,69 @@ impl HashToCurve {
         // Separate the hash bits into coordinates.
         let y_bit = &hash_bits[0];
 
-        let mut c0_bits = vec![Boolean::constant(false); 16];
-        c0_bits.extend_from_slice(&hash_bits[2 * 8..96 * 8]);
-
-        let mut c1_bits = vec![Boolean::constant(false); 16];
-        c1_bits.extend_from_slice(&hash_bits[(96 + 2) * 8..192 * 8]);
-
-        let mut c2_bits = vec![Boolean::constant(false); 16];
-        c2_bits.extend_from_slice(&hash_bits[(192 + 2) * 8..]);
+        let mut x_bits = vec![Boolean::constant(false); 16];
+        x_bits.extend_from_slice(&hash_bits[16..768]);
 
         // Calculate the increment nonce and the resulting G1 hash point.
-        let (nonce_bits, hash_point) = Self::try_and_increment(
-            c0_bits.iter().map(|i| i.value().unwrap()).collect(),
-            c1_bits.iter().map(|i| i.value().unwrap()).collect(),
-            c2_bits.iter().map(|i| i.value().unwrap()).collect(),
+        let (nonce_bits, g1) = Self::try_and_increment(
+            x_bits.iter().map(|i| i.value().unwrap()).collect(),
             y_bit.value()?,
         );
 
-        // Allocate the nonce bits.
+        // Allocate the nonce bits and convert to a field element.
         let nonce_bits_var = Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(nonce_bits))?;
+        let nonce = Boolean::le_bits_to_fp_var(&nonce_bits_var)?;
 
-        // Allocate the hash point.
-        let hash_var = G2Var::new_witness(cs.clone(), || Ok(hash_point))?;
+        // Allocate the G1 hash point.
+        let g1_var = G1Var::new_witness(cs.clone(), || Ok(g1))?;
 
         // Convert the x-coordinate bits into a field element.
-        c0_bits.reverse();
-        let c0 = Boolean::le_bits_to_fp_var(&c0_bits)?;
-
-        c1_bits.reverse();
-        let c1 = Boolean::le_bits_to_fp_var(&c1_bits)?;
-
-        c2_bits.reverse();
-        let c2 = Boolean::le_bits_to_fp_var(&c2_bits)?;
-
-        let x = Fq3Var::new(c0, c1, c2);
-
-        // Convert the nonce bits into a field element. Using double-and-add.
-        let mut nonce = Fq3Var::zero();
-        let mut power = Fq3Var::one();
-
-        for bit in nonce_bits_var {
-            let new_nonce = &nonce + &power;
-
-            nonce = Fq3Var::conditionally_select(&bit, &new_nonce, &nonce)?;
-
-            power = power.double()?;
-        }
+        x_bits.reverse();
+        let x = Boolean::le_bits_to_fp_var(&x_bits)?;
 
         // Add the nonce to the x-coordinate.
         let x = x + nonce;
 
-        // Compare the coordinates of our hash point to the calculated coordinates.
-        let hash_var_affine = hash_var.to_affine()?;
+        // Compare the coordinates of our G1 hash point to the calculated coordinates.
+        let g1_var_affine = g1_var.to_affine()?;
 
-        let y_coordinate = YToBitGadget::y_to_bit_g2(cs, &hash_var_affine)?;
-        let x_coordinate = hash_var_affine.x;
-        let inf_coordinate = hash_var_affine.infinity;
+        let y_coordinate = YToBitGadget::y_to_bit_g1(cs, &g1_var_affine)?;
+        let coordinates = g1_var_affine.to_constraint_field()?;
 
-        x_coordinate.enforce_equal(&x)?;
+        coordinates[0].enforce_equal(&x)?;
         y_coordinate.enforce_equal(y_bit)?;
-        inf_coordinate.enforce_equal(&Boolean::constant(false))?;
+        coordinates[2].enforce_equal(&FpVar::zero())?;
 
-        // TODO! The hash point still needs to be scaled by the cofactor of the curve. Otherwise the
-        //  signature won't verify.
-        // We now scale by the cofactor.
-        //let scaled_hash_var = hash_var_affine.fixed_scalar_mul_le()?;
+        // We don't need to scale by the cofactor since MNT6-753 has a cofactor of one.
 
         // Return the hash point.
-        Ok(hash_var)
+        Ok(g1_var)
     }
 
-    /// Returns the nonce i (as a vector of big endian bits), such that (x + i) is a valid x coordinate for G2.
-    fn try_and_increment(
-        c0_bits: Vec<bool>,
-        c1_bits: Vec<bool>,
-        c2_bits: Vec<bool>,
-        y: bool,
-    ) -> (Vec<bool>, G2Affine) {
+    /// Returns the nonce i (as a vector of big endian bits), such that (x + i) is a valid x coordinate for G1.
+    fn try_and_increment(x_bits: Vec<bool>, y: bool) -> (Vec<bool>, G1Affine) {
         // Prepare the bits to transform into field element.
-        let mut c0_bytes = vec![];
-        let mut c1_bytes = vec![];
-        let mut c2_bytes = vec![];
+        let mut bytes = vec![];
 
         for i in 0..96 {
-            c0_bytes.push(byte_from_be_bits(&c0_bits[i * 8..(i + 1) * 8]));
-            c1_bytes.push(byte_from_be_bits(&c1_bits[i * 8..(i + 1) * 8]));
-            c2_bytes.push(byte_from_be_bits(&c2_bits[i * 8..(i + 1) * 8]));
+            bytes.push(byte_from_be_bits(&x_bits[i * 8..(i + 1) * 8]))
         }
 
         // Transform the x-coordinate into a field element.
-        let c0 = Fq::from_repr(big_int_from_bytes_be(&mut &c0_bytes[..])).unwrap();
-        let c1 = Fq::from_repr(big_int_from_bytes_be(&mut &c1_bytes[..])).unwrap();
-        let c2 = Fq::from_repr(big_int_from_bytes_be(&mut &c2_bytes[..])).unwrap();
-        let mut x = Fq3::new(c0, c1, c2);
+        let mut x = MNT4Fr::from_repr(big_int_from_bytes_be(&mut &bytes[..])).unwrap();
 
         // This implements the try-and-increment method of converting an integer to an elliptic curve point.
         // See https://eprint.iacr.org/2009/226.pdf for more details.
         for i in 0..=255 {
-            let point = G2Affine::get_point_from_x(x, y);
+            let point = G1Affine::get_point_from_x(x, y);
 
-            if let Some(g2) = point {
+            if let Some(g1) = point {
                 let i_bits = byte_to_le_bits(i);
                 // Note that we don't scale by the cofactor here. We do it later.
-                return (i_bits, g2);
+                return (i_bits, g1);
             }
 
-            x += &Fq3::one();
+            x += &MNT4Fr::one();
         }
 
         unreachable!()

@@ -1,6 +1,6 @@
 use ark_ec::ProjectiveCurve;
 use ark_ff::fields::PrimeField;
-use ark_mnt6_753::{Fr, G2Projective};
+use ark_mnt6_753::{Fr, G1Projective};
 use num_traits::identities::Zero;
 
 use nimiq_bls::Signature;
@@ -17,7 +17,7 @@ pub struct MacroBlock {
     /// This is simply the Blake2b hash of the entire macro block header.
     pub header_hash: [u8; 32],
     /// This is the aggregated signature of the signers for this block.
-    pub signature: G2Projective,
+    pub signature: G1Projective,
     /// This is a bitmap stating which validators signed this block.
     pub signer_bitmap: Vec<bool>,
 }
@@ -29,7 +29,7 @@ impl MacroBlock {
             block_number,
             round_number,
             header_hash,
-            signature: G2Projective::zero(),
+            signature: G1Projective::zero(),
             signer_bitmap: vec![false; SLOTS as usize],
         }
     }
@@ -62,7 +62,7 @@ impl MacroBlock {
     ///     4. Finally, we take the second hash and map it to an elliptic curve point using the
     ///        "try-and-increment" method.
     /// The function || means concatenation.
-    pub fn hash(&self, pk_tree_root: &[u8]) -> G2Projective {
+    pub fn hash(&self, pk_tree_root: &[u8]) -> G1Projective {
         let mut first_bytes = self.header_hash.to_vec();
 
         first_bytes.extend(pk_tree_root);
@@ -81,7 +81,7 @@ impl MacroBlock {
 
         let second_hash = second_bytes.hash::<Blake2sHash>();
 
-        Signature::hash_to_point(second_hash)
+        Signature::hash_to_g1(second_hash)
     }
 }
 
@@ -91,7 +91,7 @@ impl Default for MacroBlock {
             block_number: 0,
             round_number: 0,
             header_hash: [0; 32],
-            signature: G2Projective::prime_subgroup_generator(),
+            signature: G1Projective::prime_subgroup_generator(),
             signer_bitmap: vec![true; SLOTS as usize],
         }
     }

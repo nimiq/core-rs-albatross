@@ -30,7 +30,7 @@ pub struct MacroBlockGadget {
     pub block_number: UInt32<MNT4Fr>,
     pub round_number: UInt32<MNT4Fr>,
     pub header_hash: Vec<Boolean<MNT4Fr>>,
-    pub signature: G2Var,
+    pub signature: G1Var,
     pub signer_bitmap: Vec<Boolean<MNT4Fr>>,
 }
 
@@ -43,7 +43,7 @@ impl MacroBlockGadget {
         // This is the commitment for the set of public keys that are owned by the next set of validators.
         pk_tree_root: &[Boolean<MNT4Fr>],
         // This is the aggregated public key.
-        agg_pk: &G1Var,
+        agg_pk: &G2Var,
     ) -> Result<Boolean<MNT4Fr>, SynthesisError> {
         // Verify that there are enough signers.
         let enough_signers = self.check_signers(cs.clone())?;
@@ -74,7 +74,7 @@ impl MacroBlockGadget {
         &self,
         cs: ConstraintSystemRef<MNT4Fr>,
         pk_tree_root: &[Boolean<MNT4Fr>],
-    ) -> Result<G2Var, SynthesisError> {
+    ) -> Result<G1Var, SynthesisError> {
         // Initialize Blake2s parameters.
         let blake2s_parameters = Blake2sWithParameterBlock {
             digest_length: 32,
@@ -172,9 +172,9 @@ impl MacroBlockGadget {
         // reversed. However we need it like this for the next step.
 
         // Hash-to-curve.
-        let g2_point = HashToCurve::hash_to_g2(cs, &second_hash_bits)?;
+        let g1_point = HashToCurve::hash_to_g1(cs, &second_hash_bits)?;
 
-        Ok(g2_point)
+        Ok(g1_point)
     }
 
     /// A function that checks if there are enough signers.
@@ -251,7 +251,7 @@ impl AllocVar<MacroBlock, MNT4Fr> for MacroBlockGadget {
         let signer_bitmap =
             Vec::<Boolean<MNT4Fr>>::new_input(cs.clone(), || Ok(&value.signer_bitmap[..]))?;
 
-        let signature = G2Var::new_input(cs, || Ok(value.signature))?;
+        let signature = G1Var::new_input(cs, || Ok(value.signature))?;
 
         Ok(MacroBlockGadget {
             block_number,
@@ -296,7 +296,7 @@ impl AllocVar<MacroBlock, MNT4Fr> for MacroBlockGadget {
         let signer_bitmap =
             Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(&value.signer_bitmap[..]))?;
 
-        let signature = G2Var::new_witness(cs, || Ok(value.signature))?;
+        let signature = G1Var::new_witness(cs, || Ok(value.signature))?;
 
         Ok(MacroBlockGadget {
             block_number,
@@ -313,7 +313,7 @@ mod tests {
     use ark_ec::ProjectiveCurve;
     use ark_ff::Zero;
     use ark_mnt4_753::Fr as MNT4Fr;
-
+    use ark_mnt6_753::constraints::G2Var;
     use ark_mnt6_753::{Fr, G1Projective, G2Projective};
     use ark_r1cs_std::prelude::{AllocVar, Boolean};
     use ark_r1cs_std::R1CSVar;
@@ -329,7 +329,6 @@ mod tests {
     use super::*;
 
     #[test]
-    #[ignore]
     fn block_hash_works() {
         // Initialize the constraint system.
         let cs = ConstraintSystem::<MNT4Fr>::new_ref();
@@ -353,7 +352,7 @@ mod tests {
             block_number: u32::rand(rng),
             round_number: u32::rand(rng),
             header_hash,
-            signature: G2Projective::rand(rng),
+            signature: G1Projective::rand(rng),
             signer_bitmap,
         };
 
@@ -374,7 +373,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn block_verify() {
         // Initialize the constraint system.
         let cs = ConstraintSystem::<MNT4Fr>::new_ref();
@@ -384,7 +382,7 @@ mod tests {
 
         // Create random keys.
         let sk = Fr::rand(rng);
-        let mut pk = G1Projective::prime_subgroup_generator();
+        let mut pk = G2Projective::prime_subgroup_generator();
         pk.mul_assign(sk);
 
         // Create more block parameters.
@@ -399,7 +397,7 @@ mod tests {
         let mut header_hash = [0u8; 32];
         rng.fill_bytes(&mut header_hash);
 
-        let mut agg_pk = G1Projective::zero();
+        let mut agg_pk = G2Projective::zero();
 
         // Create macro block with correct signers set.
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
@@ -416,7 +414,7 @@ mod tests {
             Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(bytes_to_bits(&pk_tree_root)))
                 .unwrap();
 
-        let agg_pk_var = G1Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
+        let agg_pk_var = G2Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
 
         // Verify block.
         assert!(block_var
@@ -436,7 +434,7 @@ mod tests {
 
         // Create random keys.
         let sk = Fr::rand(rng);
-        let mut pk = G1Projective::prime_subgroup_generator();
+        let mut pk = G2Projective::prime_subgroup_generator();
         pk.mul_assign(sk);
 
         // Create more block parameters.
@@ -451,7 +449,7 @@ mod tests {
         let mut header_hash = [0u8; 32];
         rng.fill_bytes(&mut header_hash);
 
-        let mut agg_pk = G1Projective::zero();
+        let mut agg_pk = G2Projective::zero();
 
         // Create macro block with correct signers set.
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
@@ -471,7 +469,7 @@ mod tests {
             Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(bytes_to_bits(&pk_tree_root)))
                 .unwrap();
 
-        let agg_pk_var = G1Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
+        let agg_pk_var = G2Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
 
         // Verify block.
         assert!(!block_var
@@ -491,7 +489,7 @@ mod tests {
 
         // Create random keys.
         let sk = Fr::rand(rng);
-        let mut pk = G1Projective::prime_subgroup_generator();
+        let mut pk = G2Projective::prime_subgroup_generator();
         pk.mul_assign(sk);
 
         // Create more block parameters.
@@ -506,7 +504,7 @@ mod tests {
         let mut header_hash = [0u8; 32];
         rng.fill_bytes(&mut header_hash);
 
-        let mut agg_pk = G1Projective::zero();
+        let mut agg_pk = G2Projective::zero();
 
         // Create macro block with correct signers set.
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
@@ -526,7 +524,7 @@ mod tests {
             Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(bytes_to_bits(&pk_tree_root)))
                 .unwrap();
 
-        let agg_pk_var = G1Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
+        let agg_pk_var = G2Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
 
         // Verify block.
         assert!(!block_var
@@ -546,7 +544,7 @@ mod tests {
 
         // Create random keys.
         let sk = Fr::rand(rng);
-        let mut pk = G1Projective::prime_subgroup_generator();
+        let mut pk = G2Projective::prime_subgroup_generator();
         pk.mul_assign(sk);
 
         // Create more block parameters.
@@ -561,7 +559,7 @@ mod tests {
         let mut header_hash = [0u8; 32];
         rng.fill_bytes(&mut header_hash);
 
-        let mut agg_pk = G1Projective::zero();
+        let mut agg_pk = G2Projective::zero();
 
         // Create macro block with correct signers set.
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
@@ -583,7 +581,7 @@ mod tests {
             Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(bytes_to_bits(&pk_tree_root)))
                 .unwrap();
 
-        let agg_pk_var = G1Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
+        let agg_pk_var = G2Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
 
         // Verify block.
         assert!(!block_var
@@ -603,7 +601,7 @@ mod tests {
 
         // Create random keys.
         let sk = Fr::rand(rng);
-        let mut pk = G1Projective::prime_subgroup_generator();
+        let mut pk = G2Projective::prime_subgroup_generator();
         pk.mul_assign(sk);
 
         // Create more block parameters.
@@ -618,7 +616,7 @@ mod tests {
         let mut header_hash = [0u8; 32];
         rng.fill_bytes(&mut header_hash);
 
-        let mut agg_pk = G1Projective::zero();
+        let mut agg_pk = G2Projective::zero();
 
         // Create macro block with correct signers set.
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
@@ -629,7 +627,7 @@ mod tests {
         }
 
         // Create wrong agg pk.
-        let agg_pk = G1Projective::rand(rng);
+        let agg_pk = G2Projective::rand(rng);
 
         // Allocate parameters in the circuit.
         let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
@@ -638,7 +636,7 @@ mod tests {
             Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(bytes_to_bits(&pk_tree_root)))
                 .unwrap();
 
-        let agg_pk_var = G1Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
+        let agg_pk_var = G2Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
 
         // Verify block.
         assert!(!block_var
@@ -658,7 +656,7 @@ mod tests {
 
         // Create random keys.
         let sk = Fr::rand(rng);
-        let mut pk = G1Projective::prime_subgroup_generator();
+        let mut pk = G2Projective::prime_subgroup_generator();
         pk.mul_assign(sk);
 
         // Create more block parameters.
@@ -673,7 +671,7 @@ mod tests {
         let mut header_hash = [0u8; 32];
         rng.fill_bytes(&mut header_hash);
 
-        let mut agg_pk = G1Projective::zero();
+        let mut agg_pk = G2Projective::zero();
 
         // Create macro block with correct signers set.
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
@@ -695,7 +693,7 @@ mod tests {
             Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(bytes_to_bits(&pk_tree_root)))
                 .unwrap();
 
-        let agg_pk_var = G1Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
+        let agg_pk_var = G2Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
 
         // Verify block.
         assert!(!block_var
@@ -715,7 +713,7 @@ mod tests {
 
         // Create random keys.
         let sk = Fr::rand(rng);
-        let mut pk = G1Projective::prime_subgroup_generator();
+        let mut pk = G2Projective::prime_subgroup_generator();
         pk.mul_assign(sk);
 
         // Create more block parameters.
@@ -730,7 +728,7 @@ mod tests {
         let mut header_hash = [0u8; 32];
         rng.fill_bytes(&mut header_hash);
 
-        let mut agg_pk = G1Projective::zero();
+        let mut agg_pk = G2Projective::zero();
 
         // Create macro block with correct signers set.
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
@@ -741,7 +739,7 @@ mod tests {
         }
 
         // Create wrong signature.
-        block.signature = G2Projective::rand(rng);
+        block.signature = G1Projective::rand(rng);
 
         // Allocate parameters in the circuit.
         let block_var = MacroBlockGadget::new_witness(cs.clone(), || Ok(block)).unwrap();
@@ -750,7 +748,7 @@ mod tests {
             Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(bytes_to_bits(&pk_tree_root)))
                 .unwrap();
 
-        let agg_pk_var = G1Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
+        let agg_pk_var = G2Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
 
         // Verify block.
         assert!(!block_var
@@ -770,7 +768,7 @@ mod tests {
 
         // Create random keys.
         let sk = Fr::rand(rng);
-        let mut pk = G1Projective::prime_subgroup_generator();
+        let mut pk = G2Projective::prime_subgroup_generator();
         pk.mul_assign(sk);
 
         // Create more block parameters.
@@ -785,7 +783,7 @@ mod tests {
         let mut header_hash = [0u8; 32];
         rng.fill_bytes(&mut header_hash);
 
-        let mut agg_pk = G1Projective::zero();
+        let mut agg_pk = G2Projective::zero();
 
         // Create macro block with too few signers.
         let mut block = MacroBlock::without_signatures(block_number, round_number, header_hash);
@@ -802,7 +800,7 @@ mod tests {
             Vec::<Boolean<MNT4Fr>>::new_witness(cs.clone(), || Ok(bytes_to_bits(&pk_tree_root)))
                 .unwrap();
 
-        let agg_pk_var = G1Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
+        let agg_pk_var = G2Var::new_witness(cs.clone(), || Ok(agg_pk)).unwrap();
 
         // Verify block.
         assert!(!block_var
