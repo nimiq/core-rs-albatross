@@ -96,7 +96,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - uses: actions/setup-python@v2.3.1
+    - uses: actions/setup-python@v2.3.2
     - uses: BSFishy/pip-action@v1
       with:
         packages: |
