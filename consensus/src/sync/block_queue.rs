@@ -77,12 +77,8 @@ struct Inner<N: Network> {
     /// Reference to the network
     network: Arc<N>,
 
-    /// Buffered blocks - `block_height -> [Block]`. There can be multiple blocks at a height if there are forks.
-    ///
-    /// # TODO
-    ///
-    ///  - The inner `Vec` should really be a `SmallVec<[Block; 1]>` or similar.
-    ///
+    /// Buffered blocks - `block_height -> block_hash -> BlockAndId`.
+    /// There can be multiple blocks at a height if there are forks.
     buffer: BTreeMap<u32, HashMap<Blake2bHash, BlockAndId<N>>>,
 
     /// Vector of pending `blockchain.push()` operations.
@@ -93,7 +89,7 @@ struct Inner<N: Network> {
 
     waker: Option<Waker>,
 
-    /// stores the current macro hieght. When the macroheight changes the buffer must be pruned.
+    /// The block number of the latest macro block. We prune the block buffer when it changes.
     current_macro_height: u32,
 }
 
@@ -119,19 +115,12 @@ impl<N: Network> Inner<N> {
         let block_number = block.block_number();
         let view_number = block.view_number();
 
-        // Ideally we would acquire upgradable read here. And provide it to push_block.
-        // RwLockUpgradableRead however is not Send and cannot be moved into the future that is created.
-        // However the push_block does not push the block but creates a future which pushes the block.
-        // Hence every future would only be created when an RwLockUpgradableReadGuard can be acquired, requiring
-        // to wait for the previous future to have been polled and concluded.
-        // Therefore the read here needs to suffice even though the condition (block_height <= head_height) might
-        //  no longer be met once the future executes.
-        let blockchain_arc = Arc::clone(&self.blockchain);
-        let blockchain = blockchain_arc.read();
+        let blockchain = Arc::clone(&self.blockchain);
+        let blockchain = blockchain.read();
         let head_height = blockchain.block_number();
         let macro_height = policy::last_macro_block(head_height);
 
-        // Check if a macro block boundary was passed. If so update the value and prune the buffer.
+        // Check if a macro block boundary was passed. If so prune the block buffer.
         if macro_height > self.current_macro_height {
             self.current_macro_height = macro_height;
             self.prune_buffer();
@@ -141,7 +130,7 @@ impl<N: Network> Inner<N> {
             // New head or fork block.
             // TODO We should limit the number of push operations we queue here.
             drop(blockchain);
-            self.push_block(blockchain_arc, block, pubsub_id, PushOpResult::Head);
+            self.push_block(block, pubsub_id, PushOpResult::Head);
         } else if block_number > head_height + self.config.window_max {
             log::warn!(
                 "Discarding block #{}.{} outside of buffer window (max {})",
@@ -149,15 +138,7 @@ impl<N: Network> Inner<N> {
                 view_number,
                 head_height + self.config.window_max,
             );
-
-            if let Some(id) = pubsub_id {
-                if let Err(e) = self
-                    .network
-                    .validate_message::<BlockTopic>(id, MsgAcceptance::Ignore)
-                {
-                    log::error!("Failed to send validate message to swarm task: {:?}", e);
-                }
-            }
+            self.report_validation_result(pubsub_id, MsgAcceptance::Ignore);
 
             if let Some(peer) = self.network.get_peer(peer_id) {
                 request_component.put_peer_into_sync_mode(peer);
@@ -169,15 +150,7 @@ impl<N: Network> Inner<N> {
                 view_number,
                 self.buffer.len(),
             );
-
-            if let Some(id) = pubsub_id {
-                if let Err(e) = self
-                    .network
-                    .validate_message::<BlockTopic>(id, MsgAcceptance::Ignore)
-                {
-                    log::error!("Failed to send validate message to swarm task: {:?}", e);
-                }
-            }
+            self.report_validation_result(pubsub_id, MsgAcceptance::Ignore);
         } else if block_number <= macro_height {
             // Block is from a previous batch/epoch, discard it.
             log::warn!(
@@ -186,15 +159,7 @@ impl<N: Network> Inner<N> {
                 view_number,
                 macro_height
             );
-
-            if let Some(id) = pubsub_id {
-                if let Err(e) = self
-                    .network
-                    .validate_message::<BlockTopic>(id, MsgAcceptance::Ignore)
-                {
-                    log::error!("Failed to send validate message to swarm task: {:?}", e);
-                }
-            }
+            self.report_validation_result(pubsub_id, MsgAcceptance::Ignore);
         } else {
             // Block is inside the buffer window, put it in the buffer.
             let block_hash = block.hash();
@@ -333,19 +298,14 @@ impl<N: Network> Inner<N> {
         };
 
         self.push_ops.push_back(future.boxed());
-        if let Some(waker) = &self.waker {
-            waker.wake_by_ref();
+        if let Some(waker) = self.waker.take() {
+            waker.wake();
         }
     }
 
     /// Pushes a single block to the blockchain.
-    fn push_block<F>(
-        &mut self,
-        blockchain: Arc<RwLock<Blockchain>>,
-        block: Block,
-        pubsub_id: Option<<N as Network>::PubsubId>,
-        op: F,
-    ) where
+    fn push_block<F>(&mut self, block: Block, pubsub_id: Option<<N as Network>::PubsubId>, op: F)
+    where
         F: Fn(Result<PushResult, PushError>, Blake2bHash) -> PushOpResult + Send + 'static,
     {
         let block_hash = block.hash();
@@ -354,6 +314,7 @@ impl<N: Network> Inner<N> {
             return;
         }
 
+        let blockchain = Arc::clone(&self.blockchain);
         let network = Arc::clone(&self.network);
         let future = async move {
             let push_result =
@@ -373,11 +334,11 @@ impl<N: Network> Inner<N> {
                 }
             };
 
-            // Let the network layer know if it should relay the message this block came from
-            if let Some(pubsub_id) = pubsub_id {
-                if let Err(e) = network.validate_message::<BlockTopic>(pubsub_id, acceptance) {
-                    log::error!("Failed to send validate message to swarm task: {:?}", e);
-                }
+            // Let the network layer know if it should relay the message this block came from.
+            if let Some(id) = pubsub_id {
+                network
+                    .validate_message::<BlockTopic>(id, acceptance)
+                    .expect("Failed to report message validation result");
             };
 
             op(push_result, block_hash)
@@ -385,8 +346,8 @@ impl<N: Network> Inner<N> {
 
         // TODO We should limit the number of push operations we queue here.
         self.push_ops.push_back(future.boxed());
-        if let Some(waker) = &self.waker {
-            waker.wake_by_ref();
+        if let Some(waker) = self.waker.take() {
+            waker.wake();
         }
     }
 
@@ -407,12 +368,7 @@ impl<N: Network> Inner<N> {
         }
 
         for (block, pubsub_id) in blocks_to_push {
-            self.push_block(
-                Arc::clone(&self.blockchain),
-                block,
-                pubsub_id,
-                PushOpResult::Buffered,
-            );
+            self.push_block(block, pubsub_id, PushOpResult::Buffered);
         }
     }
 
@@ -421,21 +377,20 @@ impl<N: Network> Inner<N> {
             return;
         }
 
-        // Iterate over all offsets, remove element if no blocks remain at that offset.
+        // Iterate over block buffer, remove element if no blocks remain at that height.
         self.buffer.drain_filter(|_block_number, blocks| {
-            // Iterate over all blocks at an offset, remove block, if parent is invalid
+            // Iterate over all blocks at the current height, remove block if parent is invalid
             blocks.drain_filter(|hash, (block, pubsub_id)| {
                 if invalid_blocks.contains(block.parent_hash()) {
                     log::trace!("Removing block because parent is invalid: {}", hash);
                     invalid_blocks.insert(hash.clone());
+
                     if let Some(id) = pubsub_id {
-                        if let Err(e) = self
-                            .network
+                        self.network
                             .validate_message::<BlockTopic>(id.clone(), MsgAcceptance::Ignore)
-                        {
-                            log::error!("Failed to send validate message to swarm task: {:?}", e);
-                        }
+                            .expect("Failed to report message validation result");
                     }
+
                     true
                 } else {
                     false
@@ -446,25 +401,27 @@ impl<N: Network> Inner<N> {
     }
 
     fn prune_buffer(&mut self) {
-        // Split off at the current macro height + 1 to retain only buffered blocks from the current batch,
-        // excluding the macro block itself.
-        let retained_buffer = self.buffer.split_off(&(self.current_macro_height + 1));
-        // swap out the two buffers
-        let mut dropped_buffer = std::mem::replace(&mut self.buffer, retained_buffer);
-
-        // Report validation result.
-        while let Some(map) = dropped_buffer.first_entry() {
-            let (_, map) = map.remove_entry();
-            for (_, (_, pubsub_id)) in map.into_iter() {
-                if let Some(id) = pubsub_id {
-                    if let Err(e) = self
-                        .network
-                        .validate_message::<BlockTopic>(id, MsgAcceptance::Ignore)
-                    {
-                        log::error!("Failed to send validate message to swarm task: {:?}", e);
-                    }
-                }
+        while let Some(entry) = self.buffer.first_entry() {
+            // Remove all entries from the block buffer that precede `current_macro_height`.
+            if *entry.key() > self.current_macro_height {
+                break;
             }
+            // Tell gossipsub to ignore the removed blocks.
+            for (_, (_, pubsub_id)) in entry.remove().into_iter() {
+                self.report_validation_result(pubsub_id, MsgAcceptance::Ignore);
+            }
+        }
+    }
+
+    fn report_validation_result(
+        &self,
+        pubsub_id: Option<<N as Network>::PubsubId>,
+        acceptance: MsgAcceptance,
+    ) {
+        if let Some(id) = pubsub_id {
+            self.network
+                .validate_message::<BlockTopic>(id, acceptance)
+                .expect("Failed to report message validation result");
         }
     }
 }
