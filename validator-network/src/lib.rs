@@ -68,9 +68,11 @@ pub trait ValidatorNetwork: Send + Sync {
     ) -> Result<(), Self::Error>;
 
     /// Signals that a Gossipsup'd message with `id` was verified successfully and can be relayed
-    async fn validate_message(
+    fn validate_message<TTopic>(
         &self,
         id: Self::PubsubId,
         acceptance: MsgAcceptance,
-    ) -> Result<bool, Self::Error>;
+    ) -> Result<(), Self::Error>
+    where
+        TTopic: Topic + Sync;
 }

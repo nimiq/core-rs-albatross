@@ -305,13 +305,16 @@ impl Network for MockNetwork {
         }
     }
 
-    async fn validate_message(
+    fn validate_message<TTopic>(
         &self,
         _id: Self::PubsubId,
         _acceptance: MsgAcceptance,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<(), Self::Error>
+    where
+        TTopic: Topic + Sync,
+    {
         // TODO implement
-        Ok(true)
+        Ok(())
     }
 
     async fn dht_get<K, V>(&self, k: &K) -> Result<Option<V>, Self::Error>

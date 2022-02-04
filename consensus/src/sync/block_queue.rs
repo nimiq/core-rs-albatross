@@ -311,8 +311,13 @@ impl<N: Network> Inner<N> {
     }
 
     /// Pushes a single block to the blockchain.
-    fn push_block<F>(&mut self, blockchain: Arc<RwLock<Blockchain>>, block: Block, pubsub_id: Option<<N as Network>::PubsubId>, op: F)
-    where
+    fn push_block<F>(
+        &mut self,
+        blockchain: Arc<RwLock<Blockchain>>,
+        block: Block,
+        pubsub_id: Option<<N as Network>::PubsubId>,
+        op: F,
+    ) where
         F: Fn(Result<PushResult, PushError>, Blake2bHash) -> PushOpResult + Send + 'static,
     {
         let block_hash = block.hash();
@@ -342,11 +347,9 @@ impl<N: Network> Inner<N> {
 
             // Let the network layer know if it should relay the message this block came from
             if let Some(pubsub_id) = pubsub_id {
-                match network.validate_message(pubsub_id, acceptance).await {
-                    Ok(true) => {}, // success
-                    Ok(false) => log::debug!("Validation took too long: the block message is no longer in the message cache"),
-                    Err(e) => log::error!("Network error while relaying block message: {}", e),
-                };
+                if let Err(e) = network.validate_message::<BlockTopic>(pubsub_id, acceptance) {
+                    log::error!("Failed to send validate message to swarm task: {:?}", e);
+                }
             };
 
             op(push_result, block_hash)
@@ -376,7 +379,12 @@ impl<N: Network> Inner<N> {
         }
 
         for block in blocks_to_push {
-            self.push_block(Arc::clone(&self.blockchain), block, None, PushOpResult::Buffered);
+            self.push_block(
+                Arc::clone(&self.blockchain),
+                block,
+                None,
+                PushOpResult::Buffered,
+            );
         }
     }
 

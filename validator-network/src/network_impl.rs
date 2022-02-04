@@ -278,14 +278,16 @@ where
         Ok(())
     }
 
-    async fn validate_message(
+    fn validate_message<TTopic>(
         &self,
         id: Self::PubsubId,
         acceptance: MsgAcceptance,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<(), Self::Error>
+    where
+        TTopic: Topic + Sync,
+    {
         self.network
-            .validate_message(id, acceptance)
-            .await
+            .validate_message::<TTopic>(id, acceptance)
             .map_err(NetworkError::Network)
     }
 }

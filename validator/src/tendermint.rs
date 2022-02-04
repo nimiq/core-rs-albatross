@@ -352,30 +352,20 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
             }
         };
 
-        // If the message was validated successfully, the network may now relay it to other peers.
-        // Otherwise, reject the message.
-        match self.network.validate_message(id, acceptance).await {
-            // Success
-            Ok(true) => {
-                if let Some(header) = header {
-                    // Return the proposal.
-                    Ok(ProposalResult::Proposal(header, valid_round))
-                } else {
-                    Ok(ProposalResult::Timeout)
-                }
-            }
-            // Message is no longer in cache: couldn't broadcast
-            Ok(false) => {
-                log::debug!(
-                "Validation took too long: the proposal message is no longer in the message cache"
-            );
-                Err(TendermintError::ProposalBroadcastError)
-            }
-            // Couldn't broadcast
-            Err(e) => {
-                log::error!("Network error while relaying proposal message: {}", e);
-                Err(TendermintError::ProposalBroadcastError)
-            }
+        // Indicate the messages acceptance to the network
+        if let Err(e) = self
+            .network
+            .validate_message::<ProposalTopic>(id, acceptance)
+        {
+            log::error!("Failed to send validate message to swarm task: {:?}", e);
+        }
+
+        // Regardless of broadcast result, process proposal if it exists. Timeout otherwise.
+        if let Some(header) = header {
+            // Return the proposal.
+            Ok(ProposalResult::Proposal(header, valid_round))
+        } else {
+            Ok(ProposalResult::Timeout)
         }
     }
 

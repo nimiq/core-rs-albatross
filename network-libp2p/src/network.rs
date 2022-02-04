@@ -21,7 +21,8 @@ use libp2p::{
     },
     dns,
     gossipsub::{
-        GossipsubEvent, GossipsubMessage, IdentTopic, MessageAcceptance, MessageId, TopicHash,
+        error::PublishError, GossipsubEvent, GossipsubMessage, IdentTopic, MessageAcceptance,
+        MessageId, TopicHash,
     },
     identify::IdentifyEvent,
     identity::Keypair,
@@ -114,6 +115,29 @@ pub(crate) enum NetworkAction {
     StartConnecting,
 }
 
+struct ValidateMessage<PeerId> {
+    pubsub_id: GossipsubId<PeerId>,
+    acceptance: MessageAcceptance,
+    topic: &'static str,
+}
+
+impl<PeerId> ValidateMessage<PeerId> {
+    pub fn new<T>(pubsub_id: GossipsubId<PeerId>, acceptance: MsgAcceptance) -> Self
+    where
+        T: Topic + Sync,
+    {
+        Self {
+            pubsub_id,
+            acceptance: match acceptance {
+                MsgAcceptance::Accept => MessageAcceptance::Accept,
+                MsgAcceptance::Ignore => MessageAcceptance::Ignore,
+                MsgAcceptance::Reject => MessageAcceptance::Reject,
+            },
+            topic: <T as Topic>::NAME,
+        }
+    }
+}
+
 #[derive(Default)]
 struct TaskState {
     dht_puts: HashMap<QueryId, oneshot::Sender<Result<(), NetworkError>>>,
@@ -139,6 +163,7 @@ pub struct Network {
     events_tx: broadcast::Sender<NetworkEvent<Peer>>,
     action_tx: mpsc::Sender<NetworkAction>,
     peers: ObservablePeerMap<Peer>,
+    validate_tx: mpsc::UnboundedSender<ValidateMessage<PeerId>>,
 }
 
 impl Network {
@@ -158,14 +183,21 @@ impl Network {
 
         let (events_tx, _) = broadcast::channel(64);
         let (action_tx, action_rx) = mpsc::channel(64);
+        let (validate_tx, validate_rx) = mpsc::unbounded();
 
-        tokio::spawn(Self::swarm_task(swarm, events_tx.clone(), action_rx));
+        tokio::spawn(Self::swarm_task(
+            swarm,
+            events_tx.clone(),
+            action_rx,
+            validate_rx,
+        ));
 
         Self {
             local_peer_id,
             events_tx,
             action_tx,
             peers,
+            validate_tx,
         }
     }
 
@@ -234,6 +266,7 @@ impl Network {
         mut swarm: NimiqSwarm,
         events_tx: broadcast::Sender<NetworkEvent<Peer>>,
         mut action_rx: mpsc::Receiver<NetworkAction>,
+        mut validate_rx: mpsc::UnboundedReceiver<ValidateMessage<PeerId>>,
     ) {
         let mut task_state = TaskState::default();
 
@@ -243,6 +276,25 @@ impl Network {
         async move {
             loop {
                 futures::select! {
+                    validate_msg = validate_rx.next().fuse() => {
+                        if let Some(validate_msg) = validate_msg {
+                            let topic = validate_msg.topic;
+                            let result: Result<bool, PublishError> = swarm
+                                .behaviour_mut()
+                                .gossipsub
+                                .report_message_validation_result(
+                                    &validate_msg.pubsub_id.message_id,
+                                    &validate_msg.pubsub_id.propagation_source,
+                                    validate_msg.acceptance,
+                                );
+
+                            match result {
+                                Ok(true) => {}, // success
+                                Ok(false) => log::debug!("Validation took too long: the {} message is no longer in the message cache", topic),
+                                Err(e) => log::error!("Network error while relaying {} message: {}", topic, e),
+                            }
+                        }
+                    },
                     event = swarm.next().fuse() => {
                         if let Some(event) = event {
                             Self::handle_event(event, &events_tx, &mut swarm, &mut task_state);
@@ -911,30 +963,17 @@ impl NetworkInterface for Network {
         Ok(())
     }
 
-    async fn validate_message(
+    fn validate_message<T>(
         &self,
-        id: Self::PubsubId,
+        pubsub_id: Self::PubsubId,
         acceptance: MsgAcceptance,
-    ) -> Result<bool, Self::Error> {
-        let (output_tx, output_rx) = oneshot::channel();
-
-        let msg_acceptance = match acceptance {
-            MsgAcceptance::Accept => MessageAcceptance::Accept,
-            MsgAcceptance::Reject => MessageAcceptance::Reject,
-            MsgAcceptance::Ignore => MessageAcceptance::Ignore,
-        };
-
-        self.action_tx
-            .clone()
-            .send(NetworkAction::Validate {
-                message_id: id.message_id,
-                source: id.propagation_source,
-                acceptance: msg_acceptance,
-                output: output_tx,
-            })
-            .await?;
-
-        output_rx.await?
+    ) -> Result<(), Self::Error>
+    where
+        T: Topic + Sync,
+    {
+        self.validate_tx
+            .unbounded_send(ValidateMessage::new::<T>(pubsub_id, acceptance))
+            .map_err(|e| NetworkError::Send(e.into_send_error()))
     }
 
     async fn dht_get<K, V>(&self, k: &K) -> Result<Option<V>, Self::Error>
@@ -1482,6 +1521,9 @@ mod tests {
         tokio::spawn(async move { while stream.next().await.is_some() {} });
     }
 
+    // Currently does not make sense, as validate message does no longer
+    // return if a message was still in the cache or not.
+    #[ignore]
     #[tokio::test]
     async fn test_gossipsub() {
         // tracing_subscriber::fmt::init();
@@ -1518,9 +1560,8 @@ mod tests {
         // Make sure messages are validated before they are pruned from the memcache
         std::thread::sleep(Duration::from_millis(4500));
         assert!(net1
-            .validate_message(message_id, MsgAcceptance::Accept)
-            .await
-            .unwrap());
+            .validate_message::<TestTopic>(message_id, MsgAcceptance::Accept)
+            .is_ok());
 
         // Call the network_info async function after filling up a topic message buffer to verify that the
         // network drops messages without stalling it's functionality.

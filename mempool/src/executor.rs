@@ -8,13 +8,12 @@ use futures::{stream::BoxStream, Future, StreamExt};
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 
 use nimiq_blockchain::Blockchain;
-use nimiq_network_interface::network::Network;
-use nimiq_network_interface::prelude::MsgAcceptance;
+use nimiq_network_interface::network::{MsgAcceptance, Network};
 use nimiq_primitives::networks::NetworkId;
 use nimiq_transaction::Transaction;
 
 use crate::filter::MempoolFilter;
-use crate::mempool::MempoolState;
+use crate::mempool::{MempoolState, TransactionTopic};
 use crate::verify::{verify_tx, VerifyErr};
 
 const CONCURRENT_VERIF_TASKS: u32 = 1000;
@@ -104,11 +103,10 @@ impl<N: Network> Future for MempoolExecutor<N> {
                     }
                 };
 
-                match network.validate_message(pubsub_id, acceptance).await {
-                    Ok(true) => {}, // success
-                    Ok(false) => log::debug!("Validation took too long: the transaction message was no longer in the message cache"),
-                    Err(e) => log::error!("Network error while relaying transaction message: {}", e),
-                };
+                if let Err(e) = network.validate_message::<TransactionTopic>(pubsub_id, acceptance)
+                {
+                    log::error!("Failed to send validate message to swarm task: {:?}", e);
+                }
 
                 tasks_count.fetch_sub(1, AtomicOrdering::SeqCst);
             });
