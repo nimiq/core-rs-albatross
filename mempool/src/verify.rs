@@ -33,8 +33,14 @@ pub enum SignVerifReturnCode {
 pub enum VerifyErr {
     /// Sender doesn't have enough funds.
     NotEnoughFunds,
-    /// Transaction is invalid
-    Invalid,
+    /// Transaction signature is invalid
+    InvalidSignature,
+    /// Transaction not valid for the validation window
+    InvalidTxWindow,
+    /// Transaction not valid for the current block height
+    InvalidBlockHeight,
+    /// Transaction sender doesn't exist
+    InvalidSender,
     /// Transaction is already known
     Known,
     /// Transaction is filtered
@@ -47,8 +53,17 @@ impl Display for VerifyErr {
             VerifyErr::NotEnoughFunds => {
                 write!(f, "Not enough funds")
             }
-            VerifyErr::Invalid => {
-                write!(f, "Invalid")
+            VerifyErr::InvalidSignature => {
+                write!(f, "Invalid signature")
+            }
+            VerifyErr::InvalidTxWindow => {
+                write!(f, "Invalid transaction window")
+            }
+            VerifyErr::InvalidBlockHeight => {
+                write!(f, "Invalid block height")
+            }
+            VerifyErr::InvalidSender => {
+                write!(f, "Invalid sender")
             }
             VerifyErr::Known => {
                 write!(f, "Known")
@@ -89,11 +104,11 @@ pub(crate) async fn verify_tx<'a>(
         Ok(rc) => {
             if rc == SignVerifReturnCode::Invalid {
                 // If signature verification failed we just return
-                return Err(VerifyErr::Invalid);
+                return Err(VerifyErr::InvalidSignature);
             }
         }
         Err(_err) => {
-            return Err(VerifyErr::Invalid);
+            return Err(VerifyErr::InvalidSignature);
         }
     };
 
@@ -112,7 +127,7 @@ pub(crate) async fn verify_tx<'a>(
         let filter = filter.read();
         if !filter.accepts_transaction(transaction) || filter.blacklisted(&transaction.hash()) {
             log::debug!("Transaction filtered");
-            return Err(VerifyErr::Invalid);
+            return Err(VerifyErr::Filtered);
         }
     }
 
@@ -123,12 +138,12 @@ pub(crate) async fn verify_tx<'a>(
 
     if !transaction.is_valid_at(block_height) {
         log::debug!("Transaction invalid at block {}", block_height);
-        return Err(VerifyErr::Invalid);
+        return Err(VerifyErr::InvalidBlockHeight);
     }
 
     if blockchain.contains_tx_in_validity_window(&transaction.hash(), None) {
         log::debug!("Transaction has already been mined");
-        return Err(VerifyErr::Invalid);
+        return Err(VerifyErr::InvalidTxWindow);
     }
 
     // 7. Sequentialize per Sender to Check Balances and acquire the upgradable from the blockchain.
@@ -147,7 +162,7 @@ pub(crate) async fn verify_tx<'a>(
                 "There is no account for this sender in the blockchain {}",
                 transaction.sender.to_user_friendly_address()
             );
-            return Err(VerifyErr::Invalid);
+            return Err(VerifyErr::InvalidSender);
         }
         Some(account) => account,
     };
