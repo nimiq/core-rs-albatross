@@ -103,10 +103,7 @@ impl<N: Network> Future for MempoolExecutor<N> {
                     }
                 };
 
-                if let Err(e) = network.validate_message::<TransactionTopic>(pubsub_id, acceptance)
-                {
-                    log::error!("Failed to send validate message to swarm task: {:?}", e);
-                }
+                network.validate_message::<TransactionTopic>(pubsub_id, acceptance);
 
                 tasks_count.fetch_sub(1, AtomicOrdering::SeqCst);
             });

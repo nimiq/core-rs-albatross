@@ -109,11 +109,7 @@ pub trait Network: Send + Sync + 'static {
     where
         T: Topic + Sync;
 
-    fn validate_message<T>(
-        &self,
-        id: Self::PubsubId,
-        acceptance: MsgAcceptance,
-    ) -> Result<(), Self::Error>
+    fn validate_message<T>(&self, id: Self::PubsubId, acceptance: MsgAcceptance)
     where
         T: Topic + Sync;
 

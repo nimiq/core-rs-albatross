@@ -336,10 +336,8 @@ impl<N: Network> Inner<N> {
 
             // Let the network layer know if it should relay the message this block came from.
             if let Some(id) = pubsub_id {
-                network
-                    .validate_message::<BlockTopic>(id, acceptance)
-                    .expect("Failed to report message validation result");
-            };
+                network.validate_message::<BlockTopic>(id, acceptance);
+            }
 
             op(push_result, block_hash)
         };
@@ -387,8 +385,7 @@ impl<N: Network> Inner<N> {
 
                     if let Some(id) = pubsub_id {
                         self.network
-                            .validate_message::<BlockTopic>(id.clone(), MsgAcceptance::Ignore)
-                            .expect("Failed to report message validation result");
+                            .validate_message::<BlockTopic>(id.clone(), MsgAcceptance::Ignore);
                     }
 
                     true
@@ -413,15 +410,14 @@ impl<N: Network> Inner<N> {
         }
     }
 
+    #[inline]
     fn report_validation_result(
         &self,
         pubsub_id: Option<<N as Network>::PubsubId>,
         acceptance: MsgAcceptance,
     ) {
         if let Some(id) = pubsub_id {
-            self.network
-                .validate_message::<BlockTopic>(id, acceptance)
-                .expect("Failed to report message validation result");
+            self.network.validate_message::<BlockTopic>(id, acceptance);
         }
     }
 }

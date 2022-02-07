@@ -963,17 +963,13 @@ impl NetworkInterface for Network {
         Ok(())
     }
 
-    fn validate_message<T>(
-        &self,
-        pubsub_id: Self::PubsubId,
-        acceptance: MsgAcceptance,
-    ) -> Result<(), Self::Error>
+    fn validate_message<T>(&self, pubsub_id: Self::PubsubId, acceptance: MsgAcceptance)
     where
         T: Topic + Sync,
     {
         self.validate_tx
             .unbounded_send(ValidateMessage::new::<T>(pubsub_id, acceptance))
-            .map_err(|e| NetworkError::Send(e.into_send_error()))
+            .expect("Failed to send reported message validation result");
     }
 
     async fn dht_get<K, V>(&self, k: &K) -> Result<Option<V>, Self::Error>
@@ -1559,9 +1555,7 @@ mod tests {
 
         // Make sure messages are validated before they are pruned from the memcache
         std::thread::sleep(Duration::from_millis(4500));
-        assert!(net1
-            .validate_message::<TestTopic>(message_id, MsgAcceptance::Accept)
-            .is_ok());
+        net1.validate_message::<TestTopic>(message_id, MsgAcceptance::Accept);
 
         // Call the network_info async function after filling up a topic message buffer to verify that the
         // network drops messages without stalling it's functionality.

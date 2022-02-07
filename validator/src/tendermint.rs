@@ -353,12 +353,8 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
         };
 
         // Indicate the messages acceptance to the network
-        if let Err(e) = self
-            .network
-            .validate_message::<ProposalTopic>(id, acceptance)
-        {
-            log::error!("Failed to send validate message to swarm task: {:?}", e);
-        }
+        self.network
+            .validate_message::<ProposalTopic>(id, acceptance);
 
         // Regardless of broadcast result, process proposal if it exists. Timeout otherwise.
         if let Some(header) = header {

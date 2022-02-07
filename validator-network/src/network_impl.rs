@@ -278,16 +278,10 @@ where
         Ok(())
     }
 
-    fn validate_message<TTopic>(
-        &self,
-        id: Self::PubsubId,
-        acceptance: MsgAcceptance,
-    ) -> Result<(), Self::Error>
+    fn validate_message<TTopic>(&self, id: Self::PubsubId, acceptance: MsgAcceptance)
     where
         TTopic: Topic + Sync,
     {
-        self.network
-            .validate_message::<TTopic>(id, acceptance)
-            .map_err(NetworkError::Network)
+        self.network.validate_message::<TTopic>(id, acceptance);
     }
 }
