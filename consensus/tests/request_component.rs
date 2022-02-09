@@ -50,7 +50,7 @@ async fn test_request_component() {
         let prod_blockchain = Arc::clone(&node1.blockchain);
         tokio::spawn(async move {
             loop {
-                produce_macro_blocks(1, &producer1, &prod_blockchain);
+                produce_macro_blocks(&producer1, &prod_blockchain, 1);
                 tokio::time::sleep(Duration::from_secs(5)).await;
             }
         });

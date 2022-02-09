@@ -57,7 +57,7 @@ async fn peers_can_sync() {
     let num_macro_blocks = (policy::BATCHES_PER_EPOCH + 1) as usize;
 
     // Produce the blocks.
-    produce_macro_blocks(num_macro_blocks, &producer, &blockchain1);
+    produce_macro_blocks(&producer, &blockchain1, num_macro_blocks);
 
     let net1 = Arc::new(hub.new_network());
     let sync1 = HistorySync::<MockNetwork>::new(Arc::clone(&blockchain1), net1.subscribe_events());
@@ -186,7 +186,7 @@ async fn sync_ingredients() {
     let num_macro_blocks = (policy::BATCHES_PER_EPOCH + 1) as usize;
 
     // Produce the blocks.
-    produce_macro_blocks(num_macro_blocks, &producer, &blockchain1);
+    produce_macro_blocks(&producer, &blockchain1, num_macro_blocks);
 
     let net1 = Arc::new(hub.new_network());
     let consensus1 = Consensus::from_network(

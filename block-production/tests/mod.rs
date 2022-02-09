@@ -216,7 +216,7 @@ fn it_can_produce_a_chain_with_txns() {
     // Small chain, otherwise test takes too long, use a small number of txns when running in volatile env
     // This test was intended to be used with an infinite loop and a high number of transactions per block though
     for _ in 0..1 {
-        fill_micro_blocks_with_txns(&producer, &blockchain, 5 as usize);
+        fill_micro_blocks_with_txns(&producer, &blockchain, 5, 0);
 
         let blockchain = blockchain.upgradable_read();
         let next_block_height = (blockchain.block_number() + 1) as u64;

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use parking_lot::RwLock;
+use rand::{prelude::StdRng, RngCore, SeedableRng};
 
 use beserial::Deserialize;
 use nimiq_block::{
@@ -22,7 +23,6 @@ use nimiq_primitives::policy;
 use nimiq_transaction::Transaction;
 use nimiq_transaction_builder::TransactionBuilder;
 use nimiq_vrf::VrfSeed;
-use rand::{thread_rng, RngCore};
 
 /// Secret keys of validator. Tests run with `genesis/src/genesis/unit-albatross.toml`
 pub const SIGNING_KEY: &str = "041580cc67e66e9e08b68fd9e4c9deb68737168fbe7488de2638c2e906c2f5ad";
@@ -34,10 +34,11 @@ pub fn generate_transactions(
     start_height: u32,
     network_id: NetworkId,
     count: usize,
+    rng_seed: u64,
 ) -> Vec<Transaction> {
     let mut txs = Vec::new();
 
-    let mut rng = thread_rng();
+    let mut rng = StdRng::seed_from_u64(rng_seed);
     for _ in 0..count {
         let mut bytes = [0u8; 20];
         rng.fill_bytes(&mut bytes);
@@ -59,12 +60,46 @@ pub fn generate_transactions(
 
 /// Produces a series of macro blocks (and the corresponding batches).
 pub fn produce_macro_blocks(
-    num_macro: usize,
     producer: &BlockProducer,
     blockchain: &Arc<RwLock<Blockchain>>,
+    num_blocks: usize,
 ) {
-    for _ in 0..num_macro {
+    for _ in 0..num_blocks {
         fill_micro_blocks(producer, blockchain);
+
+        let blockchain = blockchain.upgradable_read();
+        let next_block_height = (blockchain.block_number() + 1) as u64;
+
+        let macro_block_proposal = producer.next_macro_block_proposal(
+            &blockchain,
+            blockchain.time.now() + next_block_height * 1000,
+            0u32,
+            vec![],
+        );
+
+        let block = sign_macro_block(
+            &producer.voting_key,
+            macro_block_proposal.header,
+            macro_block_proposal.body,
+        );
+
+        assert_eq!(
+            Blockchain::push(blockchain, Block::Macro(block)),
+            Ok(PushResult::Extended)
+        );
+    }
+}
+
+/// Produces a series of macro blocks (and the corresponding batches).
+pub fn produce_macro_blocks_with_txns(
+    producer: &BlockProducer,
+    blockchain: &Arc<RwLock<Blockchain>>,
+    num_blocks: usize,
+    num_txns: usize,
+    rng_seed: u64,
+) {
+    for _ in 0..num_blocks {
+        fill_micro_blocks_with_txns(producer, blockchain, num_txns, rng_seed);
 
         let blockchain = blockchain.upgradable_read();
         let next_block_height = (blockchain.block_number() + 1) as u64;
@@ -123,6 +158,7 @@ pub fn fill_micro_blocks_with_txns(
     producer: &BlockProducer,
     blockchain: &Arc<RwLock<Blockchain>>,
     num_transactions: usize,
+    rng_seed: u64,
 ) {
     let init_height = blockchain.read().block_number();
     let key_pair = KeyPair::from(PrivateKey::from_str(UNIT_KEY).unwrap());
@@ -134,8 +170,14 @@ pub fn fill_micro_blocks_with_txns(
         log::debug!(" Current Height: {}", i);
         let blockchain = blockchain.upgradable_read();
 
-        //Generate the transactions
-        let txns = generate_transactions(&key_pair, i, NetworkId::UnitAlbatross, num_transactions);
+        // Generate the transactions.
+        let txns = generate_transactions(
+            &key_pair,
+            i,
+            NetworkId::UnitAlbatross,
+            num_transactions,
+            rng_seed,
+        );
         let start = Instant::now();
         let last_micro_block = producer.next_micro_block(
             &blockchain,
