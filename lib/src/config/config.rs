@@ -257,7 +257,7 @@ pub struct DatabaseConfig {
     max_readers: u32,
 
     /// Additional LMDB flags
-    #[builder(default = "LmdbFlags::NOMETASYNC | LmdbFlags::NOSYNC")]
+    #[builder(default = "LmdbFlags::NOMETASYNC | LmdbFlags::NOSYNC | LmdbFlags::NORDAHEAD")]
     flags: LmdbFlags::Flags,
 }
 
@@ -268,7 +268,7 @@ impl Default for DatabaseConfig {
             size: 1024 * 1024 * 1024 * 1024,
             max_dbs: 12,
             max_readers: 600,
-            flags: LmdbFlags::NOMETASYNC | LmdbFlags::NOSYNC,
+            flags: LmdbFlags::NOMETASYNC | LmdbFlags::NOSYNC | LmdbFlags::NORDAHEAD,
         }
     }
 }

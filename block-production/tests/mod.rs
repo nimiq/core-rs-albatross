@@ -204,7 +204,7 @@ fn it_can_produce_a_chain_with_txns() {
             tmp_dir,
             1024 * 1024 * 1024 * 1024,
             21,
-            LmdbFlags::NOMETASYNC | LmdbFlags::NOSYNC,
+            LmdbFlags::NOMETASYNC | LmdbFlags::NOSYNC | LmdbFlags::NORDAHEAD,
         )
         .unwrap()
     };
