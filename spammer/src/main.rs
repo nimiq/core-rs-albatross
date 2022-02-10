@@ -3,8 +3,14 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use futures::StreamExt;
+#[cfg(feature = "metrics")]
+use lazy_static::lazy_static;
+#[cfg(feature = "metrics")]
+use prometheus::{IntGauge, Registry};
 use rand::{thread_rng, RngCore};
 use structopt::StructOpt;
+#[cfg(feature = "metrics")]
+use warp::{Filter, Rejection, Reply};
 
 use nimiq::client::ConsensusProxy;
 pub use nimiq::{
@@ -27,6 +33,17 @@ use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_transaction::Transaction;
 use nimiq_transaction_builder::TransactionBuilder;
+
+#[cfg(feature = "metrics")]
+lazy_static! {
+    pub static ref REGISTRY: Registry = Registry::new();
+    pub static ref BLOCK_NUMBER: IntGauge =
+        IntGauge::new("block_number", "Block Number").expect("metric couldn't be created");
+    pub static ref TPS: IntGauge = IntGauge::new("spammer_tps", "Spammer transactions per second")
+        .expect("metric couldn't be created");
+    pub static ref BLOCK_TIME: IntGauge = IntGauge::new("block_time", "Spammer average block time")
+        .expect("metric couldn't be created");
+}
 
 #[derive(Debug, StructOpt)]
 #[structopt(rename_all = "kebab")]
@@ -70,6 +87,65 @@ struct StatsExert {
 const UNIT_KEY: &str = "6c9320ac201caf1f8eaa5b05f5d67a9e77826f3f6be266a0ecccc20416dc6587";
 const DEV_KEY: &str = "1ef7aad365c195462ed04c275d47189d5362bbfe36b5e93ce7ba2f3add5f439b";
 
+#[cfg(feature = "metrics")]
+async fn metrics_handler() -> Result<impl Reply, Rejection> {
+    use prometheus::Encoder;
+    let encoder = prometheus::TextEncoder::new();
+
+    let mut buffer = Vec::new();
+    if let Err(e) = encoder.encode(&REGISTRY.gather(), &mut buffer) {
+        eprintln!("could not encode custom metrics: {}", e);
+    };
+    let mut res = match String::from_utf8(buffer.clone()) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("custom metrics could not be from_utf8'd: {}", e);
+            String::default()
+        }
+    };
+    buffer.clear();
+
+    let mut buffer = Vec::new();
+    if let Err(e) = encoder.encode(&prometheus::gather(), &mut buffer) {
+        eprintln!("could not encode prometheus metrics: {}", e);
+    };
+    let res_custom = match String::from_utf8(buffer.clone()) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("prometheus metrics could not be from_utf8'd: {}", e);
+            String::default()
+        }
+    };
+    buffer.clear();
+
+    res.push_str(&res_custom);
+    Ok(res)
+}
+
+#[cfg(feature = "metrics")]
+async fn register_custom_metrics() {
+    REGISTRY
+        .register(Box::new(TPS.clone()))
+        .expect("collector couldn't be registered");
+    REGISTRY
+        .register(Box::new(BLOCK_TIME.clone()))
+        .expect("collector couldn't registered");
+    REGISTRY
+        .register(Box::new(BLOCK_NUMBER.clone()))
+        .expect("collector couldn't be registered");
+
+    let metrics_route = warp::path!("metrics").and_then(metrics_handler);
+
+    warp::serve(metrics_route).run(([0, 0, 0, 0], 9501)).await;
+}
+
+#[cfg(feature = "metrics")]
+async fn update_metric_counters(block_number: i64, block_time: i64, spammer_tps: i64) {
+    TPS.set(spammer_tps);
+    BLOCK_TIME.set(block_time);
+    BLOCK_NUMBER.set(block_number);
+}
+
 async fn main_inner() -> Result<(), Error> {
     // Initialize deadlock detection
     initialize_deadlock_detection();
@@ -96,6 +172,10 @@ async fn main_inner() -> Result<(), Error> {
 
     // Initialize panic hook.
     initialize_panic_reporting();
+
+    // Register metrics
+    #[cfg(feature = "metrics")]
+    tokio::spawn(register_custom_metrics());
 
     // Create config builder and apply command line and config file.
     // You usually want the command line to override config settings, so the order is important.
@@ -248,6 +328,14 @@ async fn main_inner() -> Result<(), Error> {
                     let av_tx = tx_count_total.checked_div(micro_block_count).unwrap_or(0);
 
                     let tps = tx_count_total as f32 / diff.as_secs_f32();
+
+                    #[cfg(feature = "metrics")]
+                    update_metric_counters(
+                        block.block_number() as i64,
+                        av_block_time.as_millis().try_into().unwrap(),
+                        tps as i64,
+                    )
+                    .await;
 
                     log::info!("Average over the last {} blocks:", rolling_window);
                     log::info!("\t- block time: {:?}", av_block_time);

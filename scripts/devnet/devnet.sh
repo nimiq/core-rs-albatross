@@ -12,6 +12,7 @@ kindexes=()
 fail=false
 foldername=$(date +%Y%m%d_%H%M%S)
 ERASE=false
+METRICS=false
 DATABASE_CLEAN=false
 CONTINOUS=false
 SPAMMER=false
@@ -92,6 +93,7 @@ This script launches N validators and optionally restarts them while they are ru
 OPTIONS:
    -h|--help       Show this message
    -e|--erase      Erases all of the validator state as part of restarting it
+   -m|--metrics    Enables spammer metrics (spammer must be enabled with -s).
    -d|--db         Erases only the database state of the validator as part of restarting it
    -r|--restarts   The number of times you want to kill/restart validators (by default 10 times)(0 means no restarts)
    -c|--continous  In continous mode the script runs until it is killed (or it finds an error)
@@ -154,6 +156,10 @@ while [ ! $# -eq 0 ]; do
         -e | --erase)
             ERASE=true
             ;;
+        -m | --metrics)
+            METRICS=true
+            ;;
+
         -c | --continous)
             CONTINOUS=true
             ;;
@@ -195,6 +201,11 @@ if [ "$RELEASE" = true ] ; then
     cargo+=" --release"
     cargo_build+=" --release"
     cargo_clean+=" --release"
+fi
+
+if [ "$METRICS" = true ] ; then
+    cargo+=" --features nimiq-spammer/metrics"
+    cargo_build+=" --features nimiq-spammer/metrics"
 fi
 
 echo "Number of validators: $MAX_VALIDATORS"

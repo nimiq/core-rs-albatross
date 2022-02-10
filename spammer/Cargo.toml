@@ -19,10 +19,13 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 futures = "0.3"
+lazy_static = { version = "1.4", optional = true }
 log = "0.4"
+prometheus = { version = "0.9", features = ["process"], optional = true }
 rand = "0.8.4"
 tokio = { version = "1.16", features = ["rt-multi-thread", "time", "tracing"] }
 structopt = { version = "0.3", features = ["paw"] }
+warp = { version = "0.3.2", optional = true }
 
 nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain = { path = "../blockchain" }
@@ -37,3 +40,6 @@ package = "nimiq-lib"
 path = "../lib"
 version = "0.1"
 features = ["validator", "rpc-server", "deadlock", "logging", "wallet", "panic"]
+
+[features]
+metrics = ["lazy_static", "prometheus", "warp"]
