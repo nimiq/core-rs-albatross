@@ -3,8 +3,6 @@ use std::fmt::{Debug, Error, Formatter};
 use std::io;
 use std::str;
 
-use blake2_rfc::blake2b::Blake2b;
-use blake2_rfc::blake2s::Blake2s;
 use hex::FromHex;
 use sha2::{Digest, Sha256, Sha512};
 
@@ -117,7 +115,7 @@ const BLAKE2B_LENGTH: usize = 32;
 create_typed_array!(Blake2bHash, u8, BLAKE2B_LENGTH);
 add_hex_io_fns_typed_arr!(Blake2bHash, BLAKE2B_LENGTH);
 
-pub struct Blake2bHasher(Blake2b);
+pub struct Blake2bHasher(blake3::Hasher);
 impl HashOutput for Blake2bHash {
     type Builder = Blake2bHasher;
 
@@ -131,7 +129,7 @@ impl HashOutput for Blake2bHash {
 
 impl Blake2bHasher {
     pub fn new() -> Self {
-        Blake2bHasher(Blake2b::new(BLAKE2B_LENGTH))
+        Blake2bHasher(blake3::Hasher::new())
     }
 }
 
@@ -157,7 +155,7 @@ impl Hasher for Blake2bHasher {
 
     fn finish(self) -> Blake2bHash {
         let result = self.0.finalize();
-        Blake2bHash::from(result.as_bytes())
+        Blake2bHash::from(*result.as_bytes())
     }
 }
 
@@ -197,7 +195,7 @@ impl Merge for Blake2bHash {
 const BLAKE2S_LENGTH: usize = 32;
 create_typed_array!(Blake2sHash, u8, BLAKE2S_LENGTH);
 add_hex_io_fns_typed_arr!(Blake2sHash, BLAKE2S_LENGTH);
-pub struct Blake2sHasher(Blake2s);
+pub struct Blake2sHasher(blake3::Hasher);
 impl HashOutput for Blake2sHash {
     type Builder = Blake2sHasher;
 
@@ -211,7 +209,7 @@ impl HashOutput for Blake2sHash {
 
 impl Blake2sHasher {
     pub fn new() -> Self {
-        Blake2sHasher(Blake2s::new(BLAKE2S_LENGTH))
+        Blake2sHasher(blake3::Hasher::new())
     }
 }
 
@@ -237,7 +235,7 @@ impl Hasher for Blake2sHasher {
 
     fn finish(self) -> Blake2sHash {
         let result = self.0.finalize();
-        Blake2sHash::from(result.as_bytes())
+        Blake2sHash::from(*result.as_bytes())
     }
 }
 
