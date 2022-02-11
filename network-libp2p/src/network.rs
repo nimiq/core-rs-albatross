@@ -1273,9 +1273,10 @@ mod tests {
                 .dial_address(addresses[(peer - 1) as usize].clone())
                 .await
                 .unwrap();
-            let timeout = tokio::time::Duration::from_secs(1);
-            tokio::time::sleep(timeout).await;
         }
+
+        let timeout = tokio::time::Duration::from_secs((n_peers * 2).try_into().unwrap());
+        tokio::time::sleep(timeout).await;
 
         // Verify that each network has all the other peers connected
         for peer in 0..n_peers {
@@ -1290,7 +1291,7 @@ mod tests {
             );
         }
 
-        // Now disconnect and reconnect a random peer from all peeers
+        // Now disconnect and reconnect a random peer from all peers
         for peer in 0..n_peers {
             let network1 = &networks[peer as usize];
             let peer_id1 = network1.local_peer_id();
