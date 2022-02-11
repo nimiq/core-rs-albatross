@@ -21,7 +21,7 @@ maintenance = { status = "experimental" }
 futures = "0.3"
 lazy_static = { version = "1.4", optional = true }
 log = "0.4"
-prometheus = { version = "0.9", features = ["process"], optional = true }
+prometheus = { version = "0.13", features = ["process"], optional = true }
 rand = "0.8.4"
 tokio = { version = "1.16", features = ["rt-multi-thread", "time", "tracing"] }
 structopt = { version = "0.3", features = ["paw"] }
