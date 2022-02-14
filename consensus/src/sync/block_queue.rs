@@ -385,7 +385,7 @@ impl<N: Network> Inner<N> {
 
                     if let Some(id) = pubsub_id {
                         self.network
-                            .validate_message::<BlockTopic>(id.clone(), MsgAcceptance::Ignore);
+                            .validate_message::<BlockTopic>(id.clone(), MsgAcceptance::Reject);
                     }
 
                     true
