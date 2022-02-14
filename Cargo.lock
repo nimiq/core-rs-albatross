@@ -326,7 +326,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1df2c09229cbc5a028b1d70e00fdb2acee28b1055dfb5ca73eea49c5a25c4e7c"
 dependencies = [
  "num-traits",
- "rand 0.8.4",
+ "rand 0.8.5",
  "rayon",
 ]
 
@@ -2126,7 +2126,7 @@ dependencies = [
  "log",
  "prost",
  "prost-build",
- "rand 0.8.4",
+ "rand 0.8.5",
 ]
 
 [[package]]
@@ -2153,7 +2153,7 @@ dependencies = [
  "pin-project 1.0.10",
  "prost",
  "prost-build",
- "rand 0.8.4",
+ "rand 0.8.5",
  "ring",
  "rw-stream-sink",
  "sha2 0.10.1",
@@ -2296,7 +2296,7 @@ dependencies = [
  "libp2p-core",
  "libp2p-swarm",
  "log",
- "rand 0.8.4",
+ "rand 0.8.5",
  "smallvec",
  "socket2 0.4.2",
  "void",
@@ -2350,7 +2350,7 @@ dependencies = [
  "log",
  "prost",
  "prost-build",
- "rand 0.8.4",
+ "rand 0.8.5",
  "sha2 0.10.1",
  "snow",
  "static_assertions",
@@ -2423,7 +2423,7 @@ dependencies = [
  "pin-project 1.0.10",
  "prost",
  "prost-build",
- "rand 0.8.4",
+ "rand 0.8.5",
  "smallvec",
  "static_assertions",
  "thiserror",
@@ -2447,7 +2447,7 @@ dependencies = [
  "log",
  "prost",
  "prost-build",
- "rand 0.8.4",
+ "rand 0.8.5",
  "sha2 0.10.1",
  "thiserror",
  "unsigned-varint",
@@ -2588,7 +2588,7 @@ dependencies = [
  "libsecp256k1-core",
  "libsecp256k1-gen-ecmult",
  "libsecp256k1-gen-genmult",
- "rand 0.8.4",
+ "rand 0.8.5",
  "serde",
  "sha2 0.9.9",
  "typenum",
@@ -2847,7 +2847,7 @@ dependencies = [
  "mime",
  "mime_guess",
  "quick-error",
- "rand 0.8.4",
+ "rand 0.8.5",
  "safemem",
  "tempfile",
  "twoway",
@@ -2973,7 +2973,7 @@ dependencies = [
  "nimiq-utils",
  "nimiq-vrf",
  "parking_lot 0.11.2 (git+https://github.com/styppo/parking_lot.git)",
- "rand 0.8.4",
+ "rand 0.8.5",
  "serde",
  "strum_macros",
  "tempdir",
@@ -3031,7 +3031,7 @@ dependencies = [
  "nimiq-utils",
  "nimiq-vrf",
  "parking_lot 0.11.2 (git+https://github.com/styppo/parking_lot.git)",
- "rand 0.8.4",
+ "rand 0.8.5",
  "tempdir",
 ]
 
@@ -3062,7 +3062,7 @@ dependencies = [
  "nimiq-utils",
  "nimiq-vrf",
  "parking_lot 0.11.2 (git+https://github.com/styppo/parking_lot.git)",
- "rand 0.8.4",
+ "rand 0.8.5",
  "thiserror",
 ]
 
@@ -3084,7 +3084,7 @@ dependencies = [
  "nimiq-hash",
  "nimiq-utils",
  "parking_lot 0.11.2 (git+https://github.com/styppo/parking_lot.git)",
- "rand 0.8.4",
+ "rand 0.8.5",
  "serde",
  "thiserror",
 ]
@@ -3111,7 +3111,7 @@ dependencies = [
  "nimiq-vrf",
  "paw",
  "pretty_env_logger",
- "rand 0.8.4",
+ "rand 0.8.5",
  "rand_chacha 0.3.1",
  "serde",
  "shellfn",
@@ -3140,7 +3140,7 @@ dependencies = [
  "itertools 0.10.3",
  "log",
  "num-traits",
- "rand 0.8.4",
+ "rand 0.8.5",
  "serde",
 ]
 
@@ -3176,7 +3176,7 @@ dependencies = [
  "nimiq-utils",
  "parking_lot 0.11.2 (git+https://github.com/styppo/parking_lot.git)",
  "pin-project 1.0.10",
- "rand 0.8.4",
+ "rand 0.8.5",
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -3189,7 +3189,7 @@ dependencies = [
  "bitflags 1.3.2",
  "lmdb-zero",
  "log",
- "rand 0.8.4",
+ "rand 0.8.5",
  "tempfile",
 ]
 
@@ -3240,7 +3240,7 @@ dependencies = [
  "nimiq-network-mock",
  "nimiq-utils",
  "parking_lot 0.11.2 (git+https://github.com/styppo/parking_lot.git)",
- "rand 0.8.4",
+ "rand 0.8.5",
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -3362,7 +3362,7 @@ dependencies = [
  "nimiq-hash",
  "nimiq-macros",
  "nimiq-utils",
- "rand 0.8.4",
+ "rand 0.8.5",
  "rand_core 0.6.3",
  "serde",
  "sha2 0.9.9",
@@ -3404,7 +3404,7 @@ dependencies = [
  "nimiq-wallet",
  "parking_lot 0.11.2 (git+https://github.com/styppo/parking_lot.git)",
  "paw",
- "rand 0.8.4",
+ "rand 0.8.5",
  "serde",
  "serde_derive",
  "structopt",
@@ -3447,7 +3447,7 @@ dependencies = [
  "nimiq-utils",
  "nimiq-vrf",
  "parking_lot 0.11.2 (git+https://github.com/styppo/parking_lot.git)",
- "rand 0.8.4",
+ "rand 0.8.5",
  "simple_logger",
  "tokio",
  "tokio-stream",
@@ -3485,7 +3485,7 @@ dependencies = [
  "nimiq-primitives",
  "nimiq-trie",
  "nimiq-utils",
- "rand 0.8.4",
+ "rand 0.8.5",
  "thiserror",
 ]
 
@@ -3507,7 +3507,7 @@ dependencies = [
  "nimiq-primitives",
  "nimiq-utils",
  "num-traits",
- "rand 0.8.4",
+ "rand 0.8.5",
  "rayon",
 ]
 
@@ -3529,7 +3529,7 @@ dependencies = [
  "nimiq-bls",
  "nimiq-nano-primitives",
  "nimiq-primitives",
- "rand 0.8.4",
+ "rand 0.8.5",
  "thiserror",
 ]
 
@@ -3573,7 +3573,7 @@ dependencies = [
  "parking_lot 0.11.2 (git+https://github.com/styppo/parking_lot.git)",
  "pin-project 1.0.10",
  "pin-project-lite 0.2.8",
- "rand 0.8.4",
+ "rand 0.8.5",
  "serde",
  "thiserror",
  "tokio",
@@ -3757,7 +3757,7 @@ dependencies = [
  "nimiq-transaction",
  "nimiq-transaction-builder",
  "prometheus",
- "rand 0.8.4",
+ "rand 0.8.5",
  "structopt",
  "tokio",
  "warp 0.3.2",
@@ -3830,7 +3830,7 @@ dependencies = [
  "nimiq-validator-network",
  "nimiq-vrf",
  "parking_lot 0.11.2 (git+https://github.com/styppo/parking_lot.git)",
- "rand 0.8.4",
+ "rand 0.8.5",
  "tokio",
  "tokio-stream",
 ]
@@ -3850,7 +3850,7 @@ dependencies = [
  "nimiq-primitives",
  "nimiq-transaction",
  "nimiq-utils",
- "rand 0.8.4",
+ "rand 0.8.5",
  "thiserror",
 ]
 
@@ -3889,7 +3889,7 @@ dependencies = [
  "nimiq-primitives",
  "nimiq-transaction",
  "nimiq-utils",
- "rand 0.8.4",
+ "rand 0.8.5",
  "serde",
  "thiserror",
 ]
@@ -3926,7 +3926,7 @@ dependencies = [
  "nimiq-hash",
  "nimiq-keys",
  "parking_lot 0.11.2 (git+https://github.com/styppo/parking_lot.git)",
- "rand 0.8.4",
+ "rand 0.8.5",
  "rand_core 0.6.3",
  "serde",
  "thiserror",
@@ -3973,7 +3973,7 @@ dependencies = [
  "nimiq-validator-network",
  "nimiq-vrf",
  "parking_lot 0.11.2 (git+https://github.com/styppo/parking_lot.git)",
- "rand 0.8.4",
+ "rand 0.8.5",
  "simple_logger",
  "tokio",
  "tokio-stream",
@@ -4008,7 +4008,7 @@ dependencies = [
  "nimiq-keys",
  "nimiq-macros",
  "num-traits",
- "rand 0.8.4",
+ "rand 0.8.5",
  "serde",
  "serde-big-array",
  "sha2 0.9.9",
@@ -4728,19 +4728,18 @@ dependencies = [
  "libc",
  "rand_chacha 0.2.2",
  "rand_core 0.5.1",
- "rand_hc 0.2.0",
+ "rand_hc",
 ]
 
 [[package]]
 name = "rand"
-version = "0.8.4"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e7573632e6454cf6b99d7aac4ccca54be06da05aca2ef7423d22d27d4d4bcd8"
+checksum = "34af8d1a0e25924bc5b7c43c079c942339d8f0a8b57c39049bef581b46327404"
 dependencies = [
  "libc",
  "rand_chacha 0.3.1",
  "rand_core 0.6.3",
- "rand_hc 0.3.1",
 ]
 
 [[package]]
@@ -4803,15 +4802,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca3129af7b92a17112d59ad498c6f81eaf463253766b90396d39ea7a39d6613c"
 dependencies = [
  "rand_core 0.5.1",
-]
-
-[[package]]
-name = "rand_hc"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d51e9f596de227fda2ea6c84607f5558e196eeaf43c986b724ba4fb8fdf497e7"
-dependencies = [
- "rand_core 0.6.3",
 ]
 
 [[package]]
@@ -5359,7 +5349,7 @@ dependencies = [
  "aes-gcm",
  "blake2",
  "chacha20poly1305",
- "rand 0.8.4",
+ "rand 0.8.5",
  "rand_core 0.6.3",
  "ring",
  "rustc_version 0.3.3",
@@ -5401,7 +5391,7 @@ dependencies = [
  "futures",
  "httparse",
  "log",
- "rand 0.8.4",
+ "rand 0.8.5",
  "sha-1",
 ]
 
@@ -5877,7 +5867,7 @@ dependencies = [
  "ipnet",
  "lazy_static",
  "log",
- "rand 0.8.4",
+ "rand 0.8.5",
  "smallvec",
  "thiserror",
  "tinyvec",
@@ -5923,7 +5913,7 @@ dependencies = [
  "http",
  "httparse",
  "log",
- "rand 0.8.4",
+ "rand 0.8.5",
  "sha-1",
  "thiserror",
  "url",
@@ -6450,7 +6440,7 @@ dependencies = [
  "log",
  "nohash-hasher",
  "parking_lot 0.11.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "rand 0.8.4",
+ "rand 0.8.5",
  "static_assertions",
 ]
 
