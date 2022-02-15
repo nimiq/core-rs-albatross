@@ -12,7 +12,8 @@ use beserial::Deserialize;
 #[cfg(feature = "validator")]
 use nimiq_bls::{KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
 use nimiq_database::{
-    lmdb::{open as LmdbFlags, LmdbEnvironment},
+    //lmdb::{open as LmdbFlags, LmdbEnvironment},
+    mdbx::MdbxEnvironment,
     volatile::VolatileEnvironment,
     Environment,
 };
@@ -255,10 +256,6 @@ pub struct DatabaseConfig {
     /// Recommended: 600
     #[builder(default = "600")]
     max_readers: u32,
-
-    /// Additional LMDB flags
-    #[builder(default = "LmdbFlags::NOMETASYNC | LmdbFlags::NOSYNC | LmdbFlags::NORDAHEAD")]
-    flags: LmdbFlags::Flags,
 }
 
 impl Default for DatabaseConfig {
@@ -268,7 +265,7 @@ impl Default for DatabaseConfig {
             size: 1024 * 1024 * 1024 * 1024,
             max_dbs: 12,
             max_readers: 600,
-            flags: LmdbFlags::NOMETASYNC | LmdbFlags::NOSYNC | LmdbFlags::NORDAHEAD,
+            //flags: LmdbFlags::NOMETASYNC | LmdbFlags::NOSYNC | LmdbFlags::NORDAHEAD,
         }
     }
 }
@@ -282,7 +279,7 @@ impl From<Option<config_file::DatabaseSettings>> for DatabaseConfig {
                 size: db_settings.size.unwrap_or(default.size),
                 max_dbs: db_settings.max_dbs.unwrap_or(default.max_dbs),
                 max_readers: db_settings.max_readers.unwrap_or(default.max_readers),
-                flags: default.flags,
+                //flags: default.flags,
             }
         } else {
             default
@@ -341,11 +338,9 @@ impl StorageConfig {
         log::info!("Opening database: {}", db_name);
 
         Ok(match self {
-            StorageConfig::Volatile => VolatileEnvironment::new_with_lmdb_flags(
-                db_config.max_dbs,
-                db_config.max_readers,
-                db_config.flags,
-            )?,
+            StorageConfig::Volatile => {
+                VolatileEnvironment::new_with_lmdb_flags(db_config.max_dbs, db_config.max_readers)?
+            }
             StorageConfig::Filesystem(file_storage) => {
                 let db_path = file_storage.database_parent.join(db_name);
                 let db_path = db_path
@@ -357,12 +352,11 @@ impl StorageConfig {
                         ))
                     })?
                     .to_string();
-                LmdbEnvironment::new_with_max_readers(
+                MdbxEnvironment::new_with_max_readers(
                     &db_path,
                     db_config.size,
                     db_config.max_dbs,
                     db_config.max_readers,
-                    db_config.flags,
                 )?
             }
             _ => return Err(self.not_available()),

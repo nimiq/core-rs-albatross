@@ -9,10 +9,7 @@ use nimiq_account::{Receipt, Receipts};
 use nimiq_bls::KeyPair as BLSKeyPair;
 use nimiq_build_tools::genesis::GenesisBuilder;
 use nimiq_database::WriteTransaction;
-use nimiq_database::{
-    lmdb::{open as LmdbFlags, LmdbEnvironment},
-    volatile::VolatileEnvironment,
-};
+use nimiq_database::{mdbx::MdbxEnvironment, volatile::VolatileEnvironment};
 use nimiq_keys::{Address, KeyPair, PublicKey, SecureGenerate};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
@@ -437,13 +434,7 @@ fn accounts_performance() {
         let tmp_dir = tempdir().expect("Could not create temporal directory");
         let tmp_dir = tmp_dir.path().to_str().unwrap();
         log::debug!("Creating a non volatile environment in {}", tmp_dir);
-        let env = LmdbEnvironment::new(
-            tmp_dir,
-            1024 * 1024 * 1024 * 1024,
-            21,
-            LmdbFlags::NOMETASYNC,
-        )
-        .unwrap();
+        let env = MdbxEnvironment::new(tmp_dir, 1024 * 1024 * 1024 * 1024, 21).unwrap();
         (env, num_txns)
     };
 

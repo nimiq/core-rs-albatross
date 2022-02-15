@@ -10,7 +10,7 @@ pub enum Error {
     Config(String), // TODO
 
     #[error("LMDB error: {0}")]
-    Lmdb(#[from] nimiq_database::lmdb::LmdbError),
+    Lmdb(#[from] nimiq_database::mdbx::LmdbError),
 
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),

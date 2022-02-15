@@ -1,93 +1,70 @@
 use crate::{AsDatabaseBytes, FromDatabaseValue};
 
 pub(crate) trait RawReadCursor {
-    fn first<K, V>(&mut self, accessor: &lmdb_zero::ConstAccessor) -> Option<(K, V)>
+    fn first<K, V>(&mut self) -> Option<(K, V)>
     where
         K: FromDatabaseValue,
         V: FromDatabaseValue;
 
-    fn first_duplicate<V>(&mut self, accessor: &lmdb_zero::ConstAccessor) -> Option<V>
+    fn first_duplicate<V>(&mut self) -> Option<V>
     where
         V: FromDatabaseValue;
 
-    fn last<K, V>(&mut self, accessor: &lmdb_zero::ConstAccessor) -> Option<(K, V)>
+    fn last<K, V>(&mut self) -> Option<(K, V)>
     where
         K: FromDatabaseValue,
         V: FromDatabaseValue;
 
-    fn last_duplicate<V>(&mut self, accessor: &lmdb_zero::ConstAccessor) -> Option<V>
+    fn last_duplicate<V>(&mut self) -> Option<V>
     where
         V: FromDatabaseValue;
 
-    fn seek_key_value<K, V>(&mut self, key: &K, value: &V) -> bool
-    where
-        K: AsDatabaseBytes + ?Sized,
-        V: AsDatabaseBytes + ?Sized;
-
-    fn seek_key_nearest_value<K, V>(
-        &mut self,
-        accessor: &lmdb_zero::ConstAccessor,
-        key: &K,
-        value: &V,
-    ) -> Option<V>
-    where
-        K: AsDatabaseBytes + ?Sized,
-        V: AsDatabaseBytes + FromDatabaseValue;
-
-    fn get_current<K, V>(&mut self, accessor: &lmdb_zero::ConstAccessor) -> Option<(K, V)>
+    fn get_current<K, V>(&mut self) -> Option<(K, V)>
     where
         K: FromDatabaseValue,
         V: FromDatabaseValue;
 
-    fn next<K, V>(&mut self, accessor: &lmdb_zero::ConstAccessor) -> Option<(K, V)>
+    fn next<K, V>(&mut self) -> Option<(K, V)>
     where
         K: FromDatabaseValue,
         V: FromDatabaseValue;
 
-    fn next_duplicate<K, V>(&mut self, accessor: &lmdb_zero::ConstAccessor) -> Option<(K, V)>
+    fn next_duplicate<K, V>(&mut self) -> Option<(K, V)>
     where
         K: FromDatabaseValue,
         V: FromDatabaseValue;
 
-    fn next_no_duplicate<K, V>(&mut self, accessor: &lmdb_zero::ConstAccessor) -> Option<(K, V)>
+    fn next_no_duplicate<K, V>(&mut self) -> Option<(K, V)>
     where
         K: FromDatabaseValue,
         V: FromDatabaseValue;
 
-    fn prev<K, V>(&mut self, accessor: &lmdb_zero::ConstAccessor) -> Option<(K, V)>
+    fn prev<K, V>(&mut self) -> Option<(K, V)>
     where
         K: FromDatabaseValue,
         V: FromDatabaseValue;
 
-    fn prev_duplicate<K, V>(&mut self, accessor: &lmdb_zero::ConstAccessor) -> Option<(K, V)>
+    fn prev_duplicate<K, V>(&mut self) -> Option<(K, V)>
     where
         K: FromDatabaseValue,
         V: FromDatabaseValue;
 
-    fn prev_no_duplicate<K, V>(&mut self, accessor: &lmdb_zero::ConstAccessor) -> Option<(K, V)>
+    fn prev_no_duplicate<K, V>(&mut self) -> Option<(K, V)>
     where
         K: FromDatabaseValue,
         V: FromDatabaseValue;
 
-    fn seek_key<K, V>(&mut self, accessor: &lmdb_zero::ConstAccessor, key: &K) -> Option<V>
+    fn seek_key<K, V>(&mut self, key: &K) -> Option<V>
     where
         K: AsDatabaseBytes + ?Sized,
         V: FromDatabaseValue;
 
-    fn seek_key_both<K, V>(
-        &mut self,
-        accessor: &lmdb_zero::ConstAccessor,
-        key: &K,
-    ) -> Option<(K, V)>
+    fn seek_key_both<K, V>(&mut self, key: &K) -> Option<(K, V)>
     where
         K: AsDatabaseBytes + FromDatabaseValue,
         V: FromDatabaseValue;
 
-    fn seek_range_key<K, V>(
-        &mut self,
-        accessor: &lmdb_zero::ConstAccessor,
-        key: &K,
-    ) -> Option<(K, V)>
+    fn seek_range_key<K, V>(&mut self, key: &K) -> Option<(K, V)>
     where
         K: AsDatabaseBytes + FromDatabaseValue,
         V: FromDatabaseValue;
@@ -113,16 +90,6 @@ pub trait ReadCursor {
     fn last_duplicate<V>(&mut self) -> Option<V>
     where
         V: FromDatabaseValue;
-
-    fn seek_key_value<K, V>(&mut self, key: &K, value: &V) -> bool
-    where
-        K: AsDatabaseBytes + ?Sized,
-        V: AsDatabaseBytes + ?Sized;
-
-    fn seek_key_nearest_value<K, V>(&mut self, key: &K, value: &V) -> Option<V>
-    where
-        K: AsDatabaseBytes + ?Sized,
-        V: AsDatabaseBytes + FromDatabaseValue;
 
     fn get_current<K, V>(&mut self) -> Option<(K, V)>
     where
@@ -178,23 +145,21 @@ pub trait ReadCursor {
 }
 
 macro_rules! impl_read_cursor_from_raw {
-    ($t: ty, $raw: ident, $txn: ident) => {
+    ($t: ty, $raw: ident) => {
         impl<'txn, 'db> ReadCursor for $t {
             fn first<K, V>(&mut self) -> Option<(K, V)>
             where
                 K: FromDatabaseValue,
                 V: FromDatabaseValue,
             {
-                let access = self.$txn.access();
-                self.$raw.first(&access)
+                self.$raw.first()
             }
 
             fn first_duplicate<V>(&mut self) -> Option<V>
             where
                 V: FromDatabaseValue,
             {
-                let access = self.$txn.access();
-                self.$raw.first_duplicate(&access)
+                self.$raw.first_duplicate()
             }
 
             fn last<K, V>(&mut self) -> Option<(K, V)>
@@ -202,33 +167,14 @@ macro_rules! impl_read_cursor_from_raw {
                 K: FromDatabaseValue,
                 V: FromDatabaseValue,
             {
-                let access = self.$txn.access();
-                self.$raw.last(&access)
+                self.$raw.last()
             }
 
             fn last_duplicate<V>(&mut self) -> Option<V>
             where
                 V: FromDatabaseValue,
             {
-                let access = self.$txn.access();
-                self.$raw.last_duplicate(&access)
-            }
-
-            fn seek_key_value<K, V>(&mut self, key: &K, value: &V) -> bool
-            where
-                K: AsDatabaseBytes + ?Sized,
-                V: AsDatabaseBytes + ?Sized,
-            {
-                self.$raw.seek_key_value(key, value)
-            }
-
-            fn seek_key_nearest_value<K, V>(&mut self, key: &K, value: &V) -> Option<V>
-            where
-                K: AsDatabaseBytes + ?Sized,
-                V: AsDatabaseBytes + FromDatabaseValue,
-            {
-                let access = self.$txn.access();
-                self.$raw.seek_key_nearest_value(&access, key, value)
+                self.$raw.last_duplicate()
             }
 
             fn get_current<K, V>(&mut self) -> Option<(K, V)>
@@ -236,8 +182,7 @@ macro_rules! impl_read_cursor_from_raw {
                 K: FromDatabaseValue,
                 V: FromDatabaseValue,
             {
-                let access = self.$txn.access();
-                self.$raw.get_current(&access)
+                self.$raw.get_current()
             }
 
             fn next<K, V>(&mut self) -> Option<(K, V)>
@@ -245,8 +190,7 @@ macro_rules! impl_read_cursor_from_raw {
                 K: FromDatabaseValue,
                 V: FromDatabaseValue,
             {
-                let access = self.$txn.access();
-                self.$raw.next(&access)
+                self.$raw.next()
             }
 
             fn next_duplicate<K, V>(&mut self) -> Option<(K, V)>
@@ -254,8 +198,7 @@ macro_rules! impl_read_cursor_from_raw {
                 K: FromDatabaseValue,
                 V: FromDatabaseValue,
             {
-                let access = self.$txn.access();
-                self.$raw.next_duplicate(&access)
+                self.$raw.next_duplicate()
             }
 
             fn next_no_duplicate<K, V>(&mut self) -> Option<(K, V)>
@@ -263,8 +206,7 @@ macro_rules! impl_read_cursor_from_raw {
                 K: FromDatabaseValue,
                 V: FromDatabaseValue,
             {
-                let access = self.$txn.access();
-                self.$raw.next_no_duplicate(&access)
+                self.$raw.next_no_duplicate()
             }
 
             fn prev<K, V>(&mut self) -> Option<(K, V)>
@@ -272,8 +214,7 @@ macro_rules! impl_read_cursor_from_raw {
                 K: FromDatabaseValue,
                 V: FromDatabaseValue,
             {
-                let access = self.$txn.access();
-                self.$raw.prev(&access)
+                self.$raw.prev()
             }
 
             fn prev_duplicate<K, V>(&mut self) -> Option<(K, V)>
@@ -281,8 +222,7 @@ macro_rules! impl_read_cursor_from_raw {
                 K: FromDatabaseValue,
                 V: FromDatabaseValue,
             {
-                let access = self.$txn.access();
-                self.$raw.prev_duplicate(&access)
+                self.$raw.prev_duplicate()
             }
 
             fn prev_no_duplicate<K, V>(&mut self) -> Option<(K, V)>
@@ -290,8 +230,7 @@ macro_rules! impl_read_cursor_from_raw {
                 K: FromDatabaseValue,
                 V: FromDatabaseValue,
             {
-                let access = self.$txn.access();
-                self.$raw.prev_no_duplicate(&access)
+                self.$raw.prev_no_duplicate()
             }
 
             fn seek_key<K, V>(&mut self, key: &K) -> Option<V>
@@ -299,8 +238,7 @@ macro_rules! impl_read_cursor_from_raw {
                 K: AsDatabaseBytes + ?Sized,
                 V: FromDatabaseValue,
             {
-                let access = self.$txn.access();
-                self.$raw.seek_key(&access, key)
+                self.$raw.seek_key(key)
             }
 
             fn seek_key_both<K, V>(&mut self, key: &K) -> Option<(K, V)>
@@ -308,8 +246,7 @@ macro_rules! impl_read_cursor_from_raw {
                 K: AsDatabaseBytes + FromDatabaseValue,
                 V: FromDatabaseValue,
             {
-                let access = self.$txn.access();
-                self.$raw.seek_key_both(&access, key)
+                self.$raw.seek_key_both(key)
             }
 
             fn seek_range_key<K, V>(&mut self, key: &K) -> Option<(K, V)>
@@ -317,10 +254,8 @@ macro_rules! impl_read_cursor_from_raw {
                 K: AsDatabaseBytes + FromDatabaseValue,
                 V: FromDatabaseValue,
             {
-                let access = self.$txn.access();
-                self.$raw.seek_range_key(&access, key)
+                self.$raw.seek_range_key(key)
             }
-
             fn count_duplicates(&mut self) -> usize {
                 self.$raw.count_duplicates()
             }

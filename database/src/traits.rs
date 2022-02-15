@@ -1,8 +1,8 @@
 use std::borrow::Cow;
 use std::ffi::CStr;
 use std::io;
-
-use lmdb_zero::traits::AsLmdbBytes;
+use std::mem;
+use std::slice;
 
 pub trait IntoDatabaseValue {
     fn database_byte_size(&self) -> usize;
@@ -54,11 +54,7 @@ impl FromDatabaseValue for u32 {
     where
         Self: Sized,
     {
-        let lmdb_result: Result<&lmdb_zero::Unaligned<u32>, String> =
-            lmdb_zero::traits::FromLmdbBytes::from_lmdb_bytes(bytes);
-        Ok(lmdb_result
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
-            .get())
+        Ok(u32::from_ne_bytes(bytes.try_into().expect("mismatch size")))
     }
 }
 
@@ -67,11 +63,7 @@ impl FromDatabaseValue for u64 {
     where
         Self: Sized,
     {
-        let lmdb_result: Result<&lmdb_zero::Unaligned<u64>, String> =
-            lmdb_zero::traits::FromLmdbBytes::from_lmdb_bytes(bytes);
-        Ok(lmdb_result
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
-            .get())
+        Ok(u64::from_ne_bytes(bytes.try_into().expect("mismatch size")))
     }
 }
 
@@ -90,6 +82,17 @@ impl AsDatabaseBytes for Vec<u8> {
     }
 }
 
+impl AsDatabaseBytes for str {
+    fn as_database_bytes(&self) -> Cow<[u8]> {
+        Cow::Borrowed(&self.as_bytes())
+    }
+}
+
+impl AsDatabaseBytes for CStr {
+    fn as_database_bytes(&self) -> Cow<[u8]> {
+        Cow::Borrowed(&self.to_bytes())
+    }
+}
 // Conflicting implementation:
 //impl<T> FromDatabaseValue for T
 //    where T: lmdb_zero::traits::FromLmdbBytes + ?Sized {
@@ -105,36 +108,38 @@ impl AsDatabaseBytes for Vec<u8> {
 //    }
 //}
 
-macro_rules! as_lmdb_bytes {
-    ($t: ty) => {
-        impl AsDatabaseBytes for $t {
+macro_rules! as_db_bytes {
+    ($typ:ident) => {
+        impl AsDatabaseBytes for $typ {
             fn as_database_bytes(&self) -> Cow<[u8]> {
-                return Cow::Borrowed(self.as_lmdb_bytes());
+                unsafe {
+                    Cow::Borrowed(slice::from_raw_parts(
+                        self as *const $typ as *const u8,
+                        mem::size_of::<$typ>(),
+                    ))
+                }
+            }
+        }
+        impl AsDatabaseBytes for [$typ] {
+            fn as_database_bytes(&self) -> Cow<[u8]> {
+                unsafe {
+                    Cow::Borrowed(slice::from_raw_parts(
+                        self.as_ptr() as *const u8,
+                        self.len() * mem::size_of::<$typ>(),
+                    ))
+                }
             }
         }
     };
 }
 
-as_lmdb_bytes!(u8);
-as_lmdb_bytes!(u16);
-as_lmdb_bytes!(i16);
-as_lmdb_bytes!(u32);
-as_lmdb_bytes!(i32);
-as_lmdb_bytes!(u64);
-as_lmdb_bytes!(i64);
-as_lmdb_bytes!(f32);
-as_lmdb_bytes!(f64);
-as_lmdb_bytes!(str);
-as_lmdb_bytes!(CStr);
-as_lmdb_bytes!(char);
-
-as_lmdb_bytes!([u8]);
-as_lmdb_bytes!([u16]);
-as_lmdb_bytes!([i16]);
-as_lmdb_bytes!([u32]);
-as_lmdb_bytes!([i32]);
-as_lmdb_bytes!([u64]);
-as_lmdb_bytes!([i64]);
-as_lmdb_bytes!([f32]);
-as_lmdb_bytes!([f64]);
-as_lmdb_bytes!([char]);
+as_db_bytes!(u8);
+as_db_bytes!(u16);
+as_db_bytes!(i16);
+as_db_bytes!(u32);
+as_db_bytes!(i32);
+as_db_bytes!(u64);
+as_db_bytes!(i64);
+as_db_bytes!(f32);
+as_db_bytes!(f64);
+as_db_bytes!(char);

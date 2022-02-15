@@ -12,7 +12,7 @@ pub use crate::traits::{AsDatabaseBytes, FromDatabaseValue, IntoDatabaseValue};
 
 #[macro_use]
 pub mod cursor;
-pub mod lmdb;
+pub mod mdbx;
 pub mod traits;
 pub mod volatile;
 
@@ -35,7 +35,7 @@ bitflags! {
 #[derive(Clone, Debug)]
 pub enum Environment {
     Volatile(volatile::VolatileEnvironment),
-    Persistent(lmdb::LmdbEnvironment),
+    Persistent(mdbx::MdbxEnvironment),
 }
 
 impl Environment {
@@ -72,7 +72,7 @@ impl Environment {
 #[derive(Debug)]
 pub enum Database {
     Volatile(volatile::VolatileDatabase),
-    Persistent(lmdb::LmdbDatabase),
+    Persistent(mdbx::MdbxDatabase),
 }
 
 impl Database {
@@ -83,7 +83,7 @@ impl Database {
         None
     }
 
-    fn persistent(&self) -> Option<&lmdb::LmdbDatabase> {
+    fn persistent(&self) -> Option<&mdbx::MdbxDatabase> {
         match self {
             Database::Persistent(ref db) => Some(db),
             Database::Volatile(ref db) => Some(db.as_lmdb()),
@@ -95,8 +95,8 @@ impl Database {
 pub enum Transaction<'env> {
     VolatileRead(volatile::VolatileReadTransaction<'env>),
     VolatileWrite(volatile::VolatileWriteTransaction<'env>),
-    PersistentRead(lmdb::LmdbReadTransaction<'env>),
-    PersistentWrite(lmdb::LmdbWriteTransaction<'env>),
+    PersistentRead(mdbx::MdbxReadTransaction<'env>),
+    PersistentWrite(mdbx::MdbxWriteTransaction<'env>),
 }
 
 impl<'env> Transaction<'env> {
@@ -113,7 +113,7 @@ impl<'env> Transaction<'env> {
         }
     }
 
-    pub fn cursor<'txn, 'db>(&'txn self, db: &'db Database) -> Cursor<'txn, 'db> {
+    pub fn cursor<'txn, 'db>(&'txn self, db: &'db Database) -> Cursor<'txn> {
         match *self {
             Transaction::VolatileRead(ref txn) => Cursor::VolatileCursor(txn.cursor(db)),
             Transaction::VolatileWrite(ref txn) => Cursor::VolatileCursor(txn.cursor(db)),
@@ -133,7 +133,7 @@ impl<'env> ReadTransaction<'env> {
                 volatile::VolatileReadTransaction::new(env),
             )),
             Environment::Persistent(ref env) => ReadTransaction(Transaction::PersistentRead(
-                lmdb::LmdbReadTransaction::new(env),
+                mdbx::MdbxReadTransaction::new(env),
             )),
         }
     }
@@ -148,7 +148,7 @@ impl<'env> ReadTransaction<'env> {
 
     pub fn close(self) {}
 
-    pub fn cursor<'txn, 'db>(&'txn self, db: &'db Database) -> Cursor<'txn, 'db> {
+    pub fn cursor<'txn, 'db>(&'txn self, db: &'db Database) -> Cursor<'txn> {
         self.0.cursor(db)
     }
 }
@@ -171,7 +171,7 @@ impl<'env> WriteTransaction<'env> {
                 volatile::VolatileWriteTransaction::new(env),
             )),
             Environment::Persistent(ref env) => WriteTransaction(Transaction::PersistentWrite(
-                lmdb::LmdbWriteTransaction::new(env),
+                mdbx::MdbxWriteTransaction::new(env),
             )),
         }
     }
@@ -268,11 +268,11 @@ impl<'env> WriteTransaction<'env> {
 
     pub fn abort(self) {}
 
-    pub fn cursor<'txn, 'db>(&'txn self, db: &'db Database) -> Cursor<'txn, 'db> {
+    pub fn cursor<'txn, 'db>(&'txn self, db: &'db Database) -> Cursor<'txn> {
         self.0.cursor(db)
     }
 
-    pub fn write_cursor<'txn, 'db>(&'txn self, db: &'db Database) -> WriteCursor<'txn, 'db> {
+    pub fn write_cursor<'txn, 'db>(&'txn self, db: &'db Database) -> WriteCursor<'txn> {
         match self.0 {
             Transaction::VolatileWrite(ref txn) => {
                 WriteCursor::VolatileCursor(txn.write_cursor(db))
@@ -293,14 +293,14 @@ impl<'env> Deref for WriteTransaction<'env> {
     }
 }
 
-pub enum Cursor<'txn, 'db> {
-    VolatileCursor(volatile::VolatileCursor<'txn, 'db>),
-    PersistentCursor(lmdb::LmdbCursor<'txn, 'db>),
+pub enum Cursor<'txn> {
+    VolatileCursor(volatile::VolatileCursor<'txn>),
+    PersistentCursor(mdbx::MdbxCursor<'txn>),
 }
 
-pub enum WriteCursor<'txn, 'db> {
-    VolatileCursor(volatile::VolatileWriteCursor<'txn, 'db>),
-    PersistentCursor(lmdb::LmdbWriteCursor<'txn, 'db>),
+pub enum WriteCursor<'txn> {
+    VolatileCursor(volatile::VolatileWriteCursor<'txn>),
+    PersistentCursor(mdbx::MdbxWriteCursor<'txn>),
 }
 
 macro_rules! gen_cursor_match {
@@ -324,7 +324,7 @@ macro_rules! gen_cursor_match {
     };
 }
 
-impl<'txn, 'db> ReadCursor for Cursor<'txn, 'db> {
+impl<'txn, 'db> ReadCursor for Cursor<'txn> {
     fn first<K, V>(&mut self) -> Option<(K, V)>
     where
         K: FromDatabaseValue,
@@ -353,22 +353,6 @@ impl<'txn, 'db> ReadCursor for Cursor<'txn, 'db> {
         V: FromDatabaseValue,
     {
         gen_cursor_match!(self, last_duplicate, Cursor)
-    }
-
-    fn seek_key_value<K, V>(&mut self, key: &K, value: &V) -> bool
-    where
-        K: AsDatabaseBytes + ?Sized,
-        V: AsDatabaseBytes + ?Sized,
-    {
-        gen_cursor_match!(self, seek_key_value, key, value, Cursor)
-    }
-
-    fn seek_key_nearest_value<K, V>(&mut self, key: &K, value: &V) -> Option<V>
-    where
-        K: AsDatabaseBytes + ?Sized,
-        V: AsDatabaseBytes + FromDatabaseValue,
-    {
-        gen_cursor_match!(self, seek_key_nearest_value, key, value, Cursor)
     }
 
     fn get_current<K, V>(&mut self) -> Option<(K, V)>
@@ -456,7 +440,7 @@ impl<'txn, 'db> ReadCursor for Cursor<'txn, 'db> {
     }
 }
 
-impl<'txn, 'db> ReadCursor for WriteCursor<'txn, 'db> {
+impl<'txn, 'db> ReadCursor for WriteCursor<'txn> {
     fn first<K, V>(&mut self) -> Option<(K, V)>
     where
         K: FromDatabaseValue,
@@ -485,22 +469,6 @@ impl<'txn, 'db> ReadCursor for WriteCursor<'txn, 'db> {
         V: FromDatabaseValue,
     {
         gen_cursor_match!(self, last_duplicate, WriteCursor)
-    }
-
-    fn seek_key_value<K, V>(&mut self, key: &K, value: &V) -> bool
-    where
-        K: AsDatabaseBytes + ?Sized,
-        V: AsDatabaseBytes + ?Sized,
-    {
-        gen_cursor_match!(self, seek_key_value, key, value, WriteCursor)
-    }
-
-    fn seek_key_nearest_value<K, V>(&mut self, key: &K, value: &V) -> Option<V>
-    where
-        K: AsDatabaseBytes + ?Sized,
-        V: AsDatabaseBytes + FromDatabaseValue,
-    {
-        gen_cursor_match!(self, seek_key_nearest_value, key, value, WriteCursor)
     }
 
     fn get_current<K, V>(&mut self) -> Option<(K, V)>
@@ -588,7 +556,7 @@ impl<'txn, 'db> ReadCursor for WriteCursor<'txn, 'db> {
     }
 }
 
-impl<'txn, 'db> WriteCursorTrait for WriteCursor<'txn, 'db> {
+impl<'txn, 'db> WriteCursorTrait for WriteCursor<'txn> {
     fn remove(&mut self) {
         gen_cursor_match!(self, remove, WriteCursor)
     }

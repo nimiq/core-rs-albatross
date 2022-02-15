@@ -7,10 +7,7 @@ use beserial::Deserialize;
 use nimiq_block::{Block, BlockError, ForkProof};
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, PushError, PushResult};
-use nimiq_database::{
-    lmdb::{open as LmdbFlags, LmdbEnvironment},
-    volatile::VolatileEnvironment,
-};
+use nimiq_database::{mdbx::MdbxEnvironment, volatile::VolatileEnvironment};
 use nimiq_genesis::NetworkId;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{Address, KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey};
@@ -200,13 +197,7 @@ fn it_can_produce_a_chain_with_txns() {
     } else {
         let tmp_dir = tempdir().expect("Could not create temporal directory");
         let tmp_dir = tmp_dir.path().to_str().unwrap();
-        LmdbEnvironment::new(
-            tmp_dir,
-            1024 * 1024 * 1024 * 1024,
-            21,
-            LmdbFlags::NOMETASYNC | LmdbFlags::NOSYNC | LmdbFlags::NORDAHEAD,
-        )
-        .unwrap()
+        MdbxEnvironment::new(tmp_dir, 1024 * 1024 * 1024 * 1024, 21).unwrap()
     };
     let blockchain = Arc::new(RwLock::new(
         Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
