@@ -1,7 +1,7 @@
 use parking_lot::RwLock;
 use std::convert::TryInto;
 use std::sync::Arc;
-use tempdir::TempDir;
+use tempfile::tempdir;
 
 use beserial::Deserialize;
 use nimiq_block::{Block, BlockError, ForkProof};
@@ -198,7 +198,7 @@ fn it_can_produce_a_chain_with_txns() {
     let env = if VOLATILE_ENV {
         VolatileEnvironment::new(10).unwrap()
     } else {
-        let tmp_dir = TempDir::new("chain_with_txns").expect("Could not create temporal directory");
+        let tmp_dir = tempdir().expect("Could not create temporal directory");
         let tmp_dir = tmp_dir.path().to_str().unwrap();
         LmdbEnvironment::new(
             tmp_dir,

@@ -36,7 +36,7 @@ nimiq-vrf = {path = "../../vrf"}
 
 [dev-dependencies]
 hex = "0.4"
-tempdir = "0.3"
+tempfile = "3.3"
 
 nimiq-build-tools = {path = "../../build-tools"}
 nimiq-test-utils = {path = "../../test-utils"}

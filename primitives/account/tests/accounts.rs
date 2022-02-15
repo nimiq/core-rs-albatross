@@ -2,7 +2,7 @@ use rand::prelude::StdRng;
 use rand::SeedableRng;
 use std::convert::TryFrom;
 use std::time::Instant;
-use tempdir::TempDir;
+use tempfile::tempdir;
 
 use nimiq_account::{Accounts, Inherent, InherentType};
 use nimiq_account::{Receipt, Receipts};
@@ -434,8 +434,7 @@ fn accounts_performance() {
         (env, num_txns)
     } else {
         let num_txns = 10_000;
-        let tmp_dir =
-            TempDir::new("accounts_performance_test").expect("Could not create temporal directory");
+        let tmp_dir = tempdir().expect("Could not create temporal directory");
         let tmp_dir = tmp_dir.path().to_str().unwrap();
         log::debug!("Creating a non volatile environment in {}", tmp_dir);
         let env = LmdbEnvironment::new(
