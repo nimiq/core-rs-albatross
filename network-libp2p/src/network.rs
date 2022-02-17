@@ -7,7 +7,6 @@ use bytes::{Buf, Bytes};
 use futures::executor;
 use futures::{
     channel::{mpsc, oneshot},
-    future::FutureExt,
     sink::SinkExt,
     stream::{BoxStream, StreamExt},
 };
@@ -275,8 +274,8 @@ impl Network {
 
         async move {
             loop {
-                futures::select! {
-                    validate_msg = validate_rx.next().fuse() => {
+                tokio::select! {
+                    validate_msg = validate_rx.next() => {
                         if let Some(validate_msg) = validate_msg {
                             let topic = validate_msg.topic;
                             let result: Result<bool, PublishError> = swarm
@@ -295,12 +294,12 @@ impl Network {
                             }
                         }
                     },
-                    event = swarm.next().fuse() => {
+                    event = swarm.next() => {
                         if let Some(event) = event {
                             Self::handle_event(event, &events_tx, &mut swarm, &mut task_state);
                         }
                     },
-                    action = action_rx.next().fuse() => {
+                    action = action_rx.next() => {
                         if let Some(action) = action {
                             Self::perform_action(action, &mut swarm, &mut task_state);
                         }
