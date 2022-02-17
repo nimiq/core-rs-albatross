@@ -30,6 +30,7 @@ use libp2p::{
         Quorum, Record,
     },
     noise,
+    ping::Success,
     swarm::{dial_opts::DialOpts, SwarmBuilder, SwarmEvent},
     tcp, websocket, yamux, Multiaddr, PeerId, Swarm, Transport,
 };
@@ -603,16 +604,27 @@ impl Network {
                         }
                     }
                     NimiqEvent::Ping(event) => {
-                        if let Err(e) = event.result {
-                            tracing::error!("Ping failed with peer {}, {:?}", event.peer, e);
-                            // Remove the peer from the peer map
-                            if let Some(peer) = swarm.behaviour_mut().pool.peers.remove(&event.peer)
-                            {
-                                events_tx.send(NetworkEvent::<Peer>::PeerLeft(peer)).ok();
+                        match event.result {
+                            Err(e) => {
+                                tracing::error!("Ping failed with peer {}, {:?}", event.peer, e);
+                                // Remove the peer from the peer map
+                                if let Some(peer) =
+                                    swarm.behaviour_mut().pool.peers.remove(&event.peer)
+                                {
+                                    events_tx.send(NetworkEvent::<Peer>::PeerLeft(peer)).ok();
+                                }
                             }
-                        } else {
-                            tracing::trace!("Ping succeded with peer {}", event.peer);
-                        }
+                            Ok(Success::Pong) => {
+                                tracing::trace!("Responded Ping from peer {}", event.peer);
+                            }
+                            Ok(Success::Ping { rtt }) => {
+                                tracing::trace!(
+                                    "Sent Ping and received response to/from peer {}, round trip time {:?}",
+                                    event.peer,
+                                    rtt
+                                );
+                            }
+                        };
                     }
                     NimiqEvent::Pool(event) => {
                         match event {
