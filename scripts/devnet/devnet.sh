@@ -51,7 +51,7 @@ function check_failures() {
     while [ $secs -le $sleep_time ]
     do
         # Search for panics/crashes
-        if grep -wrin " panic " $logsdir/*.log
+        if grep -rin " panic " $logsdir/*.log
         then
             echo "   !!!   PANIC   !!!"
             echo "PANIC" >> temp-state/RESULT.TXT
