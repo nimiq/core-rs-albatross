@@ -24,7 +24,7 @@ path = "src/signtx/main.rs"
 
 [dependencies]
 anyhow = "1.0"
-clap = { version = "3.0", features = ["cargo"] }
+clap = { version = "3.1", features = ["cargo"] }
 hex = "0.4"
 log = "0.4"
 rand = "0.8"
