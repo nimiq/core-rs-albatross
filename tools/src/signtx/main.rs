@@ -7,7 +7,7 @@ use std::process::exit;
 use std::str::FromStr;
 
 use anyhow::Error;
-use clap::{crate_authors, crate_description, crate_version, App, Arg};
+use clap::{crate_authors, crate_description, crate_version, Arg, Command};
 use thiserror::Error;
 
 use beserial::{Deserialize, Serialize};
@@ -17,7 +17,7 @@ use primitives::networks::NetworkId;
 use transaction::Transaction;
 
 fn run_app() -> Result<(), Error> {
-    let matches = App::new("Sign transaction")
+    let matches = Command::new("Sign transaction")
         .version(crate_version!())
         .author(crate_authors!())
         .about(crate_description!())
