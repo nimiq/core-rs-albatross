@@ -14,10 +14,7 @@ use futures::{
 use libp2p::core::transport::MemoryTransport;
 use libp2p::{
     core,
-    core::{
-        connection::ConnectionLimits, muxing::StreamMuxerBox, network::NetworkInfo,
-        transport::Boxed,
-    },
+    core::{muxing::StreamMuxerBox, transport::Boxed},
     dns,
     gossipsub::{
         error::PublishError, GossipsubEvent, GossipsubMessage, IdentTopic, MessageAcceptance,
@@ -31,7 +28,7 @@ use libp2p::{
     },
     noise,
     ping::Success,
-    swarm::{dial_opts::DialOpts, SwarmBuilder, SwarmEvent},
+    swarm::{dial_opts::DialOpts, ConnectionLimits, NetworkInfo, SwarmBuilder, SwarmEvent},
     tcp, websocket, yamux, Multiaddr, PeerId, Swarm, Transport,
 };
 use tokio::sync::broadcast;
@@ -663,7 +660,7 @@ impl Network {
                 let query_id = swarm
                     .behaviour_mut()
                     .dht
-                    .get_record(&key.into(), Quorum::One);
+                    .get_record(key.into(), Quorum::One);
                 state.dht_gets.insert(query_id, output);
             }
             NetworkAction::DhtPut { key, value, output } => {

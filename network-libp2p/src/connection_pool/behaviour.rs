@@ -14,8 +14,8 @@ use libp2p::swarm::dial_opts::PeerCondition;
 use libp2p::{
     core::{connection::ConnectionId, multiaddr::Protocol, ConnectedPoint},
     swarm::{
-        dial_opts::DialOpts, CloseConnection, DialError, IntoProtocolsHandler, NetworkBehaviour,
-        NetworkBehaviourAction, NotifyHandler, PollParameters, ProtocolsHandler,
+        dial_opts::DialOpts, CloseConnection, ConnectionHandler, DialError, IntoConnectionHandler,
+        NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, PollParameters,
     },
     Multiaddr, PeerId,
 };
@@ -400,10 +400,10 @@ impl ConnectionPoolBehaviour {
 }
 
 impl NetworkBehaviour for ConnectionPoolBehaviour {
-    type ProtocolsHandler = ConnectionPoolHandler;
+    type ConnectionHandler = ConnectionPoolHandler;
     type OutEvent = ConnectionPoolEvent;
 
-    fn new_handler(&mut self) -> Self::ProtocolsHandler {
+    fn new_handler(&mut self) -> Self::ConnectionHandler {
         ConnectionPoolHandler::new()
     }
 
@@ -415,26 +415,20 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
             .unwrap_or_default()
     }
 
-    fn inject_connected(&mut self, peer_id: &PeerId) {
-        self.peer_ids.mark_connected(*peer_id);
-        self.maintain_peers();
-    }
-
-    fn inject_disconnected(&mut self, peer_id: &PeerId) {
-        self.peer_ids.mark_closed(*peer_id);
-        // If the connection was closed for any reason, don't dial the peer again.
-        // FIXME We want to be more selective here and only mark peers as down for specific CloseReasons.
-        self.peer_ids.mark_down(*peer_id);
-        self.maintain_peers();
-    }
-
     fn inject_connection_established(
         &mut self,
         peer_id: &PeerId,
         connection_id: &ConnectionId,
         endpoint: &ConnectedPoint,
         failed_addresses: Option<&Vec<Multiaddr>>,
+        other_established: usize,
     ) {
+        if other_established == 0 {
+            // This is the first connection to this peer
+            self.peer_ids.mark_connected(*peer_id);
+            self.maintain_peers();
+        }
+
         // Send an event to the handler that tells it if this is an inbound or outbound connection, and the registered
         // messages handlers, that receive from all peers.
         self.actions
@@ -542,7 +536,8 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
         peer_id: &PeerId,
         _conn: &ConnectionId,
         endpoint: &ConnectedPoint,
-        _handler: <Self::ProtocolsHandler as IntoProtocolsHandler>::Handler,
+        _handler: <Self::ConnectionHandler as IntoConnectionHandler>::Handler,
+        remaining_established: usize,
     ) {
         let address = endpoint.get_remote_address();
 
@@ -578,13 +573,22 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
                     reason: CloseReason::RemoteClosed,
                 },
             });
+
+        if remaining_established == 0 {
+            // There are no more remaining connections to this peer
+            self.peer_ids.mark_closed(*peer_id);
+            // If the connection was closed for any reason, don't dial the peer again.
+            // FIXME We want to be more selective here and only mark peers as down for specific CloseReasons.
+            self.peer_ids.mark_down(*peer_id);
+            self.maintain_peers();
+        }
     }
 
     fn inject_event(
         &mut self,
         peer_id: PeerId,
         _connection: ConnectionId,
-        event: <<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::OutEvent,
+        event: <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as ConnectionHandler>::OutEvent,
     ) {
         match event {
             HandlerOutEvent::PeerJoined { peer } => {
@@ -616,7 +620,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
     fn inject_dial_failure(
         &mut self,
         peer_id: Option<PeerId>,
-        _handler: Self::ProtocolsHandler,
+        _handler: Self::ConnectionHandler,
         error: &DialError,
     ) {
         match error {
@@ -655,7 +659,7 @@ impl NetworkBehaviour for ConnectionPoolBehaviour {
         &mut self,
         cx: &mut Context<'_>,
         _params: &mut impl PollParameters,
-    ) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ProtocolsHandler>> {
+    ) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
         // Dispatch pending actions.
         if let Some(action) = self.actions.pop_front() {
             return Poll::Ready(action);

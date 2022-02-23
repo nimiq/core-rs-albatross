@@ -142,10 +142,10 @@ impl DiscoveryBehaviour {
 }
 
 impl NetworkBehaviour for DiscoveryBehaviour {
-    type ProtocolsHandler = DiscoveryHandler;
+    type ConnectionHandler = DiscoveryHandler;
     type OutEvent = DiscoveryEvent;
 
-    fn new_handler(&mut self) -> Self::ProtocolsHandler {
+    fn new_handler(&mut self) -> Self::ConnectionHandler {
         DiscoveryHandler::new(
             self.config.clone(),
             self.keypair.clone(),
@@ -166,12 +166,18 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         addresses
     }
 
-    fn inject_connected(&mut self, peer_id: &PeerId) {
-        self.connected_peers.insert(*peer_id);
-    }
-
-    fn inject_disconnected(&mut self, peer_id: &PeerId) {
-        self.connected_peers.remove(peer_id);
+    fn inject_connection_closed(
+        &mut self,
+        peer_id: &PeerId,
+        _: &ConnectionId,
+        _: &ConnectedPoint,
+        _: Self::ConnectionHandler,
+        remaining_established: usize,
+    ) {
+        if remaining_established == 0 {
+            // There are no more remaining connections to this peer
+            self.connected_peers.remove(peer_id);
+        }
     }
 
     fn inject_connection_established(
@@ -180,11 +186,17 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         connection_id: &ConnectionId,
         endpoint: &ConnectedPoint,
         _failed_addresses: Option<&Vec<Multiaddr>>,
+        other_established: usize,
     ) {
         log::trace!("DiscoveryBehaviour::inject_connection_established:");
         log::trace!("  - peer_id: {:?}", peer_id);
         log::trace!("  - connection_id: {:?}", connection_id);
         log::trace!("  - endpoint: {:?}", endpoint);
+
+        if other_established == 0 {
+            // This is the first connection to this peer
+            self.connected_peers.insert(*peer_id);
+        }
 
         if endpoint.is_dialer() {
             self.events
@@ -224,7 +236,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         &mut self,
         cx: &mut Context,
         _params: &mut impl PollParameters,
-    ) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ProtocolsHandler>> {
+    ) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
         // Emit events
         if let Some(event) = self.events.pop_front() {
             return Poll::Ready(event);

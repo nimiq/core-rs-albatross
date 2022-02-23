@@ -18,7 +18,7 @@ pub mod peer;
 pub const MESSAGE_PROTOCOL: &[u8] = b"/nimiq/message/0.0.1";
 pub const DISCOVERY_PROTOCOL: &[u8] = b"/nimiq/discovery/0.0.1";
 
-pub use libp2p::{self, core::network::NetworkInfo, identity::Keypair, Multiaddr, PeerId};
+pub use libp2p::{self, identity::Keypair, swarm::NetworkInfo, Multiaddr, PeerId};
 
 pub use config::Config;
 pub use error::NetworkError;

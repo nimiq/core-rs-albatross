@@ -189,7 +189,7 @@ impl NimiqBehaviour {
     ) -> Poll<
         NetworkBehaviourAction<
             <Self as NetworkBehaviour>::OutEvent,
-            <Self as NetworkBehaviour>::ProtocolsHandler,
+            <Self as NetworkBehaviour>::ConnectionHandler,
         >,
     > {
         if self.update_scores.poll_tick(cx).is_ready() {

@@ -11,8 +11,8 @@ use futures::{
 };
 use libp2p::{
     swarm::{
-        KeepAlive, NegotiatedSubstream, ProtocolsHandler, ProtocolsHandlerEvent,
-        ProtocolsHandlerUpgrErr, SubstreamProtocol,
+        ConnectionHandler, ConnectionHandlerEvent, ConnectionHandlerUpgrErr, KeepAlive,
+        NegotiatedSubstream, SubstreamProtocol,
     },
     PeerId,
 };
@@ -69,7 +69,7 @@ pub struct ConnectionPoolHandler {
 
     waker: Option<Waker>,
 
-    events: VecDeque<ProtocolsHandlerEvent<MessageProtocol, (), HandlerOutEvent, HandlerError>>,
+    events: VecDeque<ConnectionHandlerEvent<MessageProtocol, (), HandlerOutEvent, HandlerError>>,
 
     // The socket. This is only set after we negotiated the substream and before we instantiated the peer.
     socket: Option<MessageDispatch<NegotiatedSubstream>>,
@@ -102,7 +102,7 @@ impl ConnectionPoolHandler {
     }
 }
 
-impl ProtocolsHandler for ConnectionPoolHandler {
+impl ConnectionHandler for ConnectionPoolHandler {
     type InEvent = HandlerInEvent;
     type OutEvent = HandlerOutEvent;
     type Error = HandlerError;
@@ -177,7 +177,7 @@ impl ProtocolsHandler for ConnectionPoolHandler {
                     log::debug!("Requesting outbound substream to: {:?}", self.peer_id);
 
                     self.events
-                        .push_back(ProtocolsHandlerEvent::OutboundSubstreamRequest {
+                        .push_back(ConnectionHandlerEvent::OutboundSubstreamRequest {
                             protocol: SubstreamProtocol::new(MessageProtocol::default(), ()),
                         });
                 }
@@ -190,7 +190,7 @@ impl ProtocolsHandler for ConnectionPoolHandler {
     fn inject_dial_upgrade_error(
         &mut self,
         _info: Self::OutboundOpenInfo,
-        error: ProtocolsHandlerUpgrErr<SerializingError>,
+        error: ConnectionHandlerUpgrErr<SerializingError>,
     ) {
         log::error!("Dial upgrade error: {}", error);
     }
@@ -202,7 +202,7 @@ impl ProtocolsHandler for ConnectionPoolHandler {
     fn poll(
         &mut self,
         cx: &mut Context,
-    ) -> Poll<ProtocolsHandlerEvent<MessageProtocol, (), HandlerOutEvent, HandlerError>> {
+    ) -> Poll<ConnectionHandlerEvent<MessageProtocol, (), HandlerOutEvent, HandlerError>> {
         #[allow(clippy::never_loop)]
         loop {
             // Emit event
@@ -237,14 +237,14 @@ impl ProtocolsHandler for ConnectionPoolHandler {
                             self.peer = None;
 
                             // Gracefully close the connection
-                            return Poll::Ready(ProtocolsHandlerEvent::Custom(
+                            return Poll::Ready(ConnectionHandlerEvent::Custom(
                                 HandlerOutEvent::PeerLeft { peer_id, reason },
                             ));
                         }
                         Poll::Ready(Err(e)) => {
                             // Error while closing. Log the error and emit the close event.
                             log::error!("Error while closing socket: {}", e);
-                            return Poll::Ready(ProtocolsHandlerEvent::Close(
+                            return Poll::Ready(ConnectionHandlerEvent::Close(
                                 HandlerError::ConnectionClosed { reason },
                             ));
                         }
@@ -261,7 +261,7 @@ impl ProtocolsHandler for ConnectionPoolHandler {
                         // Socket error
                         log::error!("{}", e);
 
-                        return Poll::Ready(ProtocolsHandlerEvent::Close(
+                        return Poll::Ready(ConnectionHandlerEvent::Close(
                             HandlerError::ConnectionClosed {
                                 reason: CloseReason::Error,
                             },
@@ -273,7 +273,7 @@ impl ProtocolsHandler for ConnectionPoolHandler {
                         log::debug!("Remote closed connection");
 
                         // Gracefully close the connection
-                        return Poll::Ready(ProtocolsHandlerEvent::Custom(
+                        return Poll::Ready(ConnectionHandlerEvent::Custom(
                             HandlerOutEvent::PeerLeft {
                                 peer_id: peer.id,
                                 reason: CloseReason::RemoteClosed,
@@ -288,7 +288,7 @@ impl ProtocolsHandler for ConnectionPoolHandler {
                 if let Poll::Ready(Err(e)) = peer.poll_outbound(cx) {
                     log::error!("Error processing outbound messages: {}", e);
 
-                    return Poll::Ready(ProtocolsHandlerEvent::Close(
+                    return Poll::Ready(ConnectionHandlerEvent::Close(
                         HandlerError::ConnectionClosed {
                             reason: CloseReason::Error,
                         },
@@ -323,9 +323,9 @@ impl ProtocolsHandler for ConnectionPoolHandler {
             self.peer = Some(Arc::clone(&peer));
 
             // Send peer to behaviour
-            return Poll::Ready(ProtocolsHandlerEvent::Custom(HandlerOutEvent::PeerJoined {
-                peer,
-            }));
+            return Poll::Ready(ConnectionHandlerEvent::Custom(
+                HandlerOutEvent::PeerJoined { peer },
+            ));
         }
 
         store_waker!(self, waker, cx);
