@@ -35,7 +35,7 @@ rand = "0.8"
 serde = "1.0"
 serde_derive = "1.0"
 structopt = { version = "0.3", features = ["paw"] }
-strum_macros = "0.23"
+strum_macros = "0.24"
 toml = "0.5"
 url = "2.2"
 time = { version = "0.3", features = ["formatting"] }
