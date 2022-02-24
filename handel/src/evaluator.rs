@@ -122,11 +122,6 @@ impl<
         if let Identity::Single(identity) = identity {
             if store.individual_signature(level, identity).is_some() {
                 // If we already know it for this level, score it as 0
-                trace!(
-                    "Individual contribution from peer {} for level {} already known",
-                    identity,
-                    level,
-                );
                 return 0;
             }
         }
@@ -145,17 +140,8 @@ impl<
                 Identity::Multiple(ids) => ids.len(),
             };
 
-            trace!("level = {}", level);
-            trace!("contribution = {:#?}", contribution);
-            trace!(
-                "best_contribution = {:#?} - Ids: {}",
-                best_contribution,
-                best_contributors_num
-            );
-
             // check if the best signature for that level is already complete
             if to_receive == best_contributors_num {
-                trace!("Best contribution already complete");
                 return 0;
             }
 
@@ -164,7 +150,6 @@ impl<
                 .contributors()
                 .is_superset(&contribution.contributors())
             {
-                trace!("Best signature is better");
                 return 0;
             }
         }
@@ -217,13 +202,6 @@ impl<
             let new_total = with_individuals.len();
             (new_total, new_total, new_total - signers.len())
         };
-
-        trace!(
-            "new_total={}, added_sigs={}, combined_sigs={}",
-            new_total,
-            added_sigs,
-            combined_sigs
-        );
 
         // compute score
         // TODO: Remove magic numbers! What do they mean? I don't think this is discussed in the paper.

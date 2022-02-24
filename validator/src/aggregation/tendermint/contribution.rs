@@ -8,10 +8,18 @@ use nimiq_collections::bitset::BitSet;
 
 use nimiq_handel::contribution::{AggregatableContribution, ContributionError};
 
-#[derive(Serialize, Deserialize, std::fmt::Debug, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct TendermintContribution {
     #[beserial(len_type(u16))]
     pub contributions: BTreeMap<Option<Blake2sHash>, MultiSignature>,
+}
+
+impl std::fmt::Debug for TendermintContribution {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let mut debug = f.debug_map();
+        debug.entries(self.contributions.iter().map(|(v, m)| (v, &m.signers)));
+        debug.finish()
+    }
 }
 
 impl TendermintContribution {

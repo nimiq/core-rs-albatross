@@ -83,13 +83,6 @@ impl<P: Partitioner, C: AggregatableContribution> ReplaceStore<P, C> {
 
     fn check_merge(&self, contribution: &C, contributors: BitSet, level: usize) -> Option<C> {
         if let Some((best_contribution, identity)) = self.best_contribution.get(&level) {
-            trace!(
-                "trying to combine contribution {:?} for level {}, current best: {:?}",
-                contribution,
-                level,
-                best_contribution,
-            );
-
             let best_contributors = identity.as_bitset();
 
             // try to combine
@@ -152,13 +145,6 @@ impl<P: Partitioner, C: AggregatableContribution> ContributionStore for ReplaceS
     type Contribution = C;
 
     fn put(&mut self, contribution: Self::Contribution, level: usize, identity: Identity) {
-        trace!(
-            "Putting signature into store (level {}): {:?} - #{:?}",
-            level,
-            contribution,
-            identity
-        );
-
         if let Identity::Single(id) = identity {
             self.individual_verified
                 .get_mut(level)
@@ -173,11 +159,6 @@ impl<P: Partitioner, C: AggregatableContribution> ContributionStore for ReplaceS
         if let Some(best_contribution) =
             self.check_merge(&contribution, identity.as_bitset(), level)
         {
-            trace!(
-                "best_contribution = {:?} (level {})",
-                best_contribution,
-                level
-            );
             self.best_contribution
                 .insert(level, (best_contribution, identity));
             if level > self.best_level {

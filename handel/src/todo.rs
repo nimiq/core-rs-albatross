@@ -11,12 +11,21 @@ use crate::evaluator::Evaluator;
 use crate::update::LevelUpdate;
 
 /// A TodoItem represents a contribution which has not yet been aggregated into the store.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub(crate) struct TodoItem<C: AggregatableContribution> {
     /// The contribution of this TodoItem
     pub contribution: C,
     /// The level the contribution of this TodoItem belongs to.
     pub level: usize,
+}
+
+impl<C: AggregatableContribution> std::fmt::Debug for TodoItem<C> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let mut dbg = f.debug_struct("TodoItem");
+        dbg.field("level", &self.level);
+        dbg.field("signers", &self.contribution.contributors());
+        dbg.finish()
+    }
 }
 
 impl<C: AggregatableContribution> TodoItem<C> {
@@ -157,9 +166,9 @@ impl<C: AggregatableContribution, E: Evaluator<C>> Stream for TodoList<C, E> {
                 };
                 // Score the newly created TodoItem for the aggregate of the LevelUpdate
                 let score = aggregate_todo.evaluate(Arc::clone(&self.evaluator));
-                trace!("New todo with score: {}", &score);
                 // TodoItems with a score of 0 are discarded (meaning not added to the set of TodoItems).
                 if score > 0 {
+                    trace!("New todo with score: {}", &score);
                     if score > best_score {
                         // If the score is a new best remember the score and put the former best item into the list.
                         best_score = score;

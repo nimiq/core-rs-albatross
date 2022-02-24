@@ -127,10 +127,10 @@ pub(crate) fn aggregation_to_vote<ProposalHashTy: ProposalHashTrait, ProofTy: Pr
 ) -> VoteResult<ProofTy> {
     if proposal_hash.is_some() && agg.get(proposal_hash).map_or(0, |x| x.1) >= TWO_F_PLUS_ONE {
         log::debug!(
-            "Aggregate: {:#?}\nCurrent proposal {:?} has {} votes",
-            &agg,
+            "Current proposal {:?} has {} votes: {:#?}",
             &proposal_hash,
             agg.get(proposal_hash).map_or(0, |x| x.1),
+            &agg,
         );
         // If we received 2f+1 votes for the current (assuming that it isn't None), then we
         // must return Block.
@@ -138,14 +138,14 @@ pub(crate) fn aggregation_to_vote<ProposalHashTy: ProposalHashTrait, ProofTy: Pr
     } else if agg.get(&None).map_or(0, |x| x.1) >= TWO_F_PLUS_ONE {
         // is f+1 sufficient here?
         log::debug!(
-            "Aggregate: {:#?}\nNil has {} votes",
-            &agg,
+            "Nil has {} votes: {:#?}",
             agg.get(&None).map_or(0, |x| x.1),
+            &agg,
         );
         // If we received 2f+1 votes for Nil, then we must return Nil.
         VoteResult::Nil(agg.get(&None).cloned().unwrap().0)
     } else {
-        log::debug!("Aggregate: {:#?}\nAggregation timed out", &agg);
+        log::debug!("Aggregation timed out: {:#?}", &agg);
         // There are two cases when we must return Timeout:
         // 1) When we receive 2f+1 votes for a proposal that we don't have.
         // 2) When we don't have 2f+1 votes for a single proposal or for Nil.

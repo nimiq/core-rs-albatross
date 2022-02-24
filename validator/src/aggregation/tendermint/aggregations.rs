@@ -193,13 +193,10 @@ impl<N: ValidatorNetwork + 'static> Stream for TendermintAggregations<N> {
                     .aggregation_descriptors
                     .get(&(message.tag.round_number, message.tag.step))
                 {
-                    trace!("New message for ongoing aggregation: {:?}", &message);
-                    let result = descriptor.input.send(message.update);
-                    match result {
-                        Ok(()) => trace!("Sent LevelUpdate message to aggregation"),
-                        Err(e) => {
-                            trace!("Failed to relay LevelUpdate to aggregation, error {} ", e)
-                        }
+                    if descriptor.input.send(message.update.clone()).is_err() {
+                        // channel was closed, thus the aggregation was terminated. Remove the descriptor.
+                        self.aggregation_descriptors
+                            .remove(&(message.tag.round_number, message.tag.step));
                     }
                 } else if let Some((highest_round, _)) =
                     self.aggregation_descriptors.keys().next_back()

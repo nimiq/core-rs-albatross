@@ -168,18 +168,11 @@ impl<
             )
         });
 
-        trace!(
-            "Checking for completed level {}: signers={:?}",
-            level.id,
-            contribution.contributors()
-        );
-
         // check if level already is completed
         {
             let level_state = level.state.read();
             if level_state.receive_completed {
                 // The level was completed before so nothing more to do.
-                trace!("check_completed_level: receive_completed=true");
                 return;
             }
         }
@@ -194,13 +187,6 @@ impl<
                 .unwrap_or_else(|| panic!("Expected a best signature for level {}", level.id));
             self.num_contributors(best)
         };
-
-        trace!(
-            "level {} - #{}/{}",
-            level.id,
-            num_contributors,
-            level.num_peers()
-        );
 
         // If the number of contributors on this level is equal to the number of peers on this level it is completed.
         if num_contributors == level.num_peers() {
