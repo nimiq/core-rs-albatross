@@ -478,7 +478,11 @@ impl Mempool {
 
 impl TransactionVerificationCache for Mempool {
     fn is_known(&self, tx_hash: &Blake2bHash) -> bool {
-        self.contains_transaction_by_hash(tx_hash)
+        if let Some(state) = self.state.try_read() {
+            state.contains(tx_hash)
+        } else {
+            false
+        }
     }
 }
 
