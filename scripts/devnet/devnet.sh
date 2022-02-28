@@ -58,6 +58,13 @@ function check_failures() {
             fail=true
             break
         fi
+        # Search for slow lock acquisitions
+        if grep -rin "slow.*took" $logsdir/*.log
+        then
+            echo "   !!!   SLOW LOCK ACQUISITION   !!!"
+            echo "SLOW_LOCK_ACQUISITION" >> temp-state/RESULT.TXT
+            break
+        fi
         # Search for deadlocks
         if grep -wrin "deadlock" $logsdir/*.log
         then

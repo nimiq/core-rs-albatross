@@ -62,6 +62,15 @@ jobs:
           footer: '<{run_url}|View Run>'
       env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
+    - name: Report slow lock acquisitions
+      if: always() && contains(steps.reason.outputs.FAIL_REASON, 'SLOW_LOCK_ACQUISITION')
+      uses: ravsamhq/notify-slack-action@v1
+      with:
+          status: ${{ job.status }}
+          notification_title: 'Slow lock acquisition detected in FiveValidatorsWithSpammer'
+          footer: '<{run_url}|View Run>'
+      env:
+          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
     - name: Report Status to Slack
       if: always() && github.ref == 'refs/heads/albatross'
       uses: ravsamhq/notify-slack-action@v1
