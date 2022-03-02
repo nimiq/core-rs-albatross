@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use parking_lot::RwLock;
@@ -5,7 +6,6 @@ use parking_lot::RwLock;
 use nimiq_block::Block;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, Direction, CHUNK_SIZE};
 use nimiq_network_interface::message::ResponseMessage;
-use nimiq_primitives::policy;
 
 use crate::messages::*;
 
@@ -138,73 +138,48 @@ impl Handle<ResponseBlock> for RequestBlock {
 impl Handle<ResponseBlocks> for RequestMissingBlocks {
     fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> ResponseBlocks {
         let blockchain = blockchain.read();
-        // Behaviour of our missing blocks request:
-        // 1. Receives `target_block_hash: Blake2bHash, locators: Vec<Blake2bHash>`
-        // 2. Return all blocks in between most recent locator on our main chain and target block hash
-        // 3. This should also work across 1 or 2 batches with an upper bound
-        // For now, we just ignore the case if we receive a block announcement which is more than 1-2 batches away from our current block.
-        let target_block_opt = blockchain.get_block(&self.target_hash, false, None);
-        if target_block_opt.is_none() {
-            debug!(
-                "ResponseBlocks [{}] - unknown target block",
-                self.request_identifier
-            );
-            return ResponseBlocks {
-                blocks: None,
-                request_identifier: self.get_request_identifier(),
-            };
-        }
 
-        let target_block = target_block_opt.unwrap();
+        // TODO We might want to do a sanity check on the locator hashes and reject the request if
+        //  they they don't match up with the given target hash.
 
-        // A peer has requested blocks. Check all requested block locator hashes
-        // in the given order and pick the first hash that is found on our main
-        // chain, ignore the rest. If none of the requested hashes is found,
-        // pick the last macro block hash. Send the main chain starting from the
-        // picked hash back to the peer.
-        let mut start_block = None;
-        for locator in self.locators.iter() {
-            if let Some(block) = blockchain.chain_store.get_block(locator, false, None) {
-                // We found a block, ignore remaining block locator hashes.
-                start_block = Some(block);
-                break;
+        // Build a HashSet from the given locator hashes.
+        let locators = HashSet::<Blake2bHash>::from_iter(self.locators.iter().cloned());
+
+        // Walk the chain backwards from the target block until we find one of the locators or
+        // encounter a macro block. Return all blocks between the locator block (exclusive) and the
+        // target block (inclusive). If we stopped at a macro block instead of a locator, the macro
+        // block is included in the result.
+        let mut blocks = Vec::new();
+        let mut block_hash = self.target_hash.clone();
+        while !locators.contains(&block_hash) {
+            let block = blockchain.get_block(&block_hash, true, None);
+            if let Some(block) = block {
+                let is_macro = block.is_macro();
+
+                block_hash = block.parent_hash().clone();
+                blocks.push(block);
+
+                if is_macro {
+                    break;
+                }
+            } else {
+                // This can only happen if the target hash is unknown or after the chain was pruned.
+                // TODO Return the blocks we found instead of failing here?
+                debug!(
+                    "ResponseBlocks [{}] - unknown target block/predecessor {} ({} blocks found)",
+                    self.request_identifier,
+                    block_hash,
+                    blocks.len(),
+                );
+                return ResponseBlocks {
+                    blocks: None,
+                    request_identifier: self.get_request_identifier(),
+                };
             }
         }
 
-        // if no start_block can be found, assume the last macro block before target_block
-        let start_block = if let Some(block) = start_block {
-            block
-        } else if let Some(block) = blockchain.get_block_at(
-            policy::macro_block_before(target_block.block_number()),
-            false,
-            None,
-        ) {
-            block
-        } else {
-            debug!(
-                "ResponseBlocks [{}] - unknown locators and preceding macro block",
-                self.request_identifier
-            );
-            return ResponseBlocks {
-                blocks: None,
-                request_identifier: self.get_request_identifier(),
-            };
-        };
-
-        // Check that the distance is sensible.
-        let num_blocks = target_block.block_number() - start_block.block_number();
-        if num_blocks > policy::BATCH_LENGTH * 2 {
-            debug!("Received missing block request across more than 2 batches.");
-            return ResponseBlocks {
-                blocks: None,
-                request_identifier: self.get_request_identifier(),
-            };
-        }
-
-        // Collect the blocks starting right after the identified block on the main chain
-        // up to our target hash.
-        let blocks =
-            blockchain.get_blocks(&start_block.hash(), num_blocks, true, Direction::Forward);
+        // Blocks are returned in ascending (forward) order.
+        blocks.reverse();
 
         ResponseBlocks {
             blocks: Some(blocks),
