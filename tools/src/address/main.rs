@@ -8,7 +8,7 @@ fn main() {
     let address = Address::from(&public_key);
 
     println!("Address:       {}", address.to_user_friendly_address());
-    println!("Address (raw): {}", address);
+    println!("Address (raw): {}", address.to_hex());
     println!("Public Key:    {}", public_key.to_hex());
     println!("Private Key:   {}", hex::encode(private_key.as_bytes()));
 }
