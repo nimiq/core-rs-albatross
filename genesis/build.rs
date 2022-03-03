@@ -1,6 +1,6 @@
 use std::env;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use nimiq_build_tools::genesis::GenesisBuilder;
 use nimiq_database::volatile::VolatileEnvironment;
@@ -19,22 +19,13 @@ fn write_genesis_rs(directory: &Path, name: &str, genesis_hash: &Blake2bHash) {
     fs::write(directory.join("genesis.rs"), genesis_rs.as_bytes()).unwrap();
 }
 
-fn generate_albatross(
-    name: &str,
-    out_dir: &Path,
-    src_dir: &Path,
-    config_override: Option<PathBuf>,
-) {
+fn generate_albatross(name: &str, out_dir: &Path, src_dir: &Path) {
     log::info!("Generating Albatross genesis config: {}", name);
 
     let directory = out_dir.join(name);
     fs::create_dir_all(&directory).unwrap();
 
-    let genesis_config = if let Some(config_override) = config_override {
-        config_override
-    } else {
-        src_dir.join(format!("{}.toml", name))
-    };
+    let genesis_config = src_dir.join(format!("{}.toml", name));
     log::info!("genesis source file: {}", genesis_config.display());
 
     let mut builder = GenesisBuilder::new();
@@ -49,9 +40,6 @@ fn main() {
 
     let out_dir = Path::new(&env::var("OUT_DIR").unwrap()).join("genesis");
     let src_dir = Path::new("src").join("genesis");
-    let devnet_override = env::var("NIMIQ_OVERRIDE_DEVNET_CONFIG")
-        .ok()
-        .map(PathBuf::from);
 
     log::info!("Taking genesis config files from: {}", src_dir.display());
     log::info!("Writing genesis data to: {}", out_dir.display());
@@ -59,13 +47,7 @@ fn main() {
         "DevNet override {:?}",
         env::var("NIMIQ_OVERRIDE_DEVNET_CONFIG")
     );
-    if let Some(devnet_override) = &devnet_override {
-        log::info!(
-            "Using override for Albatross DevNet config: {}",
-            devnet_override.display()
-        );
-    }
 
-    generate_albatross("dev-albatross", &out_dir, &src_dir, devnet_override);
-    generate_albatross("unit-albatross", &out_dir, &src_dir, None);
+    generate_albatross("dev-albatross", &out_dir, &src_dir);
+    generate_albatross("unit-albatross", &out_dir, &src_dir);
 }

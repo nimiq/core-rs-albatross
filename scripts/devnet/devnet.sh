@@ -20,7 +20,6 @@ RELEASE=false
 MAX_VALIDATORS=4
 cargo="cargo run"
 cargo_build="cargo build"
-cargo_clean="cargo clean"
 tpb=150
 vkill=1
 down_time=10
@@ -202,12 +201,11 @@ mkdir -p $logsdir
 mkdir -p $configdir
 
 # Erase all previous state (if any) and start fresh
-rm -rf temp-state
+rm -rf temp-state/*
 
 if [ "$RELEASE" = true ] ; then
     cargo+=" --release"
     cargo_build+=" --release"
-    cargo_clean+=" --release"
 fi
 
 if [ "$METRICS" = true ] ; then
@@ -237,10 +235,9 @@ else
     python3 scripts/devnet/python/devnet_create.py $MAX_VALIDATORS -o $configdir
 fi
 echo "Config files generated in '$configdir'"
-echo "Initializing genesis..."
 export NIMIQ_OVERRIDE_DEVNET_CONFIG="$PWD/$configdir/dev-albatross.toml"
-echo "Compiling the code using genesis from '$NIMIQ_OVERRIDE_DEVNET_CONFIG' ..."
-$cargo_clean -p nimiq-genesis
+echo "Overriding genesis with '$NIMIQ_OVERRIDE_DEVNET_CONFIG' ..."
+echo "Compiling ..."
 $cargo_build
 echo "Done."
 
