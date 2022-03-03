@@ -16,7 +16,7 @@ use utils::key_rng::{CryptoRng, RngCore, SecureGenerate};
 use crate::{KeyPair, PublicKey, Signature};
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
-pub struct RandomSecret(Scalar);
+pub struct RandomSecret(pub Scalar);
 
 impl RandomSecret {
     pub const SIZE: usize = 32;
@@ -35,7 +35,7 @@ impl<'a> From<&'a [u8; RandomSecret::SIZE]> for RandomSecret {
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
-pub struct Commitment(EdwardsPoint);
+pub struct Commitment(pub EdwardsPoint);
 implement_simple_add_sum_traits!(Commitment, EdwardsPoint::identity());
 
 impl Commitment {
