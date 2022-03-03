@@ -137,7 +137,7 @@ fee_key_file = "{path}/fee_key.dat"
             path="temp-state/dev/spammer",
         ))
     return {
-        'address': "NQ40 GCAA U3UX 8BKD GUN0 PG3T 17HA 4X5H TXVE",
+        'address': "NQ43 NRP6 V97D PKBY N1B8 FYK7 EBTS 99YH 9KX7",
     }
 
 
@@ -275,7 +275,7 @@ delegation = "{validator_address}"
         ))
     f.write("""
 [[accounts]]
-address = "NQ37 7C3V VMN8 FRPN FXS9 PLAG JMRE 8SC6 KUSQ"
+address = "NQ03 0GL1 K1RU Q8L7 D9YM LKHB 4FPX KJ89 5VPM"
 balance = 10_000_000_00000
 """)
     for spammer in spammers:

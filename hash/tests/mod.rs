@@ -44,35 +44,35 @@ fn it_can_compute_argon2d() {
 
 #[test]
 fn it_can_compute_blake2b() {
-    // blake2b('test') = '928b20366943e2afd11ebc0eae2e53a93bf177a4fcf35bcc64d503704e65e202'
+    // blake2b('test') = '4878ca0425c739fa427f7eda20fe845f6b2e46ba5fe2a14df5b1e32f50603215'
 
     assert_eq!(
         Blake2bHasher::default().digest(b"test"),
-        Blake2bHash::from("928b20366943e2afd11ebc0eae2e53a93bf177a4fcf35bcc64d503704e65e202")
+        Blake2bHash::from("4878ca0425c739fa427f7eda20fe845f6b2e46ba5fe2a14df5b1e32f50603215")
     );
     let mut h = Blake2bHasher::default();
     h.write_all(b"te").unwrap();
     h.write_all(b"st").unwrap();
     assert_eq!(
         h.finish(),
-        Blake2bHash::from("928b20366943e2afd11ebc0eae2e53a93bf177a4fcf35bcc64d503704e65e202")
+        Blake2bHash::from("4878ca0425c739fa427f7eda20fe845f6b2e46ba5fe2a14df5b1e32f50603215")
     );
 }
 
 #[test]
 fn it_can_compute_blake2s() {
-    // blake2s('test') = 'f308fc02ce9172ad02a7d75800ecfc027109bc67987ea32aba9b8dcc7b10150e'
+    // blake2s('test') = '4878ca0425c739fa427f7eda20fe845f6b2e46ba5fe2a14df5b1e32f50603215'
 
     assert_eq!(
         Blake2sHasher::default().digest(b"test"),
-        Blake2sHash::from("f308fc02ce9172ad02a7d75800ecfc027109bc67987ea32aba9b8dcc7b10150e")
+        Blake2sHash::from("4878ca0425c739fa427f7eda20fe845f6b2e46ba5fe2a14df5b1e32f50603215")
     );
     let mut h = Blake2sHasher::default();
     h.write_all(b"te").unwrap();
     h.write_all(b"st").unwrap();
     assert_eq!(
         h.finish(),
-        Blake2sHash::from("f308fc02ce9172ad02a7d75800ecfc027109bc67987ea32aba9b8dcc7b10150e")
+        Blake2sHash::from("4878ca0425c739fa427f7eda20fe845f6b2e46ba5fe2a14df5b1e32f50603215")
     );
 }
 

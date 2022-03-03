@@ -24,12 +24,12 @@ use nimiq_transaction_builder::TransactionBuilder;
 use nimiq_utils::time::OffsetTime;
 use nimiq_vrf::VrfSeed;
 
-const ADDRESS: &str = "NQ20TSB0DFSMUH9C15GQGAGJTTE4D3MA859E";
+const ADDRESS: &str = "NQ11XGCVBSBL5301EX4DF58KPG23CH7K92TK";
 
 pub const ACCOUNT_SECRET_KEY: &str =
     "6c9320ac201caf1f8eaa5b05f5d67a9e77826f3f6be266a0ecccc20416dc6587";
 
-const STAKER_ADDRESS: &str = "NQ20TSB0DFSMUH9C15GQGAGJTTE4D3MA859E";
+const STAKER_ADDRESS: &str = "NQ17JLD619PAM3M4TVHJDQXNVFAMPFKYBHCF";
 
 const VOLATILE_ENV: bool = true;
 

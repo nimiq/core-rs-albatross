@@ -58,7 +58,7 @@ fn it_can_deserialize_basic_transaction() {
     assert_eq!(t.data, Vec::<u8>::new());
     assert_eq!(
         t.sender,
-        Address::from(&hex::decode("b02b9d9fcfa1a60dabe65165ded66a26983404dc").unwrap()[..])
+        Address::from(&hex::decode("d65f42b4fc68f7c9fab9561dd1d265a1e8dccb0b").unwrap()[..])
     );
     assert_eq!(t.sender_type, AccountType::Basic);
     assert_eq!(

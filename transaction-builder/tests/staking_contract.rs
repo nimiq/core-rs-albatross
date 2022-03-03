@@ -13,7 +13,7 @@ use nimiq_transaction::account::staking_contract::{
 use nimiq_transaction::{SignatureProof, Transaction};
 use nimiq_transaction_builder::TransactionBuilder;
 
-const ADDRESS: &str = "9cd82948650d902d95d52ea2ec91eae6deb0c9fe";
+const ADDRESS: &str = "435f2d0f867bf337cc4294a2167ca89d399e7e54";
 const PRIVATE_KEY: &str = "b410a7a583cbc13ef4f1cbddace30928bcb4f9c13722414bc4a2faaba3f4e187";
 const BLS_PRIVKEY: &str = "93ded88af373537a2fad738892ae29cf012bb27875cb66af9278991acbcb8e44f414\
     9c27fe9d62a31ae8537fc4891e935e1303c511091095c0ad083a1cfc0f5f223c394c2d5109288e639cde0692facc9fd\

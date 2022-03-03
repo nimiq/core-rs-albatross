@@ -180,5 +180,6 @@ balance = 1_000_000
 delegation = "NQ72 FR3J EQ5B J8G0 51GH YP9E CLC7 K13P 1TUV"
 
 [[accounts]]
-address = "NQ37 7C3V VMN8 FRPN FXS9 PLAG JMRE 8SC6 KUSQ"
+address = "NQ03 0GL1 K1RU Q8L7 D9YM LKHB 4FPX KJ89 5VPM"
+# private_key @ jeff
 balance = 10_000_000_00000
