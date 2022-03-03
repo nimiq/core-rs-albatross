@@ -303,8 +303,6 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
                 debug!("Tendermint - await_proposal: Invalid block header");
                 (MsgAcceptance::Reject, valid_round, None)
             } else {
-                let mut acceptance = MsgAcceptance::Accept;
-
                 // Get a write transaction to the database.
                 let mut txn = blockchain.write_transaction();
 
@@ -326,29 +324,28 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
                     .is_err()
                 {
                     debug!("Tendermint - await_proposal: Can't update state");
-                    acceptance = MsgAcceptance::Reject;
+                    (MsgAcceptance::Reject, valid_round, None)
                 } else {
                     // Check the validity of the block against our state. If it is invalid, we return a proposal
                     // timeout. This also returns the block body that matches the block header
                     // (assuming that the block is valid).
                     let block_state = blockchain.verify_block_state(state, &block, Some(&txn));
 
-                    if let Ok(body) = block_state {
-                        // Cache the body that we calculated.
-                        self.cache_body = body;
-                    } else if let Err(err) = block_state {
-                        debug!(
-                            "Tendermint - await_proposal: Invalid block state: {:?}",
-                            err
-                        );
-                        acceptance = MsgAcceptance::Reject;
+                    match block_state {
+                        Ok(body) => {
+                            // Cache the body that we calculated.
+                            self.cache_body = body;
+                            (MsgAcceptance::Accept, valid_round, Some(header))
+                        }
+                        Err(err) => {
+                            debug!(
+                                "Tendermint - await_proposal: Invalid block state: {:?}",
+                                err
+                            );
+                            (MsgAcceptance::Reject, valid_round, None)
+                        }
                     }
                 }
-
-                // Abort the transaction so that we don't commit the changes we made to the blockchain state.
-                txn.abort();
-
-                (acceptance, valid_round, Some(header))
             }
         };
 
