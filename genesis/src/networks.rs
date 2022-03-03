@@ -1,13 +1,17 @@
 use std::collections::HashMap;
+use std::env;
+use std::path::Path;
 
 use hex::FromHex;
 use lazy_static::lazy_static;
 
 use account::Account;
 use account::AccountsList;
-use beserial::Deserialize;
+use beserial::{Deserialize, Serialize};
 use hash::Blake2bHash;
 use keys::PublicKey;
+use nimiq_build_tools::genesis::{GenesisBuilder, GenesisBuilderError, GenesisInfo};
+use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_trie::key_nibbles::KeyNibbles;
 use peer_address::address::seed_list::SeedList;
 use peer_address::address::{NetAddress, PeerAddress, PeerAddressType, PeerId};
@@ -79,12 +83,44 @@ impl NetworkInfo {
     }
 }
 
+fn read_genesis_config(config: &Path) -> Result<GenesisData, GenesisBuilderError> {
+    let env = VolatileEnvironment::new(10).expect("Could not open a volatile database");
+
+    let GenesisInfo {
+        block,
+        hash,
+        accounts,
+    } = GenesisBuilder::new()
+        .with_config_file(config)?
+        .generate(env)?;
+
+    let block = block.serialize_to_vec();
+    let accounts = AccountsList(accounts).serialize_to_vec();
+
+    Ok(GenesisData {
+        block: Box::leak(block.into_boxed_slice()),
+        hash,
+        accounts: Box::leak(accounts.into_boxed_slice()),
+    })
+}
+
 lazy_static! {
     static ref NETWORK_MAP: HashMap<NetworkId, NetworkInfo> = {
         let mut m = HashMap::new();
         fn add(m: &mut HashMap<NetworkId, NetworkInfo>, info: NetworkInfo) {
             m.insert(info.network_id, info);
         }
+
+        let override_path = env::var_os("NIMIQ_OVERRIDE_DEVNET_CONFIG");
+        let dev_genesis = if let Some(p) = override_path {
+            read_genesis_config(Path::new(&p))
+                .expect("failure reading provided NIMIQ_OVERRIDE_DEVNET_CONFIG")
+        } else {
+            include!(concat!(
+                env!("OUT_DIR"),
+                "/genesis/dev-albatross/genesis.rs"
+            ))
+        };
 
         add(
             &mut m,
@@ -97,10 +133,7 @@ lazy_static! {
                     "5af4c3f30998573e8d3476cd0e0543bf7adba576ef321342e41c2bccc246c377",
                 )],
                 seed_lists: vec![],
-                genesis: include!(concat!(
-                    env!("OUT_DIR"),
-                    "/genesis/dev-albatross/genesis.rs"
-                )),
+                genesis: dev_genesis,
             },
         );
 
