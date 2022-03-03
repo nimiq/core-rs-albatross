@@ -66,7 +66,7 @@ pub(crate) struct ClientInner {
 
 impl ClientInner {
     async fn from_config(config: ClientConfig) -> Result<Client, Error> {
-        // Get network info (i.e. which specific blokchain we're on)
+        // Get network info (i.e. which specific blockchain we're on)
         if !config.network_id.is_albatross() {
             return Err(Error::config_error(&format!(
                 "{} is not compatible with Albatross",
