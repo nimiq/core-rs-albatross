@@ -421,7 +421,7 @@ impl Blockchain {
                 // The histories match, so we can skip over all known transactions.
                 first_new_ext_tx += known_history.len();
             }
-        } else if self.state.main_chain.head.is_micro() {
+        } else if self.state.main_chain.head.is_micro() && first_new_ext_tx < history.len() {
             // We have micro blocks for the current batch but the history is empty.
             // Check if the given history contains any items before our current block; if so, we
             // need to revert.
