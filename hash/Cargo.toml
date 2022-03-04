@@ -29,5 +29,12 @@ nimiq-database = { path = "../database" }
 nimiq-macros = { path = "../macros" }
 nimiq-mmr = { path = "../primitives/mmr" }
 
+[dev-dependencies]
+criterion = "0.3"
+
 [features]
 serde-derive = ["serde"]
+
+[[bench]]
+name = "bench"
+harness = false
