@@ -1,8 +1,8 @@
 use std::cmp;
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 
 use nimiq_account::InherentType;
-use nimiq_database::cursor::ReadCursor;
+use nimiq_database::cursor::{ReadCursor, WriteCursor};
 use nimiq_database::{
     Database, DatabaseFlags, Environment, ReadTransaction, Transaction, WriteTransaction,
 };
@@ -152,6 +152,89 @@ impl HistoryStore {
         Some(root)
     }
 
+    fn remove_txns_from_history(
+        &self,
+        txn: &mut WriteTransaction,
+        hashes: Vec<(usize, Blake2bHash)>,
+    ) {
+        // Set to keep track of the txs we are removing to remove them later
+        // from the address db in a single batch operation
+        let mut removed_txs = HashSet::new();
+        let mut affected_addresses = HashSet::new();
+
+        for (leaf_index, leaf_hash) in hashes {
+            let tx_opt: Option<ExtendedTransaction> = txn.get(&self.ext_tx_db, &leaf_hash);
+
+            let ext_tx = match tx_opt {
+                Some(v) => v,
+                None => continue,
+            };
+
+            // Remove it from the extended transaction database.
+            txn.remove(&self.ext_tx_db, &leaf_hash);
+
+            // Remove it from the transaction hash database.
+            let tx_hash = ext_tx.tx_hash();
+
+            txn.remove_item(
+                &self.tx_hash_db,
+                &tx_hash,
+                &OrderedHash {
+                    index: leaf_index as u32,
+                    hash: leaf_hash.clone(),
+                },
+            );
+
+            // Remove it from the leaf index database.
+            // Check if you are removing the last extended transaction for this block. If yes,
+            // completely remove the block, if not just decrement the last leaf index.
+            let block_number = ext_tx.block_number;
+            let (start, end) = self.get_indexes_for_block(block_number, Some(txn));
+
+            if end - start == 1 {
+                txn.remove(&self.last_leaf_db, &block_number.to_be());
+            } else {
+                txn.put(
+                    &self.last_leaf_db,
+                    &block_number.to_be(),
+                    &(leaf_index as u32 - 1),
+                );
+            }
+            removed_txs.insert(tx_hash);
+
+            match &ext_tx.data {
+                ExtTxData::Basic(tx) => {
+                    affected_addresses.insert(tx.sender.clone());
+                    affected_addresses.insert(tx.recipient.clone());
+                }
+                ExtTxData::Inherent(tx) => {
+                    affected_addresses.insert(tx.target.clone());
+                }
+            }
+        }
+
+        //Now prune the address database
+        let mut cursor = txn.write_cursor(&self.address_db);
+
+        for address in affected_addresses {
+            if cursor.seek_key::<Address, OrderedHash>(&address).is_none() {
+                continue;
+            }
+            let mut duplicate = cursor.first_duplicate::<OrderedHash>();
+
+            while let Some(v) = duplicate {
+                if !removed_txs.contains(&v.hash) {
+                    break;
+                }
+                cursor.remove();
+
+                duplicate = cursor
+                    .next_duplicate::<Address, OrderedHash>()
+                    .map(|(_, v)| v);
+            }
+        }
+    }
+
     /// Removes a number of extended transactions from an existing history tree. It returns the root
     /// of the resulting tree.
     pub fn remove_partial_history(
@@ -183,9 +266,7 @@ impl HistoryStore {
 
         // Remove each of the extended transactions in the history tree from the extended
         // transaction database.
-        for (index, hash) in hashes {
-            self.remove_extended_tx(txn, &hash, index as u32);
-        }
+        self.remove_txns_from_history(txn, hashes);
 
         // Return the history root.
         Some(root)
@@ -210,11 +291,7 @@ impl HistoryStore {
             hashes.push((i, leaf_hash));
         }
 
-        // Remove each of the extended transactions in the history tree from the extended
-        // transaction database.
-        for (index, hash) in hashes {
-            self.remove_extended_tx(txn, &hash, index as u32);
-        }
+        self.remove_txns_from_history(txn, hashes);
 
         Some(())
     }
@@ -773,146 +850,6 @@ impl HistoryStore {
                             hash: tx_hash,
                         },
                     );
-                }
-            }
-        }
-    }
-
-    /// Removes a extended transaction from the History Store's transaction databases.
-    fn remove_extended_tx(
-        &self,
-        txn: &mut WriteTransaction,
-        leaf_hash: &Blake2bHash,
-        leaf_index: u32,
-    ) {
-        // Get the transaction first.
-        let tx_opt: Option<ExtendedTransaction> = txn.get(&self.ext_tx_db, leaf_hash);
-
-        let ext_tx = match tx_opt {
-            Some(v) => v,
-            None => return,
-        };
-
-        // Remove it from the extended transaction database.
-        txn.remove(&self.ext_tx_db, leaf_hash);
-
-        // Remove it from the transaction hash database.
-        let tx_hash = ext_tx.tx_hash();
-
-        txn.remove_item(
-            &self.tx_hash_db,
-            &tx_hash,
-            &OrderedHash {
-                index: leaf_index,
-                hash: leaf_hash.clone(),
-            },
-        );
-
-        // Remove it from the leaf index database.
-        // Check if you are removing the last extended transaction for this block. If yes,
-        // completely remove the block, if not just decrement the last leaf index.
-        let block_number = ext_tx.block_number;
-
-        let (start, end) = self.get_indexes_for_block(block_number, Some(txn));
-
-        if end - start == 1 {
-            txn.remove(&self.last_leaf_db, &block_number.to_be());
-        } else {
-            txn.put(&self.last_leaf_db, &block_number.to_be(), &(leaf_index - 1));
-        }
-
-        // Remove it from the sender and recipient addresses database.
-        match &ext_tx.data {
-            ExtTxData::Basic(tx) => {
-                let mut cursor = txn.cursor(&self.address_db);
-
-                // Seek to the last transaction hash at the sender's address and
-                // go back until you find the correct one.
-                let mut sender_value = None;
-
-                if cursor
-                    .seek_key::<Address, OrderedHash>(&tx.sender)
-                    .is_some()
-                {
-                    let mut duplicate = cursor.last_duplicate::<OrderedHash>();
-
-                    while let Some(v) = duplicate {
-                        if v.hash == tx_hash {
-                            sender_value = Some(v);
-                            break;
-                        }
-
-                        duplicate = cursor
-                            .prev_duplicate::<Address, OrderedHash>()
-                            .map(|(_, v)| v);
-                    }
-                }
-
-                // Seek to the last transaction hash at the recipient's address and
-                // go back until you find the correct one.
-                let mut recipient_value = None;
-
-                if cursor
-                    .seek_key::<Address, OrderedHash>(&tx.recipient)
-                    .is_some()
-                {
-                    let mut duplicate = cursor.last_duplicate::<OrderedHash>();
-
-                    while let Some(v) = duplicate {
-                        if v.hash == tx_hash {
-                            recipient_value = Some(v);
-                            break;
-                        }
-
-                        duplicate = cursor
-                            .prev_duplicate::<Address, OrderedHash>()
-                            .map(|(_, v)| v);
-                    }
-                }
-
-                // Now remove both values. This weird construction is because of Rust's borrowing rules.
-                drop(cursor);
-
-                if let Some(v) = sender_value {
-                    txn.remove_item(&self.address_db, &tx.sender, &v);
-                }
-
-                if let Some(v) = recipient_value {
-                    txn.remove_item(&self.address_db, &tx.recipient, &v);
-                }
-            }
-            ExtTxData::Inherent(tx) => {
-                if tx.ty == InherentType::Reward {
-                    let mut cursor = txn.cursor(&self.address_db);
-
-                    // Seek to the last inherent hash at the target's address and
-                    // go back until you find the correct one.
-                    let mut recipient_value = None;
-
-                    if cursor
-                        .seek_key::<Address, OrderedHash>(&tx.target)
-                        .is_some()
-                    {
-                        let mut duplicate = cursor.last_duplicate::<OrderedHash>();
-
-                        while let Some(v) = duplicate {
-                            if v.hash == tx_hash {
-                                recipient_value = Some(v);
-                                break;
-                            }
-
-                            duplicate = cursor
-                                .prev_duplicate::<Address, OrderedHash>()
-                                .map(|(_, v)| v);
-                        }
-                    }
-
-                    // Now remove the value. This weird construction is because of Rust's borrowing rules.
-                    drop(cursor);
-
-                    if let Some(v) = recipient_value {
-                        txn.remove_item(&self.address_db, &tx.target, &v);
-                    }
                 }
             }
         }
