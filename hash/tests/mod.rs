@@ -61,18 +61,18 @@ fn it_can_compute_blake2b() {
 
 #[test]
 fn it_can_compute_blake2s() {
-    // blake2s('test') = '4878ca0425c739fa427f7eda20fe845f6b2e46ba5fe2a14df5b1e32f50603215'
+    // blake2s('test') = 'f308fc02ce9172ad02a7d75800ecfc027109bc67987ea32aba9b8dcc7b10150e'
 
     assert_eq!(
         Blake2sHasher::default().digest(b"test"),
-        Blake2sHash::from("4878ca0425c739fa427f7eda20fe845f6b2e46ba5fe2a14df5b1e32f50603215")
+        Blake2sHash::from("f308fc02ce9172ad02a7d75800ecfc027109bc67987ea32aba9b8dcc7b10150e")
     );
     let mut h = Blake2sHasher::default();
     h.write_all(b"te").unwrap();
     h.write_all(b"st").unwrap();
     assert_eq!(
         h.finish(),
-        Blake2sHash::from("4878ca0425c739fa427f7eda20fe845f6b2e46ba5fe2a14df5b1e32f50603215")
+        Blake2sHash::from("f308fc02ce9172ad02a7d75800ecfc027109bc67987ea32aba9b8dcc7b10150e")
     );
 }
 

@@ -3384,6 +3384,7 @@ name = "nimiq-hash"
 version = "0.1.0"
 dependencies = [
  "beserial",
+ "blake2-rfc",
  "blake3",
  "byteorder",
  "criterion",

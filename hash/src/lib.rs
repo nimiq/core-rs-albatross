@@ -3,6 +3,7 @@ use std::fmt::{Debug, Error, Formatter};
 use std::io;
 use std::str;
 
+use blake2_rfc::blake2s::Blake2s;
 use hex::FromHex;
 use sha2::{Digest, Sha256, Sha512};
 
@@ -195,7 +196,7 @@ impl Merge for Blake2bHash {
 const BLAKE2S_LENGTH: usize = 32;
 create_typed_array!(Blake2sHash, u8, BLAKE2S_LENGTH);
 add_hex_io_fns_typed_arr!(Blake2sHash, BLAKE2S_LENGTH);
-pub struct Blake2sHasher(blake3::Hasher);
+pub struct Blake2sHasher(Blake2s);
 impl HashOutput for Blake2sHash {
     type Builder = Blake2sHasher;
 
@@ -209,7 +210,7 @@ impl HashOutput for Blake2sHash {
 
 impl Blake2sHasher {
     pub fn new() -> Self {
-        Blake2sHasher(blake3::Hasher::new())
+        Blake2sHasher(Blake2s::new(BLAKE2S_LENGTH))
     }
 }
 
@@ -235,7 +236,7 @@ impl Hasher for Blake2sHasher {
 
     fn finish(self) -> Blake2sHash {
         let result = self.0.finalize();
-        Blake2sHash::from(*result.as_bytes())
+        Blake2sHash::from(result.as_bytes())
     }
 }
 
