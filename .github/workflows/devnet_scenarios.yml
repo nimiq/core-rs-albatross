@@ -62,6 +62,15 @@ jobs:
           footer: '<{run_url}|View Run>'
       env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
+    - name: Report long lock hold times
+      if: always() && contains(steps.reason.outputs.FAIL_REASON, 'LONG_LOCK_HOLD_TIME')
+      uses: ravsamhq/notify-slack-action@v1
+      with:
+          status: ${{ job.status }}
+          notification_title: 'Long lock hold time in FourValidatorsReconnectTest'
+          footer: '<{run_url}|View Run>'
+      env:
+          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
     - name: Report slow lock acquisitions
       if: always() && contains(steps.reason.outputs.FAIL_REASON, 'SLOW_LOCK_ACQUISITION')
       uses: ravsamhq/notify-slack-action@v1
@@ -133,6 +142,15 @@ jobs:
       with:
           status: ${{ job.status }}
           notification_title: 'Potential deadlock detected in MultipleValidatorsDownTest'
+          footer: '<{run_url}|View Run>'
+      env:
+          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
+    - name: Report long lock hold times
+      if: always() && contains(steps.reason.outputs.FAIL_REASON, 'LONG_LOCK_HOLD_TIME')
+      uses: ravsamhq/notify-slack-action@v1
+      with:
+          status: ${{ job.status }}
+          notification_title: 'Long lock hold time detected in MultipleValidatorsDownTest'
           footer: '<{run_url}|View Run>'
       env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
@@ -210,6 +228,15 @@ jobs:
           footer: '<{run_url}|View Run>'
       env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
+    - name: Report long lock hold times
+      if: always() && contains(steps.reason.outputs.FAIL_REASON, 'LONG_LOCK_HOLD_TIME')
+      uses: ravsamhq/notify-slack-action@v1
+      with:
+          status: ${{ job.status }}
+          notification_title: 'Long lock hold time detected in FourValidatorsReconnectRMdatabaseTest'
+          footer: '<{run_url}|View Run>'
+      env:
+          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
     - name: Report slow lock acquisitions
       if: always() && contains(steps.reason.outputs.FAIL_REASON, 'SLOW_LOCK_ACQUISITION')
       uses: ravsamhq/notify-slack-action@v1
@@ -281,6 +308,15 @@ jobs:
       with:
           status: ${{ job.status }}
           notification_title: 'Potential deadlock detected in FourValidatorsReconnectSpammer'
+          footer: '<{run_url}|View Run>'
+      env:
+          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
+    - name: Report long lock hold times
+      if: always() && contains(steps.reason.outputs.FAIL_REASON, 'LONG_LOCK_HOLD_TIME')
+      uses: ravsamhq/notify-slack-action@v1
+      with:
+          status: ${{ job.status }}
+          notification_title: 'Long lock hold time detected in FourValidatorsReconnectSpammer'
           footer: '<{run_url}|View Run>'
       env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
@@ -361,6 +397,15 @@ jobs:
           footer: '<{run_url}|View Run>'
       env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
+    - name: Report long lock hold times
+      if: always() && contains(steps.reason.outputs.FAIL_REASON, 'LONG_LOCK_HOLD_TIME')
+      uses: ravsamhq/notify-slack-action@v1
+      with:
+          status: ${{ job.status }}
+          notification_title: 'Long lock hold time detected in MacroProductionTest'
+          footer: '<{run_url}|View Run>'
+      env:
+          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
     - name: Report slow lock acquisitions
       if: always() && contains(steps.reason.outputs.FAIL_REASON, 'SLOW_LOCK_ACQUISITION')
       uses: ravsamhq/notify-slack-action@v1
@@ -432,6 +477,15 @@ jobs:
       with:
           status: ${{ job.status }}
           notification_title: 'Potential deadlock detected in ViewChangeTest'
+          footer: '<{run_url}|View Run>'
+      env:
+          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
+    - name: Report long lock hold times
+      if: always() && contains(steps.reason.outputs.FAIL_REASON, 'LONG_LOCK_HOLD_TIME')
+      uses: ravsamhq/notify-slack-action@v1
+      with:
+          status: ${{ job.status }}
+          notification_title: 'Long lock hold time detected in ViewChangeTest'
           footer: '<{run_url}|View Run>'
       env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}

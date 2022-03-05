@@ -58,6 +58,13 @@ function check_failures() {
             fail=true
             break
         fi
+        # Search for locks held for a long time
+        if grep -rin "lock held for a long time" $logsdir/*.log
+        then
+            echo "   !!!   LONG LOCK HOLD TIME   !!!"
+            echo "LONG_LOCK_HOLD_TIME" >> temp-state/RESULT.TXT
+            break
+        fi
         # Search for slow lock acquisitions
         if grep -rin "slow.*took" $logsdir/*.log
         then
