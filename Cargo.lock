@@ -2130,7 +2130,7 @@ dependencies = [
  "libp2p-websocket",
  "libp2p-yamux",
  "multiaddr",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pin-project 1.0.10",
  "rand 0.7.3",
  "smallvec",
@@ -2175,7 +2175,7 @@ dependencies = [
  "multiaddr",
  "multihash",
  "multistream-select",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pin-project 1.0.10",
  "prost",
  "prost-build",
@@ -2355,7 +2355,7 @@ dependencies = [
  "libp2p-core",
  "log",
  "nohash-hasher",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.7.3",
  "smallvec",
  "unsigned-varint",
@@ -2598,7 +2598,7 @@ checksum = "be902ebd89193cd020e89e89107726a38cfc0d16d18f613f4a37d046e92c7517"
 dependencies = [
  "futures",
  "libp2p-core",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "thiserror",
  "yamux",
 ]
@@ -2682,20 +2682,20 @@ dependencies = [
 
 [[package]]
 name = "lock_api"
-version = "0.4.5"
-source = "git+https://github.com/styppo/parking_lot.git#a2293612dfd803811adb9c0ded5d391373d10b6b"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "88943dd7ef4a2e5a4bfa2753aaab3013e34ce2533d1996fb18ef591e315e2b3b"
 dependencies = [
- "backtrace",
- "log",
  "scopeguard",
 ]
 
 [[package]]
 name = "lock_api"
 version = "0.4.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88943dd7ef4a2e5a4bfa2753aaab3013e34ce2533d1996fb18ef591e315e2b3b"
+source = "git+https://github.com/styppo/parking_lot.git#c02df983dc282c613a3b820ba3942c29bc3c7f14"
 dependencies = [
+ "backtrace",
+ "log",
  "scopeguard",
 ]
 
@@ -3000,7 +3000,7 @@ dependencies = [
  "nimiq-trie",
  "nimiq-utils",
  "nimiq-vrf",
- "parking_lot 0.11.2 (git+https://github.com/styppo/parking_lot.git)",
+ "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "rand 0.8.5",
  "serde",
  "strum_macros",
@@ -3058,7 +3058,7 @@ dependencies = [
  "nimiq-transaction-builder",
  "nimiq-utils",
  "nimiq-vrf",
- "parking_lot 0.11.2 (git+https://github.com/styppo/parking_lot.git)",
+ "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "rand 0.8.5",
  "tempfile",
 ]
@@ -3089,7 +3089,7 @@ dependencies = [
  "nimiq-trie",
  "nimiq-utils",
  "nimiq-vrf",
- "parking_lot 0.11.2 (git+https://github.com/styppo/parking_lot.git)",
+ "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "rand 0.8.5",
  "thiserror",
 ]
@@ -3111,7 +3111,7 @@ dependencies = [
  "log",
  "nimiq-hash",
  "nimiq-utils",
- "parking_lot 0.11.2 (git+https://github.com/styppo/parking_lot.git)",
+ "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "rand 0.8.5",
  "serde",
  "thiserror",
@@ -3202,7 +3202,7 @@ dependencies = [
  "nimiq-test-utils",
  "nimiq-transaction",
  "nimiq-utils",
- "parking_lot 0.11.2 (git+https://github.com/styppo/parking_lot.git)",
+ "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "pin-project 1.0.10",
  "rand 0.8.5",
  "thiserror",
@@ -3267,7 +3267,7 @@ dependencies = [
  "nimiq-network-interface",
  "nimiq-network-mock",
  "nimiq-utils",
- "parking_lot 0.11.2 (git+https://github.com/styppo/parking_lot.git)",
+ "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "rand 0.8.5",
  "thiserror",
  "tokio",
@@ -3430,7 +3430,7 @@ dependencies = [
  "nimiq-validator",
  "nimiq-validator-network",
  "nimiq-wallet",
- "parking_lot 0.11.2 (git+https://github.com/styppo/parking_lot.git)",
+ "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "paw",
  "rand 0.8.5",
  "serde",
@@ -3474,7 +3474,7 @@ dependencies = [
  "nimiq-transaction",
  "nimiq-utils",
  "nimiq-vrf",
- "parking_lot 0.11.2 (git+https://github.com/styppo/parking_lot.git)",
+ "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "rand 0.8.5",
  "simple_logger",
  "tokio",
@@ -3571,7 +3571,7 @@ dependencies = [
  "futures",
  "log",
  "nimiq-utils",
- "parking_lot 0.11.2 (git+https://github.com/styppo/parking_lot.git)",
+ "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -3598,7 +3598,7 @@ dependencies = [
  "nimiq-network-interface",
  "nimiq-utils",
  "nimiq-validator-network",
- "parking_lot 0.11.2 (git+https://github.com/styppo/parking_lot.git)",
+ "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "pin-project 1.0.10",
  "pin-project-lite 0.2.8",
  "rand 0.8.5",
@@ -3625,7 +3625,7 @@ dependencies = [
  "log",
  "nimiq-network-interface",
  "nimiq-utils",
- "parking_lot 0.11.2 (git+https://github.com/styppo/parking_lot.git)",
+ "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -3672,7 +3672,7 @@ dependencies = [
  "nimiq-utils",
  "num-bigint",
  "num-traits",
- "parking_lot 0.11.2 (git+https://github.com/styppo/parking_lot.git)",
+ "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "regex",
  "serde",
  "strum_macros",
@@ -3760,7 +3760,7 @@ dependencies = [
  "nimiq-validator-network",
  "nimiq-vrf",
  "nimiq-wallet",
- "parking_lot 0.11.2 (git+https://github.com/styppo/parking_lot.git)",
+ "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "serde",
  "serde_json",
  "serde_with",
@@ -3857,7 +3857,7 @@ dependencies = [
  "nimiq-validator",
  "nimiq-validator-network",
  "nimiq-vrf",
- "parking_lot 0.11.2 (git+https://github.com/styppo/parking_lot.git)",
+ "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "rand 0.8.5",
  "tokio",
  "tokio-stream",
@@ -3953,7 +3953,7 @@ dependencies = [
  "nimiq-database",
  "nimiq-hash",
  "nimiq-keys",
- "parking_lot 0.11.2 (git+https://github.com/styppo/parking_lot.git)",
+ "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "rand 0.8.5",
  "rand_core 0.6.3",
  "serde",
@@ -4000,7 +4000,7 @@ dependencies = [
  "nimiq-utils",
  "nimiq-validator-network",
  "nimiq-vrf",
- "parking_lot 0.11.2 (git+https://github.com/styppo/parking_lot.git)",
+ "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "rand 0.8.5",
  "simple_logger",
  "tokio",
@@ -4301,19 +4301,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d17b78036a60663b797adeaee46f5c9dfebb86948d1255007a1d6be0271ff99"
 dependencies = [
  "instant",
- "lock_api 0.4.6",
- "parking_lot_core 0.8.5 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "parking_lot"
-version = "0.11.2"
-source = "git+https://github.com/styppo/parking_lot.git#a2293612dfd803811adb9c0ded5d391373d10b6b"
-dependencies = [
- "backtrace",
- "lock_api 0.4.5",
- "log",
- "parking_lot_core 0.8.5 (git+https://github.com/styppo/parking_lot.git)",
+ "lock_api 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot_core 0.8.5",
 ]
 
 [[package]]
@@ -4322,8 +4311,19 @@ version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "87f5ec2493a61ac0506c0f4199f99070cbe83857b0337006a30f3e6719b8ef58"
 dependencies = [
- "lock_api 0.4.6",
- "parking_lot_core 0.9.1",
+ "lock_api 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot_core 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "parking_lot"
+version = "0.12.0"
+source = "git+https://github.com/styppo/parking_lot.git#c02df983dc282c613a3b820ba3942c29bc3c7f14"
+dependencies = [
+ "backtrace",
+ "lock_api 0.4.6 (git+https://github.com/styppo/parking_lot.git)",
+ "log",
+ "parking_lot_core 0.9.1 (git+https://github.com/styppo/parking_lot.git)",
 ]
 
 [[package]]
@@ -4342,21 +4342,6 @@ dependencies = [
 
 [[package]]
 name = "parking_lot_core"
-version = "0.8.5"
-source = "git+https://github.com/styppo/parking_lot.git#a2293612dfd803811adb9c0ded5d391373d10b6b"
-dependencies = [
- "backtrace",
- "cfg-if",
- "libc",
- "petgraph 0.5.1",
- "redox_syscall",
- "smallvec",
- "thread-id",
- "winapi",
-]
-
-[[package]]
-name = "parking_lot_core"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28141e0cc4143da2443301914478dc976a61ffdb3f043058310c70df2fed8954"
@@ -4365,6 +4350,21 @@ dependencies = [
  "libc",
  "redox_syscall",
  "smallvec",
+ "windows-sys",
+]
+
+[[package]]
+name = "parking_lot_core"
+version = "0.9.1"
+source = "git+https://github.com/styppo/parking_lot.git#c02df983dc282c613a3b820ba3942c29bc3c7f14"
+dependencies = [
+ "backtrace",
+ "cfg-if",
+ "libc",
+ "petgraph 0.5.1",
+ "redox_syscall",
+ "smallvec",
+ "thread-id",
  "windows-sys",
 ]
 
@@ -4629,7 +4629,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "memchr",
- "parking_lot 0.11.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.11.2",
  "procfs",
  "protobuf",
  "thiserror",
@@ -5702,7 +5702,7 @@ dependencies = [
  "mio",
  "num_cpus",
  "once_cell",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pin-project-lite 0.2.8",
  "signal-hook-registry",
  "socket2 0.4.4",
@@ -5905,7 +5905,7 @@ dependencies = [
  "lazy_static",
  "log",
  "lru-cache",
- "parking_lot 0.11.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.11.2",
  "resolv-conf",
  "smallvec",
  "thiserror",
@@ -6274,7 +6274,7 @@ checksum = "be0ecb0db480561e9a7642b5d3e4187c128914e58aa84330b9493e3eb68c5e7f"
 dependencies = [
  "futures",
  "js-sys",
- "parking_lot 0.11.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.11.2",
  "pin-utils",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -6500,7 +6500,7 @@ dependencies = [
  "futures",
  "log",
  "nohash-hasher",
- "parking_lot 0.11.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.11.2",
  "rand 0.8.5",
  "static_assertions",
 ]
