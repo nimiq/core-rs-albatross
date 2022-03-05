@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use beserial::Deserialize;
 
 use nimiq_blockchain::AbstractBlockchain;
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::{Blake3Hash, Hash};
 use nimiq_mempool::mempool::Mempool;
 
 use nimiq_rpc_interface::mempool::MempoolInterface;
@@ -29,10 +29,10 @@ impl MempoolInterface for MempoolDispatcher {
     type Error = Error;
 
     /// Pushes the given serialized transaction to the local mempool.
-    async fn push_transaction(&mut self, raw_tx: String) -> Result<Blake2bHash, Self::Error> {
+    async fn push_transaction(&mut self, raw_tx: String) -> Result<Blake3Hash, Self::Error> {
         let tx: nimiq_transaction::Transaction =
             Deserialize::deserialize_from_vec(&hex::decode(&raw_tx)?)?;
-        let txid = tx.hash::<Blake2bHash>();
+        let txid = tx.hash::<Blake3Hash>();
 
         match self.mempool.add_transaction(tx).await {
             Ok(_) => Ok(txid),
@@ -44,7 +44,7 @@ impl MempoolInterface for MempoolDispatcher {
     /// to also search the mempool for the transaction, it defaults to false.
     async fn get_transaction_by_hash(
         &mut self,
-        hash: Blake2bHash,
+        hash: Blake3Hash,
         check_mempool: Option<bool>,
     ) -> Result<Transaction, Error> {
         // First check the mempool.

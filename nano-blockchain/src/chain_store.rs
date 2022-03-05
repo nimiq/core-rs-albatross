@@ -2,30 +2,30 @@ use std::collections::HashMap;
 
 use nimiq_block::{Block, MacroHeader};
 use nimiq_blockchain::ChainInfo;
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_primitives::policy;
 
 /// A struct that stores the blocks for the blockchain.
 #[derive(Debug, Default)]
 pub struct ChainStore {
     // A store of chain infos indexed by their block hashes. Contains only headers.
-    chain_db: HashMap<Blake2bHash, ChainInfo>,
+    chain_db: HashMap<Blake3Hash, ChainInfo>,
     // A store of block hashes indexed by their block number.
-    height_idx: HashMap<u32, Vec<Blake2bHash>>,
+    height_idx: HashMap<u32, Vec<Blake3Hash>>,
     // A store of election block headers indexed by their epoch number.
     election_db: HashMap<u32, MacroHeader>,
 }
 
 impl ChainStore {
     /// Gets a chain info by its hash. Returns None if the chain info doesn't exist.
-    pub fn get_chain_info(&self, hash: &Blake2bHash) -> Option<&ChainInfo> {
+    pub fn get_chain_info(&self, hash: &Blake3Hash) -> Option<&ChainInfo> {
         self.chain_db.get(hash)
     }
 
     /// Gets all the stored block hashes for a given block number (you can have several micro blocks
     /// with the same block number because of forks). Returns None if there are no block hashes for
     /// that block number.
-    pub fn get_block_hashes(&self, block_number: &u32) -> Option<&Vec<Blake2bHash>> {
+    pub fn get_block_hashes(&self, block_number: &u32) -> Option<&Vec<Blake3Hash>> {
         self.height_idx.get(block_number)
     }
 
@@ -118,7 +118,7 @@ mod tests {
         // Create blocks.
         let mut data = [0u8; 32];
         rand::thread_rng().fill_bytes(&mut data);
-        let hash_1 = Blake2bHash::from(data);
+        let hash_1 = Blake3Hash::from(data);
 
         let block_1 = Block::Micro(MicroBlock {
             header: MicroHeader {
@@ -145,7 +145,7 @@ mod tests {
 
         let mut data = [0u8; 32];
         rand::thread_rng().fill_bytes(&mut data);
-        let hash_2 = Blake2bHash::from(data);
+        let hash_2 = Blake3Hash::from(data);
 
         let block_2 = Block::Micro(MicroBlock {
             header: MicroHeader {

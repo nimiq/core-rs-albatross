@@ -2,7 +2,7 @@ use std::io::Write;
 use std::ops::Range;
 
 use beserial::{Deserialize, Serialize};
-use nimiq_hash::{Blake2bHash, HashOutput, Hasher, SerializeContent};
+use nimiq_hash::{Blake3Hash, HashOutput, Hasher, SerializeContent};
 
 use crate::math::CeilingDiv;
 
@@ -286,4 +286,4 @@ pub enum PartialMerkleProofError {
     InvalidChunkSize,
 }
 
-pub type Blake2bPartialMerkleProof = PartialMerkleProof<Blake2bHash>;
+pub type Blake3PartialMerkleProof = PartialMerkleProof<Blake3Hash>;

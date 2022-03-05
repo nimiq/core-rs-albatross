@@ -3,7 +3,7 @@ use std::fmt::{Debug, Formatter};
 use beserial::{Deserialize, Serialize};
 use nimiq_block::{Block, MacroBlock};
 use nimiq_blockchain::HistoryTreeChunk;
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_network_interface::message::*;
 
 use crate::request_response;
@@ -23,7 +23,7 @@ The consensus module uses the following messages:
 #[repr(u8)]
 pub enum Objects<T: Serialize + Deserialize> {
     #[beserial(discriminant = 0)]
-    Hashes(#[beserial(len_type(u16))] Vec<Blake2bHash>),
+    Hashes(#[beserial(len_type(u16))] Vec<Blake3Hash>),
     #[beserial(discriminant = 1)]
     Objects(#[beserial(len_type(u16))] Vec<T>),
 }
@@ -36,7 +36,7 @@ impl<T: Serialize + Deserialize> Objects<T> {
         Objects::Objects(objects)
     }
 
-    pub fn with_hashes(hashes: Vec<Blake2bHash>) -> Self {
+    pub fn with_hashes(hashes: Vec<Blake3Hash>) -> Self {
         Objects::Hashes(hashes)
     }
 
@@ -75,7 +75,7 @@ impl<'a> From<&'a Block> for BlockHashType {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct BlockHashes {
     #[beserial(len_type(u16))]
-    pub hashes: Option<Vec<(BlockHashType, Blake2bHash)>>,
+    pub hashes: Option<Vec<(BlockHashType, Blake3Hash)>>,
     pub request_identifier: u32,
 }
 request_response!(BlockHashes);
@@ -113,7 +113,7 @@ pub enum RequestBlockHashesFilter {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestBlockHashes {
     #[beserial(len_type(u16, limit = 128))]
-    pub locators: Vec<Blake2bHash>,
+    pub locators: Vec<Blake3Hash>,
     pub max_blocks: u16,
     pub filter: RequestBlockHashesFilter,
     pub request_identifier: u32,
@@ -126,7 +126,7 @@ impl Message for RequestBlockHashes {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestBatchSet {
-    pub hash: Blake2bHash,
+    pub hash: Blake3Hash,
     pub request_identifier: u32,
 }
 request_response!(RequestBatchSet);
@@ -215,7 +215,7 @@ impl Debug for ResponseBlock {
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestBlock {
-    pub hash: Blake2bHash,
+    pub hash: Blake3Hash,
     pub request_identifier: u32,
 }
 request_response!(RequestBlock);
@@ -257,9 +257,9 @@ impl Debug for ResponseBlocks {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestMissingBlocks {
-    pub target_hash: Blake2bHash,
+    pub target_hash: Blake3Hash,
     #[beserial(len_type(u16, limit = 128))]
-    pub locators: Vec<Blake2bHash>,
+    pub locators: Vec<Blake3Hash>,
     pub request_identifier: u32,
 }
 request_response!(RequestMissingBlocks);
@@ -280,7 +280,7 @@ impl Message for RequestHead {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct HeadResponse {
-    pub hash: Blake2bHash,
+    pub hash: Blake3Hash,
     pub request_identifier: u32,
 }
 request_response!(HeadResponse);

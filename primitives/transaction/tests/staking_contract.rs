@@ -4,7 +4,7 @@ use beserial::{Deserialize, Serialize};
 use nimiq_bls::CompressedPublicKey as BlsPublicKey;
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_bls::SecretKey as BlsSecretKey;
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey};
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
@@ -185,7 +185,7 @@ fn update_validator() {
                     .compress(),
             ),
             new_reward_address: Some(Address::from([3u8; 20])),
-            new_signal_data: Some(Some(Blake2bHash::default())),
+            new_signal_data: Some(Some(Blake3Hash::default())),
             proof: SignatureProof::default(),
         },
         0,
@@ -245,7 +245,7 @@ fn update_validator() {
             new_voting_key: Some(voting_key.clone()),
             new_proof_of_knowledge: Some(invalid_pok.compress()),
             new_reward_address: Some(Address::from([3u8; 20])),
-            new_signal_data: Some(Some(Blake2bHash::default())),
+            new_signal_data: Some(Some(Blake3Hash::default())),
             proof: SignatureProof::default(),
         },
         0,
@@ -271,7 +271,7 @@ fn update_validator() {
                     .compress(),
             ),
             new_reward_address: Some(Address::from([3u8; 20])),
-            new_signal_data: Some(Some(Blake2bHash::default())),
+            new_signal_data: Some(Some(Blake3Hash::default())),
             proof: SignatureProof::default(),
         },
         0,

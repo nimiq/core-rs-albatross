@@ -5,7 +5,7 @@ use nimiq_block::{
 };
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, ExtendedTransaction};
 use nimiq_bls::KeyPair as BlsKeyPair;
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::{Blake3Hash, Hash};
 use nimiq_keys::KeyPair as SchnorrKeyPair;
 use nimiq_primitives::policy;
 use nimiq_transaction::Transaction;
@@ -126,7 +126,7 @@ impl BlockProducer {
         };
 
         // Signs the block header using the signing key.
-        let hash = header.hash::<Blake2bHash>();
+        let hash = header.hash::<Blake3Hash>();
         let signature = self.signing_key.sign(hash.as_slice());
 
         // Returns the micro block.
@@ -184,9 +184,9 @@ impl BlockProducer {
             parent_election_hash,
             seed,
             extra_data,
-            state_root: Blake2bHash::default(),
-            body_root: Blake2bHash::default(),
-            history_root: Blake2bHash::default(),
+            state_root: Blake3Hash::default(),
+            body_root: Blake3Hash::default(),
+            history_root: Blake3Hash::default(),
         };
 
         // Get the state.

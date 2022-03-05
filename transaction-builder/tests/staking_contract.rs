@@ -2,7 +2,7 @@ use std::convert::TryInto;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_bls::KeyPair as BlsKeyPair;
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::networks::NetworkId;
@@ -135,7 +135,7 @@ fn it_can_create_validator_transactions() {
             voting_key: bls_pair.public_key.compress(),
             proof_of_knowledge: bls_pair.sign(&bls_pair.public_key).compress(),
             reward_address: address.clone(),
-            signal_data: Some(Blake2bHash::default()),
+            signal_data: Some(Blake3Hash::default()),
             proof: Default::default(),
         },
         VALIDATOR_DEPOSIT,
@@ -148,7 +148,7 @@ fn it_can_create_validator_transactions() {
         key_pair.public,
         &bls_pair,
         address.clone(),
-        Some(Blake2bHash::default()),
+        Some(Blake3Hash::default()),
         100.try_into().unwrap(),
         1,
         NetworkId::Dummy,

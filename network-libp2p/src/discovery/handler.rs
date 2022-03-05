@@ -22,7 +22,7 @@ use thiserror::Error;
 use wasm_timer::Interval;
 
 use beserial::SerializingError;
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_utils::tagged_signing::TaggedKeypair;
 
 use super::{
@@ -60,8 +60,8 @@ pub enum HandlerError {
 
     #[error("Mismatch for genesis hash: Expected {expected}, but received {received}")]
     GenesisHashMismatch {
-        expected: Blake2bHash,
-        received: Blake2bHash,
+        expected: Blake3Hash,
+        received: Blake3Hash,
     },
 
     #[error("Peer contact has an invalid signature: {peer_contact:?}")]

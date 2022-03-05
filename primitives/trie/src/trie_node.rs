@@ -6,7 +6,7 @@ use log::error;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
-use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
+use nimiq_hash::{Blake3Hash, Hash, SerializeContent};
 
 use crate::error::MerkleRadixTrieError;
 use crate::key_nibbles::KeyNibbles;
@@ -40,7 +40,7 @@ pub enum TrieNodeType {
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Serialize, Deserialize)]
 pub struct TrieNodeChild {
     pub suffix: KeyNibbles,
-    pub hash: Blake2bHash,
+    pub hash: Blake3Hash,
 }
 
 pub const NO_CHILDREN: [Option<TrieNodeChild>; 16] = [
@@ -132,7 +132,7 @@ impl<A: Serialize + Deserialize + Clone> TrieNode<A> {
     pub fn get_child_hash(
         &self,
         child_prefix: &KeyNibbles,
-    ) -> Result<&Blake2bHash, MerkleRadixTrieError> {
+    ) -> Result<&Blake3Hash, MerkleRadixTrieError> {
         match self {
             TrieNode::LeafNode { .. } => {
                 error!(
@@ -177,7 +177,7 @@ impl<A: Serialize + Deserialize + Clone> TrieNode<A> {
     pub fn put_child(
         mut self,
         child_key: &KeyNibbles,
-        child_hash: Blake2bHash,
+        child_hash: Blake3Hash,
     ) -> Result<Self, MerkleRadixTrieError> {
         let child_index = self.get_child_index(child_key)?;
 

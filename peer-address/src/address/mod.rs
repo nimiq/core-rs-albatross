@@ -1,6 +1,6 @@
 use std::net::{IpAddr, Ipv4Addr};
 
-use nimiq_hash::{Blake2bHash, Blake2bHasher, Hasher};
+use nimiq_hash::{Blake3Hash, Blake3Hasher, Hasher};
 use nimiq_keys::PublicKey;
 
 pub use self::net_address::*;
@@ -16,8 +16,8 @@ pub mod seed_list;
 create_typed_array!(PeerId, u8, 16);
 add_hex_io_fns_typed_arr!(PeerId, PeerId::SIZE);
 
-impl From<Blake2bHash> for PeerId {
-    fn from(hash: Blake2bHash) -> Self {
+impl From<Blake3Hash> for PeerId {
+    fn from(hash: Blake3Hash) -> Self {
         let hash_arr: [u8; 32] = hash.into();
         PeerId::from(&hash_arr[0..PeerId::len()])
     }
@@ -25,7 +25,7 @@ impl From<Blake2bHash> for PeerId {
 
 impl<'a> From<&'a PublicKey> for PeerId {
     fn from(public_key: &'a PublicKey) -> Self {
-        let hash = Blake2bHasher::default().digest(public_key.as_bytes());
+        let hash = Blake3Hasher::default().digest(public_key.as_bytes());
         PeerId::from(hash)
     }
 }

@@ -22,7 +22,7 @@ use nimiq_consensus::consensus_agent::ConsensusAgent;
 use nimiq_consensus::sync::block_queue::{BlockQueue, BlockQueueConfig};
 use nimiq_consensus::sync::request_component::{RequestComponent, RequestComponentEvent};
 use nimiq_database::volatile::VolatileEnvironment;
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_network_interface::network::Network;
 use nimiq_network_interface::peer::Peer;
 use nimiq_network_mock::{MockHub, MockId, MockPeer};
@@ -34,7 +34,7 @@ use nimiq_utils::time::OffsetTime;
 #[derive(Debug)]
 pub struct MockRequestComponent<P> {
     pub peer_put_into_sync: bool,
-    pub tx: mpsc::UnboundedSender<(Blake2bHash, Vec<Blake2bHash>)>,
+    pub tx: mpsc::UnboundedSender<(Blake3Hash, Vec<Blake3Hash>)>,
     #[pin]
     pub rx: mpsc::UnboundedReceiver<Vec<Block>>,
     peer_type: PhantomData<P>,
@@ -43,7 +43,7 @@ pub struct MockRequestComponent<P> {
 impl<P> MockRequestComponent<P> {
     pub fn new() -> (
         Self,
-        mpsc::UnboundedReceiver<(Blake2bHash, Vec<Blake2bHash>)>,
+        mpsc::UnboundedReceiver<(Blake3Hash, Vec<Blake3Hash>)>,
         mpsc::UnboundedSender<Vec<Block>>,
     ) {
         let (tx1, rx1) = mpsc::unbounded();
@@ -63,11 +63,7 @@ impl<P> MockRequestComponent<P> {
 }
 
 impl<P: Peer> RequestComponent<P> for MockRequestComponent<P> {
-    fn request_missing_blocks(
-        &mut self,
-        target_block_hash: Blake2bHash,
-        locators: Vec<Blake2bHash>,
-    ) {
+    fn request_missing_blocks(&mut self, target_block_hash: Blake3Hash, locators: Vec<Blake3Hash>) {
         self.tx.unbounded_send((target_block_hash, locators)).ok(); // ignore error
     }
 

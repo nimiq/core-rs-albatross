@@ -2,7 +2,7 @@ use nimiq_block::{Block, MacroBlock};
 use nimiq_blockchain::{AbstractBlockchain, ChainInfo};
 use nimiq_database::Transaction;
 use nimiq_genesis::NetworkId;
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_primitives::slots::{Validator, Validators};
 
 use crate::blockchain::NanoBlockchain;
@@ -37,7 +37,7 @@ impl AbstractBlockchain for NanoBlockchain {
         unreachable!()
     }
 
-    fn contains(&self, hash: &Blake2bHash, include_forks: bool) -> bool {
+    fn contains(&self, hash: &Blake3Hash, include_forks: bool) -> bool {
         match self.chain_store.read().unwrap().get_chain_info(hash) {
             Some(chain_info) => include_forks || chain_info.on_main_chain,
             None => false,
@@ -59,7 +59,7 @@ impl AbstractBlockchain for NanoBlockchain {
 
     fn get_block(
         &self,
-        hash: &Blake2bHash,
+        hash: &Blake3Hash,
         _include_body: bool,
         _txn_option: Option<&Transaction>,
     ) -> Option<Block> {
@@ -72,7 +72,7 @@ impl AbstractBlockchain for NanoBlockchain {
 
     fn get_chain_info(
         &self,
-        hash: &Blake2bHash,
+        hash: &Blake3Hash,
         _include_body: bool,
         _txn_option: Option<&Transaction>,
     ) -> Option<ChainInfo> {

@@ -5,7 +5,7 @@ use thiserror::Error;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_collections::bitset::BitSet;
-use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, SerializeContent};
+use nimiq_hash::{Blake2sHash, Blake3Hash, Hash, SerializeContent};
 use nimiq_nano_primitives::pk_tree_construct;
 use nimiq_primitives::policy;
 use nimiq_primitives::slots::Validators;
@@ -39,9 +39,9 @@ pub struct MacroHeader {
     /// The timestamp of the block. It follows the Unix time and has millisecond precision.
     pub timestamp: u64,
     /// The hash of the header of the immediately preceding block (either micro or macro).
-    pub parent_hash: Blake2bHash,
+    pub parent_hash: Blake3Hash,
     /// The hash of the header of the preceding election macro block.
-    pub parent_election_hash: Blake2bHash,
+    pub parent_election_hash: Blake3Hash,
     /// The seed of the block. This is the BLS signature of the seed of the immediately preceding
     /// block (either micro or macro) using the validator key of the block proposer.
     pub seed: VrfSeed,
@@ -50,11 +50,11 @@ pub struct MacroHeader {
     pub extra_data: Vec<u8>,
     /// The root of the Merkle tree of the blockchain state. It just acts as a commitment to the
     /// state.
-    pub state_root: Blake2bHash,
+    pub state_root: Blake3Hash,
     /// The root of the Merkle tree of the body. It just acts as a commitment to the body.
-    pub body_root: Blake2bHash,
+    pub body_root: Blake3Hash,
     /// A merkle root over all of the transactions that happened in the current epoch.
-    pub history_root: Blake2bHash,
+    pub history_root: Blake3Hash,
 }
 
 /// The struct representing the body of a Macro block (can be either checkpoint or election).
@@ -79,8 +79,8 @@ pub struct MacroBody {
 }
 
 impl MacroBlock {
-    /// Returns the Blake2b hash of the block header.
-    pub fn hash(&self) -> Blake2bHash {
+    /// Returns the Blake3 hash of the block header.
+    pub fn hash(&self) -> Blake3Hash {
         self.header.hash()
     }
 
@@ -90,7 +90,7 @@ impl MacroBlock {
     }
 
     /// Calculates the following function:
-    ///     nano_zkp_hash = Blake2s( Blake2b(header) || pk_tree_root )
+    ///     nano_zkp_hash = Blake2s( Blake3(header) || pk_tree_root )
     /// Where `pk_tree_root` is the root of a special Merkle tree containing the BLS public keys of
     /// the validators for the next epoch.
     /// The `pk_tree_root` is necessary for the Nano ZK proofs and needs to be inserted into the
@@ -100,7 +100,7 @@ impl MacroBlock {
     /// Only election blocks have the `validators` field, which contain the validators for the next
     /// epoch, so for checkpoint blocks the `pk_tree_root` doesn't exist. Then, for checkpoint blocks
     /// this function simply returns:
-    ///     nano_zkp_hash = Blake2s( Blake2b(header) )
+    ///     nano_zkp_hash = Blake2s( Blake3(header) )
     pub fn nano_zkp_hash(&self) -> Blake2sHash {
         let mut message = self.hash().serialize_to_vec();
 
@@ -170,7 +170,7 @@ impl fmt::Display for MacroHeader {
             "#{}.{}:MA:{}",
             self.block_number,
             self.view_number,
-            self.hash::<Blake2bHash>().to_short_str(),
+            self.hash::<Blake3Hash>().to_short_str(),
         )
     }
 }

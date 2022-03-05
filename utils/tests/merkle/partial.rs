@@ -1,6 +1,6 @@
 use std::cmp;
 
-use nimiq_hash::{Blake2bHash, Blake2bHasher};
+use nimiq_hash::{Blake3Hash, Blake3Hasher};
 use nimiq_utils::merkle::compute_root_from_content;
 use nimiq_utils::merkle::partial::*;
 
@@ -17,12 +17,12 @@ fn it_correctly_computes_a_simple_proof() {
      *  v0   v1     v2   v3
      */
 
-    let root = compute_root_from_content::<Blake2bHasher, &str>(&values);
+    let root = compute_root_from_content::<Blake3Hasher, &str>(&values);
 
     // ------------
     // Chunk size 1
     // ------------
-    let chunks = PartialMerkleProofBuilder::from_values::<Blake2bHash, &str>(&values, 1);
+    let chunks = PartialMerkleProofBuilder::from_values::<Blake3Hash, &str>(&values, 1);
     assert!(
         chunks.is_ok(),
         "Proof builder errored: {:?}",
@@ -91,7 +91,7 @@ fn it_correctly_computes_a_simple_proof() {
     // ------------
     // Chunk size 2
     // ------------
-    let chunks = PartialMerkleProofBuilder::from_values::<Blake2bHash, &str>(&values, 2);
+    let chunks = PartialMerkleProofBuilder::from_values::<Blake3Hash, &str>(&values, 2);
     assert!(
         chunks.is_ok(),
         "Proof builder errored: {:?}",
@@ -132,7 +132,7 @@ fn it_correctly_computes_a_simple_proof() {
     // ------------
     // Chunk size 3
     // ------------
-    let chunks = PartialMerkleProofBuilder::from_values::<Blake2bHash, &str>(&values, 3);
+    let chunks = PartialMerkleProofBuilder::from_values::<Blake3Hash, &str>(&values, 3);
     assert!(
         chunks.is_ok(),
         "Proof builder errored: {:?}",
@@ -173,7 +173,7 @@ fn it_correctly_computes_a_simple_proof() {
     // ------------
     // Chunk size 4
     // ------------
-    let chunks = PartialMerkleProofBuilder::from_values::<Blake2bHash, &str>(&values, 4);
+    let chunks = PartialMerkleProofBuilder::from_values::<Blake3Hash, &str>(&values, 4);
     assert!(
         chunks.is_ok(),
         "Proof builder errored: {:?}",
@@ -210,12 +210,12 @@ fn it_correctly_computes_more_complex_proofs() {
      *   |    |
      *  v0   v1
      */
-    let root = compute_root_from_content::<Blake2bHasher, &str>(&values);
+    let root = compute_root_from_content::<Blake3Hasher, &str>(&values);
 
     // ------------
     // Chunk size 1
     // ------------
-    let chunks = PartialMerkleProofBuilder::from_values::<Blake2bHash, &str>(&values, 1);
+    let chunks = PartialMerkleProofBuilder::from_values::<Blake3Hash, &str>(&values, 1);
     assert!(
         chunks.is_ok(),
         "Proof builder errored: {:?}",
@@ -270,7 +270,7 @@ fn it_correctly_computes_more_complex_proofs() {
     // ------------
     // Chunk size 2
     // ------------
-    let chunks = PartialMerkleProofBuilder::from_values::<Blake2bHash, &str>(&values, 2);
+    let chunks = PartialMerkleProofBuilder::from_values::<Blake3Hash, &str>(&values, 2);
     assert!(
         chunks.is_ok(),
         "Proof builder errored: {:?}",
@@ -339,11 +339,11 @@ fn it_correctly_computes_more_complex_proofs() {
 
     // Vary different trees.
     for end in 5usize..7 {
-        let root = compute_root_from_content::<Blake2bHasher, &str>(&values[..end]);
+        let root = compute_root_from_content::<Blake3Hasher, &str>(&values[..end]);
 
         // Vary chunk sizes.
         for chunk_size in 1..end {
-            let chunks = PartialMerkleProofBuilder::from_values::<Blake2bHash, &str>(
+            let chunks = PartialMerkleProofBuilder::from_values::<Blake3Hash, &str>(
                 &values[..end],
                 chunk_size,
             );
@@ -410,9 +410,9 @@ fn it_discards_invalid_proofs() {
      *  v0   v1     v2   v3
      */
 
-    let root = compute_root_from_content::<Blake2bHasher, &str>(&values);
+    let root = compute_root_from_content::<Blake3Hasher, &str>(&values);
 
-    let chunks = PartialMerkleProofBuilder::from_values::<Blake2bHash, &str>(&values, 2);
+    let chunks = PartialMerkleProofBuilder::from_values::<Blake3Hash, &str>(&values, 2);
     assert!(
         chunks.is_ok(),
         "Proof builder errored: {:?}",
@@ -440,7 +440,7 @@ fn it_discards_invalid_proofs() {
 
     // Case 3: Invalid previous proof.
     // First create a proof result for a different chunk size.
-    let other_chunks = PartialMerkleProofBuilder::from_values::<Blake2bHash, &str>(&values, 1);
+    let other_chunks = PartialMerkleProofBuilder::from_values::<Blake3Hash, &str>(&values, 1);
     assert!(
         other_chunks.is_ok(),
         "Proof builder errored: {:?}",
@@ -462,7 +462,7 @@ fn it_discards_invalid_proofs() {
     }
 
     // Case 4: Invalid chunk size.
-    let chunks = PartialMerkleProofBuilder::from_values::<Blake2bHash, &str>(&values, 0);
+    let chunks = PartialMerkleProofBuilder::from_values::<Blake3Hash, &str>(&values, 0);
     match chunks {
         Err(PartialMerkleProofError::InvalidChunkSize) => {}
         _ => assert!(false, "Case 4 gave invalid response: {:?}", proof_result),

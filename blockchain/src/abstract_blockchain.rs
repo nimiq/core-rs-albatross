@@ -1,6 +1,6 @@
 use nimiq_block::{Block, BlockType, MacroBlock};
 use nimiq_database::Transaction;
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::policy;
 use nimiq_primitives::slots::{Validator, Validators};
@@ -25,17 +25,17 @@ pub trait AbstractBlockchain {
     fn election_head(&self) -> MacroBlock;
 
     /// Returns the hash of the head of the main chain.
-    fn head_hash(&self) -> Blake2bHash {
+    fn head_hash(&self) -> Blake3Hash {
         self.head().hash()
     }
 
     /// Returns the hash of the last macro block.
-    fn macro_head_hash(&self) -> Blake2bHash {
+    fn macro_head_hash(&self) -> Blake3Hash {
         self.macro_head().hash()
     }
 
     /// Returns the hash of the last election macro block.
-    fn election_head_hash(&self) -> Blake2bHash {
+    fn election_head_hash(&self) -> Blake3Hash {
         self.election_head().hash()
     }
 
@@ -85,7 +85,7 @@ pub trait AbstractBlockchain {
     fn previous_validators(&self) -> Option<Validators>;
 
     /// Checks if the blockchain contains a specific block, by its hash.
-    fn contains(&self, hash: &Blake2bHash, include_forks: bool) -> bool;
+    fn contains(&self, hash: &Blake3Hash, include_forks: bool) -> bool;
 
     /// Fetches a given block, by its block number.
     fn get_block_at(
@@ -98,7 +98,7 @@ pub trait AbstractBlockchain {
     /// Fetches a given block, by its hash.
     fn get_block(
         &self,
-        hash: &Blake2bHash,
+        hash: &Blake3Hash,
         include_body: bool,
         txn_option: Option<&Transaction>,
     ) -> Option<Block>;
@@ -106,7 +106,7 @@ pub trait AbstractBlockchain {
     /// Fetches a given chain info, by its hash.
     fn get_chain_info(
         &self,
-        hash: &Blake2bHash,
+        hash: &Blake3Hash,
         include_body: bool,
         txn_option: Option<&Transaction>,
     ) -> Option<ChainInfo>;
@@ -158,7 +158,7 @@ impl AbstractBlockchain for Blockchain {
         self.state.previous_slots.clone()
     }
 
-    fn contains(&self, hash: &Blake2bHash, include_forks: bool) -> bool {
+    fn contains(&self, hash: &Blake3Hash, include_forks: bool) -> bool {
         match self.chain_store.get_chain_info(hash, false, None) {
             Some(chain_info) => include_forks || chain_info.on_main_chain,
             None => false,
@@ -177,7 +177,7 @@ impl AbstractBlockchain for Blockchain {
 
     fn get_block(
         &self,
-        hash: &Blake2bHash,
+        hash: &Blake3Hash,
         include_body: bool,
         txn_option: Option<&Transaction>,
     ) -> Option<Block> {
@@ -186,7 +186,7 @@ impl AbstractBlockchain for Blockchain {
 
     fn get_chain_info(
         &self,
-        hash: &Blake2bHash,
+        hash: &Blake3Hash,
         include_body: bool,
         txn_option: Option<&Transaction>,
     ) -> Option<ChainInfo> {

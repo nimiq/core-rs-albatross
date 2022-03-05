@@ -10,7 +10,7 @@ use beserial::{
     Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
     SerializingError, WriteBytesExt,
 };
-use nimiq_hash::{Blake2bHash, HashOutput, Hasher, SerializeContent};
+use nimiq_hash::{Blake3Hash, HashOutput, Hasher, SerializeContent};
 
 use crate::math::CeilingDiv;
 
@@ -215,7 +215,7 @@ impl<H: HashOutput> Deserialize for MerklePath<H> {
     }
 }
 
-pub type Blake2bMerklePath = MerklePath<Blake2bHash>;
+pub type Blake3MerklePath = MerklePath<Blake3Hash>;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct MerklePathNode<H: HashOutput> {
@@ -557,12 +557,12 @@ impl error::Error for InvalidMerkleProofError {
     }
 }
 
-pub type Blake2bMerkleProof = MerkleProof<Blake2bHash>;
+pub type Blake3MerkleProof = MerkleProof<Blake3Hash>;
 
 // Simple test that checks the order of operations.
 #[cfg(test)]
 mod tests {
-    use nimiq_hash::Blake2bHasher;
+    use nimiq_hash::Blake3Hasher;
 
     use super::*;
 
@@ -580,8 +580,8 @@ mod tests {
          *   |    |
          *  v0   v1
          */
-        let root = compute_root_from_content::<Blake2bHasher, &str>(&values);
-        let proof: MerkleProof<Blake2bHash> =
+        let root = compute_root_from_content::<Blake3Hasher, &str>(&values);
+        let proof: MerkleProof<Blake3Hash> =
             MerkleProof::from_values::<&str>(&values, &[values[2]]);
         assert_eq!(proof.len(), 1);
 
@@ -613,8 +613,8 @@ mod tests {
          *   |    |      |    |
          *  v0  *v1*    v2   v3
          */
-        let root = compute_root_from_content::<Blake2bHasher, &str>(&values);
-        let proof: MerkleProof<Blake2bHash> =
+        let root = compute_root_from_content::<Blake3Hasher, &str>(&values);
+        let proof: MerkleProof<Blake3Hash> =
             MerkleProof::from_values::<&str>(&values, &[values[1]]);
         assert_eq!(proof.len(), 2);
 
@@ -636,7 +636,7 @@ mod tests {
         assert!(proof_root.is_ok());
         assert_eq!(proof_root.unwrap(), root);
 
-        let proof: MerkleProof<Blake2bHash> = MerkleProof::from_values::<&str>(&values, &[]);
+        let proof: MerkleProof<Blake3Hash> = MerkleProof::from_values::<&str>(&values, &[]);
         assert_eq!(proof.len(), 1);
 
         // Check proof internals.

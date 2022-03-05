@@ -18,7 +18,7 @@ use transaction::{SignatureProof, Transaction};
 
 pub use crate::proof::TransactionProofBuilder;
 pub use crate::recipient::Recipient;
-use hash::Blake2bHash;
+use hash::Blake3Hash;
 use primitives::policy::{STAKING_CONTRACT_ADDRESS, VALIDATOR_DEPOSIT};
 use transaction::account::htlc_contract::{AnyHash, HashAlgorithm};
 
@@ -1195,7 +1195,7 @@ impl TransactionBuilder {
         signing_key: PublicKey,
         voting_key_pair: &BlsKeyPair,
         reward_address: Address,
-        signal_data: Option<Blake2bHash>,
+        signal_data: Option<Blake3Hash>,
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
@@ -1254,7 +1254,7 @@ impl TransactionBuilder {
         new_signing_key: Option<PublicKey>,
         new_voting_key_pair: Option<&BlsKeyPair>,
         new_reward_address: Option<Address>,
-        new_signal_data: Option<Option<Blake2bHash>>,
+        new_signal_data: Option<Option<Blake3Hash>>,
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,

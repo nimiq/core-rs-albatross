@@ -2,7 +2,7 @@ use thiserror::Error;
 
 use nimiq_account::AccountError;
 use nimiq_block::{Block, BlockError, ForkProof};
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_primitives::networks::NetworkId;
 
 /// An enum used when a fork is detected.
@@ -13,10 +13,10 @@ pub enum ForkEvent {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BlockchainEvent {
-    Extended(Blake2bHash),
-    Rebranched(Vec<(Blake2bHash, Block)>, Vec<(Blake2bHash, Block)>),
-    Finalized(Blake2bHash),
-    EpochFinalized(Blake2bHash),
+    Extended(Blake3Hash),
+    Rebranched(Vec<(Blake3Hash, Block)>, Vec<(Blake3Hash, Block)>),
+    Finalized(Blake3Hash),
+    EpochFinalized(Blake3Hash),
 }
 
 #[derive(Error, Debug, Clone, PartialEq, Eq)]

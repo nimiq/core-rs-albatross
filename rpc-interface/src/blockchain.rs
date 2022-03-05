@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use async_trait::async_trait;
 use futures::stream::BoxStream;
 
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
 
@@ -24,7 +24,7 @@ pub trait BlockchainInterface {
 
     async fn get_block_by_hash(
         &mut self,
-        hash: Blake2bHash,
+        hash: Blake3Hash,
         include_transactions: Option<bool>,
     ) -> Result<Block, Self::Error>;
 
@@ -70,7 +70,7 @@ pub trait BlockchainInterface {
         &mut self,
         address: Address,
         max: Option<u16>,
-    ) -> Result<Vec<Blake2bHash>, Self::Error>;
+    ) -> Result<Vec<Blake3Hash>, Self::Error>;
 
     async fn get_transactions_by_address(
         &mut self,
@@ -97,5 +97,5 @@ pub trait BlockchainInterface {
     async fn get_staker_by_address(&mut self, address: Address) -> Result<Staker, Self::Error>;
 
     #[stream]
-    async fn head_subscribe(&mut self) -> Result<BoxStream<'static, Blake2bHash>, Self::Error>;
+    async fn head_subscribe(&mut self) -> Result<BoxStream<'static, Blake3Hash>, Self::Error>;
 }

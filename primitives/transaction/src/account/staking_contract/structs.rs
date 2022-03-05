@@ -3,7 +3,7 @@ use log::error;
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use bls::{CompressedPublicKey as BlsPublicKey, CompressedSignature as BlsSignature};
 use keys::{Address, PublicKey as SchnorrPublicKey};
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use primitives::coin::Coin;
 use primitives::policy;
 
@@ -68,7 +68,7 @@ pub enum IncomingStakingTransactionData {
         signing_key: SchnorrPublicKey,
         voting_key: BlsPublicKey,
         reward_address: Address,
-        signal_data: Option<Blake2bHash>,
+        signal_data: Option<Blake3Hash>,
         proof_of_knowledge: BlsSignature,
         // This proof is signed with the validator cold key, which will become the validator address.
         #[cfg_attr(feature = "serde-derive", serde(skip))]
@@ -78,7 +78,7 @@ pub enum IncomingStakingTransactionData {
         new_signing_key: Option<SchnorrPublicKey>,
         new_voting_key: Option<BlsPublicKey>,
         new_reward_address: Option<Address>,
-        new_signal_data: Option<Option<Blake2bHash>>,
+        new_signal_data: Option<Option<Blake3Hash>>,
         new_proof_of_knowledge: Option<BlsSignature>,
         // This proof is signed with the validator cold key.
         #[cfg_attr(feature = "serde-derive", serde(skip))]

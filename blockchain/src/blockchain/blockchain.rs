@@ -4,7 +4,7 @@ use nimiq_account::{Account, Accounts};
 use nimiq_block::Block;
 use nimiq_database::{Environment, ReadTransaction, WriteTransaction};
 use nimiq_genesis::NetworkInfo;
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::policy;
@@ -107,7 +107,7 @@ impl Blockchain {
         time: Arc<OffsetTime>,
         network_id: NetworkId,
         genesis_block: Block,
-        head_hash: Blake2bHash,
+        head_hash: Blake3Hash,
     ) -> Result<Self, BlockchainError> {
         // Check that the correct genesis block is stored.
         let genesis_info = chain_store.get_chain_info(&genesis_block.hash(), false, None);
@@ -281,13 +281,13 @@ impl Blockchain {
 }
 
 pub trait TransactionVerificationCache: Send + Sync {
-    fn is_known(&self, tx_hash: &Blake2bHash) -> bool;
+    fn is_known(&self, tx_hash: &Blake3Hash) -> bool;
 }
 
 struct DefaultTransactionVerificationCache {}
 
 impl TransactionVerificationCache for DefaultTransactionVerificationCache {
-    fn is_known(&self, _: &Blake2bHash) -> bool {
+    fn is_known(&self, _: &Blake3Hash) -> bool {
         false
     }
 }

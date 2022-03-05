@@ -11,7 +11,7 @@ use parking_lot::RwLock;
 
 use nimiq_block::Block;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_network_interface::{peer::Peer, request_response::RequestError};
 
 use crate::consensus_agent::ConsensusAgent;
@@ -20,10 +20,10 @@ use crate::consensus_agent::ConsensusAgent;
 /// Calculates the number of known/unknown blocks and a vector of unknown blocks.
 pub struct HeadRequests<TPeer: Peer + 'static> {
     peers: Vec<Arc<ConsensusAgent<TPeer>>>,
-    head_hashes: FuturesUnordered<BoxFuture<'static, (usize, Result<Blake2bHash, RequestError>)>>,
+    head_hashes: FuturesUnordered<BoxFuture<'static, (usize, Result<Blake3Hash, RequestError>)>>,
     head_blocks:
         FuturesUnordered<BoxFuture<'static, (Result<Option<Block>, RequestError>, TPeer::Id)>>,
-    requested_hashes: HashSet<Blake2bHash>,
+    requested_hashes: HashSet<Blake3Hash>,
     blockchain: Arc<RwLock<Blockchain>>,
     num_known_blocks: usize,
     num_unknown_blocks: usize,

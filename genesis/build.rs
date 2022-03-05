@@ -4,9 +4,9 @@ use std::path::Path;
 
 use nimiq_build_tools::genesis::GenesisBuilder;
 use nimiq_database::volatile::VolatileEnvironment;
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 
-fn write_genesis_rs(directory: &Path, name: &str, genesis_hash: &Blake2bHash) {
+fn write_genesis_rs(directory: &Path, name: &str, genesis_hash: &Blake3Hash) {
     let genesis_rs = format!(
         r#"GenesisData {{
             block: include_bytes!(concat!(env!("OUT_DIR"), "/genesis/{}/block.dat")),

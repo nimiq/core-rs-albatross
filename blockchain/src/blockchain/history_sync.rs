@@ -2,7 +2,7 @@ use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 
 use nimiq_block::{Block, BlockError, TendermintProof};
 use nimiq_database::WriteTransaction;
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::{Blake3Hash, Hash};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
 
@@ -125,7 +125,7 @@ impl Blockchain {
         })?;
 
         // Check the body root.
-        let body_hash = body.hash::<Blake2bHash>();
+        let body_hash = body.hash::<Blake3Hash>();
         if macro_block.header.body_root != body_hash {
             warn!(
                 "Rejecting block {} - header body hash doesn't match real body hash ({} != {})",

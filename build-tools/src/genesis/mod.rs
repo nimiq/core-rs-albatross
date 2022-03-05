@@ -13,7 +13,7 @@ use block::{Block, MacroBlock, MacroBody, MacroHeader};
 use bls::PublicKey as BlsPublicKey;
 use database::Environment;
 use database::WriteTransaction;
-use hash::{Blake2bHash, Hash};
+use hash::{Blake3Hash, Hash};
 use keys::{Address, PublicKey as SchnorrPublicKey};
 use nimiq_trie::key_nibbles::KeyNibbles;
 use primitives::coin::Coin;
@@ -40,7 +40,7 @@ pub enum GenesisBuilderError {
 #[derive(Clone)]
 pub struct GenesisInfo {
     pub block: Block,
-    pub hash: Blake2bHash,
+    pub hash: Blake3Hash,
     pub accounts: Vec<(KeyNibbles, Account)>,
 }
 
@@ -234,7 +234,7 @@ impl GenesisBuilder {
             ..Default::default()
         };
 
-        let body_root = body.hash::<Blake2bHash>();
+        let body_root = body.hash::<Blake3Hash>();
         debug!("Body root: {}", &body_root);
 
         // State root
@@ -255,11 +255,11 @@ impl GenesisBuilder {
             extra_data: vec![],
             state_root,
             body_root,
-            history_root: Blake2bHash::default(),
+            history_root: Blake3Hash::default(),
         };
 
         // genesis hash
-        let genesis_hash = header.hash::<Blake2bHash>();
+        let genesis_hash = header.hash::<Blake3Hash>();
 
         Ok(GenesisInfo {
             block: Block::Macro(MacroBlock {
@@ -308,7 +308,7 @@ impl GenesisBuilder {
         &self,
         env: Environment,
         directory: P,
-    ) -> Result<Blake2bHash, GenesisBuilderError> {
+    ) -> Result<Blake3Hash, GenesisBuilderError> {
         let GenesisInfo {
             block,
             hash,

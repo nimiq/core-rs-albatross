@@ -1,11 +1,11 @@
 use std::cmp;
 
-use nimiq_hash::{Blake2bHash, Blake2bHasher};
+use nimiq_hash::{Blake3Hash, Blake3Hasher};
 use nimiq_utils::merkle::compute_root_from_content;
 use nimiq_utils::merkle::incremental::*;
 
-fn incremental(values: &[&str], chunk_size: usize) -> Vec<IncrementalMerkleProof<Blake2bHash>> {
-    let mut builder = IncrementalMerkleProofBuilder::<Blake2bHash>::new(chunk_size).unwrap();
+fn incremental(values: &[&str], chunk_size: usize) -> Vec<IncrementalMerkleProof<Blake3Hash>> {
+    let mut builder = IncrementalMerkleProofBuilder::<Blake3Hash>::new(chunk_size).unwrap();
     for value in values {
         builder.push_item(value);
     }
@@ -25,7 +25,7 @@ fn it_correctly_computes_a_simple_proof() {
      *  v0   v1     v2   v3
      */
 
-    let root = compute_root_from_content::<Blake2bHasher, &str>(&values);
+    let root = compute_root_from_content::<Blake3Hasher, &str>(&values);
 
     // ------------
     // Chunk size 1
@@ -194,7 +194,7 @@ fn it_correctly_computes_more_complex_proofs() {
      *   |    |
      *  v0   v1
      */
-    let root = compute_root_from_content::<Blake2bHasher, &str>(&values);
+    let root = compute_root_from_content::<Blake3Hasher, &str>(&values);
 
     // ------------
     // Chunk size 1
@@ -362,14 +362,14 @@ fn it_can_compute_incremental_proofs() {
      */
     let actions = vec![1i32, 1, -1, 1, 1, 1, -1, -1, -1];
 
-    let mut builder = IncrementalMerkleProofBuilder::<Blake2bHash>::new(1).unwrap();
+    let mut builder = IncrementalMerkleProofBuilder::<Blake3Hash>::new(1).unwrap();
     let mut num = 0;
     for action in actions {
         num = (num as i32 + action) as usize;
 
         // For the small trees used here, the root for all our Merkle computations is the same.
         // The two techniques only start to differ for larger trees.
-        let root = compute_root_from_content::<Blake2bHasher, &str>(&values[..num]);
+        let root = compute_root_from_content::<Blake3Hasher, &str>(&values[..num]);
 
         if action > 0 {
             builder.push_item(&values[num - 1]);
@@ -394,7 +394,7 @@ fn it_discards_invalid_proofs() {
      *  v0   v1     v2   v3
      */
 
-    let root = compute_root_from_content::<Blake2bHasher, &str>(&values);
+    let root = compute_root_from_content::<Blake3Hasher, &str>(&values);
 
     let chunks = incremental(&values, 2);
 
@@ -434,7 +434,7 @@ fn it_discards_invalid_proofs() {
     }
 
     // Case 4: Invalid chunk size.
-    let builder = IncrementalMerkleProofBuilder::<Blake2bHash>::new(0);
+    let builder = IncrementalMerkleProofBuilder::<Blake3Hash>::new(0);
     match builder {
         Err(IncrementalMerkleProofError::InvalidChunkSize) => {}
         _ => assert!(false, "Case 4 gave invalid response: {:?}", proof_result),

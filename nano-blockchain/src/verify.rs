@@ -1,6 +1,6 @@
 use nimiq_account::Account;
 use nimiq_blockchain::{AbstractBlockchain, HistoryTreeProof};
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_trie::trie_proof::TrieProof;
 
 use crate::blockchain::NanoBlockchain;
@@ -14,7 +14,7 @@ impl NanoBlockchain {
     /// at the block with the given hash. It returns Ok if the proof is valid.
     pub fn check_account(
         &self,
-        block_hash: Blake2bHash,
+        block_hash: Blake3Hash,
         account_proof: TrieProof<Account>,
     ) -> Result<(), NanoError> {
         // Get the block.
@@ -34,7 +34,7 @@ impl NanoBlockchain {
     /// Tree at the block with the given hash. It returns Ok if the proof is valid.
     pub fn check_tx(
         &mut self,
-        block_hash: Blake2bHash,
+        block_hash: Blake3Hash,
         tx_proof: HistoryTreeProof,
     ) -> Result<(), NanoError> {
         // Get the block.

@@ -8,7 +8,7 @@ use lazy_static::lazy_static;
 use account::Account;
 use account::AccountsList;
 use beserial::{Deserialize, Serialize};
-use hash::Blake2bHash;
+use hash::Blake3Hash;
 use keys::PublicKey;
 use nimiq_build_tools::genesis::{GenesisBuilder, GenesisBuilderError, GenesisInfo};
 use nimiq_database::volatile::VolatileEnvironment;
@@ -21,7 +21,7 @@ pub use primitives::networks::NetworkId;
 #[derive(Clone, Debug)]
 struct GenesisData {
     block: &'static [u8],
-    hash: Blake2bHash,
+    hash: Blake3Hash,
     accounts: &'static [u8],
 }
 
@@ -65,7 +65,7 @@ impl NetworkInfo {
     }
 
     #[inline]
-    pub fn genesis_hash(&self) -> &Blake2bHash {
+    pub fn genesis_hash(&self) -> &Blake3Hash {
         &self.genesis.hash
     }
 

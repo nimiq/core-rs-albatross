@@ -1,5 +1,5 @@
 use bls::{CompressedSignature, KeyPair as BlsKeyPair};
-use hash::Blake2bHash;
+use hash::Blake3Hash;
 use keys::{Address, PublicKey as SchnorrPublicKey};
 use transaction::account::staking_contract::IncomingStakingTransactionData;
 
@@ -47,7 +47,7 @@ impl StakingRecipientBuilder {
         signing_key: SchnorrPublicKey,
         voting_key_pair: &BlsKeyPair,
         reward_address: Address,
-        signal_data: Option<Blake2bHash>,
+        signal_data: Option<Blake3Hash>,
     ) -> &mut Self {
         self.data = Some(IncomingStakingTransactionData::CreateValidator {
             signing_key,
@@ -69,7 +69,7 @@ impl StakingRecipientBuilder {
         new_signing_key: Option<SchnorrPublicKey>,
         new_key_pair: Option<&BlsKeyPair>,
         new_reward_address: Option<Address>,
-        new_signal_data: Option<Option<Blake2bHash>>,
+        new_signal_data: Option<Option<Blake3Hash>>,
     ) -> &mut Self {
         self.data = Some(IncomingStakingTransactionData::UpdateValidator {
             new_signing_key,

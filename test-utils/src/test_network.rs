@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_libp2p::discovery::peer_contacts::{PeerContact, Services};
 use nimiq_network_libp2p::libp2p::core::multiaddr::multiaddr;
@@ -16,7 +16,7 @@ where
 {
     async fn build_network(
         peer_id: u64,
-        genesis_hash: Blake2bHash,
+        genesis_hash: Blake3Hash,
         hub: &mut Option<MockHub>,
     ) -> Arc<Self>;
     async fn connect_network(networks: &[Arc<N>]);
@@ -26,7 +26,7 @@ where
 impl TestNetwork for MockNetwork {
     async fn build_network(
         peer_id: u64,
-        _genesis_hash: Blake2bHash,
+        _genesis_hash: Blake3Hash,
         hub: &mut Option<MockHub>,
     ) -> Arc<MockNetwork> {
         let hub = hub
@@ -50,7 +50,7 @@ impl TestNetwork for MockNetwork {
 impl TestNetwork for Network {
     async fn build_network(
         peer_id: u64,
-        genesis_hash: Blake2bHash,
+        genesis_hash: Blake3Hash,
         _hub: &mut Option<MockHub>,
     ) -> Arc<Network> {
         let clock = Arc::new(OffsetTime::new());

@@ -8,7 +8,7 @@ use std::str::FromStr;
 use hex::FromHex;
 use thiserror::Error;
 
-use hash::{hash_typed_array, Blake2bHash, Blake2bHasher, Hasher};
+use hash::{hash_typed_array, Blake3Hash, Blake3Hasher, Hasher};
 use macros::create_typed_array;
 
 use crate::key_pair::KeyPair;
@@ -155,8 +155,8 @@ impl Address {
     }
 }
 
-impl From<Blake2bHash> for Address {
-    fn from(hash: Blake2bHash) -> Self {
+impl From<Blake3Hash> for Address {
+    fn from(hash: Blake3Hash) -> Self {
         let hash_arr: [u8; 32] = hash.into();
         Address::from(&hash_arr[0..Address::len()])
     }
@@ -164,7 +164,7 @@ impl From<Blake2bHash> for Address {
 
 impl<'a> From<&'a PublicKey> for Address {
     fn from(public_key: &'a PublicKey) -> Self {
-        let hash = Blake2bHasher::default().digest(public_key.as_bytes());
+        let hash = Blake3Hasher::default().digest(public_key.as_bytes());
         Address::from(hash)
     }
 }

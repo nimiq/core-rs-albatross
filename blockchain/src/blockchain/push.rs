@@ -4,7 +4,7 @@ use parking_lot::{RwLockUpgradableReadGuard, RwLockWriteGuard};
 
 use nimiq_block::{Block, ForkProof};
 use nimiq_database::WriteTransaction;
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::{Blake3Hash, Hash};
 use nimiq_primitives::policy;
 use nimiq_vrf::VrfEntropy;
 
@@ -227,7 +227,7 @@ impl Blockchain {
     /// Extends the current main chain.
     fn extend(
         this: RwLockUpgradableReadGuard<Blockchain>,
-        block_hash: Blake2bHash,
+        block_hash: Blake3Hash,
         mut chain_info: ChainInfo,
         mut prev_info: ChainInfo,
     ) -> Result<PushResult, PushError> {
@@ -312,7 +312,7 @@ impl Blockchain {
     /// Rebranches the current main chain.
     fn rebranch(
         this: RwLockUpgradableReadGuard<Blockchain>,
-        block_hash: Blake2bHash,
+        block_hash: Blake3Hash,
         chain_info: ChainInfo,
     ) -> Result<PushResult, PushError> {
         let target_block = chain_info.head.header();
@@ -323,8 +323,8 @@ impl Blockchain {
         // Store the chain along the way.
         let read_txn = this.read_transaction();
 
-        let mut fork_chain: Vec<(Blake2bHash, ChainInfo)> = vec![];
-        let mut current: (Blake2bHash, ChainInfo) = (block_hash, chain_info);
+        let mut fork_chain: Vec<(Blake3Hash, ChainInfo)> = vec![];
+        let mut current: (Blake3Hash, ChainInfo) = (block_hash, chain_info);
 
         while !current.1.on_main_chain {
             let prev_hash = current.1.head.parent_hash().clone();
@@ -347,7 +347,7 @@ impl Blockchain {
         );
 
         // Revert AccountsTree & TransactionCache to the common ancestor state.
-        let mut revert_chain: Vec<(Blake2bHash, ChainInfo)> = vec![];
+        let mut revert_chain: Vec<(Blake3Hash, ChainInfo)> = vec![];
         let mut ancestor = current;
 
         // Check if ancestor is in current batch.

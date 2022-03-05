@@ -12,7 +12,7 @@ use nimiq_blockchain::Blockchain;
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_build_tools::genesis::GenesisBuilder;
 use nimiq_database::volatile::VolatileEnvironment;
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_keys::{
     Address, KeyPair as SchnorrKeyPair, PublicKey as SchnorrPublicKey, SecureGenerate,
 };
@@ -193,12 +193,12 @@ fn create_dummy_micro_block(transactions: Option<Vec<Transaction>>) -> Block {
         block_number: 0,
         view_number: 0,
         timestamp: 0,
-        parent_hash: Blake2bHash::default(),
+        parent_hash: Blake3Hash::default(),
         seed: VrfSeed::default(),
         extra_data: vec![0; 1],
-        state_root: Blake2bHash::default(),
-        body_root: Blake2bHash::default(),
-        history_root: Blake2bHash::default(),
+        state_root: Blake3Hash::default(),
+        body_root: Blake3Hash::default(),
+        history_root: Blake3Hash::default(),
     };
 
     let micro_body = transactions.map(|txns| MicroBody {
@@ -859,13 +859,13 @@ async fn mempool_update() {
     let (mut rev_txns, _) = generate_transactions(reverted_transactions, true);
     rev_txns.extend_from_slice(&transactions[3..8]);
     let mut reverted_micro_blocks = vec![];
-    reverted_micro_blocks.push((Blake2bHash::default(), create_dummy_micro_block(None)));
+    reverted_micro_blocks.push((Blake3Hash::default(), create_dummy_micro_block(None)));
     reverted_micro_blocks.push((
-        Blake2bHash::default(),
+        Blake3Hash::default(),
         create_dummy_micro_block(Some(rev_txns[..5].to_vec())),
     ));
     reverted_micro_blocks.push((
-        Blake2bHash::default(),
+        Blake3Hash::default(),
         create_dummy_micro_block(Some(rev_txns[5..].to_vec())),
     ));
     log::debug!("Done generating reverted micro block");
@@ -895,13 +895,13 @@ async fn mempool_update() {
     let (mut adopted_txns, _) = generate_transactions(adopted_transactions, true);
     adopted_txns.extend_from_slice(&transactions[13..18]);
     let mut adopted_micro_blocks = vec![];
-    adopted_micro_blocks.push((Blake2bHash::default(), create_dummy_micro_block(None)));
+    adopted_micro_blocks.push((Blake3Hash::default(), create_dummy_micro_block(None)));
     adopted_micro_blocks.push((
-        Blake2bHash::default(),
+        Blake3Hash::default(),
         create_dummy_micro_block(Some(adopted_txns[..5].to_vec())),
     ));
     adopted_micro_blocks.push((
-        Blake2bHash::default(),
+        Blake3Hash::default(),
         create_dummy_micro_block(Some(adopted_txns[5..].to_vec())),
     ));
 

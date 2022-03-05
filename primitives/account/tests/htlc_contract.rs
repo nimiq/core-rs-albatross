@@ -6,7 +6,7 @@ use nimiq_account::{
 };
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_database::WriteTransaction;
-use nimiq_hash::{Blake2bHasher, HashOutput, Hasher, Sha256Hasher};
+use nimiq_hash::{Blake3Hasher, HashOutput, Hasher, Sha256Hasher};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
@@ -82,7 +82,7 @@ fn it_can_verify_creation_transaction() {
     let recipient = Address::from([0u8; 20]);
     sender.serialize(&mut data);
     recipient.serialize(&mut data);
-    HashAlgorithm::Blake2b.serialize(&mut data);
+    HashAlgorithm::Blake3.serialize(&mut data);
     AnyHash::from([0u8; 32]).serialize(&mut data);
     Serialize::serialize(&2u8, &mut data);
     Serialize::serialize(&1000u64, &mut data);
@@ -159,7 +159,7 @@ fn it_can_create_contract_from_transaction() {
     let recipient = Address::from([0u8; 20]);
     sender.serialize(&mut data);
     recipient.serialize(&mut data);
-    HashAlgorithm::Blake2b.serialize(&mut data);
+    HashAlgorithm::Blake3.serialize(&mut data);
     AnyHash::from([0u8; 32]).serialize(&mut data);
     Serialize::serialize(&2u8, &mut data);
     Serialize::serialize(&1000u64, &mut data);
@@ -253,8 +253,8 @@ fn prepare_outgoing_transaction() -> (
     let recipient = Address::from(&recipient_key_pair.public);
     let pre_image = AnyHash::from([1u8; 32]);
     let hash_root = AnyHash::from(<[u8; 32]>::from(
-        Blake2bHasher::default().digest(
-            Blake2bHasher::default()
+        Blake3Hasher::default().digest(
+            Blake3Hasher::default()
                 .digest(pre_image.as_bytes())
                 .as_bytes(),
         ),
@@ -264,7 +264,7 @@ fn prepare_outgoing_transaction() -> (
         balance: 1000.try_into().unwrap(),
         sender,
         recipient,
-        hash_algorithm: HashAlgorithm::Blake2b,
+        hash_algorithm: HashAlgorithm::Blake3,
         hash_root,
         hash_count: 2,
         timeout: 100,
@@ -306,12 +306,10 @@ fn it_can_verify_regular_transfer() {
     let mut proof =
         Vec::with_capacity(3 + 2 * AnyHash::SIZE + recipient_signature_proof.serialized_size());
     Serialize::serialize(&ProofType::RegularTransfer, &mut proof);
-    Serialize::serialize(&HashAlgorithm::Blake2b, &mut proof);
+    Serialize::serialize(&HashAlgorithm::Blake3, &mut proof);
     Serialize::serialize(&1u8, &mut proof);
     Serialize::serialize(
-        &AnyHash::from(<[u8; 32]>::from(
-            Blake2bHasher::default().digest(&[0u8; 32]),
-        )),
+        &AnyHash::from(<[u8; 32]>::from(Blake3Hasher::default().digest(&[0u8; 32]))),
         &mut proof,
     );
     Serialize::serialize(&AnyHash::from([0u8; 32]), &mut proof);
@@ -370,12 +368,10 @@ fn it_can_verify_regular_transfer() {
     // regular: invalid over-long
     proof = Vec::with_capacity(4 + 2 * AnyHash::SIZE + recipient_signature_proof.serialized_size());
     Serialize::serialize(&ProofType::RegularTransfer, &mut proof);
-    Serialize::serialize(&HashAlgorithm::Blake2b, &mut proof);
+    Serialize::serialize(&HashAlgorithm::Blake3, &mut proof);
     Serialize::serialize(&1u8, &mut proof);
     Serialize::serialize(
-        &AnyHash::from(<[u8; 32]>::from(
-            Blake2bHasher::default().digest(&[0u8; 32]),
-        )),
+        &AnyHash::from(<[u8; 32]>::from(Blake3Hasher::default().digest(&[0u8; 32]))),
         &mut proof,
     );
     Serialize::serialize(&AnyHash::from([0u8; 32]), &mut proof);
@@ -482,7 +478,7 @@ fn it_can_apply_and_revert_valid_transaction() {
     let mut proof =
         Vec::with_capacity(3 + 2 * AnyHash::SIZE + recipient_signature_proof.serialized_size());
     Serialize::serialize(&ProofType::RegularTransfer, &mut proof);
-    Serialize::serialize(&HashAlgorithm::Blake2b, &mut proof);
+    Serialize::serialize(&HashAlgorithm::Blake3, &mut proof);
     Serialize::serialize(&2u8, &mut proof);
     Serialize::serialize(&start_contract.hash_root, &mut proof);
     Serialize::serialize(&pre_image, &mut proof);
@@ -636,7 +632,7 @@ fn it_refuses_invalid_transaction() {
     let mut proof =
         Vec::with_capacity(3 + 2 * AnyHash::SIZE + recipient_signature_proof.serialized_size());
     Serialize::serialize(&ProofType::RegularTransfer, &mut proof);
-    Serialize::serialize(&HashAlgorithm::Blake2b, &mut proof);
+    Serialize::serialize(&HashAlgorithm::Blake3, &mut proof);
     Serialize::serialize(&2u8, &mut proof);
     Serialize::serialize(&start_contract.hash_root, &mut proof);
     Serialize::serialize(&pre_image, &mut proof);
@@ -658,7 +654,7 @@ fn it_refuses_invalid_transaction() {
     let mut proof =
         Vec::with_capacity(3 + 2 * AnyHash::SIZE + recipient_signature_proof.serialized_size());
     Serialize::serialize(&ProofType::RegularTransfer, &mut proof);
-    Serialize::serialize(&HashAlgorithm::Blake2b, &mut proof);
+    Serialize::serialize(&HashAlgorithm::Blake3, &mut proof);
     Serialize::serialize(&2u8, &mut proof);
     Serialize::serialize(&AnyHash::from([1u8; 32]), &mut proof);
     Serialize::serialize(&pre_image, &mut proof);
@@ -680,7 +676,7 @@ fn it_refuses_invalid_transaction() {
     let mut proof =
         Vec::with_capacity(3 + 2 * AnyHash::SIZE + recipient_signature_proof.serialized_size());
     Serialize::serialize(&ProofType::RegularTransfer, &mut proof);
-    Serialize::serialize(&HashAlgorithm::Blake2b, &mut proof);
+    Serialize::serialize(&HashAlgorithm::Blake3, &mut proof);
     Serialize::serialize(&2u8, &mut proof);
     Serialize::serialize(&start_contract.hash_root, &mut proof);
     Serialize::serialize(&pre_image, &mut proof);
@@ -702,12 +698,12 @@ fn it_refuses_invalid_transaction() {
     let mut proof =
         Vec::with_capacity(3 + 2 * AnyHash::SIZE + recipient_signature_proof.serialized_size());
     Serialize::serialize(&ProofType::RegularTransfer, &mut proof);
-    Serialize::serialize(&HashAlgorithm::Blake2b, &mut proof);
+    Serialize::serialize(&HashAlgorithm::Blake3, &mut proof);
     Serialize::serialize(&1u8, &mut proof);
     Serialize::serialize(&start_contract.hash_root, &mut proof);
     Serialize::serialize(
         &AnyHash::from(<[u8; 32]>::from(
-            Blake2bHasher::default().digest(&(<[u8; 32]>::from(pre_image))),
+            Blake3Hasher::default().digest(&(<[u8; 32]>::from(pre_image))),
         )),
         &mut proof,
     );

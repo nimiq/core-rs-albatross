@@ -16,7 +16,7 @@ use libp2p::{
 use parking_lot::RwLock;
 use rand::{thread_rng, Rng};
 
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_network_libp2p::discovery::peer_contacts::{
     PeerContactBook, PeerContactBookConfig, SignedPeerContact,
 };
@@ -55,7 +55,7 @@ impl TestNode {
             .boxed();
 
         let config = DiscoveryConfig {
-            genesis_hash: Blake2bHash::default(),
+            genesis_hash: Blake3Hash::default(),
             update_interval: Duration::from_secs(10),
             min_send_update_interval: Duration::from_secs(5),
             update_limit: 64,

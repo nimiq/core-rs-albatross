@@ -11,7 +11,7 @@ use beserial::Serialize;
 use nimiq_account::{Account, BasicAccount};
 use nimiq_block::Block;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, TransactionVerificationCache};
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::{Blake3Hash, Hash};
 use nimiq_keys::Address;
 use nimiq_network_interface::network::{Network, Topic};
 use nimiq_primitives::account::AccountType;
@@ -196,8 +196,8 @@ impl Mempool {
     ///
     pub fn mempool_update(
         &self,
-        adopted_blocks: &[(Blake2bHash, Block)],
-        reverted_blocks: &[(Blake2bHash, Block)],
+        adopted_blocks: &[(Blake3Hash, Block)],
+        reverted_blocks: &[(Blake3Hash, Block)],
     ) {
         // Acquire the mempool and blockchain locks
         let blockchain = self.blockchain.read();
@@ -285,10 +285,10 @@ impl Mempool {
 
                             // TODO: We could have per sender transactions ordered by fee to try to
                             //       keep the ones with higher fee
-                            let sender_txs: Vec<Blake2bHash> =
+                            let sender_txs: Vec<Blake3Hash> =
                                 sender_state.txns.iter().cloned().collect();
 
-                            let txs_to_remove: Vec<&Blake2bHash> = sender_txs
+                            let txs_to_remove: Vec<&Blake3Hash> = sender_txs
                                 .iter()
                                 .filter(|hash| {
                                     let old_tx = mempool_state.get(hash).unwrap();
@@ -441,7 +441,7 @@ impl Mempool {
     }
 
     /// Checks whether a transaction has been filtered
-    pub fn is_filtered(&self, hash: &Blake2bHash) -> bool {
+    pub fn is_filtered(&self, hash: &Blake3Hash) -> bool {
         self.filter.read().blacklisted(hash)
     }
 
@@ -451,17 +451,17 @@ impl Mempool {
     }
 
     /// Checks if a transactions is in the mempool, by its hash.
-    pub fn contains_transaction_by_hash(&self, hash: &Blake2bHash) -> bool {
+    pub fn contains_transaction_by_hash(&self, hash: &Blake3Hash) -> bool {
         self.state.read().contains(hash)
     }
 
     /// Gets a transactions by its hash.
-    pub fn get_transaction_by_hash(&self, hash: &Blake2bHash) -> Option<Transaction> {
+    pub fn get_transaction_by_hash(&self, hash: &Blake3Hash) -> Option<Transaction> {
         self.state.read().get(hash).cloned()
     }
 
     /// Gets all transaction hashes in the mempool.
-    pub fn get_transaction_hashes(&self) -> Vec<Blake2bHash> {
+    pub fn get_transaction_hashes(&self) -> Vec<Blake3Hash> {
         self.state.read().transactions.keys().cloned().collect()
     }
 
@@ -477,7 +477,7 @@ impl Mempool {
 }
 
 impl TransactionVerificationCache for Mempool {
-    fn is_known(&self, tx_hash: &Blake2bHash) -> bool {
+    fn is_known(&self, tx_hash: &Blake3Hash) -> bool {
         if let Some(state) = self.state.try_read() {
             state.contains(tx_hash)
         } else {
@@ -488,13 +488,13 @@ impl TransactionVerificationCache for Mempool {
 
 pub(crate) struct MempoolState {
     // A hashmap containing the transactions indexed by their hash.
-    pub(crate) transactions: HashMap<Blake2bHash, Transaction>,
+    pub(crate) transactions: HashMap<Blake3Hash, Transaction>,
 
     // Transactions ordered by fee (higher fee transactions pop first)
-    pub(crate) transactions_by_fee: KeyedPriorityQueue<Blake2bHash, FeeWrapper>,
+    pub(crate) transactions_by_fee: KeyedPriorityQueue<Blake3Hash, FeeWrapper>,
 
     // Transactions ordered by age (older transactions pop first)
-    pub(crate) transactions_by_age: KeyedPriorityQueue<Blake2bHash, u32>,
+    pub(crate) transactions_by_age: KeyedPriorityQueue<Blake3Hash, u32>,
 
     // The in-fly balance per sender
     pub(crate) state_by_sender: HashMap<Address, SenderPendingState>,
@@ -513,11 +513,11 @@ pub(crate) struct MempoolState {
 }
 
 impl MempoolState {
-    pub fn contains(&self, hash: &Blake2bHash) -> bool {
+    pub fn contains(&self, hash: &Blake3Hash) -> bool {
         self.transactions.contains_key(hash)
     }
 
-    pub fn get(&self, hash: &Blake2bHash) -> Option<&Transaction> {
+    pub fn get(&self, hash: &Blake3Hash) -> Option<&Transaction> {
         self.transactions.get(hash)
     }
 
@@ -593,7 +593,7 @@ impl MempoolState {
         true
     }
 
-    pub(crate) fn remove(&mut self, tx_hash: &Blake2bHash) -> Option<Transaction> {
+    pub(crate) fn remove(&mut self, tx_hash: &Blake3Hash) -> Option<Transaction> {
         let tx = self.transactions.remove(tx_hash)?;
 
         self.transactions_by_age.remove(tx_hash);
@@ -652,7 +652,7 @@ pub(crate) struct SenderPendingState {
     pub(crate) total: Coin,
 
     // Transaction hashes for this sender.
-    pub(crate) txns: HashSet<Blake2bHash>,
+    pub(crate) txns: HashSet<Blake3Hash>,
 }
 
 /// Since f64 doesn't implement Ord, we cannot sort f64's or use them in KeyedPriorityQueues. So we

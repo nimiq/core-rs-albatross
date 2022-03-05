@@ -7,7 +7,7 @@ use nimiq_block::{
     MacroHeader, MicroBody, MicroHeader, MicroJustification, TendermintProof,
 };
 use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
 
@@ -19,7 +19,7 @@ pub struct ChainInfo {
     // A boolean stating if this block is in the main chain.
     pub on_main_chain: bool,
     // The hash of next block in the chain.
-    pub main_chain_successor: Option<Blake2bHash>,
+    pub main_chain_successor: Option<Blake3Hash>,
     // The sum of all transaction fees in this chain. It resets every batch.
     pub cum_tx_fees: Coin,
 }

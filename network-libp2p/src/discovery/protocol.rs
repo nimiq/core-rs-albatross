@@ -6,7 +6,7 @@ use libp2p::{core::UpgradeInfo, identity::Keypair, InboundUpgrade, Multiaddr, Ou
 use rand::{thread_rng, RngCore};
 
 use beserial::{Deserialize, Serialize, SerializingError};
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_macros::{add_hex_io_fns_typed_arr, create_typed_array};
 use nimiq_utils::tagged_signing::{TaggedSignable, TaggedSignature};
 
@@ -46,7 +46,7 @@ pub enum DiscoveryMessage {
         challenge_nonce: ChallengeNonce,
 
         /// Genesis hash for the network the sender is in.
-        genesis_hash: Blake2bHash,
+        genesis_hash: Blake3Hash,
 
         /// Number of peer contacts the sender is willing to accept per update.
         limit: u16,

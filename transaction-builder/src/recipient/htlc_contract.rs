@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use hash::{Blake2bHash, Sha256Hash};
+use hash::{Blake3Hash, Sha256Hash};
 use keys::Address;
 use transaction::account::htlc_contract::CreationTransactionData as HtlcCreationData;
 use transaction::account::htlc_contract::{AnyHash, HashAlgorithm};
@@ -26,12 +26,12 @@ pub enum HtlcRecipientBuilderError {
     #[error("The HTLC recipient address is missing.")]
     NoRecipient,
     /// The hash data of the [`HtlcRecipientBuilder`] has not been set.
-    /// Call [`with_hash`], [`with_sha256_hash`], or [`with_blake2b_hash`] to set this field.
+    /// Call [`with_hash`], [`with_sha256_hash`], or [`with_blake3_hash`] to set this field.
     ///
     /// [`HtlcRecipientBuilder`]: struct.HtlcRecipientBuilder.html
     /// [`with_hash`]: struct.HtlcRecipientBuilder.html#method.with_hash
     /// [`with_sha256_hash`]: struct.HtlcRecipientBuilder.html#method.with_sha256_hash
-    /// [`with_blake2b_hash`]: struct.HtlcRecipientBuilder.html#method.with_blake2b_hash
+    /// [`with_blake3_hash`]: struct.HtlcRecipientBuilder.html#method.with_blake3_hash
     #[error("The HTLC hash data is missing.")]
     NoHash,
     /// The `timeout` field of the [`HtlcRecipientBuilder`] has not been set.
@@ -150,34 +150,34 @@ impl HtlcRecipientBuilder {
         self
     }
 
-    /// Sets the hash data for the HTLC using Blake2b hashes.
+    /// Sets the hash data for the HTLC using Blake3 hashes.
     /// The `hash_root` is the result of hashing the pre-image hash `hash_count` times.
     ///
     /// # Examples
     ///
     /// ```
     /// use nimiq_transaction_builder::recipient::htlc_contract::HtlcRecipientBuilder;
-    /// use nimiq_hash::{Blake2bHasher, Hasher, HashOutput};
+    /// use nimiq_hash::{Blake3Hasher, Hasher, HashOutput};
     ///
     /// // Hash data for HTLC.
     /// // The actual pre_image must be a hash, so we have to hash our secret first.
     /// let secret = "supersecret";
-    /// let pre_image = Blake2bHasher::default().digest(&secret.as_bytes());
+    /// let pre_image = Blake3Hasher::default().digest(&secret.as_bytes());
     /// // To get the hash_root, we have to hash the pre_image multiple times.
     /// let hash_count = 10;
     /// let mut hash_root = pre_image;
     /// for _ in 0..hash_count {
-    ///     hash_root = Blake2bHasher::default().digest(hash_root.as_bytes());
+    ///     hash_root = Blake3Hasher::default().digest(hash_root.as_bytes());
     /// }
     ///
     /// let mut recipient_builder = HtlcRecipientBuilder::new();
-    /// recipient_builder.with_blake2b_hash(hash_root, hash_count);
+    /// recipient_builder.with_blake3_hash(hash_root, hash_count);
     /// ```
-    pub fn with_blake2b_hash(&mut self, hash_root: Blake2bHash, hash_count: u8) -> &mut Self {
+    pub fn with_blake3_hash(&mut self, hash_root: Blake3Hash, hash_count: u8) -> &mut Self {
         let hash: [u8; 32] = hash_root.into();
         self.hash_root = Some(AnyHash::from(hash));
         self.hash_count = hash_count;
-        self.hash_algorithm = Some(HashAlgorithm::Blake2b);
+        self.hash_algorithm = Some(HashAlgorithm::Blake3);
         self
     }
 
@@ -196,17 +196,17 @@ impl HtlcRecipientBuilder {
     /// ```
     /// use nimiq_transaction_builder::Recipient;
     /// use nimiq_keys::Address;
-    /// use nimiq_hash::{Blake2bHasher, Hasher, HashOutput};
+    /// use nimiq_hash::{Blake3Hasher, Hasher, HashOutput};
     ///
     /// // Hash data for HTLC.
     /// // The actual pre_image must be a hash, so we have to hash our secret first.
     /// let secret = "supersecret";
-    /// let pre_image = Blake2bHasher::default().digest(&secret.as_bytes());
+    /// let pre_image = Blake3Hasher::default().digest(&secret.as_bytes());
     /// // To get the hash_root, we have to hash the pre_image multiple times.
     /// let hash_count = 10;
     /// let mut hash_root = pre_image;
     /// for _ in 0..hash_count {
-    ///     hash_root = Blake2bHasher::default().digest(hash_root.as_bytes());
+    ///     hash_root = Blake3Hasher::default().digest(hash_root.as_bytes());
     /// }
     ///
     /// let mut recipient_builder = Recipient::new_htlc_builder();
@@ -217,7 +217,7 @@ impl HtlcRecipientBuilder {
     ///     Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap()
     /// );
     /// recipient_builder.with_timeout(100)
-    ///     .with_blake2b_hash(hash_root, hash_count);
+    ///     .with_blake3_hash(hash_root, hash_count);
     /// let recipient = recipient_builder.generate();
     /// assert!(recipient.is_ok());
     /// ```

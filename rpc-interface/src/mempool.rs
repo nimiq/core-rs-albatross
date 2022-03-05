@@ -1,18 +1,18 @@
 use async_trait::async_trait;
 
 use crate::types::{HashOrTx, MempoolInfo, Transaction};
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 
 #[nimiq_jsonrpc_derive::proxy(name = "MempoolProxy", rename_all = "camelCase")]
 #[async_trait]
 pub trait MempoolInterface {
     type Error;
 
-    async fn push_transaction(&mut self, raw_tx: String) -> Result<Blake2bHash, Self::Error>;
+    async fn push_transaction(&mut self, raw_tx: String) -> Result<Blake3Hash, Self::Error>;
 
     async fn get_transaction_by_hash(
         &mut self,
-        hash: Blake2bHash,
+        hash: Blake3Hash,
         check_mempool: Option<bool>,
     ) -> Result<Transaction, Self::Error>;
 

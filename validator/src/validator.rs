@@ -17,7 +17,7 @@ use blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent, ForkEvent, Pus
 use bls::{CompressedPublicKey, KeyPair as BlsKeyPair};
 use consensus::{sync::block_queue::BlockTopic, Consensus, ConsensusEvent, ConsensusProxy};
 use database::{Database, Environment, ReadTransaction, WriteTransaction};
-use hash::{Blake2bHash, Hash};
+use hash::{Blake3Hash, Hash};
 use keys::{Address, KeyPair as SchnorrKeyPair};
 use mempool::{config::MempoolConfig, mempool::Mempool};
 use network_interface::{
@@ -69,7 +69,7 @@ struct ProduceMicroBlockState {
 
 /// Validator parking state
 struct ParkingState {
-    park_tx_hash: Blake2bHash,
+    park_tx_hash: Blake3Hash,
     park_tx_validity_window_start: u32,
 }
 
@@ -394,7 +394,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         }
     }
 
-    fn on_blockchain_extended(&mut self, hash: &Blake2bHash) {
+    fn on_blockchain_extended(&mut self, hash: &Blake3Hash) {
         let block = self
             .consensus
             .blockchain
@@ -410,8 +410,8 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
 
     fn on_blockchain_rebranched(
         &mut self,
-        old_chain: &[(Blake2bHash, Block)],
-        new_chain: &[(Blake2bHash, Block)],
+        old_chain: &[(Blake3Hash, Block)],
+        new_chain: &[(Blake3Hash, Block)],
     ) {
         // Update mempool and blockchain state
         for (_hash, block) in old_chain.iter() {

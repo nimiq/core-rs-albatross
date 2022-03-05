@@ -5,7 +5,7 @@ use std::time::Duration;
 use parking_lot::RwLock;
 
 use nimiq_block::Block;
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_network_interface::peer::Peer;
 use nimiq_network_interface::request_response::{RequestError, RequestResponse};
 use nimiq_subscription::Subscription;
@@ -69,7 +69,7 @@ impl<P: Peer> ConsensusAgent<P> {
         }
     }
 
-    pub async fn request_block(&self, hash: Blake2bHash) -> Result<Option<Block>, RequestError> {
+    pub async fn request_block(&self, hash: Blake3Hash) -> Result<Option<Block>, RequestError> {
         let result = self
             .block_requests
             .request(RequestBlock {
@@ -81,7 +81,7 @@ impl<P: Peer> ConsensusAgent<P> {
         result.map(|response_block| response_block.block)
     }
 
-    pub async fn request_epoch(&self, hash: Blake2bHash) -> Result<BatchSetInfo, RequestError> {
+    pub async fn request_epoch(&self, hash: Blake3Hash) -> Result<BatchSetInfo, RequestError> {
         let result = self
             .epoch_requests
             .request(RequestBatchSet {
@@ -97,7 +97,7 @@ impl<P: Peer> ConsensusAgent<P> {
 
     pub async fn request_block_hashes(
         &self,
-        locators: Vec<Blake2bHash>,
+        locators: Vec<Blake3Hash>,
         max_blocks: u16,
         filter: RequestBlockHashesFilter,
     ) -> Result<BlockHashes, RequestError> {
@@ -137,8 +137,8 @@ impl<P: Peer> ConsensusAgent<P> {
 
     pub async fn request_missing_blocks(
         &self,
-        target_block_hash: Blake2bHash,
-        locators: Vec<Blake2bHash>,
+        target_block_hash: Blake3Hash,
+        locators: Vec<Blake3Hash>,
     ) -> Result<Option<Vec<Block>>, RequestError> {
         let result = self
             .missing_block_requests
@@ -152,7 +152,7 @@ impl<P: Peer> ConsensusAgent<P> {
         result.map(|response_blocks| response_blocks.blocks)
     }
 
-    pub async fn request_head(&self) -> Result<Blake2bHash, RequestError> {
+    pub async fn request_head(&self) -> Result<Blake3Hash, RequestError> {
         let result = self
             .head_requests
             .request(RequestHead {

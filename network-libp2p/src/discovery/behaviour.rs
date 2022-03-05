@@ -20,7 +20,7 @@ use libp2p::{
 use parking_lot::RwLock;
 use wasm_timer::Interval;
 
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_utils::time::OffsetTime;
 
 use super::{
@@ -31,7 +31,7 @@ use super::{
 #[derive(Clone, Debug)]
 pub struct DiscoveryConfig {
     /// Genesis hash for the network we want to be connected to.
-    pub genesis_hash: Blake2bHash,
+    pub genesis_hash: Blake3Hash,
 
     /// Interval in which we want to be updated.
     pub update_interval: Duration,
@@ -60,7 +60,7 @@ pub struct DiscoveryConfig {
 }
 
 impl DiscoveryConfig {
-    pub fn new(genesis_hash: Blake2bHash) -> Self {
+    pub fn new(genesis_hash: Blake3Hash) -> Self {
         Self {
             genesis_hash,
             update_interval: Duration::from_secs(60),

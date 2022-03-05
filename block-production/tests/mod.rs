@@ -12,7 +12,7 @@ use nimiq_database::{
     volatile::VolatileEnvironment,
 };
 use nimiq_genesis::NetworkId;
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::{Blake3Hash, Hash};
 use nimiq_keys::{Address, KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
@@ -63,7 +63,7 @@ fn it_can_produce_micro_blocks() {
         let justification1 = block.justification.unwrap().signature;
         let mut header2 = header1.clone();
         header2.timestamp += 1;
-        let hash2 = header2.hash::<Blake2bHash>();
+        let hash2 = header2.hash::<Blake3Hash>();
         let justification2 = signing_key().sign(hash2.as_slice());
         ForkProof {
             header1,

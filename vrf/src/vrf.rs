@@ -17,7 +17,7 @@ use serde_big_array::big_array;
 use sha2::{Digest, Sha256, Sha512};
 
 use beserial::{Deserialize, Serialize, SerializingError};
-use nimiq_hash::{Blake2bHash, Blake2bHasher, HashOutput, Hasher};
+use nimiq_hash::{Blake3Hash, Blake3Hasher, HashOutput, Hasher};
 use nimiq_keys::{KeyPair, PublicKey};
 
 use crate::rng::Rng;
@@ -277,9 +277,9 @@ impl VrfRng {
         }
     }
 
-    pub fn next_hash(&mut self) -> Blake2bHash {
+    pub fn next_hash(&mut self) -> Blake3Hash {
         // Hash use-case prefix, counter and entropy.
-        let mut hasher = Blake2bHasher::new();
+        let mut hasher = Blake3Hasher::new();
         hasher.write_u8(self.use_case as u8).unwrap();
         hasher.write_u64::<BigEndian>(self.counter).unwrap();
         hasher.write_all(self.entropy.as_slice()).unwrap();

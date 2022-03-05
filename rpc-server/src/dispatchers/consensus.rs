@@ -7,7 +7,7 @@ use beserial::{Deserialize, Serialize};
 use nimiq_blockchain::AbstractBlockchain;
 use nimiq_bls::{KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
 use nimiq_consensus::ConsensusProxy;
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::{Blake3Hash, Hash};
 use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey};
 use nimiq_network_libp2p::Network;
 use nimiq_primitives::{coin::Coin, networks::NetworkId};
@@ -83,9 +83,9 @@ impl ConsensusInterface for ConsensusDispatcher {
     }
 
     /// Sends the given serialized transaction to the network.
-    async fn send_raw_transaction(&mut self, raw_tx: String) -> Result<Blake2bHash, Error> {
+    async fn send_raw_transaction(&mut self, raw_tx: String) -> Result<Blake3Hash, Error> {
         let tx: Transaction = Deserialize::deserialize_from_vec(&hex::decode(&raw_tx)?)?;
-        let txid = tx.hash::<Blake2bHash>();
+        let txid = tx.hash::<Blake3Hash>();
 
         match self.consensus.send_transaction(tx).await {
             Ok(_) => Ok(txid),
@@ -122,7 +122,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Error> {
+    ) -> Result<Blake3Hash, Error> {
         let raw_tx = self
             .create_basic_transaction(wallet, recipient, value, fee, validity_start_height)
             .await?;
@@ -161,7 +161,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Self::Error> {
+    ) -> Result<Blake3Hash, Self::Error> {
         let raw_tx = self
             .create_basic_transaction_with_data(
                 wallet,
@@ -213,7 +213,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Self::Error> {
+    ) -> Result<Blake3Hash, Self::Error> {
         let raw_tx = self
             .create_new_vesting_transaction(
                 wallet,
@@ -261,7 +261,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Self::Error> {
+    ) -> Result<Blake3Hash, Self::Error> {
         let raw_tx = self
             .create_redeem_vesting_transaction(
                 wallet,
@@ -319,7 +319,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Self::Error> {
+    ) -> Result<Blake3Hash, Self::Error> {
         let raw_tx = self
             .create_new_htlc_transaction(
                 wallet,
@@ -383,7 +383,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Self::Error> {
+    ) -> Result<Blake3Hash, Self::Error> {
         let raw_tx = self
             .create_redeem_regular_htlc_transaction(
                 wallet,
@@ -435,7 +435,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Self::Error> {
+    ) -> Result<Blake3Hash, Self::Error> {
         let raw_tx = self
             .create_redeem_timeout_htlc_transaction(
                 wallet,
@@ -493,7 +493,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Self::Error> {
+    ) -> Result<Blake3Hash, Self::Error> {
         let raw_tx = self
             .create_redeem_early_htlc_transaction(
                 contract_address,
@@ -566,7 +566,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Self::Error> {
+    ) -> Result<Blake3Hash, Self::Error> {
         let raw_tx = self
             .create_new_staker_transaction(
                 sender_wallet,
@@ -611,7 +611,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Error> {
+    ) -> Result<Blake3Hash, Error> {
         let raw_tx = self
             .create_stake_transaction(
                 sender_wallet,
@@ -662,7 +662,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         new_delegation: Option<Address>,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Error> {
+    ) -> Result<Blake3Hash, Error> {
         let raw_tx = self
             .create_update_transaction(
                 sender_wallet,
@@ -706,7 +706,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Error> {
+    ) -> Result<Blake3Hash, Error> {
         let raw_tx = self
             .create_unstake_transaction(staker_wallet, recipient, value, fee, validity_start_height)
             .await?;
@@ -744,10 +744,10 @@ impl ConsensusInterface for ConsensusDispatcher {
         // this situation we have:
         // "" = None
         // "0x29a4b..." = Some(hash)
-        let signal_data: Option<Blake2bHash> = if signal_data.is_empty() {
+        let signal_data: Option<Blake3Hash> = if signal_data.is_empty() {
             None
         } else {
-            Some(Blake2bHash::deserialize_from_vec(&hex::decode(signal_data).unwrap()).unwrap())
+            Some(Blake3Hash::deserialize_from_vec(&hex::decode(signal_data).unwrap()).unwrap())
         };
 
         let transaction = TransactionBuilder::new_create_validator(
@@ -781,7 +781,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         signal_data: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Error> {
+    ) -> Result<Blake3Hash, Error> {
         let raw_tx = self
             .create_new_validator_transaction(
                 sender_wallet,
@@ -839,14 +839,14 @@ impl ConsensusInterface for ConsensusDispatcher {
         // null = None
         // "" = Some(None)
         // "0x29a4b..." = Some(Some(hash))
-        let new_signal_data: Option<Option<Blake2bHash>> = match new_signal_data {
+        let new_signal_data: Option<Option<Blake3Hash>> = match new_signal_data {
             None => None,
             Some(string) => {
                 if string.is_empty() {
                     Some(None)
                 } else {
                     Some(Some(
-                        Blake2bHash::deserialize_from_vec(&hex::decode(string).unwrap()).unwrap(),
+                        Blake3Hash::deserialize_from_vec(&hex::decode(string).unwrap()).unwrap(),
                     ))
                 }
             }
@@ -884,7 +884,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         new_signal_data: Option<String>,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Error> {
+    ) -> Result<Blake3Hash, Error> {
         let raw_tx = self
             .create_update_validator_transaction(
                 sender_wallet,
@@ -935,7 +935,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         signing_secret_key: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Error> {
+    ) -> Result<Blake3Hash, Error> {
         let raw_tx = self
             .create_reactivate_validator_transaction(
                 sender_wallet,
@@ -983,7 +983,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         signing_secret_key: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Error> {
+    ) -> Result<Blake3Hash, Error> {
         let raw_tx = self
             .create_reactivate_validator_transaction(
                 sender_wallet,
@@ -1031,7 +1031,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         signing_secret_key: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Error> {
+    ) -> Result<Blake3Hash, Error> {
         let raw_tx = self
             .create_unpark_validator_transaction(
                 sender_wallet,
@@ -1072,7 +1072,7 @@ impl ConsensusInterface for ConsensusDispatcher {
         recipient: Address,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Error> {
+    ) -> Result<Blake3Hash, Error> {
         let raw_tx = self
             .create_delete_validator_transaction(
                 validator_wallet,

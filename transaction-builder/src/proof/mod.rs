@@ -149,7 +149,7 @@ impl TransactionProofBuilder {
     /// ```
     /// # use nimiq_keys::{Address, KeyPair};
     /// use nimiq_transaction_builder::{Recipient, TransactionBuilder};
-    /// use nimiq_hash::{Blake2bHasher, Hasher, HashOutput};
+    /// use nimiq_hash::{Blake3Hasher, Hasher, HashOutput};
     /// use nimiq_primitives::coin::Coin;
     /// use nimiq_primitives::networks::NetworkId;
     /// use nimiq_primitives::account::AccountType;
@@ -160,12 +160,12 @@ impl TransactionProofBuilder {
     /// // Hash data for HTLC.
     /// // The actual pre_image must be a hash, so we have to hash our secret first.
     /// let secret = "supersecret";
-    /// let pre_image = Blake2bHasher::default().digest(&secret.as_bytes());
+    /// let pre_image = Blake3Hasher::default().digest(&secret.as_bytes());
     /// // To get the hash_root, we have to hash the pre_image multiple times.
     /// let hash_count = 10;
     /// let mut hash_root = pre_image.clone();
     /// for _ in 0..hash_count {
-    ///     hash_root = Blake2bHasher::default().digest(hash_root.as_bytes());
+    ///     hash_root = Blake3Hasher::default().digest(hash_root.as_bytes());
     /// }
     ///
     /// let sender_address = Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap();
@@ -186,7 +186,7 @@ impl TransactionProofBuilder {
     /// let mut htlc_proof_builder = proof_builder.unwrap_htlc();
     ///
     /// let signature = htlc_proof_builder.signature_with_key_pair(&key_pair);
-    /// htlc_proof_builder.regular_transfer_blake2b(pre_image, hash_count, hash_root, signature);
+    /// htlc_proof_builder.regular_transfer_blake3(pre_image, hash_count, hash_root, signature);
     ///
     /// let final_transaction = htlc_proof_builder.generate();
     /// assert!(final_transaction.is_some());

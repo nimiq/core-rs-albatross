@@ -3,7 +3,7 @@ use std::convert::TryInto;
 
 use nimiq_database::cursor::ReadCursor;
 use nimiq_database::{Database, Transaction, WriteTransaction};
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_mmr::store::Store;
 
 #[derive(Debug)]
@@ -14,7 +14,7 @@ enum Tx<'a, 'env> {
 
 /// A store implementation for MMRs based on a single database of LMDB.
 /// The database contains multiple MMRs and one entry per node.
-/// The values stored are `Blake2bHash`es and the keys are constructed as follows:
+/// The values stored are `Blake3Hash`es and the keys are constructed as follows:
 /// The big-endian byte representation of the epoch number concatenated with the big-endian byte
 /// representation of the node index.
 ///
@@ -77,13 +77,13 @@ impl<'a, 'env> MMRStore<'a, 'env> {
         // the cursor will continue until it finds the next key, which we know will be of the form
         // `n || 0`. If it reaches the end of the database without finding a key, then it will be on
         // a special key that indicates the end of the database.
-        cursor.seek_range_key::<_, Blake2bHash>(&next_epoch);
+        cursor.seek_range_key::<_, Blake3Hash>(&next_epoch);
 
         // Move the cursor back until it finds a key. By definition that key will either be the
         // last index of some epoch or the beginning of the database.
         // If we reach the beginning of the file, then we know that the epoch is empty and we return
         // 0 as the size.
-        let (last_key, _) = match cursor.prev::<Vec<u8>, Blake2bHash>() {
+        let (last_key, _) = match cursor.prev::<Vec<u8>, Blake3Hash>() {
             Some(v) => v,
             None => return 0,
         };
@@ -119,8 +119,8 @@ fn key_to_index(key: Vec<u8>) -> Option<(u32, usize)> {
     Some((epoch_number, index))
 }
 
-impl<'a, 'env> Store<Blake2bHash> for MMRStore<'a, 'env> {
-    fn push(&mut self, elem: Blake2bHash) {
+impl<'a, 'env> Store<Blake3Hash> for MMRStore<'a, 'env> {
+    fn push(&mut self, elem: Blake3Hash) {
         if let Tx::Write(ref mut tx) = self.tx {
             let key = index_to_key(self.epoch_number, self.size);
             tx.put(self.hist_tree_db, &key, &elem);
@@ -138,7 +138,7 @@ impl<'a, 'env> Store<Blake2bHash> for MMRStore<'a, 'env> {
         }
     }
 
-    fn get(&self, pos: usize) -> Option<Blake2bHash> {
+    fn get(&self, pos: usize) -> Option<Blake3Hash> {
         let key = index_to_key(self.epoch_number, pos);
         match self.tx {
             Tx::Read(tx) => tx.get(self.hist_tree_db, &key),

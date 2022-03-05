@@ -1,7 +1,7 @@
 use nimiq_account::{Account, StakingContract};
 use nimiq_block::Block;
 use nimiq_database::Transaction;
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_keys::Address;
 use nimiq_primitives::policy;
 use nimiq_utils::observer::{Listener, ListenerHandle};
@@ -22,7 +22,7 @@ impl Blockchain {
     /// Fetches a given number of blocks, starting at a specific block (by its hash).
     pub fn get_blocks(
         &self,
-        start_block_hash: &Blake2bHash,
+        start_block_hash: &Blake3Hash,
         count: u32,
         include_body: bool,
         direction: Direction,
@@ -36,7 +36,7 @@ impl Blockchain {
     /// Returns None if given start_block_hash is not a macro block.
     pub fn get_macro_blocks(
         &self,
-        start_block_hash: &Blake2bHash,
+        start_block_hash: &Blake3Hash,
         count: u32,
         include_body: bool,
         direction: Direction,
@@ -91,7 +91,7 @@ impl Blockchain {
     /// Checks if we have seen some transaction with this hash inside the a validity window.
     pub fn tx_in_validity_window(
         &self,
-        tx_hash: &Blake2bHash,
+        tx_hash: &Blake3Hash,
         validity_window_start: u32,
         txn_opt: Option<&Transaction>,
     ) -> bool {
@@ -118,7 +118,7 @@ impl Blockchain {
     /// used to prevent replay attacks.
     pub fn contains_tx_in_validity_window(
         &self,
-        tx_hash: &Blake2bHash,
+        tx_hash: &Blake3Hash,
         txn_opt: Option<&Transaction>,
     ) -> bool {
         let max_block_number = self

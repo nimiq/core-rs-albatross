@@ -6,7 +6,7 @@ use parking_lot::RwLock;
 
 use nimiq_account::StakingContract;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, BlockchainEvent};
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_keys::Address;
 use nimiq_primitives::{coin::Coin, policy};
 use nimiq_rpc_interface::types::{ParkedSet, Validator};
@@ -51,7 +51,7 @@ impl BlockchainInterface for BlockchainDispatcher {
     /// block, which defaults to false.
     async fn get_block_by_hash(
         &mut self,
-        hash: Blake2bHash,
+        hash: Blake3Hash,
         include_transactions: Option<bool>,
     ) -> Result<Block, Error> {
         let blockchain = self.blockchain.read();
@@ -299,7 +299,7 @@ impl BlockchainInterface for BlockchainDispatcher {
         &mut self,
         address: Address,
         max: Option<u16>,
-    ) -> Result<Vec<Blake2bHash>, Error> {
+    ) -> Result<Vec<Blake3Hash>, Error> {
         Ok(self
             .blockchain
             .read()
@@ -482,7 +482,7 @@ impl BlockchainInterface for BlockchainDispatcher {
 
     /// Subscribes to blockchain events.
     #[stream]
-    async fn head_subscribe(&mut self) -> Result<BoxStream<'static, Blake2bHash>, Error> {
+    async fn head_subscribe(&mut self) -> Result<BoxStream<'static, Blake3Hash>, Error> {
         let stream = self.blockchain.write().notifier.as_stream();
         Ok(stream
             .map(|event| match event {

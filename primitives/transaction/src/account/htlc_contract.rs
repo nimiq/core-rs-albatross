@@ -2,7 +2,7 @@ use log::error;
 use strum_macros::Display;
 
 use beserial::{Deserialize, Serialize};
-use hash::{Blake2bHasher, Hasher, Sha256Hasher};
+use hash::{Blake3Hasher, Hasher, Sha256Hasher};
 use keys::Address;
 use macros::{add_hex_io_fns_typed_arr, create_typed_array};
 use primitives::account::AccountType;
@@ -89,8 +89,8 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
 
                 for _ in 0..hash_depth {
                     match hash_algorithm {
-                        HashAlgorithm::Blake2b => {
-                            pre_image = Blake2bHasher::default().digest(&pre_image[..]).into();
+                        HashAlgorithm::Blake3 => {
+                            pre_image = Blake3Hasher::default().digest(&pre_image[..]).into();
                         }
                         HashAlgorithm::Sha256 => {
                             pre_image = Sha256Hasher::default().digest(&pre_image[..]).into();
@@ -165,13 +165,13 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
 #[repr(u8)]
 #[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
 pub enum HashAlgorithm {
-    Blake2b = 1,
+    Blake3 = 1,
     Sha256 = 3,
 }
 
 impl Default for HashAlgorithm {
     fn default() -> Self {
-        HashAlgorithm::Blake2b
+        HashAlgorithm::Blake3
     }
 }
 

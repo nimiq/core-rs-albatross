@@ -6,7 +6,7 @@ use nimiq_database::cursor::ReadCursor;
 use nimiq_database::{
     Database, DatabaseFlags, Environment, ReadTransaction, Transaction, WriteTransaction,
 };
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_keys::Address;
 use nimiq_mmr::error::Error as MMRError;
 use nimiq_mmr::hash::Hash as MMRHash;
@@ -123,7 +123,7 @@ impl HistoryStore {
         txn: &mut WriteTransaction,
         epoch_number: u32,
         ext_txs: &[ExtendedTransaction],
-    ) -> Option<Blake2bHash> {
+    ) -> Option<Blake3Hash> {
         // Get the history tree.
         let mut tree = MerkleMountainRange::new(MMRStore::with_write_transaction(
             &self.hist_tree_db,
@@ -159,7 +159,7 @@ impl HistoryStore {
         txn: &mut WriteTransaction,
         epoch_number: u32,
         num_ext_txs: usize,
-    ) -> Option<Blake2bHash> {
+    ) -> Option<Blake3Hash> {
         // Get the history tree.
         let mut tree = MerkleMountainRange::new(MMRStore::with_write_transaction(
             &self.hist_tree_db,
@@ -224,7 +224,7 @@ impl HistoryStore {
         &self,
         epoch_number: u32,
         txn_option: Option<&Transaction>,
-    ) -> Option<Blake2bHash> {
+    ) -> Option<Blake3Hash> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -247,7 +247,7 @@ impl HistoryStore {
 
     /// Calculates the history tree root from a vector of extended transactions. It doesn't use the
     /// database, it is just used to check the correctness of the history root when syncing.
-    pub fn root_from_ext_txs(ext_txs: &[ExtendedTransaction]) -> Option<Blake2bHash> {
+    pub fn root_from_ext_txs(ext_txs: &[ExtendedTransaction]) -> Option<Blake3Hash> {
         // Create a new history tree.
         let mut tree = MerkleMountainRange::new(MemoryStore::new());
 
@@ -263,7 +263,7 @@ impl HistoryStore {
     /// Gets an extended transaction given its transaction hash.
     pub fn get_ext_tx_by_hash(
         &self,
-        tx_hash: &Blake2bHash,
+        tx_hash: &Blake3Hash,
         txn_option: Option<&Transaction>,
     ) -> Vec<ExtendedTransaction> {
         let read_txn: ReadTransaction;
@@ -488,7 +488,7 @@ impl HistoryStore {
         address: &Address,
         max: u16,
         txn_option: Option<&Transaction>,
-    ) -> Vec<Blake2bHash> {
+    ) -> Vec<Blake3Hash> {
         if max == 0 {
             return vec![];
         }
@@ -531,7 +531,7 @@ impl HistoryStore {
     pub fn prove(
         &self,
         epoch_number: u32,
-        hashes: Vec<&Blake2bHash>,
+        hashes: Vec<&Blake3Hash>,
         txn_option: Option<&Transaction>,
     ) -> Option<HistoryTreeProof> {
         // Get the leaf indexes.
@@ -651,9 +651,9 @@ impl HistoryStore {
     pub fn tree_from_chunks(
         &self,
         epoch_number: u32,
-        chunks: Vec<(Vec<ExtendedTransaction>, RangeProof<Blake2bHash>)>,
+        chunks: Vec<(Vec<ExtendedTransaction>, RangeProof<Blake3Hash>)>,
         txn: &mut WriteTransaction,
-    ) -> Result<Blake2bHash, MMRError> {
+    ) -> Result<Blake3Hash, MMRError> {
         // Get partial history tree for given epoch.
         let mut tree = PartialMerkleMountainRange::new(MMRStore::with_write_transaction(
             &self.hist_tree_db,
@@ -687,10 +687,10 @@ impl HistoryStore {
     }
 
     /// Gets an extended transaction by its hash. Note that this hash is the leaf hash (see MMRHash)
-    /// of the transaction, not a simple Blake2b hash of the transaction.
+    /// of the transaction, not a simple Blake3 hash of the transaction.
     fn get_extended_tx(
         &self,
-        leaf_hash: &Blake2bHash,
+        leaf_hash: &Blake3Hash,
         txn_option: Option<&Transaction>,
     ) -> Option<ExtendedTransaction> {
         let read_txn: ReadTransaction;
@@ -709,7 +709,7 @@ impl HistoryStore {
     fn put_extended_tx(
         &self,
         txn: &mut WriteTransaction,
-        leaf_hash: &Blake2bHash,
+        leaf_hash: &Blake3Hash,
         leaf_index: u32,
         ext_tx: &ExtendedTransaction,
     ) {
@@ -782,7 +782,7 @@ impl HistoryStore {
     fn remove_extended_tx(
         &self,
         txn: &mut WriteTransaction,
-        leaf_hash: &Blake2bHash,
+        leaf_hash: &Blake3Hash,
         leaf_index: u32,
     ) {
         // Get the transaction first.
@@ -922,7 +922,7 @@ impl HistoryStore {
     /// transaction hash.
     fn get_leaves_by_tx_hash(
         &self,
-        tx_hash: &Blake2bHash,
+        tx_hash: &Blake3Hash,
         txn_option: Option<&Transaction>,
     ) -> Vec<OrderedHash> {
         let read_txn: ReadTransaction;
@@ -938,13 +938,13 @@ impl HistoryStore {
 
         // Seek to the first leaf hash at the given transaction hash.
         let mut cursor = txn.cursor(&self.tx_hash_db);
-        match cursor.seek_key::<Blake2bHash, OrderedHash>(tx_hash) {
+        match cursor.seek_key::<Blake3Hash, OrderedHash>(tx_hash) {
             Some(leaf_hash) => leaf_hashes.push(leaf_hash),
             None => return leaf_hashes,
         };
 
         // Iterate over leaf hashes for this transaction hash.
-        while let Some((_, leaf_hash)) = cursor.next_duplicate::<Blake2bHash, OrderedHash>() {
+        while let Some((_, leaf_hash)) = cursor.next_duplicate::<Blake3Hash, OrderedHash>() {
             leaf_hashes.push(leaf_hash);
         }
 

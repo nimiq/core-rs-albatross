@@ -4,7 +4,7 @@ use log::error;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_database::{Database, Environment, Transaction, WriteTransaction};
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::{Blake3Hash, Hash};
 
 use crate::key_nibbles::KeyNibbles;
 use crate::trie_node::TrieNode;
@@ -49,7 +49,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
     }
 
     /// Returns the root hash of the Merkle Radix Trie.
-    pub fn root_hash(&self, txn: &Transaction) -> Blake2bHash {
+    pub fn root_hash(&self, txn: &Transaction) -> Blake3Hash {
         self.get_root(txn).unwrap().hash()
     }
 
@@ -121,7 +121,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
 
                 // Create and store the new parent node.
                 let new_parent = TrieNode::<A>::new_branch(cur_node.key().common_prefix(key))
-                    .put_child(cur_node.key(), Blake2bHash::default())
+                    .put_child(cur_node.key(), Blake3Hash::default())
                     .unwrap()
                     .put_child(new_node.key(), new_node.hash())
                     .unwrap();
@@ -437,7 +437,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
             // Update and store the parent node.
             parent_node = parent_node
                 // Mark this node as dirty by storing the default hash.
-                .put_child(child_node.key(), Blake2bHash::default())
+                .put_child(child_node.key(), Blake3Hash::default())
                 .unwrap();
             txn.put_reserve(&self.db, parent_node.key(), &parent_node);
 
@@ -446,14 +446,14 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
     }
 
     /// Updates the hashes of all dirty nodes in the subtree specified by `key`.
-    fn update_hashes(&self, txn: &mut WriteTransaction, key: &KeyNibbles) -> Blake2bHash {
+    fn update_hashes(&self, txn: &mut WriteTransaction, key: &KeyNibbles) -> Blake3Hash {
         let mut node: TrieNode<A> = txn.get(&self.db, key).unwrap();
         if node.is_leaf() {
             return node.hash();
         }
 
         // Compute sub hashes if necessary.
-        let default_hash = Blake2bHash::default();
+        let default_hash = Blake3Hash::default();
         for mut child in node.iter_children_mut() {
             if child.hash == default_hash {
                 // TODO This could be parallelized.

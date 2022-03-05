@@ -15,7 +15,7 @@ use tokio::task::spawn_blocking;
 use nimiq_block::Block;
 use nimiq_blockchain::{AbstractBlockchain, Direction};
 use nimiq_blockchain::{Blockchain, PushError, PushResult};
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_network_interface::{
     network::{MsgAcceptance, Network, PubsubId, Topic},
     peer::Peer,
@@ -43,10 +43,10 @@ type BlockAndId<N> = (Block, Option<<N as Network>::PubsubId>);
 
 #[derive(Clone, Debug)]
 pub enum BlockQueueEvent {
-    AcceptedAnnouncedBlock(Blake2bHash),
-    AcceptedBufferedBlock(Blake2bHash, usize),
-    ReceivedMissingBlocks(Blake2bHash, usize),
-    RejectedBlock(Blake2bHash),
+    AcceptedAnnouncedBlock(Blake3Hash),
+    AcceptedBufferedBlock(Blake3Hash, usize),
+    ReceivedMissingBlocks(Blake3Hash, usize),
+    RejectedBlock(Blake3Hash),
 }
 
 #[derive(Clone, Debug)]
@@ -79,13 +79,13 @@ struct Inner<N: Network> {
 
     /// Buffered blocks - `block_height -> block_hash -> BlockAndId`.
     /// There can be multiple blocks at a height if there are forks.
-    buffer: BTreeMap<u32, HashMap<Blake2bHash, BlockAndId<N>>>,
+    buffer: BTreeMap<u32, HashMap<Blake3Hash, BlockAndId<N>>>,
 
     /// Vector of pending `blockchain.push()` operations.
     push_ops: VecDeque<BoxFuture<'static, PushOpResult>>,
 
     /// Hashes of blocks that are pending to be pushed to the chain.
-    pending_blocks: BTreeSet<Blake2bHash>,
+    pending_blocks: BTreeSet<Blake3Hash>,
 
     waker: Option<Waker>,
 
@@ -94,12 +94,12 @@ struct Inner<N: Network> {
 }
 
 enum PushOpResult {
-    Head(Result<PushResult, PushError>, Blake2bHash),
-    Buffered(Result<PushResult, PushError>, Blake2bHash),
+    Head(Result<PushResult, PushError>, Blake3Hash),
+    Buffered(Result<PushResult, PushError>, Blake3Hash),
     Missing(
         Result<PushResult, PushError>,
-        Vec<Blake2bHash>,
-        HashSet<Blake2bHash>,
+        Vec<Blake3Hash>,
+        HashSet<Blake3Hash>,
     ),
 }
 
@@ -232,7 +232,7 @@ impl<N: Network> Inner<N> {
                 )
                 .into_iter()
                 .map(|block| block.hash())
-                .collect::<Vec<Blake2bHash>>();
+                .collect::<Vec<Blake3Hash>>();
 
             request_component.request_missing_blocks(parent_hash, block_locators);
         }
@@ -306,7 +306,7 @@ impl<N: Network> Inner<N> {
     /// Pushes a single block to the blockchain.
     fn push_block<F>(&mut self, block: Block, pubsub_id: Option<<N as Network>::PubsubId>, op: F)
     where
-        F: Fn(Result<PushResult, PushError>, Blake2bHash) -> PushOpResult + Send + 'static,
+        F: Fn(Result<PushResult, PushError>, Blake3Hash) -> PushOpResult + Send + 'static,
     {
         let block_hash = block.hash();
         if !self.pending_blocks.insert(block_hash.clone()) {
@@ -370,7 +370,7 @@ impl<N: Network> Inner<N> {
         }
     }
 
-    fn remove_invalid_blocks(&mut self, mut invalid_blocks: HashSet<Blake2bHash>) {
+    fn remove_invalid_blocks(&mut self, mut invalid_blocks: HashSet<Blake3Hash>) {
         if invalid_blocks.is_empty() {
             return;
         }

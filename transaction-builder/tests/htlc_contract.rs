@@ -1,7 +1,7 @@
 use std::convert::TryInto;
 
 use beserial::{Deserialize, Serialize};
-use nimiq_hash::{Blake2bHash, Blake2bHasher, HashOutput, Hasher};
+use nimiq_hash::{Blake3Hash, Blake3Hasher, HashOutput, Hasher};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::networks::NetworkId;
@@ -17,7 +17,7 @@ fn it_can_create_creation_transaction() {
     let recipient = Address::from([0u8; 20]);
     sender.serialize(&mut data);
     recipient.serialize(&mut data);
-    HashAlgorithm::Blake2b.serialize(&mut data);
+    HashAlgorithm::Blake3.serialize(&mut data);
     AnyHash::from([0u8; 32]).serialize(&mut data);
     Serialize::serialize(&2u8, &mut data);
     Serialize::serialize(&1000u64, &mut data);
@@ -37,7 +37,7 @@ fn it_can_create_creation_transaction() {
     htlc_builder
         .with_sender(sender.clone())
         .with_recipient(recipient)
-        .with_blake2b_hash(Blake2bHash::from([0u8; 32]), 2)
+        .with_blake3_hash(Blake3Hash::from([0u8; 32]), 2)
         .with_timeout(1000);
 
     let mut builder = TransactionBuilder::new();
@@ -77,8 +77,8 @@ fn prepare_outgoing_transaction() -> (
     let recipient_key_pair = KeyPair::from(recipient_priv_key);
     let pre_image = AnyHash::from([1u8; 32]);
     let hash_root = AnyHash::from(<[u8; 32]>::from(
-        Blake2bHasher::default().digest(
-            Blake2bHasher::default()
+        Blake3Hasher::default().digest(
+            Blake3Hasher::default()
                 .digest(pre_image.as_bytes())
                 .as_bytes(),
         ),
@@ -123,7 +123,7 @@ fn it_can_create_regular_transfer() {
     let mut proof =
         Vec::with_capacity(3 + 2 * AnyHash::SIZE + recipient_signature_proof.serialized_size());
     Serialize::serialize(&ProofType::RegularTransfer, &mut proof);
-    Serialize::serialize(&HashAlgorithm::Blake2b, &mut proof);
+    Serialize::serialize(&HashAlgorithm::Blake3, &mut proof);
     Serialize::serialize(&1u8, &mut proof);
     Serialize::serialize(&hash_root, &mut proof);
     Serialize::serialize(&pre_image, &mut proof);
@@ -144,7 +144,7 @@ fn it_can_create_regular_transfer() {
         .expect("Builder should be able to create transaction");
     let mut proof_builder = proof_builder.unwrap_htlc();
     let proof = proof_builder.signature_with_key_pair(&recipient_key_pair);
-    proof_builder.regular_transfer(HashAlgorithm::Blake2b, pre_image, 1, hash_root, proof);
+    proof_builder.regular_transfer(HashAlgorithm::Blake3, pre_image, 1, hash_root, proof);
     let tx2 = proof_builder
         .generate()
         .expect("Builder should be able to create proof");

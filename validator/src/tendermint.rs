@@ -17,7 +17,7 @@ use block::{
 use block_production::BlockProducer;
 use blockchain::{AbstractBlockchain, Blockchain};
 use bls::PublicKey;
-use hash::{Blake2bHash, Blake2sHash, Hash};
+use hash::{Blake2sHash, Blake3Hash, Hash};
 use nimiq_network_interface::network::MsgAcceptance;
 use nimiq_validator_network::ValidatorNetwork;
 use primitives::{
@@ -146,7 +146,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
         // Check that we have the correct body for our header.
         match &body {
             Some(body) => {
-                if body.hash::<Blake2bHash>() != proposal.body_root {
+                if body.hash::<Blake3Hash>() != proposal.body_root {
                     debug!("Tendermint - assemble_block: Header and cached body don't match");
                     return Err(TendermintError::CannotAssembleBlock);
                 }
@@ -389,7 +389,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
     /// the pk_tree_root from the already cached block body.
     fn hash_proposal(&self, proposal: Self::ProposalTy) -> Self::ProposalHashTy {
         // Calculate the header hash.
-        let mut message = proposal.hash::<Blake2bHash>().serialize_to_vec();
+        let mut message = proposal.hash::<Blake3Hash>().serialize_to_vec();
 
         // Fetch the pk_tree_root.
         let pk_tree_root = self.cache_body.as_ref().unwrap().pk_tree_root.clone();

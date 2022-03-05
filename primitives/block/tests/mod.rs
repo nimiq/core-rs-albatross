@@ -5,14 +5,14 @@ use nimiq_block::{IndividualSignature, MacroBlock, MacroBody, MacroHeader, Multi
 use nimiq_bls::{CompressedPublicKey, KeyPair};
 use nimiq_collections::bitset::BitSet;
 use nimiq_handel::update::LevelUpdate;
-use nimiq_hash::{Blake2bHasher, Hasher};
+use nimiq_hash::{Blake3Hasher, Hasher};
 use nimiq_keys::{Address, PublicKey};
 use nimiq_primitives::slots::ValidatorsBuilder;
 use nimiq_vrf::VrfSeed;
 
 #[test]
 fn it_can_convert_macro_block_into_slots() {
-    let hash = Blake2bHasher::default().digest(&[]);
+    let hash = Blake3Hasher::default().digest(&[]);
 
     // TODO: We no longer need the reward address in there, so we can delete it from the strings below.
     let slot_allocation = vec![

@@ -5,7 +5,7 @@ use bitflags::bitflags;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
-use nimiq_hash::{Blake2bHash, Blake2sHash, Hash, SerializeContent};
+use nimiq_hash::{Blake2sHash, Blake3Hash, Hash, SerializeContent};
 use nimiq_hash_derive::SerializeContent;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
@@ -82,7 +82,7 @@ impl Block {
 
     /// Returns the parent hash of the block. The parent hash is the hash of the header of the
     /// immediately preceding block.
-    pub fn parent_hash(&self) -> &Blake2bHash {
+    pub fn parent_hash(&self) -> &Blake3Hash {
         match self {
             Block::Macro(ref block) => &block.header.parent_hash,
             Block::Micro(ref block) => &block.header.parent_hash,
@@ -91,7 +91,7 @@ impl Block {
 
     /// Returns the parent election hash of the block. The parent election hash is the hash of the
     /// header of the preceding election macro block.
-    pub fn parent_election_hash(&self) -> Option<&Blake2bHash> {
+    pub fn parent_election_hash(&self) -> Option<&Blake3Hash> {
         match self {
             Block::Macro(ref block) => Some(&block.header.parent_election_hash),
             Block::Micro(ref _block) => None,
@@ -115,7 +115,7 @@ impl Block {
     }
 
     /// Returns the state root of the block.
-    pub fn state_root(&self) -> &Blake2bHash {
+    pub fn state_root(&self) -> &Blake3Hash {
         match self {
             Block::Macro(ref block) => &block.header.state_root,
             Block::Micro(ref block) => &block.header.state_root,
@@ -123,7 +123,7 @@ impl Block {
     }
 
     /// Returns the body root of the block.
-    pub fn body_root(&self) -> &Blake2bHash {
+    pub fn body_root(&self) -> &Blake3Hash {
         match self {
             Block::Macro(ref block) => &block.header.body_root,
             Block::Micro(ref block) => &block.header.body_root,
@@ -131,7 +131,7 @@ impl Block {
     }
 
     /// Returns the history root of the block.
-    pub fn history_root(&self) -> &Blake2bHash {
+    pub fn history_root(&self) -> &Blake3Hash {
         match self {
             Block::Macro(ref block) => &block.header.history_root,
             Block::Micro(ref block) => &block.header.history_root,
@@ -151,8 +151,8 @@ impl Block {
         }
     }
 
-    /// Returns the Blake2b hash of the block header.
-    pub fn hash(&self) -> Blake2bHash {
+    /// Returns the Blake3 hash of the block header.
+    pub fn hash(&self) -> Blake3Hash {
         match self {
             Block::Macro(ref block) => block.header.hash(),
             Block::Micro(ref block) => block.header.hash(),
@@ -409,7 +409,7 @@ impl BlockHeader {
 
     /// Returns the parent hash of the block. The parent hash is the hash of the header of the
     /// immediately preceding block.
-    pub fn parent_hash(&self) -> &Blake2bHash {
+    pub fn parent_hash(&self) -> &Blake3Hash {
         match self {
             BlockHeader::Macro(ref header) => &header.parent_hash,
             BlockHeader::Micro(ref header) => &header.parent_hash,
@@ -418,7 +418,7 @@ impl BlockHeader {
 
     /// Returns the parent election hash of the block. The parent election hash is the hash of the
     /// header of the preceding election macro block.
-    pub fn parent_election_hash(&self) -> Option<&Blake2bHash> {
+    pub fn parent_election_hash(&self) -> Option<&Blake3Hash> {
         match self {
             BlockHeader::Macro(ref header) => Some(&header.parent_election_hash),
             BlockHeader::Micro(ref _header) => None,
@@ -442,7 +442,7 @@ impl BlockHeader {
     }
 
     /// Returns the state root of the block.
-    pub fn state_root(&self) -> &Blake2bHash {
+    pub fn state_root(&self) -> &Blake3Hash {
         match self {
             BlockHeader::Macro(ref header) => &header.state_root,
             BlockHeader::Micro(ref header) => &header.state_root,
@@ -450,7 +450,7 @@ impl BlockHeader {
     }
 
     /// Returns the body root of the block.
-    pub fn body_root(&self) -> &Blake2bHash {
+    pub fn body_root(&self) -> &Blake3Hash {
         match self {
             BlockHeader::Macro(ref header) => &header.body_root,
             BlockHeader::Micro(ref header) => &header.body_root,
@@ -470,8 +470,8 @@ impl BlockHeader {
         }
     }
 
-    /// Returns the Blake2b hash of the block header.
-    pub fn hash(&self) -> Blake2bHash {
+    /// Returns the Blake3 hash of the block header.
+    pub fn hash(&self) -> Blake3Hash {
         match self {
             BlockHeader::Macro(ref header) => header.hash(),
             BlockHeader::Micro(ref header) => header.hash(),
@@ -634,7 +634,7 @@ impl BlockBody {
     }
 
     /// Returns the hash of the body.
-    pub fn hash(&self) -> Blake2bHash {
+    pub fn hash(&self) -> Blake3Hash {
         match self {
             BlockBody::Micro(body) => body.hash(),
             BlockBody::Macro(body) => body.hash(),

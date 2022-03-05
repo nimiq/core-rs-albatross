@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
 use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm};
@@ -19,7 +19,7 @@ pub trait ConsensusInterface {
         raw_tx: String,
     ) -> Result<Transaction, Self::Error>;
 
-    async fn send_raw_transaction(&mut self, raw_tx: String) -> Result<Blake2bHash, Self::Error>;
+    async fn send_raw_transaction(&mut self, raw_tx: String) -> Result<Blake3Hash, Self::Error>;
 
     async fn create_basic_transaction(
         &mut self,
@@ -37,7 +37,7 @@ pub trait ConsensusInterface {
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Self::Error>;
+    ) -> Result<Blake3Hash, Self::Error>;
 
     async fn create_basic_transaction_with_data(
         &mut self,
@@ -57,7 +57,7 @@ pub trait ConsensusInterface {
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Self::Error>;
+    ) -> Result<Blake3Hash, Self::Error>;
 
     async fn create_new_vesting_transaction(
         &mut self,
@@ -81,7 +81,7 @@ pub trait ConsensusInterface {
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Self::Error>;
+    ) -> Result<Blake3Hash, Self::Error>;
 
     async fn create_redeem_vesting_transaction(
         &mut self,
@@ -101,7 +101,7 @@ pub trait ConsensusInterface {
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Self::Error>;
+    ) -> Result<Blake3Hash, Self::Error>;
 
     async fn create_new_htlc_transaction(
         &mut self,
@@ -129,7 +129,7 @@ pub trait ConsensusInterface {
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Self::Error>;
+    ) -> Result<Blake3Hash, Self::Error>;
 
     async fn create_redeem_regular_htlc_transaction(
         &mut self,
@@ -157,7 +157,7 @@ pub trait ConsensusInterface {
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Self::Error>;
+    ) -> Result<Blake3Hash, Self::Error>;
 
     async fn create_redeem_timeout_htlc_transaction(
         &mut self,
@@ -177,7 +177,7 @@ pub trait ConsensusInterface {
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Self::Error>;
+    ) -> Result<Blake3Hash, Self::Error>;
 
     async fn create_redeem_early_htlc_transaction(
         &mut self,
@@ -199,7 +199,7 @@ pub trait ConsensusInterface {
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Self::Error>;
+    ) -> Result<Blake3Hash, Self::Error>;
 
     async fn sign_redeem_early_htlc_transaction(
         &mut self,
@@ -229,7 +229,7 @@ pub trait ConsensusInterface {
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Self::Error>;
+    ) -> Result<Blake3Hash, Self::Error>;
 
     async fn create_stake_transaction(
         &mut self,
@@ -247,7 +247,7 @@ pub trait ConsensusInterface {
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Self::Error>;
+    ) -> Result<Blake3Hash, Self::Error>;
 
     async fn create_update_transaction(
         &mut self,
@@ -265,7 +265,7 @@ pub trait ConsensusInterface {
         new_delegation: Option<Address>,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Self::Error>;
+    ) -> Result<Blake3Hash, Self::Error>;
 
     async fn create_unstake_transaction(
         &mut self,
@@ -283,7 +283,7 @@ pub trait ConsensusInterface {
         value: Coin,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Self::Error>;
+    ) -> Result<Blake3Hash, Self::Error>;
 
     async fn create_new_validator_transaction(
         &mut self,
@@ -307,7 +307,7 @@ pub trait ConsensusInterface {
         signal_data: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Self::Error>;
+    ) -> Result<Blake3Hash, Self::Error>;
 
     async fn create_update_validator_transaction(
         &mut self,
@@ -331,7 +331,7 @@ pub trait ConsensusInterface {
         new_signal_data: Option<String>,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Self::Error>;
+    ) -> Result<Blake3Hash, Self::Error>;
 
     async fn create_inactivate_validator_transaction(
         &mut self,
@@ -349,7 +349,7 @@ pub trait ConsensusInterface {
         signing_secret_key: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Self::Error>;
+    ) -> Result<Blake3Hash, Self::Error>;
 
     async fn create_reactivate_validator_transaction(
         &mut self,
@@ -367,7 +367,7 @@ pub trait ConsensusInterface {
         signing_secret_key: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Self::Error>;
+    ) -> Result<Blake3Hash, Self::Error>;
 
     async fn create_unpark_validator_transaction(
         &mut self,
@@ -385,7 +385,7 @@ pub trait ConsensusInterface {
         signing_secret_key: String,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Self::Error>;
+    ) -> Result<Blake3Hash, Self::Error>;
 
     async fn create_delete_validator_transaction(
         &mut self,
@@ -401,5 +401,5 @@ pub trait ConsensusInterface {
         recipient: Address,
         fee: Coin,
         validity_start_height: ValidityStartHeight,
-    ) -> Result<Blake2bHash, Self::Error>;
+    ) -> Result<Blake3Hash, Self::Error>;
 }

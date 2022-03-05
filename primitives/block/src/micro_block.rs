@@ -3,7 +3,7 @@ use std::{fmt, io};
 
 use beserial::{Deserialize, Serialize};
 use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
-use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
+use nimiq_hash::{Blake3Hash, Hash, SerializeContent};
 use nimiq_hash_derive::SerializeContent;
 use nimiq_keys::Signature;
 use nimiq_primitives::policy;
@@ -40,7 +40,7 @@ pub struct MicroHeader {
     /// The timestamp of the block. It follows the Unix time and has millisecond precision.
     pub timestamp: u64,
     /// The hash of the header of the immediately preceding block (either micro or macro).
-    pub parent_hash: Blake2bHash,
+    pub parent_hash: Blake3Hash,
     /// The seed of the block. This is the BLS signature of the seed of the immediately preceding
     /// block (either micro or macro) using the validator key of the block producer.
     pub seed: VrfSeed,
@@ -49,12 +49,12 @@ pub struct MicroHeader {
     pub extra_data: Vec<u8>,
     /// The root of the Merkle tree of the blockchain state. It just acts as a commitment to the
     /// state.
-    pub state_root: Blake2bHash,
+    pub state_root: Blake3Hash,
     /// The root of the Merkle tree of the body. It just acts as a commitment to the
     /// body.
-    pub body_root: Blake2bHash,
+    pub body_root: Blake3Hash,
     /// A merkle root over all of the transactions that happened in the current epoch.
-    pub history_root: Blake2bHash,
+    pub history_root: Blake3Hash,
 }
 
 /// The struct representing the justification for a Micro block.
@@ -80,7 +80,7 @@ pub struct MicroBody {
 
 impl MicroBlock {
     /// Returns the hash of the block header.
-    pub fn hash(&self) -> Blake2bHash {
+    pub fn hash(&self) -> Blake3Hash {
         self.header.hash()
     }
 
@@ -137,7 +137,7 @@ impl fmt::Display for MicroHeader {
             "#{}.{}:MI:{}",
             self.block_number,
             self.view_number,
-            self.hash::<Blake2bHash>().to_short_str(),
+            self.hash::<Blake3Hash>().to_short_str(),
         )
     }
 }

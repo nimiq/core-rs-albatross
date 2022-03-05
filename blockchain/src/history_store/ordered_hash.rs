@@ -3,16 +3,16 @@ use std::convert::TryInto;
 use std::io;
 
 use nimiq_database::{AsDatabaseBytes, FromDatabaseValue};
-use nimiq_hash::{Blake2bHash, HashOutput};
+use nimiq_hash::{Blake3Hash, HashOutput};
 
-/// A wrapper for an u32 and a Blake2bHash. We use it to for two different functions:
+/// A wrapper for an u32 and a Blake3Hash. We use it to for two different functions:
 /// 1) store the hash and index of leaf nodes
 /// 2) store transaction hashes in order
 /// The wrapper is necessary because Rust doesn't let us implement traits for structs defined in external crates.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OrderedHash {
     pub index: u32,
-    pub hash: Blake2bHash,
+    pub hash: Blake3Hash,
 }
 
 impl AsDatabaseBytes for OrderedHash {

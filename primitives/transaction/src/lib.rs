@@ -22,10 +22,10 @@ use beserial::{
     Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
     SerializingError, WriteBytesExt,
 };
-use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
+use nimiq_hash::{Blake3Hash, Hash, SerializeContent};
 use nimiq_keys::Address;
 use nimiq_keys::{PublicKey, Signature};
-use nimiq_utils::merkle::{Blake2bMerklePath, Blake2bMerkleProof};
+use nimiq_utils::merkle::{Blake3MerklePath, Blake3MerkleProof};
 use num_traits::SaturatingAdd;
 use primitives::account::AccountType;
 use primitives::coin::Coin;
@@ -40,13 +40,13 @@ pub mod account;
 pub struct TransactionsProof {
     #[beserial(len_type(u16))]
     pub transactions: Vec<Transaction>,
-    pub proof: Blake2bMerkleProof,
+    pub proof: Blake3MerkleProof,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TransactionReceipt {
-    pub transaction_hash: Blake2bHash,
-    pub block_hash: Blake2bHash,
+    pub transaction_hash: Blake3Hash,
+    pub block_hash: Blake3Hash,
     pub block_height: u32,
 }
 
@@ -95,7 +95,7 @@ impl Deserialize for TransactionFlags {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SignatureProof {
     pub public_key: PublicKey,
-    pub merkle_path: Blake2bMerklePath,
+    pub merkle_path: Blake3MerklePath,
     pub signature: Signature,
 }
 
@@ -103,7 +103,7 @@ impl SignatureProof {
     pub fn from(public_key: PublicKey, signature: Signature) -> Self {
         SignatureProof {
             public_key,
-            merkle_path: Blake2bMerklePath::empty(),
+            merkle_path: Blake3MerklePath::empty(),
             signature,
         }
     }
@@ -322,7 +322,7 @@ impl Transaction {
     }
 
     pub fn check_set_valid(&mut self, tx: &Arc<Transaction>) {
-        if tx.valid && self.hash::<Blake2bHash>() == tx.hash() {
+        if tx.valid && self.hash::<Blake3Hash>() == tx.hash() {
             self.valid = true;
         }
     }
@@ -336,7 +336,7 @@ impl Transaction {
     pub fn contract_creation_address(&self) -> Address {
         let mut tx = self.clone();
         tx.recipient = Address::from([0u8; Address::SIZE]);
-        let hash: Blake2bHash = tx.hash();
+        let hash: Blake3Hash = tx.hash();
         Address::from(hash)
     }
 

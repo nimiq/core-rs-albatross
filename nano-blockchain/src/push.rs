@@ -2,7 +2,7 @@ use nimiq_block::{Block, BlockError, BlockType, MacroHeader};
 use nimiq_blockchain::{
     AbstractBlockchain, Blockchain, ChainInfo, ChainOrdering, PushError, PushResult,
 };
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::{Blake3Hash, Hash};
 use nimiq_primitives::policy;
 
 use crate::blockchain::NanoBlockchain;
@@ -230,7 +230,7 @@ impl NanoBlockchain {
             .ok_or(PushError::InvalidSuccessor)?;
 
         // Verify that the block is indeed the predecessor.
-        if header.hash::<Blake2bHash>() != prev_block.parent_election_hash {
+        if header.hash::<Blake3Hash>() != prev_block.parent_election_hash {
             return Err(PushError::InvalidPredecessor);
         }
 

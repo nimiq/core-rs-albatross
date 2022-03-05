@@ -3,7 +3,7 @@ use nimiq_account::{Inherent, InherentType};
 use nimiq_block::MacroHeader;
 use nimiq_blockchain::Blockchain;
 use nimiq_database::volatile::VolatileEnvironment;
-use nimiq_hash::{Blake2bHasher, Hasher};
+use nimiq_hash::{Blake3Hasher, Hasher};
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
@@ -21,7 +21,7 @@ fn it_can_create_batch_finalization_inherents() {
 
     let staking_contract_address = blockchain.staking_contract_address();
 
-    let hash = Blake2bHasher::default().digest(&[]);
+    let hash = Blake3Hasher::default().digest(&[]);
     let macro_header = MacroHeader {
         version: 1,
         block_number: 42,

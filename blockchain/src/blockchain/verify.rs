@@ -6,7 +6,7 @@ use nimiq_block::{
     TendermintProof, ViewChange,
 };
 use nimiq_database::Transaction as DBtx;
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::{Blake3Hash, Hash};
 use nimiq_keys::PublicKey as SchnorrPublicKey;
 use nimiq_primitives::policy;
 
@@ -255,7 +255,7 @@ impl Blockchain {
                 }
 
                 // Check the body root.
-                let body_hash = body.hash::<Blake2bHash>();
+                let body_hash = body.hash::<Blake3Hash>();
                 if *header.body_root() != body_hash {
                     warn!(
                         "Rejecting block {} - header body hash doesn't match real body hash ({} != {})",
@@ -353,7 +353,7 @@ impl Blockchain {
             }
             BlockBody::Macro(body) => {
                 // Check the body root.
-                let body_hash = body.hash::<Blake2bHash>();
+                let body_hash = body.hash::<Blake3Hash>();
                 if *header.body_root() != body_hash {
                     warn!(
                         "Rejecting block {} - header body hash doesn't match real body hash ({} != {})",
@@ -503,7 +503,7 @@ impl Blockchain {
                     disabled_set: real_disabled_slots,
                 };
 
-                let real_body_hash = real_body.hash::<Blake2bHash>();
+                let real_body_hash = real_body.hash::<Blake3Hash>();
                 if macro_block.header.body_root != real_body_hash {
                     warn!(
                         "Rejecting block {} - header body hash doesn't match real body hash ({} != {})",

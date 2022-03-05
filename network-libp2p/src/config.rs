@@ -10,7 +10,7 @@ use std::{
     time::Duration,
 };
 
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 
 use crate::discovery::{behaviour::DiscoveryConfig, peer_contacts::PeerContact};
 
@@ -28,7 +28,7 @@ impl Config {
         keypair: Keypair,
         peer_contact: PeerContact,
         seeds: Vec<Multiaddr>,
-        genesis_hash: Blake2bHash,
+        genesis_hash: Blake3Hash,
     ) -> Self {
         // Hardcoding the minimum number of peers in mesh network before adding more
         // TODO: Maybe change this to a mesh limits configuration argument of this function

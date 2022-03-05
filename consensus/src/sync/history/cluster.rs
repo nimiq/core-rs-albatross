@@ -10,7 +10,7 @@ use parking_lot::RwLock;
 
 use nimiq_block::MacroBlock;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, ExtendedTransaction, CHUNK_SIZE};
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_network_interface::prelude::Peer;
 use nimiq_utils::math::CeilingDiv;
 
@@ -63,10 +63,10 @@ lazy_static! {
 
 pub(crate) struct SyncCluster<TPeer: Peer> {
     pub id: usize,
-    pub epoch_ids: Vec<Blake2bHash>,
+    pub epoch_ids: Vec<Blake3Hash>,
     pub first_epoch_number: usize,
 
-    pub(crate) batch_set_queue: SyncQueue<TPeer, Blake2bHash, BatchSetInfo>,
+    pub(crate) batch_set_queue: SyncQueue<TPeer, Blake3Hash, BatchSetInfo>,
     history_queue: SyncQueue<TPeer, (u32, u32, usize), (u32, HistoryChunk)>,
 
     pending_batch_sets: VecDeque<PendingBatchSet>,
@@ -80,7 +80,7 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
     const NUM_PENDING_CHUNKS: usize = 12;
 
     pub(crate) fn new(
-        epoch_ids: Vec<Blake2bHash>,
+        epoch_ids: Vec<Blake3Hash>,
         first_epoch_number: usize,
         peers: Vec<SyncQueuePeer<TPeer>>,
         blockchain: Arc<RwLock<Blockchain>>,

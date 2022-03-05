@@ -1,7 +1,7 @@
 use nimiq_database::{
     Environment, ReadTransaction, Transaction as DBTransaction, WriteTransaction,
 };
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_transaction::{Transaction, TransactionFlags};
 use nimiq_trie::key_nibbles::KeyNibbles;
 use nimiq_trie::trie::MerkleRadixTrie;
@@ -60,7 +60,7 @@ impl Accounts {
         }
     }
 
-    pub fn get_root(&self, txn_option: Option<&DBTransaction>) -> Blake2bHash {
+    pub fn get_root(&self, txn_option: Option<&DBTransaction>) -> Blake3Hash {
         match txn_option {
             Some(txn) => self.tree.root_hash(txn),
             None => self.tree.root_hash(&ReadTransaction::new(&self.env)),
@@ -73,7 +73,7 @@ impl Accounts {
         inherents: &[Inherent],
         block_height: u32,
         timestamp: u64,
-    ) -> Result<Blake2bHash, AccountError> {
+    ) -> Result<Blake3Hash, AccountError> {
         let mut txn = WriteTransaction::new(&self.env);
 
         self.commit(&mut txn, transactions, inherents, block_height, timestamp)?;

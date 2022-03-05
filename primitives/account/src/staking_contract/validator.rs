@@ -5,7 +5,7 @@ use log::error;
 use beserial::{Deserialize, Serialize};
 use nimiq_bls::{CompressedPublicKey as BlsPublicKey, CompressedPublicKey};
 use nimiq_database::WriteTransaction;
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
@@ -58,7 +58,7 @@ pub struct Validator {
     pub reward_address: Address,
     // Signalling field. Can be used to do chain upgrades or for any other purpose that requires
     // validators to coordinate among themselves.
-    pub signal_data: Option<Blake2bHash>,
+    pub signal_data: Option<Blake3Hash>,
     // The amount of coins held by this validator. It also includes the coins delegated to him by
     // stakers.
     pub balance: Coin,
@@ -80,7 +80,7 @@ impl StakingContract {
         signing_key: SchnorrPublicKey,
         voting_key: BlsPublicKey,
         reward_address: Address,
-        signal_data: Option<Blake2bHash>,
+        signal_data: Option<Blake3Hash>,
     ) -> Result<(), AccountError> {
         // Get the deposit value.
         let deposit = Coin::from_u64_unchecked(policy::VALIDATOR_DEPOSIT);
@@ -175,7 +175,7 @@ impl StakingContract {
         new_signing_key: Option<SchnorrPublicKey>,
         new_voting_key: Option<BlsPublicKey>,
         new_reward_address: Option<Address>,
-        new_signal_data: Option<Option<Blake2bHash>>,
+        new_signal_data: Option<Option<Blake3Hash>>,
     ) -> Result<UpdateValidatorReceipt, AccountError> {
         // Get the validator.
         let mut validator =

@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 use std::io;
 
 use beserial::{Deserialize, Serialize};
-use nimiq_hash::{Blake2bHash, Hash, HashOutput, SerializeContent};
+use nimiq_hash::{Blake3Hash, Hash, HashOutput, SerializeContent};
 use nimiq_keys::{PublicKey as SchnorrPublicKey, Signature as SchnorrSignature};
 use nimiq_primitives::policy;
 use nimiq_vrf::VrfSeed;
@@ -35,7 +35,7 @@ impl ForkProof {
     /// Verify the validity of a fork proof.
     pub fn verify(&self, signing_key: &SchnorrPublicKey) -> Result<(), ForkProofError> {
         // Check that the headers are not equal.
-        if self.header1.hash::<Blake2bHash>() == self.header2.hash::<Blake2bHash>() {
+        if self.header1.hash::<Blake3Hash>() == self.header2.hash::<Blake3Hash>() {
             return Err(ForkProofError::SameHeader);
         }
 
@@ -53,8 +53,8 @@ impl ForkProof {
         }
 
         // Check that the justifications are valid.
-        let hash1 = self.header1.hash::<Blake2bHash>();
-        let hash2 = self.header2.hash::<Blake2bHash>();
+        let hash1 = self.header1.hash::<Blake3Hash>();
+        let hash2 = self.header2.hash::<Blake3Hash>();
         if !signing_key.verify(&self.justification1, hash1.as_slice())
             || !signing_key.verify(&self.justification2, hash2.as_slice())
         {
@@ -114,7 +114,7 @@ impl PartialOrd for ForkProof {
 
 impl Ord for ForkProof {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.hash::<Blake2bHash>().cmp(&other.hash::<Blake2bHash>())
+        self.hash::<Blake3Hash>().cmp(&other.hash::<Blake3Hash>())
     }
 }
 
@@ -129,7 +129,7 @@ impl Hash for ForkProof {}
 impl std::hash::Hash for ForkProof {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         // We need to sort the hashes, so that it is invariant to the internal ordering.
-        let mut hashes: Vec<Blake2bHash> = vec![self.header1.hash(), self.header2.hash()];
+        let mut hashes: Vec<Blake3Hash> = vec![self.header1.hash(), self.header2.hash()];
         hashes.sort();
 
         std::hash::Hash::hash(hashes[0].as_bytes(), state);

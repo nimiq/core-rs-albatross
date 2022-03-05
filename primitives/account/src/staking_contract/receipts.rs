@@ -2,7 +2,7 @@ use std::collections::BTreeSet;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_bls::CompressedPublicKey as BlsPublicKey;
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
 
 /// A collection of receipts for inherents/transactions. This is necessary to be able to revert
@@ -21,7 +21,7 @@ pub struct UpdateValidatorReceipt {
     pub old_signing_key: SchnorrPublicKey,
     pub old_voting_key: BlsPublicKey,
     pub old_reward_address: Address,
-    pub old_signal_data: Option<Blake2bHash>,
+    pub old_signal_data: Option<Blake3Hash>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
@@ -51,7 +51,7 @@ pub struct DeleteValidatorReceipt {
     pub signing_key: SchnorrPublicKey,
     pub voting_key: BlsPublicKey,
     pub reward_address: Address,
-    pub signal_data: Option<Blake2bHash>,
+    pub signal_data: Option<Blake3Hash>,
     pub retire_time: u32,
     #[beserial(len_type(u32))]
     pub stakers: Vec<Address>,

@@ -14,7 +14,7 @@ pub struct MacroBlock {
     pub block_number: u32,
     /// The Tendermint round number for this block.
     pub round_number: u32,
-    /// This is simply the Blake2b hash of the entire macro block header.
+    /// This is simply the Blake3 hash of the entire macro block header.
     pub header_hash: [u8; 32],
     /// This is the aggregated signature of the signers for this block.
     pub signature: G1Projective,

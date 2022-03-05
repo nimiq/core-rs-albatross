@@ -1,7 +1,7 @@
 use nimiq_jsonrpc_core::RpcError;
 use thiserror::Error;
 
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_keys::Address;
 use nimiq_mempool::verify::VerifyErr;
 use nimiq_rpc_interface::types::BlockNumberOrHash;
@@ -57,10 +57,10 @@ pub enum Error {
     Argon2(#[from] nimiq_hash::argon2kdf::Argon2Error),
 
     #[error("Transaction not found: {0}")]
-    TransactionNotFound(Blake2bHash),
+    TransactionNotFound(Blake3Hash),
 
     #[error("Multiple transactions found: {0}")]
-    MultipleTransactionsFound(Blake2bHash),
+    MultipleTransactionsFound(Blake3Hash),
 
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),

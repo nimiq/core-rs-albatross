@@ -4,7 +4,7 @@ use beserial::{
     Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
     SerializingError, WriteBytesExt,
 };
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_mmr::mmr::proof::{Proof, RangeProof};
 
 use crate::history_store::ExtendedTransaction;
@@ -14,7 +14,7 @@ use crate::history_store::ExtendedTransaction;
 pub const CHUNK_SIZE: usize = 1024;
 
 pub struct HistoryTreeChunk {
-    pub(crate) proof: RangeProof<Blake2bHash>,
+    pub(crate) proof: RangeProof<Blake3Hash>,
     pub history: Vec<ExtendedTransaction>,
 }
 
@@ -35,7 +35,7 @@ impl Debug for HistoryTreeChunk {
 
 impl HistoryTreeChunk {
     /// Tries to verify
-    pub fn verify(&self, expected_root: Blake2bHash, leaf_index: usize) -> Option<bool> {
+    pub fn verify(&self, expected_root: Blake3Hash, leaf_index: usize) -> Option<bool> {
         // TODO: Modify MMR library so that we do not need to clone here.
         self.proof
             .verify_with_start(&expected_root, leaf_index, self.history.clone())

@@ -15,7 +15,7 @@ use nimiq_block::{MultiSignature, ViewChangeProof};
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_bls::CompressedPublicKey;
 use nimiq_collections::BitSet;
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::{Blake3Hash, Hash};
 use nimiq_keys::{Address, PublicKey, Signature};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
@@ -28,12 +28,12 @@ use crate::error::Error;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum HashOrTx {
-    Hash(Blake2bHash),
+    Hash(Blake3Hash),
     Tx(Transaction),
 }
 
-impl From<Blake2bHash> for HashOrTx {
-    fn from(hash: Blake2bHash) -> Self {
+impl From<Blake3Hash> for HashOrTx {
+    fn from(hash: Blake3Hash) -> Self {
         HashOrTx::Hash(hash)
     }
 }
@@ -47,7 +47,7 @@ impl From<nimiq_transaction::Transaction> for HashOrTx {
 #[derive(Clone, Debug)]
 pub enum BlockNumberOrHash {
     Number(u32),
-    Hash(Blake2bHash),
+    Hash(Blake3Hash),
 }
 
 impl From<u32> for BlockNumberOrHash {
@@ -56,8 +56,8 @@ impl From<u32> for BlockNumberOrHash {
     }
 }
 
-impl From<Blake2bHash> for BlockNumberOrHash {
-    fn from(block_hash: Blake2bHash) -> Self {
+impl From<Blake3Hash> for BlockNumberOrHash {
+    fn from(block_hash: Blake3Hash) -> Self {
         BlockNumberOrHash::Hash(block_hash)
     }
 }
@@ -131,7 +131,7 @@ impl FromStr for ValidityStartHeight {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Block {
-    pub hash: Blake2bHash,
+    pub hash: Blake3Hash,
     pub size: u32,
     pub batch: u32,
     pub epoch: u32,
@@ -140,13 +140,13 @@ pub struct Block {
     pub number: u32,
     pub view: u32,
     pub timestamp: u64,
-    pub parent_hash: Blake2bHash,
+    pub parent_hash: Blake3Hash,
     pub seed: VrfSeed,
     #[serde(with = "crate::serde_helpers::hex")]
     pub extra_data: Vec<u8>,
-    pub state_hash: Blake2bHash,
-    pub body_hash: Blake2bHash,
-    pub history_hash: Blake2bHash,
+    pub state_hash: Blake3Hash,
+    pub body_hash: Blake3Hash,
+    pub history_hash: Blake3Hash,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     transactions: Option<Vec<Transaction>>,
@@ -162,7 +162,7 @@ pub enum BlockAdditionalFields {
     Macro {
         is_election_block: bool,
 
-        parent_election_hash: Blake2bHash,
+        parent_election_hash: Blake3Hash,
 
         // None if not an election block.
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -426,7 +426,7 @@ pub struct ParkedSet {
 pub struct ForkProof {
     pub block_number: u32,
     pub view_number: u32,
-    pub hashes: [Blake2bHash; 2],
+    pub hashes: [Blake3Hash; 2],
 }
 
 impl From<nimiq_block::ForkProof> for ForkProof {
@@ -444,7 +444,7 @@ impl From<nimiq_block::ForkProof> for ForkProof {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Transaction {
-    pub hash: Blake2bHash,
+    pub hash: Blake3Hash,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub block_number: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -520,7 +520,7 @@ pub struct Inherent {
     pub value: Coin,
     #[serde(with = "crate::serde_helpers::hex")]
     pub data: Vec<u8>,
-    pub hash: Blake2bHash,
+    pub hash: Blake3Hash,
 }
 
 impl Inherent {
@@ -664,7 +664,7 @@ pub struct Validator {
     pub voting_key: CompressedPublicKey,
     pub reward_address: Address,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub signal_data: Option<Blake2bHash>,
+    pub signal_data: Option<Blake3Hash>,
     pub balance: Coin,
     pub num_stakers: u64,
     #[serde(skip_serializing_if = "Option::is_none")]

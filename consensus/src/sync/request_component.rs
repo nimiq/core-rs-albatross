@@ -8,7 +8,7 @@ use futures::{FutureExt, Stream, StreamExt};
 use tokio_stream::wrappers::BroadcastStream;
 
 use nimiq_block::Block;
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_network_interface::{network::NetworkEvent, peer::Peer};
 
 use crate::consensus_agent::ConsensusAgent;
@@ -16,11 +16,7 @@ use crate::sync::history::HistorySyncReturn;
 use crate::sync::sync_queue::SyncQueue;
 
 pub trait RequestComponent<P: Peer>: Stream<Item = RequestComponentEvent> + Unpin {
-    fn request_missing_blocks(
-        &mut self,
-        target_block_hash: Blake2bHash,
-        locators: Vec<Blake2bHash>,
-    );
+    fn request_missing_blocks(&mut self, target_block_hash: Blake3Hash, locators: Vec<Blake3Hash>);
 
     fn put_peer_into_sync_mode(&mut self, peer: Arc<P>);
 
@@ -50,7 +46,7 @@ pub trait HistorySyncStream<TPeer: Peer>:
 /// Outside has a request blocks method, which doesn’t return the blocks.
 /// The blocks instead are returned by polling the component.
 pub struct BlockRequestComponent<TPeer: Peer + 'static> {
-    sync_queue: SyncQueue<TPeer, (Blake2bHash, Vec<Blake2bHash>), Vec<Block>>, // requesting missing blocks from peers
+    sync_queue: SyncQueue<TPeer, (Blake3Hash, Vec<Blake3Hash>), Vec<Block>>, // requesting missing blocks from peers
     sync_method: Pin<Box<dyn HistorySyncStream<TPeer>>>,
     agents: HashMap<Arc<TPeer>, Arc<ConsensusAgent<TPeer>>>, // this map holds the strong references to up-to-date peers
     outdated_agents: HashMap<Arc<TPeer>, Arc<ConsensusAgent<TPeer>>>, //
@@ -112,11 +108,7 @@ impl<TPeer: Peer + 'static> BlockRequestComponent<TPeer> {
 }
 
 impl<TPeer: 'static + Peer> RequestComponent<TPeer> for BlockRequestComponent<TPeer> {
-    fn request_missing_blocks(
-        &mut self,
-        target_block_hash: Blake2bHash,
-        locators: Vec<Blake2bHash>,
-    ) {
+    fn request_missing_blocks(&mut self, target_block_hash: Blake3Hash, locators: Vec<Blake3Hash>) {
         self.sync_queue.add_ids(vec![(target_block_hash, locators)]);
     }
 

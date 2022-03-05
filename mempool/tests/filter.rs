@@ -1,6 +1,6 @@
 use std::convert::TryFrom;
 
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::{Blake3Hash, Hash};
 use nimiq_keys::Address;
 use nimiq_mempool::filter::{MempoolFilter, MempoolRules};
 use nimiq_primitives::coin::Coin;
@@ -20,7 +20,7 @@ fn it_can_blacklist_transactions() {
         NetworkId::Main,
     );
 
-    let hash: Blake2bHash = tx.hash();
+    let hash: Blake3Hash = tx.hash();
     f.blacklist(hash.clone());
     assert!(f.blacklisted(&hash));
     f.remove(&hash);

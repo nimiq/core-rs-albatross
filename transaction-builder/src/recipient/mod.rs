@@ -80,17 +80,17 @@ impl Recipient {
     /// ```
     /// use nimiq_transaction_builder::Recipient;
     /// use nimiq_keys::Address;
-    /// use nimiq_hash::{Blake2bHasher, Hasher, HashOutput};
+    /// use nimiq_hash::{Blake3Hasher, Hasher, HashOutput};
     ///
     /// // Hash data for HTLC.
     /// // The actual pre_image must be a hash, so we have to hash our secret first.
     /// let secret = "supersecret";
-    /// let pre_image = Blake2bHasher::default().digest(&secret.as_bytes());
+    /// let pre_image = Blake3Hasher::default().digest(&secret.as_bytes());
     /// // To get the hash_root, we have to hash the pre_image multiple times.
     /// let hash_count = 10;
     /// let mut hash_root = pre_image;
     /// for _ in 0..hash_count {
-    ///     hash_root = Blake2bHasher::default().digest(hash_root.as_bytes());
+    ///     hash_root = Blake3Hasher::default().digest(hash_root.as_bytes());
     /// }
     ///
     /// let mut recipient_builder = Recipient::new_htlc_builder();
@@ -101,7 +101,7 @@ impl Recipient {
     ///     Address::from_any_str("NQ46 MNYU LQ93 GYYS P5DC YA51 L5JP UPUT KR62").unwrap()
     /// );
     /// recipient_builder.with_timeout(100)
-    ///     .with_blake2b_hash(hash_root, hash_count);
+    ///     .with_blake3_hash(hash_root, hash_count);
     /// let recipient = recipient_builder.generate();
     /// assert!(recipient.is_ok());
     /// ```

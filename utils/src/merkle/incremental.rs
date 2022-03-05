@@ -2,7 +2,7 @@ use std::mem;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_collections::BitSet;
-use nimiq_hash::{Blake2bHash, HashOutput, Hasher, SerializeContent};
+use nimiq_hash::{Blake3Hash, HashOutput, Hasher, SerializeContent};
 
 use crate::math::CeilingDiv;
 
@@ -406,4 +406,4 @@ pub enum IncrementalMerkleProofError {
     InvalidChunkSize,
 }
 
-pub type Blake2bIncrementalMerkleProof = IncrementalMerkleProof<Blake2bHash>;
+pub type Blake3IncrementalMerkleProof = IncrementalMerkleProof<Blake3Hash>;

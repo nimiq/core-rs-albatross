@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use beserial::Serialize;
 use futures::{FutureExt, StreamExt};
-use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
+use nimiq_hash::{Blake3Hash, Hash, SerializeContent};
 use nimiq_primitives::policy::{SLOTS, TWO_F_PLUS_ONE};
 use nimiq_tendermint::*;
 use std::collections::BTreeMap;
@@ -63,7 +63,7 @@ impl TendermintOutsideDeps for TestValidator {
     // The proposal type is obviously our TestProposal type.
     type ProposalTy = TestProposal;
     // Any hash function, doesn't matter which.
-    type ProposalHashTy = Blake2bHash;
+    type ProposalHashTy = Blake3Hash;
     // We never verify the proofs inside Tendermint so we can just use the empty type.
     type ProofTy = ();
     // The result would normally be a combination of the proposal and the proof. But since our proof

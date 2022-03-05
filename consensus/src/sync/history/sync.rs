@@ -9,7 +9,7 @@ use parking_lot::RwLock;
 use tokio_stream::wrappers::BroadcastStream;
 
 use nimiq_blockchain::Blockchain;
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_network_interface::prelude::{Network, NetworkEvent, Peer};
 
 use crate::consensus_agent::ConsensusAgent;
@@ -18,8 +18,8 @@ use crate::sync::request_component::HistorySyncStream;
 
 pub(crate) struct EpochIds<TPeer: Peer> {
     pub locator_found: bool,
-    pub ids: Vec<Blake2bHash>,
-    pub checkpoint_id: Option<Blake2bHash>, // The most recent checkpoint block in the latest epoch.
+    pub ids: Vec<Blake3Hash>,
+    pub checkpoint_id: Option<Blake3Hash>, // The most recent checkpoint block in the latest epoch.
     pub first_epoch_number: usize,
     pub sender: Arc<ConsensusAgent<TPeer>>,
 }
@@ -43,7 +43,7 @@ impl<TPeer: Peer> EpochIds<TPeer> {
 }
 
 pub(crate) enum Job<TPeer: Peer> {
-    PushBatchSet(usize, Blake2bHash, BoxFuture<'static, SyncClusterResult>),
+    PushBatchSet(usize, Blake3Hash, BoxFuture<'static, SyncClusterResult>),
     FinishCluster(SyncCluster<TPeer>, SyncClusterResult),
 }
 
@@ -126,7 +126,7 @@ mod tests {
 
     use nimiq_blockchain::Blockchain;
     use nimiq_database::volatile::VolatileEnvironment;
-    use nimiq_hash::Blake2bHash;
+    use nimiq_hash::Blake3Hash;
     use nimiq_network_interface::prelude::Network;
     use nimiq_network_mock::{MockHub, MockNetwork, MockPeer};
     use nimiq_primitives::networks::NetworkId;
@@ -156,7 +156,7 @@ mod tests {
                     epoch_id[9] = 1;
                 }
 
-                ids.push(Blake2bHash::from(epoch_id));
+                ids.push(Blake3Hash::from(epoch_id));
             }
 
             EpochIds {

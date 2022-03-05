@@ -110,37 +110,37 @@ where
     }
 }
 
-// Blake2b
+// Blake3
 
-const BLAKE2B_LENGTH: usize = 32;
-create_typed_array!(Blake2bHash, u8, BLAKE2B_LENGTH);
-add_hex_io_fns_typed_arr!(Blake2bHash, BLAKE2B_LENGTH);
+const BLAKE3_LENGTH: usize = 32;
+create_typed_array!(Blake3Hash, u8, BLAKE3_LENGTH);
+add_hex_io_fns_typed_arr!(Blake3Hash, BLAKE3_LENGTH);
 
-pub struct Blake2bHasher(blake3::Hasher);
-impl HashOutput for Blake2bHash {
-    type Builder = Blake2bHasher;
+pub struct Blake3Hasher(blake3::Hasher);
+impl HashOutput for Blake3Hash {
+    type Builder = Blake3Hasher;
 
     fn as_bytes(&self) -> &[u8] {
         &self.0
     }
     fn len() -> usize {
-        BLAKE2B_LENGTH
+        BLAKE3_LENGTH
     }
 }
 
-impl Blake2bHasher {
+impl Blake3Hasher {
     pub fn new() -> Self {
-        Blake2bHasher(blake3::Hasher::new())
+        Blake3Hasher(blake3::Hasher::new())
     }
 }
 
-impl Default for Blake2bHasher {
+impl Default for Blake3Hasher {
     fn default() -> Self {
-        Blake2bHasher::new()
+        Blake3Hasher::new()
     }
 }
 
-impl io::Write for Blake2bHasher {
+impl io::Write for Blake3Hasher {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.0.update(buf);
         Ok(buf.len())
@@ -151,22 +151,22 @@ impl io::Write for Blake2bHasher {
     }
 }
 
-impl Hasher for Blake2bHasher {
-    type Output = Blake2bHash;
+impl Hasher for Blake3Hasher {
+    type Output = Blake3Hash;
 
-    fn finish(self) -> Blake2bHash {
+    fn finish(self) -> Blake3Hash {
         let result = self.0.finalize();
-        Blake2bHash::from(*result.as_bytes())
+        Blake3Hash::from(*result.as_bytes())
     }
 }
 
-impl AsDatabaseBytes for Blake2bHash {
+impl AsDatabaseBytes for Blake3Hash {
     fn as_database_bytes(&self) -> Cow<[u8]> {
         Cow::Borrowed(self.as_bytes())
     }
 }
 
-impl FromDatabaseValue for Blake2bHash {
+impl FromDatabaseValue for Blake3Hash {
     fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
     where
         Self: Sized,
@@ -175,14 +175,14 @@ impl FromDatabaseValue for Blake2bHash {
     }
 }
 
-impl Merge for Blake2bHash {
+impl Merge for Blake3Hash {
     /// Hashes just a prefix.
     fn empty(prefix: u64) -> Self {
         let message = prefix.to_be_bytes().to_vec();
         message.hash()
     }
 
-    /// Hashes a prefix and two Blake2b hashes together.
+    /// Hashes a prefix and two Blake3 hashes together.
     fn merge(&self, other: &Self, prefix: u64) -> Self {
         let mut message = prefix.to_be_bytes().to_vec();
         message.append(&mut self.serialize_to_vec());

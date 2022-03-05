@@ -1,7 +1,7 @@
 use std::io::Write;
 
 use nimiq_hash::{
-    argon2kdf, Argon2dHash, Argon2dHasher, Blake2bHash, Blake2bHasher, Blake2sHash, Blake2sHasher,
+    argon2kdf, Argon2dHash, Argon2dHasher, Blake2sHash, Blake2sHasher, Blake3Hash, Blake3Hasher,
     Hasher, Sha256Hash, Sha256Hasher, Sha512Hash, Sha512Hasher,
 };
 
@@ -43,19 +43,19 @@ fn it_can_compute_argon2d() {
 }
 
 #[test]
-fn it_can_compute_blake2b() {
-    // blake2b('test') = '4878ca0425c739fa427f7eda20fe845f6b2e46ba5fe2a14df5b1e32f50603215'
+fn it_can_compute_blake3() {
+    // blake3('test') = '4878ca0425c739fa427f7eda20fe845f6b2e46ba5fe2a14df5b1e32f50603215'
 
     assert_eq!(
-        Blake2bHasher::default().digest(b"test"),
-        Blake2bHash::from("4878ca0425c739fa427f7eda20fe845f6b2e46ba5fe2a14df5b1e32f50603215")
+        Blake3Hasher::default().digest(b"test"),
+        Blake3Hash::from("4878ca0425c739fa427f7eda20fe845f6b2e46ba5fe2a14df5b1e32f50603215")
     );
-    let mut h = Blake2bHasher::default();
+    let mut h = Blake3Hasher::default();
     h.write_all(b"te").unwrap();
     h.write_all(b"st").unwrap();
     assert_eq!(
         h.finish(),
-        Blake2bHash::from("4878ca0425c739fa427f7eda20fe845f6b2e46ba5fe2a14df5b1e32f50603215")
+        Blake3Hash::from("4878ca0425c739fa427f7eda20fe845f6b2e46ba5fe2a14df5b1e32f50603215")
     );
 }
 

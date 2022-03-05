@@ -143,7 +143,7 @@ impl Handle<ResponseBlocks> for RequestMissingBlocks {
         //  they they don't match up with the given target hash.
 
         // Build a HashSet from the given locator hashes.
-        let locators = HashSet::<Blake2bHash>::from_iter(self.locators.iter().cloned());
+        let locators = HashSet::<Blake3Hash>::from_iter(self.locators.iter().cloned());
 
         // Walk the chain backwards from the target block until we find one of the locators or
         // encounter a macro block. Return all blocks between the locator block (exclusive) and the

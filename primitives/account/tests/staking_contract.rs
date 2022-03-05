@@ -9,7 +9,7 @@ use nimiq_bls::{CompressedPublicKey as BlsPublicKey, CompressedPublicKey};
 use nimiq_collections::BitSet;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_database::WriteTransaction;
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey};
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
@@ -286,7 +286,7 @@ fn update_validator_works() {
             new_signing_key: Some(PublicKey::from([88u8; 32])),
             new_voting_key: Some(new_voting_keypair.public_key.compress()),
             new_reward_address: Some(Address::from([77u8; 20])),
-            new_signal_data: Some(Some(Blake2bHash::default())),
+            new_signal_data: Some(Some(Blake3Hash::default())),
             new_proof_of_knowledge: Some(
                 new_voting_keypair
                     .sign(&new_voting_keypair.public_key.serialize_to_vec())
@@ -330,7 +330,7 @@ fn update_validator_works() {
         new_voting_keypair.public_key.compress()
     );
     assert_eq!(validator.reward_address, Address::from([77u8; 20]));
-    assert_eq!(validator.signal_data, Some(Blake2bHash::default()));
+    assert_eq!(validator.signal_data, Some(Blake3Hash::default()));
     assert_eq!(
         validator.balance,
         Coin::from_u64_unchecked(VALIDATOR_DEPOSIT + 150_000_000)
@@ -374,7 +374,7 @@ fn update_validator_works() {
             new_signing_key: Some(PublicKey::from([88u8; 32])),
             new_voting_key: Some(new_voting_keypair.public_key.compress()),
             new_reward_address: Some(Address::from([77u8; 20])),
-            new_signal_data: Some(Some(Blake2bHash::default())),
+            new_signal_data: Some(Some(Blake3Hash::default())),
             new_proof_of_knowledge: Some(
                 new_voting_keypair
                     .sign(&new_voting_keypair.public_key.serialize_to_vec())

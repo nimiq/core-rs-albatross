@@ -4,7 +4,7 @@ use std::sync::{Arc, Weak};
 use parking_lot::RwLock;
 
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_network_interface::prelude::{CloseReason, Network, Peer};
 
 use crate::consensus_agent::ConsensusAgent;
@@ -68,7 +68,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                 });
 
                 // Filter checkpoint from block hashes and map to hash.
-                let epoch_ids: Vec<Blake2bHash> = hashes
+                let epoch_ids: Vec<Blake3Hash> = hashes
                     .into_iter()
                     .filter_map(|(ty, id)| match ty {
                         BlockHashType::Election => Some(id),

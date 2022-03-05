@@ -3,7 +3,7 @@ use std::io;
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use nimiq_account::{Inherent, InherentType};
 use nimiq_database::{FromDatabaseValue, IntoDatabaseValue};
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::{Blake3Hash, Hash};
 use nimiq_mmr::hash::Hash as MMRHash;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
@@ -106,7 +106,7 @@ impl ExtendedTransaction {
     /// hash of the corresponding reward transaction. This results into an unique hash for the
     /// reward inherents (which wouldn't happen otherwise) and allows front-end to fetch rewards by
     /// their transaction hash.
-    pub fn tx_hash(&self) -> Blake2bHash {
+    pub fn tx_hash(&self) -> Blake3Hash {
         match &self.data {
             ExtTxData::Basic(tx) => tx.hash(),
             ExtTxData::Inherent(v) => {
@@ -142,10 +142,10 @@ impl ExtendedTransaction {
     }
 }
 
-impl MMRHash<Blake2bHash> for ExtendedTransaction {
-    /// Hashes a prefix and an extended transaction into a Blake2bHash. The prefix is necessary
+impl MMRHash<Blake3Hash> for ExtendedTransaction {
+    /// Hashes a prefix and an extended transaction into a Blake3Hash. The prefix is necessary
     /// to include it into the History Tree.
-    fn hash(&self, prefix: u64) -> Blake2bHash {
+    fn hash(&self, prefix: u64) -> Blake3Hash {
         let mut message = prefix.to_be_bytes().to_vec();
         message.append(&mut self.serialize_to_vec());
         message.hash()

@@ -4,7 +4,7 @@ use nimiq_database::cursor::{ReadCursor, WriteCursor};
 use nimiq_database::{
     Database, DatabaseFlags, Environment, ReadTransaction, Transaction, WriteTransaction,
 };
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::Blake3Hash;
 use nimiq_primitives::policy;
 
 use crate::chain_info::ChainInfo;
@@ -53,20 +53,20 @@ impl ChainStore {
         }
     }
 
-    pub fn get_head(&self, txn_option: Option<&Transaction>) -> Option<Blake2bHash> {
+    pub fn get_head(&self, txn_option: Option<&Transaction>) -> Option<Blake3Hash> {
         match txn_option {
             Some(txn) => txn.get(&self.chain_db, ChainStore::HEAD_KEY),
             None => ReadTransaction::new(&self.env).get(&self.chain_db, ChainStore::HEAD_KEY),
         }
     }
 
-    pub fn set_head(&self, txn: &mut WriteTransaction, hash: &Blake2bHash) {
+    pub fn set_head(&self, txn: &mut WriteTransaction, hash: &Blake3Hash) {
         txn.put(&self.chain_db, ChainStore::HEAD_KEY, hash);
     }
 
     pub fn get_chain_info(
         &self,
-        hash: &Blake2bHash,
+        hash: &Blake3Hash,
         include_body: bool,
         txn_option: Option<&Transaction>,
     ) -> Option<ChainInfo> {
@@ -112,7 +112,7 @@ impl ChainStore {
 
         // Seek to the first block at the given height.
         let mut cursor = txn.cursor(&self.height_idx);
-        let mut block_hash = cursor.seek_key::<u32, Blake2bHash>(&block_height)?;
+        let mut block_hash = cursor.seek_key::<u32, Blake3Hash>(&block_height)?;
 
         // Iterate until we find the main chain block.
         let mut chain_info = loop {
@@ -126,7 +126,7 @@ impl ChainStore {
             }
 
             // Get next block hash
-            block_hash = match cursor.next_duplicate::<u32, Blake2bHash>() {
+            block_hash = match cursor.next_duplicate::<u32, Blake3Hash>() {
                 Some((_, hash)) => hash,
                 None => return None,
             };
@@ -146,7 +146,7 @@ impl ChainStore {
     pub fn put_chain_info(
         &self,
         txn: &mut WriteTransaction,
-        hash: &Blake2bHash,
+        hash: &Blake3Hash,
         chain_info: &ChainInfo,
         include_body: bool,
     ) {
@@ -164,7 +164,7 @@ impl ChainStore {
         txn.put(&self.height_idx, &height, hash);
     }
 
-    pub fn remove_chain_info(&self, txn: &mut WriteTransaction, hash: &Blake2bHash, height: u32) {
+    pub fn remove_chain_info(&self, txn: &mut WriteTransaction, hash: &Blake3Hash, height: u32) {
         txn.remove(&self.chain_db, hash);
         txn.remove(&self.block_db, hash);
         txn.remove_item(&self.height_idx, &height, hash);
@@ -172,7 +172,7 @@ impl ChainStore {
 
     pub fn get_block(
         &self,
-        hash: &Blake2bHash,
+        hash: &Blake3Hash,
         include_body: bool,
         txn_option: Option<&Transaction>,
     ) -> Option<Block> {
@@ -205,7 +205,7 @@ impl ChainStore {
 
     pub fn get_blocks(
         &self,
-        start_block_hash: &Blake2bHash,
+        start_block_hash: &Blake3Hash,
         count: u32,
         include_body: bool,
         direction: Direction,
@@ -239,7 +239,7 @@ impl ChainStore {
         // Seek to the first block at the given height.
         let mut blocks = Vec::new();
         let mut cursor = txn.cursor(&self.height_idx);
-        let mut block_hash = match cursor.seek_key::<u32, Blake2bHash>(&block_height) {
+        let mut block_hash = match cursor.seek_key::<u32, Blake3Hash>(&block_height) {
             Some(hash) => hash,
             None => return blocks,
         };
@@ -249,7 +249,7 @@ impl ChainStore {
             blocks.push(block);
 
             // Get next block hash
-            block_hash = match cursor.next_duplicate::<u32, Blake2bHash>() {
+            block_hash = match cursor.next_duplicate::<u32, Blake3Hash>() {
                 Some((_, hash)) => hash,
                 None => break,
             };
@@ -260,7 +260,7 @@ impl ChainStore {
 
     fn get_blocks_backward(
         &self,
-        start_block_hash: &Blake2bHash,
+        start_block_hash: &Blake3Hash,
         count: u32,
         include_body: bool,
         txn_option: Option<&Transaction>,
@@ -295,7 +295,7 @@ impl ChainStore {
 
     fn get_blocks_forward(
         &self,
-        start_block_hash: &Blake2bHash,
+        start_block_hash: &Blake3Hash,
         count: u32,
         include_body: bool,
         txn_option: Option<&Transaction>,
@@ -335,7 +335,7 @@ impl ChainStore {
     /// Returns None if given start_block_hash is not a macro block.
     pub fn get_macro_blocks(
         &self,
-        start_block_hash: &Blake2bHash,
+        start_block_hash: &Blake3Hash,
         count: u32,
         include_body: bool,
         direction: Direction,
@@ -363,7 +363,7 @@ impl ChainStore {
     /// Returns None if given start_block_hash is not a macro block.
     fn get_macro_blocks_backward(
         &self,
-        start_block_hash: &Blake2bHash,
+        start_block_hash: &Blake3Hash,
         count: u32,
         election_blocks_only: bool,
         include_body: bool,
@@ -410,7 +410,7 @@ impl ChainStore {
     /// Returns None if given start_block_hash is not a macro block.
     fn get_macro_blocks_forward(
         &self,
-        start_block_hash: &Blake2bHash,
+        start_block_hash: &Blake3Hash,
         count: u32,
         election_blocks_only: bool,
         include_body: bool,
@@ -462,7 +462,7 @@ impl ChainStore {
 
         for height in policy::first_block_of(epoch_number)..policy::election_block_of(epoch_number)
         {
-            if let Some(hash) = txn.get::<u32, Blake2bHash>(&self.height_idx, &height) {
+            if let Some(hash) = txn.get::<u32, Blake3Hash>(&self.height_idx, &height) {
                 txn.remove(&self.chain_db, &hash);
                 txn.remove(&self.block_db, &hash);
                 txn.remove_item(&self.height_idx, &height, &hash);

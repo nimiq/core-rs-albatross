@@ -1,7 +1,7 @@
 use log::error;
 
 use beserial::{Deserialize, Serialize};
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::{Blake3Hash, Hash};
 
 use crate::key_nibbles::KeyNibbles;
 use crate::trie_node::TrieNode;
@@ -54,7 +54,7 @@ impl<A: Serialize + Deserialize + Clone> TrieProof<A> {
     /// and compare their keys to the ones we want.
     /// This function just checks that the proof is in fact a valid sub-trie and that its root
     /// matches the given root hash.
-    pub fn verify(&self, root_hash: &Blake2bHash) -> bool {
+    pub fn verify(&self, root_hash: &Blake3Hash) -> bool {
         // There must be nodes in the proof.
         if self.nodes.is_empty() {
             error!("There aren't any nodes in the trie proof!");
@@ -90,9 +90,9 @@ impl<A: Serialize + Deserialize + Clone> TrieProof<A> {
 
                         // The child node must match the hash and the key, otherwise the proof is
                         // invalid.
-                        if child_hash != &child.hash::<Blake2bHash>() || &child_key != child.key() {
+                        if child_hash != &child.hash::<Blake3Hash>() || &child_key != child.key() {
                             error!("The child node doesn't match the given hash and/or key. Got hash {}, child has hash {}. Got key {}, child has key {}.",
-                                   child_hash, child.hash::<Blake2bHash>(), child_key, child.key());
+                                   child_hash, child.hash::<Blake3Hash>(), child_key, child.key());
                             return false;
                         }
                     }
@@ -125,10 +125,10 @@ impl<A: Serialize + Deserialize + Clone> TrieProof<A> {
         }
 
         // And must match the hash given as the root hash.
-        if &root.hash::<Blake2bHash>() != root_hash {
+        if &root.hash::<Blake3Hash>() != root_hash {
             error!(
                 "The root node doesn't have the correct has! It has hash {}, but it should be {}.",
-                root.hash::<Blake2bHash>(),
+                root.hash::<Blake3Hash>(),
                 root_hash
             );
             return false;
@@ -188,8 +188,8 @@ mod tests {
             .put_child(&key_b1, b1.hash())
             .unwrap();
 
-        let root_hash = r.hash::<Blake2bHash>();
-        let wrong_root_hash = ":-E".hash::<Blake2bHash>();
+        let root_hash = r.hash::<Blake3Hash>();
+        let wrong_root_hash = ":-E".hash::<Blake3Hash>();
 
         // Correct proofs.
         let proof1 = TrieProof::new(vec![
