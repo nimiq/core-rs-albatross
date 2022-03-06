@@ -466,7 +466,7 @@ impl Blockchain {
                         write_txn,
                         micro_block,
                         prev_info.head.seed().entropy(),
-                        prev_info.head.view_number(),
+                        prev_info.head.next_view_number(),
                     )?;
 
                     current_info = prev_info;
