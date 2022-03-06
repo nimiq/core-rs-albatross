@@ -62,14 +62,12 @@ function check_failures() {
         then
             echo "   !!!   LONG LOCK HOLD TIME   !!!"
             echo "LONG_LOCK_HOLD_TIME" >> temp-state/RESULT.TXT
-            break
         fi
         # Search for slow lock acquisitions
         if grep -rin "slow.*took" $logsdir/*.log
         then
             echo "   !!!   SLOW LOCK ACQUISITION   !!!"
             echo "SLOW_LOCK_ACQUISITION" >> temp-state/RESULT.TXT
-            break
         fi
         # Search for deadlocks
         if grep -wrin "deadlock" $logsdir/*.log
