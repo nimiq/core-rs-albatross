@@ -136,12 +136,14 @@ impl Blockchain {
     ) -> Result<(), PushError> {
         match block {
             Block::Micro(micro_block) => {
+                trace!("verify_block_justification:micro:0");
                 // Checks if the justification exists. If yes, unwrap it.
                 let justification = micro_block
                     .justification
                     .as_ref()
                     .ok_or(PushError::InvalidBlock(BlockError::NoJustification))?;
 
+                trace!("verify_block_justification:micro:1");
                 if check_signature {
                     // Verify the signature on the justification.
                     let hash = block.hash();
@@ -154,14 +156,17 @@ impl Blockchain {
                     }
                 }
 
+                trace!("verify_block_justification:micro:2");
                 // Check if a view change occurred - if so, validate the proof
                 let prev_info = blockchain
                     .get_chain_info(block.parent_hash(), false, txn_opt)
                     .unwrap();
 
+                trace!("verify_block_justification:micro:3");
                 let next_view_number = prev_info.head.next_view_number();
                 let view_number = block.view_number();
 
+                trace!("verify_block_justification:micro:4");
                 if view_number < next_view_number {
                     warn!(
                         "Rejecting block {} - decreasing view number {} < {}",
@@ -193,6 +198,7 @@ impl Blockchain {
                         vrf_entropy: prev_info.head.seed().entropy(),
                     };
 
+                    trace!("verify_block_justification:micro:4:1");
                     if !justification
                         .view_change_proof
                         .as_ref()
@@ -203,8 +209,10 @@ impl Blockchain {
                         return Err(PushError::InvalidBlock(BlockError::InvalidViewChangeProof));
                     }
                 }
+                trace!("verify_block_justification:micro:5");
             }
             Block::Macro(macro_block) => {
+                trace!("verify_block_justification:macro:0");
                 // Verify the Tendermint proof.
                 if check_signature
                     && !TendermintProof::verify(
@@ -218,6 +226,7 @@ impl Blockchain {
                     );
                     return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
                 }
+                trace!("verify_block_justification:macro:1");
             }
         }
 
@@ -242,6 +251,7 @@ impl Blockchain {
 
         match body {
             BlockBody::Micro(body) => {
+                trace!("verify_block_body:micro:0");
                 // Check the size of the body.
                 let body_size = body.serialized_size();
                 if body_size > policy::MAX_SIZE_MICRO_BODY {
@@ -254,6 +264,7 @@ impl Blockchain {
                     return Err(PushError::InvalidBlock(BlockError::SizeExceeded));
                 }
 
+                trace!("verify_block_body:micro:1");
                 // Check the body root.
                 let body_hash = body.hash::<Blake2bHash>();
                 if *header.body_root() != body_hash {
@@ -266,6 +277,7 @@ impl Blockchain {
                     return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
                 }
 
+                trace!("verify_block_body:micro:2");
                 // Validate the fork proofs.
                 let mut previous_proof: Option<&ForkProof> = None;
 
@@ -315,6 +327,7 @@ impl Blockchain {
                     }
                 }
 
+                trace!("verify_block_body:micro:3");
                 // Verify transactions.
                 let mut previous_tx: Option<&Transaction> = None;
 
@@ -350,8 +363,10 @@ impl Blockchain {
 
                     previous_tx = Some(tx);
                 }
+                trace!("verify_block_body:micro:4");
             }
             BlockBody::Macro(body) => {
+                trace!("verify_block_body:macro:0");
                 // Check the body root.
                 let body_hash = body.hash::<Blake2bHash>();
                 if *header.body_root() != body_hash {
@@ -364,6 +379,7 @@ impl Blockchain {
                     return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
                 }
 
+                trace!("verify_block_body:macro:1");
                 // In case of an election block make sure it contains validators and pk_tree_root,
                 // if it is not an election block make sure it doesn't contain either.
                 let is_election = policy::is_election_block_at(header.block_number());
@@ -376,6 +392,7 @@ impl Blockchain {
                     return Err(PushError::InvalidBlock(BlockError::InvalidPkTreeRoot));
                 }
 
+                trace!("verify_block_body:macro:2");
                 // If this is an election block, check if the pk_tree_root matches the validators.
                 if is_election {
                     let pk_tree_root = MacroBlock::pk_tree_root(body.validators.as_ref().unwrap());
@@ -383,6 +400,7 @@ impl Blockchain {
                         return Err(PushError::InvalidBlock(BlockError::InvalidPkTreeRoot));
                     }
                 }
+                trace!("verify_block_body:macro:3");
             }
         }
 
