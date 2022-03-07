@@ -267,7 +267,7 @@ impl Blockchain {
         txn.commit();
 
         // Upgrade the lock as late as possible.
-        let mut this = RwLockUpgradableReadGuard::upgrade(this);
+        let mut this = RwLockUpgradableReadGuard::upgrade_untimed(this);
 
         if let Block::Macro(ref macro_block) = chain_info.head {
             this.state.macro_info = chain_info.clone();

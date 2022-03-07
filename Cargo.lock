@@ -2692,7 +2692,7 @@ dependencies = [
 [[package]]
 name = "lock_api"
 version = "0.4.6"
-source = "git+https://github.com/styppo/parking_lot.git#c02df983dc282c613a3b820ba3942c29bc3c7f14"
+source = "git+https://github.com/styppo/parking_lot.git#3830254eb8738fb87d85d6fd802f9186891777d5"
 dependencies = [
  "backtrace",
  "log",
@@ -4318,7 +4318,7 @@ dependencies = [
 [[package]]
 name = "parking_lot"
 version = "0.12.0"
-source = "git+https://github.com/styppo/parking_lot.git#c02df983dc282c613a3b820ba3942c29bc3c7f14"
+source = "git+https://github.com/styppo/parking_lot.git#3830254eb8738fb87d85d6fd802f9186891777d5"
 dependencies = [
  "backtrace",
  "lock_api 0.4.6 (git+https://github.com/styppo/parking_lot.git)",
@@ -4356,7 +4356,7 @@ dependencies = [
 [[package]]
 name = "parking_lot_core"
 version = "0.9.1"
-source = "git+https://github.com/styppo/parking_lot.git#c02df983dc282c613a3b820ba3942c29bc3c7f14"
+source = "git+https://github.com/styppo/parking_lot.git#3830254eb8738fb87d85d6fd802f9186891777d5"
 dependencies = [
  "backtrace",
  "cfg-if",
