@@ -31,9 +31,9 @@ use libp2p::{
     swarm::{dial_opts::DialOpts, ConnectionLimits, NetworkInfo, SwarmBuilder, SwarmEvent},
     tcp, websocket, yamux, Multiaddr, PeerId, Swarm, Transport,
 };
+use log::Instrument;
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
-use tracing::Instrument;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_bls::CompressedPublicKey;
@@ -268,7 +268,7 @@ impl Network {
         let mut task_state = TaskState::default();
 
         let peer_id = Swarm::local_peer_id(&swarm);
-        let task_span = tracing::trace_span!("swarm task", peer_id=?peer_id);
+        let task_span = log::trace_span!("swarm task", peer_id=?peer_id);
 
         async move {
             loop {
@@ -326,7 +326,7 @@ impl Network {
                 num_established,
                 concurrent_dial_errors,
             } => {
-                tracing::info!(
+                log::info!(
                     "Connection established with peer {}, {:?}, connections established: {:?}",
                     peer_id,
                     endpoint,
@@ -335,7 +335,7 @@ impl Network {
 
                 if let Some(dial_errors) = concurrent_dial_errors {
                     for (addr, error) in dial_errors {
-                        tracing::debug!(
+                        log::debug!(
                             "Failed to reach address: {}, peer_id={:?}, error={:?}",
                             addr,
                             peer_id,
@@ -349,7 +349,7 @@ impl Network {
                 if endpoint.is_dialer() {
                     let listen_addr = endpoint.get_remote_address();
 
-                    tracing::debug!("Saving peer {} listen address: {:?}", peer_id, listen_addr);
+                    log::debug!("Saving peer {} listen address: {:?}", peer_id, listen_addr);
 
                     swarm
                         .behaviour_mut()
@@ -359,7 +359,7 @@ impl Network {
                     if !state.is_bootstraped {
                         log::debug!("Bootstrapping DHT");
                         if swarm.behaviour_mut().dht.bootstrap().is_err() {
-                            tracing::error!("Bootstrapping DHT error: No known peers");
+                            log::error!("Bootstrapping DHT error: No known peers");
                         }
                         state.is_bootstraped = true;
                     }
@@ -372,7 +372,7 @@ impl Network {
                 num_established,
                 cause,
             } => {
-                tracing::info!(
+                log::info!(
                     "Connection closed with peer {}, {:?}, connections established: {:?}",
                     peer_id,
                     endpoint,
@@ -380,7 +380,7 @@ impl Network {
                 );
 
                 if let Some(cause) = cause {
-                    tracing::info!("Connection closed because: {:?}", cause);
+                    log::info!("Connection closed because: {:?}", cause);
                 }
 
                 let behavior = swarm.behaviour_mut();
@@ -403,7 +403,7 @@ impl Network {
                 local_addr,
                 send_back_addr,
             } => {
-                tracing::debug!(
+                log::debug!(
                     "Incoming connection from address {:?} to listen address {:?}",
                     send_back_addr,
                     local_addr
@@ -415,7 +415,7 @@ impl Network {
                 send_back_addr,
                 error,
             } => {
-                tracing::debug!(
+                log::debug!(
                     "Incoming connection error from address {:?} to listen address {:?}: {:?}",
                     send_back_addr,
                     local_addr,
@@ -425,7 +425,7 @@ impl Network {
 
             SwarmEvent::Dialing(peer_id) => {
                 // This event is only triggered if the network behaviour performs the dial
-                tracing::debug!("Dialing peer {}", peer_id);
+                log::debug!("Dialing peer {}", peer_id);
             }
 
             SwarmEvent::Behaviour(event) => {
@@ -444,7 +444,7 @@ impl Network {
                                             );
                                             output.send(result).ok();
                                         } else {
-                                            tracing::warn!(query_id = ?id, "GetRecord query result for unknown query ID");
+                                            log::warn!(query_id = ?id, "GetRecord query result for unknown query ID");
                                         }
                                     }
                                     QueryResult::PutRecord(result) => {
@@ -454,14 +454,14 @@ impl Network {
                                                 .send(result.map(|_| ()).map_err(Into::into))
                                                 .ok();
                                         } else {
-                                            tracing::warn!(query_id = ?id, "PutRecord query result for unknown query ID");
+                                            log::warn!(query_id = ?id, "PutRecord query result for unknown query ID");
                                         }
                                     }
                                     QueryResult::Bootstrap(result) => match result {
                                         Ok(result) => {
-                                            tracing::debug!(result = ?result, "DHT bootstrap successful")
+                                            log::debug!(result = ?result, "DHT bootstrap successful")
                                         }
-                                        Err(e) => tracing::error!("DHT bootstrap error: {:?}", e),
+                                        Err(e) => log::error!("DHT bootstrap error: {:?}", e),
                                     },
                                     _ => {}
                                 }
@@ -539,30 +539,30 @@ impl Network {
                                 if let Err(e) =
                                     output.try_send((message, message_id, propagation_source))
                                 {
-                                    tracing::error!(
+                                    log::error!(
                                         "Failed to dispatch gossipsub '{}' message: {:?}",
                                         topic.as_str(),
                                         e
                                     )
                                 }
                             } else {
-                                tracing::warn!(topic = ?message.topic, "unknown topic hash");
+                                log::warn!(topic = ?message.topic, "unknown topic hash");
                             }
                         }
                         GossipsubEvent::Subscribed { peer_id, topic } => {
-                            tracing::debug!(peer_id = ?peer_id, topic = ?topic, "peer subscribed to topic");
+                            log::debug!(peer_id = ?peer_id, topic = ?topic, "peer subscribed to topic");
                         }
                         GossipsubEvent::Unsubscribed { peer_id, topic } => {
-                            tracing::debug!(peer_id = ?peer_id, topic = ?topic, "peer unsubscribed");
+                            log::debug!(peer_id = ?peer_id, topic = ?topic, "peer unsubscribed");
                         }
                         GossipsubEvent::GossipsubNotSupported { peer_id } => {
-                            tracing::debug!(peer_id = ?peer_id, "gossipsub not supported");
+                            log::debug!(peer_id = ?peer_id, "gossipsub not supported");
                         }
                     },
                     NimiqEvent::Identify(event) => {
                         match event {
                             IdentifyEvent::Received { peer_id, info } => {
-                                tracing::debug!(
+                                log::debug!(
                                     "Received identity from peer {} at address {:?}: {:?}",
                                     peer_id,
                                     info.observed_addr,
@@ -577,22 +577,20 @@ impl Network {
                                     if !state.is_bootstraped {
                                         log::debug!("Bootstrapping DHT");
                                         if swarm.behaviour_mut().dht.bootstrap().is_err() {
-                                            tracing::error!(
-                                                "Bootstrapping DHT error: No known peers"
-                                            );
+                                            log::error!("Bootstrapping DHT error: No known peers");
                                         }
                                         state.is_bootstraped = true;
                                     }
                                 }
                             }
                             IdentifyEvent::Pushed { peer_id } => {
-                                tracing::trace!("Pushed identity to peer {}", peer_id);
+                                log::trace!("Pushed identity to peer {}", peer_id);
                             }
                             IdentifyEvent::Sent { peer_id } => {
-                                tracing::trace!("Sent identity to peer {}", peer_id);
+                                log::trace!("Sent identity to peer {}", peer_id);
                             }
                             IdentifyEvent::Error { peer_id, error } => {
-                                tracing::error!(
+                                log::error!(
                                     "Error while identifying remote peer {}: {:?}",
                                     peer_id,
                                     error
@@ -603,7 +601,7 @@ impl Network {
                     NimiqEvent::Ping(event) => {
                         match event.result {
                             Err(e) => {
-                                tracing::error!("Ping failed with peer {}, {:?}", event.peer, e);
+                                log::error!("Ping failed with peer {}, {:?}", event.peer, e);
                                 // Remove the peer from the peer map
                                 if let Some(peer) =
                                     swarm.behaviour_mut().pool.peers.remove(&event.peer)
@@ -612,10 +610,10 @@ impl Network {
                                 }
                             }
                             Ok(Success::Pong) => {
-                                tracing::trace!("Responded Ping from peer {}", event.peer);
+                                log::trace!("Responded Ping from peer {}", event.peer);
                             }
                             Ok(Success::Ping { rtt }) => {
-                                tracing::trace!(
+                                log::trace!(
                                     "Sent Ping and received response to/from peer {}, round trip time {:?}",
                                     event.peer,
                                     rtt
@@ -638,7 +636,7 @@ impl Network {
 
     fn perform_action(action: NetworkAction, swarm: &mut NimiqSwarm, state: &mut TaskState) {
         // FIXME implement compact debug format for NetworkAction
-        // tracing::trace!(action = ?action, "performing action");
+        // log::trace!(action = ?action, "performing action");
 
         match action {
             NetworkAction::Dial { peer_id, output } => {
@@ -825,7 +823,7 @@ impl Network {
             .clone()
             .send(NetworkAction::ListenOn { listen_addresses })
             .await
-            .map_err(|e| tracing::error!("Failed to send NetworkAction::ListenOnAddress: {:?}", e))
+            .map_err(|e| log::error!("Failed to send NetworkAction::ListenOnAddress: {:?}", e))
             .ok();
     }
 
@@ -834,7 +832,7 @@ impl Network {
             .clone()
             .send(NetworkAction::StartConnecting)
             .await
-            .map_err(|e| tracing::error!("Failed to send NetworkAction::StartConnecting: {:?}", e))
+            .map_err(|e| log::error!("Failed to send NetworkAction::StartConnecting: {:?}", e))
             .ok();
     }
 }
@@ -899,7 +897,7 @@ impl NetworkInterface for Network {
                 match <T as Deserialize>::deserialize(&mut data.reader()) {
                     Ok(message) => Some((message, peer)),
                     Err(e) => {
-                        tracing::error!(
+                        log::error!(
                             "Failed to deserialize {} message from {}: {}",
                             std::any::type_name::<T>(),
                             peer.id(),
@@ -1189,17 +1187,17 @@ mod tests {
             let net = Network::new(clock, network_config(address.clone())).await;
             net.listen_on(vec![address.clone()]).await;
 
-            tracing::debug!(address = ?address, peer_id = ?net.local_peer_id, "creating node");
+            log::debug!(address = ?address, peer_id = ?net.local_peer_id, "creating node");
 
             if let Some(dial_address) = self.addresses.first() {
                 let mut events = net.subscribe_events();
 
-                tracing::debug!(address = ?dial_address, "dialing peer");
+                log::debug!(address = ?dial_address, "dialing peer");
                 net.dial_address(dial_address.clone()).await.unwrap();
 
-                tracing::debug!("waiting for join event");
+                log::debug!("waiting for join event");
                 let event = events.next().await;
-                tracing::trace!(event = ?event);
+                log::trace!(event = ?event);
             }
 
             self.addresses.push(address);
@@ -1218,7 +1216,7 @@ mod tests {
     }
 
     async fn create_connected_networks() -> (Network, Network) {
-        tracing::debug!("creating connected test networks:");
+        log::debug!("creating connected test networks:");
         let addr1 = multiaddr![Memory(thread_rng().gen::<u64>())];
         let addr2 = multiaddr![Memory(thread_rng().gen::<u64>())];
 
@@ -1228,23 +1226,23 @@ mod tests {
         let net2 = Network::new(Arc::new(OffsetTime::new()), network_config(addr2.clone())).await;
         net2.listen_on(vec![addr2.clone()]).await;
 
-        tracing::debug!(address = ?addr1, peer_id = ?net1.local_peer_id, "Network 1");
-        tracing::debug!(address = ?addr2, peer_id = ?net2.local_peer_id, "Network 2");
+        log::debug!(address = ?addr1, peer_id = ?net1.local_peer_id, "Network 1");
+        log::debug!(address = ?addr2, peer_id = ?net2.local_peer_id, "Network 2");
 
         let mut events1 = net1.subscribe_events();
         let mut events2 = net2.subscribe_events();
 
-        tracing::debug!("dialing peer 1 from peer 2...");
+        log::debug!("dialing peer 1 from peer 2...");
         net2.dial_address(addr1).await.unwrap();
 
-        tracing::debug!("waiting for join events");
+        log::debug!("waiting for join events");
 
         let event1 = events1.next().await.unwrap().unwrap();
-        tracing::trace!(event1 = ?event1);
+        log::trace!(event1 = ?event1);
         assert_peer_joined(&event1, &net2.local_peer_id);
 
         let event2 = events2.next().await.unwrap().unwrap();
-        tracing::trace!(event2 = ?event2);
+        log::trace!(event2 = ?event2);
         assert_peer_joined(&event2, &net1.local_peer_id);
 
         (net1, net2)
@@ -1261,7 +1259,7 @@ mod tests {
                 .parse()
                 .unwrap();
 
-            tracing::debug!("Creating network: {}", peer);
+            log::debug!("Creating network: {}", peer);
 
             addresses.push(addr.clone());
 
@@ -1269,14 +1267,14 @@ mod tests {
                 Network::new(Arc::new(OffsetTime::new()), network_config(addr.clone())).await;
             network.listen_on(vec![addr.clone()]).await;
 
-            tracing::debug!(address = ?addr, peer_id = ?network.local_peer_id, "Network {}",peer);
+            log::debug!(address = ?addr, peer_id = ?network.local_peer_id, "Network {}",peer);
             networks.push(network);
         }
 
         // Connect them
         for peer in 1..n_peers {
             // Dial the previous peer
-            tracing::debug!("Dialing Peer: {}", peer);
+            log::debug!("Dialing Peer: {}", peer);
             networks[peer as usize]
                 .dial_address(addresses[(peer - 1) as usize].clone())
                 .await
@@ -1326,7 +1324,7 @@ mod tests {
             );
 
             // Disconnect a random peer
-            tracing::debug!("Disconnecting peer {} from peer {}", close_peer, peer);
+            log::debug!("Disconnecting peer {} from peer {}", close_peer, peer);
             let current_peer = network1.get_peer(*peer_id2).unwrap();
             current_peer.close(CloseReason::Other);
 
@@ -1354,7 +1352,7 @@ mod tests {
             // Now reconnect the peer
             events1 = network1.subscribe_events();
             events2 = network2.subscribe_events();
-            tracing::debug!("Reconnecting peer: {}", close_peer);
+            log::debug!("Reconnecting peer: {}", close_peer);
             network1
                 .dial_address(addresses[close_peer as usize].clone())
                 .await
@@ -1417,7 +1415,7 @@ mod tests {
 
         peer2.send(TestMessage { id: 4711 }).await.unwrap();
 
-        tracing::debug!("send complete");
+        log::debug!("send complete");
 
         let msg = msgs.next().await.unwrap();
 
@@ -1444,7 +1442,7 @@ mod tests {
             .await
             .unwrap();
 
-        tracing::debug!("send complete");
+        log::debug!("send complete");
 
         let msg = msgs1.next().await.unwrap();
         assert_eq!(msg.id, 4711);
@@ -1485,15 +1483,15 @@ mod tests {
         let mut events2 = net2.subscribe_events();
 
         peer1.close(CloseReason::Other);
-        tracing::debug!("closed peer");
+        log::debug!("closed peer");
 
         let event1 = events1.next().await.unwrap().unwrap();
         assert_peer_left(&event1, net2.local_peer_id());
-        tracing::trace!(event1 = ?event1);
+        log::trace!(event1 = ?event1);
 
         let event2 = events2.next().await.unwrap().unwrap();
         assert_peer_left(&event2, net1.local_peer_id());
-        tracing::trace!(event2 = ?event2);
+        log::trace!(event2 = ?event2);
 
         assert_eq!(net1.get_peers().len(), 0);
         assert_eq!(net2.get_peers().len(), 0);
@@ -1568,9 +1566,9 @@ mod tests {
             .await
             .unwrap();
 
-        tracing::info!("Waiting for Gossipsub message...");
+        log::info!("Waiting for Gossipsub message...");
         let (received_message, message_id) = messages.next().await.unwrap();
-        tracing::info!("Received Gossipsub message: {:?}", received_message);
+        log::info!("Received Gossipsub message: {:?}", received_message);
 
         assert_eq!(received_message, test_message);
 

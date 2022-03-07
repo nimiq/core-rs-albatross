@@ -35,7 +35,7 @@ pub enum Error {
     RpcServer(#[from] nimiq_rpc_server::Error),
 
     #[error("Logger error: {0}")]
-    Logging(#[from] log::SetLoggerError),
+    Logging(#[from] actual_log::SetLoggerError),
 
     #[error("Failed to parse multiaddr: {0}")]
     Multiaddr(#[from] nimiq_network_libp2p::libp2p::core::multiaddr::Error),

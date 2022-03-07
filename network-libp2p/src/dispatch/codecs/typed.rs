@@ -154,7 +154,7 @@ impl Decoder for MessageCodec {
     type Error = Error;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<(MessageType, BytesMut)>, Error> {
-        let span = tracing::trace_span!("decode");
+        let span = log::trace_span!("decode");
         let _enter = span.enter();
         loop {
             match &self.state {

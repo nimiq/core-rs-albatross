@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use log::{LevelFilter, ParseLevelError};
+use actual_log::{LevelFilter, ParseLevelError};
 use structopt::StructOpt;
 use thiserror::Error;
 

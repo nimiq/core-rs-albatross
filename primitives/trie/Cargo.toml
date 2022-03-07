@@ -12,7 +12,7 @@ keywords = ["nimiq", "cryptocurrency", "blockchain"]
 
 [dependencies]
 hex = "0.4"
-log = "0.4"
+log = { package = "tracing", version = "0.1" }
 thiserror = "1.0"
 
 beserial = { path = "../../beserial" }

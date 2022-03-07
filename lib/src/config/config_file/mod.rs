@@ -3,7 +3,7 @@ use std::fs::read_to_string;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-use log::LevelFilter;
+use actual_log::LevelFilter;
 use serde_derive::Deserialize;
 use thiserror::Error;
 

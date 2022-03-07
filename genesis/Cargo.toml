@@ -42,7 +42,7 @@ nimiq-trie = { path = "../primitives/trie" }
 nimiq-utils = { path = "../utils", features = ["observer", "crc", "time"] }
 
 [build-dependencies]
-log = "0.4"
+log = { package = "tracing", version = "0.1" }
 pretty_env_logger = "0.4"
 
 nimiq-build-tools = { path = "../build-tools" }
