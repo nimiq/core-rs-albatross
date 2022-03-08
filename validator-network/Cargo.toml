@@ -22,7 +22,7 @@ beserial = { path = "../beserial", features = ["libp2p"] }
 beserial_derive = { path = "../beserial/beserial_derive" }
 futures = "0.3"
 thiserror = "1.0"
-log = "0.4"
+log = { package = "tracing", version = "0.1" }
 tokio = "1.16"
 
 nimiq-network-interface = { path = "../network-interface" }

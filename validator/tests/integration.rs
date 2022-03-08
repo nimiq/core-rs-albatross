@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
+use actual_log::LevelFilter::{Debug, Info};
 use futures::{future, StreamExt};
-use log::LevelFilter::{Debug, Info};
 use nimiq_blockchain::AbstractBlockchain;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_network_libp2p::Network;

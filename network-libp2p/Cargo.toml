@@ -34,7 +34,7 @@ libp2p = { version = "0.43", default-features = false, features = [
     "dns-tokio",
     "tcp-tokio",
 ] }
-log = "0.4"
+log = { package = "tracing", version = "0.1" }
 parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
 pin-project = "1.0"
 pin-project-lite = "0.2.0"
@@ -44,7 +44,6 @@ thiserror = "1.0"
 tokio = { version = "1.16", features = ["macros", "rt", "tracing"] }
 tokio-stream = "0.1"
 tokio-util = { version = "0.7", features = ["codec"] }
-tracing = "0.1"
 tracing-attributes = "0.1"
 wasm-timer = "0.2"
 

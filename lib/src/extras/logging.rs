@@ -1,11 +1,12 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use actual_log::LevelFilter;
 use colored::Colorize;
 use fern::colors::{Color, ColoredLevelConfig};
 use fern::{log_file, Dispatch};
 use file_rotate::{compression::Compression, suffix::AppendCount, ContentLimit, FileRotate};
 use lazy_static::lazy_static;
-use log::{Level, LevelFilter};
+use log::Level;
 use time::OffsetDateTime;
 
 use crate::{
@@ -193,8 +194,8 @@ impl NimiqDispatch for Dispatch {
 
 macro_rules! force_log {
     ($lvl:expr, $($arg:tt)+) => ({
-        if log::log_enabled!($lvl) {
-            log::log!($lvl, $($arg)+);
+        if log::enabled!($lvl) {
+            log::event!($lvl, $($arg)+);
         } else {
             eprintln!($($arg)+);
         }
@@ -202,16 +203,14 @@ macro_rules! force_log {
 }
 
 pub fn log_error_cause_chain<E: std::error::Error>(e: &E) {
-    let level = Level::Error;
-
-    force_log!(level, "{}", e);
+    force_log!(Level::ERROR, "{}", e);
 
     if let Some(mut e) = e.source() {
-        force_log!(level, "  caused by");
-        force_log!(level, "    {}", e);
+        force_log!(Level::ERROR, "  caused by");
+        force_log!(Level::ERROR, "    {}", e);
 
         while let Some(source) = e.source() {
-            force_log!(level, "    {}", source);
+            force_log!(Level::ERROR, "    {}", source);
 
             e = source;
         }

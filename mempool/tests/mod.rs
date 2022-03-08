@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
+use actual_log::LevelFilter::Debug;
 use futures::{channel::mpsc, sink::SinkExt};
-use log::LevelFilter::Debug;
 use parking_lot::RwLock;
 use rand::prelude::StdRng;
 use rand::SeedableRng;
