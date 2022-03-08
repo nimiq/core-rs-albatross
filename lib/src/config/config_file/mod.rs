@@ -7,6 +7,7 @@ use log::level_filters::LevelFilter;
 use serde_derive::Deserialize;
 use thiserror::Error;
 
+use nimiq_mempool::mempool::Mempool;
 use nimiq_mempool::{
     config::MempoolConfig,
     filter::{MempoolFilter, MempoolRules},
@@ -393,6 +394,7 @@ pub struct DatabaseSettings {
 #[serde(deny_unknown_fields)]
 pub struct MempoolSettings {
     pub filter: Option<MempoolFilterSettings>,
+    pub size_limit: Option<usize>,
     pub blacklist_limit: Option<usize>,
 }
 
@@ -437,6 +439,7 @@ pub struct MempoolFilterSettings {
 impl From<MempoolSettings> for MempoolConfig {
     fn from(mempool: MempoolSettings) -> Self {
         Self {
+            size_limit: mempool.size_limit.unwrap_or(Mempool::DEFAULT_SIZE_LIMIT),
             filter_limit: mempool
                 .blacklist_limit
                 .unwrap_or(MempoolFilter::DEFAULT_BLACKLIST_SIZE),

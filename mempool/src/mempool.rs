@@ -5,7 +5,8 @@ use keyed_priority_queue::KeyedPriorityQueue;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
+use std::sync::{atomic, Arc};
 
 use beserial::Serialize;
 use nimiq_account::{Account, BasicAccount};
@@ -54,12 +55,19 @@ pub struct Mempool {
 }
 
 impl Mempool {
+    /// Default total size limit of transactions in the mempool (bytes)
+    pub const DEFAULT_SIZE_LIMIT: usize = 12000000;
+
     /// Creates a new mempool
     pub fn new(blockchain: Arc<RwLock<Blockchain>>, config: MempoolConfig) -> Self {
         let state = MempoolState {
+            total_size_limit: config.size_limit,
             transactions: HashMap::new(),
             transactions_by_fee: KeyedPriorityQueue::new(),
+            transactions_remove_ord: KeyedPriorityQueue::new(),
             transactions_by_age: KeyedPriorityQueue::new(),
+            total_transactions_size: 0,
+            tx_counter: AtomicU64::new(0),
             state_by_sender: HashMap::new(),
             outgoing_validators: HashSet::new(),
             outgoing_stakers: HashSet::new(),
@@ -487,14 +495,26 @@ impl TransactionVerificationCache for Mempool {
 }
 
 pub(crate) struct MempoolState {
+    // Total size limit of transactions in the mempool
+    pub(crate) total_size_limit: usize,
+
     // A hashmap containing the transactions indexed by their hash.
     pub(crate) transactions: HashMap<Blake2bHash, Transaction>,
 
     // Transactions ordered by fee (higher fee transactions pop first)
     pub(crate) transactions_by_fee: KeyedPriorityQueue<Blake2bHash, FeeWrapper>,
 
+    // Transactions ordered by fee (lower fee transactions pop first)
+    pub(crate) transactions_remove_ord: KeyedPriorityQueue<Blake2bHash, RemoveTxOrd>,
+
     // Transactions ordered by age (older transactions pop first)
     pub(crate) transactions_by_age: KeyedPriorityQueue<Blake2bHash, u32>,
+
+    // Total size of the transactions currently in mempool (bytes)
+    pub(crate) total_transactions_size: usize,
+
+    // Counter that increases for every added transaction, to order them for removal
+    pub(crate) tx_counter: AtomicU64,
 
     // The in-fly balance per sender
     pub(crate) state_by_sender: HashMap<Address, SenderPendingState>,
@@ -532,6 +552,14 @@ impl MempoolState {
 
         self.transactions_by_fee
             .push(tx_hash.clone(), FeeWrapper(tx.fee_per_byte()));
+
+        self.transactions_remove_ord.push(
+            tx_hash.clone(),
+            RemoveTxOrd {
+                fee: tx.fee_per_byte(),
+                order: self.tx_counter.fetch_add(1, atomic::Ordering::Relaxed),
+            },
+        );
 
         self.transactions_by_age
             .push(tx_hash.clone(), tx.validity_start_height);
@@ -590,6 +618,13 @@ impl MempoolState {
             }
         }
 
+        // Update total tx size and remove the cheapest ones if we have too many txs.
+        self.total_transactions_size += tx.serialized_size();
+        while self.total_transactions_size > self.total_size_limit {
+            let (tx_hash, _) = self.transactions_remove_ord.pop().unwrap();
+            self.remove(&tx_hash);
+        }
+
         true
     }
 
@@ -598,6 +633,7 @@ impl MempoolState {
 
         self.transactions_by_age.remove(tx_hash);
         self.transactions_by_fee.remove(tx_hash);
+        self.transactions_remove_ord.remove(tx_hash);
 
         let sender_state = self.state_by_sender.get_mut(&tx.sender).unwrap();
 
@@ -643,6 +679,8 @@ impl MempoolState {
             }
         }
 
+        self.total_transactions_size -= tx.serialized_size();
+
         Some(tx)
     }
 }
@@ -674,5 +712,30 @@ impl PartialOrd for FeeWrapper {
 impl Ord for FeeWrapper {
     fn cmp(&self, other: &Self) -> Ordering {
         self.0.total_cmp(&other.0)
+    }
+}
+
+/// Ordering in which transactions are removed in case the mempool is full.
+/// First compares by fee, then by time
+#[derive(PartialEq)]
+pub struct RemoveTxOrd {
+    fee: f64,
+    order: u64,
+}
+
+impl Eq for RemoveTxOrd {}
+
+impl PartialOrd for RemoveTxOrd {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for RemoveTxOrd {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.fee
+            .total_cmp(&other.fee)
+            .reverse()
+            .then(self.order.cmp(&other.order).reverse())
     }
 }
