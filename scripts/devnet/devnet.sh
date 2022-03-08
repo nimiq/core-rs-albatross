@@ -35,6 +35,9 @@ function cleanup_exit() {
         kill $pid
     done
     echo "Done."
+
+    report_warnings
+
     if [ "$fail" = true ] ; then
         echo "...FAILED..."
         exit 1
@@ -44,44 +47,17 @@ function cleanup_exit() {
 }
 
 function check_failures() {
-
-    # Periodically check for deadlocks/panic/crashes
+    # Periodically check for panics/crashes
     secs=0
     while [ $secs -le $sleep_time ]
     do
-        # Search for panics/crashes
+        # Search for panics
         if grep -rin " panic " $logsdir/*.log
         then
             echo "   !!!   PANIC   !!!"
             echo "PANIC" >> temp-state/RESULT.TXT
             fail=true
             break
-        fi
-        # Search for locks held for a long time
-        if grep -rin "lock held for a long time" $logsdir/*.log
-        then
-            echo "   !!!   LONG LOCK HOLD TIME   !!!"
-            echo "LONG_LOCK_HOLD_TIME" >> temp-state/RESULT.TXT
-        fi
-        # Search for slow lock acquisitions
-        if grep -rin "slow.*took" $logsdir/*.log
-        then
-            echo "   !!!   SLOW LOCK ACQUISITION   !!!"
-            echo "SLOW_LOCK_ACQUISITION" >> temp-state/RESULT.TXT
-        fi
-        # Search for deadlocks
-        if grep -wrin "deadlock" $logsdir/*.log
-        then
-            # Only report deadlock once
-            if [ -f "temp-state/RESULT.TXT" ] && [ $(grep "DEADLOCK" temp-state/RESULT.TXT) ]
-            then
-                :
-            else
-                echo "   !!!   POTENTIAL DEADLOCK DETECTED  !!!"
-                echo "DEADLOCK" >> temp-state/RESULT.TXT
-                #  Do not mark the test as failed if a potential deadlock is detected
-                #    fail=true
-            fi
         fi
 
         sleep 1
@@ -91,6 +67,29 @@ function check_failures() {
     if [ "$fail" = true ] ; then
         echo " Execution failed..."
         cleanup_exit
+    fi
+}
+
+function report_warnings() {
+    # Search for locks held for a long time
+    if grep -rin "lock held for a long time" $logsdir/*.log
+    then
+        echo "   !!!   LONG LOCK HOLD TIME   !!!"
+        echo "LONG_LOCK_HOLD_TIME" >> temp-state/RESULT.TXT
+    fi
+
+    # Search for slow lock acquisitions
+    if grep -rin "slow.*took" $logsdir/*.log
+    then
+        echo "   !!!   SLOW LOCK ACQUISITION   !!!"
+        echo "SLOW_LOCK_ACQUISITION" >> temp-state/RESULT.TXT
+    fi
+
+    # Search for deadlocks
+    if grep -wrin "deadlock" $logsdir/*.log
+    then
+        echo "   !!!   POTENTIAL DEADLOCK DETECTED  !!!"
+        echo "DEADLOCK" >> temp-state/RESULT.TXT
     fi
 }
 
@@ -377,7 +376,6 @@ do
         break
     fi
     old_block_number=$new_block_number
-
 done
 
 sleep 30
