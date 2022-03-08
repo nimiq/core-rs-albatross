@@ -21,4 +21,4 @@ bitflags = "1.0"
 log = { package = "tracing", version = "0.1" }
 rand = "0.8"
 tempfile = "3"
-libmdbx="0.1.1"
+libmdbx = "0.1.1"

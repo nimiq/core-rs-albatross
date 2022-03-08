@@ -93,20 +93,6 @@ impl AsDatabaseBytes for CStr {
         Cow::Borrowed(self.to_bytes())
     }
 }
-// Conflicting implementation:
-//impl<T> FromDatabaseValue for T
-//    where T: lmdb_zero::traits::FromLmdbBytes + ?Sized {
-//    fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
-//        Ok(lmdb_zero::traits::FromLmdbBytes::from_lmdb_bytes(bytes).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?.to_owned())
-//    }
-//}
-
-//impl<T> AsDatabaseBytes for T
-//    where T: lmdb_zero::traits::AsLmdbBytes + ?Sized {
-//    fn as_database_bytes(&self) -> Cow<[u8]> {
-//        return Cow::Borrowed(self.as_lmdb_bytes());
-//    }
-//}
 
 macro_rules! as_db_bytes {
     ($typ:ident) => {

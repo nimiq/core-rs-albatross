@@ -69,7 +69,7 @@ impl VolatileEnvironment {
         }))
     }
 
-    pub fn new_with_lmdb_flags(
+    pub fn with_max_readers(
         max_dbs: u32,
         max_readers: u32,
     ) -> Result<Environment, VolatileDatabaseError> {
@@ -104,7 +104,7 @@ impl VolatileEnvironment {
 pub struct VolatileDatabase(MdbxDatabase);
 
 impl VolatileDatabase {
-    pub(super) fn as_lmdb(&self) -> &MdbxDatabase {
+    pub(super) fn as_mdbx(&self) -> &MdbxDatabase {
         &self.0
     }
 }
@@ -496,7 +496,7 @@ mod tests {
 
     #[test]
     fn isolation_test() {
-        let env = VolatileEnvironment::new_with_lmdb_flags(1, 126).unwrap();
+        let env = VolatileEnvironment::with_max_readers(1, 126).unwrap();
         {
             let db = env.open_database("test".to_string());
 
@@ -529,7 +529,7 @@ mod tests {
 
     #[test]
     fn duplicates_test() {
-        let env = VolatileEnvironment::new_with_lmdb_flags(1, 126).unwrap();
+        let env = VolatileEnvironment::with_max_readers(1, 126).unwrap();
         {
             let db = env.open_database_with_flags(
                 "test".to_string(),
@@ -595,7 +595,7 @@ mod tests {
 
     #[test]
     fn cursor_test() {
-        let env = VolatileEnvironment::new_with_lmdb_flags(1, 126).unwrap();
+        let env = VolatileEnvironment::with_max_readers(1, 126).unwrap();
         {
             let db = env.open_database_with_flags(
                 "test".to_string(),

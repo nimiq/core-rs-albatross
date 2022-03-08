@@ -11,12 +11,7 @@ use strum_macros::Display;
 use beserial::Deserialize;
 #[cfg(feature = "validator")]
 use nimiq_bls::{KeyPair as BlsKeyPair, SecretKey as BlsSecretKey};
-use nimiq_database::{
-    //lmdb::{open as LmdbFlags, LmdbEnvironment},
-    mdbx::MdbxEnvironment,
-    volatile::VolatileEnvironment,
-    Environment,
-};
+use nimiq_database::{mdbx::MdbxEnvironment, volatile::VolatileEnvironment, Environment};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_mempool::{config::MempoolConfig, filter::MempoolRules};
 use nimiq_network_libp2p::{Keypair as IdentityKeypair, Multiaddr};
@@ -339,7 +334,7 @@ impl StorageConfig {
 
         Ok(match self {
             StorageConfig::Volatile => {
-                VolatileEnvironment::new_with_lmdb_flags(db_config.max_dbs, db_config.max_readers)?
+                VolatileEnvironment::with_max_readers(db_config.max_dbs, db_config.max_readers)?
             }
             StorageConfig::Filesystem(file_storage) => {
                 let db_path = file_storage.database_parent.join(db_name);

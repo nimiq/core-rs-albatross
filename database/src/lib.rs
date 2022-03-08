@@ -86,7 +86,7 @@ impl Database {
     fn persistent(&self) -> Option<&mdbx::MdbxDatabase> {
         match self {
             Database::Persistent(ref db) => Some(db),
-            Database::Volatile(ref db) => Some(db.as_lmdb()),
+            Database::Volatile(ref db) => Some(db.as_mdbx()),
         }
     }
 }
