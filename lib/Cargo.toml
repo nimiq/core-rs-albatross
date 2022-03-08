@@ -20,10 +20,8 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 actual_log = { package = "log", version = "0.4" }
-colored = { version = "2.0", optional = true }
 derive_builder = "0.10"
 directories = "4.0"
-fern = { version = "0.6", features = ["colored"], optional = true }
 file-rotate = { version = "0.6" }
 hex = "0.4"
 # human-panic = { version = "1.0", optional = true } currently unused, might be used in the future
@@ -38,8 +36,8 @@ structopt = { version = "0.3", features = ["paw"] }
 strum_macros = "0.24"
 toml = "0.5"
 url = "2.2"
-time = { version = "0.3", features = ["formatting"] }
 thiserror = "1.0"
+tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
 
 beserial = { path = "../beserial" }
 nimiq-block = { path = "../primitives/block" }
@@ -66,7 +64,7 @@ nimiq-wallet = { path = "../wallet", optional = true }
 deadlock = []
 default = []
 launcher = []
-logging = ["fern", "colored"]
+logging = ["tracing-subscriber"]
 panic = ["log-panics"]
 rpc-server = ["validator", "nimiq-rpc-server", "nimiq-wallet"]
 validator = ["nimiq-validator", "nimiq-validator-network", "nimiq-bls", "nimiq-rpc-server"]

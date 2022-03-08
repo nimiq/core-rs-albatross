@@ -1,19 +1,23 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::fmt;
+use std::fs::{self, File};
+use std::io;
+use std::sync::Arc;
 
-use actual_log::LevelFilter;
-use colored::Colorize;
-use fern::colors::{Color, ColoredLevelConfig};
-use fern::{log_file, Dispatch};
 use file_rotate::{compression::Compression, suffix::AppendCount, ContentLimit, FileRotate};
-use log::Level;
-use time::OffsetDateTime;
+use log::{level_filters::LevelFilter, Level};
+use parking_lot::Mutex;
+use tracing_subscriber::filter::Targets;
+use tracing_subscriber::fmt::format::Writer;
+use tracing_subscriber::fmt::time::{FormatTime, SystemTime};
+use tracing_subscriber::fmt::Layer;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::Layer as _;
 
 use crate::{
     config::{command_line::CommandLine, config_file::LogSettings},
     error::Error,
 };
-
-static MAX_MODULE_WIDTH: AtomicUsize = AtomicUsize::new(20);
 
 static NIMIQ_MODULES: &'static [&'static str] = &[
     "beserial",
@@ -70,122 +74,18 @@ static NIMIQ_MODULES: &'static [&'static str] = &[
     "nimiq_wallet",
 ];
 
-pub const DEFAULT_LEVEL: LevelFilter = LevelFilter::Info;
+pub const DEFAULT_LEVEL: LevelFilter = LevelFilter::INFO;
 
-/// Retrieve and set max module width.
-fn max_module_width(target: &str) -> usize {
-    let mut max_width = MAX_MODULE_WIDTH.load(Ordering::Acquire);
-    if max_width < target.len() {
-        MAX_MODULE_WIDTH.store(target.len(), Ordering::Release);
-        max_width = target.len();
-    }
-    max_width
+trait TargetsExt {
+    fn with_nimiq_targets(self, level: LevelFilter) -> Self;
 }
 
-/// Trait that implements Nimiq specific behavior for fern's Dispatch.
-pub trait NimiqDispatch {
-    /// Setup logging in pretty_env_logger style.
-    #[must_use]
-    fn pretty_logging(self, show_timestamps: bool, formatted: bool) -> Self;
-
-    /// Setup nimiq modules log level.
-    #[must_use]
-    fn level_for_nimiq(self, level: LevelFilter) -> Self;
-
-    /// Filters out every target not starting with "nimiq".
-    /// Note that this excludes beserial and libargon2_sys!
-    #[must_use]
-    fn only_nimiq(self) -> Self;
-}
-
-fn pretty_logging(
-    dispatch: Dispatch,
-    colors_level: ColoredLevelConfig,
-    formatted: bool,
-) -> Dispatch {
-    dispatch.format(move |out, message, record| {
-        let target_text = record.target().split("::").last().unwrap();
-        let max_width = max_module_width(target_text);
-        let target = format!("{: <width$}", target_text, width = max_width);
-
-        if formatted {
-            out.finish(format_args!(
-                " {level: <5} {target} | {message}",
-                target = target.bold(),
-                level = colors_level.color(record.level()),
-                message = message,
-            ));
-        } else {
-            out.finish(format_args!(
-                " {level: <5} {target} | {message}",
-                target = target,
-                level = record.level(),
-                message = message,
-            ));
-        }
-    })
-}
-
-fn pretty_logging_with_timestamps(
-    dispatch: Dispatch,
-    colors_level: ColoredLevelConfig,
-    formatted: bool,
-) -> Dispatch {
-    dispatch.format(move |out, message, record| {
-        let target_text = record.target().split("::").last().unwrap();
-        let max_width = max_module_width(target_text);
-        let target = format!("{: <width$}", target_text, width = max_width);
-        let ts_format = time::format_description::parse(
-            "[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:3]",
-        )
-        .unwrap();
-
-        if formatted {
-            out.finish(format_args!(
-                " {timestamp} {level: <5} {target} | {message}",
-                timestamp = OffsetDateTime::now_utc().format(&ts_format).unwrap(),
-                target = target.bold(),
-                level = colors_level.color(record.level()),
-                message = message,
-            ));
-        } else {
-            out.finish(format_args!(
-                " {timestamp} {level: <5} {target} | {message}",
-                timestamp = OffsetDateTime::now_utc().format(&ts_format).unwrap(),
-                target = target,
-                level = record.level(),
-                message = message,
-            ));
-        }
-    })
-}
-
-impl NimiqDispatch for Dispatch {
-    fn pretty_logging(self, show_timestamps: bool, formatted: bool) -> Self {
-        let colors_level = ColoredLevelConfig::new()
-            .error(Color::Red)
-            .warn(Color::Yellow)
-            .info(Color::Green)
-            .debug(Color::Blue)
-            .trace(Color::Magenta);
-
-        if show_timestamps {
-            pretty_logging_with_timestamps(self, colors_level, formatted)
-        } else {
-            pretty_logging(self, colors_level, formatted)
-        }
-    }
-
-    fn level_for_nimiq(self, level: LevelFilter) -> Self {
-        let mut builder = self;
+impl TargetsExt for Targets {
+    fn with_nimiq_targets(mut self, level: LevelFilter) -> Targets {
         for &module in NIMIQ_MODULES.iter() {
-            builder = builder.level_for(module, level);
+            self = self.with_target(module, level);
         }
-        builder
-    }
-
-    fn only_nimiq(self) -> Self {
-        self.filter(|metadata| metadata.target().starts_with("nimiq"))
+        self
     }
 }
 
@@ -214,6 +114,35 @@ pub fn log_error_cause_chain<E: std::error::Error>(e: &E) {
     }
 }
 
+enum LoggingTarget {
+    File(Arc<File>),
+    Stderr(io::Stderr),
+}
+
+impl io::Write for LoggingTarget {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        use self::LoggingTarget::*;
+        match self {
+            File(f) => (&**f).write(buf),
+            Stderr(s) => s.write(buf),
+        }
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        use self::LoggingTarget::*;
+        match self {
+            File(f) => (&**f).flush(),
+            Stderr(s) => s.flush(),
+        }
+    }
+    fn write_vectored(&mut self, bufs: &[io::IoSlice<'_>]) -> io::Result<usize> {
+        use self::LoggingTarget::*;
+        match self {
+            File(f) => (&**f).write_vectored(bufs),
+            Stderr(s) => s.write_vectored(bufs),
+        }
+    }
+}
+
 pub fn initialize_logging(
     command_line_opt: Option<&CommandLine>,
     settings_opt: Option<&LogSettings>,
@@ -232,47 +161,87 @@ pub fn initialize_logging(
     }
 
     // Set logging level for Nimiq and all other modules
-    let mut dispatch = Dispatch::new()
-        // Do not format (colors, bold components) for file output
-        .pretty_logging(settings.timestamps, settings.file.is_none())
-        .level(DEFAULT_LEVEL)
-        .level_for_nimiq(settings.level.unwrap_or(DEFAULT_LEVEL));
-
+    let mut filter = Targets::new()
+        .with_default(DEFAULT_LEVEL)
+        .with_nimiq_targets(settings.level.unwrap_or(DEFAULT_LEVEL));
     // Set logging level for specific selected modules
-    for (module, level) in &settings.tags {
-        dispatch = dispatch.level_for(module.clone(), *level);
+    filter = filter.with_targets(settings.tags);
+
+    let file = match &settings.file {
+        Some(filename) => Some(Arc::new(File::open(filename)?)),
+        None => None,
+    };
+    let out = move || -> io::LineWriter<LoggingTarget> {
+        io::LineWriter::new(if let Some(file) = &file {
+            LoggingTarget::File(file.clone())
+        } else {
+            LoggingTarget::Stderr(io::stderr())
+        })
+    };
+
+    struct MaybeSystemTime(bool);
+
+    impl FormatTime for MaybeSystemTime {
+        fn format_time(&self, w: &mut Writer) -> fmt::Result {
+            if self.0 {
+                SystemTime.format_time(w)
+            } else {
+                ().format_time(w)
+            }
+        }
     }
 
-    // Log into file or to stderr
-    if let Some(ref filename) = settings.file {
-        dispatch = dispatch.chain(log_file(filename)?);
-    } else {
-        dispatch = dispatch.chain(std::io::stderr());
+    #[derive(Clone)]
+    struct Rotating(Arc<Mutex<FileRotate<AppendCount>>>);
+
+    impl io::Write for Rotating {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            self.0.lock().write(buf)
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            self.0.lock().flush()
+        }
+        fn write_vectored(&mut self, bufs: &[io::IoSlice<'_>]) -> io::Result<usize> {
+            self.0.lock().write_vectored(bufs)
+        }
     }
 
-    if let Some(rotating_file_settings) = settings.rotating_trace_log {
-        std::fs::create_dir_all(rotating_file_settings.path.clone())?;
+    let rotating_layer = if let Some(rotating_file_settings) = settings.rotating_trace_log {
+        fs::create_dir_all(&rotating_file_settings.path)?;
 
         // Create rotating log file according to settings
-        let log = FileRotate::new(
+        let log = Rotating(Arc::new(Mutex::new(FileRotate::new(
             rotating_file_settings.path.join("log.log"),
             AppendCount::new(rotating_file_settings.file_count),
             ContentLimit::Bytes(rotating_file_settings.size),
             Compression::None,
-        );
+        ))));
 
-        dispatch = Dispatch::new().chain(dispatch);
+        Some(
+            Layer::new()
+                .with_writer(move || log.clone())
+                .with_ansi(false)
+                .with_timer(SystemTime)
+                .with_filter(
+                    Targets::new()
+                        .with_default(DEFAULT_LEVEL)
+                        .with_nimiq_targets(LevelFilter::TRACE),
+                ),
+        )
+    } else {
+        None
+    };
 
-        dispatch = dispatch.chain(
-            Dispatch::new()
-                .pretty_logging(true, false) // always log with timestamps and without formatting
-                .level(DEFAULT_LEVEL)
-                .level_for_nimiq(LevelFilter::Trace)
-                .chain(Box::new(log) as Box<dyn std::io::Write + Send>),
-        );
-    }
-
-    dispatch.apply()?;
+    tracing_subscriber::registry()
+        .with(rotating_layer)
+        .with(
+            Layer::new()
+                .with_writer(out)
+                .with_ansi(settings.file.is_none())
+                .with_timer(MaybeSystemTime(settings.timestamps))
+                .with_filter(filter),
+        )
+        .init();
 
     Ok(())
 }

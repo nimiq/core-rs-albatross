@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use actual_log::{LevelFilter, ParseLevelError};
+use log::level_filters::{LevelFilter, ParseLevelFilterError};
 use structopt::StructOpt;
 use thiserror::Error;
 
@@ -90,7 +90,7 @@ pub enum LogTagParseError {
     #[error("Log tag is missing separator: {0}")]
     MissingColon(String),
     #[error("Invalid log level: {0}")]
-    InvalidLogLevel(#[from] ParseLevelError),
+    InvalidLogLevel(#[from] ParseLevelFilterError),
 }
 
 fn parse_log_tags(s: &str) -> Result<(String, LevelFilter), LogTagParseError> {
