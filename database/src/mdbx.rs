@@ -885,7 +885,7 @@ impl<'txn, 'db> RawReadCursor for RawWriteLmdbCursor<'txn> {
     }
 
     fn count_duplicates(&mut self) -> usize {
-        0 as usize
+        0
     }
 }
 

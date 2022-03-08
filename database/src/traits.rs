@@ -84,13 +84,13 @@ impl AsDatabaseBytes for Vec<u8> {
 
 impl AsDatabaseBytes for str {
     fn as_database_bytes(&self) -> Cow<[u8]> {
-        Cow::Borrowed(&self.as_bytes())
+        Cow::Borrowed(self.as_bytes())
     }
 }
 
 impl AsDatabaseBytes for CStr {
     fn as_database_bytes(&self) -> Cow<[u8]> {
-        Cow::Borrowed(&self.to_bytes())
+        Cow::Borrowed(self.to_bytes())
     }
 }
 // Conflicting implementation:
@@ -113,6 +113,7 @@ macro_rules! as_db_bytes {
         impl AsDatabaseBytes for $typ {
             fn as_database_bytes(&self) -> Cow<[u8]> {
                 unsafe {
+                    #[allow(clippy::size_of_in_element_count)]
                     Cow::Borrowed(slice::from_raw_parts(
                         self as *const $typ as *const u8,
                         mem::size_of::<$typ>(),
@@ -123,6 +124,7 @@ macro_rules! as_db_bytes {
         impl AsDatabaseBytes for [$typ] {
             fn as_database_bytes(&self) -> Cow<[u8]> {
                 unsafe {
+                    #[allow(clippy::size_of_in_element_count)]
                     Cow::Borrowed(slice::from_raw_parts(
                         self.as_ptr() as *const u8,
                         self.len() * mem::size_of::<$typ>(),
