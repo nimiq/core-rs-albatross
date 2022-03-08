@@ -3478,7 +3478,6 @@ dependencies = [
  "fern",
  "file-rotate",
  "hex",
- "lazy_static",
  "log",
  "log-panics",
  "nimiq-block",

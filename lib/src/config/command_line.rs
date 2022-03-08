@@ -8,10 +8,10 @@ use nimiq_primitives::networks::NetworkId;
 
 use crate::config::config_file::SyncMode;
 
-/*lazy_static! {
-    static ref VALID_LOG_LEVELS: [&'static str; 6] = ["off", "error", "warn", "info", "debug", "trace"];
-    static ref VALID_CONSENSUS_TYPES: [&'static str; 2] = ["full", "macro-sync"];
-}*/
+/*
+static VALID_LOG_LEVELS: [&'static str; 6] = ["off", "error", "warn", "info", "debug", "trace"];
+static VALID_CONSENSUS_TYPES: [&'static str; 2] = ["full", "macro-sync"];
+*/
 
 #[derive(Debug, StructOpt)]
 #[structopt(rename_all = "kebab")]
