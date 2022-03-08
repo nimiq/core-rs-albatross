@@ -1831,6 +1831,7 @@ dependencies = [
  "libp2p-metrics",
  "libp2p-noise",
  "libp2p-ping",
+ "libp2p-request-response",
  "libp2p-swarm",
  "libp2p-swarm-derive",
  "libp2p-tcp",
@@ -2014,6 +2015,24 @@ dependencies = [
  "log",
  "rand 0.7.3",
  "void",
+]
+
+[[package]]
+name = "libp2p-request-response"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12388a73626d1727524069cce0bb05a9c428581de435278a070c55ae27cc7e73"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "futures",
+ "instant",
+ "libp2p-core",
+ "libp2p-swarm",
+ "log",
+ "rand 0.7.3",
+ "smallvec",
+ "unsigned-varint",
 ]
 
 [[package]]
@@ -5266,6 +5285,8 @@ checksum = "d86a8dc7f45e4c1b0d30e43038c38f274e77af056aa5f74b93c2cf9eb3c1c836"
 dependencies = [
  "asynchronous-codec",
  "bytes",
+ "futures-io",
+ "futures-util",
 ]
 
 [[package]]

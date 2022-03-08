@@ -4,16 +4,23 @@ use std::sync::{
 };
 
 use async_trait::async_trait;
-use futures::stream::{BoxStream, StreamExt};
+use futures::{
+    future::BoxFuture,
+    stream::{BoxStream, StreamExt},
+};
 use parking_lot::Mutex;
 use thiserror::Error;
 use tokio::sync::broadcast::Sender;
 use tokio_stream::wrappers::{errors::BroadcastStreamRecvError, BroadcastStream};
 
 use beserial::{Deserialize, Serialize};
-use nimiq_network_interface::network::{MsgAcceptance, NetworkEvent, PubsubId, Topic};
-use nimiq_network_interface::peer::Peer;
-use nimiq_network_interface::{network::Network, peer_map::ObservablePeerMap};
+use nimiq_network_interface::{
+    message::{Message, RequestError, ResponseMessage},
+    network::Network,
+    network::{MsgAcceptance, NetworkEvent, PubsubId, Topic},
+    peer::Peer,
+    peer_map::ObservablePeerMap,
+};
 
 use crate::{hub::MockHubInner, peer::MockPeer, MockAddress, MockPeerId};
 
@@ -34,6 +41,8 @@ pub enum MockNetworkError {
     #[error("Peer is already unsubscribed to topic: {0}")]
     AlreadyUnsubscribed(&'static str),
 }
+
+pub type MockRequestId = u64;
 
 #[derive(Clone, Debug)]
 pub struct MockId<P> {
@@ -174,6 +183,7 @@ impl Network for MockNetwork {
     type AddressType = MockAddress;
     type Error = MockNetworkError;
     type PubsubId = MockId<MockPeerId>;
+    type RequestId = MockRequestId;
 
     fn get_peer_updates(&self) -> (Vec<Arc<MockPeer>>, BroadcastStream<NetworkEvent<MockPeer>>) {
         self.peers.subscribe()
@@ -356,5 +366,37 @@ impl Network for MockNetwork {
 
     fn get_local_peer_id(&self) -> MockPeerId {
         self.address.into()
+    }
+
+    async fn request<'a, Req: Message, Res: Message>(
+        &self,
+        _request: Req,
+        _peer_id: <Self::PeerType as Peer>::Id,
+    ) -> Result<
+        BoxFuture<
+            'a,
+            (
+                ResponseMessage<Res>,
+                Self::RequestId,
+                <Self::PeerType as Peer>::Id,
+            ),
+        >,
+        RequestError,
+    > {
+        unimplemented!();
+    }
+
+    fn receive_requests<'a, M: Message>(
+        &self,
+    ) -> BoxStream<'a, (M, Self::RequestId, <Self::PeerType as Peer>::Id)> {
+        unimplemented!();
+    }
+
+    async fn respond<'a, M: Message>(
+        &self,
+        _request_id: Self::RequestId,
+        _response: M,
+    ) -> Result<(), Self::Error> {
+        unimplemented!();
     }
 }

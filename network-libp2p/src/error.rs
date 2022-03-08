@@ -41,6 +41,9 @@ pub enum NetworkError {
     #[error("Already unsubscribed to topic: {topic_name}")]
     AlreadyUnsubscribed { topic_name: &'static str },
 
+    #[error("Unknown Request ID")]
+    UnknownRequestId,
+
     #[error("Couldn't set topic score parameters")]
     TopicScoreParams {
         topic_name: &'static str,

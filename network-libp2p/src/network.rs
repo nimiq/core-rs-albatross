@@ -7,8 +7,10 @@ use bytes::{Buf, Bytes};
 use futures::executor;
 use futures::{
     channel::{mpsc, oneshot},
+    future::BoxFuture,
     sink::SinkExt,
     stream::{BoxStream, StreamExt},
+    FutureExt,
 };
 #[cfg(test)]
 use libp2p::core::transport::MemoryTransport;
@@ -27,18 +29,19 @@ use libp2p::{
         Quorum, Record,
     },
     noise,
-    request_response::{RequestId, RequestResponseMessage, ResponseChannel},
+    request_response::{OutboundFailure, RequestId, RequestResponseMessage, ResponseChannel},
     swarm::{dial_opts::DialOpts, ConnectionLimits, NetworkInfo, SwarmBuilder, SwarmEvent},
     tcp, websocket, yamux, Multiaddr, PeerId, Swarm, Transport,
 };
 use log::Instrument;
 use tokio::sync::broadcast;
+
 use tokio_stream::wrappers::BroadcastStream;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_bls::CompressedPublicKey;
 use nimiq_network_interface::{
-    message::{Message, MessageType},
+    message::{Message, MessageType, RequestError, ResponseError, ResponseMessage},
     network::{MsgAcceptance, Network as NetworkInterface, NetworkEvent, PubsubId, Topic},
     peer::Peer as PeerInterface,
     peer_map::ObservablePeerMap,
@@ -107,6 +110,10 @@ pub(crate) enum NetworkAction {
         type_id: MessageType,
         output: mpsc::Sender<(Bytes, Arc<Peer>)>,
     },
+    ReceiveRequests {
+        type_id: MessageType,
+        output: mpsc::Sender<(Bytes, RequestId, PeerId)>,
+    },
     ListenOn {
         listen_addresses: Vec<Multiaddr>,
     },
@@ -114,10 +121,11 @@ pub(crate) enum NetworkAction {
     SendRequest {
         peer_id: PeerId,
         request: IncomingRequest,
+        response_channel: oneshot::Sender<(ResponseMessage<Bytes>, RequestId, PeerId, MessageType)>,
         output: oneshot::Sender<RequestId>,
     },
     SendResponse {
-        response_channel: ResponseChannel<OutgoingResponse>,
+        request_id: RequestId,
         response: OutgoingResponse,
         output: oneshot::Sender<Result<(), NetworkError>>,
     },
@@ -152,7 +160,12 @@ struct TaskState {
     dht_gets: HashMap<QueryId, oneshot::Sender<Result<Option<Vec<u8>>, NetworkError>>>,
     gossip_topics: HashMap<TopicHash, (mpsc::Sender<(GossipsubMessage, MessageId, PeerId)>, bool)>,
     is_bootstraped: bool,
-    requests: HashMap<RequestId, ResponseChannel<OutgoingResponse>>,
+    requests: HashMap<
+        RequestId,
+        oneshot::Sender<(ResponseMessage<Bytes>, RequestId, PeerId, MessageType)>,
+    >,
+    response_channels: HashMap<RequestId, ResponseChannel<OutgoingResponse>>,
+    receive_requests: HashMap<MessageType, mpsc::Sender<(Bytes, RequestId, PeerId)>>,
 }
 
 #[derive(Clone, Debug)]
@@ -166,7 +179,6 @@ impl PubsubId<PeerId> for GossipsubId<PeerId> {
         self.propagation_source
     }
 }
-
 pub struct Network {
     local_peer_id: PeerId,
     events_tx: broadcast::Sender<NetworkEvent<Peer>>,
@@ -618,35 +630,60 @@ impl Network {
                         };
                     }
                     NimiqEvent::RequestResponse(event) => match event {
-                        RequestResponseEvent::Message { peer, message } => match message {
+                        RequestResponseEvent::Message {
+                            peer: peer_id,
+                            message,
+                        } => match message {
                             RequestResponseMessage::Request {
                                 request_id,
-                                request,
+                                request: request_data,
                                 channel,
                             } => {
-                                tracing::debug!(
-                                    "Incoming request {} from peer {}: {:?}",
+                                let (type_id, request) = request_data;
+                                log::trace!(
+                                    "Incoming [Request ID {}] from peer {}: {:?}",
                                     request_id,
-                                    peer,
+                                    peer_id,
                                     request,
                                 );
-                                state.requests.insert(request_id, channel);
-                                // TODO
-                                // Inform the peer about the request
-                                // event_tx maybe?
+                                state.response_channels.insert(request_id, channel);
+                                // Check the message type and check if we have request receivers such that we can send the request
+                                if let Some(sender) = state.receive_requests.get_mut(&type_id) {
+                                    sender
+                                        .start_send((request.freeze(), request_id, peer_id))
+                                        .ok();
+                                } else {
+                                    log::warn!(
+                                        "No receiver found for requests of type ID {}",
+                                        type_id
+                                    );
+                                }
                             }
                             RequestResponseMessage::Response {
                                 request_id,
                                 response,
                             } => {
-                                tracing::trace!(
-                                    "Incoming response {} from peer {}: {:?}",
+                                log::trace!(
+                                    "[Request ID {}] Incoming response from peer {}",
                                     request_id,
-                                    peer,
-                                    response,
+                                    peer_id,
                                 );
-                                // TODO
-                                // Inform the peer about the response
+                                let (message_type, response) = response;
+                                if let Some(channel) = state.requests.remove(&request_id) {
+                                    channel
+                                        .send((
+                                            ResponseMessage::Response(response.freeze()),
+                                            request_id,
+                                            peer_id,
+                                            message_type,
+                                        ))
+                                        .ok();
+                                } else {
+                                    log::error!(
+                                        "No such request ID found: [Request ID {}]",
+                                        request_id
+                                    );
+                                }
                             }
                         },
                         RequestResponseEvent::OutboundFailure {
@@ -654,33 +691,50 @@ impl Network {
                             request_id,
                             error,
                         } => {
-                            tracing::error!(
-                                "Request {} sent to peer {} failed, error: {:?}",
+                            log::error!(
+                                "[Request ID {}] sent to peer {} failed, error: {:?}",
                                 request_id,
                                 peer,
                                 error,
                             );
-                            state.requests.remove(&request_id);
+                            if let Some(channel) = state.requests.remove(&request_id) {
+                                channel
+                                    .send((
+                                        ResponseMessage::<Bytes>::Error(Self::to_response_error(
+                                            error,
+                                        )),
+                                        request_id,
+                                        peer,
+                                        0.into(),
+                                    ))
+                                    .ok();
+                            } else {
+                                log::error!(
+                                    "No such request ID found: [Request ID {}]",
+                                    request_id
+                                );
+                            }
                         }
                         RequestResponseEvent::InboundFailure {
                             peer,
                             request_id,
                             error,
                         } => {
-                            tracing::error!(
-                                "Response to {} from peer {} failed, error: {:?}",
+                            log::error!(
+                                "Response to [Request ID {}] from peer {} failed, error: {:?}",
                                 request_id,
                                 peer,
                                 error,
                             );
+                            //state.response_channels.remove(&request_id);
                         }
                         RequestResponseEvent::ResponseSent { peer, request_id } => {
-                            tracing::trace!(
-                                "Response to request {} sent to peer: {}",
+                            log::trace!(
+                                "Response to [Request ID {}] sent to peer: {}",
                                 request_id,
                                 peer
                             );
-                            state.requests.remove(&request_id);
+                            //state.response_channels.remove(&request_id);
                         }
                     },
                 }
@@ -851,6 +905,9 @@ impl Network {
             NetworkAction::ReceiveFromAll { type_id, output } => {
                 swarm.behaviour_mut().pool.receive_from_all(type_id, output);
             }
+            NetworkAction::ReceiveRequests { type_id, output } => {
+                state.receive_requests.insert(type_id, output);
+            }
             NetworkAction::ListenOn { listen_addresses } => {
                 for listen_address in listen_addresses {
                     Swarm::listen_on(swarm, listen_address)
@@ -863,38 +920,39 @@ impl Network {
             NetworkAction::SendRequest {
                 peer_id,
                 request,
+                response_channel,
                 output,
             } => {
-                if let Err(e) = output.send(
-                    swarm
-                        .behaviour_mut()
-                        .request_response
-                        .send_request(&peer_id, request),
-                ) {
-                    tracing::error!(
-                        "Request {} was sent to peer {} but the action channel was dropped",
-                        e,
-                        peer_id
-                    );
-                };
+                let request_id = swarm
+                    .behaviour_mut()
+                    .request_response
+                    .send_request(&peer_id, request);
+                log::trace!("Request {} was sent to peer {}", request_id, peer_id);
+                state.requests.insert(request_id, response_channel);
+                output.send(request_id).ok();
             }
             NetworkAction::SendResponse {
-                response_channel,
+                request_id,
                 response,
                 output,
             } => {
-                if let Err(e) = output.send(
-                    swarm
-                        .behaviour_mut()
-                        .request_response
-                        .send_response(response_channel, response)
-                        .map_err(NetworkError::ResponseChannelClosed),
-                ) {
-                    tracing::error!(
-                        "Response was sent but the action channel was dropped: {:?}",
-                        e
-                    );
-                };
+                if let Some(response_channel) = state.response_channels.remove(&request_id) {
+                    if let Err(e) = output.send(
+                        swarm
+                            .behaviour_mut()
+                            .request_response
+                            .send_response(response_channel, response)
+                            .map_err(NetworkError::ResponseChannelClosed),
+                    ) {
+                        log::error!(
+                            "Response was sent but the action channel was dropped: {:?}",
+                            e
+                        );
+                    };
+                } else {
+                    log::error!("Tried to respond to a non existing request");
+                    output.send(Err(NetworkError::UnknownRequestId)).ok();
+                }
             }
         }
     }
@@ -926,6 +984,15 @@ impl Network {
             .map_err(|e| log::error!("Failed to send NetworkAction::StartConnecting: {:?}", e))
             .ok();
     }
+
+    fn to_response_error(error: OutboundFailure) -> ResponseError {
+        match error {
+            OutboundFailure::ConnectionClosed => ResponseError::ConnectionClosed,
+            OutboundFailure::DialFailure => ResponseError::DialFailure,
+            OutboundFailure::Timeout => ResponseError::Timeout,
+            OutboundFailure::UnsupportedProtocols => ResponseError::UnsupportedProtocols,
+        }
+    }
 }
 
 #[async_trait]
@@ -934,6 +1001,7 @@ impl NetworkInterface for Network {
     type AddressType = Multiaddr;
     type Error = NetworkError;
     type PubsubId = GossipsubId<PeerId>;
+    type RequestId = RequestId;
 
     fn get_peer_updates(
         &self,
@@ -980,6 +1048,7 @@ impl NetworkInterface for Network {
         // to be properly set up when this function returns. It should be ok to block here as we're
         // only calling this during client initialization.
         // A better way to do this would be make receive_from_all() async.
+        // Look to not block it and add it to a unorderded futures
         let receive_stream = executor::block_on(register_future);
 
         receive_stream
@@ -1149,6 +1218,135 @@ impl NetworkInterface for Network {
 
     fn get_local_peer_id(&self) -> <Self::PeerType as PeerInterface>::Id {
         self.local_peer_id
+    }
+
+    async fn request<'a, Req: Message, Res: Message>(
+        &self,
+        request: Req,
+        peer_id: PeerId,
+    ) -> Result<BoxFuture<'a, (ResponseMessage<Res>, RequestId, PeerId)>, RequestError> {
+        let (output_tx, output_rx) = oneshot::channel();
+        let (response_tx, response_rx) = oneshot::channel();
+
+        let mut buf = vec![];
+        request
+            .serialize(&mut buf)
+            .map_err(|_| RequestError::SerializationError)?;
+
+        self.action_tx
+            .clone()
+            .send(NetworkAction::SendRequest {
+                peer_id,
+                request: (Req::TYPE_ID.into(), buf[..].into()),
+                response_channel: response_tx,
+                output: output_tx,
+            })
+            .await
+            .map_err(|_| RequestError::SendError)?;
+
+        let request_id = output_rx.await.map_err(|_| RequestError::SendError)?;
+
+        let mapped_future = response_rx.map(move |data| {
+            async move {
+                match data {
+                    Err(_) => (ResponseMessage::Error(ResponseError::SenderFutureDropped), request_id, peer_id),
+                    Ok((data, request_id, peer_id, message_type)) => {
+                        match data {
+                            ResponseMessage::Response(data) => {
+                                if message_type == Res::TYPE_ID.into() {
+                                    match <Res as Deserialize>::deserialize(&mut data.reader()) {
+                                        Ok(message) => {
+                                            (ResponseMessage::Response(message), request_id, peer_id)
+                                        },
+                                        Err(e) => {
+                                            log::error!(
+                                                "Failed to deserialize request ID {} of type {} message from {}: {}",
+                                                request_id,
+                                                std::any::type_name::<Res>(),
+                                                peer_id,
+                                                e
+                                                );
+                                            (ResponseMessage::Error(ResponseError::DeSerializationError), request_id, peer_id)
+                                        },
+                                    }
+                                } else {
+                                    (ResponseMessage::Error(ResponseError::InvalidResponse), request_id, peer_id)
+                                }
+                            },
+                            ResponseMessage::Error(e) => (ResponseMessage::Error(e), request_id, peer_id),
+                        }
+                    }
+                }
+            }
+        }).flatten();
+
+        Ok(mapped_future.boxed())
+    }
+
+    fn receive_requests<'a, M: Message>(&self) -> BoxStream<'a, (M, RequestId, PeerId)> {
+        let mut action_tx = self.action_tx.clone();
+
+        // Future to register the channel.
+        let register_future = async move {
+            let (tx, rx) = mpsc::channel(0);
+
+            action_tx
+                .send(NetworkAction::ReceiveRequests {
+                    type_id: M::TYPE_ID.into(),
+                    output: tx,
+                })
+                .await
+                .expect("Sending action to network task failed.");
+
+            rx
+        };
+
+        // XXX Drive the register future to completion. This is needed because we want the receivers
+        // to be properly set up when this function returns. It should be ok to block here as we're
+        // only calling this during client initialization.
+        // A better way to do this would be make receive_from_all() async.
+        let receive_stream = executor::block_on(register_future);
+
+        receive_stream
+            .filter_map(|(data, request_id, peer_id)| async move {
+                // Map the (data, peer) stream to (message, peer) by deserializing the messages.
+                match <M as Deserialize>::deserialize(&mut data.reader()) {
+                    Ok(message) => Some((message, request_id, peer_id)),
+                    Err(e) => {
+                        log::error!(
+                            "Failed to deserialize request ID {} of type {} message from {}: {}",
+                            request_id,
+                            std::any::type_name::<M>(),
+                            peer_id,
+                            e
+                        );
+                        None
+                    }
+                }
+            })
+            .boxed()
+    }
+
+    async fn respond<'a, M: Message>(
+        &self,
+        request_id: RequestId,
+        response: M,
+    ) -> Result<(), Self::Error> {
+        let (output_tx, output_rx) = oneshot::channel();
+
+        let mut buf = vec![];
+        response.serialize(&mut buf)?;
+
+        self.action_tx
+            .clone()
+            .send(NetworkAction::SendResponse {
+                request_id,
+                response: (M::TYPE_ID.into(), buf[..].into()),
+                output: output_tx,
+            })
+            .await?;
+
+        output_rx.await?
     }
 }
 

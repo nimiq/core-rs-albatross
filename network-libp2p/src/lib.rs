@@ -13,6 +13,7 @@ mod error;
 mod network;
 pub mod peer;
 
+pub const REQRES_PROTOCOL: &[u8] = b"/nimiq/reqres/0.0.1";
 pub const MESSAGE_PROTOCOL: &[u8] = b"/nimiq/message/0.0.1";
 pub const DISCOVERY_PROTOCOL: &[u8] = b"/nimiq/discovery/0.0.1";
 

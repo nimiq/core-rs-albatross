@@ -37,7 +37,7 @@ use crate::{
         handler::HandlerError as DiscoveryError,
         peer_contacts::PeerContactBook,
     },
-    dispatch::codecs::typed::{IncomingRequest, MessageCodec, MessageProtocol, OutgoingResponse},
+    dispatch::codecs::typed::{IncomingRequest, MessageCodec, OutgoingResponse, ReqResProtocol},
     peer::Peer,
     Config,
 };
@@ -168,7 +168,7 @@ impl NimiqBehaviour {
 
         // Request Response behaviour
         let codec = MessageCodec::default();
-        let protocol = MessageProtocol::Version1;
+        let protocol = ReqResProtocol::Version1;
         let config = RequestResponseConfig::default();
         let request_response =
             RequestResponse::new(codec, iter::once((protocol, ProtocolSupport::Full)), config);

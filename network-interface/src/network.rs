@@ -1,8 +1,10 @@
-use std::{pin::Pin, sync::Arc};
+use std::{fmt::Debug, pin::Pin, sync::Arc};
 
 use async_trait::async_trait;
 use futures::{
-    future, ready, stream,
+    future,
+    future::BoxFuture,
+    ready, stream,
     stream::{BoxStream, FusedStream, SelectAll},
     task::{Context, Poll},
     Stream, StreamExt, TryFutureExt,
@@ -11,8 +13,10 @@ use tokio_stream::wrappers::{errors::BroadcastStreamRecvError, BroadcastStream};
 
 use beserial::{Deserialize, Serialize};
 
-use crate::message::Message;
-use crate::peer::*;
+use crate::{
+    message::{Message, RequestError, ResponseMessage},
+    peer::*,
+};
 
 pub enum NetworkEvent<P> {
     PeerJoined(Arc<P>),
@@ -68,6 +72,7 @@ pub trait Network: Send + Sync + 'static {
     type AddressType: std::fmt::Display + std::fmt::Debug;
     type Error: std::error::Error;
     type PubsubId: PubsubId<<Self::PeerType as Peer>::Id>;
+    type RequestId: Debug + Copy + Clone + PartialEq + Eq + Send + Sync;
 
     fn get_peer_updates(
         &self,
@@ -128,6 +133,32 @@ pub trait Network: Send + Sync + 'static {
     async fn dial_address(&self, address: Self::AddressType) -> Result<(), Self::Error>;
 
     fn get_local_peer_id(&self) -> <Self::PeerType as Peer>::Id;
+
+    async fn request<'a, Req: Message, Res: Message>(
+        &self,
+        request: Req,
+        peer_id: <Self::PeerType as Peer>::Id,
+    ) -> Result<
+        BoxFuture<
+            'a,
+            (
+                ResponseMessage<Res>,
+                Self::RequestId,
+                <Self::PeerType as Peer>::Id,
+            ),
+        >,
+        RequestError,
+    >;
+
+    fn receive_requests<'a, M: Message>(
+        &self,
+    ) -> BoxStream<'a, (M, Self::RequestId, <Self::PeerType as Peer>::Id)>;
+
+    async fn respond<'a, M: Message>(
+        &self,
+        request_id: Self::RequestId,
+        response: M,
+    ) -> Result<(), Self::Error>;
 }
 
 // .next() To get next item of stream.

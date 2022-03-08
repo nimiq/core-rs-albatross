@@ -6,10 +6,65 @@ use derive_more::{AsMut, AsRef, Display, From, Into};
 use beserial::{uvar, Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use futures::{AsyncRead, AsyncReadExt};
 use nimiq_utils::crc::Crc32Computer;
+use thiserror::Error;
 
 use crate::message::crc::ReaderComputeCrc32;
 
 mod crc;
+
+#[derive(Clone, Debug, Error)]
+pub enum RequestError {
+    #[error("Timeout error")]
+    Timeout,
+    #[error("Send error")]
+    SendError,
+    #[error("Receive error")]
+    ReceiveError,
+    /// Request failed to be serialized
+    #[error("Receive error")]
+    SerializationError,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum ResponseError {
+    /// Received response type doesn't match the expected type
+    InvalidResponse,
+    /// Response failed to be deserialized
+    DeSerializationError,
+    /// Sender future has already been dropped
+    SenderFutureDropped,
+    /// The request could not be sent because a dialing attempt failed.
+    DialFailure,
+    /// The request timed out before a response was received.
+    ///
+    /// It is not known whether the request may have been
+    /// received (and processed) by the remote peer.
+    Timeout,
+    /// The connection closed before a response was received.
+    ///
+    /// It is not known whether the request may have been
+    /// received (and processed) by the remote peer.
+    ConnectionClosed,
+    /// The remote supports none of the requested protocols.
+    UnsupportedProtocols,
+}
+
+#[derive(Clone, Debug)]
+pub enum RawResponseMessage {
+    Response(Vec<u8>),
+    Error(ResponseError),
+}
+
+#[derive(Debug)]
+pub enum ResponseMessage<M: std::fmt::Debug> {
+    Response(M),
+    Error(ResponseError),
+}
+
+#[derive(
+    Copy, Clone, Debug, From, Into, AsRef, AsMut, Display, Hash, PartialEq, Eq, PartialOrd, Ord,
+)]
+pub struct RequestId(u64);
 
 #[derive(
     Copy, Clone, Debug, From, Into, AsRef, AsMut, Display, Hash, PartialEq, Eq, PartialOrd, Ord,
@@ -181,12 +236,4 @@ pub async fn read_message<R: AsyncRead + Unpin>(
     reader.read_exact(&mut msg[header_len..]).await?;
 
     Ok(msg)
-}
-
-pub trait RequestMessage: Message {
-    fn set_request_identifier(&mut self, request_identifier: u32);
-}
-
-pub trait ResponseMessage: Message {
-    fn get_request_identifier(&self) -> u32;
 }

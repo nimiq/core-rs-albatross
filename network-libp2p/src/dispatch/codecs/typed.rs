@@ -8,12 +8,12 @@
 
 use std::{
     fmt::Debug,
-    io::{self, Cursor},
+    io::{self, Cursor, Write},
 };
 
 use bytes::{Buf, BytesMut};
 use futures::prelude::*;
-use libp2p::core::ProtocolName;
+use libp2p::core::{upgrade, ProtocolName};
 use libp2p::request_response::RequestResponseCodec;
 use thiserror::Error;
 use tokio_util::codec::{Decoder, Encoder};
@@ -23,7 +23,12 @@ pub use nimiq_network_interface::message::{Message, MessageType};
 use nimiq_network_interface::peer::SendError;
 use nimiq_utils::crc::Crc32Computer;
 
-use crate::MESSAGE_PROTOCOL;
+use crate::REQRES_PROTOCOL;
+
+/// Maximum response size in bytes (10 kB)
+const MAX_REQUEST_SIZE: usize = 2 * 1024;
+/// Maximum response size in bytes (10 MB)
+const MAX_RESPONSE_SIZE: usize = 10 * 1024 * 1024;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -90,7 +95,7 @@ impl Header {
     pub const MAGIC: u32 = 0x4204_2042;
     /// Total size of the header:
     /// - magic: 4B
-    /// - type_ud: 8B
+    /// - type_id: 8B
     /// - length: 4B
     /// - checksum: 4B
     pub const SIZE: usize = 20;
@@ -149,6 +154,42 @@ impl MessageCodec {
         if crc != declared_crc {
             return Err(Error::ChecksumMismatch(declared_crc, crc));
         }
+
+        Ok(())
+    }
+
+    fn encode_serialized_message(
+        &mut self,
+        type_id: u64,
+        message: &BytesMut,
+        dst: &mut BytesMut,
+    ) -> Result<(), Error> {
+        let mut header = Header::new(type_id);
+        let message_length = Header::SIZE + message.len();
+        header.length = message_length as u32;
+
+        let existing_length = dst.len();
+        dst.reserve(message_length);
+        dst.resize(existing_length + message_length, 0);
+
+        // Go to the bottom of the buffer to write the data
+        let mut c = Cursor::new(dst.as_mut());
+        c.set_position(existing_length as u64);
+
+        // Write header
+        header.serialize(&mut c)?;
+
+        // Serialize message
+        c.write_all(message)?;
+
+        // Calculate the CRC
+        let crc = Crc32Computer::default()
+            .update(&c.get_ref()[existing_length..])
+            .result();
+
+        // Write the CRC in the respective field in the header
+        c.set_position((existing_length + Header::SIZE - 4) as u64);
+        crc.serialize(&mut c)?;
 
         Ok(())
     }
@@ -279,71 +320,99 @@ impl<M: Message> Encoder<&M> for MessageCodec {
     }
 }
 
-pub type IncomingRequest = Vec<u8>;
-pub type OutgoingResponse = Result<Vec<u8>, ()>;
+pub type IncomingRequest = (MessageType, BytesMut);
+pub type OutgoingResponse = (MessageType, BytesMut);
 
 #[derive(Debug, Clone)]
-pub enum MessageProtocol {
+pub enum ReqResProtocol {
     Version1,
 }
 
-impl ProtocolName for MessageProtocol {
+impl ProtocolName for ReqResProtocol {
     fn protocol_name(&self) -> &[u8] {
         match *self {
-            MessageProtocol::Version1 => MESSAGE_PROTOCOL,
+            ReqResProtocol::Version1 => REQRES_PROTOCOL,
         }
     }
 }
 
 #[async_trait::async_trait]
 impl RequestResponseCodec for MessageCodec {
-    type Protocol = MessageProtocol;
+    type Protocol = ReqResProtocol;
     type Request = IncomingRequest;
     type Response = OutgoingResponse;
 
-    async fn read_request<T>(
-        &mut self,
-        _: &Self::Protocol,
-        mut _io: &mut T,
-    ) -> io::Result<Self::Request>
+    async fn read_request<T>(&mut self, _: &Self::Protocol, io: &mut T) -> io::Result<Self::Request>
     where
         T: AsyncRead + Unpin + Send,
     {
-        unimplemented!()
+        let bytes = upgrade::read_length_prefixed(io, MAX_REQUEST_SIZE).await?;
+        let request = self
+            .decode(&mut bytes[..].into())
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        if let Some((request_id, request_data)) = request {
+            Ok((request_id, request_data))
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Fail to decode request",
+            ))
+        }
     }
 
     async fn read_response<T>(
         &mut self,
         _: &Self::Protocol,
-        mut _io: &mut T,
+        io: &mut T,
     ) -> io::Result<Self::Response>
     where
         T: AsyncRead + Unpin + Send,
     {
-        unimplemented!()
+        let bytes = upgrade::read_length_prefixed(io, MAX_RESPONSE_SIZE).await?;
+        let response = self
+            .decode(&mut bytes[..].into())
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        if let Some((message_type, response_data)) = response {
+            Ok((message_type, response_data))
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Fail to decode response",
+            ))
+        }
     }
 
     async fn write_request<T>(
         &mut self,
         _: &Self::Protocol,
-        _io: &mut T,
-        _req: Self::Request,
+        io: &mut T,
+        req: Self::Request,
     ) -> io::Result<()>
     where
         T: AsyncWrite + Send + Unpin,
     {
-        unimplemented!()
+        let (type_id, request) = req;
+        let mut buffer = BytesMut::with_capacity(request.len());
+        self.encode_serialized_message(type_id.into(), &request, &mut buffer)
+            .map_err(|_| io::Error::new(io::ErrorKind::Other, "Fail to encode request"))?;
+        upgrade::write_length_prefixed(io, &buffer[..]).await?;
+        io.close().await
     }
 
     async fn write_response<T>(
         &mut self,
         _: &Self::Protocol,
-        _io: &mut T,
-        _res: Self::Response,
+        io: &mut T,
+        res: Self::Response,
     ) -> io::Result<()>
     where
         T: AsyncWrite + Unpin + Send,
     {
-        unimplemented!()
+        let (type_id, response) = res;
+        let mut buffer = BytesMut::with_capacity(response.len());
+        self.encode_serialized_message(type_id.into(), &response, &mut buffer)
+            .map_err(|_| io::Error::new(io::ErrorKind::Other, "Fail to encode response"))?;
+        upgrade::write_length_prefixed(io, &buffer[..]).await?;
+        io.close().await
     }
 }
