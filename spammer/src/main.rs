@@ -8,7 +8,13 @@ use futures::StreamExt;
 use lazy_static::lazy_static;
 #[cfg(feature = "metrics")]
 use prometheus::{IntGauge, Registry};
-use rand::{thread_rng, RngCore};
+use rand::distributions::WeightedIndex;
+use rand::prelude::*;
+use rand::thread_rng;
+
+use serde::Deserialize;
+
+use std::sync::{Arc, RwLock};
 #[cfg(feature = "metrics")]
 use warp::{Filter, Rejection, Reply};
 
@@ -27,7 +33,7 @@ pub use nimiq::{
 };
 use nimiq_block::BlockType;
 use nimiq_blockchain::{AbstractBlockchain, BlockchainEvent};
-use nimiq_keys::{Address, KeyPair, PrivateKey};
+use nimiq_keys::{Address, KeyPair, PrivateKey, SecureGenerate};
 use nimiq_mempool::mempool::Mempool;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
@@ -60,6 +66,63 @@ pub struct SpammerCommandLine {
     /// * `nimiq-spammer --tpb 724`
     #[clap(long, short)]
     pub tpb: Option<u32>,
+
+    /// A spammer generation config file
+    ///
+    /// # Examples
+    ///
+    /// * `nimiq-spammer --profile spammer-profile.toml`
+    ///
+    #[clap(long, short)]
+    pub profile: Option<PathBuf>,
+}
+
+pub struct SpammerAccounts {
+    //KeyPair associated with the account
+    key_pair: KeyPair,
+    //Current balance for that account
+    balance: Coin,
+    //The block number where the txn was sent
+    block_number: u32,
+}
+
+pub struct SpammerContracts {
+    //KeyPair associated with the contract owner
+    key_pair: KeyPair,
+    //The block number where the contract was created
+    block_number: u32,
+    //Contract address
+    address: Address,
+}
+
+pub struct SpammerState {
+    balances: Vec<SpammerAccounts>,
+    current_block_number: u32,
+    vesting_contracs: Vec<SpammerContracts>,
+}
+
+#[derive(Deserialize)]
+pub struct SpammerGenerationOptions {
+    // Weights between transaction types
+    // base basic, burst basic, vesting
+    weights: [u32; 3],
+    // Existing account to new account proportion
+    many_to_many: f32,
+    // transactions per block, has different meaning depending on burst option
+    tpb: usize,
+}
+
+impl Default for SpammerGenerationOptions {
+    fn default() -> Self {
+        Self {
+            //By default, only base basic transactions
+            weights: [10, 0, 0],
+            //By default, only "one to many" distribution
+            many_to_many: 0.0,
+            //Default constant TPB
+            tpb: 500,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -67,6 +130,12 @@ struct StatsExert {
     pub time: std::time::Duration,
     pub is_micro: bool,
     pub tx_count: usize,
+}
+
+enum SpamType {
+    BaseBasicTransaction,
+    BurstBasicTransaction,
+    Vesting,
 }
 
 const UNIT_KEY: &str = "6c9320ac201caf1f8eaa5b05f5d67a9e77826f3f6be266a0ecccc20416dc6587";
@@ -152,6 +221,12 @@ async fn main_inner() -> Result<(), Error> {
     let config_file = ConfigFile::find(Some(&command_line))?;
     log::trace!("Config file: {:#?}", config_file);
 
+    let state = std::sync::Arc::new(RwLock::new(SpammerState {
+        balances: Vec::new(),
+        current_block_number: 0,
+        vesting_contracs: Vec::new(),
+    }));
+
     // Initialize logging with config values.
     initialize_logging(Some(&command_line), Some(&config_file.log))?;
 
@@ -233,12 +308,26 @@ async fn main_inner() -> Result<(), Error> {
     let mut tx_count_total = 0usize;
     let mut micro_block_count = 0usize;
 
-    let mut count = 500;
+    let mut conf_options = if let Some(spammer_profile) = spammer_command_line.profile {
+        let content = std::fs::read_to_string(spammer_profile)?;
+
+        let config: SpammerGenerationOptions = toml::from_str(&content).unwrap();
+        config
+    } else {
+        SpammerGenerationOptions::default()
+    };
+
+    //Command line option takes precedence over config file
     if let Some(tpb) = spammer_command_line.tpb {
-        count = tpb as usize;
+        conf_options.tpb = tpb as usize;
     }
 
-    log::info!("Spammer configured to generate {} tx/block", count);
+    let conf_options = Arc::new(conf_options);
+
+    log::info!(
+        "Spammer configured to generate {} tx/block",
+        conf_options.tpb
+    );
 
     loop {
         while let Some(event) = bc_events.next().await {
@@ -262,10 +351,10 @@ async fn main_inner() -> Result<(), Error> {
                         std::sync::Arc::clone(&mempool),
                         consensus.clone(),
                         key_pair.clone(),
-                        count,
+                        conf_options.clone(),
+                        std::sync::Arc::clone(&state),
                     )
                     .await;
-                    log::info!("\tSent {} transactions to the network.\n", count);
                 }
 
                 let time = std::time::Duration::from_millis(block.header().timestamp());
@@ -281,6 +370,8 @@ async fn main_inner() -> Result<(), Error> {
                     log::info!("\t- block contains: {} tx", tx_count);
                     log::info!("\t- mempool contains: {} tx", mempool_count);
                 }
+
+                state.write().unwrap().current_block_number = block.block_number();
 
                 tx_count_total += tx_count;
 
@@ -341,14 +432,52 @@ async fn spam(
     mempool: std::sync::Arc<Mempool>,
     consensus: ConsensusProxy,
     key_pair: KeyPair,
-    count: usize,
+    config: Arc<SpammerGenerationOptions>,
+    state: Arc<RwLock<SpammerState>>,
 ) {
     let (number, net_id) = {
         let blockchain = consensus.blockchain.read();
         (blockchain.block_number(), blockchain.network_id)
     };
     tokio::task::spawn_blocking(move || {
-        let txs = generate_transactions(&key_pair, number, net_id, count);
+        let choices = [
+            SpamType::BaseBasicTransaction,
+            SpamType::BurstBasicTransaction,
+            SpamType::Vesting,
+        ];
+
+        let dist = WeightedIndex::new(&config.weights).unwrap();
+        let mut rng = thread_rng();
+        let new_count;
+
+        let txs = match choices[dist.sample(&mut rng)] {
+            SpamType::BaseBasicTransaction => {
+                new_count = config.tpb;
+                generate_basic_transactions(
+                    &key_pair,
+                    number,
+                    net_id,
+                    new_count,
+                    config.clone(),
+                    state,
+                )
+            }
+            SpamType::BurstBasicTransaction => {
+                new_count = rng.gen_range(config.tpb * 10..config.tpb * 20);
+                generate_basic_transactions(
+                    &key_pair,
+                    number,
+                    net_id,
+                    new_count,
+                    config.clone(),
+                    state,
+                )
+            }
+            SpamType::Vesting => {
+                new_count = rng.gen_range(0..config.tpb);
+                generate_vesting_contracts(&key_pair, number, net_id, new_count, state)
+            }
+        };
 
         for tx in txs {
             let consensus1 = consensus.clone();
@@ -362,30 +491,94 @@ async fn spam(
                 }
             });
         }
+        log::info!("\tSent {} transactions to the network.\n", new_count);
     })
     .await
     .expect("spawn_blocking() panicked");
 }
 
-fn generate_transactions(
+fn generate_basic_transactions(
     key_pair: &KeyPair,
     start_height: u32,
     network_id: NetworkId,
     count: usize,
+    config: Arc<SpammerGenerationOptions>,
+    state: std::sync::Arc<RwLock<SpammerState>>,
 ) -> Vec<Transaction> {
     let mut txs = Vec::new();
 
     let mut rng = thread_rng();
+
     for _ in 0..count {
-        let mut bytes = [0u8; 20];
-        rng.fill_bytes(&mut bytes);
-        let recipient = Address::from(bytes);
+        let current_block_number = state.read().unwrap().current_block_number;
+        let mut state = state.write().unwrap();
+
+        if rng.gen_bool(config.many_to_many.into()) && !state.balances.is_empty() {
+            //This is the case where we send from an existing account
+
+            // Obtain a random index
+            let index = rng.gen_range(0..state.balances.len());
+
+            let account = &mut state.balances[index];
+
+            // If the sender already reached a balance of zero we need to remove it
+            if account.balance == Coin::ZERO {
+                state.balances.swap_remove(index);
+                continue;
+            }
+
+            //We need to make sure the txns are mined and included in the blockchain first.
+            if current_block_number - account.block_number <= 32 {
+                continue;
+            }
+
+            // We generate a new recipient
+            let new_kp = KeyPair::generate(&mut rng);
+            let recipient = Address::from(&new_kp);
+            let amount = Coin::from_u64_unchecked(50);
+
+            let tx = TransactionBuilder::new_basic(
+                &account.key_pair,
+                recipient,
+                amount,
+                Coin::ZERO,
+                start_height,
+                network_id,
+            )
+            .unwrap();
+            txs.push(tx);
+
+            //Update the senders balance
+            account.balance -= amount;
+            //Create a new recipients account and add it to the vector
+            state.balances.push(SpammerAccounts {
+                key_pair: new_kp,
+                balance: amount,
+                block_number: current_block_number,
+            });
+            continue;
+        }
+
+        // This is the case where we are creating new recipient accounts
+        let new_kp = KeyPair::generate(&mut rng);
+
+        let recipient = Address::from(&new_kp);
+        let amount = Coin::from_u64_unchecked(100);
+
+        //We only need to mantain state when we use many to many distributions
+        if config.many_to_many > 0.0 {
+            state.balances.push(SpammerAccounts {
+                key_pair: new_kp,
+                balance: amount,
+                block_number: current_block_number,
+            });
+        }
 
         let tx = TransactionBuilder::new_basic(
             key_pair,
             recipient,
-            Coin::from_u64_unchecked(1),
-            Coin::from_u64_unchecked(200),
+            amount,
+            Coin::ZERO,
             start_height,
             network_id,
         )
@@ -393,6 +586,67 @@ fn generate_transactions(
         txs.push(tx);
     }
 
+    txs
+}
+
+fn generate_vesting_contracts(
+    key_pair: &KeyPair,
+    start_height: u32,
+    network_id: NetworkId,
+    count: usize,
+    state: Arc<RwLock<SpammerState>>,
+) -> Vec<Transaction> {
+    let mut txs = Vec::new();
+
+    let mut rng = thread_rng();
+
+    let mut state = state.write().unwrap();
+    let current_block_number = state.current_block_number;
+
+    state.vesting_contracs.retain(|contract| {
+        if current_block_number - contract.block_number <= 32 {
+            true
+        } else {
+            let tx = TransactionBuilder::new_redeem_vesting(
+                &contract.key_pair,
+                contract.address.clone(),
+                Address::from(&contract.key_pair),
+                Coin::from_u64_unchecked(10),
+                Coin::ZERO,
+                start_height,
+                network_id,
+            )
+            .unwrap();
+            txs.push(tx);
+            false
+        }
+    });
+
+    for _ in 0..count {
+        let new_kp = KeyPair::generate(&mut rng);
+        let recipient = Address::from(&new_kp);
+
+        let tx = TransactionBuilder::new_create_vesting(
+            key_pair,
+            recipient,
+            1,
+            1,
+            1,
+            Coin::from_u64_unchecked(10),
+            Coin::ZERO,
+            start_height,
+            network_id,
+        )
+        .unwrap();
+
+        state.vesting_contracs.push(SpammerContracts {
+            block_number: current_block_number,
+            key_pair: new_kp,
+            address: tx.recipient.clone(),
+        });
+
+        txs.push(tx);
+    }
     txs
 }
 

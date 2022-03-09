@@ -3220,7 +3220,9 @@ dependencies = [
  "nimiq-transaction-builder",
  "prometheus",
  "rand 0.8.5",
+ "serde",
  "tokio",
+ "toml",
  "tracing",
  "warp 0.3.2",
 ]

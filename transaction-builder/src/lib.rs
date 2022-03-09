@@ -665,7 +665,7 @@ impl TransactionBuilder {
 
         let proof_builder = builder.generate()?;
         match proof_builder {
-            TransactionProofBuilder::Basic(mut builder) => {
+            TransactionProofBuilder::Vesting(mut builder) => {
                 builder.sign_with_key_pair(key_pair);
                 Ok(builder.generate().unwrap())
             }
