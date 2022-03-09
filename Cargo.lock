@@ -3494,8 +3494,10 @@ dependencies = [
  "structopt",
  "strum_macros",
  "thiserror",
+ "tokio",
  "toml",
  "tracing",
+ "tracing-gelf",
  "tracing-log",
  "tracing-subscriber 0.3.9",
  "url",
@@ -5922,6 +5924,35 @@ checksum = "03cfcb51380632a72d3111cb8d3447a8d908e577d31beeac006f836383d29a23"
 dependencies = [
  "lazy_static",
  "valuable",
+]
+
+[[package]]
+name = "tracing-futures"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97d095ae15e245a057c8e8451bab9b3ee1e1f68e9ba2b4fbc18d0ac5237835f2"
+dependencies = [
+ "pin-project 1.0.10",
+ "tracing",
+]
+
+[[package]]
+name = "tracing-gelf"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bef407d785989f789a53a00c9a6196735ef6e407ae2bb20e0282b3b9dc271f66"
+dependencies = [
+ "bytes",
+ "futures-channel",
+ "futures-util",
+ "hostname",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tokio-util 0.6.9",
+ "tracing-core",
+ "tracing-futures",
+ "tracing-subscriber 0.3.9",
 ]
 
 [[package]]
