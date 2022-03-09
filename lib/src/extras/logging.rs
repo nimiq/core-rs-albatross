@@ -349,8 +349,12 @@ pub fn initialize_logging(
         None
     };
 
-    let gelf_layer = if let Some(graylog_address) = settings.graylog_address {
-        let (layer, bg_task) = tracing_gelf::Logger::builder().connect_tcp(graylog_address)?;
+    let gelf_layer = if let Some(graylog) = &settings.graylog {
+        let mut builder = tracing_gelf::Logger::builder();
+        for (name, value) in &graylog.extra_fields {
+            builder = builder.additional_field(name.clone(), value.clone());
+        }
+        let (layer, bg_task) = builder.connect_tcp(graylog.address.clone())?;
         let layer = layer.with_filter(
             Targets::new()
                 .with_default(DEFAULT_LEVEL)

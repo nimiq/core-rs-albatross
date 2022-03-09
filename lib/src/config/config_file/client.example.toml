@@ -211,6 +211,22 @@ level = "debug"
 # Default: 3
 # file_count = 2
 
+# Graylog target
+# [log.graylog]
+
+# Graylog server address
+# address = "localhost:9000"
+
+# Extra fields to add to every log record
+# [log.graylog_extra_fields]
+# host = "mine"
+# run = 1
+# production = false
+
+# Alternate way of writing the above, under the [log] section
+# extra_fields = { host = "mine", run = 1, production = false }
+
+
 ##############################################################################
 ##
 ## Configure mempool

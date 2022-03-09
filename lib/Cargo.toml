@@ -33,6 +33,7 @@ paw = "1.0"
 rand = "0.8"
 serde = "1.0"
 serde_derive = "1.0"
+serde_json = { version = "1.0", features = ["preserve_order"], optional = true }
 structopt = { version = "0.3", features = ["paw"] }
 strum_macros = "0.24"
 toml = "0.5"
@@ -68,7 +69,7 @@ nimiq-wallet = { path = "../wallet", optional = true }
 deadlock = []
 default = []
 launcher = []
-logging = ["tokio", "tracing-gelf", "tracing-log", "tracing-subscriber"]
+logging = ["serde_json", "tokio", "tracing-gelf", "tracing-log", "tracing-subscriber"]
 panic = ["log-panics"]
 rpc-server = ["validator", "nimiq-rpc-server", "nimiq-wallet"]
 validator = ["nimiq-validator", "nimiq-validator-network", "nimiq-bls", "nimiq-rpc-server"]

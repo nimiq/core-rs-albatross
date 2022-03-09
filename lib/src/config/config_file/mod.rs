@@ -319,6 +319,14 @@ impl From<ReverseProxySettings> for ReverseProxyConfig {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct GraylogConfig {
+    pub address: String,
+    #[serde(default)]
+    pub extra_fields: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RotatingLogFileConfig {
     #[serde(default)]
     pub path: PathBuf,
@@ -354,7 +362,7 @@ pub struct LogSettings {
     #[serde(default)]
     pub file: Option<String>,
     #[serde(default)]
-    pub graylog_address: Option<String>,
+    pub graylog: Option<GraylogConfig>,
     #[serde(default = "LogSettings::default_rotating_trace_log")]
     pub rotating_trace_log: Option<RotatingLogFileConfig>,
 }
@@ -377,7 +385,7 @@ impl Default for LogSettings {
             tags: HashMap::new(),
             statistics: Self::default_statistics_interval(),
             file: None,
-            graylog_address: None,
+            graylog: None,
             rotating_trace_log: Self::default_rotating_trace_log(),
         }
     }
