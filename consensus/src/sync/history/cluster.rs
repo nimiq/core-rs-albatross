@@ -57,9 +57,7 @@ impl From<PendingBatchSet> for BatchSet {
     }
 }
 
-lazy_static! {
-    static ref SYNC_CLUSTER_ID: AtomicUsize = AtomicUsize::default();
-}
+static SYNC_CLUSTER_ID: AtomicUsize = AtomicUsize::new(0);
 
 pub(crate) struct SyncCluster<TPeer: Peer> {
     pub id: usize,
