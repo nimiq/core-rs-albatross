@@ -3459,6 +3459,7 @@ dependencies = [
 name = "nimiq-lib"
 version = "0.1.0"
 dependencies = [
+ "ansi_term",
  "beserial",
  "derive_builder",
  "directories",
@@ -3495,6 +3496,7 @@ dependencies = [
  "thiserror",
  "toml",
  "tracing",
+ "tracing-log",
  "tracing-subscriber 0.3.9",
  "url",
 ]
