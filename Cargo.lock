@@ -3251,7 +3251,6 @@ dependencies = [
  "beserial_derive",
  "futures",
  "hex",
- "lazy_static",
  "nimiq-block",
  "nimiq-block-production",
  "nimiq-blockchain",

@@ -36,9 +36,6 @@ nimiq-bls = {path = "../bls", features = ["beserial"], optional = true}
 nimiq-keys = {path = "../keys", optional = true}
 nimiq-utils = {path = "../utils", features = ["math"], optional = true}
 
-[dev-dependencies]
-lazy_static = "1.2"
-
 [features]
 account = ["hex", "thiserror"]
 all = ["account", "coin", "networks", "policy", "slots"]
