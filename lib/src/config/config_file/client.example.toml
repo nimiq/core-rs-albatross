@@ -204,8 +204,8 @@ level = "debug"
 # path = none
 
 # Size of each log file
-# Default: 50000000 (50mB)
-# size = 50000000
+# Default: 50_000_000 (50 MB)
+# size = 50_000_000
 
 # Count of additional log files. The total log files count will be file_count + 2.
 # Default: 3

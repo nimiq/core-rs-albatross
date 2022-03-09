@@ -340,7 +340,7 @@ impl Default for RotatingLogFileConfig {
     fn default() -> Self {
         Self {
             path: paths::home().join("logs"),
-            size: 50000000, // 50mB
+            size: 50_000_000, // 50 MB
             file_count: 3,
         }
     }
