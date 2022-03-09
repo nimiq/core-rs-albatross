@@ -11,7 +11,7 @@ RUN rustup update nightly && rustup default nightly
 
 # Fetch dependencies.
 RUN apt-get update \
-    && apt-get --no-install-recommends -y install libssl-dev pkg-config \
+    && apt-get --no-install-recommends -y install libssl-dev pkg-config clang\
     && rm -rf /var/lib/apt/lists/*
 
 # Copy sources.
