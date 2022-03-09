@@ -47,7 +47,7 @@ For more detailed information about how to connect and use the development netwo
 Besides [Rust nightly](https://www.rust-lang.org/learn/get-started#installing-rust) itself,
 the following packages are required to be able to compile the source code:
 
-- `gcc`
+- `clang`
 - `pkg-config`
 - `libssl-dev` (in Debian/Ubuntu) or `openssl-devel` (in Fedora/Red Hat)
 
