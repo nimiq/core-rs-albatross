@@ -50,6 +50,7 @@ impl TendermintProof {
     /// Verifies the proof. This only checks that the proof is valid for this block, not that the
     /// block itself is valid.
     pub fn verify(block: &MacroBlock, current_validators: &Validators) -> bool {
+        trace!("verify:0");
         // If there's no justification then the proof is false evidently.
         let justification = match &block.justification {
             None => {
@@ -65,10 +66,12 @@ impl TendermintProof {
             return false;
         }
 
+        trace!("verify:1"); // average 10 ms
         // Calculate the `nano_zkp_hash`. This a special hash that is calculated using the `validators`
         // field of the block body. It is necessary for the ZKP proofs used in the nano sync.
         let block_hash = block.nano_zkp_hash();
 
+        trace!("verify:2");
         // Calculate the message that was actually signed by the validators.
         let message = TendermintVote {
             proposal_hash: Some(block_hash),
@@ -79,6 +82,7 @@ impl TendermintProof {
             },
         };
 
+        trace!("verify:3"); // average 80 ms
         // Get the public key for each SLOT and add them together to get the aggregated public key
         // (if they are part of the Multisignature Bitset).
         let mut agg_pk = AggregatePublicKey::new();
@@ -89,8 +93,11 @@ impl TendermintProof {
             }
         }
 
+        trace!("verify:4"); // average 90 ms
         // Verify the aggregated signature against our aggregated public key.
-        agg_pk.verify(&message, &justification.sig.signature)
+        let result = agg_pk.verify(&message, &justification.sig.signature);
+        trace!("verify:5");
+        result
     }
 }
 

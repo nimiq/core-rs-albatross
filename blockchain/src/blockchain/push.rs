@@ -28,6 +28,7 @@ impl Blockchain {
         block: Block,
         trusted: bool,
     ) -> Result<PushResult, PushError> {
+        trace!("do_push:0");
         // Ignore all blocks that precede (or are at the same height) as the most recent accepted
         // macro block.
         let last_macro_block = policy::last_macro_block(this.block_number());
@@ -39,6 +40,7 @@ impl Blockchain {
             return Ok(PushResult::Ignored);
         }
 
+        trace!("do_push:1");
         // TODO: We might want to pass this as argument to this method.
         let read_txn = this.read_transaction();
 
@@ -51,6 +53,7 @@ impl Blockchain {
             return Ok(PushResult::Known);
         }
 
+        trace!("do_push:2");
         // Check if we have this block's parent.
         let prev_info = this
             .chain_store
@@ -64,6 +67,7 @@ impl Blockchain {
                 PushError::Orphan
             })?;
 
+        trace!("do_push:3");
         // Get the intended block proposer.
         let proposer_slot = this
             .get_proposer_at(
@@ -80,6 +84,7 @@ impl Blockchain {
                 PushError::Orphan
             })?;
 
+        trace!("do_push:4"); // do_push:4 to do_push:5 takes 401 ms for macro blocks and 62 ms for micro blocks in the worst case
         // Check the header.
         if let Err(e) = Blockchain::verify_block_header(
             this.deref(),
@@ -92,6 +97,7 @@ impl Blockchain {
             return Err(e);
         }
 
+        trace!("do_push:5"); // do_push:5 to do_push:6 takes 124 ms for macro blocks and 274 ms for micro blocks in the worst case
         // Check the justification.
         if let Err(e) = Blockchain::verify_block_justification(
             &*this,
@@ -104,6 +110,7 @@ impl Blockchain {
             return Err(e);
         }
 
+        trace!("do_push:6");
         // Check the body.
         if let Err(e) =
             this.verify_block_body(&block.header(), &block.body(), Some(&read_txn), !trusted)
@@ -112,6 +119,7 @@ impl Blockchain {
             return Err(e);
         }
 
+        trace!("do_push:7");
         // Detect forks.
         if let Block::Micro(micro_block) = &block {
             // Check if there are two blocks in the same slot and with the same height. Since we already
@@ -162,14 +170,18 @@ impl Blockchain {
             }
         }
 
+        trace!("do_push:8");
         // Calculate chain ordering.
         let chain_order =
             ChainOrdering::order_chains(this.deref(), &block, &prev_info, Some(&read_txn));
 
+        trace!("do_push:9");
         read_txn.close();
 
+        trace!("do_push:10");
         let chain_info = ChainInfo::from_block(block, &prev_info);
 
+        trace!("do_push:11");
         // Extend, rebranch or just store the block depending on the chain ordering.
         let result = match chain_order {
             ChainOrdering::Extend => {
@@ -188,10 +200,14 @@ impl Blockchain {
             }
         };
 
+        trace!("do_push:12");
         let mut txn = this.write_transaction();
+        trace!("do_push:13");
         this.chain_store
             .put_chain_info(&mut txn, &chain_info.head.hash(), &chain_info, true);
+        trace!("do_push:14");
         txn.commit();
+        trace!("do_push:15");
 
         Ok(result)
     }
@@ -231,12 +247,15 @@ impl Blockchain {
         mut chain_info: ChainInfo,
         mut prev_info: ChainInfo,
     ) -> Result<PushResult, PushError> {
+        trace!("extend:0");
         let mut txn = this.write_transaction();
 
+        trace!("extend:1");
         let block_number = this.block_number() + 1;
         let is_macro_block = policy::is_macro_block_at(block_number);
         let is_election_block = policy::is_election_block_at(block_number);
 
+        trace!("extend:2"); // extend:2 to extend:3 takes a negligible amount of time for macro blocks and 303 ms for micro blocks in the worst case
         if let Err(e) = this.check_and_commit(
             &this.state,
             &chain_info.head,
@@ -248,6 +267,7 @@ impl Blockchain {
             return Err(e);
         }
 
+        trace!("extend:3");
         chain_info.on_main_chain = true;
         prev_info.main_chain_successor = Some(chain_info.head.hash());
 
@@ -257,6 +277,7 @@ impl Blockchain {
             .put_chain_info(&mut txn, chain_info.head.parent_hash(), &prev_info, false);
         this.chain_store.set_head(&mut txn, &block_hash);
 
+        trace!("extend:4");
         if is_election_block {
             this.chain_store.prune_epoch(
                 policy::epoch_at(block_number).saturating_sub(MAX_EPOCHS_STORED),
@@ -264,11 +285,14 @@ impl Blockchain {
             );
         }
 
+        trace!("extend:5"); // extend:5 to extend:6 takes a negligible amount of time for macro blocks and 165 ms for micro blocks in the worst case
         txn.commit();
 
+        trace!("extend:6");
         // Upgrade the lock as late as possible.
         let mut this = RwLockUpgradableReadGuard::upgrade_untimed(this);
 
+        trace!("extend:7");
         if let Block::Macro(ref macro_block) = chain_info.head {
             this.state.macro_info = chain_info.clone();
             this.state.macro_head_hash = block_hash.clone();
@@ -285,6 +309,7 @@ impl Blockchain {
             }
         }
 
+        trace!("extend:8");
         this.state.main_chain = chain_info;
         this.state.head_hash = block_hash.clone();
 
@@ -544,6 +569,7 @@ impl Blockchain {
         first_view_number: u32,
         txn: &mut WriteTransaction,
     ) -> Result<(), PushError> {
+        trace!("check_and_commit:0");
         // Check transactions against replay attacks. This is only necessary for micro blocks.
         if block.is_micro() {
             let transactions = block.transactions();
@@ -562,6 +588,7 @@ impl Blockchain {
             }
         }
 
+        trace!("check_and_commit:1");
         // Commit block to AccountsTree.
         if let Err(e) = self.commit_accounts(state, block, prev_entropy, first_view_number, txn) {
             warn!("Rejecting block {} - commit failed: {:?}", block, e);
@@ -570,12 +597,14 @@ impl Blockchain {
             return Err(e);
         }
 
+        trace!("check_and_commit:2");
         // Verify the state against the block.
         if let Err(e) = self.verify_block_state(state, block, Some(txn)) {
             warn!("Rejecting block {} - bad state", block);
             return Err(e);
         }
 
+        trace!("check_and_commit:3");
         Ok(())
     }
 }
