@@ -37,6 +37,9 @@ pub enum Error {
     #[error("Logger error: {0}")]
     Logging(#[from] tracing_subscriber::filter::FromEnvError),
 
+    #[error("Gelf logger error: {0}")]
+    LoggingGelf(#[from] tracing_gelf::BuilderError),
+
     #[error("Failed to parse multiaddr: {0}")]
     Multiaddr(#[from] nimiq_network_libp2p::libp2p::core::multiaddr::Error),
 

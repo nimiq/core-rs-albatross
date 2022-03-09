@@ -353,6 +353,8 @@ pub struct LogSettings {
     pub statistics: u64,
     #[serde(default)]
     pub file: Option<String>,
+    #[serde(default)]
+    pub graylog_address: Option<String>,
     #[serde(default = "LogSettings::default_rotating_trace_log")]
     pub rotating_trace_log: Option<RotatingLogFileConfig>,
 }
@@ -375,6 +377,7 @@ impl Default for LogSettings {
             tags: HashMap::new(),
             statistics: Self::default_statistics_interval(),
             file: None,
+            graylog_address: None,
             rotating_trace_log: Self::default_rotating_trace_log(),
         }
     }

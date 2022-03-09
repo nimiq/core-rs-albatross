@@ -38,6 +38,8 @@ strum_macros = "0.24"
 toml = "0.5"
 url = "2.2"
 thiserror = "1.0"
+tokio = { version = "1.16", features = ["rt"], optional = true }
+tracing-gelf = { version = "0.6", optional = true }
 tracing-log = { version = "0.1", optional = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
 
@@ -66,7 +68,7 @@ nimiq-wallet = { path = "../wallet", optional = true }
 deadlock = []
 default = []
 launcher = []
-logging = ["tracing-log", "tracing-subscriber"]
+logging = ["tokio", "tracing-gelf", "tracing-log", "tracing-subscriber"]
 panic = ["log-panics"]
 rpc-server = ["validator", "nimiq-rpc-server", "nimiq-wallet"]
 validator = ["nimiq-validator", "nimiq-validator-network", "nimiq-bls", "nimiq-rpc-server"]

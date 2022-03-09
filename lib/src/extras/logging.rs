@@ -349,7 +349,21 @@ pub fn initialize_logging(
         None
     };
 
+    let gelf_layer = if let Some(graylog_address) = settings.graylog_address {
+        let (layer, bg_task) = tracing_gelf::Logger::builder().connect_tcp(graylog_address)?;
+        let layer = layer.with_filter(
+            Targets::new()
+                .with_default(DEFAULT_LEVEL)
+                .with_nimiq_targets(LevelFilter::TRACE),
+        );
+        tokio::spawn(bg_task);
+        Some(layer)
+    } else {
+        None
+    };
+
     tracing_subscriber::registry()
+        .with(gelf_layer)
         .with(rotating_layer)
         .with(
             Layer::new()
