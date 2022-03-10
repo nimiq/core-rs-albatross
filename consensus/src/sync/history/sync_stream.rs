@@ -10,7 +10,6 @@ use nimiq_block::Block;
 use nimiq_blockchain::Blockchain;
 use nimiq_network_interface::prelude::{Network, NetworkEvent, Peer};
 
-use crate::consensus_agent::ConsensusAgent;
 use crate::sync::history::cluster::{SyncCluster, SyncClusterResult};
 use crate::sync::history::sync::{HistorySyncReturn, Job};
 use crate::sync::history::HistorySync;
@@ -27,13 +26,12 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                     // Delete the ConsensusAgent from the agents map, removing the only "persistent"
                     // strong reference to it. There might not be an entry for every peer (e.g. if
                     // it didn't send any epoch ids).
-                    self.remove_agent(peer.id());
-                    self.agents.remove(&peer);
+                    self.remove_peer(peer.id());
+                    self.peers.remove(&peer.id());
                 }
                 Ok(NetworkEvent::PeerJoined(peer)) => {
                     // Create a ConsensusAgent for the peer that joined and request epoch_ids from it.
-                    let agent = Arc::new(ConsensusAgent::new(peer));
-                    self.add_agent(agent);
+                    self.add_peer(peer.id());
                 }
                 Err(_) => return Poll::Ready(None),
             }
@@ -62,15 +60,12 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                 if !epoch_ids.locator_found {
                     debug!(
                         "Peer is behind or on different chain: {:?}",
-                        epoch_ids.sender.peer.id()
+                        epoch_ids.sender
                     );
                     return Poll::Ready(Some(HistorySyncReturn::Outdated(epoch_ids.sender)));
                 } else if epoch_ids.ids.is_empty() && epoch_ids.checkpoint_id.is_none() {
                     // We are synced with this peer.
-                    debug!(
-                        "Finished syncing with peer: {:?}",
-                        epoch_ids.sender.peer.id()
-                    );
+                    debug!("Finished syncing with peer: {:?}", epoch_ids.sender);
                     return Poll::Ready(Some(HistorySyncReturn::Good(epoch_ids.sender)));
                 }
 
@@ -196,10 +191,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         }
     }
 
-    fn evict_jobs_by_cluster(
-        &mut self,
-        cluster_id: usize,
-    ) -> Option<SyncCluster<TNetwork::PeerType>> {
+    fn evict_jobs_by_cluster(&mut self, cluster_id: usize) -> Option<SyncCluster<TNetwork>> {
         while let Some(job) = self.job_queue.front() {
             let id = match job {
                 Job::PushBatchSet(cluster_id, ..) => *cluster_id,

@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 use std::fmt::Formatter;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 
 use futures::task::{Context, Poll};
 use futures::{FutureExt, Stream, StreamExt};
@@ -11,11 +11,10 @@ use parking_lot::RwLock;
 use nimiq_block::MacroBlock;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, ExtendedTransaction, CHUNK_SIZE};
 use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::prelude::Peer;
+use nimiq_network_interface::prelude::{Network, Peer, RequestError, ResponseMessage};
 use nimiq_utils::math::CeilingDiv;
 
-use crate::consensus_agent::ConsensusAgent;
-use crate::messages::{BatchSetInfo, HistoryChunk};
+use crate::messages::{BatchSetInfo, HistoryChunk, RequestBatchSet, RequestHistoryChunk};
 use crate::sync::sync_queue::{SyncQueue, SyncQueuePeer};
 
 struct PendingBatchSet {
@@ -34,7 +33,7 @@ impl PendingBatchSet {
     }
 }
 
-pub(crate) struct BatchSet {
+pub struct BatchSet {
     pub block: MacroBlock,
     pub history: Vec<ExtendedTransaction>,
 }
@@ -61,43 +60,44 @@ lazy_static! {
     static ref SYNC_CLUSTER_ID: AtomicUsize = AtomicUsize::default();
 }
 
-pub(crate) struct SyncCluster<TPeer: Peer> {
+pub struct SyncCluster<TNetwork: Network> {
     pub id: usize,
     pub epoch_ids: Vec<Blake2bHash>,
     pub first_epoch_number: usize,
 
-    pub(crate) batch_set_queue: SyncQueue<TPeer, Blake2bHash, BatchSetInfo>,
-    history_queue: SyncQueue<TPeer, (u32, u32, usize), (u32, HistoryChunk)>,
+    pub(crate) batch_set_queue: SyncQueue<TNetwork, Blake2bHash, BatchSetInfo>,
+    history_queue: SyncQueue<TNetwork, (u32, u32, usize), (u32, HistoryChunk)>,
 
     pending_batch_sets: VecDeque<PendingBatchSet>,
     num_epochs_finished: usize,
 
     blockchain: Arc<RwLock<Blockchain>>,
+    network: Arc<TNetwork>,
 }
 
-impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
+impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
     const NUM_PENDING_BATCH_SETS: usize = 5;
     const NUM_PENDING_CHUNKS: usize = 12;
 
     pub(crate) fn new(
         epoch_ids: Vec<Blake2bHash>,
         first_epoch_number: usize,
-        peers: Vec<SyncQueuePeer<TPeer>>,
+        peers: Vec<SyncQueuePeer<TNetwork::PeerType>>,
         blockchain: Arc<RwLock<Blockchain>>,
+        network: Arc<TNetwork>,
     ) -> Self {
         let id = SYNC_CLUSTER_ID.fetch_add(1, Ordering::SeqCst);
 
         let batch_set_queue = SyncQueue::new(
+            Arc::clone(&network),
             epoch_ids.clone(),
             peers.clone(),
             Self::NUM_PENDING_BATCH_SETS,
-            |id, peer| {
+            |id, network, peer_id| {
                 async move {
-                    if let Some(peer) = Weak::upgrade(&peer) {
-                        if let Ok(batch) = peer.request_epoch(id).await {
-                            if batch.block.is_some() {
-                                return Some(batch);
-                            }
+                    if let Ok(batch) = Self::request_epoch(network, peer_id, id).await {
+                        if batch.block.is_some() {
+                            return Some(batch);
                         }
                     }
                     None
@@ -106,19 +106,22 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
             },
         );
         let history_queue = SyncQueue::new(
+            Arc::clone(&network),
             Vec::<(u32, u32, usize)>::new(),
             peers,
             Self::NUM_PENDING_CHUNKS,
-            move |(epoch_number, block_number, chunk_index), peer| {
+            move |(epoch_number, block_number, chunk_index), network, peer_id| {
                 async move {
-                    if let Some(peer) = Weak::upgrade(&peer) {
-                        return peer
-                            .request_history_chunk(epoch_number, block_number, chunk_index)
-                            .await
-                            .ok()
-                            .map(|chunk| (epoch_number, chunk));
-                    }
-                    None
+                    return Self::request_history_chunk(
+                        network,
+                        peer_id,
+                        epoch_number,
+                        block_number,
+                        chunk_index,
+                    )
+                    .await
+                    .ok()
+                    .map(|chunk| (epoch_number, chunk));
                 }
                 .boxed()
             },
@@ -132,6 +135,7 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
             pending_batch_sets: VecDeque::with_capacity(Self::NUM_PENDING_BATCH_SETS),
             num_epochs_finished: 0,
             blockchain,
+            network,
         }
     }
 
@@ -235,30 +239,28 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
 
     pub(crate) fn add_peer(
         &mut self,
-        peer_id: TPeer::Id,
-        peer: Weak<ConsensusAgent<TPeer>>,
+        peer_id: <<TNetwork as Network>::PeerType as Peer>::Id,
     ) -> bool {
         // TODO keep only one list of peers
-        if !self.batch_set_queue.has_peer(peer_id.clone()) {
-            self.batch_set_queue
-                .add_peer(peer_id.clone(), Weak::clone(&peer));
-            self.history_queue.add_peer(peer_id, peer);
+        if !self.batch_set_queue.has_peer(peer_id) {
+            self.batch_set_queue.add_peer(peer_id);
+            self.history_queue.add_peer(peer_id);
 
             return true;
         }
         false
     }
 
-    pub(crate) fn remove_peer(&mut self, peer_id: &TPeer::Id) {
+    pub(crate) fn remove_peer(&mut self, peer_id: &<<TNetwork as Network>::PeerType as Peer>::Id) {
         self.batch_set_queue.remove_peer(peer_id);
         self.history_queue.remove_peer(peer_id);
     }
 
-    pub(crate) fn has_peer(&self, peer_id: TPeer::Id) -> bool {
+    pub(crate) fn has_peer(&self, peer_id: <<TNetwork as Network>::PeerType as Peer>::Id) -> bool {
         self.batch_set_queue.has_peer(peer_id)
     }
 
-    pub(crate) fn peers(&self) -> &Vec<SyncQueuePeer<TPeer>> {
+    pub(crate) fn peers(&self) -> &Vec<SyncQueuePeer<TNetwork::PeerType>> {
         &self.batch_set_queue.peers
     }
 
@@ -282,6 +284,7 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
             first_epoch_number,
             self.batch_set_queue.peers.clone(),
             Arc::clone(&self.blockchain),
+            Arc::clone(&self.network),
         )
     }
 
@@ -327,9 +330,61 @@ impl<TPeer: Peer + 'static> SyncCluster<TPeer> {
     pub(crate) fn num_epochs_finished(&self) -> usize {
         self.num_epochs_finished
     }
+
+    pub async fn request_epoch(
+        network: Arc<TNetwork>,
+        peer_id: <<TNetwork as Network>::PeerType as Peer>::Id,
+        hash: Blake2bHash,
+    ) -> Result<BatchSetInfo, RequestError> {
+        let result = network.request(RequestBatchSet { hash }, peer_id).await;
+
+        // TODO verify that hash of returned epoch matches the one we requested
+        match result {
+            Ok(future) => {
+                let (response_message, _request_id, _peer_id) = future.await;
+                match response_message {
+                    ResponseMessage::Response(batch_set_info) => Ok(batch_set_info),
+                    ResponseMessage::Error(_) => Err(RequestError::Timeout),
+                }
+            }
+            Err(_) => Err(RequestError::SendError),
+        }
+    }
+
+    pub async fn request_history_chunk(
+        network: Arc<TNetwork>,
+        peer_id: <<TNetwork as Network>::PeerType as Peer>::Id,
+        epoch_number: u32,
+        block_number: u32,
+        chunk_index: usize,
+    ) -> Result<HistoryChunk, RequestError> {
+        let result = network
+            .request(
+                RequestHistoryChunk {
+                    epoch_number,
+                    block_number,
+                    chunk_index: chunk_index as u64,
+                },
+                peer_id,
+            )
+            .await;
+
+        // TODO filter empty chunks here?
+
+        match result {
+            Ok(future) => {
+                let (response_message, _request_id, _peer_id) = future.await;
+                match response_message {
+                    ResponseMessage::Response(history_chunk) => Ok(history_chunk),
+                    ResponseMessage::Error(_) => Err(RequestError::Timeout),
+                }
+            }
+            Err(_) => Err(RequestError::SendError),
+        }
+    }
 }
 
-impl<TPeer: Peer + 'static> Stream for SyncCluster<TPeer> {
+impl<TNetwork: Network + 'static> Stream for SyncCluster<TNetwork> {
     type Item = Result<BatchSet, SyncClusterResult>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
@@ -397,7 +452,7 @@ impl<TPeer: Peer + 'static> Stream for SyncCluster<TPeer> {
     }
 }
 
-impl<TPeer: Peer + 'static> std::fmt::Debug for SyncCluster<TPeer> {
+impl<TNetwork: Network + 'static> std::fmt::Debug for SyncCluster<TNetwork> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut dbg = f.debug_struct("SyncCluster");
         dbg.field("id", &self.id);
@@ -411,7 +466,7 @@ impl<TPeer: Peer + 'static> std::fmt::Debug for SyncCluster<TPeer> {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(crate) enum SyncClusterResult {
+pub enum SyncClusterResult {
     EpochSuccessful,
     NoMoreEpochs,
     Error,

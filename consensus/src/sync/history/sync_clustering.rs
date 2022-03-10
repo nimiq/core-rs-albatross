@@ -1,14 +1,13 @@
 use std::collections::VecDeque;
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 
 use parking_lot::RwLock;
 
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::prelude::{CloseReason, Network, Peer};
+use nimiq_network_interface::prelude::{CloseReason, Network, Peer, RequestError, ResponseMessage};
 
-use crate::consensus_agent::ConsensusAgent;
-use crate::messages::{BlockHashType, RequestBlockHashesFilter};
+use crate::messages::{BlockHashType, BlockHashes, RequestBlockHashes, RequestBlockHashesFilter};
 use crate::sync::history::cluster::{SyncCluster, SyncClusterResult};
 use crate::sync::history::sync::{EpochIds, Job};
 use crate::sync::history::HistorySync;
@@ -18,7 +17,8 @@ use crate::sync::sync_queue::SyncQueuePeer;
 impl<TNetwork: Network> HistorySync<TNetwork> {
     pub(crate) async fn request_epoch_ids(
         blockchain: Arc<RwLock<Blockchain>>,
-        agent: Arc<ConsensusAgent<TNetwork::PeerType>>,
+        network: Arc<TNetwork>,
+        peer_id: <<TNetwork as Network>::PeerType as Peer>::Id,
     ) -> Option<EpochIds<TNetwork::PeerType>> {
         let (locators, epoch_number) = {
             // Order matters here. The first hash found by the recipient of the request will be
@@ -39,13 +39,14 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
             (locators, election_head.epoch_number())
         };
 
-        let result = agent
-            .request_block_hashes(
-                locators,
-                1000, // TODO: Use other value
-                RequestBlockHashesFilter::ElectionAndLatestCheckpoint,
-            )
-            .await;
+        let result = Self::request_block_hashes(
+            Arc::clone(&network),
+            peer_id,
+            locators,
+            1000, // TODO: Use other value
+            RequestBlockHashesFilter::ElectionAndLatestCheckpoint,
+        )
+        .await;
 
         match result {
             Ok(block_hashes) => {
@@ -55,7 +56,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                         ids: Vec::new(),
                         checkpoint_id: None,
                         first_epoch_number: 0,
-                        sender: agent,
+                        sender: peer_id,
                     });
                 }
 
@@ -81,7 +82,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                     epoch_ids.len(),
                     epoch_number + 1,
                     checkpoint_id.is_some(),
-                    agent.peer.id(),
+                    peer_id,
                 );
 
                 Some(EpochIds {
@@ -89,12 +90,14 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                     ids: epoch_ids,
                     checkpoint_id,
                     first_epoch_number: epoch_number as usize + 1,
-                    sender: agent,
+                    sender: peer_id,
                 })
             }
             Err(e) => {
                 log::error!("Request block hashes failed: {}", e);
-                agent.peer.close(CloseReason::Other);
+                if let Some(peer) = network.get_peer(peer_id) {
+                    peer.close(CloseReason::Other);
+                }
                 None
             }
         }
@@ -103,7 +106,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
     pub(crate) fn cluster_epoch_ids(
         &mut self,
         mut epoch_ids: EpochIds<TNetwork::PeerType>,
-    ) -> Option<Arc<ConsensusAgent<TNetwork::PeerType>>> {
+    ) -> Option<<<TNetwork as Network>::PeerType as Peer>::Id> {
         // Read our current blockchain state.
         let (our_epoch_id, our_epoch_number) = {
             let blockchain = self.blockchain.read();
@@ -179,9 +182,9 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
             // If a FinishCluster job exists, store the peer in the finished cluster so we request
             // more epoch ids from it when the job is processed.
             if let Some(cluster) = cluster {
-                let agent = epoch_ids.sender;
-                cluster.add_peer(agent.peer.id(), Arc::downgrade(&agent));
-                self.agents.insert(Arc::clone(&agent.peer), (agent, 1));
+                let sender_peer_id = epoch_ids.sender;
+                cluster.add_peer(sender_peer_id);
+                self.peers.insert(sender_peer_id, 1);
                 return None;
             }
 
@@ -202,7 +205,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         let mut num_clusters = 0;
 
         let checkpoint_epoch = epoch_ids.get_checkpoint_epoch();
-        let agent = epoch_ids.sender;
+        let sender_peer_id = epoch_ids.sender;
 
         debug!(
             "Clustering ids: first_epoch_number={}, num_ids={}, num_clusters={}, active_cluster={}",
@@ -277,7 +280,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
 
                     // The peer's epoch ids matched at least a part of this (now potentially truncated) cluster,
                     // so we add the peer to this cluster. We also increment the peer's number of clusters.
-                    cluster.add_peer(agent.peer.id(), Arc::downgrade(&agent));
+                    cluster.add_peer(sender_peer_id);
                     num_clusters += 1;
 
                     // Advance the id_index by the number of matched ids.
@@ -296,10 +299,10 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                 Vec::from(&epoch_ids.ids[id_index..]),
                 epoch_ids.first_epoch_number + id_index,
                 vec![SyncQueuePeer {
-                    peer_id: agent.peer.id(),
-                    agent: Arc::downgrade(&agent),
+                    peer_id: sender_peer_id,
                 }],
                 Arc::clone(&self.blockchain),
+                Arc::clone(&self.network),
             ));
             // Don't increment the num_clusters here, as this is done in the loop later on.
         }
@@ -324,7 +327,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                 {
                     // The peer's checkpoint id matched this cluster,
                     // so we add the peer to this cluster. We also increment the peer's number of clusters.
-                    cluster.add_peer(agent.peer.id(), Arc::downgrade(&agent));
+                    cluster.add_peer(sender_peer_id);
                     num_clusters += 1;
                     found_cluster = true;
                     break;
@@ -337,10 +340,10 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                     vec![checkpoint_id],
                     checkpoint_epoch,
                     vec![SyncQueuePeer {
-                        peer_id: agent.peer.id(),
-                        agent: Arc::downgrade(&agent),
+                        peer_id: sender_peer_id,
                     }],
                     Arc::clone(&self.blockchain),
+                    Arc::clone(&self.network),
                 );
                 self.checkpoint_clusters.push_back(cluster);
                 num_clusters += 1;
@@ -348,23 +351,19 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         }
 
         // Store agent Arc and number of clusters it's in.
-        self.agents
-            .insert(Arc::clone(&agent.peer), (agent, num_clusters));
+        self.peers.insert(sender_peer_id, num_clusters);
 
         // Update cluster counts for all peers in new clusters.
         for cluster in &new_clusters {
             debug!("Adding new cluster: {:#?}", cluster);
-            for agent in cluster.peers() {
-                if let Some(agent) = Weak::upgrade(&agent.agent) {
-                    let pair = self.agents.get_mut(&agent.peer).unwrap_or_else(|| {
-                        panic!(
-                            "Agent should be present {:?} cluster {}",
-                            agent.peer.id(),
-                            cluster.id
-                        )
-                    });
-                    pair.1 = pair.1.saturating_add(1);
-                }
+            for peer in cluster.peers() {
+                let pair = self.peers.get_mut(&peer.peer_id).unwrap_or_else(|| {
+                    panic!(
+                        "Agent should be present {:?} cluster {}",
+                        peer.peer_id, cluster.id
+                    )
+                });
+                *pair = pair.saturating_add(1);
             }
         }
 
@@ -374,7 +373,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         None
     }
 
-    pub(crate) fn pop_next_cluster(&mut self) -> Option<SyncCluster<TNetwork::PeerType>> {
+    pub(crate) fn pop_next_cluster(&mut self) -> Option<SyncCluster<TNetwork>> {
         let cluster =
             HistorySync::<TNetwork>::find_best_cluster(&mut self.epoch_clusters, &self.blockchain);
 
@@ -390,9 +389,9 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
     }
 
     fn find_best_cluster(
-        clusters: &mut VecDeque<SyncCluster<TNetwork::PeerType>>,
+        clusters: &mut VecDeque<SyncCluster<TNetwork>>,
         blockchain: &Arc<RwLock<Blockchain>>,
-    ) -> Option<SyncCluster<TNetwork::PeerType>> {
+    ) -> Option<SyncCluster<TNetwork>> {
         if clusters.is_empty() {
             return None;
         }
@@ -434,7 +433,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
     /// provide new epoch ids or emitted as synced peers if there are no new ids to sync.
     pub(crate) fn finish_cluster(
         &mut self,
-        cluster: SyncCluster<TNetwork::PeerType>,
+        cluster: SyncCluster<TNetwork>,
         result: SyncClusterResult,
     ) {
         if result != SyncClusterResult::NoMoreEpochs {
@@ -446,38 +445,63 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
 
         // Decrement the cluster count for all peers in the cluster.
         for peer in cluster.peers() {
-            if let Some(agent) = Weak::upgrade(&peer.agent) {
-                let cluster_count = {
-                    let pair = self.agents.get_mut(&agent.peer).unwrap_or_else(|| {
-                        panic!(
-                            "Agent should be present {:?} cluster {}",
-                            agent.peer.id(),
-                            cluster.id
-                        )
-                    });
-                    pair.1 = pair.1.saturating_sub(1);
-                    pair.1
-                };
+            let cluster_count = {
+                let pair = self.peers.get_mut(&peer.peer_id).unwrap_or_else(|| {
+                    panic!(
+                        "Agent should be present {:?} cluster {}",
+                        peer.peer_id, cluster.id
+                    )
+                });
+                *pair = pair.saturating_sub(1);
+                pair
+            };
 
-                // If the peer isn't in any more clusters, request more epoch_ids from it.
-                // Only do so if the cluster was synced.
-                if cluster_count == 0 {
-                    // Always remove agent from agents map. It will be re-added if it returns more
-                    // epoch_ids and dropped otherwise.
-                    self.agents.remove(&agent.peer);
+            // If the peer isn't in any more clusters, request more epoch_ids from it.
+            // Only do so if the cluster was synced.
+            if *cluster_count == 0 {
+                // Always remove agent from agents map. It will be re-added if it returns more
+                // epoch_ids and dropped otherwise.
+                self.peers.remove(&peer.peer_id);
 
-                    if result != SyncClusterResult::Error {
-                        self.add_agent(agent);
-                    } else {
-                        debug!(
-                            "Closing connection to peer {:?} after cluster {} failed",
-                            agent.peer.id(),
-                            cluster.id
-                        );
-                        //agent.peer.close(CloseReason::Other);
-                    }
+                if result != SyncClusterResult::Error {
+                    self.add_peer(peer.peer_id);
+                } else {
+                    debug!(
+                        "Closing connection to peer {:?} after cluster {} failed",
+                        peer.peer_id, cluster.id
+                    );
+                    //agent.peer.close(CloseReason::Other);
                 }
             }
+        }
+    }
+
+    pub async fn request_block_hashes(
+        network: Arc<TNetwork>,
+        peer_id: <<TNetwork as Network>::PeerType as Peer>::Id,
+        locators: Vec<Blake2bHash>,
+        max_blocks: u16,
+        filter: RequestBlockHashesFilter,
+    ) -> Result<BlockHashes, RequestError> {
+        let result = network
+            .request::<RequestBlockHashes, BlockHashes>(
+                RequestBlockHashes {
+                    locators,
+                    max_blocks,
+                    filter,
+                },
+                peer_id,
+            )
+            .await;
+        match result {
+            Ok(future) => {
+                let (response_message, _request_id, _peer_id) = future.await;
+                match response_message {
+                    ResponseMessage::Response(block_hashes) => Ok(block_hashes),
+                    ResponseMessage::Error(_) => Err(RequestError::Timeout),
+                }
+            }
+            Err(_) => Err(RequestError::SendError),
         }
     }
 }

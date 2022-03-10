@@ -37,8 +37,11 @@ impl<N: NetworkInterface + TestNetwork> Node<N> {
 
         let network = N::build_network(peer_id, genesis_info.hash, hub).await;
 
-        let sync_protocol =
-            HistorySync::<N>::new(Arc::clone(&blockchain), network.subscribe_events());
+        let sync_protocol = HistorySync::<N>::new(
+            Arc::clone(&blockchain),
+            Arc::clone(&network),
+            network.subscribe_events(),
+        );
         let consensus = AbstractConsensus::<N>::with_min_peers(
             env,
             Arc::clone(&blockchain),

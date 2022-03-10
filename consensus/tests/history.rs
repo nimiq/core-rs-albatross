@@ -9,13 +9,12 @@ use parking_lot::RwLock;
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_consensus::consensus::Consensus;
-use nimiq_consensus::consensus_agent::ConsensusAgent;
 use nimiq_consensus::messages::RequestBlockHashesFilter;
-use nimiq_consensus::sync::history::{HistorySync, HistorySyncReturn};
+use nimiq_consensus::sync::history::{cluster::SyncCluster, HistorySync, HistorySyncReturn};
 use nimiq_consensus::sync::request_component::HistorySyncStream;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
-use nimiq_network_interface::network::Network;
+use nimiq_network_interface::{network::Network, peer::Peer};
 use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_primitives::policy;
 use nimiq_test_log::test;
@@ -27,7 +26,7 @@ pub struct MockHistorySyncStream<TNetwork: Network> {
 }
 
 impl<TNetwork: Network> HistorySyncStream<TNetwork::PeerType> for MockHistorySyncStream<TNetwork> {
-    fn add_agent(&self, _agent: Arc<ConsensusAgent<TNetwork::PeerType>>) {}
+    fn add_peer(&self, _peer_id: <<TNetwork as Network>::PeerType as Peer>::Id) {}
 }
 
 impl<TNetwork: Network> Stream for MockHistorySyncStream<TNetwork> {
@@ -59,7 +58,11 @@ async fn peers_can_sync() {
     produce_macro_blocks(&producer, &blockchain1, num_macro_blocks);
 
     let net1 = Arc::new(hub.new_network());
-    let sync1 = HistorySync::<MockNetwork>::new(Arc::clone(&blockchain1), net1.subscribe_events());
+    let sync1 = HistorySync::<MockNetwork>::new(
+        Arc::clone(&blockchain1),
+        Arc::clone(&net1),
+        net1.subscribe_events(),
+    );
     let consensus1 =
         Consensus::from_network(env1, blockchain1, Arc::clone(&net1), Box::pin(sync1)).await;
 
@@ -71,8 +74,11 @@ async fn peers_can_sync() {
     ));
 
     let net2 = Arc::new(hub.new_network());
-    let mut sync2 =
-        HistorySync::<MockNetwork>::new(Arc::clone(&blockchain2), net2.subscribe_events());
+    let mut sync2 = HistorySync::<MockNetwork>::new(
+        Arc::clone(&blockchain2),
+        Arc::clone(&net2),
+        net2.subscribe_events(),
+    );
     let consensus2 = Consensus::from_network(
         env2,
         blockchain2,
@@ -224,17 +230,18 @@ async fn sync_ingredients() {
 
     // Test ingredients:
     // Request hashes
-    let agent = ConsensusAgent::new(Arc::clone(&net2.get_peers()[0]));
-    let hashes = agent
-        .request_block_hashes(
-            vec![consensus2.blockchain.read().head_hash()],
-            3,
-            RequestBlockHashesFilter::ElectionAndLatestCheckpoint,
-        )
-        .await
-        .expect("Should yield hashes")
-        .hashes
-        .expect("Should contain hashes");
+    let peer_id = net2.get_peers()[0].id();
+    let hashes = HistorySync::request_block_hashes(
+        Arc::clone(&net2),
+        peer_id,
+        vec![consensus2.blockchain.read().head_hash()],
+        3,
+        RequestBlockHashesFilter::ElectionAndLatestCheckpoint,
+    )
+    .await
+    .expect("Should yield hashes")
+    .hashes
+    .expect("Should contain hashes");
     assert_eq!(hashes.len(), 2);
     assert_eq!(
         hashes[0].1,
@@ -243,10 +250,13 @@ async fn sync_ingredients() {
     assert_eq!(hashes[1].1, consensus1.blockchain.read().macro_head_hash());
 
     // Request epoch
-    let epoch = agent
-        .request_epoch(consensus1.blockchain.read().election_head_hash())
-        .await
-        .expect("Should yield epoch");
+    let epoch = SyncCluster::request_epoch(
+        Arc::clone(&net2),
+        peer_id,
+        consensus1.blockchain.read().election_head_hash(),
+    )
+    .await
+    .expect("Should yield epoch");
     let block1 = epoch.block.expect("Should have block");
 
     assert_eq!(epoch.history_len, 3);
@@ -255,10 +265,13 @@ async fn sync_ingredients() {
         consensus1.blockchain.read().election_head_hash()
     );
 
-    let epoch = agent
-        .request_epoch(consensus1.blockchain.read().macro_head_hash())
-        .await
-        .expect("Should yield epoch");
+    let epoch = SyncCluster::request_epoch(
+        Arc::clone(&net2),
+        peer_id,
+        consensus1.blockchain.read().macro_head_hash(),
+    )
+    .await
+    .expect("Should yield epoch");
     let block2 = epoch.block.expect("Should have block");
 
     assert_eq!(epoch.history_len, 1);
@@ -268,12 +281,12 @@ async fn sync_ingredients() {
     );
 
     // Request history chunk.
-    let chunk = agent
-        .request_history_chunk(1, block1.block_number(), 0)
-        .await
-        .expect("Should yield history chunk")
-        .chunk
-        .expect("Should yield history chunk");
+    let chunk =
+        SyncCluster::request_history_chunk(Arc::clone(&net2), peer_id, 1, block1.block_number(), 0)
+            .await
+            .expect("Should yield history chunk")
+            .chunk
+            .expect("Should yield history chunk");
 
     assert_eq!(chunk.history.len(), 3);
     assert_eq!(
@@ -289,12 +302,12 @@ async fn sync_ingredients() {
         Some(true)
     );
 
-    let chunk = agent
-        .request_history_chunk(2, block2.block_number(), 0)
-        .await
-        .expect("Should yield history chunk")
-        .chunk
-        .expect("Should yield history chunk");
+    let chunk =
+        SyncCluster::request_history_chunk(Arc::clone(&net2), peer_id, 2, block2.block_number(), 0)
+            .await
+            .expect("Should yield history chunk")
+            .chunk
+            .expect("Should yield history chunk");
 
     assert_eq!(chunk.history.len(), 1);
     assert_eq!(

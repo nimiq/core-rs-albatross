@@ -6,10 +6,7 @@ use nimiq_blockchain::HistoryTreeChunk;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::message::*;
 
-use crate::request_response;
-
 pub(crate) mod handlers;
-mod request_response;
 
 /*
 The consensus module uses the following messages:
@@ -76,9 +73,7 @@ impl<'a> From<&'a Block> for BlockHashType {
 pub struct BlockHashes {
     #[beserial(len_type(u16))]
     pub hashes: Option<Vec<(BlockHashType, Blake2bHash)>>,
-    pub request_identifier: u32,
 }
-request_response!(BlockHashes);
 
 impl Message for BlockHashes {
     const TYPE_ID: u64 = 201;
@@ -97,7 +92,6 @@ impl Debug for BlockHashes {
                 dbg.field("last_hash", &last);
             }
         }
-        dbg.field("request_identifier", &self.request_identifier);
         dbg.finish()
     }
 }
@@ -116,9 +110,7 @@ pub struct RequestBlockHashes {
     pub locators: Vec<Blake2bHash>,
     pub max_blocks: u16,
     pub filter: RequestBlockHashesFilter,
-    pub request_identifier: u32,
 }
-request_response!(RequestBlockHashes);
 
 impl Message for RequestBlockHashes {
     const TYPE_ID: u64 = 200;
@@ -127,9 +119,7 @@ impl Message for RequestBlockHashes {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestBatchSet {
     pub hash: Blake2bHash,
-    pub request_identifier: u32,
 }
-request_response!(RequestBatchSet);
 
 impl Message for RequestBatchSet {
     const TYPE_ID: u64 = 202;
@@ -141,9 +131,7 @@ impl Message for RequestBatchSet {
 pub struct BatchSetInfo {
     pub block: Option<MacroBlock>,
     pub history_len: u32,
-    pub request_identifier: u32,
 }
-request_response!(BatchSetInfo);
 
 impl Message for BatchSetInfo {
     const TYPE_ID: u64 = 203;
@@ -158,9 +146,7 @@ impl Debug for BatchSetInfo {
                 .field("block_number", &block.block_number())
                 .field("is_election_block", &block.is_election_block());
         }
-        debug_struct
-            .field("history_len", &self.history_len)
-            .field("request_identifier", &self.request_identifier);
+        debug_struct.field("history_len", &self.history_len);
         debug_struct.finish()
     }
 }
@@ -171,9 +157,7 @@ pub struct RequestHistoryChunk {
     pub epoch_number: u32,
     pub block_number: u32,
     pub chunk_index: u64,
-    pub request_identifier: u32,
 }
-request_response!(RequestHistoryChunk);
 
 impl Message for RequestHistoryChunk {
     const TYPE_ID: u64 = 204;
@@ -183,9 +167,7 @@ impl Message for RequestHistoryChunk {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HistoryChunk {
     pub chunk: Option<HistoryTreeChunk>,
-    pub request_identifier: u32,
 }
-request_response!(HistoryChunk);
 
 impl Message for HistoryChunk {
     const TYPE_ID: u64 = 205;
@@ -194,9 +176,7 @@ impl Message for HistoryChunk {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ResponseBlock {
     pub block: Option<Block>,
-    pub request_identifier: u32,
 }
-request_response!(ResponseBlock);
 
 impl Message for ResponseBlock {
     const TYPE_ID: u64 = 206;
@@ -209,16 +189,13 @@ impl Debug for ResponseBlock {
             dbg.field("hash", &block.hash());
             dbg.field("header", &block.header());
         }
-        dbg.field("request_identifier", &self.request_identifier);
         dbg.finish()
     }
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestBlock {
     pub hash: Blake2bHash,
-    pub request_identifier: u32,
 }
-request_response!(RequestBlock);
 
 impl Message for RequestBlock {
     const TYPE_ID: u64 = 207;
@@ -229,9 +206,7 @@ pub struct ResponseBlocks {
     // TODO: Set to sensible limit (2 * BATCH_SIZE for example).
     #[beserial(len_type(u16, limit = 256))]
     pub blocks: Option<Vec<Block>>,
-    pub request_identifier: u32,
 }
-request_response!(ResponseBlocks);
 
 impl Message for ResponseBlocks {
     const TYPE_ID: u64 = 208;
@@ -250,7 +225,6 @@ impl Debug for ResponseBlocks {
                 dbg.field("last_block", &last.block_number());
             }
         }
-        dbg.field("request_identifier", &self.request_identifier);
         dbg.finish()
     }
 }
@@ -260,19 +234,14 @@ pub struct RequestMissingBlocks {
     pub target_hash: Blake2bHash,
     #[beserial(len_type(u16, limit = 128))]
     pub locators: Vec<Blake2bHash>,
-    pub request_identifier: u32,
 }
-request_response!(RequestMissingBlocks);
 
 impl Message for RequestMissingBlocks {
     const TYPE_ID: u64 = 209;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct RequestHead {
-    pub request_identifier: u32,
-}
-request_response!(RequestHead);
+pub struct RequestHead {}
 
 impl Message for RequestHead {
     const TYPE_ID: u64 = 210;
@@ -281,9 +250,7 @@ impl Message for RequestHead {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct HeadResponse {
     pub hash: Blake2bHash,
-    pub request_identifier: u32,
 }
-request_response!(HeadResponse);
 
 impl Message for HeadResponse {
     const TYPE_ID: u64 = 211;

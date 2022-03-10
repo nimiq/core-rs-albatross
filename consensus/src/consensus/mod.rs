@@ -60,7 +60,7 @@ pub struct Consensus<N: Network> {
     pub network: Arc<N>,
     pub env: Environment,
 
-    block_queue: BlockQueue<N, BlockRequestComponent<N::PeerType>>,
+    block_queue: BlockQueue<N, BlockRequestComponent<N>>,
 
     /// A Delay which exists purely for the waker on its poll to reactivate the task running Consensus::poll
     /// FIXME Remove this
@@ -68,7 +68,7 @@ pub struct Consensus<N: Network> {
 
     events: BroadcastSender<ConsensusEvent>,
     established_flag: Arc<AtomicBool>,
-    head_requests: Option<HeadRequests<N::PeerType>>,
+    head_requests: Option<HeadRequests<N>>,
     head_requests_time: Option<Instant>,
 
     min_peers: usize,
@@ -114,8 +114,11 @@ impl<N: Network> Consensus<N> {
         sync_protocol: Pin<Box<dyn HistorySyncStream<N::PeerType>>>,
         min_peers: usize,
     ) -> Self {
-        let request_component =
-            BlockRequestComponent::new(sync_protocol, network.subscribe_events());
+        let request_component = BlockRequestComponent::new(
+            sync_protocol,
+            network.subscribe_events(),
+            Arc::clone(&network),
+        );
 
         let block_queue = BlockQueue::new(
             BlockQueueConfig::default(),
@@ -132,12 +135,12 @@ impl<N: Network> Consensus<N> {
         env: Environment,
         blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<N>,
-        block_queue: BlockQueue<N, BlockRequestComponent<N::PeerType>>,
+        block_queue: BlockQueue<N, BlockRequestComponent<N>>,
         min_peers: usize,
     ) -> Self {
         let (tx, _rx) = broadcast(256);
 
-        Self::init_network_requests(&network, &blockchain);
+        Self::init_network_request_receivers(&network, &blockchain);
 
         let established_flag = Arc::new(AtomicBool::new(false));
 
@@ -203,7 +206,7 @@ impl<N: Network> Consensus<N> {
     /// via the block queue.
     fn check_established(
         &mut self,
-        finished_head_request: Option<HeadRequestsResult<N::PeerType>>,
+        finished_head_request: Option<HeadRequestsResult<N>>,
     ) -> Option<ConsensusEvent> {
         // We can only lose established state right now if we drop below our minimum peer threshold.
         if self.is_established() {
@@ -262,6 +265,7 @@ impl<N: Network> Consensus<N> {
                 debug!("Initiating head requests");
                 self.head_requests = Some(HeadRequests::new(
                     self.block_queue.peers(),
+                    Arc::clone(&self.network),
                     Arc::clone(&self.blockchain),
                 ));
                 self.head_requests_time = Some(Instant::now());

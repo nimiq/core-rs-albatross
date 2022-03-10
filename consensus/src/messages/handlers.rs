@@ -5,7 +5,6 @@ use parking_lot::RwLock;
 
 use nimiq_block::Block;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, Direction, CHUNK_SIZE};
-use nimiq_network_interface::message::ResponseMessage;
 
 use crate::messages::*;
 
@@ -34,10 +33,7 @@ impl Handle<BlockHashes> for RequestBlockHashes {
             }
         }
         if start_block_hash_opt.is_none() {
-            return BlockHashes {
-                hashes: None,
-                request_identifier: self.get_request_identifier(),
-            };
+            return BlockHashes { hashes: None };
         }
         let start_block_hash = start_block_hash_opt.unwrap();
 
@@ -81,7 +77,6 @@ impl Handle<BlockHashes> for RequestBlockHashes {
 
         BlockHashes {
             hashes: Some(hashes),
-            request_identifier: self.get_request_identifier(),
         }
     }
 }
@@ -97,13 +92,11 @@ impl Handle<BatchSetInfo> for RequestBatchSet {
             BatchSetInfo {
                 block: Some(block),
                 history_len,
-                request_identifier: self.get_request_identifier(),
             }
         } else {
             BatchSetInfo {
                 block: None,
                 history_len: 0,
-                request_identifier: self.get_request_identifier(),
             }
         }
     }
@@ -118,20 +111,14 @@ impl Handle<HistoryChunk> for RequestHistoryChunk {
             self.chunk_index as usize,
             None,
         );
-        HistoryChunk {
-            chunk,
-            request_identifier: self.get_request_identifier(),
-        }
+        HistoryChunk { chunk }
     }
 }
 
 impl Handle<ResponseBlock> for RequestBlock {
     fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> ResponseBlock {
         let block = blockchain.read().get_block(&self.hash, true, None);
-        ResponseBlock {
-            block,
-            request_identifier: self.get_request_identifier(),
-        }
+        ResponseBlock { block }
     }
 }
 
@@ -166,15 +153,11 @@ impl Handle<ResponseBlocks> for RequestMissingBlocks {
                 // This can only happen if the target hash is unknown or after the chain was pruned.
                 // TODO Return the blocks we found instead of failing here?
                 debug!(
-                    "ResponseBlocks [{}] - unknown target block/predecessor {} ({} blocks found)",
-                    self.request_identifier,
+                    "ResponseBlocks - unknown target block/predecessor {} ({} blocks found)",
                     block_hash,
                     blocks.len(),
                 );
-                return ResponseBlocks {
-                    blocks: None,
-                    request_identifier: self.get_request_identifier(),
-                };
+                return ResponseBlocks { blocks: None };
             }
         }
 
@@ -183,7 +166,6 @@ impl Handle<ResponseBlocks> for RequestMissingBlocks {
 
         ResponseBlocks {
             blocks: Some(blocks),
-            request_identifier: self.get_request_identifier(),
         }
     }
 }
@@ -191,9 +173,6 @@ impl Handle<ResponseBlocks> for RequestMissingBlocks {
 impl Handle<HeadResponse> for RequestHead {
     fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> HeadResponse {
         let hash = blockchain.read().head_hash();
-        HeadResponse {
-            hash,
-            request_identifier: self.get_request_identifier(),
-        }
+        HeadResponse { hash }
     }
 }

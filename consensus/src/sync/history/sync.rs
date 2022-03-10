@@ -12,7 +12,6 @@ use nimiq_blockchain::Blockchain;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::prelude::{Network, NetworkEvent, Peer};
 
-use crate::consensus_agent::ConsensusAgent;
 use crate::sync::history::cluster::{SyncCluster, SyncClusterResult};
 use crate::sync::request_component::HistorySyncStream;
 
@@ -21,7 +20,7 @@ pub(crate) struct EpochIds<TPeer: Peer> {
     pub ids: Vec<Blake2bHash>,
     pub checkpoint_id: Option<Blake2bHash>, // The most recent checkpoint block in the latest epoch.
     pub first_epoch_number: usize,
-    pub sender: Arc<ConsensusAgent<TPeer>>,
+    pub sender: TPeer::Id,
 }
 
 impl<TPeer: Peer> Clone for EpochIds<TPeer> {
@@ -31,7 +30,7 @@ impl<TPeer: Peer> Clone for EpochIds<TPeer> {
             ids: self.ids.clone(),
             checkpoint_id: self.checkpoint_id.clone(),
             first_epoch_number: self.first_epoch_number,
-            sender: Arc::clone(&self.sender),
+            sender: self.sender,
         }
     }
 }
@@ -42,28 +41,28 @@ impl<TPeer: Peer> EpochIds<TPeer> {
     }
 }
 
-pub(crate) enum Job<TPeer: Peer> {
+pub(crate) enum Job<TNetwork: Network> {
     PushBatchSet(usize, Blake2bHash, BoxFuture<'static, SyncClusterResult>),
-    FinishCluster(SyncCluster<TPeer>, SyncClusterResult),
+    FinishCluster(SyncCluster<TNetwork>, SyncClusterResult),
 }
 
 pub struct HistorySync<TNetwork: Network> {
     pub(crate) blockchain: Arc<RwLock<Blockchain>>,
+    pub(crate) network: Arc<TNetwork>,
     pub(crate) network_event_rx: BroadcastStream<NetworkEvent<TNetwork::PeerType>>,
-    pub(crate) agents:
-        HashMap<Arc<TNetwork::PeerType>, (Arc<ConsensusAgent<TNetwork::PeerType>>, usize)>,
+    pub(crate) peers: HashMap<<<TNetwork as Network>::PeerType as Peer>::Id, usize>,
     pub(crate) epoch_ids_stream:
         FuturesUnordered<BoxFuture<'static, Option<EpochIds<TNetwork::PeerType>>>>,
-    pub(crate) epoch_clusters: VecDeque<SyncCluster<TNetwork::PeerType>>,
-    pub(crate) checkpoint_clusters: VecDeque<SyncCluster<TNetwork::PeerType>>,
-    pub(crate) active_cluster: Option<SyncCluster<TNetwork::PeerType>>,
-    pub(crate) job_queue: VecDeque<Job<TNetwork::PeerType>>,
+    pub(crate) epoch_clusters: VecDeque<SyncCluster<TNetwork>>,
+    pub(crate) checkpoint_clusters: VecDeque<SyncCluster<TNetwork>>,
+    pub(crate) active_cluster: Option<SyncCluster<TNetwork>>,
+    pub(crate) job_queue: VecDeque<Job<TNetwork>>,
     pub(crate) waker: Option<Waker>,
 }
 
 pub enum HistorySyncReturn<TPeer: Peer> {
-    Good(Arc<ConsensusAgent<TPeer>>),
-    Outdated(Arc<ConsensusAgent<TPeer>>),
+    Good(TPeer::Id),
+    Outdated(TPeer::Id),
 }
 
 impl<TNetwork: Network> HistorySync<TNetwork> {
@@ -72,12 +71,14 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
 
     pub fn new(
         blockchain: Arc<RwLock<Blockchain>>,
+        network: Arc<TNetwork>,
         network_event_rx: BroadcastStream<NetworkEvent<TNetwork::PeerType>>,
     ) -> Self {
         Self {
             blockchain,
+            network,
             network_event_rx,
-            agents: HashMap::new(),
+            peers: HashMap::new(),
             epoch_ids_stream: FuturesUnordered::new(),
             epoch_clusters: VecDeque::new(),
             checkpoint_clusters: VecDeque::new(),
@@ -87,11 +88,11 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         }
     }
 
-    pub fn agents(&self) -> impl Iterator<Item = &Arc<ConsensusAgent<TNetwork::PeerType>>> {
-        self.agents.values().map(|(agent, _)| agent)
+    pub fn peers(&self) -> impl Iterator<Item = &<<TNetwork as Network>::PeerType as Peer>::Id> {
+        self.peers.keys()
     }
 
-    pub fn remove_agent(&mut self, peer_id: <<TNetwork as Network>::PeerType as Peer>::Id) {
+    pub fn remove_peer(&mut self, peer_id: <<TNetwork as Network>::PeerType as Peer>::Id) {
         for cluster in self.epoch_clusters.iter_mut() {
             cluster.remove_peer(&peer_id);
         }
@@ -105,9 +106,14 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
 }
 
 impl<TNetwork: Network> HistorySyncStream<TNetwork::PeerType> for HistorySync<TNetwork> {
-    fn add_agent(&self, agent: Arc<ConsensusAgent<TNetwork::PeerType>>) {
-        trace!("Requesting epoch ids for peer: {:?}", agent.peer.id());
-        let future = Self::request_epoch_ids(Arc::clone(&self.blockchain), agent).boxed();
+    fn add_peer(&self, peer_id: <<TNetwork as Network>::PeerType as Peer>::Id) {
+        trace!("Requesting epoch ids for peer: {:?}", peer_id);
+        let future = Self::request_epoch_ids(
+            Arc::clone(&self.blockchain),
+            Arc::clone(&self.network),
+            peer_id,
+        )
+        .boxed();
         self.epoch_ids_stream.push(future);
 
         // Pushing the future to FuturesUnordered above does not wake the task that
@@ -127,20 +133,19 @@ mod tests {
     use nimiq_blockchain::Blockchain;
     use nimiq_database::volatile::VolatileEnvironment;
     use nimiq_hash::Blake2bHash;
-    use nimiq_network_interface::prelude::Network;
-    use nimiq_network_mock::{MockHub, MockNetwork, MockPeer};
+    use nimiq_network_interface::prelude::{Network, Peer};
+    use nimiq_network_mock::{MockHub, MockNetwork, MockPeer, MockPeerId};
     use nimiq_primitives::networks::NetworkId;
     use nimiq_test_log::test;
     use nimiq_utils::time::OffsetTime;
 
-    use crate::consensus_agent::ConsensusAgent;
     use crate::sync::history::sync::EpochIds;
     use crate::sync::history::HistorySync;
 
     #[test(tokio::test)]
     async fn it_can_cluster_epoch_ids() {
         fn generate_epoch_ids(
-            agent: &Arc<ConsensusAgent<MockPeer>>,
+            sender_peer_id: MockPeerId,
             len: usize,
             first_epoch_number: usize,
             diverge_at: Option<usize>,
@@ -165,7 +170,7 @@ mod tests {
                 ids,
                 checkpoint_id: None,
                 first_epoch_number,
-                sender: Arc::clone(agent),
+                sender: sender_peer_id,
             }
         }
 
@@ -183,11 +188,7 @@ mod tests {
         net1.dial_mock(&net2);
         net1.dial_mock(&net3);
         let peers = net1.get_peers();
-        let consensus_agents: Vec<_> = peers
-            .into_iter()
-            .map(ConsensusAgent::new)
-            .map(Arc::new)
-            .collect();
+        let peer_ids: Vec<_> = peers.into_iter().map(|peer| peer.id()).collect();
 
         fn run_test<F>(
             blockchain: &Arc<RwLock<Blockchain>>,
@@ -199,16 +200,22 @@ mod tests {
         ) where
             F: Fn(HistorySync<MockNetwork>),
         {
-            let mut sync =
-                HistorySync::<MockNetwork>::new(Arc::clone(blockchain), net.subscribe_events());
+            let mut sync = HistorySync::<MockNetwork>::new(
+                Arc::clone(blockchain),
+                Arc::clone(&net),
+                net.subscribe_events(),
+            );
             sync.cluster_epoch_ids(epoch_ids1.clone());
             sync.cluster_epoch_ids(epoch_ids2.clone());
             test(sync);
 
             // Symmetric check
             if symmetric {
-                let mut sync =
-                    HistorySync::<MockNetwork>::new(Arc::clone(blockchain), net.subscribe_events());
+                let mut sync = HistorySync::<MockNetwork>::new(
+                    Arc::clone(blockchain),
+                    Arc::clone(&net),
+                    net.subscribe_events(),
+                );
                 sync.cluster_epoch_ids(epoch_ids2);
                 sync.cluster_epoch_ids(epoch_ids1);
                 test(sync);
@@ -217,8 +224,8 @@ mod tests {
 
         // This test tests several aspects of the epoch id clustering.
         // 1) identical epoch ids
-        let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 10, 1, None);
-        let epoch_ids2 = generate_epoch_ids(&consensus_agents[1], 10, 1, None);
+        let epoch_ids1 = generate_epoch_ids(peer_ids[0], 10, 1, None);
+        let epoch_ids2 = generate_epoch_ids(peer_ids[1], 10, 1, None);
         run_test(
             &blockchain,
             &net1,
@@ -234,8 +241,8 @@ mod tests {
         );
 
         // 2) disjoint epoch ids
-        let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 10, 1, None);
-        let epoch_ids2 = generate_epoch_ids(&consensus_agents[1], 10, 1, Some(0));
+        let epoch_ids1 = generate_epoch_ids(peer_ids[0], 10, 1, None);
+        let epoch_ids2 = generate_epoch_ids(peer_ids[1], 10, 1, Some(0));
         run_test(
             &blockchain,
             &net1,
@@ -254,8 +261,8 @@ mod tests {
         );
 
         // 3) same offset and history, second shorter than first
-        let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 10, 1, None);
-        let epoch_ids2 = generate_epoch_ids(&consensus_agents[1], 8, 1, None);
+        let epoch_ids1 = generate_epoch_ids(peer_ids[0], 10, 1, None);
+        let epoch_ids2 = generate_epoch_ids(peer_ids[1], 8, 1, None);
         run_test(
             &blockchain,
             &net1,
@@ -274,8 +281,8 @@ mod tests {
         );
 
         // 4) different offset, same history, but second is longer
-        let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 10, 1, None);
-        let epoch_ids2 = generate_epoch_ids(&consensus_agents[1], 10, 3, None);
+        let epoch_ids1 = generate_epoch_ids(peer_ids[0], 10, 1, None);
+        let epoch_ids2 = generate_epoch_ids(peer_ids[1], 10, 3, None);
         run_test(
             &blockchain,
             &net1,
@@ -294,8 +301,8 @@ mod tests {
         ); // TODO: for a symmetric check, blockchain state would need to change
 
         // 5) Irrelevant epoch ids (that would constitute forks from what we have already seen.
-        let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 10, 0, None);
-        let epoch_ids2 = generate_epoch_ids(&consensus_agents[1], 10, 0, Some(0));
+        let epoch_ids1 = generate_epoch_ids(peer_ids[0], 10, 0, None);
+        let epoch_ids2 = generate_epoch_ids(peer_ids[1], 10, 0, Some(0));
         run_test(
             &blockchain,
             &net1,
@@ -308,8 +315,8 @@ mod tests {
         );
 
         // 6) different offset, same history, but second is shorter
-        let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 10, 1, None);
-        let epoch_ids2 = generate_epoch_ids(&consensus_agents[1], 5, 3, None);
+        let epoch_ids1 = generate_epoch_ids(peer_ids[0], 10, 1, None);
+        let epoch_ids2 = generate_epoch_ids(peer_ids[1], 5, 3, None);
         run_test(
             &blockchain,
             &net1,
@@ -328,8 +335,8 @@ mod tests {
         ); // TODO: for a symmetric check, blockchain state would need to change
 
         // 7) different offset, diverging history, second longer
-        let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 10, 1, None);
-        let epoch_ids2 = generate_epoch_ids(&consensus_agents[1], 8, 4, Some(6));
+        let epoch_ids1 = generate_epoch_ids(peer_ids[0], 10, 1, None);
+        let epoch_ids2 = generate_epoch_ids(peer_ids[1], 8, 4, Some(6));
         run_test(
             &blockchain,
             &net1,

@@ -1,6 +1,6 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::pin::Pin;
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use futures::task::{Context, Poll};
@@ -9,24 +9,28 @@ use tokio_stream::wrappers::BroadcastStream;
 
 use nimiq_block::Block;
 use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::{network::NetworkEvent, peer::Peer};
+use nimiq_network_interface::{
+    network::{Network, NetworkEvent},
+    peer::Peer,
+    prelude::{RequestError, ResponseMessage},
+};
 
-use crate::consensus_agent::ConsensusAgent;
+use crate::messages::{RequestMissingBlocks, ResponseBlocks};
 use crate::sync::history::HistorySyncReturn;
 use crate::sync::sync_queue::SyncQueue;
 
-pub trait RequestComponent<P: Peer>: Stream<Item = RequestComponentEvent> + Unpin {
+pub trait RequestComponent<N: Network>: Stream<Item = RequestComponentEvent> + Unpin {
     fn request_missing_blocks(
         &mut self,
         target_block_hash: Blake2bHash,
         locators: Vec<Blake2bHash>,
     );
 
-    fn put_peer_into_sync_mode(&mut self, peer: Arc<P>);
+    fn put_peer_into_sync_mode(&mut self, peer_id: <<N as Network>::PeerType as Peer>::Id);
 
     fn num_peers(&self) -> usize;
 
-    fn peers(&self) -> Vec<Weak<ConsensusAgent<P>>>;
+    fn peers(&self) -> Vec<<<N as Network>::PeerType as Peer>::Id>;
 }
 
 #[derive(Debug)]
@@ -37,7 +41,7 @@ pub enum RequestComponentEvent {
 pub trait HistorySyncStream<TPeer: Peer>:
     Stream<Item = HistorySyncReturn<TPeer>> + Unpin + Send
 {
-    fn add_agent(&self, agent: Arc<ConsensusAgent<TPeer>>);
+    fn add_peer(&self, peer_id: TPeer::Id);
 }
 
 /// Peer Tracking & Request Component
@@ -49,41 +53,43 @@ pub trait HistorySyncStream<TPeer: Peer>:
 ///
 /// Outside has a request blocks method, which doesn’t return the blocks.
 /// The blocks instead are returned by polling the component.
-pub struct BlockRequestComponent<TPeer: Peer + 'static> {
-    sync_queue: SyncQueue<TPeer, (Blake2bHash, Vec<Blake2bHash>), Vec<Block>>, // requesting missing blocks from peers
-    sync_method: Pin<Box<dyn HistorySyncStream<TPeer>>>,
-    agents: HashMap<Arc<TPeer>, Arc<ConsensusAgent<TPeer>>>, // this map holds the strong references to up-to-date peers
-    outdated_agents: HashMap<Arc<TPeer>, Arc<ConsensusAgent<TPeer>>>, //
-    outdated_timeouts: HashMap<Arc<TPeer>, Instant>,
-    network_event_rx: BroadcastStream<NetworkEvent<TPeer>>,
+pub struct BlockRequestComponent<TNetwork: Network + 'static> {
+    sync_queue: SyncQueue<TNetwork, (Blake2bHash, Vec<Blake2bHash>), Vec<Block>>, // requesting missing blocks from peers
+    sync_method: Pin<Box<dyn HistorySyncStream<TNetwork::PeerType>>>,
+    peers: HashSet<<<TNetwork as Network>::PeerType as Peer>::Id>, // this map holds the strong references to up-to-date peers
+    outdated_peers: HashSet<<<TNetwork as Network>::PeerType as Peer>::Id>, //
+    outdated_timeouts: HashMap<<<TNetwork as Network>::PeerType as Peer>::Id, Instant>,
+    network_event_rx: BroadcastStream<NetworkEvent<TNetwork::PeerType>>,
 }
 
-impl<TPeer: Peer + 'static> BlockRequestComponent<TPeer> {
+impl<TNetwork: Network + 'static> BlockRequestComponent<TNetwork> {
     const NUM_PENDING_BLOCKS: usize = 5;
 
     const CHECK_OUTDATED_TIMEOUT: Duration = Duration::from_secs(20);
 
     pub fn new(
-        sync_method: Pin<Box<dyn HistorySyncStream<TPeer>>>,
-        network_event_rx: BroadcastStream<NetworkEvent<TPeer>>,
+        sync_method: Pin<Box<dyn HistorySyncStream<TNetwork::PeerType>>>,
+        network_event_rx: BroadcastStream<NetworkEvent<TNetwork::PeerType>>,
+        network: Arc<TNetwork>,
     ) -> Self {
         Self {
             sync_method,
             sync_queue: SyncQueue::new(
+                network,
                 vec![],
                 vec![],
                 Self::NUM_PENDING_BLOCKS,
-                |(target_block_hash, locators), peer| {
+                |(target_block_hash, locators), network, peer_id| {
                     async move {
-                        if let Some(peer) = Weak::upgrade(&peer) {
-                            let res = peer
-                                .request_missing_blocks(target_block_hash, locators)
-                                .await;
-                            if let Ok(Some(missing_blocks)) = res {
-                                Some(missing_blocks)
-                            } else {
-                                None
-                            }
+                        let res = Self::request_missing_blocks_from_peer(
+                            network,
+                            peer_id,
+                            target_block_hash,
+                            locators,
+                        )
+                        .await;
+                        if let Ok(Some(missing_blocks)) = res {
+                            Some(missing_blocks)
                         } else {
                             None
                         }
@@ -91,8 +97,8 @@ impl<TPeer: Peer + 'static> BlockRequestComponent<TPeer> {
                     .boxed()
                 },
             ),
-            agents: Default::default(),
-            outdated_agents: Default::default(),
+            peers: Default::default(),
+            outdated_peers: Default::default(),
             outdated_timeouts: Default::default(),
             network_event_rx,
         }
@@ -108,15 +114,42 @@ impl<TPeer: Peer + 'static> BlockRequestComponent<TPeer> {
             }
             !timeouted
         });
-        for peer in peers_todo {
-            debug!("Adding outdated peer {:?} to history sync", peer.id());
-            let agent = self.outdated_agents.remove(&peer).unwrap();
-            self.sync_method.add_agent(agent);
+        for peer_id in peers_todo {
+            debug!("Adding outdated peer {:?} to history sync", peer_id);
+            let peer_id = self.outdated_peers.take(&peer_id).unwrap();
+            self.sync_method.add_peer(peer_id);
+        }
+    }
+
+    pub async fn request_missing_blocks_from_peer(
+        network: Arc<TNetwork>,
+        peer_id: <<TNetwork as Network>::PeerType as Peer>::Id,
+        target_block_hash: Blake2bHash,
+        locators: Vec<Blake2bHash>,
+    ) -> Result<Option<Vec<Block>>, RequestError> {
+        let result = network
+            .request::<RequestMissingBlocks, ResponseBlocks>(
+                RequestMissingBlocks {
+                    locators,
+                    target_hash: target_block_hash,
+                },
+                peer_id,
+            )
+            .await;
+        match result {
+            Ok(future) => {
+                let (response_message, _request_id, _peer_id) = future.await;
+                match response_message {
+                    ResponseMessage::Response(blocks) => Ok(blocks.blocks),
+                    ResponseMessage::Error(_) => Err(RequestError::Timeout),
+                }
+            }
+            Err(_) => Err(RequestError::SendError),
         }
     }
 }
 
-impl<TPeer: 'static + Peer> RequestComponent<TPeer> for BlockRequestComponent<TPeer> {
+impl<TNetwork: 'static + Network> RequestComponent<TNetwork> for BlockRequestComponent<TNetwork> {
     fn request_missing_blocks(
         &mut self,
         target_block_hash: Blake2bHash,
@@ -125,11 +158,11 @@ impl<TPeer: 'static + Peer> RequestComponent<TPeer> for BlockRequestComponent<TP
         self.sync_queue.add_ids(vec![(target_block_hash, locators)]);
     }
 
-    fn put_peer_into_sync_mode(&mut self, peer: Arc<TPeer>) {
+    fn put_peer_into_sync_mode(&mut self, peer_id: <<TNetwork as Network>::PeerType as Peer>::Id) {
         // If the peer is not in `agents`, it's already in sync mode.
-        if let Some(agent) = self.agents.remove(&peer) {
-            debug!("Putting peer back into sync mode: {:?}", peer.id());
-            self.sync_method.add_agent(agent);
+        if let Some(peer_id) = self.peers.take(&peer_id) {
+            debug!("Putting peer back into sync mode: {:?}", peer_id);
+            self.sync_method.add_peer(peer_id);
         }
     }
 
@@ -137,12 +170,12 @@ impl<TPeer: 'static + Peer> RequestComponent<TPeer> for BlockRequestComponent<TP
         self.sync_queue.num_peers()
     }
 
-    fn peers(&self) -> Vec<Weak<ConsensusAgent<TPeer>>> {
-        self.agents.values().map(Arc::downgrade).collect()
+    fn peers(&self) -> Vec<<<TNetwork as Network>::PeerType as Peer>::Id> {
+        self.peers.iter().cloned().collect()
     }
 }
 
-impl<TPeer: Peer + 'static> Stream for BlockRequestComponent<TPeer> {
+impl<TNetwork: Network + 'static> Stream for BlockRequestComponent<TNetwork> {
     type Item = RequestComponentEvent;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
@@ -150,27 +183,25 @@ impl<TPeer: Peer + 'static> Stream for BlockRequestComponent<TPeer> {
         while let Poll::Ready(Some(result)) = self.network_event_rx.poll_next_unpin(cx) {
             if let Ok(NetworkEvent::PeerLeft(peer)) = result {
                 // Remove peers that left.
-                self.agents.remove(&peer);
+                self.peers.remove(&peer.id());
             }
         }
 
         // 2. Poll self.sync_method and add new peers to self.sync_queue.
         while let Poll::Ready(result) = self.sync_method.poll_next_unpin(cx) {
             match result {
-                Some(HistorySyncReturn::Good(peer)) => {
-                    debug!("Adding peer {:?} into follow mode", peer.peer.id());
-                    self.sync_queue
-                        .add_peer(peer.peer.id(), Arc::downgrade(&peer));
-                    self.agents.insert(Arc::clone(&peer.peer), peer);
+                Some(HistorySyncReturn::Good(peer_id)) => {
+                    debug!("Adding peer {:?} into follow mode", peer_id);
+                    self.sync_queue.add_peer(peer_id);
+                    self.peers.insert(peer_id);
                 }
-                Some(HistorySyncReturn::Outdated(peer)) => {
+                Some(HistorySyncReturn::Outdated(peer_id)) => {
                     debug!(
                         "History sync returned outdated peer {:?}. Waiting.",
-                        peer.peer.id()
+                        peer_id
                     );
-                    self.outdated_timeouts
-                        .insert(Arc::clone(&peer.peer), Instant::now());
-                    self.outdated_agents.insert(Arc::clone(&peer.peer), peer);
+                    self.outdated_timeouts.insert(peer_id, Instant::now());
+                    self.outdated_peers.insert(peer_id);
                 }
                 None => {}
             }

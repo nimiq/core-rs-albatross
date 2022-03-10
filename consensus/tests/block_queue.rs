@@ -1,7 +1,7 @@
 use std::{
     marker::PhantomData,
     pin::Pin,
-    sync::{Arc, Weak},
+    sync::Arc,
     task::{Context, Poll},
 };
 
@@ -18,14 +18,13 @@ use rand::Rng;
 use nimiq_block::Block;
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
-use nimiq_consensus::consensus_agent::ConsensusAgent;
 use nimiq_consensus::sync::block_queue::{BlockQueue, BlockQueueConfig};
 use nimiq_consensus::sync::request_component::{RequestComponent, RequestComponentEvent};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::network::Network;
 use nimiq_network_interface::peer::Peer;
-use nimiq_network_mock::{MockHub, MockId, MockPeer};
+use nimiq_network_mock::{MockHub, MockId, MockNetwork};
 use nimiq_primitives::networks::NetworkId;
 use nimiq_test_log::test;
 use nimiq_test_utils::blockchain::{signing_key, voting_key};
@@ -63,7 +62,7 @@ impl<P> MockRequestComponent<P> {
     }
 }
 
-impl<P: Peer> RequestComponent<P> for MockRequestComponent<P> {
+impl<N: Network> RequestComponent<N> for MockRequestComponent<N> {
     fn request_missing_blocks(
         &mut self,
         target_block_hash: Blake2bHash,
@@ -72,7 +71,7 @@ impl<P: Peer> RequestComponent<P> for MockRequestComponent<P> {
         self.tx.unbounded_send((target_block_hash, locators)).ok(); // ignore error
     }
 
-    fn put_peer_into_sync_mode(&mut self, _peer: Arc<P>) {
+    fn put_peer_into_sync_mode(&mut self, _peer: <<N as Network>::PeerType as Peer>::Id) {
         self.peer_put_into_sync = true;
     }
 
@@ -80,18 +79,18 @@ impl<P: Peer> RequestComponent<P> for MockRequestComponent<P> {
         1
     }
 
-    fn peers(&self) -> Vec<Weak<ConsensusAgent<P>>> {
+    fn peers(&self) -> Vec<<<N as Network>::PeerType as Peer>::Id> {
         unimplemented!()
     }
 }
 
-impl<P> Default for MockRequestComponent<P> {
+impl<N> Default for MockRequestComponent<N> {
     fn default() -> Self {
         Self::new().0
     }
 }
 
-impl<P: Peer> Stream for MockRequestComponent<P> {
+impl<N: Network> Stream for MockRequestComponent<N> {
     type Item = RequestComponentEvent;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
@@ -114,7 +113,7 @@ async fn send_single_micro_block_to_block_queue() {
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network());
     let producer = BlockProducer::new(signing_key(), voting_key());
-    let request_component = MockRequestComponent::<MockPeer>::default();
+    let request_component = MockRequestComponent::<MockNetwork>::default();
     let (mut tx, rx) = mpsc::channel(32);
 
     let mut block_queue = BlockQueue::with_block_stream(
@@ -168,7 +167,7 @@ async fn send_two_micro_blocks_out_of_order() {
     let network = Arc::new(hub.new_network());
     let producer = BlockProducer::new(signing_key(), voting_key());
     let (request_component, mut mock_ptarc_rx, _mock_ptarc_tx) =
-        MockRequestComponent::<MockPeer>::new();
+        MockRequestComponent::<MockNetwork>::new();
     let (mut tx, rx) = mpsc::channel(32);
 
     let mut block_queue = BlockQueue::with_block_stream(
@@ -264,7 +263,7 @@ async fn send_micro_blocks_out_of_order() {
     let network = Arc::new(hub.new_network());
     let producer = BlockProducer::new(signing_key(), voting_key());
     let (request_component, _mock_ptarc_rx, _mock_ptarc_tx) =
-        MockRequestComponent::<MockPeer>::new();
+        MockRequestComponent::<MockNetwork>::new();
     let (mut tx, rx) = mpsc::channel(32);
 
     let mut block_queue = BlockQueue::with_block_stream(
@@ -358,7 +357,7 @@ async fn send_invalid_block() {
     let network = Arc::new(hub.new_network());
     let producer = BlockProducer::new(signing_key(), voting_key());
     let (request_component, mut mock_ptarc_rx, _mock_ptarc_tx) =
-        MockRequestComponent::<MockPeer>::new();
+        MockRequestComponent::<MockNetwork>::new();
     let (mut tx, rx) = mpsc::channel(32);
 
     let mut block_queue = BlockQueue::with_block_stream(
@@ -450,7 +449,7 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
     let network = Arc::new(hub.new_network_with_address(1));
     let producer = BlockProducer::new(signing_key(), voting_key());
     let (request_component, mut mock_ptarc_rx, mock_ptarc_tx) =
-        MockRequestComponent::<MockPeer>::new();
+        MockRequestComponent::<MockNetwork>::new();
     let (mut tx, rx) = mpsc::channel(32);
 
     let mut block_queue = BlockQueue::with_block_stream(
@@ -546,7 +545,7 @@ async fn put_peer_back_into_sync_mode() {
     let mut hub = MockHub::new();
     let network = Arc::new(hub.new_network_with_address(1));
     let producer = BlockProducer::new(signing_key(), voting_key());
-    let (request_component, _, _) = MockRequestComponent::<MockPeer>::new();
+    let (request_component, _, _) = MockRequestComponent::<MockNetwork>::new();
     let (mut tx, rx) = mpsc::channel(32);
 
     let peer_addr = hub.new_address().into();

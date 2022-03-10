@@ -4,7 +4,7 @@ use std::collections::binary_heap::PeekMut;
 use std::collections::{BinaryHeap, VecDeque};
 use std::fmt::Debug;
 use std::pin::Pin;
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 use std::task::Waker;
 
 use futures::future::BoxFuture;
@@ -12,9 +12,7 @@ use futures::stream::FuturesUnordered;
 use futures::task::{Context, Poll};
 use futures::{ready, Future, Stream, StreamExt};
 
-use nimiq_network_interface::peer::Peer;
-
-use crate::consensus_agent::ConsensusAgent;
+use nimiq_network_interface::{network::Network, peer::Peer};
 
 #[pin_project]
 #[derive(Debug)]
@@ -70,14 +68,12 @@ impl<TOutput> Ord for QueuedOutput<TOutput> {
 
 pub struct SyncQueuePeer<TPeer: Peer> {
     pub(crate) peer_id: TPeer::Id,
-    pub(crate) agent: Weak<ConsensusAgent<TPeer>>,
 }
 
 impl<TPeer: Peer> Clone for SyncQueuePeer<TPeer> {
     fn clone(&self) -> Self {
         Self {
-            peer_id: self.peer_id.clone(),
-            agent: self.agent.clone(),
+            peer_id: self.peer_id,
         }
     }
 }
@@ -85,8 +81,9 @@ impl<TPeer: Peer> Clone for SyncQueuePeer<TPeer> {
 /// The SyncQueue will request a list of ids from a set of peers
 /// and implements an ordered stream over the resulting objects.
 /// The stream returns an error if an id could not be resolved.
-pub struct SyncQueue<TPeer: Peer, TId, TOutput> {
-    pub(crate) peers: Vec<SyncQueuePeer<TPeer>>,
+pub struct SyncQueue<TNetwork: Network, TId, TOutput> {
+    pub(crate) peers: Vec<SyncQueuePeer<TNetwork::PeerType>>,
+    network: Arc<TNetwork>,
     desired_pending_size: usize,
     ids_to_request: VecDeque<TId>,
     pending_futures: FuturesUnordered<OrderWrapper<TId, BoxFuture<'static, Option<TOutput>>>>,
@@ -94,21 +91,30 @@ pub struct SyncQueue<TPeer: Peer, TId, TOutput> {
     next_incoming_index: usize,
     next_outgoing_index: usize,
     current_peer_index: usize,
-    request_fn: fn(TId, Weak<ConsensusAgent<TPeer>>) -> BoxFuture<'static, Option<TOutput>>,
+    request_fn: fn(
+        TId,
+        Arc<TNetwork>,
+        <<TNetwork as Network>::PeerType as Peer>::Id,
+    ) -> BoxFuture<'static, Option<TOutput>>,
     waker: Option<Waker>,
 }
 
-impl<TPeer, TId, TOutput> SyncQueue<TPeer, TId, TOutput>
+impl<TNetwork, TId, TOutput> SyncQueue<TNetwork, TId, TOutput>
 where
-    TPeer: Peer,
     TId: Clone + Debug,
     TOutput: Send + Unpin,
+    TNetwork: Network,
 {
     pub fn new(
+        network: Arc<TNetwork>,
         ids: Vec<TId>,
-        peers: Vec<SyncQueuePeer<TPeer>>,
+        peers: Vec<SyncQueuePeer<TNetwork::PeerType>>,
         desired_pending_size: usize,
-        request_fn: fn(TId, Weak<ConsensusAgent<TPeer>>) -> BoxFuture<'static, Option<TOutput>>,
+        request_fn: fn(
+            TId,
+            Arc<TNetwork>,
+            <<TNetwork as Network>::PeerType as Peer>::Id,
+        ) -> BoxFuture<'static, Option<TOutput>>,
     ) -> Self {
         log::trace!(
             "Creating SyncQueue for {} with {} ids and {} peers",
@@ -118,6 +124,7 @@ where
         );
 
         SyncQueue {
+            network,
             peers,
             desired_pending_size,
             ids_to_request: VecDeque::from(ids),
@@ -131,17 +138,14 @@ where
         }
     }
 
-    fn get_next_peer(&mut self, start_index: usize) -> Option<Weak<ConsensusAgent<TPeer>>> {
-        while !self.peers.is_empty() {
+    fn get_next_peer(
+        &mut self,
+        start_index: usize,
+    ) -> Option<<<TNetwork as Network>::PeerType as Peer>::Id> {
+        if !self.peers.is_empty() {
             let index = start_index % self.peers.len();
-            match Weak::upgrade(&self.peers[index].agent) {
-                Some(peer) => {
-                    return Some(Arc::downgrade(&peer));
-                }
-                None => {
-                    self.peers.remove(index);
-                }
-            }
+            // TODO: Maybe check if the peer connection is closed.
+            return Some(self.peers[index].peer_id);
         }
         None
     }
@@ -159,8 +163,8 @@ where
         // Drain ids and produce futures.
         for _ in 0..num_ids_to_request {
             // Get next peer in line. Abort if there are no more peers.
-            let peer = match self.get_next_peer(self.current_peer_index) {
-                Some(peer) => peer,
+            let peer_id = match self.get_next_peer(self.current_peer_index) {
+                Some(peer_id) => peer_id,
                 None => return,
             };
 
@@ -174,7 +178,7 @@ where
             );
 
             let wrapper = OrderWrapper {
-                data: (self.request_fn)(id.clone(), peer),
+                data: (self.request_fn)(id.clone(), Arc::clone(&self.network), peer_id),
                 id,
                 index: self.next_incoming_index,
                 peer: self.current_peer_index,
@@ -205,18 +209,15 @@ where
         }
     }
 
-    pub fn add_peer(&mut self, peer_id: TPeer::Id, peer: Weak<ConsensusAgent<TPeer>>) {
-        self.peers.push(SyncQueuePeer {
-            peer_id,
-            agent: peer,
-        });
+    pub fn add_peer(&mut self, peer_id: <<TNetwork as Network>::PeerType as Peer>::Id) {
+        self.peers.push(SyncQueuePeer { peer_id });
     }
 
-    pub fn remove_peer(&mut self, peer_id: &TPeer::Id) {
+    pub fn remove_peer(&mut self, peer_id: &<<TNetwork as Network>::PeerType as Peer>::Id) {
         self.peers.retain(|element| element.peer_id != *peer_id)
     }
 
-    pub fn has_peer(&self, peer_id: TPeer::Id) -> bool {
+    pub fn has_peer(&self, peer_id: <<TNetwork as Network>::PeerType as Peer>::Id) -> bool {
         self.peers.iter().any(|o_peer| o_peer.peer_id == peer_id)
     }
 
@@ -259,9 +260,9 @@ where
     }
 }
 
-impl<TPeer, TId, TOutput> Stream for SyncQueue<TPeer, TId, TOutput>
+impl<TNetwork, TId, TOutput> Stream for SyncQueue<TNetwork, TId, TOutput>
 where
-    TPeer: Peer,
+    TNetwork: Network,
     TId: Clone + Unpin + Debug,
     TOutput: Send + Unpin,
 {
@@ -319,7 +320,11 @@ where
                             );
 
                             let wrapper = OrderWrapper {
-                                data: (self.request_fn)(result.id.clone(), peer),
+                                data: (self.request_fn)(
+                                    result.id.clone(),
+                                    Arc::clone(&self.network),
+                                    peer,
+                                ),
                                 id: result.id,
                                 index: result.index,
                                 peer: next_peer,

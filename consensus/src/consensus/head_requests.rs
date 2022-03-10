@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::mem;
 use std::pin::Pin;
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 
 use futures::future::BoxFuture;
 use futures::stream::FuturesUnordered;
@@ -12,46 +12,55 @@ use parking_lot::RwLock;
 use nimiq_block::Block;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_hash::Blake2bHash;
-use nimiq_network_interface::{peer::Peer, request_response::RequestError};
+use nimiq_network_interface::{
+    network::Network,
+    peer::Peer,
+    prelude::{RequestError, ResponseMessage},
+};
 
-use crate::consensus_agent::ConsensusAgent;
+use crate::messages::{HeadResponse, RequestBlock, RequestHead, ResponseBlock};
 
 /// Requests the head blocks for a set of peers.
 /// Calculates the number of known/unknown blocks and a vector of unknown blocks.
-pub struct HeadRequests<TPeer: Peer + 'static> {
-    peers: Vec<Arc<ConsensusAgent<TPeer>>>,
+pub struct HeadRequests<TNetwork: Network + 'static> {
+    peers: Vec<<<TNetwork as Network>::PeerType as Peer>::Id>,
     head_hashes: FuturesUnordered<BoxFuture<'static, (usize, Result<Blake2bHash, RequestError>)>>,
-    head_blocks:
-        FuturesUnordered<BoxFuture<'static, (Result<Option<Block>, RequestError>, TPeer::Id)>>,
+    head_blocks: FuturesUnordered<
+        BoxFuture<
+            'static,
+            (
+                Result<Option<Block>, RequestError>,
+                <<TNetwork as Network>::PeerType as Peer>::Id,
+            ),
+        >,
+    >,
     requested_hashes: HashSet<Blake2bHash>,
     blockchain: Arc<RwLock<Blockchain>>,
+    network: Arc<TNetwork>,
     num_known_blocks: usize,
     num_unknown_blocks: usize,
-    unknown_blocks: Vec<(Block, TPeer::Id)>,
+    unknown_blocks: Vec<(Block, <<TNetwork as Network>::PeerType as Peer>::Id)>,
 }
 
-pub struct HeadRequestsResult<TPeer: Peer + 'static> {
+pub struct HeadRequestsResult<TNetwork: Network + 'static> {
     pub num_known_blocks: usize,
     pub num_unknown_blocks: usize,
-    pub unknown_blocks: Vec<(Block, TPeer::Id)>,
+    pub unknown_blocks: Vec<(Block, <<TNetwork as Network>::PeerType as Peer>::Id)>,
 }
 
-impl<TPeer: Peer + 'static> HeadRequests<TPeer> {
+impl<TNetwork: Network + 'static> HeadRequests<TNetwork> {
     pub fn new(
-        peers: Vec<Weak<ConsensusAgent<TPeer>>>,
+        peers: Vec<<<TNetwork as Network>::PeerType as Peer>::Id>,
+        network: Arc<TNetwork>,
         blockchain: Arc<RwLock<Blockchain>>,
     ) -> Self {
-        let peers: Vec<_> = peers
-            .into_iter()
-            .filter_map(|peer| peer.upgrade())
-            .collect();
-
         let head_hashes = peers
             .iter()
             .enumerate()
-            .map(|(i, peer)| {
-                let peer = Arc::clone(peer);
-                async move { (i, peer.request_head().await) }.boxed()
+            .map(|(i, peer_id)| {
+                let peer_id = *peer_id;
+                let network = Arc::clone(&network);
+                async move { (i, Self::request_head(network, peer_id).await) }.boxed()
             })
             .collect();
 
@@ -61,6 +70,7 @@ impl<TPeer: Peer + 'static> HeadRequests<TPeer> {
             head_blocks: Default::default(),
             requested_hashes: Default::default(),
             blockchain,
+            network,
             num_known_blocks: 0,
             num_unknown_blocks: 0,
             unknown_blocks: Default::default(),
@@ -70,10 +80,51 @@ impl<TPeer: Peer + 'static> HeadRequests<TPeer> {
     pub fn is_finished(&self) -> bool {
         self.head_hashes.is_empty() && self.head_blocks.is_empty()
     }
+
+    async fn request_head(
+        network: Arc<TNetwork>,
+        peer_id: <<TNetwork as Network>::PeerType as Peer>::Id,
+    ) -> Result<Blake2bHash, RequestError> {
+        let result = network
+            .request::<RequestHead, HeadResponse>(RequestHead {}, peer_id)
+            .await;
+
+        match result {
+            Ok(future) => {
+                let (response_message, _request_id, _peer_id) = future.await;
+                match response_message {
+                    ResponseMessage::Response(head) => Ok(head.hash),
+                    ResponseMessage::Error(_) => Err(RequestError::Timeout),
+                }
+            }
+            Err(_) => Err(RequestError::SendError),
+        }
+    }
+
+    async fn request_block(
+        network: Arc<TNetwork>,
+        peer_id: <<TNetwork as Network>::PeerType as Peer>::Id,
+        hash: Blake2bHash,
+    ) -> Result<Option<Block>, RequestError> {
+        let result = network
+            .request::<RequestBlock, ResponseBlock>(RequestBlock { hash }, peer_id)
+            .await;
+
+        match result {
+            Ok(future) => {
+                let (response_message, _request_id, _peer_id) = future.await;
+                match response_message {
+                    ResponseMessage::Response(block) => Ok(block.block),
+                    ResponseMessage::Error(_) => Err(RequestError::Timeout),
+                }
+            }
+            Err(_) => Err(RequestError::SendError),
+        }
+    }
 }
 
-impl<TPeer: Peer + 'static> Future for HeadRequests<TPeer> {
-    type Output = HeadRequestsResult<TPeer>;
+impl<TNetwork: Network + 'static> Future for HeadRequests<TNetwork> {
+    type Output = HeadRequestsResult<TNetwork>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         // We poll the hashes first.
@@ -93,10 +144,13 @@ impl<TPeer: Peer + 'static> Future for HeadRequests<TPeer> {
                         self.num_unknown_blocks += 1;
                         if !self.requested_hashes.contains(&hash) {
                             self.requested_hashes.insert(hash.clone());
-                            let peer = Arc::clone(&self.peers[i]);
+                            let network = Arc::clone(&self.network);
+                            let peer_id = self.peers[i];
                             self.head_blocks.push(
-                                async move { (peer.request_block(hash).await, peer.peer.id()) }
-                                    .boxed(),
+                                async move {
+                                    (Self::request_block(network, peer_id, hash).await, peer_id)
+                                }
+                                .boxed(),
                             );
                         }
                     }

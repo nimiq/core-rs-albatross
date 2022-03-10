@@ -133,7 +133,11 @@ impl ClientInner {
         let wallet_store = Arc::new(WalletStore::new(environment.clone()));
 
         // Initialize consensus
-        let sync = HistorySync::<Network>::new(Arc::clone(&blockchain), network_events);
+        let sync = HistorySync::<Network>::new(
+            Arc::clone(&blockchain),
+            Arc::clone(&network),
+            network_events,
+        );
         let consensus = Consensus::with_min_peers(
             environment.clone(),
             blockchain,

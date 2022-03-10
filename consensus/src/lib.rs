@@ -18,7 +18,6 @@ pub use consensus::{Consensus, ConsensusEvent, ConsensusProxy};
 pub use error::Error;
 
 pub mod consensus;
-pub mod consensus_agent;
 pub mod error;
 pub mod messages;
 pub mod sync;

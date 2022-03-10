@@ -1,7 +1,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
     pin::Pin,
-    sync::{Arc, Weak},
+    sync::Arc,
     task::{Context, Poll, Waker},
 };
 
@@ -22,7 +22,6 @@ use nimiq_network_interface::{
 };
 use nimiq_primitives::policy;
 
-use crate::consensus_agent::ConsensusAgent;
 use crate::sync::request_component::RequestComponentEvent;
 
 use super::request_component::RequestComponent;
@@ -105,7 +104,7 @@ enum PushOpResult {
 
 impl<N: Network> Inner<N> {
     /// Handles a block announcement.
-    fn on_block_announced<TReq: RequestComponent<N::PeerType>>(
+    fn on_block_announced<TReq: RequestComponent<N>>(
         &mut self,
         block: Block,
         mut request_component: Pin<&mut TReq>,
@@ -141,7 +140,7 @@ impl<N: Network> Inner<N> {
             self.report_validation_result(pubsub_id, MsgAcceptance::Ignore);
 
             if let Some(peer) = self.network.get_peer(peer_id) {
-                request_component.put_peer_into_sync_mode(peer);
+                request_component.put_peer_into_sync_mode(peer.id());
             }
         } else if self.buffer.len() >= self.config.buffer_max {
             log::warn!(
@@ -499,7 +498,7 @@ impl<N: Network> Stream for Inner<N> {
 }
 
 #[pin_project]
-pub struct BlockQueue<N: Network, TReq: RequestComponent<N::PeerType>> {
+pub struct BlockQueue<N: Network, TReq: RequestComponent<N>> {
     /// The Peer Tracking and Request Component.
     #[pin]
     pub request_component: TReq,
@@ -515,7 +514,7 @@ pub struct BlockQueue<N: Network, TReq: RequestComponent<N::PeerType>> {
     accepted_announcements: usize,
 }
 
-impl<N: Network, TReq: RequestComponent<N::PeerType>> BlockQueue<N, TReq> {
+impl<N: Network, TReq: RequestComponent<N>> BlockQueue<N, TReq> {
     pub async fn new(
         config: BlockQueueConfig,
         blockchain: Arc<RwLock<Blockchain>>,
@@ -566,7 +565,7 @@ impl<N: Network, TReq: RequestComponent<N::PeerType>> BlockQueue<N, TReq> {
         self.request_component.num_peers()
     }
 
-    pub fn peers(&self) -> Vec<Weak<ConsensusAgent<N::PeerType>>> {
+    pub fn peers(&self) -> Vec<<<N as Network>::PeerType as Peer>::Id> {
         self.request_component.peers()
     }
 
@@ -580,7 +579,7 @@ impl<N: Network, TReq: RequestComponent<N::PeerType>> BlockQueue<N, TReq> {
     }
 }
 
-impl<N: Network, TReq: RequestComponent<N::PeerType>> Stream for BlockQueue<N, TReq> {
+impl<N: Network, TReq: RequestComponent<N>> Stream for BlockQueue<N, TReq> {
     type Item = BlockQueueEvent;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
