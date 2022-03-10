@@ -5941,8 +5941,7 @@ dependencies = [
 [[package]]
 name = "tracing-gelf"
 version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bef407d785989f789a53a00c9a6196735ef6e407ae2bb20e0282b3b9dc271f66"
+source = "git+https://github.com/hrxi/tracing-gelf.git?branch=nimiq#6640b2d3932037590d14d382de2ccf0c6041b161"
 dependencies = [
  "bytes",
  "futures-channel",
@@ -5952,6 +5951,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util 0.6.9",
+ "tracing",
  "tracing-core",
  "tracing-futures",
  "tracing-subscriber 0.3.9",
