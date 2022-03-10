@@ -941,3 +941,74 @@ async fn mempool_update() {
         );
     }
 }
+
+#[tokio::test]
+async fn applies_total_tx_size_limits() {
+    let env = VolatileEnvironment::new(10).unwrap();
+    let mut genesis_builder = GenesisBuilder::default();
+
+    // Generate transactions
+    let balance = 1;
+    let num_txns = 5;
+    let mut mempool_transactions = vec![];
+    let sender_balances = vec![balance + num_txns * num_txns; num_txns as usize];
+    let recipient_balances = vec![0; num_txns as usize];
+
+    let recipient_accounts = generate_accounts(recipient_balances, &mut genesis_builder, false);
+    let sender_accounts = generate_accounts(sender_balances, &mut genesis_builder, true);
+
+    for i in 0..num_txns {
+        let mempool_transaction = TestTransaction {
+            fee: if i < 2 { 0 as u64 } else { (i + 1) as u64 }, // Produce two tx with the same lowest fees
+            value: balance,
+            recipient: recipient_accounts[i as usize].clone(),
+            sender: sender_accounts[i as usize].clone(),
+        };
+        mempool_transactions.push(mempool_transaction);
+    }
+
+    let (txns, txns_len) = generate_transactions(mempool_transactions, true);
+
+    let mut rng = StdRng::seed_from_u64(0);
+    genesis_builder.with_genesis_validator(
+        Address::from(&SchnorrKeyPair::generate(&mut rng)),
+        SchnorrPublicKey::from([0u8; 32]),
+        BlsKeyPair::generate(&mut rng).public_key,
+        Address::default(),
+    );
+
+    let genesis_info = genesis_builder.generate(env.clone()).unwrap();
+
+    let blockchain = Arc::new(RwLock::new(
+        Blockchain::with_genesis(
+            env.clone(),
+            Arc::new(OffsetTime::new()),
+            NetworkId::UnitAlbatross,
+            genesis_info.block,
+            genesis_info.accounts,
+        )
+        .unwrap(),
+    ));
+
+    // Create mempool with total size limit just below the total one of the generated transactions
+    let mempool_config = MempoolConfig {
+        size_limit: txns_len - 1,
+        ..Default::default()
+    };
+    let mempool = Mempool::new(blockchain, mempool_config);
+    let mut hub = MockHub::new();
+    let mock_id = MockId::new(hub.new_address().into());
+    let mock_network = Arc::new(hub.new_network());
+
+    let tx_remove_ord_recipient = txns[0].recipient.clone();
+
+    send_txn_to_mempool(&mempool, mock_network, mock_id, txns).await;
+
+    let mempool_txns = mempool.get_transactions_for_block(txns_len);
+
+    // We expect that the tx with the lowest fee did not stay in the mempool
+    for tx in &mempool_txns {
+        assert_ne!(tx.recipient, tx_remove_ord_recipient);
+    }
+    assert_eq!(mempool_txns.len(), (num_txns - 1) as usize);
+}

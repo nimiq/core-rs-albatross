@@ -733,8 +733,14 @@ impl ClientConfigBuilder {
     }
 
     /// Sets the mempool filter rules
-    pub fn mempool(&mut self, filter_rules: MempoolRules, filter_limit: usize) -> &mut Self {
+    pub fn mempool(
+        &mut self,
+        size_limit: usize,
+        filter_rules: MempoolRules,
+        filter_limit: usize,
+    ) -> &mut Self {
         self.mempool = Some(MempoolConfig {
+            size_limit,
             filter_rules,
             filter_limit,
         });

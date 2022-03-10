@@ -235,6 +235,10 @@ level = "debug"
 
 [mempool]
 
+# Total size limit of transactions in the mempool (bytes)
+# Default: 12_000_000 (~ 100000 basic tx)
+#size_limit = 12_000_000
+
 # Configure max size of transaction black list
 # Default: 25000
 #blacklist_limit = 25000
