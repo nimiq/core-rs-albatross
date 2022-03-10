@@ -33,6 +33,8 @@ parser.add_argument('-o', "--output", metavar='DIR', type=str,
                     help="output directory", default="/tmp/nimiq-devnet")
 parser.add_argument('-s', "--spammer", action="store_true",
                     help="generate configuration files for a spammer")
+parser.add_argument('-a', "--albagen", action="store_true",
+                    help="generate configuration files for albagen")
 args = parser.parse_args()
 
 output = Path(args.output)
@@ -277,6 +279,11 @@ delegation = "{validator_address}"
 [[accounts]]
 address = "NQ37 7C3V VMN8 FRPN FXS9 PLAG JMRE 8SC6 KUSQ"
 balance = 10_000_000_00000
+
+[[accounts]]
+address = "NQ87 HKRC JYGR PJN5 KQYQ 5TM1 26XX 7TNG YT27"
+# private_key = "3336f25f5b4272a280c8eb8c1288b39bd064dfb32ebc799459f707a0e88c4e5f"
+balance = 10_000_000_00000
 """)
     for spammer in spammers:
         f.write("""
@@ -342,7 +349,7 @@ services:
       - SIGNING_KEY={signing_key}
       - VOTING_KEY={voting_key}
       - FEE_KEY={fee_key}
-      - RPC_ENABLED=false
+      - RPC_ENABLED=true
       - RUST_BACKTRACE="1"
       - NIMIQ_LOG_LEVEL=debug
       - NIMIQ_LOG_TIMESTAMPS=true
@@ -369,7 +376,7 @@ services:
       - seed0
     environment:
       - LISTEN_ADDRESSES=/ip4/7.0.0.98/tcp/8443/ws
-      - NIMIQ_HOST=seed4.${NETWORK_NAME:?err}
+      - NIMIQ_HOST=spammer.${NETWORK_NAME:?err}
       - NIMIQ_NETWORK=dev-albatross
       - NIMIQ_SEED_NODES=/ip4/7.0.0.99/tcp/8443/ws
       - NIMIQ_PEER_KEY_FILE=/home/nimiq/.nimiq/peer_key.dat
@@ -386,8 +393,21 @@ services:
     volumes:
       - "spammer:/home/nimiq/.nimiq:rw"\n""")
 
+    # Albagen
+    if args.albagen:
+        f.write("""
+  albagen:
+    image: albagen:latest
+    networks:
+      devnet:
+        ipv4_address: 7.0.0.97
+    volumes:
+      - "albagen"
+""")
+
     # Volumes
     f.write("volumes:\n")
+    f.write("  albagen:\n")
     if args.spammer:
         f.write("  spammer:\n")
     f.write("  seed0:\n")
