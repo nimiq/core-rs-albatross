@@ -47,6 +47,7 @@ RUN mkdir -p /home/nimiq/.nimiq
 VOLUME /home/nimiq/.nimiq
 
 COPY ./scripts/docker_*.sh /home/nimiq/
+COPY ./genesis/src/genesis/dev-albatross-4-validators.toml /home/nimiq/
 
 # Pull necessary files from builder image
 COPY --chown=root:root --from=builder /build/nimiq-client /usr/local/bin/nimiq-client

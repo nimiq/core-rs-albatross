@@ -4,3 +4,4 @@
 !/target/debug/nimiq-spammer
 !/target/release/nimiq-spammer
 !/scripts/docker_*.sh
+!/genesis/src/genesis/*

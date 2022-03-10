@@ -19,6 +19,7 @@ VOLUME /home/nimiq/.nimiq
 
 # Copy necessary files from host environment
 COPY ./scripts/docker_*.sh /home/nimiq/
+COPY ./genesis/src/genesis/dev-albatross-4-validators.toml /home/nimiq/
 
 ARG BUILD=debug
 ARG APP=client
