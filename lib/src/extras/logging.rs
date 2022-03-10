@@ -349,7 +349,7 @@ pub fn initialize_logging(
         None
     };
 
-    let gelf_layer = if let Some(graylog) = &settings.graylog {
+    let (gelf_layer, gelf_task) = if let Some(graylog) = &settings.graylog {
         let mut builder = tracing_gelf::Logger::builder();
         for (name, value) in &graylog.extra_fields {
             builder = builder.additional_field(name.clone(), value.clone());
@@ -360,10 +360,9 @@ pub fn initialize_logging(
                 .with_default(DEFAULT_LEVEL)
                 .with_nimiq_targets(LevelFilter::TRACE),
         );
-        tokio::spawn(bg_task);
-        Some(layer)
+        (Some(layer), Some(bg_task))
     } else {
-        None
+        (None, None)
     };
 
     tracing_subscriber::registry()
@@ -378,5 +377,10 @@ pub fn initialize_logging(
         )
         .init();
 
+    // Spawn the graylog task after setting up logging so we still get error messages from the
+    // graylog logging itself.
+    if let Some(task) = gelf_task {
+        tokio::spawn(task);
+    }
     Ok(())
 }
