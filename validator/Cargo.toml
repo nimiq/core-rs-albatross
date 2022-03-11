@@ -59,7 +59,7 @@ hex = "0.4"
 simple_logger = "2.1.0"
 tokio = { version = "1.16", features = ["rt", "test-util", "time", "tracing"] }
 
-nimiq-build-tools = { path = "../build-tools" }
+nimiq-genesis-builder = { path = "../genesis-builder" }
 nimiq-network-libp2p = { path = "../network-libp2p" }
 nimiq-network-mock = { path = "../network-mock" }
 # This adds a circular dev-dependency which is fine but breaks VS code rust-analyzer.

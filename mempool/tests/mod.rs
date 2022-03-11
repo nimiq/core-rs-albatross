@@ -10,8 +10,8 @@ use beserial::{Deserialize, Serialize};
 use nimiq_block::{Block, MicroBlock, MicroBody, MicroHeader};
 use nimiq_blockchain::Blockchain;
 use nimiq_bls::KeyPair as BlsKeyPair;
-use nimiq_build_tools::genesis::GenesisBuilder;
 use nimiq_database::volatile::VolatileEnvironment;
+use nimiq_genesis_builder::GenesisBuilder;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::{
     Address, KeyPair as SchnorrKeyPair, PublicKey as SchnorrPublicKey, SecureGenerate,

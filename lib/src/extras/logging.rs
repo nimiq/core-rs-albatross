@@ -40,7 +40,7 @@ static NIMIQ_MODULES: &'static [&'static str] = &[
     "nimiq_database",
     "nimiq_devnet",
     "nimiq_genesis",
-    "nimiq_genesis",
+    "nimiq_genesis_builder",
     "nimiq_handel",
     "nimiq_hash",
     "nimiq_hash_derive",

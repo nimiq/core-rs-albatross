@@ -38,7 +38,7 @@ nimiq-vrf = {path = "../../vrf"}
 hex = "0.4"
 tempfile = "3.3"
 
-nimiq-build-tools = {path = "../../build-tools"}
+nimiq-genesis-builder = {path = "../../genesis-builder"}
 nimiq-test-utils = {path = "../../test-utils"}
 
 [features]

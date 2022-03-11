@@ -29,8 +29,8 @@ beserial_derive = { path = "../beserial/beserial_derive" }
 nimiq-account = { path = "../primitives/account" }
 nimiq-block = { path = "../primitives/block" }
 nimiq-bls = { path = "../bls" }
-nimiq-build-tools = { path = "../build-tools" }
 nimiq-database = { path = "../database" }
+nimiq-genesis-builder = { path = "../genesis-builder" }
 nimiq-hash = { path = "../hash" }
 nimiq-hash_derive = { path = "../hash/hash_derive" }
 nimiq-keys = { path = "../keys" }
@@ -45,7 +45,7 @@ nimiq-utils = { path = "../utils", features = ["observer", "crc", "time"] }
 log = { package = "tracing", version = "0.1", features = ["log"] }
 pretty_env_logger = "0.4"
 
-nimiq-build-tools = { path = "../build-tools" }
 nimiq-database = { path = "../database" }
+nimiq-genesis-builder = { path = "../genesis-builder" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }

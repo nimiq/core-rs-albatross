@@ -5,10 +5,10 @@ use serde::{Deserialize, Deserializer};
 use time::OffsetDateTime;
 
 use beserial::Deserialize as BDeserialize;
-use bls::PublicKey as BlsPublicKey;
-use keys::{Address, PublicKey as SchnorrPublicKey};
-use primitives::coin::Coin;
-use vrf::VrfSeed;
+use nimiq_bls::PublicKey as BlsPublicKey;
+use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
+use nimiq_primitives::coin::Coin;
+use nimiq_vrf::VrfSeed;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct GenesisConfig {

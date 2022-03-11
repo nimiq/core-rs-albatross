@@ -57,7 +57,7 @@ nimiq-utils = { path = "../utils", features = [
 hex = "0.4"
 
 nimiq-bls = { path = "../bls" }
-nimiq-build-tools = { path = "../build-tools" }
+nimiq-genesis-builder = { path = "../genesis-builder" }
 nimiq-keys = { path = "../keys" }
 nimiq-network-mock = { path = "../network-mock" }
 nimiq-block-production = { path = "../block-production" }

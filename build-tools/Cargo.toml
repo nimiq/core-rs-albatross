@@ -5,38 +5,14 @@ authors = ["Janosch Gräf <janosch@nimiq.com>"]
 edition = "2021"
 
 [[bin]]
-name = "nimiq-genesis"
-path = "src/genesis/main.rs"
-
-[[bin]]
 name = "nimiq-devnet"
 path = "src/devnet/main.rs"
 
 [dependencies]
 anyhow = "1.0"
 ctrlc = "3.1"
-hex = "0.4"
-lazy_static = "1.3"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 paw = "1.0"
 pretty_env_logger = "0.4"
-rand = "0.8"
-rand_chacha = "0.3"
-serde = { version = "1.0", features = ["derive"] }
 shellfn = "0.1"
 structopt = { version = "0.3", features = ["paw"] }
-thiserror = "1.0"
-time = { version = "0.3", features = ["parsing"] }
-toml = "0.5"
-
-beserial = { path = "../beserial" }
-nimiq-account = { path = "../primitives/account" }
-nimiq-block = { path = "../primitives/block" }
-nimiq-bls = { path = "../bls" }
-nimiq-collections = { path = "../collections" }
-nimiq-database = { path = "../database" }
-nimiq-hash = { path = "../hash" }
-nimiq-keys = { path = "../keys" }
-nimiq-primitives = { path = "../primitives" }
-nimiq-trie = { path = "../primitives/trie" }
-nimiq-vrf = { path = "../vrf" }

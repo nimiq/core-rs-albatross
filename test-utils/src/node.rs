@@ -3,10 +3,10 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 
 use nimiq_blockchain::Blockchain;
-use nimiq_build_tools::genesis::GenesisInfo;
 use nimiq_consensus::sync::history::HistorySync;
 use nimiq_consensus::Consensus as AbstractConsensus;
 use nimiq_database::volatile::VolatileEnvironment;
+use nimiq_genesis_builder::GenesisInfo;
 use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_mock::MockHub;
 use nimiq_primitives::networks::NetworkId;

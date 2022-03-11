@@ -2,8 +2,8 @@ use std::env;
 use std::fs;
 use std::path::Path;
 
-use nimiq_build_tools::genesis::GenesisBuilder;
 use nimiq_database::volatile::VolatileEnvironment;
+use nimiq_genesis_builder::GenesisBuilder;
 use nimiq_hash::Blake2bHash;
 
 fn write_genesis_rs(directory: &Path, name: &str, genesis_hash: &Blake2bHash) {

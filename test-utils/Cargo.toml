@@ -25,14 +25,14 @@ nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain = { path = "../blockchain" }
 nimiq-block-production = { path = "../block-production" }
 nimiq-bls = { path = "../bls" }
-nimiq-build-tools = { path = "../build-tools" }
 nimiq-collections = { path = "../collections" }
 nimiq-consensus = { path = "../consensus" }
 nimiq-database = { path = "../database" }
+nimiq-genesis = { path = "../genesis" }
+nimiq-genesis-builder = { path = "../genesis-builder" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-mempool = { path = "../mempool" }
-nimiq-genesis = { path = "../genesis" }
 nimiq-nano-primitives = { path = "../nano-primitives" }
 nimiq-transaction-builder = { path = "../transaction-builder" }
 nimiq-network-interface = { path = "../network-interface" }

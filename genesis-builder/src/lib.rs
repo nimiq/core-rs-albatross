@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate log;
+
 use std::convert::TryFrom;
 use std::fs::{read_to_string, OpenOptions};
 use std::io::Error as IoError;
@@ -7,17 +10,16 @@ use thiserror::Error;
 use time::OffsetDateTime;
 use toml::de::Error as TomlError;
 
-use account::{Account, AccountError, Accounts, AccountsList, BasicAccount, StakingContract};
 use beserial::{Serialize, SerializingError};
-use block::{Block, MacroBlock, MacroBody, MacroHeader};
-use bls::PublicKey as BlsPublicKey;
-use database::Environment;
-use database::WriteTransaction;
-use hash::{Blake2bHash, Hash};
-use keys::{Address, PublicKey as SchnorrPublicKey};
+use nimiq_account::{Account, AccountError, Accounts, AccountsList, BasicAccount, StakingContract};
+use nimiq_block::{Block, MacroBlock, MacroBody, MacroHeader};
+use nimiq_bls::PublicKey as BlsPublicKey;
+use nimiq_database::{Environment, WriteTransaction};
+use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_keys::{Address, PublicKey as SchnorrPublicKey};
+use nimiq_primitives::coin::Coin;
 use nimiq_trie::key_nibbles::KeyNibbles;
-use primitives::coin::Coin;
-use vrf::VrfSeed;
+use nimiq_vrf::VrfSeed;
 
 mod config;
 

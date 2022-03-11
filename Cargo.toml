@@ -11,6 +11,7 @@ members = [
   "consensus",
   "database",
   "genesis",
+  "genesis-builder",
   "handel",
   "hash",
   "hash/hash_derive",

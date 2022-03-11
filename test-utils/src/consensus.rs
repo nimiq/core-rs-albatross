@@ -1,8 +1,8 @@
 use crate::node::Node;
 use crate::test_network::TestNetwork;
 
-use nimiq_build_tools::genesis::GenesisInfo;
 use nimiq_consensus::Consensus as AbstractConsensus;
+use nimiq_genesis_builder::GenesisInfo;
 use nimiq_network_interface::network::Network as NetworkInterface;
 use nimiq_network_mock::MockHub;
 

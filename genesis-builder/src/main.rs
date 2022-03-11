@@ -1,8 +1,8 @@
 use std::env;
 use std::process::exit;
 
-use nimiq_build_tools::genesis::{GenesisBuilder, GenesisInfo};
 use nimiq_database::volatile::VolatileEnvironment;
+use nimiq_genesis_builder::{GenesisBuilder, GenesisInfo};
 
 fn usage(args: Vec<String>) -> ! {
     eprintln!(
