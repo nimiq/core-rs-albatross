@@ -45,7 +45,11 @@ pub struct MacroHeader {
     /// The seed of the block. This is the BLS signature of the seed of the immediately preceding
     /// block (either micro or macro) using the validator key of the block proposer.
     pub seed: VrfSeed,
-    /// The extra data of the block. It is simply 32 raw bytes. No planned use.
+    /// The extra data of the block. It is simply 32 raw bytes.
+    ///
+    /// It encodes the initial supply in the genesis block, as a big-endian `u64`.
+    ///
+    /// No planned use otherwise.
     #[beserial(len_type(u8, limit = 32))]
     pub extra_data: Vec<u8>,
     /// The root of the Merkle tree of the blockchain state. It just acts as a commitment to the

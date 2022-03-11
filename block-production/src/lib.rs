@@ -44,7 +44,7 @@ impl BlockProducer {
         fork_proofs: Vec<ForkProof>,
         // The transactions to be included in the block body.
         mut transactions: Vec<Transaction>,
-        // Extra data for this block. It has no a priori use.
+        // Extra data for this block.
         extra_data: Vec<u8>,
     ) -> MicroBlock {
         // Calculate the block number. It is simply the previous block number incremented by one.
@@ -152,7 +152,7 @@ impl BlockProducer {
         timestamp: u64,
         // The view number for the block proposal.
         view_number: u32,
-        // Extra data for this block. It has no a priori use.
+        // Extra data for this block.
         extra_data: Vec<u8>,
     ) -> MacroBlock {
         // Calculate the block number. It is simply the previous block number incremented by one.
