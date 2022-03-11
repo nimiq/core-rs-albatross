@@ -5,7 +5,6 @@ members = [
   "block-production",
   "blockchain",
   "bls",
-  "build-tools",
   "client",
   "collections",
   "consensus",

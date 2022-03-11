@@ -32,7 +32,6 @@ static NIMIQ_MODULES: &'static [&'static str] = &[
     "nimiq_blockchain",
     "nimiq_bls",
     "nimiq_bls",
-    "nimiq_build_tools",
     "nimiq_client",
     "nimiq_collections",
     "nimiq_consensus",
