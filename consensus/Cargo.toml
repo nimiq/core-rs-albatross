@@ -20,7 +20,7 @@ maintenance = { status = "experimental" }
 async-trait = "0.1"
 futures = "0.3"
 lazy_static = "1.4.0"
-log = { package = "tracing", version = "0.1" }
+log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
 pin-project = "1.0"
 rand = "0.8"

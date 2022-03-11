@@ -21,7 +21,7 @@ bitvec = "1.0"
 hex = {version = "0.4", optional = true}
 itertools = {version = "0.10", optional = true}
 lazy_static = {version = "1.2", optional = true}
-log = { package = "tracing", version = "0.1" }
+log = { package = "tracing", version = "0.1", features = ["log"] }
 num-bigint = {version = "0.4.2", optional = true}
 num-traits = {version = "0.2", optional = true}
 parking_lot = {git = "https://github.com/styppo/parking_lot.git", optional = true}

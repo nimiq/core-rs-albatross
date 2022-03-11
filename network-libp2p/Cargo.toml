@@ -34,7 +34,7 @@ libp2p = { version = "0.43", default-features = false, features = [
     "dns-tokio",
     "tcp-tokio",
 ] }
-log = { package = "tracing", version = "0.1" }
+log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
 pin-project = "1.0"
 pin-project-lite = "0.2.0"

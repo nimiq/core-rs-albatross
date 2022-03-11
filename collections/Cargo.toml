@@ -20,7 +20,7 @@ maintenance = { status = "experimental" }
 itertools = { version = "0.10", optional = true }
 num-traits = "0.2"
 serde = { version = "1.0", features = ["derive"], optional = true }
-log = { package = "tracing", version = "0.1" }
+log = { package = "tracing", version = "0.1", features = ["log"] }
 
 beserial = { path = "../beserial", optional = true }
 

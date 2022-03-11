@@ -10,7 +10,7 @@ edition = "2021"
 async-trait = "0.1"
 futures = "0.3"
 lazy_static = "1.3"
-log = { package = "tracing", version = "0.1" }
+log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
 rand = "0.8"
 thiserror = "1.0"

@@ -31,7 +31,7 @@ tokio = { version = "1.16", features = [
 ] }
 tokio-stream = { version = "0.1", features = ["default", "sync"] }
 
-log = { package = "tracing", version = "0.1" }
+log = { package = "tracing", version = "0.1", features = ["log"] }
 
 beserial = { path = "../beserial" }
 nimiq-utils = { path = "../utils", features = ["crc"] }

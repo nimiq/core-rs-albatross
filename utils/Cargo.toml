@@ -24,7 +24,7 @@ futures = { version = "0.3" }
 futures-lite = { version = "1.12.0" }
 hex = { version = "0.4", optional = true }
 libp2p = { version = "0.43", optional = true }
-log = { package = "tracing", version = "0.1", optional = true }
+log = { package = "tracing", version = "0.1", optional = true, features = ["log"] }
 parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
 rand = { version = "0.8", optional = true }
 rand_core = { version = "0.6", optional = true }

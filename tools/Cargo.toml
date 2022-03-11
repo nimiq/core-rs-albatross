@@ -26,7 +26,7 @@ path = "src/signtx/main.rs"
 anyhow = "1.0"
 clap = { version = "3.1", features = ["cargo"] }
 hex = "0.4"
-log = { package = "tracing", version = "0.1" }
+log = { package = "tracing", version = "0.1", features = ["log"] }
 rand = "0.8"
 thiserror = "1.0"
 

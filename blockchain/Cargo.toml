@@ -17,7 +17,7 @@ maintenance = { status = "experimental" }
 [dependencies]
 thiserror = "1.0"
 hex = "0.4"
-log = { package = "tracing", version = "0.1" }
+log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
 rand = "0.8"
 
