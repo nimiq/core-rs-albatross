@@ -117,7 +117,7 @@ where
             }
         }
 
-        // get the background_stream fromthe outside deps.
+        // get the background_stream from the outside deps.
         let background_task = deps
             .get_background_task()
             .into_stream()

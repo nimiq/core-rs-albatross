@@ -45,7 +45,7 @@ pub struct MacroHeader {
     /// The seed of the block. This is the BLS signature of the seed of the immediately preceding
     /// block (either micro or macro) using the validator key of the block proposer.
     pub seed: VrfSeed,
-    /// The extra data of the block. It is simply 32 raw bytes.
+    /// The extra data of the block. It is simply up to 32 raw bytes.
     ///
     /// It encodes the initial supply in the genesis block, as a big-endian `u64`.
     ///

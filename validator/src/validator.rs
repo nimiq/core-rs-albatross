@@ -250,7 +250,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             {
                 // If we are parked and no transaction has been seen in the expected validity window
                 // after an epoch, reset our parking state
-                log::debug!("Reseting state to re-send un-park transactions since we are parked and validity window doesn't contain the transaction sent");
+                log::debug!("Resetting state to re-send un-park transactions since we are parked and validity window doesn't contain the transaction sent");
                 self.parking_state = None;
             }
         }
@@ -434,7 +434,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         while let Poll::Ready(Some(event)) = macro_producer.poll_next_unpin(cx) {
             match event {
                 TendermintReturn::Error(err) => {
-                    log::error!("Tendermint Returned an Error: {:?}", err);
+                    log::error!("Tendermint returned an error: {:?}", err);
                 }
                 TendermintReturn::Result(block) => {
                     // If the event is a result meaning the next macro block was produced we push it onto our local chain

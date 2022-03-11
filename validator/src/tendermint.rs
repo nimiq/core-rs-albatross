@@ -126,7 +126,7 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
             vec![],
         );
 
-        // Cache the block body and hash for future use.
+        // Cache the block body for future use.
         self.cache_body = block.body;
 
         // Return the block header as the proposal.
