@@ -120,13 +120,14 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                             .push_back(Job::PushBatchSet(cluster.id, hash, future));
                     }
                     Some(Err(_)) | None => {
-                        // Evict the active cluster if it error'd or finished.
+                        // Cluster finished or errored, evict it.
                         let cluster = self.active_cluster.take().unwrap();
-                        let result = match &result {
-                            Some(_) => SyncClusterResult::Error,
-                            None => SyncClusterResult::NoMoreEpochs,
-                        };
 
+                        let result = match result {
+                            Some(Err(e)) => e,
+                            None => SyncClusterResult::NoMoreEpochs,
+                            _ => unreachable!(),
+                        };
                         self.job_queue
                             .push_back(Job::FinishCluster(cluster, result));
 
@@ -228,5 +229,311 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
         self.poll_job_queue(cx);
 
         Poll::Pending
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use futures::StreamExt;
+    use nimiq_block_production::BlockProducer;
+    use parking_lot::{RwLock, RwLockUpgradableReadGuard};
+
+    use nimiq_blockchain::{AbstractBlockchain, Blockchain};
+    use nimiq_database::volatile::VolatileEnvironment;
+    use nimiq_network_interface::prelude::Network;
+    use nimiq_network_mock::{MockHub, MockNetwork};
+    use nimiq_primitives::networks::NetworkId;
+    use nimiq_primitives::policy;
+    use nimiq_test_utils::blockchain::{produce_macro_blocks_with_txns, signing_key, voting_key};
+    use nimiq_utils::time::OffsetTime;
+
+    use crate::messages::{RequestBatchSet, RequestBlockHashes, RequestHistoryChunk};
+    use crate::sync::history::{HistorySync, HistorySyncReturn};
+    use crate::Consensus;
+
+    fn blockchain() -> Arc<RwLock<Blockchain>> {
+        let time = Arc::new(OffsetTime::new());
+        let env = VolatileEnvironment::new(10).unwrap();
+        Arc::new(RwLock::new(
+            Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
+        ))
+    }
+
+    fn copy_chain(from: &RwLock<Blockchain>, to: &RwLock<Blockchain>) {
+        let chain_info =
+            from.read()
+                .chain_store
+                .get_chain_info(&to.read().head_hash(), false, None);
+        let mut block_hash = match chain_info {
+            Some(chain_info) if chain_info.on_main_chain => chain_info.main_chain_successor,
+            _ => panic!("Chains have diverged"),
+        };
+
+        while let Some(hash) = block_hash {
+            let chain_info = from
+                .read()
+                .chain_store
+                .get_chain_info(&hash, true, None)
+                .unwrap();
+            assert!(chain_info.on_main_chain);
+
+            Blockchain::push(to.upgradable_read(), chain_info.head).expect("Failed to push block");
+            block_hash = chain_info.main_chain_successor;
+        }
+
+        assert_eq!(from.read().head(), to.read().head());
+    }
+
+    fn spawn_request_handlers<TNetwork: Network>(
+        network: &Arc<TNetwork>,
+        blockchain: &Arc<RwLock<Blockchain>>,
+    ) {
+        tokio::spawn(Consensus::<TNetwork>::request_handler(
+            network.receive_from_all::<RequestBlockHashes>(),
+            blockchain,
+        ));
+        tokio::spawn(Consensus::<TNetwork>::request_handler(
+            network.receive_from_all::<RequestBatchSet>(),
+            blockchain,
+        ));
+        tokio::spawn(Consensus::<TNetwork>::request_handler(
+            network.receive_from_all::<RequestHistoryChunk>(),
+            blockchain,
+        ));
+    }
+
+    #[tokio::test]
+    async fn it_terminates_if_there_is_nothing_to_sync() {
+        simple_logger::SimpleLogger::new()
+            .with_level(actual_log::LevelFilter::Trace)
+            .init()
+            .ok();
+
+        let mut hub = MockHub::default();
+        let net1 = Arc::new(hub.new_network());
+        let net2 = Arc::new(hub.new_network());
+
+        let chain = blockchain();
+        let mut sync = HistorySync::<MockNetwork>::new(Arc::clone(&chain), net1.subscribe_events());
+
+        net1.dial_mock(&net2);
+        spawn_request_handlers(&net2, &chain);
+
+        match sync.next().await {
+            Some(HistorySyncReturn::Good(_)) => {
+                assert_eq!(chain.read().block_number(), 0);
+            }
+            _ => assert!(false, "Unexpected HistorySyncReturn"),
+        }
+    }
+
+    #[tokio::test]
+    async fn it_can_sync_a_single_finalized_epoch() {
+        simple_logger::SimpleLogger::new()
+            .with_level(actual_log::LevelFilter::Trace)
+            .init()
+            .ok();
+
+        let mut hub = MockHub::default();
+        let net1 = Arc::new(hub.new_network());
+        let net2 = Arc::new(hub.new_network());
+
+        let chain1 = blockchain();
+        let chain2 = blockchain();
+
+        let producer = BlockProducer::new(signing_key(), voting_key());
+        produce_macro_blocks_with_txns(
+            &producer,
+            &chain2,
+            policy::BATCHES_PER_EPOCH as usize,
+            1,
+            0,
+        );
+        assert_eq!(chain2.read().block_number(), policy::EPOCH_LENGTH);
+
+        let mut sync =
+            HistorySync::<MockNetwork>::new(Arc::clone(&chain1), net1.subscribe_events());
+
+        net1.dial_mock(&net2);
+        spawn_request_handlers(&net2, &chain2);
+
+        match sync.next().await {
+            Some(HistorySyncReturn::Good(_)) => {
+                assert_eq!(chain1.read().head(), chain2.read().head());
+            }
+            _ => panic!("Unexpected HistorySyncReturn"),
+        }
+    }
+
+    #[tokio::test]
+    async fn it_can_sync_multiple_finalized_epochs() {
+        simple_logger::SimpleLogger::new()
+            .with_level(actual_log::LevelFilter::Trace)
+            .init()
+            .ok();
+
+        let mut hub = MockHub::default();
+        let net1 = Arc::new(hub.new_network());
+        let net2 = Arc::new(hub.new_network());
+
+        let chain1 = blockchain();
+        let chain2 = blockchain();
+
+        let num_epochs = 2;
+        let producer = BlockProducer::new(signing_key(), voting_key());
+        produce_macro_blocks_with_txns(
+            &producer,
+            &chain2,
+            num_epochs * policy::BATCHES_PER_EPOCH as usize,
+            1,
+            0,
+        );
+        assert_eq!(
+            chain2.read().block_number(),
+            num_epochs as u32 * policy::EPOCH_LENGTH
+        );
+
+        let mut sync =
+            HistorySync::<MockNetwork>::new(Arc::clone(&chain1), net1.subscribe_events());
+
+        net1.dial_mock(&net2);
+        spawn_request_handlers(&net2, &chain2);
+
+        match sync.next().await {
+            Some(HistorySyncReturn::Good(_)) => {
+                assert_eq!(chain1.read().head(), chain2.read().head());
+            }
+            _ => panic!("Unexpected HistorySyncReturn"),
+        }
+    }
+
+    #[tokio::test]
+    async fn it_can_sync_a_single_batch() {
+        simple_logger::SimpleLogger::new()
+            .with_level(actual_log::LevelFilter::Trace)
+            .init()
+            .ok();
+
+        let mut hub = MockHub::default();
+        let net1 = Arc::new(hub.new_network());
+        let net2 = Arc::new(hub.new_network());
+
+        let chain1 = blockchain();
+        let chain2 = blockchain();
+
+        let producer = BlockProducer::new(signing_key(), voting_key());
+        produce_macro_blocks_with_txns(&producer, &chain2, 1, 1, 0);
+        assert_eq!(chain2.read().block_number(), policy::BATCH_LENGTH);
+
+        let mut sync =
+            HistorySync::<MockNetwork>::new(Arc::clone(&chain1), net1.subscribe_events());
+
+        net1.dial_mock(&net2);
+        spawn_request_handlers(&net2, &chain2);
+
+        match sync.next().await {
+            Some(HistorySyncReturn::Good(_)) => {
+                assert_eq!(chain1.read().head(), chain2.read().head());
+            }
+            _ => panic!("Unexpected HistorySyncReturn"),
+        }
+    }
+
+    #[tokio::test]
+    async fn it_can_sync_multiple_batches() {
+        simple_logger::SimpleLogger::new()
+            .with_level(actual_log::LevelFilter::Trace)
+            .init()
+            .ok();
+
+        let mut hub = MockHub::default();
+        let net1 = Arc::new(hub.new_network());
+        let net2 = Arc::new(hub.new_network());
+
+        let chain1 = blockchain();
+        let chain2 = blockchain();
+
+        let num_batches = (policy::BATCHES_PER_EPOCH - 1) as usize;
+        let producer = BlockProducer::new(signing_key(), voting_key());
+        produce_macro_blocks_with_txns(&producer, &chain2, num_batches, 1, 0);
+        assert_eq!(
+            chain2.read().block_number(),
+            num_batches as u32 * policy::BATCH_LENGTH
+        );
+
+        let mut sync =
+            HistorySync::<MockNetwork>::new(Arc::clone(&chain1), net1.subscribe_events());
+
+        net1.dial_mock(&net2);
+        spawn_request_handlers(&net2, &chain2);
+
+        match sync.next().await {
+            Some(HistorySyncReturn::Good(_)) => {
+                assert_eq!(chain1.read().head(), chain2.read().head());
+            }
+            _ => panic!("Unexpected HistorySyncReturn"),
+        }
+    }
+
+    #[tokio::test]
+    async fn it_can_sync_consecutive_batches_from_different_peers() {
+        simple_logger::SimpleLogger::new()
+            .with_level(actual_log::LevelFilter::Trace)
+            .init()
+            .ok();
+
+        let mut hub = MockHub::default();
+        let net1 = Arc::new(hub.new_network());
+        let net2 = Arc::new(hub.new_network());
+        let net3 = Arc::new(hub.new_network());
+        let net4 = Arc::new(hub.new_network());
+
+        let chain1 = blockchain();
+        let chain2 = blockchain();
+        let chain3 = blockchain();
+        let chain4 = blockchain();
+
+        let producer = BlockProducer::new(signing_key(), voting_key());
+        produce_macro_blocks_with_txns(&producer, &chain2, 1, 1, 0);
+        assert_eq!(chain2.read().block_number(), policy::BATCH_LENGTH);
+
+        copy_chain(&*chain2, &*chain3);
+        produce_macro_blocks_with_txns(&producer, &chain3, 1, 1, 0);
+        assert_eq!(chain3.read().block_number(), 2 * policy::BATCH_LENGTH);
+
+        copy_chain(&*chain3, &*chain4);
+        produce_macro_blocks_with_txns(&producer, &chain4, 1, 1, 0);
+        assert_eq!(chain4.read().block_number(), 3 * policy::BATCH_LENGTH);
+
+        let mut sync =
+            HistorySync::<MockNetwork>::new(Arc::clone(&chain1), net1.subscribe_events());
+
+        net1.dial_mock(&net2);
+        net1.dial_mock(&net3);
+        net1.dial_mock(&net4);
+
+        spawn_request_handlers(&net2, &chain2);
+        spawn_request_handlers(&net3, &chain3);
+        spawn_request_handlers(&net4, &chain4);
+
+        log::info!(
+            "Event 1: {:?}",
+            tokio::time::timeout(std::time::Duration::from_secs(5), sync.next()).await
+        );
+        log::info!(
+            "Event 2: {:?}",
+            tokio::time::timeout(std::time::Duration::from_secs(5), sync.next()).await
+        );
+        // log::info!("Event 2: {:?}", sync.next().await);
+        // log::info!("Event 3: {:?}", sync.next().await);
+
+        // match sync.next().await {
+        //     Some(HistorySyncReturn::Good(_)) => {
+        //         assert_eq!(chain1.read().head(), chain2.read().head());
+        //     }
+        //     _ => panic!("Unexpected HistorySyncReturn"),
+        // }
     }
 }
