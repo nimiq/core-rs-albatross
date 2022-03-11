@@ -118,7 +118,7 @@ impl<K: Eq + Hash + Debug> Timers<K> {
         F: FnOnce(),
     {
         if delays.contains_key(&key) {
-            error!("Duplicate delay for key {:?}", &key);
+            log::error!("Duplicate delay for key {:?}", &key);
             return;
         }
 
@@ -145,7 +145,7 @@ impl<K: Eq + Hash + Debug> Timers<K> {
         F: Fn(),
     {
         if intervals.contains_key(&key) {
-            error!("Duplicate delay for key {:?}", &key);
+            log::error!("Duplicate delay for key {:?}", &key);
             return;
         }
 
