@@ -320,16 +320,6 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
         match blockchain.get_next_block_type(None) {
             BlockType::Macro => {
                 let active_validators = blockchain.current_validators().unwrap();
-
-                // Take the current state and see if it is applicable to the current height.
-                // We do not need to keep it as it is persisted.
-                // This will always result in None in case the validator works as intended.
-                // Only in case of a crashed node this will result in a value from which Tendermint can resume its work.
-                let state = self
-                    .macro_state
-                    .take()
-                    .filter(|state| state.height == next_block_number);
-
                 let proposal_stream = self.proposal_receiver.clone().boxed();
 
                 drop(blockchain);
@@ -343,7 +333,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                     head.seed().clone(),
                     next_block_number,
                     next_view_number,
-                    state,
+                    self.macro_state.take(),
                     proposal_stream,
                 ));
             }
@@ -494,8 +484,18 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                 TendermintReturn::StateUpdate(update) => {
                     trace!("Tendermint state update {:?}", update);
                     let mut write_transaction = WriteTransaction::new(&self.env);
+                    let expected_height = self.consensus.blockchain.read().block_number() + 1;
+                    if expected_height != update.height {
+                        warn!(
+                            unexpected = true,
+                            expected_height,
+                            height = update.height,
+                            "Got severely outdated Tendermint state, Tendermint instance should be
+                             gone already because new blocks were pushed since it was created."
+                        );
+                    }
                     let persistable_state = PersistedMacroState::<TValidatorNetwork> {
-                        height: self.consensus.blockchain.read().block_number() + 1,
+                        height: update.height,
                         step: update.step.into(),
                         round: update.round,
                         locked_round: update.locked_round,

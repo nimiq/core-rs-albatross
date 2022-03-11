@@ -95,22 +95,34 @@ impl ProduceMacroBlock {
             initial_round,
         );
 
-        let state_opt = state.map(|s| TendermintState {
-            step: match s.step {
-                TendermintStep::PreVote => Step::Prevote,
-                TendermintStep::PreCommit => Step::Precommit,
-                TendermintStep::Propose => Step::Propose,
-            },
-            round: s.round,
-            locked_value: s.locked_value,
-            locked_round: s.locked_round,
-            valid_value: s.valid_value,
-            valid_round: s.valid_round,
-            current_checkpoint: Checkpoint::StartRound,
-            current_proof: None,
-            current_proposal: None,
-            current_proposal_vr: None,
-        });
+        let state_opt =
+            state
+                .filter(|s| {
+                    let up_to_date = s.height == block_height;
+                    if !up_to_date {
+                        log::info!(state_height = s.height, block_height,
+                    "got outdated persisted state, this should only happen on unclean restarts"
+                );
+                    }
+                    up_to_date
+                })
+                .map(|s| TendermintState {
+                    height: s.height,
+                    round: s.round,
+                    step: match s.step {
+                        TendermintStep::PreVote => Step::Prevote,
+                        TendermintStep::PreCommit => Step::Precommit,
+                        TendermintStep::Propose => Step::Propose,
+                    },
+                    locked_value: s.locked_value,
+                    locked_round: s.locked_round,
+                    valid_value: s.valid_value,
+                    valid_round: s.valid_round,
+                    current_checkpoint: Checkpoint::StartRound,
+                    current_proof: None,
+                    current_proposal: None,
+                    current_proposal_vr: None,
+                });
 
         // create the Tendermint instance, which implements Stream
 

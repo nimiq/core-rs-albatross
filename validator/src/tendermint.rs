@@ -82,6 +82,10 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
     type ProofTy = MultiSignature;
     type ResultTy = MacroBlock;
 
+    fn block_height(&self) -> u32 {
+        self.block_height
+    }
+
     fn initial_round(&self) -> u32 {
         // Macro blocks follow the same rules as micro blocks when it comes to view_number/round.
         // Thus the round is offset by the predecessors view.

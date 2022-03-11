@@ -45,7 +45,7 @@ where
     let mut tendermint = if let Some(state) = state_opt {
         Tendermint { deps, state }
     } else {
-        Tendermint { state: TendermintState::new(deps.initial_round()), deps }
+        Tendermint { state: TendermintState::new(deps.block_height(), deps.initial_round()), deps }
     };
 
     // This is the main loop of the function. It progresses the Tendermint state machine.

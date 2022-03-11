@@ -70,6 +70,10 @@ impl TendermintOutsideDeps for TestValidator {
     // is just the empty type, our result is just the TestProposal.
     type ResultTy = TestProposal;
 
+    fn block_height(&self) -> u32 {
+        0
+    }
+
     fn initial_round(&self) -> u32 {
         0
     }

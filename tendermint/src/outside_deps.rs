@@ -13,6 +13,9 @@ pub trait TendermintOutsideDeps: Send + Unpin {
     type ProofTy: ProofTrait;
     type ResultTy: ResultTrait;
 
+    /// The block height this Tendermint instance is supposed to be used for.
+    fn block_height(&self) -> u32;
+
     /// The round Tendermint is supposed to start with.
     fn initial_round(&self) -> u32;
 

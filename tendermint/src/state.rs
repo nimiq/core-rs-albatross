@@ -8,6 +8,7 @@ use crate::{
 /// variables that we need for our implementation (those are prefixed with "current").
 #[derive(Clone, Debug)]
 pub struct TendermintState<ProposalTy: ProposalTrait, ProofTy: ProofTrait> {
+    pub height: u32,
     pub round: u32,
     pub step: Step,
     pub locked_value: Option<ProposalTy>,
@@ -21,8 +22,9 @@ pub struct TendermintState<ProposalTy: ProposalTrait, ProofTy: ProofTrait> {
 }
 
 impl<ProposalTy: ProposalTrait, ProofTy: ProofTrait> TendermintState<ProposalTy, ProofTy> {
-    pub fn new(initial_round: u32) -> Self {
+    pub fn new(height: u32, initial_round: u32) -> Self {
         Self {
+            height,
             round: initial_round,
             step: Step::Propose,
             locked_value: None,
