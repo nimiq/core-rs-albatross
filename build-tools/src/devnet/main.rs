@@ -71,7 +71,9 @@ fn run_devnet(args: Args, keyboard_interrupt: Arc<AtomicBool>) -> Result<(), Err
 
 #[paw::main]
 fn main(args: Args) {
-    pretty_env_logger::init();
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
 
     debug!("{:#?}", args);
 

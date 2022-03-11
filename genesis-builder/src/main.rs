@@ -13,7 +13,9 @@ fn usage(args: Vec<String>) -> ! {
 }
 
 fn main() {
-    pretty_env_logger::init();
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
 
     let env = VolatileEnvironment::new(10).expect("Could not open a volatile database");
     let args = env::args().collect::<Vec<String>>();

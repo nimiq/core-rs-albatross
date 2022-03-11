@@ -13,6 +13,6 @@ anyhow = "1.0"
 ctrlc = "3.1"
 log = { package = "tracing", version = "0.1", features = ["log"] }
 paw = "1.0"
-pretty_env_logger = "0.4"
 shellfn = "0.1"
 structopt = { version = "0.3", features = ["paw"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

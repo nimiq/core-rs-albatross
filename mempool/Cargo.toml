@@ -38,10 +38,10 @@ nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-utils = { path = "../utils", features = ["observer", "mutable-once"] }
 
 [dev-dependencies]
-actual_log = { package = "log", version = "0.4" }
 hex = "0.4"
 rand = "0.8"
-simple_logger = "2.1"
+tracing-core = "0.1"
+tracing-subscriber = "0.3"
 
 nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain = { path = "../blockchain" }

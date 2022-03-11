@@ -1,6 +1,6 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use actual_log::LevelFilter::Debug;
 use futures::{channel::mpsc, sink::SinkExt};
 use parking_lot::RwLock;
 use rand::prelude::StdRng;
@@ -30,6 +30,17 @@ use nimiq_vrf::VrfSeed;
 const BASIC_TRANSACTION: &str = "000222666efadc937148a6d61589ce6d4aeecca97fda4c32348d294eab582f14a0754d1260f15bea0e8fb07ab18f45301483599e34000000000000c350000000000000008a00019640023fecb82d3aef4be76853d5c5b263754b7d495d9838f6ae5df60cf3addd3512a82988db0056059c7a52ae15285983ef0db8229ae446c004559147686d28f0a30a";
 const ENABLE_LOG: bool = false;
 const NUM_TXNS_START_STOP: usize = 100;
+
+fn init_logging() {
+    static INITIALIZED: AtomicBool = AtomicBool::new(false);
+    if ENABLE_LOG && !INITIALIZED.load(Ordering::Acquire) {
+        let _ = tracing_subscriber::fmt()
+            .with_max_level(tracing_core::LevelFilter::DEBUG)
+            .with_test_writer()
+            .try_init();
+        INITIALIZED.store(true, Ordering::Release);
+    }
+}
 
 async fn send_get_mempool_txns(
     blockchain: Arc<RwLock<Blockchain>>,
@@ -216,12 +227,7 @@ fn create_dummy_micro_block(transactions: Option<Vec<Transaction>>) -> Block {
 
 #[tokio::test]
 async fn push_same_tx_twice() {
-    if ENABLE_LOG {
-        simple_logger::SimpleLogger::new()
-            .with_level(Debug)
-            .init()
-            .ok();
-    }
+    init_logging();
 
     // Generate and sign transaction from an address
     let mut rng = StdRng::seed_from_u64(0);
@@ -281,12 +287,7 @@ async fn push_same_tx_twice() {
 
 #[tokio::test]
 async fn valid_tx_not_in_blockchain() {
-    if ENABLE_LOG {
-        simple_logger::SimpleLogger::new()
-            .with_level(Debug)
-            .init()
-            .ok();
-    }
+    init_logging();
 
     // Generate and sign transaction from an address
     let balance = 40;
@@ -354,12 +355,7 @@ async fn push_tx_with_wrong_signature() {
 
 #[tokio::test]
 async fn mempool_get_txn_max_size() {
-    if ENABLE_LOG {
-        simple_logger::SimpleLogger::new()
-            .with_level(Debug)
-            .init()
-            .ok();
-    }
+    init_logging();
 
     // Generate and sign transaction from an address
     let mut rng = StdRng::seed_from_u64(0);
@@ -428,12 +424,7 @@ async fn mempool_get_txn_max_size() {
 
 #[tokio::test]
 async fn mempool_get_txn_ordered() {
-    if ENABLE_LOG {
-        simple_logger::SimpleLogger::new()
-            .with_level(Debug)
-            .init()
-            .ok();
-    }
+    init_logging();
 
     // Generate and sign transaction from an address
     let mut rng = StdRng::seed_from_u64(0);
@@ -504,12 +495,7 @@ async fn mempool_get_txn_ordered() {
 
 #[tokio::test]
 async fn push_tx_with_insufficient_balance() {
-    if ENABLE_LOG {
-        simple_logger::SimpleLogger::new()
-            .with_level(Debug)
-            .init()
-            .ok();
-    }
+    init_logging();
 
     // Generate and sign transaction from an address
     let mut rng = StdRng::seed_from_u64(0);
@@ -573,12 +559,7 @@ async fn push_tx_with_insufficient_balance() {
 
 #[tokio::test]
 async fn multiple_transactions_multiple_senders() {
-    if ENABLE_LOG {
-        simple_logger::SimpleLogger::new()
-            .with_level(Debug)
-            .init()
-            .ok();
-    }
+    init_logging();
 
     let mut rng = StdRng::seed_from_u64(0);
     let balance = 40;
@@ -648,12 +629,7 @@ async fn multiple_transactions_multiple_senders() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn mempool_tps() {
-    if ENABLE_LOG {
-        simple_logger::SimpleLogger::new()
-            .with_level(Debug)
-            .init()
-            .ok();
-    }
+    init_logging();
 
     let mut rng = StdRng::seed_from_u64(0);
     let time = Arc::new(OffsetTime::new());
@@ -730,12 +706,7 @@ async fn mempool_tps() {
 
 #[tokio::test]
 async fn multiple_start_stop() {
-    if ENABLE_LOG {
-        simple_logger::SimpleLogger::new()
-            .with_level(Debug)
-            .init()
-            .ok();
-    }
+    init_logging();
 
     let mut rng = StdRng::seed_from_u64(0);
     let time = Arc::new(OffsetTime::new());
@@ -796,12 +767,7 @@ async fn multiple_start_stop() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn mempool_update() {
-    if ENABLE_LOG {
-        simple_logger::SimpleLogger::new()
-            .with_level(Debug)
-            .init()
-            .ok();
-    }
+    init_logging();
 
     let mut rng = StdRng::seed_from_u64(0);
     let time = Arc::new(OffsetTime::new());

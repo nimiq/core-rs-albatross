@@ -905,17 +905,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "colored"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3616f750b84d8f0de8a58bda93e08e2a81ad3f523089b05f1dffecab48c6cbd"
-dependencies = [
- "atty",
- "lazy_static",
- "winapi",
-]
-
-[[package]]
 name = "concurrent-queue"
 version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1442,19 +1431,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "env_logger"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44533bbbb3bb3c1fa17d9f2e4e38bbbaf8396ba82193c4cb1b6445d711445d36"
-dependencies = [
- "atty",
- "humantime",
- "log",
- "regex",
- "termcolor",
-]
-
-[[package]]
 name = "event-listener"
 version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1883,30 +1859,6 @@ name = "httpdate"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4a1e36c821dbe04574f602848a19f742f4fb3c98d40449f11bcad18d6b17421"
-
-[[package]]
-name = "human-panic"
-version = "1.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39f357a500abcbd7c5f967c1d45c8838585b36743823b9d43488f24850534e36"
-dependencies = [
- "backtrace",
- "os_type",
- "serde",
- "serde_derive",
- "termcolor",
- "toml",
- "uuid",
-]
-
-[[package]]
-name = "humantime"
-version = "1.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df004cfca50ef23c36850aaaa59ad52cc70d0e90243c3c7737a4dd32dc7a3c4f"
-dependencies = [
- "quick-error",
-]
 
 [[package]]
 name = "hyper"
@@ -3182,10 +3134,10 @@ dependencies = [
  "anyhow",
  "ctrlc",
  "paw",
- "pretty_env_logger",
  "shellfn",
  "structopt",
  "tracing",
+ "tracing-subscriber 0.3.9",
 ]
 
 [[package]]
@@ -3284,8 +3236,8 @@ dependencies = [
  "nimiq-transaction",
  "nimiq-trie",
  "nimiq-utils",
- "pretty_env_logger",
  "tracing",
+ "tracing-subscriber 0.3.9",
  "url",
 ]
 
@@ -3304,12 +3256,12 @@ dependencies = [
  "nimiq-primitives",
  "nimiq-trie",
  "nimiq-vrf",
- "pretty_env_logger",
  "serde",
  "thiserror",
  "time 0.3.7",
  "toml",
  "tracing",
+ "tracing-subscriber 0.3.9",
 ]
 
 [[package]]
@@ -3469,7 +3421,6 @@ dependencies = [
  "directories",
  "file-rotate",
  "hex",
- "log",
  "log-panics",
  "nimiq-block",
  "nimiq-blockchain",
@@ -3521,7 +3472,6 @@ dependencies = [
  "futures-lite",
  "hex",
  "keyed_priority_queue",
- "log",
  "nimiq-account",
  "nimiq-block",
  "nimiq-blockchain",
@@ -3541,10 +3491,11 @@ dependencies = [
  "nimiq-vrf",
  "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "rand 0.8.5",
- "simple_logger",
  "tokio",
  "tokio-stream",
  "tracing",
+ "tracing-core",
+ "tracing-subscriber 0.3.9",
 ]
 
 [[package]]
@@ -3705,7 +3656,6 @@ dependencies = [
  "beserial_derive",
  "bitflags",
  "hex",
- "human-panic",
  "lazy_static",
  "nimiq-bls",
  "nimiq-genesis-builder",
@@ -3715,9 +3665,7 @@ dependencies = [
  "nimiq-macros",
  "nimiq-primitives",
  "nimiq-utils",
- "simple_logger",
  "thiserror",
- "tracing",
  "url",
 ]
 
@@ -3760,9 +3708,9 @@ dependencies = [
  "nimiq-primitives",
  "nimiq-rpc-interface",
  "nimiq-transaction",
- "pretty_env_logger",
  "structopt",
  "tokio",
+ "tracing-subscriber 0.3.9",
  "url",
 ]
 
@@ -4038,7 +3986,6 @@ dependencies = [
  "hex",
  "lazy_static",
  "linked-hash-map",
- "log",
  "nimiq-account",
  "nimiq-block",
  "nimiq-block-production",
@@ -4066,10 +4013,11 @@ dependencies = [
  "nimiq-vrf",
  "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "rand 0.8.5",
- "simple_logger",
  "tokio",
  "tokio-stream",
  "tracing",
+ "tracing-core",
+ "tracing-subscriber 0.3.9",
 ]
 
 [[package]]
@@ -4338,15 +4286,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e22443d1643a904602595ba1cd8f7d896afe56d26712531c5ff73a15b2fbf64"
 dependencies = [
  "memchr",
-]
-
-[[package]]
-name = "os_type"
-version = "2.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3df761f6470298359f84fcfb60d86db02acc22c251c37265c07a3d1057d2389"
-dependencies = [
- "regex",
 ]
 
 [[package]]
@@ -4623,16 +4562,6 @@ name = "ppv-lite86"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eb9f9e6e233e5c4a35559a617bf40a4ec447db2e84c20b55a6f83167b7e57872"
-
-[[package]]
-name = "pretty_env_logger"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "926d36b9553851b8b0005f1275891b392ee4d2d833852c417ed025477350fb9d"
-dependencies = [
- "env_logger",
- "log",
-]
 
 [[package]]
 name = "proc-macro-crate"
@@ -5448,19 +5377,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f054c6c1a6e95179d6f23ed974060dcefb2d9388bb7256900badad682c499de4"
 
 [[package]]
-name = "simple_logger"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c75a9723083573ace81ad0cdfc50b858aa3c366c48636edb4109d73122a0c0ea"
-dependencies = [
- "atty",
- "colored",
- "log",
- "time 0.3.7",
- "winapi",
-]
-
-[[package]]
 name = "slab"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5761,17 +5677,9 @@ version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "004cbc98f30fa233c61a38bc77e96a9106e65c88f2d3bef182ae952027e5753d"
 dependencies = [
- "itoa",
  "libc",
  "num_threads",
- "time-macros",
 ]
-
-[[package]]
-name = "time-macros"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25eb0ca3468fc0acc11828786797f6ef9aa1555e4a211a60d64cc8e4d1be47d6"
 
 [[package]]
 name = "tinyvec"
@@ -6195,15 +6103,6 @@ name = "utf-8"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09cc8ee72d2a9becf2f2febe0205bbed8fc6615b7cb429ad062dc7b7ddd036a9"
-
-[[package]]
-name = "uuid"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
-dependencies = [
- "getrandom 0.2.5",
-]
 
 [[package]]
 name = "valuable"

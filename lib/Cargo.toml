@@ -19,7 +19,6 @@ maintenance = { status = "experimental" }
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-actual_log = { package = "log", version = "0.4" }
 ansi_term = "0.12"
 derive_builder = "0.10"
 directories = "4.0"
@@ -42,7 +41,7 @@ thiserror = "1.0"
 tokio = { version = "1.16", features = ["rt"], optional = true }
 tracing-gelf = { git = "https://github.com/hrxi/tracing-gelf.git", branch = "nimiq", optional = true }
 tracing-log = { version = "0.1", optional = true }
-tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
+tracing-subscriber = { version = "0.3", optional = true }
 
 beserial = { path = "../beserial" }
 nimiq-block = { path = "../primitives/block" }

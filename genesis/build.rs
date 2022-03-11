@@ -36,7 +36,9 @@ fn generate_albatross(name: &str, out_dir: &Path, src_dir: &Path) {
 }
 
 fn main() {
-    pretty_env_logger::init();
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
 
     let out_dir = Path::new(&env::var("OUT_DIR").unwrap()).join("genesis");
     let src_dir = Path::new("src").join("genesis");

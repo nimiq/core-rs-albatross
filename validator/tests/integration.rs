@@ -1,25 +1,29 @@
 use std::sync::Arc;
 
-use actual_log::LevelFilter::{Debug, Info};
 use futures::{future, StreamExt};
 use nimiq_blockchain::AbstractBlockchain;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_network_libp2p::Network;
 use nimiq_test_utils::validator::build_validators;
+use tracing_core::LevelFilter;
+use tracing_subscriber::{filter::Targets, layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore]
 async fn four_validators_can_create_an_epoch() {
-    simple_logger::SimpleLogger::new()
-        .with_level(Info)
-        .with_module_level("nimiq_validator", Debug)
-        .with_module_level("nimiq_network_libp2p", Info)
-        .with_module_level("nimiq_handel", Info)
-        .with_module_level("nimiq_tendermint", Debug)
-        .with_module_level("nimiq_blockchain", Debug)
-        .with_module_level("nimiq_block", Debug)
-        .init()
-        .ok();
+    tracing_subscriber::registry()
+        .with(
+            Targets::new()
+                .with_default(LevelFilter::INFO)
+                .with_target("nimiq_validator", LevelFilter::DEBUG)
+                .with_target("nimiq_network_libp2p", LevelFilter::INFO)
+                .with_target("nimiq_handel", LevelFilter::INFO)
+                .with_target("nimiq_tendermint", LevelFilter::DEBUG)
+                .with_target("nimiq_blockchain", LevelFilter::DEBUG)
+                .with_target("nimiq_block", LevelFilter::DEBUG),
+        )
+        .with(tracing_subscriber::fmt::layer().with_test_writer())
+        .init();
 
     let env = VolatileEnvironment::new(10).expect("Could not open a volatile database");
 

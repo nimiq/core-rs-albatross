@@ -141,8 +141,6 @@ fn test_peers_in_contact_book(
 
 #[tokio::test]
 pub async fn test_exchanging_peers() {
-    //pretty_env_logger::init();
-
     // create nodes
     let mut node1 = TestNode::new();
     let node2 = TestNode::new();

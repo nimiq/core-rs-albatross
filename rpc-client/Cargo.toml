@@ -38,26 +38,26 @@ nimiq-hash = { path = "../hash", optional = true }
 nimiq-keys = { path = "../keys", optional = true }
 nimiq-primitives = { path = "../primitives", optional = true }
 nimiq-transaction = { path = "../primitives/transaction", optional = true }
-pretty_env_logger = { version = "0.4", optional = true }
 structopt = { version = "0.3.26", optional = true }
 tokio = { version = "1.16", features = [
     "macros",
     "rt-multi-thread",
     "tracing",
 ], optional = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
 
 [features]
 default = ["app"]
 app = [
-    "structopt",
-    "tokio",
     "anyhow",
     "dotenv",
-    "pretty_env_logger",
-    "nimiq-keys",
-    "nimiq-primitives",
-    "nimiq-transaction",
     "nimiq-account",
     "nimiq-bls",
     "nimiq-hash",
+    "nimiq-keys",
+    "nimiq-primitives",
+    "nimiq-transaction",
+    "structopt",
+    "tokio",
+    "tracing-subscriber",
 ]

@@ -54,10 +54,10 @@ nimiq-validator-network = { path = "../validator-network" }
 nimiq-vrf = { path = "../vrf" }
 
 [dev-dependencies]
-actual_log = { package = "log", version = "0.4" }
 hex = "0.4"
-simple_logger = "2.1.0"
 tokio = { version = "1.16", features = ["rt", "test-util", "time", "tracing"] }
+tracing-core = "0.1"
+tracing-subscriber = "0.3"
 
 nimiq-genesis-builder = { path = "../genesis-builder" }
 nimiq-network-libp2p = { path = "../network-libp2p" }

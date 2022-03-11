@@ -393,7 +393,9 @@ async fn run_app(opt: Opt) -> Result<(), Error> {
 #[tokio::main]
 async fn main() {
     dotenv::dotenv().ok();
-    pretty_env_logger::init();
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
 
     let opt = Opt::from_args();
     if let Err(e) = run_app(opt).await {

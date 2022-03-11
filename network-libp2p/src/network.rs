@@ -1383,7 +1383,6 @@ mod tests {
 
     #[tokio::test]
     async fn connections_stress_and_reconnect() {
-        // pretty_env_logger::init();
         // tracing_subscriber::fmt::init();
 
         let peers: usize = 15;
