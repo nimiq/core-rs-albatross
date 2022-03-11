@@ -127,7 +127,8 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
         );
 
         // Cache the block body for future use.
-        self.cache_body = block.body;
+        // Always `Some(…)` because the above function always sets it to `Some(…)`.
+        self.cache_body = Some(block.body.expect("produced blocks always have a body"));
 
         // Return the block header as the proposal.
         Ok(block.header)
@@ -334,7 +335,9 @@ impl<TValidatorNetwork: ValidatorNetwork + 'static> TendermintOutsideDeps
                     match block_state {
                         Ok(body) => {
                             // Cache the body that we calculated.
-                            self.cache_body = body;
+                            self.cache_body = Some(body.expect(
+                                "verify_block_state returns a body for blocks without one",
+                            ));
                             (MsgAcceptance::Accept, valid_round, Some(header))
                         }
                         Err(err) => {

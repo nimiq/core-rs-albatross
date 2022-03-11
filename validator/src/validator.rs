@@ -437,6 +437,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                     log::error!("Tendermint returned an error: {:?}", err);
                 }
                 TendermintReturn::Result(block) => {
+                    trace!("Tendermint returned block {}", block);
                     // If the event is a result meaning the next macro block was produced we push it onto our local chain
                     let block_copy = block.clone();
 
@@ -491,6 +492,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
                 // In case of a new state update we need to store the new version of it disregarding
                 // any old state which potentially still lingers.
                 TendermintReturn::StateUpdate(update) => {
+                    trace!("Tendermint state update {:?}", update);
                     let mut write_transaction = WriteTransaction::new(&self.env);
                     let persistable_state = PersistedMacroState::<TValidatorNetwork> {
                         height: self.consensus.blockchain.read().block_number() + 1,
@@ -678,7 +680,9 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Future
         // Process blockchain updates.
         let mut received_event = false;
         while let Poll::Ready(Some(event)) = self.blockchain_event_rx.poll_next_unpin(cx) {
-            if self.consensus.is_established() {
+            let consensus_established = self.consensus.is_established();
+            trace!(consensus_established, "blockchain event {:?}", event);
+            if consensus_established {
                 self.on_blockchain_event(event);
                 received_event = true;
             }
@@ -689,7 +693,9 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork> Future
 
         // Process fork events.
         while let Poll::Ready(Some(event)) = self.fork_event_rx.poll_next_unpin(cx) {
-            if self.consensus.is_established() {
+            let consensus_established = self.consensus.is_established();
+            trace!(consensus_established, "fork event {:?}", event);
+            if consensus_established {
                 self.on_fork_event(event);
             }
         }

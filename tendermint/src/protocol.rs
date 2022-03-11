@@ -44,13 +44,13 @@ impl<
         let valid_round = self.state.valid_round;
 
         if self.deps.is_our_turn(round) {
-            let proposal = if self.state.valid_value.is_some() {
+            let proposal = if let Some(valid_value) = &self.state.valid_value {
                 debug!(
                     "Our turn at round {}, broadcasting former valid proposal of round {}",
                     round,
                     self.state.valid_round.unwrap()
                 );
-                self.state.valid_value.clone().unwrap()
+                valid_value.clone()
             } else {
                 debug!("Our turn at round {}, broadcasting fresh proposal", round);
                 self.deps.get_value(round)?

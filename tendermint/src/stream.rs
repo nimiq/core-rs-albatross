@@ -111,6 +111,11 @@ where
         // An optional input for the TendermintState.
         state_opt: Option<TendermintState<ProposalTy, ProofTy>>,
     ) -> Result<Self, DepsTy> {
+        debug!(
+            "Initializing tendermint with{} prior state",
+            if state_opt.is_some() { "" } else { "out" }
+        );
+
         if let Some(state) = &state_opt {
             if !deps.verify_state(state) {
                 return Err(deps);

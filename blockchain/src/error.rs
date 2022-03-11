@@ -6,7 +6,7 @@ use nimiq_hash::Blake2bHash;
 use nimiq_primitives::networks::NetworkId;
 
 /// An enum used when a fork is detected.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ForkEvent {
     Detected(ForkProof),
 }
