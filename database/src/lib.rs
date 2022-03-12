@@ -2,6 +2,8 @@
 extern crate log;
 
 use std::borrow::Cow;
+use std::error;
+use std::fmt;
 use std::io;
 use std::ops::Deref;
 
@@ -15,6 +17,38 @@ pub mod cursor;
 pub mod mdbx;
 pub mod traits;
 pub mod volatile;
+
+#[derive(Debug)]
+pub enum Error {
+    CreateDirectory(io::Error),
+    Mdbx(libmdbx::Error),
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use Error::*;
+        match self {
+            CreateDirectory(e) => write!(f, "couldn't create directory for DB: {}", e),
+            Mdbx(e) => e.fmt(f),
+        }
+    }
+}
+
+impl error::Error for Error {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        use Error::*;
+        Some(match self {
+            CreateDirectory(e) => e,
+            Mdbx(e) => e,
+        })
+    }
+}
+
+impl From<libmdbx::Error> for Error {
+    fn from(e: libmdbx::Error) -> Error {
+        Error::Mdbx(e)
+    }
+}
 
 bitflags! {
     #[derive(Default)]
@@ -60,13 +94,6 @@ impl Environment {
     }
 
     pub fn close(self) {}
-
-    pub fn drop_database(self) -> io::Result<()> {
-        match self {
-            Environment::Volatile(env) => env.drop_database(),
-            Environment::Persistent(env) => env.drop_database(),
-        }
-    }
 }
 
 #[derive(Debug)]

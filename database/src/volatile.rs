@@ -1,6 +1,3 @@
-use std::error::Error;
-use std::fmt;
-use std::io;
 use std::sync::Arc;
 
 use tempfile::TempDir;
@@ -24,79 +21,29 @@ impl Clone for VolatileEnvironment {
     }
 }
 
-#[derive(Debug)]
-pub enum VolatileDatabaseError {
-    IoError(io::Error),
-    LmdbError(LmdbError),
-}
-
-impl fmt::Display for VolatileDatabaseError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            VolatileDatabaseError::IoError(e) => e.fmt(f),
-            VolatileDatabaseError::LmdbError(e) => e.fmt(f),
-        }
-    }
-}
-
-impl Error for VolatileDatabaseError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            VolatileDatabaseError::IoError(e) => Some(e),
-            VolatileDatabaseError::LmdbError(e) => Some(e),
-        }
-    }
-}
-
 impl VolatileEnvironment {
     #[allow(clippy::new_ret_no_self)]
-    pub fn new(max_dbs: u32) -> Result<Environment, VolatileDatabaseError> {
-        let temp_dir = TempDir::new().map_err(VolatileDatabaseError::IoError)?;
-        let path = temp_dir
-            .path()
-            .to_str()
-            .ok_or_else(|| {
-                VolatileDatabaseError::IoError(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    "Path cannot be converted into a string.",
-                ))
-            })?
-            .to_string();
+    pub fn new(max_dbs: u32) -> Result<Environment, Error> {
+        let temp_dir = TempDir::new().map_err(Error::CreateDirectory)?;
+        let env = MdbxEnvironment::new_mdbx_environment(temp_dir.path(), 0, max_dbs, None)?;
         Ok(Environment::Volatile(VolatileEnvironment {
             temp_dir: Arc::new(temp_dir),
-            env: MdbxEnvironment::new_mdbx_environment(&path, 0, max_dbs, None)
-                .map_err(VolatileDatabaseError::LmdbError)?,
+            env,
         }))
     }
 
-    pub fn with_max_readers(
-        max_dbs: u32,
-        max_readers: u32,
-    ) -> Result<Environment, VolatileDatabaseError> {
-        let temp_dir = TempDir::new().map_err(VolatileDatabaseError::IoError)?;
-        let path = temp_dir
-            .path()
-            .to_str()
-            .ok_or_else(|| {
-                VolatileDatabaseError::IoError(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    "Path cannot be converted into a string.",
-                ))
-            })?
-            .to_string();
+    pub fn with_max_readers(max_dbs: u32, max_readers: u32) -> Result<Environment, Error> {
+        let temp_dir = TempDir::new().map_err(Error::CreateDirectory)?;
+        let env =
+            MdbxEnvironment::new_mdbx_environment(temp_dir.path(), 0, max_dbs, Some(max_readers))?;
         Ok(Environment::Volatile(VolatileEnvironment {
             temp_dir: Arc::new(temp_dir),
-            env: MdbxEnvironment::new_mdbx_environment(&path, 0, max_dbs, Some(max_readers))
-                .map_err(VolatileDatabaseError::LmdbError)?,
+            env,
         }))
     }
 
     pub(super) fn open_database(&self, name: String, flags: DatabaseFlags) -> VolatileDatabase {
         VolatileDatabase(self.env.open_database(name, flags))
-    }
-
-    pub(super) fn drop_database(self) -> io::Result<()> {
-        Ok(())
     }
 }
 
@@ -490,8 +437,6 @@ mod tests {
             let tx = ReadTransaction::new(&env);
             assert!(tx.get::<str, String>(&db, "test").is_none());
         }
-
-        env.drop_database().unwrap();
     }
 
     #[test]
@@ -523,8 +468,6 @@ mod tests {
             let tx2 = ReadTransaction::new(&env);
             assert_eq!(tx2.get::<str, String>(&db, "test"), Some("one".to_string()));
         }
-
-        env.drop_database().unwrap();
     }
 
     #[test]
@@ -589,8 +532,6 @@ mod tests {
                 assert!(tx.get::<str, u32>(&db, "test").is_none());
             }
         }
-
-        env.drop_database().unwrap();
     }
 
     #[test]
@@ -654,7 +595,5 @@ mod tests {
             assert_eq!(cursor.next::<String, u32>(), Some((test2, 5783)));
             //            assert_eq!(cursor.seek_range_key::<String, u32>("test"), Some((test1.clone(), 12)));
         }
-
-        env.drop_database().unwrap();
     }
 }

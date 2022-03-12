@@ -3,7 +3,6 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
-pub use libmdbx::Error as LmdbError;
 use libmdbx::{NoWriteMap, Transaction, WriteFlags, RO, RW};
 
 use crate::cursor::{RawReadCursor, ReadCursor, WriteCursor as WriteCursorTrait};
@@ -12,48 +11,38 @@ use super::*;
 
 type DbKvPair<'a> = (Cow<'a, [u8]>, Cow<'a, [u8]>);
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct MdbxEnvironment {
     env: Arc<libmdbx::Environment<NoWriteMap>>,
-    path: String,
-}
-
-impl Clone for MdbxEnvironment {
-    fn clone(&self) -> Self {
-        Self {
-            env: Arc::clone(&self.env),
-            path: self.path.clone(),
-        }
-    }
 }
 
 impl MdbxEnvironment {
     #[allow(clippy::new_ret_no_self)]
-    pub fn new(path: &str, size: usize, max_dbs: u32) -> Result<Environment, LmdbError> {
+    pub fn new<P: AsRef<Path>>(path: P, size: usize, max_dbs: u32) -> Result<Environment, Error> {
         Ok(Environment::Persistent(
-            MdbxEnvironment::new_mdbx_environment(path, size, max_dbs, None)?,
+            MdbxEnvironment::new_mdbx_environment(path.as_ref(), size, max_dbs, None)?,
         ))
     }
 
     #[allow(clippy::new_ret_no_self)]
-    pub fn new_with_max_readers(
-        path: &str,
+    pub fn new_with_max_readers<P: AsRef<Path>>(
+        path: P,
         size: usize,
         max_dbs: u32,
         max_readers: u32,
-    ) -> Result<Environment, LmdbError> {
+    ) -> Result<Environment, Error> {
         Ok(Environment::Persistent(
-            MdbxEnvironment::new_mdbx_environment(path, size, max_dbs, Some(max_readers))?,
+            MdbxEnvironment::new_mdbx_environment(path.as_ref(), size, max_dbs, Some(max_readers))?,
         ))
     }
 
     pub(super) fn new_mdbx_environment(
-        path: &str,
+        path: &Path,
         size: usize,
         max_dbs: u32,
         max_readers: Option<u32>,
-    ) -> Result<Self, LmdbError> {
-        fs::create_dir_all(path).unwrap();
+    ) -> Result<Self, Error> {
+        fs::create_dir_all(path).map_err(Error::CreateDirectory)?;
 
         let mut env = libmdbx::Environment::new();
 
@@ -81,16 +70,13 @@ impl MdbxEnvironment {
             env.set_max_readers(max_readers);
         }
 
-        let env = env.open(Path::new(path)).unwrap();
+        let env = env.open(path)?;
 
-        let info = env.info().unwrap();
+        let info = env.info()?;
         let cur_mapsize = info.map_size();
         info!("MDBX memory map size: {}", cur_mapsize);
 
-        let mdbx = MdbxEnvironment {
-            env: Arc::new(env),
-            path: path.to_string(),
-        };
+        let mdbx = MdbxEnvironment { env: Arc::new(env) };
         if mdbx.need_resize(0) {
             info!("MDBX memory needs to be resized.");
         }
@@ -128,14 +114,6 @@ impl MdbxEnvironment {
             db: name,
             flags: db_flags,
         }
-    }
-
-    pub(super) fn drop_database(self) -> io::Result<()> {
-        fs::remove_dir_all(self.path())
-    }
-
-    fn path(&self) -> String {
-        self.path.clone()
     }
 
     pub fn need_resize(&self, threshold_size: usize) -> bool {
@@ -910,11 +888,13 @@ impl<'txn, 'db> WriteCursorTrait for MdbxWriteCursor<'txn> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::tempdir;
 
     #[test]
     fn it_can_save_basic_objects() {
-        let env = MdbxEnvironment::new("./test", 0, 1).unwrap();
+        let tempdir = tempdir().unwrap();
         {
+            let env = MdbxEnvironment::new(tempdir.path().join("test"), 0, 1).unwrap();
             let db = env.open_database("test".to_string());
 
             // Read non-existent value.
@@ -961,14 +941,13 @@ mod tests {
             let tx = ReadTransaction::new(&env);
             assert!(tx.get::<str, String>(&db, "test").is_none());
         }
-
-        env.drop_database().unwrap();
     }
 
     #[test]
     fn isolation_test() {
-        let env = MdbxEnvironment::new("./test2", 0, 1).unwrap();
+        let tempdir = tempdir().unwrap();
         {
+            let env = MdbxEnvironment::new(tempdir.path().join("test2"), 0, 1).unwrap();
             let db = env.open_database("test".to_string());
 
             // Read non-existent value.
@@ -994,14 +973,14 @@ mod tests {
             let tx2 = ReadTransaction::new(&env);
             assert_eq!(tx2.get::<str, String>(&db, "test"), Some("one".to_string()));
         }
-
-        env.drop_database().unwrap();
+        tempdir.close().unwrap();
     }
 
     #[test]
     fn duplicates_test() {
-        let env = MdbxEnvironment::new("./test3", 0, 1).unwrap();
+        let tempdir = tempdir().unwrap();
         {
+            let env = MdbxEnvironment::new(tempdir.path().join("test3"), 0, 1).unwrap();
             let db = env.open_database_with_flags(
                 "test".to_string(),
                 DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_UINT_VALUES,
@@ -1060,14 +1039,14 @@ mod tests {
                 assert!(tx.get::<str, u32>(&db, "test").is_none());
             }
         }
-
-        env.drop_database().unwrap();
+        tempdir.close().unwrap();
     }
 
     #[test]
     fn cursor_test() {
-        let env = MdbxEnvironment::new("./test4", 0, 1).unwrap();
+        let tempdir = tempdir().unwrap();
         {
+            let env = MdbxEnvironment::new(tempdir.path().join("test4"), 0, 1).unwrap();
             let db = env.open_database_with_flags(
                 "test".to_string(),
                 DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_UINT_VALUES,
@@ -1121,7 +1100,6 @@ mod tests {
             assert_eq!(cursor.next::<String, u32>(), Some((test2, 5783)));
             //            assert_eq!(cursor.seek_range_key::<String, u32>("test"), Some((test1.clone(), 12)));
         }
-
-        env.drop_database().unwrap();
+        tempdir.close().unwrap();
     }
 }
