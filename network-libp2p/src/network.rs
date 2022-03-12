@@ -94,7 +94,7 @@ pub(crate) enum NetworkAction {
     Publish {
         topic_name: &'static str,
         data: Vec<u8>,
-        output: oneshot::Sender<Result<MessageId, NetworkError>>,
+        output: oneshot::Sender<Result<(), NetworkError>>,
     },
     NetworkInfo {
         output: oneshot::Sender<NetworkInfo>,
@@ -894,6 +894,11 @@ impl Network {
                             .behaviour_mut()
                             .gossipsub
                             .publish(topic, data)
+                            .map(|_| ())
+                            .or_else(|e| match e {
+                                PublishError::Duplicate => Ok(()),
+                                _ => Err(e),
+                            })
                             .map_err(Into::into),
                     )
                     .ok();
@@ -1156,7 +1161,7 @@ impl NetworkInterface for Network {
             })
             .await?;
 
-        let _message_id = output_rx.await??;
+        output_rx.await??;
 
         Ok(())
     }
