@@ -297,7 +297,8 @@ fn it_can_revert_unpark_transactions() {
         Coin::ZERO,
         1,
         NetworkId::UnitAlbatross,
-    );
+    )
+    .unwrap();
 
     transactions.push(tx);
 
@@ -395,7 +396,8 @@ fn it_can_revert_create_stacker_transaction() {
         100.try_into().unwrap(),
         1,
         NetworkId::UnitAlbatross,
-    );
+    )
+    .unwrap();
 
     transactions.push(tx);
 

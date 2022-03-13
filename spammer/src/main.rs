@@ -403,7 +403,8 @@ fn generate_transactions(
             Coin::from_u64_unchecked(200),
             start_height,
             network_id,
-        );
+        )
+        .unwrap();
         txs.push(tx);
     }
 

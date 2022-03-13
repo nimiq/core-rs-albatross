@@ -153,7 +153,7 @@ impl TransactionBuilder {
     ///     NetworkId::Main
     /// );
     ///
-    /// let proof_builder = builder.generate().unwrap();
+    /// let proof_builder = builder.generate()?;
     /// let transaction = proof_builder.preliminary_transaction();
     /// assert_eq!(transaction.sender, sender);
     /// ```
@@ -227,7 +227,7 @@ impl TransactionBuilder {
     /// );
     /// builder.with_fee(Coin::from_u64_unchecked(1337));
     ///
-    /// let proof_builder = builder.generate().unwrap();
+    /// let proof_builder = builder.generate()?;
     /// let transaction = proof_builder.preliminary_transaction();
     /// assert_eq!(transaction.fee, Coin::from_u64_unchecked(1337));
     /// ```
@@ -292,7 +292,7 @@ impl TransactionBuilder {
     /// );
     /// builder.with_sender_type(AccountType::HTLC);
     ///
-    /// let proof_builder = builder.generate().unwrap();
+    /// let proof_builder = builder.generate()?;
     /// let transaction = proof_builder.preliminary_transaction();
     /// assert_eq!(transaction.sender_type, AccountType::HTLC);
     ///
@@ -336,7 +336,7 @@ impl TransactionBuilder {
     /// );
     /// builder.with_fee(Coin::from_u64_unchecked(1337));
     ///
-    /// let proof_builder = builder.generate().unwrap();
+    /// let proof_builder = builder.generate()?;
     /// let transaction = proof_builder.preliminary_transaction();
     /// assert_eq!(
     ///     transaction.recipient,
@@ -413,7 +413,7 @@ impl TransactionBuilder {
     /// );
     /// builder.with_fee(Coin::from_u64_unchecked(1337));
     ///
-    /// let proof_builder = builder.generate().unwrap();
+    /// let proof_builder = builder.generate()?;
     /// let transaction = proof_builder.preliminary_transaction();
     /// ```
     ///
@@ -503,7 +503,7 @@ impl TransactionBuilder {
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
-    ) -> Transaction {
+    ) -> Result<Transaction, TransactionBuilderError> {
         let sender = Address::from(key_pair);
         let mut builder = Self::new();
         builder
@@ -514,11 +514,11 @@ impl TransactionBuilder {
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);
 
-        let proof_builder = builder.generate().unwrap();
+        let proof_builder = builder.generate()?;
         match proof_builder {
             TransactionProofBuilder::Basic(mut builder) => {
                 builder.sign_with_key_pair(key_pair);
-                builder.generate().unwrap()
+                Ok(builder.generate().unwrap())
             }
             _ => unreachable!(),
         }
@@ -550,7 +550,7 @@ impl TransactionBuilder {
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
-    ) -> Transaction {
+    ) -> Result<Transaction, TransactionBuilderError> {
         let sender = Address::from(key_pair);
 
         let mut builder = Self::new();
@@ -562,11 +562,11 @@ impl TransactionBuilder {
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);
 
-        let proof_builder = builder.generate().unwrap();
+        let proof_builder = builder.generate()?;
         match proof_builder {
             TransactionProofBuilder::Basic(mut builder) => {
                 builder.sign_with_key_pair(key_pair);
-                builder.generate().unwrap()
+                Ok(builder.generate().unwrap())
             }
             _ => unreachable!(),
         }
@@ -604,7 +604,7 @@ impl TransactionBuilder {
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
-    ) -> Transaction {
+    ) -> Result<Transaction, TransactionBuilderError> {
         let mut recipient = Recipient::new_vesting_builder(owner);
         recipient.with_steps(value, start_time, time_step, num_steps);
 
@@ -617,11 +617,11 @@ impl TransactionBuilder {
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);
 
-        let proof_builder = builder.generate().unwrap();
+        let proof_builder = builder.generate()?;
         match proof_builder {
             TransactionProofBuilder::Basic(mut builder) => {
                 builder.sign_with_key_pair(key_pair);
-                builder.generate().unwrap()
+                Ok(builder.generate().unwrap())
             }
             _ => unreachable!(),
         }
@@ -652,7 +652,7 @@ impl TransactionBuilder {
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
-    ) -> Transaction {
+    ) -> Result<Transaction, TransactionBuilderError> {
         let mut builder = Self::new();
         builder
             .with_sender(contract_address)
@@ -663,11 +663,11 @@ impl TransactionBuilder {
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);
 
-        let proof_builder = builder.generate().unwrap();
+        let proof_builder = builder.generate()?;
         match proof_builder {
             TransactionProofBuilder::Basic(mut builder) => {
                 builder.sign_with_key_pair(key_pair);
-                builder.generate().unwrap()
+                Ok(builder.generate().unwrap())
             }
             _ => unreachable!(),
         }
@@ -710,7 +710,7 @@ impl TransactionBuilder {
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
-    ) -> Transaction {
+    ) -> Result<Transaction, TransactionBuilderError> {
         let mut recipient = Recipient::new_htlc_builder();
         recipient
             .with_sender(htlc_sender)
@@ -727,11 +727,11 @@ impl TransactionBuilder {
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);
 
-        let proof_builder = builder.generate().unwrap();
+        let proof_builder = builder.generate()?;
         match proof_builder {
             TransactionProofBuilder::Basic(mut builder) => {
                 builder.sign_with_key_pair(key_pair);
-                builder.generate().unwrap()
+                Ok(builder.generate().unwrap())
             }
             _ => unreachable!(),
         }
@@ -777,7 +777,7 @@ impl TransactionBuilder {
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
-    ) -> Transaction {
+    ) -> Result<Transaction, TransactionBuilderError> {
         let mut builder = Self::new();
         builder
             .with_sender(contract_address)
@@ -788,12 +788,12 @@ impl TransactionBuilder {
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);
 
-        let proof_builder = builder.generate().unwrap();
+        let proof_builder = builder.generate()?;
         match proof_builder {
             TransactionProofBuilder::Htlc(mut builder) => {
                 let sig = builder.signature_with_key_pair(key_pair);
                 builder.regular_transfer(hash_algorithm, pre_image, hash_count, hash_root, sig);
-                builder.generate().unwrap()
+                Ok(builder.generate().unwrap())
             }
             _ => unreachable!(),
         }
@@ -826,7 +826,7 @@ impl TransactionBuilder {
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
-    ) -> Transaction {
+    ) -> Result<Transaction, TransactionBuilderError> {
         let mut builder = Self::new();
         builder
             .with_sender(contract_address)
@@ -837,12 +837,12 @@ impl TransactionBuilder {
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);
 
-        let proof_builder = builder.generate().unwrap();
+        let proof_builder = builder.generate()?;
         match proof_builder {
             TransactionProofBuilder::Htlc(mut builder) => {
                 let sig = builder.signature_with_key_pair(key_pair);
                 builder.timeout_resolve(sig);
-                builder.generate().unwrap()
+                Ok(builder.generate().unwrap())
             }
             _ => unreachable!(),
         }
@@ -878,7 +878,7 @@ impl TransactionBuilder {
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
-    ) -> Transaction {
+    ) -> Result<Transaction, TransactionBuilderError> {
         let mut builder = Self::new();
         builder
             .with_sender(contract_address)
@@ -889,11 +889,11 @@ impl TransactionBuilder {
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);
 
-        let proof_builder = builder.generate().unwrap();
+        let proof_builder = builder.generate()?;
         match proof_builder {
             TransactionProofBuilder::Htlc(mut builder) => {
                 builder.early_resolve(htlc_sender_signature, htlc_recipient_signature);
-                builder.generate().unwrap()
+                Ok(builder.generate().unwrap())
             }
             _ => unreachable!(),
         }
@@ -927,7 +927,7 @@ impl TransactionBuilder {
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
-    ) -> SignatureProof {
+    ) -> Result<SignatureProof, TransactionBuilderError> {
         let mut builder = Self::new();
         builder
             .with_sender(contract_address)
@@ -938,9 +938,9 @@ impl TransactionBuilder {
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);
 
-        let proof_builder = builder.generate().unwrap();
+        let proof_builder = builder.generate()?;
         match proof_builder {
-            TransactionProofBuilder::Htlc(builder) => builder.signature_with_key_pair(key_pair),
+            TransactionProofBuilder::Htlc(builder) => Ok(builder.signature_with_key_pair(key_pair)),
             _ => unreachable!(),
         }
     }
@@ -972,7 +972,7 @@ impl TransactionBuilder {
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
-    ) -> Transaction {
+    ) -> Result<Transaction, TransactionBuilderError> {
         let mut recipient = Recipient::new_staking_builder();
         recipient.create_staker(delegation);
 
@@ -985,13 +985,13 @@ impl TransactionBuilder {
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);
 
-        let proof_builder = builder.generate().unwrap();
+        let proof_builder = builder.generate()?;
         match proof_builder {
             TransactionProofBuilder::InStaking(mut builder) => {
                 builder.sign_with_key_pair(staker_key_pair);
                 let mut builder = builder.generate().unwrap().unwrap_basic();
                 builder.sign_with_key_pair(key_pair);
-                builder.generate().unwrap()
+                Ok(builder.generate().unwrap())
             }
             _ => unreachable!(),
         }
@@ -1022,7 +1022,7 @@ impl TransactionBuilder {
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
-    ) -> Transaction {
+    ) -> Result<Transaction, TransactionBuilderError> {
         let mut recipient = Recipient::new_staking_builder();
         recipient.stake(staker_address);
 
@@ -1035,13 +1035,13 @@ impl TransactionBuilder {
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);
 
-        let proof_builder = builder.generate().unwrap();
+        let proof_builder = builder.generate()?;
         match proof_builder {
             TransactionProofBuilder::InStaking(mut builder) => {
                 builder.sign_with_key_pair(&KeyPair::default());
                 let mut builder = builder.generate().unwrap().unwrap_basic();
                 builder.sign_with_key_pair(key_pair);
-                builder.generate().unwrap()
+                Ok(builder.generate().unwrap())
             }
             _ => unreachable!(),
         }
@@ -1078,7 +1078,7 @@ impl TransactionBuilder {
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
-    ) -> Transaction {
+    ) -> Result<Transaction, TransactionBuilderError> {
         let mut recipient = Recipient::new_staking_builder();
         recipient.update_staker(new_delegation);
 
@@ -1101,7 +1101,7 @@ impl TransactionBuilder {
             }
         }
 
-        let proof_builder = builder.generate().unwrap();
+        let proof_builder = builder.generate()?;
         match proof_builder {
             TransactionProofBuilder::InStaking(mut builder) => {
                 builder.sign_with_key_pair(staker_key_pair);
@@ -1109,12 +1109,12 @@ impl TransactionBuilder {
                     None => {
                         let mut builder = builder.generate().unwrap().unwrap_out_staking();
                         builder.unstake(staker_key_pair);
-                        builder.generate().unwrap()
+                        Ok(builder.generate().unwrap())
                     }
                     Some(key) => {
                         let mut builder = builder.generate().unwrap().unwrap_basic();
                         builder.sign_with_key_pair(key);
-                        builder.generate().unwrap()
+                        Ok(builder.generate().unwrap())
                     }
                 }
             }
@@ -1146,7 +1146,7 @@ impl TransactionBuilder {
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
-    ) -> Transaction {
+    ) -> Result<Transaction, TransactionBuilderError> {
         let recipient = Recipient::new_basic(recipient);
 
         let mut builder = Self::new();
@@ -1159,11 +1159,11 @@ impl TransactionBuilder {
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);
 
-        let proof_builder = builder.generate().unwrap();
+        let proof_builder = builder.generate()?;
         match proof_builder {
             TransactionProofBuilder::OutStaking(mut builder) => {
                 builder.unstake(key_pair);
-                builder.generate().unwrap()
+                Ok(builder.generate().unwrap())
             }
             _ => unreachable!(),
         }
@@ -1199,7 +1199,7 @@ impl TransactionBuilder {
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
-    ) -> Transaction {
+    ) -> Result<Transaction, TransactionBuilderError> {
         let mut recipient = Recipient::new_staking_builder();
         recipient.create_validator(signing_key, voting_key_pair, reward_address, signal_data);
 
@@ -1212,13 +1212,13 @@ impl TransactionBuilder {
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);
 
-        let proof_builder = builder.generate().unwrap();
+        let proof_builder = builder.generate()?;
         match proof_builder {
             TransactionProofBuilder::InStaking(mut builder) => {
                 builder.sign_with_key_pair(cold_key_pair);
                 let mut builder = builder.generate().unwrap().unwrap_basic();
                 builder.sign_with_key_pair(key_pair);
-                builder.generate().unwrap()
+                Ok(builder.generate().unwrap())
             }
             _ => unreachable!(),
         }
@@ -1258,7 +1258,7 @@ impl TransactionBuilder {
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
-    ) -> Transaction {
+    ) -> Result<Transaction, TransactionBuilderError> {
         let mut recipient = Recipient::new_staking_builder();
         recipient.update_validator(
             new_signing_key,
@@ -1276,13 +1276,13 @@ impl TransactionBuilder {
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);
 
-        let proof_builder = builder.generate().unwrap();
+        let proof_builder = builder.generate()?;
         match proof_builder {
             TransactionProofBuilder::InStaking(mut builder) => {
                 builder.sign_with_key_pair(cold_key_pair);
                 let mut builder = builder.generate().unwrap().unwrap_basic();
                 builder.sign_with_key_pair(key_pair);
-                builder.generate().unwrap()
+                Ok(builder.generate().unwrap())
             }
             _ => unreachable!(),
         }
@@ -1316,7 +1316,7 @@ impl TransactionBuilder {
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
-    ) -> Transaction {
+    ) -> Result<Transaction, TransactionBuilderError> {
         let mut recipient = Recipient::new_staking_builder();
         recipient.inactivate_validator(validator_address);
 
@@ -1329,13 +1329,13 @@ impl TransactionBuilder {
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);
 
-        let proof_builder = builder.generate().unwrap();
+        let proof_builder = builder.generate()?;
         match proof_builder {
             TransactionProofBuilder::InStaking(mut builder) => {
                 builder.sign_with_key_pair(signing_key_pair);
                 let mut builder = builder.generate().unwrap().unwrap_basic();
                 builder.sign_with_key_pair(key_pair);
-                builder.generate().unwrap()
+                Ok(builder.generate().unwrap())
             }
             _ => unreachable!(),
         }
@@ -1369,7 +1369,7 @@ impl TransactionBuilder {
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
-    ) -> Transaction {
+    ) -> Result<Transaction, TransactionBuilderError> {
         let mut recipient = Recipient::new_staking_builder();
         recipient.reactivate_validator(validator_address);
 
@@ -1382,13 +1382,13 @@ impl TransactionBuilder {
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);
 
-        let proof_builder = builder.generate().unwrap();
+        let proof_builder = builder.generate()?;
         match proof_builder {
             TransactionProofBuilder::InStaking(mut builder) => {
                 builder.sign_with_key_pair(signing_key_pair);
                 let mut builder = builder.generate().unwrap().unwrap_basic();
                 builder.sign_with_key_pair(key_pair);
-                builder.generate().unwrap()
+                Ok(builder.generate().unwrap())
             }
             _ => unreachable!(),
         }
@@ -1422,7 +1422,7 @@ impl TransactionBuilder {
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
-    ) -> Transaction {
+    ) -> Result<Transaction, TransactionBuilderError> {
         let mut recipient = Recipient::new_staking_builder();
         recipient.unpark_validator(validator_address);
 
@@ -1435,13 +1435,13 @@ impl TransactionBuilder {
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);
 
-        let proof_builder = builder.generate().unwrap();
+        let proof_builder = builder.generate()?;
         match proof_builder {
             TransactionProofBuilder::InStaking(mut builder) => {
                 builder.sign_with_key_pair(signing_key_pair);
                 let mut builder = builder.generate().unwrap().unwrap_basic();
                 builder.sign_with_key_pair(key_pair);
-                builder.generate().unwrap()
+                Ok(builder.generate().unwrap())
             }
             _ => unreachable!(),
         }
@@ -1469,7 +1469,7 @@ impl TransactionBuilder {
         fee: Coin,
         validity_start_height: u32,
         network_id: NetworkId,
-    ) -> Transaction {
+    ) -> Result<Transaction, TransactionBuilderError> {
         let recipient = Recipient::new_basic(recipient);
 
         let mut builder = Self::new();
@@ -1482,11 +1482,11 @@ impl TransactionBuilder {
             .with_validity_start_height(validity_start_height)
             .with_network_id(network_id);
 
-        let proof_builder = builder.generate().unwrap();
+        let proof_builder = builder.generate()?;
         match proof_builder {
             TransactionProofBuilder::OutStaking(mut builder) => {
                 builder.delete_validator(cold_key_pair);
-                builder.generate().unwrap()
+                Ok(builder.generate().unwrap())
             }
             _ => unreachable!(),
         }

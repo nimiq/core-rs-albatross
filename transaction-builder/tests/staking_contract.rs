@@ -11,7 +11,7 @@ use nimiq_transaction::account::staking_contract::{
     IncomingStakingTransactionData, OutgoingStakingTransactionProof,
 };
 use nimiq_transaction::{SignatureProof, Transaction};
-use nimiq_transaction_builder::TransactionBuilder;
+use nimiq_transaction_builder::{TransactionBuilder, TransactionBuilderError};
 
 const ADDRESS: &str = "9cd82948650d902d95d52ea2ec91eae6deb0c9fe";
 const PRIVATE_KEY: &str = "b410a7a583cbc13ef4f1cbddace30928bcb4f9c13722414bc4a2faaba3f4e187";
@@ -42,7 +42,8 @@ fn it_can_create_staker_transactions() {
         100.try_into().unwrap(),
         1,
         NetworkId::Dummy,
-    );
+    )
+    .unwrap();
 
     assert_eq!(tx, tx2);
 
@@ -62,7 +63,8 @@ fn it_can_create_staker_transactions() {
         100.try_into().unwrap(),
         1,
         NetworkId::Dummy,
-    );
+    )
+    .unwrap();
 
     assert_eq!(tx, tx2);
 
@@ -83,7 +85,8 @@ fn it_can_create_staker_transactions() {
         100.try_into().unwrap(),
         1,
         NetworkId::Dummy,
-    );
+    )
+    .unwrap();
 
     assert_eq!(tx, tx2);
 
@@ -103,7 +106,8 @@ fn it_can_create_staker_transactions() {
         100.try_into().unwrap(),
         1,
         NetworkId::Dummy,
-    );
+    )
+    .unwrap();
 
     assert_eq!(tx, tx2);
 
@@ -117,9 +121,33 @@ fn it_can_create_staker_transactions() {
         100.try_into().unwrap(),
         1,
         NetworkId::Dummy,
-    );
+    )
+    .unwrap();
 
     assert_eq!(tx, tx2);
+}
+
+#[test]
+fn it_can_fail_creating_staker_transactions() {
+    let key_pair = ed25519_key_pair();
+    let address = Address::from_any_str(ADDRESS).unwrap();
+
+    // Invalid stake
+    let err3 = TransactionBuilder::new_stake(
+        &key_pair,
+        address,
+        0.try_into().unwrap(), // InvalidValue
+        100.try_into().unwrap(),
+        1,
+        NetworkId::Dummy,
+    )
+    .err();
+
+    match err3 {
+        Some(TransactionBuilderError::InvalidValue) => {}
+        Some(_) => panic!("Wrong error returned"),
+        None => panic!("No error returned"),
+    }
 }
 
 #[test]
@@ -152,7 +180,8 @@ fn it_can_create_validator_transactions() {
         100.try_into().unwrap(),
         1,
         NetworkId::Dummy,
-    );
+    )
+    .unwrap();
 
     assert_eq!(tx, tx2);
 
@@ -180,7 +209,8 @@ fn it_can_create_validator_transactions() {
         100.try_into().unwrap(),
         1,
         NetworkId::Dummy,
-    );
+    )
+    .unwrap();
 
     assert_eq!(tx, tx2);
 
@@ -201,7 +231,8 @@ fn it_can_create_validator_transactions() {
         100.try_into().unwrap(),
         1,
         NetworkId::Dummy,
-    );
+    )
+    .unwrap();
 
     assert_eq!(tx, tx2);
 
@@ -222,7 +253,8 @@ fn it_can_create_validator_transactions() {
         100.try_into().unwrap(),
         1,
         NetworkId::Dummy,
-    );
+    )
+    .unwrap();
 
     assert_eq!(tx, tx2);
 
@@ -243,7 +275,8 @@ fn it_can_create_validator_transactions() {
         100.try_into().unwrap(),
         1,
         NetworkId::Dummy,
-    );
+    )
+    .unwrap();
 
     assert_eq!(tx, tx2);
 
@@ -256,7 +289,8 @@ fn it_can_create_validator_transactions() {
         100.try_into().unwrap(),
         1,
         NetworkId::Dummy,
-    );
+    )
+    .unwrap();
 
     assert_eq!(tx, tx2);
 }
