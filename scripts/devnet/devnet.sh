@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+set -o errexit
+set -o nounset
+set -o pipefail
 
 max_restarts=10
 # Initializing variables
@@ -28,11 +31,11 @@ trap cleanup_exit INT
 function cleanup_exit() {
     echo "Killing all validators..."
     for pid in ${vpids[@]}; do
-        kill $pid
+        kill $pid || true
     done
     echo "Killing seed/spammer..."
     for pid in ${spids[@]}; do
-        kill $pid
+        kill $pid || true
     done
     echo "Done."
 
@@ -353,7 +356,7 @@ do
 
     # First collect the last block number from each validator
     for log in $logsdir/*.log; do
-        bn=$(grep "Accepted block #" $log | tail -1 | awk -F# '{print $2}' | cut --delimiter=. --fields 1)
+        bn=$({ grep "Accepted block #" $log || test $? = 1; } | tail -1 | awk -F# '{print $2}' | cut --delimiter=. --fields 1)
         if [ -z "$bn" ]; then
             bns+=(0)
         else
