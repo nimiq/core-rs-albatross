@@ -7,7 +7,7 @@ use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
 
 use crate::chain_info::ChainInfo;
-use crate::history_store::{ExtTxData, ExtendedTransaction, HistoryStore};
+use crate::history::{ExtTxData, ExtendedTransaction, HistoryStore};
 use crate::{AbstractBlockchain, Blockchain, BlockchainEvent, PushError, PushResult};
 use nimiq_account::{Inherent, InherentType};
 

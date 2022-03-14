@@ -7,7 +7,7 @@ use beserial::{
 use nimiq_hash::Blake2bHash;
 use nimiq_mmr::mmr::proof::{Proof, RangeProof};
 
-use crate::history_store::ExtendedTransaction;
+use crate::history::ExtendedTransaction;
 
 /// The chunk size used in our protocol.
 /// TODO: Update number.

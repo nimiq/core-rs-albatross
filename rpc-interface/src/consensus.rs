@@ -12,6 +12,8 @@ use crate::types::{Transaction, ValidityStartHeight};
 pub trait ConsensusInterface {
     type Error;
 
+    // `nimiq_jsonrpc_derive::proxy` requires the receiver type to be a mutable reference.
+    #[allow(clippy::wrong_self_convention)]
     async fn is_consensus_established(&mut self) -> Result<bool, Self::Error>;
 
     async fn get_raw_transaction_info(

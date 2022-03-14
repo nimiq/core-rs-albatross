@@ -17,9 +17,9 @@ use nimiq_mmr::mmr::MerkleMountainRange;
 use nimiq_mmr::store::memory::MemoryStore;
 use nimiq_primitives::policy;
 
-use crate::history_store::mmr_store::MMRStore;
-use crate::history_store::ordered_hash::OrderedHash;
-use crate::history_store::{ExtendedTransaction, HistoryTreeChunk, HistoryTreeProof};
+use crate::history::mmr_store::MMRStore;
+use crate::history::ordered_hash::OrderedHash;
+use crate::history::{ExtendedTransaction, HistoryTreeChunk, HistoryTreeProof};
 use crate::ExtTxData;
 
 /// A struct that contains databases to store history trees (which are Merkle Mountain Ranges

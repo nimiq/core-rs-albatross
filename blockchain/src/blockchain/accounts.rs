@@ -5,7 +5,7 @@ use nimiq_primitives::policy;
 use nimiq_vrf::VrfEntropy;
 
 use crate::blockchain_state::BlockchainState;
-use crate::history_store::ExtendedTransaction;
+use crate::history::ExtendedTransaction;
 use crate::{Blockchain, PushError};
 
 /// Implements methods to handle the accounts.

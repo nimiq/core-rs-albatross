@@ -17,7 +17,7 @@ use crate::chain_info::ChainInfo;
 #[cfg(feature = "metrics")]
 use crate::chain_metrics::BlockchainMetrics;
 use crate::chain_store::ChainStore;
-use crate::history_store::HistoryStore;
+use crate::history::HistoryStore;
 use crate::reward::genesis_parameters;
 use crate::{BlockchainError, BlockchainEvent, ForkEvent};
 use nimiq_trie::key_nibbles::KeyNibbles;

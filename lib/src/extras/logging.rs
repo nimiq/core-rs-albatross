@@ -22,7 +22,7 @@ use crate::{
     error::Error,
 };
 
-static NIMIQ_MODULES: &'static [&'static str] = &[
+static NIMIQ_MODULES: &[&str] = &[
     "beserial",
     "beserial_derive",
     "nimiq_account",

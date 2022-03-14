@@ -1,3 +1,5 @@
+use std::error;
+use std::fmt;
 use std::io;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
@@ -23,6 +25,24 @@ pub struct ExtendedTransaction {
     // A struct containing the transaction data.
     pub data: ExtTxData,
 }
+
+#[derive(Clone, Debug)]
+pub enum IntoTransactionError {
+    NoBasicTransactionMapping,
+}
+
+impl fmt::Display for IntoTransactionError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use IntoTransactionError::*;
+        match self {
+            NoBasicTransactionMapping => {
+                "no basic transaction mapping for this extended transaction"
+            }
+        }
+        .fmt(f)
+    }
+}
+impl error::Error for IntoTransactionError {}
 
 impl ExtendedTransaction {
     /// Convert a set of inherents and basic transactions (together with a network id, a block
@@ -121,7 +141,7 @@ impl ExtendedTransaction {
 
     /// Tries to convert an extended transaction into a regular transaction. This will work for all
     /// extended transactions that wrap over regular transactions and reward inherents.
-    pub fn into_transaction(self) -> Result<BlockchainTransaction, ()> {
+    pub fn into_transaction(self) -> Result<BlockchainTransaction, IntoTransactionError> {
         match self.data {
             ExtTxData::Basic(tx) => Ok(tx),
             ExtTxData::Inherent(x) => {
@@ -135,7 +155,7 @@ impl ExtendedTransaction {
                         self.network_id,
                     ))
                 } else {
-                    Err(())
+                    Err(IntoTransactionError::NoBasicTransactionMapping)
                 }
             }
         }
