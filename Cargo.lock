@@ -5852,8 +5852,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-gelf"
-version = "0.6.0"
-source = "git+https://github.com/hrxi/tracing-gelf.git?branch=nimiq#6640b2d3932037590d14d382de2ccf0c6041b161"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6d094204165dcfc9cffe7b2c22d98e4a7bc86f1e8a052c83c7c5442ee325bf4"
 dependencies = [
  "bytes",
  "futures-channel",
