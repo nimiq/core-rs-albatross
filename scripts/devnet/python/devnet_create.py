@@ -275,6 +275,13 @@ delegation = "{validator_address}"
             reward_address=validator["reward_address"]["address"],
             validator_address=validator["validator_address"]["address"]
         ))
+        f.write("""
+[[accounts]]
+address = "{reward_address}"
+balance = 10_000_000_00000
+""".format(
+            reward_address=validator["reward_address"]["address"],
+        ))
     f.write("""
 [[accounts]]
 address = "NQ37 7C3V VMN8 FRPN FXS9 PLAG JMRE 8SC6 KUSQ"
