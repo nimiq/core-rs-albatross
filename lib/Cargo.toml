@@ -21,6 +21,7 @@ maintenance = { status = "experimental" }
 [dependencies]
 ansi_term = "0.12"
 clap = { version = "3.0", features = ["derive"] }
+console-subscriber = { version = "0.1", features = ["parking_lot"], optional = true }
 derive_builder = "0.11"
 directories = "4.0"
 file-rotate = { version = "0.6" }
@@ -37,7 +38,7 @@ strum_macros = "0.24"
 toml = "0.5"
 url = "2.2"
 thiserror = "1.0"
-tokio = { version = "1.16", features = ["rt"], optional = true }
+tokio = { version = "1.16", features = ["rt", "tracing"], optional = true }
 tracing-gelf = { version = "0.6.1", optional = true }
 tracing-log = { version = "0.1", optional = true }
 tracing-subscriber = { version = "0.3", optional = true }
@@ -67,7 +68,7 @@ nimiq-wallet = { path = "../wallet", optional = true }
 deadlock = []
 default = []
 launcher = []
-logging = ["serde_json", "tokio", "tracing-gelf", "tracing-log", "tracing-subscriber"]
+logging = ["console-subscriber", "serde_json", "tokio", "tracing-gelf", "tracing-log", "tracing-subscriber"]
 panic = ["log-panics"]
 rpc-server = ["validator", "nimiq-rpc-server", "nimiq-wallet"]
 validator = ["nimiq-validator", "nimiq-validator-network", "nimiq-bls", "nimiq-rpc-server"]

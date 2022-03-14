@@ -196,6 +196,10 @@ level = "debug"
 # Default: none
 #file = "nimiq-client.log"
 
+# Tokio console
+# Default: None
+#tokio_console_bind_address = "127.0.0.1:6669"
+
 # Specify a rotating log file containing a trace log
 # [log.rotating_trace_log]
 

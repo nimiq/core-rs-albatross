@@ -1,3 +1,4 @@
+use std::env;
 use std::fmt;
 use std::fs::{self, File};
 use std::io;
@@ -11,11 +12,11 @@ use tracing_log::NormalizeEvent;
 use tracing_subscriber::filter::Targets;
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::time::{FormatTime, SystemTime};
-use tracing_subscriber::fmt::{FmtContext, FormatEvent, FormatFields, FormattedFields, Layer};
+use tracing_subscriber::fmt::{FmtContext, FormatEvent, FormatFields, FormattedFields};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::Layer as _;
+use tracing_subscriber::Layer;
 
 use crate::{
     config::{command_line::CommandLine, config_file::LogSettings},
@@ -335,7 +336,7 @@ pub fn initialize_logging(
         ))));
 
         Some(
-            Layer::new()
+            tracing_subscriber::fmt::layer()
                 .with_writer(move || log.clone())
                 .with_ansi(false)
                 .event_format(Formatting(SystemTime))
@@ -365,11 +366,51 @@ pub fn initialize_logging(
         (None, None)
     };
 
+    #[cfg(tokio_unstable)]
+    fn initialize_tokio_console<S>(bind_address: &str) -> Option<Box<dyn Layer<S> + Send + Sync>>
+    where
+        S: Subscriber + for<'a> LookupSpan<'a>,
+    {
+        let addresses = bind_address
+            .to_socket_addrs()
+            .expect("Unable to resolve tokio console bind address");
+        Some(Box::new(
+            console_subscriber::ConsoleLayer::builder()
+                .with_default_env()
+                .server_addr(addresses.as_slice()[0])
+                .spawn(),
+        ))
+    }
+    #[cfg(not(tokio_unstable))]
+    fn initialize_tokio_console<S>(bind_address: &str) -> Option<Box<dyn Layer<S> + Send + Sync>>
+    where
+        S: Subscriber + for<'a> LookupSpan<'a>,
+    {
+        let _ = bind_address;
+        log::error!("cannot enable tokio console server, need `RUSTFLAGS=\"--cfg tokio_unstable\"` at compile time.");
+        None
+    }
+
+    let tokio_console_bind_address =
+        settings
+            .tokio_console_bind_address
+            .or_else(|| match env::var("TOKIO_CONSOLE_BIND") {
+                Ok(v) => Some(v),
+                Err(env::VarError::NotPresent) => None,
+                Err(env::VarError::NotUnicode(_)) => {
+                    panic!("non-UTF-8 TOKIO_CONSOLE_BIND variable")
+                }
+            });
+
+    let tokio_console_layer =
+        tokio_console_bind_address.and_then(|addr| initialize_tokio_console(&addr));
+
     tracing_subscriber::registry()
         .with(gelf_layer)
         .with(rotating_layer)
+        .with(tokio_console_layer)
         .with(
-            Layer::new()
+            tracing_subscriber::fmt::layer()
                 .with_writer(out)
                 .with_ansi(settings.file.is_none())
                 .event_format(Formatting(MaybeSystemTime(settings.timestamps)))

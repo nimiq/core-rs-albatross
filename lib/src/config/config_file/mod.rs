@@ -366,6 +366,8 @@ pub struct LogSettings {
     pub graylog: Option<GraylogConfig>,
     #[serde(default = "LogSettings::default_rotating_trace_log")]
     pub rotating_trace_log: Option<RotatingLogFileConfig>,
+    #[serde(default)]
+    pub tokio_console_bind_address: Option<String>,
 }
 
 impl LogSettings {
@@ -388,6 +390,7 @@ impl Default for LogSettings {
             file: None,
             graylog: None,
             rotating_trace_log: Self::default_rotating_trace_log(),
+            tokio_console_bind_address: None,
         }
     }
 }
