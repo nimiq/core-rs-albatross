@@ -215,6 +215,7 @@ level = "debug"
 # [log.graylog]
 
 # Graylog server address
+# Default: None
 # address = "localhost:9000"
 
 # Extra fields to add to every log record
