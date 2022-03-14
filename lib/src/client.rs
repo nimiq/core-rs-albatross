@@ -109,6 +109,7 @@ impl ClientInner {
             peer_contact,
             seeds,
             network_info.genesis_hash().clone(),
+            false,
         );
 
         log::debug!("listen_addresses = {:?}", config.network.listen_addresses);

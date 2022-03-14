@@ -21,6 +21,7 @@ pub struct Config {
     pub discovery: DiscoveryConfig,
     pub kademlia: KademliaConfig,
     pub gossipsub: GossipsubConfig,
+    pub memory_transport: bool,
 }
 
 impl Config {
@@ -29,6 +30,7 @@ impl Config {
         peer_contact: PeerContact,
         seeds: Vec<Multiaddr>,
         genesis_hash: Blake2bHash,
+        memory_transport: bool,
     ) -> Self {
         // Hardcoding the minimum number of peers in mesh network before adding more
         // TODO: Maybe change this to a mesh limits configuration argument of this function
@@ -64,6 +66,7 @@ impl Config {
             discovery: DiscoveryConfig::new(genesis_hash),
             kademlia,
             gossipsub,
+            memory_transport,
         }
     }
 }

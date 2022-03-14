@@ -63,7 +63,13 @@ impl TestNetwork for Network {
             None,
         );
         peer_contact.set_current_time();
-        let config = Config::new(peer_key, peer_contact, Vec::new(), genesis_hash.clone());
+        let config = Config::new(
+            peer_key,
+            peer_contact,
+            Vec::new(),
+            genesis_hash.clone(),
+            true,
+        );
         let network = Arc::new(Network::new(clock, config).await);
         network.listen_on(vec![peer_address]).await;
         network
