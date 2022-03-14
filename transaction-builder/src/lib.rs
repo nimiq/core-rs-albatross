@@ -153,7 +153,7 @@ impl TransactionBuilder {
     ///     NetworkId::Main
     /// );
     ///
-    /// let proof_builder = builder.generate()?;
+    /// let proof_builder = builder.generate().unwrap();
     /// let transaction = proof_builder.preliminary_transaction();
     /// assert_eq!(transaction.sender, sender);
     /// ```
@@ -227,7 +227,7 @@ impl TransactionBuilder {
     /// );
     /// builder.with_fee(Coin::from_u64_unchecked(1337));
     ///
-    /// let proof_builder = builder.generate()?;
+    /// let proof_builder = builder.generate().unwrap();
     /// let transaction = proof_builder.preliminary_transaction();
     /// assert_eq!(transaction.fee, Coin::from_u64_unchecked(1337));
     /// ```
@@ -292,7 +292,7 @@ impl TransactionBuilder {
     /// );
     /// builder.with_sender_type(AccountType::HTLC);
     ///
-    /// let proof_builder = builder.generate()?;
+    /// let proof_builder = builder.generate().unwrap();
     /// let transaction = proof_builder.preliminary_transaction();
     /// assert_eq!(transaction.sender_type, AccountType::HTLC);
     ///
@@ -336,7 +336,7 @@ impl TransactionBuilder {
     /// );
     /// builder.with_fee(Coin::from_u64_unchecked(1337));
     ///
-    /// let proof_builder = builder.generate()?;
+    /// let proof_builder = builder.generate().unwrap();
     /// let transaction = proof_builder.preliminary_transaction();
     /// assert_eq!(
     ///     transaction.recipient,
@@ -413,7 +413,7 @@ impl TransactionBuilder {
     /// );
     /// builder.with_fee(Coin::from_u64_unchecked(1337));
     ///
-    /// let proof_builder = builder.generate()?;
+    /// let proof_builder = builder.generate().unwrap();
     /// let transaction = proof_builder.preliminary_transaction();
     /// ```
     ///
