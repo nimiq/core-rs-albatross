@@ -39,6 +39,8 @@ members = [
   "rpc-server",
   "spammer",
   "tendermint",
+  "test-log",
+  "test-log/proc-macro",
   "test-utils",
   "tools",
   "transaction-builder",

@@ -2475,6 +2475,7 @@ dependencies = [
  "nimiq-mmr",
  "nimiq-nano-primitives",
  "nimiq-primitives",
+ "nimiq-test-log",
  "nimiq-test-utils",
  "nimiq-transaction",
  "nimiq-trie",
@@ -3202,6 +3203,24 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "nimiq-test-log"
+version = "0.1.0"
+dependencies = [
+ "nimiq-test-log-proc-macro",
+ "tracing-subscriber 0.3.9",
+]
+
+[[package]]
+name = "nimiq-test-log-proc-macro"
+version = "0.1.0"
+dependencies = [
+ "nimiq-test-log",
+ "quote 1.0.15",
+ "syn 1.0.86",
+ "tokio",
 ]
 
 [[package]]

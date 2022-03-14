@@ -1,0 +1,8 @@
+[package]
+name = "nimiq-test-log"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+nimiq-test-log-proc-macro = { path = "proc-macro" }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
