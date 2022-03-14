@@ -18,23 +18,23 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 bitvec = "1.0"
-hex = {version = "0.4", optional = true}
-itertools = {version = "0.10", optional = true}
-lazy_static = {version = "1.2", optional = true}
+hex = { version = "0.4", optional = true }
+itertools = { version = "0.10", optional = true }
+lazy_static = { version = "1.2", optional = true }
 log = { package = "tracing", version = "0.1", features = ["log"] }
-num-bigint = {version = "0.4.2", optional = true}
-num-traits = {version = "0.2", optional = true}
-parking_lot = {git = "https://github.com/styppo/parking_lot.git", optional = true}
-regex = {version = "1.5", optional = true}
-serde = {version = "1.0", features = ["derive"], optional = true}
+num-bigint = { version = "0.4.2", optional = true }
+num-traits = { version = "0.2", optional = true }
+parking_lot = { git = "https://github.com/styppo/parking_lot.git", optional = true }
+regex = { version = "1.5", optional = true }
+serde = { version = "1.0", features = ["derive"], optional = true }
 strum_macros = "0.24"
-thiserror = {version = "1.0.20", optional = true}
+thiserror = { version = "1.0.20", optional = true }
 
-beserial = {path = "../beserial"}
-beserial_derive = {path = "../beserial/beserial_derive"}
-nimiq-bls = {path = "../bls", features = ["beserial"], optional = true}
-nimiq-keys = {path = "../keys", optional = true}
-nimiq-utils = {path = "../utils", features = ["math"], optional = true}
+beserial = { path = "../beserial" }
+beserial_derive = { path = "../beserial/beserial_derive" }
+nimiq-bls = { path = "../bls", features = ["beserial"], optional = true }
+nimiq-keys = { path = "../keys", optional = true }
+nimiq-utils = { path = "../utils", features = ["math"], optional = true }
 
 [dev-dependencies]
 lazy_static = "1.2"
