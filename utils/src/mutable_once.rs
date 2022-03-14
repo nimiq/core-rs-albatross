@@ -49,6 +49,7 @@ unsafe impl<T: Send> Sync for MutableOnce<T> {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nimiq_test_log::test;
 
     #[test]
     fn mutable_once_works() {

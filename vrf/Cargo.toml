@@ -25,5 +25,8 @@ nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-macros = { path = "../macros" }
 
+[dev-dependencies]
+nimiq-test-log = { path = "../test-log" }
+
 [features]
 serde-derive = ["serde", "serde-big-array"]

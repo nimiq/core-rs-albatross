@@ -24,6 +24,7 @@ use nimiq_network_libp2p::discovery::{
     behaviour::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryEvent},
     peer_contacts::{PeerContact, Protocols, Services},
 };
+use nimiq_test_log::test;
 use nimiq_utils::time::OffsetTime;
 
 struct TestNode {
@@ -139,7 +140,7 @@ fn test_peers_in_contact_book(
     }
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 pub async fn test_exchanging_peers() {
     // create nodes
     let mut node1 = TestNode::new();
@@ -198,7 +199,7 @@ pub async fn test_exchanging_peers() {
     test_peers_in_contact_book(&peer_contact_book2.read(), &all_peer_contacts);
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 pub async fn test_dialing_peer_from_contacts() {
     // create nodes
     let mut node1 = TestNode::new();

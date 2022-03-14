@@ -19,6 +19,7 @@ use nimiq_primitives::policy::{
     BLOCKS_PER_BATCH, BLOCKS_PER_EPOCH, STAKING_CONTRACT_ADDRESS, VALIDATOR_DEPOSIT,
 };
 use nimiq_primitives::slots::SlashedSlot;
+use nimiq_test_log::test;
 use nimiq_transaction::account::staking_contract::{
     IncomingStakingTransactionData, OutgoingStakingTransactionProof,
 };

@@ -13,6 +13,7 @@ use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{Address, KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::policy;
+use nimiq_test_log::test;
 use nimiq_test_utils::blockchain::{
     fill_micro_blocks, fill_micro_blocks_with_txns, sign_macro_block, sign_view_change,
     signing_key, voting_key,

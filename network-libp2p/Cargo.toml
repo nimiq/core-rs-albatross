@@ -63,7 +63,7 @@ nimiq-utils = { path = "../utils", features = [
 nimiq-validator-network = { path = "../validator-network" }
 
 [dev-dependencies]
-tracing-subscriber = "0.3"
+nimiq-test-log = { path = "../test-log" }
 
 [features]
 default = ["peer-contact-book-persistence"]

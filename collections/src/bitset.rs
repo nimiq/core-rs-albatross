@@ -453,6 +453,7 @@ mod serde_derive {
 mod tests {
     use super::BitSet;
     use beserial::{Deserialize, Serialize};
+    use nimiq_test_log::test;
 
     fn sample_bitset() -> BitSet {
         let mut set = BitSet::new();

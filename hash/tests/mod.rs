@@ -4,6 +4,7 @@ use nimiq_hash::{
     argon2kdf, Argon2dHash, Argon2dHasher, Blake2bHash, Blake2bHasher, Blake2sHash, Blake2sHasher,
     Hasher, Sha256Hash, Sha256Hasher, Sha512Hash, Sha512Hasher,
 };
+use nimiq_test_log::test;
 
 mod hmac;
 mod pbkdf2;

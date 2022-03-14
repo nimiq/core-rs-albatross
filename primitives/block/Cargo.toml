@@ -37,6 +37,7 @@ nimiq-utils = { path = "../../utils", features = ["merkle"] }
 nimiq-vrf = { path = "../../vrf" }
 
 [dev-dependencies]
+nimiq-test-log = { path = "../../test-log" }
 num-traits = "0.2"
 
 [features]

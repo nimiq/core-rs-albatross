@@ -9,6 +9,7 @@ use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::policy;
 use nimiq_primitives::slots::SlashedSlot;
+use nimiq_test_log::test;
 use nimiq_utils::time::OffsetTime;
 use nimiq_vrf::VrfSeed;
 use std::sync::Arc;

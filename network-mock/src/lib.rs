@@ -76,6 +76,7 @@ pub mod tests {
         network::{Network, NetworkEvent, Topic},
         peer::Peer,
     };
+    use nimiq_test_log::test;
 
     use super::network::MockNetworkError;
     use super::{MockHub, MockPeer, MockPeerId};
@@ -102,7 +103,7 @@ pub mod tests {
         }
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn test_peer_list() {
         let mut hub = MockHub::default();
 
@@ -150,7 +151,7 @@ pub mod tests {
         x: i32,
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn dht_put_and_get() {
         let mut hub = MockHub::new();
         let net1 = hub.new_network();
@@ -182,7 +183,7 @@ pub mod tests {
         tokio::spawn(async move { while stream.next().await.is_some() {} });
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn test_gossipsub() {
         let mut hub = MockHub::new();
         let net1 = hub.new_network();
@@ -220,7 +221,7 @@ pub mod tests {
         const TYPE_ID: u64 = 42;
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn both_peers_can_talk_with_each_other() {
         let mut hub = MockHub::new();
         let net1 = hub.new_network();

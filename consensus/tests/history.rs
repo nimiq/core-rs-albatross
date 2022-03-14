@@ -18,6 +18,7 @@ use nimiq_genesis::NetworkId;
 use nimiq_network_interface::network::Network;
 use nimiq_network_mock::{MockHub, MockNetwork};
 use nimiq_primitives::policy;
+use nimiq_test_log::test;
 use nimiq_test_utils::blockchain::{produce_macro_blocks, signing_key, voting_key};
 use nimiq_utils::time::OffsetTime;
 
@@ -37,10 +38,8 @@ impl<TNetwork: Network> Stream for MockHistorySyncStream<TNetwork> {
     }
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn peers_can_sync() {
-    //simple_logger::SimpleLogger::new().init().unwrap();
-
     let mut hub = MockHub::default();
 
     // Setup first peer.
@@ -167,9 +166,8 @@ async fn peers_can_sync() {
     //    );
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn sync_ingredients() {
-    //simple_logger::SimpleLogger::new().init().unwrap();
     let mut hub = MockHub::default();
 
     // Setup first peer.

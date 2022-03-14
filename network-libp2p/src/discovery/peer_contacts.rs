@@ -545,6 +545,7 @@ impl PeerContactBook {
 #[cfg(test)]
 mod tests {
     use super::Protocols;
+    use nimiq_test_log::test;
 
     #[test]
     fn protocols_from_multiaddr() {

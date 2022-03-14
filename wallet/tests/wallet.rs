@@ -7,6 +7,7 @@ use lazy_static::lazy_static;
 
 use beserial::{Deserialize, Serialize};
 use keys::{Address, KeyPair, PrivateKey};
+use nimiq_test_log::test;
 use primitives::coin::Coin;
 use primitives::networks::NetworkId;
 use wallet::WalletAccount;

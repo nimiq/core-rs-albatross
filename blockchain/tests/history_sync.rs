@@ -7,6 +7,7 @@ use nimiq_blockchain::{AbstractBlockchain, Blockchain, PushResult};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
 use nimiq_primitives::policy::{BATCHES_PER_EPOCH, BLOCKS_PER_BATCH, BLOCKS_PER_EPOCH};
+use nimiq_test_log::test;
 use nimiq_test_utils::blockchain::{
     fill_micro_blocks_with_txns, produce_macro_blocks, produce_macro_blocks_with_txns, signing_key,
     voting_key,

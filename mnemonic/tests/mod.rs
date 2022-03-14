@@ -1,4 +1,5 @@
 use nimiq_mnemonic::*;
+use nimiq_test_log::test;
 
 struct TestVector {
     entropy: &'static str,

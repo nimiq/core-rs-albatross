@@ -25,6 +25,7 @@ beserial = { path = "../beserial", optional = true }
 
 [dev-dependencies]
 hex = "0.4"
+nimiq-test-log = { path = "../test-log" }
 rand = "0.8"
 
 [features]

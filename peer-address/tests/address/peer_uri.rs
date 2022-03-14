@@ -2,6 +2,7 @@ use std::str::FromStr;
 
 use nimiq_peer_address::address::PeerUri;
 use nimiq_peer_address::protocol::Protocol;
+use nimiq_test_log::test;
 
 #[test]
 fn test_parse_uri_dumb() {

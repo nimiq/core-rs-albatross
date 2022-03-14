@@ -175,6 +175,7 @@ mod tests {
         network::NetworkEvent,
         peer::{CloseReason, Peer as PeerInterface, RequestResponse, SendError},
     };
+    use nimiq_test_log::test;
 
     #[derive(Debug, Error)]
     pub enum PeerError {}
@@ -235,7 +236,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn it_adds_peers() {
         let peers = ObservablePeerMap::new();
 
@@ -255,7 +256,7 @@ mod tests {
         assert_peer_joined(&mut listener, 4).await;
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn it_removes_peers() {
         let peers = ObservablePeerMap::new();
 

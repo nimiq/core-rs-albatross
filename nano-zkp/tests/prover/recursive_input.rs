@@ -13,6 +13,7 @@ use rand::RngCore;
 
 use nimiq_bls::utils::bytes_to_bits;
 use nimiq_nano_zkp::utils::{pack_inputs, prepare_inputs, unpack_inputs};
+use nimiq_test_log::test;
 
 const NUMBER_OF_BITS: usize = 1024;
 

@@ -56,11 +56,12 @@ nimiq-utils = { path = "../utils", features = [
 [dev-dependencies]
 hex = "0.4"
 
+nimiq-block-production = { path = "../block-production" }
 nimiq-bls = { path = "../bls" }
 nimiq-genesis-builder = { path = "../genesis-builder" }
 nimiq-keys = { path = "../keys" }
 nimiq-network-mock = { path = "../network-mock" }
-nimiq-block-production = { path = "../block-production" }
+nimiq-test-log = { path = "../test-log" }
 # This adds a circular dev-dependency which is fine but breaks VS code rust-analyzer.
 # See https://github.com/rust-analyzer/rust-analyzer/issues/2414
 nimiq-test-utils = { path = "../test-utils" }

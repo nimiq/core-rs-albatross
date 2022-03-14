@@ -30,6 +30,7 @@ use nimiq_handel::verifier;
 use nimiq_network_interface::message::Message;
 use nimiq_network_interface::network::Network;
 use nimiq_network_mock::{MockHub, MockNetwork};
+use nimiq_test_log::test;
 
 /// Dump Aggregate adding numbers.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -252,7 +253,7 @@ impl<M: Message + Clone + Unpin + std::fmt::Debug, N: Network> Sink<(M, usize)>
     }
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn it_can_aggregate() {
     let config = Config {
         update_count: 4,

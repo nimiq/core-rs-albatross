@@ -67,6 +67,7 @@ mod tests {
 
     use nimiq_bls::pedersen::{pedersen_generators, pedersen_hash};
     use nimiq_bls::utils::bytes_to_bits;
+    use nimiq_test_log::test;
 
     use super::*;
 

@@ -5,6 +5,7 @@ use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::account::AccountType;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
+use nimiq_test_log::test;
 use nimiq_transaction::{SignatureProof, Transaction};
 use nimiq_transaction_builder::{Recipient, TransactionBuilder};
 

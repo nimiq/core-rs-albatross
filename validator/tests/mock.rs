@@ -11,6 +11,7 @@ use nimiq_handel::update::{LevelUpdate, LevelUpdateMessage};
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
 use nimiq_network_interface::network::Network;
 use nimiq_network_mock::{MockHub, MockNetwork};
+use nimiq_test_log::test;
 use nimiq_test_utils::validator::{
     build_validator, build_validators, seeded_rng, validator_for_slot,
 };
@@ -19,7 +20,7 @@ use nimiq_vrf::VrfSeed;
 use std::sync::Arc;
 use std::time::Duration;
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn one_validator_can_create_micro_blocks() {
     let hub = MockHub::default();
     let env = VolatileEnvironment::new(10).expect("Could not open a volatile database");
@@ -62,7 +63,7 @@ async fn one_validator_can_create_micro_blocks() {
     assert!(consensus1.blockchain.read().block_number() >= 10);
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn four_validators_can_create_micro_blocks() {
     let hub = MockHub::default();
     let env = VolatileEnvironment::new(10).expect("Could not open a volatile database");
@@ -84,7 +85,7 @@ async fn four_validators_can_create_micro_blocks() {
     assert!(blockchain.read().block_number() >= 30);
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn four_validators_can_view_change() {
     let hub = MockHub::default();
     let env = VolatileEnvironment::new(10).expect("Could not open a volatile database");
@@ -158,7 +159,7 @@ fn create_view_change_update(
 }
 
 #[ignore]
-#[tokio::test]
+#[test(tokio::test)]
 async fn validator_can_catch_up() {
     // remove first block producer in order to trigger a view change. Never connect him again
     // remove the second block producer to trigger another view change after the first one (which we want someone to catch up to). Never connect him again

@@ -353,6 +353,7 @@ impl Deserialize for KeyNibbles {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nimiq_test_log::test;
 
     #[test]
     fn to_from_str_works() {

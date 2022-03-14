@@ -34,5 +34,8 @@ nimiq-hash = { path = "../hash" }
 nimiq-macros = { path = "../macros" }
 nimiq-utils = { path = "../utils", features = ["key-rng"] }
 
+[dev-dependencies]
+nimiq-test-log = { path = "../test-log" }
+
 [features]
 serde-derive = ["serde"]

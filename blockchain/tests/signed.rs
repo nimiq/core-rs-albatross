@@ -10,11 +10,10 @@ use nimiq_bls::{lazy::LazyPublicKey, AggregateSignature, KeyPair};
 use nimiq_collections::bitset::BitSet;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
-
 use nimiq_keys::{Address, PublicKey};
-
 use nimiq_primitives::policy;
 use nimiq_primitives::slots::{Validator, Validators};
+use nimiq_test_log::test;
 use nimiq_utils::time::OffsetTime;
 use nimiq_vrf::VrfEntropy;
 

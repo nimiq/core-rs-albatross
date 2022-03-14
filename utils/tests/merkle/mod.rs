@@ -1,5 +1,6 @@
 use beserial::{Deserialize, Serialize};
 use nimiq_hash::{Blake2bHash, Blake2bHasher, Hasher};
+use nimiq_test_log::test;
 use nimiq_utils::merkle::{
     compute_root_from_content, compute_root_from_content_slice, MerklePath, MerkleProof,
 };

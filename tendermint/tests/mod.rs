@@ -4,6 +4,7 @@ use futures::{FutureExt, StreamExt};
 use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
 use nimiq_primitives::policy::{SLOTS, TWO_F_PLUS_ONE};
 use nimiq_tendermint::*;
+use nimiq_test_log::test;
 use std::collections::BTreeMap;
 use std::io;
 
@@ -266,7 +267,7 @@ async fn tendermint_loop(
 }
 
 // Simple test where everything goes normally.
-#[tokio::test]
+#[test(tokio::test)]
 async fn everything_works() {
     // From the perspective of the proposer.
     let proposer = TestValidator {
@@ -296,7 +297,7 @@ async fn everything_works() {
 }
 
 // The first proposer does not send a proposal but the second one does.
-#[tokio::test]
+#[test(tokio::test)]
 async fn no_proposal() {
     let validator = TestValidator {
         proposer_round: 99,
@@ -318,7 +319,7 @@ async fn no_proposal() {
 // NOTE: When we want a prevote or precommit aggregation to be a Timeout, we send 0 votes for 'A',
 // 'B' and Nil. Technically this is incorrect since any aggregation will always have at least 2f+1
 // votes. But this trick will produce the same result and it's simpler to write.
-#[tokio::test]
+#[test(tokio::test)]
 async fn all_timeouts() {
     let validator = TestValidator {
         proposer_round: 99,
@@ -337,7 +338,7 @@ async fn all_timeouts() {
 }
 
 // We don't have enough prevotes for the first proposal we received.
-#[tokio::test]
+#[test(tokio::test)]
 async fn not_enough_prevotes() {
     let validator = TestValidator {
         proposer_round: 99,
@@ -356,7 +357,7 @@ async fn not_enough_prevotes() {
 }
 
 // We don't have enough precommits for the first proposal we received.
-#[tokio::test]
+#[test(tokio::test)]
 async fn not_enough_precommits() {
     let validator = TestValidator {
         proposer_round: 99,
@@ -376,7 +377,7 @@ async fn not_enough_precommits() {
 
 // Our validator locks on the first round proposal, which doesn't complete, and then needs to
 // rebroadcast the proposal since he is the next proposer.
-#[tokio::test]
+#[test(tokio::test)]
 async fn locks_and_rebroadcasts() {
     let validator = TestValidator {
         proposer_round: 1,
@@ -398,7 +399,7 @@ async fn locks_and_rebroadcasts() {
 
 // Our validator locks on the first round proposal, which doesn't complete, and then needs to unlock
 // on the second round when that proposal gets 2f+1 prevotes.
-#[tokio::test]
+#[test(tokio::test)]
 async fn locks_and_unlocks() {
     let validator = TestValidator {
         proposer_round: 99,
@@ -418,7 +419,7 @@ async fn locks_and_unlocks() {
 
 // Our validator doesn't receive any prevotes for the proposal but then receives enough precommits
 // and is forced to accept the proposal.
-#[tokio::test]
+#[test(tokio::test)]
 async fn forced_commit() {
     let validator = TestValidator {
         proposer_round: 99,
@@ -435,7 +436,7 @@ async fn forced_commit() {
 
 // The first and second proposals don't get enough prevotes or precommits, and the third proposal
 // is a rebroadcast of the first one.
-#[tokio::test]
+#[test(tokio::test)]
 async fn past_proposal() {
     let validator = TestValidator {
         proposer_round: 99,

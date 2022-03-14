@@ -17,6 +17,7 @@ mod tests {
     use futures::{io::Cursor, SinkExt, StreamExt};
 
     use super::{MessageReader, MessageWriter};
+    use nimiq_test_log::test;
 
     #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
     struct TestMessage {
@@ -25,7 +26,7 @@ mod tests {
         pub bar: String,
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn it_writes_and_reads_messages() {
         let mut buf = vec![];
 

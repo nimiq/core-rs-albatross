@@ -3,6 +3,7 @@ use rand::thread_rng;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_bls::*;
+use nimiq_test_log::test;
 use nimiq_utils::key_rng::SecureGenerate;
 
 // Warning: You really should run these tests on release mode. Otherwise it will take too long.

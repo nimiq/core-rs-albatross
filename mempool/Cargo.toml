@@ -39,8 +39,6 @@ nimiq-utils = { path = "../utils", features = ["observer", "mutable-once"] }
 [dev-dependencies]
 hex = "0.4"
 rand = "0.8"
-tracing-core = "0.1"
-tracing-subscriber = "0.3"
 
 nimiq-block = { path = "../primitives/block" }
 nimiq-blockchain = { path = "../blockchain" }
@@ -49,5 +47,6 @@ nimiq-database = { path = "../database" }
 nimiq-genesis = { path = "../genesis" }
 nimiq-genesis-builder = { path = "../genesis-builder" }
 nimiq-network-mock = { path = "../network-mock" }
+nimiq-test-log = { path = "../test-log" }
 nimiq-test-utils = { path = "../test-utils" }
 nimiq-vrf = { path = "../vrf" }

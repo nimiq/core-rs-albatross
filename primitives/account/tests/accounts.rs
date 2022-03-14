@@ -13,6 +13,7 @@ use nimiq_genesis_builder::GenesisBuilder;
 use nimiq_keys::{Address, KeyPair, PublicKey, SecureGenerate};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
+use nimiq_test_log::test;
 use nimiq_test_utils::test_transaction::{
     generate_accounts, generate_transactions, TestTransaction,
 };

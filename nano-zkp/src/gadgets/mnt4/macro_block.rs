@@ -325,6 +325,7 @@ mod tests {
     use nimiq_bls::utils::bytes_to_bits;
     use nimiq_nano_primitives::MacroBlock;
     use nimiq_primitives::policy::{SLOTS, TWO_F_PLUS_ONE};
+    use nimiq_test_log::test;
 
     use super::*;
 

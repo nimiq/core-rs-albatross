@@ -26,3 +26,4 @@ nimiq-keys = { path = "../keys" }
 
 [dev-dependencies]
 hex = "0.4"
+nimiq-test-log = { path = "../test-log" }

@@ -34,6 +34,9 @@ nimiq-macros = { path = "../macros" }
 nimiq-primitives = { path = "../primitives", features = ["coin", "networks"] }
 nimiq-utils = { path = "../utils", features = ["observer", "crc", "time"] }
 
+[dev-dependencies]
+nimiq-test-log = { path = "../test-log" }
+
 [build-dependencies]
 nimiq-genesis-builder = { path = "../genesis-builder" }
 nimiq-hash = { path = "../hash" }

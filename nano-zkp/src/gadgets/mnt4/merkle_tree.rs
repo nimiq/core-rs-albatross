@@ -144,6 +144,7 @@ mod tests {
     use nimiq_nano_primitives::{
         merkle_tree_construct, merkle_tree_prove, merkle_tree_verify, serialize_g1_mnt6,
     };
+    use nimiq_test_log::test;
 
     use super::*;
 

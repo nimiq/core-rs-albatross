@@ -508,6 +508,7 @@ impl<A: Serialize + Deserialize + Clone> MerkleRadixTrie<A> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nimiq_test_log::test;
 
     #[test]
     fn get_put_remove_works() {

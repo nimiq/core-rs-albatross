@@ -675,6 +675,7 @@ mod tests {
     use std::vec::Vec;
 
     use super::{Node, UniqueLinkedList};
+    use nimiq_test_log::test;
 
     #[cfg(test)]
     fn list_from<T: Clone + Hash + Eq>(v: &[T]) -> UniqueLinkedList<T> {

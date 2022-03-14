@@ -23,4 +23,5 @@ nimiq-trie = { path = "../primitives/trie" }
 nimiq-utils = { path = "../utils", features = ["time"] }
 
 [dev-dependencies]
+nimiq-test-log = { path = "../test-log" }
 rand = "^0.8"

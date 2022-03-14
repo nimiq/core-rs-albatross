@@ -64,6 +64,7 @@ mod tests {
     use nimiq_bls::utils::bytes_to_bits;
     use nimiq_nano_primitives::{pk_tree_construct, state_commitment};
     use nimiq_primitives::policy::SLOTS;
+    use nimiq_test_log::test;
 
     use super::*;
 

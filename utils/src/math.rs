@@ -35,6 +35,7 @@ ceiling_div!(usize);
 #[cfg(test)]
 mod tests {
     use super::log2;
+    use nimiq_test_log::test;
 
     #[test]
     fn test_log2() {

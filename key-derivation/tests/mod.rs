@@ -1,5 +1,6 @@
 use nimiq_key_derivation::*;
 use nimiq_keys::{PrivateKey, PublicKey};
+use nimiq_test_log::test;
 
 struct TestVector {
     path: &'static str,

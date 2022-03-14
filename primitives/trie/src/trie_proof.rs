@@ -142,6 +142,7 @@ impl<A: Serialize + Deserialize + Clone> TrieProof<A> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nimiq_test_log::test;
 
     // We're going to construct proofs based on this tree:
     //

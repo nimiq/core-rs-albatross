@@ -154,6 +154,7 @@ mod tests {
     use beserial::{Deserialize, Serialize};
 
     use super::{Header, MessageWriter};
+    use nimiq_test_log::test;
 
     #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
     struct TestMessage {
@@ -162,7 +163,7 @@ mod tests {
         pub bar: String,
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     pub async fn it_can_write_a_message() {
         let test_message = TestMessage {
             foo: 42,

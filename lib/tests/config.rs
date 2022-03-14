@@ -4,6 +4,7 @@ use nimiq_lib::config::{
     config::{ClientConfigBuilder, DatabaseConfig, DatabaseConfigBuilder, FileStorageConfig},
     config_file::ConfigFile,
 };
+use nimiq_test_log::test;
 
 #[test]
 fn config_file_no_db_entry() {

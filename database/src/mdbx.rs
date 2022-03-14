@@ -888,6 +888,7 @@ impl<'txn, 'db> WriteCursorTrait for MdbxWriteCursor<'txn> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nimiq_test_log::test;
     use tempfile::tempdir;
 
     #[test]

@@ -110,6 +110,7 @@ mod tests {
     use rand::prelude::*;
 
     use nimiq_block::{MicroBlock, MicroBody, MicroHeader, MicroJustification};
+    use nimiq_test_log::test;
 
     use super::*;
 

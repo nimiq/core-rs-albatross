@@ -185,6 +185,7 @@ mod tests {
     use std::collections::HashSet;
 
     use super::*;
+    use nimiq_test_log::test;
 
     #[test]
     fn it_correctly_computes_positions() {

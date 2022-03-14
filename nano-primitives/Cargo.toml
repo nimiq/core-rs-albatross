@@ -29,5 +29,6 @@ rand = "0.8"
 nimiq-block = { path = "../primitives/block", version = "0.1" }
 nimiq-collections = { path = "../collections", version = "0.1" }
 nimiq-keys = { path = "../keys", version = "0.1" }
+nimiq-test-log = { path = "../test-log" }
 nimiq-utils = { path = "../utils", version = "0.1" }
 nimiq-primitives = { path = "../primitives", features = ["slots"] }

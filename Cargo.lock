@@ -2386,6 +2386,7 @@ dependencies = [
  "nimiq-keys",
  "nimiq-macros",
  "nimiq-primitives",
+ "nimiq-test-log",
  "nimiq-test-utils",
  "nimiq-transaction",
  "nimiq-trie",
@@ -2418,6 +2419,7 @@ dependencies = [
  "nimiq-macros",
  "nimiq-nano-primitives",
  "nimiq-primitives",
+ "nimiq-test-log",
  "nimiq-transaction",
  "nimiq-utils",
  "nimiq-vrf",
@@ -2444,6 +2446,7 @@ dependencies = [
  "nimiq-hash",
  "nimiq-keys",
  "nimiq-primitives",
+ "nimiq-test-log",
  "nimiq-test-utils",
  "nimiq-transaction",
  "nimiq-transaction-builder",
@@ -2502,6 +2505,7 @@ dependencies = [
  "byteorder",
  "hex",
  "nimiq-hash",
+ "nimiq-test-log",
  "nimiq-utils",
  "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "rand 0.8.5",
@@ -2527,6 +2531,7 @@ dependencies = [
  "beserial",
  "hex",
  "itertools",
+ "nimiq-test-log",
  "num-traits",
  "rand 0.8.5",
  "serde",
@@ -2558,6 +2563,7 @@ dependencies = [
  "nimiq-network-mock",
  "nimiq-primitives",
  "nimiq-subscription",
+ "nimiq-test-log",
  "nimiq-test-utils",
  "nimiq-transaction",
  "nimiq-utils",
@@ -2576,6 +2582,7 @@ version = "0.1.0"
 dependencies = [
  "bitflags",
  "libmdbx",
+ "nimiq-test-log",
  "tempfile",
  "tracing",
 ]
@@ -2647,6 +2654,7 @@ dependencies = [
  "nimiq-macros",
  "nimiq-network-interface",
  "nimiq-network-mock",
+ "nimiq-test-log",
  "nimiq-utils",
  "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "rand 0.8.5",
@@ -2667,6 +2675,7 @@ dependencies = [
  "nimiq-database",
  "nimiq-macros",
  "nimiq-mmr",
+ "nimiq-test-log",
  "rust-argon2",
  "serde",
  "sha2 0.9.9",
@@ -2755,6 +2764,7 @@ dependencies = [
  "hex",
  "nimiq-hash",
  "nimiq-keys",
+ "nimiq-test-log",
  "regex",
 ]
 
@@ -2771,6 +2781,7 @@ dependencies = [
  "nimiq-database",
  "nimiq-hash",
  "nimiq-macros",
+ "nimiq-test-log",
  "nimiq-utils",
  "rand 0.8.5",
  "rand_core 0.6.3",
@@ -2807,6 +2818,7 @@ dependencies = [
  "nimiq-peer-address",
  "nimiq-primitives",
  "nimiq-rpc-server",
+ "nimiq-test-log",
  "nimiq-utils",
  "nimiq-validator",
  "nimiq-validator-network",
@@ -2852,6 +2864,7 @@ dependencies = [
  "nimiq-network-interface",
  "nimiq-network-mock",
  "nimiq-primitives",
+ "nimiq-test-log",
  "nimiq-test-utils",
  "nimiq-transaction",
  "nimiq-utils",
@@ -2861,13 +2874,14 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
- "tracing-core",
- "tracing-subscriber 0.3.9",
 ]
 
 [[package]]
 name = "nimiq-mmr"
 version = "0.1.0"
+dependencies = [
+ "nimiq-test-log",
+]
 
 [[package]]
 name = "nimiq-mnemonic"
@@ -2879,6 +2893,7 @@ dependencies = [
  "nimiq-hash",
  "nimiq-key-derivation",
  "nimiq-macros",
+ "nimiq-test-log",
  "nimiq-utils",
  "unicode-normalization",
 ]
@@ -2895,6 +2910,7 @@ dependencies = [
  "nimiq-hash",
  "nimiq-nano-zkp",
  "nimiq-primitives",
+ "nimiq-test-log",
  "nimiq-trie",
  "nimiq-utils",
  "rand 0.8.5",
@@ -2917,6 +2933,7 @@ dependencies = [
  "nimiq-hash",
  "nimiq-keys",
  "nimiq-primitives",
+ "nimiq-test-log",
  "nimiq-utils",
  "num-traits",
  "rand 0.8.5",
@@ -2941,6 +2958,7 @@ dependencies = [
  "nimiq-bls",
  "nimiq-nano-primitives",
  "nimiq-primitives",
+ "nimiq-test-log",
  "rand 0.8.5",
  "thiserror",
 ]
@@ -2953,6 +2971,7 @@ dependencies = [
  "beserial",
  "derive_more",
  "futures",
+ "nimiq-test-log",
  "nimiq-utils",
  "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "thiserror",
@@ -2979,6 +2998,7 @@ dependencies = [
  "nimiq-hash",
  "nimiq-macros",
  "nimiq-network-interface",
+ "nimiq-test-log",
  "nimiq-utils",
  "nimiq-validator-network",
  "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
@@ -2992,7 +3012,6 @@ dependencies = [
  "tokio-util 0.7.0",
  "tracing",
  "tracing-attributes",
- "tracing-subscriber 0.3.9",
  "wasm-timer",
 ]
 
@@ -3006,6 +3025,7 @@ dependencies = [
  "derive_more",
  "futures",
  "nimiq-network-interface",
+ "nimiq-test-log",
  "nimiq-utils",
  "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "thiserror",
@@ -3031,6 +3051,7 @@ dependencies = [
  "nimiq-keys",
  "nimiq-macros",
  "nimiq-primitives",
+ "nimiq-test-log",
  "nimiq-utils",
  "thiserror",
  "url",
@@ -3048,6 +3069,7 @@ dependencies = [
  "lazy_static",
  "nimiq-bls",
  "nimiq-keys",
+ "nimiq-test-log",
  "nimiq-utils",
  "num-bigint",
  "num-traits",
@@ -3200,6 +3222,7 @@ dependencies = [
  "nimiq-block",
  "nimiq-hash",
  "nimiq-primitives",
+ "nimiq-test-log",
  "thiserror",
  "tokio",
  "tracing",
@@ -3218,8 +3241,8 @@ name = "nimiq-test-log-proc-macro"
 version = "0.1.0"
 dependencies = [
  "nimiq-test-log",
- "quote 1.0.15",
- "syn 1.0.86",
+ "quote",
+ "syn",
  "tokio",
 ]
 
@@ -3293,6 +3316,7 @@ dependencies = [
  "nimiq-keys",
  "nimiq-macros",
  "nimiq-primitives",
+ "nimiq-test-log",
  "nimiq-utils",
  "num-traits",
  "serde",
@@ -3313,6 +3337,7 @@ dependencies = [
  "nimiq-hash",
  "nimiq-keys",
  "nimiq-primitives",
+ "nimiq-test-log",
  "nimiq-transaction",
  "nimiq-utils",
  "rand 0.8.5",
@@ -3330,6 +3355,7 @@ dependencies = [
  "nimiq-database",
  "nimiq-hash",
  "nimiq-keys",
+ "nimiq-test-log",
  "thiserror",
  "tracing",
 ]
@@ -3349,6 +3375,7 @@ dependencies = [
  "nimiq-database",
  "nimiq-hash",
  "nimiq-keys",
+ "nimiq-test-log",
  "parking_lot 0.12.0 (git+https://github.com/styppo/parking_lot.git)",
  "rand 0.8.5",
  "rand_core 0.6.3",
@@ -3390,6 +3417,7 @@ dependencies = [
  "nimiq-network-mock",
  "nimiq-primitives",
  "nimiq-tendermint",
+ "nimiq-test-log",
  "nimiq-test-utils",
  "nimiq-transaction-builder",
  "nimiq-utils",
@@ -3431,6 +3459,7 @@ dependencies = [
  "nimiq-hash",
  "nimiq-keys",
  "nimiq-macros",
+ "nimiq-test-log",
  "num-traits",
  "rand 0.8.5",
  "serde",
@@ -3452,6 +3481,7 @@ dependencies = [
  "nimiq-key-derivation",
  "nimiq-keys",
  "nimiq-primitives",
+ "nimiq-test-log",
  "nimiq-transaction",
  "nimiq-utils",
 ]

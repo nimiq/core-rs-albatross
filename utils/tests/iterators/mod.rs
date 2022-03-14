@@ -1,3 +1,4 @@
+use nimiq_test_log::test;
 use nimiq_utils::iterators::*;
 
 #[test]

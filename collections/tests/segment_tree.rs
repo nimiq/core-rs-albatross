@@ -1,5 +1,6 @@
 use nimiq_collections::segment_tree::Range;
 use nimiq_collections::SegmentTree;
+use nimiq_test_log::test;
 
 #[test]
 fn it_works() {

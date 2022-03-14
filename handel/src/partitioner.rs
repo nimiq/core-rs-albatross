@@ -121,6 +121,7 @@ impl Partitioner for BinomialPartitioner {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nimiq_test_log::test;
 
     #[test]
     fn test_partitioner() {

@@ -232,6 +232,7 @@ pub fn supply_at(genesis_supply: u64, genesis_time: u64, current_time: u64) -> u
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nimiq_test_log::test;
 
     #[test]
     fn it_correctly_computes_epoch() {

@@ -1,6 +1,7 @@
 use std::thread::sleep;
 use std::time::Duration;
 
+use nimiq_test_log::test;
 use nimiq_utils::rate_limit::*;
 
 #[test]

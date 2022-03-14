@@ -11,6 +11,7 @@ use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
 use nimiq_keys::{KeyPair as SchnorrKeyPair, PrivateKey as SchnorrPrivateKey};
 use nimiq_primitives::policy;
+use nimiq_test_log::test;
 use nimiq_test_utils::blockchain::{sign_view_change, SIGNING_KEY, VOTING_KEY};
 use nimiq_utils::time::OffsetTime;
 

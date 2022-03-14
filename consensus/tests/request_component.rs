@@ -7,15 +7,14 @@ use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis_builder::GenesisBuilder;
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
 use nimiq_network_mock::{MockHub, MockNetwork};
+use nimiq_test_log::test;
 use nimiq_test_utils::blockchain::{produce_macro_blocks, signing_key, voting_key};
 use nimiq_test_utils::node::Node;
 use nimiq_test_utils::validator::seeded_rng;
 
 #[ignore]
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[test(tokio::test(flavor = "multi_thread", worker_threads = 4))]
 async fn test_request_component() {
-    //simple_logger::init_by_env();
-
     let mut hub = Some(MockHub::default());
     let env = VolatileEnvironment::new(10).expect("Could not open a volatile database");
 

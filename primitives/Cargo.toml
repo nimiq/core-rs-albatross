@@ -38,6 +38,7 @@ nimiq-utils = { path = "../utils", features = ["math"], optional = true }
 
 [dev-dependencies]
 lazy_static = "1.2"
+nimiq-test-log = { path = "../test-log" }
 
 [features]
 account = ["hex", "thiserror"]

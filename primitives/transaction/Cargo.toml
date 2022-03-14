@@ -31,6 +31,7 @@ nimiq-utils = { path = "../../utils", features = ["merkle"] }
 
 [dev-dependencies]
 hex = "0.4"
+nimiq-test-log = { path = "../../test-log" }
 
 [features]
 serde-derive = ["serde"]

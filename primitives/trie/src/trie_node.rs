@@ -443,6 +443,7 @@ impl<'a, A: Serialize + Deserialize + Clone> iter::IntoIterator for &'a mut Trie
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nimiq_test_log::test;
 
     #[test]
     fn get_child_index_works() {

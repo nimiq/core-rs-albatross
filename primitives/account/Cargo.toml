@@ -39,6 +39,7 @@ hex = "0.4"
 tempfile = "3.3"
 
 nimiq-genesis-builder = { path = "../../genesis-builder" }
+nimiq-test-log = { path = "../../test-log" }
 nimiq-test-utils = { path = "../../test-utils" }
 
 [features]

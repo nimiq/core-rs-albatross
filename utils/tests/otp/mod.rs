@@ -1,4 +1,5 @@
 use beserial::{Deserialize, Serialize};
+use nimiq_test_log::test;
 use nimiq_utils::otp::*;
 
 #[derive(Default, Serialize, Deserialize, Eq, PartialEq, Clone)]

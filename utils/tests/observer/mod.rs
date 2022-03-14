@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::sync::RwLock;
 
+use nimiq_test_log::test;
 use nimiq_utils::observer::*;
 
 #[test]

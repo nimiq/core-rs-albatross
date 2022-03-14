@@ -106,6 +106,7 @@ mod tests {
     use nimiq_keys::{Address, PublicKey as SchnorrPK};
     use nimiq_primitives::policy::SLOTS;
     use nimiq_primitives::slots::{Validator, Validators};
+    use nimiq_test_log::test;
     use nimiq_utils::key_rng::SecureGenerate;
 
     use super::*;

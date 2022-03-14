@@ -1082,6 +1082,7 @@ mod tests {
         network::Network as NetworkInterface,
         peer::{CloseReason, Peer as PeerInterface},
     };
+    use nimiq_test_log::test;
     use nimiq_utils::time::OffsetTime;
 
     use crate::{
@@ -1381,17 +1382,15 @@ mod tests {
         networks
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn connections_stress_and_reconnect() {
-        // tracing_subscriber::fmt::init();
-
         let peers: usize = 15;
         let networks = create_network_with_n_peers(peers).await;
 
         assert_eq!(peers, networks.len());
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn two_networks_can_connect() {
         let (net1, net2) = create_connected_networks().await;
         assert_eq!(net1.get_peers().len(), 1);
@@ -1403,7 +1402,7 @@ mod tests {
         assert_eq!(peer1.id(), net1.local_peer_id);
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn one_peer_can_talk_to_another() {
         let (net1, net2) = create_connected_networks().await;
 
@@ -1421,10 +1420,8 @@ mod tests {
         assert_eq!(msg.id, 4711);
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn one_peer_can_send_multiple_messages() {
-        // tracing_subscriber::fmt::init();
-
         let (net1, net2) = create_connected_networks().await;
 
         let peer2 = net1.get_peer(*net2.local_peer_id()).unwrap();
@@ -1450,7 +1447,7 @@ mod tests {
         assert_eq!(msg.x, "foobar");
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn both_peers_can_talk_with_each_other() {
         let (net1, net2) = create_connected_networks().await;
 
@@ -1470,10 +1467,8 @@ mod tests {
         assert_eq!(msg2.id, 420);
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn connections_are_properly_closed() {
-        // tracing_subscriber::fmt::init();
-
         let (net1, net2) = create_connected_networks().await;
 
         let peer1 = net2.get_peer(*net1.local_peer_id()).unwrap();
@@ -1501,10 +1496,8 @@ mod tests {
         x: i32,
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn dht_put_and_get() {
-        // tracing_subscriber::fmt::init();
-
         let (net1, net2) = create_connected_networks().await;
 
         // FIXME: Add delay while networks share their addresses
@@ -1538,10 +1531,8 @@ mod tests {
     // Currently does not make sense, as validate message does no longer
     // return if a message was still in the cache or not.
     #[ignore]
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn test_gossipsub() {
-        // tracing_subscriber::fmt::init();
-
         let mut net = TestNetwork::new();
 
         let net1 = net.spawn().await;

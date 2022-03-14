@@ -1148,6 +1148,7 @@ mod tests {
     use rand::{thread_rng, RngCore};
 
     use super::{LinkedList, Node};
+    use nimiq_test_log::test;
 
     #[cfg(test)]
     fn list_from<T: Clone>(v: &[T]) -> LinkedList<T> {

@@ -1011,6 +1011,7 @@ mod test_set {
     use std::hash;
 
     use super::LimitHashSet;
+    use nimiq_test_log::test;
 
     #[test]
     fn test_disjoint() {

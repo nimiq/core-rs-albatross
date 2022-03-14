@@ -1,6 +1,7 @@
 use std::cmp;
 
 use nimiq_hash::{Blake2bHash, Blake2bHasher};
+use nimiq_test_log::test;
 use nimiq_utils::merkle::compute_root_from_content;
 use nimiq_utils::merkle::incremental::*;
 

@@ -64,6 +64,9 @@ nimiq-validator = { path = "../validator", optional = true, features = ["trusted
 nimiq-validator-network = { path = "../validator-network", optional = true }
 nimiq-wallet = { path = "../wallet", optional = true }
 
+[dev-dependencies]
+nimiq-test-log = { path = "../test-log" }
+
 [features]
 deadlock = []
 default = []

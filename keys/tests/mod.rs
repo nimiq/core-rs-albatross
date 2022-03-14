@@ -1,4 +1,5 @@
 use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey, SecureGenerate, Signature};
+use nimiq_test_log::test;
 
 mod multisig;
 

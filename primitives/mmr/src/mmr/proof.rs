@@ -280,6 +280,7 @@ mod tests {
     use crate::store::Store;
 
     use super::*;
+    use nimiq_test_log::test;
 
     #[test]
     fn it_correctly_constructs_proofs() {

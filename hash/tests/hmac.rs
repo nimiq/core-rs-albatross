@@ -2,6 +2,7 @@ use hex::FromHex;
 
 use nimiq_hash::hmac::*;
 use nimiq_hash::Sha512Hash;
+use nimiq_test_log::test;
 
 struct TestVector {
     key: &'static str,

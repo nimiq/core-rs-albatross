@@ -234,8 +234,8 @@ mod tests {
     use beserial::{Deserialize, Serialize};
 
     use super::Header;
-
     use super::MessageReader;
+    use nimiq_test_log::test;
 
     #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
     struct TestMessage {
@@ -255,7 +255,7 @@ mod tests {
         message.serialize(&mut w).unwrap();
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     pub async fn it_can_read_a_message() {
         let test_message = TestMessage {
             foo: 42,
@@ -270,7 +270,7 @@ mod tests {
         assert_eq!(reader.next().await, None);
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     pub async fn it_can_read_multiple_messages() {
         let m1 = TestMessage {
             foo: 42,

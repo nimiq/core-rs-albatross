@@ -386,6 +386,7 @@ impl<'txn> WriteCursorTrait for VolatileWriteCursor<'txn> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nimiq_test_log::test;
 
     #[test]
     fn it_can_save_basic_objects() {

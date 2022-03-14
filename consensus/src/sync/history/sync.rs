@@ -130,13 +130,14 @@ mod tests {
     use nimiq_network_interface::prelude::Network;
     use nimiq_network_mock::{MockHub, MockNetwork, MockPeer};
     use nimiq_primitives::networks::NetworkId;
+    use nimiq_test_log::test;
     use nimiq_utils::time::OffsetTime;
 
     use crate::consensus_agent::ConsensusAgent;
     use crate::sync::history::sync::EpochIds;
     use crate::sync::history::HistorySync;
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn it_can_cluster_epoch_ids() {
         fn generate_epoch_ids(
             agent: &Arc<ConsensusAgent<MockPeer>>,

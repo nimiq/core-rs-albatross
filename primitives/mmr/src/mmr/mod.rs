@@ -435,6 +435,7 @@ mod tests {
     use crate::store::memory::MemoryStore;
 
     use super::*;
+    use nimiq_test_log::test;
 
     #[test]
     fn it_correctly_constructs_trees() {

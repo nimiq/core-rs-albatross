@@ -7,6 +7,7 @@ use sha2::Digest;
 use nimiq_keys::multisig::*;
 use nimiq_keys::multisig::{Commitment, PartialSignature, RandomSecret};
 use nimiq_keys::{KeyPair, PrivateKey, PublicKey, Signature};
+use nimiq_test_log::test;
 
 struct StrTestVector {
     priv_keys: &'static [&'static str],

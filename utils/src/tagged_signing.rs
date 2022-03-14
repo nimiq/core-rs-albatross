@@ -138,6 +138,7 @@ pub trait TaggedPublicKey {
 #[cfg(test)]
 mod tests {
     use nimiq_keys::{KeyPair, PublicKey, SecureGenerate, Signature};
+    use nimiq_test_log::test;
 
     use beserial::{Deserialize, Serialize};
 

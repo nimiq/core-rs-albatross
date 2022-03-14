@@ -973,6 +973,7 @@ mod tests {
     use nimiq_database::volatile::VolatileEnvironment;
     use nimiq_primitives::coin::Coin;
     use nimiq_primitives::networks::NetworkId;
+    use nimiq_test_log::test;
     use nimiq_transaction::Transaction as BlockchainTransaction;
 
     use crate::ExtTxData;

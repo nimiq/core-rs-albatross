@@ -32,3 +32,4 @@ nimiq-network-interface = { path = "../network-interface" }
 
 [dev-dependencies]
 nimiq-network-mock = { path = "../network-mock" }
+nimiq-test-log = { path = "../test-log" }

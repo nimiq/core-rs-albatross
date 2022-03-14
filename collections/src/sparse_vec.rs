@@ -52,6 +52,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nimiq_test_log::test;
 
     #[test]
     fn sparse_vec_can_store_objects() {

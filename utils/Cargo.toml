@@ -44,6 +44,7 @@ nimiq-hash = { path = "../hash", optional = true }
 [dev-dependencies]
 beserial_derive = { path = "../beserial/beserial_derive" }
 nimiq-keys = { path = "../keys" }
+nimiq-test-log = { path = "../test-log" }
 
 [features]
 crc = []

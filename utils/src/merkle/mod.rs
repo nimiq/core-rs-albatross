@@ -565,6 +565,7 @@ mod tests {
     use nimiq_hash::Blake2bHasher;
 
     use super::*;
+    use nimiq_test_log::test;
 
     #[test]
     fn it_correctly_computes_a_simple_proof() {

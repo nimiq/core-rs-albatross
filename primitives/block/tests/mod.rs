@@ -8,6 +8,7 @@ use nimiq_handel::update::LevelUpdate;
 use nimiq_hash::{Blake2bHasher, Hasher};
 use nimiq_keys::{Address, PublicKey};
 use nimiq_primitives::slots::ValidatorsBuilder;
+use nimiq_test_log::test;
 use nimiq_vrf::VrfSeed;
 
 #[test]

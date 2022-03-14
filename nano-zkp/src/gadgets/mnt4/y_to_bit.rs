@@ -70,6 +70,7 @@ mod tests {
 
     use nimiq_bls::utils::bytes_to_bits;
     use nimiq_nano_primitives::{serialize_g1_mnt6, serialize_g2_mnt6};
+    use nimiq_test_log::test;
 
     use super::*;
 

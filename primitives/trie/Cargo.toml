@@ -20,3 +20,6 @@ beserial_derive = { path = "../../beserial/beserial_derive" }
 nimiq-database = { path = "../../database" }
 nimiq-hash = { path = "../../hash" }
 nimiq-keys = { path = "../../keys" }
+
+[dev-dependencies]
+nimiq-test-log = { path = "../../test-log" }

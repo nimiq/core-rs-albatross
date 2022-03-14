@@ -27,6 +27,7 @@ use nimiq_network_interface::network::Network;
 use nimiq_network_interface::peer::Peer;
 use nimiq_network_mock::{MockHub, MockId, MockPeer};
 use nimiq_primitives::networks::NetworkId;
+use nimiq_test_log::test;
 use nimiq_test_utils::blockchain::{signing_key, voting_key};
 use nimiq_utils::time::OffsetTime;
 
@@ -103,7 +104,7 @@ impl<P: Peer> Stream for MockRequestComponent<P> {
     }
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn send_single_micro_block_to_block_queue() {
     let time = Arc::new(OffsetTime::new());
     let env = VolatileEnvironment::new(10).unwrap();
@@ -151,7 +152,7 @@ async fn send_single_micro_block_to_block_queue() {
     assert!(block_queue.buffered_blocks().next().is_none());
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn send_two_micro_blocks_out_of_order() {
     let env1 = VolatileEnvironment::new(10).unwrap();
     let time1 = Arc::new(OffsetTime::new());
@@ -247,7 +248,7 @@ async fn send_two_micro_blocks_out_of_order() {
     );
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn send_micro_blocks_out_of_order() {
     let env1 = VolatileEnvironment::new(10).unwrap();
     let time1 = Arc::new(OffsetTime::new());
@@ -341,7 +342,7 @@ async fn send_micro_blocks_out_of_order() {
     assert!(block_queue.buffered_blocks().next().is_none());
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn send_invalid_block() {
     let env1 = VolatileEnvironment::new(10).unwrap();
     let time1 = Arc::new(OffsetTime::new());
@@ -433,7 +434,7 @@ async fn send_invalid_block() {
     );
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn send_block_with_gap_and_respond_to_missing_request() {
     let env1 = VolatileEnvironment::new(10).unwrap();
     let time1 = Arc::new(OffsetTime::new());
@@ -530,7 +531,7 @@ async fn send_block_with_gap_and_respond_to_missing_request() {
     );
 }
 
-#[tokio::test]
+#[test(tokio::test)]
 async fn put_peer_back_into_sync_mode() {
     let env1 = VolatileEnvironment::new(10).unwrap();
     let time1 = Arc::new(OffsetTime::new());

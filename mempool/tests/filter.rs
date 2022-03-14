@@ -5,6 +5,7 @@ use nimiq_keys::Address;
 use nimiq_mempool::filter::{MempoolFilter, MempoolRules};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
+use nimiq_test_log::test;
 use nimiq_transaction::Transaction;
 
 #[test]

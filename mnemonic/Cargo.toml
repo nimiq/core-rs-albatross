@@ -27,6 +27,9 @@ nimiq-key-derivation = { path = "../key-derivation", optional = true }
 nimiq-macros = { path = "../macros" }
 nimiq-utils = { path = "../utils", features = ["crc"] }
 
+[dev-dependencies]
+nimiq-test-log = { path = "../test-log" }
+
 [features]
 default = ["key-derivation"]
 key-derivation = ["nimiq-key-derivation"]

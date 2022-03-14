@@ -29,6 +29,9 @@ beserial = { path = "../beserial", optional = true }
 nimiq-hash = { path = "../hash" }
 nimiq-utils = { path = "../utils", features = ["key-rng"] }
 
+[dev-dependencies]
+nimiq-test-log = { path = "../test-log" }
+
 [features]
 default = ["beserial", "lazy"]
 lazy = ["parking_lot"]

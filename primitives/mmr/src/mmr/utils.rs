@@ -36,6 +36,7 @@ pub(crate) mod test_utils {
     use crate::hash::{Hash, Merge};
 
     use super::*;
+    use nimiq_test_log::test;
 
     pub(crate) fn hash_perfect_tree<H: Merge, T: Hash<H>>(values: &[T]) -> Option<H> {
         let len = values.len();
