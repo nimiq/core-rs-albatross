@@ -2,13 +2,13 @@ use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::str::FromStr;
 
+use clap::Parser;
 use futures::StreamExt;
 #[cfg(feature = "metrics")]
 use lazy_static::lazy_static;
 #[cfg(feature = "metrics")]
 use prometheus::{IntGauge, Registry};
 use rand::{thread_rng, RngCore};
-use structopt::StructOpt;
 #[cfg(feature = "metrics")]
 use warp::{Filter, Rejection, Reply};
 
@@ -45,36 +45,21 @@ lazy_static! {
         .expect("metric couldn't be created");
 }
 
-#[derive(Debug, StructOpt)]
-#[structopt(rename_all = "kebab")]
+#[derive(Debug, Parser)]
 pub struct SpammerCommandLine {
     /// Use a custom configuration file.
     ///
     /// # Examples
     ///
     /// * `nimiq-spammer --config ~/.nimiq/client-albatross.toml`
-    ///
-    #[structopt(long, short = "c")]
+    #[clap(long, short)]
     pub config: Option<PathBuf>,
 
     /// Transactions per block to generate.
     ///
     /// * `nimiq-spammer --tpb 724`
-    #[structopt(long, short = "t")]
+    #[clap(long, short)]
     pub tpb: Option<u32>,
-}
-
-impl SpammerCommandLine {
-    pub fn from_args() -> Self {
-        <Self as StructOpt>::from_args()
-    }
-}
-
-impl FromIterator<String> for SpammerCommandLine {
-    /// Load command line from command line arguments (std::env::args)
-    fn from_iter<I: IntoIterator<Item = String>>(args: I) -> Self {
-        <Self as StructOpt>::from_iter(args)
-    }
 }
 
 #[derive(Clone)]
@@ -151,7 +136,7 @@ async fn main_inner() -> Result<(), Error> {
     initialize_deadlock_detection();
 
     // Parse command line.
-    let spammer_command_line = SpammerCommandLine::from_args();
+    let spammer_command_line = SpammerCommandLine::parse();
     log::trace!("Command line: {:#?}", spammer_command_line);
 
     let command_line = CommandLine {

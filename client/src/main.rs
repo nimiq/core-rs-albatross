@@ -18,7 +18,7 @@ async fn main_inner() -> Result<(), Error> {
     initialize_deadlock_detection();
 
     // Parse command line.
-    let command_line = CommandLine::from_args();
+    let command_line = CommandLine::parse();
     log::trace!("Command line: {:#?}", command_line);
 
     // Parse config file - this will obey the `--config` command line option.

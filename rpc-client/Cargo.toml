@@ -31,6 +31,7 @@ nimiq-rpc-interface = { path = "../rpc-interface" }
 
 # Needed for the command line app
 anyhow = { version = "1.0", optional = true }
+clap = { version = "3.0", features = ["derive"], optional = true }
 dotenv = { version = "0.15", optional = true }
 nimiq-account = { path = "../primitives/account", optional = true }
 nimiq-bls = { path = "../bls", optional = true }
@@ -38,7 +39,6 @@ nimiq-hash = { path = "../hash", optional = true }
 nimiq-keys = { path = "../keys", optional = true }
 nimiq-primitives = { path = "../primitives", optional = true }
 nimiq-transaction = { path = "../primitives/transaction", optional = true }
-structopt = { version = "0.3.26", optional = true }
 tokio = { version = "1.16", features = [
     "macros",
     "rt-multi-thread",
@@ -50,6 +50,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = tr
 default = ["app"]
 app = [
     "anyhow",
+    "clap",
     "dotenv",
     "nimiq-account",
     "nimiq-bls",
@@ -57,7 +58,6 @@ app = [
     "nimiq-keys",
     "nimiq-primitives",
     "nimiq-transaction",
-    "structopt",
     "tokio",
     "tracing-subscriber",
 ]

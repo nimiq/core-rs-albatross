@@ -1,6 +1,6 @@
 use anyhow::{bail, Error};
+use clap::Parser;
 use futures::stream::StreamExt;
-use structopt::StructOpt;
 
 use nimiq_jsonrpc_core::Credentials;
 use nimiq_keys::Address;
@@ -13,22 +13,22 @@ use nimiq_rpc_interface::{
     wallet::WalletInterface,
 };
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 struct Opt {
-    #[structopt(short)]
+    #[clap(short)]
     url: Option<String>,
 
-    #[structopt(short = "U")]
+    #[clap(short = 'U')]
     username: Option<String>,
 
-    #[structopt(short = "P")]
+    #[clap(short = 'P')]
     password: Option<String>,
 
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     command: Command,
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 enum Command {
     /// Query a block from the blockchain.
     Block {
@@ -36,7 +36,7 @@ enum Command {
         hash_or_number: Option<BlockNumberOrHash>,
 
         /// Include transactions
-        #[structopt(short = "t")]
+        #[clap(short = 't')]
         include_transactions: bool,
     },
 
@@ -46,30 +46,31 @@ enum Command {
     /// Follow the head of the blockchain.
     Follow {
         /// Show the full block instead of only the hash.
-        #[structopt(short)]
+        #[clap(short)]
         block: bool,
     },
 
     /// Show wallet accounts and their balances.
+    #[clap(flatten)]
     Account(AccountCommand),
 
     /// Create, sign and send transactions.
-    #[structopt(name = "tx")]
+    #[clap(name = "tx", flatten)]
     Transaction(TransactionCommand),
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 enum AccountCommand {
     List {
-        #[structopt(short, long)]
+        #[clap(short, long)]
         short: bool,
     },
     New {
-        #[structopt(short = "P", long)]
+        #[clap(short = 'P', long)]
         password: Option<String>,
     },
     Import {
-        #[structopt(short = "P", long)]
+        #[clap(short = 'P', long)]
         password: Option<String>,
 
         key_data: String,
@@ -78,7 +79,7 @@ enum AccountCommand {
         address: Address,
     },
     Unlock {
-        #[structopt(short = "P", long)]
+        #[clap(short = 'P', long)]
         password: Option<String>,
 
         address: Address,
@@ -89,7 +90,7 @@ enum AccountCommand {
     },
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 enum TransactionCommand {
     /// Sends a simple transaction from the wallet `wallet` to a basic `recipient`.
     Basic {
@@ -102,14 +103,14 @@ enum TransactionCommand {
         /// The amount of NIM to send to the recipient.
         value: Coin,
 
-        #[structopt(short, long, default_value = "0")]
+        #[clap(short, long, default_value = "0")]
         fee: Coin,
 
-        #[structopt(short, long, default_value)]
+        #[clap(short, long, default_value_t)]
         validity_start_height: ValidityStartHeight,
 
         /// Don't actually send the transaction, but output the transaction as hex string.
-        #[structopt(long = "dry")]
+        #[clap(long = "dry")]
         dry: bool,
     },
 
@@ -123,14 +124,14 @@ enum TransactionCommand {
         /// The amount of NIM to stake.
         value: Coin,
 
-        #[structopt(short, long, default_value = "0")]
+        #[clap(short, long, default_value = "0")]
         fee: Coin,
 
-        #[structopt(short, long, default_value)]
+        #[clap(short, long, default_value_t)]
         validity_start_height: ValidityStartHeight,
 
         /// Don't actually send the transaction, but output the transaction as hex string.
-        #[structopt(long = "dry")]
+        #[clap(long = "dry")]
         dry: bool,
     },
 
@@ -143,14 +144,14 @@ enum TransactionCommand {
 
         value: Coin,
 
-        #[structopt(short, long, default_value = "0")]
+        #[clap(short, long, default_value = "0")]
         fee: Coin,
 
-        #[structopt(short, long, default_value)]
+        #[clap(short, long, default_value_t)]
         validity_start_height: ValidityStartHeight,
 
         /// Don't actually send the transaction, but output the transaction as hex string.
-        #[structopt(long = "dry")]
+        #[clap(long = "dry")]
         dry: bool,
     },
 }
@@ -397,8 +398,7 @@ async fn main() {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
-    let opt = Opt::from_args();
-    if let Err(e) = run_app(opt).await {
+    if let Err(e) = run_app(Opt::parse()).await {
         eprintln!("Error: {}", e);
         std::process::exit(1);
     }

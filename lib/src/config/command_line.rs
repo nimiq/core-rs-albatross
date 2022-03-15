@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
+use clap::Parser;
 use log::level_filters::{LevelFilter, ParseLevelFilterError};
-use structopt::StructOpt;
 use thiserror::Error;
 
 use nimiq_primitives::networks::NetworkId;
@@ -13,8 +13,7 @@ static VALID_LOG_LEVELS: [&'static str; 6] = ["off", "error", "warn", "info", "d
 static VALID_CONSENSUS_TYPES: [&'static str; 2] = ["full", "macro-sync"];
 */
 
-#[derive(Debug, StructOpt)]
-#[structopt(rename_all = "kebab")]
+#[derive(Debug, Parser)]
 pub struct CommandLine {
     /// Use a custom configuration file.
     ///
@@ -22,7 +21,7 @@ pub struct CommandLine {
     ///
     /// * `nimiq-client --config ~/.nimiq/client-albatross.toml`
     ///
-    #[structopt(long, short = "c")]
+    #[clap(long, short = 'c')]
     pub config: Option<PathBuf>,
 
     /// Configure global log level.
@@ -31,7 +30,7 @@ pub struct CommandLine {
     ///
     /// * `nimiq-client --log-level trace`
     ///
-    #[structopt(long)]
+    #[clap(long)]
     pub log_level: Option<LevelFilter>,
 
     /// Configure log level for specific tag.
@@ -40,7 +39,7 @@ pub struct CommandLine {
     ///
     /// * `nimiq-client --log-tags nimiq-handel:trace --log-tags nimiq-validator:trace`
     ///
-    #[structopt(long = "log-tags", parse(try_from_str = parse_log_tags))]
+    #[clap(long = "log-tags", parse(try_from_str = parse_log_tags))]
     pub log_tags: Option<Vec<(String, LevelFilter)>>,
 
     /// Do not actively connect to the network
@@ -50,7 +49,7 @@ pub struct CommandLine {
     /// * This is currently not implemented.
     /// * This might be removed in the future.
     ///
-    #[structopt(long)]
+    #[clap(long)]
     pub passive: bool,
 
     /// Configure sync mode, one of history (default)
@@ -59,7 +58,7 @@ pub struct CommandLine {
     ///
     /// * `nimiq-client --mode history`
     ///
-    #[structopt(long = "mode", parse(try_from_str))]
+    #[clap(long = "mode", parse(try_from_str))]
     pub sync_mode: Option<SyncMode>,
 
     /// Configure the network to connect to, one of test-albatross, dev-albatross (default)
@@ -68,20 +67,13 @@ pub struct CommandLine {
     ///
     /// * `nimiq-client --network test-albatross
     ///
-    #[structopt(long)]
+    #[clap(long)]
     pub network: Option<NetworkId>,
 }
 
 impl CommandLine {
-    pub fn from_args() -> Self {
-        <Self as StructOpt>::from_args()
-    }
-}
-
-impl FromIterator<String> for CommandLine {
-    /// Load command line from command line arguments (std::env::args)
-    fn from_iter<I: IntoIterator<Item = String>>(args: I) -> Self {
-        <Self as StructOpt>::from_iter(args)
+    pub fn parse() -> CommandLine {
+        Parser::parse()
     }
 }
 

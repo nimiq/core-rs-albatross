@@ -20,6 +20,7 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 ansi_term = "0.12"
+clap = { version = "3.0", features = ["derive"] }
 derive_builder = "0.10"
 directories = "4.0"
 file-rotate = { version = "0.6" }
@@ -33,7 +34,6 @@ rand = "0.8"
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = { version = "1.0", features = ["preserve_order"], optional = true }
-structopt = { version = "0.3", features = ["paw"] }
 strum_macros = "0.24"
 toml = "0.5"
 url = "2.2"
