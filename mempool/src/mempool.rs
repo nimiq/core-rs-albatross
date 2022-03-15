@@ -5,8 +5,7 @@ use keyed_priority_queue::KeyedPriorityQueue;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::AtomicU64;
-use std::sync::{atomic, Arc};
+use std::sync::Arc;
 
 use beserial::Serialize;
 use nimiq_account::{Account, BasicAccount};
@@ -61,18 +60,18 @@ impl Mempool {
     /// Creates a new mempool
     pub fn new(blockchain: Arc<RwLock<Blockchain>>, config: MempoolConfig) -> Self {
         let state = MempoolState {
-            total_size_limit: config.size_limit,
             transactions: HashMap::new(),
-            transactions_by_fee: KeyedPriorityQueue::new(),
-            transactions_remove_ord: KeyedPriorityQueue::new(),
-            transactions_by_age: KeyedPriorityQueue::new(),
-            total_transactions_size: 0,
-            tx_counter: AtomicU64::new(0),
+            best_transactions: KeyedPriorityQueue::new(),
+            worst_transactions: KeyedPriorityQueue::new(),
+            oldest_transactions: KeyedPriorityQueue::new(),
             state_by_sender: HashMap::new(),
             outgoing_validators: HashSet::new(),
             outgoing_stakers: HashSet::new(),
             creating_validators: HashSet::new(),
             creating_stakers: HashSet::new(),
+            total_size_limit: config.size_limit,
+            total_size: 0,
+            tx_counter: 0,
         };
 
         let state = Arc::new(RwLock::new(state));
@@ -216,7 +215,7 @@ impl Mempool {
         // First remove the transactions that are no longer valid due to age.
         loop {
             // Get the hash of the oldest transaction.
-            let tx_hash = match mempool_state.transactions_by_age.peek() {
+            let tx_hash = match mempool_state.oldest_transactions.peek() {
                 None => {
                     break;
                 }
@@ -360,9 +359,9 @@ impl Mempool {
                     };
 
                     // Calculate the new balance assuming we add this transaction to the mempool
-                    let in_fly_balance = tx.total_value() + sender_total;
+                    let pending_balance = tx.total_value() + sender_total;
 
-                    if in_fly_balance <= sender_balance {
+                    if pending_balance <= sender_balance {
                         mempool_state.put(tx);
                     } else {
                         log::debug!(
@@ -396,7 +395,7 @@ impl Mempool {
 
         loop {
             // Get the hash of the highest paying transaction.
-            let tx_hash = match mempool_state_upgraded.transactions_by_fee.peek() {
+            let tx_hash = match mempool_state_upgraded.best_transactions.peek() {
                 None => {
                     break;
                 }
@@ -495,28 +494,22 @@ impl TransactionVerificationCache for Mempool {
 }
 
 pub(crate) struct MempoolState {
-    // Total size limit of transactions in the mempool
-    pub(crate) total_size_limit: usize,
-
     // A hashmap containing the transactions indexed by their hash.
     pub(crate) transactions: HashMap<Blake2bHash, Transaction>,
 
-    // Transactions ordered by fee (higher fee transactions pop first)
-    pub(crate) transactions_by_fee: KeyedPriorityQueue<Blake2bHash, FeeWrapper>,
+    // Transactions ordered by fee per byte (highest to lowest) and insertion order (oldest to newest).
+    // This is the ordering in which transactions are included in blocks by the validator.
+    pub(crate) best_transactions: KeyedPriorityQueue<Blake2bHash, BestTxOrder>,
 
-    // Transactions ordered by fee (lower fee transactions pop first)
-    pub(crate) transactions_remove_ord: KeyedPriorityQueue<Blake2bHash, RemoveTxOrd>,
+    // Transactions ordered by fee per byte (lowest to highest) and insertion order (newest to oldest).
+    // This is the ordering used to evict transactions from the mempool when it becomes full.
+    pub(crate) worst_transactions: KeyedPriorityQueue<Blake2bHash, WorstTxOrder>,
 
-    // Transactions ordered by age (older transactions pop first)
-    pub(crate) transactions_by_age: KeyedPriorityQueue<Blake2bHash, u32>,
+    // Transactions ordered by validity_start_height (oldest to newest).
+    // This ordering is used to evict expired transactions from the mempool.
+    pub(crate) oldest_transactions: KeyedPriorityQueue<Blake2bHash, u32>,
 
-    // Total size of the transactions currently in mempool (bytes)
-    pub(crate) total_transactions_size: usize,
-
-    // Counter that increases for every added transaction, to order them for removal
-    pub(crate) tx_counter: AtomicU64,
-
-    // The in-fly balance per sender
+    // The pending balance per sender.
     pub(crate) state_by_sender: HashMap<Address, SenderPendingState>,
 
     // The sets of all senders of staking transactions. For simplicity, each validator/staker can
@@ -530,6 +523,15 @@ pub(crate) struct MempoolState {
     // sure that the creation staking transactions do not interfere with one another.
     pub(crate) creating_validators: HashSet<Address>,
     pub(crate) creating_stakers: HashSet<Address>,
+
+    // Maximum allowed total size (in bytes) of all transactions in the mempool.
+    pub(crate) total_size_limit: usize,
+
+    // Total size (in bytes) of the transactions currently in mempool.
+    pub(crate) total_size: usize,
+
+    // Counter that increases for every added transaction, to order them for removal.
+    pub(crate) tx_counter: u64,
 }
 
 impl MempoolState {
@@ -550,18 +552,23 @@ impl MempoolState {
 
         self.transactions.insert(tx_hash.clone(), tx.clone());
 
-        self.transactions_by_fee
-            .push(tx_hash.clone(), FeeWrapper(tx.fee_per_byte()));
-
-        self.transactions_remove_ord.push(
+        self.best_transactions.push(
             tx_hash.clone(),
-            RemoveTxOrd {
-                fee: tx.fee_per_byte(),
-                order: self.tx_counter.fetch_add(1, atomic::Ordering::Relaxed),
+            BestTxOrder {
+                fee_per_byte: tx.fee_per_byte(),
+                insertion_order: self.tx_counter,
             },
         );
+        self.worst_transactions.push(
+            tx_hash.clone(),
+            WorstTxOrder {
+                fee_per_byte: tx.fee_per_byte(),
+                insertion_order: self.tx_counter,
+            },
+        );
+        self.tx_counter += 1;
 
-        self.transactions_by_age
+        self.oldest_transactions
             .push(tx_hash.clone(), tx.validity_start_height);
 
         match self.state_by_sender.get_mut(&tx.sender) {
@@ -619,9 +626,9 @@ impl MempoolState {
         }
 
         // Update total tx size and remove the cheapest ones if we have too many txs.
-        self.total_transactions_size += tx.serialized_size();
-        while self.total_transactions_size > self.total_size_limit {
-            let (tx_hash, _) = self.transactions_remove_ord.pop().unwrap();
+        self.total_size += tx.serialized_size();
+        while self.total_size > self.total_size_limit {
+            let (tx_hash, _) = self.worst_transactions.pop().unwrap();
             self.remove(&tx_hash);
         }
 
@@ -631,9 +638,9 @@ impl MempoolState {
     pub(crate) fn remove(&mut self, tx_hash: &Blake2bHash) -> Option<Transaction> {
         let tx = self.transactions.remove(tx_hash)?;
 
-        self.transactions_by_age.remove(tx_hash);
-        self.transactions_by_fee.remove(tx_hash);
-        self.transactions_remove_ord.remove(tx_hash);
+        self.best_transactions.remove(tx_hash);
+        self.worst_transactions.remove(tx_hash);
+        self.oldest_transactions.remove(tx_hash);
 
         let sender_state = self.state_by_sender.get_mut(&tx.sender).unwrap();
 
@@ -679,7 +686,7 @@ impl MempoolState {
             }
         }
 
-        self.total_transactions_size -= tx.serialized_size();
+        self.total_size -= tx.serialized_size();
 
         Some(tx)
     }
@@ -693,49 +700,56 @@ pub(crate) struct SenderPendingState {
     pub(crate) txns: HashSet<Blake2bHash>,
 }
 
-/// Since f64 doesn't implement Ord, we cannot sort f64's or use them in KeyedPriorityQueues. So we
-/// create this wrapper and implement Ord ourselves.
+/// Ordering in which transactions removed from the mempool to be included in blocks.
+/// This is stored on a max-heap, so the greater transaction comes first.
+/// Compares by fee per byte (higher first), then by insertion order (lower i.e. older first).
 // TODO: Maybe use this wrapper to do more fine ordering. For example, we might prefer small size
 //       transactions over large size transactions (assuming they have the same fee per byte). Or
 //       we might prefer basic transactions over staking contract transactions, etc, etc.
 #[derive(PartialEq)]
-pub struct FeeWrapper(f64);
+pub struct BestTxOrder {
+    fee_per_byte: f64,
+    insertion_order: u64,
+}
 
-impl Eq for FeeWrapper {}
+impl Eq for BestTxOrder {}
 
-impl PartialOrd for FeeWrapper {
+impl PartialOrd for BestTxOrder {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for FeeWrapper {
+impl Ord for BestTxOrder {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.0.total_cmp(&other.0)
+        self.fee_per_byte
+            .total_cmp(&other.fee_per_byte)
+            .then(self.insertion_order.cmp(&other.insertion_order).reverse())
     }
 }
 
-/// Ordering in which transactions are removed in case the mempool is full.
-/// First compares by fee, then by time
+/// Ordering in which transactions are evicted when the mempool is full.
+/// This is stored on a max-heap, so the greater transaction comes first.
+/// Compares by fee per byte (lower first), then by insertion order (higher i.e. newer first).
 #[derive(PartialEq)]
-pub struct RemoveTxOrd {
-    fee: f64,
-    order: u64,
+pub struct WorstTxOrder {
+    fee_per_byte: f64,
+    insertion_order: u64,
 }
 
-impl Eq for RemoveTxOrd {}
+impl Eq for WorstTxOrder {}
 
-impl PartialOrd for RemoveTxOrd {
+impl PartialOrd for WorstTxOrder {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for RemoveTxOrd {
+impl Ord for WorstTxOrder {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.fee
-            .total_cmp(&other.fee)
+        self.fee_per_byte
+            .total_cmp(&other.fee_per_byte)
             .reverse()
-            .then(self.order.cmp(&other.order).reverse())
+            .then(self.insertion_order.cmp(&other.insertion_order))
     }
 }

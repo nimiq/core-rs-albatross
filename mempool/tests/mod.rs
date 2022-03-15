@@ -12,7 +12,7 @@ use nimiq_blockchain::Blockchain;
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis_builder::GenesisBuilder;
-use nimiq_hash::Blake2bHash;
+use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{
     Address, KeyPair as SchnorrKeyPair, PublicKey as SchnorrPublicKey, SecureGenerate,
 };
@@ -996,19 +996,19 @@ async fn applies_total_tx_size_limits() {
         ..Default::default()
     };
     let mempool = Mempool::new(blockchain, mempool_config);
-    let mut hub = MockHub::new();
-    let mock_id = MockId::new(hub.new_address().into());
-    let mock_network = Arc::new(hub.new_network());
 
-    let tx_remove_ord_recipient = txns[0].recipient.clone();
+    // The worst transaction is the second transaction with the lowest fee.
+    let worst_tx = txns[1].hash::<Blake2bHash>();
 
-    send_txn_to_mempool(&mempool, mock_network, mock_id, txns).await;
+    for tx in txns {
+        mempool.add_transaction(tx).await.unwrap();
+    }
 
     let mempool_txns = mempool.get_transactions_for_block(txns_len);
 
     // We expect that the tx with the lowest fee did not stay in the mempool
     for tx in &mempool_txns {
-        assert_ne!(tx.recipient, tx_remove_ord_recipient);
+        assert_ne!(tx.hash::<Blake2bHash>(), worst_tx);
     }
     assert_eq!(mempool_txns.len(), (num_txns - 1) as usize);
 }
