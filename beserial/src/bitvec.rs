@@ -3,6 +3,7 @@ use bitvec::{
     prelude::{BitSlice, BitVec, Msb0},
     view::BitView,
 };
+use num_traits::{FromPrimitive, ToPrimitive};
 
 use crate::{
     Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
@@ -16,7 +17,7 @@ fn bits_to_bytes(lhs: usize) -> usize {
 }
 
 impl SerializeWithLength for BitSlice<u8, Msb0> {
-    fn serialize<S: Serialize + num::FromPrimitive, W: WriteBytesExt>(
+    fn serialize<S: Serialize + FromPrimitive, W: WriteBytesExt>(
         &self,
         writer: &mut W,
     ) -> Result<usize, SerializingError> {
@@ -46,7 +47,7 @@ impl SerializeWithLength for BitSlice<u8, Msb0> {
         Ok(size)
     }
 
-    fn serialized_size<S: Serialize + num::FromPrimitive>(&self) -> usize {
+    fn serialized_size<S: Serialize + FromPrimitive>(&self) -> usize {
         let mut size = 0;
 
         // Size of number of bits
@@ -60,20 +61,20 @@ impl SerializeWithLength for BitSlice<u8, Msb0> {
 }
 
 impl SerializeWithLength for BitVec<u8, Msb0> {
-    fn serialize<S: Serialize + num::FromPrimitive, W: WriteBytesExt>(
+    fn serialize<S: Serialize + FromPrimitive, W: WriteBytesExt>(
         &self,
         writer: &mut W,
     ) -> Result<usize, SerializingError> {
         self.as_bitslice().serialize::<S, W>(writer)
     }
 
-    fn serialized_size<S: Serialize + num::FromPrimitive>(&self) -> usize {
+    fn serialized_size<S: Serialize + FromPrimitive>(&self) -> usize {
         self.as_bitslice().serialized_size::<S>()
     }
 }
 
 impl DeserializeWithLength for BitVec<u8, Msb0> {
-    fn deserialize_with_limit<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(
+    fn deserialize_with_limit<D: Deserialize + ToPrimitive, R: ReadBytesExt>(
         reader: &mut R,
         limit: Option<usize>,
     ) -> Result<Self, SerializingError> {

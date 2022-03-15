@@ -1,4 +1,5 @@
 use crate::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use num_traits::{FromPrimitive, ToPrimitive};
 
 #[allow(non_camel_case_types)]
 #[derive(Ord, PartialOrd, Eq, PartialEq, Debug, Copy, Clone)]
@@ -40,7 +41,7 @@ impl From<u64> for uvar {
     }
 }
 
-impl num::FromPrimitive for uvar {
+impl FromPrimitive for uvar {
     fn from_i64(n: i64) -> Option<Self> {
         if n < 0 {
             None
@@ -54,7 +55,7 @@ impl num::FromPrimitive for uvar {
     }
 }
 
-impl num::ToPrimitive for uvar {
+impl ToPrimitive for uvar {
     fn to_i64(&self) -> Option<i64> {
         if self.0 > i64::max_value() as u64 {
             None
@@ -141,7 +142,7 @@ impl Serialize for uvar {
 
 impl Deserialize for uvar {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        fn read<T: num::ToPrimitive + Deserialize, R: ReadBytesExt>(
+        fn read<T: ToPrimitive + Deserialize, R: ReadBytesExt>(
             reader: &mut R,
         ) -> Result<u64, SerializingError> {
             let n: T = Deserialize::deserialize(reader)?;
