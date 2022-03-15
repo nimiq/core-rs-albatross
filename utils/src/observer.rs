@@ -3,7 +3,6 @@ use std::sync::{Arc, Weak};
 use std::task::{Context, Poll};
 
 use futures::stream::Stream;
-use futures_lite::stream::StreamExt;
 use parking_lot::RwLock;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -88,7 +87,7 @@ impl<E> Stream for NotifierStream<E> {
     type Item = E;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        self.stream.poll_next(cx)
+        Pin::new(&mut self.stream).poll_next(cx)
     }
 }
 
