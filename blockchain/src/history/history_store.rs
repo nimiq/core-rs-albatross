@@ -1432,7 +1432,7 @@ mod tests {
         let history_store = HistoryStore::new(env.clone());
         let mut txn = WriteTransaction::new(&env);
 
-        for i in 0..=(16 * policy::BATCH_LENGTH) {
+        for i in 0..=(16 * policy::BLOCKS_PER_BATCH) {
             if policy::is_macro_block_at(i) {
                 let ext_txs = vec![
                     create_inherent(i, 1),
@@ -1458,7 +1458,7 @@ mod tests {
         for i in (1..=16).rev() {
             history_store.remove_partial_history(
                 &mut txn,
-                policy::epoch_at(i * policy::BATCH_LENGTH),
+                policy::epoch_at(i * policy::BLOCKS_PER_BATCH),
                 4,
             );
 

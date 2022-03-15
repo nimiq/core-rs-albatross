@@ -49,13 +49,13 @@ pub const TWO_F_PLUS_ONE: u16 = (2 * SLOTS + 3 - 1) / 3;
 pub const F_PLUS_ONE: u16 = (SLOTS + 3 - 1) / 3;
 
 /// Length of a batch including the macro block
-pub const BATCH_LENGTH: u32 = 32; // TODO Set
+pub const BLOCKS_PER_BATCH: u32 = 32; // TODO Set
 
 /// How many batches constitute an epoch
 pub const BATCHES_PER_EPOCH: u16 = 4; // TODO Set
 
 /// Length of epoch including election macro block
-pub const EPOCH_LENGTH: u32 = BATCH_LENGTH * BATCHES_PER_EPOCH as u32;
+pub const BLOCKS_PER_EPOCH: u32 = BLOCKS_PER_BATCH * BATCHES_PER_EPOCH as u32;
 
 /// The maximum drift, in milliseconds, that is allowed between any block's timestamp and the node's
 /// system time. We only care about drifting to the future.
@@ -90,33 +90,33 @@ pub const SUPPLY_DECAY: f64 = 4.692821935e-13;
 /// Returns the epoch number at a given block number (height).
 #[inline]
 pub fn epoch_at(block_number: u32) -> u32 {
-    (block_number + EPOCH_LENGTH - 1) / EPOCH_LENGTH
+    (block_number + BLOCKS_PER_EPOCH - 1) / BLOCKS_PER_EPOCH
 }
 
 /// Returns the epoch index at a given block number. The epoch index is the number of a block relative
 /// to the the epoch it is in. For example, the first block of any epoch always has an epoch index of 0.
 #[inline]
 pub fn epoch_index_at(block_number: u32) -> u32 {
-    (block_number + EPOCH_LENGTH - 1) % EPOCH_LENGTH
+    (block_number + BLOCKS_PER_EPOCH - 1) % BLOCKS_PER_EPOCH
 }
 
 /// Returns the batch number at a given `block_number` (height)
 #[inline]
 pub fn batch_at(block_number: u32) -> u32 {
-    (block_number + BATCH_LENGTH - 1) / BATCH_LENGTH
+    (block_number + BLOCKS_PER_BATCH - 1) / BLOCKS_PER_BATCH
 }
 
 /// Returns the batch index at a given block number. The batch index is the number of a block relative
 /// to the the batch it is in. For example, the first block of any batch always has an batch index of 0.
 #[inline]
 pub fn batch_index_at(block_number: u32) -> u32 {
-    (block_number + BATCH_LENGTH - 1) % BATCH_LENGTH
+    (block_number + BLOCKS_PER_BATCH - 1) % BLOCKS_PER_BATCH
 }
 
 /// Returns the number (height) of the next election macro block after a given block number (height).
 #[inline]
 pub fn election_block_after(block_number: u32) -> u32 {
-    (block_number / EPOCH_LENGTH + 1) * EPOCH_LENGTH
+    (block_number / BLOCKS_PER_EPOCH + 1) * BLOCKS_PER_EPOCH
 }
 
 /// Returns the number (height) of the preceding election macro block before a given block number (height).
@@ -126,26 +126,26 @@ pub fn election_block_before(block_number: u32) -> u32 {
     if block_number == 0 {
         panic!("Called macro_block_before with block_number 0");
     }
-    (block_number - 1) / EPOCH_LENGTH * EPOCH_LENGTH
+    (block_number - 1) / BLOCKS_PER_EPOCH * BLOCKS_PER_EPOCH
 }
 
 /// Returns the number (height) of the last election macro block at a given block number (height).
 /// If the given block number is an election macro block, then it returns that block number.
 #[inline]
 pub fn last_election_block(block_number: u32) -> u32 {
-    block_number / EPOCH_LENGTH * EPOCH_LENGTH
+    block_number / BLOCKS_PER_EPOCH * BLOCKS_PER_EPOCH
 }
 
 /// Returns a boolean expressing if the block at a given block number (height) is an election macro block.
 #[inline]
 pub fn is_election_block_at(block_number: u32) -> bool {
-    epoch_index_at(block_number) == EPOCH_LENGTH - 1
+    epoch_index_at(block_number) == BLOCKS_PER_EPOCH - 1
 }
 
 /// Returns the number (height) of the next macro block after a given block number (height).
 #[inline]
 pub fn macro_block_after(block_number: u32) -> u32 {
-    (block_number / BATCH_LENGTH + 1) * BATCH_LENGTH
+    (block_number / BLOCKS_PER_BATCH + 1) * BLOCKS_PER_BATCH
 }
 
 /// Returns the number (height) of the preceding macro block before a given block number (height).
@@ -155,26 +155,26 @@ pub fn macro_block_before(block_number: u32) -> u32 {
     if block_number == 0 {
         panic!("Called macro_block_before with block_number 0");
     }
-    (block_number - 1) / BATCH_LENGTH * BATCH_LENGTH
+    (block_number - 1) / BLOCKS_PER_BATCH * BLOCKS_PER_BATCH
 }
 
 /// Returns the number (height) of the last macro block at a given block number (height).
 /// If the given block number is a macro block, then it returns that block number.
 #[inline]
 pub fn last_macro_block(block_number: u32) -> u32 {
-    block_number / BATCH_LENGTH * BATCH_LENGTH
+    block_number / BLOCKS_PER_BATCH * BLOCKS_PER_BATCH
 }
 
 /// Returns a boolean expressing if the block at a given block number (height) is a macro block.
 #[inline]
 pub fn is_macro_block_at(block_number: u32) -> bool {
-    batch_index_at(block_number) == BATCH_LENGTH - 1
+    batch_index_at(block_number) == BLOCKS_PER_BATCH - 1
 }
 
 /// Returns a boolean expressing if the block at a given block number (height) is a micro block.
 #[inline]
 pub fn is_micro_block_at(block_number: u32) -> bool {
-    batch_index_at(block_number) != BATCH_LENGTH - 1
+    batch_index_at(block_number) != BLOCKS_PER_BATCH - 1
 }
 
 /// Returns the block number of the first block of the given epoch (which is always a micro block).
@@ -182,7 +182,7 @@ pub fn first_block_of(epoch: u32) -> u32 {
     if epoch == 0 {
         panic!("Called first_block_of for epoch 0");
     }
-    (epoch - 1) * EPOCH_LENGTH + 1
+    (epoch - 1) * BLOCKS_PER_EPOCH + 1
 }
 
 ///  Returns the block number of the first block of the given batch (which is always a micro block).
@@ -190,25 +190,25 @@ pub fn first_block_of_batch(batch: u32) -> u32 {
     if batch == 0 {
         panic!("Called first_block_of_batch for batch 0");
     }
-    (batch - 1) * BATCH_LENGTH + 1
+    (batch - 1) * BLOCKS_PER_BATCH + 1
 }
 
 /// Returns the block number of the election macro block of the given epoch (which is always the last block).
 pub fn election_block_of(epoch: u32) -> u32 {
-    epoch * EPOCH_LENGTH
+    epoch * BLOCKS_PER_EPOCH
 }
 
 /// Returns the block number of the macro block (checkpoint or election) of the given batch (which
 /// is always the last block).
 pub fn macro_block_of(batch: u32) -> u32 {
-    batch * BATCH_LENGTH
+    batch * BLOCKS_PER_BATCH
 }
 
 /// Returns a boolean expressing if the batch at a given block number (height) is the first batch
 /// of the epoch.
 #[inline]
 pub fn first_batch_of_epoch(block_number: u32) -> bool {
-    epoch_index_at(block_number) < BATCH_LENGTH
+    epoch_index_at(block_number) < BLOCKS_PER_BATCH
 }
 
 /// Returns the supply at a given time (as Unix time) in Lunas (1 NIM = 100,000 Lunas). It is

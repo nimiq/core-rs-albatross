@@ -150,13 +150,13 @@ fn micro_block_works_after_macro_block() {
     let temp_producer = TemporaryBlockProducer::new();
 
     // apply an entire batch including macro block on view_number/round_number zero
-    for _ in 0..policy::BATCH_LENGTH {
+    for _ in 0..policy::BLOCKS_PER_BATCH {
         let _ = temp_producer.next_block(0, vec![]);
     }
     // make sure we are at the beginning of the batch and all block were applied
     assert_eq!(
         temp_producer.blockchain.read().block_number(),
-        policy::BATCH_LENGTH
+        policy::BLOCKS_PER_BATCH
     );
     assert_eq!(temp_producer.blockchain.read().view_number(), 0);
 
@@ -171,24 +171,24 @@ fn micro_block_works_after_macro_block() {
     // make sure this was an extend
     assert_eq!(
         temp_producer.blockchain.read().block_number(),
-        policy::BATCH_LENGTH + 1
+        policy::BLOCKS_PER_BATCH + 1
     );
     // and rebranch it to block view number 1
     temp_producer.push(rebranch).unwrap();
     // make sure this was a rebranch
     assert_eq!(
         temp_producer.blockchain.read().block_number(),
-        policy::BATCH_LENGTH + 1
+        policy::BLOCKS_PER_BATCH + 1
     );
 
     // apply the rest of the batch including macro block on view_number/round_number one
-    for _ in 0..policy::BATCH_LENGTH - 1 {
+    for _ in 0..policy::BLOCKS_PER_BATCH - 1 {
         let _ = temp_producer.next_block(2, vec![]);
     }
     // make sure we are at the beginning of the batch
     assert_eq!(
         temp_producer.blockchain.read().block_number(),
-        policy::BATCH_LENGTH * 2
+        policy::BLOCKS_PER_BATCH * 2
     );
     assert_eq!(temp_producer.blockchain.read().view_number(), 2);
 
@@ -206,7 +206,7 @@ fn micro_block_works_after_macro_block() {
 
     assert_eq!(
         temp_producer.blockchain.read().block_number(),
-        policy::BATCH_LENGTH * 2 + 1
+        policy::BLOCKS_PER_BATCH * 2 + 1
     );
     assert_eq!(temp_producer.blockchain.read().view_number(), 2);
 }
@@ -283,7 +283,7 @@ fn it_cant_rebranch_across_epochs() {
     temp_producer2.push(ancestor).unwrap();
 
     // progress the chain across an epoch boundary.
-    for _ in 0..policy::EPOCH_LENGTH {
+    for _ in 0..policy::BLOCKS_PER_EPOCH {
         temp_producer1.next_block(0, vec![]);
     }
 
@@ -327,7 +327,7 @@ fn it_can_rebranch_to_inferior_macro_block() {
 
     // [0] - [0] - ... - [0] - [macro 0]
     //    \- [1] - ... - [1]
-    for _ in 0..policy::BATCH_LENGTH - 1 {
+    for _ in 0..policy::BLOCKS_PER_BATCH - 1 {
         let inferior = producer1.next_block(0, vec![]);
         producer2.next_block(1, vec![]);
         assert_eq!(producer2.push(inferior), Ok(PushResult::Ignored));

@@ -13,7 +13,7 @@ use rand::rngs::SmallRng;
 use rand::{RngCore, SeedableRng};
 
 use nimiq_nano_primitives::{pk_tree_construct, state_commitment, MacroBlock};
-use nimiq_primitives::policy::{EPOCH_LENGTH, SLOTS, TWO_F_PLUS_ONE};
+use nimiq_primitives::policy::{BLOCKS_PER_EPOCH, SLOTS, TWO_F_PLUS_ONE};
 
 /// Takes a vector of booleans and converts it into a vector of field elements, which is the way we
 /// represent inputs to circuits (natively).
@@ -222,7 +222,7 @@ pub fn create_test_blocks(
 
     // Create the macro block.
     let mut block =
-        MacroBlock::without_signatures(EPOCH_LENGTH * (index as u32 + 1), 0, final_header_hash);
+        MacroBlock::without_signatures(BLOCKS_PER_EPOCH * (index as u32 + 1), 0, final_header_hash);
 
     for i in 0..SLOTS as usize {
         if signer_bitmap[i] {

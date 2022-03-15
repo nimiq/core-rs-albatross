@@ -18,7 +18,7 @@ use nimiq_nano_primitives::{merkle_tree_prove, serialize_g1_mnt6, serialize_g2_m
 use nimiq_nano_primitives::{
     pk_tree_construct, state_commitment, vk_commitment, MacroBlock, PK_TREE_BREADTH, PK_TREE_DEPTH,
 };
-use nimiq_primitives::policy::{EPOCH_LENGTH, SLOTS};
+use nimiq_primitives::policy::{BLOCKS_PER_EPOCH, SLOTS};
 
 use crate::circuits::mnt4::{
     MacroBlockCircuit, MergerCircuit, PKTreeLeafCircuit as LeafMNT4, PKTreeNodeCircuit as NodeMNT4,
@@ -671,7 +671,7 @@ impl NanoZKP {
 
         // Calculate the inputs.
         let mut initial_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
-            block.block_number - EPOCH_LENGTH,
+            block.block_number - BLOCKS_PER_EPOCH,
             initial_header_hash,
             initial_pks.to_vec(),
         )));
@@ -749,7 +749,7 @@ impl NanoZKP {
 
         // Calculate the inputs.
         let mut initial_state_commitment = pack_inputs(bytes_to_bits(&state_commitment(
-            block.block_number - EPOCH_LENGTH,
+            block.block_number - BLOCKS_PER_EPOCH,
             initial_header_hash,
             initial_pks.to_vec(),
         )));
@@ -828,7 +828,7 @@ impl NanoZKP {
 
         // Get the intermediate state commitment.
         let intermediate_state_commitment = state_commitment(
-            block.block_number - EPOCH_LENGTH,
+            block.block_number - BLOCKS_PER_EPOCH,
             initial_header_hash,
             initial_pks.to_vec(),
         );
@@ -936,7 +936,7 @@ impl NanoZKP {
         // Calculate the inputs.
         let initial_state_comm_bytes = match genesis_data {
             None => state_commitment(
-                block.block_number - EPOCH_LENGTH,
+                block.block_number - BLOCKS_PER_EPOCH,
                 initial_header_hash,
                 initial_pks.to_vec(),
             ),

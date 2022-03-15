@@ -61,8 +61,8 @@ pub struct BlockQueueConfig {
 impl Default for BlockQueueConfig {
     fn default() -> Self {
         Self {
-            buffer_max: 4 * policy::BATCH_LENGTH as usize,
-            window_max: 2 * policy::BATCH_LENGTH,
+            buffer_max: 4 * policy::BLOCKS_PER_BATCH as usize,
+            window_max: 2 * policy::BLOCKS_PER_BATCH,
         }
     }
 }

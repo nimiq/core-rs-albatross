@@ -241,7 +241,7 @@ impl<TNetwork: Network, TValidatorNetwork: ValidatorNetwork>
             let staking_state = self.get_staking_state(&*blockchain);
             if staking_state == ValidatorStakingState::Parked
                 && blockchain.block_number()
-                    >= parking_state.park_tx_validity_window_start + policy::EPOCH_LENGTH
+                    >= parking_state.park_tx_validity_window_start + policy::BLOCKS_PER_EPOCH
                 && !blockchain.tx_in_validity_window(
                     &parking_state.park_tx_hash,
                     parking_state.park_tx_validity_window_start,

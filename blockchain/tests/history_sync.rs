@@ -6,7 +6,7 @@ use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain, PushResult};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
-use nimiq_primitives::policy::{BATCHES_PER_EPOCH, BATCH_LENGTH, EPOCH_LENGTH};
+use nimiq_primitives::policy::{BATCHES_PER_EPOCH, BLOCKS_PER_BATCH, BLOCKS_PER_EPOCH};
 use nimiq_test_utils::blockchain::{
     fill_micro_blocks_with_txns, produce_macro_blocks, produce_macro_blocks_with_txns, signing_key,
     voting_key,
@@ -39,14 +39,14 @@ fn history_sync_works() {
     // Get the election blocks and corresponding history tree transactions.
     let election_block_1 = blockchain
         .chain_store
-        .get_block_at(EPOCH_LENGTH, true, None)
+        .get_block_at(BLOCKS_PER_EPOCH, true, None)
         .unwrap();
 
     let election_txs_1 = blockchain.history_store.get_epoch_transactions(1, None);
 
     let election_block_2 = blockchain
         .chain_store
-        .get_block_at(2 * EPOCH_LENGTH, true, None)
+        .get_block_at(2 * BLOCKS_PER_EPOCH, true, None)
         .unwrap();
 
     let election_txs_2 = blockchain.history_store.get_epoch_transactions(2, None);
@@ -54,13 +54,13 @@ fn history_sync_works() {
     // Get the checkpoint blocks and corresponding history tree transactions.
     let checkpoint_block_2_1 = blockchain
         .chain_store
-        .get_block_at(EPOCH_LENGTH + BATCH_LENGTH, true, None)
+        .get_block_at(BLOCKS_PER_EPOCH + BLOCKS_PER_BATCH, true, None)
         .unwrap();
 
     let mut checkpoint_txs_2_1 = vec![];
 
     for ext_tx in &election_txs_2 {
-        if ext_tx.block_number > EPOCH_LENGTH + BATCH_LENGTH {
+        if ext_tx.block_number > BLOCKS_PER_EPOCH + BLOCKS_PER_BATCH {
             break;
         }
 
@@ -69,13 +69,13 @@ fn history_sync_works() {
 
     let checkpoint_block_2_3 = blockchain
         .chain_store
-        .get_block_at(EPOCH_LENGTH + 3 * BATCH_LENGTH, true, None)
+        .get_block_at(BLOCKS_PER_EPOCH + 3 * BLOCKS_PER_BATCH, true, None)
         .unwrap();
 
     let mut checkpoint_txs_2_3 = vec![];
 
     for ext_tx in &election_txs_2 {
-        if ext_tx.block_number > EPOCH_LENGTH + 3 * BATCH_LENGTH {
+        if ext_tx.block_number > BLOCKS_PER_EPOCH + 3 * BLOCKS_PER_BATCH {
             break;
         }
 
@@ -84,7 +84,7 @@ fn history_sync_works() {
 
     let checkpoint_block_3_1 = blockchain
         .chain_store
-        .get_block_at(2 * EPOCH_LENGTH + BATCH_LENGTH, true, None)
+        .get_block_at(2 * BLOCKS_PER_EPOCH + BLOCKS_PER_BATCH, true, None)
         .unwrap();
 
     let checkpoint_txs_3_1 = blockchain.history_store.get_epoch_transactions(3, None);
@@ -170,14 +170,14 @@ fn history_sync_works_with_micro_blocks() {
     // Get the election blocks and corresponding history tree transactions.
     let election_block_1 = blockchain
         .chain_store
-        .get_block_at(EPOCH_LENGTH, true, None)
+        .get_block_at(BLOCKS_PER_EPOCH, true, None)
         .unwrap();
 
     let election_txs_1 = blockchain.history_store.get_epoch_transactions(1, None);
 
     let election_block_2 = blockchain
         .chain_store
-        .get_block_at(2 * EPOCH_LENGTH, true, None)
+        .get_block_at(2 * BLOCKS_PER_EPOCH, true, None)
         .unwrap();
 
     let election_txs_2 = blockchain.history_store.get_epoch_transactions(2, None);
@@ -185,13 +185,13 @@ fn history_sync_works_with_micro_blocks() {
     // Get the checkpoint blocks and corresponding history tree transactions.
     let checkpoint_block_2_1 = blockchain
         .chain_store
-        .get_block_at(EPOCH_LENGTH + BATCH_LENGTH, true, None)
+        .get_block_at(BLOCKS_PER_EPOCH + BLOCKS_PER_BATCH, true, None)
         .unwrap();
 
     let mut checkpoint_txs_2_1 = vec![];
 
     for ext_tx in &election_txs_2 {
-        if ext_tx.block_number > EPOCH_LENGTH + BATCH_LENGTH {
+        if ext_tx.block_number > BLOCKS_PER_EPOCH + BLOCKS_PER_BATCH {
             break;
         }
 
@@ -200,7 +200,7 @@ fn history_sync_works_with_micro_blocks() {
 
     let checkpoint_block_3_2 = blockchain
         .chain_store
-        .get_block_at(2 * EPOCH_LENGTH + 2 * BATCH_LENGTH, true, None)
+        .get_block_at(2 * BLOCKS_PER_EPOCH + 2 * BLOCKS_PER_BATCH, true, None)
         .unwrap();
 
     let checkpoint_txs_3_2 = blockchain.history_store.get_epoch_transactions(3, None);
@@ -208,22 +208,22 @@ fn history_sync_works_with_micro_blocks() {
     // Get the micro blocks.
     let mut micro_blocks_2_2 = vec![];
 
-    for i in 1..BATCH_LENGTH {
+    for i in 1..BLOCKS_PER_BATCH {
         micro_blocks_2_2.push(
             blockchain
                 .chain_store
-                .get_block_at(EPOCH_LENGTH + BATCH_LENGTH + i, true, None)
+                .get_block_at(BLOCKS_PER_EPOCH + BLOCKS_PER_BATCH + i, true, None)
                 .unwrap(),
         )
     }
 
     let mut micro_blocks_3_1 = vec![];
 
-    for i in 1..BATCH_LENGTH {
+    for i in 1..BLOCKS_PER_BATCH {
         micro_blocks_3_1.push(
             blockchain
                 .chain_store
-                .get_block_at(2 * EPOCH_LENGTH + i, true, None)
+                .get_block_at(2 * BLOCKS_PER_EPOCH + i, true, None)
                 .unwrap(),
         )
     }
@@ -306,7 +306,7 @@ fn history_sync_works_with_diverging_history() {
     let num_macro_blocks = BATCHES_PER_EPOCH as usize;
     let producer = BlockProducer::new(signing_key(), voting_key());
     produce_macro_blocks_with_txns(&producer, &blockchain1, num_macro_blocks, 2, 0);
-    assert_eq!(blockchain1.read().block_number(), EPOCH_LENGTH);
+    assert_eq!(blockchain1.read().block_number(), BLOCKS_PER_EPOCH);
 
     // Produce some micro blocks (with a different history) in blockchain2.
     let env = VolatileEnvironment::new(10).unwrap();
@@ -315,13 +315,13 @@ fn history_sync_works_with_diverging_history() {
         Blockchain::new(env, NetworkId::UnitAlbatross, time).unwrap(),
     ));
     fill_micro_blocks_with_txns(&producer, &blockchain2, 3, 1);
-    assert_eq!(blockchain2.read().block_number(), BATCH_LENGTH - 1);
+    assert_eq!(blockchain2.read().block_number(), BLOCKS_PER_BATCH - 1);
 
     // Get the election block and corresponding history tree transactions from blockchain1.
     let blockchain = blockchain1.read();
     let election_block_1 = blockchain
         .chain_store
-        .get_block_at(EPOCH_LENGTH, true, None)
+        .get_block_at(BLOCKS_PER_EPOCH, true, None)
         .unwrap();
     let election_txs_1 = blockchain.history_store.get_epoch_transactions(1, None);
 

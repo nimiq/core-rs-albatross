@@ -673,7 +673,7 @@ impl StakingContract {
                 return Err(AccountError::InvalidForSender);
             }
             Some(time) => {
-                if block_height <= policy::election_block_after(time) + policy::BATCH_LENGTH {
+                if block_height <= policy::election_block_after(time) + policy::BLOCKS_PER_BATCH {
                     return Err(AccountError::InvalidForSender);
                 }
             }

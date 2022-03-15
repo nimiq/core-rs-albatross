@@ -84,7 +84,7 @@ fn it_can_create_batch_finalization_inherents() {
             &mut txn,
             &[],
             &[slash_inherent],
-            policy::BATCH_LENGTH + 1,
+            policy::BLOCKS_PER_BATCH + 1,
             0,
         )
         .is_ok());

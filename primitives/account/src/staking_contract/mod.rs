@@ -343,7 +343,8 @@ impl StakingContract {
                         return false;
                     }
                     Some(time) => {
-                        if block_height <= policy::election_block_after(time) + policy::BATCH_LENGTH
+                        if block_height
+                            <= policy::election_block_after(time) + policy::BLOCKS_PER_BATCH
                         {
                             warn!(
                     "Cannot pay fees for transaction because validator hasn't been inactive for long enough."

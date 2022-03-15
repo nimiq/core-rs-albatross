@@ -16,7 +16,7 @@ use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::policy;
 use nimiq_primitives::policy::{
-    BATCH_LENGTH, EPOCH_LENGTH, STAKING_CONTRACT_ADDRESS, VALIDATOR_DEPOSIT,
+    BLOCKS_PER_BATCH, BLOCKS_PER_EPOCH, STAKING_CONTRACT_ADDRESS, VALIDATOR_DEPOSIT,
 };
 use nimiq_primitives::slots::SlashedSlot;
 use nimiq_transaction::account::staking_contract::{
@@ -946,7 +946,7 @@ fn delete_validator_works() {
             &accounts_tree,
             &mut db_txn,
             &tx,
-            next_election_block + BATCH_LENGTH + 1,
+            next_election_block + BLOCKS_PER_BATCH + 1,
             0
         ),
         Ok(Some(receipt.clone()))
@@ -1753,7 +1753,7 @@ fn slash_inherents_work() {
             &accounts_tree,
             &mut db_txn,
             &inherent,
-            1 + BATCH_LENGTH,
+            1 + BLOCKS_PER_BATCH,
             0
         ),
         Ok(Some(receipt.clone()))
@@ -1782,7 +1782,7 @@ fn slash_inherents_work() {
         &accounts_tree,
         &mut db_txn,
         &inherent,
-        1 + BATCH_LENGTH,
+        1 + BLOCKS_PER_BATCH,
         Some(&receipt),
         &validator_address,
         slot.slot,
@@ -1801,7 +1801,7 @@ fn slash_inherents_work() {
             &accounts_tree,
             &mut db_txn,
             &inherent,
-            1 + EPOCH_LENGTH,
+            1 + BLOCKS_PER_EPOCH,
             0
         ),
         Ok(Some(receipt.clone()))
@@ -1829,7 +1829,7 @@ fn slash_inherents_work() {
         &accounts_tree,
         &mut db_txn,
         &inherent,
-        1 + EPOCH_LENGTH,
+        1 + BLOCKS_PER_EPOCH,
         Some(&receipt),
         &validator_address,
         slot.slot,

@@ -226,7 +226,7 @@ impl NanoBlockchain {
 
         // Check if we have this block's successor.
         let prev_block = chain_store_r
-            .get_election(epoch + policy::EPOCH_LENGTH)
+            .get_election(epoch + policy::BLOCKS_PER_EPOCH)
             .ok_or(PushError::InvalidSuccessor)?;
 
         // Verify that the block is indeed the predecessor.

@@ -131,7 +131,7 @@ pub fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<RwLock<Block
 
     assert!(policy::is_macro_block_at(init_height));
 
-    let macro_block_number = init_height + policy::BATCH_LENGTH;
+    let macro_block_number = init_height + policy::BLOCKS_PER_BATCH;
 
     for i in (init_height + 1)..macro_block_number {
         let blockchain = blockchain.upgradable_read();
@@ -165,7 +165,7 @@ pub fn fill_micro_blocks_with_txns(
     let key_pair = KeyPair::from(PrivateKey::from_str(UNIT_KEY).unwrap());
     assert!(policy::is_macro_block_at(init_height));
 
-    let macro_block_number = init_height + policy::BATCH_LENGTH;
+    let macro_block_number = init_height + policy::BLOCKS_PER_BATCH;
 
     for i in (init_height + 1)..macro_block_number {
         log::debug!(" Current Height: {}", i);
