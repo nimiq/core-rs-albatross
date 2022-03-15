@@ -1,16 +1,18 @@
 use anyhow::{bail, Error};
 use clap::Parser;
 use futures::stream::StreamExt;
+use url::Url;
 
+use nimiq_jsonrpc_client::{websocket::WebsocketClient, ArcClient};
 use nimiq_jsonrpc_core::Credentials;
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
-use nimiq_rpc_client::Client;
 use nimiq_rpc_interface::{
-    blockchain::BlockchainInterface,
-    consensus::ConsensusInterface,
+    blockchain::{BlockchainInterface, BlockchainProxy},
+    consensus::{ConsensusInterface, ConsensusProxy},
+    mempool::MempoolProxy,
     types::{BlockNumberOrHash, ValidityStartHeight},
-    wallet::WalletInterface,
+    wallet::{WalletInterface, WalletProxy},
 };
 
 #[derive(Debug, Parser)]
@@ -365,6 +367,26 @@ impl Command {
         }
 
         Ok(())
+    }
+}
+
+pub struct Client {
+    pub blockchain: BlockchainProxy<ArcClient<WebsocketClient>>,
+    pub consensus: ConsensusProxy<ArcClient<WebsocketClient>>,
+    pub mempool: MempoolProxy<ArcClient<WebsocketClient>>,
+    pub wallet: WalletProxy<ArcClient<WebsocketClient>>,
+}
+
+impl Client {
+    pub async fn new(url: Url, credentials: Option<Credentials>) -> Result<Self, Error> {
+        let client = ArcClient::new(WebsocketClient::new(url, credentials).await?);
+
+        Ok(Self {
+            blockchain: BlockchainProxy::new(client.clone()),
+            consensus: ConsensusProxy::new(client.clone()),
+            mempool: MempoolProxy::new(client.clone()),
+            wallet: WalletProxy::new(client),
+        })
     }
 }
 

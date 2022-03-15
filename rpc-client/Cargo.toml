@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 license = "Apache-2.0"
 edition = "2021"
-description = "JSON RPC server for the Nimiq Rust implementation"
+description = "JSON RPC client for the Nimiq Rust implementation"
 homepage = "https://nimiq.com"
 repository = "https://github.com/nimiq/core-rs-albatross"
 categories = ["cryptography::cryptocurrencies"]
@@ -12,8 +12,7 @@ keywords = ["nimiq", "cryptocurrency", "blockchain"]
 
 [[bin]]
 name = "nimiq-rpc"
-path = "src/bin/client.rs"
-required-features = ["app"]
+path = "src/main.rs"
 
 [badges]
 travis-ci = { repository = "nimiq/core-rs", branch = "master" }
@@ -22,42 +21,24 @@ is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-url = "2.2"
+anyhow = "1.0"
+clap = { version = "3.0", features = ["derive"] }
+dotenv = "0.15"
 futures = "0.3"
-
-nimiq-jsonrpc-core = { git = "https://github.com/nimiq/jsonrpc.git" }
-nimiq-jsonrpc-client = { git = "https://github.com/nimiq/jsonrpc.git" }
-nimiq-rpc-interface = { path = "../rpc-interface" }
-
-# Needed for the command line app
-anyhow = { version = "1.0", optional = true }
-clap = { version = "3.0", features = ["derive"], optional = true }
-dotenv = { version = "0.15", optional = true }
-nimiq-account = { path = "../primitives/account", optional = true }
-nimiq-bls = { path = "../bls", optional = true }
-nimiq-hash = { path = "../hash", optional = true }
-nimiq-keys = { path = "../keys", optional = true }
-nimiq-primitives = { path = "../primitives", optional = true }
-nimiq-transaction = { path = "../primitives/transaction", optional = true }
 tokio = { version = "1.16", features = [
     "macros",
     "rt-multi-thread",
     "tracing",
-], optional = true }
-tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
+] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+url = "2.2"
 
-[features]
-default = ["app"]
-app = [
-    "anyhow",
-    "clap",
-    "dotenv",
-    "nimiq-account",
-    "nimiq-bls",
-    "nimiq-hash",
-    "nimiq-keys",
-    "nimiq-primitives",
-    "nimiq-transaction",
-    "tokio",
-    "tracing-subscriber",
-]
+nimiq-account = { path = "../primitives/account" }
+nimiq-bls = { path = "../bls" }
+nimiq-hash = { path = "../hash" }
+nimiq-jsonrpc-client = { git = "https://github.com/nimiq/jsonrpc.git" }
+nimiq-jsonrpc-core = { git = "https://github.com/nimiq/jsonrpc.git" }
+nimiq-keys = { path = "../keys" }
+nimiq-primitives = { path = "../primitives" }
+nimiq-rpc-interface = { path = "../rpc-interface" }
+nimiq-transaction = { path = "../primitives/transaction" }
