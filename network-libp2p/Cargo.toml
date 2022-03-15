@@ -25,14 +25,15 @@ futures = "0.3"
 hex = "0.4"
 ip_network = "0.4"
 libp2p = { version = "0.43", default-features = false, features = [
-    "gossipsub",
-    "kad",
-    "identify",
-    "noise",
-    "yamux",
-    "websocket",
     "dns-tokio",
+    "gossipsub",
+    "identify",
+    "kad",
+    "noise",
+    "ping",
     "tcp-tokio",
+    "websocket",
+    "yamux",
 ] }
 log = { package = "tracing", version = "0.1", features = ["log"] }
 parking_lot = { git = "https://github.com/styppo/parking_lot.git" }
