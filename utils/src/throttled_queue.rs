@@ -61,10 +61,9 @@ where
         // Check for more allowance if interval is defined.
         if self.allowance_interval > Duration::default() {
             let now = Instant::now();
-            let num_intervals = now
-                .duration_since(self.last_allowance)
-                .div_duration_f64(self.allowance_interval)
-                .trunc() as usize;
+            let num_intervals = (now.duration_since(self.last_allowance).as_secs_f64()
+                / self.allowance_interval.as_secs_f64())
+            .trunc() as usize;
             if num_intervals > 0 {
                 self.available_now = cmp::min(
                     self.max_allowance,

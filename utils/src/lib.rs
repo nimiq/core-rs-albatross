@@ -1,6 +1,3 @@
-// TODO: Remove when stabilized.
-#![feature(div_duration)]
-
 #[cfg(feature = "beserial_derive")]
 #[macro_use]
 extern crate beserial_derive;
