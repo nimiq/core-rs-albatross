@@ -135,7 +135,7 @@ impl<N: ValidatorNetwork> TendermintAggregations<N> {
 
             trace!("Aggregation_descriptors: {:?}", &tmp_desc,);
 
-            // copy round_number for use in drain_filter couple of lines down so that id can be moved into closure.
+            // copy round_number for use in `retain` couple of lines down so that id can be moved into closure.
             let round_number = id.round_number;
 
             // wrap the aggregation stream
@@ -151,7 +151,7 @@ impl<N: ValidatorNetwork> TendermintAggregations<N> {
             // Since this instance of Aggregation now becomes the current aggregation all bitsets containing contributors
             // for future aggregations which are older or same age than this one can be discarded.
             self.future_aggregations
-                .drain_filter(|round, _bitset| round <= &round_number);
+                .retain(|round, _bitset| round > &round_number);
 
             // Push the aggregation to the select_all streams.
             self.combined_aggregation_streams.push(aggregation);

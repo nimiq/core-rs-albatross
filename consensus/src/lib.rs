@@ -1,8 +1,5 @@
 #![allow(dead_code)]
 #![feature(map_first_last)]
-#![feature(btree_drain_filter)]
-#![feature(drain_filter)]
-#![feature(hash_drain_filter)]
 
 #[macro_use]
 extern crate beserial_derive;

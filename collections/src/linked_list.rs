@@ -743,7 +743,6 @@ impl<T> LinkedList<T> {
     /// Splitting a list into evens and odds, reusing the original list:
     ///
     /// ```
-    /// #![feature(drain_filter)]
     /// use std::collections::LinkedList;
     ///
     /// let mut numbers: LinkedList<u32> = LinkedList::new();

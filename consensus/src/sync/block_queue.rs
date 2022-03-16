@@ -353,15 +353,18 @@ impl<N: Network> Inner<N> {
         let mut blocks_to_push = vec![];
         {
             let blockchain = self.blockchain.read();
-            self.buffer.drain_filter(|_, blocks| {
+            self.buffer.retain(|_, blocks| {
                 // Push all blocks with a known parent to the chain.
-                let blocks_with_known_parent = blocks
-                    .drain_filter(|_, (block, _)| blockchain.contains(block.parent_hash(), true))
-                    .map(|(_, block_and_id)| block_and_id);
-                blocks_to_push.extend(blocks_with_known_parent);
+                blocks.retain(|_, (block, pubsub_id)| {
+                    let push = blockchain.contains(block.parent_hash(), true);
+                    if push {
+                        blocks_to_push.push((block.clone(), pubsub_id.clone()));
+                    }
+                    !push
+                });
 
                 // Remove buffer entry if there are no blocks left.
-                blocks.is_empty()
+                !blocks.is_empty()
             });
         }
 
@@ -376,9 +379,9 @@ impl<N: Network> Inner<N> {
         }
 
         // Iterate over block buffer, remove element if no blocks remain at that height.
-        self.buffer.drain_filter(|_block_number, blocks| {
+        self.buffer.retain(|_block_number, blocks| {
             // Iterate over all blocks at the current height, remove block if parent is invalid
-            blocks.drain_filter(|hash, (block, pubsub_id)| {
+            blocks.retain(|hash, (block, pubsub_id)| {
                 if invalid_blocks.contains(block.parent_hash()) {
                     log::trace!("Removing block because parent is invalid: {}", hash);
                     invalid_blocks.insert(hash.clone());
@@ -388,12 +391,12 @@ impl<N: Network> Inner<N> {
                             .validate_message::<BlockTopic>(id.clone(), MsgAcceptance::Reject);
                     }
 
-                    true
-                } else {
                     false
+                } else {
+                    true
                 }
             });
-            blocks.is_empty()
+            !blocks.is_empty()
         });
     }
 

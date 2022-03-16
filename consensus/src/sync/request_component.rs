@@ -100,10 +100,15 @@ impl<TPeer: Peer + 'static> BlockRequestComponent<TPeer> {
 
     /// Adds all outdated peers that were checked more than TIMEOUT ago to history sync
     fn check_peers_up_to_date(&mut self) {
-        let peers_todo = self
-            .outdated_timeouts
-            .drain_filter(|_, last_checked| last_checked.elapsed() >= Self::CHECK_OUTDATED_TIMEOUT);
-        for (peer, _) in peers_todo {
+        let mut peers_todo = Vec::new();
+        self.outdated_timeouts.retain(|peer, last_checked| {
+            let timeouted = last_checked.elapsed() >= Self::CHECK_OUTDATED_TIMEOUT;
+            if timeouted {
+                peers_todo.push(peer.clone());
+            }
+            !timeouted
+        });
+        for peer in peers_todo {
             debug!("Adding outdated peer {:?} to history sync", peer.id());
             let agent = self.outdated_agents.remove(&peer).unwrap();
             self.sync_method.add_agent(agent);
