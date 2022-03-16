@@ -9,7 +9,6 @@ use parking_lot::RwLock;
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_consensus::consensus::Consensus;
-use nimiq_consensus::messages::RequestBlockHashesFilter;
 use nimiq_consensus::sync::history::{cluster::SyncCluster, HistorySync, HistorySyncReturn};
 use nimiq_consensus::sync::request_component::HistorySyncStream;
 use nimiq_database::volatile::VolatileEnvironment;
@@ -243,25 +242,22 @@ async fn sync_ingredients() {
     tokio::time::sleep(Duration::from_secs(1)).await; // FIXME, Prof. Berrang told me to do this
 
     // Test ingredients:
-    // Request hashes
+    // Request macro chain
     let peer_id = net2.get_peers()[0].id();
-    let hashes = HistorySync::request_block_hashes(
+    let macro_chain = HistorySync::request_macro_chain(
         Arc::clone(&net2),
         peer_id,
         vec![consensus2.blockchain.read().head_hash()],
         3,
-        RequestBlockHashesFilter::ElectionAndLatestCheckpoint,
     )
     .await
-    .expect("Should yield hashes")
-    .hashes
-    .expect("Should contain hashes");
-    assert_eq!(hashes.len(), 2);
-    assert_eq!(
-        hashes[0].1,
-        consensus1.blockchain.read().election_head_hash()
-    );
-    assert_eq!(hashes[1].1, consensus1.blockchain.read().macro_head_hash());
+    .expect("Should yield macro chain");
+    let epochs = macro_chain.epochs.expect("Should contain epochs");
+    let checkpoint = macro_chain.checkpoint.expect("Should contain checkpoint");
+    let blockchain = consensus1.blockchain.read();
+    assert_eq!(epochs.len(), 1);
+    assert_eq!(epochs[0], blockchain.election_head_hash());
+    assert_eq!(checkpoint.hash, blockchain.macro_head_hash());
 
     // Request epoch
     let epoch = SyncCluster::request_epoch(

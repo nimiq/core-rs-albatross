@@ -6,8 +6,9 @@ use parking_lot::RwLock;
 use nimiq_blockchain::{AbstractBlockchain, Blockchain};
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::prelude::{CloseReason, Network, Peer, RequestError, ResponseMessage};
+use nimiq_primitives::policy;
 
-use crate::messages::{BlockHashType, BlockHashes, RequestBlockHashes, RequestBlockHashesFilter};
+use crate::messages::{MacroChain, RequestMacroChain};
 use crate::sync::history::cluster::{SyncCluster, SyncClusterResult};
 use crate::sync::history::sync::{EpochIds, Job};
 use crate::sync::history::HistorySync;
@@ -39,62 +40,67 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
             (locators, election_head.epoch_number())
         };
 
-        let result = Self::request_block_hashes(
+        let result = Self::request_macro_chain(
             Arc::clone(&network),
             peer_id,
             locators,
             1000, // TODO: Use other value
-            RequestBlockHashesFilter::ElectionAndLatestCheckpoint,
         )
         .await;
 
         match result {
-            Ok(block_hashes) => {
-                if block_hashes.hashes.is_none() {
+            Ok(macro_chain) => {
+                if macro_chain.epochs.is_none() {
                     return Some(EpochIds {
                         locator_found: false,
                         ids: Vec::new(),
-                        checkpoint_id: None,
+                        checkpoint: None,
                         first_epoch_number: 0,
                         sender: peer_id,
                     });
                 }
 
-                let hashes = block_hashes.hashes.unwrap();
+                let epoch_ids = macro_chain.epochs.unwrap();
 
-                // Get checkpoint id if exists.
-                let checkpoint_id = hashes.last().and_then(|(ty, id)| match *ty {
-                    BlockHashType::Checkpoint => Some(id.clone()),
-                    _ => None,
-                });
-
-                // Filter checkpoint from block hashes and map to hash.
-                let epoch_ids: Vec<Blake2bHash> = hashes
-                    .into_iter()
-                    .filter_map(|(ty, id)| match ty {
-                        BlockHashType::Election => Some(id),
-                        _ => None,
-                    })
-                    .collect();
+                // Sanity-check checkpoint block number:
+                //  * is in checkpoint epoch
+                //  * is a non-election macro block
+                if let Some(checkpoint) = &macro_chain.checkpoint {
+                    let checkpoint_epoch = epoch_number + epoch_ids.len() as u32 + 1;
+                    if policy::epoch_at(checkpoint.block_number) != checkpoint_epoch
+                        || !policy::is_macro_block_at(checkpoint.block_number)
+                        || policy::is_election_block_at(checkpoint.block_number)
+                    {
+                        // Peer provided an invalid checkpoint block number, close connection.
+                        log::error!(
+                            "Request macro chain failed: invalid checkpoint block number {}, checkpoint_epoch={}",
+                            checkpoint.block_number, checkpoint_epoch
+                        );
+                        if let Some(peer) = network.get_peer(peer_id) {
+                            peer.close(CloseReason::Other);
+                        }
+                        return None;
+                    }
+                }
 
                 log::debug!(
                     "Received {} epoch_ids starting at #{} (checkpoint={}) from {:?}",
                     epoch_ids.len(),
                     epoch_number + 1,
-                    checkpoint_id.is_some(),
+                    macro_chain.checkpoint.is_some(),
                     peer_id,
                 );
 
                 Some(EpochIds {
                     locator_found: true,
                     ids: epoch_ids,
-                    checkpoint_id,
+                    checkpoint: macro_chain.checkpoint,
                     first_epoch_number: epoch_number as usize + 1,
                     sender: peer_id,
                 })
             }
             Err(e) => {
-                log::error!("Request block hashes failed: {}", e);
+                log::error!("Request macro chain failed: {:?}", e);
                 if let Some(peer) = network.get_peer(peer_id) {
                     peer.close(CloseReason::Other);
                 }
@@ -108,11 +114,12 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         mut epoch_ids: EpochIds<TNetwork::PeerType>,
     ) -> Option<<<TNetwork as Network>::PeerType as Peer>::Id> {
         // Read our current blockchain state.
-        let (our_epoch_id, our_epoch_number) = {
+        let (our_epoch_id, our_epoch_number, our_block_number) = {
             let blockchain = self.blockchain.read();
             (
                 blockchain.election_head_hash(),
                 blockchain.election_head().epoch_number() as usize,
+                blockchain.block_number(),
             )
         };
 
@@ -138,6 +145,13 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
             }
         }
 
+        // Discard checkpoint block if it is old.
+        if let Some(checkpoint) = &epoch_ids.checkpoint {
+            if checkpoint.block_number <= our_block_number {
+                epoch_ids.checkpoint = None;
+            }
+        }
+
         // TODO Sanity check: All of the remaining ids should be unknown
 
         // Check if we have already downloaded the remaining epoch_ids but not applied them to the
@@ -147,7 +161,11 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         //  job queue. If we validated the macro block signature of each epoch as soon as we get the
         //  macro block for an epoch (before downloading the history), we would avoid downloading
         //  invalid epochs and could reject out-of-order ids here immediately.
-        let id_iter = epoch_ids.ids.iter().chain(epoch_ids.checkpoint_id.iter());
+        let checkpoint_id = epoch_ids
+            .checkpoint
+            .as_ref()
+            .map(|checkpoint| checkpoint.hash.clone());
+        let id_iter = epoch_ids.ids.iter().chain(checkpoint_id.iter());
         let mut job_iter = self.job_queue.iter_mut();
 
         let mut num_ids_to_remove = 0;
@@ -171,7 +189,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
 
         // Check if we removed all ids (including the checkpoint id if it existed).
         if num_ids_to_remove > epoch_ids.ids.len()
-            || (num_ids_to_remove == epoch_ids.ids.len() && epoch_ids.checkpoint_id.is_none())
+            || (num_ids_to_remove == epoch_ids.ids.len() && epoch_ids.checkpoint.is_none())
         {
             // No ids remain, nothing new to learn from this peer at this point.
             let cluster = job_iter.find_map(|job| match job {
@@ -197,8 +215,6 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
 
         epoch_ids.ids = epoch_ids.ids.split_off(num_ids_to_remove);
         epoch_ids.first_epoch_number += num_ids_to_remove;
-
-        // ----------
 
         let mut id_index = 0;
         let mut new_clusters = VecDeque::new();
@@ -295,20 +311,20 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
 
         // Add remaining ids to a new cluster with only the sending peer in it.
         if id_index < epoch_ids.ids.len() {
-            new_clusters.push_back(SyncCluster::new(
-                Vec::from(&epoch_ids.ids[id_index..]),
-                epoch_ids.first_epoch_number + id_index,
+            new_clusters.push_back(SyncCluster::for_epoch(
+                Arc::clone(&self.blockchain),
+                Arc::clone(&self.network),
                 vec![SyncQueuePeer {
                     peer_id: sender_peer_id,
                 }],
-                Arc::clone(&self.blockchain),
-                Arc::clone(&self.network),
+                Vec::from(&epoch_ids.ids[id_index..]),
+                epoch_ids.first_epoch_number + id_index,
             ));
             // Don't increment the num_clusters here, as this is done in the loop later on.
         }
 
-        // Now cluster the checkpoint id if present.
-        if let Some(checkpoint_id) = epoch_ids.checkpoint_id {
+        // Now cluster the checkpoint if present.
+        if let Some(checkpoint) = epoch_ids.checkpoint {
             let mut found_cluster = false;
             let checkpoint_clusters = self
                 .checkpoint_clusters
@@ -323,7 +339,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                 // Look for clusters at the same epoch with the same hash.
                 if cluster.first_epoch_number == checkpoint_epoch
                     && cluster.epoch_ids.len() == 1
-                    && cluster.epoch_ids[0] == checkpoint_id
+                    && cluster.epoch_ids[0] == checkpoint.hash
                 {
                     // The peer's checkpoint id matched this cluster,
                     // so we add the peer to this cluster. We also increment the peer's number of clusters.
@@ -336,14 +352,15 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
 
             // If there was no suitable cluster, add a new one.
             if !found_cluster {
-                let cluster = SyncCluster::new(
-                    vec![checkpoint_id],
-                    checkpoint_epoch,
+                let cluster = SyncCluster::for_checkpoint(
+                    Arc::clone(&self.blockchain),
+                    Arc::clone(&self.network),
                     vec![SyncQueuePeer {
                         peer_id: sender_peer_id,
                     }],
-                    Arc::clone(&self.blockchain),
-                    Arc::clone(&self.network),
+                    checkpoint.hash,
+                    checkpoint_epoch,
+                    checkpoint.block_number as usize,
                 );
                 self.checkpoint_clusters.push_back(cluster);
                 num_clusters += 1;
@@ -396,16 +413,22 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
             return None;
         }
 
-        let current_epoch = blockchain.read().election_head().epoch_number() as usize;
+        let (current_block, last_finalized_epoch) = {
+            let blockchain = blockchain.read();
+            (
+                blockchain.block_number() as usize,
+                blockchain.election_head().epoch_number() as usize,
+            )
+        };
 
         let (best_idx, _) = clusters
             .iter()
             .enumerate()
-            .reduce(|a, b| {
-                if a.1.compare(b.1, current_epoch).is_gt() {
-                    a
+            .reduce(|accum, item| {
+                if accum.1.compare(item.1, last_finalized_epoch).is_le() {
+                    accum
                 } else {
-                    b
+                    item
                 }
             })
             .expect("clusters not empty");
@@ -414,12 +437,25 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
             .swap_remove_front(best_idx)
             .expect("best cluster should be there");
 
-        debug!("Syncing cluster {} at index {} out of {} clusters: current_epoch={}, first_epoch_number={}, num_ids={}, num_peers: {}",
-               best_cluster.id, best_idx, clusters.len() + 1, current_epoch, best_cluster.first_epoch_number, best_cluster.epoch_ids.len(), best_cluster.peers().len());
-
-        if best_cluster.first_epoch_number <= current_epoch {
-            best_cluster.remove_front(current_epoch - best_cluster.first_epoch_number + 1);
+        // Remove any epoch ids that precede our accepted state.
+        if best_cluster.first_epoch_number <= last_finalized_epoch {
+            best_cluster.remove_front(last_finalized_epoch - best_cluster.first_epoch_number + 1);
         }
+
+        // Remove checkpoint if it precedes our accepted state.
+        if !best_cluster.is_empty() && best_cluster.first_block_number <= current_block {
+            assert_eq!(best_cluster.len(), 1);
+            best_cluster.remove_front(1);
+        }
+
+        debug!(
+            last_finalized_epoch,
+            current_block,
+            cluster = ?best_cluster,
+            "Syncing cluster at index {} of {} clusters",
+            best_idx,
+            clusters.len() + 1
+        );
 
         Some(best_cluster)
     }
@@ -475,19 +511,17 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
         }
     }
 
-    pub async fn request_block_hashes(
+    pub async fn request_macro_chain(
         network: Arc<TNetwork>,
         peer_id: <<TNetwork as Network>::PeerType as Peer>::Id,
         locators: Vec<Blake2bHash>,
-        max_blocks: u16,
-        filter: RequestBlockHashesFilter,
-    ) -> Result<BlockHashes, RequestError> {
+        max_epochs: u16,
+    ) -> Result<MacroChain, RequestError> {
         let result = network
-            .request::<RequestBlockHashes, BlockHashes>(
-                RequestBlockHashes {
+            .request::<RequestMacroChain, MacroChain>(
+                RequestMacroChain {
                     locators,
-                    max_blocks,
-                    filter,
+                    max_epochs,
                 },
                 peer_id,
             )
@@ -514,17 +548,18 @@ mod tests {
     use nimiq_blockchain::Blockchain;
     use nimiq_database::volatile::VolatileEnvironment;
     use nimiq_hash::Blake2bHash;
-    use nimiq_network_interface::prelude::Network;
-    use nimiq_network_mock::{MockHub, MockNetwork, MockPeer};
+    use nimiq_network_interface::prelude::{Network, Peer};
+    use nimiq_network_mock::{MockHub, MockNetwork, MockPeer, MockPeerId};
     use nimiq_primitives::networks::NetworkId;
+    use nimiq_primitives::policy;
     use nimiq_utils::time::OffsetTime;
 
-    use crate::consensus_agent::ConsensusAgent;
+    use crate::messages::Checkpoint;
     use crate::sync::history::sync::EpochIds;
     use crate::sync::history::HistorySync;
 
     fn generate_epoch_ids(
-        agent: &Arc<ConsensusAgent<MockPeer>>,
+        sender: MockPeerId,
         len: usize,
         first_epoch_number: usize,
         diverge_at: Option<usize>,
@@ -545,7 +580,7 @@ mod tests {
             ids.push(Blake2bHash::from(epoch_id));
         }
 
-        let checkpoint_id = if add_checkpoint {
+        let checkpoint = if add_checkpoint {
             let mut checkpoint_id = [0u8; 32];
             checkpoint_id[0..8].copy_from_slice(&(first_epoch_number + len).to_le_bytes());
 
@@ -553,7 +588,12 @@ mod tests {
                 checkpoint_id[9] = 1;
             }
 
-            Some(Blake2bHash::from(checkpoint_id))
+            let block_number = (first_epoch_number + len) as u32 * policy::BLOCKS_PER_EPOCH
+                + policy::BLOCKS_PER_BATCH;
+            Some(Checkpoint {
+                hash: Blake2bHash::from(checkpoint_id),
+                block_number,
+            })
         } else {
             None
         };
@@ -561,9 +601,9 @@ mod tests {
         EpochIds {
             locator_found: true,
             ids,
-            checkpoint_id,
+            checkpoint,
             first_epoch_number,
-            sender: Arc::clone(agent),
+            sender,
         }
     }
 
@@ -577,16 +617,22 @@ mod tests {
     ) where
         F: Fn(HistorySync<MockNetwork>),
     {
-        let mut sync =
-            HistorySync::<MockNetwork>::new(Arc::clone(blockchain), net.subscribe_events());
+        let mut sync = HistorySync::<MockNetwork>::new(
+            Arc::clone(blockchain),
+            Arc::clone(net),
+            net.subscribe_events(),
+        );
         sync.cluster_epoch_ids(epoch_ids1.clone());
         sync.cluster_epoch_ids(epoch_ids2.clone());
         test(sync);
 
         // Symmetric check
         if symmetric {
-            let mut sync =
-                HistorySync::<MockNetwork>::new(Arc::clone(blockchain), net.subscribe_events());
+            let mut sync = HistorySync::<MockNetwork>::new(
+                Arc::clone(blockchain),
+                Arc::clone(net),
+                net.subscribe_events(),
+            );
             sync.cluster_epoch_ids(epoch_ids2);
             sync.cluster_epoch_ids(epoch_ids1);
             test(sync);
@@ -610,16 +656,12 @@ mod tests {
         net1.dial_mock(&net2);
         net1.dial_mock(&net3);
         let peers = net1.get_peers();
-        let consensus_agents: Vec<_> = peers
-            .into_iter()
-            .map(ConsensusAgent::new)
-            .map(Arc::new)
-            .collect();
+        let peer_ids: Vec<_> = peers.into_iter().map(|peer| peer.id()).collect();
 
         // This test tests several aspects of the epoch id clustering.
         // 1) identical epoch ids
-        let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 10, 1, None, false);
-        let epoch_ids2 = generate_epoch_ids(&consensus_agents[1], 10, 1, None, false);
+        let epoch_ids1 = generate_epoch_ids(peer_ids[0], 10, 1, None, false);
+        let epoch_ids2 = generate_epoch_ids(peer_ids[1], 10, 1, None, false);
         run_clustering_test(
             &blockchain,
             &net1,
@@ -635,8 +677,8 @@ mod tests {
         );
 
         // 2) disjoint epoch ids
-        let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 10, 1, None, false);
-        let epoch_ids2 = generate_epoch_ids(&consensus_agents[1], 10, 1, Some(0), false);
+        let epoch_ids1 = generate_epoch_ids(peer_ids[0], 10, 1, None, false);
+        let epoch_ids2 = generate_epoch_ids(peer_ids[1], 10, 1, Some(0), false);
         run_clustering_test(
             &blockchain,
             &net1,
@@ -655,8 +697,8 @@ mod tests {
         );
 
         // 3) same offset and history, second shorter than first
-        let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 10, 1, None, false);
-        let epoch_ids2 = generate_epoch_ids(&consensus_agents[1], 8, 1, None, false);
+        let epoch_ids1 = generate_epoch_ids(peer_ids[0], 10, 1, None, false);
+        let epoch_ids2 = generate_epoch_ids(peer_ids[1], 8, 1, None, false);
         run_clustering_test(
             &blockchain,
             &net1,
@@ -675,8 +717,8 @@ mod tests {
         );
 
         // 4) different offset, same history, but second is longer
-        let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 10, 1, None, false);
-        let epoch_ids2 = generate_epoch_ids(&consensus_agents[1], 10, 3, None, false);
+        let epoch_ids1 = generate_epoch_ids(peer_ids[0], 10, 1, None, false);
+        let epoch_ids2 = generate_epoch_ids(peer_ids[1], 10, 3, None, false);
         run_clustering_test(
             &blockchain,
             &net1,
@@ -695,8 +737,8 @@ mod tests {
         ); // TODO: for a symmetric check, blockchain state would need to change
 
         // 5) Irrelevant epoch ids (that would constitute forks from what we have already seen.
-        let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 10, 0, None, false);
-        let epoch_ids2 = generate_epoch_ids(&consensus_agents[1], 10, 0, Some(0), false);
+        let epoch_ids1 = generate_epoch_ids(peer_ids[0], 10, 0, None, false);
+        let epoch_ids2 = generate_epoch_ids(peer_ids[1], 10, 0, Some(0), false);
         run_clustering_test(
             &blockchain,
             &net1,
@@ -709,8 +751,8 @@ mod tests {
         );
 
         // 6) different offset, same history, but second is shorter
-        let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 10, 1, None, false);
-        let epoch_ids2 = generate_epoch_ids(&consensus_agents[1], 5, 3, None, false);
+        let epoch_ids1 = generate_epoch_ids(peer_ids[0], 10, 1, None, false);
+        let epoch_ids2 = generate_epoch_ids(peer_ids[1], 5, 3, None, false);
         run_clustering_test(
             &blockchain,
             &net1,
@@ -729,8 +771,8 @@ mod tests {
         ); // TODO: for a symmetric check, blockchain state would need to change
 
         // 7) different offset, diverging history, second longer
-        let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 10, 1, None, false);
-        let epoch_ids2 = generate_epoch_ids(&consensus_agents[1], 8, 4, Some(6), false);
+        let epoch_ids1 = generate_epoch_ids(peer_ids[0], 10, 1, None, false);
+        let epoch_ids2 = generate_epoch_ids(peer_ids[1], 8, 4, Some(6), false);
         run_clustering_test(
             &blockchain,
             &net1,
@@ -769,17 +811,13 @@ mod tests {
         net1.dial_mock(&net2);
         net1.dial_mock(&net3);
         let peers = net1.get_peers();
-        let consensus_agents: Vec<_> = peers
-            .into_iter()
-            .map(ConsensusAgent::new)
-            .map(Arc::new)
-            .collect();
+        let peer_ids: Vec<_> = peers.into_iter().map(|peer| peer.id()).collect();
 
         // This test tests several aspects of the checkpoint id clustering.
 
         // no epoch ids, identical checkpoints
-        let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 0, 1, None, true);
-        let epoch_ids2 = generate_epoch_ids(&consensus_agents[1], 0, 1, None, true);
+        let epoch_ids1 = generate_epoch_ids(peer_ids[0], 0, 1, None, true);
+        let epoch_ids2 = generate_epoch_ids(peer_ids[1], 0, 1, None, true);
         run_clustering_test(
             &blockchain,
             &net1,
@@ -796,8 +834,8 @@ mod tests {
         );
 
         // no epoch ids, diverging checkpoints
-        let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 0, 1, None, true);
-        let epoch_ids2 = generate_epoch_ids(&consensus_agents[1], 0, 1, Some(0), true);
+        let epoch_ids1 = generate_epoch_ids(peer_ids[0], 0, 1, None, true);
+        let epoch_ids2 = generate_epoch_ids(peer_ids[1], 0, 1, Some(0), true);
         run_clustering_test(
             &blockchain,
             &net1,
@@ -817,8 +855,8 @@ mod tests {
         );
 
         // no epoch ids, checkpoints with different offset
-        let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 0, 1, None, true);
-        let epoch_ids2 = generate_epoch_ids(&consensus_agents[1], 0, 3, None, true);
+        let epoch_ids1 = generate_epoch_ids(peer_ids[0], 0, 1, None, true);
+        let epoch_ids2 = generate_epoch_ids(peer_ids[1], 0, 3, None, true);
         run_clustering_test(
             &blockchain,
             &net1,
@@ -838,8 +876,8 @@ mod tests {
         ); // TODO: for a symmetric check, blockchain state would need to change
 
         // identical epoch ids and checkpoints
-        let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 10, 1, None, true);
-        let epoch_ids2 = generate_epoch_ids(&consensus_agents[1], 10, 1, None, true);
+        let epoch_ids1 = generate_epoch_ids(peer_ids[0], 10, 1, None, true);
+        let epoch_ids2 = generate_epoch_ids(peer_ids[1], 10, 1, None, true);
         run_clustering_test(
             &blockchain,
             &net1,
@@ -859,8 +897,8 @@ mod tests {
         );
 
         // identical epoch ids and diverging checkpoints
-        let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 10, 1, None, true);
-        let epoch_ids2 = generate_epoch_ids(&consensus_agents[1], 10, 1, Some(10), true);
+        let epoch_ids1 = generate_epoch_ids(peer_ids[0], 10, 1, None, true);
+        let epoch_ids2 = generate_epoch_ids(peer_ids[1], 10, 1, Some(10), true);
         run_clustering_test(
             &blockchain,
             &net1,
@@ -883,8 +921,8 @@ mod tests {
         );
 
         // identical epoch ids and one checkpoint present, one missing
-        let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 10, 1, None, true);
-        let epoch_ids2 = generate_epoch_ids(&consensus_agents[1], 10, 1, None, false);
+        let epoch_ids1 = generate_epoch_ids(peer_ids[0], 10, 1, None, true);
+        let epoch_ids2 = generate_epoch_ids(peer_ids[1], 10, 1, None, false);
         run_clustering_test(
             &blockchain,
             &net1,
@@ -904,8 +942,8 @@ mod tests {
         );
 
         // different offset, same history, same checkpoints
-        let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 10, 1, None, true);
-        let epoch_ids2 = generate_epoch_ids(&consensus_agents[1], 5, 6, None, true);
+        let epoch_ids1 = generate_epoch_ids(peer_ids[0], 10, 1, None, true);
+        let epoch_ids2 = generate_epoch_ids(peer_ids[1], 5, 6, None, true);
         run_clustering_test(
             &blockchain,
             &net1,
@@ -925,8 +963,8 @@ mod tests {
         ); // TODO: for a symmetric check, blockchain state would need to change
 
         // different offset, diverging history, second longer
-        let epoch_ids1 = generate_epoch_ids(&consensus_agents[0], 10, 1, None, true);
-        let epoch_ids2 = generate_epoch_ids(&consensus_agents[1], 8, 4, Some(6), true);
+        let epoch_ids1 = generate_epoch_ids(peer_ids[0], 10, 1, None, true);
+        let epoch_ids2 = generate_epoch_ids(peer_ids[1], 8, 4, Some(6), true);
         run_clustering_test(
             &blockchain,
             &net1,

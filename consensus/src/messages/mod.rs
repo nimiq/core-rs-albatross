@@ -17,102 +17,48 @@ The consensus module uses the following messages:
 */
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum Objects<T: Serialize + Deserialize> {
-    #[beserial(discriminant = 0)]
-    Hashes(#[beserial(len_type(u16))] Vec<Blake2bHash>),
-    #[beserial(discriminant = 1)]
-    Objects(#[beserial(len_type(u16))] Vec<T>),
-}
-
-impl<T: Serialize + Deserialize> Objects<T> {
-    pub const MAX_HASHES: usize = 1000;
-    pub const MAX_OBJECTS: usize = 1000;
-
-    pub fn with_objects(objects: Vec<T>) -> Self {
-        Objects::Objects(objects)
-    }
-
-    pub fn with_hashes(hashes: Vec<Blake2bHash>) -> Self {
-        Objects::Hashes(hashes)
-    }
-
-    pub fn contains_hashes(&self) -> bool {
-        matches!(self, Objects::Hashes(_))
-    }
-
-    pub fn contains_objects(&self) -> bool {
-        !self.contains_hashes()
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum BlockHashType {
-    Micro = 1,
-    Checkpoint = 2,
-    Election = 3,
-}
-
-impl<'a> From<&'a Block> for BlockHashType {
-    fn from(block: &'a Block) -> Self {
-        match block {
-            Block::Micro(_) => BlockHashType::Micro,
-            Block::Macro(macro_block) => {
-                if macro_block.is_election_block() {
-                    BlockHashType::Election
-                } else {
-                    BlockHashType::Checkpoint
-                }
-            }
-        }
-    }
+pub struct Checkpoint {
+    pub block_number: u32,
+    pub hash: Blake2bHash,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-pub struct BlockHashes {
+pub struct MacroChain {
     #[beserial(len_type(u16))]
-    pub hashes: Option<Vec<(BlockHashType, Blake2bHash)>>,
+    pub epochs: Option<Vec<Blake2bHash>>,
+    pub checkpoint: Option<Checkpoint>,
 }
 
-impl Message for BlockHashes {
+impl Message for MacroChain {
     const TYPE_ID: u64 = 201;
 }
 
-impl Debug for BlockHashes {
+impl Debug for MacroChain {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        let mut dbg = f.debug_struct("BlockHashes");
-        if let Some(hashes) = &self.hashes {
-            let len = hashes.len();
-            dbg.field("length", &len);
-            if !hashes.is_empty() {
-                let first = hashes.first().unwrap();
-                let last = hashes.last().unwrap();
-                dbg.field("first_hash", &first);
-                dbg.field("last_hash", &last);
+        let mut dbg = f.debug_struct("MacroChain");
+        if let Some(epochs) = &self.epochs {
+            let len = epochs.len();
+            dbg.field("num_epochs", &len);
+            if !epochs.is_empty() {
+                let first = epochs.first().unwrap();
+                let last = epochs.last().unwrap();
+                dbg.field("first_epoch", &first);
+                dbg.field("last_epoch", &last);
             }
         }
+        dbg.field("checkpoint", &self.checkpoint);
         dbg.finish()
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum RequestBlockHashesFilter {
-    All = 1,
-    ElectionOnly = 2,
-    ElectionAndLatestCheckpoint = 3,
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct RequestBlockHashes {
+pub struct RequestMacroChain {
     #[beserial(len_type(u16, limit = 128))]
     pub locators: Vec<Blake2bHash>,
-    pub max_blocks: u16,
-    pub filter: RequestBlockHashesFilter,
+    pub max_epochs: u16,
 }
 
-impl Message for RequestBlockHashes {
+impl Message for RequestMacroChain {
     const TYPE_ID: u64 = 200;
 }
 

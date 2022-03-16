@@ -24,7 +24,7 @@ use crate::{
     MockAddress, MockPeerId,
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct MockPeer {
     /// The address of the network that sees this peer
     pub(crate) network_address: MockAddress,

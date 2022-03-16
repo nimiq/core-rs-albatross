@@ -10,7 +10,7 @@ use nimiq_network_interface::prelude::{Message, Network, Peer};
 
 use crate::messages::handlers::Handle;
 use crate::messages::{
-    RequestBatchSet, RequestBlock, RequestBlockHashes, RequestHead, RequestHistoryChunk,
+    RequestBatchSet, RequestBlock, RequestHead, RequestHistoryChunk, RequestMacroChain,
     RequestMissingBlocks,
 };
 use crate::Consensus;
@@ -22,7 +22,7 @@ impl<N: Network> Consensus<N> {
         network: &Arc<N>,
         blockchain: &Arc<RwLock<Blockchain>>,
     ) {
-        let stream = network.receive_requests::<RequestBlockHashes>();
+        let stream = network.receive_requests::<RequestMacroChain>();
         tokio::spawn(Self::request_handler(network, stream, blockchain));
 
         let stream = network.receive_requests::<RequestBatchSet>();
@@ -41,7 +41,7 @@ impl<N: Network> Consensus<N> {
         tokio::spawn(Self::request_handler(network, stream, blockchain));
     }
 
-    fn request_handler<Req: Handle<Res> + Message, Res: Message>(
+    pub(crate) fn request_handler<Req: Handle<Res> + Message, Res: Message>(
         network: &Arc<N>,
         stream: BoxStream<'static, (Req, N::RequestId, <N::PeerType as Peer>::Id)>,
         blockchain: &Arc<RwLock<Blockchain>>,

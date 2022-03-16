@@ -9,9 +9,12 @@ use futures::{FutureExt, Stream, StreamExt};
 use parking_lot::RwLock;
 
 use nimiq_block::MacroBlock;
-use nimiq_blockchain::{AbstractBlockchain, Blockchain, ExtendedTransaction, CHUNK_SIZE};
+use nimiq_blockchain::{
+    AbstractBlockchain, Blockchain, ExtendedTransaction, PushError, PushResult, CHUNK_SIZE,
+};
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::prelude::{Network, Peer, RequestError, ResponseMessage};
+use nimiq_primitives::policy;
 use nimiq_utils::math::CeilingDiv;
 
 use crate::messages::{BatchSetInfo, HistoryChunk, RequestBatchSet, RequestHistoryChunk};
@@ -64,6 +67,7 @@ pub struct SyncCluster<TNetwork: Network> {
     pub id: usize,
     pub epoch_ids: Vec<Blake2bHash>,
     pub first_epoch_number: usize,
+    pub first_block_number: usize,
 
     pub(crate) batch_set_queue: SyncQueue<TNetwork, Blake2bHash, BatchSetInfo>,
     history_queue: SyncQueue<TNetwork, (u32, u32, usize), (u32, HistoryChunk)>,
@@ -79,12 +83,48 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
     const NUM_PENDING_BATCH_SETS: usize = 5;
     const NUM_PENDING_CHUNKS: usize = 12;
 
-    pub(crate) fn new(
-        epoch_ids: Vec<Blake2bHash>,
-        first_epoch_number: usize,
-        peers: Vec<SyncQueuePeer<TNetwork::PeerType>>,
+    pub(crate) fn for_epoch(
         blockchain: Arc<RwLock<Blockchain>>,
         network: Arc<TNetwork>,
+        peers: Vec<SyncQueuePeer<TNetwork::PeerType>>,
+        epoch_ids: Vec<Blake2bHash>,
+        first_epoch_number: usize,
+    ) -> Self {
+        Self::new(
+            blockchain,
+            network,
+            peers,
+            epoch_ids,
+            first_epoch_number,
+            first_epoch_number * policy::BLOCKS_PER_EPOCH as usize,
+        )
+    }
+
+    pub(crate) fn for_checkpoint(
+        blockchain: Arc<RwLock<Blockchain>>,
+        network: Arc<TNetwork>,
+        peers: Vec<SyncQueuePeer<TNetwork::PeerType>>,
+        checkpoint_id: Blake2bHash,
+        epoch_number: usize,
+        block_number: usize,
+    ) -> Self {
+        Self::new(
+            blockchain,
+            network,
+            peers,
+            vec![checkpoint_id],
+            epoch_number,
+            block_number,
+        )
+    }
+
+    fn new(
+        blockchain: Arc<RwLock<Blockchain>>,
+        network: Arc<TNetwork>,
+        peers: Vec<SyncQueuePeer<TNetwork::PeerType>>,
+        epoch_ids: Vec<Blake2bHash>,
+        first_epoch_number: usize,
+        first_block_number: usize,
     ) -> Self {
         let id = SYNC_CLUSTER_ID.fetch_add(1, Ordering::SeqCst);
 
@@ -130,6 +170,7 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
             id,
             epoch_ids,
             first_epoch_number,
+            first_block_number,
             batch_set_queue,
             history_queue,
             pending_batch_sets: VecDeque::with_capacity(Self::NUM_PENDING_BATCH_SETS),
@@ -279,12 +320,12 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         // Remove the split-off ids from our epoch queue.
         self.batch_set_queue.truncate_ids(at);
 
-        Self::new(
-            ids,
-            first_epoch_number,
-            self.batch_set_queue.peers.clone(),
+        Self::for_epoch(
             Arc::clone(&self.blockchain),
             Arc::clone(&self.network),
+            self.batch_set_queue.peers.clone(),
+            ids,
+            first_epoch_number,
         )
     }
 
@@ -309,14 +350,18 @@ impl<TNetwork: Network + 'static> SyncCluster<TNetwork> {
         this_epoch_number
             .cmp(&other_epoch_number) // Lower epoch first
             .then_with(|| {
-                other
-                    .batch_set_queue
+                self.first_block_number
+                    .cmp(&other.first_block_number)
+                    .reverse()
+            }) // Higher block number first (used for checkpoints only)
+            .then_with(|| {
+                self.batch_set_queue
                     .num_peers()
-                    .cmp(&self.batch_set_queue.num_peers())
+                    .cmp(&other.batch_set_queue.num_peers())
+                    .reverse()
             }) // Higher peer count first
-            .then_with(|| other_ids_len.cmp(&this_ids_len)) // More ids first
-            .then_with(|| self.epoch_ids.cmp(&other.epoch_ids)) //
-            .reverse() // We want the best cluster to be *last*
+            .then_with(|| this_ids_len.cmp(&other_ids_len).reverse()) // More ids first
+            .then_with(|| self.epoch_ids.cmp(&other.epoch_ids))
     }
 
     pub(crate) fn len(&self) -> usize {
@@ -456,8 +501,18 @@ impl<TNetwork: Network + 'static> std::fmt::Debug for SyncCluster<TNetwork> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut dbg = f.debug_struct("SyncCluster");
         dbg.field("id", &self.id);
-        dbg.field("first_epoch_number", &self.first_epoch_number);
-        dbg.field("num_epoch_ids", &self.epoch_ids.len());
+        if policy::is_election_block_at(self.first_block_number as u32) {
+            // Epoch cluster
+            let last_epoch_number =
+                self.first_epoch_number + self.epoch_ids.len().saturating_sub(1);
+            dbg.field("first_epoch_number", &self.first_epoch_number);
+            dbg.field("last_epoch_number", &last_epoch_number);
+            dbg.field("num_epoch_ids", &self.epoch_ids.len());
+        } else {
+            // Checkpoint cluster
+            dbg.field("epoch_number", &self.first_epoch_number);
+            dbg.field("block_number", &self.first_block_number);
+        }
         dbg.field("num_peers", &self.peers().len());
         dbg.field("num_pending_batch_sets", &self.pending_batch_sets.len());
         dbg.field("num_epochs_finished", &self.num_epochs_finished);
@@ -473,17 +528,12 @@ pub enum SyncClusterResult {
     Outdated,
 }
 
-impl<T, E: std::fmt::Debug> From<Result<T, E>> for SyncClusterResult {
-    fn from(res: Result<T, E>) -> Self {
-        match res {
-            Ok(_) => SyncClusterResult::EpochSuccessful,
-            Err(err) => {
-                log::debug!(
-                    "SyncClusterResult From<Result<T, E>> encountered error: {:?}",
-                    err
-                );
-                SyncClusterResult::Error
-            }
+impl From<Result<PushResult, PushError>> for SyncClusterResult {
+    fn from(result: Result<PushResult, PushError>) -> Self {
+        match result {
+            Ok(PushResult::Extended | PushResult::Rebranched) => SyncClusterResult::EpochSuccessful,
+            Ok(_) => SyncClusterResult::Outdated,
+            Err(_) => SyncClusterResult::Error,
         }
     }
 }

@@ -12,27 +12,17 @@ use nimiq_blockchain::Blockchain;
 use nimiq_hash::Blake2bHash;
 use nimiq_network_interface::prelude::{Network, NetworkEvent, Peer};
 
+use crate::messages::Checkpoint;
 use crate::sync::history::cluster::{SyncCluster, SyncClusterResult};
 use crate::sync::request_component::HistorySyncStream;
 
+#[derive(Clone)]
 pub(crate) struct EpochIds<TPeer: Peer> {
     pub locator_found: bool,
     pub ids: Vec<Blake2bHash>,
-    pub checkpoint_id: Option<Blake2bHash>, // The most recent checkpoint block in the latest epoch.
+    pub checkpoint: Option<Checkpoint>, // The most recent checkpoint block in the latest epoch.
     pub first_epoch_number: usize,
     pub sender: TPeer::Id,
-}
-
-impl<TPeer: Peer> Clone for EpochIds<TPeer> {
-    fn clone(&self) -> Self {
-        EpochIds {
-            locator_found: self.locator_found,
-            ids: self.ids.clone(),
-            checkpoint_id: self.checkpoint_id.clone(),
-            first_epoch_number: self.first_epoch_number,
-            sender: self.sender,
-        }
-    }
 }
 
 impl<TPeer: Peer> EpochIds<TPeer> {

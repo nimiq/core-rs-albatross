@@ -109,6 +109,7 @@ impl Blockchain {
                     previous_block_no = macro_head.block_number(),
                     "Rejecting block",
                 );
+                return Ok(PushResult::Ignored);
             }
         }
 

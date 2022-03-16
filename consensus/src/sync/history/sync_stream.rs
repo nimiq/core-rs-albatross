@@ -63,7 +63,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                         epoch_ids.sender
                     );
                     return Poll::Ready(Some(HistorySyncReturn::Outdated(epoch_ids.sender)));
-                } else if epoch_ids.ids.is_empty() && epoch_ids.checkpoint_id.is_none() {
+                } else if epoch_ids.ids.is_empty() && epoch_ids.checkpoint.is_none() {
                     // We are synced with this peer.
                     debug!("Finished syncing with peer: {:?}", epoch_ids.sender);
                     return Poll::Ready(Some(HistorySyncReturn::Good(epoch_ids.sender)));
@@ -103,7 +103,7 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                                 batch_set.block.epoch_number(),
                                 batch_set.history.len()
                             );
-                            spawn_blocking(move || {
+                            let result = spawn_blocking(move || {
                                 Blockchain::push_history_sync(
                                     blockchain.upgradable_read(),
                                     Block::Macro(batch_set.block),
@@ -111,8 +111,12 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                                 )
                             })
                             .await
-                            .expect("blockchain.push_history_sync() should not panic")
-                            .into()
+                            .expect("blockchain.push_history_sync() should not panic");
+
+                            if let Err(e) = &result {
+                                log::warn!("Failed to push epoch: {:?}", e);
+                            }
+                            result.into()
                         }
                         .boxed();
 
@@ -238,7 +242,7 @@ mod tests {
 
     use futures::StreamExt;
     use nimiq_block_production::BlockProducer;
-    use parking_lot::{RwLock, RwLockUpgradableReadGuard};
+    use parking_lot::RwLock;
 
     use nimiq_blockchain::{AbstractBlockchain, Blockchain};
     use nimiq_database::volatile::VolatileEnvironment;
@@ -249,7 +253,7 @@ mod tests {
     use nimiq_test_utils::blockchain::{produce_macro_blocks_with_txns, signing_key, voting_key};
     use nimiq_utils::time::OffsetTime;
 
-    use crate::messages::{RequestBatchSet, RequestBlockHashes, RequestHistoryChunk};
+    use crate::messages::{RequestBatchSet, RequestHistoryChunk, RequestMacroChain};
     use crate::sync::history::{HistorySync, HistorySyncReturn};
     use crate::Consensus;
 
@@ -291,15 +295,18 @@ mod tests {
         blockchain: &Arc<RwLock<Blockchain>>,
     ) {
         tokio::spawn(Consensus::<TNetwork>::request_handler(
-            network.receive_from_all::<RequestBlockHashes>(),
+            network,
+            network.receive_requests::<RequestMacroChain>(),
             blockchain,
         ));
         tokio::spawn(Consensus::<TNetwork>::request_handler(
-            network.receive_from_all::<RequestBatchSet>(),
+            network,
+            network.receive_requests::<RequestBatchSet>(),
             blockchain,
         ));
         tokio::spawn(Consensus::<TNetwork>::request_handler(
-            network.receive_from_all::<RequestHistoryChunk>(),
+            network,
+            network.receive_requests::<RequestHistoryChunk>(),
             blockchain,
         ));
     }
@@ -316,16 +323,20 @@ mod tests {
         let net2 = Arc::new(hub.new_network());
 
         let chain = blockchain();
-        let mut sync = HistorySync::<MockNetwork>::new(Arc::clone(&chain), net1.subscribe_events());
+        let mut sync = HistorySync::<MockNetwork>::new(
+            Arc::clone(&chain),
+            Arc::clone(&net1),
+            net1.subscribe_events(),
+        );
 
-        net1.dial_mock(&net2);
         spawn_request_handlers(&net2, &chain);
+        net1.dial_mock(&net2);
 
         match sync.next().await {
             Some(HistorySyncReturn::Good(_)) => {
                 assert_eq!(chain.read().block_number(), 0);
             }
-            _ => assert!(false, "Unexpected HistorySyncReturn"),
+            res => panic!("Unexpected HistorySyncReturn: {:?}", res),
         }
     }
 
@@ -351,19 +362,22 @@ mod tests {
             1,
             0,
         );
-        assert_eq!(chain2.read().block_number(), policy::EPOCH_LENGTH);
+        assert_eq!(chain2.read().block_number(), policy::BLOCKS_PER_EPOCH);
 
-        let mut sync =
-            HistorySync::<MockNetwork>::new(Arc::clone(&chain1), net1.subscribe_events());
+        let mut sync = HistorySync::<MockNetwork>::new(
+            Arc::clone(&chain1),
+            Arc::clone(&net1),
+            net1.subscribe_events(),
+        );
 
-        net1.dial_mock(&net2);
         spawn_request_handlers(&net2, &chain2);
+        net1.dial_mock(&net2);
 
         match sync.next().await {
             Some(HistorySyncReturn::Good(_)) => {
                 assert_eq!(chain1.read().head(), chain2.read().head());
             }
-            _ => panic!("Unexpected HistorySyncReturn"),
+            res => panic!("Unexpected HistorySyncReturn: {:?}", res),
         }
     }
 
@@ -392,20 +406,23 @@ mod tests {
         );
         assert_eq!(
             chain2.read().block_number(),
-            num_epochs as u32 * policy::EPOCH_LENGTH
+            num_epochs as u32 * policy::BLOCKS_PER_EPOCH
         );
 
-        let mut sync =
-            HistorySync::<MockNetwork>::new(Arc::clone(&chain1), net1.subscribe_events());
+        let mut sync = HistorySync::<MockNetwork>::new(
+            Arc::clone(&chain1),
+            Arc::clone(&net1),
+            net1.subscribe_events(),
+        );
 
-        net1.dial_mock(&net2);
         spawn_request_handlers(&net2, &chain2);
+        net1.dial_mock(&net2);
 
         match sync.next().await {
             Some(HistorySyncReturn::Good(_)) => {
                 assert_eq!(chain1.read().head(), chain2.read().head());
             }
-            _ => panic!("Unexpected HistorySyncReturn"),
+            res => panic!("Unexpected HistorySyncReturn: {:?}", res),
         }
     }
 
@@ -425,19 +442,22 @@ mod tests {
 
         let producer = BlockProducer::new(signing_key(), voting_key());
         produce_macro_blocks_with_txns(&producer, &chain2, 1, 1, 0);
-        assert_eq!(chain2.read().block_number(), policy::BATCH_LENGTH);
+        assert_eq!(chain2.read().block_number(), policy::BLOCKS_PER_BATCH);
 
-        let mut sync =
-            HistorySync::<MockNetwork>::new(Arc::clone(&chain1), net1.subscribe_events());
+        let mut sync = HistorySync::<MockNetwork>::new(
+            Arc::clone(&chain1),
+            Arc::clone(&net1),
+            net1.subscribe_events(),
+        );
 
-        net1.dial_mock(&net2);
         spawn_request_handlers(&net2, &chain2);
+        net1.dial_mock(&net2);
 
         match sync.next().await {
             Some(HistorySyncReturn::Good(_)) => {
                 assert_eq!(chain1.read().head(), chain2.read().head());
             }
-            _ => panic!("Unexpected HistorySyncReturn"),
+            res => panic!("Unexpected HistorySyncReturn: {:?}", res),
         }
     }
 
@@ -460,14 +480,17 @@ mod tests {
         produce_macro_blocks_with_txns(&producer, &chain2, num_batches, 1, 0);
         assert_eq!(
             chain2.read().block_number(),
-            num_batches as u32 * policy::BATCH_LENGTH
+            num_batches as u32 * policy::BLOCKS_PER_BATCH
         );
 
-        let mut sync =
-            HistorySync::<MockNetwork>::new(Arc::clone(&chain1), net1.subscribe_events());
+        let mut sync = HistorySync::<MockNetwork>::new(
+            Arc::clone(&chain1),
+            Arc::clone(&net1),
+            net1.subscribe_events(),
+        );
 
-        net1.dial_mock(&net2);
         spawn_request_handlers(&net2, &chain2);
+        net1.dial_mock(&net2);
 
         match sync.next().await {
             Some(HistorySyncReturn::Good(_)) => {
@@ -497,43 +520,43 @@ mod tests {
 
         let producer = BlockProducer::new(signing_key(), voting_key());
         produce_macro_blocks_with_txns(&producer, &chain2, 1, 1, 0);
-        assert_eq!(chain2.read().block_number(), policy::BATCH_LENGTH);
+        assert_eq!(chain2.read().block_number(), policy::BLOCKS_PER_BATCH);
 
         copy_chain(&*chain2, &*chain3);
         produce_macro_blocks_with_txns(&producer, &chain3, 1, 1, 0);
-        assert_eq!(chain3.read().block_number(), 2 * policy::BATCH_LENGTH);
+        assert_eq!(chain3.read().block_number(), 2 * policy::BLOCKS_PER_BATCH);
 
         copy_chain(&*chain3, &*chain4);
         produce_macro_blocks_with_txns(&producer, &chain4, 1, 1, 0);
-        assert_eq!(chain4.read().block_number(), 3 * policy::BATCH_LENGTH);
+        assert_eq!(chain4.read().block_number(), 3 * policy::BLOCKS_PER_BATCH);
 
-        let mut sync =
-            HistorySync::<MockNetwork>::new(Arc::clone(&chain1), net1.subscribe_events());
-
-        net1.dial_mock(&net2);
-        net1.dial_mock(&net3);
-        net1.dial_mock(&net4);
+        let mut sync = HistorySync::<MockNetwork>::new(
+            Arc::clone(&chain1),
+            Arc::clone(&net1),
+            net1.subscribe_events(),
+        );
 
         spawn_request_handlers(&net2, &chain2);
         spawn_request_handlers(&net3, &chain3);
         spawn_request_handlers(&net4, &chain4);
 
-        log::info!(
-            "Event 1: {:?}",
-            tokio::time::timeout(std::time::Duration::from_secs(5), sync.next()).await
-        );
-        log::info!(
-            "Event 2: {:?}",
-            tokio::time::timeout(std::time::Duration::from_secs(5), sync.next()).await
-        );
-        // log::info!("Event 2: {:?}", sync.next().await);
-        // log::info!("Event 3: {:?}", sync.next().await);
+        net1.dial_mock(&net2);
+        net1.dial_mock(&net3);
+        net1.dial_mock(&net4);
 
-        // match sync.next().await {
-        //     Some(HistorySyncReturn::Good(_)) => {
-        //         assert_eq!(chain1.read().head(), chain2.read().head());
-        //     }
-        //     _ => panic!("Unexpected HistorySyncReturn"),
-        // }
+        match sync.next().await {
+            Some(HistorySyncReturn::Good(peer_id)) if peer_id == net4.peer_id() => {}
+            res => panic!("Unexpected HistorySyncReturn: {:?}", res),
+        }
+        match sync.next().await {
+            Some(HistorySyncReturn::Outdated(peer_id)) if peer_id == net3.peer_id() => {}
+            res => panic!("Unexpected HistorySyncReturn: {:?}", res),
+        }
+        match sync.next().await {
+            Some(HistorySyncReturn::Outdated(peer_id)) if peer_id == net2.peer_id() => {}
+            res => panic!("Unexpected HistorySyncReturn: {:?}", res),
+        }
+
+        assert_eq!(chain1.read().head(), chain4.read().head());
     }
 }

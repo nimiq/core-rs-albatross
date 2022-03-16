@@ -13,70 +13,68 @@ pub trait Handle<Response> {
     fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> Response;
 }
 
-impl Handle<BlockHashes> for RequestBlockHashes {
-    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> BlockHashes {
+impl Handle<MacroChain> for RequestMacroChain {
+    fn handle(&self, blockchain: &Arc<RwLock<Blockchain>>) -> MacroChain {
         let blockchain = blockchain.read();
-        // A peer has requested blocks. Check all requested block locator hashes
-        // in the given order and pick the first hash that is found on our main
-        // chain, ignore the rest.
-        let mut start_block_hash_opt = None;
+        // A peer has the macro chain. Check all block locator hashes in the given order and pick
+        // the first hash that is found on our main chain, ignore the rest.
+        let mut start_block_hash = None;
         for locator in self.locators.iter() {
-            if blockchain
-                .chain_store
-                .get_block(locator, false, None)
-                .is_some()
-            {
-                // We found a block, ignore remaining block locator hashes.
-                trace!("Start block found: {:?}", &locator);
-                start_block_hash_opt = Some(locator.clone());
-                break;
+            let chain_info = blockchain.chain_store.get_chain_info(locator, false, None);
+            if let Some(chain_info) = chain_info {
+                if chain_info.on_main_chain {
+                    // We found a block, ignore remaining block locator hashes.
+                    trace!("Start block found: {:?}", &locator);
+                    start_block_hash = Some(locator.clone());
+                    break;
+                }
             }
         }
-        if start_block_hash_opt.is_none() {
-            return BlockHashes { hashes: None };
+        if start_block_hash.is_none() {
+            return MacroChain {
+                epochs: None,
+                checkpoint: None,
+            };
         }
-        let start_block_hash = start_block_hash_opt.unwrap();
+        let start_block_hash = start_block_hash.unwrap();
 
-        // Collect up to GETBLOCKS_VECTORS_MAX inventory vectors for the blocks starting right
-        // after the identified block on the main chain.
-        let blocks = match self.filter {
-            RequestBlockHashesFilter::ElectionOnly
-            | RequestBlockHashesFilter::ElectionAndLatestCheckpoint => blockchain
-                .get_macro_blocks(
-                    &start_block_hash,
-                    self.max_blocks as u32,
-                    false,
-                    Direction::Forward,
-                    true,
-                )
-                .unwrap(), // We made sure that start_block_hash is on our chain.
-            RequestBlockHashesFilter::All => blockchain.get_blocks(
+        // Get up to `self.max_blocks` macro blocks from our chain starting at `start_block_hash`.
+        // TODO We don't need the actual macro block headers here, the hash of each block would suffice.
+        let election_blocks = blockchain
+            .get_macro_blocks(
                 &start_block_hash,
-                self.max_blocks as u32,
+                self.max_epochs as u32,
                 false,
                 Direction::Forward,
-            ),
+                true,
+            )
+            .unwrap(); // We made sure that start_block_hash is on our chain.
+        let epochs: Vec<_> = election_blocks.iter().map(|block| block.hash()).collect();
+
+        // Add latest checkpoint block if all of the following conditions are met:
+        // * the requester has caught up, i.e. it already knows the last epoch (epochs.is_empty())
+        //   or we are returning the last epoch in this response.
+        // * the latest macro block is a checkpoint block.
+        // * the latest macro block is not the locator given by the requester.
+        let checkpoint_block = blockchain.macro_head();
+        let checkpoint_hash = blockchain.macro_head_hash();
+        let caught_up =
+            epochs.is_empty() || *epochs.last().unwrap() == blockchain.election_head_hash();
+        let checkpoint = if caught_up
+            && !checkpoint_block.is_election_block()
+            && checkpoint_hash != start_block_hash
+        {
+            Some(Checkpoint {
+                block_number: checkpoint_block.block_number(),
+                hash: checkpoint_hash,
+            })
+        } else {
+            None
         };
 
-        let mut hashes: Vec<_> = blocks
-            .iter()
-            .map(|block| (BlockHashType::from(block), block.hash()))
-            .collect();
-
-        // Add latest checkpoint block if requested.
-        if self.filter == RequestBlockHashesFilter::ElectionAndLatestCheckpoint
-            && hashes.len() < self.max_blocks as usize
-        {
-            let checkpoint_block = blockchain.macro_head();
-            // Only include the latest checkpoint block if it is not the locator given by the requester
-            if !checkpoint_block.is_election_block() && checkpoint_block.hash() != start_block_hash
-            {
-                hashes.push((BlockHashType::Checkpoint, checkpoint_block.hash()));
-            }
-        }
-
-        BlockHashes {
-            hashes: Some(hashes),
+        MacroChain {
+            epochs: Some(epochs),
+            checkpoint,
         }
     }
 }
