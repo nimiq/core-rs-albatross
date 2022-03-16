@@ -1,5 +1,3 @@
-#![feature(trait_alias)]
-
 #[macro_use]
 extern crate log;
 
@@ -18,12 +16,16 @@ pub use state::TendermintState;
 pub use stream::TendermintStreamWrapper as Tendermint;
 pub use utils::*;
 
-// These are trait aliases. We use them instead of repeating these trait bounds all throughout the
-// code. It results in code that is cleaner and easier to understand.
-pub trait ProposalTrait = Clone + Debug + PartialEq + Unpin + Send + Sync + 'static;
+// Poor man's trait aliases:
 
-pub trait ProposalHashTrait = Clone + Debug + PartialEq + Ord + Unpin + Send + 'static;
+pub trait ProposalTrait: Clone + Debug + PartialEq + Unpin + Send + Sync + 'static {}
+impl<T: Clone + Debug + PartialEq + Unpin + Send + Sync + 'static> ProposalTrait for T {}
 
-pub trait ProofTrait = Clone + Debug + Unpin + Send + 'static;
+pub trait ProposalHashTrait: Clone + Debug + PartialEq + Ord + Unpin + Send + 'static {}
+impl<T: Clone + Debug + PartialEq + Ord + Unpin + Send + 'static> ProposalHashTrait for T {}
 
-pub trait ResultTrait = Clone + Debug + Unpin + Send + 'static;
+pub trait ProofTrait: Clone + Debug + Unpin + Send + 'static {}
+impl<T: Clone + Debug + Unpin + Send + 'static> ProofTrait for T {}
+
+pub trait ResultTrait: Clone + Debug + Unpin + Send + 'static {}
+impl<T: Clone + Debug + Unpin + Send + 'static> ResultTrait for T {}
