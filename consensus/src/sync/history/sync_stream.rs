@@ -239,8 +239,9 @@ impl<TNetwork: Network> Stream for HistorySync<TNetwork> {
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
+    use std::task::Poll;
 
-    use futures::StreamExt;
+    use futures::{Stream, StreamExt};
     use nimiq_block_production::BlockProducer;
     use parking_lot::RwLock;
 
@@ -558,5 +559,109 @@ mod tests {
         }
 
         assert_eq!(chain1.read().head(), chain4.read().head());
+    }
+
+    struct DisconnectDuringSyncStream {
+        pub sync: HistorySync<MockNetwork>,
+        pub net_sync: Arc<MockNetwork>,
+        pub net_disconnect: Arc<MockNetwork>,
+        pub chain_sync: Arc<RwLock<Blockchain>>,
+        pub chain_up2date: Arc<RwLock<Blockchain>>,
+        pub current_i: u32,
+        pub disconnect_at: u32,
+        pub reconnect_at: Option<u32>,
+    }
+
+    impl DisconnectDuringSyncStream {
+        pub fn new(disconnect_at: u32, reconnect_at: Option<u32>) -> DisconnectDuringSyncStream {
+            let mut hub = MockHub::default();
+            let net_sync = Arc::new(hub.new_network());
+            let net_up2date = Arc::new(hub.new_network());
+            let net_disconnect = Arc::new(hub.new_network());
+
+            let chain_sync = blockchain();
+            let chain_up2date = blockchain();
+            let chain_disconnect = blockchain();
+
+            let num_epochs = 2;
+            let producer = BlockProducer::new(signing_key(), voting_key());
+            produce_macro_blocks_with_txns(
+                &producer,
+                &chain_up2date,
+                (num_epochs * policy::BATCHES_PER_EPOCH - 1) as usize,
+                1,
+                0,
+            );
+            copy_chain(&chain_up2date, &chain_disconnect);
+
+            let sync = HistorySync::<MockNetwork>::new(
+                Arc::clone(&chain_sync),
+                net_sync.subscribe_events(),
+            );
+
+            net_sync.dial_mock(&net_up2date);
+            net_sync.dial_mock(&net_disconnect);
+
+            spawn_request_handlers(&net_sync, &chain_sync);
+            spawn_request_handlers(&net_up2date, &chain_up2date);
+            spawn_request_handlers(&net_disconnect, &chain_disconnect);
+
+            DisconnectDuringSyncStream {
+                sync,
+                net_sync,
+                net_disconnect,
+                chain_sync,
+                chain_up2date,
+                current_i: 0,
+                disconnect_at,
+                reconnect_at,
+            }
+        }
+    }
+
+    impl Stream for DisconnectDuringSyncStream {
+        type Item = bool;
+
+        fn poll_next(
+            mut self: std::pin::Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+        ) -> Poll<Option<Self::Item>> {
+            match self.sync.poll_next_unpin(cx) {
+                Poll::Ready(Some(HistorySyncReturn::Good(_))) => {
+                    assert_eq!(
+                        self.chain_sync.read().head(),
+                        self.chain_up2date.read().head()
+                    );
+                    return Poll::Ready(Some(true));
+                }
+                Poll::Pending => {
+                    if self.current_i == self.disconnect_at {
+                        self.net_disconnect.disconnect();
+                    }
+                    if let Some(rec_at) = self.reconnect_at {
+                        if self.current_i == rec_at {
+                            self.net_sync.dial_mock(&self.net_disconnect);
+                        }
+                    }
+                }
+                _ => return Poll::Ready(None),
+            }
+            self.current_i += 1;
+            Poll::Pending
+        }
+    }
+
+    #[tokio::test]
+    async fn it_can_disconnect_peer_during_sync() {
+        // The to-be-synced peer is connected with an up-to-date one the whole time. An additional up-to-date peer is disconnected (and reconnected).
+
+        // Disconnect at the beginning, don't reconnect
+        let mut res = DisconnectDuringSyncStream::new(2, None);
+        assert!(res.next().await.unwrap());
+
+        // Disconnect after 1/3 of the stream polls, reconnect at 2/3.
+        let mut res =
+            DisconnectDuringSyncStream::new(res.current_i / 3, Some(res.current_i / 3 * 2));
+        assert!(res.next().await.unwrap());
     }
 }
