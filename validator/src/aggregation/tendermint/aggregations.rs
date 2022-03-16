@@ -201,8 +201,8 @@ impl<N: ValidatorNetwork + 'static> Stream for TendermintAggregations<N> {
                             trace!("Failed to relay LevelUpdate to aggregation, error {} ", e)
                         }
                     }
-                } else if let Some(((highest_round, _), _)) =
-                    self.aggregation_descriptors.last_key_value()
+                } else if let Some((highest_round, _)) =
+                    self.aggregation_descriptors.keys().next_back()
                 {
                     // messages of future rounds need to be tracked in terms of contributors only (without verifying them).
                     // Also note that PreVote and PreCommit are tracked in the same bitset as the protocol requires.

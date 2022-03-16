@@ -401,16 +401,21 @@ impl<N: Network> Inner<N> {
     }
 
     fn prune_buffer(&mut self) {
-        while let Some(entry) = self.buffer.first_entry() {
+        self.buffer.retain(|&block_number, blocks| {
             // Remove all entries from the block buffer that precede `current_macro_height`.
-            if *entry.key() > self.current_macro_height {
-                break;
+            if block_number > self.current_macro_height {
+                return true;
             }
             // Tell gossipsub to ignore the removed blocks.
-            for (_, (_, pubsub_id)) in entry.remove().into_iter() {
-                self.report_validation_result(pubsub_id, MsgAcceptance::Ignore);
+            for (_, pubsub_id) in blocks.values() {
+                // Inline `report_validation_result` here, because it solves the borrow issue:
+                if let Some(id) = pubsub_id {
+                    self.network
+                        .validate_message::<BlockTopic>(id.clone(), MsgAcceptance::Ignore);
+                }
             }
-        }
+            false
+        });
     }
 
     #[inline]
