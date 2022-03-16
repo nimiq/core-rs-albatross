@@ -1,8 +1,6 @@
 use std::fmt;
 use std::hash::Hash;
 use std::hash::Hasher;
-use std::net::IpAddr;
-use std::str::FromStr;
 use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
@@ -17,8 +15,6 @@ use keys::{PublicKey, Signature};
 use crate::address::{NetAddress, PeerId, PeerUri};
 use crate::protocol::Protocol;
 use crate::services::ServiceFlags;
-
-use super::is_ip_globally_reachable_legacy;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum PeerAddressType {
@@ -205,50 +201,6 @@ impl PeerAddress {
             }
         }
         false
-    }
-
-    pub fn is_globally_reachable(&self, legacy_mode: bool) -> bool {
-        match &self.ty {
-            PeerAddressType::Ws(host, _) => {
-                // If host is an ip, check if it's globally reachable
-                if let Ok(ip) = IpAddr::from_str(&host[..]) {
-                    if legacy_mode {
-                        if !is_ip_globally_reachable_legacy(&ip) {
-                            return false;
-                        }
-                    } else {
-                        if !ip.is_global() {
-                            return false;
-                        }
-                        if let IpAddr::V4(ipv4) = ip {
-                            // https://github.com/rust-lang/rust/issues/57558
-                            if ipv4.octets()[0] == 0 {
-                                return false;
-                            }
-                        }
-                    }
-                }
-            }
-            PeerAddressType::Wss(host, _) => {
-                // IP addresses can't have a proper certificate
-                if IpAddr::from_str(&host[..]).is_ok() {
-                    return false;
-                }
-            }
-            _ => {}
-        }
-        match &self.ty {
-            PeerAddressType::Wss(host, _) | PeerAddressType::Ws(host, _) => {
-                // "the use of dotless domains is prohibited [in new gTLDs]" [ https://www.icann.org/resources/board-material/resolutions-new-gtld-2013-08-13-en#1 ]. Old gTLDs rarely use them.
-                if !host[1..host.len() - 1].contains('.') {
-                    return false;
-                };
-            }
-            _ => {
-                return false;
-            }
-        };
-        true
     }
 
     pub fn protocol(&self) -> Protocol {

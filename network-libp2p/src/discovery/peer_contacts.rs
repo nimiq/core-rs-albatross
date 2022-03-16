@@ -387,19 +387,6 @@ impl PeerContactInfo {
         false
     }
 
-    pub fn is_globally_reachable(&self) -> bool {
-        for multiaddr in &self.contact.inner.addresses {
-            for protocol in multiaddr.iter() {
-                match protocol {
-                    Protocol::Ip4(ip_addr) => return ip_addr.is_global(),
-                    Protocol::Ip6(ip_addr) => return ip_addr.is_global(),
-                    _ => {}
-                }
-            }
-        }
-        false
-    }
-
     pub fn matches(&self, protocols: Protocols, services: Services) -> bool {
         self.protocols.intersects(protocols) && self.services().intersects(services)
     }
