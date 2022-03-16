@@ -723,7 +723,8 @@ impl PartialOrd for BestTxOrder {
 impl Ord for BestTxOrder {
     fn cmp(&self, other: &Self) -> Ordering {
         self.fee_per_byte
-            .total_cmp(&other.fee_per_byte)
+            .partial_cmp(&other.fee_per_byte)
+            .expect("fees can't be NaN")
             .then(self.insertion_order.cmp(&other.insertion_order).reverse())
     }
 }
@@ -748,7 +749,8 @@ impl PartialOrd for WorstTxOrder {
 impl Ord for WorstTxOrder {
     fn cmp(&self, other: &Self) -> Ordering {
         self.fee_per_byte
-            .total_cmp(&other.fee_per_byte)
+            .partial_cmp(&other.fee_per_byte)
+            .expect("fees can't be NaN")
             .reverse()
             .then(self.insertion_order.cmp(&other.insertion_order))
     }
