@@ -365,7 +365,7 @@ jobs:
         override: true
     - name: Configure micro block per epoch
       run: |
-          sed -i 's/BATCH_LENGTH: u32 = 32;/BATCH_LENGTH: u32 = 5;/g' primitives/src/policy.rs
+          sed -i 's/BLOCKS_PER_BATCH: u32 = 32;/BLOCKS_PER_BATCH: u32 = 2;/g' primitives/src/policy.rs
     - uses: actions-rs/cargo@v1
       with:
         command: build
@@ -426,7 +426,7 @@ jobs:
       env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
 
-  ViewChangeTest:
+  Validators10sDown:
     runs-on: ubuntu-20.04
 
     steps:
@@ -459,7 +459,7 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v2
       with:
-          name: ViewChangeTest-logs
+          name: Validators10sDown-logs
           path: |
             temp-logs/
     - name: Retrieve failure reason
@@ -476,7 +476,7 @@ jobs:
       uses: ravsamhq/notify-slack-action@v1
       with:
           status: ${{ job.status }}
-          notification_title: 'Potential deadlock detected in ViewChangeTest'
+          notification_title: 'Potential deadlock detected in Validators10sDown'
           footer: '<{run_url}|View Run>'
       env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
@@ -485,7 +485,7 @@ jobs:
       uses: ravsamhq/notify-slack-action@v1
       with:
           status: ${{ job.status }}
-          notification_title: 'Long lock hold time detected in ViewChangeTest'
+          notification_title: 'Long lock hold time detected in Validators10sDown'
           footer: '<{run_url}|View Run>'
       env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
@@ -494,7 +494,7 @@ jobs:
       uses: ravsamhq/notify-slack-action@v1
       with:
           status: ${{ job.status }}
-          notification_title: 'Slow lock acquisition detected in ViewChangeTest'
+          notification_title: 'Slow lock acquisition detected in Validators10sDown'
           footer: '<{run_url}|View Run>'
       env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
@@ -504,7 +504,93 @@ jobs:
       with:
           status: ${{ job.status }}
           notify_when: 'failure'
-          notification_title: 'ViewChangeTest failed because of ${{ steps.reason.outputs.FAIL_REASON }}'
+          notification_title: 'Validators10sDown failed because of ${{ steps.reason.outputs.FAIL_REASON }}'
+          footer: '<{run_url}|View Run>'
+      env:
+          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
+
+  LowViewChangeDelay:
+    runs-on: ubuntu-20.04
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions/setup-python@v3
+    - uses: BSFishy/pip-action@v1
+      with:
+        packages: |
+          sh
+    - uses: actions/cache@v2
+      with:
+        path:
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: cargo-${{ hashFiles('**/Cargo.toml') }}
+    - name: Set up Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: nightly-2022-03-13
+        override: true
+    - name: Configure the view change delay 
+      run: |
+          sed -i 's/VIEW_CHANGE_DELAY: Duration = Duration::from_secs(10);/VIEW_CHANGE_DELAY: Duration = Duration::from_secs(2);/g' validator/src/validator.rs
+    - uses: actions-rs/cargo@v1
+      with:
+        command: build
+    - name: Executes the test
+      run: |
+          bash scripts/devnet/devnet.sh -k 0 -s 150
+    - name: Archive test results
+      if: always()
+      uses: actions/upload-artifact@v2
+      with:
+          name: LowViewChangeDelay-logs
+          path: |
+            temp-logs/
+    - name: Retrieve failure reason
+      if: always()
+      run: |
+          if [ -f temp-state/RESULT.TXT ]; then
+            echo "::set-output name=FAIL_REASON::$(cat temp-state/RESULT.TXT)"
+          else
+            echo "::set-output name=FAIL_REASON::other"
+          fi
+      id: reason
+    - name: Report potential deadlocks to slack
+      if: always() && contains(steps.reason.outputs.FAIL_REASON, 'DEADLOCK')
+      uses: ravsamhq/notify-slack-action@v1
+      with:
+          status: ${{ job.status }}
+          notification_title: 'Potential deadlock detected in LowViewChangeDelay'
+          footer: '<{run_url}|View Run>'
+      env:
+          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
+    - name: Report long lock hold times
+      if: always() && contains(steps.reason.outputs.FAIL_REASON, 'LONG_LOCK_HOLD_TIME')
+      uses: ravsamhq/notify-slack-action@v1
+      with:
+          status: ${{ job.status }}
+          notification_title: 'Long lock hold time detected in LowViewChangeDelay'
+          footer: '<{run_url}|View Run>'
+      env:
+          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
+    - name: Report slow lock acquisitions
+      if: always() && contains(steps.reason.outputs.FAIL_REASON, 'SLOW_LOCK_ACQUISITION')
+      uses: ravsamhq/notify-slack-action@v1
+      with:
+          status: ${{ job.status }}
+          notification_title: 'Slow lock acquisition detected in LowViewChangeDelay'
+          footer: '<{run_url}|View Run>'
+      env:
+          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
+    - name: Report Status to Slack
+      if: always() && github.ref == 'refs/heads/albatross'
+      uses: ravsamhq/notify-slack-action@v1
+      with:
+          status: ${{ job.status }}
+          notify_when: 'failure'
+          notification_title: 'LowViewChangeDelay failed because of ${{ steps.reason.outputs.FAIL_REASON }}'
           footer: '<{run_url}|View Run>'
       env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
