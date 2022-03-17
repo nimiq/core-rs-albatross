@@ -1,8 +1,9 @@
 use std::collections::BTreeMap;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::task::Poll;
 
 use futures::{ready, Future, StreamExt};
+use parking_lot::RwLock;
 
 use nimiq_block::TendermintStep;
 use nimiq_handel::contribution::AggregatableContribution;
@@ -49,17 +50,14 @@ impl<N: ValidatorNetwork + 'static> BackgroundTask<N> {
         // If it exists, the highest round received in a TendermintAggregationEvent::NewRound(n)
         // must be kept such that it can be send to the next current_aggregate sink if it by then is
         // still relevant.
-        let current_aggregate = self
-            .current_aggregate
-            .write()
-            .expect("current_aggregate lock could not be acquired")
-            .take();
+        let mut aggregate_lock = self.current_aggregate.write();
+        let current_aggregate = aggregate_lock.take();
 
-        match current_aggregate {
+        match &current_aggregate {
             // If there is a current ongoing aggregation it is retrieved.
             Some(CurrentAggregation { sender, round, .. }) => {
                 // Check that the next_round is actually higher than the round which is awaiting a result.
-                if round < next_round {
+                if round < &next_round {
                     // Send the me NewRound event through the channel to the currently awaited
                     // aggregation for it to resolve.
                     if let Err(e) = sender.send(AggregationResult::NewRound(next_round)) {
@@ -75,15 +73,14 @@ impl<N: ValidatorNetwork + 'static> BackgroundTask<N> {
                         "Received NewRound({}), but current_aggregate is in round {}",
                         next_round, round
                     );
+                    // put the aggregation descriptor back in place to be reused for the next aggregation
+                    *aggregate_lock = current_aggregate;
                 }
             }
             // If there is no caller awaiting a result
             None => {
                 // Advance pending_new_round to next_round if next_round is higher.
-                let mut lock = self
-                    .pending_new_round
-                    .write()
-                    .expect("pending_new_round lock could not be acquired");
+                let mut lock = self.pending_new_round.write();
                 match lock.as_mut() {
                     Some(current_round) => {
                         *current_round = u32::max(*current_round, next_round);
@@ -107,7 +104,6 @@ impl<N: ValidatorNetwork + 'static> BackgroundTask<N> {
         let contribution = self
             .current_bests
             .write()
-            .expect("current_bests lock could not be acquired")
             .entry((round, step))
             .and_modify(|contrib| {
                 // This test is not strictly necessary as the handel streams will only return a
@@ -121,10 +117,7 @@ impl<N: ValidatorNetwork + 'static> BackgroundTask<N> {
 
         // Better or not, we need to check if it is actionable for tendermint, and if it is and
         // there is a current_aggregate sink present, we send it as well.
-        let mut lock = self
-            .current_aggregate
-            .write()
-            .expect("current_aggregate lock could not be acquired");
+        let mut lock = self.current_aggregate.write();
 
         // If there is a current ongoing aggregation it is retrieved
         let current_aggregation = match lock.as_ref() {

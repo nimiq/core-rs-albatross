@@ -1,9 +1,7 @@
-use std::{
-    collections::BTreeMap,
-    sync::{Arc, RwLock},
-};
+use std::{collections::BTreeMap, sync::Arc};
 
 use futures::{future, StreamExt};
+use parking_lot::RwLock;
 use tokio::{sync::mpsc, time};
 
 use bls::SecretKey;
@@ -122,10 +120,7 @@ where
         // make sure that there is no currently ongoing aggregation from a previous call to `broadcast_and_aggregate` which has not yet been awaited.
         // if there is none make sure to set this one with the same lock to prevent a race condition
         let (mut aggregate_receiver, _aggregate_sender) = {
-            let mut current_aggregate = self
-                .current_aggregate
-                .write()
-                .expect("current_aggregate lock could not be aquired.");
+            let mut current_aggregate = self.current_aggregate.write();
 
             match current_aggregate.take() {
                 Some(aggr) => {
@@ -190,19 +185,11 @@ where
 
         // If a new round event was emitted before it needs to be checked if it is still relevant by
         // checking if it concerned a round higher than the one which is currently starting.
-        if let Some(pending_round) = self
-            .pending_new_round
-            .write()
-            .expect("pending_new_round lock could not be aquired.")
-            .take()
-        {
+        if let Some(pending_round) = self.pending_new_round.write().take() {
             if pending_round > round {
                 // If it is higher then the NewRound Event is emitted finishing this broadcast_and_aggregate call.
                 // The aggregation itself however willl remain valid, as it might get referenced in a future round.
-                self.current_aggregate
-                    .write()
-                    .expect("current_aggregate lock could not be aquired.")
-                    .take();
+                self.current_aggregate.write().take();
 
                 return Ok(AggregationResult::NewRound(pending_round));
             }
@@ -270,7 +257,7 @@ where
                                         TendermintError::AggregationError
                                     })?;
                             }
-                            trace!("Tendermint: {}-{:?}: A proposal has > 2f+1", &round, &step);
+                            // trace!("Tendermint: {}-{:?}: A proposal has > 2f+1", &round, &step);
                             return Ok(result);
                         }
 
@@ -294,11 +281,11 @@ where
                                     TendermintError::AggregationError
                                 })?;
                         }
-                        trace!(
-                            "Tendermint: {}-{:?}: All other proposals have > 2f + 1 votes",
-                            &round,
-                            &step
-                        );
+                        // trace!(
+                        //     "Tendermint: {}-{:?}: All other proposals have > 2f + 1 votes",
+                        //     &round,
+                        //     &step
+                        // );
                         return Ok(result);
                     }
 
@@ -314,7 +301,7 @@ where
                                     TendermintError::AggregationError
                                 })?;
                         }
-                        trace!("Tendermint: {}-{:?}: Everybody signed", &round, &step);
+                        // trace!("Tendermint: {}-{:?}: Everybody signed", &round, &step);
                         return Ok(result);
                     }
                 }
@@ -348,12 +335,7 @@ where
         round: u32,
         step: impl Into<TendermintStep>,
     ) -> Result<AggregationResult<Blake2sHash, MultiSignature>, TendermintError> {
-        if let Some(current_best) = self
-            .current_bests
-            .read()
-            .expect("current_bests lock could not be aquired.")
-            .get(&(round, step.into()))
-        {
+        if let Some(current_best) = self.current_bests.read().get(&(round, step.into())) {
             Ok(AggregationResult::Aggregation(
                 current_best
                     .contributions
