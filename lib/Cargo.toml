@@ -21,7 +21,7 @@ maintenance = { status = "experimental" }
 [dependencies]
 ansi_term = "0.12"
 clap = { version = "3.0", features = ["derive"] }
-derive_builder = "0.10"
+derive_builder = "0.11"
 directories = "4.0"
 file-rotate = { version = "0.6" }
 hex = "0.4"
