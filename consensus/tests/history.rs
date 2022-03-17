@@ -14,22 +14,28 @@ use nimiq_consensus::sync::history::{cluster::SyncCluster, HistorySync, HistoryS
 use nimiq_consensus::sync::request_component::HistorySyncStream;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis::NetworkId;
-use nimiq_network_interface::{network::Network, peer::Peer};
-use nimiq_network_mock::{MockHub, MockNetwork};
+use nimiq_network_interface::{network::Network as NetworkInterface, peer::Peer};
+use nimiq_network_libp2p::Network;
+use nimiq_network_mock::MockHub;
 use nimiq_primitives::policy;
 use nimiq_test_log::test;
-use nimiq_test_utils::blockchain::{produce_macro_blocks, signing_key, voting_key};
+use nimiq_test_utils::{
+    blockchain::{produce_macro_blocks, signing_key, voting_key},
+    test_network::TestNetwork,
+};
 use nimiq_utils::time::OffsetTime;
 
-pub struct MockHistorySyncStream<TNetwork: Network> {
+pub struct MockHistorySyncStream<TNetwork: NetworkInterface> {
     _network: Arc<TNetwork>,
 }
 
-impl<TNetwork: Network> HistorySyncStream<TNetwork::PeerType> for MockHistorySyncStream<TNetwork> {
-    fn add_peer(&self, _peer_id: <<TNetwork as Network>::PeerType as Peer>::Id) {}
+impl<TNetwork: NetworkInterface> HistorySyncStream<TNetwork::PeerType>
+    for MockHistorySyncStream<TNetwork>
+{
+    fn add_peer(&self, _peer_id: <<TNetwork as NetworkInterface>::PeerType as Peer>::Id) {}
 }
 
-impl<TNetwork: Network> Stream for MockHistorySyncStream<TNetwork> {
+impl<TNetwork: NetworkInterface> Stream for MockHistorySyncStream<TNetwork> {
     type Item = HistorySyncReturn<TNetwork::PeerType>;
 
     fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
@@ -39,7 +45,8 @@ impl<TNetwork: Network> Stream for MockHistorySyncStream<TNetwork> {
 
 #[test(tokio::test)]
 async fn peers_can_sync() {
-    let mut hub = MockHub::default();
+    let hub = MockHub::default();
+    let mut networks = vec![];
 
     // Setup first peer.
     let env1 = VolatileEnvironment::new(10).unwrap();
@@ -57,8 +64,9 @@ async fn peers_can_sync() {
     // Produce the blocks.
     produce_macro_blocks(&producer, &blockchain1, num_macro_blocks);
 
-    let net1 = Arc::new(hub.new_network());
-    let sync1 = HistorySync::<MockNetwork>::new(
+    let net1 = TestNetwork::build_network(0, Default::default(), &mut Some(hub)).await;
+    networks.push(Arc::clone(&net1));
+    let sync1 = HistorySync::<Network>::new(
         Arc::clone(&blockchain1),
         Arc::clone(&net1),
         net1.subscribe_events(),
@@ -73,8 +81,10 @@ async fn peers_can_sync() {
         Blockchain::new(env2.clone(), NetworkId::UnitAlbatross, time).unwrap(),
     ));
 
-    let net2 = Arc::new(hub.new_network());
-    let mut sync2 = HistorySync::<MockNetwork>::new(
+    let net2 =
+        TestNetwork::build_network(1, Default::default(), &mut Some(MockHub::default())).await;
+    networks.push(Arc::clone(&net2));
+    let mut sync2 = HistorySync::<Network>::new(
         Arc::clone(&blockchain2),
         Arc::clone(&net2),
         net2.subscribe_events(),
@@ -89,7 +99,7 @@ async fn peers_can_sync() {
     )
     .await;
 
-    net1.dial_mock(&net2);
+    Network::connect_networks(&networks, 1u64).await;
     tokio::time::sleep(Duration::from_secs(1)).await;
     let sync_result = sync2.next().await;
 
@@ -174,7 +184,8 @@ async fn peers_can_sync() {
 
 #[test(tokio::test)]
 async fn sync_ingredients() {
-    let mut hub = MockHub::default();
+    let hub = MockHub::default();
+    let mut networks = vec![];
 
     // Setup first peer.
     let time = Arc::new(OffsetTime::new());
@@ -192,7 +203,8 @@ async fn sync_ingredients() {
     // Produce the blocks.
     produce_macro_blocks(&producer, &blockchain1, num_macro_blocks);
 
-    let net1 = Arc::new(hub.new_network());
+    let net1 = TestNetwork::build_network(2, Default::default(), &mut Some(hub)).await;
+    networks.push(Arc::clone(&net1));
     let consensus1 = Consensus::from_network(
         env1,
         blockchain1,
@@ -210,7 +222,9 @@ async fn sync_ingredients() {
         Blockchain::new(env2.clone(), NetworkId::UnitAlbatross, time).unwrap(),
     ));
 
-    let net2 = Arc::new(hub.new_network());
+    let net2: Arc<Network> =
+        TestNetwork::build_network(3, Default::default(), &mut Some(MockHub::default())).await;
+    networks.push(Arc::clone(&net2));
     let consensus2 = Consensus::from_network(
         env2,
         blockchain2,
@@ -222,8 +236,8 @@ async fn sync_ingredients() {
     .await;
 
     // Connect the two peers.
-    let mut stream = consensus2.network.subscribe_events();
-    net1.dial_mock(&net2);
+    let mut stream = net2.subscribe_events();
+    Network::connect_networks(&networks, 3u64).await;
     // Then wait for connection to be established.
     let _ = stream.next().await.unwrap();
     tokio::time::sleep(Duration::from_secs(1)).await; // FIXME, Prof. Berrang told me to do this

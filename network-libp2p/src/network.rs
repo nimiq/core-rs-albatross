@@ -42,7 +42,7 @@ use nimiq_bls::CompressedPublicKey;
 use nimiq_network_interface::{
     message::{Message, MessageType, RequestError, ResponseError, ResponseMessage},
     network::{MsgAcceptance, Network as NetworkInterface, NetworkEvent, PubsubId, Topic},
-    peer::Peer as PeerInterface,
+    peer::{CloseReason, Peer as PeerInterface},
     peer_map::ObservablePeerMap,
 };
 use nimiq_utils::time::OffsetTime;
@@ -1006,6 +1006,11 @@ impl Network {
             OutboundFailure::DialFailure => ResponseError::DialFailure,
             OutboundFailure::Timeout => ResponseError::Timeout,
             OutboundFailure::UnsupportedProtocols => ResponseError::UnsupportedProtocols,
+        }
+    }
+    pub fn disconnect(&self) {
+        for peer in self.get_peers() {
+            peer.close(CloseReason::Other)
         }
     }
 }

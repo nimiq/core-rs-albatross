@@ -2579,6 +2579,7 @@ dependencies = [
  "nimiq-macros",
  "nimiq-mempool",
  "nimiq-network-interface",
+ "nimiq-network-libp2p",
  "nimiq-network-mock",
  "nimiq-primitives",
  "nimiq-subscription",

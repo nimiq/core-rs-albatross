@@ -9,11 +9,15 @@ use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_genesis_builder::GenesisBuilder;
 use nimiq_handel::update::{LevelUpdate, LevelUpdateMessage};
 use nimiq_keys::{Address, KeyPair, SecureGenerate};
-use nimiq_network_interface::network::Network;
-use nimiq_network_mock::{MockHub, MockNetwork};
+use nimiq_network_interface::network::Network as NetworkInterface;
+use nimiq_network_libp2p::Network;
+use nimiq_network_mock::MockHub;
 use nimiq_test_log::test;
-use nimiq_test_utils::validator::{
-    build_validator, build_validators, seeded_rng, validator_for_slot,
+use nimiq_test_utils::{
+    test_network::TestNetwork,
+    validator::{
+        build_validator, build_validators, pop_validator_for_slot, seeded_rng, validator_for_slot,
+    },
 };
 use nimiq_validator::aggregation::view_change::SignedViewChangeMessage;
 use nimiq_vrf::VrfSeed;
@@ -39,8 +43,8 @@ async fn one_validator_can_create_micro_blocks() {
         .generate(env)
         .unwrap();
 
-    let (validator, mut consensus1) = build_validator::<MockNetwork>(
-        1,
+    let (validator, mut consensus1) = build_validator::<Network>(
+        0,
         Address::from(&validator_key),
         signing_key,
         voting_key,
@@ -65,10 +69,16 @@ async fn one_validator_can_create_micro_blocks() {
 
 #[test(tokio::test)]
 async fn four_validators_can_create_micro_blocks() {
+    //use tracing_subscriber;
+    //tracing_subscriber::fmt()
+    //    .with_max_level(tracing_core::LevelFilter::DEBUG)
+    //    .with_test_writer()
+    //    .try_init();
     let hub = MockHub::default();
     let env = VolatileEnvironment::new(10).expect("Could not open a volatile database");
 
-    let validators = build_validators::<MockNetwork>(env, 4, &mut Some(hub)).await;
+    let validators =
+        build_validators::<Network>(env, &(1u64..=4u64).collect::<Vec<_>>(), &mut Some(hub)).await;
 
     let blockchain = Arc::clone(&validators.first().unwrap().consensus.blockchain);
 
@@ -90,11 +100,14 @@ async fn four_validators_can_view_change() {
     let hub = MockHub::default();
     let env = VolatileEnvironment::new(10).expect("Could not open a volatile database");
 
-    let validators = build_validators::<MockNetwork>(env, 4, &mut Some(hub)).await;
+    let mut validators =
+        build_validators::<Network>(env, &(5u64..=8u64).collect::<Vec<_>>(), &mut Some(hub)).await;
 
     // Disconnect the next block producer.
-    let validator = validator_for_slot(&validators, 1, 0);
-    validator.consensus.network.shutdown();
+    let validator = pop_validator_for_slot(&mut validators, 1, 0);
+    validator.consensus.network.disconnect();
+    drop(validator);
+    log::info!("Peer disconnection");
 
     // Listen for blockchain events from the new block producer (after view change).
     let validator = validator_for_slot(&validators, 1, 1);
@@ -169,16 +182,17 @@ async fn validator_can_catch_up() {
     let env = VolatileEnvironment::new(10).expect("Could not open a volatile database");
 
     // In total 8 validator are registered. after 3 validators are taken offline the remaining 5 should not be able to progress on their own
-    let mut validators = build_validators::<MockNetwork>(env, 8, &mut Some(hub)).await;
+    let mut validators =
+        build_validators::<Network>(env, &(9u64..=16u64).collect::<Vec<_>>(), &mut Some(hub)).await;
     // Maintain a collection of the corresponding networks.
 
-    let networks: Vec<Arc<MockNetwork>> = validators
+    let networks: Vec<Arc<Network>> = validators
         .iter()
         .map(|v| v.consensus.network.clone())
         .collect();
 
     // Disconnect the block producers for the next 3 views. remember the one which is supposed to actually create the block (3rd view)
-    let (validator, nw) = {
+    let (validator, _) = {
         let validator = validator_for_slot(&mut validators, 1, 0);
         validator.consensus.network.disconnect();
         let id1 = validator.validator_slot_band();
@@ -237,10 +251,8 @@ async fn validator_can_catch_up() {
     time::sleep(Duration::from_secs(8)).await;
 
     // reconnect a validator (who has not seen the proof for the ViewChange to view 1)
-    for network in &networks {
-        log::warn!("connecting networks");
-        nw.dial_mock(network);
-    }
+    log::warn!("connecting networks");
+    Network::connect_networks(&networks, 9u64).await;
 
     // Wait for the new block producer to create a blockchainEvent (which is always an extended event for block 1) and keep the hash
     if let Some(BlockchainEvent::Extended(hash)) = events.next().await {

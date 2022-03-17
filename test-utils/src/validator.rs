@@ -59,13 +59,14 @@ where
 
 pub async fn build_validators<N: TestNetwork + NetworkInterface>(
     env: Environment,
-    num_validators: usize,
+    peer_ids: &[u64],
     hub: &mut Option<MockHub>,
 ) -> Vec<AbstractValidator<N, ValidatorNetworkImpl<N>>>
 where
     N::Error: Send,
     <N::PeerType as PeerInterface>::Id: Serialize + Deserialize + Clone + Display,
 {
+    let num_validators = peer_ids.len();
     // Generate validator key pairs.
     let mut rng = seeded_rng(0);
     let voting_keys: Vec<BlsKeyPair> = (0..num_validators)
@@ -97,13 +98,13 @@ where
     let mut validators = vec![];
     let mut consensus = vec![];
     let mut networks = vec![];
-    for id in 0..num_validators {
+    for i in 0..num_validators {
         let (v, c) = build_validator(
-            (id + 1) as u64,
-            Address::from(&validator_keys[id]),
-            signing_keys[id].clone(),
-            voting_keys[id].clone(),
-            fee_keys[id].clone(),
+            peer_ids[i] as u64,
+            Address::from(&validator_keys[i]),
+            signing_keys[i].clone(),
+            voting_keys[i].clone(),
+            fee_keys[i].clone(),
             genesis.clone(),
             hub,
         )
@@ -120,7 +121,7 @@ where
     }
 
     // Connect network
-    N::connect_network(&networks).await;
+    N::connect_networks(&networks, peer_ids[0]).await;
 
     // Wait until validators are connected.
     let mut events: Vec<BroadcastStream<ConsensusEvent>> =
@@ -159,4 +160,30 @@ where
             &validator.voting_key().public_key.compress() == slot.voting_key.compressed()
         })
         .unwrap()
+}
+
+pub fn pop_validator_for_slot<N: TestNetwork + NetworkInterface>(
+    validators: &mut Vec<AbstractValidator<N, ValidatorNetworkImpl<N>>>,
+    block_number: u32,
+    view_number: u32,
+) -> AbstractValidator<N, ValidatorNetworkImpl<N>>
+where
+    N::Error: Send,
+    <N::PeerType as PeerInterface>::Id: Serialize + Deserialize + Clone + Send,
+{
+    let consensus = &validators.first().unwrap().consensus;
+
+    let (slot, _) = consensus
+        .blockchain
+        .read()
+        .get_slot_owner_at(block_number, view_number, None)
+        .expect("Couldn't find slot owner!");
+
+    let index = validators
+        .iter()
+        .position(|validator| {
+            &validator.voting_key().public_key.compress() == slot.voting_key.compressed()
+        })
+        .unwrap();
+    validators.remove(index)
 }

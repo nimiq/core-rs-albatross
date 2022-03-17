@@ -12,7 +12,8 @@ use nimiq_test_utils::validator::build_validators;
 async fn four_validators_can_create_an_epoch() {
     let env = VolatileEnvironment::new(10).expect("Could not open a volatile database");
 
-    let validators = build_validators::<Network>(env, 4, &mut None).await;
+    let validators =
+        build_validators::<Network>(env, &(1u64..=4u64).collect::<Vec<_>>(), &mut None).await;
 
     let blockchain = Arc::clone(&validators.first().unwrap().consensus.blockchain);
 

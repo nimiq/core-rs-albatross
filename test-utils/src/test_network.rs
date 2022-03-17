@@ -19,7 +19,7 @@ where
         genesis_hash: Blake2bHash,
         hub: &mut Option<MockHub>,
     ) -> Arc<Self>;
-    async fn connect_network(networks: &[Arc<N>]);
+    async fn connect_networks(networks: &[Arc<N>], seed_peer_id: u64);
 }
 
 #[async_trait]
@@ -35,7 +35,7 @@ impl TestNetwork for MockNetwork {
         Arc::new(hub.new_network_with_address(peer_id))
     }
 
-    async fn connect_network(networks: &[Arc<MockNetwork>]) {
+    async fn connect_networks(networks: &[Arc<MockNetwork>], _seed_peer_id: u64) {
         // Connect validators to each other.
         for (id, network) in networks.iter().enumerate() {
             for other_id in (id + 1)..networks.len() {
@@ -75,10 +75,10 @@ impl TestNetwork for Network {
         network
     }
 
-    async fn connect_network(networks: &[Arc<Network>]) {
+    async fn connect_networks(networks: &[Arc<Network>], seed_peer_id: u64) {
         for network in networks {
             // Tell the network to connect to seed nodes
-            let seed = multiaddr![Memory(1u64)];
+            let seed = multiaddr![Memory(seed_peer_id)];
             log::debug!("Dialing seed: {:?}", seed);
             network
                 .dial_address(seed)
