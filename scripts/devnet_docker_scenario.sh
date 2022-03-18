@@ -43,7 +43,10 @@ tmp_dir=`mktemp -d -t docker_devnet.XXXXXXXXXX`
 
 # Create devnet configuration
 echo "Creating devnet configuration... "
-python3 scripts/devnet/python/devnet_create.py $MAX_VALIDATORS -o $tmp_dir -s
+python3 scripts/devnet/python/devnet_create.py $MAX_VALIDATORS -o $tmp_dir -s -a
+
+# Clone the albatross generator repo
+git clone https://github.com/redmaner/albatross_generator.git $tmp_dir/albatross_generator --depth 1
 
 # Overwrite the docker compose and genesis
 echo "Copying the genesis and docker compose files... "
@@ -56,6 +59,7 @@ cargo build --release
 echo "Create docker images... "
 docker buildx build . --pull -t core --progress=plain --build-arg BUILD=release
 docker buildx build . --pull -t spammer --progress=plain --build-arg APP=spammer --build-arg BUILD=release
+docker buildx build $tmp_dir/albatross_generator --pull -t albagen --progress=plain
 
 echo "Launching docker compose with '$tmp_dir/docker-compose.yml' as compose file ..."
 NETWORK_NAME=nimiq.local docker-compose -f $tmp_dir/docker-compose.yml up
