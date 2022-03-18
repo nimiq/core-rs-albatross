@@ -22,7 +22,7 @@ jobs:
       uses: actions-rs/toolchain@v1
       with:
         profile: minimal
-        toolchain: nightly-2022-03-13
+        toolchain: stable
         override: true
     - name: Set up python
       uses: actions/setup-python@v3

@@ -44,7 +44,7 @@ For more detailed information about how to connect and use the development netwo
 
 ## Installation
 
-Besides [Rust nightly](https://www.rust-lang.org/learn/get-started#installing-rust) itself,
+Besides [Rust stable](https://www.rust-lang.org/learn/get-started#installing-rust) itself,
 the following packages are required to be able to compile the source code:
 
 - `clang`
@@ -57,26 +57,26 @@ After installing the previous packages, compiling the project is achieved throug
 ```bash
 git clone https://github.com/nimiq/core-rs-albatross
 cd core-rs
-cargo +nightly build
+cargo build
 ```
 
 Note that this will build in debug mode, which is not as performant. 
 To get the most speed out of the client, please build in release mode:
 
 ```bash
-cargo +nightly build --release
+cargo build --release
 ```
 
 If you want to install the client onto your system (into `$HOME/.cargo/bin`), run:
 
 ```bash
-cargo +nightly install --path client/
+cargo install --path client/
 ```
 
 Alternatively, you can install it directly from git:
 
 ```bash
-cargo +nightly install --git https://github.com/nimiq/core-rs-albatross.git
+cargo install --git https://github.com/nimiq/core-rs-albatross.git
 ```
 
 ## Usage
