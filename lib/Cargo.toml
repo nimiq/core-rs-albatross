@@ -36,11 +36,12 @@ serde_derive = "1.0"
 serde_json = { version = "1.0", features = ["preserve_order"], optional = true }
 strum_macros = "0.24"
 toml = "0.5"
-url = "2.2"
+url = { version = "2.2", features = ["serde"] }
 thiserror = "1.0"
 tokio = { version = "1.16", features = ["rt", "tracing"], optional = true }
 tracing-gelf = { version = "0.6.1", optional = true }
 tracing-log = { version = "0.1", optional = true }
+tracing-loki = { version = "0.1.0", optional = true }
 tracing-subscriber = { version = "0.3", optional = true }
 
 beserial = { path = "../beserial" }
@@ -71,7 +72,7 @@ nimiq-test-log = { path = "../test-log" }
 deadlock = []
 default = []
 launcher = []
-logging = ["console-subscriber", "serde_json", "tokio", "tracing-gelf", "tracing-log", "tracing-subscriber"]
+logging = ["console-subscriber", "serde_json", "tokio", "tracing-gelf", "tracing-log", "tracing-loki", "tracing-subscriber"]
 panic = ["log-panics"]
 rpc-server = ["validator", "nimiq-rpc-server", "nimiq-wallet"]
 validator = ["nimiq-validator", "nimiq-validator-network", "nimiq-bls", "nimiq-rpc-server"]

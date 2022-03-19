@@ -366,6 +366,22 @@ pub fn initialize_logging(
         (None, None)
     };
 
+    let (loki_layer, loki_task) = if let Some(loki) = &settings.loki {
+        let (layer, bg_task) = tracing_loki::layer(
+            loki.url.clone(),
+            loki.labels.clone(),
+            loki.extra_fields.clone(),
+        )?;
+        let layer = layer.with_filter(
+            Targets::new()
+                .with_default(DEFAULT_LEVEL)
+                .with_nimiq_targets(LevelFilter::TRACE),
+        );
+        (Some(layer), Some(bg_task))
+    } else {
+        (None, None)
+    };
+
     #[cfg(tokio_unstable)]
     fn initialize_tokio_console<S>(bind_address: &str) -> Option<Box<dyn Layer<S> + Send + Sync>>
     where
@@ -407,6 +423,7 @@ pub fn initialize_logging(
 
     tracing_subscriber::registry()
         .with(gelf_layer)
+        .with(loki_layer)
         .with(rotating_layer)
         .with(tokio_console_layer)
         .with(
@@ -421,6 +438,9 @@ pub fn initialize_logging(
     // Spawn the graylog task after setting up logging so we still get error messages from the
     // graylog logging itself.
     if let Some(task) = gelf_task {
+        tokio::spawn(task);
+    }
+    if let Some(task) = loki_task {
         tokio::spawn(task);
     }
     Ok(())

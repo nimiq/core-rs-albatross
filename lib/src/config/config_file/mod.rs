@@ -6,6 +6,7 @@ use std::str::FromStr;
 use log::level_filters::LevelFilter;
 use serde_derive::Deserialize;
 use thiserror::Error;
+use url::Url;
 
 use nimiq_mempool::mempool::Mempool;
 use nimiq_mempool::{
@@ -301,6 +302,16 @@ pub struct GraylogConfig {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct LokiConfig {
+    pub url: Url,
+    #[serde(default)]
+    pub labels: HashMap<String, String>,
+    #[serde(default)]
+    pub extra_fields: HashMap<String, String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RotatingLogFileConfig {
     #[serde(default)]
     pub path: PathBuf,
@@ -337,6 +348,8 @@ pub struct LogSettings {
     pub file: Option<String>,
     #[serde(default)]
     pub graylog: Option<GraylogConfig>,
+    #[serde(default)]
+    pub loki: Option<LokiConfig>,
     #[serde(default)]
     pub rotating_trace_log: Option<RotatingLogFileConfig>,
     #[serde(default)]
