@@ -337,7 +337,7 @@ pub struct LogSettings {
     pub file: Option<String>,
     #[serde(default)]
     pub graylog: Option<GraylogConfig>,
-    #[serde(default = "LogSettings::default_rotating_trace_log")]
+    #[serde(default)]
     pub rotating_trace_log: Option<RotatingLogFileConfig>,
     #[serde(default)]
     pub tokio_console_bind_address: Option<String>,
@@ -347,10 +347,6 @@ impl LogSettings {
     pub fn default_statistics_interval() -> u64 {
         10
     }
-
-    pub fn default_rotating_trace_log() -> Option<RotatingLogFileConfig> {
-        None
-    }
 }
 
 impl Default for LogSettings {
@@ -359,10 +355,11 @@ impl Default for LogSettings {
             level: None,
             timestamps: true,
             tags: HashMap::new(),
-            statistics: Self::default_statistics_interval(),
+            statistics: 10,
             file: None,
             graylog: None,
-            rotating_trace_log: Self::default_rotating_trace_log(),
+            loki: None,
+            rotating_trace_log: None,
             tokio_console_bind_address: None,
         }
     }

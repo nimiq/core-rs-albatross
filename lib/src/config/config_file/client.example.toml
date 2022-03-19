@@ -166,12 +166,12 @@ level = "debug"
 # address = "localhost:9000"
 
 # Extra fields to add to every log record
-# [log.graylog_extra_fields]
+# [log.graylog.extra_fields]
 # host = "mine"
 # run = 1
 # production = false
 
-# Alternate way of writing the above, under the [log] section
+# Alternate way of writing the above, under the [log.graylog] section
 # extra_fields = { host = "mine", run = 1, production = false }
 
 
