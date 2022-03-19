@@ -14,10 +14,6 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - uses: actions/setup-python@v3
-    - uses: BSFishy/pip-action@v1
-      with:
-        packages: |
-          sh
     - uses: actions/cache@v3
       with:
         path:
@@ -97,10 +93,6 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - uses: actions/setup-python@v3
-    - uses: BSFishy/pip-action@v1
-      with:
-        packages: |
-          sh
     - uses: actions/cache@v3
       with:
         path:
@@ -180,10 +172,6 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - uses: actions/setup-python@v3
-    - uses: BSFishy/pip-action@v1
-      with:
-        packages: |
-          sh
     - uses: actions/cache@v3
       with:
         path:
@@ -263,10 +251,6 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - uses: actions/setup-python@v3
-    - uses: BSFishy/pip-action@v1
-      with:
-        packages: |
-          sh
     - uses: actions/cache@v3
       with:
         path:
@@ -346,10 +330,6 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - uses: actions/setup-python@v3
-    - uses: BSFishy/pip-action@v1
-      with:
-        packages: |
-          sh
     - uses: actions/cache@v3
       with:
         path:
@@ -432,10 +412,6 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - uses: actions/setup-python@v3
-    - uses: BSFishy/pip-action@v1
-      with:
-        packages: |
-          sh
     - uses: actions/cache@v3
       with:
         path:
@@ -515,10 +491,6 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - uses: actions/setup-python@v3
-    - uses: BSFishy/pip-action@v1
-      with:
-        packages: |
-          sh
     - uses: actions/cache@v3
       with:
         path:

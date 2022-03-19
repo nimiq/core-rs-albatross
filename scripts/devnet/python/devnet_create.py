@@ -23,7 +23,7 @@ from pathlib import Path
 
 import argparse
 import json
-import sh
+import subprocess
 import sys
 
 parser = argparse.ArgumentParser()
@@ -42,8 +42,8 @@ output = Path(args.output)
 num_validators = args.num_validators
 target = Path.cwd() / "target" / "debug"
 
-nimiq_address = sh.Command(str(target / "nimiq-address"))
-nimiq_bls = sh.Command(str(target / "nimiq-bls"))
+nimiq_address = lambda: subprocess.check_output([str(target / "nimiq-address")], text=True).splitlines()
+nimiq_bls = lambda: subprocess.check_output([str(target / "nimiq-bls")], text=True).splitlines()
 
 
 def create_bls_keypair():
