@@ -63,7 +63,7 @@ jobs:
       uses: actions-rs/cargo@v1
       with:
         command: llvm-cov
-        args: --all-features
+        args: --all-features --doctests
     - name: Generate coverage report
       uses: actions-rs/cargo@v1
       with:
