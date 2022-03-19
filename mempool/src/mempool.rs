@@ -99,7 +99,7 @@ impl Mempool {
             return;
         }
 
-        // Suscribe to the network TX topic
+        // Subscribe to the network TX topic
         let txn_stream = network.subscribe::<TransactionTopic>().await.unwrap();
 
         let mempool_executor = MempoolExecutor::new(
@@ -162,7 +162,7 @@ impl Mempool {
             return;
         }
 
-        // Unsuscribe to the network TX topic before killing the executor
+        // Unsubscribe to the network TX topic before killing the executor
         network.unsubscribe::<TransactionTopic>().await.unwrap();
 
         // Stop the executor
@@ -172,10 +172,10 @@ impl Mempool {
     /// Stops the mempool executor without TX stream
     ///
     /// This function is used for testing purposes (along with the start_executor_with_txn_stream function)
-    /// it is the responsability of the caller to suscribe and unsuscribe from the topic accordingly
+    /// it is the responsibility of the caller to subscribe and unsubscribe from the topic accordingly
     ///
     /// This functions should only be called only after one of the functions to start the executor is called.
-    pub async fn stop_executor_without_unsuscribe(&self) {
+    pub async fn stop_executor_without_unsubscribe(&self) {
         let mut handle = self.executor_handle.lock().await;
 
         if handle.is_none() {

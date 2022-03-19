@@ -75,7 +75,7 @@ async fn send_txn_to_mempool(
 
     let timeout = tokio::time::Duration::from_secs(1);
     tokio::time::sleep(timeout).await;
-    mempool.stop_executor_without_unsuscribe().await;
+    mempool.stop_executor_without_unsubscribe().await;
 }
 
 async fn multiple_start_stop_send(
@@ -113,7 +113,7 @@ async fn multiple_start_stop_send(
 
     let timeout = tokio::time::Duration::from_secs(2);
     tokio::time::sleep(timeout).await;
-    mempool.stop_executor_without_unsuscribe().await;
+    mempool.stop_executor_without_unsubscribe().await;
 
     // Get the transactions from the mempool
     let obtained_txns = mempool.get_transactions_for_block(usize::MAX);
@@ -138,7 +138,7 @@ async fn multiple_start_stop_send(
     tokio::time::sleep(timeout).await;
 
     // Call stop again, nothing should happen.
-    mempool.stop_executor_without_unsuscribe().await;
+    mempool.stop_executor_without_unsubscribe().await;
 
     // We should not obtain any, since the executor should not be running.
     let obtained_txns = mempool.get_transactions_for_block(usize::MAX);
@@ -176,7 +176,7 @@ async fn multiple_start_stop_send(
 
     let timeout = tokio::time::Duration::from_secs(2);
     tokio::time::sleep(timeout).await;
-    mempool.stop_executor_without_unsuscribe().await;
+    mempool.stop_executor_without_unsubscribe().await;
 
     // Get the transactions from the mempool
     let obtained_txns = mempool.get_transactions_for_block(usize::MAX);
