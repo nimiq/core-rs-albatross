@@ -6,9 +6,6 @@
 ARG RUST_IMAGE=rust:slim
 FROM $RUST_IMAGE AS builder
 
-# Switch to Rust nightly
-RUN rustup update nightly && rustup default nightly
-
 # Fetch dependencies.
 RUN apt-get update \
     && apt-get --no-install-recommends -y install libssl-dev pkg-config clang\
