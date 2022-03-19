@@ -294,14 +294,6 @@ pub struct MetricsServerSettings {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct GraylogConfig {
-    pub address: String,
-    #[serde(default)]
-    pub extra_fields: HashMap<String, serde_json::Value>,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct LokiConfig {
     pub url: Url,
     #[serde(default)]
@@ -347,8 +339,6 @@ pub struct LogSettings {
     #[serde(default)]
     pub file: Option<String>,
     #[serde(default)]
-    pub graylog: Option<GraylogConfig>,
-    #[serde(default)]
     pub loki: Option<LokiConfig>,
     #[serde(default)]
     pub rotating_trace_log: Option<RotatingLogFileConfig>,
@@ -370,7 +360,6 @@ impl Default for LogSettings {
             tags: HashMap::new(),
             statistics: 10,
             file: None,
-            graylog: None,
             loki: None,
             rotating_trace_log: None,
             tokio_console_bind_address: None,

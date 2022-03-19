@@ -35,9 +35,6 @@ pub enum Error {
     #[error("Logger error: {0}")]
     Logging(#[from] tracing_subscriber::filter::FromEnvError),
 
-    #[error("Gelf logger error: {0}")]
-    LoggingGelf(#[from] tracing_gelf::BuilderError),
-
     #[error("Loki logger error: {0}")]
     LoggingLoki(#[from] tracing_loki::Error),
 

@@ -350,22 +350,6 @@ pub fn initialize_logging(
         None
     };
 
-    let (gelf_layer, gelf_task) = if let Some(graylog) = &settings.graylog {
-        let mut builder = tracing_gelf::Logger::builder();
-        for (name, value) in &graylog.extra_fields {
-            builder = builder.additional_field(name.clone(), value.clone());
-        }
-        let (layer, bg_task) = builder.connect_tcp(graylog.address.clone())?;
-        let layer = layer.with_filter(
-            Targets::new()
-                .with_default(DEFAULT_LEVEL)
-                .with_nimiq_targets(LevelFilter::TRACE),
-        );
-        (Some(layer), Some(bg_task))
-    } else {
-        (None, None)
-    };
-
     let (loki_layer, loki_task) = if let Some(loki) = &settings.loki {
         let (layer, bg_task) = tracing_loki::layer(
             loki.url.clone(),
@@ -422,7 +406,6 @@ pub fn initialize_logging(
         tokio_console_bind_address.and_then(|addr| initialize_tokio_console(&addr));
 
     tracing_subscriber::registry()
-        .with(gelf_layer)
         .with(loki_layer)
         .with(rotating_layer)
         .with(tokio_console_layer)
@@ -435,11 +418,6 @@ pub fn initialize_logging(
         )
         .init();
 
-    // Spawn the graylog task after setting up logging so we still get error messages from the
-    // graylog logging itself.
-    if let Some(task) = gelf_task {
-        tokio::spawn(task);
-    }
     if let Some(task) = loki_task {
         tokio::spawn(task);
     }
