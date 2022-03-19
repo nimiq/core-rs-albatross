@@ -743,7 +743,7 @@ impl<T> LinkedList<T> {
     /// Splitting a list into evens and odds, reusing the original list:
     ///
     /// ```
-    /// use std::collections::LinkedList;
+    /// use nimiq_collections::LinkedList;
     ///
     /// let mut numbers: LinkedList<u32> = LinkedList::new();
     /// numbers.extend(&[1, 2, 3, 4, 5, 6, 8, 9, 11, 13, 14, 15]);
