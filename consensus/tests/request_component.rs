@@ -38,9 +38,6 @@ async fn test_request_component() {
 
     let producer1 = BlockProducer::new(signing_key(), voting_key());
 
-    //let num_macro_blocks = (policy::BATCHES_PER_EPOCH + 1) as usize;
-    //produce_macro_blocks(num_macro_blocks, &producer1, &node1.blockchain);
-
     node1.consume();
     node2.consume();
 

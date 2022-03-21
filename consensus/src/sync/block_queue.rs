@@ -478,14 +478,14 @@ impl<N: Network> Stream for Inner<N> {
                 }
 
                 PushOpResult::Head(Err(result), hash) => {
-                    //If there was a blockchain push error, we remove the block from the pending blocks
+                    // If there was a blockchain push error, we remove the block from the pending blocks
                     log::trace!("Head push operation failed because of {}", result);
                     self.pending_blocks.remove(&hash);
                     return Poll::Ready(Some(BlockQueueEvent::RejectedBlock(hash)));
                 }
 
                 PushOpResult::Buffered(Err(result), hash) => {
-                    //If there was a blockchain push error, we remove the block from the pending blocks
+                    // If there was a blockchain push error, we remove the block from the pending blocks
                     log::trace!("Buffered push operation failed because of {}", result);
                     self.pending_blocks.remove(&hash);
                     return Poll::Ready(Some(BlockQueueEvent::RejectedBlock(hash)));

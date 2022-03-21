@@ -223,7 +223,7 @@ impl<M: Message + Clone + Unpin + std::fmt::Debug, N: Network> Sink<(M, usize)>
                     network: self.network.clone(),
                 }
                 .send(item.0),
-            ); //.boxed();
+            );
             self.current_future = Some(fut);
             Ok(())
         }

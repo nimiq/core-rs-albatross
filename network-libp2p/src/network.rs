@@ -741,7 +741,6 @@ impl Network {
                                 peer,
                                 error,
                             );
-                            //state.response_channels.remove(&request_id);
                         }
                         RequestResponseEvent::ResponseSent { peer, request_id } => {
                             log::trace!(
@@ -749,7 +748,6 @@ impl Network {
                                 request_id,
                                 peer
                             );
-                            //state.response_channels.remove(&request_id);
                         }
                     },
                 }

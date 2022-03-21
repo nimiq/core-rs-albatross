@@ -12,8 +12,6 @@ pub mod hash_rng;
 pub mod iterators;
 #[cfg(feature = "key-rng")]
 pub mod key_rng;
-// #[cfg(feature = "locking")]
-// pub mod locking;
 #[cfg(feature = "math")]
 pub mod math;
 #[cfg(feature = "merkle")]
@@ -32,8 +30,6 @@ pub mod tagged_signing;
 pub mod throttled_queue;
 #[cfg(feature = "time")]
 pub mod time;
-// #[cfg(feature = "timers")]
-// pub mod timers;
 #[cfg(feature = "unique-id")]
 pub mod unique_id;
 #[cfg(feature = "unique-ptr")]

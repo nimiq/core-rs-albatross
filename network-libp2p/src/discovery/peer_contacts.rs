@@ -536,8 +536,6 @@ impl PeerContactBook {
             for peer_id in delete_peers {
                 self.peer_contacts.remove(&peer_id);
             }
-
-            //log::debug!("contacts: {:#?}", self.peer_contacts);
         }
     }
 }

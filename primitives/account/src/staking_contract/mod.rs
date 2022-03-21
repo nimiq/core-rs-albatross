@@ -32,19 +32,21 @@ mod validator;
 /// different account types. Each different account type is intended to store a different piece of
 /// data concerning the staking contract. By having the path to each account you can navigate the
 /// staking contract subtrie. The subtrie has the following format:
-/**
-///     STAKING_CONTRACT_ADDRESS
-///         |--> PATH_CONTRACT_MAIN: Staking(StakingContract)
-///         |
-///         |--> PATH_VALIDATORS_LIST
-///         |       |--> VALIDATOR_ADDRESS
-///         |               |--> PATH_VALIDATOR_MAIN: StakingValidator(Validator)
-///         |               |--> PATH_VALIDATOR_STAKERS_LIST
-///         |                       |--> STAKER_ADDRESS: StakingValidatorsStaker(Address)
-///         |
-///         |--> PATH_STAKERS_LIST
-///                 |--> STAKER_ADDRESS: StakingStaker(Staker)
-*/
+///
+/// ```text
+/// STAKING_CONTRACT_ADDRESS
+///     |--> PATH_CONTRACT_MAIN: Staking(StakingContract)
+///     |
+///     |--> PATH_VALIDATORS_LIST
+///     |       |--> VALIDATOR_ADDRESS
+///     |               |--> PATH_VALIDATOR_MAIN: StakingValidator(Validator)
+///     |               |--> PATH_VALIDATOR_STAKERS_LIST
+///     |                       |--> STAKER_ADDRESS: StakingValidatorsStaker(Address)
+///     |
+///     |--> PATH_STAKERS_LIST
+///             |--> STAKER_ADDRESS: StakingStaker(Staker)
+/// ```
+///
 /// So, for example, if you want to get the validator with a given address then you just fetch the
 /// node with key STAKING_CONTRACT_ADDRESS||PATH_VALIDATORS_LIST||VALIDATOR_ADDRESS||PATH_VALIDATOR_MAIN
 /// from the AccountsTrie (|| means concatenation).

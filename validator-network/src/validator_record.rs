@@ -2,8 +2,6 @@ use beserial::{Deserialize, Serialize};
 use nimiq_bls::{PublicKey, SecretKey, Signature};
 use nimiq_utils::tagged_signing::TaggedSignable;
 
-//struct ValidatorPeerId<TPeerId: Serialize>(TPeerId);
-
 // TODO: Use a tagged signature for validator records
 impl<TPeerId> TaggedSignable for ValidatorRecord<TPeerId>
 where
@@ -18,8 +16,7 @@ where
     TPeerId: Serialize + Deserialize,
 {
     pub peer_id: TPeerId,
-    //public_key: PublicKey,
-    // TODO: other info?
+    // TODO: other info, like public key?
 }
 
 impl<TPeerId> ValidatorRecord<TPeerId>

@@ -213,7 +213,7 @@ impl HistoryStore {
             }
         }
 
-        //Now prune the address database
+        // Now prune the address database
         let mut cursor = txn.write_cursor(&self.address_db);
 
         for address in affected_addresses {

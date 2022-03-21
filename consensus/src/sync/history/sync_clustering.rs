@@ -470,7 +470,6 @@ impl<TNetwork: Network> HistorySync<TNetwork> {
                         "Closing connection to peer {:?} after cluster {} failed",
                         peer.peer_id, cluster.id
                     );
-                    //agent.peer.close(CloseReason::Other);
                 }
             }
         }

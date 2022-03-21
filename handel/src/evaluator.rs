@@ -98,8 +98,6 @@ impl<
     /// `>0` being more useful the bigger the number.
     fn evaluate(&self, contribution: &C, level: usize) -> usize {
         // TODO: Consider weight
-        //let weight = self.weights.signature_weight(&signature)
-        //    .unwrap_or_else(|| panic!("No weight for signature: {:?}", signature));
 
         // Special case for final aggregations
         if level == self.partitioner.levels() {

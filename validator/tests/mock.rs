@@ -69,11 +69,6 @@ async fn one_validator_can_create_micro_blocks() {
 
 #[test(tokio::test)]
 async fn four_validators_can_create_micro_blocks() {
-    //use tracing_subscriber;
-    //tracing_subscriber::fmt()
-    //    .with_max_level(tracing_core::LevelFilter::DEBUG)
-    //    .with_test_writer()
-    //    .try_init();
     let hub = MockHub::default();
     let env = VolatileEnvironment::new(10).expect("Could not open a volatile database");
 

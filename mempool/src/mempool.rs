@@ -261,7 +261,7 @@ impl Mempool {
                         // This an unknown transaction from a known sender, we need to update our
                         // senders balance and some transactions could become invalid
 
-                        //Obtain the sender account. Signaling txns from adopted blocks should be allowed
+                        // Obtain the sender account. Signaling txns from adopted blocks should be allowed
                         let sender_account =
                             match blockchain.get_account(&tx.sender).or_else(|| {
                                 if tx.total_value() != Coin::ZERO {

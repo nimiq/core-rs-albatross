@@ -10,20 +10,25 @@ impl Default for Crc32Computer {
     }
 }
 
+#[test]
+fn table_is_correct() {
+    let mut table = [0u32; 256];
+    for j in 0..256 {
+        let mut b = j;
+        for _ in 0..8 {
+            if b & 1 != 0 {
+                b = (b >> 1) ^ 0xEDB88320;
+            } else {
+                b = b >> 1;
+            }
+        }
+        table[j] = (b >> 0) as u32;
+    }
+    assert_eq!(table, Crc32Computer::TABLE);
+}
+
 #[allow(clippy::unreadable_literal)]
 impl Crc32Computer {
-    //let mut table = [0u32; 256];
-    //for j in 0..256 {
-    //    let mut b = j;
-    //    for k in 0..8 {
-    //        if b & 1 != 0 {
-    //            b = (b >> 1) ^ 0xEDB88320;
-    //        } else {
-    //            b = b >> 1;
-    //        }
-    //    }
-    //    table[j] = (b >> 0) as u32;
-    //}
     const TABLE: [u32; 256] = [
         0, 1996959894, 3993919788, 2567524794, 124634137, 1886057615, 3915621685, 2657392035,
         249268274, 2044508324, 3772115230, 2547177864, 162941995, 2125561021, 3887607047,
@@ -113,7 +118,7 @@ impl Crc8Computer {
 
     pub fn update(&mut self, buf: &[u8]) -> &mut Self {
         for &i in buf {
-            self.value = Crc8Computer::TABLE[(self.value ^ (i as u8)/* & 0xff*/) as usize];
+            self.value = Crc8Computer::TABLE[(self.value ^ (i as u8)) as usize];
         }
         self
     }

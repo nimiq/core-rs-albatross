@@ -77,7 +77,6 @@ pub fn test(attr: TokenStream, item: TokenStream) -> TokenStream {
     let inner_test = match args.as_slice() {
         [] => NestedMeta::Meta(Meta::Path(parse_quote! { ::core::prelude::v1::test })),
         [m] => m.clone(),
-        //[NestedMeta::Meta(Meta::Path(path))] => path.clone(),
         _ => panic!("unsupported attributes supplied: {}", quote! { args }),
     };
 

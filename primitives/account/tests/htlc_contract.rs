@@ -19,10 +19,8 @@ use nimiq_trie::key_nibbles::KeyNibbles;
 
 const HTLC: &str = "00000000000000001b215589344cf570d36bec770825eae30b73213924786862babbdb05e7c4430612135eb2a836812303daebe368963c60d22098a5e9f1ebcb8e54d0b7beca942a2a0a9d95391804fe8f0100000000000296350000000000000001";
 
-// This function is used to create the HTLC constant above. If you need to generate a new one just
-// uncomment out the test flag.
-//#[test]
-#[allow(dead_code)]
+// This function is used to create the HTLC constant above.
+#[test]
 fn create_serialized_contract() {
     let contract = HashedTimeLockedContract {
         balance: Coin::ZERO,
@@ -38,8 +36,7 @@ fn create_serialized_contract() {
     };
     let mut bytes: Vec<u8> = Vec::with_capacity(contract.serialized_size());
     contract.serialize(&mut bytes).unwrap();
-    println!("{}", hex::encode(bytes));
-    panic!();
+    assert_eq!(HTLC, hex::encode(bytes));
 }
 
 #[test]

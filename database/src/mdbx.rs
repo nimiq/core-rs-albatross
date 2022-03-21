@@ -1083,7 +1083,6 @@ mod tests {
 
             assert_eq!(
                 cursor.get_current::<String, u32>(),
-                //Some((test1.clone(), 125))
                 Some((test1.clone(), 5783))
             );
 

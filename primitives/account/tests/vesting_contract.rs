@@ -17,10 +17,8 @@ use nimiq_trie::key_nibbles::KeyNibbles;
 
 const CONTRACT: &str = "00002fbf9bd9c800fd34ab7265a0e48c454ccbf4c9c61dfdf68f9a220000000000000001000000000003f480000002632e314a0000002fbf9bd9c800";
 
-// This function is used to create the CONTRACT constant above. If you need to generate a new one just
-// uncomment out the test flag.
-//#[test]
-#[allow(dead_code)]
+// This function is used to create the CONTRACT constant above.
+#[test]
 fn create_serialized_contract() {
     let contract = VestingContract {
         balance: Coin::from_u64_unchecked(52500000000000),
@@ -32,8 +30,7 @@ fn create_serialized_contract() {
     };
     let mut bytes: Vec<u8> = Vec::with_capacity(contract.serialized_size());
     contract.serialize(&mut bytes).unwrap();
-    println!("{}", hex::encode(bytes));
-    panic!();
+    assert_eq!(CONTRACT, hex::encode(bytes));
 }
 
 #[test]

@@ -36,7 +36,6 @@ pub struct ConfigFile {
     pub consensus: ConsensusSettings,
     pub rpc_server: Option<RpcServerSettings>,
     pub metrics_server: Option<MetricsServerSettings>,
-    //pub reverse_proxy: Option<ReverseProxySettings>,
     #[serde(default)]
     pub log: LogSettings,
     pub database: Option<DatabaseSettings>,
@@ -138,7 +137,6 @@ pub struct NetworkSettings {
 #[derive(Clone, Debug, Deserialize)]
 pub struct Seed {
     pub address: Multiaddr,
-    //public_key: PublicKey,
 }
 
 #[derive(Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
@@ -292,31 +290,6 @@ pub struct MetricsServerSettings {
     pub port: Option<u16>,
     pub password: Option<String>,
 }
-
-/*
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ReverseProxySettings {
-    pub port: Option<u16>,
-    #[serde(deserialize_with = "deserialize_string")]
-    pub address: address::NetAddress,
-    #[serde(default)]
-    pub header: String,
-    #[serde(default)]
-    pub with_tls_termination: bool,
-}
-
-impl From<ReverseProxySettings> for ReverseProxyConfig {
-    fn from(proxy: ReverseProxySettings) -> Self {
-        ReverseProxyConfig {
-            port: proxy.port.unwrap_or(consts::REVERSE_PROXY_DEFAULT_PORT),
-            address: proxy.address,
-            header: proxy.header,
-            with_tls_termination: proxy.with_tls_termination,
-        }
-    }
-}
-*/
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]

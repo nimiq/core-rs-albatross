@@ -260,7 +260,6 @@ impl Default for DatabaseConfig {
             size: 1024 * 1024 * 1024 * 1024,
             max_dbs: 12,
             max_readers: 600,
-            //flags: LmdbFlags::NOMETASYNC | LmdbFlags::NOSYNC | LmdbFlags::NORDAHEAD,
         }
     }
 }
@@ -274,7 +273,6 @@ impl From<Option<config_file::DatabaseSettings>> for DatabaseConfig {
                 size: db_settings.size.unwrap_or(default.size),
                 max_dbs: db_settings.max_dbs.unwrap_or(default.max_dbs),
                 max_readers: db_settings.max_readers.unwrap_or(default.max_readers),
-                //flags: default.flags,
             }
         } else {
             default
@@ -602,11 +600,6 @@ pub struct ClientConfig {
     #[builder(default)]
     pub consensus: ConsensusConfig,
 
-    /// The `ProtocolConfig` that determines how the client accepts incoming connections. This
-    /// will also determine how the client advertises itself to the network.
-    ///
-    //pub protocol: ProtocolConfig,
-
     /// The Nimiq network the client should connect to. Usually this should be either `Test` or
     /// `Main` for the Nimiq 1.0 networks. For Albatross there is currently only `TestAlbatross`
     /// and `DevAlbatross` available. Since Albatross is still in development at time of writing,
@@ -620,12 +613,6 @@ pub struct ClientConfig {
     #[builder(default = "NetworkId::DevAlbatross")]
     pub network_id: NetworkId,
 
-    /*
-    /// This configuration is needed if your node runs behind a reverse proxy.
-    ///
-    #[builder(setter(custom), default)]
-    pub reverse_proxy: Option<ReverseProxyConfig>,
-    */
     /// Determines where the database is stored.
     ///
     #[builder(default)]
@@ -703,28 +690,6 @@ impl ClientConfigBuilder {
     pub fn test(&mut self) -> &mut Self {
         self.network_id(NetworkId::TestAlbatross)
     }
-
-    /*
-    /// Sets the reverse proxy configuration. You need to set this if you run your node behind
-    /// a reverse proxy.
-    ///
-    /// # Arguments
-    ///
-    /// * `port` - Port at which the reverse proxy is listening for incoming connections
-    /// * `header` - Name of header which contains the origin IP address
-    /// * `address` - Address on which the reverse proxy is listening for incoming connections
-    /// * `termination` - TODO
-    ///
-    pub fn reverse_proxy(&mut self, port: u16, header: String, address: NetAddress, with_tls_termination: bool) -> &mut Self {
-        self.reverse_proxy = Some(Some(ReverseProxyConfig {
-            port,
-            header,
-            address,
-            with_tls_termination,
-        }));
-        self
-    }
-    */
 
     /// Configures the storage to be volatile. All data will be lost after shutdown of the client.
     pub fn volatile(&mut self) -> &mut Self {
